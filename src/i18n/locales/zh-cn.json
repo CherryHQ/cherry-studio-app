@@ -282,6 +282,22 @@
         "backupPath": "备份存储路径",
         "logout": "退出登录",
         "login": "使用坚果云账户登录"
+      },
+      "assistant": {
+        "title": "默认助手",
+        "default_assistant": {
+          "name": "默认助手",
+          "description": "创建新助手时使用的助手，如果未设置助手，将使用此助手"
+        },
+        "topic_naming_assistant": {
+          "name": "主题命名助手",
+          "description": "自动命名新主题时使用的助手"
+        },
+        "translate_assistant": {
+          "name": "翻译助手",
+          "description": "用于翻译服务的助手"
+        },
+        "empty": "还没有助手..."
       }
     },
     "profile": {

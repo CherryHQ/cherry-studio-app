@@ -46,7 +46,7 @@ export default function GeneralSettings({
               <SettingRowTitle>{t('settings.websearch.searchCount')}</SettingRowTitle>
               <SettingRowTitle>{searchCount}</SettingRowTitle>
             </XStack>
-            <Slider defaultValue={[searchCount]} max={20} step={1} onValueChange={onSearchCountChange}>
+            <Slider defaultValue={[searchCount]} min={1} max={20} step={1} onValueChange={onSearchCountChange}>
               <Slider.Track backgroundColor="rgba(0, 185, 107, 0.2)">
                 <Slider.TrackActive backgroundColor="rgba(0, 185, 107, 1)" />
               </Slider.Track>

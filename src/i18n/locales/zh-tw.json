@@ -282,6 +282,22 @@
         "backupPath": "備份存儲路徑",
         "logout": "登出",
         "login": "使用堅果雲賬戶登錄"
+      },
+      "assistant": {
+        "title": "預設助理",
+        "default_assistant": {
+          "name": "預設助理",
+          "description": "創建新助理時使用的助理，如果未設置助理，將使用此助理"
+        },
+        "topic_naming_assistant": {
+          "name": "主題命名助理",
+          "description": "自動命名新主題時使用的助理"
+        },
+        "translate_assistant": {
+          "name": "翻譯助理",
+          "description": "用於翻譯服務的助理"
+        },
+        "empty": "還沒有助理..."
       }
     },
     "profile": {

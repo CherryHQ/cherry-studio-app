@@ -9,5 +9,7 @@ export const files = sqliteTable('files', {
   size: integer('size').notNull(),
   ext: text('ext').notNull(),
   count: integer('count').notNull(),
-  type: text('type').notNull()
+  type: text('type').notNull(),
+  mime_type: text('mime_type').notNull(),
+  md5: text('md5').notNull()
 })

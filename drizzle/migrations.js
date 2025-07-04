@@ -15,6 +15,7 @@ import m0010 from './0010_mysterious_giant_man.sql';
 import m0011 from './0011_milky_mattie_franklin.sql';
 import m0012 from './0012_marvelous_slipstream.sql';
 import m0013 from './0013_lowly_gargoyle.sql';
+import m0014 from './0014_classy_bloodstorm.sql';
 
   export default {
     journal,
@@ -32,7 +33,8 @@ m0009,
 m0010,
 m0011,
 m0012,
-m0013
+m0013,
+m0014
     }
   }
   

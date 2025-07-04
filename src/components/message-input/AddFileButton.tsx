@@ -27,7 +27,7 @@ export const AddFileButton: React.FC<AddFileButtonProps> = ({ files, setFiles })
         return
       }
 
-      const _files: FileType[] = result.assets.map(asset => {
+      const _files: Omit<FileType, 'md5'>[] = result.assets.map(asset => {
         const id = uuid()
         return {
           id: id,
@@ -37,7 +37,7 @@ export const AddFileButton: React.FC<AddFileButtonProps> = ({ files, setFiles })
           size: asset.fileSize || 0,
           ext: asset.fileName?.split('.').pop() || 'png',
           type: getFileType(asset.fileName?.split('.').pop() || 'png'),
-          mimeType: asset.mimeType || '',
+          mime_type: asset.mimeType || '',
           created_at: new Date().toISOString(),
           count: 1
         }
@@ -58,7 +58,7 @@ export const AddFileButton: React.FC<AddFileButtonProps> = ({ files, setFiles })
         return
       }
 
-      const _files: FileType[] = result.assets.map(asset => {
+      const _files: Omit<FileType, 'md5'>[] = result.assets.map(asset => {
         return {
           id: uuid(),
           name: asset.name,
@@ -67,7 +67,7 @@ export const AddFileButton: React.FC<AddFileButtonProps> = ({ files, setFiles })
           size: asset.size || 0,
           ext: asset.name.split('.').pop() || '',
           type: getFileType(asset.name.split('.').pop() || ''),
-          mimeType: asset.mimeType || '',
+          mime_type: asset.mimeType || '',
           created_at: new Date().toISOString(),
           count: 1
         }

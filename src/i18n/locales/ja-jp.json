@@ -282,6 +282,22 @@
         "backupPath": "バックアップ保存パス",
         "logout": "ログアウト",
         "login": "Nutstoreアカウントでログイン"
+      },
+      "assistant": {
+        "title": "デフォルトアシスタント",
+        "default_assistant": {
+          "name": "デフォルトアシスタント",
+          "description": "新しいアシスタントを作成するときに使用されるアシスタント。設定されていない場合、このアシスタントが使用されます"
+        },
+        "topic_naming_assistant": {
+          "name": "トピック命名アシスタント",
+          "description": "新しいトピックを自動的に命名するときに使用されるアシスタント"
+        },
+        "translate_assistant": {
+          "name": "翻訳アシスタント",
+          "description": "翻訳サービスに使用されるアシスタント"
+        },
+        "empty": "まだアシスタントがありません..."
       }
     },
     "profile": {

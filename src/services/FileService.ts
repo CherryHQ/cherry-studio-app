@@ -6,12 +6,23 @@ import { deleteFileById, getAllFiles, getFileById, upsertFiles } from '../../db/
 
 const fileStorageDir = new Directory(Paths.cache, 'Files')
 
-export async function readFile(file: FileType): Promise<string> {
-  const fileData = new File(file.path)
-  return fileData.text()
+export function readFile(file: FileType): string {
+  return new File(file.path).text()
 }
 
-export async function uploadFiles(files: FileType[]): Promise<FileType[]> {
+export function readBase64File(file: FileType): string {
+  return new File(file.path).base64()
+}
+
+export function readBinaryFile(file: FileType): Blob {
+  return new File(file.path).blob()
+}
+
+export function readStreamFile(file: FileType): ReadableStream {
+  return new File(file.path).readableStream()
+}
+
+export async function uploadFiles(files: Omit<FileType, 'md5'>[]): Promise<FileType[]> {
   if (!fileStorageDir.exists) {
     fileStorageDir.create({ intermediates: true, overwrite: true })
   }
@@ -20,10 +31,14 @@ export async function uploadFiles(files: FileType[]): Promise<FileType[]> {
     try {
       const sourceFile = new File(file.path)
       const destinationFile = new File(fileStorageDir, `${file.id}.${file.ext}`)
-      upsertFiles([{ ...file, path: destinationFile.uri }])
+      upsertFiles([
+        { ...file, path: destinationFile.uri, mime_type: destinationFile.type || '', md5: destinationFile.md5 || '' }
+      ])
       sourceFile.copy(destinationFile)
       return {
         ...file,
+        mime_type: destinationFile.type || '',
+        md5: destinationFile.md5 || '',
         path: destinationFile.uri
       }
     } catch (error) {
@@ -35,7 +50,7 @@ export async function uploadFiles(files: FileType[]): Promise<FileType[]> {
   return await Promise.all(filePromises)
 }
 
-export async function deleteFile(id: string, force: boolean = false): Promise<void> {
+async function deleteFile(id: string, force: boolean = false): Promise<void> {
   try {
     const file = await getFileById(id)
     if (!file) return
@@ -60,9 +75,12 @@ export async function deleteFiles(files: FileType[]): Promise<void> {
 }
 
 export default {
+  readFile,
+  readBase64File,
+  readBinaryFile,
+  readStreamFile,
   getFile: getFileById,
   getAllFiles,
   uploadFiles,
-  deleteFile,
   deleteFiles
 }
