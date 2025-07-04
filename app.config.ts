@@ -4,7 +4,7 @@ export default {
     slug: 'cherry-studio',
     version: '1.0.0',
     orientation: 'portrait',
-    icon: './src/assets/images/favicon.png',
+    icon: './src/assets/images/adaptive-icon.png',
     scheme: 'cherry-studio',
     userInterfaceStyle: 'automatic',
     newArchEnabled: true,
@@ -14,6 +14,7 @@ export default {
       bundleIdentifier: 'com.anonymous.cherrystudio'
     },
     android: {
+      icon: './src/assets/images/adaptive-icon.png',
       adaptiveIcon: {
         foregroundImage: './src/assets/images/adaptive-icon.png',
         backgroundColor: '#ffffff'
@@ -59,7 +60,7 @@ export default {
     },
     extra: {
       eas: {
-        projectId: '80096eaf-3ad0-4b87-a466-15f04da1bacc'
+        projectId: '6ace903b-e144-4820-b968-54478056a48d'
       }
     }
   }
