@@ -1,4 +1,4 @@
- import { audioExts, documentExts, imageExts, KB, MB, textExts, videoExts } from '@/constants'
+import { audioExts, documentExts, imageExts, KB, MB, textExts, videoExts } from '@/constants'
 import { FileTypes } from '@/types/file'
 
 /**

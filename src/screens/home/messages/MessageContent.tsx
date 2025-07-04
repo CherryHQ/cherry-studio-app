@@ -42,7 +42,6 @@ const MessageContent: React.FC<Props> = ({ message }) => {
 const styles = StyleSheet.create({
   userContainer: {
     alignSelf: 'flex-end',
-    width: '50%',
     alignItems: 'flex-end'
   },
   assistantContainer: {

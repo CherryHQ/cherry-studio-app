@@ -1,5 +1,5 @@
 import React from 'react'
-import { XStack } from 'tamagui'
+import { ScrollView } from 'tamagui'
 
 import { FileType } from '@/types/file'
 
@@ -12,11 +12,11 @@ interface FilePreviewProps {
 
 const FilePreview: React.FC<FilePreviewProps> = ({ files, setFiles }) => {
   return (
-    <XStack>
-      {files.map(file => {
-        return <PreviewItem key={file.id} file={file} files={files} setFiles={setFiles} />
-      })}
-    </XStack>
+    <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ flexDirection: 'row' }}>
+      {files.map((file, index) => (
+        <PreviewItem key={index} file={file} files={files} setFiles={setFiles} />
+      ))}
+    </ScrollView>
   )
 }
 

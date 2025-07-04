@@ -2,13 +2,7 @@ import { FC, memo } from 'react'
 import React from 'react'
 import { View, XStack } from 'tamagui'
 
-import {
-  ImageMessageBlock,
-  MainTextMessageBlock,
-  MessageBlock,
-  MessageBlockStatus,
-  MessageBlockType
-} from '@/types/message'
+import { MainTextMessageBlock, MessageBlock, MessageBlockStatus, MessageBlockType } from '@/types/message'
 
 import FileBlock from './FileBlock'
 import ImageBlock from './ImageBlock'
@@ -21,12 +15,17 @@ interface MessageBlockRendererProps {
   blocks: MessageBlock[]
 }
 
-const filterImageBlockGroups = (blocks: MessageBlock[]): (MessageBlock[] | MessageBlock)[] => {
+/**
+ * Groups media blocks (images and files or Videos/Audio(later)) in the message.
+ * @param blocks The message blocks to group.
+ * @returns An array of grouped media blocks.
+ */
+const filterMediaBlockGroups = (blocks: MessageBlock[]): (MessageBlock[] | MessageBlock)[] => {
   return blocks.reduce((acc: (MessageBlock[] | MessageBlock)[], currentBlock) => {
-    if (currentBlock.type === MessageBlockType.IMAGE) {
+    if (currentBlock.type === MessageBlockType.IMAGE || currentBlock.type === MessageBlockType.FILE) {
       const prevGroup = acc[acc.length - 1]
 
-      if (Array.isArray(prevGroup) && prevGroup[0].type === MessageBlockType.IMAGE) {
+      if (Array.isArray(prevGroup) && prevGroup[0].type === currentBlock.type) {
         prevGroup.push(currentBlock)
       } else {
         acc.push([currentBlock])
@@ -40,19 +39,24 @@ const filterImageBlockGroups = (blocks: MessageBlock[]): (MessageBlock[] | Messa
 }
 
 const MessageBlockRenderer: FC<MessageBlockRendererProps> = ({ blocks }) => {
-  const groupedBlocks = filterImageBlockGroups(blocks)
+  const groupedBlocks = filterMediaBlockGroups(blocks)
 
   return (
-    <View flex={1}>
+    <View flex={1} width="100%">
       {groupedBlocks.map(block => {
         if (Array.isArray(block)) {
-          const groupKey = block.map(imageBlock => imageBlock.id).join('-')
+          const groupKey = blocks.map(block => block.id).join('-')
           return (
-            <View key={groupKey}>
-              <XStack>
-                {block.map(imageBlock => (
-                  <ImageBlock key={imageBlock.id} block={imageBlock as ImageMessageBlock} />
-                ))}
+            <View key={groupKey} width="100%">
+              <XStack flexWrap="wrap" gap="5" width="100%">
+                {blocks.map(block => {
+                  switch (block.type) {
+                    case MessageBlockType.IMAGE:
+                      return <ImageBlock key={block.id} block={block} />
+                    case MessageBlockType.FILE:
+                      return <FileBlock key={block.id} block={block} />
+                  }
+                })}
               </XStack>
             </View>
           )

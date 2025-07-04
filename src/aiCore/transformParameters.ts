@@ -19,6 +19,7 @@ import {
   isSupportedReasoningEffortModel,
   isSupportedThinkingTokenModel
 } from '@/config/models/reasoning'
+import { isVisionModel } from '@/config/models/vision'
 import { isWebSearchModel } from '@/config/models/webSearch'
 import { DEFAULT_MAX_TOKENS, defaultTimeout } from '@/constants'
 import { getAssistantSettings, getDefaultModel } from '@/services/AssistantService'
@@ -176,7 +177,7 @@ export async function convertMessagesToSdkMessages(
   model: Model
 ): Promise<StreamTextParams['messages']> {
   const sdkMessages: StreamTextParams['messages'] = []
-  const isVision = model.id.includes('vision') || model.id.includes('gpt-4') // 简单的视觉模型检测
+  const isVision = isVisionModel(model)
 
   for (const message of messages) {
     const sdkMessage = await convertMessageToSdkParam(message, isVision)

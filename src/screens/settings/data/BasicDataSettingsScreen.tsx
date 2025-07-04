@@ -35,8 +35,6 @@ export default function BasicDataSettingsScreen() {
 
   const handleRestore = async () => {
     // 处理恢复数据逻辑
-    console.log('Data restore pressed')
-
     try {
       const result = await DocumentPicker.getDocumentAsync()
 
@@ -44,9 +42,7 @@ export default function BasicDataSettingsScreen() {
 
       const asset = result.assets[0]
 
-      console.log('Selected file:', asset.name)
-
-      if (!['.zip', '.bak'].some(ext => asset.name.endsWith(ext))) throw new TypeError('Invalid file type')
+      if (!asset.name.endsWith('.json')) throw new TypeError('Invalid file type')
 
       const file: Omit<FileType, 'md5'> = {
         id: uuid(),
