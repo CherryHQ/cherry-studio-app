@@ -26,34 +26,7 @@ export default {
       // output: 'static',
       favicon: './src/assets/images/favicon.png'
     },
-    plugins: [
-      [
-        'expo-splash-screen',
-        {
-          image: './src/assets/images/splash-icon.png',
-          imageWidth: 200,
-          resizeMode: 'contain',
-          backgroundColor: '#ffffff'
-        }
-      ],
-      'expo-localization',
-      'expo-asset',
-      'expo-font',
-      'expo-web-browser',
-      'expo-sqlite',
-      [
-        'expo-document-picker',
-        {
-          iCloudContainerEnvironment: 'Production'
-        }
-      ],
-      [
-        'expo-image-picker',
-        {
-          photosPermission: 'The app accesses your photos to let you share them with your friends.'
-        }
-      ]
-    ],
+    plugins: [],
     experiments: {
       typedRoutes: true,
       reactCompiler: true

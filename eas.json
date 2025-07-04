@@ -14,10 +14,10 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "NODE_ENV": "production"
+        "NODE_ENV": "development"
       },
       "cache": {
-        "disabled": false
+        "disabled": true
       }
     },
     "production": {
