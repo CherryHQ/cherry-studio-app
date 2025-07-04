@@ -4,11 +4,17 @@ import { BackupData, BackupReduxData } from '@/types/databackup'
 import { FileType } from '@/types/file'
 import { ValueJSONed } from '@/types/utils'
 
+import { upsertBlocks } from '../../db/queries/messageBlocks.queries'
+import { updateTopics } from './TopicService'
+
 const fileStorageDir = new Directory(Paths.cache, 'Files')
 
-async function restoreTopics(topics: BackupData['indexedDB']['topics']) {
-  // restore topics
+async function restoreDBData(data: BackupData['indexedDB']) {
+  updateTopics(data.topics)
+  upsertBlocks(data.message_blocks)
 }
+
+async function restoreReduxData(data: BackupReduxData) {}
 
 export async function restore(backupFile: Omit<FileType, 'md5'>) {
   console.log('start to restore data...')
@@ -20,18 +26,16 @@ export async function restore(backupFile: Omit<FileType, 'md5'>) {
   try {
     // read data.json
     const data = JSON.parse(new File(backupFile.path).text()) as BackupData
+    const reduxDataJSON = JSON.parse(data.localStorage['persist:cherry-studio']) as ValueJSONed<BackupReduxData>
+    const reduxData: BackupReduxData = {} as BackupReduxData
 
-    const reduxData = JSON.parse(data.localStorage['persist:cherry-studio']) as ValueJSONed<BackupReduxData>
-
-    console.log('reduxData: ', reduxData.agents)
-
-    for (const key of Object.keys(reduxData) as (keyof BackupReduxData)[]) {
-      const value = reduxData[key]
-      console.log('key: ', key)
-      console.log('value: ', JSON.parse(value))
+    for (const key of Object.keys(reduxDataJSON) as (keyof BackupReduxData)[]) {
+      reduxData[key] = JSON.parse(reduxDataJSON[key])
     }
 
     // restore data
+    await restoreDBData(data.indexedDB)
+    await restoreReduxData(reduxData)
   } catch (error) {
     console.log('restore error: ', error)
   }

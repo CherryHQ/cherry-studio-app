@@ -1,4 +1,7 @@
-import { BaseMessageBlock, Message } from './message'
+import { WebSearchState } from '@/store/websearch'
+
+import { Assistant } from './assistant'
+import { Message, MessageBlock } from './message'
 
 export type WebDavConfig = {
   webdavHost: string
@@ -9,6 +12,12 @@ export type WebDavConfig = {
   skipBackupFile?: boolean
 }
 
+export type WebDAVSyncState = {
+  lastSyncTime: number | null
+  syncing: boolean
+  lastSyncError: string | null
+}
+
 export type BackupData = {
   time: number
   version: number
@@ -17,8 +26,8 @@ export type BackupData = {
     topics: {
       id: string
       messages: Message[]
-    }
-    message_blocks: BaseMessageBlock[]
+    }[]
+    message_blocks: MessageBlock[]
   }
   localStorage: {
     'persist:cherry-studio': string
@@ -27,11 +36,13 @@ export type BackupData = {
 
 export type BackupReduxData = {
   agents: string
-  assistants: string
-  backup: string
+  assistants: Assistant[]
+  backup: {
+    webdavSync: WebDAVSyncState
+  }
   copilot: string
-  inputTools: string
-  knowledge: string
+  // inputTools: string
+  // knowledge: string
   llm: string
   // mcp:string
   // minapps:string
@@ -40,5 +51,5 @@ export type BackupReduxData = {
   selectionStore: string
   settings: string
   shortcuts: string
-  websearch: string
+  websearch: WebSearchState
 }

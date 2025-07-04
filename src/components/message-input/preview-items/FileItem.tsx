@@ -1,11 +1,13 @@
-import { CircleX, File as FileIcon } from '@tamagui/lucide-icons'
+import { X } from '@tamagui/lucide-icons'
 import { FC } from 'react'
 import React from 'react'
 import { TouchableOpacity } from 'react-native'
 import FileViewer from 'react-native-file-viewer'
-import { Text, View } from 'tamagui'
+import { Stack, Text, View, XStack, YStack } from 'tamagui'
 
+import { FileIcon } from '@/components/icons/FileIcon'
 import { FileType } from '@/types/file'
+import { formatFileSize } from '@/utils/file'
 
 interface FileItemProps {
   file: FileType
@@ -14,7 +16,7 @@ interface FileItemProps {
   height?: number
 }
 
-const FileItem: FC<FileItemProps> = ({ file, onRemove, width = 60, height = 60 }) => {
+const FileItem: FC<FileItemProps> = ({ file, onRemove }) => {
   const handlePreview = () => {
     FileViewer.open(file.path, { displayName: file.name }).catch(error => {
       console.error('打开文件时出错:', error)
@@ -27,34 +29,53 @@ const FileItem: FC<FileItemProps> = ({ file, onRemove, width = 60, height = 60 }
   }
 
   return (
-    <View style={{ position: 'relative' }}>
+    <View>
       <TouchableOpacity onPress={handlePreview}>
-        <View
-          width={width}
-          height={height}
-          borderRadius={8}
-          backgroundColor="$gray6"
-          justifyContent="center"
-          alignItems="center"
-          padding="$1">
-          <FileIcon size={24} />
-          <Text fontSize={10} numberOfLines={1} ellipsizeMode="middle">
-            {file.name || 'file'}
-          </Text>
+        <View>
+          <XStack
+            gap={12}
+            width="auto"
+            // height={height}
+            borderRadius={8}
+            backgroundColor="rgba(0, 185, 107, 0.15)"
+            justifyContent="center"
+            alignItems="flex-start"
+            paddingVertical={8}
+            paddingHorizontal={12}>
+            <Stack
+              width={40}
+              height={40}
+              gap={10}
+              borderRadius={99}
+              backgroundColor="rgba(0, 185, 107, 1)"
+              alignItems="center"
+              justifyContent="center">
+              <FileIcon size={24} />
+            </Stack>
+            <YStack justifyContent="center" gap={2}>
+              <Text fontSize={16} lineHeight={20} numberOfLines={1} ellipsizeMode="middle">
+                {file.name}
+              </Text>
+              <Text fontSize={12} lineHeight={16}>
+                {formatFileSize(file.size)}
+              </Text>
+            </YStack>
+            {onRemove && (
+              <TouchableOpacity onPress={handleRemove}>
+                <Stack
+                  width={16}
+                  height={16}
+                  backgroundColor="rgba(255, 0, 0, 0.2)"
+                  borderRadius={99}
+                  alignItems="center"
+                  justifyContent="center">
+                  <X size={10} color="rgba(255, 0, 0, 1)" />
+                </Stack>
+              </TouchableOpacity>
+            )}
+          </XStack>
         </View>
       </TouchableOpacity>
-      {onRemove && (
-        <TouchableOpacity
-          onPress={handleRemove}
-          style={{
-            position: 'absolute',
-            top: -8,
-            right: -8,
-            borderRadius: 99
-          }}>
-          <CircleX size={22} />
-        </TouchableOpacity>
-      )}
     </View>
   )
 }

@@ -15,7 +15,7 @@ const ImageBlock: React.FC<Props> = ({ block }) => {
 
   return (
     <View>
-      <ImageItem file={block.file} width={168} height={168} />
+      <ImageItem file={block.file} />
     </View>
   )
 }
