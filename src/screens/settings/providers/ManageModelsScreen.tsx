@@ -257,9 +257,9 @@ export default function ManageModelsScreen() {
 
             {/* Model List Card with Accordion */}
             {isLoading ? (
-              <YStack flex={1} justifyContent="center" alignItems="center">
+              <SafeAreaContainer>
                 <ActivityIndicator />
-              </YStack>
+              </SafeAreaContainer>
             ) : (
               <YStack flex={1}>
                 {sortedModelGroups.length > 0 ? (

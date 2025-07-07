@@ -1,4 +1,5 @@
 import { Directory, File, Paths } from 'expo-file-system/next'
+import { unzip } from 'react-native-zip-archive'
 
 import { BackupData, BackupReduxData } from '@/types/databackup'
 import { FileType } from '@/types/file'
@@ -10,11 +11,14 @@ import { updateTopics } from './TopicService'
 const fileStorageDir = new Directory(Paths.cache, 'Files')
 
 async function restoreDBData(data: BackupData['indexedDB']) {
+  if (1) return
   updateTopics(data.topics)
   upsertBlocks(data.message_blocks)
 }
 
-async function restoreReduxData(data: BackupReduxData) {}
+async function restoreReduxData(data: BackupReduxData) {
+  console.log(data)
+}
 
 export async function restore(backupFile: Omit<FileType, 'md5'>) {
   console.log('start to restore data...')
@@ -24,8 +28,14 @@ export async function restore(backupFile: Omit<FileType, 'md5'>) {
   }
 
   try {
+    // unzip
+    const backupDir = new Directory(fileStorageDir, backupFile.name)
+    await unzip(backupFile.path, backupDir.uri)
+    console.log('backupDir: ', backupDir)
+
     // read data.json
-    const data = JSON.parse(new File(backupFile.path).text()) as BackupData
+    const data = JSON.parse(new File(backupDir.uri, 'data.json').text()) as BackupData
+
     const reduxDataJSON = JSON.parse(data.localStorage['persist:cherry-studio']) as ValueJSONed<BackupReduxData>
     const reduxData: BackupReduxData = {} as BackupReduxData
 

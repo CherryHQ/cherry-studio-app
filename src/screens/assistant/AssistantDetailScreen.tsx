@@ -31,9 +31,9 @@ export default function AssistantDetailScreen() {
 
   if (isLoading) {
     return (
-      <View>
+      <SafeAreaContainer>
         <ActivityIndicator />
-      </View>
+      </SafeAreaContainer>
     )
   }
 

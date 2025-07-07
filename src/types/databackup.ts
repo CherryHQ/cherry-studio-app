@@ -1,7 +1,11 @@
+import { CopilotState } from '@/store/copilot'
+import { LlmState } from '@/store/llm'
 import { WebSearchState } from '@/store/websearch'
 
 import { Assistant } from './assistant'
 import { Message, MessageBlock } from './message'
+import { SelectionState } from './selectionTypes'
+import { SettingsState } from './setting'
 
 export type WebDavConfig = {
   webdavHost: string
@@ -16,6 +20,14 @@ export type WebDAVSyncState = {
   lastSyncTime: number | null
   syncing: boolean
   lastSyncError: string | null
+}
+
+export type NutStore = {
+  nutstoreToken: string
+  nutstorePath: string
+  nutstoreAutoSync: boolean
+  nutstoreSyncInterval: number
+  nutstoreSyncState: WebDAVSyncState
 }
 
 export type BackupData = {
@@ -35,21 +47,26 @@ export type BackupData = {
 }
 
 export type BackupReduxData = {
-  agents: string
-  assistants: Assistant[]
+  agents: {
+    agents: Assistant[]
+  }
+  assistants: {
+    defaultAssistant: Assistant
+    assistants: Assistant[]
+  }
   backup: {
     webdavSync: WebDAVSyncState
   }
-  copilot: string
+  nutstore: NutStore
+  copilot: CopilotState
   // inputTools: string
   // knowledge: string
-  llm: string
+  llm: LlmState
   // mcp:string
   // minapps:string
-  nutstore: string
   // paintings:string
-  selectionStore: string
-  settings: string
-  shortcuts: string
+  selectionStore: SelectionState
+  settings: SettingsState
+  // shortcuts: string
   websearch: WebSearchState
 }

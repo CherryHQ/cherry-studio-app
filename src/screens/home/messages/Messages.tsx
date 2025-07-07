@@ -19,8 +19,8 @@ interface MessagesProps {
 }
 
 const Messages: FC<MessagesProps> = ({ assistant, topic, setActiveTopic, onComponentUpdate, onFirstUpdate }) => {
-  const { processedMessages } = useMessages(topic.id)
-  const groupedMessages = Object.entries(getGroupedMessages(processedMessages))
+  const { messages } = useMessages(topic.id)
+  const groupedMessages = Object.entries(getGroupedMessages(messages))
 
   const renderMessageGroup = ({ item }: { item: [string, GroupedMessage[]] }) => {
     return <MessageGroup assistant={assistant} item={item} />

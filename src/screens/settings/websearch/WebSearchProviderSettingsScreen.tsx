@@ -4,7 +4,7 @@ import { Eye, EyeOff, ShieldCheck } from '@tamagui/lucide-icons'
 import React, { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, Alert } from 'react-native'
-import { Button, Input, Stack, Text, useTheme, View, XStack, YStack } from 'tamagui'
+import { Button, Input, Stack, Text, useTheme, XStack, YStack } from 'tamagui'
 
 import ExternalLink from '@/components/ExternalLink'
 import { SettingContainer, SettingGroupTitle, SettingHelpText } from '@/components/settings'
@@ -24,21 +24,21 @@ export default function WebSearchProviderSettingsScreen() {
   const navigation = useNavigation()
   const route = useRoute<WebsearchProviderSettingsRouteProp>()
 
-  const { providerId } = route.params
-  const { provider, isLoading, updateProvider } = useWebSearchProvider(providerId)
-
   const [showApiKey, setShowApiKey] = useState(false)
+  const [checkLoading, setCheckLoading] = useState(false)
   const bottomSheetRef = useRef<BottomSheet>(null)
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false)
 
+  const { providerId } = route.params
+  const { provider, isLoading, updateProvider } = useWebSearchProvider(providerId)
   const webSearchProviderConfig = provider?.id ? WEB_SEARCH_PROVIDER_CONFIG[provider.id] : undefined
   const apiKeyWebsite = webSearchProviderConfig?.websites?.apiKey
 
   if (isLoading) {
     return (
-      <View>
+      <SafeAreaContainer>
         <ActivityIndicator />
-      </View>
+      </SafeAreaContainer>
     )
   }
 
@@ -80,10 +80,14 @@ export default function WebSearchProviderSettingsScreen() {
   async function checkSearch() {
     // TODO : 支持多个 API Key 检测
     if (!provider) return
+    setCheckLoading(true)
 
     try {
       const { valid, error } = await WebSearchService.checkSearch(provider)
-      const errorMessage = error && error?.message ? ' ' + error?.message : ''
+      const errorMessage =
+        error && error?.message
+          ? ' ' + (error.message.length > 100 ? error.message.substring(0, 100) + '...' : error.message)
+          : ''
 
       if (valid) {
         Alert.alert(t('settings.websearch.check_success'), t('settings.websearch.check_success_message'), [
@@ -110,6 +114,8 @@ export default function WebSearchProviderSettingsScreen() {
           onPress: () => setIsBottomSheetOpen(false)
         }
       ])
+    } finally {
+      setCheckLoading(false)
     }
   }
 
@@ -176,13 +182,13 @@ export default function WebSearchProviderSettingsScreen() {
           />
         </YStack>
       </SettingContainer>
-      {/*TODO 添加loading*/}
       <ApiCheckSheet
         bottomSheetRef={bottomSheetRef}
         isOpen={isBottomSheetOpen}
         onClose={handleBottomSheetClose}
         apiKey={provider?.apiKey || ''}
         onStartModelCheck={checkSearch}
+        loading={checkLoading}
       />
     </SafeAreaContainer>
   )

@@ -47,5 +47,5 @@ export const useMessages = (topicId: string) => {
     }
   }, [rawMessages])
 
-  return { processedMessages }
+  return { messages: processedMessages }
 }

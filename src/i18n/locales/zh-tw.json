@@ -93,7 +93,11 @@
       "see_all": "查看全部",
       "ok": "確定",
       "error_occurred": "發生錯誤",
-      "loading": "載入中..."
+      "loading": "載入中...",
+      "file": "檔案",
+      "photo": "相片",
+      "clear_all": "清除全部",
+      "camera": "相機"
     },
     "history": {
       "topics.empty": "未找到主題",
@@ -163,7 +167,9 @@
           "balance_recharge": "餘額充值",
           "free_bills": "免費帳單"
         },
-        "api_host.placeholder": "請輸入 API 主機"
+        "api_host.placeholder": "請輸入 API 主機",
+        "not_found": "找不到提供商",
+        "not_found_message": "導航到提供商頁面時發生錯誤"
       },
       "proxy.title": "代理地址",
       "theme.window.style.opaque": "不透明窗口",
@@ -298,6 +304,87 @@
           "description": "用於翻譯服務的助理"
         },
         "empty": "還沒有助理..."
+      },
+      "notion": {
+        "api_key": "Notion API 金鑰",
+        "api_key_placeholder": "輸入 Notion API 金鑰",
+        "check": {
+          "button": "檢查",
+          "empty_api_key": "API 金鑰未配置",
+          "empty_database_id": "資料庫 ID 未配置",
+          "error": "連接錯誤，請檢查網路配置和 API 金鑰以及資料庫 ID",
+          "fail": "連接失敗，請檢查網路和 API 金鑰以及資料庫 ID",
+          "success": "連接成功"
+        },
+        "database_id": "Notion 資料庫 ID",
+        "database_id_placeholder": "輸入 Notion 資料庫 ID",
+        "help": "Notion 配置文檔",
+        "page_name_key": "頁面標題欄位名稱",
+        "page_name_key_placeholder": "輸入頁面標題欄位名稱，預設為 Name",
+        "title": "Notion 設定",
+        "export_reasoning.title": "在匯出時包含推理鏈",
+        "export_reasoning.help": "啟用後，匯出的內容將包含助理生成的推理鏈（思考過程）。"
+      },
+      "yuque": {
+        "check": {
+          "button": "檢查",
+          "empty_repo_url": "請先輸入知識庫 URL",
+          "empty_token": "請先輸入語雀 Token",
+          "fail": "語雀連接驗證失敗",
+          "success": "語雀連接驗證成功"
+        },
+        "help": "獲取語雀 Token",
+        "repo_url": "語雀 URL",
+        "repo_url_placeholder": "https://www.yuque.com/username/xxx",
+        "title": "語雀配置",
+        "token": "語雀 Token",
+        "token_placeholder": "請輸入語雀 Token"
+      },
+      "joplin": {
+        "check": {
+          "button": "檢查",
+          "empty_token": "請輸入 Joplin 授權令牌",
+          "empty_url": "請輸入 Joplin 剪藏服務 URL",
+          "fail": "Joplin 連接驗證失敗",
+          "success": "Joplin 連接驗證成功"
+        },
+        "help": "點擊此處獲取 Joplin 授權令牌",
+        "title": "Joplin 配置",
+        "token": "Joplin 授權令牌",
+        "token_placeholder": "Joplin 授權令牌",
+        "url": "Joplin Web 剪藏服務 URL",
+        "url_placeholder": "http://127.0.0.1:41184/",
+        "export_reasoning.title": "在匯出時包含推理鏈",
+        "export_reasoning.help": "啟用後，匯出的內容將包含助理生成的推理鏈（思考過程）。"
+      },
+      "obsidian": {
+        "title": "Obsidian 配置",
+        "default_vault": "預設 Obsidian 儲存庫",
+        "default_vault_placeholder": "請選擇預設的 Obsidian 儲存庫",
+        "default_vault_loading": "正在載入 Obsidian 儲存庫...",
+        "default_vault_no_vaults": "未找到 Obsidian 儲存庫",
+        "default_vault_fetch_error": "獲取 Obsidian 儲存庫失敗",
+        "default_vault_export_failed": "匯出失敗"
+      },
+      "siyuan": {
+        "title": "思源筆記配置",
+        "api_url": "思源筆記 API URL",
+        "api_url_placeholder": "例如：http://127.0.0.1:6806",
+        "token": "思源筆記 Token",
+        "token.help": "獲取思源筆記 Token",
+        "token_placeholder": "請輸入思源筆記 Token",
+        "box_id": "思源筆記筆記本 ID",
+        "box_id_placeholder": "請輸入思源筆記筆記本 ID",
+        "root_path": "思源筆記根路徑",
+        "root_path_placeholder": "例如：/CherryStudio",
+        "check": {
+          "title": "連接檢查",
+          "button": "檢查",
+          "empty_config": "請填寫 API 地址和令牌",
+          "success": "連接成功",
+          "fail": "連接失敗，請檢查 API 地址和令牌",
+          "error": "連接錯誤，請檢查網路連接"
+        }
       }
     },
     "profile": {
@@ -387,6 +474,12 @@
     "topics": {
       "title": "主題",
       "title.recent": "最近的主題"
+    },
+    "errors": {
+      "cannotOpenLink": "無法打開連結: {{error}}",
+      "linkErrorTitle": "打開連結錯誤",
+      "deviceCannotHandleLink": "您的設備無法處理此連結: {{href}}",
+      "cannotOpenLinkTitle": "無法打開連結"
     }
   }
 }

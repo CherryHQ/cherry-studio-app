@@ -23,7 +23,8 @@ export function MenuTabContent({ searchPlaceholder, title, onSeeAllPress, childr
         contentContainerStyle={{
           paddingBottom: 20,
           gap: 20
-        }}>
+        }}
+        showsVerticalScrollIndicator={false}>
         <YStack>
           <XStack justifyContent="space-between" alignItems="center">
             <XStack gap={5} alignItems="center">
