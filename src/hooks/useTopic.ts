@@ -1,44 +1,34 @@
-export const TopicManager = {
-  async getTopic(id: string) {
-    // return await db.topics.get(id)
-    return
-  },
+import { eq } from 'drizzle-orm'
+import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
 
-  async getAllTopics() {
-    // return await db.topics.toArray()
-    return
-  },
+import { Topic } from '@/types/assistant'
 
-  async getTopicMessages(id: string) {
-    // const topic = await TopicManager.getTopic(id)
-    // return topic ? topic.messages : []
-    return
-  },
+import { db } from '../../db'
+import { transformDbToTopic, upsertTopics } from '../../db/queries/topics.queries'
+import { topics as topicSchema } from '../../db/schema'
 
-  async removeTopic(id: string) {
-    // const messages = await TopicManager.getTopicMessages(id)
+export function useTopic(topicId: string) {
+  const query = db.select().from(topicSchema).where(eq(topicSchema.id, topicId))
 
-    // for (const message of messages) {
-    //   await deleteMessageFiles(message)
-    // }
+  const { data: rawTopic, updatedAt } = useLiveQuery(query)
 
-    // db.topics.delete(id)
-    return
-  },
+  const updateTopic = async (topic: Topic) => {
+    await upsertTopics([topic])
+  }
 
-  async clearTopicMessages(id: string) {
-    //   const topic = await TopicManager.getTopic(id)
+  if (!updatedAt) {
+    return {
+      topic: null,
+      isLoading: true,
+      updateTopic
+    }
+  }
 
-    //   if (topic) {
-    //     for (const message of topic?.messages ?? []) {
-    //       await deleteMessageFiles(message)
-    //     }
+  const processedTopic = transformDbToTopic(rawTopic[0])
 
-    //     topic.messages = []
-
-    //     await db.topics.update(id, topic)
-    //   }
-    // }
-    return
+  return {
+    topic: processedTopic,
+    isLoading: false,
+    updateTopic
   }
 }

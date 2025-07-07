@@ -1,7 +1,7 @@
 import { ChevronRight } from '@tamagui/lucide-icons'
 import React from 'react'
-import { Text, XStack } from 'tamagui' // Removed Select, Sheet, Adapt, Check
-import * as DropdownMenu from 'zeego/dropdown-menu' // Added zeego
+import { Text, XStack } from 'tamagui'
+import * as DropdownMenu from 'zeego/dropdown-menu'
 
 interface SelectOptionItem<T = any> {
   label: string

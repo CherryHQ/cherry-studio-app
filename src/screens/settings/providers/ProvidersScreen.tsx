@@ -3,7 +3,7 @@ import { Plus } from '@tamagui/lucide-icons'
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
-import { ScrollView, useTheme, View, YStack } from 'tamagui'
+import { ScrollView, useTheme, YStack } from 'tamagui'
 
 import { SettingContainer, SettingGroup, SettingGroupTitle } from '@/components/settings'
 import { HeaderBar } from '@/components/settings/HeaderBar'
@@ -28,9 +28,9 @@ export default function ProvidersScreen() {
 
   if (isLoading) {
     return (
-      <View>
+      <SafeAreaContainer>
         <ActivityIndicator />
-      </View>
+      </SafeAreaContainer>
     )
   }
 

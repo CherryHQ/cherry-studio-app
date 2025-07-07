@@ -1,5 +1,6 @@
-import * as ExpoLinking from 'expo-linking' // 使用 Expo 的 Linking
+import * as ExpoLinking from 'expo-linking'
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Alert, OpaqueColorValue } from 'react-native'
 import { Button, GetThemeValueForKey, Text } from 'tamagui'
 
@@ -12,6 +13,8 @@ interface ExternalLinkProps {
 }
 
 const ExternalLink: React.FC<ExternalLinkProps> = ({ href, children, color = '$blue10', size, onError }) => {
+  const { t } = useTranslation()
+
   const handlePress = async () => {
     const supported = await ExpoLinking.canOpenURL(href)
 
@@ -19,23 +22,25 @@ const ExternalLink: React.FC<ExternalLinkProps> = ({ href, children, color = '$b
       try {
         await ExpoLinking.openURL(href)
       } catch (error) {
-        const message = `无法打开链接: ${error instanceof Error ? error.message : String(error)}`
+        const message = t('errors.cannotOpenLink', {
+          error: error instanceof Error ? error.message : String(error)
+        })
         console.error(message, error)
 
         if (onError) {
           onError(error instanceof Error ? error : new Error(String(error)))
         } else {
-          Alert.alert('打开链接出错', message)
+          Alert.alert(t('errors.linkErrorTitle'), message)
         }
       }
     } else {
-      const message = `您的设备无法处理此链接: ${href}`
+      const message = t('errors.deviceCannotHandleLink', { href })
       console.warn(message)
 
       if (onError) {
         onError(new Error(message))
       } else {
-        Alert.alert('无法打开链接', message)
+        Alert.alert(t('errors.cannotOpenLinkTitle'), message)
       }
     }
   }

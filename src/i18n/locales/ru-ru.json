@@ -93,7 +93,11 @@
       "see_all": "Показать все",
       "ok": "ОК",
       "error_occurred": "Произошла ошибка",
-      "loading": "Загрузка..."
+      "loading": "Загрузка...",
+      "file": "Файл",
+      "photo": "Фото",
+      "clear_all": "Очистить всё",
+      "camera": "Камера"
     },
     "history": {
       "topics.empty": "Темы не найдены",
@@ -163,7 +167,9 @@
           "balance_recharge": "Пополнение баланса",
           "free_bills": "Бесплатные счета"
         },
-        "api_host.placeholder": "Пожалуйста, введите API хост"
+        "api_host.placeholder": "Пожалуйста, введите API хост",
+        "not_found": "Поставщик не найден",
+        "not_found_message": "Произошла ошибка при переходе на страницу провайдера."
       },
       "proxy.title": "Адрес прокси",
       "theme.window.style.opaque": "Непрозрачное окно",
@@ -298,6 +304,87 @@
           "description": "Помощник, используемый для службы перевода"
         },
         "empty": "Пока нет помощников..."
+      },
+      "notion": {
+        "api_key": "Ключ API Notion",
+        "api_key_placeholder": "Введите ключ API Notion",
+        "check": {
+          "button": "Проверить",
+          "empty_api_key": "API ключ не настроен",
+          "empty_database_id": "ID базы данных не настроен",
+          "error": "Ошибка подключения, проверьте настройки сети, API ключ и ID базы данных",
+          "fail": "Не удалось подключиться, проверьте сеть, API ключ и ID базы данных",
+          "success": "Подключение успешно"
+        },
+        "database_id": "ID базы данных Notion",
+        "database_id_placeholder": "Введите ID базы данных Notion",
+        "help": "Документация по настройке Notion",
+        "page_name_key": "Название поля заголовка страницы",
+        "page_name_key_placeholder": "Введите название поля заголовка страницы, по умолчанию Name",
+        "title": "Настройки Notion",
+        "export_reasoning.title": "Включить цепочку рассуждений в экспорт",
+        "export_reasoning.help": "При включении экспортируемый контент будет включать цепочку рассуждений (процесс мышления)."
+      },
+      "yuque": {
+        "check": {
+          "button": "Проверить",
+          "empty_repo_url": "Пожалуйста, сначала введите URL базы знаний",
+          "empty_token": "Пожалуйста, сначала введите токен Yuque",
+          "fail": "Проверка подключения Yuque не удалась",
+          "success": "Подключение Yuque успешно проверено"
+        },
+        "help": "Получить токен Yuque",
+        "repo_url": "URL Yuque",
+        "repo_url_placeholder": "https://www.yuque.com/username/xxx",
+        "title": "Конфигурация Yuque",
+        "token": "Токен Yuque",
+        "token_placeholder": "Пожалуйста, введите токен Yuque"
+      },
+      "joplin": {
+        "check": {
+          "button": "Проверить",
+          "empty_token": "Пожалуйста, введите токен авторизации Joplin",
+          "empty_url": "Пожалуйста, введите URL сервиса Joplin Clipper",
+          "fail": "Проверка подключения Joplin не удалась",
+          "success": "Проверка подключения Joplin успешна"
+        },
+        "help": "Нажмите здесь, чтобы получить токен авторизации Joplin",
+        "title": "Конфигурация Joplin",
+        "token": "Токен авторизации Joplin",
+        "token_placeholder": "Токен авторизации Joplin",
+        "url": "URL сервиса Joplin Web Clipper",
+        "url_placeholder": "http://127.0.0.1:41184/",
+        "export_reasoning.title": "Включить цепочку рассуждений в экспорт",
+        "export_reasoning.help": "При включении экспортируемый контент будет включать цепочку рассуждений (процесс мышления), созданную ассистентом."
+      },
+      "obsidian": {
+        "title": "Конфигурация Obsidian",
+        "default_vault": "Хранилище Obsidian по умолчанию",
+        "default_vault_placeholder": "Пожалуйста, выберите хранилище Obsidian по умолчанию",
+        "default_vault_loading": "Загрузка хранил��ща Obsidian...",
+        "default_vault_no_vaults": "Хранилища Obsidian не найдены",
+        "default_vault_fetch_error": "Не удалось получить хранилище Obsidian",
+        "default_vault_export_failed": "Экспорт не удался"
+      },
+      "siyuan": {
+        "title": "Конфигурация Siyuan Note",
+        "api_url": "URL API Siyuan Note",
+        "api_url_placeholder": "например: http://127.0.0.1:6806",
+        "token": "Токен Siyuan Note",
+        "token.help": "Получить токен Siyuan Note",
+        "token_placeholder": "Пожалуйста, введите токен Siyuan Note",
+        "box_id": "ID блока Siyuan Note",
+        "box_id_placeholder": "Пожалуйста, введите ID блока Siyuan Note",
+        "root_path": "Корневой путь Siyuan Note",
+        "root_path_placeholder": "например: /CherryStudio",
+        "check": {
+          "title": "Проверка подключения",
+          "button": "Проверить",
+          "empty_config": "Пожалуйста, заполните API адрес и токен",
+          "success": "Подключение успешно",
+          "fail": "Подключение не удалось, проверьте API адрес и токен",
+          "error": "Ошибка подключения, проверьте сетевое соединение"
+        }
       }
     },
     "profile": {
@@ -387,6 +474,12 @@
     "topics": {
       "title": "Тема",
       "title.recent": "Недавние темы"
+    },
+    "errors": {
+      "cannotOpenLink": "Не удается открыть ссылку: {{error}}",
+      "linkErrorTitle": "Ошибка открытия ссылки",
+      "deviceCannotHandleLink": "Ваше устройство не может обработать эту ссылку: {{href}}",
+      "cannotOpenLinkTitle": "Не удается открыть ссылку"
     }
   }
 }

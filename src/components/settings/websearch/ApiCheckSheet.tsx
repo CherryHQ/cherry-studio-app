@@ -2,7 +2,8 @@ import BottomSheet from '@gorhom/bottom-sheet'
 import { ChevronsRight } from '@tamagui/lucide-icons'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button, Text, XStack, YStack } from 'tamagui'
+import { ActivityIndicator } from 'react-native'
+import { Button, Text, useTheme, XStack, YStack } from 'tamagui'
 
 import { ISheet } from '@/components/ui/Sheet'
 
@@ -12,11 +13,21 @@ interface ApiCheckSheetProps {
   onClose: () => void
   apiKey: string
   onStartModelCheck: () => void
+  loading?: boolean
 }
 
-export function ApiCheckSheet({ bottomSheetRef, isOpen, onClose, apiKey, onStartModelCheck }: ApiCheckSheetProps) {
+export function ApiCheckSheet({
+  bottomSheetRef,
+  isOpen,
+  onClose,
+  apiKey,
+  onStartModelCheck,
+  loading = false
+}: ApiCheckSheetProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
   const sheetSnapPoints = ['40%']
+  const indicatorColor = theme.background.val.includes('dark') ? 'white' : 'black'
 
   return (
     <ISheet bottomSheetRef={bottomSheetRef} isOpen={isOpen} onClose={onClose} snapPoints={sheetSnapPoints}>
@@ -30,14 +41,18 @@ export function ApiCheckSheet({ bottomSheetRef, isOpen, onClose, apiKey, onStart
             width={224}
             borderRadius={70}
             backgroundColor="$color1"
-            disabled={!apiKey}
+            disabled={!apiKey || loading}
             onPress={onStartModelCheck}>
-            <XStack width="100%" alignItems="center" justifyContent="space-between">
-              <Text fontSize={18} fontWeight="bold">
-                {t('button.start_check_model')}
-              </Text>
-              <ChevronsRight />
-            </XStack>
+            {loading ? (
+              <ActivityIndicator color={indicatorColor} />
+            ) : (
+              <XStack width="100%" alignItems="center" justifyContent="space-between">
+                <Text fontSize={18} fontWeight="bold">
+                  {t('button.start_check_model')}
+                </Text>
+                <ChevronsRight />
+              </XStack>
+            )}
           </Button>
         </XStack>
       </YStack>

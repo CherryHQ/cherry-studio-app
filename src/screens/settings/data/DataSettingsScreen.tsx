@@ -57,27 +57,27 @@ export default function DataSettingsScreen() {
       items: [
         {
           title: 'Notion',
-          screen: 'notion',
+          screen: 'NotionSettingsScreen',
           icon: <DataBackupIcon provider="notion" />
         },
         {
           title: 'Yuque',
-          screen: 'yuque',
+          screen: 'YuqueSettingsScreen',
           icon: <DataBackupIcon provider="yuque" />
         },
         {
           title: 'Joplin',
-          screen: 'joplin',
+          screen: 'JoplinSettingsScreen',
           icon: <DataBackupIcon provider="joplin" />
         },
         {
           title: 'Obsidian',
-          screen: 'obsidian',
+          screen: 'ObsidianSettingsScreen',
           icon: <DataBackupIcon provider="obsidian" />
         },
         {
           title: 'SiYuan Note',
-          screen: 'siyuan',
+          screen: 'SiyuanSettingsScreen',
           icon: <DataBackupIcon provider="siyuan" />
         }
       ]

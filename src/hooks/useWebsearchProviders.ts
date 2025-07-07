@@ -21,7 +21,9 @@ export function useWebsearchProviders() {
 
   const processedProviders = rawProviders.map(provider => transformDbToWebSearchProvider(provider))
   const freeProviders = processedProviders.filter(provider => provider.id.startsWith('local-'))
-  const apiProviders = processedProviders.filter(provider => !provider.id.startsWith('local-'))
+  const apiProviders = processedProviders.filter(
+    provider => !provider.id.startsWith('local-') && provider.id !== 'searxng'
+  )
 
   return {
     freeProviders,

@@ -1,18 +1,25 @@
+import { useNavigation } from '@react-navigation/native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Image, ScrollView, styled, Text, XStack, YStack } from 'tamagui'
 
 import AssistantItemCard from '@/components/assistant/AssistantItemCard'
+import { useAssistants } from '@/hooks/useAssistant'
 import { Assistant } from '@/types/assistant'
+import { NavigationProps } from '@/types/naviagate'
 
 interface WelcomeContentProps {
-  systemAssistants: Assistant[]
-  onSeeAllPress: () => void
-  onAssistantPress: (assistant: Assistant) => void
+  onAssistantSelect: (assistant: Assistant) => void
 }
 
-const WelcomeContent = ({ systemAssistants, onSeeAllPress, onAssistantPress }: WelcomeContentProps) => {
+const WelcomeContent = ({ onAssistantSelect }: WelcomeContentProps) => {
   const { t } = useTranslation()
+  const navigation = useNavigation<NavigationProps>()
+  const { assistants: systemAssistants } = useAssistants()
+
+  const handleSeeAllPress = () => {
+    navigation.navigate('AssistantMarketScreen')
+  }
 
   return (
     <>
@@ -20,7 +27,7 @@ const WelcomeContent = ({ systemAssistants, onSeeAllPress, onAssistantPress }: W
       <YStack gap={17} paddingHorizontal={20} paddingTop={40}>
         <XStack justifyContent="space-between">
           <Text>{t('assistants.market.popular')}</Text>
-          <Text onPress={onSeeAllPress}>{t('common.see_all')}</Text>
+          <Text onPress={handleSeeAllPress}>{t('common.see_all')}</Text>
         </XStack>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <XStack gap={20}>
@@ -29,7 +36,7 @@ const WelcomeContent = ({ systemAssistants, onSeeAllPress, onAssistantPress }: W
                 key={assistant.id}
                 assistant={assistant}
                 setIsBottomSheetOpen={() => {}}
-                onAssistantPress={() => onAssistantPress(assistant)}
+                onAssistantPress={() => onAssistantSelect(assistant)}
               />
             ))}
           </XStack>

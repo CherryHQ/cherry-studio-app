@@ -9,6 +9,11 @@ export type RootStackParamList = {
   WebDavScreen: undefined
   WebDavConfigScreen: undefined
   NutstoreLoginScreen: undefined
+  NotionSettingsScreen: undefined
+  YuqueSettingsScreen: undefined
+  JoplinSettingsScreen: undefined
+  ObsidianSettingsScreen: undefined
+  SiyuanSettingsScreen: undefined
   AssistantSettingsScreen: undefined
   ProvidersScreen: undefined
   AboutScreen: undefined

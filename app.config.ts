@@ -27,6 +27,7 @@ export default {
       favicon: './src/assets/images/favicon.png'
     },
     plugins: [
+      ['expo-build-properties', { ios: { deploymentTarget: '15.5' } }],
       [
         'expo-splash-screen',
         {
@@ -51,6 +52,14 @@ export default {
         'expo-image-picker',
         {
           photosPermission: 'The app accesses your photos to let you share them with your friends.'
+        }
+      ],
+      [
+        'expo-camera',
+        {
+          cameraPermission: 'Allow $(PRODUCT_NAME) to access your camera',
+          microphonePermission: 'Allow $(PRODUCT_NAME) to access your microphone',
+          recordAudioAndroid: true
         }
       ]
     ],

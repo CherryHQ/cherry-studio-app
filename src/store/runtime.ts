@@ -11,13 +11,21 @@ export interface UpdateState {
   timestamp: number
 }
 
+export interface ExportState {
+  isExporting: boolean
+}
+
 export interface RuntimeState {
   timestamp: number
+  export: ExportState
   websearch: WebSearchState
 }
 
 const initialState: RuntimeState = {
   timestamp: dayjs().unix(),
+  export: {
+    isExporting: false
+  },
   websearch: {
     activeSearches: {}
   }
@@ -29,6 +37,9 @@ const runtimeSlice = createSlice({
   reducers: {
     setTimestamp: (state, action: PayloadAction<number>) => {
       state.timestamp = action.payload
+    },
+    setExportState: (state, action: PayloadAction<Partial<ExportState>>) => {
+      state.export = { ...state.export, ...action.payload }
     },
     // WebSearch related actions
     setActiveSearches: (state, action: PayloadAction<Record<string, WebSearchStatus>>) => {
@@ -46,6 +57,6 @@ const runtimeSlice = createSlice({
   }
 })
 
-export const { setTimestamp, setWebSearchStatus } = runtimeSlice.actions
+export const { setTimestamp, setWebSearchStatus, setExportState } = runtimeSlice.actions
 
 export default runtimeSlice.reducer

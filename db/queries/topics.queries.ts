@@ -12,7 +12,7 @@ import { topics } from '../schema'
  * @param dbRecord - 从数据库检索的记录。
  * @returns 一个 Topic 对象。
  */
-function transformDbToTopic(dbRecord: any): Topic {
+export function transformDbToTopic(dbRecord: any): Topic {
   return {
     id: dbRecord.id,
     assistantId: dbRecord.assistant_id,

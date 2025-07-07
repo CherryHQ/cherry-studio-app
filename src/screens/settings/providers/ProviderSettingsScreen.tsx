@@ -6,7 +6,7 @@ import React, { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view'
-import { Accordion, Button, Separator, Text, View, XStack, YStack } from 'tamagui'
+import { Accordion, Button, Separator, Text, XStack, YStack } from 'tamagui'
 
 import { SettingContainer, SettingGroup, SettingGroupTitle, SettingRow } from '@/components/settings'
 import { HeaderBar } from '@/components/settings/HeaderBar'
@@ -103,11 +103,10 @@ export default function ProviderSettingsScreen() {
   }
 
   if (isLoading) {
-    // todo 会产生白屏动画
     return (
-      <View>
+      <SafeAreaContainer>
         <ActivityIndicator />
-      </View>
+      </SafeAreaContainer>
     )
   }
 

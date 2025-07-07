@@ -9,6 +9,8 @@ import { useAssistant } from '@/hooks/useAssistant'
 import { Assistant } from '@/types/assistant'
 import { NavigationProps } from '@/types/naviagate'
 
+import SafeAreaContainer from '../ui/SafeAreaContainer'
+
 interface AssistantDetailsProps {
   assistant: Assistant
   onEdit: () => void
@@ -65,7 +67,11 @@ export const AssistantSelection: React.FC<AssistantSelectionProps> = ({ assistan
   }
 
   if (isLoading) {
-    return <ActivityIndicator />
+    return (
+      <SafeAreaContainer>
+        <ActivityIndicator />
+      </SafeAreaContainer>
+    )
   }
 
   if (!assistant) {

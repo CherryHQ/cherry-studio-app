@@ -27,10 +27,10 @@
       "settings.max_tokens": "启用最大令牌限制",
       "settings.max_tokens_value": "最大令牌限制",
       "settings.reasoning": "推理努力",
-      "settings.reasoning.auto": "自动",
-      "settings.reasoning.low": "低",
-      "settings.reasoning.medium": "中等",
-      "settings.reasoning.high": "高",
+      "settings.reasoning.auto": "默认",
+      "settings.reasoning.low": "浮想",
+      "settings.reasoning.medium": "斟酌",
+      "settings.reasoning.high": "沉思",
       "market": {
         "title": "助理市场",
         "search_placeholder": "搜索助手...",
@@ -93,7 +93,17 @@
       "see_all": "查看全部",
       "ok": "确定",
       "error_occurred": "发生错误",
-      "loading": "加载中..."
+      "loading": "加载中...",
+      "file": "文件",
+      "photo": "照片",
+      "clear_all": "清除全部",
+      "camera": "相机"
+    },
+    "errors": {
+      "cannotOpenLink": "无法打开链接: {{error}}",
+      "linkErrorTitle": "打开链接出错",
+      "deviceCannotHandleLink": "您的设备无法处理此链接: {{href}}",
+      "cannotOpenLinkTitle": "无法打开链接"
     },
     "history": {
       "topics.empty": "未找到主题",
@@ -163,7 +173,9 @@
           "balance_recharge": "余额充值",
           "free_bills": "免费额度"
         },
-        "api_host.placeholder": "请输入 API 主机"
+        "api_host.placeholder": "请输入 API 主机",
+        "not_found": "未找到提供商",
+        "not_found_message": "导航到提供商页面时出现错误"
       },
       "proxy.title": "代理地址",
       "theme.window.style.opaque": "不透明窗口",
@@ -182,7 +194,7 @@
         },
         "title": "网络搜索",
         "selectPlaceholder": "请选择网页搜索提供商...",
-        "searchWithDates": "包含日期搜索",
+        "searchWithDates": "包含日期��索",
         "overrideSearchService": "覆盖搜索服务",
         "searchCount": "搜索数量",
         "contentLengthLimit": "内容长度限制",
@@ -298,6 +310,87 @@
           "description": "用于翻译服务的助手"
         },
         "empty": "还没有助手..."
+      },
+      "notion": {
+        "api_key": "Notion API 密钥",
+        "api_key_placeholder": "输入 Notion API 密钥",
+        "check": {
+          "button": "检查",
+          "empty_api_key": "API 密钥未配置",
+          "empty_database_id": "数据库 ID 未配置",
+          "error": "连接错误，请检查网络配置和 API 密钥以及数据库 ID",
+          "fail": "连接失败，请检查网络和 API 密钥以及数据库 ID",
+          "success": "连接成功"
+        },
+        "database_id": "Notion 数据库 ID",
+        "database_id_placeholder": "输入 Notion 数据库 ID",
+        "help": "Notion 配置文档",
+        "page_name_key": "页面标题字段名",
+        "page_name_key_placeholder": "输入页面标题字段名，默认为 Name",
+        "title": "Notion 设置",
+        "export_reasoning.title": "在导出时包含推理链",
+        "export_reasoning.help": "启用后，导出的内容将包含助手生成的推理链（思考过程）。"
+      },
+      "yuque": {
+        "check": {
+          "button": "检查",
+          "empty_repo_url": "请先输入知识库 URL",
+          "empty_token": "请先输入语雀 Token",
+          "fail": "语雀连接验证失败",
+          "success": "语雀连接验证成功"
+        },
+        "help": "获取语雀 Token",
+        "repo_url": "语雀 URL",
+        "repo_url_placeholder": "https://www.yuque.com/username/xxx",
+        "title": "语雀配置",
+        "token": "语雀 Token",
+        "token_placeholder": "请输入语雀 Token"
+      },
+      "joplin": {
+        "check": {
+          "button": "检查",
+          "empty_token": "请输入 Joplin 授权令牌",
+          "empty_url": "请输入 Joplin 剪藏服务 URL",
+          "fail": "Joplin 连接验证失败",
+          "success": "Joplin 连接验证成功"
+        },
+        "help": "点击此处获取 Joplin 授权令牌",
+        "title": "Joplin 配置",
+        "token": "Joplin 授权令牌",
+        "token_placeholder": "Joplin 授权令牌",
+        "url": "Joplin Web 剪藏服务 URL",
+        "url_placeholder": "http://127.0.0.1:41184/",
+        "export_reasoning.title": "在导出时包含推理链",
+        "export_reasoning.help": "启用后，导出的内容将包含助手生成的推理链（思考过程）。"
+      },
+      "obsidian": {
+        "title": "Obsidian 配置",
+        "default_vault": "默认 Obsidian 仓库",
+        "default_vault_placeholder": "请选择默认的 Obsidian 仓库",
+        "default_vault_loading": "正在加载 Obsidian 仓库...",
+        "default_vault_no_vaults": "未找到 Obsidian 仓库",
+        "default_vault_fetch_error": "获取 Obsidian 仓库失败",
+        "default_vault_export_failed": "导出失败"
+      },
+      "siyuan": {
+        "title": "思源笔记配置",
+        "api_url": "思源笔记 API URL",
+        "api_url_placeholder": "例如：http://127.0.0.1:6806",
+        "token": "思源笔记 Token",
+        "token.help": "获取思源笔记 Token",
+        "token_placeholder": "请输入思源笔记 Token",
+        "box_id": "思源笔记笔记本 ID",
+        "box_id_placeholder": "请输入思源笔记笔记本 ID",
+        "root_path": "思源笔记根路径",
+        "root_path_placeholder": "例如：/CherryStudio",
+        "check": {
+          "title": "连接检查",
+          "button": "检查",
+          "empty_config": "请填写 API 地址和令牌",
+          "success": "连接成功",
+          "fail": "连接失败，请检查 API 地址和令牌",
+          "error": "连接错误，请检查网络连接"
+        }
       }
     },
     "profile": {
