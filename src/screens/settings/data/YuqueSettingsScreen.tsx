@@ -1,127 +1,79 @@
-import BottomSheet from '@gorhom/bottom-sheet'
-import { useNavigation } from '@react-navigation/native'
-import { Eye, EyeOff, ShieldCheck } from '@tamagui/lucide-icons'
-import React, { useRef, useState } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert } from 'react-native'
-import { Button, Input, Stack, useTheme, XStack, YStack } from 'tamagui'
 
-import ExternalLink from '@/components/ExternalLink'
-import { SettingContainer, SettingGroupTitle } from '@/components/settings'
-import { HeaderBar } from '@/components/settings/HeaderBar'
-import { ApiCheckSheet } from '@/components/settings/websearch/ApiCheckSheet'
-import SafeAreaContainer from '@/components/ui/SafeAreaContainer'
+import { useDataBackupProvider } from '@/hooks/useDataBackup'
+import ProviderSettingsScreen, { ProviderConfig } from '@/screens/settings/data/DataProviderSettingsScreen'
 
 export default function YuqueSettingsScreen() {
   const { t } = useTranslation()
-  const theme = useTheme()
-  const navigation = useNavigation()
-
-  const [showApiKey, setShowApiKey] = useState(false)
-  const [checkLoading, setCheckLoading] = useState(false)
-  const bottomSheetRef = useRef<BottomSheet>(null)
-  const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false)
-
-  const handleBackPress = () => {
-    navigation.goBack()
-  }
-
-  const handleOpenBottomSheet = () => {
-    bottomSheetRef.current?.expand()
-    setIsBottomSheetOpen(true)
-  }
-
-  const handleBottomSheetClose = () => {
-    setIsBottomSheetOpen(false)
-  }
-
-  const toggleApiKeyVisibility = () => {
-    setShowApiKey(prevShowApiKey => !prevShowApiKey)
-  }
-
-  const handleProviderConfigChange = async (key: 'apiKey' | 'apiHost', value: string) => {
-    console.log('Updating provider config:', key, value)
-  }
+  const { provider, updateProvider } = useDataBackupProvider('yuque')
 
   async function checkConnection() {
-    setCheckLoading(true)
+    console.log('Checking Yuque connection...')
 
-    try {
-      console.log('Checking Yuque connection...')
-      Alert.alert(t('settings.yuque.check.success'))
-    } catch (error) {
-      Alert.alert(t('settings.yuque.check.fail'))
-    } finally {
-      setCheckLoading(false)
+    if (!provider || !provider.yuqueToken) {
+      Alert.alert(t('settings.data.yuque.check.empty_token'))
+      return
     }
+
+    if (!provider || !provider.yuqueUrl) {
+      Alert.alert(t('settings.data.yuque.check.empty_url'))
+      return
+    }
+
+    const response = await fetch('https://www.yuque.com/api/v2/hello', {
+      headers: {
+        'X-Auth-Token': provider.yuqueToken
+      }
+    })
+
+    if (!response.ok) {
+      Alert.alert(t('settings.yuque.check.fail'))
+      return
+    }
+
+    const yuqueSlug = provider.yuqueUrl.replace('https://www.yuque.com/', '')
+    const repoIDResponse = await fetch(`https://www.yuque.com/api/v2/repos/${yuqueSlug}`, {
+      headers: {
+        'X-Auth-Token': provider.yuqueToken
+      }
+    })
+
+    if (!repoIDResponse.ok) {
+      Alert.alert(t('settings.yuque.check.fail'))
+      return
+    }
+
+    const data = await repoIDResponse.json()
+    await updateProvider({
+      ...provider,
+      yuqueRepoId: data.data.id
+    })
+    Alert.alert(t('settings.yuque.check.success'))
   }
 
-  return (
-    <SafeAreaContainer style={{ flex: 1, backgroundColor: theme.background.val }}>
-      <HeaderBar title={t('settings.yuque.title')} onBackPress={handleBackPress} />
-      <SettingContainer>
-        <YStack gap={8}>
-          <XStack paddingHorizontal={10} height={20} alignItems="center">
-            <SettingGroupTitle>{t('settings.yuque.repo_url')}</SettingGroupTitle>
-          </XStack>
-          <Input
-            placeholder={t('settings.yuque.repo_url_placeholder')}
-            value={''}
-            onChangeText={text => handleProviderConfigChange('apiHost', text)}
-          />
-        </YStack>
+  const config: ProviderConfig = {
+    providerType: 'yuque',
+    titleKey: 'settings.yuque.title',
+    fields: [
+      {
+        type: 'input',
+        key: 'yuqueUrl',
+        titleKey: 'settings.yuque.repo_url',
+        placeholderKey: 'settings.yuque.repo_url_placeholder'
+      },
+      {
+        type: 'password',
+        key: 'yuqueToken',
+        titleKey: 'settings.yuque.token',
+        placeholderKey: 'settings.yuque.token_placeholder',
+        helpUrl: 'https://www.yuque.com/settings/tokens',
+        helpTextKey: 'settings.yuque.help'
+      }
+    ],
+    checkConnectionFn: checkConnection
+  }
 
-        <YStack gap={8}>
-          <XStack paddingHorizontal={10} height={20} justifyContent="space-between" alignItems="center">
-            <SettingGroupTitle>{t('settings.yuque.token')}</SettingGroupTitle>
-            <Button
-              size={16}
-              icon={<ShieldCheck size={16} />}
-              backgroundColor="$colorTransparent"
-              circular
-              onPress={handleOpenBottomSheet}
-            />
-          </XStack>
-
-          <XStack paddingVertical={8} gap={8} position="relative">
-            <Input
-              flex={1}
-              placeholder={t('settings.yuque.token_placeholder')}
-              secureTextEntry={!showApiKey}
-              paddingRight={48}
-              value={''}
-              onChangeText={text => handleProviderConfigChange('apiKey', text)}
-            />
-            <Stack
-              position="absolute"
-              right={10}
-              top="50%"
-              height={16}
-              width={16}
-              alignItems="center"
-              justifyContent="center"
-              zIndex={1}
-              onPress={toggleApiKeyVisibility}
-              cursor="pointer">
-              {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-            </Stack>
-          </XStack>
-
-          <XStack justifyContent="space-between">
-            <ExternalLink href="https://www.yuque.com/settings/tokens" size={12}>
-              {t('settings.yuque.help')}
-            </ExternalLink>
-          </XStack>
-        </YStack>
-      </SettingContainer>
-      <ApiCheckSheet
-        bottomSheetRef={bottomSheetRef}
-        isOpen={isBottomSheetOpen}
-        onClose={handleBottomSheetClose}
-        apiKey={''}
-        onStartModelCheck={checkConnection}
-        loading={checkLoading}
-      />
-    </SafeAreaContainer>
-  )
+  return <ProviderSettingsScreen config={config} />
 }

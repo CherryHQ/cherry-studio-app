@@ -106,7 +106,7 @@ export default function WebSearchProviderSettingsScreen() {
           }
         ])
       }
-    } catch (err) {
+    } catch (error) {
       Alert.alert(t('settings.websearch.check_error'), t('common.error_occurred'), [
         {
           text: t('common.ok'),
@@ -114,6 +114,7 @@ export default function WebSearchProviderSettingsScreen() {
           onPress: () => setIsBottomSheetOpen(false)
         }
       ])
+      throw error
     } finally {
       setCheckLoading(false)
     }
