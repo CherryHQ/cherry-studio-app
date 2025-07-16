@@ -17,8 +17,8 @@ export const SearchInput = ({ placeholder, onChangeText, value }: SearchInputPro
     <XStack height={48} gap={8} alignItems="center" width="100%">
       <Input
         flex={1}
-        paddingHorizontal={16}
-        paddingVertical={13}
+        paddingHorizontal={0}
+        paddingVertical={0}
         borderRadius={24}
         width="100%"
         paddingLeft={42}
