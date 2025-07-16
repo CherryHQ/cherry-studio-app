@@ -13,6 +13,7 @@ import { BlurView } from '@/components/ui/BlurView'
 import SafeAreaContainer from '@/components/ui/SafeAreaContainer'
 import { useStarAssistants } from '@/hooks/useAssistant'
 import { useTopics } from '@/hooks/useTopic'
+import { useIsDark } from '@/utils'
 import { getAssistantWithTopic } from '@/utils/assistants'
 
 import { SearchInput } from '../ui/SearchInput'
@@ -20,6 +21,7 @@ import { MenuTab, TabItem } from './MenuTab'
 
 export default function CustomDrawerContent(props: DrawerContentComponentProps) {
   const { t } = useTranslation()
+  const isDark = useIsDark()
 
   const { topics, isLoading: isLoadingTopics } = useTopics()
   const { assistants, isLoading: isLoadingAssistants } = useStarAssistants()
@@ -50,7 +52,7 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
 
   return (
     <YStack flex={1}>
-      <BlurView style={{ flex: 1, backgroundColor: '#ffffffbb' }} intensity={60} tint="default">
+      <BlurView style={{ flex: 1, backgroundColor: isDark ? '#000000bb' : '#ffffffbb' }} intensity={60} tint="default">
         <YStack gap={10} flex={1} padding={20}>
           <YStack>
             <DrawerItemList {...props} />
