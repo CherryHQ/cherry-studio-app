@@ -1,6 +1,7 @@
 import { useNavigation } from '@react-navigation/native'
 import { Plus } from '@tamagui/lucide-icons'
-import React, { useState } from 'react'
+
+import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
 
@@ -16,16 +17,24 @@ import { SearchInput } from '@/components/ui/SearchInput'
 import { useAllProviders } from '@/hooks/useProviders'
 import { NavigationProps } from '@/types/naviagate'
 
+import { useDebounce } from '@/utils/useDebounce'
+
 export default function ProvidersScreen() {
   const { t } = useTranslation()
   const theme = useTheme()
   const navigation = useNavigation<NavigationProps>()
+
+
   const [searchQuery, setSearchQuery] = useState('')
+
+  const debouncedSearchQuery = useDebounce(searchQuery, 500)
+
   const { providers, isLoading } = useAllProviders()
+
 
   const displayedProviders = providers
     .filter(p => p.enabled)
-    .filter(p => p.name && p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .filter(p => p.name && p.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()))
 
   const onAddProvider = () => {
     navigation.navigate('ProviderListScreen')
@@ -55,6 +64,7 @@ export default function ProvidersScreen() {
       />
 
       <SettingContainer>
+
         <SearchInput placeholder={t('settings.provider.search')} value={searchQuery} onChangeText={setSearchQuery} />
 
 
@@ -66,6 +76,7 @@ export default function ProvidersScreen() {
             <CustomRadialGradientBackground style={{ radius: 2 }}>
               <ScrollView backgroundColor="$colorTransparent" showsVerticalScrollIndicator={false}>
                 <SettingGroup>
+   
                   {displayedProviders.map(p => (
                     <ProviderItem key={p.id} provider={p} mode="enabled" />
                   ))}

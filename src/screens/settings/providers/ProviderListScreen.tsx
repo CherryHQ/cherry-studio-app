@@ -1,7 +1,8 @@
 import BottomSheet from '@gorhom/bottom-sheet'
 import { useNavigation } from '@react-navigation/native'
 import { Plus } from '@tamagui/lucide-icons'
-import React, { useRef, useState } from 'react'
+
+import React, { useRef, useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
 import { ScrollView, Text, YStack } from 'tamagui'
@@ -14,8 +15,9 @@ import CustomRadialGradientBackground from '@/components/ui/CustomRadialGradient
 import SafeAreaContainer from '@/components/ui/SafeAreaContainer'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { useAllProviders } from '@/hooks/useProviders'
-import { loggerService } from '@/services/LoggerService'
-const logger = loggerService.withContext('ProviderListScreen')
+
+import { useDebounce } from '@/utils/useDebounce'
+
 
 export default function ProviderListScreen() {
   const { t } = useTranslation()
@@ -24,11 +26,19 @@ export default function ProviderListScreen() {
   const bottomSheetRef = useRef<BottomSheet>(null)
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false)
   const { providers, isLoading } = useAllProviders()
+
   const [searchQuery, setSearchQuery] = useState('')
+ 
+  const debouncedSearchQuery = useDebounce(searchQuery, 500)
+
   const [selectedProviderType, setSelectedProviderType] = useState<string | undefined>(undefined)
   const [providerName, setProviderName] = useState('')
 
-  const filteredProviders = providers.filter(p => p.name && p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+
+  
+  const filteredProviders = providers.filter(
+    p => p.name && p.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+  )
 
   const handleProviderTypeChange = (value: string) => {
     setSelectedProviderType(value)
@@ -52,8 +62,8 @@ export default function ProviderListScreen() {
   }
 
   const handleAddProvider = () => {
-    logger.info('Provider Name:', providerName)
-    logger.info('Provider Type:', selectedProviderType)
+    console.log('Provider Name:', providerName)
+    console.log('Provider Type:', selectedProviderType)
   }
 
   return (
@@ -72,6 +82,7 @@ export default function ProviderListScreen() {
         </SafeAreaContainer>
       ) : (
         <SettingContainer>
+       
           <SearchInput placeholder={t('settings.provider.search')} value={searchQuery} onChangeText={setSearchQuery} />
 
           <YStack flex={1} gap={8}>
