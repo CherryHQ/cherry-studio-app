@@ -1,14 +1,136 @@
-import { eq, inArray } from 'drizzle-orm'
+import { eq, inArray, InferInsertModel } from 'drizzle-orm'
 
 import { loggerService } from '@/services/LoggerService'
-import { MessageBlock, MessageBlockStatus, MessageBlockType } from '@/types/message'
+import {
+  CitationMessageBlock,
+  CodeMessageBlock,
+  FileMessageBlock,
+  ImageMessageBlock,
+  MainTextMessageBlock,
+  MessageBlock,
+  MessageBlockStatus,
+  MessageBlockType,
+  ThinkingMessageBlock,
+  ToolMessageBlock,
+  TranslationMessageBlock
+} from '@/types/message'
 
 import { db } from '..'
-// import { db } from '..'
 import { messageBlocks } from '../schema'
 const logger = loggerService.withContext('DataBase Message Blocks')
 
-type KeysOfUnion<T> = T extends T ? keyof T : never
+type MessageBlockDbInsert = InferInsertModel<typeof messageBlocks>
+
+function transformPartialMessageBlockToDb(changes: Partial<MessageBlock>): Partial<MessageBlockDbInsert> {
+  const dbChanges: Partial<MessageBlockDbInsert> = {}
+
+  for (const key in changes) {
+    if (!Object.prototype.hasOwnProperty.call(changes, key)) continue
+
+    // The switch operates on the string `key`.
+    switch (key) {
+      // --- Base fields (accessible on `changes` directly) ---
+      case 'messageId':
+        dbChanges.message_id = changes.messageId
+        break
+      case 'type':
+        dbChanges.type = changes.type
+        break
+      case 'createdAt':
+        dbChanges.created_at = changes.createdAt
+        break
+      case 'updatedAt':
+        dbChanges.updated_at = changes.updatedAt
+        break
+      case 'status':
+        dbChanges.status = changes.status
+        break
+      case 'model':
+        dbChanges.model = changes.model ? JSON.stringify(changes.model) : null
+        break
+      case 'metadata':
+        dbChanges.metadata = changes.metadata ? JSON.stringify(changes.metadata) : null
+        break
+      case 'error':
+        dbChanges.error = changes.error ? JSON.stringify(changes.error) : null
+        break
+
+      // --- Type-specific fields (require casting) ---
+      case 'content': {
+        // 'content' can be a string or an object (for ToolBlock).
+        // We cast to a union of all types that have a 'content' property.
+        const content = (
+          changes as Partial<
+            MainTextMessageBlock | ThinkingMessageBlock | TranslationMessageBlock | CodeMessageBlock | ToolMessageBlock
+          >
+        ).content
+
+        if (typeof content === 'object' && content !== null) {
+          dbChanges.content = JSON.stringify(content)
+        } else {
+          dbChanges.content = content as string | null
+        }
+
+        break
+      }
+
+      case 'knowledgeBaseIds':
+        dbChanges.knowledge_base_ids = (changes as Partial<MainTextMessageBlock>).knowledgeBaseIds
+          ? JSON.stringify((changes as Partial<MainTextMessageBlock>).knowledgeBaseIds)
+          : null
+        break
+      case 'citationReferences':
+        dbChanges.citation_references = (changes as Partial<MainTextMessageBlock>).citationReferences
+          ? JSON.stringify((changes as Partial<MainTextMessageBlock>).citationReferences)
+          : null
+        break
+      case 'thinking_millsec':
+        dbChanges.thinking_millsec = (changes as Partial<ThinkingMessageBlock>).thinking_millsec ?? null
+        break
+      case 'language':
+        dbChanges.language = (changes as Partial<CodeMessageBlock>).language
+        break
+      case 'url':
+        dbChanges.url = (changes as Partial<ImageMessageBlock>).url
+        break
+      case 'file':
+        // 'file' exists on ImageMessageBlock and FileMessageBlock
+        const file = (changes as Partial<ImageMessageBlock | FileMessageBlock>).file
+        dbChanges.file = file ? JSON.stringify(file) : null
+        break
+      case 'toolId':
+        dbChanges.tool_id = (changes as Partial<ToolMessageBlock>).toolId
+        break
+      case 'toolName':
+        dbChanges.tool_name = (changes as Partial<ToolMessageBlock>).toolName
+        break
+      case 'arguments':
+        const args = (changes as Partial<ToolMessageBlock>).arguments
+        dbChanges.arguments = args ? JSON.stringify(args) : null
+        break
+      case 'sourceBlockId':
+        dbChanges.source_block_id = (changes as Partial<TranslationMessageBlock>).sourceBlockId
+        break
+      case 'response':
+        const response = (changes as Partial<CitationMessageBlock>).response
+        dbChanges.response = response ? JSON.stringify(response) : null
+        break
+      case 'knowledge':
+        const knowledge = (changes as Partial<CitationMessageBlock>).knowledge
+        dbChanges.knowledge = knowledge ? JSON.stringify(knowledge) : null
+        break
+
+      // 'id' is the primary key and typically shouldn't be updated.
+      case 'id':
+        break
+
+      default:
+        break
+    }
+  }
+
+  return dbChanges
+}
 
 // 数据库记录转换为 MessageBlock 类型
 export function transformDbToMessageBlock(dbRecord: any): MessageBlock {
@@ -224,48 +346,48 @@ export async function upsertBlocks(blocks: MessageBlock | MessageBlock[]) {
  * 更新单个现有块。
  * @param update - 包含块 ID 和要应用的更改的对象。
  */
-export async function updateOneBlock(update: { id: string; changes: Partial<MessageBlock> }) {
+export async function updateOneBlock(update: {
+  id: string
+  changes: Partial<MessageBlock>
+}): Promise<MessageBlock | null> {
+  const { id, changes } = update
+
+  if (Object.keys(changes).length === 0) {
+    // 如果没有变更，可以提前返回或抛出错误
+    // 为了避免不必要的数据库查询，这里直接查询并返回当前块
+    const currentRecord = db.select().from(messageBlocks).where(eq(messageBlocks.id, id)).get()
+    return currentRecord ? transformDbToMessageBlock(currentRecord) : null
+  }
+
+  // 1. 将 Partial<MessageBlock> 转换为数据库可以理解的部分更新对象
+  const dbUpdatePayload = transformPartialMessageBlockToDb(changes)
+
+  // 2. 自动更新 updated_at 字段
+  if (!dbUpdatePayload.updated_at) {
+    dbUpdatePayload.updated_at = new Date().toISOString()
+  }
+
   try {
-    const { id, changes } = update
-    const dbChanges: { [key: string]: any } = {}
+    // 3. 执行更新并使用 .returning() 获取更新后的完整记录
+    // .returning() 会返回一个包含更新后行的数组
+    const updatedRecords = await db
+      .update(messageBlocks)
+      .set(dbUpdatePayload)
+      .where(eq(messageBlocks.id, id))
+      .returning()
 
-    // 使用 KeysOfUnion 辅助类型来正确地类型化键数组。
-    // 这会创建一个包含任何块类型中所有可能键的联合类型。
-    const jsonFields: KeysOfUnion<MessageBlock>[] = [
-      'model',
-      'metadata',
-      'error',
-      'file',
-      'arguments',
-      'response',
-      'knowledge',
-      'knowledgeBaseIds',
-      'citationReferences'
-    ]
-
-    for (const key in changes) {
-      // 我们必须将 `changes` 转换为 `any` 来动态访问其属性，
-      // 因为 TypeScript 无法保证给定的 `key` 存在于 `MessageBlock` 联合类型中的每一种类型上。
-      const value = (changes as any)[key]
-      if (value === undefined) continue
-
-      // 为了类型兼容性，对 `includes` 方法使用字符串数组断言。
-      if ((jsonFields as string[]).includes(key)) {
-        dbChanges[key] = JSON.stringify(value)
-      } else if (key === 'thinking_millsec') {
-        dbChanges.thinking_millsec = value
-      } else if (key === 'content' && typeof value === 'object') {
-        dbChanges.content = JSON.stringify(value)
-      } else {
-        dbChanges[key] = value
-      }
+    // 4. 检查是否有记录被更新
+    if (updatedRecords.length === 0) {
+      logger.warn(`Block with id "${id}" not found for update.`)
+      return null
     }
 
-    if (Object.keys(dbChanges).length > 0) {
-      await db.update(messageBlocks).set(dbChanges).where(eq(messageBlocks.id, id))
-    }
+    // 5. 将返回的数据库记录转换为 MessageBlock 领域对象
+    const updatedRecord = updatedRecords[0]
+    return transformDbToMessageBlock(updatedRecord)
   } catch (error) {
-    logger.error(`Error updating block with ID ${update.id}:`, error)
+    logger.error('Failed to update message block in database:', error)
+    // 根据你的错误处理策略，可以抛出错误或返回 null
     throw error
   }
 }

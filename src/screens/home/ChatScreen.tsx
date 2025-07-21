@@ -1,6 +1,7 @@
 import { RouteProp, useRoute } from '@react-navigation/native'
 import React from 'react'
-import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, TouchableWithoutFeedback } from 'react-native'
+import { ActivityIndicator, Keyboard, Platform, TouchableWithoutFeedback } from 'react-native'
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { YStack } from 'tamagui'
 
 import { HeaderBar } from '@/components/header-bar'
@@ -8,16 +9,19 @@ import { MessageInput } from '@/components/message-input/MessageInput'
 import SafeAreaContainer from '@/components/ui/SafeAreaContainer'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useTopic } from '@/hooks/useTopic'
+import { loggerService } from '@/services/LoggerService'
 import { RootStackParamList } from '@/types/naviagate'
 
 import ChatContent from './ChatContent'
 import WelcomeContent from './WelcomeContent'
 
+const logger = loggerService.withContext('ChatScreen')
 type ChatScreenRouteProp = RouteProp<RootStackParamList, 'ChatScreen'>
 
 const ChatScreen = () => {
   const route = useRoute<ChatScreenRouteProp>()
   const { topicId } = route.params
+  logger.info('topicId', topicId)
   const { updateAssistant } = useAssistant('default')
   const { topic, isLoading } = useTopic(topicId)
 

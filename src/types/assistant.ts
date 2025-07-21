@@ -57,6 +57,12 @@ export type Topic = {
   isNameManuallyEdited?: boolean
 }
 
+export type ModelPricing = {
+  input_per_million_tokens: number
+  output_per_million_tokens: number
+  currencySymbol?: string
+}
+
 export type Model = {
   id: string
   provider: string
@@ -65,6 +71,9 @@ export type Model = {
   owned_by?: string
   description?: string
   type?: ModelType[]
+  pricing?: ModelPricing
+  endpoint_type?: EndpointType
+  supported_endpoint_types?: EndpointType[]
 }
 
 export type ModelType = 'text' | 'vision' | 'embedding' | 'reasoning' | 'function_calling' | 'web_search'
@@ -107,3 +116,5 @@ export type ProviderType =
   | 'vertexai'
 
 export type ApiStatus = 'idle' | 'processing' | 'success' | 'error'
+
+export type EndpointType = 'openai' | 'openai-response' | 'anthropic' | 'gemini' | 'image-generation' | 'jina-rerank'

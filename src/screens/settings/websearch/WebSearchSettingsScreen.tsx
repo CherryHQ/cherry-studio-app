@@ -1,7 +1,8 @@
 import { useNavigation } from '@react-navigation/native'
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { KeyboardAvoidingView, Platform } from 'react-native'
+import { Platform } from 'react-native'
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { ScrollView, useTheme, YStack } from 'tamagui'
 
 import { SettingContainer } from '@/components/settings'

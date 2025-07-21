@@ -1,22 +1,25 @@
-import { GenerateImageParams, isDedicatedImageGenerationModel } from '@/config/models/image'
+import { isFunctionCallingModel } from '@/config/models/functionCalling'
+import { isDedicatedImageGenerationModel } from '@/config/models/image'
 import { Model, Provider } from '@/types/assistant'
+import { GenerateImageParams } from '@/types/image'
 import { RequestOptions, SdkModel } from '@/types/sdk'
+import { isEnabledToolUse } from '@/utils/mcpTool'
 
 import { ApiClientFactory, BaseApiClient, OpenAIAPIClient } from './clients'
 import { AihubmixAPIClient } from './clients/AihubmixAPIClient'
 import { AnthropicAPIClient } from './clients/anthropic/AnthropicAPIClient'
+import { NewAPIClient } from './clients/NewAPIClient'
 import { OpenAIResponseAPIClient } from './clients/openai/OpenAIResponseAPIClient'
 import { CompletionsMiddlewareBuilder } from './middleware/builder'
 import { MIDDLEWARE_NAME as AbortHandlerMiddlewareName } from './middleware/common/AbortHandlerMiddleware'
+import { MIDDLEWARE_NAME as ErrorHandlerMiddlewareName } from './middleware/common/ErrorHandlerMiddleware'
 import { MIDDLEWARE_NAME as FinalChunkConsumerMiddlewareName } from './middleware/common/FinalChunkConsumerMiddleware'
 import { applyCompletionsMiddlewares } from './middleware/composer'
-// import { MIDDLEWARE_NAME as McpToolChunkMiddlewareName } from './middleware/core/McpToolChunkMiddleware'
 import { MIDDLEWARE_NAME as RawStreamListenerMiddlewareName } from './middleware/core/RawStreamListenerMiddleware'
 import { MIDDLEWARE_NAME as ThinkChunkMiddlewareName } from './middleware/core/ThinkChunkMiddleware'
-// import { MIDDLEWARE_NAME as WebSearchMiddlewareName } from './middleware/core/WebSearchMiddleware'
-// import { MIDDLEWARE_NAME as ImageGenerationMiddlewareName } from './middleware/feat/ImageGenerationMiddleware'
-// import { MIDDLEWARE_NAME as ThinkingTagExtractionMiddlewareName } from './middleware/feat/ThinkingTagExtractionMiddleware'
-// import { MIDDLEWARE_NAME as ToolUseExtractionMiddlewareName } from './middleware/feat/ToolUseExtractionMiddleware'
+import { MIDDLEWARE_NAME as WebSearchMiddlewareName } from './middleware/core/WebSearchMiddleware'
+import { MIDDLEWARE_NAME as ThinkingTagExtractionMiddlewareName } from './middleware/feat/ThinkingTagExtractionMiddleware'
+import { MIDDLEWARE_NAME as ToolUseExtractionMiddlewareName } from './middleware/feat/ToolUseExtractionMiddleware'
 import { MiddlewareRegistry } from './middleware/register'
 import { CompletionsParams, CompletionsResult } from './middleware/schemas'
 
@@ -46,6 +49,12 @@ export default class AiProvider {
       if (client instanceof OpenAIResponseAPIClient) {
         client = client.getClient(model) as BaseApiClient
       }
+    } else if (this.apiClient instanceof NewAPIClient) {
+      client = this.apiClient.getClientForModel(model)
+
+      if (client instanceof OpenAIResponseAPIClient) {
+        client = client.getClient(model) as BaseApiClient
+      }
     } else if (this.apiClient instanceof OpenAIResponseAPIClient) {
       // OpenAIResponseAPIClient: 根据模型特征选择API类型
       client = this.apiClient.getClient(model) as BaseApiClient
@@ -62,39 +71,46 @@ export default class AiProvider {
       builder.clear()
       builder
         .add(MiddlewareRegistry[FinalChunkConsumerMiddlewareName])
+        .add(MiddlewareRegistry[ErrorHandlerMiddlewareName])
         .add(MiddlewareRegistry[AbortHandlerMiddlewareName])
       // .add(MiddlewareRegistry[ImageGenerationMiddlewareName])
     } else {
       // Existing logic for other models
       if (!params.enableReasoning) {
+        // 这里注释掉不会影响正常的关闭思考,可忽略不计的性能下降
         // builder.remove(ThinkingTagExtractionMiddlewareName)
         builder.remove(ThinkChunkMiddlewareName)
       }
 
       // 注意：用client判断会导致typescript类型收窄
-      if (!(this.apiClient instanceof OpenAIAPIClient)) {
-        // builder.remove(ThinkingTagExtractionMiddlewareName)
+      if (!(this.apiClient instanceof OpenAIAPIClient) && !(this.apiClient instanceof OpenAIResponseAPIClient)) {
+        builder.remove(ThinkingTagExtractionMiddlewareName)
       }
 
-      if (!(this.apiClient instanceof AnthropicAPIClient)) {
+      if (!(this.apiClient instanceof AnthropicAPIClient) && !(this.apiClient instanceof OpenAIResponseAPIClient)) {
         builder.remove(RawStreamListenerMiddlewareName)
       }
 
       if (!params.enableWebSearch) {
-        // builder.remove(WebSearchMiddlewareName)
+        builder.remove(WebSearchMiddlewareName)
       }
 
       if (!params.mcpTools?.length) {
-        // builder.remove(ToolUseExtractionMiddlewareName)
+        builder.remove(ToolUseExtractionMiddlewareName)
         // builder.remove(McpToolChunkMiddlewareName)
       }
 
-      // if (isEnabledToolUse(params.assistant) && isFunctionCallingModel(model)) {
-      //   builder.remove(ToolUseExtractionMiddlewareName)
-      // }
+      if (isEnabledToolUse(params.assistant) && isFunctionCallingModel(model)) {
+        builder.remove(ToolUseExtractionMiddlewareName)
+      }
 
       if (params.callType !== 'chat') {
         builder.remove(AbortHandlerMiddlewareName)
+      }
+
+      if (params.callType === 'test') {
+        builder.remove(ErrorHandlerMiddlewareName)
+        builder.remove(FinalChunkConsumerMiddlewareName)
       }
     }
 
@@ -118,7 +134,7 @@ export default class AiProvider {
       return dimensions
     } catch (error) {
       console.error('Error getting embedding dimensions:', error)
-      return 0
+      throw error
     }
   }
 

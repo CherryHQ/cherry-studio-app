@@ -3,7 +3,7 @@ import { ArrowLeftRight, PenLine } from '@tamagui/lucide-icons'
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { styled, Tabs, Text, XStack, YStack } from 'tamagui'
 
 import { ModelTabContent } from '@/components/assistant/ModelTabContent'

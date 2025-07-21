@@ -1,7 +1,9 @@
+import { loggerService } from '@/services/LoggerService'
 import { ChunkType } from '@/types/chunk'
 
 import { CompletionsParams, CompletionsResult } from '../schemas'
 import { CompletionsContext, CompletionsMiddleware } from '../types'
+const logger = loggerService.withContext('TransformCoreToSdkParamsMiddleware')
 
 export const MIDDLEWARE_NAME = 'TransformCoreToSdkParamsMiddleware'
 
@@ -13,8 +15,6 @@ export const TransformCoreToSdkParamsMiddleware: CompletionsMiddleware =
   () =>
   next =>
   async (ctx: CompletionsContext, params: CompletionsParams): Promise<CompletionsResult> => {
-    console.debug(`🔄 [${MIDDLEWARE_NAME}] Starting core to SDK params transformation:`, ctx)
-
     const internal = ctx._internal
 
     // 🔧 检测递归调用：检查 params 中是否携带了预处理的 SDK 消息
@@ -24,7 +24,7 @@ export const TransformCoreToSdkParamsMiddleware: CompletionsMiddleware =
     const apiClient = ctx.apiClientInstance
 
     if (!apiClient) {
-      console.error(`🔄 [${MIDDLEWARE_NAME}] ApiClient instance not found in context.`)
+      logger.error(`🔄 [${MIDDLEWARE_NAME}] ApiClient instance not found in context.`)
       throw new Error('ApiClient instance not found in context')
     }
 
@@ -32,7 +32,7 @@ export const TransformCoreToSdkParamsMiddleware: CompletionsMiddleware =
     const requestTransformer = apiClient.getRequestTransformer()
 
     if (!requestTransformer) {
-      console.warn(
+      logger.warn(
         `🔄 [${MIDDLEWARE_NAME}] ApiClient does not have getRequestTransformer method, skipping transformation`
       )
       const result = await next(ctx, params)
@@ -77,7 +77,7 @@ export const TransformCoreToSdkParamsMiddleware: CompletionsMiddleware =
 
       return next(ctx, params)
     } catch (error) {
-      console.error(`🔄 [${MIDDLEWARE_NAME}] Error during request transformation:`, error)
+      logger.error(`🔄 [${MIDDLEWARE_NAME}] Error during request transformation:`, error)
       // 让错误向上传播，或者可以在这里进行特定的错误处理
       throw error
     }

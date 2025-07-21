@@ -7,9 +7,9 @@ import { TextStreamPart, ToolSet } from '@cherrystudio/ai-core'
 
 import { Chunk, ChunkType } from '@/types/chunk'
 import { BaseTool } from '@/types/tool'
-import { WebSearchSource } from '@/types/websearch'
+import { WebSearchResults, WebSearchSource } from '@/types/websearch'
 
-import { ToolCallChunkHandler } from './chunk/handleTooCallChunk'
+import { ToolCallChunkHandler } from './handleTooCallChunk'
 
 // import { ToolCallChunkHandler } from './chunk/handleTooCallChunk'
 
@@ -59,7 +59,9 @@ export class AiSdkToChunkAdapter {
     const reader = fullStream.getReader()
     const final = {
       text: '',
-      reasoning_content: ''
+      reasoningContent: '',
+      webSearchResults: [],
+      reasoningId: ''
     }
 
     try {
@@ -82,30 +84,50 @@ export class AiSdkToChunkAdapter {
    * 转换 AI SDK chunk 为 Cherry Studio chunk 并调用回调
    * @param chunk AI SDK 的 chunk 数据
    */
-  private convertAndEmitChunk(chunk: TextStreamPart<any>, final: { text: string; reasoning_content: string }) {
+  private convertAndEmitChunk(
+    chunk: TextStreamPart<any>,
+    final: { text: string; reasoningContent: string; webSearchResults: any[]; reasoningId: string }
+  ) {
     console.log('AI SDK chunk type:', chunk.type, chunk)
 
     switch (chunk.type) {
       // === 文本相关事件 ===
+      case 'text-start':
+        this.onChunk({
+          type: ChunkType.TEXT_START
+        })
+        break
       case 'text':
         final.text += chunk.text || ''
         this.onChunk({
           type: ChunkType.TEXT_DELTA,
-          text: chunk.text || ''
+          text: final.text || ''
         })
+        console.log('final.text', final.text)
         break
       case 'text-end':
         this.onChunk({
           type: ChunkType.TEXT_COMPLETE,
           text: final.text || ''
         })
+        final.text = ''
+        break
+      case 'reasoning-start':
+        if (final.reasoningId !== chunk.id) {
+          final.reasoningId = chunk.id
+          this.onChunk({
+            type: ChunkType.THINKING_START
+          })
+        }
+
         break
       case 'reasoning':
         this.onChunk({
           type: ChunkType.THINKING_DELTA,
-          text: chunk.text || '',
+          text: final.reasoningContent || '',
           thinking_millsec: (chunk.providerMetadata?.metadata?.thinking_millsec as number) || 0
         })
+        final.reasoningContent += chunk.text || ''
         break
       case 'reasoning-end':
         this.onChunk({
@@ -113,9 +135,20 @@ export class AiSdkToChunkAdapter {
           text: (chunk.providerMetadata?.metadata?.thinking_content as string) || '',
           thinking_millsec: (chunk.providerMetadata?.metadata?.thinking_millsec as number) || 0
         })
+        final.reasoningContent = ''
         break
 
       // === 工具调用相关事件（原始 AI SDK 事件，如果没有被中间件处理） ===
+
+      case 'tool-input-start':
+      case 'tool-input-delta':
+      case 'tool-input-end':
+        this.toolCallHandler.handleToolCallCreated(chunk)
+        break
+
+      // case 'tool-input-delta':
+      //   this.toolCallHandler.handleToolCallCreated(chunk)
+      //   break
       case 'tool-call':
         // 原始的工具调用（未被中间件处理）
         this.toolCallHandler.handleToolCall(chunk)
@@ -125,17 +158,17 @@ export class AiSdkToChunkAdapter {
         // 原始的工具调用结果（未被中间件处理）
         this.toolCallHandler.handleToolResult(chunk)
         break
-      // case 'start':
-      //   this.onChunk({
-      //     type: ChunkType.LLM_RESPONSE_CREATED
-      //   })
-      //   break
 
       // === 步骤相关事件 ===
+      case 'start':
+        this.onChunk({
+          type: ChunkType.LLM_RESPONSE_CREATED
+        })
+        break
       // TODO: 需要区分接口开始和步骤开始
-      // case 'step-start':
+      // case 'start-step':
       //   this.onChunk({
-      //     type: ChunkType.LLM_RESPONSE_CREATED
+      //     type: ChunkType.BLOCK_CREATED
       //   })
       //   break
       // case 'step-finish':
@@ -146,16 +179,41 @@ export class AiSdkToChunkAdapter {
       //   final.text = ''
       //   break
 
-      // case 'finish-step': {
-      //   const { totalUsage, finishReason, providerMetadata } = chunk
-      // }
+      case 'finish-step': {
+        const { providerMetadata } = chunk
+
+        // googel web search
+        if (providerMetadata?.google) {
+          this.onChunk({
+            type: ChunkType.LLM_WEB_SEARCH_COMPLETE,
+            llm_web_search: {
+              results: providerMetadata.google?.groundingMetadata as WebSearchResults,
+              source: WebSearchSource.GEMINI
+            }
+          })
+        } else {
+          if (final.webSearchResults.length > 0) {
+            this.onChunk({
+              type: ChunkType.LLM_WEB_SEARCH_COMPLETE,
+              llm_web_search: {
+                results: final.webSearchResults,
+                source: WebSearchSource.AISDK
+              }
+            })
+          }
+        }
+
+        final.webSearchResults = []
+        // final.reasoningId = ''
+        break
+      }
 
       case 'finish':
         this.onChunk({
           type: ChunkType.BLOCK_COMPLETE,
           response: {
             text: final.text || '',
-            reasoning_content: final.reasoning_content || '',
+            reasoning_content: final.reasoningContent || '',
             usage: {
               completion_tokens: chunk.totalUsage.outputTokens || 0,
               prompt_tokens: chunk.totalUsage.inputTokens || 0,
@@ -173,7 +231,7 @@ export class AiSdkToChunkAdapter {
           type: ChunkType.LLM_RESPONSE_COMPLETE,
           response: {
             text: final.text || '',
-            reasoning_content: final.reasoning_content || '',
+            reasoning_content: final.reasoningContent || '',
             usage: {
               completion_tokens: chunk.totalUsage.outputTokens || 0,
               prompt_tokens: chunk.totalUsage.inputTokens || 0,
@@ -191,13 +249,21 @@ export class AiSdkToChunkAdapter {
 
       // === 源和文件相关事件 ===
       case 'source':
-        this.onChunk({
-          type: ChunkType.LLM_WEB_SEARCH_COMPLETE,
-          llm_web_search: {
-            source: WebSearchSource.AISDK,
-            results: [{}]
-          }
-        })
+        if (chunk.sourceType === 'url') {
+          // if (final.webSearchResults.length === 0) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { sourceType: _, ...rest } = chunk
+          final.webSearchResults.push(rest)
+          // }
+          // this.onChunk({
+          //   type: ChunkType.LLM_WEB_SEARCH_COMPLETE,
+          //   llm_web_search: {
+          //     source: WebSearchSource.AISDK,
+          //     results: final.webSearchResults
+          //   }
+          // })
+        }
+
         break
       // case 'file':
       //   // 文件相关事件，可能是图片生成
@@ -212,15 +278,13 @@ export class AiSdkToChunkAdapter {
       case 'error':
         this.onChunk({
           type: ChunkType.ERROR,
-          error: {
-            message: chunk.error || 'Unknown error'
-          }
+          error: chunk.error as Record<string, any>
         })
         break
 
       default:
-        // 其他类型的 chunk 可以忽略或记录日志
-        console.log('Unhandled AI SDK chunk type:', chunk.type, chunk)
+      // 其他类型的 chunk 可以忽略或记录日志
+      // console.log('Unhandled AI SDK chunk type:', chunk.type, chunk)
     }
   }
 }

@@ -1,18 +1,18 @@
+import { useNavigation } from '@react-navigation/native'
 import React, { useEffect } from 'react'
 import { ActivityIndicator } from 'react-native'
 
 import SafeAreaContainer from '@/components/ui/SafeAreaContainer'
-import { useNavigation } from '@/hooks/useNavigation'
 import { getDefaultAssistant } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
 import { createNewTopic, getNewestTopic } from '@/services/TopicService'
+import { NavigationProps } from '@/types/naviagate'
 import { runAsyncFunction } from '@/utils'
 
 const logger = loggerService.withContext('HomeScreen')
 
-// todo: 当侧边栏删除当前主页的topic会进入加载状态
 const HomeScreen = () => {
-  const { navigateToChatScreen } = useNavigation()
+  const navigation = useNavigation<NavigationProps>()
 
   useEffect(() => {
     runAsyncFunction(async () => {
@@ -20,17 +20,18 @@ const HomeScreen = () => {
         const newestTopic = await getNewestTopic()
 
         if (newestTopic) {
-          navigateToChatScreen(newestTopic.id)
+          // 使用 replace 避免用户可以返回到这个加载屏
+          navigation.replace('ChatScreen', { topicId: newestTopic.id })
         } else {
           const defaultAssistant = await getDefaultAssistant()
           const newTopic = await createNewTopic(defaultAssistant)
-          navigateToChatScreen(newTopic.id)
+          navigation.replace('ChatScreen', { topicId: newTopic.id })
         }
       } catch (error) {
-        logger.error('Get Newest Topic', error)
+        logger.error('Get Newest Topic on Home Screen', error)
       }
     })
-  }, [])
+  }, [navigation])
 
   return (
     <SafeAreaContainer style={{ alignItems: 'center', justifyContent: 'center' }}>

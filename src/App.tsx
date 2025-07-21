@@ -13,6 +13,7 @@ import { Suspense, useEffect } from 'react'
 import React from 'react'
 import { ActivityIndicator, useColorScheme } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { KeyboardProvider } from 'react-native-keyboard-controller'
 import { Provider, useSelector } from 'react-redux'
 import { PersistGate } from 'redux-persist/integration/react'
 import { PortalProvider, TamaguiProvider } from 'tamagui'
@@ -72,7 +73,7 @@ function DatabaseInitializer() {
     }
 
     const handleMigrations = async () => {
-      if (success) {
+      if (success && loaded) {
         logger.info('Migrations completed successfully', expoDb.databasePath)
         await initializeApp()
       } else if (error) {
@@ -81,7 +82,7 @@ function DatabaseInitializer() {
     }
 
     handleMigrations()
-  }, [success, error, initialized, dispatch])
+  }, [success, error, initialized, dispatch, loaded])
 
   useEffect(() => {
     SplashScreen.hideAsync()
@@ -97,15 +98,17 @@ function ThemedApp() {
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme={colorScheme ?? 'light'}>
       <PortalProvider>
-        <NavigationContainer theme={DefaultTheme}>
-          <ThemeProvider value={DefaultTheme}>
-            <BottomSheetModalProvider>
-              <DatabaseInitializer />
-              <AppNavigator />
-              <StatusBar style="auto" />
-            </BottomSheetModalProvider>
-          </ThemeProvider>
-        </NavigationContainer>
+        <KeyboardProvider>
+          <NavigationContainer theme={DefaultTheme}>
+            <ThemeProvider value={DefaultTheme}>
+              <BottomSheetModalProvider>
+                <DatabaseInitializer />
+                <AppNavigator />
+                <StatusBar style="auto" />
+              </BottomSheetModalProvider>
+            </ThemeProvider>
+          </NavigationContainer>
+        </KeyboardProvider>
       </PortalProvider>
     </TamaguiProvider>
   )

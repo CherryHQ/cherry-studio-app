@@ -181,3 +181,19 @@ export async function removeAllMessages() {
     throw error
   }
 }
+
+export async function updateMessageById(messageId: string, updates: Partial<Message>): Promise<Message | undefined> {
+  try {
+    const dbRecord = transformMessageToDb(updates)
+    const result = await db.update(messages).set(dbRecord).where(eq(messages.id, messageId)).returning()
+
+    if (result.length === 0) {
+      return undefined
+    }
+
+    return transformDbToMessage(result[0])
+  } catch (error) {
+    logger.error(`Error updating message with ID ${messageId}:`, error)
+    throw error
+  }
+}

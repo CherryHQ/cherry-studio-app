@@ -64,7 +64,7 @@ export interface MainTextMessageBlock extends BaseMessageBlock {
 export interface ThinkingMessageBlock extends BaseMessageBlock {
   type: MessageBlockType.THINKING
   content: string
-  thinking_millsec?: number
+  thinking_millsec: number
 }
 
 // 翻译块
@@ -72,8 +72,6 @@ export interface TranslationMessageBlock extends BaseMessageBlock {
   type: MessageBlockType.TRANSLATION
   content: string
   sourceBlockId?: string // Optional: ID of the block that was translated
-  sourceLanguage?: string
-  targetLanguage: string
 }
 
 // 代码块 - 专门处理代码

@@ -1,11 +1,14 @@
 import { desc, eq } from 'drizzle-orm'
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
 
+import { loggerService } from '@/services/LoggerService'
 import { Topic } from '@/types/assistant'
 
 import { db } from '../../db'
 import { transformDbToTopic, upsertTopics } from '../../db/queries/topics.queries'
 import { topics as topicSchema } from '../../db/schema'
+
+const logger = loggerService.withContext('useTopic')
 
 export function getCurrentTopicId(): string {
   return store.getState().topic.currentTopicId
@@ -16,12 +19,14 @@ export function useTopic(topicId: string) {
 
   // add deps https://stackoverflow.com/questions/79258085/drizzle-orm-uselivequery-doesnt-detect-parameters-change
   const { data: rawTopic, updatedAt } = useLiveQuery(query, [topicId])
+  logger.debug('rawTopic', rawTopic)
 
   const updateTopic = async (topic: Topic) => {
     await upsertTopics([topic])
   }
 
-  if (!updatedAt) {
+  // 当删除最后一个topic时会返回 rawTopic.length === 0, 需要返回加载状态
+  if (!updatedAt || rawTopic.length === 0) {
     return {
       topic: null,
       isLoading: true,

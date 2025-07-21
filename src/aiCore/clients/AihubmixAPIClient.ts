@@ -1,6 +1,6 @@
-import { GenerateImageParams } from '@/config/models/image'
 import { isOpenAILLMModel } from '@/config/models/webSearch'
 import { Model, Provider } from '@/types/assistant'
+import { GenerateImageParams } from '@/types/image'
 import { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
 import {
   RequestOptions,
@@ -15,6 +15,7 @@ import {
 } from '@/types/sdk'
 import { MCPTool } from '@/types/tool'
 
+import { CompletionsContext } from '../middleware/types'
 import { AnthropicAPIClient } from './anthropic/AnthropicAPIClient'
 import { BaseApiClient } from './BaseApiClient'
 import { GeminiAPIClient } from './gemini/GeminiAPIClient'
@@ -36,11 +37,19 @@ export class AihubmixAPIClient extends BaseApiClient {
   constructor(provider: Provider) {
     super(provider)
 
+    const providerExtraHeaders = {
+      ...provider,
+      extra_headers: {
+        ...provider.extra_headers,
+        'APP-Code': 'MLTG2087'
+      }
+    }
+
     // 初始化各个client - 现在有类型安全
-    const claudeClient = new AnthropicAPIClient(provider)
-    const geminiClient = new GeminiAPIClient({ ...provider, apiHost: 'https://aihubmix.com/gemini' })
-    const openaiClient = new OpenAIResponseAPIClient(provider)
-    const defaultClient = new OpenAIAPIClient(provider)
+    const claudeClient = new AnthropicAPIClient(providerExtraHeaders)
+    const geminiClient = new GeminiAPIClient({ ...providerExtraHeaders, apiHost: 'https://aihubmix.com/gemini' })
+    const openaiClient = new OpenAIResponseAPIClient(providerExtraHeaders)
+    const defaultClient = new OpenAIAPIClient(providerExtraHeaders)
 
     this.clients.set('claude', claudeClient)
     this.clients.set('gemini', geminiClient)
@@ -50,6 +59,14 @@ export class AihubmixAPIClient extends BaseApiClient {
     // 设置默认client
     this.defaultClient = defaultClient
     this.currentClient = this.defaultClient as BaseApiClient
+  }
+
+  override getBaseURL(): string {
+    if (!this.currentClient) {
+      return this.provider.apiHost
+    }
+
+    return this.currentClient.getBaseURL()
   }
 
   /**
@@ -84,7 +101,12 @@ export class AihubmixAPIClient extends BaseApiClient {
     }
 
     // gemini开头 且不以-nothink、-search结尾
-    if ((id.startsWith('gemini') || id.startsWith('imagen')) && !id.endsWith('-nothink') && !id.endsWith('-search')) {
+    if (
+      (id.startsWith('gemini') || id.startsWith('imagen')) &&
+      !id.endsWith('-nothink') &&
+      !id.endsWith('-search') &&
+      !id.includes('embedding')
+    ) {
       const client = this.clients.get('gemini')
 
       if (!client || !this.isValidClient(client)) {
@@ -166,8 +188,8 @@ export class AihubmixAPIClient extends BaseApiClient {
     return this.currentClient.getRequestTransformer()
   }
 
-  getResponseChunkTransformer(): ResponseChunkTransformer<SdkRawChunk> {
-    return this.currentClient.getResponseChunkTransformer()
+  getResponseChunkTransformer(ctx: CompletionsContext): ResponseChunkTransformer<SdkRawChunk> {
+    return this.currentClient.getResponseChunkTransformer(ctx)
   }
 
   convertMcpToolsToSdkTools(mcpTools: MCPTool[]): SdkTool[] {

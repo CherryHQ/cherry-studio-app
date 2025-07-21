@@ -32,5 +32,6 @@ export type RootStackParamList = {
   AssistantDetailScreen: { assistantId: string }
   AssistantMarketScreen: undefined
   WebSearchProviderSettingsScreen: { providerId: string }
+  TestScreen: undefined
 }
 export type NavigationProps = StackNavigationProp<RootStackParamList>

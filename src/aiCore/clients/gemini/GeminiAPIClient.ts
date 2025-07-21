@@ -1,7 +1,5 @@
 import {
   Content,
-  File,
-  FileState,
   FunctionCall,
   GenerateContentConfig,
   GenerateImagesConfig,
@@ -10,22 +8,25 @@ import {
   HarmCategory,
   Modality,
   Model as GeminiModel,
-  Pager,
   Part,
   SafetySetting,
   SendMessageParameters,
   ThinkingConfig,
   Tool
 } from '@google/genai'
+import { nanoid } from '@reduxjs/toolkit'
+import { File as ExpoFile } from 'expo-file-system/next'
 
 import { GenericChunk } from '@/aiCore/middleware/schemas'
 import { findTokenLimit, GEMINI_FLASH_MODEL_REGEX, isGemmaModel } from '@/config/models'
-import { GenerateImageParams } from '@/config/models/image'
-import { EFFORT_RATIO, isGeminiReasoningModel } from '@/config/models/reasoning'
+import { EFFORT_RATIO, isSupportedThinkingTokenGeminiModel } from '@/config/models/reasoning'
+import { isVisionModel } from '@/config/models/vision'
+import { defaultTimeout, MB } from '@/constants'
 import { estimateTextTokens } from '@/services/TokenService'
 import { Assistant, Model, Provider } from '@/types/assistant'
-import { ChunkType, LLMWebSearchCompleteChunk } from '@/types/chunk'
-import { FileType } from '@/types/file'
+import { ChunkType, LLMWebSearchCompleteChunk, TextStartChunk, ThinkingStartChunk } from '@/types/chunk'
+import { FileType, FileTypes } from '@/types/file'
+import { GenerateImageParams } from '@/types/image'
 import { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
 import { Message } from '@/types/message'
 import {
@@ -38,7 +39,14 @@ import {
 } from '@/types/sdk'
 import { MCPTool } from '@/types/tool'
 import { WebSearchSource } from '@/types/websearch'
-import { findFileBlocks, findImageBlocks } from '@/utils/messageUtils/find'
+import {
+  geminiFunctionCallToMcpTool,
+  isEnabledToolUse,
+  mcpToolCallResponseToGeminiMessage,
+  mcpToolsToGeminiTools
+} from '@/utils/mcpTool'
+import { findFileBlocks, findImageBlocks, getMainTextContent } from '@/utils/messageUtils/find'
+import { buildSystemPrompt } from '@/utils/prompt'
 
 import { BaseApiClient } from '../BaseApiClient'
 import { RequestTransformer, ResponseChunkTransformer } from '../types'
@@ -63,7 +71,7 @@ export class GeminiAPIClient extends BaseApiClient<
       ...rest,
       config: {
         ...rest.config,
-        abortSignal: options?.abortSignal,
+        abortSignal: options?.signal,
         httpOptions: {
           ...rest.config?.httpOptions,
           timeout: options?.timeout
@@ -97,7 +105,7 @@ export class GeminiAPIClient extends BaseApiClient<
         aspectRatio: imageSize,
         abortSignal: signal,
         httpOptions: {
-          timeout: 5 * 60 * 1000
+          timeout: defaultTimeout
         }
       }
       const response = await sdk.models.generateImages({
@@ -127,15 +135,11 @@ export class GeminiAPIClient extends BaseApiClient<
   override async getEmbeddingDimensions(model: Model): Promise<number> {
     const sdk = await this.getSdkInstance()
 
-    try {
-      const data = await sdk.models.embedContent({
-        model: model.id,
-        contents: [{ role: 'user', parts: [{ text: 'hi' }] }]
-      })
-      return data.embeddings?.[0]?.values?.length || 0
-    } catch (e) {
-      return 0
-    }
+    const data = await sdk.models.embedContent({
+      model: model.id,
+      contents: [{ role: 'user', parts: [{ text: 'hi' }] }]
+    })
+    return data.embeddings?.[0]?.values?.length || 0
   }
 
   override async listModels(): Promise<GeminiModel[]> {
@@ -158,10 +162,21 @@ export class GeminiAPIClient extends BaseApiClient<
     this.sdkInstance = new GoogleGenAI({
       vertexai: false,
       apiKey: this.apiKey,
-      httpOptions: { baseUrl: this.getBaseURL() }
+      apiVersion: this.getApiVersion(),
+      httpOptions: {
+        baseUrl: this.getBaseURL(),
+        apiVersion: this.getApiVersion(),
+        headers: {
+          ...this.provider.extra_headers
+        }
+      }
     })
 
     return this.sdkInstance
+  }
+
+  protected getApiVersion(): string {
+    return 'v1beta'
   }
 
   /**
@@ -169,42 +184,35 @@ export class GeminiAPIClient extends BaseApiClient<
    * @param file - The file
    * @returns The part
    */
-  // private async handlePdfFile(file: FileType): Promise<Part> {
-  //   const smallFileSize = 20 * MB
-  //   const isSmallFile = file.size < smallFileSize
+  private async handlePdfFile(file: FileType): Promise<Part> {
+    const smallFileSize = 20 * MB
+    const isSmallFile = file.size < smallFileSize
 
-  //   if (isSmallFile) {
-  //     const { data, mimeType } = await this.base64File(file)
-  //     return {
-  //       inlineData: {
-  //         data,
-  //         mimeType
-  //       } as Part['inlineData']
-  //     }
-  //   }
+    if (isSmallFile) {
+      const { data, mimeType } = await this.base64File(file)
+      return {
+        inlineData: {
+          data,
+          mimeType
+        } as Part['inlineData']
+      }
+    }
 
-  //   // Retrieve file from Gemini uploaded files
-  //   const fileMetadata: File | undefined = await this.retrieveFile(file)
+    throw new Error('handlePdfFile not implemented')
 
-  //   if (fileMetadata) {
-  //     return {
-  //       fileData: {
-  //         fileUri: fileMetadata.uri,
-  //         mimeType: fileMetadata.mimeType
-  //       } as Part['fileData']
-  //     }
-  //   }
+    // // Retrieve file from Gemini uploaded files
+    // const fileMetadata: FileUploadResponse = await window.api.fileService.retrieve(this.provider, file.id)
 
-  //   // If file is not found, upload it to Gemini
-  //   const result = await this.uploadFile(file)
+    // if (fileMetadata.status === 'success') {
+    //   const remoteFile = fileMetadata.originalFile?.file as File
+    //   return createPartFromUri(remoteFile.uri!, remoteFile.mimeType!)
+    // }
 
-  //   return {
-  //     fileData: {
-  //       fileUri: result.uri,
-  //       mimeType: result.mimeType
-  //     } as Part['fileData']
-  //   }
-  // }
+    // // If file is not found, upload it to Gemini
+    // const result = await window.api.fileService.upload(this.provider, file)
+    // const remoteFile = result.originalFile?.file as File
+    // return createPartFromUri(remoteFile.uri!, remoteFile.mimeType!)
+  }
 
   /**
    * Get the message contents
@@ -214,73 +222,75 @@ export class GeminiAPIClient extends BaseApiClient<
   private async convertMessageToSdkParam(message: Message): Promise<Content> {
     const role = message.role === 'user' ? 'user' : 'model'
     const parts: Part[] = [{ text: await this.getMessageContent(message) }]
+
     // Add any generated images from previous responses
-    const imageBlocks = findImageBlocks(message)
+    const imageBlocks = await findImageBlocks(message)
 
-    // for (const imageBlock of imageBlocks) {
-    //   if (
-    //     imageBlock.metadata?.generateImageResponse?.images &&
-    //     imageBlock.metadata.generateImageResponse.images.length > 0
-    //   ) {
-    //     for (const imageUrl of imageBlock.metadata.generateImageResponse.images) {
-    //       if (imageUrl && imageUrl.startsWith('data:')) {
-    //         // Extract base64 data and mime type from the data URL
-    //         const matches = imageUrl.match(/^data:(.+);base64,(.*)$/)
+    for (const imageBlock of imageBlocks) {
+      if (
+        imageBlock.metadata?.generateImageResponse?.images &&
+        imageBlock.metadata.generateImageResponse.images.length > 0
+      ) {
+        for (const imageUrl of imageBlock.metadata.generateImageResponse.images) {
+          if (imageUrl && imageUrl.startsWith('data:')) {
+            // Extract base64 data and mime type from the data URL
+            const matches = imageUrl.match(/^data:(.+);base64,(.*)$/)
 
-    //         if (matches && matches.length === 3) {
-    //           const mimeType = matches[1]
-    //           const base64Data = matches[2]
-    //           parts.push({
-    //             inlineData: {
-    //               data: base64Data,
-    //               mimeType: mimeType
-    //             } as Part['inlineData']
-    //           })
-    //         }
-    //       }
-    //     }
-    //   }
+            if (matches && matches.length === 3) {
+              const mimeType = matches[1]
+              const base64Data = matches[2]
+              parts.push({
+                inlineData: {
+                  data: base64Data,
+                  mimeType: mimeType
+                } as Part['inlineData']
+              })
+            }
+          }
+        }
+      }
 
-    //   const file = imageBlock.file
+      const file = imageBlock.file
 
-    //   if (file) {
-    //     const base64Data = await window.api.file.base64Image(file.id + file.ext)
-    //     parts.push({
-    //       inlineData: {
-    //         data: base64Data.base64,
-    //         mimeType: base64Data.mime
-    //       } as Part['inlineData']
-    //     })
-    //   }
-    // }
+      if (file) {
+        const image = new ExpoFile(file.path)
 
-    const fileBlocks = findFileBlocks(message)
+        parts.push({
+          inlineData: {
+            data: image.base64(),
+            mimeType: image.type
+          } as Part['inlineData']
+        })
+      }
+    }
 
-    // for (const fileBlock of fileBlocks) {
-    //   const file = fileBlock.file
+    const fileBlocks = await findFileBlocks(message)
 
-    //   if (file.type === FileTypes.IMAGE) {
-    //     const base64Data = await window.api.file.base64Image(file.id + file.ext)
-    //     parts.push({
-    //       inlineData: {
-    //         data: base64Data.base64,
-    //         mimeType: base64Data.mime
-    //       } as Part['inlineData']
-    //     })
-    //   }
+    for (const fileBlock of fileBlocks) {
+      const file = fileBlock.file
 
-    //   if (file.ext === '.pdf') {
-    //     parts.push(await this.handlePdfFile(file))
-    //     continue
-    //   }
+      if (file.type === FileTypes.IMAGE) {
+        const image = new ExpoFile(file.path)
+        parts.push({
+          inlineData: {
+            data: image.base64(),
+            mimeType: image.type
+          } as Part['inlineData']
+        })
+      }
 
-    //   if ([FileTypes.TEXT, FileTypes.DOCUMENT].includes(file.type)) {
-    //     const fileContent = await (await window.api.file.read(file.id + file.ext)).trim()
-    //     parts.push({
-    //       text: file.origin_name + '\n' + fileContent
-    //     })
-    //   }
-    // }
+      if (file.ext === '.pdf') {
+        parts.push(await this.handlePdfFile(file))
+        continue
+      }
+
+      if ([FileTypes.TEXT, FileTypes.DOCUMENT].includes(file.type)) {
+        const fileContent = new ExpoFile(file.path).text().trim()
+        parts.push({
+          text: file.origin_name + '\n' + fileContent
+        })
+      }
+    }
 
     return {
       role,
@@ -289,54 +299,54 @@ export class GeminiAPIClient extends BaseApiClient<
   }
 
   // @ts-ignore unused
-  // private async getImageFileContents(message: Message): Promise<Content> {
-  //   const role = message.role === 'user' ? 'user' : 'model'
-  //   const content = getMainTextContent(message)
-  //   const parts: Part[] = [{ text: content }]
-  //   const imageBlocks = findImageBlocks(message)
+  private async getImageFileContents(message: Message): Promise<Content> {
+    const role = message.role === 'user' ? 'user' : 'model'
+    const content = await getMainTextContent(message)
+    const parts: Part[] = [{ text: content }]
+    const imageBlocks = await findImageBlocks(message)
 
-  //   for (const imageBlock of imageBlocks) {
-  //     if (
-  //       imageBlock.metadata?.generateImageResponse?.images &&
-  //       imageBlock.metadata.generateImageResponse.images.length > 0
-  //     ) {
-  //       for (const imageUrl of imageBlock.metadata.generateImageResponse.images) {
-  //         if (imageUrl && imageUrl.startsWith('data:')) {
-  //           // Extract base64 data and mime type from the data URL
-  //           const matches = imageUrl.match(/^data:(.+);base64,(.*)$/)
+    for (const imageBlock of imageBlocks) {
+      if (
+        imageBlock.metadata?.generateImageResponse?.images &&
+        imageBlock.metadata.generateImageResponse.images.length > 0
+      ) {
+        for (const imageUrl of imageBlock.metadata.generateImageResponse.images) {
+          if (imageUrl && imageUrl.startsWith('data:')) {
+            // Extract base64 data and mime type from the data URL
+            const matches = imageUrl.match(/^data:(.+);base64,(.*)$/)
 
-  //           if (matches && matches.length === 3) {
-  //             const mimeType = matches[1]
-  //             const base64Data = matches[2]
-  //             parts.push({
-  //               inlineData: {
-  //                 data: base64Data,
-  //                 mimeType: mimeType
-  //               } as Part['inlineData']
-  //             })
-  //           }
-  //         }
-  //       }
-  //     }
+            if (matches && matches.length === 3) {
+              const mimeType = matches[1]
+              const base64Data = matches[2]
+              parts.push({
+                inlineData: {
+                  data: base64Data,
+                  mimeType: mimeType
+                } as Part['inlineData']
+              })
+            }
+          }
+        }
+      }
 
-  //     const file = imageBlock.file
+      const file = imageBlock.file
 
-  //     if (file) {
-  //       const base64Data = await window.api.file.base64Image(file.id + file.ext)
-  //       parts.push({
-  //         inlineData: {
-  //           data: base64Data.base64,
-  //           mimeType: base64Data.mime
-  //         } as Part['inlineData']
-  //       })
-  //     }
-  //   }
+      if (file) {
+        const image = new ExpoFile(file.path)
+        parts.push({
+          inlineData: {
+            data: image.base64(),
+            mimeType: image.type
+          } as Part['inlineData']
+        })
+      }
+    }
 
-  //   return {
-  //     role,
-  //     parts: parts
-  //   }
-  // }
+    return {
+      role,
+      parts: parts
+    }
+  }
 
   /**
    * Get the safety settings
@@ -376,31 +386,33 @@ export class GeminiAPIClient extends BaseApiClient<
    * @returns The reasoning effort
    */
   private getBudgetToken(assistant: Assistant, model: Model) {
-    if (isGeminiReasoningModel(model)) {
+    if (isSupportedThinkingTokenGeminiModel(model)) {
       const reasoningEffort = assistant?.settings?.reasoning_effort
 
       // 如果thinking_budget是undefined，不思考
       if (reasoningEffort === undefined) {
-        return {
-          thinkingConfig: {
-            includeThoughts: false,
-            ...(GEMINI_FLASH_MODEL_REGEX.test(model.id) ? { thinkingBudget: 0 } : {})
-          } as ThinkingConfig
-        }
+        return GEMINI_FLASH_MODEL_REGEX.test(model.id)
+          ? {
+              thinkingConfig: {
+                thinkingBudget: 0
+              }
+            }
+          : {}
       }
 
-      const effortRatio = EFFORT_RATIO[reasoningEffort]
-
-      if (effortRatio > 1) {
+      if (reasoningEffort === 'auto') {
         return {
           thinkingConfig: {
-            includeThoughts: true
+            includeThoughts: true,
+            thinkingBudget: -1
           }
         }
       }
 
-      const { max } = findTokenLimit(model.id) || { max: 0 }
-      const budget = Math.floor(max * effortRatio)
+      const effortRatio = EFFORT_RATIO[reasoningEffort]
+      const { min, max } = findTokenLimit(model.id) || { min: 0, max: 0 }
+      // 计算 budgetTokens，确保不低于 min
+      const budget = Math.floor((max - min) * effortRatio + min)
 
       return {
         thinkingConfig: {
@@ -434,23 +446,22 @@ export class GeminiAPIClient extends BaseApiClient<
         messages: GeminiSdkMessageParam[]
         metadata: Record<string, any>
       }> => {
-        const { messages, mcpTools, maxTokens, enableWebSearch, enableGenerateImage } = coreRequest
+        const { messages, mcpTools, maxTokens, enableWebSearch, enableUrlContext, enableGenerateImage } = coreRequest
         // 1. 处理系统消息
         let systemInstruction = assistant.prompt
 
         // 2. 设置工具
-        // const { tools } = this.setupToolsConfig({
-        //   mcpTools,
-        //   model,
-        //   enableToolUse: isEnabledToolUse(assistant)
-        // })
+        const { tools } = this.setupToolsConfig({
+          mcpTools,
+          model,
+          enableToolUse: isEnabledToolUse(assistant)
+        })
 
         if (this.useSystemPromptForTools) {
-          // systemInstruction = await buildSystemPrompt(assistant.prompt || '', mcpTools, assistant)
-          systemInstruction = assistant.prompt || '' // todo
+          systemInstruction = await buildSystemPrompt(assistant.prompt || '', mcpTools, assistant)
         }
 
-        let messageContents: Content
+        let messageContents: Content = { role: 'user', parts: [] } // Initialize messageContents
         const history: Content[] = []
 
         // 3. 处理用户消息
@@ -460,41 +471,56 @@ export class GeminiAPIClient extends BaseApiClient<
             parts: [{ text: messages }]
           }
         } else {
-          const userLastMessage = messages.pop()!
-          messageContents = await this.convertMessageToSdkParam(userLastMessage)
+          const userLastMessage = messages.pop()
 
-          for (const message of messages) {
-            history.push(await this.convertMessageToSdkParam(message))
+          if (userLastMessage) {
+            messageContents = await this.convertMessageToSdkParam(userLastMessage)
+
+            for (const message of messages) {
+              history.push(await this.convertMessageToSdkParam(message))
+            }
+
+            messages.push(userLastMessage)
           }
         }
 
-        // if (enableWebSearch) {
-        //   tools.push({
-        //     googleSearch: {}
-        //   })
-        // }
+        if (enableWebSearch) {
+          tools.push({
+            googleSearch: {}
+          })
+        }
 
-        // if (isGemmaModel(model) && assistant.prompt) {
-        //   const isFirstMessage = history.length === 0
+        if (enableUrlContext) {
+          tools.push({
+            urlContext: {}
+          })
+        }
 
-        //   if (isFirstMessage && messageContents) {
-        //     const systemMessage = [
-        //       {
-        //         text:
-        //           '<start_of_turn>user\n' +
-        //           systemInstruction +
-        //           '<end_of_turn>\n' +
-        //           '<start_of_turn>user\n' +
-        //           (messageContents?.parts?.[0] as Part).text +
-        //           '<end_of_turn>'
-        //       }
-        //     ] as Part[]
+        if (isGemmaModel(model) && assistant.prompt) {
+          const isFirstMessage = history.length === 0
 
-        //     if (messageContents && messageContents.parts) {
-        //       messageContents.parts[0] = systemMessage[0]
-        //     }
-        //   }
-        // }
+          if (isFirstMessage && messageContents) {
+            const userMessageText =
+              messageContents.parts && messageContents.parts.length > 0
+                ? (messageContents.parts[0] as Part).text || ''
+                : ''
+            const systemMessage = [
+              {
+                text:
+                  '<start_of_turn>user\n' +
+                  systemInstruction +
+                  '<end_of_turn>\n' +
+                  '<start_of_turn>user\n' +
+                  userMessageText +
+                  '<end_of_turn>'
+              }
+            ] as Part[]
+
+            if (messageContents && messageContents.parts) {
+              messageContents.parts[0] = systemMessage[0]
+            }
+          }
+        }
 
         const newHistory =
           isRecursiveCall && recursiveSdkMessages && recursiveSdkMessages.length > 0
@@ -503,25 +529,20 @@ export class GeminiAPIClient extends BaseApiClient<
 
         const newMessageContents =
           isRecursiveCall && recursiveSdkMessages && recursiveSdkMessages.length > 0
-            ? {
-                ...messageContents,
-                parts: [
-                  ...(messageContents.parts || []),
-                  ...(recursiveSdkMessages[recursiveSdkMessages.length - 1].parts || [])
-                ]
-              }
+            ? recursiveSdkMessages[recursiveSdkMessages.length - 1]
             : messageContents
 
         const generateContentConfig: GenerateContentConfig = {
           safetySettings: this.getSafetySettings(),
           systemInstruction: isGemmaModel(model) ? undefined : systemInstruction,
-          // temperature: this.getTemperature(assistant, model),
-          // topP: this.getTopP(assistant, model),
+          temperature: this.getTemperature(assistant, model),
+          topP: this.getTopP(assistant, model),
           maxOutputTokens: maxTokens,
-          // tools: tools,
+          tools: tools,
           ...(enableGenerateImage ? this.getGenerateImageParameter() : {}),
           ...this.getBudgetToken(assistant, model),
-          ...this.getCustomParameters(assistant)
+          // 只在对话场景下应用自定义参数，避免影响翻译、总结等其他业务逻辑
+          ...(coreRequest.callType === 'chat' ? this.getCustomParameters(assistant) : {})
         }
 
         const param: GeminiSdkParams = {
@@ -541,10 +562,11 @@ export class GeminiAPIClient extends BaseApiClient<
   }
 
   getResponseChunkTransformer(): ResponseChunkTransformer<GeminiSdkRawChunk> {
+    const toolCalls: FunctionCall[] = []
+    let isFirstTextChunk = true
+    let isFirstThinkingChunk = true
     return () => ({
       async transform(chunk: GeminiSdkRawChunk, controller: TransformStreamDefaultController<GenericChunk>) {
-        let toolCalls: FunctionCall[] = []
-
         if (chunk.candidates && chunk.candidates.length > 0) {
           for (const candidate of chunk.candidates) {
             if (candidate.content) {
@@ -552,11 +574,25 @@ export class GeminiAPIClient extends BaseApiClient<
                 const text = part.text || ''
 
                 if (part.thought) {
+                  if (isFirstThinkingChunk) {
+                    controller.enqueue({
+                      type: ChunkType.THINKING_START
+                    } as ThinkingStartChunk)
+                    isFirstThinkingChunk = false
+                  }
+
                   controller.enqueue({
                     type: ChunkType.THINKING_DELTA,
                     text: text
                   })
                 } else if (part.text) {
+                  if (isFirstTextChunk) {
+                    controller.enqueue({
+                      type: ChunkType.TEXT_START
+                    } as TextStartChunk)
+                    isFirstTextChunk = false
+                  }
+
                   controller.enqueue({
                     type: ChunkType.TEXT_DELTA,
                     text: text
@@ -573,6 +609,8 @@ export class GeminiAPIClient extends BaseApiClient<
                       ]
                     }
                   })
+                } else if (part.functionCall) {
+                  toolCalls.push(part.functionCall)
                 }
               })
             }
@@ -588,8 +626,12 @@ export class GeminiAPIClient extends BaseApiClient<
                 } as LLMWebSearchCompleteChunk)
               }
 
-              if (chunk.functionCalls) {
-                toolCalls = toolCalls.concat(chunk.functionCalls)
+              if (toolCalls.length > 0) {
+                controller.enqueue({
+                  type: ChunkType.MCP_TOOL_CREATED,
+                  tool_calls: [...toolCalls]
+                })
+                toolCalls.length = 0
               }
 
               controller.enqueue({
@@ -618,35 +660,29 @@ export class GeminiAPIClient extends BaseApiClient<
   }
 
   public convertMcpToolsToSdkTools(mcpTools: MCPTool[]): Tool[] {
-    throw new Error('Method not implemented.')
-
-    // return mcpToolsToGeminiTools(mcpTools)
+    return mcpToolsToGeminiTools(mcpTools)
   }
 
   public convertSdkToolCallToMcp(toolCall: GeminiSdkToolCall, mcpTools: MCPTool[]): MCPTool | undefined {
-    throw new Error('Method not implemented.')
-
-    // return geminiFunctionCallToMcpTool(mcpTools, toolCall)
+    return geminiFunctionCallToMcpTool(mcpTools, toolCall)
   }
 
   public convertSdkToolCallToMcpToolResponse(toolCall: GeminiSdkToolCall, mcpTool: MCPTool): ToolCallResponse {
-    throw new Error('Method not implemented.')
+    const parsedArgs = (() => {
+      try {
+        return typeof toolCall.args === 'string' ? JSON.parse(toolCall.args) : toolCall.args
+      } catch {
+        return toolCall.args
+      }
+    })()
 
-    // const parsedArgs = (() => {
-    //   try {
-    //     return typeof toolCall.args === 'string' ? JSON.parse(toolCall.args) : toolCall.args
-    //   } catch {
-    //     return toolCall.args
-    //   }
-    // })()
-
-    // return {
-    //   id: toolCall.id || nanoid(),
-    //   toolCallId: toolCall.id,
-    //   tool: mcpTool,
-    //   arguments: parsedArgs,
-    //   status: 'pending'
-    // } as ToolCallResponse
+    return {
+      id: toolCall.id || nanoid(),
+      toolCallId: toolCall.id,
+      tool: mcpTool,
+      arguments: parsedArgs,
+      status: 'pending'
+    } as ToolCallResponse
   }
 
   public convertMcpToolResponseToSdkMessageParam(
@@ -654,29 +690,27 @@ export class GeminiAPIClient extends BaseApiClient<
     resp: MCPCallToolResponse,
     model: Model
   ): GeminiSdkMessageParam | undefined {
-    throw new Error('Method not implemented.')
+    if ('toolUseId' in mcpToolResponse && mcpToolResponse.toolUseId) {
+      return mcpToolCallResponseToGeminiMessage(mcpToolResponse, resp, isVisionModel(model))
+    } else if ('toolCallId' in mcpToolResponse) {
+      return {
+        role: 'user',
+        parts: [
+          {
+            functionResponse: {
+              id: mcpToolResponse.toolCallId,
+              name: mcpToolResponse.tool.id,
+              response: {
+                output: !resp.isError ? resp.content : undefined,
+                error: resp.isError ? resp.content : undefined
+              }
+            }
+          }
+        ]
+      } satisfies Content
+    }
 
-    // if ('toolUseId' in mcpToolResponse && mcpToolResponse.toolUseId) {
-    //   return mcpToolCallResponseToGeminiMessage(mcpToolResponse, resp, isVisionModel(model))
-    // } else if ('toolCallId' in mcpToolResponse) {
-    //   return {
-    //     role: 'user',
-    //     parts: [
-    //       {
-    //         functionResponse: {
-    //           id: mcpToolResponse.toolCallId,
-    //           name: mcpToolResponse.tool.id,
-    //           response: {
-    //             output: !resp.isError ? resp.content : undefined,
-    //             error: resp.isError ? resp.content : undefined
-    //           }
-    //         }
-    //       }
-    //     ]
-    //   } satisfies Content
-    // }
-
-    // return
+    return
   }
 
   public buildSdkMessages(
@@ -686,18 +720,20 @@ export class GeminiAPIClient extends BaseApiClient<
     toolCalls: FunctionCall[]
   ): Content[] {
     const parts: Part[] = []
+    const modelParts: Part[] = []
 
     if (output) {
-      parts.push({
+      modelParts.push({
         text: output
       })
     }
 
     toolCalls.forEach(toolCall => {
-      parts.push({
+      modelParts.push({
         functionCall: toolCall
       })
     })
+
     parts.push(
       ...toolResults
         .map(ts => ts.parts)
@@ -707,10 +743,22 @@ export class GeminiAPIClient extends BaseApiClient<
 
     const userMessage: Content = {
       role: 'user',
-      parts: parts
+      parts: []
     }
 
-    return [...currentReqMessages, userMessage]
+    if (modelParts.length > 0) {
+      currentReqMessages.push({
+        role: 'model',
+        parts: modelParts
+      })
+    }
+
+    if (parts.length > 0) {
+      userMessage.parts?.push(...parts)
+      currentReqMessages.push(userMessage)
+    }
+
+    return currentReqMessages
   }
 
   override estimateMessageTokens(message: GeminiSdkMessageParam): number {
@@ -742,66 +790,29 @@ export class GeminiAPIClient extends BaseApiClient<
   }
 
   public extractMessagesFromSdkPayload(sdkPayload: GeminiSdkParams): GeminiSdkMessageParam[] {
-    return sdkPayload.history || []
-  }
+    const messageParam: GeminiSdkMessageParam = {
+      role: 'user',
+      parts: []
+    }
 
-  private async uploadFile(file: FileType): Promise<File> {
-    return await this.sdkInstance!.files.upload({
-      file: file.path,
-      config: {
-        mimeType: 'application/pdf',
-        name: file.id,
-        displayName: file.origin_name
-      }
-    })
-  }
-
-  // private async base64File(file: FileType) {
-  //   const { data } = await window.api.file.base64File(file.id + file.ext)
-  //   return {
-  //     data,
-  //     mimeType: 'application/pdf'
-  //   }
-  // }
-
-  // private async retrieveFile(file: FileType): Promise<File | undefined> {
-  //   const cachedResponse = CacheService.get<any>('gemini_file_list')
-
-  //   if (cachedResponse) {
-  //     return this.processResponse(cachedResponse, file)
-  //   }
-
-  //   const response = await this.sdkInstance!.files.list()
-  //   CacheService.set('gemini_file_list', response, 3000)
-
-  //   return this.processResponse(response, file)
-  // }
-
-  private async processResponse(response: Pager<File>, file: FileType) {
-    for await (const f of response) {
-      if (f.state === FileState.ACTIVE) {
-        if (f.displayName === file.origin_name && Number(f.sizeBytes) === file.size) {
-          return f
+    if (Array.isArray(sdkPayload.message)) {
+      sdkPayload.message.forEach(part => {
+        if (typeof part === 'string') {
+          messageParam.parts?.push({ text: part })
+        } else if (typeof part === 'object') {
+          messageParam.parts?.push(part)
         }
-      }
+      })
     }
 
-    return undefined
+    return [...(sdkPayload.history || []), messageParam]
   }
 
-  // @ts-ignore unused
-  private async listFiles(): Promise<File[]> {
-    const files: File[] = []
-
-    for await (const f of await this.sdkInstance!.files.list()) {
-      files.push(f)
+  private async base64File(file: FileType) {
+    const _file = new ExpoFile(file.path)
+    return {
+      data: _file.base64(),
+      mimeType: _file.type
     }
-
-    return files
-  }
-
-  // @ts-ignore unused
-  private async deleteFile(fileId: string) {
-    await this.sdkInstance!.files.delete({ name: fileId })
   }
 }

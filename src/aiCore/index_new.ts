@@ -20,17 +20,21 @@ import { createPromptToolUsePlugin, webSearchPlugin } from '@cherrystudio/ai-cor
 import { fetch as expoFetch } from 'expo/fetch'
 import { cloneDeep } from 'lodash'
 
-import { GenerateImageParams, isDedicatedImageGenerationModel } from '@/config/models/image'
+import { isDedicatedImageGenerationModel } from '@/config/models/image'
+import { loggerService } from '@/services/LoggerService'
 import { Model, Provider } from '@/types/assistant'
+import { GenerateImageParams } from '@/types/image'
 import { formatApiHost } from '@/utils/api'
 
 import LegacyAiProvider from '.'
-import AiSdkToChunkAdapter from './AiSdkToChunkAdapter'
+import AiSdkToChunkAdapter from './chunk/AiSdkToChunkAdapter'
 import { AiSdkMiddlewareConfig, buildAiSdkMiddlewares } from './middleware/aisdk/AiSdkMiddlewareBuilder'
 import { CompletionsResult } from './middleware/schemas'
 import reasoningTimePlugin from './plugins/reasoningTimePlugin'
 import { createAihubmixProvider } from './provider/aihubmix'
 import { getAiSdkProviderId } from './provider/factory'
+
+const logger = loggerService.withContext('ToolCallChunkHandler')
 
 function getActualProvider(model: Model, provider: Provider): Provider {
   // 如果是 vertexai 类型且没有 googleCredentials，转换为 VertexProvider
@@ -82,7 +86,7 @@ function providerToAiSdkConfig(actualProvider: Provider): {
       options
     }
   } else {
-    console.log(`Using openai-compatible fallback for provider: ${actualProvider.type}`)
+    logger.info(`Using openai-compatible fallback for provider: ${actualProvider.type}`)
     const options = ProviderConfigFactory.createOpenAICompatible(actualProvider.apiHost, actualProvider.apiKey)
 
     return {
@@ -160,6 +164,7 @@ export default class ModernAiProvider {
 
     // 2. 推理模型时添加推理插件
     if (middlewareConfig.enableReasoning) {
+      logger.info('buildPlugins', middlewareConfig.enableReasoning)
       plugins.push(reasoningTimePlugin)
     }
 
@@ -193,7 +198,7 @@ export default class ModernAiProvider {
     // if (!middlewareConfig.enableTool && middlewareConfig.mcpTools && middlewareConfig.mcpTools.length > 0) {
     //   plugins.push(createNativeToolUsePlugin())
     // }
-    console.log(
+    logger.info(
       '最终插件列表:',
       plugins.map(p => p.name)
     )
@@ -205,7 +210,7 @@ export default class ModernAiProvider {
     params: StreamTextParams,
     middlewareConfig: AiSdkMiddlewareConfig
   ): Promise<CompletionsResult> {
-    console.log('completions', modelId, params, middlewareConfig)
+    logger.info('completions', modelId, params, middlewareConfig)
     return await this.modernCompletions(modelId, params, middlewareConfig)
   }
 
@@ -220,19 +225,21 @@ export default class ModernAiProvider {
     // try {
     // 根据条件构建插件数组
     const plugins = this.buildPlugins(middlewareConfig)
-
+    logger.info('this.config.providerId', this.config.providerId)
+    logger.info('this.config.options', this.config.options)
+    logger.info('plugins', plugins)
     // 用构建好的插件数组创建executor
     const executor = createExecutor(this.config.providerId, this.config.options, plugins)
 
     // 动态构建中间件数组
     const middlewares = buildAiSdkMiddlewares(middlewareConfig)
-    // console.log('构建的中间件:', middlewares)
+    // logger.info('构建的中间件:', middlewares)
 
     // 创建带有中间件的执行器
     if (middlewareConfig.onChunk) {
       // 流式处理 - 使用适配器
       const adapter = new AiSdkToChunkAdapter(middlewareConfig.onChunk, middlewareConfig.mcpTools)
-      console.log('最终params', params)
+      logger.info('最终params', params)
       const streamResult = await executor.streamText(
         modelId,
         params,
@@ -270,13 +277,11 @@ export default class ModernAiProvider {
   }
 
   public async getEmbeddingDimensions(model: Model): Promise<number> {
-    // todo: 使用现代化SDK获取嵌入维度
-    return -1
+    return this.legacyProvider.getEmbeddingDimensions(model)
   }
 
   public async generateImage(params: GenerateImageParams): Promise<string[]> {
-    // todo: 使用现代化SDK生成图像
-    return []
+    return this.legacyProvider.generateImage(params)
   }
 
   public getBaseURL(): string {

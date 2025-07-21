@@ -48,7 +48,10 @@ export default definePlugin({
           hasStartedThinking = false
           thinkingStartTime = 0
           reasoningBlockId = ''
-          controller.enqueue(chunk)
+
+          if (chunk.type !== 'reasoning-end') {
+            controller.enqueue(chunk)
+          }
         } else {
           if (chunk.type !== 'reasoning-end') {
             controller.enqueue(chunk)

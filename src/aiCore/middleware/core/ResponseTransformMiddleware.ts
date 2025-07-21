@@ -1,8 +1,11 @@
+import { loggerService } from '@/services/LoggerService'
 import { SdkRawChunk } from '@/types/sdk'
 
 import { ResponseChunkTransformerContext } from '../../clients/types'
 import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
 import { CompletionsContext, CompletionsMiddleware } from '../types'
+
+const logger = loggerService.withContext('ResponseTransformMiddleware')
 
 export const MIDDLEWARE_NAME = 'ResponseTransformMiddleware'
 
@@ -37,10 +40,10 @@ export const ResponseTransformMiddleware: CompletionsMiddleware =
         }
 
         // 获取响应转换器
-        const responseChunkTransformer = apiClient.getResponseChunkTransformer?.()
+        const responseChunkTransformer = apiClient.getResponseChunkTransformer(ctx)
 
         if (!responseChunkTransformer) {
-          console.warn(`[${MIDDLEWARE_NAME}] No ResponseChunkTransformer available, skipping transformation`)
+          logger.warn(`[${MIDDLEWARE_NAME}] No ResponseChunkTransformer available, skipping transformation`)
           return result
         }
 
@@ -56,6 +59,7 @@ export const ResponseTransformMiddleware: CompletionsMiddleware =
           isStreaming: params.streamOutput || false,
           isEnabledToolCalling: (params.mcpTools && params.mcpTools.length > 0) || false,
           isEnabledWebSearch: params.enableWebSearch || false,
+          isEnabledUrlContext: params.enableUrlContext || false,
           isEnabledReasoning: params.enableReasoning || false,
           mcpTools: params.mcpTools || [],
           provider: ctx.apiClientInstance?.provider
@@ -75,7 +79,7 @@ export const ResponseTransformMiddleware: CompletionsMiddleware =
             stream: genericChunkTransformStream
           }
         } catch (error) {
-          console.error(`[${MIDDLEWARE_NAME}] Error during chunk transformation:`, error)
+          logger.error(`[${MIDDLEWARE_NAME}] Error during chunk transformation:`, error)
           throw error
         }
       }

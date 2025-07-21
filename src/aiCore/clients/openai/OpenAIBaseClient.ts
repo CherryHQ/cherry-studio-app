@@ -1,10 +1,14 @@
 import OpenAI, { AzureOpenAI } from 'openai'
 
-import { isSupportedModel } from '@/config/models'
-import { GenerateImageParams } from '@/config/models/image'
-import { isOpenAIReasoningModel, isSupportedReasoningEffortOpenAIModel } from '@/config/models/reasoning'
+import { isNotSupportTemperatureAndTopP, isSupportedModel } from '@/config/models'
+import {
+  isClaudeReasoningModel,
+  isOpenAIReasoningModel,
+  isSupportedReasoningEffortOpenAIModel
+} from '@/config/models/reasoning'
 import { getAssistantSettings } from '@/services/AssistantService'
 import { Assistant, Model, Provider } from '@/types/assistant'
+import { GenerateImageParams } from '@/types/image'
 import {
   OpenAIResponseSdkMessageParam,
   OpenAIResponseSdkParams,
@@ -80,16 +84,12 @@ export abstract class OpenAIBaseClient<
   override async getEmbeddingDimensions(model: Model): Promise<number> {
     const sdk = await this.getSdkInstance()
 
-    try {
-      const data = await sdk.embeddings.create({
-        model: model.id,
-        input: model?.provider === 'baidu-cloud' ? ['hi'] : 'hi',
-        encoding_format: 'float'
-      })
-      return data.data[0].embedding.length
-    } catch (e) {
-      return 0
-    }
+    const data = await sdk.embeddings.create({
+      model: model.id,
+      input: model?.provider === 'baidu-cloud' ? ['hi'] : 'hi',
+      encoding_format: this.provider.id === 'voyageai' ? undefined : 'float'
+    })
+    return data.data[0].embedding.length
   }
 
   override async listModels(): Promise<OpenAI.Models.Model[]> {
@@ -136,15 +136,15 @@ export abstract class OpenAIBaseClient<
       return this.sdkInstance
     }
 
-    const apiKeyForSdkInstance = this.provider.apiKey
+    const apiKeyForSdkInstance = this.apiKey
 
-    // if (this.provider.id === 'copilot') {
-    //   const defaultHeaders = store.getState().copilot.defaultHeaders
-    //   const { token } = await window.api.copilot.getToken(defaultHeaders)
-    //   // this.provider.apiKey不允许修改
-    //   // this.provider.apiKey = token
-    //   apiKeyForSdkInstance = token
-    // }
+    if (this.provider.id === 'copilot') {
+      // const defaultHeaders = store.getState().copilot.defaultHeaders
+      // const { token } = await window.api.copilot.getToken(defaultHeaders)
+      // this.provider.apiKey不允许修改
+      // this.provider.apiKey = token
+      // apiKeyForSdkInstance = token
+    }
 
     if (this.provider.id === 'azure-openai' || this.provider.type === 'azure-openai') {
       this.sdkInstance = new AzureOpenAI({
@@ -160,6 +160,7 @@ export abstract class OpenAIBaseClient<
         baseURL: this.getBaseURL(),
         defaultHeaders: {
           ...this.defaultHeaders(),
+          ...this.provider.extra_headers,
           ...(this.provider.id === 'copilot' ? { 'editor-version': 'vscode/1.97.2' } : {}),
           ...(this.provider.id === 'copilot' ? { 'copilot-vision-request': 'true' } : {})
         }
@@ -169,27 +170,27 @@ export abstract class OpenAIBaseClient<
     return this.sdkInstance
   }
 
-  // override getTemperature(assistant: Assistant, model: Model): number | undefined {
-  //   if (
-  //     isNotSupportTemperatureAndTopP(model) ||
-  //     (assistant.settings?.reasoning_effort && isClaudeReasoningModel(model))
-  //   ) {
-  //     return undefined
-  //   }
+  override getTemperature(assistant: Assistant, model: Model): number | undefined {
+    if (
+      isNotSupportTemperatureAndTopP(model) ||
+      (assistant.settings?.reasoning_effort && isClaudeReasoningModel(model))
+    ) {
+      return undefined
+    }
 
-  //   return assistant.settings?.temperature
-  // }
+    return assistant.settings?.temperature
+  }
 
-  // override getTopP(assistant: Assistant, model: Model): number | undefined {
-  //   if (
-  //     isNotSupportTemperatureAndTopP(model) ||
-  //     (assistant.settings?.reasoning_effort && isClaudeReasoningModel(model))
-  //   ) {
-  //     return undefined
-  //   }
+  override getTopP(assistant: Assistant, model: Model): number | undefined {
+    if (
+      isNotSupportTemperatureAndTopP(model) ||
+      (assistant.settings?.reasoning_effort && isClaudeReasoningModel(model))
+    ) {
+      return undefined
+    }
 
-  //   return assistant.settings?.topP
-  // }
+    return assistant.settings?.topP
+  }
 
   /**
    * Get the provider specific parameters for the assistant
@@ -231,15 +232,14 @@ export abstract class OpenAIBaseClient<
 
     // const openAI = getStoreSetting('openAI') as SettingsState['openAI']
     // const summaryText = openAI?.summaryText || 'off'
-    const summaryText = 'off' // TODO: Replace with actual setting retrieval logic
 
-    let summary: string | undefined = undefined
+    // let summary: string | undefined = undefined
 
-    if (summaryText === 'off' || model.id.includes('o1-pro')) {
-      summary = undefined
-    } else {
-      summary = summaryText
-    }
+    // if (summaryText === 'off' || model.id.includes('o1-pro')) {
+    //   summary = undefined
+    // } else {
+    //   summary = summaryText
+    // }
 
     const reasoningEffort = assistant?.settings?.reasoning_effort
 
@@ -250,8 +250,8 @@ export abstract class OpenAIBaseClient<
     if (isSupportedReasoningEffortOpenAIModel(model)) {
       return {
         reasoning: {
-          effort: reasoningEffort as OpenAI.ReasoningEffort,
-          summary: summary
+          effort: reasoningEffort as OpenAI.ReasoningEffort
+          // summary: summary
         } as OpenAI.Reasoning
       }
     }

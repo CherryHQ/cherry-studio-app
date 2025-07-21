@@ -1,4 +1,4 @@
-import { Model } from '@/types/assistant'
+import { Model, ReasoningEffortOptions } from '@/types/assistant'
 import { getLowerBaseModelName } from '@/utils/naming'
 
 import { isEmbeddingModel } from './embedding'
@@ -187,4 +187,13 @@ export function isSupportedThinkingTokenModel(model?: Model): boolean {
     isSupportedThinkingTokenClaudeModel(model) ||
     isSupportedThinkingTokenDoubaoModel(model)
   )
+}
+
+export type EffortRatio = Record<ReasoningEffortOptions, number>
+
+export const EFFORT_RATIO: EffortRatio = {
+  low: 0.2,
+  medium: 0.5,
+  high: 0.8,
+  auto: 2
 }

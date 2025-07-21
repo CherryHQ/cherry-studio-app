@@ -1,9 +1,11 @@
+import { loggerService } from '@/services/LoggerService'
 import { Usage } from '@/types/assistant'
 import type { Chunk } from '@/types/chunk'
 import { ChunkType } from '@/types/chunk'
 
 import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
 import { CompletionsContext, CompletionsMiddleware } from '../types'
+const logger = loggerService.withContext('FinalChunkConsumerAndNotifierMiddleware')
 
 export const MIDDLEWARE_NAME = 'FinalChunkConsumerAndNotifierMiddleware'
 
@@ -64,7 +66,7 @@ const FinalChunkConsumerMiddleware: CompletionsMiddleware =
             const { done, value: chunk } = await reader.read()
 
             if (done) {
-              console.debug(`[${MIDDLEWARE_NAME}] Input stream finished.`)
+              logger.debug(`[${MIDDLEWARE_NAME}] Input stream finished.`)
               break
             }
 
@@ -80,11 +82,11 @@ const FinalChunkConsumerMiddleware: CompletionsMiddleware =
 
               if (!shouldSkipChunk) params.onChunk?.(genericChunk)
             } else {
-              console.warn(`[${MIDDLEWARE_NAME}] Received undefined chunk before stream was done.`)
+              logger.warn(`[${MIDDLEWARE_NAME}] Received undefined chunk before stream was done.`)
             }
           }
         } catch (error) {
-          console.error(`[${MIDDLEWARE_NAME}] Error consuming stream:`, error)
+          logger.error(`[${MIDDLEWARE_NAME}] Error consuming stream:`, error)
           throw error
         } finally {
           if (params.onChunk && !isRecursiveCall) {
@@ -117,7 +119,7 @@ const FinalChunkConsumerMiddleware: CompletionsMiddleware =
 
         return modifiedResult
       } else {
-        console.debug(`[${MIDDLEWARE_NAME}] No GenericChunk stream to process.`)
+        logger.debug(`[${MIDDLEWARE_NAME}] No GenericChunk stream to process.`)
       }
     }
 
@@ -135,12 +137,10 @@ function extractAndAccumulateUsageMetrics(ctx: CompletionsContext, chunk: Generi
   try {
     if (ctx._internal.customState && !ctx._internal.customState?.firstTokenTimestamp) {
       ctx._internal.customState.firstTokenTimestamp = Date.now()
-      console.debug(`[${MIDDLEWARE_NAME}] First token timestamp: ${ctx._internal.customState.firstTokenTimestamp}`)
+      logger.debug(`[${MIDDLEWARE_NAME}] First token timestamp: ${ctx._internal.customState.firstTokenTimestamp}`)
     }
 
     if (chunk.type === ChunkType.LLM_RESPONSE_COMPLETE) {
-      console.debug(`[${MIDDLEWARE_NAME}] LLM_RESPONSE_COMPLETE chunk received:`, ctx._internal)
-
       // 从LLM_RESPONSE_COMPLETE chunk中提取usage数据
       if (chunk.response?.usage) {
         accumulateUsage(ctx._internal.observer.usage, chunk.response.usage)

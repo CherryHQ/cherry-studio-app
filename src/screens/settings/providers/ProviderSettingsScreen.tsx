@@ -5,7 +5,7 @@ import { groupBy } from 'lodash'
 import React, { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { Accordion, Button, Separator, Text, XStack, YStack } from 'tamagui'
 
 import { SettingContainer, SettingGroup, SettingGroupTitle, SettingRow } from '@/components/settings'
@@ -126,8 +126,6 @@ export default function ProviderSettingsScreen() {
         <KeyboardAwareScrollView
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
-          extraScrollHeight={300}
-          enableOnAndroid={true}
           contentContainerStyle={{ flexGrow: 1 }}>
           <YStack flex={1} gap={24}>
             {/* Auth Card */}

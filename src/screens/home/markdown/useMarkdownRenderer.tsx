@@ -37,6 +37,8 @@ export const useMarkdownRenderer = (isDark: boolean) => {
   }
 
   const renderEquation = (node: ASTNode, isBlock: boolean) => {
+    logger.info('renderEquation', node)
+
     try {
       return (
         <View

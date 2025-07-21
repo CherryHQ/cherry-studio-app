@@ -1,8 +1,12 @@
+import { File } from 'expo-file-system/next'
 import { isEmpty } from 'lodash'
 
-import { GenerateImageParams } from '@/config/models/image'
+import { isNotSupportTemperatureAndTopP } from '@/config/models'
+import { isFunctionCallingModel } from '@/config/models/functionCalling'
 import { DEFAULT_TIMEOUT } from '@/constants'
 import { Assistant, Model, Provider } from '@/types/assistant'
+import { FileTypes } from '@/types/file'
+import { GenerateImageParams } from '@/types/image'
 import { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
 import { Message } from '@/types/message'
 import {
@@ -19,9 +23,10 @@ import {
 import { MCPTool } from '@/types/tool'
 import { addAbortController, removeAbortController } from '@/utils/abortController'
 import { isJSON, parseJSON } from '@/utils/json'
-import { getMainTextContent } from '@/utils/messageUtils/find'
+import { findFileBlocks, getMainTextContent } from '@/utils/messageUtils/find'
 
-import { ApiClient, RawStreamListener, RequestTransformer, ResponseChunkTransformer } from './types'
+import { CompletionsContext } from '../middleware/types'
+import { ApiClient, RequestTransformer, ResponseChunkTransformer } from './types'
 
 /**
  * Abstract base class for API clients.
@@ -74,7 +79,7 @@ export abstract class BaseApiClient<
   // 在 CoreRequestToSdkParamsMiddleware中使用
   abstract getRequestTransformer(): RequestTransformer<TSdkParams, TMessageParam>
   // 在RawSdkChunkToGenericChunkMiddleware中使用
-  abstract getResponseChunkTransformer(): ResponseChunkTransformer<TRawChunk>
+  abstract getResponseChunkTransformer(ctx: CompletionsContext): ResponseChunkTransformer<TRawChunk>
 
   /**
    * 工具转换
@@ -89,7 +94,7 @@ export abstract class BaseApiClient<
 
   abstract buildSdkMessages(
     currentReqMessages: TMessageParam[],
-    output: TRawOutput | string,
+    output: TRawOutput | string | undefined,
     toolResults: TMessageParam[],
     toolCalls?: TToolCall[]
   ): TMessageParam[]
@@ -107,17 +112,6 @@ export abstract class BaseApiClient<
    * 不同的提供商可能使用不同的字段名（如messages、history等）
    */
   abstract extractMessagesFromSdkPayload(sdkPayload: TSdkParams): TMessageParam[]
-
-  /**
-   * 附加原始流监听器
-   */
-  public attachRawStreamListener<TListener extends RawStreamListener<TRawChunk>>(
-    rawOutput: TRawOutput,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _listener: TListener
-  ): TRawOutput {
-    return rawOutput
-  }
 
   /**
    * 通用函数
@@ -164,13 +158,13 @@ export abstract class BaseApiClient<
   //   return this.provider.id === 'lmstudio' ? getLMStudioKeepAliveTime() : undefined
   // }
 
-  // public getTemperature(assistant: Assistant, model: Model): number | undefined {
-  //   return isNotSupportTemperatureAndTopP(model) ? undefined : assistant.settings?.temperature
-  // }
+  public getTemperature(assistant: Assistant, model: Model): number | undefined {
+    return isNotSupportTemperatureAndTopP(model) ? undefined : assistant.settings?.temperature
+  }
 
-  // public getTopP(assistant: Assistant, model: Model): number | undefined {
-  //   return isNotSupportTemperatureAndTopP(model) ? undefined : assistant.settings?.topP
-  // }
+  public getTopP(assistant: Assistant, model: Model): number | undefined {
+    return isNotSupportTemperatureAndTopP(model) ? undefined : assistant.settings?.topP
+  }
 
   // protected getServiceTier(model: Model) {
   //   if (!isOpenAIModel(model) || model.provider === 'github' || model.provider === 'copilot') {
@@ -234,56 +228,31 @@ export abstract class BaseApiClient<
    * @param message - The message
    * @returns The file content
    */
-  // protected async extractFileContent(message: Message) {
-  //   const fileBlocks = findFileBlocks(message)
+  protected async extractFileContent(message: Message) {
+    const fileBlocks = await findFileBlocks(message)
 
-  //   if (fileBlocks.length > 0) {
-  //     const textFileBlocks = fileBlocks.filter(
-  //       fb => fb.file && [FileTypes.TEXT, FileTypes.DOCUMENT].includes(fb.file.type)
-  //     )
+    if (fileBlocks.length > 0) {
+      const textFileBlocks = fileBlocks.filter(
+        fb => fb.file && [FileTypes.TEXT, FileTypes.DOCUMENT].includes(fb.file.type)
+      )
 
-  //     if (textFileBlocks.length > 0) {
-  //       let text = ''
-  //       const divider = '\n\n---\n\n'
+      if (textFileBlocks.length > 0) {
+        let text = ''
+        const divider = '\n\n---\n\n'
 
-  //       for (const fileBlock of textFileBlocks) {
-  //         const file = fileBlock.file
-  //         const fileContent = (await window.api.file.read(file.id + file.ext)).trim()
-  //         const fileNameRow = 'file: ' + file.origin_name + '\n\n'
-  //         text = text + fileNameRow + fileContent + divider
-  //       }
+        for (const fileBlock of textFileBlocks) {
+          const file = fileBlock.file
+          const fileContent = new File(file.path).text().trim()
+          const fileNameRow = 'file: ' + file.origin_name + '\n\n'
+          text = text + fileNameRow + fileContent + divider
+        }
 
-  //       return text
-  //     }
-  //   }
+        return text
+      }
+    }
 
-  //   return ''
-  // }
-
-  // private async getWebSearchReferencesFromCache(message: Message) {
-  //   const content = getMainTextContent(message)
-
-  //   if (isEmpty(content)) {
-  //     return []
-  //   }
-
-  //   const webSearch: WebSearchResponse = window.keyv.get(`web-search-${message.id}`)
-
-  //   if (webSearch) {
-  //     return (webSearch.results as WebSearchProviderResponse).results.map(
-  //       (result, index) =>
-  //         ({
-  //           id: index + 1,
-  //           content: result.content,
-  //           sourceUrl: result.url,
-  //           type: 'url'
-  //         }) as KnowledgeReference
-  //     )
-  //   }
-
-  //   return []
-  // }
-
+    return ''
+  }
   /**
    * 从缓存中获取知识库引用
    */
@@ -380,29 +349,30 @@ export abstract class BaseApiClient<
   }
 
   // Setup tools configuration based on provided parameters
-  // public setupToolsConfig(params: { mcpTools?: MCPTool[]; model: Model; enableToolUse?: boolean }): {
-  //   tools: TSdkSpecificTool[]
-  // } {
-  //   const { mcpTools, model, enableToolUse } = params
-  //   let tools: TSdkSpecificTool[] = []
+  // Setup tools configuration based on provided parameters
+  public setupToolsConfig(params: { mcpTools?: MCPTool[]; model: Model; enableToolUse?: boolean }): {
+    tools: TSdkSpecificTool[]
+  } {
+    const { mcpTools, model, enableToolUse } = params
+    let tools: TSdkSpecificTool[] = []
 
-  //   // If there are no tools, return an empty array
-  //   if (!mcpTools?.length) {
-  //     return { tools }
-  //   }
+    // If there are no tools, return an empty array
+    if (!mcpTools?.length) {
+      return { tools }
+    }
 
-  //   // If the number of tools exceeds the threshold, use the system prompt
-  //   if (mcpTools.length > BaseApiClient.SYSTEM_PROMPT_THRESHOLD) {
-  //     this.useSystemPromptForTools = true
-  //     return { tools }
-  //   }
+    // If the number of tools exceeds the threshold, use the system prompt
+    if (mcpTools.length > BaseApiClient.SYSTEM_PROMPT_THRESHOLD) {
+      this.useSystemPromptForTools = true
+      return { tools }
+    }
 
-  //   // If the model supports function calling and tool usage is enabled
-  //   if (isFunctionCallingModel(model) && enableToolUse) {
-  //     tools = this.convertMcpToolsToSdkTools(mcpTools)
-  //     this.useSystemPromptForTools = false
-  //   }
+    // If the model supports function calling and tool usage is enabled
+    if (isFunctionCallingModel(model) && enableToolUse) {
+      tools = this.convertMcpToolsToSdkTools(mcpTools)
+      this.useSystemPromptForTools = false
+    }
 
-  //   return { tools }
-  // }
+    return { tools }
+  }
 }

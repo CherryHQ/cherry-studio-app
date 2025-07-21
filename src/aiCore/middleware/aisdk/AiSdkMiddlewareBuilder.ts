@@ -1,8 +1,12 @@
-import { LanguageModelV2Middleware, simulateStreamingMiddleware } from '@cherrystudio/ai-core'
+import {
+  extractReasoningMiddleware,
+  LanguageModelV2Middleware,
+  simulateStreamingMiddleware
+} from '@cherrystudio/ai-core'
 
 import { Model, Provider } from '@/types/assistant'
 import { Chunk } from '@/types/chunk'
-import { MCPTool } from '@/types/tool'
+import { BaseTool } from '@/types/tool'
 
 /**
  * AI SDK 中间件配置项
@@ -16,7 +20,7 @@ export interface AiSdkMiddlewareConfig {
   // 是否开启提示词工具调用
   enableTool?: boolean
   enableWebSearch?: boolean
-  mcpTools?: MCPTool[]
+  mcpTools?: BaseTool[]
 }
 
 /**
@@ -131,6 +135,8 @@ export function buildAiSdkMiddlewares(config: AiSdkMiddlewareConfig): LanguageMo
   return builder.build()
 }
 
+const tagNameArray = ['think', 'thought']
+
 /**
  * 添加provider特定的中间件
  */
@@ -143,11 +149,19 @@ function addProviderSpecificMiddlewares(builder: AiSdkMiddlewareBuilder, config:
       // Anthropic特定中间件
       break
     case 'openai':
-      // builder.add({
-      //   name: 'thinking-tag-extraction',
-      //   middleware: extractReasoningMiddleware({ tagName: 'think' })
-      // })
+
+    case 'azure-openai': {
+      if (config.enableReasoning) {
+        const tagName = config.model?.id.includes('gemini') ? tagNameArray[1] : tagNameArray[0]
+        builder.add({
+          name: 'thinking-tag-extraction',
+          middleware: extractReasoningMiddleware({ tagName })
+        })
+      }
+
       break
+    }
+
     case 'gemini':
       // Gemini特定中间件
       break

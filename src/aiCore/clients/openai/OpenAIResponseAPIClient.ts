@@ -1,13 +1,19 @@
+import { File } from 'expo-file-system/next'
 import { isEmpty } from 'lodash'
-import OpenAI from 'openai'
+import OpenAI, { AzureOpenAI } from 'openai'
+import { ResponseInput } from 'openai/resources/responses/responses.mjs'
 
 import { GenericChunk } from '@/aiCore/middleware/schemas'
+import { CompletionsContext } from '@/aiCore/middleware/types'
 import { isOpenAIChatCompletionOnlyModel } from '@/config/models'
 import { isSupportedReasoningEffortOpenAIModel } from '@/config/models/reasoning'
 import { isVisionModel } from '@/config/models/vision'
+import { isOpenAILLMModel } from '@/config/models/webSearch'
+import { MB } from '@/constants'
 import { estimateTextTokens } from '@/services/TokenService'
 import { Model, Provider } from '@/types/assistant'
 import { ChunkType } from '@/types/chunk'
+import { FileType, FileTypes } from '@/types/file'
 import { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
 import { Message } from '@/types/message'
 import {
@@ -21,7 +27,14 @@ import {
 import { MCPTool } from '@/types/tool'
 import { WebSearchSource } from '@/types/websearch'
 import { addImageFileToContents } from '@/utils/formats'
+import {
+  isEnabledToolUse,
+  mcpToolCallResponseToOpenAIMessage,
+  mcpToolsToOpenAIResponseTools,
+  openAIToolsToMcpTool
+} from '@/utils/mcpTool'
 import { findFileBlocks, findImageBlocks } from '@/utils/messageUtils/find'
+import { buildSystemPrompt } from '@/utils/prompt'
 
 import { RequestTransformer, ResponseChunkTransformer } from '../types'
 import { OpenAIAPIClient } from './OpenAIApiClient'
@@ -42,14 +55,42 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
     this.client = new OpenAIAPIClient(provider)
   }
 
+  private formatApiHost() {
+    const host = this.provider.apiHost
+
+    if (host.endsWith('/openai/v1')) {
+      return host
+    } else {
+      if (host.endsWith('/')) {
+        return host + 'openai/v1'
+      } else {
+        return host + '/openai/v1'
+      }
+    }
+  }
+
   /**
    * 根据模型特征选择合适的客户端
    */
   public getClient(model: Model) {
-    if (isOpenAIChatCompletionOnlyModel(model)) {
-      return this.client
-    } else {
+    if (this.provider.type === 'openai-response') {
       return this
+    }
+
+    if (isOpenAILLMModel(model) && !isOpenAIChatCompletionOnlyModel(model)) {
+      if (this.provider.id === 'azure-openai' || this.provider.type === 'azure-openai') {
+        this.provider = { ...this.provider, apiHost: this.formatApiHost() }
+
+        if (this.provider.apiVersion === 'preview') {
+          return this
+        } else {
+          return this.client
+        }
+      }
+
+      return this
+    } else {
+      return this.client
     }
   }
 
@@ -58,14 +99,24 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
       return this.sdkInstance
     }
 
-    return new OpenAI({
-      dangerouslyAllowBrowser: true,
-      apiKey: this.provider.apiKey,
-      baseURL: this.getBaseURL(),
-      defaultHeaders: {
-        ...this.defaultHeaders()
-      }
-    })
+    if (this.provider.id === 'azure-openai' || this.provider.type === 'azure-openai') {
+      return new AzureOpenAI({
+        dangerouslyAllowBrowser: true,
+        apiKey: this.apiKey,
+        apiVersion: this.provider.apiVersion,
+        baseURL: this.provider.apiHost
+      })
+    } else {
+      return new OpenAI({
+        dangerouslyAllowBrowser: true,
+        apiKey: this.apiKey,
+        baseURL: this.getBaseURL(),
+        defaultHeaders: {
+          ...this.defaultHeaders(),
+          ...this.provider.extra_headers
+        }
+      })
+    }
   }
 
   override async createCompletions(
@@ -76,25 +127,45 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
     return await sdk.responses.create(payload, options)
   }
 
+  private async handlePdfFile(file: FileType): Promise<OpenAI.Responses.ResponseInputFile | undefined> {
+    if (file.size > 32 * MB) return undefined
+
+    // try {
+    //   const pageCount = await window.api.file.pdfInfo(file.id + file.ext)
+    //   if (pageCount > 100) return undefined
+    // } catch {
+    //   return undefined
+    // }
+
+    // const { data } = await window.api.file.base64File(file.id + file.ext)
+    // return {
+    //   type: 'input_file',
+    //   filename: file.origin_name,
+    //   file_data: `data:application/pdf;base64,${data}`
+    // } as OpenAI.Responses.ResponseInputFile
+
+    throw new Error('not implemented')
+  }
+
   public async convertMessageToSdkParam(message: Message, model: Model): Promise<OpenAIResponseSdkMessageParam> {
     const isVision = isVisionModel(model)
     const content = await this.getMessageContent(message)
-    const fileBlocks = findFileBlocks(message)
-    const imageBlocks = findImageBlocks(message)
+    const fileBlocks = await findFileBlocks(message)
+    const imageBlocks = await findImageBlocks(message)
 
-    // if (fileBlocks.length === 0 && imageBlocks.length === 0) {
-    //   if (message.role === 'assistant') {
-    //     return {
-    //       role: 'assistant',
-    //       content: content
-    //     }
-    //   } else {
-    //     return {
-    //       role: message.role === 'system' ? 'user' : message.role,
-    //       content: content ? [{ type: 'input_text', text: content }] : []
-    //     } as OpenAI.Responses.EasyInputMessage
-    //   }
-    // }
+    if (fileBlocks.length === 0 && imageBlocks.length === 0) {
+      if (message.role === 'assistant') {
+        return {
+          role: 'assistant',
+          content: content
+        }
+      } else {
+        return {
+          role: message.role === 'system' ? 'user' : message.role,
+          content: content ? [{ type: 'input_text', text: content }] : []
+        } as OpenAI.Responses.EasyInputMessage
+      }
+    }
 
     const parts: OpenAI.Responses.ResponseInputContent[] = []
 
@@ -105,37 +176,47 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
       })
     }
 
-    // for (const imageBlock of imageBlocks) {
-    //   if (isVision) {
-    //     if (imageBlock.file) {
-    //       const image = await window.api.file.base64Image(imageBlock.file.id + imageBlock.file.ext)
-    //       parts.push({
-    //         detail: 'auto',
-    //         type: 'input_image',
-    //         image_url: image.data as string
-    //       })
-    //     } else if (imageBlock.url && imageBlock.url.startsWith('data:')) {
-    //       parts.push({
-    //         detail: 'auto',
-    //         type: 'input_image',
-    //         image_url: imageBlock.url
-    //       })
-    //     }
-    //   }
-    // }
+    for (const imageBlock of imageBlocks) {
+      if (isVision) {
+        if (imageBlock.file) {
+          const image = new File(imageBlock.file.path)
 
-    // for (const fileBlock of fileBlocks) {
-    //   const file = fileBlock.file
-    //   if (!file) continue
+          parts.push({
+            detail: 'auto',
+            type: 'input_image',
+            image_url: image.base64()
+          })
+        } else if (imageBlock.url && imageBlock.url.startsWith('data:')) {
+          parts.push({
+            detail: 'auto',
+            type: 'input_image',
+            image_url: imageBlock.url
+          })
+        }
+      }
+    }
 
-    //   if ([FileTypes.TEXT, FileTypes.DOCUMENT].includes(file.type)) {
-    //     const fileContent = (await window.api.file.read(file.id + file.ext)).trim()
-    //     parts.push({
-    //       type: 'input_text',
-    //       text: file.origin_name + '\n' + fileContent
-    //     })
-    //   }
-    // }
+    for (const fileBlock of fileBlocks) {
+      const file = fileBlock.file
+      if (!file) continue
+
+      if (isVision && file.ext === '.pdf') {
+        const pdfPart = await this.handlePdfFile(file)
+
+        if (pdfPart) {
+          parts.push(pdfPart)
+          continue
+        }
+      }
+
+      if ([FileTypes.TEXT, FileTypes.DOCUMENT].includes(file.type)) {
+        const fileContent = new File(file.path).text().trim()
+        parts.push({
+          type: 'input_text',
+          text: file.origin_name + '\n' + fileContent
+        })
+      }
+    }
 
     return {
       role: message.role === 'system' ? 'user' : message.role,
@@ -144,34 +225,28 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
   }
 
   public convertMcpToolsToSdkTools(mcpTools: MCPTool[]): OpenAI.Responses.Tool[] {
-    throw new Error('Method not implemented.')
-
-    // return mcpToolsToOpenAIResponseTools(mcpTools)
+    return mcpToolsToOpenAIResponseTools(mcpTools)
   }
 
   public convertSdkToolCallToMcp(toolCall: OpenAIResponseSdkToolCall, mcpTools: MCPTool[]): MCPTool | undefined {
-    throw new Error('Method not implemented.')
-
-    // return openAIToolsToMcpTool(mcpTools, toolCall)
+    return openAIToolsToMcpTool(mcpTools, toolCall)
   }
   public convertSdkToolCallToMcpToolResponse(toolCall: OpenAIResponseSdkToolCall, mcpTool: MCPTool): ToolCallResponse {
-    throw new Error('Method not implemented.')
+    const parsedArgs = (() => {
+      try {
+        return JSON.parse(toolCall.arguments)
+      } catch {
+        return toolCall.arguments
+      }
+    })()
 
-    // const parsedArgs = (() => {
-    //   try {
-    //     return JSON.parse(toolCall.arguments)
-    //   } catch {
-    //     return toolCall.arguments
-    //   }
-    // })()
-
-    // return {
-    //   id: toolCall.call_id,
-    //   toolCallId: toolCall.call_id,
-    //   tool: mcpTool,
-    //   arguments: parsedArgs,
-    //   status: 'pending'
-    // }
+    return {
+      id: toolCall.call_id,
+      toolCallId: toolCall.call_id,
+      tool: mcpTool,
+      arguments: parsedArgs,
+      status: 'pending'
+    }
   }
 
   public convertMcpToolResponseToSdkMessageParam(
@@ -179,32 +254,42 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
     resp: MCPCallToolResponse,
     model: Model
   ): OpenAIResponseSdkMessageParam | undefined {
-    throw new Error('Method not implemented.')
+    if ('toolUseId' in mcpToolResponse && mcpToolResponse.toolUseId) {
+      return mcpToolCallResponseToOpenAIMessage(mcpToolResponse, resp, isVisionModel(model))
+    } else if ('toolCallId' in mcpToolResponse && mcpToolResponse.toolCallId) {
+      return {
+        type: 'function_call_output',
+        call_id: mcpToolResponse.toolCallId,
+        output: JSON.stringify(resp.content)
+      }
+    }
 
-    // if ('toolUseId' in mcpToolResponse && mcpToolResponse.toolUseId) {
-    //   return mcpToolCallResponseToOpenAIMessage(mcpToolResponse, resp, isVisionModel(model))
-    // } else if ('toolCallId' in mcpToolResponse && mcpToolResponse.toolCallId) {
-    //   return {
-    //     type: 'function_call_output',
-    //     call_id: mcpToolResponse.toolCallId,
-    //     output: JSON.stringify(resp.content)
-    //   }
-    // }
+    return
+  }
 
-    // return
+  private convertResponseToMessageContent(response: OpenAI.Responses.Response): ResponseInput {
+    const content: OpenAI.Responses.ResponseInput = []
+    content.push(...response.output)
+    return content
   }
 
   public buildSdkMessages(
     currentReqMessages: OpenAIResponseSdkMessageParam[],
-    output: string,
+    output: OpenAI.Responses.Response | undefined,
     toolResults: OpenAIResponseSdkMessageParam[],
     toolCalls: OpenAIResponseSdkToolCall[]
   ): OpenAIResponseSdkMessageParam[] {
-    const assistantMessage: OpenAIResponseSdkMessageParam = {
-      role: 'assistant',
-      content: [{ type: 'input_text', text: output }]
+    if (!output && toolCalls.length === 0) {
+      return [...currentReqMessages, ...toolResults]
     }
-    const newReqMessages = [...currentReqMessages, assistantMessage, ...(toolCalls || []), ...(toolResults || [])]
+
+    if (!output) {
+      return [...currentReqMessages, ...(toolCalls || []), ...(toolResults || [])]
+    }
+
+    const content = this.convertResponseToMessageContent(output)
+
+    const newReqMessages = [...currentReqMessages, ...content, ...(toolResults || [])]
     return newReqMessages
   }
 
@@ -283,16 +368,15 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
         }
 
         // 2. 设置工具
-        const tools: OpenAI.Responses.Tool[] = []
-        // const { tools: extraTools } = this.setupToolsConfig({
-        //   mcpTools: mcpTools,
-        //   model,
-        //   enableToolUse: isEnabledToolUse(assistant)
-        // })
+        let tools: OpenAI.Responses.Tool[] = []
+        const { tools: extraTools } = this.setupToolsConfig({
+          mcpTools: mcpTools,
+          model,
+          enableToolUse: isEnabledToolUse(assistant)
+        })
 
         if (this.useSystemPromptForTools) {
-          // systemMessageInput.text = await buildSystemPrompt(systemMessageInput.text || '', mcpTools, assistant)
-          systemMessageInput.text = systemMessageInput.text || '' // todo
+          systemMessageInput.text = await buildSystemPrompt(systemMessageInput.text || '', mcpTools, assistant)
         }
 
         systemMessageContent.push(systemMessageInput)
@@ -318,17 +402,15 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
           ) as OpenAI.Responses.EasyInputMessage
           const finalUserMessage = userMessage.pop() as OpenAI.Responses.EasyInputMessage
 
-          if (
-            finalAssistantMessage &&
-            Array.isArray(finalAssistantMessage.content) &&
-            finalUserMessage &&
-            Array.isArray(finalUserMessage.content)
-          ) {
-            finalAssistantMessage.content = [...finalAssistantMessage.content, ...finalUserMessage.content]
+          if (finalUserMessage && Array.isArray(finalUserMessage.content)) {
+            if (finalAssistantMessage && Array.isArray(finalAssistantMessage.content)) {
+              finalAssistantMessage.content = [...finalAssistantMessage.content, ...finalUserMessage.content]
+              // 这里是故意将上条助手消息的内容（包含图片和文件）作为用户消息发送
+              userMessage = [{ ...finalAssistantMessage, role: 'user' } as OpenAI.Responses.EasyInputMessage]
+            } else {
+              userMessage.push(finalUserMessage)
+            }
           }
-
-          // 这里是故意将上条助手消息的内容（包含图片和文件）作为用户消息发送
-          userMessage = [{ ...finalAssistantMessage, role: 'user' } as OpenAI.Responses.EasyInputMessage]
         }
 
         // 4. 最终请求消息
@@ -340,39 +422,35 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
           reqMessages = [systemMessage, ...userMessage].filter(Boolean) as OpenAI.Responses.EasyInputMessage[]
         }
 
-        // if (enableWebSearch) {
-        //   tools.push({
-        //     type: 'web_search_preview'
-        //   })
-        // }
+        if (enableWebSearch) {
+          tools.push({
+            type: 'web_search_preview'
+          })
+        }
 
-        // if (enableGenerateImage) {
-        //   tools.push({
-        //     type: 'image_generation',
-        //     partial_images: streamOutput ? 2 : undefined
-        //   })
-        // }
+        if (enableGenerateImage) {
+          tools.push({
+            type: 'image_generation',
+            partial_images: streamOutput ? 2 : undefined
+          })
+        }
 
-        // const toolChoices: OpenAI.Responses.ToolChoiceTypes = {
-        //   type: 'web_search_preview'
-        // }
-
-        // tools = tools.concat(extraTools)
+        tools = tools.concat(extraTools)
         const commonParams = {
           model: model.id,
           input:
             isRecursiveCall && recursiveSdkMessages && recursiveSdkMessages.length > 0
               ? recursiveSdkMessages
               : reqMessages,
-          // temperature: this.getTemperature(assistant, model),
-          // top_p: this.getTopP(assistant, model),
+          temperature: this.getTemperature(assistant, model),
+          top_p: this.getTopP(assistant, model),
           max_output_tokens: maxTokens,
           stream: streamOutput,
           tools: !isEmpty(tools) ? tools : undefined,
-          // tool_choice: enableWebSearch ? toolChoices : undefined,
           // service_tier: this.getServiceTier(model),
           ...(this.getReasoningEffort(assistant, model) as OpenAI.Reasoning),
-          ...this.getCustomParameters(assistant)
+          // 只在对话场景下应用自定义参数，避免影响翻译、总结等其他业务逻辑
+          ...(coreRequest.callType === 'chat' ? this.getCustomParameters(assistant) : {})
         }
         const sdkParams: OpenAIResponseSdkParams = streamOutput
           ? {
@@ -389,17 +467,32 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
     }
   }
 
-  getResponseChunkTransformer(): ResponseChunkTransformer<OpenAIResponseSdkRawChunk> {
+  getResponseChunkTransformer(ctx: CompletionsContext): ResponseChunkTransformer<OpenAIResponseSdkRawChunk> {
     const toolCalls: OpenAIResponseSdkToolCall[] = []
     const outputItems: OpenAI.Responses.ResponseOutputItem[] = []
+    let hasBeenCollectedToolCalls = false
+    let hasReasoningSummary = false
+    let isFirstThinkingChunk = true
+    let isFirstTextChunk = true
     return () => ({
       async transform(chunk: OpenAIResponseSdkRawChunk, controller: TransformStreamDefaultController<GenericChunk>) {
         // 处理chunk
         if ('output' in chunk) {
+          if (ctx._internal?.toolProcessingState) {
+            ctx._internal.toolProcessingState.output = chunk
+          }
+
           for (const output of chunk.output) {
             switch (output.type) {
               case 'message':
                 if (output.content[0].type === 'output_text') {
+                  if (isFirstTextChunk) {
+                    controller.enqueue({
+                      type: ChunkType.TEXT_START
+                    })
+                    isFirstTextChunk = false
+                  }
+
                   controller.enqueue({
                     type: ChunkType.TEXT_DELTA,
                     text: output.content[0].text
@@ -418,6 +511,13 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
 
                 break
               case 'reasoning':
+                if (isFirstThinkingChunk) {
+                  controller.enqueue({
+                    type: ChunkType.THINKING_START
+                  })
+                  isFirstThinkingChunk = false
+                }
+
                 controller.enqueue({
                   type: ChunkType.THINKING_DELTA,
                   text: output.summary.map(s => s.text).join('\n')
@@ -439,15 +539,55 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
                 })
             }
           }
+
+          if (toolCalls.length > 0) {
+            controller.enqueue({
+              type: ChunkType.MCP_TOOL_CREATED,
+              tool_calls: toolCalls
+            })
+          }
+
+          controller.enqueue({
+            type: ChunkType.LLM_RESPONSE_COMPLETE,
+            response: {
+              usage: {
+                prompt_tokens: chunk.usage?.input_tokens || 0,
+                completion_tokens: chunk.usage?.output_tokens || 0,
+                total_tokens: chunk.usage?.total_tokens || 0
+              }
+            }
+          })
         } else {
           switch (chunk.type) {
             case 'response.output_item.added':
               if (chunk.item.type === 'function_call') {
                 outputItems.push(chunk.item)
+              } else if (chunk.item.type === 'web_search_call') {
+                controller.enqueue({
+                  type: ChunkType.LLM_WEB_SEARCH_IN_PROGRESS
+                })
               }
 
               break
+            case 'response.reasoning_summary_part.added':
+              if (hasReasoningSummary) {
+                const separator = '\n\n'
+                controller.enqueue({
+                  type: ChunkType.THINKING_DELTA,
+                  text: separator
+                })
+              }
+
+              hasReasoningSummary = true
+              break
             case 'response.reasoning_summary_text.delta':
+              if (isFirstThinkingChunk) {
+                controller.enqueue({
+                  type: ChunkType.THINKING_START
+                })
+                isFirstThinkingChunk = false
+              }
+
               controller.enqueue({
                 type: ChunkType.THINKING_DELTA,
                 text: chunk.delta
@@ -474,6 +614,13 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
               break
 
             case 'response.output_text.delta': {
+              if (isFirstTextChunk) {
+                controller.enqueue({
+                  type: ChunkType.TEXT_START
+                })
+                isFirstTextChunk = false
+              }
+
               controller.enqueue({
                 type: ChunkType.TEXT_DELTA,
                 text: chunk.delta
@@ -490,7 +637,8 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
                 if (outputItem.type === 'function_call') {
                   toolCalls.push({
                     ...outputItem,
-                    arguments: chunk.arguments
+                    arguments: chunk.arguments,
+                    status: 'completed'
                   })
                 }
               }
@@ -509,17 +657,30 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
                 })
               }
 
-              if (toolCalls.length > 0) {
+              if (toolCalls.length > 0 && !hasBeenCollectedToolCalls) {
                 controller.enqueue({
                   type: ChunkType.MCP_TOOL_CREATED,
                   tool_calls: toolCalls
                 })
+                hasBeenCollectedToolCalls = true
               }
 
               break
             }
 
             case 'response.completed': {
+              if (ctx._internal?.toolProcessingState) {
+                ctx._internal.toolProcessingState.output = chunk.response
+              }
+
+              if (toolCalls.length > 0 && !hasBeenCollectedToolCalls) {
+                controller.enqueue({
+                  type: ChunkType.MCP_TOOL_CREATED,
+                  tool_calls: toolCalls
+                })
+                hasBeenCollectedToolCalls = true
+              }
+
               const completion_tokens = chunk.response.usage?.output_tokens || 0
               const total_tokens = chunk.response.usage?.total_tokens || 0
               controller.enqueue({

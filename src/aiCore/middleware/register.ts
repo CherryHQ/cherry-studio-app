@@ -2,7 +2,6 @@ import * as AbortHandlerModule from './common/AbortHandlerMiddleware'
 import * as ErrorHandlerModule from './common/ErrorHandlerMiddleware'
 import * as FinalChunkConsumerModule from './common/FinalChunkConsumerMiddleware'
 import * as LoggingModule from './common/LoggingMiddleware'
-// import * as McpToolChunkModule from './core/McpToolChunkMiddleware'
 import * as RawStreamListenerModule from './core/RawStreamListenerMiddleware'
 import * as ResponseTransformModule from './core/ResponseTransformMiddleware'
 // import * as SdkCallModule from './core/SdkCallMiddleware'
@@ -10,8 +9,9 @@ import * as StreamAdapterModule from './core/StreamAdapterMiddleware'
 import * as TextChunkModule from './core/TextChunkMiddleware'
 import * as ThinkChunkModule from './core/ThinkChunkMiddleware'
 import * as TransformCoreToSdkParamsModule from './core/TransformCoreToSdkParamsMiddleware'
-// import * as WebSearchModule from './core/WebSearchMiddleware'
-// import * as ThinkingTagExtractionModule from './feat/ThinkingTagExtractionMiddleware'
+import * as WebSearchModule from './core/WebSearchMiddleware'
+import * as ThinkingTagExtractionModule from './feat/ThinkingTagExtractionMiddleware'
+import * as ToolUseExtractionMiddleware from './feat/ToolUseExtractionMiddleware'
 
 /**
  * 中间件注册表 - 提供所有可用中间件的集中访问
@@ -55,14 +55,14 @@ export const MiddlewareRegistry = {
   },
 
   // 特性处理中间件
-  // [ThinkingTagExtractionModule.MIDDLEWARE_NAME]: {
-  //   name: ThinkingTagExtractionModule.MIDDLEWARE_NAME,
-  //   middleware: ThinkingTagExtractionModule.ThinkingTagExtractionMiddleware
-  // },
-  // [ToolUseExtractionMiddleware.MIDDLEWARE_NAME]: {
-  //   name: ToolUseExtractionMiddleware.MIDDLEWARE_NAME,
-  //   middleware: ToolUseExtractionMiddleware.ToolUseExtractionMiddleware
-  // },
+  [ThinkingTagExtractionModule.MIDDLEWARE_NAME]: {
+    name: ThinkingTagExtractionModule.MIDDLEWARE_NAME,
+    middleware: ThinkingTagExtractionModule.ThinkingTagExtractionMiddleware
+  },
+  [ToolUseExtractionMiddleware.MIDDLEWARE_NAME]: {
+    name: ToolUseExtractionMiddleware.MIDDLEWARE_NAME,
+    middleware: ToolUseExtractionMiddleware.ToolUseExtractionMiddleware
+  },
   [ThinkChunkModule.MIDDLEWARE_NAME]: {
     name: ThinkChunkModule.MIDDLEWARE_NAME,
     middleware: ThinkChunkModule.ThinkChunkMiddleware
@@ -71,10 +71,10 @@ export const MiddlewareRegistry = {
   //   name: McpToolChunkModule.MIDDLEWARE_NAME,
   //   middleware: McpToolChunkModule.McpToolChunkMiddleware
   // },
-  // [WebSearchModule.MIDDLEWARE_NAME]: {
-  //   name: WebSearchModule.MIDDLEWARE_NAME,
-  //   middleware: WebSearchModule.WebSearchMiddleware
-  // },
+  [WebSearchModule.MIDDLEWARE_NAME]: {
+    name: WebSearchModule.MIDDLEWARE_NAME,
+    middleware: WebSearchModule.WebSearchMiddleware
+  },
   [TextChunkModule.MIDDLEWARE_NAME]: {
     name: TextChunkModule.MIDDLEWARE_NAME,
     middleware: TextChunkModule.TextChunkMiddleware
@@ -91,8 +91,7 @@ export const MiddlewareRegistry = {
  * @returns 对应的中间件信息
  */
 export function getMiddleware(name: string) {
-  // return MiddlewareRegistry[name]
-  return MiddlewareRegistry[name as keyof typeof MiddlewareRegistry]
+  return MiddlewareRegistry[name]
 }
 
 /**
@@ -113,9 +112,9 @@ export const DefaultCompletionsNamedMiddlewares = [
   MiddlewareRegistry[AbortHandlerModule.MIDDLEWARE_NAME], // 中止处理
   // MiddlewareRegistry[McpToolChunkModule.MIDDLEWARE_NAME], // 工具处理
   MiddlewareRegistry[TextChunkModule.MIDDLEWARE_NAME], // 文本处理
-  // MiddlewareRegistry[WebSearchModule.MIDDLEWARE_NAME], // Web搜索处理
-  // MiddlewareRegistry[ToolUseExtractionMiddleware.MIDDLEWARE_NAME], // 工具使用提取处理
-  // MiddlewareRegistry[ThinkingTagExtractionModule.MIDDLEWARE_NAME], // 思考标签提取处理（特定provider）
+  MiddlewareRegistry[WebSearchModule.MIDDLEWARE_NAME], // Web搜索处理
+  MiddlewareRegistry[ToolUseExtractionMiddleware.MIDDLEWARE_NAME], // 工具使用提取处理
+  MiddlewareRegistry[ThinkingTagExtractionModule.MIDDLEWARE_NAME], // 思考标签提取处理（特定provider）
   MiddlewareRegistry[ThinkChunkModule.MIDDLEWARE_NAME], // 思考处理（通用SDK）
   MiddlewareRegistry[ResponseTransformModule.MIDDLEWARE_NAME], // 响应转换
   MiddlewareRegistry[StreamAdapterModule.MIDDLEWARE_NAME], // 流适配器
@@ -142,7 +141,7 @@ export {
   StreamAdapterModule,
   TextChunkModule,
   ThinkChunkModule,
-  // ThinkingTagExtractionModule,
-  TransformCoreToSdkParamsModule
-  // WebSearchModule
+  ThinkingTagExtractionModule,
+  TransformCoreToSdkParamsModule,
+  WebSearchModule
 }

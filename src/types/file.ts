@@ -1,3 +1,5 @@
+import type { FileSchema } from '@mistralai/mistralai/models/components'
+
 export enum FileTypes {
   IMAGE = 'image',
   VIDEO = 'video',
@@ -19,4 +21,18 @@ export interface FileType {
   count: number
   tokens?: number
   md5: string
+}
+
+export interface RemoteFile {
+  type: 'gemini' | 'mistral'
+  file: File | FileSchema
+}
+
+export type FileStatus = 'success' | 'processing' | 'failed' | 'unknown'
+
+export interface FileUploadResponse {
+  fileId: string
+  displayName: string
+  status: FileStatus
+  originalFile?: RemoteFile
 }

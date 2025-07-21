@@ -32,6 +32,7 @@ import ProvidersScreen from '@/screens/settings/providers/ProvidersScreen'
 import SettingsScreen from '@/screens/settings/SettingsScreen'
 import WebSearchProviderSettingsScreen from '@/screens/settings/websearch/WebSearchProviderSettingsScreen'
 import WebSearchSettingsScreen from '@/screens/settings/websearch/WebSearchSettingsScreen'
+import TestScreen from '@/screens/test/TestScreen'
 import TopicScreen from '@/screens/topic/TopicScreen'
 import WelcomeScreen from '@/screens/WelcomeScreen'
 import { useAppSelector } from '@/store'
@@ -93,6 +94,8 @@ export default function MainStackNavigator() {
 
       {/* topic screen */}
       <Stack.Screen name="TopicScreen" component={TopicScreen} />
+
+      <Stack.Screen name="TestScreen" component={TestScreen} />
     </Stack.Navigator>
   )
 }
