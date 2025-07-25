@@ -1,7 +1,8 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { BrushCleaning } from '@tamagui/lucide-icons'
 import { sortBy } from 'lodash'
-import { forwardRef, useEffect, useState } from 'react'
+import debounce from 'lodash/debounce'
+import { forwardRef, useCallback, useEffect, useState } from 'react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button, Stack, Text, useTheme, View, XStack, YStack } from 'tamagui'
@@ -29,7 +30,20 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
   const theme = useTheme()
   const isDark = useIsDark()
   const [selectedModels, setSelectedModels] = useState<string[]>(() => mentions.map(m => getModelUniqId(m)))
+  const [inputValue, setInputValue] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+
+  const debouncedSetQuery = useCallback(
+    debounce((query: string) => {
+      setSearchQuery(query)
+    }, 300),
+    []
+  )
+
+  const handleSearchChange = (text: string) => {
+    setInputValue(text)
+    debouncedSetQuery(text)
+  }
 
   useEffect(() => {
     setSelectedModels(mentions.map(m => getModelUniqId(m)))
@@ -117,8 +131,8 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
           <XStack gap={5}>
             <Stack flex={1}>
               <BottomSheetSearchInput
-                value={searchQuery}
-                onChangeText={setSearchQuery}
+                value={inputValue}
+                onChangeText={handleSearchChange}
                 placeholder={t('common.search_placeholder')}
               />
             </Stack>

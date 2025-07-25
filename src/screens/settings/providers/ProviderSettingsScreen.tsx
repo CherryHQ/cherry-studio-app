@@ -2,7 +2,8 @@ import BottomSheet from '@gorhom/bottom-sheet'
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native'
 import { ChevronRight, HeartPulse, Plus, Settings, Settings2 } from '@tamagui/lucide-icons'
 import { groupBy } from 'lodash'
-import React, { useRef, useState } from 'react'
+import debounce from 'lodash/debounce'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
@@ -33,6 +34,25 @@ export default function ProviderSettingsScreen() {
 
   const bottomSheetRef = useRef<BottomSheet>(null)
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false)
+  
+  // 搜索状态
+  const [searchText, setSearchText] = useState('')
+  const [debouncedSearchText, setDebouncedSearchText] = useState('')
+
+  // 防抖处理
+  const debouncedSetSearchText = useCallback(
+    debounce((text: string) => {
+      setDebouncedSearchText(text)
+    }, 300),
+    []
+  )
+
+  useEffect(() => {
+    debouncedSetSearchText(searchText)
+    return () => {
+      debouncedSetSearchText.cancel()
+    }
+  }, [searchText, debouncedSetSearchText])
 
   const handleOpenBottomSheet = () => {
     bottomSheetRef.current?.expand()
@@ -48,8 +68,26 @@ export default function ProviderSettingsScreen() {
 
   const modelGroups = groupBy(provider?.models, 'group')
 
+  // 搜索过滤模型
+  const filteredModelGroups = Object.fromEntries(
+    Object.entries(modelGroups).map(([groupName, models]) => [
+      groupName,
+      models.filter(model => {
+        if (!debouncedSearchText) return true
+        
+        const query = debouncedSearchText.toLowerCase().trim()
+        if (!query) return true
+        
+        return (
+          (model.name && model.name.toLowerCase().includes(query)) ||
+          (model.id && model.id.toLowerCase().includes(query))
+        )
+      })
+    ]).filter(([, models]) => models.length > 0) // 过滤掉空分组
+  )
+
   // 对分组进行排序
-  const sortedModelGroups = Object.entries(modelGroups).sort(([a], [b]) => a.localeCompare(b))
+  const sortedModelGroups = Object.entries(filteredModelGroups).sort(([a], [b]) => a.localeCompare(b))
 
   // 默认展开前6个分组
   const defaultOpenGroups = sortedModelGroups.slice(0, 6).map((_, index) => `item-${index}`)
@@ -165,7 +203,11 @@ export default function ProviderSettingsScreen() {
             <Separator />
 
             {/* Search Card */}
-            <SearchInput placeholder={t('settings.models.search')} />
+            <SearchInput 
+              placeholder={t('settings.models.search')} 
+              value={searchText}
+              onChangeText={setSearchText}
+            />
 
             {/* Model List Card with Accordion */}
             <YStack flex={1}>
@@ -184,7 +226,7 @@ export default function ProviderSettingsScreen() {
                       <ModelGroup
                         key={groupName}
                         groupName={groupName}
-                        models={modelsInGroup} // Use modelsInGroup
+                        models={modelsInGroup as Model[]} // Type assertion for modelsInGroup
                         index={index}
                         renderModelButton={(
                           model: Model // Wrap with useCallback
