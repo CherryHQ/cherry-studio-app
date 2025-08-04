@@ -112,40 +112,6 @@ export async function extractFileContent(message: Message): Promise<string> {
 }
 
 /**
- * 提取外部工具搜索关键词和问题
- * 从用户消息中提取用于网络搜索和知识库搜索的关键词
- */
-export async function extractSearchKeywords(
-  lastUserMessage: Message,
-  assistant: Assistant,
-  options: {
-    shouldWebSearch?: boolean
-    shouldKnowledgeSearch?: boolean
-    lastAnswer?: Message
-  } = {}
-): Promise<ExtractResults | undefined> {
-  // todo
-  const { shouldWebSearch = false, shouldKnowledgeSearch = false, lastAnswer } = options
-
-  if (!lastUserMessage) return undefined
-
-  return await getFallbackResult()
-
-  async function getFallbackResult(): Promise<ExtractResults> {
-    const fallbackContent = await getMainTextContent(lastUserMessage)
-    return {
-      websearch: shouldWebSearch ? { question: [fallbackContent || 'search'] } : undefined,
-      knowledge: shouldKnowledgeSearch
-        ? {
-            question: [fallbackContent || 'search'],
-            rewrite: fallbackContent || 'search'
-          }
-        : undefined
-    }
-  }
-}
-
-/**
  * 转换消息为 AI SDK 参数格式
  * 基于 OpenAI 格式的通用转换，支持文本、图片和文件
  */

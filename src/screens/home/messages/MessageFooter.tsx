@@ -5,9 +5,8 @@ import React, { useEffect, useState } from 'react'
 import { Button, View, XStack } from 'tamagui'
 
 import { TranslatedIcon, TranslationIcon } from '@/components/icons/TranslationIcon'
-import { fetchTranslate } from '@/services/ApiService'
 import { loggerService } from '@/services/LoggerService'
-import { regenerateAssistantMessage } from '@/services/MessagesService'
+import { regenerateAssistantMessage, fetchTranslate } from '@/services/MessagesService'
 import { Assistant } from '@/types/assistant'
 import { Message } from '@/types/message'
 import { filterMessages } from '@/utils/messageUtils/filters'
@@ -75,7 +74,7 @@ const MessageFooter = ({ message, assistant, bottomSheetRef, setIsBottomSheetOpe
       if (isTranslating) return
       setIsTranslating(true)
       const messageId = message.id
-      await fetchTranslate({ assistantMessageId: messageId, message: message })
+      await fetchTranslate(messageId, message)
       setIsTranslated(true) // 翻译成功后更新状态
     } catch (error) {
       logger.error('Error during translation:', error)

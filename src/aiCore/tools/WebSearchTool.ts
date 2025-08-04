@@ -7,7 +7,7 @@ import { ExtractResults } from '@/types/extract'
 import { Message, UserMessageStatus } from '@/types/message'
 import { WebSearchProvider } from '@/types/websearch'
 
-import { extractSearchKeywords } from '../transformParameters'
+import { extractSearchKeywords } from '@/aiCore/utils/websearch'
 import { loggerService } from '@/services/LoggerService'
 
 

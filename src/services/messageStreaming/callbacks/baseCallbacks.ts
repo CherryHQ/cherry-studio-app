@@ -1,4 +1,4 @@
-import { fetchTopicNaming } from '@/services/ApiService'
+import { fetchTopicNaming } from '@/services/TopicService'
 import { loggerService } from '@/services/LoggerService'
 import { estimateMessagesUsage } from '@/services/TokenService'
 import { Assistant } from '@/types/assistant'
