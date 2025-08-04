@@ -5,9 +5,9 @@ import { ChunkType } from '@/types/chunk'
 
 import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
 import { CompletionsContext, CompletionsMiddleware } from '../types'
-const logger = loggerService.withContext('FinalChunkConsumerAndNotifierMiddleware')
 
 export const MIDDLEWARE_NAME = 'FinalChunkConsumerAndNotifierMiddleware'
+const logger = loggerService.withContext(MIDDLEWARE_NAME)
 
 /**
  * 最终Chunk消费和通知中间件
@@ -162,7 +162,7 @@ function extractAndAccumulateUsageMetrics(ctx: CompletionsContext, chunk: Generi
       )
     }
   } catch (error) {
-    console.error(`[${MIDDLEWARE_NAME}] Error extracting usage/metrics from chunk:`, error)
+    logger.error('Error extracting usage/metrics from chunk:', error)
   }
 }
 

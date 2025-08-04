@@ -37,7 +37,7 @@ export const createCitationCallbacks = (deps: CitationCallbacksDependencies) => 
         blockManager.smartBlockUpdate(citationBlockId, changes, MessageBlockType.CITATION, true)
         logger.debug('onExternalToolComplete', externalToolResult)
       } else {
-        console.error('[onExternalToolComplete] citationBlockId is null. Cannot update.')
+        logger.error('[onExternalToolComplete] citationBlockId is null. Cannot update.')
       }
     },
 

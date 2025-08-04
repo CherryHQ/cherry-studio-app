@@ -23,8 +23,11 @@ import {
   ReasoningEffortOptionalParams
 } from '@/types/sdk'
 import { formatApiHost } from '@/utils/api'
+import { loggerService } from '@/services/LoggerService'
 
 import { BaseApiClient } from '../BaseApiClient'
+
+const logger = loggerService.withContext('OpenAIBaseClient')
 
 /**
  * 抽象的OpenAI基础客户端类，包含两个OpenAI客户端之间的共享功能
@@ -126,7 +129,7 @@ export abstract class OpenAIBaseClient<
 
       return models.filter(isSupportedModel)
     } catch (error) {
-      console.error('Error listing models:', error)
+      logger.error('Error listing models:', error)
       return []
     }
   }

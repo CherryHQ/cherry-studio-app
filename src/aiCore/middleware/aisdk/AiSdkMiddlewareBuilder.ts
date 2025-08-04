@@ -58,7 +58,7 @@ export class AiSdkMiddlewareBuilder {
     if (index !== -1) {
       this.middlewares.splice(index + 1, 0, middleware)
     } else {
-      console.warn(`AiSdkMiddlewareBuilder: 未找到名为 '${targetName}' 的中间件，无法插入`)
+      logger.warn(`未找到名为 '${targetName}' 的中间件，无法插入`)
     }
 
     return this

@@ -5,9 +5,9 @@ import { ResponseChunkTransformerContext } from '../../clients/types'
 import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
 import { CompletionsContext, CompletionsMiddleware } from '../types'
 
-const logger = loggerService.withContext('ResponseTransformMiddleware')
 
 export const MIDDLEWARE_NAME = 'ResponseTransformMiddleware'
+const logger = loggerService.withContext(MIDDLEWARE_NAME)
 
 /**
  * 响应转换中间件
@@ -51,7 +51,7 @@ export const ResponseTransformMiddleware: CompletionsMiddleware =
         const model = assistant?.model
 
         if (!assistant || !model) {
-          console.error(`[${MIDDLEWARE_NAME}] Assistant or Model not found for transformation`)
+          logger.error('Assistant or Model not found for transformation')
           throw new Error('Assistant or Model not found for transformation')
         }
 

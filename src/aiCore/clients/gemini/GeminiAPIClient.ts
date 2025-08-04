@@ -47,9 +47,12 @@ import {
 } from '@/utils/mcpTool'
 import { findFileBlocks, findImageBlocks, getMainTextContent } from '@/utils/messageUtils/find'
 import { buildSystemPrompt } from '@/utils/prompt'
+import { loggerService } from '@/services/LoggerService'
 
 import { BaseApiClient } from '../BaseApiClient'
 import { RequestTransformer, ResponseChunkTransformer } from '../types'
+
+const logger = loggerService.withContext('GeminiAPIClient')
 
 export class GeminiAPIClient extends BaseApiClient<
   GoogleGenAI,
@@ -127,7 +130,7 @@ export class GeminiAPIClient extends BaseApiClient<
       //  console.log(response?.generatedImages?.[0]?.image?.imageBytes);
       return images
     } catch (error) {
-      console.error('[generateImage] error:', error)
+      logger.error('[generateImage] error:', error)
       throw error
     }
   }

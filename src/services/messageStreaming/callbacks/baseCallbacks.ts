@@ -74,7 +74,7 @@ export const createBaseCallbacks = async (deps: BaseCallbacksDependencies) => {
     // },
 
     onError: async (error: any) => {
-      console.dir(error, { depth: null })
+      logger.error('onError', error)
       const isErrorTypeAbort = isAbortError(error)
       let pauseErrorLanguagePlaceholder = ''
 
