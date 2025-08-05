@@ -3,9 +3,9 @@ import { ChunkType } from '@/types/chunk'
 
 import { CompletionsParams, CompletionsResult } from '../schemas'
 import { CompletionsContext, CompletionsMiddleware } from '../types'
-const logger = loggerService.withContext('TransformCoreToSdkParamsMiddleware')
 
 export const MIDDLEWARE_NAME = 'TransformCoreToSdkParamsMiddleware'
+const logger = loggerService.withContext(MIDDLEWARE_NAME)
 
 /**
  * 中间件：将CoreCompletionsRequest转换为SDK特定的参数
@@ -24,7 +24,7 @@ export const TransformCoreToSdkParamsMiddleware: CompletionsMiddleware =
     const apiClient = ctx.apiClientInstance
 
     if (!apiClient) {
-      logger.error(`🔄 [${MIDDLEWARE_NAME}] ApiClient instance not found in context.`)
+      logger.error(`🔄 ApiClient instance not found in context.`)
       throw new Error('ApiClient instance not found in context')
     }
 
@@ -44,7 +44,7 @@ export const TransformCoreToSdkParamsMiddleware: CompletionsMiddleware =
     const model = params.assistant.model
 
     if (!assistant || !model) {
-      console.error(`🔄 [${MIDDLEWARE_NAME}] Assistant or Model not found for transformation.`)
+      logger.error('🔄 Assistant or Model not found for transformation.')
       throw new Error('Assistant or Model not found for transformation')
     }
 

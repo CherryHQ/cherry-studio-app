@@ -321,7 +321,7 @@ export const saveUpdatesToDB = async (
     }
     await updateExistingMessageAndBlocksInDB(messageDataToSave, blocksToUpdate)
   } catch (error) {
-    console.error(`[DB Save Updates] Failed for message ${messageId}:`, error)
+    logger.error(`[DB Save Updates] Failed for message ${messageId}:`, error)
   }
 }
 
@@ -333,14 +333,14 @@ const updateExistingMessageAndBlocksInDB = async (
     await updateMessageById(updatedMessage.id, updatedMessage)
     await upsertBlocks(updatedBlocks)
   } catch (error) {
-    console.error(`[updateExistingMsg] Failed to update message ${updatedMessage.id}:`, error)
+    logger.error(`[updateExistingMsg] Failed to update message ${updatedMessage.id}:`, error)
   }
 }
 
 // 新增: 辅助函数，用于获取并保存单个更新后的 Block 到数据库
 export const saveUpdatedBlockToDB = async (blockId: string | null, messageId: string, topicId: string) => {
   if (!blockId) {
-    console.warn('[DB Save Single Block] Received null/undefined blockId. Skipping save.')
+    logger.warn('[DB Save Single Block] Received null/undefined blockId. Skipping save.')
     return
   }
 
@@ -349,7 +349,7 @@ export const saveUpdatedBlockToDB = async (blockId: string | null, messageId: st
   if (blockToSave) {
     await saveUpdatesToDB(messageId, topicId, {}, [blockToSave]) // Pass messageId, topicId, empty message updates, and the block
   } else {
-    console.warn(`[DB Save Single Block] Block ${blockId} not found in state. Cannot save.`)
+    logger.warn(`[DB Save Single Block] Block ${blockId} not found in state. Cannot save.`)
   }
 }
 

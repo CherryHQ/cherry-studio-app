@@ -14,6 +14,7 @@ import {
   SdkToolCall
 } from '@/types/sdk'
 import { MCPTool } from '@/types/tool'
+import { loggerService } from '@/services/LoggerService'
 
 import { CompletionsContext } from '../middleware/types'
 import { AnthropicAPIClient } from './anthropic/AnthropicAPIClient'
@@ -22,6 +23,8 @@ import { GeminiAPIClient } from './gemini/GeminiAPIClient'
 import { OpenAIAPIClient } from './openai/OpenAIApiClient'
 import { OpenAIResponseAPIClient } from './openai/OpenAIResponseAPIClient'
 import { RequestTransformer, ResponseChunkTransformer } from './types'
+
+const logger = loggerService.withContext('NewAPIClient')
 
 export class NewAPIClient extends BaseApiClient {
   // 使用联合类型而不是any，保持类型安全
@@ -182,7 +185,7 @@ export class NewAPIClient extends BaseApiClient {
 
       return models.filter(isSupportedModel)
     } catch (error) {
-      console.error('Error listing models:', error)
+      logger.error('Error listing models:', error)
       return []
     }
   }

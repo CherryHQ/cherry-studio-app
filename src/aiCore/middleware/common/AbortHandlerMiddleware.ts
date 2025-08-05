@@ -1,10 +1,13 @@
 import { Chunk, ChunkType, ErrorChunk } from '@/types/chunk'
 import { addAbortController, removeAbortController } from '@/utils/abortController'
+import { loggerService } from '@/services/LoggerService'
 
 import { CompletionsParams, CompletionsResult } from '../schemas'
 import type { CompletionsContext, CompletionsMiddleware } from '../types'
 
 export const MIDDLEWARE_NAME = 'AbortHandlerMiddleware'
+
+const logger = loggerService.withContext(MIDDLEWARE_NAME)
 
 export const AbortHandlerMiddleware: CompletionsMiddleware =
   () =>
@@ -31,7 +34,7 @@ export const AbortHandlerMiddleware: CompletionsMiddleware =
     }
 
     if (!messageId) {
-      console.warn(`[${MIDDLEWARE_NAME}] No messageId found, abort functionality will not be available.`)
+      logger.warn('No messageId found, abort functionality will not be available.')
       return next(ctx, params)
     }
 

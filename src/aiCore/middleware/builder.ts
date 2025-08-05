@@ -1,5 +1,8 @@
+import { loggerService } from '@/services/LoggerService'
 import { DefaultCompletionsNamedMiddlewares } from './register'
 import { BaseContext, CompletionsMiddleware, MethodMiddleware } from './types'
+
+const logger = loggerService.withContext('MiddlewareBuilder')
 
 /**
  * 带有名称标识的中间件接口
@@ -67,7 +70,7 @@ export class MiddlewareBuilder<TMiddleware = any> {
     if (index !== -1) {
       this.middlewares.splice(index + 1, 0, middlewareToInsert)
     } else {
-      console.warn(`MiddlewareBuilder: 未找到名为 '${targetName}' 的中间件，无法插入`)
+      logger.warn(`未找到名为 '${targetName}' 的中间件，无法插入`)
     }
 
     return this
@@ -85,7 +88,7 @@ export class MiddlewareBuilder<TMiddleware = any> {
     if (index !== -1) {
       this.middlewares.splice(index, 0, middlewareToInsert)
     } else {
-      console.warn(`MiddlewareBuilder: 未找到名为 '${targetName}' 的中间件，无法插入`)
+      logger.warn(`未找到名为 '${targetName}' 的中间件，无法插入`)
     }
 
     return this
@@ -103,7 +106,7 @@ export class MiddlewareBuilder<TMiddleware = any> {
     if (index !== -1) {
       this.middlewares[index] = newMiddleware
     } else {
-      console.warn(`MiddlewareBuilder: 未找到名为 '${targetName}' 的中间件，无法替换`)
+      logger.warn(`未找到名为 '${targetName}' 的中间件，无法替换`)
     }
 
     return this

@@ -4,6 +4,7 @@ import { Model, Provider } from '@/types/assistant'
 import { GenerateImageParams } from '@/types/image'
 import { RequestOptions, SdkModel } from '@/types/sdk'
 import { isEnabledToolUse } from '@/utils/mcpTool'
+import { loggerService } from '@/services/LoggerService'
 
 import { ApiClientFactory, BaseApiClient, OpenAIAPIClient } from './clients'
 import { AihubmixAPIClient } from './clients/AihubmixAPIClient'
@@ -22,6 +23,8 @@ import { MIDDLEWARE_NAME as ThinkingTagExtractionMiddlewareName } from './middle
 import { MIDDLEWARE_NAME as ToolUseExtractionMiddlewareName } from './middleware/feat/ToolUseExtractionMiddleware'
 import { MiddlewareRegistry } from './middleware/register'
 import { CompletionsParams, CompletionsResult } from './middleware/schemas'
+
+const logger = loggerService.withContext('AiProvider')
 
 export default class AiProvider {
   private apiClient: BaseApiClient
@@ -133,7 +136,7 @@ export default class AiProvider {
       const dimensions = await this.apiClient.getEmbeddingDimensions(model)
       return dimensions
     } catch (error) {
-      console.error('Error getting embedding dimensions:', error)
+      logger.error('Error getting embedding dimensions:', error)
       throw error
     }
   }

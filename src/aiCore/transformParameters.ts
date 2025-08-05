@@ -40,11 +40,13 @@ import { FileMessageBlock, ImageMessageBlock, Message, ThinkingMessageBlock } fr
 import { MCPTool } from '@/types/tool'
 import { findFileBlocks, findImageBlocks, findThinkingBlocks, getMainTextContent } from '@/utils/messageUtils/find'
 import { buildSystemPrompt } from '@/utils/prompt'
+import { loggerService } from '@/services/LoggerService'
 
 import { webSearchTool } from './tools/WebSearchTool'
 import { buildProviderOptions } from './utils/options'
 
 const { tool } = aiSdk
+const logger = loggerService.withContext('TransformParameters')
 
 /**
  * 获取温度参数
@@ -186,7 +188,7 @@ async function convertMessageToUserModelMessage(
             mediaType: image.type || 'image/png'
           })
         } catch (error) {
-          console.warn('Failed to load image:', error)
+          logger.warn('Failed to load image:', error)
         }
       } else if (imageBlock.url) {
         parts.push({
@@ -252,7 +254,7 @@ async function convertFileBlockToTextPart(fileBlock: FileMessageBlock): Promise<
         text: `${file.origin_name}\n${fileContent.trim()}`
       }
     } catch (error) {
-      console.warn('Failed to read file:', error)
+      logger.warn('Failed to read file:', error)
     }
   }
 

@@ -1,12 +1,14 @@
 import { ImageMessageBlock, MessageBlockStatus, MessageBlockType } from '@/types/message'
 import { createImageBlock } from '@/utils/messageUtils/create'
 
+import { loggerService } from '@/services/LoggerService'
 import { BlockManager } from '../BlockManager'
-
 interface ImageCallbacksDependencies {
   blockManager: BlockManager
   assistantMsgId: string
 }
+
+const logger = loggerService.withContext('ImageCallbacks')
 
 export const createImageCallbacks = (deps: ImageCallbacksDependencies) => {
   const { blockManager, assistantMsgId } = deps
@@ -64,7 +66,7 @@ export const createImageCallbacks = (deps: ImageCallbacksDependencies) => {
 
         imageBlockId = null
       } else {
-        console.error('[onImageGenerated] Last block was not an Image block or ID is missing.')
+        logger.error('[onImageGenerated] Last block was not an Image block or ID is missing.')
       }
     }
   }

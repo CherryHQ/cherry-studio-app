@@ -5,8 +5,10 @@ import { TagConfig, TagExtractor } from '@/utils/tagExtraction'
 
 import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
 import { CompletionsContext, CompletionsMiddleware } from '../types'
+import { loggerService } from '@/services/logger'
 
 export const MIDDLEWARE_NAME = 'ToolUseExtractionMiddleware'
+const logger = loggerService.withContext(MIDDLEWARE_NAME)
 
 // 工具使用标签配置
 const TOOL_USE_TAG_CONFIG: TagConfig = {
@@ -107,7 +109,7 @@ function createToolUseExtractionTransform(
         // 转发其他所有chunk
         controller.enqueue(chunk)
       } catch (error) {
-        console.error(`🔧 [${MIDDLEWARE_NAME}] Error processing chunk:`, error)
+        logger.error(`🔧 Error processing chunk:`, error)
         controller.error(error)
       }
     },

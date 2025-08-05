@@ -1,7 +1,10 @@
 import { MessageBlock, MessageBlockStatus, MessageBlockType } from '@/types/message'
 import { createThinkingBlock } from '@/utils/messageUtils/create'
+import { loggerService } from '@/services/LoggerService'
 
 import { BlockManager } from '../BlockManager'
+
+const logger = loggerService.withContext('ThinkingCallbacks')
 
 interface ThinkingCallbacksDependencies {
   blockManager: BlockManager
@@ -57,7 +60,7 @@ export const createThinkingCallbacks = (deps: ThinkingCallbacksDependencies) => 
         blockManager.smartBlockUpdate(thinkingBlockId, changes, MessageBlockType.THINKING, true)
         thinkingBlockId = null
       } else {
-        console.warn(
+        logger.warn(
           `[onThinkingComplete] Received thinking.complete but last block was not THINKING (was ${blockManager.lastBlockType}) or lastBlockId is null.`
         )
       }

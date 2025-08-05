@@ -21,7 +21,7 @@ import { MCPTool } from '@/types/tool'
 
 import { CompletionsParams } from '../aiCore/middleware/schemas'
 
-const logger = loggerService.withContext('Utils Mcp Tool')
+const logger = loggerService.withContext('McpTool')
 
 const MCP_AUTO_INSTALL_SERVER_NAME = '@cherry/mcp-auto-install'
 const EXTRA_SCHEMA_KEYS = ['schema', 'headers']
@@ -115,7 +115,7 @@ export function openAIToolsToMcpTool(
   })
 
   if (!tool) {
-    console.warn('No MCP Tool found for tool call:', toolCall)
+    logger.warn('No MCP Tool found for tool call:', toolCall)
     return undefined
   }
 
@@ -123,7 +123,7 @@ export function openAIToolsToMcpTool(
 }
 
 export async function callMCPTool(toolResponse: MCPToolResponse): Promise<MCPCallToolResponse> {
-  logger.log(`[MCP] Calling Tool: ${toolResponse.tool.serverName} ${toolResponse.tool.name}`, toolResponse.tool)
+  logger.info(`Calling Tool: ${toolResponse.tool.serverName} ${toolResponse.tool.name}`, toolResponse.tool)
 
   try {
     const server = getMcpServerByTool(toolResponse.tool)
@@ -157,10 +157,10 @@ export async function callMCPTool(toolResponse: MCPToolResponse): Promise<MCPCal
       }
     }
 
-    logger.log(`[MCP] Tool called: ${toolResponse.tool.serverName} ${toolResponse.tool.name}`, resp)
+    logger.info(`Tool called: ${toolResponse.tool.serverName} ${toolResponse.tool.name}`, resp)
     return resp
   } catch (e) {
-    console.error(`[MCP] Error calling Tool: ${toolResponse.tool.serverName} ${toolResponse.tool.name}`, e)
+    logger.error(`Error calling Tool: ${toolResponse.tool.serverName} ${toolResponse.tool.name}`, e)
     return Promise.resolve({
       isError: true,
       content: [
