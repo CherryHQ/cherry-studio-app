@@ -44,12 +44,22 @@ export async function checkModelHealth(
 
     logger.error(`Health check failed for model ${model.id}:`, error as Error)
 
+    // Extract meaningful error message
+    let errorMessage = 'Unknown error'
+    if (error instanceof Error) {
+      errorMessage = error.message
+      // Check if error has additional details
+      if ((error as any).status) {
+        errorMessage = `HTTP ${(error as any).status}: ${errorMessage}`
+      }
+    }
+
     return {
       modelId: model.id,
       status: 'unhealthy',
       latency,
       lastChecked: Date.now(),
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: errorMessage
     }
   }
 }
