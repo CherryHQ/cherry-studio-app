@@ -30,6 +30,7 @@ import { Model } from '@/types/assistant'
 import { ProvidersNavigationProps } from '@/types/naviagate'
 import { Switch } from 'heroui-native'
 import { AddModelSheet } from '@/componentsV2/features/SettingsScreen/AddModelSheet'
+import { ModelHealthCheckSheet } from '@/componentsV2/features/SettingsScreen/ModelHealthCheckSheet'
 
 const logger = loggerService.withContext('ProviderSettingsScreen')
 
@@ -41,9 +42,14 @@ export default function ProviderSettingsScreen() {
   const route = useRoute<ProviderSettingsRouteProp>()
 
   const bottomSheetRef = useRef<BottomSheetModal>(null)
+  const healthCheckSheetRef = useRef<BottomSheetModal>(null)
 
   const handleOpenBottomSheet = () => {
     bottomSheetRef.current?.present()
+  }
+
+  const handleOpenHealthCheck = () => {
+    healthCheckSheetRef.current?.present()
   }
 
   const { providerId } = route.params
@@ -170,7 +176,7 @@ export default function ProviderSettingsScreen() {
             <YStack className="flex-1 gap-2">
               <XStack className="justify-between items-center pr-2.5">
                 <GroupTitle>{t('settings.models.title')}</GroupTitle>
-                <IconButton icon={<HeartPulse size={14} />} />
+                <IconButton icon={<HeartPulse size={14} />} onPress={handleOpenHealthCheck} />
               </XStack>
               <SearchInput placeholder={t('settings.models.search')} value={searchText} onChangeText={setSearchText} />
               <Group>
@@ -182,6 +188,7 @@ export default function ProviderSettingsScreen() {
       </Container>
 
       <AddModelSheet ref={bottomSheetRef} provider={provider} updateProvider={updateProvider} />
+      <ModelHealthCheckSheet ref={healthCheckSheetRef} provider={provider} models={allModels} />
     </SafeAreaContainer>
   )
 }
