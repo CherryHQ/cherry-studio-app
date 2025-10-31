@@ -21,7 +21,7 @@ import {
   IconButton,
   SearchInput
 } from '@/componentsV2'
-import { HeartPulse, Plus, Settings2, X } from '@/componentsV2/icons/LucideIcon'
+import { HeartPulse, Minus, Plus, Settings2 } from '@/componentsV2/icons/LucideIcon'
 import { useProvider } from '@/hooks/useProviders'
 import { useSearch } from '@/hooks/useSearch'
 import { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
@@ -128,7 +128,7 @@ export default function ProviderSettingsScreen() {
         </YStack>
       </XStack>
       <IconButton
-        icon={<X size={16} />}
+        icon={<Minus size={18} className="rounded-full bg-red-20 text-red-100 dark:text-red-100" />}
         onPress={() => handleRemoveModel(model.id)}
       />
     </XStack>
