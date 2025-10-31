@@ -139,7 +139,7 @@ export const ModelHealthCheckSheet = forwardRef<BottomSheetModal, ModelHealthChe
               <YStack className="gap-2">
                 {models.map(model => {
                   const health = healthResults[model.id]
-                  const latencyText = health?.latency ? `${health.latency.toFixed(2)}s` : '-'
+                  const latencyText = health?.latency != null ? `${health.latency.toFixed(2)}s` : '-'
 
                   return (
                     <XStack
