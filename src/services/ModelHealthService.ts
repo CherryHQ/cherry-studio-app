@@ -6,6 +6,19 @@ const logger = loggerService.withContext('ModelHealthService')
 
 export type ModelHealthCheckResult = ModelHealth
 
+function extractErrorMessage(error: unknown): string {
+  let errorMessage = 'Unknown error'
+  if (error instanceof Error) {
+    errorMessage = error.message
+    if ((error as any).status) {
+      errorMessage = `HTTP ${(error as any).status}: ${errorMessage}`
+    }
+  } else if (typeof error === 'string') {
+    errorMessage = error
+  }
+  return errorMessage
+}
+
 /**
  * Check health of a single model
  * @param provider Provider to test
@@ -45,14 +58,7 @@ export async function checkModelHealth(
     logger.error(`Health check failed for model ${model.id}:`, error as Error)
 
     // Extract meaningful error message
-    let errorMessage = 'Unknown error'
-    if (error instanceof Error) {
-      errorMessage = error.message
-      // Check if error has additional details
-      if ((error as any).status) {
-        errorMessage = `HTTP ${(error as any).status}: ${errorMessage}`
-      }
-    }
+    const errorMessage = extractErrorMessage(error)
 
     return {
       modelId: model.id,
@@ -95,7 +101,7 @@ export async function checkModelsHealth(
         modelId: models[index].id,
         status: 'unhealthy',
         lastChecked: Date.now(),
-        error: result.reason instanceof Error ? result.reason.message : 'Health check failed'
+        error: extractErrorMessage(result.reason)
       }
     }
   })
