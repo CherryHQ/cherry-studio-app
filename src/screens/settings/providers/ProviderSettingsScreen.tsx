@@ -21,7 +21,7 @@ import {
   IconButton,
   SearchInput
 } from '@/componentsV2'
-import { HeartPulse, Plus, Settings2 } from '@/componentsV2/icons/LucideIcon'
+import { HeartPulse, Plus, Settings2, X } from '@/componentsV2/icons/LucideIcon'
 import { useProvider } from '@/hooks/useProviders'
 import { useSearch } from '@/hooks/useSearch'
 import { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
@@ -30,6 +30,8 @@ import { Model } from '@/types/assistant'
 import { ProvidersNavigationProps } from '@/types/naviagate'
 import { Switch } from 'heroui-native'
 import { AddModelSheet } from '@/componentsV2/features/SettingsScreen/AddModelSheet'
+import { ModelIcon } from '@/componentsV2/icons'
+import { ModelTags } from '@/componentsV2/features/ModelTags'
 
 const logger = loggerService.withContext('ProviderSettingsScreen')
 
@@ -97,6 +99,40 @@ export default function ProviderSettingsScreen() {
       }
     }
   }
+
+  const handleRemoveModel = useCallback(async (modelId: string) => {
+    if (provider) {
+      const updatedModels = provider.models.filter(model => model.id !== modelId)
+      const updatedProvider = { ...provider, models: updatedModels }
+
+      try {
+        await updateProvider(updatedProvider)
+        logger.info(`Removed model ${modelId} from provider ${provider.id}`)
+      } catch (error) {
+        logger.error('Failed to remove model:', error)
+      }
+    }
+  }, [provider, updateProvider])
+
+  const renderModelItem = useCallback((model: Model, _index: number) => (
+    <XStack className="items-center justify-between w-full">
+      <XStack className="flex-1 gap-2">
+        <XStack className="items-center justify-center">
+          <ModelIcon model={model} />
+        </XStack>
+        <YStack className="flex-1 gap-1">
+          <Text numberOfLines={1} ellipsizeMode="tail">
+            {model.name}
+          </Text>
+          <ModelTags model={model} size={11} />
+        </YStack>
+      </XStack>
+      <IconButton
+        icon={<X size={16} />}
+        onPress={() => handleRemoveModel(model.id)}
+      />
+    </XStack>
+  ), [handleRemoveModel])
 
   if (isLoading) {
     return (
@@ -174,7 +210,7 @@ export default function ProviderSettingsScreen() {
               </XStack>
               <SearchInput placeholder={t('settings.models.search')} value={searchText} onChangeText={setSearchText} />
               <Group>
-                <ModelGroup modelGroups={sortedModelGroups} />
+                <ModelGroup modelGroups={sortedModelGroups} renderModelItem={renderModelItem} />
               </Group>
             </YStack>
           </YStack>
