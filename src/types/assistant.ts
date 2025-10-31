@@ -141,7 +141,7 @@ export type ModelHealthStatus = 'testing' | 'healthy' | 'unhealthy' | 'idle'
 export type ModelHealth = {
   modelId: string
   status: ModelHealthStatus
-  latency?: number // in seconds
+  latency?: number // Response time in seconds
   lastChecked?: number
   error?: string
 }
