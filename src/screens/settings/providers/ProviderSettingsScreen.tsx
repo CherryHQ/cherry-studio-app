@@ -158,7 +158,7 @@ export default function ProviderSettingsScreen() {
             </XStack>
             {health && (
               <XStack className="items-center gap-2">
-                {health.latency && (
+                {health.latency != null && (
                   <Text className="text-xs font-mono text-text-secondary dark:text-text-secondary-dark">
                     {health.latency.toFixed(2)}s
                   </Text>
