@@ -23,7 +23,7 @@ export default function GeneralSettingsScreen() {
   const { t, i18n } = useTranslation()
 
   const [language, setLanguage] = useState('zh-CN')
-  const { activeTheme } = useTheme()
+  const { themeSetting } = useTheme()
 
   const navigation = useNavigation<GeneralSettingsNavigationProps>()
 
@@ -62,7 +62,9 @@ export default function GeneralSettingsScreen() {
                   <Text className="text-lg">{t('settings.general.theme.title')}</Text>
                 </XStack>
                 <XStack className="items-center gap-2">
-                  <Text className="text-gray-500">{t(`settings.general.theme.${activeTheme}`)}</Text>
+                  <Text className="text-gray-500">
+                    {t(`settings.general.theme.${themeSetting === 'system' ? 'auto' : themeSetting}`)}
+                  </Text>
                   <RowRightArrow />
                 </XStack>
               </PressableRow>
