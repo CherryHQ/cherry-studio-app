@@ -178,8 +178,22 @@ jobs:
       - name: Create Copilot Agent task
         if: steps.check-changes.outputs.has_changes == 'true' && env.skip_port == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.COPILOT_TOKEN || secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
+          # Check if token is available
+          if [ -z "${{ secrets.COPILOT_TOKEN }}" ] && [ -z "${{ secrets.GH_PAT }}" ]; then
+            echo "❌ ERROR: No Copilot-enabled token found!"
+            echo ""
+            echo "Please create a Personal Access Token (PAT) with Copilot access:"
+            echo "1. Go to: https://github.com/settings/tokens/new"
+            echo "2. Select scopes: 'repo', 'workflow', 'copilot'"
+            echo "3. Generate token"
+            echo "4. Add it to repository secrets as 'COPILOT_TOKEN' or 'GH_PAT'"
+            echo "   Settings → Secrets and variables → Actions → New repository secret"
+            echo ""
+            echo "Fallback: Using default GITHUB_TOKEN (may not have Copilot access)"
+          fi
+
           # Use GitHub Copilot Agent to apply the patch and handle conflicts
           gh agent-task create \
             --base main \
