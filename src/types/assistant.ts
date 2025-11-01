@@ -136,6 +136,16 @@ export type Model = {
   supported_text_delta?: boolean
 }
 
+export type ModelHealthStatus = 'testing' | 'healthy' | 'unhealthy' | 'idle'
+
+export type ModelHealth = {
+  modelId: string
+  status: ModelHealthStatus
+  latency?: number // Response time in seconds
+  lastChecked?: number
+  error?: string
+}
+
 export type ModelType = 'text' | 'vision' | 'embedding' | 'reasoning' | 'function_calling' | 'web_search' | 'rerank'
 
 export type Usage = OpenAI.Completions.CompletionUsage & {

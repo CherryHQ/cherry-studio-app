@@ -640,6 +640,10 @@
           "label": "No Model yet...",
           "tooltip": "The page you were looking for is beyond our reach. Sorry for the inconvenience."
         },
+        "health_check": {
+          "checking": "Checking...",
+          "title": "Model Health Check"
+        },
         "search": "Search Models...",
         "title": "Models"
       },

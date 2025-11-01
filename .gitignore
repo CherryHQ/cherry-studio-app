@@ -75,3 +75,6 @@ TOP_ENTRY_IMPLEMENTATION.md
 .codex/
 .gemini/
 .qwen/
+
+# coverage
+coverage/

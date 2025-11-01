@@ -159,6 +159,7 @@ export async function checkApi(provider: Provider, model: Model): Promise<void> 
     }
   } catch (error: any) {
     logger.error('Check Api Error', error)
+    throw error
   }
 }
 
