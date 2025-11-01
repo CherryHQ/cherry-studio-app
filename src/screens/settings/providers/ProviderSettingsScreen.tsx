@@ -131,55 +131,6 @@ export default function ProviderSettingsScreen() {
     }
   }
 
-  const renderModelItem = useCallback(
-    (model: Model) => {
-      const health = healthResults[model.id]
-
-      const getStatusIcon = () => {
-        if (!health) return null
-
-        switch (health.status) {
-          case 'healthy':
-            return <CircleCheck size={16} className="text-green-500" />
-          case 'unhealthy':
-            return <XCircle size={16} className="text-red-500" />
-          case 'testing':
-            return <ActivityIndicator size="small" color={isDark ? '#ffffff' : '#000000'} />
-          default:
-            return null
-        }
-      }
-
-      return (
-        <YStack className="w-full gap-1">
-          <XStack className="items-center justify-between w-full">
-            <XStack className="flex-1 gap-2">
-              <Text numberOfLines={1} ellipsizeMode="tail">
-                {model.name || model.id}
-              </Text>
-            </XStack>
-            {health && (
-              <XStack className="items-center gap-2">
-                {health.latency != null && (
-                  <Text className="text-xs font-mono text-text-secondary dark:text-text-secondary-dark">
-                    {health.latency.toFixed(2)}s
-                  </Text>
-                )}
-                {getStatusIcon()}
-              </XStack>
-            )}
-          </XStack>
-          {health?.error && health.status === 'unhealthy' && (
-            <Text className="text-xs text-red-500" numberOfLines={2}>
-              {health.error}
-            </Text>
-          )}
-        </YStack>
-      )
-    },
-    [healthResults, isDark]
-  )
-
   const handleEnabledChange = async (checked: boolean) => {
     if (provider) {
       const updatedProvider = { ...provider, enabled: checked }
@@ -206,25 +157,62 @@ export default function ProviderSettingsScreen() {
     }
   }, [provider, updateProvider])
 
-  const renderModelItem = useCallback((model: Model, _index: number) => (
-    <XStack className="items-center justify-between w-full">
-      <XStack className="flex-1 gap-2">
-        <XStack className="items-center justify-center">
-          <ModelIcon model={model} />
-        </XStack>
-        <YStack className="flex-1 gap-1">
-          <Text numberOfLines={1} ellipsizeMode="tail">
-            {model.name}
-          </Text>
-          <ModelTags model={model} size={11} />
+  const renderModelItem = useCallback(
+    (model: Model, _index: number) => {
+      const health = healthResults[model.id]
+
+      const getStatusIcon = () => {
+        if (!health) return null
+
+        switch (health.status) {
+          case 'healthy':
+            return <CircleCheck size={16} className="text-green-500" />
+          case 'unhealthy':
+            return <XCircle size={16} className="text-red-500" />
+          case 'testing':
+            return <ActivityIndicator size="small" color={isDark ? '#ffffff' : '#000000'} />
+          default:
+            return null
+        }
+      }
+
+      return (
+        <YStack className="w-full gap-1">
+          <XStack className="items-center justify-between w-full">
+            <XStack className="flex-1 gap-2">
+              <XStack className="items-center justify-center">
+                <ModelIcon model={model} />
+              </XStack>
+              <YStack className="flex-1 gap-1">
+                <Text numberOfLines={1} ellipsizeMode="tail">
+                  {model.name}
+                </Text>
+                <ModelTags model={model} size={11} />
+              </YStack>
+            </XStack>
+            <XStack className="items-center gap-2">
+              {health && health.latency != null && (
+                <Text className="text-xs font-mono text-text-secondary dark:text-text-secondary-dark">
+                  {health.latency.toFixed(2)}s
+                </Text>
+              )}
+              {getStatusIcon()}
+              <IconButton
+                icon={<Minus size={18} className="rounded-full bg-red-20 text-red-100 dark:text-red-100" />}
+                onPress={() => handleRemoveModel(model.id)}
+              />
+            </XStack>
+          </XStack>
+          {health?.error && health.status === 'unhealthy' && (
+            <Text className="text-xs text-red-500" numberOfLines={2}>
+              {health.error}
+            </Text>
+          )}
         </YStack>
-      </XStack>
-      <IconButton
-        icon={<Minus size={18} className="rounded-full bg-red-20 text-red-100 dark:text-red-100" />}
-        onPress={() => handleRemoveModel(model.id)}
-      />
-    </XStack>
-  ), [handleRemoveModel])
+      )
+    },
+    [healthResults, isDark, handleRemoveModel]
+  )
 
   if (isLoading) {
     return (
