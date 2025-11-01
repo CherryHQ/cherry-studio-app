@@ -8,7 +8,7 @@ import { useSearch } from '@/hooks/useSearch'
 import { Provider } from '@/types/assistant'
 import { AddProviderSheet } from '@/componentsV2/features/SettingsScreen/AddProviderSheet'
 import { ProviderItem } from '@/componentsV2/features/SettingsScreen/ProviderItem'
-import { LegendList } from '@legendapp/list'
+import { FlashList } from '@shopify/flash-list'
 import { useAllProviders } from '@/hooks/useProviders'
 
 export default function ProviderListScreen() {
@@ -30,20 +30,23 @@ export default function ProviderListScreen() {
     { delay: 100 }
   )
 
-  const onAddProvider = () => {
+  const onAddProvider = useCallback(() => {
     setSheetMode('add')
     setEditingProvider(undefined)
     bottomSheetRef.current?.present()
-  }
+  }, [])
 
-  const onEditProvider = (provider: Provider) => {
+  const onEditProvider = useCallback((provider: Provider) => {
     setSheetMode('edit')
     setEditingProvider(provider)
     bottomSheetRef.current?.present()
-  }
+  }, [])
 
-  const renderProviderItem = ({ item }: { item: Provider }) => (
-    <ProviderItem provider={item} mode={item.enabled ? 'enabled' : 'checked'} onEdit={onEditProvider} />
+  const renderProviderItem = useCallback(
+    ({ item }: { item: Provider }) => (
+      <ProviderItem provider={item} mode={item.enabled ? 'enabled' : 'checked'} onEdit={onEditProvider} />
+    ),
+    [onEditProvider]
   )
 
   return (
@@ -64,16 +67,12 @@ export default function ProviderListScreen() {
           <SearchInput placeholder={t('settings.provider.search')} value={searchText} onChangeText={setSearchText} />
 
           <Group className="flex-1">
-            <LegendList
+            <FlashList
               data={filteredProviders}
               renderItem={renderProviderItem}
               keyExtractor={item => item.id}
-              estimatedItemSize={60}
               showsVerticalScrollIndicator={false}
-              extraData={filteredProviders}
               contentContainerStyle={{ paddingBottom: 30 }}
-              drawDistance={2000}
-              recycleItems
             />
           </Group>
         </Container>
