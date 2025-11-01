@@ -59,8 +59,21 @@ jobs:
             echo ""
           fi
 
-          # GH_TOKEN env var is automatically used by gh CLI
-          echo "🔑 Using token for authentication"
+          # Save token and clear GH_TOKEN to allow gh auth login
+          TOKEN_TO_USE="$GH_TOKEN"
+          unset GH_TOKEN
+
+          # Authenticate gh CLI
+          echo "🔑 Authenticating gh CLI..."
+          echo "$TOKEN_TO_USE" | gh auth login --with-token
+
+          # Verify authentication
+          gh auth status || {
+            echo "❌ Authentication failed!"
+            exit 1
+          }
+
+          echo "✅ Authentication successful"
 
           # Let Copilot Agent handle everything
           gh agent-task create \
