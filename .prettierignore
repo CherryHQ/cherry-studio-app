@@ -13,3 +13,6 @@ drizzle/
 
 # Generated files
 *.generated.*
+
+# GitHub workflows (don't auto-format)
+.github/workflows/
