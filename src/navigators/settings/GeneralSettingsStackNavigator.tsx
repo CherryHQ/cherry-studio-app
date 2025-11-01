@@ -1,4 +1,4 @@
-import { createStackNavigator, TransitionPresets } from '@react-navigation/stack'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import React from 'react'
 
 import GeneralSettingsScreen from '@/screens/settings/general/GeneralSettingsScreen'
@@ -11,15 +11,15 @@ export type GeneralSettingsStackParamList = {
   LanguageChangeScreen: undefined
 }
 
-const Stack = createStackNavigator<GeneralSettingsStackParamList>()
+const Stack = createNativeStackNavigator<GeneralSettingsStackParamList>()
 
 export default function GeneralSettingsStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        gestureResponseDistance: 9999,
-        ...TransitionPresets.SlideFromRightIOS
+        gestureResponseDistance: { start: 9999 }, 
+        animation: 'slide_from_right'
       }}>
       <Stack.Screen name="GeneralSettingsScreen" component={GeneralSettingsScreen} />
       <Stack.Screen name="ThemeSettingsScreen" component={ThemeSettingsScreen} />

@@ -1,4 +1,4 @@
-import { createStackNavigator, TransitionPresets } from '@react-navigation/stack'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import React from 'react'
 
 import WebSearchProviderSettingsScreen from '@/screens/settings/websearch/WebSearchProviderSettingsScreen'
@@ -9,15 +9,15 @@ export type WebSearchStackParamList = {
   WebSearchProviderSettingsScreen: { providerId: string }
 }
 
-const Stack = createStackNavigator<WebSearchStackParamList>()
+const Stack = createNativeStackNavigator<WebSearchStackParamList>()
 
 export default function WebSearchStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        gestureResponseDistance: 9999,
-        ...TransitionPresets.SlideFromRightIOS
+        gestureResponseDistance: { start: 9999 }, 
+        animation: 'slide_from_right'
       }}>
       <Stack.Screen name="WebSearchSettingsScreen" component={WebSearchSettingsScreen} />
       <Stack.Screen name="WebSearchProviderSettingsScreen" component={WebSearchProviderSettingsScreen} />

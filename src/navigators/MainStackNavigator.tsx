@@ -1,6 +1,6 @@
 import '@/i18n'
 
-import { createStackNavigator } from '@react-navigation/stack'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import React from 'react'
 
 import AppDrawerNavigator from '@/navigators/AppDrawerNavigator'
@@ -8,7 +8,7 @@ import WelcomeStackNavigator from '@/navigators/WelcomeStackNavigator'
 import { RootStackParamList } from '@/types/naviagate'
 import { useAppState } from '@/hooks/useAppState'
 
-const Stack = createStackNavigator<RootStackParamList>()
+const Stack = createNativeStackNavigator<RootStackParamList>()
 
 export default function MainStackNavigator() {
   const { welcomeShown } = useAppState()

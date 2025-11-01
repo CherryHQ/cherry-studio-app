@@ -1,4 +1,4 @@
-import { createStackNavigator, TransitionPresets } from '@react-navigation/stack'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import React from 'react'
 
 import AssistantDetailScreen from '@/screens/assistant/AssistantDetailScreen'
@@ -11,15 +11,15 @@ export type AssistantStackParamList = {
   AssistantDetailScreen: { assistantId: string; tab?: string }
 }
 
-const Stack = createStackNavigator<AssistantStackParamList>()
+const Stack = createNativeStackNavigator<AssistantStackParamList>()
 
 export default function AssistantStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        gestureResponseDistance: 9999,
-        ...TransitionPresets.SlideFromRightIOS
+        gestureResponseDistance: { start: 9999 }, 
+        animation: 'slide_from_right'
       }}>
       <Stack.Screen name="AssistantScreen" component={AssistantScreen} />
       <Stack.Screen name="AssistantMarketScreen" component={AssistantMarketScreen} />

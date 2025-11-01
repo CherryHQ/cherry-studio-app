@@ -1,20 +1,20 @@
 import { McpMarketScreen } from '@/screens/mcp/McpMarketScreen'
-import { createStackNavigator, TransitionPresets } from '@react-navigation/stack'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import React from 'react'
 
 export type McpStackParamList = {
   McpMarketScreen: undefined
 }
 
-const Stack = createStackNavigator<McpStackParamList>()
+const Stack = createNativeStackNavigator<McpStackParamList>()
 
 export default function McpStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        gestureResponseDistance: 9999,
-        ...TransitionPresets.SlideFromRightIOS
+        gestureResponseDistance: { start: 9999 }, 
+        animation: 'slide_from_right'
       }}>
       <Stack.Screen name="McpMarketScreen" component={McpMarketScreen} />
     </Stack.Navigator>

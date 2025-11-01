@@ -1,4 +1,4 @@
-import { createStackNavigator, TransitionPresets } from '@react-navigation/stack'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import React from 'react'
 
 import ChatScreen from '@/screens/home/ChatScreen'
@@ -24,15 +24,15 @@ export type HomeStackParamList = {
   AboutSettings: { screen?: string; params?: any } | undefined
 }
 
-const Stack = createStackNavigator<HomeStackParamList>()
+const Stack = createNativeStackNavigator<HomeStackParamList>()
 
 export default function HomeStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        gestureResponseDistance: 9999,
-        ...TransitionPresets.SlideFromRightIOS
+        gestureResponseDistance: { start: 9999 }, 
+        animation: 'slide_from_right'
       }}>
       <Stack.Screen name="ChatScreen" component={ChatScreen} />
       <Stack.Screen name="TopicScreen" component={TopicScreen} />
