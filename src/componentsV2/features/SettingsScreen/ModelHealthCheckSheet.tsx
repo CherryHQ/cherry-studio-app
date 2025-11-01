@@ -122,12 +122,12 @@ export const ModelHealthCheckSheet = forwardRef<BottomSheetModal, ModelHealthChe
         onDismiss={() => setIsVisible(false)}
         onChange={index => setIsVisible(index >= 0)}>
         <BottomSheetView style={{ flex: 1, paddingBottom: insets.bottom }}>
-          <YStack className="flex-1 pb-7 px-5 gap-4">
+          <YStack className="flex-1 gap-4 px-5 pb-7">
             <XStack className="w-full items-center justify-between px-3">
               <Text className="text-xl font-semibold">{t('settings.models.health_check.title')}</Text>
               {isChecking && (
                 <XStack className="items-center gap-2">
-                  <RefreshCw size={16} className="text-text-secondary dark:text-text-secondary-dark animate-spin" />
+                  <RefreshCw size={16} className="animate-spin text-text-secondary dark:text-text-secondary-dark" />
                   <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
                     {t('settings.models.health_check.checking')}
                   </Text>
@@ -144,7 +144,7 @@ export const ModelHealthCheckSheet = forwardRef<BottomSheetModal, ModelHealthChe
                   return (
                     <XStack
                       key={model.id}
-                      className="w-full py-3 px-4 rounded-2xl bg-background-secondary dark:bg-background-secondary-dark border border-border dark:border-border-dark justify-between items-center">
+                      className="dark:border-border-dark w-full items-center justify-between rounded-2xl border border-border bg-background-secondary px-4 py-3 dark:bg-background-secondary-dark">
                       <YStack className="flex-1 gap-1">
                         <Text className="text-sm font-medium" numberOfLines={1}>
                           {model.name || model.id}
@@ -157,7 +157,7 @@ export const ModelHealthCheckSheet = forwardRef<BottomSheetModal, ModelHealthChe
                       </YStack>
 
                       <XStack className="items-center gap-3">
-                        <Text className="text-sm font-mono text-text-secondary dark:text-text-secondary-dark min-w-[60px] text-right">
+                        <Text className="min-w-[60px] text-right font-mono text-sm text-text-secondary dark:text-text-secondary-dark">
                           {latencyText}
                         </Text>
                         {health && getStatusIcon(health.status)}

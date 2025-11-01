@@ -181,7 +181,7 @@ export default function ProviderSettingsScreen() {
 
       return (
         <YStack className="w-full gap-1">
-          <XStack className="items-center justify-between w-full">
+          <XStack className="w-full items-center justify-between">
             <XStack className="flex-1 gap-2">
               <XStack className="items-center justify-center">
                 <ModelIcon model={model} />
@@ -195,7 +195,7 @@ export default function ProviderSettingsScreen() {
             </XStack>
             <XStack className="items-center gap-2">
               {health && health.latency != null && (
-                <Text className="text-xs font-mono text-text-secondary dark:text-text-secondary-dark">
+                <Text className="font-mono text-xs text-text-secondary dark:text-text-secondary-dark">
                   {health.latency.toFixed(2)}s
                 </Text>
               )}
@@ -290,13 +290,7 @@ export default function ProviderSettingsScreen() {
               <XStack className="items-center justify-between pr-2.5">
                 <GroupTitle>{t('settings.models.title')}</GroupTitle>
                 <IconButton
-                  icon={
-                    isCheckingHealth ? (
-                      <RefreshCw size={14} className="animate-spin" />
-                    ) : (
-                      <HeartPulse size={14} />
-                    )
-                  }
+                  icon={isCheckingHealth ? <RefreshCw size={14} className="animate-spin" /> : <HeartPulse size={14} />}
                   onPress={handleHealthCheck}
                   disabled={isCheckingHealth}
                 />
