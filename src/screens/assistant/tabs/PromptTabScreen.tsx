@@ -32,7 +32,7 @@ export default function PromptTabScreen() {
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       bottomOffset={10}>
-      <YStack className="flex-1 pt-2.5 bg-transparent">
+      <YStack className="flex-1 bg-transparent pt-2.5">
         <PromptTabContent assistant={assistant} updateAssistant={updateAssistant} />
       </YStack>
     </KeyboardAwareScrollView>

@@ -12,7 +12,7 @@ interface Props {
 export default function MessageMcpTool({ block }: Props) {
   const toolResponse = block.metadata?.rawMcpToolResponse
 
-  const { id, tool, status, response } = toolResponse!
+  const { tool, status, response } = toolResponse!
   const isPending = status === 'pending'
   const isDone = status === 'done'
   const isError = status === 'error'
@@ -21,7 +21,7 @@ export default function MessageMcpTool({ block }: Props) {
     <View>
       <Accordion selectionMode="single" variant="default" className="rounded-md">
         <Accordion.Item value="1">
-          <Accordion.Trigger className="py-2 bg-ui-card-background dark:bg-ui-card-background-dark">
+          <Accordion.Trigger className="bg-ui-card-background py-2 dark:bg-ui-card-background-dark">
             <XStack className="flex-1 items-center gap-2">
               {isPending && <Spinner size="sm" />}
               {isDone && <Wrench size={16} />}

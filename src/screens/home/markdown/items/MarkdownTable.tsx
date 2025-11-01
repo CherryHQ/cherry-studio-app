@@ -16,7 +16,7 @@ export const MarkdownTable: React.FC<MarkdownTableProps> = ({ header, rows, isDa
   const renderCell = (cellData: ReactNode, cellIndex: number) => (
     <View
       key={`${cellIndex}`}
-      className="p-2 select-none"
+      className="select-none p-2"
       style={{
         width: cellWidth,
         borderRightWidth: cellIndex === header.length - 1 ? 0 : 1,
@@ -28,9 +28,9 @@ export const MarkdownTable: React.FC<MarkdownTableProps> = ({ header, rows, isDa
 
   return (
     <ScrollView horizontal={true} className="mt-2.5">
-      <YStack className="border rounded-3" style={{ borderColor: currentColors.border }}>
+      <YStack className="rounded-3 border" style={{ borderColor: currentColors.border }}>
         <XStack
-          className="border-b rounded-t-3"
+          className="rounded-t-3 border-b"
           style={{ borderColor: currentColors.border, backgroundColor: currentColors.codeBg }}>
           {header.map((cellData, cellIndex) => renderCell(cellData, cellIndex))}
         </XStack>

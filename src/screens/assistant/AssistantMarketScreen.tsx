@@ -60,7 +60,7 @@ export default function AssistantMarketScreen() {
     <SafeAreaContainer className="pb-0">
       <View collapsable={false} className="flex-1">
         <HeaderBar title={t('assistants.market.title')} />
-        <Container className="py-0 gap-2.5">
+        <Container className="gap-2.5 py-0">
           <SearchInput
             placeholder={t('assistants.market.search_placeholder')}
             value={searchText}

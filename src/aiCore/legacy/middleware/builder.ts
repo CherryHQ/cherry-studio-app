@@ -200,10 +200,6 @@ export class MiddlewareBuilder<TMiddleware = any> {
  * Completions 中间件构建器
  */
 export class CompletionsMiddlewareBuilder extends MiddlewareBuilder<CompletionsMiddleware> {
-  constructor(baseChain?: NamedMiddleware<CompletionsMiddleware>[]) {
-    super(baseChain)
-  }
-
   /**
    * 使用默认的 Completions 中间件链
    * @returns CompletionsMiddlewareBuilder 实例
@@ -216,11 +212,7 @@ export class CompletionsMiddlewareBuilder extends MiddlewareBuilder<CompletionsM
 /**
  * 通用方法中间件构建器
  */
-export class MethodMiddlewareBuilder extends MiddlewareBuilder<MethodMiddleware> {
-  constructor(baseChain?: NamedMiddleware<MethodMiddleware>[]) {
-    super(baseChain)
-  }
-}
+export class MethodMiddlewareBuilder extends MiddlewareBuilder<MethodMiddleware> {}
 
 // 便捷的工厂函数
 

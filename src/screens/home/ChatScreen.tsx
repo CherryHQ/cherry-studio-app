@@ -13,10 +13,7 @@ import { useCurrentTopic } from '@/hooks/useTopic'
 
 import ChatContent from './ChatContent'
 import { ChatScreenHeader } from '@/componentsV2/features/ChatScreen/Header'
-import { loggerService } from '@/services/LoggerService'
 import React from 'react'
-
-const logger = loggerService.withContext('ChatScreen')
 
 const ChatScreen = () => {
   const navigation = useNavigation<DrawerNavigationProp<any>>()

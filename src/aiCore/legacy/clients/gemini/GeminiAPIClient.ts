@@ -28,7 +28,7 @@ import {
 import { defaultTimeout } from '@/constants'
 import { loggerService } from '@/services/LoggerService'
 import { estimateTextTokens } from '@/services/TokenService'
-import { Assistant, EFFORT_RATIO, Model, Provider } from '@/types/assistant'
+import { Assistant, EFFORT_RATIO, Model } from '@/types/assistant'
 import { ChunkType, LLMWebSearchCompleteChunk, TextStartChunk, ThinkingStartChunk } from '@/types/chunk'
 import { FileMetadata, FileTypes } from '@/types/file'
 import { GenerateImageParams } from '@/types/image'
@@ -68,10 +68,6 @@ export class GeminiAPIClient extends BaseApiClient<
   GeminiSdkToolCall,
   Tool
 > {
-  constructor(provider: Provider) {
-    super(provider)
-  }
-
   override async createCompletions(payload: GeminiSdkParams, options?: GeminiOptions): Promise<GeminiSdkRawOutput> {
     const sdk = await this.getSdkInstance()
     const { model, history, ...rest } = payload
@@ -196,7 +192,7 @@ export class GeminiAPIClient extends BaseApiClient<
    * @param file - The file
    * @returns The part
    */
-  private async handlePdfFile(file: FileMetadata): Promise<Part> {
+  private async handlePdfFile(_file: FileMetadata): Promise<Part> {
     throw new Error('PDF file handling not implemented')
     // const smallFileSize = 20 * MB
     // const isSmallFile = file.size < smallFileSize

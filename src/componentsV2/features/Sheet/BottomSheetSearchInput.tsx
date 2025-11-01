@@ -17,7 +17,7 @@ export const BottomSheetSearchInput = ({ placeholder, onChangeText, value }: Bot
   const { isDark } = useTheme()
 
   return (
-    <XStack className="h-10 rounded-lg gap-2 items-center w-full relative">
+    <XStack className="relative h-10 w-full items-center gap-2 rounded-lg">
       <BottomSheetTextInput
         value={value}
         onChangeText={onChangeText}
@@ -31,7 +31,7 @@ export const BottomSheetSearchInput = ({ placeholder, onChangeText, value }: Bot
         ]}
         placeholderTextColor={isDark ? '#acf3a6ff' : '#81df94ff'}
       />
-      <YStack className="absolute left-4 top-[13px] h-5 w-5 items-center justify-center z-10">
+      <YStack className="absolute left-4 top-[13px] z-10 h-5 w-5 items-center justify-center">
         <Search size={20} className="text-green-100 dark:text-green-dark-100" />
       </YStack>
     </XStack>

@@ -65,11 +65,7 @@ export async function getAllWebSearchProviders(): Promise<WebSearchProvider[]> {
  */
 export async function getWebSearchProviderById(providerId: string): Promise<WebSearchProvider | null> {
   try {
-    const result = await db
-      .select()
-      .from(websearch_providers)
-      .where(eq(websearch_providers.id, providerId))
-      .get()
+    const result = await db.select().from(websearch_providers).where(eq(websearch_providers.id, providerId)).get()
 
     if (!result) {
       return null

@@ -19,7 +19,7 @@ const PreviewItem: FC<PreviewItemProps> = ({ file, files, setFiles }) => {
   const isImage = file.type === FileTypes.IMAGE
 
   return (
-    <View className="pt-2 px-1">
+    <View className="px-1 pt-2">
       {isImage ? (
         <ImageItem
           file={file}

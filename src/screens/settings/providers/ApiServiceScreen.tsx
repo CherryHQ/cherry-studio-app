@@ -65,7 +65,7 @@ export default function ApiServiceScreen() {
       <SafeAreaContainer>
         <HeaderBar title={t('settings.provider.not_found')} />
         <Container>
-          <Text className="text-center text-gray-400 py-6">{t('settings.provider.not_found_message')}</Text>
+          <Text className="py-6 text-center text-gray-400">{t('settings.provider.not_found_message')}</Text>
         </Container>
       </SafeAreaContainer>
     )
@@ -154,7 +154,7 @@ export default function ApiServiceScreen() {
       <Container>
         {/* API Key 配置 */}
         <YStack className="gap-2">
-          <XStack className="justify-between items-center">
+          <XStack className="items-center justify-between">
             <GroupTitle>{t('settings.provider.api_key.label')}</GroupTitle>
             <Button size="sm" isIconOnly variant="ghost" onPress={handleOpenBottomSheet}>
               <Button.Label>
@@ -168,7 +168,7 @@ export default function ApiServiceScreen() {
             </Button>
           </XStack>
 
-          <XStack className="gap-2 relative">
+          <XStack className="relative gap-2">
             <TextField className="flex-1">
               <TextField.Input
                 className="h-12 pr-0"
@@ -195,7 +195,7 @@ export default function ApiServiceScreen() {
 
         {/* API Host 配置 */}
         <YStack className="gap-2">
-          <XStack className="pr-3 justify-between items-center">
+          <XStack className="items-center justify-between pr-3">
             <GroupTitle>{t('settings.provider.api_host.label')}</GroupTitle>
           </XStack>
           <TextField>

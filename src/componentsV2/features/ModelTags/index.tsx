@@ -128,7 +128,7 @@ export const ModelTags: React.FC<ModelTagsProps> = ({
   }
 
   return (
-    <XStack className="gap-4 items-center">
+    <XStack className="items-center gap-4">
       {tags.map(tag => (
         <CustomTag
           key={tag.key}

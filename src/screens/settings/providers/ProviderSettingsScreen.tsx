@@ -143,19 +143,22 @@ export default function ProviderSettingsScreen() {
     }
   }
 
-  const handleRemoveModel = useCallback(async (modelId: string) => {
-    if (provider) {
-      const updatedModels = provider.models.filter(model => model.id !== modelId)
-      const updatedProvider = { ...provider, models: updatedModels }
+  const handleRemoveModel = useCallback(
+    async (modelId: string) => {
+      if (provider) {
+        const updatedModels = provider.models.filter(model => model.id !== modelId)
+        const updatedProvider = { ...provider, models: updatedModels }
 
-      try {
-        await updateProvider(updatedProvider)
-        logger.info(`Removed model ${modelId} from provider ${provider.id}`)
-      } catch (error) {
-        logger.error('Failed to remove model:', error)
+        try {
+          await updateProvider(updatedProvider)
+          logger.info(`Removed model ${modelId} from provider ${provider.id}`)
+        } catch (error) {
+          logger.error('Failed to remove model:', error)
+        }
       }
-    }
-  }, [provider, updateProvider])
+    },
+    [provider, updateProvider]
+  )
 
   const renderModelItem = useCallback(
     (model: Model, _index: number) => {
@@ -227,7 +230,7 @@ export default function ProviderSettingsScreen() {
       <SafeAreaContainer className="flex-1">
         <HeaderBar title={t('settings.provider.not_found')} />
         <Container className="flex-1">
-          <Text className="text-center text-gray-500 py-6">{t('settings.provider.not_found_message')}</Text>
+          <Text className="py-6 text-center text-gray-500">{t('settings.provider.not_found_message')}</Text>
         </Container>
       </SafeAreaContainer>
     )
@@ -270,9 +273,9 @@ export default function ProviderSettingsScreen() {
                 </Row>
                 <PressableRow onPress={onApiService}>
                   <Text>{t('settings.provider.api_service')}</Text>
-                  <XStack className="justify-center items-center">
+                  <XStack className="items-center justify-center">
                     {provider.apiKey && provider.apiHost && (
-                      <Text className="py-0.5 px-2 rounded-md bg-green-10 border-green-20 text-green-100 dark:text-green-dark-100 border-[0.5px] font-bold text-xs">
+                      <Text className="rounded-md border-[0.5px] border-green-20 bg-green-10 px-2 py-0.5 text-xs font-bold text-green-100 dark:text-green-dark-100">
                         {t('settings.provider.added')}
                       </Text>
                     )}
@@ -284,7 +287,7 @@ export default function ProviderSettingsScreen() {
 
             {/* Model List Card with Accordion */}
             <YStack className="flex-1 gap-2">
-              <XStack className="justify-between items-center pr-2.5">
+              <XStack className="items-center justify-between pr-2.5">
                 <GroupTitle>{t('settings.models.title')}</GroupTitle>
                 <IconButton
                   icon={

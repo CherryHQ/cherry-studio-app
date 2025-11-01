@@ -2,16 +2,12 @@ import OpenAI from 'openai'
 
 import { isSupportedModel } from '@/config/models'
 import { loggerService } from '@/services/LoggerService'
-import { Model, Provider } from '@/types/assistant'
+import { Model } from '@/types/assistant'
 
 import { OpenAIAPIClient } from '../openai/OpenAIApiClient'
 
 const logger = loggerService.withContext('PPIOAPIClient')
 export class PPIOAPIClient extends OpenAIAPIClient {
-  constructor(provider: Provider) {
-    super(provider)
-  }
-
   override getClientCompatibilityType(_model?: Model): string[] {
     return ['OpenAIAPIClient']
   }

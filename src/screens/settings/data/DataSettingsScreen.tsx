@@ -100,7 +100,7 @@ export default function DataSettingsScreen() {
 
       <YStack className="flex-1">
         <Container>
-          <YStack className="gap-6 flex-1">
+          <YStack className="flex-1 gap-6">
             {settingsItems.map(group => (
               <GroupContainer key={group.title} title={group.title}>
                 {group.items.map(item => (

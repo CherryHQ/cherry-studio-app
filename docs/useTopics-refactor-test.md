@@ -3,6 +3,7 @@
 ## 新的 useTopics Hook 功能验证
 
 ### 重构完成情况
+
 - ✅ 移除了旧的 `useLiveQuery` 直接数据库查询
 - ✅ 实现了基于 TopicService 的缓存优先架构
 - ✅ 集成了 `useSyncExternalStore` 订阅系统
@@ -13,16 +14,16 @@
 
 ```typescript
 const {
-  topics,           // Topic[] - 缓存的主题列表
-  isLoading,        // boolean - 初始加载状态（仅在缓存为空时显示）
-  isRefreshing,     // boolean - 后台刷新状态
-  hasError,         // boolean - 是否有错误
-  error,           // Error | null - 错误对象
-  refreshTopics,   // () => Promise<void> - 手动刷新功能
+  topics, // Topic[] - 缓存的主题列表
+  isLoading, // boolean - 初始加载状态（仅在缓存为空时显示）
+  isRefreshing, // boolean - 后台刷新状态
+  hasError, // boolean - 是否有错误
+  error, // Error | null - 错误对象
+  refreshTopics, // () => Promise<void> - 手动刷新功能
 
   // 便利状态
-  isEmpty,         // boolean - 是否为空列表（且不在加载中）
-  hasData          // boolean - 是否有数据
+  isEmpty, // boolean - 是否为空列表（且不在加载中）
+  hasData // boolean - 是否有数据
 } = useTopics()
 ```
 
@@ -36,6 +37,7 @@ const {
 ### 测试场���
 
 #### 1. 基本功能测试
+
 ```typescript
 // 在组件中使用
 function TopicListComponent() {
@@ -61,11 +63,13 @@ function TopicListComponent() {
 ```
 
 #### 2. 缓存性能测试
+
 - 首次访问：从数据库加载（~50ms）
 - 5分钟内再次访问：从缓存读取（~0.5ms）
 - 超过5分钟：自动从数据库刷新缓存
 
 #### 3. 实时更新测试
+
 - 创建新主题：列表自动更新（通过 TopicService 乐观更新）
 - 重命名主题：列表自动更新
 - 删除主题：列表自动更新

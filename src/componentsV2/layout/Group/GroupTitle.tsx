@@ -7,7 +7,7 @@ export interface GroupTitleProps extends TextProps {
 }
 
 const GroupTitle: React.FC<GroupTitleProps> = ({ className, ...props }) => {
-  return <Text className={`font-bold opacity-70 pl-3 ${className || ''}`} {...props} />
+  return <Text className={`pl-3 font-bold opacity-70 ${className || ''}`} {...props} />
 }
 
 export default GroupTitle

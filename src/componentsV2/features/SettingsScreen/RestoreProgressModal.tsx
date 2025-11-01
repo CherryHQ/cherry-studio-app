@@ -78,13 +78,13 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
         {isDone && (
           <Pressable onPress={onClose} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
         )}
-        <YStack className="w-3/4 rounded-2xl overflow-hidden bg-ui-card-background dark:bg-ui-card-background-dark p-4 gap-3">
+        <YStack className="w-3/4 gap-3 overflow-hidden rounded-2xl bg-ui-card-background p-4 dark:bg-ui-card-background-dark">
           <YStack className="items-center gap-3">
             <Text className="text-2xl font-bold">{title}</Text>
             <Text className="text-lg text-text-secondary dark:text-text-secondary-dark">{description}</Text>
           </YStack>
 
-          <YStack className="gap-3 justify-center items-center">
+          <YStack className="items-center justify-center gap-3">
             {steps.map(step => (
               <ErrorView key={step.id} isInvalid={true}>
                 <View className="flex-row items-center gap-2">
@@ -95,16 +95,16 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
             ))}
           </YStack>
 
-          <XStack className="justify-center items-center">
+          <XStack className="items-center justify-center">
             <Button
               size="sm"
               className={cn(
                 'w-40 items-center justify-center rounded-[30px] border text-base',
                 overallStatus === 'error'
-                  ? 'bg-red-20 border-red-20 dark:bg-red-20 dark:border-red-20'
+                  ? 'border-red-20 bg-red-20 dark:border-red-20 dark:bg-red-20'
                   : overallStatus === 'success'
-                    ? 'bg-green-20 border-green-20 dark:bg-green-dark-20 dark:border-green-dark-20'
-                    : 'bg-yellow-20 border-yellow-20 dark:bg-yellow-dark-20 dark:border-yellow-dark-20'
+                    ? 'border-green-20 bg-green-20 dark:border-green-dark-20 dark:bg-green-dark-20'
+                    : 'border-yellow-20 bg-yellow-20 dark:border-yellow-dark-20 dark:bg-yellow-dark-20'
               )}
               isDisabled={!isDone}
               onPress={onClose}>

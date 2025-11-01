@@ -13,7 +13,7 @@ export function isJSON(str: any): boolean {
 
   try {
     return typeof JSON.parse(str) === 'object'
-  } catch (e) {
+  } catch {
     return false
   }
 }
@@ -26,7 +26,7 @@ export function isJSON(str: any): boolean {
 export function parseJSON(str: string): any | null {
   try {
     return JSON.parse(str)
-  } catch (e) {
+  } catch {
     return null
   }
 }

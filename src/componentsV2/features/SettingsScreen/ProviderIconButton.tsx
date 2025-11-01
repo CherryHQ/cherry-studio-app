@@ -113,18 +113,18 @@ export function ProviderIconButton({ providerId, iconUri, onImageSelected }: Pro
     <YStack className="relative">
       <TouchableOpacity
         onPress={handleUploadIcon}
-        className="w-[120px] h-[120px] rounded-full border-[5px] border-green-100 overflow-hidden"
+        className="h-[120px] w-[120px] overflow-hidden rounded-full border-[5px] border-green-100"
         style={{ justifyContent: 'center', alignItems: 'center' }}>
         {image ? (
-          <Image source={{ uri: image }} className="w-[120px] h-[120px]" style={{ width: 120, height: 120 }} />
+          <Image source={{ uri: image }} className="h-[120px] w-[120px]" style={{ width: 120, height: 120 }} />
         ) : (
-          <YStack className="w-full h-full pt-3 pl-5 border boder-white">
+          <YStack className="boder-white h-full w-full border pl-5 pt-3">
             <DefaultProviderIcon />
           </YStack>
         )}
       </TouchableOpacity>
 
-      <YStack className="absolute bottom-0 right-0 w-10 h-10 rounded-full z-10">
+      <YStack className="absolute bottom-0 right-0 z-10 h-10 w-10 rounded-full">
         <LinearGradient
           colors={['#81df94', '#00B96B']}
           start={[1, 1]}

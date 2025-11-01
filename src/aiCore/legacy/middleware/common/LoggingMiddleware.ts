@@ -27,7 +27,7 @@ const stringifyArgsForLogging = (args: any[]): string => {
         return stringifiedArg && stringifiedArg.length > 200 ? stringifiedArg.substring(0, 200) + '...' : stringifiedArg
       })
       .join(', ')
-  } catch (e) {
+  } catch {
     return '[Error serializing arguments]' // Handle potential errors during stringification 处理字符串化期间的潜在错误
   }
 }

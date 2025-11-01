@@ -46,13 +46,13 @@ const ImageViewerFooterComponent: React.FC<ImageViewerFooterComponentProps> = ({
       } else {
         toast.show(result?.message || t('common.error_occurred'), { color: 'red', duration: 2500 })
       }
-    } catch (e) {
+    } catch {
       toast.show(t('common.error_occurred'), { color: 'red', duration: 2500 })
     }
   }
 
   return (
-    <View className="w-full items-center p-safe">
+    <View className="p-safe w-full items-center">
       <TouchableOpacity activeOpacity={0.8} onPress={handleSave} className="flex-row items-center gap-2">
         <Download size={18} />
         <Text className="text-lg">{t('button.save_image')}</Text>

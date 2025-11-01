@@ -245,7 +245,7 @@ export function useTopic(topicId: string) {
   /**
    * Track if we're loading the topic from database
    */
-  const [isLoading, setIsLoading] = useState(false)
+  const [, setIsLoading] = useState(false)
 
   /**
    * Load topic from database if not cached
@@ -258,7 +258,7 @@ export function useTopic(topicId: string) {
         .then(() => {
           setIsLoading(false)
         })
-        .catch((error) => {
+        .catch(error => {
           logger.error(`Failed to load topic ${topicId}:`, error as Error)
           setIsLoading(false)
         })

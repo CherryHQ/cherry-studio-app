@@ -37,7 +37,7 @@ export type ProgressUpdate = {
 
 type OnProgressCallback = (update: ProgressUpdate) => void
 
-async function restoreIndexedDbData(data: ExportIndexedData, onProgress: OnProgressCallback, dispatch: Dispatch) {
+async function restoreIndexedDbData(data: ExportIndexedData, onProgress: OnProgressCallback, _dispatch: Dispatch) {
   onProgress({ step: 'restore_messages', status: 'in_progress' })
 
   // 根据数据量动态调整批次大小
@@ -182,7 +182,7 @@ async function restoreIndexedDbData(data: ExportIndexedData, onProgress: OnProgr
   onProgress({ step: 'restore_messages', status: 'completed' })
 }
 
-async function restoreReduxData(data: ExportReduxData, onProgress: OnProgressCallback, dispatch: Dispatch) {
+async function restoreReduxData(data: ExportReduxData, onProgress: OnProgressCallback, _dispatch: Dispatch) {
   onProgress({ step: 'restore_settings', status: 'in_progress' })
   await providerDatabase.upsertProviders(data.llm.providers)
   providerService.invalidateCache()

@@ -8,7 +8,7 @@ export interface RowProps extends ViewProps {
 
 const Row: React.FC<RowProps> = ({ className, children, ...props }) => {
   return (
-    <XStack className={`justify-between items-center py-[14px] px-4 ${className || ''}`} {...props}>
+    <XStack className={`items-center justify-between px-4 py-[14px] ${className || ''}`} {...props}>
       {children}
     </XStack>
   )

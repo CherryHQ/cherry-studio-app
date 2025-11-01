@@ -39,7 +39,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   }
 
   return (
-    <XStack className="px-4 items-center h-[44px] justify-between">
+    <XStack className="h-[44px] items-center justify-between px-4">
       {/* Left area */}
       <XStack className="min-w-[40px] items-center">
         {leftButton ? (
@@ -56,8 +56,8 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
       </XStack>
 
       {/* Title */}
-      <XStack className="flex-1 justify-center items-center">
-        <Text className="text-[18px] font-bold text-center">{title}</Text>
+      <XStack className="flex-1 items-center justify-center">
+        <Text className="text-center text-[18px] font-bold">{title}</Text>
       </XStack>
 
       {/* Right area */}

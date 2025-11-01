@@ -12,7 +12,7 @@ export const MenuButton = ({ onMenuPress }: MenuButtonProps) => {
     <TouchableOpacity
       onPress={onMenuPress}
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      className="w-6 h-6 items-center justify-center rounded-full">
+      className="h-6 w-6 items-center justify-center rounded-full">
       <Menu size={24} />
     </TouchableOpacity>
   )

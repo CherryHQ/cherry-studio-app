@@ -10,11 +10,11 @@ import { useToast } from '@/hooks/useToast'
 import { markdownColors } from './MarkdownStyles'
 import { ExtractMathResult, useMathEquation } from './useMathEquation'
 import MarkdownImage from './items/MarkdownImage'
-import MarkdownCode from './items/MarkdownCode'
-import MarkdownCodeSpan from './items/MarkdownCodeSpan'
-import MarkdownParagraph from './items/MarkdownParagraph'
-import MarkdownText from './items/MarkdownText'
-import MarkdownTable from './items/MarkdownTable'
+import { MarkdownCode } from './items/MarkdownCode'
+import { MarkdownCodeSpan } from './items/MarkdownCodeSpan'
+import { MarkdownParagraph } from './items/MarkdownParagraph'
+import { MarkdownText } from './items/MarkdownText'
+import { MarkdownTable } from './items/MarkdownTable'
 
 // const logger = loggerService.withContext('useMarkedRenderer')
 

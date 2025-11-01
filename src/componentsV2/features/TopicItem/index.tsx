@@ -113,7 +113,7 @@ export const TopicItem: FC<TopicItemProps> = ({
       confirmText: t('common.save'),
       cancelText: t('common.cancel'),
       content: (
-        <TextField className="w-full mt-2">
+        <TextField className="mt-2 w-full">
           <TextField.Input
             className="rounded-2xl bg-transparent"
             defaultValue={topic.name}
@@ -183,7 +183,7 @@ export const TopicItem: FC<TopicItemProps> = ({
       ]}
       onPress={openTopic}>
       <XStack
-        className={`rounded-lg py-1 px-1 gap-1.5 justify-center items-center ${
+        className={`items-center justify-center gap-1.5 rounded-lg px-1 py-1 ${
           isActive ? 'bg-green-10 dark:bg-green-10' : 'bg-transparent'
         }`}>
         <EmojiAvatar
@@ -194,11 +194,11 @@ export const TopicItem: FC<TopicItemProps> = ({
           borderColor={isDark ? '#444444' : '#ffffff'}
         />
         <YStack className="flex-1 gap-0.5">
-          <XStack className="justify-between items-center gap-2">
+          <XStack className="items-center justify-between gap-2">
             <Text className="flex-1 text-base font-bold" numberOfLines={1} ellipsizeMode="tail">
               {assistant?.name}
             </Text>
-            <Text className="text-xs text-text-secondary dark:text-text-secondary-dark shrink-0 text-wrap-none">
+            <Text className="text-wrap-none shrink-0 text-xs text-text-secondary dark:text-text-secondary-dark">
               {displayTime}
             </Text>
           </XStack>

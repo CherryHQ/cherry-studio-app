@@ -25,7 +25,7 @@ function SelectableText({ children }) {
     return (
       <TextField className="h-full w-full">
         <TextField.Input
-          className="h-full w-full text-sm leading-6 border-0 px-4 rounded-none"
+          className="h-full w-full rounded-none border-0 px-4 text-sm leading-6"
           multiline
           editable={false}
           value={children}

@@ -44,10 +44,10 @@ export const MarkdownCode: React.FC<MarkdownCodeProps> = ({
   const isHtml = lang.toLowerCase() === 'html'
 
   return (
-    <View className="gap-2 px-3 pt-0 pb-3 rounded-3 mt-2" style={containerStyle}>
-      <XStack className="py-2 justify-between items-center border-b" style={{ borderColor: currentColors.codeBorder }}>
-        <XStack className="gap-2 flex-1 items-center">
-          {getCodeLanguageIcon(lang) && <Image source={getCodeLanguageIcon(lang)} className="w-5 h-5" />}
+    <View className="rounded-3 mt-2 gap-2 px-3 pb-3 pt-0" style={containerStyle}>
+      <XStack className="items-center justify-between border-b py-2" style={{ borderColor: currentColors.codeBorder }}>
+        <XStack className="flex-1 items-center gap-2">
+          {getCodeLanguageIcon(lang) && <Image source={getCodeLanguageIcon(lang)} className="h-5 w-5" />}
           <Text className="text-base">{lang.toUpperCase()}</Text>
         </XStack>
         <XStack className="gap-2">

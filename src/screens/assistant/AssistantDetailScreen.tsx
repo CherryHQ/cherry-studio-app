@@ -58,9 +58,9 @@ export default function AssistantDetailScreen() {
 
   if (!assistant) {
     return (
-      <SafeAreaContainer className="flex-1 justify-center items-center">
+      <SafeAreaContainer className="flex-1 items-center justify-center">
         <DrawerGestureWrapper>
-          <View collapsable={false} className="flex-1 justify-center items-center">
+          <View collapsable={false} className="flex-1 items-center justify-center">
             <Text>{t('assistants.error.notFound')}</Text>
           </View>
         </DrawerGestureWrapper>
@@ -78,7 +78,7 @@ export default function AssistantDetailScreen() {
           />
           <View className="flex-1">
             <Container>
-              <XStack className="justify-center items-center pb-5">
+              <XStack className="items-center justify-center pb-5">
                 <AvatarEditButton
                   content={assistant?.emoji || <DefaultProviderIcon />}
                   editIcon={assistant?.emoji ? <ArrowLeftRight size={24} /> : <PenLine size={24} />}

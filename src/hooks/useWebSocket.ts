@@ -94,12 +94,11 @@ export function useWebSocket() {
           // If we reach here, this candidate worked, use it for the actual connection
           socket.current = io(connectionUrl, {
             timeout: 5000,
-            reconnection: false,  // 禁用自动重连，因为这是一次性文件传输
-            transports: ['websocket', 'polling']  // Try both transports
+            reconnection: false, // 禁用自动重连，因为这是一次性文件传输
+            transports: ['websocket', 'polling'] // Try both transports
           })
 
           break // Exit the loop when we find a working candidate
-
         } catch (error) {
           logger.warn(`Failed to connect to ${candidate.host} via ${candidate.interface}:`, error)
           continue // Try next candidate

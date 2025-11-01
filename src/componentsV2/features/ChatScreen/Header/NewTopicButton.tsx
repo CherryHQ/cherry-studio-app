@@ -61,6 +61,7 @@ export const NewTopicButton: React.FC<NewTopicButtonProps> = ({ assistant }) => 
     selectionSheetRef.current?.dismiss()
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleSelectAssistant = (selectedAssistant: Assistant) => {
     closeBottomSheet()
     handleAddNewTopic(selectedAssistant)
@@ -74,7 +75,7 @@ export const NewTopicButton: React.FC<NewTopicButtonProps> = ({ assistant }) => 
     return assistants.map(assistantItem => ({
       key: assistantItem.id,
       label: (
-        <YStack className="gap-1 flex-1 justify-center">
+        <YStack className="flex-1 justify-center gap-1">
           <Text className="text-sm font-bold" numberOfLines={1} ellipsizeMode="tail">
             {assistantItem.name}
           </Text>

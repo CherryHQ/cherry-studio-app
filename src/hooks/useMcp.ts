@@ -96,7 +96,7 @@ export function useMcpServer(mcpId: string) {
         .then(() => {
           setIsLoading(false)
         })
-        .catch((error) => {
+        .catch(error => {
           logger.error(`Failed to load MCP server ${mcpId}:`, error as Error)
           setIsLoading(false)
         })
@@ -173,7 +173,7 @@ export function useMcpServers() {
 
   const processedMcps = useMemo(() => {
     if (!rawMcps) return []
-    return rawMcps.map((mcp) => transformDbToMcp(mcp))
+    return rawMcps.map(mcp => transformDbToMcp(mcp))
   }, [rawMcps])
 
   if (!updatedAt) {
@@ -216,7 +216,7 @@ export function useActiveMcpServers() {
   const { mcpServers: mcps, isLoading, updateMcpServers } = useMcpServers()
 
   const activeMcpServers = useMemo(() => {
-    return mcps.filter((mcp) => mcp.isActive === true)
+    return mcps.filter(mcp => mcp.isActive === true)
   }, [mcps])
 
   return {

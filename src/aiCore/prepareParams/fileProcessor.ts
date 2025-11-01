@@ -85,7 +85,7 @@ export async function convertFileBlockToTextPart(fileBlock: FileMessageBlock): P
 /**
  * 处理Gemini大文件上传
  */
-export async function handleGeminiFileUpload(file: FileMetadata, model: Model): Promise<FilePart | null> {
+export async function handleGeminiFileUpload(_file: FileMetadata, _model: Model): Promise<FilePart | null> {
   throw new Error('Not implemented')
 
   // try {

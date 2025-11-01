@@ -24,7 +24,7 @@ interface FileItemProps {
   disabledContextMenu?: boolean
 }
 
-const FileItem: FC<FileItemProps> = ({ file, onRemove, width, disabledContextMenu }) => {
+const FileItem: FC<FileItemProps> = ({ file, onRemove, disabledContextMenu }) => {
   const { t } = useTranslation()
   const toast = useToast()
 
@@ -68,25 +68,25 @@ const FileItem: FC<FileItemProps> = ({ file, onRemove, width, disabledContextMen
         }
       ]}
       borderRadius={16}>
-      <XStack className="gap-1.5 rounded-lg bg-green-20 dark:bg-green-dark-20 justify-start items-center py-1.5 px-1.5 pr-3">
-        <View className="w-9 h-9 gap-2 rounded-[9.5px] bg-green-100 dark:bg-green-dark-100 items-center justify-center">
+      <XStack className="items-center justify-start gap-1.5 rounded-lg bg-green-20 px-1.5 py-1.5 pr-3 dark:bg-green-dark-20">
+        <View className="h-9 w-9 items-center justify-center gap-2 rounded-[9.5px] bg-green-100 dark:bg-green-dark-100">
           <FileIcon size={20} className="text-white dark:text-black" />
         </View>
-        <YStack className="justify-center gap-0.75">
+        <YStack className="gap-0.75 justify-center">
           <Text
-            className="text-sm leading-3.5 text-text-primary dark:text-text-primary-dark"
+            className="leading-3.5 text-sm text-text-primary dark:text-text-primary-dark"
             numberOfLines={1}
             ellipsizeMode="middle">
             {file.name}
           </Text>
-          <Text className="text-xs leading-2.75 text-text-secondary dark:text-text-secondary-dark">
+          <Text className="leading-2.75 text-xs text-text-secondary dark:text-text-secondary-dark">
             {formatFileSize(file.size)}
           </Text>
         </YStack>
       </XStack>
       {onRemove && (
-        <TouchableOpacity onPress={handleRemove} hitSlop={5} className="absolute -top-1.5 -right-1.5 rounded-full">
-          <View className="border border-white rounded-full p-0.5">
+        <TouchableOpacity onPress={handleRemove} hitSlop={5} className="absolute -right-1.5 -top-1.5 rounded-full">
+          <View className="rounded-full border border-white p-0.5">
             <X size={14} />
           </View>
         </TouchableOpacity>

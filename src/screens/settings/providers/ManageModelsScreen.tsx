@@ -225,7 +225,7 @@ export default function ManageModelsScreen() {
               <ModelGroup
                 modelGroups={sortedModelGroups}
                 renderModelItem={(model, _index) => (
-                  <XStack className="items-center justify-between w-full">
+                  <XStack className="w-full items-center justify-between">
                     <XStack className="flex-1 gap-2">
                       <XStack className="items-center justify-center">
                         <ModelIcon model={model} />

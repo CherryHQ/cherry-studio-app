@@ -269,7 +269,7 @@ export default function BasicDataSettingsScreen() {
       <HeaderBar title={t('settings.data.basic_title')} />
 
       <Container>
-        <YStack className="gap-6 flex-1">
+        <YStack className="flex-1 gap-6">
           {settingsItems.map(group => (
             <GroupContainer key={group.title} title={group.title}>
               {group.items.map(item => (

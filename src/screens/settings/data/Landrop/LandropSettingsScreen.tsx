@@ -1,4 +1,3 @@
-
 import { loggerService } from '@/services/LoggerService'
 import { useNavigation } from '@react-navigation/native'
 import { ConnectionInfo } from '@/types/network'
@@ -99,7 +98,9 @@ export default function LandropSettingsScreen() {
     if (typeof connectionInfo === 'string') {
       logger.info(`Connecting to Landrop sender at ${connectionInfo} (legacy format)`)
     } else {
-      logger.info(`Connecting to Landrop sender with ${connectionInfo.candidates.length} IP candidates, selected: ${connectionInfo.selectedHost}`)
+      logger.info(
+        `Connecting to Landrop sender with ${connectionInfo.candidates.length} IP candidates, selected: ${connectionInfo.selectedHost}`
+      )
     }
   }
 
@@ -130,7 +131,7 @@ export default function LandropSettingsScreen() {
             zIndex: 10
           }}>
           <Spinner />
-          <Text className="mt-4 text-white text-lg">
+          <Text className="mt-4 text-lg text-white">
             {status === WebSocketStatus.CONNECTING
               ? t('settings.data.landrop.scan_qr_code.connecting')
               : t('settings.data.landrop.scan_qr_code.waiting_for_file')}

@@ -46,13 +46,13 @@ export default function GeneralSettings() {
       <Group>
         <Row>
           <Text>{t('settings.websearch.contentLengthLimit')}</Text>
-          <TextField className="flex-1 max-w-20">
+          <TextField className="max-w-20 flex-1">
             <TextField.Input value={contentLimit?.toString() || ''} onChangeText={handleContentLimitChange} />
           </TextField>
         </Row>
         <Row>
           <Text>{t('settings.websearch.searchCount')}</Text>
-          <TextField className="flex-1 max-w-20">
+          <TextField className="max-w-20 flex-1">
             <TextField.Input value={searchCount.toString()} onChangeText={handleSearchCountChange} />
           </TextField>
         </Row>

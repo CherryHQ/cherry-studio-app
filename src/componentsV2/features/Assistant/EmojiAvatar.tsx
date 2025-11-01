@@ -28,7 +28,7 @@ const EmojiAvatar = ({
 
   return (
     <View
-      className={cn('relative overflow-hidden items-center justify-center')}
+      className={cn('relative items-center justify-center overflow-hidden')}
       style={{
         height: size,
         width: size,
@@ -38,7 +38,7 @@ const EmojiAvatar = ({
       }}>
       {/* 背景模糊emoji */}
       <YStack
-        className="absolute inset-0 items-center justify-center scale-[2] origin-center"
+        className="absolute inset-0 origin-center scale-[2] items-center justify-center"
         style={{
           height: size - borderWidth * 2,
           width: size - borderWidth * 2

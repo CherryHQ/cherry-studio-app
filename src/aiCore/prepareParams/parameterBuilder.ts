@@ -15,7 +15,6 @@ import {
   isWebSearchModel
 } from '@/config/models'
 import { getAssistantSettings, getDefaultModel } from '@/services/AssistantService'
-import { loggerService } from '@/services/LoggerService'
 import { StreamTextParams } from '@/types/aiCoretypes'
 import { Assistant, Provider } from '@/types/assistant'
 import { MCPTool } from '@/types/tool'
@@ -23,8 +22,6 @@ import { MCPTool } from '@/types/tool'
 import { setupToolsConfig } from '../utils/mcp'
 import { buildProviderOptions } from '../utils/options'
 import { getTemperature, getTopP } from './modelParameters'
-
-const logger = loggerService.withContext('parameterBuilder')
 
 /**
  * 构建 AI SDK 流式参数

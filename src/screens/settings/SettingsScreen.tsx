@@ -110,7 +110,7 @@ export default function SettingsScreen() {
           <HeaderBar title={t('settings.title')} />
 
           <Container>
-            <YStack className="gap-6 flex-1">
+            <YStack className="flex-1 gap-6">
               {settingsItems.map((group, index) => (
                 <SettingGroup key={index} title={group.title}>
                   {group.items.map((item, index) => (
@@ -161,7 +161,7 @@ function SettingItem({ title, screen, icon, specificScreen }: SettingItemProps) 
       return (
         <Image
           source={icon ? { uri: icon } : require('@/assets/images/favicon.png')}
-          className="w-10 h-10 rounded-full"
+          className="h-10 w-10 rounded-full"
           accessibilityLabel={title}
         />
       )

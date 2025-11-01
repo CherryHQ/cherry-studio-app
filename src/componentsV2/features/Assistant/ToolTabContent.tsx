@@ -86,7 +86,7 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
           </Text>
           <Pressable
             onPress={handleToolUsePress}
-            className="flex-row items-center justify-between rounded-lg bg-ui-card-background dark:bg-ui-card-background-dark px-3 py-3 active:opacity-80">
+            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80 dark:bg-ui-card-background-dark">
             <XStack className="flex-1 items-center gap-2">
               {assistant.settings?.toolUseMode ? (
                 <XStack className="flex-1 items-center gap-2">
@@ -114,10 +114,10 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
           </Text>
           <Pressable
             onPress={handleWebsearchPress}
-            className="flex-row items-center justify-between rounded-lg bg-ui-card-background dark:bg-ui-card-background-dark px-3 py-3 active:opacity-80">
+            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80 dark:bg-ui-card-background-dark">
             <XStack className="flex-1 items-center gap-2">
               {websearchContent.isActive ? (
-                <XStack className="flex-1 items-center gap-2 max-w-[80%]">
+                <XStack className="max-w-[80%] flex-1 items-center gap-2">
                   <XStack className="items-center justify-center">{websearchContent.icon}</XStack>
                   <Text className="flex-1 text-base" numberOfLines={1} ellipsizeMode="tail">
                     {websearchContent.text}
@@ -142,7 +142,7 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
           </Text>
           <Pressable
             onPress={handleMcpServerPress}
-            className="flex-row items-center justify-between rounded-lg bg-ui-card-background dark:bg-ui-card-background-dark px-3 py-3 active:opacity-80">
+            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80 dark:bg-ui-card-background-dark">
             <XStack className="flex-1 items-center gap-2">
               {assistant.mcpServers && assistant.mcpServers.length > 0 ? (
                 <Text>{t('mcp.server.selected', { num: assistant.mcpServers.length })}</Text>

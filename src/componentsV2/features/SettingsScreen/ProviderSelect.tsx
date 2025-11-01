@@ -2,7 +2,6 @@ import { ChevronDown } from '@/componentsV2/icons'
 import { ProviderType } from '@/types/assistant'
 import { Button } from 'heroui-native'
 import React from 'react'
-import { useTranslation } from 'react-i18next'
 import * as DropdownMenu from 'zeego/dropdown-menu'
 
 interface SelectOptionItem {
@@ -37,8 +36,6 @@ const providerOptions: SelectOptionGroup[] = [
 ]
 
 export function ProviderSelect({ value, onValueChange, placeholder }: ProviderSelectProps) {
-  const { t } = useTranslation()
-
   const handleValueChange = (newValue: string) => {
     onValueChange(newValue as ProviderType)
   }

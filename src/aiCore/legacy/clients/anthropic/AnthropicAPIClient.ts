@@ -31,7 +31,7 @@ import { DEFAULT_MAX_TOKENS } from '@/constants'
 import { getAssistantSettings } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
 import { estimateTextTokens } from '@/services/TokenService'
-import { Assistant, EFFORT_RATIO, Model, Provider } from '@/types/assistant'
+import { Assistant, EFFORT_RATIO, Model } from '@/types/assistant'
 import {
   ChunkType,
   ErrorChunk,
@@ -76,9 +76,6 @@ export class AnthropicAPIClient extends BaseApiClient<
   oauthToken: string | undefined = undefined
   isOAuthMode: boolean = false
   sdkInstance: Anthropic | undefined = undefined
-  constructor(provider: Provider) {
-    super(provider)
-  }
 
   async getSdkInstance(): Promise<Anthropic> {
     if (this.sdkInstance) {
@@ -140,7 +137,7 @@ export class AnthropicAPIClient extends BaseApiClient<
       ]
     }
 
-    if (system[0].text.trim() != defaultClaudeCodeSystem) {
+    if (system[0].text.trim() !== defaultClaudeCodeSystem) {
       system.unshift({
         type: 'text',
         text: defaultClaudeCodeSystem
@@ -173,8 +170,7 @@ export class AnthropicAPIClient extends BaseApiClient<
   }
 
   // @ts-ignore sdk未提供
-
-  override async generateImage(generateImageParams: GenerateImageParams): Promise<string[]> {
+  override async generateImage(_generateImageParams: GenerateImageParams): Promise<string[]> {
     return []
   }
 
@@ -242,8 +238,8 @@ export class AnthropicAPIClient extends BaseApiClient<
       1024,
       Math.floor(
         Math.min(
-          (findTokenLimit(model.id)?.max! - findTokenLimit(model.id)?.min!) * effortRatio +
-            findTokenLimit(model.id)?.min!,
+          (findTokenLimit(model.id)?.max ?? 0 - (findTokenLimit(model.id)?.min ?? 0)) * effortRatio +
+            (findTokenLimit(model.id)?.min ?? 0),
           (maxTokens || DEFAULT_MAX_TOKENS) * effortRatio
         )
       )

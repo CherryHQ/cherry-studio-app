@@ -12,5 +12,5 @@ export type CompressedConnectionInfo = [
   number, // Selected IP as number
   number[], // Candidate IPs as numbers
   number, // Port number
-  number  // Timestamp for uniqueness
+  number // Timestamp for uniqueness
 ]

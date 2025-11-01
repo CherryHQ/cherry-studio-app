@@ -47,10 +47,7 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { preferenceService } from '@/services/PreferenceService'
 import { loggerService } from '@/services/LoggerService'
 import { DefaultPreferences } from '@/shared/data/preference/preferenceSchemas'
-import type {
-  PreferenceDefaultScopeType,
-  PreferenceKeyType
-} from '@/shared/data/preference/preferenceTypes'
+import type { PreferenceDefaultScopeType, PreferenceKeyType } from '@/shared/data/preference/preferenceTypes'
 
 const logger = loggerService.withContext('usePreference')
 
@@ -88,10 +85,7 @@ const logger = loggerService.withContext('usePreference')
  */
 export function usePreference<K extends PreferenceKeyType>(
   key: K
-): [
-  value: PreferenceDefaultScopeType[K],
-  setValue: (value: PreferenceDefaultScopeType[K]) => Promise<void>
-] {
+): [value: PreferenceDefaultScopeType[K], setValue: (value: PreferenceDefaultScopeType[K]) => Promise<void>] {
   // ==================== Subscription (useSyncExternalStore) ====================
 
   /**
@@ -148,7 +142,7 @@ export function usePreference<K extends PreferenceKeyType>(
     if (cachedValue === undefined) {
       logger.debug(`Initial load for preference: ${key}`)
 
-      preferenceService.get(key).catch((error) => {
+      preferenceService.get(key).catch(error => {
         logger.error(`Failed to load preference ${key}:`, error as Error)
       })
     }
@@ -254,13 +248,13 @@ export function useMultiplePreferences<T extends Record<string, PreferenceKeyTyp
       logger.verbose(`Subscribing to multiple preferences: ${preferenceKeys.join(', ')}`)
 
       // Subscribe to each key
-      const unsubscribeFunctions = preferenceKeys.map((key) => {
+      const unsubscribeFunctions = preferenceKeys.map(key => {
         return preferenceService.subscribe(key, callback)
       })
 
       // Return combined unsubscribe function
       return () => {
-        unsubscribeFunctions.forEach((unsubscribe) => unsubscribe())
+        unsubscribeFunctions.forEach(unsubscribe => unsubscribe())
       }
     },
     [preferenceKeys]
@@ -287,15 +281,15 @@ export function useMultiplePreferences<T extends Record<string, PreferenceKeyTyp
   // ==================== Lazy Loading ====================
 
   useEffect(() => {
-    const uncachedKeys = preferenceKeys.filter((key) => {
-      const localKey = Object.keys(keys).find((k) => keys[k] === key)
+    const uncachedKeys = preferenceKeys.filter(key => {
+      const localKey = Object.keys(keys).find(k => keys[k] === key)
       return localKey && cachedValues[localKey] === undefined
     })
 
     if (uncachedKeys.length > 0) {
       logger.debug(`Initial load for multiple preferences: ${uncachedKeys.join(', ')}`)
 
-      preferenceService.getMultiple(uncachedKeys).catch((error) => {
+      preferenceService.getMultiple(uncachedKeys).catch(error => {
         logger.error('Failed to load multiple preferences:', error as Error)
       })
     }

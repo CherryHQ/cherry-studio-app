@@ -304,8 +304,8 @@
       }
     },
     "html_preview": {
-      "title": "Предварительный просмотр HTML",
-      "loading": "Загрузка HTML..."
+      "loading": "Загрузка HTML...",
+      "title": "Предварительный просмотр HTML"
     },
     "inputs": {
       "mentions": "@ {{number}} моделей",

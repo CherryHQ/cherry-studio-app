@@ -606,8 +606,7 @@ export class ProviderService {
    * Get cache status for debugging
    */
   public getCacheStatus(): ProviderCacheStatus {
-    const cacheAge =
-      this.allProvidersCacheTimestamp !== null ? Date.now() - this.allProvidersCacheTimestamp : null
+    const cacheAge = this.allProvidersCacheTimestamp !== null ? Date.now() - this.allProvidersCacheTimestamp : null
 
     return {
       defaultProvider: {
@@ -623,8 +622,7 @@ export class ProviderService {
       allProvidersCache: {
         size: this.allProvidersCache.size,
         isValid:
-          this.allProvidersCacheTimestamp !== null &&
-          Date.now() - this.allProvidersCacheTimestamp < this.CACHE_TTL,
+          this.allProvidersCacheTimestamp !== null && Date.now() - this.allProvidersCacheTimestamp < this.CACHE_TTL,
         age: cacheAge
       },
       subscribers: {

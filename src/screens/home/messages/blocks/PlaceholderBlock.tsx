@@ -27,7 +27,7 @@ const TypingLoader: React.FC = () => {
             loop: true,
             repeatReverse: true
           }}
-          className="bg-text-primary dark:bg-text-primary-dark rounded-full"
+          className="rounded-full bg-text-primary dark:bg-text-primary-dark"
           style={{
             width: 6,
             height: 6,
@@ -42,7 +42,7 @@ const TypingLoader: React.FC = () => {
 const PlaceholderBlock: React.FC<PlaceholderBlockProps> = ({ block }) => {
   if (block.status === MessageBlockStatus.PROCESSING && block.type === MessageBlockType.UNKNOWN) {
     return (
-      <View className="flex-1 items-start my-2.5">
+      <View className="my-2.5 flex-1 items-start">
         <TypingLoader />
       </View>
     )

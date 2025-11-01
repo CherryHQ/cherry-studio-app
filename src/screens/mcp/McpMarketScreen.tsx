@@ -54,7 +54,7 @@ export function McpMarketScreen() {
               onPress: handleMenuPress
             }}
           />
-          <Container className="py-0 gap-2.5">
+          <Container className="gap-2.5 py-0">
             <SearchInput
               placeholder={t('assistants.market.search_placeholder')}
               value={searchText}

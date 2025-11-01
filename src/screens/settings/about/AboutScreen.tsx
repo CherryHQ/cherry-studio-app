@@ -41,17 +41,17 @@ export default function AboutScreen() {
         }}
       />
       <Container>
-        <YStack className="gap-6 flex-1">
+        <YStack className="flex-1 gap-6">
           {/* Logo and Description */}
           <Group>
             <Row className="gap-4">
               <Image className="h-[70px] w-[70px] rounded-[41px]" source={require('@/assets/images/favicon.png')} />
-              <YStack className="gap-[5px] py-1 flex-1">
-                <Text className="font-bold text-[22px]">{t('common.cherry_studio')}</Text>
+              <YStack className="flex-1 gap-[5px] py-1">
+                <Text className="text-[22px] font-bold">{t('common.cherry_studio')}</Text>
                 <Text className="text-sm text-text-secondary dark:text-text-secondary-dark" numberOfLines={0}>
                   {t('common.cherry_studio_description')}
                 </Text>
-                <Text className="text-sm border border-green-20 dark:border-green-dark-20 bg-green-10 dark:bg-green-dark-10 text-green-100 dark:text-green-dark-100 self-start px-2 py-0.5 rounded-[25.37px]">
+                <Text className="self-start rounded-[25.37px] border border-green-20 bg-green-10 px-2 py-0.5 text-sm text-green-100 dark:border-green-dark-20 dark:bg-green-dark-10 dark:text-green-dark-100">
                   v{appVersion}
                 </Text>
               </YStack>

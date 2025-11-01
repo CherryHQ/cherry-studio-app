@@ -1,4 +1,4 @@
-import { Model, Provider } from '@/types/assistant'
+import { Model } from '@/types/assistant'
 import { GenerateImageParams } from '@/types/image'
 import { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
 import {
@@ -33,10 +33,6 @@ export abstract class MixedBaseAPIClient extends BaseApiClient {
   >
   protected abstract defaultClient: OpenAIAPIClient
   protected abstract currentClient: BaseApiClient
-
-  constructor(provider: Provider) {
-    super(provider)
-  }
 
   override getBaseURL(): string {
     if (!this.currentClient) {

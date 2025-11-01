@@ -304,8 +304,8 @@
       }
     },
     "html_preview": {
-      "title": "HTML 預覽",
-      "loading": "載入 HTML 中..."
+      "loading": "載入 HTML 中...",
+      "title": "HTML 預覽"
     },
     "inputs": {
       "mentions": "@ {{number}} 個模型",

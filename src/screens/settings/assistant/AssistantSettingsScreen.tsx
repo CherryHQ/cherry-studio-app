@@ -23,7 +23,7 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
   return (
     <Button
       variant="ghost"
-      className="w-full   bg-ui-card-background dark:bg-ui-card-background-dark px-3  justify-between"
+      className="w-full   justify-between bg-ui-card-background px-3  dark:bg-ui-card-background-dark"
       onPress={onPress}>
       <Button.Label>
         <XStack className="flex-1 items-center gap-2 overflow-hidden">
@@ -33,10 +33,10 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
                 className="h-[18px] w-[18px] rounded-full"
                 source={getModelOrProviderIcon(model.id, model.provider, isDark)}
               />
-              <Text numberOfLines={1} className="shrink-0 max-w-[60%] font-medium">
+              <Text numberOfLines={1} className="max-w-[60%] shrink-0 font-medium">
                 {getBaseModelName(model.name)}
               </Text>
-              <Text className="opacity-45 font-semibold">|</Text>
+              <Text className="font-semibold opacity-45">|</Text>
               <Text numberOfLines={1} className="shrink font-semibold opacity-45">
                 {t(`provider.${model.provider}`)}
               </Text>
@@ -48,7 +48,7 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
           )}
         </XStack>
       </Button.Label>
-      <ChevronDown size={18} className="text-text-secondary dark:text-text-secondary-dark opacity-90" />
+      <ChevronDown size={18} className="text-text-secondary opacity-90 dark:text-text-secondary-dark" />
     </Button>
   )
 }
@@ -93,7 +93,7 @@ function AssistantSettingItem({
           />
         </XStack>
         <ModelPicker assistant={assistant} onPress={() => sheetRef.current?.present()} />
-        <Text className="px-[10px] text-text-secondary dark:text-text-secondary-dark opacity-70">
+        <Text className="px-[10px] text-text-secondary opacity-70 dark:text-text-secondary-dark">
           {t(descriptionKey)}
         </Text>
       </YStack>

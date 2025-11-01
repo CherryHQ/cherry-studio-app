@@ -8,8 +8,8 @@ const WelcomeContent = () => {
   const { t } = useTranslation()
 
   return (
-    <Pressable className="flex-1 justify-center items-center h-full w-full" onPress={() => Keyboard.dismiss()}>
-      <YStack className="justify-center items-center">
+    <Pressable className="h-full w-full flex-1 items-center justify-center" onPress={() => Keyboard.dismiss()}>
+      <YStack className="items-center justify-center">
         <FastSquircleView
           style={{
             width: 144,
@@ -18,9 +18,9 @@ const WelcomeContent = () => {
             overflow: 'hidden'
           }}
           cornerSmoothing={0.6}>
-          <Image className="w-full h-full" source={require('@/assets/images/favicon.png')} />
+          <Image className="h-full w-full" source={require('@/assets/images/favicon.png')} />
         </FastSquircleView>
-        <Text className="text-[18px] font-bold text-primary mt-5">{t('chat.title')}</Text>
+        <Text className="text-primary mt-5 text-[18px] font-bold">{t('chat.title')}</Text>
       </YStack>
     </Pressable>
   )

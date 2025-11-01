@@ -52,7 +52,7 @@ export const WebSearchApiCheckSheet = forwardRef<BottomSheetModal, WebSearchApiC
         onDismiss={() => setIsVisible(false)}
         onChange={index => setIsVisible(index >= 0)}>
         <BottomSheetView>
-          <YStack className="items-center pt-2.5 pb-7 px-5 gap-2.5">
+          <YStack className="items-center gap-2.5 px-5 pb-7 pt-2.5">
             <XStack className="w-full items-center justify-center">
               <Text className="text-2xl text-text-primary dark:text-text-primary-dark">
                 {t('settings.provider.api_check.title')}
@@ -61,13 +61,13 @@ export const WebSearchApiCheckSheet = forwardRef<BottomSheetModal, WebSearchApiC
             <XStack className="w-full items-center justify-center">
               <Button
                 variant="tertiary"
-                className="h-11 w-1/2 rounded-lg bg-green-10 border-green-20 dark:bg-green-dark-10 dark:border-green-dark-20"
+                className="h-11 w-1/2 rounded-lg border-green-20 bg-green-10 dark:border-green-dark-20 dark:bg-green-dark-10"
                 isDisabled={checkApiStatus === 'processing'}
                 onPress={onStartModelCheck}>
                 <Button.Label>
                   {checkApiStatus === 'processing' && (
                     <View>
-                      <XStack className="gap-2.5 w-full items-center justify-center">
+                      <XStack className="w-full items-center justify-center gap-2.5">
                         <Spinner size="sm" color="success" />
                         <Text className="text-lg font-bold text-green-100 dark:text-green-dark-100">
                           {t('button.checking')}

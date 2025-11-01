@@ -76,7 +76,7 @@ const MessageBlockRenderer: FC<MessageBlockRendererProps> = ({ blocks, message }
           return (
             <XStack
               key={groupKey}
-              className={`flex-wrap gap-2 mt-2.5 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              className={`mt-2.5 flex-wrap gap-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {blockOrGroup.map(block => {
                 switch (block.type) {
                   case MessageBlockType.IMAGE:

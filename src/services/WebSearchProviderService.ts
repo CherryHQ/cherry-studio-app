@@ -552,7 +552,7 @@ export class WebSearchProviderService {
 
         // Update cache
         this.allProvidersCache.clear()
-        providers.forEach((provider) => {
+        providers.forEach(provider => {
           this.allProvidersCache.set(provider.id, provider)
         })
 
@@ -666,7 +666,7 @@ export class WebSearchProviderService {
     const subscribers = this.providerSubscribers.get(providerId)
     if (subscribers && subscribers.size > 0) {
       logger.verbose(`Notifying ${subscribers.size} subscribers for WebSearch provider ${providerId}`)
-      subscribers.forEach((callback) => {
+      subscribers.forEach(callback => {
         try {
           callback()
         } catch (error) {
@@ -682,7 +682,7 @@ export class WebSearchProviderService {
   private notifyGlobalSubscribers(): void {
     if (this.globalSubscribers.size > 0) {
       logger.verbose(`Notifying ${this.globalSubscribers.size} global subscribers`)
-      this.globalSubscribers.forEach((callback) => {
+      this.globalSubscribers.forEach(callback => {
         try {
           callback()
         } catch (error) {
@@ -701,7 +701,7 @@ export class WebSearchProviderService {
   private notifyAllProvidersSubscribers(): void {
     if (this.allProvidersSubscribers.size > 0) {
       logger.verbose(`Notifying ${this.allProvidersSubscribers.size} all WebSearch providers subscribers`)
-      this.allProvidersSubscribers.forEach((callback) => {
+      this.allProvidersSubscribers.forEach(callback => {
         try {
           callback()
         } catch (error) {
@@ -816,8 +816,7 @@ export class WebSearchProviderService {
       cacheAge: number | null
     }
   } {
-    const cacheAge =
-      this.allProvidersCacheTimestamp !== null ? Date.now() - this.allProvidersCacheTimestamp : null
+    const cacheAge = this.allProvidersCacheTimestamp !== null ? Date.now() - this.allProvidersCacheTimestamp : null
 
     return {
       lruCache: {
@@ -829,8 +828,7 @@ export class WebSearchProviderService {
       allProvidersCache: {
         size: this.allProvidersCache.size,
         isCacheValid:
-          this.allProvidersCacheTimestamp !== null &&
-          Date.now() - this.allProvidersCacheTimestamp < this.CACHE_TTL,
+          this.allProvidersCacheTimestamp !== null && Date.now() - this.allProvidersCacheTimestamp < this.CACHE_TTL,
         cacheAge
       }
     }

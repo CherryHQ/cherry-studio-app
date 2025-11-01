@@ -1,14 +1,11 @@
 import { useCallback } from 'react'
 
-import { loggerService } from '@/services/LoggerService'
 import { topicService } from '@/services/TopicService'
 import { Topic } from '@/types/assistant'
 import { abortCompletion } from '@/utils/abortController'
 import { useTopic } from './useTopic'
 
 import { messageDatabase } from '@database'
-
-const logger = loggerService.withContext('UseMessageOperations')
 
 /**
  * Hook 提供针对特定主题的消息操作方法。 / Hook providing various operations for messages within a specific topic.

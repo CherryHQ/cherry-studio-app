@@ -145,7 +145,7 @@ export function TopicList({ topics, enableScroll, handleNavigateChatScreen }: Gr
       case 'header':
         return (
           <Text
-            className="text-text-primary dark:text-text-primary-dark font-bold"
+            className="font-bold text-text-primary dark:text-text-primary-dark"
             style={{ paddingTop: index !== 0 ? 20 : 0 }}>
             {item.title}
           </Text>

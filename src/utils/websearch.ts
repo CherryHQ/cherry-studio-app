@@ -26,7 +26,7 @@ export function getWebsiteBrand(url: string): string {
         return WEBSITE_BRAND[brand]
       }
     }
-  } catch (e) {
+  } catch {
     return WEBSITE_BRAND.default
   }
 

@@ -7,9 +7,9 @@ export const EmptyModelView: React.FC = () => {
   const { t } = useTranslation()
 
   return (
-    <YStack className="gap-12 w-full items-center">
+    <YStack className="w-full items-center gap-12">
       <YStack className="gap-3">
-        <Text className="text-3xl font-bold text-center text-text-primary dark:text-text-primary-dark">
+        <Text className="text-center text-3xl font-bold text-text-primary dark:text-text-primary-dark">
           {t('settings.models.empty.label')}
         </Text>
       </YStack>

@@ -1,15 +1,10 @@
 import OpenAI from 'openai'
 
-import { Provider } from '@/types/assistant'
 import { OpenAISdkParams, OpenAISdkRawOutput } from '@/types/sdk'
 
 import { OpenAIAPIClient } from '../openai/OpenAIApiClient'
 
 export class CherryinAPIClient extends OpenAIAPIClient {
-  constructor(provider: Provider) {
-    super(provider)
-  }
-
   override async createCompletions(
     payload: OpenAISdkParams,
     options?: OpenAI.RequestOptions

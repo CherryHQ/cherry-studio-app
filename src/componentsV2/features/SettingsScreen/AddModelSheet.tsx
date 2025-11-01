@@ -114,11 +114,11 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
       onChange={index => setIsVisible(index >= 0)}>
       <BottomSheetView style={{ paddingBottom: insets.bottom }}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <YStack className="items-center pb-7 px-5 gap-2.5">
+          <YStack className="items-center gap-2.5 px-5 pb-7">
             <XStack className="w-full items-center justify-center">
               <Text className="text-xl">{t('settings.models.add.model.label')}</Text>
             </XStack>
-            <YStack className="w-full gap-6 justify-center items-center ">
+            <YStack className="w-full items-center justify-center gap-6 ">
               {/* Model ID Input */}
               <YStack className="w-full gap-2">
                 <XStack className="gap-2 px-3">
@@ -164,7 +164,7 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
               </YStack>
               <Button
                 variant="tertiary"
-                className="h-11 w-4/6 rounded-2xl bg-green-10 border-green-20 dark:bg-green-dark-10 dark:border-green-dark-20"
+                className="h-11 w-4/6 rounded-2xl border-green-20 bg-green-10 dark:border-green-dark-20 dark:bg-green-dark-10"
                 onPress={handleAddModel}
                 isDisabled={!modelId.trim()}>
                 <Button.Label>

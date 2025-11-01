@@ -283,7 +283,7 @@ export class McpService {
    */
   public async getActiveMcpServers(): Promise<MCPServer[]> {
     const allServers = await this.getAllMcpServers()
-    return allServers.filter((server) => server.isActive)
+    return allServers.filter(server => server.isActive)
   }
 
   /**
@@ -310,7 +310,7 @@ export class McpService {
 
       // Filter disabled tools
       if (mcpServer.disabledTools && mcpServer.disabledTools.length > 0) {
-        return tools.filter((tool) => !mcpServer.disabledTools?.includes(tool.name))
+        return tools.filter(tool => !mcpServer.disabledTools?.includes(tool.name))
       }
 
       return tools
@@ -599,7 +599,7 @@ export class McpService {
 
         // Update cache
         this.allMcpServersCache.clear()
-        mcpServers.forEach((server) => {
+        mcpServers.forEach(server => {
           this.allMcpServersCache.set(server.id, server)
         })
 
@@ -627,15 +627,10 @@ export class McpService {
   /**
    * Perform optimistic MCP server update with rollback on failure
    */
-  private async performMcpServerUpdate(
-    mcpId: string,
-    updates: Partial<Omit<MCPServer, 'id'>>
-  ): Promise<void> {
+  private async performMcpServerUpdate(mcpId: string, updates: Partial<Omit<MCPServer, 'id'>>): Promise<void> {
     // Save old data for rollback
     const oldLRUServer = this.mcpCache.get(mcpId) ? { ...this.mcpCache.get(mcpId)! } : null
-    const oldAllServersServer = this.allMcpServersCache.get(mcpId)
-      ? { ...this.allMcpServersCache.get(mcpId)! }
-      : null
+    const oldAllServersServer = this.allMcpServersCache.get(mcpId) ? { ...this.allMcpServersCache.get(mcpId)! } : null
 
     try {
       // Fetch current MCP server data
@@ -713,7 +708,7 @@ export class McpService {
     const subscribers = this.mcpServerSubscribers.get(mcpId)
     if (subscribers && subscribers.size > 0) {
       logger.verbose(`Notifying ${subscribers.size} subscribers for MCP server ${mcpId}`)
-      subscribers.forEach((callback) => {
+      subscribers.forEach(callback => {
         try {
           callback()
         } catch (error) {
@@ -729,7 +724,7 @@ export class McpService {
   private notifyGlobalSubscribers(): void {
     if (this.globalSubscribers.size > 0) {
       logger.verbose(`Notifying ${this.globalSubscribers.size} global subscribers`)
-      this.globalSubscribers.forEach((callback) => {
+      this.globalSubscribers.forEach(callback => {
         try {
           callback()
         } catch (error) {
@@ -748,7 +743,7 @@ export class McpService {
   private notifyAllMcpServersSubscribers(): void {
     if (this.allMcpServersSubscribers.size > 0) {
       logger.verbose(`Notifying ${this.allMcpServersSubscribers.size} all MCP servers subscribers`)
-      this.allMcpServersSubscribers.forEach((callback) => {
+      this.allMcpServersSubscribers.forEach(callback => {
         try {
           callback()
         } catch (error) {
@@ -863,8 +858,7 @@ export class McpService {
       cacheAge: number | null
     }
   } {
-    const cacheAge =
-      this.allMcpServersCacheTimestamp !== null ? Date.now() - this.allMcpServersCacheTimestamp : null
+    const cacheAge = this.allMcpServersCacheTimestamp !== null ? Date.now() - this.allMcpServersCacheTimestamp : null
 
     return {
       lruCache: {
@@ -876,8 +870,7 @@ export class McpService {
       allServersCache: {
         size: this.allMcpServersCache.size,
         isCacheValid:
-          this.allMcpServersCacheTimestamp !== null &&
-          Date.now() - this.allMcpServersCacheTimestamp < this.CACHE_TTL,
+          this.allMcpServersCacheTimestamp !== null && Date.now() - this.allMcpServersCacheTimestamp < this.CACHE_TTL,
         cacheAge
       }
     }

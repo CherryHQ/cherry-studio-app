@@ -304,8 +304,8 @@
       }
     },
     "html_preview": {
-      "title": "HTML Preview",
-      "loading": "Loading HTML..."
+      "loading": "Loading HTML...",
+      "title": "HTML Preview"
     },
     "inputs": {
       "mentions": "@ {{number}} models",

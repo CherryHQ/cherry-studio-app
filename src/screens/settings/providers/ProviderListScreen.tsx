@@ -60,7 +60,7 @@ export default function ProviderListScreen() {
           <ActivityIndicator />
         </SafeAreaContainer>
       ) : (
-        <Container className="pb-0 gap-4">
+        <Container className="gap-4 pb-0">
           <SearchInput placeholder={t('settings.provider.search')} value={searchText} onChangeText={setSearchText} />
 
           <Group className="flex-1">

@@ -49,7 +49,6 @@ import {
   isSystemProvider,
   Model,
   OpenAIServiceTier,
-  Provider,
   SystemProviderIds
 } from '@/types/assistant'
 // For Copilot token
@@ -93,10 +92,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
   OpenAI.Chat.Completions.ChatCompletionMessageToolCall,
   ChatCompletionTool
 > {
-  constructor(provider: Provider) {
-    super(provider)
-  }
-
   override async createCompletions(
     payload: OpenAISdkParams,
     options?: OpenAI.RequestOptions
@@ -197,7 +192,8 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
     // reasoningEffort有效的情况
     const effortRatio = EFFORT_RATIO[reasoningEffort]
     const budgetTokens = Math.floor(
-      (findTokenLimit(model.id)?.max! - findTokenLimit(model.id)?.min!) * effortRatio + findTokenLimit(model.id)?.min!
+      (findTokenLimit(model.id)?.max ?? 0 - (findTokenLimit(model.id)?.min ?? 0)) * effortRatio +
+        (findTokenLimit(model.id)?.min ?? 0)
     )
 
     // DeepSeek hybrid inference models, v3.1 and maybe more in the future

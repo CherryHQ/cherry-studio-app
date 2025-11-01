@@ -23,6 +23,7 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
 
   useEffect(() => {
     setMentions(assistant.defaultModel ? [assistant.defaultModel] : [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topic.id])
 
   const sendMessage = async () => {

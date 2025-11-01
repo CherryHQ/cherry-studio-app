@@ -87,8 +87,8 @@ const McpServerItemSheet = forwardRef<BottomSheetModal, McpServerItemSheetProps>
         onDismiss={() => setIsVisible(false)}
         onChange={index => setIsVisible(index >= 0)}>
         {!selectedMcp ? null : (
-          <YStack className="flex-1 gap-10 relative">
-            <XStack className="top-5 w-full justify-center items-center">
+          <YStack className="relative flex-1 gap-10">
+            <XStack className="top-5 w-full items-center justify-center">
               <Text className="text-2xl">{selectedMcp.name}</Text>
             </XStack>
             <TouchableOpacity
@@ -102,10 +102,10 @@ const McpServerItemSheet = forwardRef<BottomSheetModal, McpServerItemSheetProps>
               }}
               onPress={() => (ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </TouchableOpacity>
 
-            <XStack className="w-full justify-center items-center">
+            <XStack className="w-full items-center justify-center">
               <Text className="text-lg">{selectedMcp.description}</Text>
             </XStack>
 
@@ -116,7 +116,7 @@ const McpServerItemSheet = forwardRef<BottomSheetModal, McpServerItemSheetProps>
                 {/* Description */}
                 {selectedMcp.description && (
                   <YStack className="gap-1">
-                    <Text className="leading-5 text-lg font-bold text-text-primary dark:text-text-primary-dark">
+                    <Text className="text-lg font-bold leading-5 text-text-primary dark:text-text-primary-dark">
                       {t('common.description')}
                     </Text>
                     <Text className="leading-5 text-text-secondary dark:text-text-secondary-dark">
@@ -127,7 +127,7 @@ const McpServerItemSheet = forwardRef<BottomSheetModal, McpServerItemSheetProps>
                 {/* Tools */}
                 {tools.length > 0 && (
                   <YStack className="gap-1">
-                    <Text className="leading-5 text-lg font-bold text-text-primary dark:text-text-primary-dark">
+                    <Text className="text-lg font-bold leading-5 text-text-primary dark:text-text-primary-dark">
                       {t('common.tool')}
                     </Text>
                     <Accordion

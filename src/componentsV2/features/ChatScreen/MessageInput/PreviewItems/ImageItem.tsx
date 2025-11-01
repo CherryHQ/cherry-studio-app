@@ -100,12 +100,12 @@ const ImageItem: FC<ImageItemProps> = ({ file, allImages = [], onRemove, size, d
         borderRadius={10}>
         {imageError ? (
           <View
-            className="bg-gray-5 dark:bg-gray-dark-5 items-center justify-center rounded-2.5"
+            className="bg-gray-5 dark:bg-gray-dark-5 rounded-2.5 items-center justify-center"
             style={{
               width: imageWidth,
               height: imageWidth
             }}>
-            <ImageOff size={imageWidth * 0.3} className="text-gray-20 dark:text-gray-dark-20" />
+            <ImageOff size={imageWidth * 0.3} className="dark:text-gray-dark-20 text-gray-20" />
           </View>
         ) : (
           <Image
@@ -128,8 +128,8 @@ const ImageItem: FC<ImageItemProps> = ({ file, allImages = [], onRemove, size, d
         )}
       />
       {onRemove && (
-        <TouchableOpacity onPress={handleRemove} hitSlop={5} className="absolute -top-1.5 -right-1.5 rounded-full">
-          <View className="border border-white rounded-full p-0.5">
+        <TouchableOpacity onPress={handleRemove} hitSlop={5} className="absolute -right-1.5 -top-1.5 rounded-full">
+          <View className="rounded-full border border-white p-0.5">
             <X size={14} />
           </View>
         </TouchableOpacity>

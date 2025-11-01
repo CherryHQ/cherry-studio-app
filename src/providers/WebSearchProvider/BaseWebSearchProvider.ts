@@ -1,4 +1,4 @@
-import { WebSearchState , WebSearchProvider, WebSearchProviderResponse } from '@/types/websearch'
+import { WebSearchState, WebSearchProvider, WebSearchProviderResponse } from '@/types/websearch'
 
 export default abstract class BaseWebSearchProvider {
   protected provider: WebSearchProvider

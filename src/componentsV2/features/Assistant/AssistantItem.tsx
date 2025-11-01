@@ -65,7 +65,7 @@ const AssistantItem: FC<AssistantItemProps> = ({ assistant, onAssistantPress }) 
 
   return (
     <ContextMenu borderRadius={16} list={contextMenuItems} onPress={handlePress}>
-      <View className="py-2.5 px-2.5 justify-between items-center rounded-2xl bg-ui-card-background dark:bg-ui-card-background-dark">
+      <View className="items-center justify-between rounded-2xl bg-ui-card-background px-2.5 py-2.5 dark:bg-ui-card-background-dark">
         <XStack className="gap-3.5">
           <EmojiAvatar
             emoji={assistant.emoji}
@@ -74,7 +74,7 @@ const AssistantItem: FC<AssistantItemProps> = ({ assistant, onAssistantPress }) 
             borderWidth={3}
             borderColor={isDark ? '#333333' : '#f7f7f7'}
           />
-          <YStack className="gap-1 flex-1 justify-center">
+          <YStack className="flex-1 justify-center gap-1">
             <Text className="text-sm font-bold" numberOfLines={1} ellipsizeMode="tail">
               {assistant.name}
             </Text>

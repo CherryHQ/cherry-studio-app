@@ -113,9 +113,9 @@ export async function callBuiltInTool(toolResponse: MCPToolResponse): Promise<MC
 }
 
 export async function callMCPTool(
-  toolResponse: MCPToolResponse,
-  topicId?: string,
-  modelName?: string
+  _toolResponse: MCPToolResponse,
+  _topicId?: string,
+  _modelName?: string
 ): Promise<MCPCallToolResponse> {
   throw new Error('Not implemented')
   // logger.info(`Calling Tool: ${toolResponse.tool.serverName} ${toolResponse.tool.name}`, toolResponse.tool)
@@ -311,7 +311,7 @@ export function filterMCPTools(
   return mcpTools
 }
 
-export function getMcpServerByTool(tool: MCPTool) {
+export function getMcpServerByTool(_tool: MCPTool) {
   throw new Error('Function not implemented.')
   // const servers = store.getState().mcp.servers
   // return servers.find(s => s.id === tool.serverId)
@@ -363,7 +363,7 @@ export function parseToolUse(
 
     try {
       parsedArgs = JSON.parse(toolArgs)
-    } catch (error) {
+    } catch {
       // If parsing fails, use the string as is
       parsedArgs = toolArgs
     }

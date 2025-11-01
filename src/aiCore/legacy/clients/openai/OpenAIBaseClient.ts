@@ -8,7 +8,7 @@ import {
 } from '@/config/models'
 import { getAssistantSettings } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
-import { Assistant, Model, Provider } from '@/types/assistant'
+import { Assistant, Model } from '@/types/assistant'
 import { GenerateImageParams } from '@/types/image'
 import {
   OpenAIResponseSdkMessageParam,
@@ -41,10 +41,6 @@ export abstract class OpenAIBaseClient<
   TToolCall extends OpenAI.Chat.Completions.ChatCompletionMessageToolCall | OpenAIResponseSdkToolCall,
   TSdkSpecificTool extends OpenAI.Chat.Completions.ChatCompletionTool | OpenAIResponseSdkTool
 > extends BaseApiClient<TSdkInstance, TSdkParams, TRawOutput, TRawChunk, TMessageParam, TToolCall, TSdkSpecificTool> {
-  constructor(provider: Provider) {
-    super(provider)
-  }
-
   // 仅适用于openai
   override getBaseURL(): string {
     const host = this.provider.apiHost

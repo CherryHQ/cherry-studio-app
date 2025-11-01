@@ -1,7 +1,4 @@
 {
-  "importOrder": ["^react", "^@tamagui/(.*)$", "^@expo/(.*)$", "^@/(.*)$", "^[./]"],
-  "importOrderSeparation": true,
-  "importOrderSortSpecifiers": true,
   "tabWidth": 2,
   "semi": false,
   "singleQuote": true,
@@ -9,5 +6,6 @@
   "trailingComma": "none",
   "arrowParens": "avoid",
   "printWidth": 120,
-  "bracketSameLine": true
+  "bracketSameLine": true,
+  "plugins": ["prettier-plugin-tailwindcss"]
 }

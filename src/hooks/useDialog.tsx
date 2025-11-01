@@ -133,14 +133,14 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
           className={centeredViewClassName}>
           {maskClosable && <Pressable className="absolute inset-0" onPress={cancel} />}
           <YStack className="w-3/4 rounded-2xl bg-ui-card-background dark:bg-ui-card-background-dark">
-            <YStack className="gap-3 p-5 items-center">
+            <YStack className="items-center gap-3 p-5">
               {typeof options?.title === 'string' ? (
                 <Text className="text-lg font-bold text-text-primary dark:text-text-primary-dark">{options.title}</Text>
               ) : (
                 options?.title
               )}
               {typeof options?.content === 'string' ? (
-                <Text className="text-[15px] leading-5 text-text-secondary dark:text-text-secondary-dark text-center">
+                <Text className="text-center text-[15px] leading-5 text-text-secondary dark:text-text-secondary-dark">
                   {options.content}
                 </Text>
               ) : (
@@ -148,18 +148,18 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
               )}
             </YStack>
 
-            <XStack className="p-5 pt-0 gap-5">
+            <XStack className="gap-5 p-5 pt-0">
               {showCancel && (
                 <Button
                   variant="tertiary"
                   className={cn(
-                    'flex-1 h-[42px] rounded-[30px] bg-transparent border-gray-20 dark:border-gray-20',
+                    'h-[42px] flex-1 rounded-[30px] border-gray-20 bg-transparent dark:border-gray-20',
                     options?.cancelStyle?.toString() || ''
                   )}
                   onPress={cancel}
                   isDisabled={isLoading}>
                   <Button.Label>
-                    <Text className="text-gray-80 dark:text-gray-80 text-[17px]">
+                    <Text className="text-[17px] text-gray-80 dark:text-gray-80">
                       {isLoading && shouldShowLoading ? t('common.loading') : cancelText}
                     </Text>
                   </Button.Label>
@@ -167,7 +167,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
               )}
               <Button
                 className={cn(
-                  'flex-1 h-[42px] rounded-[30px] border',
+                  'h-[42px] flex-1 rounded-[30px] border',
                   confirmButtonClassName,
                   options?.confirmStyle?.toString() || ''
                 )}

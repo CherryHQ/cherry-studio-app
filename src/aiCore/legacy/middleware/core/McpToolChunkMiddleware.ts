@@ -405,11 +405,11 @@ export async function parseAndCallTools<R>(
   content: string | MCPToolResponse[],
   allToolResponses: MCPToolResponse[],
   onChunk: CompletionsParams['onChunk'],
-  convertToMessage: (mcpToolResponse: MCPToolResponse, resp: MCPCallToolResponse, model: Model) => R | undefined,
-  model: Model,
+  _convertToMessage: (mcpToolResponse: MCPToolResponse, resp: MCPCallToolResponse, model: Model) => R | undefined,
+  _model: Model,
   mcpTools?: MCPTool[],
-  abortSignal?: AbortSignal,
-  topicId?: CompletionsParams['topicId']
+  _abortSignal?: AbortSignal,
+  _topicId?: CompletionsParams['topicId']
 ): Promise<{ toolResults: R[]; confirmedToolResponses: MCPToolResponse[] }> {
   const toolResults: R[] = []
   let curToolResponses: MCPToolResponse[] = []

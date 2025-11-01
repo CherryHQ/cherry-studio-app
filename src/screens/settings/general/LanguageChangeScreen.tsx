@@ -35,20 +35,20 @@ export default function LanguageChangeScreen() {
             <PressableRow
               key={opt.value}
               onPress={() => handleLanguageChange(opt.value)}
-              className="bg-ui-card-background dark:bg-ui-card-background-dark p-4 rounded-xl">
+              className="rounded-xl bg-ui-card-background p-4 dark:bg-ui-card-background-dark">
               <XStack className="items-center gap-3">
                 <Text className="text-base">{opt.flag}</Text>
                 <Text className="text-base">{opt.label}</Text>
               </XStack>
 
               <XStack
-                className={`w-5 h-5 rounded-full border-2 items-center justify-center ${
+                className={`h-5 w-5 items-center justify-center rounded-full border-2 ${
                   currentLanguage === opt.value
                     ? 'border-gray-900 dark:border-gray-100'
                     : 'border-gray-400 dark:border-gray-600'
                 }`}>
                 {currentLanguage === opt.value && (
-                  <XStack className="w-2.5 h-2.5 rounded-full bg-gray-900 dark:bg-gray-100" />
+                  <XStack className="h-2.5 w-2.5 rounded-full bg-gray-900 dark:bg-gray-100" />
                 )}
               </XStack>
             </PressableRow>

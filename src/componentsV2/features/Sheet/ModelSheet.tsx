@@ -209,7 +209,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
                   alignItems: 'center'
                 }}
                 className="px-2">
-                <XStack className="gap-3 items-center justify-start px-0">
+                <XStack className="items-center justify-start gap-3 px-0">
                   <XStack className="items-center justify-center">
                     <ProviderIcon provider={item.provider} size={24} />
                   </XStack>
@@ -228,14 +228,14 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() => handleModelToggle(item.value)}
-              className={`px-2 py-2 justify-between rounded-lg border ${
+              className={`justify-between rounded-lg border px-2 py-2 ${
                 isSelected
-                  ? 'border-green-20 dark:border-green-dark-20 bg-green-10 dark:bg-green-dark-10'
+                  ? 'border-green-20 bg-green-10 dark:border-green-dark-20 dark:bg-green-dark-10'
                   : 'border-transparent bg-transparent'
               }`}>
-              <XStack className="gap-2 flex-1 items-center justify-between w-full">
-                <XStack className="gap-2 flex-1 items-center max-w-[80%]">
-                  <XStack className="justify-center items-center flex-shrink-0">
+              <XStack className="w-full flex-1 items-center justify-between gap-2">
+                <XStack className="max-w-[80%] flex-1 items-center gap-2">
+                  <XStack className="flex-shrink-0 items-center justify-center">
                     <ModelIcon model={item.model} size={24} />
                   </XStack>
                   <Text
@@ -249,7 +249,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
                     {item.label}
                   </Text>
                 </XStack>
-                <XStack className="gap-2 items-center flex-shrink-0">
+                <XStack className="flex-shrink-0 items-center gap-2">
                   <ModelTags model={item.model} size={11} />
                 </XStack>
               </XStack>
@@ -264,7 +264,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
         ListHeaderComponentStyle={{ minHeight: 50 }}
         ListHeaderComponent={
           <YStack className="gap-4" style={{ paddingTop: 4 }}>
-            <XStack className="gap-[5px] flex-1 items-center justify-center">
+            <XStack className="flex-1 items-center justify-center gap-[5px]">
               <YStack className="flex-1">
                 <SearchInput
                   value={inputValue}
@@ -277,8 +277,8 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
                   size="sm"
                   className={`rounded-full ${
                     isMultiSelectActive
-                      ? 'bg-green-10 dark:bg-green-dark-10 border border-green-20 dark:border-green-dark-20'
-                      : 'bg-ui-card dark:bg-ui-card-dark border border-transparent'
+                      ? 'border border-green-20 bg-green-10 dark:border-green-dark-20 dark:bg-green-dark-10'
+                      : 'border border-transparent bg-ui-card dark:bg-ui-card-dark'
                   }`}
                   onPress={toggleMultiSelectMode}>
                   <Button.Label>

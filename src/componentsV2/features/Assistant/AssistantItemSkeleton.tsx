@@ -7,7 +7,7 @@ import { useTheme } from 'heroui-native'
 const AssistantItemSkeleton: FC = () => {
   const { isDark } = useTheme()
   return (
-    <View className="py-2.5 px-2.5 rounded-2xl bg-ui-card-background dark:bg-ui-card-background-dark">
+    <View className="rounded-2xl bg-ui-card-background px-2.5 py-2.5 dark:bg-ui-card-background-dark">
       <ContentLoader
         height={46}
         width={300}

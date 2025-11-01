@@ -63,7 +63,7 @@ ${htmlContent || ''}
         {shouldShowLoading && isLoading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#007AFF" />
-            <Text className="text-base mt-3">{t('html_preview.loading')}</Text>
+            <Text className="mt-3 text-base">{t('html_preview.loading')}</Text>
           </View>
         )}
         <WebView

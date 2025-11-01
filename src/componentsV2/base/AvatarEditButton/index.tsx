@@ -41,7 +41,7 @@ export function AvatarEditButton({
     <YStack className="relative">
       <TouchableOpacity
         onPress={() => setIsOpen(prev => !prev)}
-        className="rounded-full border-[5px] border-green-100 overflow-hidden"
+        className="overflow-hidden rounded-full border-[5px] border-green-100"
         style={{
           width: size,
           height: size,

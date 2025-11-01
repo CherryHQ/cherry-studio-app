@@ -9,8 +9,6 @@ import { AssistantMessageStatus, GroupedMessage, MessageBlock } from '@/types/me
 import { MultiModalIcon } from '@/componentsV2/icons'
 import MessageItem from './Message'
 import MessageFooter from './MessageFooter'
-import { useTranslation } from 'react-i18next'
-import { storage } from '@/utils'
 import MessageHeader from './MessageHeader'
 
 interface MultiModelTabProps {
@@ -20,10 +18,7 @@ interface MultiModelTabProps {
 }
 
 const MultiModelTab: FC<MultiModelTabProps> = ({ assistant, messages, messageBlocks }) => {
-  const { t } = useTranslation()
-
   const [currentTab, setCurrentTab] = useState('0')
-  const currentLanguage = storage.getString('language')
 
   if (!messages || messages.length === 0) {
     return null
@@ -41,7 +36,7 @@ const MultiModelTab: FC<MultiModelTabProps> = ({ assistant, messages, messageBlo
                 return (
                   _message.model && (
                     <Tabs.Trigger key={tabValue} value={tabValue}>
-                      <XStack className="gap-1 items-center justify-center">
+                      <XStack className="items-center justify-center gap-1">
                         {_message.useful && <MultiModalIcon size={14} />}
                         <Tabs.Label
                           className={cn(

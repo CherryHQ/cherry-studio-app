@@ -24,11 +24,6 @@ export interface OrchestrationRequest {
  */
 // NOTE：暂时没有用到这个类
 export class OrchestrationService {
-  constructor() {
-    // In the future, this could be a singleton, but for now, a new instance is fine.
-    // this.conversationService = new ConversationService()
-  }
-
   /**
    * This is the core method to handle user messages.
    * It takes the message context and an events object for callbacks,

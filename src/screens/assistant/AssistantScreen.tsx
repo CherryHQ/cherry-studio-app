@@ -112,7 +112,7 @@ export default function AssistantScreen() {
               keyExtractor={item => item.id}
               ItemSeparatorComponent={() => <YStack className="h-2" />}
               ListEmptyComponent={
-                <YStack className="flex-1 justify-center items-center">
+                <YStack className="flex-1 items-center justify-center">
                   <Text>{t('settings.assistant.empty')}</Text>
                 </YStack>
               }

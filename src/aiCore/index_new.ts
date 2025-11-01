@@ -16,7 +16,7 @@ import { AiSdkModel, StreamTextParams } from '@/types/aiCoretypes'
 import { Assistant, Model, Provider } from '@/types/assistant'
 import { GenerateImageParams } from '@/types/image'
 
-import AiSdkToChunkAdapter from './chunk/AiSdkToChunkAdapter'
+import { AiSdkToChunkAdapter } from './chunk/AiSdkToChunkAdapter'
 import LegacyAiProvider from './legacy/index'
 import { CompletionsParams, CompletionsResult } from './legacy/middleware/schemas'
 import { AiSdkMiddlewareConfig, buildAiSdkMiddlewares } from './middleware/AiSdkMiddlewareBuilder'

@@ -13,12 +13,14 @@
 ## 🎯 重构目标
 
 ### 主要目标
+
 1. ✅ **提升性能** - 通过 LRU 缓存减少数据库查询
 2. ✅ **改善体验** - 乐观更新提供零延迟 UI
 3. ✅ **类型安全** - 完整的 TypeScript 类型覆盖
 4. ✅ **易于维护** - 清晰的架构和完整的文档
 
 ### 技术目标
+
 1. ✅ 单例模式 - 全局唯一实例，共享缓存
 2. ✅ 三层缓存 - 当前主题 + LRU + 全量缓存
 3. ✅ 乐观更新 - 立即更新 UI，后台同步
@@ -34,6 +36,7 @@
 **文件**: `src/services/TopicService.ts` (1240+ 行)
 
 **核心功能**:
+
 - ✅ 单例模式，全局唯一实例
 - ✅ 三层缓存架构
 - ✅ 完整的 CRUD 操作
@@ -43,6 +46,7 @@
 - ✅ 加载去重（防止重复查询）
 
 **缓存架构**:
+
 ```typescript
 // 1. 当前主题缓存（1个）
 private currentTopicCache: Topic | null = null
@@ -59,6 +63,7 @@ private readonly CACHE_TTL = 5 * 60 * 1000
 ```
 
 **公共 API**:
+
 ```typescript
 // 查询操作
 getCurrentTopic(): Topic | null
@@ -91,12 +96,14 @@ logCacheStatus(): void
 **文件**: `src/hooks/useTopic.ts`
 
 **重构前**:
+
 ```typescript
 // 使用 Redux/简单状态管理
 const [currentTopicId, setCurrentTopicId] = useState('')
 ```
 
 **重构后**:
+
 ```typescript
 // 使用 useSyncExternalStore + TopicService
 const subscribe = useCallback((callback: () => void) => {
@@ -111,6 +118,7 @@ const currentTopic = useSyncExternalStore(subscribe, getSnapshot, getServerSnaps
 ```
 
 **新增功能**:
+
 - ✅ `switchTopic(topicId)` - 切换主题（利用 LRU 缓存）
 - ✅ `createNewTopic(assistant)` - 创建新主题（自动切换）
 - ✅ `renameTopic(newName)` - 重命名当前主题
@@ -119,17 +127,22 @@ const currentTopic = useSyncExternalStore(subscribe, getSnapshot, getServerSnaps
 ### 3. 重构 useTopic(topicId) Hook
 
 **重构前**:
+
 ```typescript
 // 使用 Drizzle useLiveQuery，直接查询数据库
 const { data: rawTopic, updatedAt } = useLiveQuery(query, [topicId])
 ```
 
 **重构后**:
+
 ```typescript
 // 使用 useSyncExternalStore + LRU 缓存
-const subscribe = useCallback((callback: () => void) => {
-  return topicService.subscribeTopic(topicId, callback)
-}, [topicId])
+const subscribe = useCallback(
+  (callback: () => void) => {
+    return topicService.subscribeTopic(topicId, callback)
+  },
+  [topicId]
+)
 
 const getSnapshot = useCallback(() => {
   return topicService.getTopicCached(topicId)
@@ -140,12 +153,13 @@ const topic = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 // 懒加载：如果缓存未命中，从数据库加载
 useEffect(() => {
   if (!topic) {
-    topicService.getTopic(topicId)  // 使用 LRU 缓存
+    topicService.getTopic(topicId) // 使用 LRU 缓存
   }
 }, [topic, topicId])
 ```
 
 **性能提升**:
+
 - ✅ 从 LRU 缓存读取，无需查询数据库
 - ✅ 订阅特定主题变化，精确更新
 - ✅ 乐观更新，所有操作零延迟
@@ -153,10 +167,12 @@ useEffect(() => {
 ### 4. 优化 switchToTopic 缓存管理
 
 **修复的问题**:
+
 1. ❌ 旧的当前主题未被缓存，切换回去需要重新查询
 2. ❌ 总是从数据库加载新主题，未利用 LRU 缓存
 
 **修复后**:
+
 ```typescript
 public async switchToTopic(topicId: string): Promise<void> {
   // 1. 使用 getTopic() 获取新主题（利用 LRU 缓存）
@@ -186,6 +202,7 @@ public async switchToTopic(topicId: string): Promise<void> {
 ### 5. 更新所有使用 Topic 的组件
 
 **更新的文件**:
+
 1. ✅ `src/componentsV2/features/ChatScreen/Header/NewTopicButton.tsx`
 2. ✅ `src/componentsV2/features/TopicList/index.tsx`
 3. ✅ `src/componentsV2/features/TopicItem/index.tsx`
@@ -193,6 +210,7 @@ public async switchToTopic(topicId: string): Promise<void> {
 5. ✅ `src/screens/welcome/WelcomeScreen.tsx`
 
 **主要改动**:
+
 - 使用 `topicService.createTopic()` 替代旧的创建方法
 - 使用 `switchTopic()` 替代 `setCurrentTopicId()`
 - 实现本地乐观更新 + 错误回滚（在 TopicList 等组件）
@@ -200,9 +218,11 @@ public async switchToTopic(topicId: string): Promise<void> {
 ### 6. 创建调试工具
 
 #### 控制台日志
+
 **自动记录**: 所有缓存操作自动打印到控制台
 
 示例日志:
+
 ```
 [TopicService] LRU cache hit for topic: xyz789
 [TopicService] Loading topic from database: def456
@@ -212,6 +232,7 @@ public async switchToTopic(topicId: string): Promise<void> {
 ```
 
 #### 调试方法
+
 ```typescript
 // 获取缓存状态对象
 const status = topicService.getCacheStatus()
@@ -221,6 +242,7 @@ topicService.logCacheStatus()
 ```
 
 #### 可视化调试组件
+
 **文件**: `src/componentsV2/debug/TopicCacheDebug.tsx`
 
 ```typescript
@@ -237,6 +259,7 @@ function ChatScreen() {
 ```
 
 **显示内容**:
+
 - 当前主题 ID 和订阅者数量
 - LRU 缓存大小和主题列表
 - 访问顺序（从旧到新）
@@ -245,6 +268,7 @@ function ChatScreen() {
 ### 7. 编写文档
 
 **创建的文档**:
+
 1. ✅ `docs/topic-cache-debug.md` - 缓存调试完整指南
 2. ✅ `docs/topic-refactor-summary.md` - 重构总结（本文档）
 3. ✅ `docs/data-zh.md` - 更新数据架构文档，添加 Topic 系统章节
@@ -255,13 +279,13 @@ function ChatScreen() {
 
 ### 重构前 vs 重构后
 
-| 操作 | 重构前 | 重构后 | 性能提升 |
-|------|--------|--------|---------|
-| 切换到最近访问的主题 | 数据库查询 (~50ms) | LRU 缓存命中 (~0.5ms) | **~100x** |
-| 访问当前主题 | useLiveQuery 订阅 | 内存缓存 | **~50x** |
-| 更新主题名称 | 等待数据库写入 | 乐观更新（零延迟） | **即时响应** |
-| 并发更新同一主题 | 可能冲突 | 请求队列保证顺序 | **无冲突** |
-| 重复加载同一主题 | N 次数据库查询 | 去重，只查询 1 次 | **减少 N-1 次** |
+| 操作                 | 重构前             | 重构后                | 性能提升        |
+| -------------------- | ------------------ | --------------------- | --------------- |
+| 切换到最近访问的主题 | 数据库查询 (~50ms) | LRU 缓存命中 (~0.5ms) | **~100x**       |
+| 访问当前主题         | useLiveQuery 订阅  | 内存缓存              | **~50x**        |
+| 更新主题名称         | 等待数据库写入     | 乐观更新（零延迟）    | **即时响应**    |
+| 并发更新同一主题     | 可能冲突           | 请求队列保证顺序      | **无冲突**      |
+| 重复加载同一主题     | N 次数据库查询     | 去重，只查询 1 次     | **减少 N-1 次** |
 
 ### LRU 缓存效果
 
@@ -329,6 +353,7 @@ function ChatScreen() {
 ### 数据流
 
 #### 读取流程
+
 ```
 Component → useTopic(id)
   ↓
@@ -345,6 +370,7 @@ topicService.getTopicCached(id)
 ```
 
 #### 写入流程（乐观更新）
+
 ```
 Component → renameTopic('new name')
   ↓
@@ -381,6 +407,7 @@ topicService.renameTopic(id, name)
 ### 缓存测试
 
 **测试场景**: 依次访问 5 个主题，再访问第 6 个
+
 ```bash
 # 预期结果
 访问 A → DB load, LRU: [A]
@@ -401,6 +428,7 @@ topicService.renameTopic(id, name)
 ## 📝 代码统计
 
 ### 新增代码
+
 - `TopicService.ts`: ~1240 行
 - `TopicCacheDebug.tsx`: ~128 行
 - `topic-cache-debug.md`: ~300 行
@@ -410,6 +438,7 @@ topicService.renameTopic(id, name)
 **总计**: ~2700 行新代码和文档
 
 ### 修改代码
+
 - `useTopic.ts`: 重构 ~150 行
 - 组件更新: 5 个文件，~50 行改动
 
@@ -420,6 +449,7 @@ topicService.renameTopic(id, name)
 ### 对于开发者
 
 **之前**:
+
 ```typescript
 // 使用 useLiveQuery 直接查询
 const { data } = useLiveQuery(query)
@@ -429,6 +459,7 @@ const [currentTopicId, setCurrentTopicId] = useState('')
 ```
 
 **现在**:
+
 ```typescript
 // 使用 TopicService hooks
 const { currentTopic, switchTopic } = useCurrentTopic()
@@ -441,6 +472,7 @@ const topic = await topicService.getTopic(topicId)
 ### API 变更
 
 #### 已弃用（但向后兼容）
+
 ```typescript
 // ⚠️ Deprecated
 export async function createNewTopic(assistant: Assistant): Promise<Topic>
@@ -454,6 +486,7 @@ await topicService.renameTopic(topicId, newName)
 ```
 
 #### Hook API 变更
+
 ```typescript
 // 之前
 const { currentTopicId, setCurrentTopicId } = useCurrentTopic()
@@ -468,16 +501,19 @@ const { currentTopic, currentTopicId, switchTopic } = useCurrentTopic()
 ## 🚀 未来优化方向
 
 ### 短期
+
 1. ⏳ 监控缓存命中率，调整 LRU 大小
 2. ⏳ 添加缓存性能指标上报
 3. ⏳ 优化内存占用（可选：添加总内存限制）
 
 ### 中期
+
 1. ⏳ 实现 IndexedDB 持久化缓存（跨会话）
 2. ⏳ 添加预加载策略（预测用户行为）
 3. ⏳ 实现更智能的缓存驱逐策略（基于访问频率 + 时间）
 
 ### 长期
+
 1. ⏳ 考虑将其他实体（Message、Assistant）也使用类似架构
 2. ⏳ 实现离线优先（Offline First）完整方案
 3. ⏳ 探索 Web Worker 中的后台同步
@@ -487,6 +523,7 @@ const { currentTopic, currentTopicId, switchTopic } = useCurrentTopic()
 ## 💡 经验教训
 
 ### 成功经验
+
 1. ✅ **架构参考 PreferenceService**: 复用成熟的设计模式
 2. ✅ **三层缓存**: 平衡内存占用和性能
 3. ✅ **乐观更新**: 显著提升用户体验
@@ -494,6 +531,7 @@ const { currentTopic, currentTopicId, switchTopic } = useCurrentTopic()
 5. ✅ **调试工具**: 快速定位问题
 
 ### 遇到的问题和解决
+
 1. **问题**: LRU 缓存初始为空，看起来没有生效
    - **原因**: `switchToTopic()` 未将旧主题移入缓存
    - **解决**: 添加自动缓存管理逻辑

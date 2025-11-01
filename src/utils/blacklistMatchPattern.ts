@@ -1,4 +1,4 @@
-import { WebSearchState , WebSearchProviderResponse } from '@/types/websearch'
+import { WebSearchState, WebSearchProviderResponse } from '@/types/websearch'
 
 export async function filterResultWithBlacklist(
   response: WebSearchProviderResponse,

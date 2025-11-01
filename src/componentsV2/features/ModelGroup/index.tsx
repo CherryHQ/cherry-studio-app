@@ -25,7 +25,7 @@ export interface ModelGroupProps {
 }
 
 const DefaultModelItem: React.FC<{ model: Model; index: number }> = ({ model }) => (
-  <XStack className="items-center justify-between w-full">
+  <XStack className="w-full items-center justify-between">
     <XStack className="flex-1 gap-2">
       <XStack className="items-center justify-center">
         <ModelIcon model={model} />
@@ -51,7 +51,7 @@ export default function ModelGroup({
 
   if (showEmptyState && modelGroups.length === 0) {
     return (
-      <YStack className="flex-1 justify-center items-center h-20">
+      <YStack className="h-20 flex-1 items-center justify-center">
         <Text className="text-center text-text-secondary dark:text-text-secondary-dark">{t(emptyStateKey)}</Text>
       </YStack>
     )
@@ -63,8 +63,8 @@ export default function ModelGroup({
         {modelGroups.map(([groupName, models], index) => (
           <Accordion.Item key={index} value={groupName}>
             <Accordion.Trigger className="bg-ui-card-background dark:bg-ui-card-background-dark">
-              <XStack className="flex-1 gap-3 items-center justify-between">
-                <XStack className="flex-1 gap-3 items-center">
+              <XStack className="flex-1 items-center justify-between gap-3">
+                <XStack className="flex-1 items-center gap-3">
                   <Accordion.Indicator />
                   <Text className="font-bold">{groupName}</Text>
                   <Chip variant="tertiary" size="sm" className="rounded-md bg-green-20 dark:bg-green-dark-20">
@@ -76,7 +76,7 @@ export default function ModelGroup({
                 {renderGroupButton && renderGroupButton(groupName, models)}
               </XStack>
             </Accordion.Trigger>
-            <Accordion.Content className="bg-ui-card-background dark:bg-ui-card-background-dark gap-2">
+            <Accordion.Content className="gap-2 bg-ui-card-background dark:bg-ui-card-background-dark">
               {models.map((model, modelIndex) => (
                 <React.Fragment key={model.id || modelIndex}>{renderModelItem(model, modelIndex)}</React.Fragment>
               ))}

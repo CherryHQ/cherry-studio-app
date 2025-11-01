@@ -41,10 +41,10 @@ export const AssistantSelection: React.FC<AssistantSelectionProps> = ({ assistan
   return (
     <>
       <Pressable onPress={handlePress} className="active:opacity-60">
-        <XStack className="gap-3.5 items-center justify-center">
-          <YStack className="gap-0.5 items-center justify-start">
+        <XStack className="items-center justify-center gap-3.5">
+          <YStack className="items-center justify-start gap-0.5">
             <Text
-              className="text-text-primary dark:text-text-primary-dark text-base"
+              className="text-base text-text-primary dark:text-text-primary-dark"
               ellipsizeMode="tail"
               numberOfLines={1}>
               {assistant.name}

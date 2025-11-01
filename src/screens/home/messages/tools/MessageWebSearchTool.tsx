@@ -14,7 +14,7 @@ export const MessageWebSearchToolTitle = ({ toolResponse }: { toolResponse: MCPT
       text={
         <XStack className="flex-1 items-center gap-2.5 pl-0">
           <Text className="text-sm text-gray-500 dark:text-gray-400">{i18n.t('message.searching')}</Text>
-          <Text className="text-sm max-w-[70%] text-gray-500 dark:text-gray-400" numberOfLines={1} ellipsizeMode="tail">
+          <Text className="max-w-[70%] text-sm text-gray-500 dark:text-gray-400" numberOfLines={1} ellipsizeMode="tail">
             {toolInput?.additionalContext ?? ''}
           </Text>
         </XStack>

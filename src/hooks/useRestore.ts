@@ -180,9 +180,7 @@ export function useRestore(options: UseRestoreOptions = {}) {
   }
 
   const updateStepStatus = (stepId: RestoreStepId, status: StepStatus, error?: string) => {
-    setRestoreSteps(prevSteps =>
-      prevSteps.map(step => (step.id === stepId ? { ...step, status, error } : step))
-    )
+    setRestoreSteps(prevSteps => prevSteps.map(step => (step.id === stepId ? { ...step, status, error } : step)))
   }
 
   const openModal = () => {

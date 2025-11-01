@@ -56,26 +56,31 @@ Cherry Studio 使用基于 SQLite 的 PreferenceService 管理所有用户配置
 ### PreferenceService 特性
 
 #### 1. **懒加载（Lazy Loading）**
+
 - 首次访问时才从数据库加载
 - 减少应用启动时间
 - 降低内存占用
 
 #### 2. **乐观更新（Optimistic Updates）**
+
 - UI 立即更新，无需等待数据库写入
 - 后台异步同步到 SQLite
 - 失败时自动回滚
 
 #### 3. **请求队列（Request Queue）**
+
 - 序列化同一 key 的更新操作
 - 防止竞态条件
 - 保证数据一致性
 
 #### 4. **React 18 集成**
+
 - 基于 `useSyncExternalStore`
 - 完美支持并发渲染
 - 自动订阅/取消订阅
 
 #### 5. **类型安全**
+
 - 基于 TypeScript 的类型推断
 - 根据 key 自动推导 value 类型
 - 编译时类型检查
@@ -107,6 +112,7 @@ CREATE TABLE preference (
 ```
 
 **默认值：**
+
 - `user.avatar`: `''` (空字符串)
 - `user.name`: `'Cherry Studio'`
 - `user.id`: 自动生成 UUID
@@ -126,6 +132,7 @@ enum ThemeMode {
 ```
 
 **默认值：**
+
 - `ui.theme_mode`: `ThemeMode.system`
 
 #### Topic 状态（Topic State）
@@ -137,6 +144,7 @@ enum ThemeMode {
 ```
 
 **默认值：**
+
 - `topic.current_id`: `''` (空字符串，表示无活跃话题)
 
 #### WebSearch 配置（Web Search Configuration）
@@ -151,6 +159,7 @@ enum ThemeMode {
 ```
 
 **默认值：**
+
 - `websearch.search_with_time`: `true`
 - `websearch.max_results`: `5`
 - `websearch.override_search_service`: `true`
@@ -166,6 +175,7 @@ enum ThemeMode {
 ```
 
 **默认值：**
+
 - `app.initialized`: `false`
 - `app.initialization_version`: `0`
 
@@ -378,23 +388,27 @@ Cherry Studio 使用 TopicService 管理所有对话话题（topics），采用�
 #### 1. **三层缓存策略**
 
 **当前主题缓存（Current Topic Cache）**
+
 - 存储当前活跃的话题
 - 最高优先级，永不驱逐
 - 与 `preference: topic.current_id` 同步
 
 **LRU 缓存（Least Recently Used Cache）**
+
 - 存储最近访问的 5 个话题
 - 使用 LRU 算法自动驱逐最旧项
 - 访问时更新顺序
 - 切换主题时自动管理
 
 **所有话题缓存（All Topics Cache）**
+
 - 缓存所有话题列表
 - 5 分钟 TTL（生存时间）
 - 用于话题列表显示
 - 支持强制刷新
 
 #### 2. **乐观更新（Optimistic Updates）**
+
 - 所有 CRUD 操作立即更新缓存
 - UI 零延迟响应
 - 后台异步同步到 SQLite
@@ -424,6 +438,7 @@ switchToTopic(topicId) 流程：
 #### 4. **订阅系统（Subscription System）**
 
 支持四种订阅类型：
+
 - **当前主题订阅**：`subscribeCurrentTopic()` - 监听当前活跃主题变化
 - **特定主题订阅**：`subscribeTopic(id)` - 监听指定主题的变化
 - **全局订阅**：`subscribeAll()` - 监听所有主题变化
@@ -432,16 +447,19 @@ switchToTopic(topicId) 流程：
 #### 5. **并发控制（Concurrency Control）**
 
 **请求队列（Request Queue）**
+
 - 序列化同一主题的更新操作
 - 防止竞态条件
 - 保证数据一致性
 
 **加载去重（Load Deduplication）**
+
 - 跟踪进行中的加载操作
 - 防止重复加载同一主题
 - 共享加载 Promise
 
 #### 6. **React 18 深度集成**
+
 - 基于 `useSyncExternalStore`
 - 完美支持并发渲染
 - 自动订阅/取消订阅
@@ -721,13 +739,13 @@ function ChatScreen() {
 
 相比之前的架构，TopicService 提供了以下性能提升：
 
-| 操作 | 之前 | 现在 | 提升 |
-|------|-----|-----|-----|
-| 切换到最近主题 | 数据库查询 | LRU 缓存命中 | ~100x 更快 |
-| 访问当前主题 | useLiveQuery 订阅 | 内存缓存 | ~50x 更快 |
-| 更新主题名称 | 等待数据库写入 | 乐观更新 | 零延迟 UI |
-| 并发更新 | 可能冲突 | 请求队列 | 无冲突 |
-| 重复加载 | 多次查询 | 去重 | 减少 N-1 次查询 |
+| 操作           | 之前              | 现在         | 提升            |
+| -------------- | ----------------- | ------------ | --------------- |
+| 切换到最近主题 | 数据库查询        | LRU 缓存命中 | ~100x 更快      |
+| 访问当前主题   | useLiveQuery 订阅 | 内存缓存     | ~50x 更快       |
+| 更新主题名称   | 等待数据库写入    | 乐观更新     | 零延迟 UI       |
+| 并发更新       | 可能冲突          | 请求队列     | 无冲突          |
+| 重复加载       | 多次查询          | 去重         | 减少 N-1 次查询 |
 
 ### 类型定义
 
@@ -735,12 +753,12 @@ function ChatScreen() {
 
 ```typescript
 export interface Topic {
-  id: string                  // 主题唯一 ID
-  assistantId: string        // 关联的助手 ID
-  name: string               // 主题名称
-  createdAt: number          // 创建时间戳
-  updatedAt: number          // 更新时间戳
-  isLoading?: boolean        // 是否正在加载（可选）
+  id: string // 主题唯一 ID
+  assistantId: string // 关联的助手 ID
+  name: string // 主题名称
+  createdAt: number // 创建时间戳
+  updatedAt: number // 更新时间戳
+  isLoading?: boolean // 是否正在加载（可选）
 }
 ```
 
@@ -752,7 +770,7 @@ const { currentTopic, switchTopic } = useCurrentTopic()
 const { topic, renameTopic } = useTopic(topicId)
 
 // ✅ 推荐：利用乐观更新
-await renameTopic('新名称')  // UI 立即更新，无需等待
+await renameTopic('新名称') // UI 立即更新，无需等待
 
 // ✅ 推荐：在非 React 上下文使用 topicService
 const topic = await topicService.getTopic(topicId)
@@ -760,11 +778,11 @@ const topic = await topicService.getTopic(topicId)
 // ✅ 推荐：使用缓存友好的访问模式
 // 在最近访问的 6 个主题间切换，全部从缓存获取
 for (const topicId of recentTopicIds.slice(0, 6)) {
-  await switchTopic(topicId)  // ✅ LRU cache hit!
+  await switchTopic(topicId) // ✅ LRU cache hit!
 }
 
 // ⚠️ 注意：所有 setter 都是异步的
-await renameTopic('新名称')  // 或者
+await renameTopic('新名称') // 或者
 renameTopic('新名称').catch(console.error)
 
 // ❌ 避免：不要在 React 组件外使用 hooks
@@ -824,24 +842,28 @@ Cherry Studio 使用 AssistantService 管理所有 AI 助手配置，采用与 T
 #### 1. **三层缓存策略**
 
 **系统助手永久缓存（System Assistants Cache）**
+
 - 存储系统内置助手（default, quick, translate）
 - 最高优先级，永不驱逐
 - 应用启动时自动加载
 - 频繁访问无需查询数据库
 
 **LRU 缓存（Least Recently Used Cache）**
+
 - 存储最近访问的 10 个助手
 - 使用 LRU 算法自动驱逐最旧项
 - 访问时更新顺序
 - 适合用户助手的频繁访问
 
 **所有助手缓存（All Assistants Cache）**
+
 - 缓存所有助手列表
 - 5 分钟 TTL（生存时间）
 - 用于助手列表显示
 - 支持强制刷新
 
 #### 2. **乐观更新（Optimistic Updates）**
+
 - 所有 CRUD 操作立即更新缓存
 - UI 零延迟响应
 - 后台异步同步到 SQLite
@@ -869,6 +891,7 @@ getAssistant(assistantId) 流程：
 #### 4. **订阅系统（Subscription System）**
 
 支持四种订阅类型：
+
 - **特定助手订阅**：`subscribeAssistant(id)` - 监听指定助手的变化
 - **全局订阅**：`subscribeAllAssistants()` - 监听所有助手变化
 - **内置助手订阅**：`subscribeBuiltInAssistants()` - 监听内置助手变化
@@ -877,16 +900,19 @@ getAssistant(assistantId) 流程：
 #### 5. **并发控制（Concurrency Control）**
 
 **请求队列（Request Queue）**
+
 - 序列化同一助手的更新操作
 - 防止竞态条件
 - 保证数据一致性
 
 **加载去重（Load Deduplication）**
+
 - 跟踪进行中的加载操作
 - 防止重复加载同一助手
 - 共享加载 Promise
 
 #### 6. **React 18 深度集成**
+
 - 基于 `useSyncExternalStore`
 - 完美支持并发渲染
 - 自动订阅/取消订阅
@@ -1026,13 +1052,13 @@ assistantService.invalidateCache()
 
 ```typescript
 // 场景：频繁调用系统助手（如自动命名、翻译）
-await assistantService.getAssistant('quick')     // ✅ 从系统缓存，0ms
+await assistantService.getAssistant('quick') // ✅ 从系统缓存，0ms
 await assistantService.getAssistant('translate') // ✅ 从系统缓存，0ms
-await assistantService.getAssistant('default')   // ✅ 从系统缓存，0ms
+await assistantService.getAssistant('default') // ✅ 从系统缓存，0ms
 
 // 无论调用多少次，都是内存访问，无数据库开销
 for (let i = 0; i < 1000; i++) {
-  await assistantService.getAssistant('quick')   // ✅ 永远从缓存
+  await assistantService.getAssistant('quick') // ✅ 永远从缓存
 }
 ```
 
@@ -1103,34 +1129,34 @@ for (let i = 0; i < 1000; i++) {
 
 相比之前的架构，AssistantService 提供了以下性能提升：
 
-| 操作 | 之前 | 现在 | 提升 |
-|------|-----|-----|-----|
-| 访问系统助手 | 数据库查询 | 系统缓存命中 | ~100x 更快 |
-| 访问最近助手 | 数据库查询 | LRU 缓存命中 | ~100x 更快 |
-| 更新助手 | 等待数据库写入 | 乐观更新 | 零延迟 UI |
-| 并发更新 | 可能冲突 | 请求队列 | 无冲突 |
-| 重复加载 | 多次查询 | 去重 | 减少 N-1 次查询 |
+| 操作         | 之前           | 现在         | 提升            |
+| ------------ | -------------- | ------------ | --------------- |
+| 访问系统助手 | 数据库查询     | 系统缓存命中 | ~100x 更快      |
+| 访问最近助手 | 数据库查询     | LRU 缓存命中 | ~100x 更快      |
+| 更新助手     | 等待数据库写入 | 乐观更新     | 零延迟 UI       |
+| 并发更新     | 可能冲突       | 请求队列     | 无冲突          |
+| 重复加载     | 多次查询       | 去重         | 减少 N-1 次查询 |
 
 ### 助手类型
 
 ```typescript
 export interface Assistant {
-  id: string                          // 助手唯一 ID
-  name: string                        // 助手名称
-  prompt: string                      // 系统提示词
-  type: 'system' | 'external'        // system: 系统内置, external: 用户创建
-  emoji?: string                      // 助手图标
-  description?: string                // 助手描述
-  model?: Model                       // 默认模型
-  defaultModel?: Model                // 快速助手默认模型
-  settings?: AssistantSettings        // 助手设置（JSON）
-  enableWebSearch?: boolean           // 启用网页搜索
-  enableGenerateImage?: boolean       // 启用图像生成
-  webSearchProviderId?: string        // 搜索服务提供商 ID
-  tags?: string[]                     // 标签
-  group?: string[]                    // 分组
-  createdAt?: number                  // 创建时间戳
-  updatedAt?: number                  // 更新时间戳
+  id: string // 助手唯一 ID
+  name: string // 助手名称
+  prompt: string // 系统提示词
+  type: 'system' | 'external' // system: 系统内置, external: 用户创建
+  emoji?: string // 助手图标
+  description?: string // 助手描述
+  model?: Model // 默认模型
+  defaultModel?: Model // 快速助手默认模型
+  settings?: AssistantSettings // 助手设置（JSON）
+  enableWebSearch?: boolean // 启用网页搜索
+  enableGenerateImage?: boolean // 启用图像生成
+  webSearchProviderId?: string // 搜索服务提供商 ID
+  tags?: string[] // 标签
+  group?: string[] // 分组
+  createdAt?: number // 创建时间戳
+  updatedAt?: number // 更新时间戳
 }
 ```
 
@@ -1142,7 +1168,7 @@ const { assistant, updateAssistant } = useAssistant(assistantId)
 const { assistants } = useAssistants()
 
 // ✅ 推荐：利用乐观更新
-await updateAssistant({ name: '新名称' })  // UI 立即更新，无需等待
+await updateAssistant({ name: '新名称' }) // UI 立即更新，无需等待
 
 // ✅ 推荐：在非 React 上下文使用 assistantService
 const assistant = await assistantService.getAssistant(assistantId)
@@ -1154,7 +1180,7 @@ for (const topic of topics) {
 }
 
 // ⚠️ 注意：所有 update/delete 都是异步的
-await updateAssistant({ name: '新名称' })  // 或者
+await updateAssistant({ name: '新名称' }) // 或者
 updateAssistant({ name: '新名称' }).catch(console.error)
 
 // ❌ 避免：不要在 React 组件外使用 hooks
@@ -1214,24 +1240,28 @@ Cherry Studio 使用 ProviderService 管理所有 LLM 服务提供商配置（Op
 #### 1. **三层缓存策略**
 
 **默认 Provider 永久缓存（Default Provider Cache）**
+
 - 存储默认的 LLM Provider
 - 最高优先级，永不驱逐
 - 应用中最频繁访问的 Provider
 - 从 `preference: settings.default_provider_id` 同步
 
 **LRU 缓存（Least Recently Used Cache）**
+
 - 存储最近访问的 10 个 Provider
 - 使用 LRU 算法自动驱逐最旧项
 - 访问时更新顺序
 - 适合用户频繁切换的 Provider
 
 **所有 Provider 缓存（All Providers Cache）**
+
 - 缓存所有 Provider 列表
 - 5 分钟 TTL（生存时间）
 - 用于 Provider 列表显示
 - 支持强制刷新
 
 #### 2. **乐观更新（Optimistic Updates）**
+
 - 所有 CRUD 操作立即更新缓存
 - UI 零延迟响应
 - 后台异步同步到 SQLite
@@ -1260,6 +1290,7 @@ getProvider(providerId) 流程：
 #### 4. **订阅系统（Subscription System）**
 
 支持四种订阅类型：
+
 - **特定 Provider 订阅**：`subscribeProvider(id)` - 监听指定 Provider 的变化
 - **默认 Provider 订阅**：`subscribeDefaultProvider()` - 监听默认 Provider 变化
 - **全局订阅**：`subscribeAllProviders()` - 监听所有 Provider 变化
@@ -1268,16 +1299,19 @@ getProvider(providerId) 流程：
 #### 5. **并发控制（Concurrency Control）**
 
 **更新队列（Update Queue）**
+
 - 序列化同一 Provider 的更新操作
 - 防止竞态条件
 - 保证数据一致性
 
 **加载去重（Load Deduplication）**
+
 - 跟踪进行中的加载操作
 - 防止重复加载同一 Provider
 - 共享加载 Promise
 
 #### 6. **React 18 深度集成**
+
 - 基于 `useSyncExternalStore`（单个 Provider）
 - 使用 Drizzle `useLiveQuery`（所有 Provider 列表）
 - 完美支持并发渲染
@@ -1406,12 +1440,12 @@ providerService.invalidateCache()
 
 ```typescript
 // 场景：频繁调用默认 Provider（每次 AI 对话）
-await providerService.getDefaultProviderAsync()  // ✅ 从默认缓存，0ms
-await providerService.getDefaultProviderAsync()  // ✅ 从默认缓存，0ms
+await providerService.getDefaultProviderAsync() // ✅ 从默认缓存，0ms
+await providerService.getDefaultProviderAsync() // ✅ 从默认缓存，0ms
 
 // 无论调用多少次，都是内存访问，无数据库开销
 for (let i = 0; i < 1000; i++) {
-  const provider = providerService.getDefaultProvider()  // ✅ 永远从缓存
+  const provider = providerService.getDefaultProvider() // ✅ 永远从缓存
 }
 ```
 
@@ -1485,10 +1519,12 @@ for (let i = 0; i < 1000; i++) {
 #### ⚠️ 问题 1: **混合数据获取策略导致的不一致**
 
 **问题所在：**
+
 - `useProvider` 使用 `useSyncExternalStore` + ProviderService 缓存
 - `useAllProviders` 使用 Drizzle 的 `useLiveQuery`，直接查询数据库
 
 **影响：**
+
 ```typescript
 // useProviders.ts:18-19
 const query = db.select().from(providersSchema)
@@ -1497,15 +1533,17 @@ const { data: rawProviders } = useLiveQuery(query)
 ```
 
 当通过 `providerService.updateProvider()` 更新时：
+
 1. ProviderService 更新了 `allProvidersCache` ✅
 2. 但 `useLiveQuery` 需要等待 SQLite 写入完成才能响应 ⏱️
 3. 导致 `useAllProviders` 的更新比 `useProvider` **慢一个事务周期**
 
 **建议修复：**
+
 ```typescript
 // 方案 1: 统一使用 ProviderService 缓存
 export function useAllProviders() {
-  const subscribe = useCallback((callback) => {
+  const subscribe = useCallback(callback => {
     return providerService.subscribeAllProviders(callback)
   }, [])
 
@@ -1522,6 +1560,7 @@ export function useAllProviders() {
 #### ⚠️ 问题 2: **缓存一致性风险**
 
 **问题所在：**
+
 ```typescript
 // ProviderService.ts:735-738
 if (this.allProvidersCache.size > 0 || this.allProvidersCacheTimestamp !== null) {
@@ -1530,12 +1569,14 @@ if (this.allProvidersCache.size > 0 || this.allProvidersCacheTimestamp !== null)
 ```
 
 **风险场景：**
+
 1. App 启动后，`allProvidersCache` 为空
 2. 调用 `createProvider()` 创建新 Provider
 3. 由于缓存为空，**不会更新 allProvidersCache**
 4. 之后调用 `getAllProviders()` 时，可能返回过期数据
 
 **建议修复：**
+
 ```typescript
 // 无条件更新缓存，或者在缓存为空时主动初始化
 this.allProvidersCache.set(provider.id, provider)
@@ -1547,12 +1588,14 @@ if (this.allProvidersCacheTimestamp === null) {
 #### ⚠️ 问题 3: **内存泄漏风险 - 异步操作未清理**
 
 **问题所在：**
+
 ```typescript
 // useProviders.ts:121-142
 useEffect(() => {
   if (!provider) {
     setIsLoading(true)
-    providerService.getProvider(providerId)
+    providerService
+      .getProvider(providerId)
       .then(() => setIsLoading(false))
       .catch(error => {
         logger.error(`Failed to load provider ${providerId}:`, error as Error)
@@ -1566,13 +1609,15 @@ useEffect(() => {
 **风险：** 如果组件在 Promise pending 时卸载，`setIsLoading` 会在卸载后调用
 
 **建议修复：**
+
 ```typescript
 useEffect(() => {
   let cancelled = false
 
   if (!provider) {
     setIsLoading(true)
-    providerService.getProvider(providerId)
+    providerService
+      .getProvider(providerId)
       .then(() => {
         if (!cancelled) setIsLoading(false)
       })
@@ -1584,24 +1629,29 @@ useEffect(() => {
       })
   }
 
-  return () => { cancelled = true }
+  return () => {
+    cancelled = true
+  }
 }, [provider, providerId, isValidId])
 ```
 
 #### ⚠️ 问题 4: **TTL 缓存策略可能不适合移动端**
 
 **问题所在：**
+
 ```typescript
 // ProviderService.ts:138
 private readonly CACHE_TTL = 5 * 60 * 1000 // 5 分钟
 ```
 
 **移动端特性：**
+
 - App 可能长时间在后台
 - 恢复时缓存可能已过期但数据库未变
 - 频繁的缓存失效会导致不必要的数据库查询
 
 **建议：**
+
 ```typescript
 // 方案 1: 使用版本号而非时间戳
 private allProvidersCacheVersion: number = 0
@@ -1624,13 +1674,13 @@ AppState.addEventListener('change', (state) => {
 
 相比直接查询数据库，ProviderService 提供了以下性能提升：
 
-| 操作 | 直接查询 | ProviderService | 提升 |
-|------|---------|----------------|-----|
-| 访问默认 Provider | 数据库查询 | 默认缓存命中 | ~100x 更快 |
-| 访问最近 Provider | 数据库查询 | LRU 缓存命中 | ~100x 更快 |
-| 更新 Provider | 等待数据库写入 | 乐观更新 | 零延迟 UI |
-| 并发更新 | 可能冲突 | 更新队列 | 无冲突 |
-| 重复加载 | 多次查询 | 去重 | 减少 N-1 次查询 |
+| 操作              | 直接查询       | ProviderService | 提升            |
+| ----------------- | -------------- | --------------- | --------------- |
+| 访问默认 Provider | 数据库查询     | 默认缓存命中    | ~100x 更快      |
+| 访问最近 Provider | 数据库查询     | LRU 缓存命中    | ~100x 更快      |
+| 更新 Provider     | 等待数据库写入 | 乐观更新        | 零延迟 UI       |
+| 并发更新          | 可能冲突       | 更新队列        | 无冲突          |
+| 重复加载          | 多次查询       | 去重            | 减少 N-1 次查询 |
 
 ### Provider 类型
 
@@ -1638,21 +1688,21 @@ AppState.addEventListener('change', (state) => {
 
 ```typescript
 export interface Provider {
-  id: string                          // Provider 唯一 ID
-  name: string                        // Provider 名称
-  type: string                        // openai, anthropic, google, 等
-  apiKey?: string                     // API 密钥
-  apiHost?: string                    // API 地址
-  apiVersion?: string                 // API 版本
-  models?: Model[]                    // 可用模型列表
-  enabled?: boolean                   // 是否启用
-  isSystem?: boolean                  // 系统内置 vs 用户添加
-  isAuthed?: boolean                  // 认证状态
-  rateLimit?: number                  // 速率限制
-  isNotSupportArrayContent?: boolean  // 是否支持数组内容
-  notes?: string                      // 备注
-  createdAt?: number                  // 创建时间戳
-  updatedAt?: number                  // 更新时间戳
+  id: string // Provider 唯一 ID
+  name: string // Provider 名称
+  type: string // openai, anthropic, google, 等
+  apiKey?: string // API 密钥
+  apiHost?: string // API 地址
+  apiVersion?: string // API 版本
+  models?: Model[] // 可用模型列表
+  enabled?: boolean // 是否启用
+  isSystem?: boolean // 系统内置 vs 用户添加
+  isAuthed?: boolean // 认证状态
+  rateLimit?: number // 速率限制
+  isNotSupportArrayContent?: boolean // 是否支持数组内容
+  notes?: string // 备注
+  createdAt?: number // 创建时间戳
+  updatedAt?: number // 更新时间戳
 }
 ```
 
@@ -1665,7 +1715,7 @@ const { provider: defaultProvider } = useDefaultProvider()
 const { providers } = useAllProviders()
 
 // ✅ 推荐：利用乐观更新
-await updateProvider({ enabled: true })  // UI 立即更新，无需等待
+await updateProvider({ enabled: true }) // UI 立即更新，无需等待
 
 // ✅ 推荐：在非 React 上下文使用 providerService
 const provider = await providerService.getProvider(providerId)
@@ -1679,11 +1729,11 @@ for (const message of messages) {
 // ✅ 推荐：使用缓存友好的访问模式
 // 在最近访问的 11 个 Provider 间切换，全部从缓存获取
 for (const providerId of recentProviderIds.slice(0, 11)) {
-  await providerService.getProvider(providerId)  // ✅ LRU cache hit!
+  await providerService.getProvider(providerId) // ✅ LRU cache hit!
 }
 
 // ⚠️ 注意：所有 update/delete 都是异步的
-await updateProvider({ enabled: true })  // 或者
+await updateProvider({ enabled: true }) // 或者
 updateProvider({ enabled: true }).catch(console.error)
 
 // ⚠️ 注意：useAllProviders 使用 useLiveQuery，可能有轻微延迟
@@ -1746,23 +1796,27 @@ Cherry Studio 使用 McpService 管理所有 MCP 服务器配置，采用简化�
 #### 1. **简化的两层缓存策略**
 
 **LRU 缓存（Least Recently Used Cache）**
+
 - 存储最近访问的 20 个 MCP 服务器
 - 使用 LRU 算法自动驱逐最旧项
 - 访问时更新顺序
 - 无永久缓存（与 Assistant 不同）
 
 **所有服务器缓存（All Servers Cache）**
+
 - 缓存所有 MCP 服务器列表
 - 5 分钟 TTL（生存时间）
 - 用于 MCP 市场列表显示
 - 支持强制刷新
 
 **工具列表（Tools）**
+
 - ⚠️ **不缓存**：每次调用 `getMcpTools()` 都重新获取
 - 确保工具列表始终是最新的
 - 支持 `disabledTools` 过滤
 
 #### 2. **乐观更新（Optimistic Updates）**
+
 - 所有 CRUD 操作立即更新缓存
 - UI 零延迟响应
 - 后台异步同步到 SQLite
@@ -1790,6 +1844,7 @@ getMcpTools(mcpId) 流程：
 #### 4. **订阅系统（Subscription System）**
 
 支持三种订阅类型：
+
 - **特定服务器订阅**：`subscribeMcpServer(id)` - 监听指定 MCP 服务器的变化
 - **全局订阅**：`subscribeAll()` - 监听所有 MCP 服务器变化
 - **列表订阅**：`subscribeAllMcpServers()` - 监听服务器列表变化
@@ -1797,16 +1852,19 @@ getMcpTools(mcpId) 流程：
 #### 5. **并发控制（Concurrency Control）**
 
 **更新队列（Update Queue）**
+
 - 序列化同一服务器的更新操作
 - 防止竞态条件
 - 保证数据一致性
 
 **加载去重（Load Deduplication）**
+
 - 跟踪进行中的加载操作
 - 防止重复加载同一服务器
 - 共享加载 Promise
 
 #### 6. **React 18 深度集成**
+
 - 基于 `useSyncExternalStore`（单个 MCP 服务器）
 - 使用 Drizzle `useLiveQuery`（所有 MCP 服务器列表）
 - 完美支持并发渲染
@@ -1986,8 +2044,8 @@ mcpService.invalidateCache()
 
 ```typescript
 // 场景：频繁查询 MCP 工具列表
-await mcpService.getMcpTools(mcpId)  // ⚠️ 数据库查询 + 过滤
-await mcpService.getMcpTools(mcpId)  // ⚠️ 再次查询（不缓存）
+await mcpService.getMcpTools(mcpId) // ⚠️ 数据库查询 + 过滤
+await mcpService.getMcpTools(mcpId) // ⚠️ 再次查询（不缓存）
 
 // 为什么不缓存？
 // 1. 工具配置可能随时变化（disabledTools）
@@ -2101,14 +2159,14 @@ function DebugScreen() {
 
 相比之前的简单实现，McpService 提供了以下性能提升：
 
-| 操作 | 之前 | 现在 | 提升 |
-|------|-----|-----|-----|
-| 访问最近 MCP 服务器 | 数据库查询 | LRU 缓存命中 | ~100x 更快 |
-| 获取所有服务器 | 每次查询数据库 | 缓存 5 分钟 | ~100x 更快 |
-| 更新服务器 | 等待数据库写入 | 乐观更新 | 零延迟 UI |
-| 并发更新 | 可能冲突 | 更新队列 | 无冲突 |
-| 重复加载 | 多次查询 | 去重 | 减少 N-1 次查询 |
-| 获取工具列表 | - | 不缓存 | 确保数据新鲜 |
+| 操作                | 之前           | 现在         | 提升            |
+| ------------------- | -------------- | ------------ | --------------- |
+| 访问最近 MCP 服务器 | 数据库查询     | LRU 缓存命中 | ~100x 更快      |
+| 获取所有服务器      | 每次查询数据库 | 缓存 5 分钟  | ~100x 更快      |
+| 更新服务器          | 等待数据库写入 | 乐观更新     | 零延迟 UI       |
+| 并发更新            | 可能冲突       | 更新队列     | 无冲突          |
+| 重复加载            | 多次查询       | 去重         | 减少 N-1 次查询 |
+| 获取工具列表        | -              | 不缓存       | 确保数据新鲜    |
 
 ### MCP 类型定义
 
@@ -2116,24 +2174,24 @@ function DebugScreen() {
 
 ```typescript
 export interface MCPServer {
-  id: string                          // MCP 服务器唯一 ID
-  name: string                        // 服务器名称
-  description?: string                // 服务器描述
-  type: 'builtin' | 'custom'         // builtin: 内置, custom: 用户添加
-  command: string                     // 启动命令
-  args?: string[]                     // 命令参数（JSON 数组）
-  env?: Record<string, string>        // 环境变量（JSON 对象）
-  isActive?: boolean                  // 是否激活
-  disabledTools?: string[]            // 禁用的工具列表
-  createdAt?: number                  // 创建时间戳
-  updatedAt?: number                  // 更新时间戳
+  id: string // MCP 服务器唯一 ID
+  name: string // 服务器名称
+  description?: string // 服务器描述
+  type: 'builtin' | 'custom' // builtin: 内置, custom: 用户添加
+  command: string // 启动命令
+  args?: string[] // 命令参数（JSON 数组）
+  env?: Record<string, string> // 环境变量（JSON 对象）
+  isActive?: boolean // 是否激活
+  disabledTools?: string[] // 禁用的工具列表
+  createdAt?: number // 创建时间戳
+  updatedAt?: number // 更新时间戳
 }
 
 export interface MCPTool {
-  id: string                          // 工具唯一 ID
-  name: string                        // 工具名称
-  description: string                 // 工具描述
-  inputSchema: object                 // 输入参数 JSON Schema
+  id: string // 工具唯一 ID
+  name: string // 工具名称
+  description: string // 工具描述
+  inputSchema: object // 输入参数 JSON Schema
 }
 ```
 
@@ -2142,23 +2200,27 @@ export interface MCPTool {
 #### 为什么不缓存工具列表？
 
 **决策理由：**
+
 1. **数据新鲜性**：工具的启用/禁用状态（disabledTools）可能随时变化
 2. **访问频率低**：工具列表通常在配置页面查询，不是高频操作
 3. **数据量小**：单个 MCP 服务器的工具数量有限（~10-50 个）
 4. **一致性保证**：每次获取都是最新状态，避免缓存不一致
 
 **性能影响：**
+
 - 查询一次工具列表：~10-20ms（数据库查询 + 过滤）
 - 相比 UI 渲染时间（~50-100ms），影响可忽略
 
 #### 为什么没有永久缓存？
 
 **与 Assistant 系统的对比：**
+
 - Assistant 有系统助手（default, quick, translate），需要永久缓存
 - MCP 没有"系统 MCP 服务器"的概念，所有服务器地位平等
 - LRU(20) 足够覆盖用户的常用 MCP 服务器
 
 **设计优势：**
+
 - 架构更简单，易于维护
 - 无需区分"系统"和"用户"MCP 服务器
 - LRU 自动管理，无需手动维护永久缓存
@@ -2173,7 +2235,7 @@ const { activeMcpServers } = useActiveMcpServers()
 const { tools } = useMcpTools(mcpId)
 
 // ✅ 推荐：利用乐观更新
-await updateMcpServer({ isActive: true })  // UI 立即更新，无需等待
+await updateMcpServer({ isActive: true }) // UI 立即更新，无需等待
 
 // ✅ 推荐：在非 React 上下文使用 mcpService
 const mcpServer = await mcpService.getMcpServer(mcpId)
@@ -2182,15 +2244,15 @@ const tools = await mcpService.getMcpTools(mcpId)
 // ✅ 推荐：使用缓存友好的访问模式
 // 在最近访问的 20 个服务器间切换，全部从缓存获取
 for (const mcpId of recentMcpIds.slice(0, 20)) {
-  await mcpService.getMcpServer(mcpId)  // ✅ LRU cache hit!
+  await mcpService.getMcpServer(mcpId) // ✅ LRU cache hit!
 }
 
 // ⚠️ 注意：工具列表不缓存，频繁调用会有性能开销
 // 如果需要多次使用工具列表，建议在组件中缓存
-const { tools } = useMcpTools(mcpId)  // ✅ React 组件会缓存结果
+const { tools } = useMcpTools(mcpId) // ✅ React 组件会缓存结果
 
 // ⚠️ 注意：所有 update/delete 都是异步的
-await updateMcpServer({ isActive: true })  // 或者
+await updateMcpServer({ isActive: true }) // 或者
 updateMcpServer({ isActive: true }).catch(console.error)
 
 // ⚠️ 注意：useMcpServers 使用 useLiveQuery，可能有轻微延迟
@@ -2256,6 +2318,7 @@ Cherry Studio 使用 WebSearchProviderService 管理所有网页搜索服务提�
 #### 1. **简化的两层缓存策略**
 
 **LRU 缓存（Least Recently Used Cache）**
+
 - 存储最近访问的 5 个搜索提供商
 - 使用 LRU 算法自动驱逐最旧项
 - 访问时更新顺序
@@ -2263,12 +2326,14 @@ Cherry Studio 使用 WebSearchProviderService 管理所有网页搜索服务提�
 - 无永久缓存（与 Provider 系统不同）
 
 **所有提供商缓存（All Providers Cache）**
+
 - 缓存所有搜索提供商列表
 - 5 分钟 TTL（生存时间）
 - 用于搜索提供商列表显示
 - 支持强制刷新
 
 #### 2. **乐观更新（Optimistic Updates）**
+
 - 所有 CRUD 操作立即更新缓存
 - UI 零延迟响应
 - 后台异步同步到 SQLite
@@ -2287,6 +2352,7 @@ getProvider(providerId) 流程：
 #### 4. **订阅系统（Subscription System）**
 
 支持三种订阅类型：
+
 - **特定提供商订阅**：`subscribeProvider(id)` - 监听指定提供商的变化
 - **全局订阅**：`subscribeAll()` - 监听所有提供商变化
 - **列表订阅**：`subscribeAllProviders()` - 监听提供商列表变化
@@ -2294,16 +2360,19 @@ getProvider(providerId) 流程：
 #### 5. **并发控制（Concurrency Control）**
 
 **更新队列（Update Queue）**
+
 - 序列化同一提供商的更新操作
 - 防止竞态条件
 - 保证数据一致性
 
 **加载去重（Load Deduplication）**
+
 - 跟踪进行中的加载操作
 - 防止重复加载同一提供商
 - 共享加载 Promise
 
 #### 6. **React 18 深度集成**
+
 - 基于 `useSyncExternalStore`（单个提供商 - 新 hook）
 - 使用 Drizzle `useLiveQuery`（提供商列表 - 旧 hooks 保持兼容）
 - 完美支持并发渲染
@@ -2455,12 +2524,14 @@ webSearchProviderService.invalidateCache()
 #### 为什么选择 LRU(5) 而不是 LRU(20)？
 
 **移动端特性考虑：**
+
 - 搜索提供商的使用频率比 MCP 服务器更集中
 - 用户通常只使用 1-3 个常用搜索提供商
 - 移动端内存更宝贵，5 个缓存足够覆盖常用场景
 - 减少内存占用，提升应用性能
 
 **实际效果：**
+
 ```typescript
 // 典型使用场景：用户在 Google 和 Searxng 间切换
 访问 Google  → LRU: [Google]
@@ -2562,13 +2633,13 @@ webSearchProviderService.logCacheStatus()
 
 相比之前的简单实现，WebSearchProviderService 提供了以下性能提升：
 
-| 操作 | 之前 | 现在 | 提升 |
-|------|-----|-----|-----|
-| 访问最近搜索提供商 | 数据库查询 | LRU 缓存命中 | ~100x 更快 |
-| 获取所有提供商 | 每次查询数据库 | 缓存 5 分钟 | ~100x 更快 |
-| 更新提供商 | 等待数据库写入 | 乐观更新 | 零延迟 UI |
-| 并发更新 | 可能冲突 | 更新队列 | 无冲突 |
-| 重复加载 | 多次查询 | 去重 | 减少 N-1 次查询 |
+| 操作               | 之前           | 现在         | 提升            |
+| ------------------ | -------------- | ------------ | --------------- |
+| 访问最近搜索提供商 | 数据库查询     | LRU 缓存命中 | ~100x 更快      |
+| 获取所有提供商     | 每次查询数据库 | 缓存 5 分钟  | ~100x 更快      |
+| 更新提供商         | 等待数据库写入 | 乐观更新     | 零延迟 UI       |
+| 并发更新           | 可能冲突       | 更新队列     | 无冲突          |
+| 重复加载           | 多次查询       | 去重         | 减少 N-1 次查询 |
 
 ### WebSearch Provider 类型定义
 
@@ -2576,19 +2647,19 @@ webSearchProviderService.logCacheStatus()
 
 ```typescript
 export interface WebSearchProvider {
-  id: string                          // 搜索提供商唯一 ID
-  name: string                        // 提供商名称
-  type: 'free' | 'api'               // free: 免费服务, api: API 服务
-  apiKey?: string                     // API 密钥（API 服务需要）
-  apiHost?: string                    // API 地址
-  engines?: string[]                  // 搜索引擎列表（JSON 数组）
-  url?: string                        // 服务 URL
-  basicAuthUsername?: string          // Basic Auth 用户名
-  basicAuthPassword?: string          // Basic Auth 密码
-  contentLimit?: number               // 内容长度限制
-  usingBrowser?: boolean              // 是否使用浏览器模式
-  createdAt?: number                  // 创建时间戳
-  updatedAt?: number                  // 更新时间戳
+  id: string // 搜索提供商唯一 ID
+  name: string // 提供商名称
+  type: 'free' | 'api' // free: 免费服务, api: API 服务
+  apiKey?: string // API 密钥（API 服务需要）
+  apiHost?: string // API 地址
+  engines?: string[] // 搜索引擎列表（JSON 数组）
+  url?: string // 服务 URL
+  basicAuthUsername?: string // Basic Auth 用户名
+  basicAuthPassword?: string // Basic Auth 密码
+  contentLimit?: number // 内容长度限制
+  usingBrowser?: boolean // 是否使用浏览器模式
+  createdAt?: number // 创建时间戳
+  updatedAt?: number // 更新时间戳
 }
 ```
 
@@ -2597,11 +2668,13 @@ export interface WebSearchProvider {
 #### 为什么没有默认提供商缓存？
 
 **与 Provider 系统的对比：**
+
 - Provider 系统有默认 LLM Provider（全局单一）
 - WebSearch Provider **没有全局默认**，而是每个 Assistant 独立配置（`webSearchProviderId`）
 - 每次搜索使用的提供商由 Assistant 决定，不是全局配置
 
 **设计优势：**
+
 - 架构更简单，避免不必要的缓存层
 - 与实际使用场景匹配（per-Assistant 而非 global）
 - 参考 McpService 的简化架构
@@ -2609,12 +2682,14 @@ export interface WebSearchProvider {
 #### 为什么 LRU 缓存只有 5 个？
 
 **移动端优化考虑：**
+
 - 搜索提供商数量通常有限（5-10 个）
 - 用户常用的提供商更少（1-3 个）
 - 5 个缓存足够覆盖 99% 的使用场景
 - 减少内存占用，提升移动端性能
 
 **对比其他服务：**
+
 - TopicService: LRU(5) - 话题切换频繁
 - AssistantService: LRU(10) - 助手种类较多
 - ProviderService: LRU(10) - LLM 提供商较多
@@ -2624,11 +2699,13 @@ export interface WebSearchProvider {
 #### 为什么保留 useLiveQuery 的旧 Hooks？
 
 **兼容性考虑：**
+
 - `useWebsearchProviders()` 和 `useAllWebSearchProviders()` 在多处使用
 - 立即迁移会影响现有功能稳定性
 - 采用渐进式迁移策略
 
 **迁移策略：**
+
 1. ✅ 已完成：创建新架构（WebSearchProviderService）
 2. ✅ 已完成：添加新 Hook（`useWebSearchProvider`）
 3. ⏳ 待进行：逐步迁移使用 `useWebsearchProviders` 的组件
@@ -2641,7 +2718,7 @@ export interface WebSearchProvider {
 const { provider, updateProvider } = useWebSearchProvider(providerId)
 
 // ✅ 推荐：利用乐观更新
-await updateProvider({ apiKey: 'new-key' })  // UI 立即更新，无需等待
+await updateProvider({ apiKey: 'new-key' }) // UI 立即更新，无需等待
 
 // ✅ 推荐：在非 React 上下文使用 webSearchProviderService
 const provider = await webSearchProviderService.getProvider(providerId)
@@ -2649,15 +2726,15 @@ const provider = await webSearchProviderService.getProvider(providerId)
 // ✅ 推荐：使用缓存友好的访问模式
 // 在最近访问的 5 个提供商间切换，全部从缓存获取
 for (const providerId of recentProviderIds.slice(0, 5)) {
-  await webSearchProviderService.getProvider(providerId)  // ✅ LRU cache hit!
+  await webSearchProviderService.getProvider(providerId) // ✅ LRU cache hit!
 }
 
 // ✅ 推荐：旧 Hooks 仍可正常使用（向后兼容）
-const { freeProviders, apiProviders } = useWebsearchProviders()  // ✅ 仍然可用
-const { providers } = useAllWebSearchProviders()  // ✅ 仍然可用
+const { freeProviders, apiProviders } = useWebsearchProviders() // ✅ 仍然可用
+const { providers } = useAllWebSearchProviders() // ✅ 仍然可用
 
 // ⚠️ 注意：所有 update/delete 都是异步的
-await updateProvider({ apiKey: 'new-key' })  // 或者
+await updateProvider({ apiKey: 'new-key' }) // 或者
 updateProvider({ apiKey: 'new-key' }).catch(console.error)
 
 // ⚠️ 注意：旧 Hooks 使用 useLiveQuery，可能有轻微延迟
@@ -2703,15 +2780,17 @@ class WebSearchService {
 **重要修复：WebSearchTool 异步加载**
 
 之前的问题：
+
 - WebSearchTool 在创建时同步获取提供商
 - 如果缓存为空，返回 `undefined`
 - 导致工具调用失败，AI 多次重试
 
 现在的解决方案（`src/aiCore/tools/WebSearchTool.ts`）:
+
 ```typescript
 export const webSearchToolWithPreExtractedKeywords = (
   webSearchProviderId: string,
-  extractedKeywords: { question: string[], links?: string[] },
+  extractedKeywords: { question: string[]; links?: string[] },
   requestId: string
 ) => {
   return tool({
@@ -2734,6 +2813,7 @@ export const webSearchToolWithPreExtractedKeywords = (
 ```
 
 **修复效果：**
+
 - 提供商在需要时异步加载
 - 缓存命中时加载很快（~1ms）
 - 缓存未命中时从数据库加载（~10-20ms）
@@ -2757,6 +2837,7 @@ interface AssistantsState {
 ```
 
 **说明：**
+
 - ⚠️ **已废弃**：内置助手管理已迁移到 AssistantService
 - 系统内置助手（default, quick, translate）现由 AssistantService 管理
 - 用户自定义的助手存储在 SQLite `assistants` 表中
@@ -2950,6 +3031,7 @@ CREATE TABLE preference (
 ```
 
 **说明：**
+
 - 存储所有用户配置和应用状态
 - 由 PreferenceService 管理
 - 详见本文档 "Preference 系统" 章节
@@ -3125,6 +3207,7 @@ AI 生成回复
 **持久化：** 自动持久化到本地数据库
 
 **优势：**
+
 - 类型安全的 API
 - 懒加载，按需读取
 - 乐观更新，UI 响应迅速
@@ -3132,6 +3215,7 @@ AI 生成回复
 - 与 React 18 深度集成
 
 **适用场景：**
+
 - 用户配置（头像、用户名、主题等）
 - 应用状态（初始化标志、欢迎页面状态）
 - UI 状态（当前话题 ID）
@@ -3143,9 +3227,11 @@ AI 生成回复
 **持久化：** 通过 redux-persist 自动持久化
 
 **当前使用：**
+
 - `assistant` slice：内置助手配置
 
 **适用场景：**
+
 - 全局共享的应用状态
 - 需要跨组件同步的数据
 
@@ -3156,12 +3242,14 @@ AI 生成回复
 **迁移：** 自动管理版本迁移
 
 **优势：**
+
 - 关系型数据，支持复杂查询
 - 索引优化，查询性能高
 - 事务支持，数据一致性保证
 - 本地存储，离线可用
 
 **适用场景：**
+
 - 实体数据（助手、话题、消息）
 - 关系数据（一对多、多对多）
 - 大量数据存储
@@ -3169,14 +3257,14 @@ AI 生成回复
 
 ### 存储选择指南
 
-| 数据类型 | 推荐存储 | 原因 |
-|---------|---------|------|
-| 用户配置 | Preference | 类型安全，乐观更新，懒加载 |
-| 应用状态 | Preference | 简单键值对，快速访问 |
-| 实体数据 | SQLite | 需要关系查询，支持索引 |
-| 大量数据 | SQLite | 高效存储和检索 |
-| 运行时状态 | Memory/State | 生命周期短，无需持久化 |
-| 临时缓存 | Memory/State | 生命周期短，无需持久化 |
+| 数据类型   | 推荐存储     | 原因                       |
+| ---------- | ------------ | -------------------------- |
+| 用户配置   | Preference   | 类型安全，乐观更新，懒加载 |
+| 应用状态   | Preference   | 简单键值对，快速访问       |
+| 实体数据   | SQLite       | 需要关系查询，支持索引     |
+| 大量数据   | SQLite       | 高效存储和检索             |
+| 运行时状态 | Memory/State | 生命周期短，无需持久化     |
+| 临时缓存   | Memory/State | 生命周期短，无需持久化     |
 
 ---
 
@@ -3192,7 +3280,7 @@ const { theme, setTheme } = useSettings()
 const prefs = useMultiplePreferences(['user.name', 'user.avatar'])
 
 // ⚠️ 注意：setter 是异步的
-await setTheme('dark')  // 或者
+await setTheme('dark') // 或者
 setTheme('dark').catch(console.error)
 
 // ❌ 避免：不要在非 React 上下文使用 hooks
@@ -3206,7 +3294,9 @@ setTheme('dark').catch(console.error)
 const topics = await db.select().from(topicsTable).where(eq(topicsTable.assistant_id, assistantId))
 
 // ✅ 推荐：使用索引字段查询
-const messages = await db.select().from(messagesTable)
+const messages = await db
+  .select()
+  .from(messagesTable)
   .where(eq(messagesTable.topic_id, topicId))
   .orderBy(desc(messagesTable.created_at))
 
@@ -3250,12 +3340,14 @@ Cherry Studio 采用混合存储策略：
 ### 核心架构特点
 
 **Preference System**
+
 - 懒加载，按需读取
 - 乐观更新，零延迟 UI
 - 基于 useSyncExternalStore
 - 自动回滚机制
 
 **Topic System**
+
 - 三层缓存：当前主题 + LRU(5) + 全量缓存(TTL 5min)
 - 智能缓存管理，自动驱逐
 - 乐观更新，所有 CRUD 操作零延迟
@@ -3263,6 +3355,7 @@ Cherry Studio 采用混合存储策略：
 - 并发控制，防止竞态
 
 **Assistant System**
+
 - 三层缓存：系统助手(永久) + LRU(10) + 全量缓存(TTL 5min)
 - 系统助手永久驻留内存，极致性能优化
 - 乐观更新，所有 CRUD 操作零延迟
@@ -3271,6 +3364,7 @@ Cherry Studio 采用混合存储策略：
 - 支持高频访问场景（自动命名、翻译）
 
 **Provider System**
+
 - 三层缓存：默认 Provider(永久) + LRU(10) + 全量缓存(TTL 5min)
 - 默认 Provider 永久驻留内存，极致性能优化
 - 乐观更新，所有 CRUD 操作零延迟
@@ -3280,6 +3374,7 @@ Cherry Studio 采用混合存储策略：
 - ⚠️ 存在架构不一致问题（useAllProviders 使用 useLiveQuery，需要统一）
 
 **MCP System**
+
 - 两层缓存：LRU(20) + 全量缓存(TTL 5min)
 - 简化的缓存策略，无永久缓存
 - 工具列表不缓存，确保数据新鲜
@@ -3289,6 +3384,7 @@ Cherry Studio 采用混合存储策略：
 - 调试工具支持（McpCacheDebug 组件）
 
 **性能优势**
+
 - ✅ 类型安全（TypeScript 全面覆盖）
 - ✅ 高性能（缓存命中率 ~90%+，系统助手/默认 Provider 100%）
 - ✅ 良好的开发体验（hooks + 调试工具）
@@ -3297,6 +3393,7 @@ Cherry Studio 采用混合存储策略：
 - ✅ 易于维护和扩展（单例 + 清晰架构）
 
 **最佳实践建议**
+
 - 简单配置使用 Preference System
 - 对话相关使用 Topic System
 - AI 助手相关使用 Assistant System
@@ -3307,11 +3404,11 @@ Cherry Studio 采用混合存储策略：
 
 **性能对比**
 
-| 系统 | 缓存策略 | 最快访问 | 适用场景 |
-|------|---------|---------|---------|
-| Preference | 懒加载 + 内存缓存 | ~1ms | 用户配置、应用状态 |
-| Topic | 当前主题 + LRU(5) + TTL | ~0ms (当前), ~1ms (LRU) | 对话管理 |
-| Assistant | 系统助手 + LRU(10) + TTL | ~0ms (系统), ~1ms (LRU) | AI 助手管理 |
-| Provider | 默认 Provider + LRU(10) + TTL | ~0ms (默认), ~1ms (LRU) | LLM 提供商管理 |
-| MCP | LRU(20) + TTL | ~1ms (LRU), ~0ms (all cache) | MCP 服务器管理 |
-| SQLite | 索引查询 | ~10-50ms | 实体数据、关系查询 |
+| 系统       | 缓存策略                      | 最快访问                     | 适用场景           |
+| ---------- | ----------------------------- | ---------------------------- | ------------------ |
+| Preference | 懒加载 + 内存缓存             | ~1ms                         | 用户配置、应用状态 |
+| Topic      | 当前主题 + LRU(5) + TTL       | ~0ms (当前), ~1ms (LRU)      | 对话管理           |
+| Assistant  | 系统助手 + LRU(10) + TTL      | ~0ms (系统), ~1ms (LRU)      | AI 助手管理        |
+| Provider   | 默认 Provider + LRU(10) + TTL | ~0ms (默认), ~1ms (LRU)      | LLM 提供商管理     |
+| MCP        | LRU(20) + TTL                 | ~1ms (LRU), ~0ms (all cache) | MCP 服务器管理     |
+| SQLite     | 索引查询                      | ~10-50ms                     | 实体数据、关系查询 |

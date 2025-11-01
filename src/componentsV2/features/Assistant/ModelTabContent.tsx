@@ -80,14 +80,14 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
       }}>
       <Button
         variant="tertiary"
-        className="border-0 justify-between bg-ui-card-background dark:bg-ui-card-background-dark rounded-xl"
+        className="justify-between rounded-xl border-0 bg-ui-card-background dark:bg-ui-card-background-dark"
         onPress={handleModelPress}>
         {model.length > 0 ? (
-          <XStack className="flex-1 flex-row justify-between items-center">
+          <XStack className="flex-1 flex-row items-center justify-between">
             <Text className="text-base" numberOfLines={1} ellipsizeMode="tail">
               {t(`provider.${model[0].provider}`)}
             </Text>
-            <Text className="text-base max-w-[70%]" numberOfLines={1} ellipsizeMode="middle">
+            <Text className="max-w-[70%] text-base" numberOfLines={1} ellipsizeMode="middle">
               {getBaseModelName(model[0].name)}
             </Text>
           </XStack>
@@ -165,7 +165,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
             <Text>{t('assistants.settings.max_tokens_value')}</Text>
             <TextField className="min-w-[60px]">
               <TextField.Input
-                className="h-[25px] text-xs leading-[14.4px] text-center"
+                className="h-[25px] text-center text-xs leading-[14.4px]"
                 value={maxTokensInput}
                 onChangeText={setMaxTokensInput}
                 onEndEditing={() => {
@@ -186,14 +186,14 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
         {isReasoningModel(model[0]) && (
           <Button
             variant="tertiary"
-            className="border-0 py-3 pl-4 pr-5 justify-between bg-transparent rounded-xl"
+            className="justify-between rounded-xl border-0 bg-transparent py-3 pl-4 pr-5"
             onPress={handleReasoningPress}>
-            <Button.Label className="flex-1 justify-between items-center flex-row">
+            <Button.Label className="flex-1 flex-row items-center justify-between">
               <XStack>
                 <Text className="flex-1">{t('assistants.settings.reasoning.label')}</Text>
 
                 <YStack className="justify-end">
-                  <Text className="text-sm bg-green-10 dark:bg-green-dark-10 border-green-20 dark:border-green-dark-20 text-green-100 dark:text-green-dark-100 border-[0.5px] py-[2px] px-2 rounded-lg">
+                  <Text className="rounded-lg border-[0.5px] border-green-20 bg-green-10 px-2 py-[2px] text-sm text-green-100 dark:border-green-dark-20 dark:bg-green-dark-10 dark:text-green-dark-100">
                     {t(`assistants.settings.reasoning.${settings.reasoning_effort || 'off'}`)}
                   </Text>
                 </YStack>

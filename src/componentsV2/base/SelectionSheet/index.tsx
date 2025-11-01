@@ -83,7 +83,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
       typeof item.description === 'string' ? (
         <Text
           className={cn(
-            `text-[11px] opacity-70 flex-1 ${item.isSelected ? 'text-green-100 dark:text-green-dark-100' : 'text-text-secondary dark:text-text-secondary-dark'}`,
+            `flex-1 text-[11px] opacity-70 ${item.isSelected ? 'text-green-100 dark:text-green-dark-100' : 'text-text-secondary dark:text-text-secondary-dark'}`,
             item.color && !item.isSelected ? item.color : undefined
           )}
           numberOfLines={1}
@@ -97,7 +97,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
       <TouchableOpacity onPress={() => handleSelect(item)} activeOpacity={0.5}>
         <XStack
           className={cn(
-            `items-center gap-2.5 px-3.5 py-3 rounded-lg border ${
+            `items-center gap-2.5 rounded-lg border px-3.5 py-3 ${
               item.isSelected
                 ? 'border-green-20 bg-green-10 dark:border-green-dark-20 dark:bg-green-dark-10'
                 : 'border-transparent bg-ui-card-background dark:bg-ui-card-background-dark'
@@ -105,7 +105,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
             item.backgroundColor && !item.isSelected ? item.backgroundColor : undefined
           )}>
           {iconElement}
-          <XStack className="flex-1 gap-2.5 items-center justify-between">
+          <XStack className="flex-1 items-center justify-between gap-2.5">
             {labelElement}
             {descriptionElement}
           </XStack>
@@ -149,13 +149,13 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
         ListHeaderComponent={
           placeholder ? (
             <View className="px-4 pb-2">
-              <Text className="text-sm text-text-secondary dark:text-text-secondary-dark text-center opacity-60">
+              <Text className="text-center text-sm text-text-secondary opacity-60 dark:text-text-secondary-dark">
                 {placeholder}
               </Text>
             </View>
           ) : undefined
         }
-        ListEmptyComponent={emptyContent ? <YStack className="pb-7 px-4 gap-2.5">{emptyContent}</YStack> : undefined}
+        ListEmptyComponent={emptyContent ? <YStack className="gap-2.5 px-4 pb-7">{emptyContent}</YStack> : undefined}
         recycleItems
       />
     </BottomSheetModal>

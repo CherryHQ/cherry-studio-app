@@ -59,7 +59,7 @@ export class ConversationService {
     return !!assistant.webSearchProviderId
   }
 
-  static needsKnowledgeSearch(assistant: Assistant): boolean {
+  static needsKnowledgeSearch(_assistant: Assistant): boolean {
     return false
     // return !isEmpty(assistant.knowledge_bases)
   }

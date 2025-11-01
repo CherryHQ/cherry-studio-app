@@ -304,8 +304,8 @@
       }
     },
     "html_preview": {
-      "title": "HTMLプレビュー",
-      "loading": "HTMLを読み込み中..."
+      "loading": "HTMLを読み込み中...",
+      "title": "HTMLプレビュー"
     },
     "inputs": {
       "mentions": "@ {{number}} モデル",
