@@ -1,6 +1,6 @@
 import { isSupportedModel } from '@/config/models'
 import { loggerService } from '@/services/LoggerService'
-import type { Model, Provider } from '@/types/assistant'
+import type { Model, Provider } from '@/types'
 import type { NewApiModel } from '@/types/sdk'
 
 import { AnthropicAPIClient } from '../anthropic/AnthropicAPIClient'
@@ -41,7 +41,6 @@ export class NewAPIClient extends MixedBaseAPIClient {
     if (!this.currentClient) {
       return this.provider.apiHost
     }
-
     return this.currentClient.getBaseURL()
   }
 
@@ -55,41 +54,33 @@ export class NewAPIClient extends MixedBaseAPIClient {
 
     if (model.endpoint_type === 'anthropic') {
       const client = this.clients.get('claude')
-
       if (!client || !this.isValidClient(client)) {
         throw new Error('Failed to get claude client')
       }
-
       return client
     }
 
     if (model.endpoint_type === 'openai-response') {
       const client = this.clients.get('openai-response')
-
       if (!client || !this.isValidClient(client)) {
         throw new Error('Failed to get openai-response client')
       }
-
       return client
     }
 
     if (model.endpoint_type === 'gemini') {
       const client = this.clients.get('gemini')
-
       if (!client || !this.isValidClient(client)) {
         throw new Error('Failed to get gemini client')
       }
-
       return client
     }
 
     if (model.endpoint_type === 'openai' || model.endpoint_type === 'image-generation') {
       const client = this.clients.get('openai')
-
       if (!client || !this.isValidClient(client)) {
         throw new Error('Failed to get openai client')
       }
-
       return client
     }
 

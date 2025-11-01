@@ -17,17 +17,15 @@ const stringifyArgsForLogging = (args: any[]): string => {
     return args
       .map(arg => {
         if (typeof arg === 'function') return '[Function]'
-
         if (typeof arg === 'object' && arg !== null && arg.constructor === Object && Object.keys(arg).length > 20) {
           return '[Object with >20 keys]'
         }
-
         // Truncate long strings to avoid flooding logs 截断长字符串以避免日志泛滥
         const stringifiedArg = JSON.stringify(arg, null, 2)
         return stringifiedArg && stringifiedArg.length > 200 ? stringifiedArg.substring(0, 200) + '...' : stringifiedArg
       })
       .join(', ')
-  } catch {
+  } catch (e) {
     return '[Error serializing arguments]' // Handle potential errors during stringification 处理字符串化期间的潜在错误
   }
 }
@@ -46,13 +44,12 @@ const stringifyArgsForLogging = (args: any[]): string => {
  */
 export const createGenericLoggingMiddleware: () => MethodMiddleware = () => {
   const middlewareName = 'GenericLoggingMiddleware'
-
+  // oxlint-disable-next-line @typescript-eslint/no-unused-vars
   return (_: MiddlewareAPI<BaseContext, any[]>) => next => async (ctx, args) => {
     const methodName = ctx.methodName
     const logPrefix = `[${middlewareName} (${methodName})]`
     logger.debug(`${logPrefix} Initiating. Args: ${stringifyArgsForLogging(args)}`)
     const startTime = Date.now()
-
     try {
       const result = await next(ctx, args)
       const duration = Date.now() - startTime

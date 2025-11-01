@@ -1,8 +1,8 @@
 import { loggerService } from '@/services/LoggerService'
-import type { Model } from '@/types/assistant'
+import type { Model } from '@/types'
 import type { TextDeltaChunk, ThinkingCompleteChunk, ThinkingDeltaChunk, ThinkingStartChunk } from '@/types/chunk'
 import { ChunkType } from '@/types/chunk'
-import { getLowerBaseModelName } from '@/utils/naming'
+import { getLowerBaseModelName } from '@/utils'
 import type { TagConfig } from '@/utils/tagExtraction'
 import { TagExtractor } from '@/utils/tagExtraction'
 
@@ -142,7 +142,6 @@ export const ThinkingTagExtractionMiddleware: CompletionsMiddleware =
                         })
                         accumulatingText = true
                       }
-
                       // 发送清理后的文本内容
                       const cleanTextChunk: TextDeltaChunk = {
                         ...textChunk,
@@ -169,7 +168,6 @@ export const ThinkingTagExtractionMiddleware: CompletionsMiddleware =
             flush(controller) {
               // 处理可能剩余的思考内容
               const finalResult = tagExtractor.finalize()
-
               if (finalResult?.tagContentExtracted) {
                 const thinkingCompleteChunk: ThinkingCompleteChunk = {
                   type: ChunkType.THINKING_COMPLETE,
@@ -191,6 +189,5 @@ export const ThinkingTagExtractionMiddleware: CompletionsMiddleware =
         logger.warn(`[${MIDDLEWARE_NAME}] No generic chunk stream to process or not a ReadableStream.`)
       }
     }
-
     return result
   }

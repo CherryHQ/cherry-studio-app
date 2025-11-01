@@ -1,8 +1,7 @@
-import type { Assistant } from '@/types/assistant'
+import type { Assistant, MCPTool } from '@/types'
 import type { Chunk } from '@/types/chunk'
-import type { Message } from '@/types/message'
+import type { Message } from '@/types/newMessage'
 import type { SdkRawChunk, SdkRawOutput } from '@/types/sdk'
-import type { MCPTool } from '@/types/tool'
 
 import type { ProcessingState } from './types'
 

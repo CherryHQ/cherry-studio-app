@@ -1,14 +1,16 @@
+import { ApiClientFactory } from '@/aiCore/legacy/clients/ApiClientFactory'
+import type { BaseApiClient } from '@/aiCore/legacy/clients/BaseApiClient'
 import { isDedicatedImageGenerationModel, isFunctionCallingModel } from '@/config/models'
+import { getProviderByModel } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
-import { getProviderByModel } from '@/services/ProviderService'
-import type { Model, Provider } from '@/types/assistant'
-import type { GenerateImageParams } from '@/types/image'
+import { withSpanResult } from '@/services/SpanManagerService'
+import type { StartSpanParams } from '@/trace/types/ModelSpanEntity'
+import type { GenerateImageParams, Model, Provider } from '@/types'
 import type { RequestOptions, SdkModel } from '@/types/sdk'
-import { isSupportedToolUse } from '@/utils/mcpTool'
+import { isSupportedToolUse } from '@/utils/mcp-tools'
 
-import type { BaseApiClient } from './clients'
-import { ApiClientFactory } from './clients'
 import { AihubmixAPIClient } from './clients/aihubmix/AihubmixAPIClient'
+import { VertexAPIClient } from './clients/gemini/VertexAPIClient'
 import { NewAPIClient } from './clients/newapi/NewAPIClient'
 import { OpenAIResponseAPIClient } from './clients/openai/OpenAIResponseAPIClient'
 import { CompletionsMiddlewareBuilder } from './middleware/builder'
@@ -38,7 +40,6 @@ export default class AiProvider {
   public async completions(params: CompletionsParams, options?: RequestOptions): Promise<CompletionsResult> {
     // 1. 根据模型识别正确的客户端
     const model = params.assistant.model
-
     if (!model) {
       return Promise.reject(new Error('Model is required'))
     }
@@ -49,21 +50,19 @@ export default class AiProvider {
     if (this.apiClient instanceof AihubmixAPIClient) {
       // AihubmixAPIClient: 根据模型选择合适的子client
       client = this.apiClient.getClientForModel(model)
-
       if (client instanceof OpenAIResponseAPIClient) {
         client = client.getClient(model) as BaseApiClient
       }
     } else if (this.apiClient instanceof NewAPIClient) {
       client = this.apiClient.getClientForModel(model)
-
       if (client instanceof OpenAIResponseAPIClient) {
         client = client.getClient(model) as BaseApiClient
       }
     } else if (this.apiClient instanceof OpenAIResponseAPIClient) {
       // OpenAIResponseAPIClient: 根据模型特征选择API类型
       client = this.apiClient.getClient(model) as BaseApiClient
-      // } else if (this.apiClient instanceof VertexAPIClient) {
-      //   client = this.apiClient.getClient(model) as BaseApiClient
+    } else if (this.apiClient instanceof VertexAPIClient) {
+      client = this.apiClient.getClient(model) as BaseApiClient
     } else {
       // 其他client直接使用
       client = this.apiClient
@@ -71,7 +70,6 @@ export default class AiProvider {
 
     // 2. 构建中间件链
     const builder = CompletionsMiddlewareBuilder.withDefaults()
-
     // images api
     if (isDedicatedImageGenerationModel(model)) {
       builder.clear()
@@ -87,7 +85,6 @@ export default class AiProvider {
       const clientTypes = client.getClientCompatibilityType(model)
       const isOpenAICompatible =
         clientTypes.includes('OpenAIAPIClient') || clientTypes.includes('OpenAIResponseAPIClient')
-
       if (!isOpenAICompatible) {
         logger.silly('ThinkingTagExtractionMiddleware is removed')
         builder.remove(ThinkingTagExtractionMiddlewareName)
@@ -97,34 +94,28 @@ export default class AiProvider {
         clientTypes.includes('AnthropicAPIClient') ||
         clientTypes.includes('OpenAIResponseAPIClient') ||
         clientTypes.includes('AnthropicVertexAPIClient')
-
       if (!isAnthropicOrOpenAIResponseCompatible) {
         logger.silly('RawStreamListenerMiddleware is removed')
         builder.remove(RawStreamListenerMiddlewareName)
       }
-
       if (!params.enableWebSearch) {
         logger.silly('WebSearchMiddleware is removed')
         builder.remove(WebSearchMiddlewareName)
       }
-
       if (!params.mcpTools?.length) {
         builder.remove(ToolUseExtractionMiddlewareName)
         logger.silly('ToolUseExtractionMiddleware is removed')
         builder.remove(McpToolChunkMiddlewareName)
         logger.silly('McpToolChunkMiddleware is removed')
       }
-
       if (isSupportedToolUse(params.assistant) && isFunctionCallingModel(model)) {
         builder.remove(ToolUseExtractionMiddlewareName)
         logger.silly('ToolUseExtractionMiddleware is removed')
       }
-
       if (params.callType !== 'chat' && params.callType !== 'check' && params.callType !== 'translate') {
         logger.silly('AbortHandlerMiddleware is removed')
         builder.remove(AbortHandlerMiddlewareName)
       }
-
       if (params.callType === 'test') {
         builder.remove(ErrorHandlerMiddlewareName)
         logger.silly('ErrorHandlerMiddleware is removed')
@@ -147,20 +138,20 @@ export default class AiProvider {
     return result
   }
 
-  // public async completionsForTrace(params: CompletionsParams, options?: RequestOptions): Promise<CompletionsResult> {
-  //   const traceName = params.assistant.model?.name
-  //     ? `${params.assistant.model?.name}.${params.callType}`
-  //     : `LLM.${params.callType}`
+  public async completionsForTrace(params: CompletionsParams, options?: RequestOptions): Promise<CompletionsResult> {
+    const traceName = params.assistant.model?.name
+      ? `${params.assistant.model?.name}.${params.callType}`
+      : `LLM.${params.callType}`
 
-  //   const traceParams: StartSpanParams = {
-  //     name: traceName,
-  //     tag: 'LLM',
-  //     topicId: params.topicId || '',
-  //     modelName: params.assistant.model?.name
-  //   }
+    const traceParams: StartSpanParams = {
+      name: traceName,
+      tag: 'LLM',
+      topicId: params.topicId || '',
+      modelName: params.assistant.model?.name
+    }
 
-  //   return await withSpanResult(this.completions.bind(this), traceParams, params, options)
-  // }
+    return await withSpanResult(this.completions.bind(this), traceParams, params, options)
+  }
 
   public async models(): Promise<SdkModel[]> {
     return this.apiClient.listModels()
@@ -172,7 +163,6 @@ export default class AiProvider {
       if (this.apiClient instanceof OpenAIResponseAPIClient && getProviderByModel(model).type === 'azure-openai') {
         this.apiClient = this.apiClient.getClient(model) as BaseApiClient
       }
-
       const dimensions = await this.apiClient.getEmbeddingDimensions(model)
       return dimensions
     } catch (error) {
@@ -186,7 +176,6 @@ export default class AiProvider {
       const client = this.apiClient.getClientForModel({ id: params.model } as Model)
       return client.generateImage(params)
     }
-
     return this.apiClient.generateImage(params)
   }
 

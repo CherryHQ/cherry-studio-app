@@ -1,15 +1,10 @@
-import type { InferToolInput, InferToolOutput } from 'ai'
-import { tool } from 'ai'
-import { z } from 'zod'
+import { type InferToolInput, type InferToolOutput, tool } from 'ai'
+import * as z from 'zod'
 
 import { REFERENCE_PROMPT } from '@/config/prompts'
-import { loggerService } from '@/services/LoggerService'
-import { webSearchProviderService } from '@/services/WebSearchProviderService'
 import WebSearchService from '@/services/WebSearchService'
-import type { ExtractResults } from '@/types/extract'
-import type { WebSearchProvider, WebSearchProviderResponse } from '@/types/websearch'
-
-const logger = loggerService.withContext('WebSearchTool')
+import type { WebSearchProvider, WebSearchProviderResponse } from '@/types'
+import type { ExtractResults } from '@/utils/extract'
 
 /**
  * 使用预提取关键词的网络搜索工具
@@ -23,18 +18,21 @@ export const webSearchToolWithPreExtractedKeywords = (
   },
   requestId: string
 ) => {
+  const webSearchProvider = WebSearchService.getWebSearchProvider(webSearchProviderId)
+
   return tool({
     name: 'builtin_web_search',
-    description: `Search the web and return citable sources using pre-analyzed search intent.
+    description: `Web search tool for finding current information, news, and real-time data from the internet.
 
-Pre-extracted search keywords: "${extractedKeywords.question.join(', ')}"${
-      extractedKeywords.links
+This tool has been configured with search parameters based on the conversation context:
+- Prepared queries: ${extractedKeywords.question.map(q => `"${q}"`).join(', ')}${
+      extractedKeywords.links?.length
         ? `
-Relevant links: ${extractedKeywords.links.join(', ')}`
+- Relevant URLs: ${extractedKeywords.links.join(', ')}`
         : ''
     }
 
-Call this tool to execute the search. You can optionally provide additional context to refine the search.`,
+You can use this tool as-is to search with the prepared queries, or provide additionalContext to refine or replace the search terms.`,
 
     inputSchema: z.object({
       additionalContext: z
@@ -44,26 +42,11 @@ Call this tool to execute the search. You can optionally provide additional cont
     }),
 
     execute: async ({ additionalContext }) => {
-      // Load WebSearch provider asynchronously
-      logger.verbose(`Loading WebSearch provider: ${webSearchProviderId}`)
-      const webSearchProvider = await webSearchProviderService.getProvider(webSearchProviderId)
-
-      if (!webSearchProvider) {
-        logger.error(`WebSearch provider not found: ${webSearchProviderId}`)
-        return {
-          query: '',
-          results: []
-        }
-      }
-
-      logger.verbose(`WebSearch provider loaded: ${webSearchProvider.name}`)
-
       let finalQueries = [...extractedKeywords.question]
 
       if (additionalContext?.trim()) {
         // 如果大模型提供了额外上下文，使用更具体的描述
         const cleanContext = additionalContext.trim()
-
         if (cleanContext) {
           finalQueries = [cleanContext]
         }
@@ -73,7 +56,6 @@ Call this tool to execute the search. You can optionally provide additional cont
         query: '',
         results: []
       }
-
       // 检查是否需要搜索
       if (finalQueries[0] === 'not_needed') {
         return searchResults
@@ -86,13 +68,12 @@ Call this tool to execute the search. You can optionally provide additional cont
           links: extractedKeywords.links
         }
       }
-      searchResults = await WebSearchService.processWebsearch(webSearchProvider, extractResults, requestId)
+      searchResults = await WebSearchService.processWebsearch(webSearchProvider!, extractResults, requestId)
 
       return searchResults
     },
     toModelOutput: results => {
       let summary = 'No search needed based on the query analysis.'
-
       if (results.query && results.results.length > 0) {
         summary = `Found ${results.results.length} relevant sources. Use [number] format to cite specific information.`
       }
