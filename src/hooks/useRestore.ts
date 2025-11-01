@@ -5,6 +5,8 @@ import { useDispatch } from 'react-redux'
 import { useDialog } from '@/hooks/useDialog'
 import { ProgressUpdate, restore, RestoreStepId, StepStatus } from '@/services/BackupService'
 import { loggerService } from '@/services/LoggerService'
+import { databaseMaintenance } from '@/database/DatabaseMaintenance'
+import { persistor } from '@/store'
 import { FileMetadata } from '@/types/file'
 import { uuid } from '@/utils'
 import { getFileType } from '@/utils/file'
@@ -56,6 +58,7 @@ const createStepsFromConfig = (stepConfigs: StepConfig[], t: (key: string) => st
 
 export interface UseRestoreOptions {
   stepConfigs?: StepConfig[]
+  clearBeforeRestore?: boolean
   customRestoreFunction?: (
     file: Omit<FileMetadata, 'md5'>,
     onProgress: (update: ProgressUpdate) => void
@@ -67,7 +70,7 @@ export function useRestore(options: UseRestoreOptions = {}) {
   const dispatch = useDispatch()
   const dialog = useDialog()
 
-  const { stepConfigs = DEFAULT_RESTORE_STEPS, customRestoreFunction = restore } = options
+  const { stepConfigs = DEFAULT_RESTORE_STEPS, clearBeforeRestore = false, customRestoreFunction = restore } = options
 
   const [isModalOpen, setModalOpen] = useState(false)
   const [restoreSteps, setRestoreSteps] = useState<RestoreStep[]>(createStepsFromConfig(stepConfigs, t))
@@ -137,6 +140,24 @@ export function useRestore(options: UseRestoreOptions = {}) {
     skipModalSetup = false
   ) => {
     if (!validateFile(file)) return
+
+    // 清除现有数据（如果启用）
+    if (clearBeforeRestore) {
+      try {
+        logger.info('Clearing existing data before restore...')
+        await databaseMaintenance.resetDatabase()
+        await persistor.purge()
+        logger.info('Existing data cleared successfully')
+      } catch (error) {
+        logger.error('Failed to clear existing data:', error)
+        dialog.open({
+          type: 'error',
+          title: t('common.error'),
+          content: t('settings.data.restore.clear_error')
+        })
+        return
+      }
+    }
 
     // 重置状态并打开模态框（除非 skipModalSetup 为 true）
     if (!skipModalSetup) {

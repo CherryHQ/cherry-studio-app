@@ -19,8 +19,9 @@ export type DialogOptions = {
   /** 是否可以点击遮罩层关闭 */
   maskClosable?: boolean
   type?: 'info' | 'warning' | 'error' | 'success'
-  onConFirm?: () => void
-  onCancel?: () => void
+  onConFirm?: () => void | Promise<void>
+  onCancel?: () => void | Promise<void>
+  showLoading?: boolean
 }
 
 type DialogContextValue = { open: (options: DialogOptions) => void; close: () => void } | undefined
@@ -31,6 +32,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   const { isDark } = useTheme()
   const [isOpen, setOpen] = useState(false)
   const [options, setOptions] = useState<DialogOptions | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
   const { t } = useTranslation()
 
   const centeredViewClassName = isDark
@@ -44,18 +46,37 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
     }, 300)
   }
 
-  const cancel = () => {
-    options?.onCancel?.()
+  const cancel = async () => {
+    if (isLoading) return
+
+    try {
+      await options?.onCancel?.()
+    } catch (error) {
+      console.error('Dialog onCancel error:', error)
+    }
     close()
   }
 
-  const confirm = () => {
-    options?.onConFirm?.()
-    close()
+  const confirm = async () => {
+    if (isLoading) return
+
+    if (options?.showLoading) {
+      setIsLoading(true)
+    }
+
+    try {
+      await options?.onConFirm?.()
+    } catch (error) {
+      console.error('Dialog onConFirm error:', error)
+    } finally {
+      setIsLoading(false)
+      close()
+    }
   }
 
   const open = (newOptions: DialogOptions) => {
     setOptions(newOptions)
+    setIsLoading(false)
     setOpen(true)
   }
 
@@ -95,6 +116,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   const maskClosable = options?.maskClosable ?? true
   const confirmText = options?.confirmText ?? t('common.ok')
   const cancelText = options?.cancelText ?? t('common.cancel')
+  const shouldShowLoading = options?.showLoading ?? false
 
   const confirmButtonClassName = getConfirmButtonClassName()
   const confirmTextClassName = getConfirmTextClassName()
@@ -134,9 +156,12 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                     'flex-1 h-[42px] rounded-[30px] bg-transparent border-gray-20 dark:border-gray-20',
                     options?.cancelStyle?.toString() || ''
                   )}
-                  onPress={cancel}>
+                  onPress={cancel}
+                  isDisabled={isLoading}>
                   <Button.Label>
-                    <Text className="text-gray-80 dark:text-gray-80 text-[17px]">{cancelText}</Text>
+                    <Text className="text-gray-80 dark:text-gray-80 text-[17px]">
+                      {isLoading && shouldShowLoading ? t('common.loading') : cancelText}
+                    </Text>
                   </Button.Label>
                 </Button>
               )}
@@ -146,9 +171,12 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                   confirmButtonClassName,
                   options?.confirmStyle?.toString() || ''
                 )}
-                onPress={confirm}>
+                onPress={confirm}
+                isDisabled={isLoading}>
                 <Button.Label>
-                  <Text className={cn(confirmTextClassName, 'text-[17px]')}>{confirmText}</Text>
+                  <Text className={cn(confirmTextClassName, 'text-[17px]')}>
+                    {isLoading && shouldShowLoading ? t('common.loading') : confirmText}
+                  </Text>
                 </Button.Label>
               </Button>
             </XStack>

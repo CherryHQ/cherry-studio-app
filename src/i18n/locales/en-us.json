@@ -516,13 +516,16 @@
         "landrop": {
           "filename": "File Name",
           "scan_qr_code": {
+            "connecting": "Connecting...",
             "description": "Scan QR Code from Cherry Studio",
             "grant_permission": "Grant Permission",
             "permission_denied": "Camera permission not granted. Please enable it in your device settings to scan QR codes.",
+            "processing": "Processing QR code...",
             "requesting_permission": "Requesting camera permission...",
             "success": "Connection Successful 🎉",
             "success_description": "You can now Click Send Button to Restore Data!",
-            "title": "Scan QR Code"
+            "title": "Scan QR Code",
+            "waiting_for_file": "Waiting for file..."
           },
           "status": {
             "connected": "Connected",
@@ -541,6 +544,8 @@
         "reset_success": "Data reset successful! The app has been restored to its initial state.",
         "reset_warning": "Are you sure you want to reset all data? This will delete all conversations, messages, and user-created content. This action cannot be undone.",
         "restore": {
+          "clear_error": "Failed to clear existing data. Please try again.",
+          "confirm_warning": "Restoring from backup will overwrite all current app data.",
           "error": "Restore Error",
           "error_message": "An error occurred during the restore process. Please check the file and try again.",
           "progress": {

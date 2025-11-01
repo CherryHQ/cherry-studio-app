@@ -4,6 +4,7 @@ import { File } from 'expo-file-system'
 
 import { loggerService } from '@/services/LoggerService'
 import { DEFAULT_BACKUP_STORAGE } from '@/constants/storage'
+import type { ConnectionInfo } from '@/types/network'
 const logger = loggerService.withContext('useWebSocket')
 
 // 定义 WebSocket 连接状态的枚举
@@ -74,15 +75,41 @@ export function useWebSocket() {
     }
   }
 
-  const connect = async (ip: string) => {
+  const connect = async (connectionInfo: ConnectionInfo) => {
     if (socket.current) {
       return
     }
 
     try {
       setStatus(WebSocketStatus.CONNECTING)
-      logger.info('ip', ip)
-      socket.current = io(`http://${ip}`, { timeout: 5000, reconnection: true })
+
+      // Sort candidates by priority (lower number = higher priority)
+      const sortedCandidates = [...connectionInfo.candidates].sort((a, b) => a.priority - b.priority)
+
+      // Try each candidate until one succeeds
+      for (const candidate of sortedCandidates) {
+        try {
+          const connectionUrl = `http://${candidate.host}:${connectionInfo.port}`
+
+          // If we reach here, this candidate worked, use it for the actual connection
+          socket.current = io(connectionUrl, {
+            timeout: 5000,
+            reconnection: false,  // 禁用自动重连，因为这是一次性文件传输
+            transports: ['websocket', 'polling']  // Try both transports
+          })
+
+          break // Exit the loop when we find a working candidate
+
+        } catch (error) {
+          logger.warn(`Failed to connect to ${candidate.host} via ${candidate.interface}:`, error)
+          continue // Try next candidate
+        }
+      }
+
+      // If no candidates worked
+      if (!socket.current) {
+        throw new Error('Failed to connect to any IP candidate')
+      }
 
       // 连接客户端
       socket.current.on('connect', () => {
@@ -99,7 +126,14 @@ export function useWebSocket() {
       // 断开连接
       socket.current.on('disconnect', () => {
         logger.info('disconnected from WebSocket server')
-        setStatus(WebSocketStatus.DISCONNECTED)
+        // 如果是文件传输完成后的断开，不要改变状态
+        setStatus(prevStatus => {
+          if (prevStatus === WebSocketStatus.ZIP_FILE_END) {
+            logger.debug('File transfer completed, keeping ZIP_FILE_END status')
+            return prevStatus
+          }
+          return WebSocketStatus.DISCONNECTED
+        })
         socket.current = null
       })
 
@@ -126,7 +160,7 @@ export function useWebSocket() {
         zipFileChunk.current.size += chunkData.length
         const progress = Math.min((zipFileChunk.current.size / zipFileInfo.current.totalSize) * 100, 100)
         setProgress(progress)
-        logger.info('zip-file-chunk:', Math.floor(progress), '%')
+        logger.silly('zip-file-chunk:', Math.floor(progress), '%')
       })
 
       // 文件接收结束
@@ -137,6 +171,11 @@ export function useWebSocket() {
         await writeZipFile()
         setStatus(WebSocketStatus.ZIP_FILE_END)
         setProgress(100)
+
+        // 主动断开连接，避免服务端关闭后客户端持续重连
+        socket.current?.disconnect()
+        socket.current = null
+        logger.info('WebSocket connection closed after file transfer completed')
       })
     } catch (error) {
       logger.error('Failed to get IP address:', error)

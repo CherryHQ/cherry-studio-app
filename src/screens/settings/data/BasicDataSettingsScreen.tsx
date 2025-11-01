@@ -56,7 +56,8 @@ export default function BasicDataSettingsScreen() {
   const [isBackup, setIsBackup] = useState(false)
   const [cacheSize, setCacheSize] = useState<string>('--')
   const { isModalOpen, restoreSteps, overallStatus, startRestore, closeModal } = useRestore({
-    stepConfigs: DEFAULT_RESTORE_STEPS
+    stepConfigs: DEFAULT_RESTORE_STEPS,
+    clearBeforeRestore: true
   })
 
   const loadCacheSize = async () => {
@@ -85,15 +86,25 @@ export default function BasicDataSettingsScreen() {
   }
 
   const handleRestore = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: 'application/zip' })
-    if (result.canceled) return
+    dialog.open({
+      type: 'warning',
+      title: t('settings.data.restore.title'),
+      content: t('settings.data.restore.confirm_warning'),
+      confirmText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      showLoading: true,
+      onConFirm: async () => {
+        const result = await DocumentPicker.getDocumentAsync({ type: 'application/zip' })
+        if (result.canceled) return
 
-    const asset = result.assets[0]
-    await startRestore({
-      name: asset.name,
-      uri: asset.uri,
-      size: asset.size,
-      mimeType: asset.mimeType
+        const asset = result.assets[0]
+        await startRestore({
+          name: asset.name,
+          uri: asset.uri,
+          size: asset.size,
+          mimeType: asset.mimeType
+        })
+      }
     })
   }
 

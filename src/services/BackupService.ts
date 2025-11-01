@@ -40,20 +40,131 @@ type OnProgressCallback = (update: ProgressUpdate) => void
 async function restoreIndexedDbData(data: ExportIndexedData, onProgress: OnProgressCallback, dispatch: Dispatch) {
   onProgress({ step: 'restore_messages', status: 'in_progress' })
 
-  // Batch import topics directly to database for performance
-  await topicDatabase.upsertTopics(data.topics)
-  await messageDatabase.upsertMessages(data.messages)
+  // 根据数据量动态调整批次大小
+  const topicCount = data.topics.length
+  const messageCount = data.messages.length
+  const blockCount = data.message_blocks.length
 
-  // Filter message_blocks to only include those with valid message_id references
-  const validMessageIds = new Set(data.messages.map(msg => msg.id))
-  const validBlocks = data.message_blocks.filter(block => validMessageIds.has(block.messageId))
-  const filteredCount = data.message_blocks.length - validBlocks.length
+  // 数据量越大，批次越小，避免单次操作占用太多内存
+  const BATCH_SIZE = messageCount > 10000 ? 20 : messageCount > 1000 ? 50 : 100
 
-  if (filteredCount > 0) {
-    logger.warn(`Filtered out ${filteredCount} message block(s) with invalid message_id references during restore`)
+  logger.info(`Processing ${topicCount} topics, ${messageCount} messages, ${blockCount} blocks`)
+  logger.info(`Using batch size: ${BATCH_SIZE}`)
+
+  // 获取数据库中现有的 assistant IDs，用于验证 topics
+  const existingAssistants = await assistantDatabase.getAllAssistants()
+  const existingAssistantIds = new Set(existingAssistants.map(a => a.id))
+
+  // 检查并修复 topics 中的无效 assistantId
+  const topicAssistantIds = new Set(data.topics.map(t => t.assistantId))
+  const missingTopicAssistantIds = [...topicAssistantIds].filter(id => !existingAssistantIds.has(id))
+
+  if (missingTopicAssistantIds.length > 0) {
+    const affectedTopicsCount = data.topics.filter(t => missingTopicAssistantIds.includes(t.assistantId)).length
+    logger.warn(
+      `Fixed ${affectedTopicsCount} topics with missing assistant_id by replacing with "default". Missing IDs: ${missingTopicAssistantIds.join(', ')}`
+    )
+
+    data.topics = data.topics.map(topic => {
+      if (missingTopicAssistantIds.includes(topic.assistantId)) {
+        return {
+          ...topic,
+          assistantId: 'default'
+        }
+      }
+      return topic
+    })
   }
 
-  await messageBlockDatabase.upsertBlocks(validBlocks)
+  // 分批处理 topics
+  for (let i = 0; i < topicCount; i += BATCH_SIZE) {
+    const batch = data.topics.slice(i, Math.min(i + BATCH_SIZE, topicCount))
+    await topicDatabase.upsertTopics(batch)
+
+    if (i % (BATCH_SIZE * 10) === 0 || i + BATCH_SIZE >= topicCount) {
+      logger.info(`Topics: ${Math.min(i + BATCH_SIZE, topicCount)}/${topicCount}`)
+    }
+  }
+
+  // 验证并修复 messages 中的外键引用
+  const messageAssistantIds = new Set(data.messages.map(msg => msg.assistantId))
+  const messageTopicIds = new Set(data.messages.map(msg => msg.topicId))
+  const validTopicIds = new Set(data.topics.map(t => t.id))
+
+  // 检查是否有 messages 引用了不存在的 assistantId
+  const missingAssistantIds = [...messageAssistantIds].filter(id => !existingAssistantIds.has(id))
+  if (missingAssistantIds.length > 0) {
+    const affectedMessagesCount = data.messages.filter(msg => missingAssistantIds.includes(msg.assistantId)).length
+    logger.warn(
+      `Fixed ${affectedMessagesCount} messages with missing assistant_id by replacing with "default". Missing IDs: ${missingAssistantIds.join(', ')}`
+    )
+
+    data.messages = data.messages.map(msg => {
+      if (missingAssistantIds.includes(msg.assistantId)) {
+        return {
+          ...msg,
+          assistantId: 'default'
+        }
+      }
+      return msg
+    })
+  }
+
+  // 检查是否有 messages 引用了不存在的 topicId
+  const missingTopicIds = [...messageTopicIds].filter(id => !validTopicIds.has(id))
+  if (missingTopicIds.length > 0) {
+    const originalCount = data.messages.length
+    data.messages = data.messages.filter(msg => !missingTopicIds.includes(msg.topicId))
+    const filteredCount = originalCount - data.messages.length
+
+    if (filteredCount > 0) {
+      logger.error(
+        `Filtered out ${filteredCount} messages with invalid topic_id references. Missing topic IDs: ${missingTopicIds.join(', ')}`
+      )
+    }
+  }
+
+  // 分批处理 messages
+  const finalMessageCount = data.messages.length
+  for (let i = 0; i < finalMessageCount; i += BATCH_SIZE) {
+    const batch = data.messages.slice(i, Math.min(i + BATCH_SIZE, finalMessageCount))
+    await messageDatabase.upsertMessages(batch)
+
+    if (i % (BATCH_SIZE * 10) === 0 || i + BATCH_SIZE >= finalMessageCount) {
+      logger.info(`Messages: ${Math.min(i + BATCH_SIZE, finalMessageCount)}/${finalMessageCount}`)
+    }
+  }
+
+  // 分批过滤和处理 message_blocks
+  logger.info('Processing message blocks...')
+  const validMessageIds = new Set(data.messages.map(msg => msg.id))
+  let filteredCount = 0
+  let processedBlocks = 0
+
+  for (let i = 0; i < blockCount; i += BATCH_SIZE) {
+    const batch = data.message_blocks.slice(i, Math.min(i + BATCH_SIZE, blockCount))
+    const validBlocks = batch.filter(block => {
+      const isValid = validMessageIds.has(block.messageId)
+      if (!isValid) filteredCount++
+      return isValid
+    })
+
+    if (validBlocks.length > 0) {
+      await messageBlockDatabase.upsertBlocks(validBlocks)
+      processedBlocks += validBlocks.length
+    }
+
+    if (i % (BATCH_SIZE * 10) === 0 || i + BATCH_SIZE >= blockCount) {
+      logger.info(`Blocks: ${Math.min(i + BATCH_SIZE, blockCount)}/${blockCount} (valid: ${processedBlocks})`)
+    }
+  }
+
+  if (filteredCount > 0) {
+    logger.warn(`Filtered out ${filteredCount} message block(s) with invalid message_id references`)
+  }
+
+  // 清理 Set 对象
+  validMessageIds.clear()
 
   // Invalidate caches after bulk import to ensure consistency
   topicService.invalidateCache()
@@ -67,6 +178,7 @@ async function restoreIndexedDbData(data: ExportIndexedData, onProgress: OnProgr
     }
   }
 
+  logger.info('IndexedDB data restore completed')
   onProgress({ step: 'restore_messages', status: 'completed' })
 }
 
@@ -85,7 +197,10 @@ async function restoreReduxData(data: ExportReduxData, onProgress: OnProgressCal
         type: index === 0 ? 'system' : 'external'
       }) as Assistant
   )
+
+  logger.info(`Restoring ${assistants.length} assistants`)
   await assistantDatabase.upsertAssistants(assistants)
+
   await websearchProviderDatabase.upsertWebSearchProviders(data.websearch.providers)
   await new Promise(resolve => setTimeout(resolve, 200)) // Delay between steps
 
@@ -106,15 +221,41 @@ export async function restore(
 
   try {
     const extractedDirPath = Paths.join(DEFAULT_DOCUMENTS_STORAGE, backupFile.name.replace('.zip', ''))
+    logger.info('Unzipping backup file...')
     await unzip(backupFile.path, extractedDirPath)
     unzipPath = extractedDirPath
 
     const dataFile = new File(extractedDirPath, 'data.json')
 
-    const { reduxData, indexedData } = transformBackupData(dataFile.textSync())
+    // TODO: 长期方案 - 重构备份格式为分文件存储，避免读取大 JSON 文件
+    // 当前依赖 android:largeHeap="true" 来处理大文件（>100MB）
+    logger.info('Starting to read backup file, size:', dataFile.size, 'bytes')
+    let fileContent = await dataFile.text()
 
-    await restoreReduxData(reduxData, onProgress, dispatch)
-    await restoreIndexedDbData(indexedData, onProgress, dispatch)
+    logger.info('Parsing and transforming backup data...')
+    let parsedData = transformBackupData(fileContent)
+
+    // 立即释放原始文件内容
+    // @ts-ignore - fileContent 不再需要
+    fileContent = null
+
+    logger.info('Restoring Redux data...')
+    await restoreReduxData(parsedData.reduxData, onProgress, dispatch)
+
+    // Redux 数据已写入，释放内存
+    // @ts-ignore
+    parsedData.reduxData = null
+
+    logger.info('Restoring IndexedDB data...')
+    await restoreIndexedDbData(parsedData.indexedData, onProgress, dispatch)
+
+    // IndexedDB 数据已写入，释放内存
+    // @ts-ignore
+    parsedData.indexedData = null
+    // @ts-ignore
+    parsedData = null
+
+    logger.info('Restore completed successfully')
   } catch (error) {
     logger.error('restore error: ', error)
     throw error
@@ -130,12 +271,30 @@ export async function restore(
 }
 
 function transformBackupData(data: string): { reduxData: ExportReduxData; indexedData: ExportIndexedData } {
-  const orginalData = JSON.parse(data)
-  const localStorage = orginalData.localStorage
+  let orginalData: any
 
-  const persistDataString = localStorage['persist:cherry-studio']
+  try {
+    // 解析主 JSON - 这步无法避免，但可以立即释放原始字符串
+    logger.info('Parsing main JSON structure...')
+    orginalData = JSON.parse(data)
+    // data 参数会在函数返回后自动释放
+  } catch (error) {
+    logger.error('Failed to parse backup JSON:', error)
+    throw new Error('Invalid backup file format')
+  }
 
-  const rawReduxData = JSON.parse(persistDataString)
+  // 提取 Redux 数据
+  logger.info('Extracting Redux data...')
+  let localStorageData = orginalData.localStorage
+
+  // 从 IndexedDB 提取 topics（这是数据的真实来源，包含所有 topics）
+  const indexedDb: ImportIndexedData = orginalData.indexedDB
+
+  orginalData = null
+  let persistDataString = localStorageData['persist:cherry-studio']
+  localStorageData = null
+  let rawReduxData = JSON.parse(persistDataString)
+  persistDataString = null
 
   const reduxData: ImportReduxData = {
     assistants: JSON.parse(rawReduxData.assistants),
@@ -144,42 +303,66 @@ function transformBackupData(data: string): { reduxData: ExportReduxData; indexe
     settings: JSON.parse(rawReduxData.settings)
   }
 
+  rawReduxData = null
+
+  logger.info('Processing topics and messages...')
+  // 从 Redux 构建 topic 的 assistantId 映射
   const topicsFromRedux = reduxData.assistants.assistants
     .flatMap(a => a.topics)
     .concat(reduxData.assistants.defaultAssistant.topics)
 
-  const indexedDb: ImportIndexedData = orginalData.indexedDB
+  const topicToAssistantMap = new Map<string, string>()
+  for (const topic of topicsFromRedux) {
+    topicToAssistantMap.set(topic.id, topic.assistantId)
+  }
 
-  const allMessages = indexedDb.topics.flatMap(t => t.messages)
+  const allMessages: Message[] = []
+  const messagesByTopicId: Record<string, Message[]> = {}
 
-  const messagesByTopicId = allMessages.reduce<Record<string, Message[]>>((acc, message) => {
-    const { topicId } = message
-
-    if (!acc[topicId]) {
-      acc[topicId] = []
+  // 从 IndexedDB 提取所有 topics 和 messages
+  for (const topic of indexedDb.topics) {
+    if (topic.messages && topic.messages.length > 0) {
+      messagesByTopicId[topic.id] = topic.messages
+      allMessages.push(...topic.messages)
     }
+  }
 
-    acc[topicId].push(message)
-    return acc
-  }, {})
+  logger.info(`Extracted ${allMessages.length} messages from ${indexedDb.topics.length} topics`)
 
-  // 4. 遍历 redux 中的 topics，并将分组后的 messages 附加到每个 topic 上
-  const topicsWithMessages = topicsFromRedux.map(topic => {
-    const correspondingMessages = messagesByTopicId[topic.id] || []
+  // 合并 topics：使用 IndexedDB 的 topics，补充 Redux 的元数据
+  let topicsUsingDefaultFallback = 0
+  const topicsWithMessages = indexedDb.topics.map(indexedTopic => {
+    // 尝试从 Redux 中获取对应的 topic 元数据
+    const reduxTopic = topicsFromRedux.find(t => t.id === indexedTopic.id)
+
+    if (!reduxTopic) {
+      topicsUsingDefaultFallback++
+    }
 
     return {
-      ...topic,
-      messages: correspondingMessages
-    }
+      id: indexedTopic.id,
+      assistantId: reduxTopic?.assistantId ?? 'default',
+      name: reduxTopic?.name ?? 'Untitled Topic',
+      createdAt: reduxTopic?.createdAt ?? Date.now(),
+      updatedAt: reduxTopic?.updatedAt ?? Date.now(),
+      isLoading: reduxTopic?.isLoading ?? false
+    } satisfies Topic
   })
+
+  if (topicsUsingDefaultFallback > 0) {
+    logger.warn(`${topicsUsingDefaultFallback} topics not found in Redux data, using 'default' as assistantId fallback`)
+  }
+
+  topicToAssistantMap.clear()
+  logger.info('Backup data transformation completed')
 
   return {
     reduxData: reduxData,
     indexedData: {
       topics: topicsWithMessages,
-      message_blocks: indexedDb.message_blocks,
+      message_blocks: indexedDb.message_blocks || [],
       messages: allMessages,
-      settings: indexedDb.settings
+      settings: indexedDb.settings || []
     }
   }
 }

@@ -24,7 +24,10 @@ export function getSystemAssistants(): Assistant[] {
     emoji: '😀',
     prompt: '',
     topics: [],
-    type: 'system'
+    type: 'system',
+    settings: {
+      toolUseMode: 'function'
+    }
   }
   const translateAssistant: Assistant = {
     id: 'translate',

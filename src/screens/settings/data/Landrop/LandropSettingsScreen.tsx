@@ -1,22 +1,26 @@
+
+import { loggerService } from '@/services/LoggerService'
 import { useNavigation } from '@react-navigation/native'
+import { ConnectionInfo } from '@/types/network'
 import { File } from 'expo-file-system'
 import React, { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { SafeAreaContainer, HeaderBar, RestoreProgressModal } from '@/componentsV2'
-import { useDialog } from '@/hooks/useDialog'
+import { SafeAreaContainer, HeaderBar, RestoreProgressModal, YStack, Text } from '@/componentsV2'
 import { useRestore, LANDROP_RESTORE_STEPS, RESTORE_STEP_CONFIGS } from '@/hooks/useRestore'
 import { useWebSocket, WebSocketStatus } from '@/hooks/useWebSocket'
 import { DataSourcesNavigationProps } from '@/types/naviagate'
+import { Spinner } from 'heroui-native'
 
 import { QRCodeScanner } from './QRCodeScanner'
 import { DEFAULT_BACKUP_STORAGE } from '@/constants/storage'
 
+const logger = loggerService.withContext('landropSettingsScreen')
+
 export default function LandropSettingsScreen() {
   const { t } = useTranslation()
-  const dialog = useDialog()
   const navigation = useNavigation<DataSourcesNavigationProps>()
-  const { status, filename, connect } = useWebSocket()
+  const { status, filename, connect, disconnect } = useWebSocket()
   const [scannedIP, setScannedIP] = useState<string | null>(null)
   const { isModalOpen, restoreSteps, overallStatus, startRestore, closeModal, updateStepStatus, openModal } =
     useRestore({
@@ -24,6 +28,18 @@ export default function LandropSettingsScreen() {
     })
 
   const hasScannedRef = useRef(false)
+  const disconnectRef = useRef(disconnect)
+
+  useEffect(() => {
+    disconnectRef.current = disconnect
+  }, [disconnect])
+
+  useEffect(() => {
+    return () => {
+      logger.debug('Component unmounting, disconnecting WebSocket')
+      disconnectRef.current()
+    }
+  }, [])
 
   useEffect(() => {
     if (status === WebSocketStatus.DISCONNECTED) {
@@ -53,7 +69,7 @@ export default function LandropSettingsScreen() {
     const handleRestore = async () => {
       if (status === WebSocketStatus.ZIP_FILE_END) {
         const zip = new File(DEFAULT_BACKUP_STORAGE, filename)
-        console.log('zip', zip)
+        logger.debug('zip', zip)
         await startRestore(
           {
             name: zip.name,
@@ -69,20 +85,22 @@ export default function LandropSettingsScreen() {
     handleRestore()
   }, [filename, startRestore, status])
 
-  const handleQRCodeScanned = (ip: string) => {
+  const handleQRCodeScanned = async (connectionInfo: ConnectionInfo) => {
     if (hasScannedRef.current) {
       return
     }
 
     hasScannedRef.current = true
 
-    setScannedIP(ip)
-    connect(ip)
-    dialog.open({
-      type: 'info',
-      title: t('settings.data.landrop.scan_qr_code.success'),
-      content: t('settings.data.landrop.scan_qr_code.success_description')
-    })
+    setScannedIP(`Connection attempt: ${connectionInfo.candidates.length} candidates`)
+    await connect(connectionInfo)
+
+    // Log connection attempt details
+    if (typeof connectionInfo === 'string') {
+      logger.info(`Connecting to Landrop sender at ${connectionInfo} (legacy format)`)
+    } else {
+      logger.info(`Connecting to Landrop sender with ${connectionInfo.candidates.length} IP candidates, selected: ${connectionInfo.selectedHost}`)
+    }
   }
 
   const handleModalClose = () => {
@@ -90,11 +108,36 @@ export default function LandropSettingsScreen() {
     navigation.goBack()
   }
 
+  const showLoading = status === WebSocketStatus.CONNECTING || status === WebSocketStatus.CONNECTED
+
   return (
     <SafeAreaContainer style={{ flex: 1 }}>
       <HeaderBar title={t('settings.data.landrop.scan_qr_code.title')} />
 
       {!isModalOpen && !scannedIP && <QRCodeScanner onQRCodeScanned={handleQRCodeScanned} />}
+
+      {showLoading && (
+        <YStack
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10
+          }}>
+          <Spinner />
+          <Text className="mt-4 text-white text-lg">
+            {status === WebSocketStatus.CONNECTING
+              ? t('settings.data.landrop.scan_qr_code.connecting')
+              : t('settings.data.landrop.scan_qr_code.waiting_for_file')}
+          </Text>
+        </YStack>
+      )}
+
       <RestoreProgressModal
         isOpen={isModalOpen}
         steps={restoreSteps}

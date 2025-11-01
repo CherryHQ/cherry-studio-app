@@ -872,7 +872,10 @@ export async function createAssistant(): Promise<Assistant> {
     name: i18n.t('settings.assistant.title'),
     prompt: '',
     topics: [],
-    type: 'external'
+    type: 'external',
+    settings: {
+      toolUseMode: 'function'
+    }
   }
 
   await assistantService.createAssistant(newAssistant)

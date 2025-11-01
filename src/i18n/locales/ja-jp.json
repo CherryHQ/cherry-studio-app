@@ -516,13 +516,16 @@
         "landrop": {
           "filename": "ファイル名",
           "scan_qr_code": {
+            "connecting": "接続中...",
             "description": "Cherry StudioからQRコードをスキャン",
             "grant_permission": "権限を付与する",
             "permission_denied": "カメラの権限が許可されていません。QRコードをスキャンするには、デバイスの設定でカメラの権限を有効にしてください。",
+            "processing": "[to be translated]:正在处理二维码...",
             "requesting_permission": "カメラの権限をリクエスト中...",
             "success": "接続に成功しました 🎉",
             "success_description": "今すぐ送信ボタンをクリックしてデータを復元できます！",
-            "title": "QRコードをスキャン"
+            "title": "QRコードをスキャン",
+            "waiting_for_file": "ファイルの送信を待っています..."
           },
           "status": {
             "connected": "接続済み",
@@ -541,6 +544,8 @@
         "reset_success": "データリセットが成功しました！アプリケーションは初期状態に復元されました。",
         "reset_warning": "すべてのデータをリセットしますか？これにより、すべての会話、メッセージ、およびユーザーが作成したコンテンツが削除されます。この操作は元に戻せません。",
         "restore": {
+          "clear_error": "既存のデータのクリアに失敗しました。もう一度お試しください。",
+          "confirm_warning": "バックアップを復元すると現在のアプリデータがすべて上書きされます。",
           "error": "エラーを復元",
           "error_message": "復元処理中にエラーが発生しました。ファイルを確認して、もう一度やり直してください。",
           "progress": {
