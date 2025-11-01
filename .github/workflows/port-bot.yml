@@ -46,12 +46,25 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.COPILOT_TOKEN || secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          # Check if Copilot token is available
-          if [ -z "${{ secrets.COPILOT_TOKEN }}" ] && [ -z "${{ secrets.GH_PAT }}" ]; then
-            echo "⚠️ WARNING: No Copilot-enabled token found!"
-            echo "Please add COPILOT_TOKEN to repository secrets for full functionality."
-            echo "See: https://github.com/${{ github.repository }}/settings/secrets/actions"
+          # Verify token is available
+          if [ -z "$GH_TOKEN" ]; then
+            echo "❌ ERROR: No GitHub token available!"
+            exit 1
           fi
+
+          # Check if Copilot token is configured
+          if [ -z "${{ secrets.COPILOT_TOKEN }}" ] && [ -z "${{ secrets.GH_PAT }}" ]; then
+            echo "⚠️ WARNING: Using default GITHUB_TOKEN (may not have Copilot access)"
+            echo "For best results, add COPILOT_TOKEN to repository secrets:"
+            echo "  https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo ""
+          fi
+
+          # Authenticate gh CLI with the token
+          echo "$GH_TOKEN" | gh auth login --with-token
+
+          # Verify authentication
+          gh auth status
 
           # Let Copilot Agent handle everything
           gh agent-task create \
