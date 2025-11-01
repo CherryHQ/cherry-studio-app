@@ -1,0 +1,2164 @@
+diff --git a/src/aiCore/chunk/AiSdkToChunkAdapter.ts b/src/aiCore/chunk/AiSdkToChunkAdapter.ts
+index 3f27f94..6e4288d 100644
+--- a/src/aiCore/chunk/AiSdkToChunkAdapter.ts
++++ b/src/aiCore/chunk/AiSdkToChunkAdapter.ts
+@@ -4,8 +4,10 @@
+  */
+ 
+ import { loggerService } from '@logger'
+-import { AISDKWebSearchResult, MCPTool, WebSearchResults, WebSearchSource } from '@renderer/types'
+-import { Chunk, ChunkType } from '@renderer/types/chunk'
++import type { AISDKWebSearchResult, MCPTool, WebSearchResults } from '@renderer/types'
++import { WebSearchSource } from '@renderer/types'
++import type { Chunk } from '@renderer/types/chunk'
++import { ChunkType } from '@renderer/types/chunk'
+ import { ProviderSpecificError } from '@renderer/types/provider-specific-error'
+ import { formatErrorMessage } from '@renderer/utils/error'
+ import { convertLinks, flushLinkConverterBuffer } from '@renderer/utils/linkConverter'
+diff --git a/src/aiCore/chunk/handleToolCallChunk.ts b/src/aiCore/chunk/handleToolCallChunk.ts
+index 39aefc6..32c7e53 100644
+--- a/src/aiCore/chunk/handleToolCallChunk.ts
++++ b/src/aiCore/chunk/handleToolCallChunk.ts
+@@ -6,8 +6,16 @@
+ 
+ import { loggerService } from '@logger'
+ import { processKnowledgeReferences } from '@renderer/services/KnowledgeService'
+-import { BaseTool, MCPTool, MCPToolResponse, NormalToolResponse } from '@renderer/types'
+-import { Chunk, ChunkType } from '@renderer/types/chunk'
++import type {
++  BaseTool,
++  MCPCallToolResponse,
++  MCPTool,
++  MCPToolResponse,
++  MCPToolResultContent,
++  NormalToolResponse
++} from '@renderer/types'
++import type { Chunk } from '@renderer/types/chunk'
++import { ChunkType } from '@renderer/types/chunk'
+ import type { ToolSet, TypedToolCall, TypedToolError, TypedToolResult } from 'ai'
+ 
+ const logger = loggerService.withContext('ToolCallChunkHandler')
+@@ -254,6 +262,7 @@ export class ToolCallChunkHandler {
+       type: 'tool-result'
+     } & TypedToolResult<ToolSet>
+   ): void {
++    // TODO: 基于AI SDK为供应商内置工具做更好的展示和类型安全处理
+     const { toolCallId, output, input } = chunk
+ 
+     if (!toolCallId) {
+@@ -299,12 +308,7 @@ export class ToolCallChunkHandler {
+         responses: [toolResponse]
+       })
+ 
+-      const images: string[] = []
+-      for (const content of toolResponse.response?.content || []) {
+-        if (content.type === 'image' && content.data) {
+-          images.push(`data:${content.mimeType};base64,${content.data}`)
+-        }
+-      }
++      const images = extractImagesFromToolOutput(toolResponse.response)
+ 
+       if (images.length) {
+         this.onChunk({
+@@ -351,3 +355,41 @@ export class ToolCallChunkHandler {
+ }
+ 
+ export const addActiveToolCall = ToolCallChunkHandler.addActiveToolCall.bind(ToolCallChunkHandler)
++
++function extractImagesFromToolOutput(output: unknown): string[] {
++  if (!output) {
++    return []
++  }
++
++  const contents: unknown[] = []
++
++  if (isMcpCallToolResponse(output)) {
++    contents.push(...output.content)
++  } else if (Array.isArray(output)) {
++    contents.push(...output)
++  } else if (hasContentArray(output)) {
++    contents.push(...output.content)
++  }
++
++  return contents
++    .filter(isMcpImageContent)
++    .map((content) => `data:${content.mimeType ?? 'image/png'};base64,${content.data}`)
++}
++
++function isMcpCallToolResponse(value: unknown): value is MCPCallToolResponse {
++  return typeof value === 'object' && value !== null && Array.isArray((value as MCPCallToolResponse).content)
++}
++
++function hasContentArray(value: unknown): value is { content: unknown[] } {
++  return typeof value === 'object' && value !== null && Array.isArray((value as { content?: unknown }).content)
++}
++
++function isMcpImageContent(content: unknown): content is MCPToolResultContent & { data: string } {
++  if (typeof content !== 'object' || content === null) {
++    return false
++  }
++
++  const resultContent = content as MCPToolResultContent
++
++  return resultContent.type === 'image' && typeof resultContent.data === 'string'
++}
+diff --git a/src/aiCore/index_new.ts b/src/aiCore/index_new.ts
+index b748e3c..800d2ff 100644
+--- a/src/aiCore/index_new.ts
++++ b/src/aiCore/index_new.ts
+@@ -11,16 +11,18 @@ import { createExecutor } from '@cherrystudio/ai-core'
+ import { loggerService } from '@logger'
+ import { getEnableDeveloperMode } from '@renderer/hooks/useSettings'
+ import { addSpan, endSpan } from '@renderer/services/SpanManagerService'
+-import { StartSpanParams } from '@renderer/trace/types/ModelSpanEntity'
++import type { StartSpanParams } from '@renderer/trace/types/ModelSpanEntity'
+ import type { Assistant, GenerateImageParams, Model, Provider } from '@renderer/types'
+ import type { AiSdkModel, StreamTextParams } from '@renderer/types/aiCoreTypes'
++import { SUPPORTED_IMAGE_ENDPOINT_LIST } from '@renderer/utils'
+ import { buildClaudeCodeSystemModelMessage } from '@shared/anthropic'
+ import { type ImageModel, type LanguageModel, type Provider as AiSdkProvider, wrapLanguageModel } from 'ai'
+ 
+ import AiSdkToChunkAdapter from './chunk/AiSdkToChunkAdapter'
+ import LegacyAiProvider from './legacy/index'
+-import { CompletionsParams, CompletionsResult } from './legacy/middleware/schemas'
+-import { AiSdkMiddlewareConfig, buildAiSdkMiddlewares } from './middleware/AiSdkMiddlewareBuilder'
++import type { CompletionsParams, CompletionsResult } from './legacy/middleware/schemas'
++import type { AiSdkMiddlewareConfig } from './middleware/AiSdkMiddlewareBuilder'
++import { buildAiSdkMiddlewares } from './middleware/AiSdkMiddlewareBuilder'
+ import { buildPlugins } from './plugins/PluginBuilder'
+ import { createAiSdkProvider } from './provider/factory'
+ import {
+@@ -77,7 +79,7 @@ export default class ModernAiProvider {
+     return this.actualProvider
+   }
+ 
+-  public async completions(modelId: string, params: StreamTextParams, config: ModernAiProviderConfig) {
++  public async completions(modelId: string, params: StreamTextParams, providerConfig: ModernAiProviderConfig) {
+     // 检查model是否存在
+     if (!this.model) {
+       throw new Error('Model is required for completions. Please use constructor with model parameter.')
+@@ -85,7 +87,10 @@ export default class ModernAiProvider {
+ 
+     // 每次请求时重新生成配置以确保API key轮换生效
+     this.config = providerToAiSdkConfig(this.actualProvider, this.model)
+-
++    logger.debug('Generated provider config for completions', this.config)
++    if (SUPPORTED_IMAGE_ENDPOINT_LIST.includes(this.config.options.endpoint)) {
++      providerConfig.isImageGenerationEndpoint = true
++    }
+     // 准备特殊配置
+     await prepareSpecialProviderConfig(this.actualProvider, this.config)
+ 
+@@ -96,12 +101,13 @@ export default class ModernAiProvider {
+ 
+     // 提前构建中间件
+     const middlewares = buildAiSdkMiddlewares({
+-      ...config,
+-      provider: this.actualProvider
++      ...providerConfig,
++      provider: this.actualProvider,
++      assistant: providerConfig.assistant
+     })
+     logger.debug('Built middlewares in completions', {
+       middlewareCount: middlewares.length,
+-      isImageGeneration: config.isImageGenerationEndpoint
++      isImageGeneration: providerConfig.isImageGenerationEndpoint
+     })
+     if (!this.localProvider) {
+       throw new Error('Local provider not created')
+@@ -109,7 +115,7 @@ export default class ModernAiProvider {
+ 
+     // 根据endpoint类型创建对应的模型
+     let model: AiSdkModel | undefined
+-    if (config.isImageGenerationEndpoint) {
++    if (providerConfig.isImageGenerationEndpoint) {
+       model = this.localProvider.imageModel(modelId)
+     } else {
+       model = this.localProvider.languageModel(modelId)
+@@ -125,15 +131,15 @@ export default class ModernAiProvider {
+       params.messages = [...claudeCodeSystemMessage, ...(params.messages || [])]
+     }
+ 
+-    if (config.topicId && getEnableDeveloperMode()) {
++    if (providerConfig.topicId && getEnableDeveloperMode()) {
+       // TypeScript类型窄化：确保topicId是string类型
+       const traceConfig = {
+-        ...config,
+-        topicId: config.topicId
++        ...providerConfig,
++        topicId: providerConfig.topicId
+       }
+       return await this._completionsForTrace(model, params, traceConfig)
+     } else {
+-      return await this._completionsOrImageGeneration(model, params, config)
++      return await this._completionsOrImageGeneration(model, params, providerConfig)
+     }
+   }
+ 
+diff --git a/src/aiCore/legacy/clients/ApiClientFactory.ts b/src/aiCore/legacy/clients/ApiClientFactory.ts
+index e7194c2..bc41616 100644
+--- a/src/aiCore/legacy/clients/ApiClientFactory.ts
++++ b/src/aiCore/legacy/clients/ApiClientFactory.ts
+@@ -1,11 +1,11 @@
+ import { loggerService } from '@logger'
+ import { isNewApiProvider } from '@renderer/config/providers'
+-import { Provider } from '@renderer/types'
++import type { Provider } from '@renderer/types'
+ 
+ import { AihubmixAPIClient } from './aihubmix/AihubmixAPIClient'
+ import { AnthropicAPIClient } from './anthropic/AnthropicAPIClient'
+ import { AwsBedrockAPIClient } from './aws/AwsBedrockAPIClient'
+-import { BaseApiClient } from './BaseApiClient'
++import type { BaseApiClient } from './BaseApiClient'
+ import { CherryAiAPIClient } from './cherryai/CherryAiAPIClient'
+ import { GeminiAPIClient } from './gemini/GeminiAPIClient'
+ import { VertexAPIClient } from './gemini/VertexAPIClient'
+diff --git a/src/aiCore/legacy/clients/BaseApiClient.ts b/src/aiCore/legacy/clients/BaseApiClient.ts
+index 4a41db7..767cad1 100644
+--- a/src/aiCore/legacy/clients/BaseApiClient.ts
++++ b/src/aiCore/legacy/clients/BaseApiClient.ts
+@@ -9,29 +9,31 @@ import { REFERENCE_PROMPT } from '@renderer/config/prompts'
+ import { isSupportServiceTierProvider } from '@renderer/config/providers'
+ import { getLMStudioKeepAliveTime } from '@renderer/hooks/useLMStudio'
+ import { getAssistantSettings } from '@renderer/services/AssistantService'
+-import {
++import type {
+   Assistant,
+-  FileTypes,
+   GenerateImageParams,
+-  GroqServiceTiers,
+-  isGroqServiceTier,
+-  isOpenAIServiceTier,
+   KnowledgeReference,
+   MCPCallToolResponse,
+   MCPTool,
+   MCPToolResponse,
+   MemoryItem,
+   Model,
+-  OpenAIServiceTiers,
+   OpenAIVerbosity,
+   Provider,
+-  SystemProviderIds,
+   ToolCallResponse,
+   WebSearchProviderResponse,
+   WebSearchResponse
+ } from '@renderer/types'
+-import { Message } from '@renderer/types/newMessage'
+ import {
++  FileTypes,
++  GroqServiceTiers,
++  isGroqServiceTier,
++  isOpenAIServiceTier,
++  OpenAIServiceTiers,
++  SystemProviderIds
++} from '@renderer/types'
++import type { Message } from '@renderer/types/newMessage'
++import type {
+   RequestOptions,
+   SdkInstance,
+   SdkMessageParam,
+@@ -49,8 +51,8 @@ import { defaultTimeout } from '@shared/config/constant'
+ import { defaultAppHeaders } from '@shared/utils'
+ import { isEmpty } from 'lodash'
+ 
+-import { CompletionsContext } from '../middleware/types'
+-import { ApiClient, RequestTransformer, ResponseChunkTransformer } from './types'
++import type { CompletionsContext } from '../middleware/types'
++import type { ApiClient, RequestTransformer, ResponseChunkTransformer } from './types'
+ 
+ const logger = loggerService.withContext('BaseApiClient')
+ 
+diff --git a/src/aiCore/legacy/clients/MixedBaseApiClient.ts b/src/aiCore/legacy/clients/MixedBaseApiClient.ts
+index 36a207e..fb5568a 100644
+--- a/src/aiCore/legacy/clients/MixedBaseApiClient.ts
++++ b/src/aiCore/legacy/clients/MixedBaseApiClient.ts
+@@ -1,4 +1,4 @@
+-import {
++import type {
+   GenerateImageParams,
+   MCPCallToolResponse,
+   MCPTool,
+@@ -7,7 +7,7 @@ import {
+   Provider,
+   ToolCallResponse
+ } from '@renderer/types'
+-import {
++import type {
+   RequestOptions,
+   SdkInstance,
+   SdkMessageParam,
+@@ -19,13 +19,13 @@ import {
+   SdkToolCall
+ } from '@renderer/types/sdk'
+ 
+-import { CompletionsContext } from '../middleware/types'
+-import { AnthropicAPIClient } from './anthropic/AnthropicAPIClient'
++import type { CompletionsContext } from '../middleware/types'
++import type { AnthropicAPIClient } from './anthropic/AnthropicAPIClient'
+ import { BaseApiClient } from './BaseApiClient'
+-import { GeminiAPIClient } from './gemini/GeminiAPIClient'
+-import { OpenAIAPIClient } from './openai/OpenAIApiClient'
+-import { OpenAIResponseAPIClient } from './openai/OpenAIResponseAPIClient'
+-import { RequestTransformer, ResponseChunkTransformer } from './types'
++import type { GeminiAPIClient } from './gemini/GeminiAPIClient'
++import type { OpenAIAPIClient } from './openai/OpenAIApiClient'
++import type { OpenAIResponseAPIClient } from './openai/OpenAIResponseAPIClient'
++import type { RequestTransformer, ResponseChunkTransformer } from './types'
+ 
+ /**
+  * MixedAPIClient - 适用于可能含有多种接口类型的Provider
+diff --git a/src/aiCore/legacy/clients/__tests__/ApiClientFactory.test.ts b/src/aiCore/legacy/clients/__tests__/ApiClientFactory.test.ts
+index 550486a..03ec1e1 100644
+--- a/src/aiCore/legacy/clients/__tests__/ApiClientFactory.test.ts
++++ b/src/aiCore/legacy/clients/__tests__/ApiClientFactory.test.ts
+@@ -1,5 +1,4 @@
+-import { Provider } from '@renderer/types'
+-import { isOpenAIProvider } from '@renderer/utils'
++import type { Provider } from '@renderer/types'
+ import { beforeEach, describe, expect, it, vi } from 'vitest'
+ 
+ import { AihubmixAPIClient } from '../aihubmix/AihubmixAPIClient'
+@@ -202,36 +201,4 @@ describe('ApiClientFactory', () => {
+       expect(client).toBeDefined()
+     })
+   })
+-
+-  describe('isOpenAIProvider', () => {
+-    it('should return true for openai type', () => {
+-      const provider = createTestProvider('openai', 'openai')
+-      expect(isOpenAIProvider(provider)).toBe(true)
+-    })
+-
+-    it('should return true for azure-openai type', () => {
+-      const provider = createTestProvider('azure-openai', 'azure-openai')
+-      expect(isOpenAIProvider(provider)).toBe(true)
+-    })
+-
+-    it('should return true for unknown type (fallback to OpenAI)', () => {
+-      const provider = createTestProvider('unknown', 'unknown')
+-      expect(isOpenAIProvider(provider)).toBe(true)
+-    })
+-
+-    it('should return false for vertexai type', () => {
+-      const provider = createTestProvider('vertex', 'vertexai')
+-      expect(isOpenAIProvider(provider)).toBe(false)
+-    })
+-
+-    it('should return false for anthropic type', () => {
+-      const provider = createTestProvider('anthropic', 'anthropic')
+-      expect(isOpenAIProvider(provider)).toBe(false)
+-    })
+-
+-    it('should return false for gemini type', () => {
+-      const provider = createTestProvider('gemini', 'gemini')
+-      expect(isOpenAIProvider(provider)).toBe(false)
+-    })
+-  })
+ })
+diff --git a/src/aiCore/legacy/clients/__tests__/index.clientCompatibilityTypes.test.ts b/src/aiCore/legacy/clients/__tests__/index.clientCompatibilityTypes.test.ts
+index dd85730..bcff572 100644
+--- a/src/aiCore/legacy/clients/__tests__/index.clientCompatibilityTypes.test.ts
++++ b/src/aiCore/legacy/clients/__tests__/index.clientCompatibilityTypes.test.ts
+@@ -6,7 +6,7 @@ import { VertexAPIClient } from '@renderer/aiCore/legacy/clients/gemini/VertexAP
+ import { NewAPIClient } from '@renderer/aiCore/legacy/clients/newapi/NewAPIClient'
+ import { OpenAIAPIClient } from '@renderer/aiCore/legacy/clients/openai/OpenAIApiClient'
+ import { OpenAIResponseAPIClient } from '@renderer/aiCore/legacy/clients/openai/OpenAIResponseAPIClient'
+-import { EndpointType, Model, Provider } from '@renderer/types'
++import type { EndpointType, Model, Provider } from '@renderer/types'
+ import { beforeEach, describe, expect, it, vi } from 'vitest'
+ 
+ vi.mock('@renderer/config/models', () => ({
+diff --git a/src/aiCore/legacy/clients/aihubmix/AihubmixAPIClient.ts b/src/aiCore/legacy/clients/aihubmix/AihubmixAPIClient.ts
+index 1149c04..a8a0ca5 100644
+--- a/src/aiCore/legacy/clients/aihubmix/AihubmixAPIClient.ts
++++ b/src/aiCore/legacy/clients/aihubmix/AihubmixAPIClient.ts
+@@ -1,8 +1,8 @@
+ import { isOpenAILLMModel } from '@renderer/config/models'
+-import { Model, Provider } from '@renderer/types'
++import type { Model, Provider } from '@renderer/types'
+ 
+ import { AnthropicAPIClient } from '../anthropic/AnthropicAPIClient'
+-import { BaseApiClient } from '../BaseApiClient'
++import type { BaseApiClient } from '../BaseApiClient'
+ import { GeminiAPIClient } from '../gemini/GeminiAPIClient'
+ import { MixedBaseAPIClient } from '../MixedBaseApiClient'
+ import { OpenAIAPIClient } from '../openai/OpenAIApiClient'
+diff --git a/src/aiCore/legacy/clients/anthropic/AnthropicAPIClient.ts b/src/aiCore/legacy/clients/anthropic/AnthropicAPIClient.ts
+index 4f9bb28..15f3cf1 100644
+--- a/src/aiCore/legacy/clients/anthropic/AnthropicAPIClient.ts
++++ b/src/aiCore/legacy/clients/anthropic/AnthropicAPIClient.ts
+@@ -1,5 +1,5 @@
+-import Anthropic from '@anthropic-ai/sdk'
+-import {
++import type Anthropic from '@anthropic-ai/sdk'
++import type {
+   Base64ImageSource,
+   ImageBlockParam,
+   MessageParam,
+@@ -8,7 +8,7 @@ import {
+   ToolUseBlock,
+   WebSearchTool20250305
+ } from '@anthropic-ai/sdk/resources'
+-import {
++import type {
+   ContentBlock,
+   ContentBlockParam,
+   MessageCreateParamsBase,
+@@ -23,27 +23,24 @@ import {
+   WebSearchToolResultError
+ } from '@anthropic-ai/sdk/resources/messages'
+ import { MessageStream } from '@anthropic-ai/sdk/resources/messages/messages'
+-import AnthropicVertex from '@anthropic-ai/vertex-sdk'
++import type AnthropicVertex from '@anthropic-ai/vertex-sdk'
+ import { loggerService } from '@logger'
+ import { DEFAULT_MAX_TOKENS } from '@renderer/config/constant'
+ import { findTokenLimit, isClaudeReasoningModel, isReasoningModel, isWebSearchModel } from '@renderer/config/models'
+ import { getAssistantSettings } from '@renderer/services/AssistantService'
+ import FileManager from '@renderer/services/FileManager'
+ import { estimateTextTokens } from '@renderer/services/TokenService'
+-import {
++import type {
+   Assistant,
+-  EFFORT_RATIO,
+-  FileTypes,
+   MCPCallToolResponse,
+   MCPTool,
+   MCPToolResponse,
+   Model,
+   Provider,
+-  ToolCallResponse,
+-  WebSearchSource
++  ToolCallResponse
+ } from '@renderer/types'
+-import {
+-  ChunkType,
++import { EFFORT_RATIO, FileTypes, WebSearchSource } from '@renderer/types'
++import type {
+   ErrorChunk,
+   LLMWebSearchCompleteChunk,
+   LLMWebSearchInProgressChunk,
+@@ -53,8 +50,9 @@ import {
+   ThinkingDeltaChunk,
+   ThinkingStartChunk
+ } from '@renderer/types/chunk'
++import { ChunkType } from '@renderer/types/chunk'
+ import { type Message } from '@renderer/types/newMessage'
+-import {
++import type {
+   AnthropicSdkMessageParam,
+   AnthropicSdkParams,
+   AnthropicSdkRawChunk,
+@@ -71,9 +69,9 @@ import { findFileBlocks, findImageBlocks } from '@renderer/utils/messageUtils/fi
+ import { buildClaudeCodeSystemMessage, getSdkClient } from '@shared/anthropic'
+ import { t } from 'i18next'
+ 
+-import { GenericChunk } from '../../middleware/schemas'
++import type { GenericChunk } from '../../middleware/schemas'
+ import { BaseApiClient } from '../BaseApiClient'
+-import { AnthropicStreamListener, RawStreamListener, RequestTransformer, ResponseChunkTransformer } from '../types'
++import type { AnthropicStreamListener, RawStreamListener, RequestTransformer, ResponseChunkTransformer } from '../types'
+ 
+ const logger = loggerService.withContext('AnthropicAPIClient')
+ 
+diff --git a/src/aiCore/legacy/clients/anthropic/AnthropicVertexClient.ts b/src/aiCore/legacy/clients/anthropic/AnthropicVertexClient.ts
+index bb96ac9..2fe16e8 100644
+--- a/src/aiCore/legacy/clients/anthropic/AnthropicVertexClient.ts
++++ b/src/aiCore/legacy/clients/anthropic/AnthropicVertexClient.ts
+@@ -1,8 +1,8 @@
+-import Anthropic from '@anthropic-ai/sdk'
++import type Anthropic from '@anthropic-ai/sdk'
+ import AnthropicVertex from '@anthropic-ai/vertex-sdk'
+ import { loggerService } from '@logger'
+ import { getVertexAILocation, getVertexAIProjectId, getVertexAIServiceAccount } from '@renderer/hooks/useVertexAI'
+-import { Provider } from '@renderer/types'
++import type { Provider } from '@renderer/types'
+ import { isEmpty } from 'lodash'
+ 
+ import { AnthropicAPIClient } from './AnthropicAPIClient'
+diff --git a/src/aiCore/legacy/clients/aws/AwsBedrockAPIClient.ts b/src/aiCore/legacy/clients/aws/AwsBedrockAPIClient.ts
+index 1de8a72..94f74ee 100644
+--- a/src/aiCore/legacy/clients/aws/AwsBedrockAPIClient.ts
++++ b/src/aiCore/legacy/clients/aws/AwsBedrockAPIClient.ts
+@@ -6,7 +6,7 @@ import {
+   InvokeModelWithResponseStreamCommand
+ } from '@aws-sdk/client-bedrock-runtime'
+ import { loggerService } from '@logger'
+-import { GenericChunk } from '@renderer/aiCore/legacy/middleware/schemas'
++import type { GenericChunk } from '@renderer/aiCore/legacy/middleware/schemas'
+ import { DEFAULT_MAX_TOKENS } from '@renderer/config/constant'
+ import { findTokenLimit, isReasoningModel } from '@renderer/config/models'
+ import {
+@@ -16,10 +16,8 @@ import {
+ } from '@renderer/hooks/useAwsBedrock'
+ import { getAssistantSettings } from '@renderer/services/AssistantService'
+ import { estimateTextTokens } from '@renderer/services/TokenService'
+-import {
++import type {
+   Assistant,
+-  EFFORT_RATIO,
+-  FileTypes,
+   GenerateImageParams,
+   MCPCallToolResponse,
+   MCPTool,
+@@ -28,15 +26,11 @@ import {
+   Provider,
+   ToolCallResponse
+ } from '@renderer/types'
+-import {
+-  ChunkType,
+-  MCPToolCreatedChunk,
+-  TextDeltaChunk,
+-  ThinkingDeltaChunk,
+-  ThinkingStartChunk
+-} from '@renderer/types/chunk'
+-import { Message } from '@renderer/types/newMessage'
+-import {
++import { EFFORT_RATIO, FileTypes } from '@renderer/types'
++import type { MCPToolCreatedChunk, TextDeltaChunk, ThinkingDeltaChunk, ThinkingStartChunk } from '@renderer/types/chunk'
++import { ChunkType } from '@renderer/types/chunk'
++import type { Message } from '@renderer/types/newMessage'
++import type {
+   AwsBedrockSdkInstance,
+   AwsBedrockSdkMessageParam,
+   AwsBedrockSdkParams,
+@@ -58,7 +52,7 @@ import { findFileBlocks, findImageBlocks } from '@renderer/utils/messageUtils/fi
+ import { t } from 'i18next'
+ 
+ import { BaseApiClient } from '../BaseApiClient'
+-import { RequestTransformer, ResponseChunkTransformer } from '../types'
++import type { RequestTransformer, ResponseChunkTransformer } from '../types'
+ 
+ const logger = loggerService.withContext('AwsBedrockAPIClient')
+ 
+diff --git a/src/aiCore/legacy/clients/cherryai/CherryAiAPIClient.ts b/src/aiCore/legacy/clients/cherryai/CherryAiAPIClient.ts
+index 08e4d9d..b72e0a8 100644
+--- a/src/aiCore/legacy/clients/cherryai/CherryAiAPIClient.ts
++++ b/src/aiCore/legacy/clients/cherryai/CherryAiAPIClient.ts
+@@ -1,6 +1,6 @@
+-import OpenAI from '@cherrystudio/openai'
+-import { Provider } from '@renderer/types'
+-import { OpenAISdkParams, OpenAISdkRawOutput } from '@renderer/types/sdk'
++import type OpenAI from '@cherrystudio/openai'
++import type { Provider } from '@renderer/types'
++import type { OpenAISdkParams, OpenAISdkRawOutput } from '@renderer/types/sdk'
+ 
+ import { OpenAIAPIClient } from '../openai/OpenAIApiClient'
+ 
+diff --git a/src/aiCore/legacy/clients/gemini/GeminiAPIClient.ts b/src/aiCore/legacy/clients/gemini/GeminiAPIClient.ts
+index 33d34c7..27e659c 100644
+--- a/src/aiCore/legacy/clients/gemini/GeminiAPIClient.ts
++++ b/src/aiCore/legacy/clients/gemini/GeminiAPIClient.ts
+@@ -1,14 +1,9 @@
+-import {
++import type {
+   Content,
+-  createPartFromUri,
+   File,
+   FunctionCall,
+   GenerateContentConfig,
+   GenerateImagesConfig,
+-  GoogleGenAI,
+-  HarmBlockThreshold,
+-  HarmCategory,
+-  Modality,
+   Model as GeminiModel,
+   Part,
+   SafetySetting,
+@@ -16,6 +11,7 @@ import {
+   ThinkingConfig,
+   Tool
+ } from '@google/genai'
++import { createPartFromUri, GoogleGenAI, HarmBlockThreshold, HarmCategory, Modality } from '@google/genai'
+ import { loggerService } from '@logger'
+ import { nanoid } from '@reduxjs/toolkit'
+ import {
+@@ -26,11 +22,9 @@ import {
+   isVisionModel
+ } from '@renderer/config/models'
+ import { estimateTextTokens } from '@renderer/services/TokenService'
+-import {
++import type {
+   Assistant,
+-  EFFORT_RATIO,
+   FileMetadata,
+-  FileTypes,
+   FileUploadResponse,
+   GenerateImageParams,
+   MCPCallToolResponse,
+@@ -38,12 +32,13 @@ import {
+   MCPToolResponse,
+   Model,
+   Provider,
+-  ToolCallResponse,
+-  WebSearchSource
++  ToolCallResponse
+ } from '@renderer/types'
+-import { ChunkType, LLMWebSearchCompleteChunk, TextStartChunk, ThinkingStartChunk } from '@renderer/types/chunk'
+-import { Message } from '@renderer/types/newMessage'
+-import {
++import { EFFORT_RATIO, FileTypes, WebSearchSource } from '@renderer/types'
++import type { LLMWebSearchCompleteChunk, TextStartChunk, ThinkingStartChunk } from '@renderer/types/chunk'
++import { ChunkType } from '@renderer/types/chunk'
++import type { Message } from '@renderer/types/newMessage'
++import type {
+   GeminiOptions,
+   GeminiSdkMessageParam,
+   GeminiSdkParams,
+@@ -62,9 +57,9 @@ import { findFileBlocks, findImageBlocks, getMainTextContent } from '@renderer/u
+ import { defaultTimeout, MB } from '@shared/config/constant'
+ import { t } from 'i18next'
+ 
+-import { GenericChunk } from '../../middleware/schemas'
++import type { GenericChunk } from '../../middleware/schemas'
+ import { BaseApiClient } from '../BaseApiClient'
+-import { RequestTransformer, ResponseChunkTransformer } from '../types'
++import type { RequestTransformer, ResponseChunkTransformer } from '../types'
+ 
+ const logger = loggerService.withContext('GeminiAPIClient')
+ 
+diff --git a/src/aiCore/legacy/clients/gemini/VertexAPIClient.ts b/src/aiCore/legacy/clients/gemini/VertexAPIClient.ts
+index 37e6677..49a96a8 100644
+--- a/src/aiCore/legacy/clients/gemini/VertexAPIClient.ts
++++ b/src/aiCore/legacy/clients/gemini/VertexAPIClient.ts
+@@ -1,7 +1,7 @@
+ import { GoogleGenAI } from '@google/genai'
+ import { loggerService } from '@logger'
+ import { createVertexProvider, isVertexAIConfigured, isVertexProvider } from '@renderer/hooks/useVertexAI'
+-import { Model, Provider, VertexProvider } from '@renderer/types'
++import type { Model, Provider, VertexProvider } from '@renderer/types'
+ import { isEmpty } from 'lodash'
+ 
+ import { AnthropicVertexClient } from '../anthropic/AnthropicVertexClient'
+diff --git a/src/aiCore/legacy/clients/newapi/NewAPIClient.ts b/src/aiCore/legacy/clients/newapi/NewAPIClient.ts
+index 58b349a..f3e04e0 100644
+--- a/src/aiCore/legacy/clients/newapi/NewAPIClient.ts
++++ b/src/aiCore/legacy/clients/newapi/NewAPIClient.ts
+@@ -1,10 +1,10 @@
+ import { loggerService } from '@logger'
+ import { isSupportedModel } from '@renderer/config/models'
+-import { Model, Provider } from '@renderer/types'
+-import { NewApiModel } from '@renderer/types/sdk'
++import type { Model, Provider } from '@renderer/types'
++import type { NewApiModel } from '@renderer/types/sdk'
+ 
+ import { AnthropicAPIClient } from '../anthropic/AnthropicAPIClient'
+-import { BaseApiClient } from '../BaseApiClient'
++import type { BaseApiClient } from '../BaseApiClient'
+ import { GeminiAPIClient } from '../gemini/GeminiAPIClient'
+ import { MixedBaseAPIClient } from '../MixedBaseApiClient'
+ import { OpenAIAPIClient } from '../openai/OpenAIApiClient'
+diff --git a/src/aiCore/legacy/clients/openai/OpenAIApiClient.ts b/src/aiCore/legacy/clients/openai/OpenAIApiClient.ts
+index 618d9b4..239890c 100644
+--- a/src/aiCore/legacy/clients/openai/OpenAIApiClient.ts
++++ b/src/aiCore/legacy/clients/openai/OpenAIApiClient.ts
+@@ -1,5 +1,6 @@
+-import OpenAI, { AzureOpenAI } from '@cherrystudio/openai'
+-import {
++import type { AzureOpenAI } from '@cherrystudio/openai'
++import type OpenAI from '@cherrystudio/openai'
++import type {
+   ChatCompletionContentPart,
+   ChatCompletionContentPartRefusal,
+   ChatCompletionTool
+@@ -48,25 +49,28 @@ import { mapLanguageToQwenMTModel } from '@renderer/config/translate'
+ import { processPostsuffixQwen3Model, processReqMessages } from '@renderer/services/ModelMessageService'
+ import { estimateTextTokens } from '@renderer/services/TokenService'
+ // For Copilot token
+-import {
++import type {
+   Assistant,
+-  EFFORT_RATIO,
+-  FileTypes,
+-  isSystemProvider,
+-  isTranslateAssistant,
+   MCPCallToolResponse,
+   MCPTool,
+   MCPToolResponse,
+   Model,
+   OpenAIServiceTier,
+   Provider,
++  ToolCallResponse
++} from '@renderer/types'
++import {
++  EFFORT_RATIO,
++  FileTypes,
++  isSystemProvider,
++  isTranslateAssistant,
+   SystemProviderIds,
+-  ToolCallResponse,
+   WebSearchSource
+ } from '@renderer/types'
+-import { ChunkType, TextStartChunk, ThinkingStartChunk } from '@renderer/types/chunk'
+-import { Message } from '@renderer/types/newMessage'
+-import {
++import type { TextStartChunk, ThinkingStartChunk } from '@renderer/types/chunk'
++import { ChunkType } from '@renderer/types/chunk'
++import type { Message } from '@renderer/types/newMessage'
++import type {
+   OpenAIExtraBody,
+   OpenAIModality,
+   OpenAISdkMessageParam,
+@@ -86,8 +90,8 @@ import {
+ import { findFileBlocks, findImageBlocks } from '@renderer/utils/messageUtils/find'
+ import { t } from 'i18next'
+ 
+-import { GenericChunk } from '../../middleware/schemas'
+-import { RequestTransformer, ResponseChunkTransformer, ResponseChunkTransformerContext } from '../types'
++import type { GenericChunk } from '../../middleware/schemas'
++import type { RequestTransformer, ResponseChunkTransformer, ResponseChunkTransformerContext } from '../types'
+ import { OpenAIBaseClient } from './OpenAIBaseClient'
+ 
+ const logger = loggerService.withContext('OpenAIApiClient')
+diff --git a/src/aiCore/legacy/clients/openai/OpenAIBaseClient.ts b/src/aiCore/legacy/clients/openai/OpenAIBaseClient.ts
+index 8a0a3fe..abd1793 100644
+--- a/src/aiCore/legacy/clients/openai/OpenAIBaseClient.ts
++++ b/src/aiCore/legacy/clients/openai/OpenAIBaseClient.ts
+@@ -10,9 +10,9 @@ import {
+ import { getStoreSetting } from '@renderer/hooks/useSettings'
+ import { getAssistantSettings } from '@renderer/services/AssistantService'
+ import store from '@renderer/store'
+-import { SettingsState } from '@renderer/store/settings'
+-import { Assistant, GenerateImageParams, Model, Provider } from '@renderer/types'
+-import {
++import type { SettingsState } from '@renderer/store/settings'
++import type { Assistant, GenerateImageParams, Model, Provider } from '@renderer/types'
++import type {
+   OpenAIResponseSdkMessageParam,
+   OpenAIResponseSdkParams,
+   OpenAIResponseSdkRawChunk,
+diff --git a/src/aiCore/legacy/clients/openai/OpenAIResponseAPIClient.ts b/src/aiCore/legacy/clients/openai/OpenAIResponseAPIClient.ts
+index 5d13d6f..b9131be 100644
+--- a/src/aiCore/legacy/clients/openai/OpenAIResponseAPIClient.ts
++++ b/src/aiCore/legacy/clients/openai/OpenAIResponseAPIClient.ts
+@@ -1,8 +1,8 @@
+ import OpenAI, { AzureOpenAI } from '@cherrystudio/openai'
+-import { ResponseInput } from '@cherrystudio/openai/resources/responses/responses'
++import type { ResponseInput } from '@cherrystudio/openai/resources/responses/responses'
+ import { loggerService } from '@logger'
+-import { GenericChunk } from '@renderer/aiCore/legacy/middleware/schemas'
+-import { CompletionsContext } from '@renderer/aiCore/legacy/middleware/types'
++import type { GenericChunk } from '@renderer/aiCore/legacy/middleware/schemas'
++import type { CompletionsContext } from '@renderer/aiCore/legacy/middleware/types'
+ import {
+   isGPT5SeriesModel,
+   isOpenAIChatCompletionOnlyModel,
+@@ -14,21 +14,20 @@ import {
+ } from '@renderer/config/models'
+ import { isSupportDeveloperRoleProvider } from '@renderer/config/providers'
+ import { estimateTextTokens } from '@renderer/services/TokenService'
+-import {
++import type {
+   FileMetadata,
+-  FileTypes,
+   MCPCallToolResponse,
+   MCPTool,
+   MCPToolResponse,
+   Model,
+   OpenAIServiceTier,
+   Provider,
+-  ToolCallResponse,
+-  WebSearchSource
++  ToolCallResponse
+ } from '@renderer/types'
++import { FileTypes, WebSearchSource } from '@renderer/types'
+ import { ChunkType } from '@renderer/types/chunk'
+-import { Message } from '@renderer/types/newMessage'
+-import {
++import type { Message } from '@renderer/types/newMessage'
++import type {
+   OpenAIResponseSdkMessageParam,
+   OpenAIResponseSdkParams,
+   OpenAIResponseSdkRawChunk,
+@@ -48,7 +47,7 @@ import { MB } from '@shared/config/constant'
+ import { t } from 'i18next'
+ import { isEmpty } from 'lodash'
+ 
+-import { RequestTransformer, ResponseChunkTransformer } from '../types'
++import type { RequestTransformer, ResponseChunkTransformer } from '../types'
+ import { OpenAIAPIClient } from './OpenAIApiClient'
+ import { OpenAIBaseClient } from './OpenAIBaseClient'
+ 
+diff --git a/src/aiCore/legacy/clients/ovms/OVMSClient.ts b/src/aiCore/legacy/clients/ovms/OVMSClient.ts
+index 5dc9155..179bb54 100644
+--- a/src/aiCore/legacy/clients/ovms/OVMSClient.ts
++++ b/src/aiCore/legacy/clients/ovms/OVMSClient.ts
+@@ -1,7 +1,8 @@
+-import OpenAI from '@cherrystudio/openai'
++import type OpenAI from '@cherrystudio/openai'
+ import { loggerService } from '@logger'
+ import { isSupportedModel } from '@renderer/config/models'
+-import { objectKeys, Provider } from '@renderer/types'
++import type { Provider } from '@renderer/types'
++import { objectKeys } from '@renderer/types'
+ 
+ import { OpenAIAPIClient } from '../openai/OpenAIApiClient'
+ 
+diff --git a/src/aiCore/legacy/clients/ppio/PPIOAPIClient.ts b/src/aiCore/legacy/clients/ppio/PPIOAPIClient.ts
+index 57b54b9..345496e 100644
+--- a/src/aiCore/legacy/clients/ppio/PPIOAPIClient.ts
++++ b/src/aiCore/legacy/clients/ppio/PPIOAPIClient.ts
+@@ -1,7 +1,7 @@
+-import OpenAI from '@cherrystudio/openai'
++import type OpenAI from '@cherrystudio/openai'
+ import { loggerService } from '@logger'
+ import { isSupportedModel } from '@renderer/config/models'
+-import { Model, Provider } from '@renderer/types'
++import type { Model, Provider } from '@renderer/types'
+ 
+ import { OpenAIAPIClient } from '../openai/OpenAIApiClient'
+ 
+diff --git a/src/aiCore/legacy/clients/types.ts b/src/aiCore/legacy/clients/types.ts
+index 6d10f42..bf7b129 100644
+--- a/src/aiCore/legacy/clients/types.ts
++++ b/src/aiCore/legacy/clients/types.ts
+@@ -1,8 +1,8 @@
+-import Anthropic from '@anthropic-ai/sdk'
+-import OpenAI from '@cherrystudio/openai'
+-import { Assistant, MCPTool, MCPToolResponse, Model, ToolCallResponse } from '@renderer/types'
+-import { Provider } from '@renderer/types'
+-import {
++import type Anthropic from '@anthropic-ai/sdk'
++import type OpenAI from '@cherrystudio/openai'
++import type { Assistant, MCPTool, MCPToolResponse, Model, ToolCallResponse } from '@renderer/types'
++import type { Provider } from '@renderer/types'
++import type {
+   AnthropicSdkRawChunk,
+   OpenAIResponseSdkRawChunk,
+   OpenAIResponseSdkRawOutput,
+@@ -15,8 +15,8 @@ import {
+   SdkToolCall
+ } from '@renderer/types/sdk'
+ 
+-import { CompletionsParams, GenericChunk } from '../middleware/schemas'
+-import { CompletionsContext } from '../middleware/types'
++import type { CompletionsParams, GenericChunk } from '../middleware/schemas'
++import type { CompletionsContext } from '../middleware/types'
+ 
+ /**
+  * 原始流监听器接口
+diff --git a/src/aiCore/legacy/clients/zhipu/ZhipuAPIClient.ts b/src/aiCore/legacy/clients/zhipu/ZhipuAPIClient.ts
+index c04e08f..ea6c141 100644
+--- a/src/aiCore/legacy/clients/zhipu/ZhipuAPIClient.ts
++++ b/src/aiCore/legacy/clients/zhipu/ZhipuAPIClient.ts
+@@ -1,7 +1,7 @@
+-import OpenAI from '@cherrystudio/openai'
++import type OpenAI from '@cherrystudio/openai'
+ import { loggerService } from '@logger'
+-import { Provider } from '@renderer/types'
+-import { GenerateImageParams } from '@renderer/types'
++import type { Provider } from '@renderer/types'
++import type { GenerateImageParams } from '@renderer/types'
+ 
+ import { OpenAIAPIClient } from '../openai/OpenAIApiClient'
+ 
+diff --git a/src/aiCore/legacy/index.ts b/src/aiCore/legacy/index.ts
+index adc81f0..da6cdb6 100644
+--- a/src/aiCore/legacy/index.ts
++++ b/src/aiCore/legacy/index.ts
+@@ -1,10 +1,10 @@
+ import { loggerService } from '@logger'
+ import { ApiClientFactory } from '@renderer/aiCore/legacy/clients/ApiClientFactory'
+-import { BaseApiClient } from '@renderer/aiCore/legacy/clients/BaseApiClient'
++import type { BaseApiClient } from '@renderer/aiCore/legacy/clients/BaseApiClient'
+ import { isDedicatedImageGenerationModel, isFunctionCallingModel } from '@renderer/config/models'
+ import { getProviderByModel } from '@renderer/services/AssistantService'
+ import { withSpanResult } from '@renderer/services/SpanManagerService'
+-import { StartSpanParams } from '@renderer/trace/types/ModelSpanEntity'
++import type { StartSpanParams } from '@renderer/trace/types/ModelSpanEntity'
+ import type { GenerateImageParams, Model, Provider } from '@renderer/types'
+ import type { RequestOptions, SdkModel } from '@renderer/types/sdk'
+ import { isSupportedToolUse } from '@renderer/utils/mcp-tools'
+diff --git a/src/aiCore/legacy/middleware/builder.ts b/src/aiCore/legacy/middleware/builder.ts
+index 2ea20d4..1d0b9d1 100644
+--- a/src/aiCore/legacy/middleware/builder.ts
++++ b/src/aiCore/legacy/middleware/builder.ts
+@@ -1,7 +1,7 @@
+ import { loggerService } from '@logger'
+ 
+ import { DefaultCompletionsNamedMiddlewares } from './register'
+-import { BaseContext, CompletionsMiddleware, MethodMiddleware } from './types'
++import type { BaseContext, CompletionsMiddleware, MethodMiddleware } from './types'
+ 
+ const logger = loggerService.withContext('aiCore:MiddlewareBuilder')
+ 
+diff --git a/src/aiCore/legacy/middleware/common/AbortHandlerMiddleware.ts b/src/aiCore/legacy/middleware/common/AbortHandlerMiddleware.ts
+index a733e45..5f24797 100644
+--- a/src/aiCore/legacy/middleware/common/AbortHandlerMiddleware.ts
++++ b/src/aiCore/legacy/middleware/common/AbortHandlerMiddleware.ts
+@@ -1,8 +1,9 @@
+ import { loggerService } from '@logger'
+-import { Chunk, ChunkType, ErrorChunk } from '@renderer/types/chunk'
++import type { Chunk, ErrorChunk } from '@renderer/types/chunk'
++import { ChunkType } from '@renderer/types/chunk'
+ import { addAbortController, removeAbortController } from '@renderer/utils/abortController'
+ 
+-import { CompletionsParams, CompletionsResult } from '../schemas'
++import type { CompletionsParams, CompletionsResult } from '../schemas'
+ import type { CompletionsContext, CompletionsMiddleware } from '../types'
+ 
+ const logger = loggerService.withContext('aiCore:AbortHandlerMiddleware')
+diff --git a/src/aiCore/legacy/middleware/common/ErrorHandlerMiddleware.ts b/src/aiCore/legacy/middleware/common/ErrorHandlerMiddleware.ts
+index dde98cb..7d6a7f6 100644
+--- a/src/aiCore/legacy/middleware/common/ErrorHandlerMiddleware.ts
++++ b/src/aiCore/legacy/middleware/common/ErrorHandlerMiddleware.ts
+@@ -1,10 +1,10 @@
+ import { loggerService } from '@logger'
+ import { isZhipuModel } from '@renderer/config/models'
+ import { getStoreProviders } from '@renderer/hooks/useStore'
+-import { Chunk } from '@renderer/types/chunk'
++import type { Chunk } from '@renderer/types/chunk'
+ 
+-import { CompletionsParams, CompletionsResult } from '../schemas'
+-import { CompletionsContext } from '../types'
++import type { CompletionsParams, CompletionsResult } from '../schemas'
++import type { CompletionsContext } from '../types'
+ import { createErrorChunk } from '../utils'
+ 
+ const logger = loggerService.withContext('ErrorHandlerMiddleware')
+diff --git a/src/aiCore/legacy/middleware/common/FinalChunkConsumerMiddleware.ts b/src/aiCore/legacy/middleware/common/FinalChunkConsumerMiddleware.ts
+index 57498b9..0325e4e 100644
+--- a/src/aiCore/legacy/middleware/common/FinalChunkConsumerMiddleware.ts
++++ b/src/aiCore/legacy/middleware/common/FinalChunkConsumerMiddleware.ts
+@@ -1,10 +1,10 @@
+ import { loggerService } from '@logger'
+-import { Usage } from '@renderer/types'
++import type { Usage } from '@renderer/types'
+ import type { Chunk } from '@renderer/types/chunk'
+ import { ChunkType } from '@renderer/types/chunk'
+ 
+-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+-import { CompletionsContext, CompletionsMiddleware } from '../types'
++import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
++import type { CompletionsContext, CompletionsMiddleware } from '../types'
+ 
+ export const MIDDLEWARE_NAME = 'FinalChunkConsumerAndNotifierMiddleware'
+ 
+diff --git a/src/aiCore/legacy/middleware/common/LoggingMiddleware.ts b/src/aiCore/legacy/middleware/common/LoggingMiddleware.ts
+index acd371d..480cbbc 100644
+--- a/src/aiCore/legacy/middleware/common/LoggingMiddleware.ts
++++ b/src/aiCore/legacy/middleware/common/LoggingMiddleware.ts
+@@ -1,6 +1,6 @@
+ import { loggerService } from '@logger'
+ 
+-import { BaseContext, MethodMiddleware, MiddlewareAPI } from '../types'
++import type { BaseContext, MethodMiddleware, MiddlewareAPI } from '../types'
+ 
+ const logger = loggerService.withContext('LoggingMiddleware')
+ 
+diff --git a/src/aiCore/legacy/middleware/composer.ts b/src/aiCore/legacy/middleware/composer.ts
+index 82b9fd1..97bbf0a 100644
+--- a/src/aiCore/legacy/middleware/composer.ts
++++ b/src/aiCore/legacy/middleware/composer.ts
+@@ -1,5 +1,5 @@
+ import { withSpanResult } from '@renderer/services/SpanManagerService'
+-import {
++import type {
+   RequestOptions,
+   SdkInstance,
+   SdkMessageParam,
+@@ -10,16 +10,10 @@ import {
+   SdkToolCall
+ } from '@renderer/types/sdk'
+ 
+-import { BaseApiClient } from '../clients'
+-import { CompletionsParams, CompletionsResult } from './schemas'
+-import {
+-  BaseContext,
+-  CompletionsContext,
+-  CompletionsMiddleware,
+-  MethodMiddleware,
+-  MIDDLEWARE_CONTEXT_SYMBOL,
+-  MiddlewareAPI
+-} from './types'
++import type { BaseApiClient } from '../clients'
++import type { CompletionsParams, CompletionsResult } from './schemas'
++import type { BaseContext, CompletionsContext, CompletionsMiddleware, MethodMiddleware, MiddlewareAPI } from './types'
++import { MIDDLEWARE_CONTEXT_SYMBOL } from './types'
+ 
+ /**
+  * Creates the initial context for a method call, populating method-specific fields. /
+diff --git a/src/aiCore/legacy/middleware/core/McpToolChunkMiddleware.ts b/src/aiCore/legacy/middleware/core/McpToolChunkMiddleware.ts
+index fc03279..6affa5a 100644
+--- a/src/aiCore/legacy/middleware/core/McpToolChunkMiddleware.ts
++++ b/src/aiCore/legacy/middleware/core/McpToolChunkMiddleware.ts
+@@ -1,7 +1,8 @@
+ import { loggerService } from '@logger'
+-import { MCPCallToolResponse, MCPTool, MCPToolResponse, Model } from '@renderer/types'
+-import { ChunkType, MCPToolCreatedChunk } from '@renderer/types/chunk'
+-import { SdkMessageParam, SdkRawOutput, SdkToolCall } from '@renderer/types/sdk'
++import type { MCPCallToolResponse, MCPTool, MCPToolResponse, Model } from '@renderer/types'
++import type { MCPToolCreatedChunk } from '@renderer/types/chunk'
++import { ChunkType } from '@renderer/types/chunk'
++import type { SdkMessageParam, SdkRawOutput, SdkToolCall } from '@renderer/types/sdk'
+ import {
+   callBuiltInTool,
+   callMCPTool,
+@@ -12,8 +13,8 @@ import {
+ } from '@renderer/utils/mcp-tools'
+ import { confirmSameNameTools, requestToolConfirmation, setToolIdToNameMapping } from '@renderer/utils/userConfirmation'
+ 
+-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+-import { CompletionsContext, CompletionsMiddleware } from '../types'
++import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
++import type { CompletionsContext, CompletionsMiddleware } from '../types'
+ 
+ export const MIDDLEWARE_NAME = 'McpToolChunkMiddleware'
+ const MAX_TOOL_RECURSION_DEPTH = 20 // 防止无限递归
+diff --git a/src/aiCore/legacy/middleware/core/RawStreamListenerMiddleware.ts b/src/aiCore/legacy/middleware/core/RawStreamListenerMiddleware.ts
+index 0d59ad9..04bfd75 100644
+--- a/src/aiCore/legacy/middleware/core/RawStreamListenerMiddleware.ts
++++ b/src/aiCore/legacy/middleware/core/RawStreamListenerMiddleware.ts
+@@ -1,9 +1,9 @@
+ import { AnthropicAPIClient } from '@renderer/aiCore/legacy/clients/anthropic/AnthropicAPIClient'
+-import { AnthropicSdkRawChunk, AnthropicSdkRawOutput } from '@renderer/types/sdk'
++import type { AnthropicSdkRawChunk, AnthropicSdkRawOutput } from '@renderer/types/sdk'
+ 
+-import { AnthropicStreamListener } from '../../clients/types'
+-import { CompletionsParams, CompletionsResult } from '../schemas'
+-import { CompletionsContext, CompletionsMiddleware } from '../types'
++import type { AnthropicStreamListener } from '../../clients/types'
++import type { CompletionsParams, CompletionsResult } from '../schemas'
++import type { CompletionsContext, CompletionsMiddleware } from '../types'
+ 
+ export const MIDDLEWARE_NAME = 'RawStreamListenerMiddleware'
+ 
+diff --git a/src/aiCore/legacy/middleware/core/ResponseTransformMiddleware.ts b/src/aiCore/legacy/middleware/core/ResponseTransformMiddleware.ts
+index 850da83..bdab7b8 100644
+--- a/src/aiCore/legacy/middleware/core/ResponseTransformMiddleware.ts
++++ b/src/aiCore/legacy/middleware/core/ResponseTransformMiddleware.ts
+@@ -1,9 +1,9 @@
+ import { loggerService } from '@logger'
+-import { SdkRawChunk } from '@renderer/types/sdk'
++import type { SdkRawChunk } from '@renderer/types/sdk'
+ 
+-import { ResponseChunkTransformerContext } from '../../clients/types'
+-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+-import { CompletionsContext, CompletionsMiddleware } from '../types'
++import type { ResponseChunkTransformerContext } from '../../clients/types'
++import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
++import type { CompletionsContext, CompletionsMiddleware } from '../types'
+ 
+ export const MIDDLEWARE_NAME = 'ResponseTransformMiddleware'
+ 
+diff --git a/src/aiCore/legacy/middleware/core/StreamAdapterMiddleware.ts b/src/aiCore/legacy/middleware/core/StreamAdapterMiddleware.ts
+index 8bb5266..b6dc13e 100644
+--- a/src/aiCore/legacy/middleware/core/StreamAdapterMiddleware.ts
++++ b/src/aiCore/legacy/middleware/core/StreamAdapterMiddleware.ts
+@@ -1,8 +1,8 @@
+-import { SdkRawChunk } from '@renderer/types/sdk'
++import type { SdkRawChunk } from '@renderer/types/sdk'
+ import { asyncGeneratorToReadableStream, createSingleChunkReadableStream } from '@renderer/utils/stream'
+ 
+-import { CompletionsParams, CompletionsResult } from '../schemas'
+-import { CompletionsContext, CompletionsMiddleware } from '../types'
++import type { CompletionsParams, CompletionsResult } from '../schemas'
++import type { CompletionsContext, CompletionsMiddleware } from '../types'
+ import { isAsyncIterable } from '../utils'
+ 
+ export const MIDDLEWARE_NAME = 'StreamAdapterMiddleware'
+diff --git a/src/aiCore/legacy/middleware/core/TextChunkMiddleware.ts b/src/aiCore/legacy/middleware/core/TextChunkMiddleware.ts
+index 41157bf..8372449 100644
+--- a/src/aiCore/legacy/middleware/core/TextChunkMiddleware.ts
++++ b/src/aiCore/legacy/middleware/core/TextChunkMiddleware.ts
+@@ -1,8 +1,8 @@
+ import { loggerService } from '@logger'
+ import { ChunkType } from '@renderer/types/chunk'
+ 
+-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+-import { CompletionsContext, CompletionsMiddleware } from '../types'
++import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
++import type { CompletionsContext, CompletionsMiddleware } from '../types'
+ 
+ export const MIDDLEWARE_NAME = 'TextChunkMiddleware'
+ 
+diff --git a/src/aiCore/legacy/middleware/core/ThinkChunkMiddleware.ts b/src/aiCore/legacy/middleware/core/ThinkChunkMiddleware.ts
+index 2149d8f..5920cdc 100644
+--- a/src/aiCore/legacy/middleware/core/ThinkChunkMiddleware.ts
++++ b/src/aiCore/legacy/middleware/core/ThinkChunkMiddleware.ts
+@@ -1,8 +1,9 @@
+ import { loggerService } from '@logger'
+-import { ChunkType, ThinkingCompleteChunk, ThinkingDeltaChunk } from '@renderer/types/chunk'
++import type { ThinkingCompleteChunk, ThinkingDeltaChunk } from '@renderer/types/chunk'
++import { ChunkType } from '@renderer/types/chunk'
+ 
+-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+-import { CompletionsContext, CompletionsMiddleware } from '../types'
++import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
++import type { CompletionsContext, CompletionsMiddleware } from '../types'
+ 
+ export const MIDDLEWARE_NAME = 'ThinkChunkMiddleware'
+ 
+diff --git a/src/aiCore/legacy/middleware/core/TransformCoreToSdkParamsMiddleware.ts b/src/aiCore/legacy/middleware/core/TransformCoreToSdkParamsMiddleware.ts
+index 71831a3..ebc86f5 100644
+--- a/src/aiCore/legacy/middleware/core/TransformCoreToSdkParamsMiddleware.ts
++++ b/src/aiCore/legacy/middleware/core/TransformCoreToSdkParamsMiddleware.ts
+@@ -1,8 +1,8 @@
+ import { loggerService } from '@logger'
+ import { ChunkType } from '@renderer/types/chunk'
+ 
+-import { CompletionsParams, CompletionsResult } from '../schemas'
+-import { CompletionsContext, CompletionsMiddleware } from '../types'
++import type { CompletionsParams, CompletionsResult } from '../schemas'
++import type { CompletionsContext, CompletionsMiddleware } from '../types'
+ 
+ export const MIDDLEWARE_NAME = 'TransformCoreToSdkParamsMiddleware'
+ 
+diff --git a/src/aiCore/legacy/middleware/core/WebSearchMiddleware.ts b/src/aiCore/legacy/middleware/core/WebSearchMiddleware.ts
+index ae346af..3365b16 100644
+--- a/src/aiCore/legacy/middleware/core/WebSearchMiddleware.ts
++++ b/src/aiCore/legacy/middleware/core/WebSearchMiddleware.ts
+@@ -2,8 +2,8 @@ import { loggerService } from '@logger'
+ import { ChunkType } from '@renderer/types/chunk'
+ import { convertLinks, flushLinkConverterBuffer } from '@renderer/utils/linkConverter'
+ 
+-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+-import { CompletionsContext, CompletionsMiddleware } from '../types'
++import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
++import type { CompletionsContext, CompletionsMiddleware } from '../types'
+ 
+ const logger = loggerService.withContext('WebSearchMiddleware')
+ 
+diff --git a/src/aiCore/legacy/middleware/feat/ImageGenerationMiddleware.ts b/src/aiCore/legacy/middleware/feat/ImageGenerationMiddleware.ts
+index 40ab43c..0df303e 100644
+--- a/src/aiCore/legacy/middleware/feat/ImageGenerationMiddleware.ts
++++ b/src/aiCore/legacy/middleware/feat/ImageGenerationMiddleware.ts
+@@ -1,4 +1,4 @@
+-import OpenAI from '@cherrystudio/openai'
++import type OpenAI from '@cherrystudio/openai'
+ import { toFile } from '@cherrystudio/openai/uploads'
+ import { isDedicatedImageGenerationModel } from '@renderer/config/models'
+ import FileManager from '@renderer/services/FileManager'
+@@ -6,9 +6,9 @@ import { ChunkType } from '@renderer/types/chunk'
+ import { findImageBlocks, getMainTextContent } from '@renderer/utils/messageUtils/find'
+ import { defaultTimeout } from '@shared/config/constant'
+ 
+-import { BaseApiClient } from '../../clients/BaseApiClient'
+-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+-import { CompletionsContext, CompletionsMiddleware } from '../types'
++import type { BaseApiClient } from '../../clients/BaseApiClient'
++import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
++import type { CompletionsContext, CompletionsMiddleware } from '../types'
+ 
+ export const MIDDLEWARE_NAME = 'ImageGenerationMiddleware'
+ 
+diff --git a/src/aiCore/legacy/middleware/feat/ThinkingTagExtractionMiddleware.ts b/src/aiCore/legacy/middleware/feat/ThinkingTagExtractionMiddleware.ts
+index 447b9d2..dea679e 100644
+--- a/src/aiCore/legacy/middleware/feat/ThinkingTagExtractionMiddleware.ts
++++ b/src/aiCore/legacy/middleware/feat/ThinkingTagExtractionMiddleware.ts
+@@ -1,17 +1,18 @@
+ import { loggerService } from '@logger'
+-import { Model } from '@renderer/types'
+-import {
+-  ChunkType,
++import type { Model } from '@renderer/types'
++import type {
+   TextDeltaChunk,
+   ThinkingCompleteChunk,
+   ThinkingDeltaChunk,
+   ThinkingStartChunk
+ } from '@renderer/types/chunk'
++import { ChunkType } from '@renderer/types/chunk'
+ import { getLowerBaseModelName } from '@renderer/utils'
+-import { TagConfig, TagExtractor } from '@renderer/utils/tagExtraction'
++import type { TagConfig } from '@renderer/utils/tagExtraction'
++import { TagExtractor } from '@renderer/utils/tagExtraction'
+ 
+-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+-import { CompletionsContext, CompletionsMiddleware } from '../types'
++import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
++import type { CompletionsContext, CompletionsMiddleware } from '../types'
+ 
+ const logger = loggerService.withContext('ThinkingTagExtractionMiddleware')
+ 
+diff --git a/src/aiCore/legacy/middleware/feat/ToolUseExtractionMiddleware.ts b/src/aiCore/legacy/middleware/feat/ToolUseExtractionMiddleware.ts
+index 1f559bf..38d842e 100644
+--- a/src/aiCore/legacy/middleware/feat/ToolUseExtractionMiddleware.ts
++++ b/src/aiCore/legacy/middleware/feat/ToolUseExtractionMiddleware.ts
+@@ -1,11 +1,13 @@
+ import { loggerService } from '@logger'
+-import { MCPTool } from '@renderer/types'
+-import { ChunkType, MCPToolCreatedChunk, TextDeltaChunk } from '@renderer/types/chunk'
++import type { MCPTool } from '@renderer/types'
++import type { MCPToolCreatedChunk, TextDeltaChunk } from '@renderer/types/chunk'
++import { ChunkType } from '@renderer/types/chunk'
+ import { parseToolUse } from '@renderer/utils/mcp-tools'
+-import { TagConfig, TagExtractor } from '@renderer/utils/tagExtraction'
++import type { TagConfig } from '@renderer/utils/tagExtraction'
++import { TagExtractor } from '@renderer/utils/tagExtraction'
+ 
+-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+-import { CompletionsContext, CompletionsMiddleware } from '../types'
++import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
++import type { CompletionsContext, CompletionsMiddleware } from '../types'
+ 
+ export const MIDDLEWARE_NAME = 'ToolUseExtractionMiddleware'
+ 
+diff --git a/src/aiCore/legacy/middleware/index.ts b/src/aiCore/legacy/middleware/index.ts
+index 64be4ed..66213c3 100644
+--- a/src/aiCore/legacy/middleware/index.ts
++++ b/src/aiCore/legacy/middleware/index.ts
+@@ -1,4 +1,4 @@
+-import { CompletionsMiddleware, MethodMiddleware } from './types'
++import type { CompletionsMiddleware, MethodMiddleware } from './types'
+ 
+ // /**
+ //  * Wraps a provider instance with middlewares.
+diff --git a/src/aiCore/legacy/middleware/schemas.ts b/src/aiCore/legacy/middleware/schemas.ts
+index ce89934..9119d81 100644
+--- a/src/aiCore/legacy/middleware/schemas.ts
++++ b/src/aiCore/legacy/middleware/schemas.ts
+@@ -1,9 +1,9 @@
+-import { Assistant, MCPTool } from '@renderer/types'
+-import { Chunk } from '@renderer/types/chunk'
+-import { Message } from '@renderer/types/newMessage'
+-import { SdkRawChunk, SdkRawOutput } from '@renderer/types/sdk'
++import type { Assistant, MCPTool } from '@renderer/types'
++import type { Chunk } from '@renderer/types/chunk'
++import type { Message } from '@renderer/types/newMessage'
++import type { SdkRawChunk, SdkRawOutput } from '@renderer/types/sdk'
+ 
+-import { ProcessingState } from './types'
++import type { ProcessingState } from './types'
+ 
+ // ============================================================================
+ // Core Request Types - 核心请求结构
+diff --git a/src/aiCore/legacy/middleware/types.ts b/src/aiCore/legacy/middleware/types.ts
+index 0a7dbe3..3762035 100644
+--- a/src/aiCore/legacy/middleware/types.ts
++++ b/src/aiCore/legacy/middleware/types.ts
+@@ -1,6 +1,6 @@
+-import { MCPToolResponse, Metrics, Usage, WebSearchResponse } from '@renderer/types'
+-import { Chunk, ErrorChunk } from '@renderer/types/chunk'
+-import {
++import type { MCPToolResponse, Metrics, Usage, WebSearchResponse } from '@renderer/types'
++import type { Chunk, ErrorChunk } from '@renderer/types/chunk'
++import type {
+   SdkInstance,
+   SdkMessageParam,
+   SdkParams,
+@@ -10,8 +10,8 @@ import {
+   SdkToolCall
+ } from '@renderer/types/sdk'
+ 
+-import { BaseApiClient } from '../clients'
+-import { CompletionsParams, CompletionsResult } from './schemas'
++import type { BaseApiClient } from '../clients'
++import type { CompletionsParams, CompletionsResult } from './schemas'
+ 
+ /**
+  * Symbol to uniquely identify middleware context objects.
+diff --git a/src/aiCore/legacy/middleware/utils.ts b/src/aiCore/legacy/middleware/utils.ts
+index 12a2fe6..32e94e1 100644
+--- a/src/aiCore/legacy/middleware/utils.ts
++++ b/src/aiCore/legacy/middleware/utils.ts
+@@ -1,4 +1,5 @@
+-import { ChunkType, ErrorChunk } from '@renderer/types/chunk'
++import type { ErrorChunk } from '@renderer/types/chunk'
++import { ChunkType } from '@renderer/types/chunk'
+ 
+ /**
+  * Creates an ErrorChunk object with a standardized structure.
+diff --git a/src/aiCore/middleware/AiSdkMiddlewareBuilder.ts b/src/aiCore/middleware/AiSdkMiddlewareBuilder.ts
+index 924cc5f..3f14917 100644
+--- a/src/aiCore/middleware/AiSdkMiddlewareBuilder.ts
++++ b/src/aiCore/middleware/AiSdkMiddlewareBuilder.ts
+@@ -1,12 +1,18 @@
+-import { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins'
++import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins'
+ import { loggerService } from '@logger'
+-import { type MCPTool, type Message, type Model, type Provider } from '@renderer/types'
++import { isSupportedThinkingTokenQwenModel } from '@renderer/config/models'
++import { isSupportEnableThinkingProvider } from '@renderer/config/providers'
++import type { MCPTool } from '@renderer/types'
++import { type Assistant, type Message, type Model, type Provider } from '@renderer/types'
+ import type { Chunk } from '@renderer/types/chunk'
+-import { extractReasoningMiddleware, LanguageModelMiddleware, simulateStreamingMiddleware } from 'ai'
++import type { LanguageModelMiddleware } from 'ai'
++import { extractReasoningMiddleware, simulateStreamingMiddleware } from 'ai'
++import { isEmpty } from 'lodash'
+ 
+ import { isOpenRouterGeminiGenerateImageModel } from '../utils/image'
+ import { noThinkMiddleware } from './noThinkMiddleware'
+ import { openrouterGenerateImageMiddleware } from './openrouterGenerateImageMiddleware'
++import { qwenThinkingMiddleware } from './qwenThinkingMiddleware'
+ import { toolChoiceMiddleware } from './toolChoiceMiddleware'
+ 
+ const logger = loggerService.withContext('AiSdkMiddlewareBuilder')
+@@ -19,6 +25,7 @@ export interface AiSdkMiddlewareConfig {
+   onChunk?: (chunk: Chunk) => void
+   model?: Model
+   provider?: Provider
++  assistant?: Assistant
+   enableReasoning: boolean
+   // 是否开启提示词工具调用
+   isPromptToolUse: boolean
+@@ -127,7 +134,7 @@ export function buildAiSdkMiddlewares(config: AiSdkMiddlewareConfig): LanguageMo
+   const builder = new AiSdkMiddlewareBuilder()
+ 
+   // 0. 知识库强制调用中间件（必须在最前面，确保第一轮强制调用知识库）
+-  if (config.knowledgeRecognition === 'off') {
++  if (!isEmpty(config.assistant?.knowledge_bases?.map((base) => base.id)) && config.knowledgeRecognition !== 'on') {
+     builder.add({
+       name: 'force-knowledge-first',
+       middleware: toolChoiceMiddleware('builtin_knowledge_search')
+@@ -218,6 +225,21 @@ function addProviderSpecificMiddlewares(builder: AiSdkMiddlewareBuilder, config:
+ function addModelSpecificMiddlewares(builder: AiSdkMiddlewareBuilder, config: AiSdkMiddlewareConfig): void {
+   if (!config.model || !config.provider) return
+ 
++  // Qwen models on providers that don't support enable_thinking parameter (like Ollama, LM Studio, NVIDIA)
++  // Use /think or /no_think suffix to control thinking mode
++  if (
++    config.provider &&
++    isSupportedThinkingTokenQwenModel(config.model) &&
++    !isSupportEnableThinkingProvider(config.provider)
++  ) {
++    const enableThinking = config.assistant?.settings?.reasoning_effort !== undefined
++    builder.add({
++      name: 'qwen-thinking-control',
++      middleware: qwenThinkingMiddleware(enableThinking)
++    })
++    logger.debug(`Added Qwen thinking middleware with thinking ${enableThinking ? 'enabled' : 'disabled'}`)
++  }
++
+   // 可以根据模型ID或特性添加特定中间件
+   // 例如：图像生成模型、多模态模型等
+   if (isOpenRouterGeminiGenerateImageModel(config.model, config.provider)) {
+diff --git a/src/aiCore/middleware/noThinkMiddleware.ts b/src/aiCore/middleware/noThinkMiddleware.ts
+index 9d7d933..3e56249 100644
+--- a/src/aiCore/middleware/noThinkMiddleware.ts
++++ b/src/aiCore/middleware/noThinkMiddleware.ts
+@@ -1,5 +1,5 @@
+ import { loggerService } from '@logger'
+-import { LanguageModelMiddleware } from 'ai'
++import type { LanguageModelMiddleware } from 'ai'
+ 
+ const logger = loggerService.withContext('noThinkMiddleware')
+ 
+diff --git a/src/aiCore/middleware/openrouterGenerateImageMiddleware.ts b/src/aiCore/middleware/openrouterGenerateImageMiddleware.ts
+index 0110d9a..792192b 100644
+--- a/src/aiCore/middleware/openrouterGenerateImageMiddleware.ts
++++ b/src/aiCore/middleware/openrouterGenerateImageMiddleware.ts
+@@ -1,4 +1,4 @@
+-import { LanguageModelMiddleware } from 'ai'
++import type { LanguageModelMiddleware } from 'ai'
+ 
+ /**
+  * Returns a LanguageModelMiddleware that ensures the OpenRouter provider is configured to support both
+diff --git a/src/aiCore/middleware/qwenThinkingMiddleware.ts b/src/aiCore/middleware/qwenThinkingMiddleware.ts
+new file mode 100644
+index 0000000..931831a
+--- /dev/null
++++ b/src/aiCore/middleware/qwenThinkingMiddleware.ts
+@@ -0,0 +1,39 @@
++import type { LanguageModelMiddleware } from 'ai'
++
++/**
++ * Qwen Thinking Middleware
++ * Controls thinking mode for Qwen models on providers that don't support enable_thinking parameter (like Ollama)
++ * Appends '/think' or '/no_think' suffix to user messages based on reasoning_effort setting
++ * @param enableThinking - Whether thinking mode is enabled (based on reasoning_effort !== undefined)
++ * @returns LanguageModelMiddleware
++ */
++export function qwenThinkingMiddleware(enableThinking: boolean): LanguageModelMiddleware {
++  const suffix = enableThinking ? ' /think' : ' /no_think'
++
++  return {
++    middlewareVersion: 'v2',
++
++    transformParams: async ({ params }) => {
++      const transformedParams = { ...params }
++      // Process messages in prompt
++      if (transformedParams.prompt && Array.isArray(transformedParams.prompt)) {
++        transformedParams.prompt = transformedParams.prompt.map((message) => {
++          // Only process user messages
++          if (message.role === 'user') {
++            // Process content array
++            if (Array.isArray(message.content)) {
++              for (const part of message.content) {
++                if (part.type === 'text' && !part.text.endsWith('/think') && !part.text.endsWith('/no_think')) {
++                  part.text += suffix
++                }
++              }
++            }
++          }
++          return message
++        })
++      }
++
++      return transformedParams
++    }
++  }
++}
+diff --git a/src/aiCore/middleware/toolChoiceMiddleware.ts b/src/aiCore/middleware/toolChoiceMiddleware.ts
+index 6d3ba37..7bb00af 100644
+--- a/src/aiCore/middleware/toolChoiceMiddleware.ts
++++ b/src/aiCore/middleware/toolChoiceMiddleware.ts
+@@ -1,5 +1,5 @@
+ import { loggerService } from '@logger'
+-import { LanguageModelMiddleware } from 'ai'
++import type { LanguageModelMiddleware } from 'ai'
+ 
+ const logger = loggerService.withContext('toolChoiceMiddleware')
+ 
+diff --git a/src/aiCore/plugins/PluginBuilder.ts b/src/aiCore/plugins/PluginBuilder.ts
+index 7767564..eb46eb7 100644
+--- a/src/aiCore/plugins/PluginBuilder.ts
++++ b/src/aiCore/plugins/PluginBuilder.ts
+@@ -1,10 +1,10 @@
+-import { AiPlugin } from '@cherrystudio/ai-core'
+-import { createPromptToolUsePlugin, googleToolsPlugin, webSearchPlugin } from '@cherrystudio/ai-core/built-in/plugins'
++import type { AiPlugin } from '@cherrystudio/ai-core'
++import { createPromptToolUsePlugin, webSearchPlugin } from '@cherrystudio/ai-core/built-in/plugins'
+ import { loggerService } from '@logger'
+ import { getEnableDeveloperMode } from '@renderer/hooks/useSettings'
+-import { Assistant } from '@renderer/types'
++import type { Assistant } from '@renderer/types'
+ 
+-import { AiSdkMiddlewareConfig } from '../middleware/AiSdkMiddlewareBuilder'
++import type { AiSdkMiddlewareConfig } from '../middleware/AiSdkMiddlewareBuilder'
+ import { searchOrchestrationPlugin } from './searchOrchestrationPlugin'
+ import { createTelemetryPlugin } from './telemetryPlugin'
+ 
+@@ -68,9 +68,9 @@ export function buildPlugins(
+     )
+   }
+ 
+-  if (middlewareConfig.enableUrlContext) {
+-    plugins.push(googleToolsPlugin({ urlContext: true }))
+-  }
++  // if (middlewareConfig.enableUrlContext && middlewareConfig.) {
++  //   plugins.push(googleToolsPlugin({ urlContext: true }))
++  // }
+ 
+   logger.debug(
+     'Final plugin list:',
+diff --git a/src/aiCore/plugins/searchOrchestrationPlugin.ts b/src/aiCore/plugins/searchOrchestrationPlugin.ts
+index 7e662dd..6be577f 100644
+--- a/src/aiCore/plugins/searchOrchestrationPlugin.ts
++++ b/src/aiCore/plugins/searchOrchestrationPlugin.ts
+@@ -18,7 +18,8 @@ import { getDefaultModel, getProviderByModel } from '@renderer/services/Assistan
+ import store from '@renderer/store'
+ import { selectCurrentUserId, selectGlobalMemoryEnabled, selectMemoryConfig } from '@renderer/store/memory'
+ import type { Assistant } from '@renderer/types'
+-import { extractInfoFromXML, ExtractResults } from '@renderer/utils/extract'
++import type { ExtractResults } from '@renderer/utils/extract'
++import { extractInfoFromXML } from '@renderer/utils/extract'
+ import type { LanguageModel, ModelMessage } from 'ai'
+ import { generateText } from 'ai'
+ import { isEmpty } from 'lodash'
+diff --git a/src/aiCore/plugins/telemetryPlugin.ts b/src/aiCore/plugins/telemetryPlugin.ts
+index 75bf6e1..485d339 100644
+--- a/src/aiCore/plugins/telemetryPlugin.ts
++++ b/src/aiCore/plugins/telemetryPlugin.ts
+@@ -8,10 +8,11 @@
+ 
+ import { definePlugin } from '@cherrystudio/ai-core'
+ import { loggerService } from '@logger'
+-import { Context, context as otelContext, Span, SpanContext, trace, Tracer } from '@opentelemetry/api'
++import type { Context, Span, SpanContext, Tracer } from '@opentelemetry/api'
++import { context as otelContext, trace } from '@opentelemetry/api'
+ import { currentSpan } from '@renderer/services/SpanManagerService'
+ import { webTraceService } from '@renderer/services/WebTraceService'
+-import { Assistant } from '@renderer/types'
++import type { Assistant } from '@renderer/types'
+ 
+ import { AiSdkSpanAdapter } from '../trace/AiSdkSpanAdapter'
+ 
+@@ -49,7 +50,7 @@ class AdapterTracer {
+       this.cachedParentContext = undefined
+     }
+ 
+-    logger.info('AdapterTracer created with parent context info', {
++    logger.debug('AdapterTracer created with parent context info', {
+       topicId,
+       modelName,
+       parentTraceId: this.parentSpanContext?.traceId,
+@@ -62,7 +63,7 @@ class AdapterTracer {
+   startActiveSpan<F extends (span: Span) => any>(name: string, options: any, fn: F): ReturnType<F>
+   startActiveSpan<F extends (span: Span) => any>(name: string, options: any, context: any, fn: F): ReturnType<F>
+   startActiveSpan<F extends (span: Span) => any>(name: string, arg2?: any, arg3?: any, arg4?: any): ReturnType<F> {
+-    logger.info('AdapterTracer.startActiveSpan called', {
++    logger.debug('AdapterTracer.startActiveSpan called', {
+       spanName: name,
+       topicId: this.topicId,
+       modelName: this.modelName,
+@@ -88,7 +89,7 @@ class AdapterTracer {
+         // 包装span的end方法
+         const originalEnd = span.end.bind(span)
+         span.end = (endTime?: any) => {
+-          logger.info('AI SDK span.end() called in startActiveSpan - about to convert span', {
++          logger.debug('AI SDK span.end() called in startActiveSpan - about to convert span', {
+             spanName: name,
+             spanId: span.spanContext().spanId,
+             traceId: span.spanContext().traceId,
+@@ -101,14 +102,14 @@ class AdapterTracer {
+ 
+           // 转换并保存 span 数据
+           try {
+-            logger.info('Converting AI SDK span to SpanEntity (from startActiveSpan)', {
++            logger.debug('Converting AI SDK span to SpanEntity (from startActiveSpan)', {
+               spanName: name,
+               spanId: span.spanContext().spanId,
+               traceId: span.spanContext().traceId,
+               topicId: this.topicId,
+               modelName: this.modelName
+             })
+-            logger.info('span', span)
++            logger.silly('span', span)
+             const spanEntity = AiSdkSpanAdapter.convertToSpanEntity({
+               span,
+               topicId: this.topicId,
+@@ -118,7 +119,7 @@ class AdapterTracer {
+             // 保存转换后的数据
+             window.api.trace.saveEntity(spanEntity)
+ 
+-            logger.info('AI SDK span converted and saved successfully (from startActiveSpan)', {
++            logger.debug('AI SDK span converted and saved successfully (from startActiveSpan)', {
+               spanName: name,
+               spanId: span.spanContext().spanId,
+               traceId: span.spanContext().traceId,
+@@ -151,7 +152,7 @@ class AdapterTracer {
+       if (this.parentSpanContext) {
+         try {
+           const ctx = trace.setSpanContext(otelContext.active(), this.parentSpanContext)
+-          logger.info('Created active context with parent SpanContext for startActiveSpan', {
++          logger.debug('Created active context with parent SpanContext for startActiveSpan', {
+             spanName: name,
+             parentTraceId: this.parentSpanContext.traceId,
+             parentSpanId: this.parentSpanContext.spanId,
+@@ -218,7 +219,7 @@ export function createTelemetryPlugin(config: TelemetryPluginConfig) {
+       if (effectiveTopicId) {
+         try {
+           // 从 SpanManagerService 获取当前的 span
+-          logger.info('Attempting to find parent span', {
++          logger.debug('Attempting to find parent span', {
+             topicId: effectiveTopicId,
+             requestId: context.requestId,
+             modelName: modelName,
+@@ -230,7 +231,7 @@ export function createTelemetryPlugin(config: TelemetryPluginConfig) {
+           if (parentSpan) {
+             // 直接使用父 span 的 SpanContext，避免手动拼装字段遗漏
+             parentSpanContext = parentSpan.spanContext()
+-            logger.info('Found active parent span for AI SDK', {
++            logger.debug('Found active parent span for AI SDK', {
+               parentSpanId: parentSpanContext.spanId,
+               parentTraceId: parentSpanContext.traceId,
+               topicId: effectiveTopicId,
+@@ -302,7 +303,7 @@ export function createTelemetryPlugin(config: TelemetryPluginConfig) {
+             logger.debug('Updated active context with parent span')
+           })
+ 
+-          logger.info('Set parent context for AI SDK spans', {
++          logger.debug('Set parent context for AI SDK spans', {
+             parentSpanId: parentSpanContext?.spanId,
+             parentTraceId: parentSpanContext?.traceId,
+             hasActiveContext: !!activeContext,
+@@ -313,7 +314,7 @@ export function createTelemetryPlugin(config: TelemetryPluginConfig) {
+         }
+       }
+ 
+-      logger.info('Injecting AI SDK telemetry config with adapter', {
++      logger.debug('Injecting AI SDK telemetry config with adapter', {
+         requestId: context.requestId,
+         topicId: effectiveTopicId,
+         modelId: context.modelId,
+diff --git a/src/aiCore/prepareParams/fileProcessor.ts b/src/aiCore/prepareParams/fileProcessor.ts
+index 9e46f0c..5ee8812 100644
+--- a/src/aiCore/prepareParams/fileProcessor.ts
++++ b/src/aiCore/prepareParams/fileProcessor.ts
+@@ -8,7 +8,7 @@ import { loggerService } from '@logger'
+ import { getProviderByModel } from '@renderer/services/AssistantService'
+ import type { FileMetadata, Message, Model } from '@renderer/types'
+ import { FileTypes } from '@renderer/types'
+-import { FileMessageBlock } from '@renderer/types/newMessage'
++import type { FileMessageBlock } from '@renderer/types/newMessage'
+ import { findFileBlocks } from '@renderer/utils/messageUtils/find'
+ import type { FilePart, TextPart } from 'ai'
+ 
+@@ -114,7 +114,7 @@ export async function handleGeminiFileUpload(file: FileMetadata, model: Model):
+ }
+ 
+ /**
+- * 处理OpenAI大文件上传
++ * 处理OpenAI兼容大文件上传
+  */
+ export async function handleOpenAILargeFileUpload(
+   file: FileMetadata,
+diff --git a/src/aiCore/prepareParams/messageConverter.ts b/src/aiCore/prepareParams/messageConverter.ts
+index 46cacb5..72f387d 100644
+--- a/src/aiCore/prepareParams/messageConverter.ts
++++ b/src/aiCore/prepareParams/messageConverter.ts
+@@ -6,7 +6,7 @@
+ import { loggerService } from '@logger'
+ import { isImageEnhancementModel, isVisionModel } from '@renderer/config/models'
+ import type { Message, Model } from '@renderer/types'
+-import { FileMessageBlock, ImageMessageBlock, ThinkingMessageBlock } from '@renderer/types/newMessage'
++import type { FileMessageBlock, ImageMessageBlock, ThinkingMessageBlock } from '@renderer/types/newMessage'
+ import {
+   findFileBlocks,
+   findImageBlocks,
+diff --git a/src/aiCore/prepareParams/modelParameters.ts b/src/aiCore/prepareParams/modelParameters.ts
+index 6f78ac2..ed3f4fa 100644
+--- a/src/aiCore/prepareParams/modelParameters.ts
++++ b/src/aiCore/prepareParams/modelParameters.ts
+@@ -4,6 +4,7 @@
+  */
+ 
+ import {
++  isClaude45ReasoningModel,
+   isClaudeReasoningModel,
+   isNotSupportTemperatureAndTopP,
+   isSupportedFlexServiceTier
+@@ -19,7 +20,10 @@ export function getTemperature(assistant: Assistant, model: Model): number | und
+   if (assistant.settings?.reasoning_effort && isClaudeReasoningModel(model)) {
+     return undefined
+   }
+-  if (isNotSupportTemperatureAndTopP(model)) {
++  if (
++    isNotSupportTemperatureAndTopP(model) ||
++    (isClaude45ReasoningModel(model) && assistant.settings?.enableTopP && !assistant.settings?.enableTemperature)
++  ) {
+     return undefined
+   }
+   const assistantSettings = getAssistantSettings(assistant)
+@@ -33,7 +37,10 @@ export function getTopP(assistant: Assistant, model: Model): number | undefined
+   if (assistant.settings?.reasoning_effort && isClaudeReasoningModel(model)) {
+     return undefined
+   }
+-  if (isNotSupportTemperatureAndTopP(model)) {
++  if (
++    isNotSupportTemperatureAndTopP(model) ||
++    (isClaude45ReasoningModel(model) && assistant.settings?.enableTemperature)
++  ) {
+     return undefined
+   }
+   const assistantSettings = getAssistantSettings(assistant)
+diff --git a/src/aiCore/prepareParams/parameterBuilder.ts b/src/aiCore/prepareParams/parameterBuilder.ts
+index b53293e..d3fa1cb 100644
+--- a/src/aiCore/prepareParams/parameterBuilder.ts
++++ b/src/aiCore/prepareParams/parameterBuilder.ts
+@@ -3,9 +3,11 @@
+  * 构建AI SDK的流式和非流式参数
+  */
+ 
++import { anthropic } from '@ai-sdk/anthropic'
++import { google } from '@ai-sdk/google'
+ import { vertexAnthropic } from '@ai-sdk/google-vertex/anthropic/edge'
+ import { vertex } from '@ai-sdk/google-vertex/edge'
+-import { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins'
++import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins'
+ import { isBaseProvider } from '@cherrystudio/ai-core/core/providers/schemas'
+ import { loggerService } from '@logger'
+ import {
+@@ -19,7 +21,7 @@ import {
+ } from '@renderer/config/models'
+ import { getAssistantSettings, getDefaultModel } from '@renderer/services/AssistantService'
+ import store from '@renderer/store'
+-import { CherryWebSearchConfig } from '@renderer/store/websearch'
++import type { CherryWebSearchConfig } from '@renderer/store/websearch'
+ import { type Assistant, type MCPTool, type Provider } from '@renderer/types'
+ import type { StreamTextParams } from '@renderer/types/aiCoreTypes'
+ import { mapRegexToPatterns } from '@renderer/utils/blacklistMatchPattern'
+@@ -97,10 +99,6 @@ export async function buildStreamTextParams(
+ 
+   let tools = setupToolsConfig(mcpTools)
+ 
+-  // if (webSearchProviderId) {
+-  //   tools['builtin_web_search'] = webSearchTool(webSearchProviderId)
+-  // }
+-
+   // 构建真正的 providerOptions
+   const webSearchConfig: CherryWebSearchConfig = {
+     maxResults: store.getState().websearch.maxResults,
+@@ -143,12 +141,34 @@ export async function buildStreamTextParams(
+     }
+   }
+ 
+-  // google-vertex
+-  if (enableUrlContext && aiSdkProviderId === 'google-vertex') {
++  if (enableUrlContext) {
+     if (!tools) {
+       tools = {}
+     }
+-    tools.url_context = vertex.tools.urlContext({}) as ProviderDefinedTool
++    const blockedDomains = mapRegexToPatterns(webSearchConfig.excludeDomains)
++
++    switch (aiSdkProviderId) {
++      case 'google-vertex':
++        tools.url_context = vertex.tools.urlContext({}) as ProviderDefinedTool
++        break
++      case 'google':
++        tools.url_context = google.tools.urlContext({}) as ProviderDefinedTool
++        break
++      case 'anthropic':
++      case 'google-vertex-anthropic':
++        tools.web_fetch = (
++          aiSdkProviderId === 'anthropic'
++            ? anthropic.tools.webFetch_20250910({
++                maxUses: webSearchConfig.maxResults,
++                blockedDomains: blockedDomains.length > 0 ? blockedDomains : undefined
++              })
++            : vertexAnthropic.tools.webFetch_20250910({
++                maxUses: webSearchConfig.maxResults,
++                blockedDomains: blockedDomains.length > 0 ? blockedDomains : undefined
++              })
++        ) as ProviderDefinedTool
++        break
++    }
+   }
+ 
+   // 构建基础参数
+diff --git a/src/aiCore/provider/config/aihubmix.ts b/src/aiCore/provider/config/aihubmix.ts
+index d0ac83d..432be5e 100644
+--- a/src/aiCore/provider/config/aihubmix.ts
++++ b/src/aiCore/provider/config/aihubmix.ts
+@@ -2,7 +2,7 @@
+  * AiHubMix规则集
+  */
+ import { isOpenAILLMModel } from '@renderer/config/models'
+-import { Provider } from '@renderer/types'
++import type { Provider } from '@renderer/types'
+ 
+ import { provider2Provider, startsWith } from './helper'
+ import type { RuleSet } from './types'
+@@ -32,7 +32,8 @@ const AIHUBMIX_RULES: RuleSet = {
+       match: (model) =>
+         (startsWith('gemini')(model) || startsWith('imagen')(model)) &&
+         !model.id.endsWith('-nothink') &&
+-        !model.id.endsWith('-search'),
++        !model.id.endsWith('-search') &&
++        !model.id.includes('embedding'),
+       provider: (provider: Provider) => {
+         return extraProviderConfig({
+           ...provider,
+diff --git a/src/aiCore/provider/config/newApi.ts b/src/aiCore/provider/config/newApi.ts
+index 5277495..97de625 100644
+--- a/src/aiCore/provider/config/newApi.ts
++++ b/src/aiCore/provider/config/newApi.ts
+@@ -1,7 +1,7 @@
+ /**
+  * NewAPI规则集
+  */
+-import { Provider } from '@renderer/types'
++import type { Provider } from '@renderer/types'
+ 
+ import { endpointIs, provider2Provider } from './helper'
+ import type { RuleSet } from './types'
+diff --git a/src/aiCore/provider/factory.ts b/src/aiCore/provider/factory.ts
+index 6221110..4cdbfb6 100644
+--- a/src/aiCore/provider/factory.ts
++++ b/src/aiCore/provider/factory.ts
+@@ -1,7 +1,7 @@
+ import { hasProviderConfigByAlias, type ProviderId, resolveProviderConfigId } from '@cherrystudio/ai-core/provider'
+ import { createProvider as createProviderCore } from '@cherrystudio/ai-core/provider'
+ import { loggerService } from '@logger'
+-import { Provider } from '@renderer/types'
++import type { Provider } from '@renderer/types'
+ import type { Provider as AiSdkProvider } from 'ai'
+ 
+ import { initializeNewProviders } from './providerInitialization'
+diff --git a/src/aiCore/provider/providerConfig.ts b/src/aiCore/provider/providerConfig.ts
+index 0a3bbc7..1532375 100644
+--- a/src/aiCore/provider/providerConfig.ts
++++ b/src/aiCore/provider/providerConfig.ts
+@@ -6,26 +6,28 @@ import {
+   type ProviderSettingsMap
+ } from '@cherrystudio/ai-core/provider'
+ import { isOpenAIChatCompletionOnlyModel } from '@renderer/config/models'
+-import { isNewApiProvider } from '@renderer/config/providers'
++import {
++  isAnthropicProvider,
++  isAzureOpenAIProvider,
++  isGeminiProvider,
++  isNewApiProvider
++} from '@renderer/config/providers'
+ import {
+   getAwsBedrockAccessKeyId,
+   getAwsBedrockRegion,
+   getAwsBedrockSecretAccessKey
+ } from '@renderer/hooks/useAwsBedrock'
+-import { createVertexProvider, isVertexAIConfigured } from '@renderer/hooks/useVertexAI'
++import { createVertexProvider, isVertexAIConfigured, isVertexProvider } from '@renderer/hooks/useVertexAI'
+ import { getProviderByModel } from '@renderer/services/AssistantService'
+-import { loggerService } from '@renderer/services/LoggerService'
+ import store from '@renderer/store'
+-import { isSystemProvider, type Model, type Provider } from '@renderer/types'
+-import { formatApiHost } from '@renderer/utils/api'
+-import { cloneDeep, trim } from 'lodash'
++import { isSystemProvider, type Model, type Provider, SystemProviderIds } from '@renderer/types'
++import { formatApiHost, formatAzureOpenAIApiHost, formatVertexApiHost, routeToEndpoint } from '@renderer/utils/api'
++import { cloneDeep } from 'lodash'
+ 
+ import { aihubmixProviderCreator, newApiResolverCreator, vertexAnthropicProviderCreator } from './config'
+ import { COPILOT_DEFAULT_HEADERS } from './constants'
+ import { getAiSdkProviderId } from './factory'
+ 
+-const logger = loggerService.withContext('ProviderConfigProcessor')
+-
+ /**
+  * 获取轮询的API key
+  * 复用legacy架构的多key轮询逻辑
+@@ -56,13 +58,6 @@ function getRotatedApiKey(provider: Provider): string {
+  * 处理特殊provider的转换逻辑
+  */
+ function handleSpecialProviders(model: Model, provider: Provider): Provider {
+-  // if (provider.type === 'vertexai' && !isVertexProvider(provider)) {
+-  //   if (!isVertexAIConfigured()) {
+-  //     throw new Error('VertexAI is not configured. Please configure project, location and service account credentials.')
+-  //   }
+-  //   return createVertexProvider(provider)
+-  // }
+-
+   if (isNewApiProvider(provider)) {
+     return newApiResolverCreator(model, provider)
+   }
+@@ -79,43 +74,30 @@ function handleSpecialProviders(model: Model, provider: Provider): Provider {
+ }
+ 
+ /**
+- * 格式化provider的API Host
++ * 主要用来对齐AISdk的BaseURL格式
++ * @param provider
++ * @returns
+  */
+-function formatAnthropicApiHost(host: string): string {
+-  const trimmedHost = host?.trim()
+-
+-  if (!trimmedHost) {
+-    return ''
+-  }
+-
+-  if (trimmedHost.endsWith('/')) {
+-    return trimmedHost
+-  }
+-
+-  if (trimmedHost.endsWith('/v1')) {
+-    return `${trimmedHost}/`
+-  }
+-
+-  return formatApiHost(trimmedHost)
+-}
+-
+ function formatProviderApiHost(provider: Provider): Provider {
+   const formatted = { ...provider }
+   if (formatted.anthropicApiHost) {
+-    formatted.anthropicApiHost = formatAnthropicApiHost(formatted.anthropicApiHost)
++    formatted.anthropicApiHost = formatApiHost(formatted.anthropicApiHost)
+   }
+ 
+-  if (formatted.type === 'anthropic') {
++  if (isAnthropicProvider(provider)) {
+     const baseHost = formatted.anthropicApiHost || formatted.apiHost
+-    formatted.apiHost = formatAnthropicApiHost(baseHost)
++    formatted.apiHost = formatApiHost(baseHost)
+     if (!formatted.anthropicApiHost) {
+       formatted.anthropicApiHost = formatted.apiHost
+     }
+-  } else if (formatted.id === 'copilot') {
+-    const trimmed = trim(formatted.apiHost)
+-    formatted.apiHost = trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed
+-  } else if (formatted.type === 'gemini') {
+-    formatted.apiHost = formatApiHost(formatted.apiHost, 'v1beta')
++  } else if (formatted.id === SystemProviderIds.copilot || formatted.id === SystemProviderIds.github) {
++    formatted.apiHost = formatApiHost(formatted.apiHost, false)
++  } else if (isGeminiProvider(formatted)) {
++    formatted.apiHost = formatApiHost(formatted.apiHost, true, 'v1beta')
++  } else if (isAzureOpenAIProvider(formatted)) {
++    formatted.apiHost = formatAzureOpenAIApiHost(formatted.apiHost)
++  } else if (isVertexProvider(formatted)) {
++    formatted.apiHost = formatVertexApiHost(formatted)
+   } else {
+     formatted.apiHost = formatApiHost(formatted.apiHost)
+   }
+@@ -149,15 +131,15 @@ export function providerToAiSdkConfig(
+   options: ProviderSettingsMap[keyof ProviderSettingsMap]
+ } {
+   const aiSdkProviderId = getAiSdkProviderId(actualProvider)
+-  logger.debug('providerToAiSdkConfig', { aiSdkProviderId })
+ 
+   // 构建基础配置
++  const { baseURL, endpoint } = routeToEndpoint(actualProvider.apiHost)
+   const baseConfig = {
+-    baseURL: trim(actualProvider.apiHost),
++    baseURL: baseURL,
+     apiKey: getRotatedApiKey(actualProvider)
+   }
+ 
+-  const isCopilotProvider = actualProvider.id === 'copilot'
++  const isCopilotProvider = actualProvider.id === SystemProviderIds.copilot
+   if (isCopilotProvider) {
+     const storedHeaders = store.getState().copilot.defaultHeaders ?? {}
+     const options = ProviderConfigFactory.fromProvider('github-copilot-openai-compatible', baseConfig, {
+@@ -178,6 +160,7 @@ export function providerToAiSdkConfig(
+ 
+   // 处理OpenAI模式
+   const extraOptions: any = {}
++  extraOptions.endpoint = endpoint
+   if (actualProvider.type === 'openai-response' && !isOpenAIChatCompletionOnlyModel(model)) {
+     extraOptions.mode = 'responses'
+   } else if (aiSdkProviderId === 'openai') {
+@@ -199,13 +182,11 @@ export function providerToAiSdkConfig(
+   }
+   // azure
+   if (aiSdkProviderId === 'azure' || actualProvider.type === 'azure-openai') {
+-    extraOptions.apiVersion = actualProvider.apiVersion
+-    baseConfig.baseURL += '/openai'
++    // extraOptions.apiVersion = actualProvider.apiVersion 默认使用v1，不使用azure endpoint
+     if (actualProvider.apiVersion === 'preview') {
+       extraOptions.mode = 'responses'
+     } else {
+       extraOptions.mode = 'chat'
+-      extraOptions.useDeploymentBasedUrls = true
+     }
+   }
+ 
+@@ -227,22 +208,7 @@ export function providerToAiSdkConfig(
+       ...googleCredentials,
+       privateKey: formatPrivateKey(googleCredentials.privateKey)
+     }
+-    // extraOptions.headers = window.api.vertexAI.getAuthHeaders({
+-    //   projectId: project,
+-    //   serviceAccount: {
+-    //     privateKey: googleCredentials.privateKey,
+-    //     clientEmail: googleCredentials.clientEmail
+-    //   }
+-    // })
+-    if (baseConfig.baseURL.endsWith('/v1/')) {
+-      baseConfig.baseURL = baseConfig.baseURL.slice(0, -4)
+-    } else if (baseConfig.baseURL.endsWith('/v1')) {
+-      baseConfig.baseURL = baseConfig.baseURL.slice(0, -3)
+-    }
+-
+-    if (baseConfig.baseURL && !baseConfig.baseURL.includes('publishers/google')) {
+-      baseConfig.baseURL = `${baseConfig.baseURL}/v1/projects/${project}/locations/${location}/publishers/google`
+-    }
++    baseConfig.baseURL += aiSdkProviderId === 'google-vertex' ? '/publishers/google' : '/publishers/anthropic/models'
+   }
+ 
+   if (hasProviderConfig(aiSdkProviderId) && aiSdkProviderId !== 'openai-compatible') {
+diff --git a/src/aiCore/provider/providerInitialization.ts b/src/aiCore/provider/providerInitialization.ts
+index 9942ffa..665f2bd 100644
+--- a/src/aiCore/provider/providerInitialization.ts
++++ b/src/aiCore/provider/providerInitialization.ts
+@@ -63,6 +63,14 @@ export const NEW_PROVIDER_CONFIGS: ProviderConfig[] = [
+     creatorFunctionName: 'createMistral',
+     supportsImageGeneration: false,
+     aliases: ['mistral']
++  },
++  {
++    id: 'huggingface',
++    name: 'HuggingFace',
++    import: () => import('@ai-sdk/huggingface'),
++    creatorFunctionName: 'createHuggingFace',
++    supportsImageGeneration: true,
++    aliases: ['hf', 'hugging-face']
+   }
+ ] as const
+ 
+diff --git a/src/aiCore/tools/KnowledgeSearchTool.ts b/src/aiCore/tools/KnowledgeSearchTool.ts
+index f3a4761..9a1a94f 100644
+--- a/src/aiCore/tools/KnowledgeSearchTool.ts
++++ b/src/aiCore/tools/KnowledgeSearchTool.ts
+@@ -1,7 +1,7 @@
+ import { REFERENCE_PROMPT } from '@renderer/config/prompts'
+ import { processKnowledgeSearch } from '@renderer/services/KnowledgeService'
+ import type { Assistant, KnowledgeReference } from '@renderer/types'
+-import { ExtractResults, KnowledgeExtractResults } from '@renderer/utils/extract'
++import type { ExtractResults, KnowledgeExtractResults } from '@renderer/utils/extract'
+ import { type InferToolInput, type InferToolOutput, tool } from 'ai'
+ import { isEmpty } from 'lodash'
+ import * as z from 'zod'
+diff --git a/src/aiCore/tools/WebSearchTool.ts b/src/aiCore/tools/WebSearchTool.ts
+index 61d5d3b..9545b64 100644
+--- a/src/aiCore/tools/WebSearchTool.ts
++++ b/src/aiCore/tools/WebSearchTool.ts
+@@ -1,7 +1,7 @@
+ import { REFERENCE_PROMPT } from '@renderer/config/prompts'
+ import WebSearchService from '@renderer/services/WebSearchService'
+-import { WebSearchProvider, WebSearchProviderResponse } from '@renderer/types'
+-import { ExtractResults } from '@renderer/utils/extract'
++import type { WebSearchProvider, WebSearchProviderResponse } from '@renderer/types'
++import type { ExtractResults } from '@renderer/utils/extract'
+ import { type InferToolInput, type InferToolOutput, tool } from 'ai'
+ import * as z from 'zod'
+ 
+diff --git a/src/aiCore/trace/AiSdkSpanAdapter.ts b/src/aiCore/trace/AiSdkSpanAdapter.ts
+index fc844b5..732397d 100644
+--- a/src/aiCore/trace/AiSdkSpanAdapter.ts
++++ b/src/aiCore/trace/AiSdkSpanAdapter.ts
+@@ -6,8 +6,9 @@
+  */
+ 
+ import { loggerService } from '@logger'
+-import { SpanEntity, TokenUsage } from '@mcp-trace/trace-core'
+-import { Span, SpanKind, SpanStatusCode } from '@opentelemetry/api'
++import type { SpanEntity, TokenUsage } from '@mcp-trace/trace-core'
++import type { Span } from '@opentelemetry/api'
++import { SpanKind, SpanStatusCode } from '@opentelemetry/api'
+ 
+ const logger = loggerService.withContext('AiSdkSpanAdapter')
+ 
+diff --git a/src/aiCore/utils/image.ts b/src/aiCore/utils/image.ts
+index 43d9166..37dbe76 100644
+--- a/src/aiCore/utils/image.ts
++++ b/src/aiCore/utils/image.ts
+@@ -1,4 +1,5 @@
+-import { isSystemProvider, Model, Provider, SystemProviderIds } from '@renderer/types'
++import type { Model, Provider } from '@renderer/types'
++import { isSystemProvider, SystemProviderIds } from '@renderer/types'
+ 
+ export function buildGeminiGenerateImageParams(): Record<string, any> {
+   return {
+diff --git a/src/aiCore/utils/mcp.ts b/src/aiCore/utils/mcp.ts
+index 9606d9e..84bc661 100644
+--- a/src/aiCore/utils/mcp.ts
++++ b/src/aiCore/utils/mcp.ts
+@@ -1,10 +1,10 @@
+ import { loggerService } from '@logger'
+-import { MCPTool, MCPToolResponse } from '@renderer/types'
++import type { MCPTool, MCPToolResponse } from '@renderer/types'
+ import { callMCPTool, getMcpServerByTool, isToolAutoApproved } from '@renderer/utils/mcp-tools'
+ import { requestToolConfirmation } from '@renderer/utils/userConfirmation'
+ import { type Tool, type ToolSet } from 'ai'
+ import { jsonSchema, tool } from 'ai'
+-import { JSONSchema7 } from 'json-schema'
++import type { JSONSchema7 } from 'json-schema'
+ 
+ const logger = loggerService.withContext('MCP-utils')
+ 
+diff --git a/src/aiCore/utils/options.ts b/src/aiCore/utils/options.ts
+index d151b57..eaf4764 100644
+--- a/src/aiCore/utils/options.ts
++++ b/src/aiCore/utils/options.ts
+@@ -2,15 +2,13 @@ import { baseProviderIdSchema, customProviderIdSchema } from '@cherrystudio/ai-c
+ import { isOpenAIModel, isQwenMTModel, isSupportFlexServiceTierModel } from '@renderer/config/models'
+ import { isSupportServiceTierProvider } from '@renderer/config/providers'
+ import { mapLanguageToQwenMTModel } from '@renderer/config/translate'
++import type { Assistant, Model, Provider } from '@renderer/types'
+ import {
+-  Assistant,
+   GroqServiceTiers,
+   isGroqServiceTier,
+   isOpenAIServiceTier,
+   isTranslateAssistant,
+-  Model,
+   OpenAIServiceTiers,
+-  Provider,
+   SystemProviderIds
+ } from '@renderer/types'
+ import { t } from 'i18next'
+@@ -90,7 +88,9 @@ export function buildProviderOptions(
+           serviceTier: serviceTierSetting
+         }
+         break
+-
++      case 'huggingface':
++        providerSpecificOptions = buildOpenAIProviderOptions(assistant, model, capabilities)
++        break
+       case 'anthropic':
+         providerSpecificOptions = buildAnthropicProviderOptions(assistant, model, capabilities)
+         break
+diff --git a/src/aiCore/utils/reasoning.ts b/src/aiCore/utils/reasoning.ts
+index 2c98d86..0246ac3 100644
+--- a/src/aiCore/utils/reasoning.ts
++++ b/src/aiCore/utils/reasoning.ts
+@@ -10,6 +10,7 @@ import {
+   isGrok4FastReasoningModel,
+   isGrokReasoningModel,
+   isOpenAIDeepResearchModel,
++  isOpenAIModel,
+   isOpenAIReasoningModel,
+   isQwenAlwaysThinkModel,
+   isQwenReasoningModel,
+@@ -29,9 +30,10 @@ import {
+ import { isSupportEnableThinkingProvider } from '@renderer/config/providers'
+ import { getStoreSetting } from '@renderer/hooks/useSettings'
+ import { getAssistantSettings, getProviderByModel } from '@renderer/services/AssistantService'
+-import { SettingsState } from '@renderer/store/settings'
+-import { Assistant, EFFORT_RATIO, isSystemProvider, Model, SystemProviderIds } from '@renderer/types'
+-import { ReasoningEffortOptionalParams } from '@renderer/types/sdk'
++import type { SettingsState } from '@renderer/store/settings'
++import type { Assistant, Model } from '@renderer/types'
++import { EFFORT_RATIO, isSystemProvider, SystemProviderIds } from '@renderer/types'
++import type { ReasoningEffortOptionalParams } from '@renderer/types/sdk'
+ import { toInteger } from 'lodash'
+ 
+ const logger = loggerService.withContext('reasoning')
+@@ -66,7 +68,8 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
+         isGrokReasoningModel(model) ||
+         isOpenAIReasoningModel(model) ||
+         isQwenAlwaysThinkModel(model) ||
+-        model.id.includes('seed-oss')
++        model.id.includes('seed-oss') ||
++        model.id.includes('minimax-m2')
+       ) {
+         return {}
+       }
+@@ -199,7 +202,7 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
+     }
+   }
+ 
+-  // OpenRouter models, use thinking
++  // OpenRouter models, use reasoning
+   if (model.provider === SystemProviderIds.openrouter) {
+     if (isSupportedReasoningEffortModel(model) || isSupportedThinkingTokenModel(model)) {
+       return {
+@@ -318,6 +321,20 @@ export function getOpenAIReasoningParams(assistant: Assistant, model: Model): Re
+   if (!isReasoningModel(model)) {
+     return {}
+   }
++
++  let reasoningEffort = assistant?.settings?.reasoning_effort
++
++  if (!reasoningEffort) {
++    return {}
++  }
++
++  // 非OpenAI模型，但是Provider类型是responses/azure openai的情况
++  if (!isOpenAIModel(model)) {
++    return {
++      reasoningEffort
++    }
++  }
++
+   const openAI = getStoreSetting('openAI') as SettingsState['openAI']
+   const summaryText = openAI?.summaryText || 'off'
+ 
+@@ -329,16 +346,10 @@ export function getOpenAIReasoningParams(assistant: Assistant, model: Model): Re
+     reasoningSummary = summaryText
+   }
+ 
+-  let reasoningEffort = assistant?.settings?.reasoning_effort
+-
+   if (isOpenAIDeepResearchModel(model)) {
+     reasoningEffort = 'medium'
+   }
+ 
+-  if (!reasoningEffort) {
+-    return {}
+-  }
+-
+   // OpenAI 推理参数
+   if (isSupportedReasoningEffortOpenAIModel(model)) {
+     return {
+diff --git a/src/aiCore/utils/websearch.ts b/src/aiCore/utils/websearch.ts
+index 0ab41d5..fde4ff5 100644
+--- a/src/aiCore/utils/websearch.ts
++++ b/src/aiCore/utils/websearch.ts
+@@ -1,12 +1,12 @@
+-import {
++import type {
+   AnthropicSearchConfig,
+   OpenAISearchConfig,
+   WebSearchPluginConfig
+ } from '@cherrystudio/ai-core/core/plugins/built-in/webSearchPlugin/helper'
+-import { BaseProviderId } from '@cherrystudio/ai-core/provider'
++import type { BaseProviderId } from '@cherrystudio/ai-core/provider'
+ import { isOpenAIDeepResearchModel, isOpenAIWebSearchChatCompletionOnlyModel } from '@renderer/config/models'
+-import { CherryWebSearchConfig } from '@renderer/store/websearch'
+-import { Model } from '@renderer/types'
++import type { CherryWebSearchConfig } from '@renderer/store/websearch'
++import type { Model } from '@renderer/types'
+ import { mapRegexToPatterns } from '@renderer/utils/blacklistMatchPattern'
+ 
+ export function getWebSearchParams(model: Model): Record<string, any> {
