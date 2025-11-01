@@ -1,9 +1,10 @@
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native'
 import { groupBy } from 'lodash'
-import React, { useCallback, useRef } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
+import { ActivityIndicator } from 'react-native'
 
 import {
   Container,
@@ -21,15 +22,16 @@ import {
   IconButton,
   SearchInput
 } from '@/componentsV2'
-import { HeartPulse, Minus, Plus, Settings2 } from '@/componentsV2/icons/LucideIcon'
+import { CircleCheck, HeartPulse, Minus, Plus, RefreshCw, Settings2, XCircle } from '@/componentsV2/icons/LucideIcon'
 import { useProvider } from '@/hooks/useProviders'
 import { useSearch } from '@/hooks/useSearch'
 import { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
 import { loggerService } from '@/services/LoggerService'
-import { Model } from '@/types/assistant'
+import { Model, ModelHealth } from '@/types/assistant'
 import { ProvidersNavigationProps } from '@/types/naviagate'
-import { Switch } from 'heroui-native'
+import { Switch, useTheme } from 'heroui-native'
 import { AddModelSheet } from '@/componentsV2/features/SettingsScreen/AddModelSheet'
+import { modelHealthService } from '@/services/ModelHealthService'
 import { ModelIcon } from '@/componentsV2/icons'
 import { ModelTags } from '@/componentsV2/features/ModelTags'
 
@@ -39,10 +41,13 @@ type ProviderSettingsRouteProp = RouteProp<ProvidersStackParamList, 'ProviderSet
 
 export default function ProviderSettingsScreen() {
   const { t } = useTranslation()
+  const { isDark } = useTheme()
   const navigation = useNavigation<ProvidersNavigationProps>()
   const route = useRoute<ProviderSettingsRouteProp>()
 
   const bottomSheetRef = useRef<BottomSheetModal>(null)
+  const [healthResults, setHealthResults] = useState<Record<string, ModelHealth>>({})
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false)
 
   const handleOpenBottomSheet = () => {
     bottomSheetRef.current?.present()
@@ -84,9 +89,47 @@ export default function ProviderSettingsScreen() {
     navigation.navigate('ApiServiceScreen', { providerId })
   }
 
-  // const onSettingModel = (model: Model) => {
-  //   logger.info('[ProviderSettingsPage] onSettingModel', model)
-  // }
+  const handleHealthCheck = async () => {
+    if (!provider || isCheckingHealth) return
+
+    setIsCheckingHealth(true)
+    setHealthResults({})
+
+    try {
+      // Initialize all models as testing
+      const initialResults: Record<string, ModelHealth> = {}
+      allModels.forEach(model => {
+        initialResults[model.id] = {
+          modelId: model.id,
+          status: 'testing'
+        }
+      })
+      setHealthResults(initialResults)
+
+      // Check models one by one
+      for (const model of allModels) {
+        try {
+          const result = await modelHealthService.checkModelHealth(provider, model)
+          setHealthResults(prev => ({
+            ...prev,
+            [model.id]: result
+          }))
+        } catch (error) {
+          logger.error(`Failed to check model ${model.id}:`, error as Error)
+          setHealthResults(prev => ({
+            ...prev,
+            [model.id]: {
+              modelId: model.id,
+              status: 'unhealthy',
+              error: error instanceof Error ? error.message : 'Unknown error'
+            }
+          }))
+        }
+      }
+    } finally {
+      setIsCheckingHealth(false)
+    }
+  }
 
   const handleEnabledChange = async (checked: boolean) => {
     if (provider) {
@@ -118,26 +161,60 @@ export default function ProviderSettingsScreen() {
   )
 
   const renderModelItem = useCallback(
-    (model: Model, _index: number) => (
-      <XStack className="w-full items-center justify-between">
-        <XStack className="flex-1 gap-2">
-          <XStack className="items-center justify-center">
-            <ModelIcon model={model} />
+    (model: Model, _index: number) => {
+      const health = healthResults[model.id]
+
+      const getStatusIcon = () => {
+        if (!health) return null
+
+        switch (health.status) {
+          case 'healthy':
+            return <CircleCheck size={16} className="text-green-500" />
+          case 'unhealthy':
+            return <XCircle size={16} className="text-red-500" />
+          case 'testing':
+            return <ActivityIndicator size="small" color={isDark ? '#ffffff' : '#000000'} />
+          default:
+            return null
+        }
+      }
+
+      return (
+        <YStack className="w-full gap-1">
+          <XStack className="w-full items-center justify-between">
+            <XStack className="flex-1 gap-2">
+              <XStack className="items-center justify-center">
+                <ModelIcon model={model} />
+              </XStack>
+              <YStack className="flex-1 gap-1">
+                <Text numberOfLines={1} ellipsizeMode="tail">
+                  {model.name}
+                </Text>
+                <ModelTags model={model} size={11} />
+              </YStack>
+            </XStack>
+            <XStack className="items-center gap-2">
+              {health && health.latency != null && (
+                <Text className="font-mono text-xs text-text-secondary dark:text-text-secondary-dark">
+                  {health.latency.toFixed(2)}s
+                </Text>
+              )}
+              {getStatusIcon()}
+              <IconButton
+                icon={<Minus size={18} className="rounded-full bg-red-20 text-red-100 dark:text-red-100" />}
+                onPress={() => handleRemoveModel(model.id)}
+              />
+            </XStack>
           </XStack>
-          <YStack className="flex-1 gap-1">
-            <Text numberOfLines={1} ellipsizeMode="tail">
-              {model.name}
+          {health?.error && health.status === 'unhealthy' && (
+            <Text className="text-xs text-red-500" numberOfLines={2}>
+              {health.error}
             </Text>
-            <ModelTags model={model} size={11} />
-          </YStack>
-        </XStack>
-        <IconButton
-          icon={<Minus size={18} className="rounded-full bg-red-20 text-red-100 dark:text-red-100" />}
-          onPress={() => handleRemoveModel(model.id)}
-        />
-      </XStack>
-    ),
-    [handleRemoveModel]
+          )}
+        </YStack>
+      )
+    },
+    [healthResults, isDark, handleRemoveModel]
   )
 
   if (isLoading) {
@@ -212,7 +289,11 @@ export default function ProviderSettingsScreen() {
             <YStack className="flex-1 gap-2">
               <XStack className="items-center justify-between pr-2.5">
                 <GroupTitle>{t('settings.models.title')}</GroupTitle>
-                <IconButton icon={<HeartPulse size={14} />} />
+                <IconButton
+                  icon={isCheckingHealth ? <RefreshCw size={14} className="animate-spin" /> : <HeartPulse size={14} />}
+                  onPress={handleHealthCheck}
+                  disabled={isCheckingHealth}
+                />
               </XStack>
               <SearchInput placeholder={t('settings.models.search')} value={searchText} onChangeText={setSearchText} />
               <Group>
