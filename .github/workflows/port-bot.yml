@@ -48,6 +48,7 @@ jobs:
         run: |
           # Authenticate gh CLI
           echo "🔑 Authenticating gh CLI..."
+          alias gh="env -u GITHUB_TOKEN gh $1"
           gh auth login
 
           # Verify authentication
