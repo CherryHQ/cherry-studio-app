@@ -239,15 +239,10 @@ export function useExternalAssistants() {
   }, [subscribe])
 
   const loadExternalAssistants = async () => {
-    try {
       setIsLoading(true)
       const external = await assistantService.getExternalAssistants()
       setAssistants(external)
-    } catch (error) {
-      logger.error('Failed to load external assistants:', error as Error)
-    } finally {
       setIsLoading(false)
-    }
   }
 
   const updateAssistants = useCallback(async (updates: Assistant[]) => {

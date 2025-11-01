@@ -380,8 +380,13 @@ export class AssistantService {
    * Get external assistants (user-created)
    */
   public async getExternalAssistants(): Promise<Assistant[]> {
-    const assistants = await assistantDatabase.getExternalAssistants()
-    return assistants
+    try {
+      const assistants = await assistantDatabase.getExternalAssistants()
+      return assistants
+    } catch(error) {
+      logger.error('Failed to load external assistants:', error as Error)
+      return []
+    }
   }
 
   /**
