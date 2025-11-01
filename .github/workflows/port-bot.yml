@@ -24,248 +24,97 @@ jobs:
         uses: actions/checkout@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      - name: Checkout source repository
-        uses: actions/checkout@v5
-        with:
-          repository: CherryHQ/cherry-studio
-          ref: ${{ inputs.source_ref || 'main' }}
-          path: source-repo
-          fetch-depth: 50
-
-      - name: Set up Git
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          fetch-depth: 1
 
       - name: Get last ported commit
         id: last-port
         run: |
-          # Try to get the last ported commit from a tracking file
+          # Try to get the last ported commit from tracking file
           if [ -f .github/port-bot-state ]; then
             LAST_COMMIT=$(cat .github/port-bot-state)
-            echo "📝 Using tracked commit from state file"
+            echo "📝 Using tracked commit: $LAST_COMMIT"
           else
-            # If no state file, get a commit from 30 days ago as starting point
-            cd source-repo
-            LAST_COMMIT=$(git log --before="30 days ago" --format="%H" -- src/renderer/src/aiCore | head -1)
-
-            # If still empty (repo is newer than 30 days or no aiCore changes in 30 days), use first aiCore commit
-            if [ -z "$LAST_COMMIT" ]; then
-              LAST_COMMIT=$(git log --format="%H" -- src/renderer/src/aiCore | tail -1)
-              echo "⚠️ No state file and no commits in last 30 days, using first aiCore commit"
-            else
-              echo "ℹ️ No state file found, starting from 30 days ago"
-            fi
-            cd ..
+            # First run - use a reasonable starting point (30 days ago)
+            LAST_COMMIT="HEAD~100"  # Fallback: last 100 commits
+            echo "ℹ️ No state file found, using fallback"
           fi
 
           echo "last_commit=$LAST_COMMIT" >> $GITHUB_OUTPUT
-          echo "Last ported commit: $LAST_COMMIT"
-
-      - name: Check for aiCore changes
-        id: check-changes
-        run: |
-          cd source-repo
-
-          # Get commits that modified src/renderer/src/aiCore since last port
-          COMMITS=$(git log ${{ steps.last-port.outputs.last_commit }}..HEAD \
-            --pretty=format:"%H|%s|%an|%ae|%aI" \
-            -- src/renderer/src/aiCore)
-
-          if [ -z "$COMMITS" ]; then
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "No changes found in src/renderer/src/aiCore"
-          else
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-
-            # Get the latest commit hash
-            LATEST_COMMIT=$(git log -1 --format="%H" -- src/renderer/src/aiCore)
-            echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
-            echo "latest_commit_short=$(echo $LATEST_COMMIT | cut -c1-7)" >> $GITHUB_OUTPUT
-
-            # Count changes
-            COMMIT_COUNT=$(echo "$COMMITS" | wc -l | tr -d ' ')
-            echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
-
-            # Save commits info for PR body
-            echo "$COMMITS" > ../commits.txt
-
-            echo "Found $COMMIT_COUNT commit(s) with aiCore changes"
-          fi
-
-          cd ..
-
-      - name: Create port branch
-        if: steps.check-changes.outputs.has_changes == 'true'
-        run: |
-          BRANCH_NAME="port/aicore-${{ steps.check-changes.outputs.latest_commit_short }}"
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_ENV
-
-          # Check if branch already exists
-          if git ls-remote --heads origin $BRANCH_NAME | grep -q $BRANCH_NAME; then
-            echo "Branch $BRANCH_NAME already exists, skipping"
-            echo "skip_port=true" >> $GITHUB_ENV
-          else
-            git checkout -b $BRANCH_NAME
-            echo "skip_port=false" >> $GITHUB_ENV
-          fi
-
-      - name: Generate patch file
-        if: steps.check-changes.outputs.has_changes == 'true' && env.skip_port == 'false'
-        run: |
-          cd source-repo
-
-          # Generate patch with path transformation (src/renderer/src/aiCore -> src/aiCore)
-          git diff ${{ steps.last-port.outputs.last_commit }}..HEAD \
-            -- src/renderer/src/aiCore > ../aicore-changes.patch
-
-          cd ..
-
-          # Transform paths in the patch file for mobile structure
-          sed -i.bak 's|src/renderer/src/aiCore|src/aiCore|g' aicore-changes.patch
-          rm aicore-changes.patch.bak
-
-          echo "✅ Generated patch file with transformed paths"
-
-      - name: Save patch for Copilot Agent
-        if: steps.check-changes.outputs.has_changes == 'true' && env.skip_port == 'false'
-        run: |
-          # Save the patch file for Copilot Agent to process
-          mkdir -p .github/port-patches
-          mv aicore-changes.patch .github/port-patches/
-
-          echo "✅ Saved patch for Copilot Agent processing"
-          echo "patch_status=copilot" >> $GITHUB_ENV
-
-      - name: Analyze patch
-        if: steps.check-changes.outputs.has_changes == 'true' && env.skip_port == 'false'
-        run: |
-          # Get statistics from patch file
-          PATCH_FILE=".github/port-patches/aicore-changes.patch"
-
-          ADDED_LINES=$(grep "^+" "$PATCH_FILE" | grep -v "^+++" | wc -l | tr -d ' ')
-          REMOVED_LINES=$(grep "^-" "$PATCH_FILE" | grep -v "^---" | wc -l | tr -d ' ')
-          FILES_CHANGED=$(grep "^diff --git" "$PATCH_FILE" | wc -l | tr -d ' ')
-
-          echo "added_lines=$ADDED_LINES" >> $GITHUB_ENV
-          echo "removed_lines=$REMOVED_LINES" >> $GITHUB_ENV
-          echo "files_changed=$FILES_CHANGED" >> $GITHUB_ENV
-
-          echo "📊 Patch Statistics:"
-          echo "Files changed: $FILES_CHANGED"
-          echo "Lines added: $ADDED_LINES"
-          echo "Lines removed: $REMOVED_LINES"
-
-      - name: Commit patch file
-        if: steps.check-changes.outputs.has_changes == 'true' && env.skip_port == 'false'
-        run: |
-          # Commit the patch file to the branch
-          git add .github/port-patches/
-          git commit -m "chore: add upstream patch for Copilot Agent
-
-          Patch contains ${{ env.files_changed }} files with +${{ env.added_lines }}/-${{ env.removed_lines }} lines.
-
-          Source: CherryHQ/cherry-studio@${{ steps.check-changes.outputs.latest_commit }}"
-
-      - name: Push branch
-        if: steps.check-changes.outputs.has_changes == 'true' && env.skip_port == 'false'
-        run: |
-          git push origin ${{ env.branch_name }}
-          echo "✅ Pushed branch with patch file"
+          echo "last_commit_display=${LAST_COMMIT:0:7}" >> $GITHUB_OUTPUT
 
       - name: Create Copilot Agent task
-        if: steps.check-changes.outputs.has_changes == 'true' && env.skip_port == 'false'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_TOKEN || secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          # Check if token is available
+          # Check if Copilot token is available
           if [ -z "${{ secrets.COPILOT_TOKEN }}" ] && [ -z "${{ secrets.GH_PAT }}" ]; then
-            echo "❌ ERROR: No Copilot-enabled token found!"
-            echo ""
-            echo "Please create a Personal Access Token (PAT) with Copilot access:"
-            echo "1. Go to: https://github.com/settings/tokens/new"
-            echo "2. Select scopes: 'repo', 'workflow', 'copilot'"
-            echo "3. Generate token"
-            echo "4. Add it to repository secrets as 'COPILOT_TOKEN' or 'GH_PAT'"
-            echo "   Settings → Secrets and variables → Actions → New repository secret"
-            echo ""
-            echo "Fallback: Using default GITHUB_TOKEN (may not have Copilot access)"
+            echo "⚠️ WARNING: No Copilot-enabled token found!"
+            echo "Please add COPILOT_TOKEN to repository secrets for full functionality."
+            echo "See: https://github.com/${{ github.repository }}/settings/secrets/actions"
           fi
 
-          # Use GitHub Copilot Agent to apply the patch and handle conflicts
+          # Let Copilot Agent handle everything
           gh agent-task create \
             --base main \
             --repo ${{ github.repository }} \
             --follow \
-            "Help me solve the conflicts in .github/port-patches/aicore-changes.patch and port the changes to src/aiCore/.
+            "Port changes from CherryHQ/cherry-studio repository's \`src/renderer/src/aiCore\` directory to this repo's \`src/aiCore\` directory.
 
-          **Context**: This is a React Native/Expo mobile app porting changes from a desktop Electron app.
+          **Source repository**: https://github.com/CherryHQ/cherry-studio
+          **Last ported commit**: ${{ steps.last-port.outputs.last_commit_display || 'first time' }}
+          **Target**: Port all new changes to \`src/aiCore/\`
+
+          **This is a React Native/Expo mobile app** porting from an Electron desktop app.
 
           **Required transformations**:
-          1. Replace import paths: \`@renderer/**\` → \`@/**\`
-          2. Replace logger imports: \`@logger\` → \`@/services/LoggerService\`
-          3. Fix ESLint rule differences (this repo may have stricter rules)
-          4. Adapt Electron-specific code for React Native:
-             - Replace Node.js APIs (\`fs\`, \`path\`) with Expo equivalents
-             - Replace Electron IPC with React Native bridge patterns
-             - Ensure all file operations are async
-             - Use React Native compatible packages
+          1. Path mapping: \`src/renderer/src/aiCore\` → \`src/aiCore\`
+          2. Import rewrites:
+             - \`@renderer/**\` → \`@/**\`
+             - \`@logger\` → \`@/services/LoggerService\`
+          3. Electron → React Native adaptations:
+             - Replace Node.js APIs (\`fs\`, \`path\`) with \`expo-file-system\`
+             - Remove Electron IPC, use React Native bridge if needed
+             - Make all file operations async
+             - Use RN-compatible packages only
+          4. Fix ESLint differences (this repo has stricter rules)
 
           **Steps**:
-          1. Apply the patch from \`.github/port-patches/aicore-changes.patch\` to \`src/aiCore/\`
-          2. Apply all the transformations listed above using bash/sed
-          3. Run \`yarn format\` and \`yarn lint\` to fix style issues
-          4. Ensure all imports resolve correctly
-          5. Create a PR with clear description of changes made
+          1. Fetch latest changes from https://github.com/CherryHQ/cherry-studio
+          2. Generate diff for \`src/renderer/src/aiCore\` since last port
+          3. Apply transformations above using bash/sed/find
+          4. Port changes to \`src/aiCore/\`
+          5. Run \`yarn format && yarn lint\` to fix style
+          6. Update \`.github/port-bot-state\` with the latest upstream commit hash
+          7. Create PR with summary of changes and upstream commits
 
           **Important**:
-          - Do not modify \`.github/workflows/\` directory
-          - Focus only on \`src/aiCore/\` directory
-          - Update \`.github/port-bot-state\` with: ${{ steps.check-changes.outputs.latest_commit }}"
+          - DO NOT modify \`.github/workflows/\`
+          - Focus ONLY on \`src/aiCore/\` directory
+          - Ensure all imports resolve correctly
+          - Test that no Node.js-only APIs remain"
 
+          echo ""
           echo "✅ Copilot Agent task created"
-          echo ""
-          echo "🤖 GitHub Copilot Agent will:"
-          echo "  1. Apply the patch and resolve conflicts"
-          echo "  2. Transform imports and adapt code for React Native"
-          echo "  3. Run lint and format"
-          echo "  4. Create a pull request automatically"
-          echo ""
-          echo "Monitor the agent task at: https://github.com/${{ github.repository }}/issues"
+          echo "🤖 Agent will handle: fetch, diff, transform, port, lint, PR"
+          echo "📍 Monitor: https://github.com/${{ github.repository }}/pulls"
 
 
-      - name: Final Summary
+      - name: Summary
         if: always()
         run: |
           echo "==================================="
-          echo "Port Bot Summary"
+          echo "🤖 Port Bot - Copilot Agent Mode"
           echo "==================================="
-
-          if [ "${{ steps.check-changes.outputs.has_changes }}" == "true" ]; then
-            if [ "${{ env.skip_port }}" == "true" ]; then
-              echo "⚠️ Changes detected but branch already exists"
-            else
-              echo "✅ Copilot Agent task created successfully"
-              echo ""
-              echo "📊 Statistics:"
-              echo "  - Upstream commits: ${{ steps.check-changes.outputs.commit_count }}"
-              echo "  - Files in patch: ${{ env.files_changed }}"
-              echo "  - Lines: +${{ env.added_lines }} -${{ env.removed_lines }}"
-              echo ""
-              echo "🤖 Next Steps:"
-              echo "  - GitHub Copilot Agent will apply the patch"
-              echo "  - Transform imports and adapt code for React Native"
-              echo "  - Run lint and format automatically"
-              echo "  - Create a PR with detailed description"
-              echo ""
-              echo "📍 Monitor progress:"
-              echo "   https://github.com/${{ github.repository }}/pulls"
-            fi
-          else
-            echo "ℹ️ No new changes found in src/renderer/src/aiCore"
-            echo "✨ Repository is up to date with upstream"
-          fi
-
+          echo ""
+          echo "✅ Task created successfully"
+          echo ""
+          echo "📋 What happens next:"
+          echo "  1. Copilot Agent fetches upstream changes"
+          echo "  2. Generates and applies transformed patch"
+          echo "  3. Runs lint and format"
+          echo "  4. Creates PR automatically"
+          echo ""
+          echo "📍 Track progress at:"
+          echo "   https://github.com/${{ github.repository }}/pulls"
+          echo ""
           echo "==================================="
