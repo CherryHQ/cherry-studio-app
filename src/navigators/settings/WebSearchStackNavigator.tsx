@@ -16,7 +16,7 @@ export default function WebSearchStackNavigator() {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        gestureResponseDistance: { start: 9999 }, 
+        gestureResponseDistance: { start: 9999 },
         animation: 'slide_from_right'
       }}>
       <Stack.Screen name="WebSearchSettingsScreen" component={WebSearchSettingsScreen} />

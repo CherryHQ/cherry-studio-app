@@ -368,7 +368,6 @@ export function useTopics() {
     setIsLoading(false)
   }
 
-
   // ==================== Return API ====================
 
   return {

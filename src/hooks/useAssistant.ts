@@ -239,10 +239,10 @@ export function useExternalAssistants() {
   }, [subscribe])
 
   const loadExternalAssistants = async () => {
-      setIsLoading(true)
-      const external = await assistantService.getExternalAssistants()
-      setAssistants(external)
-      setIsLoading(false)
+    setIsLoading(true)
+    const external = await assistantService.getExternalAssistants()
+    setAssistants(external)
+    setIsLoading(false)
   }
 
   const updateAssistants = useCallback(async (updates: Assistant[]) => {

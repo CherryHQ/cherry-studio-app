@@ -384,7 +384,7 @@ export class AssistantService {
     try {
       const assistants = await assistantDatabase.getExternalAssistants()
       return assistants
-    } catch(error) {
+    } catch (error) {
       logger.error('Failed to load external assistants:', error as Error)
       return []
     }
