@@ -2,7 +2,7 @@ import type { LanguageModelMiddleware } from 'ai'
 import { extractReasoningMiddleware, simulateStreamingMiddleware } from 'ai'
 
 import { loggerService } from '@/services/LoggerService'
-import type { Model, Provider } from '@/types/assistant'
+import type { Assistant, Model, Provider } from '@/types/assistant'
 import type { Chunk } from '@/types/chunk'
 import type { Message } from '@/types/message'
 import type { MCPTool } from '@/types/tool'
@@ -16,6 +16,7 @@ export interface AiSdkMiddlewareConfig {
   onChunk?: (chunk: Chunk) => void
   model?: Model
   provider?: Provider
+  assistant?: Assistant
   enableReasoning: boolean
   // 是否开启提示词工具调用
   isPromptToolUse: boolean

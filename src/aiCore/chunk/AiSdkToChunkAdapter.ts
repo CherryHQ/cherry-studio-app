@@ -11,7 +11,7 @@ import type { MCPTool } from '@/types/tool'
 import type { WebSearchResults } from '@/types/websearch'
 import { WebSearchSource } from '@/types/websearch'
 
-import { ToolCallChunkHandler } from './handleTooCallChunk'
+import { ToolCallChunkHandler } from './handleToolCallChunk'
 
 export interface CherryStudioChunk {
   type: 'text-delta' | 'text-complete' | 'tool-call' | 'tool-result' | 'finish' | 'error'
