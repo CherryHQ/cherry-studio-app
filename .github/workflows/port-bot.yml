@@ -60,6 +60,8 @@ jobs:
 
           echo "✅ Authentication successful"
 
+          env -u GITHUB_TOKEN gh auth login
+
           # Let Copilot Agent handle everything (also clear GITHUB_TOKEN)
           env -u GITHUB_TOKEN gh agent-task create \
             --base main \
