@@ -2,6 +2,7 @@ import { createStackNavigator, TransitionPresets } from '@react-navigation/stack
 import React from 'react'
 
 import ChatScreen from '@/screens/home/ChatScreen'
+import HtmlPreviewScreen from '@/screens/home/HtmlPreviewScreen'
 import SettingsScreen from '@/screens/settings/SettingsScreen'
 import TopicScreen from '@/screens/topic/TopicScreen'
 
@@ -16,6 +17,7 @@ export type HomeStackParamList = {
   ChatScreen: { topicId: string }
   TopicScreen: undefined
   SettingsScreen: undefined
+  HtmlPreviewScreen: undefined
   GeneralSettings: { screen?: string; params?: any } | undefined
   AssistantSettings: { screen?: string; params?: any } | undefined
   ProvidersSettings: { screen?: string; params?: any } | undefined
@@ -37,6 +39,7 @@ export default function HomeStackNavigator() {
       <Stack.Screen name="ChatScreen" component={ChatScreen} />
       <Stack.Screen name="TopicScreen" component={TopicScreen} />
       <Stack.Screen name="SettingsScreen" component={SettingsScreen} />
+      <Stack.Screen name="HtmlPreviewScreen" component={HtmlPreviewScreen} />
       <Stack.Screen name="GeneralSettings" component={GeneralSettingsStackNavigator} />
       <Stack.Screen name="AssistantSettings" component={AssistantSettingsStackNavigator} />
       <Stack.Screen name="ProvidersSettings" component={ProvidersStackNavigator} />

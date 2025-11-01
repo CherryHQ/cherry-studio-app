@@ -303,6 +303,10 @@
         "empty": "未找到话题"
       }
     },
+    "html_preview": {
+      "title": "HTML 预览",
+      "loading": "加载 HTML 中..."
+    },
     "inputs": {
       "mentions": "@ {{number}} 个模型",
       "placeholder": "发送消息..."

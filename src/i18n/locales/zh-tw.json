@@ -303,6 +303,10 @@
         "empty": "未找到主題"
       }
     },
+    "html_preview": {
+      "title": "HTML 預覽",
+      "loading": "載入 HTML 中..."
+    },
     "inputs": {
       "mentions": "@ {{number}} 個模型",
       "placeholder": "傳送訊息..."

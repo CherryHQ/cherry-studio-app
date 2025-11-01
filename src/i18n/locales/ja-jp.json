@@ -303,6 +303,10 @@
         "empty": "トピックが見つかりません。"
       }
     },
+    "html_preview": {
+      "title": "HTMLプレビュー",
+      "loading": "HTMLを読み込み中..."
+    },
     "inputs": {
       "mentions": "@ {{number}} モデル",
       "placeholder": "メッセージを送信..."

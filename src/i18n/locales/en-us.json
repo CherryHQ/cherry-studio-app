@@ -303,6 +303,10 @@
         "empty": " No topics found"
       }
     },
+    "html_preview": {
+      "title": "HTML Preview",
+      "loading": "Loading HTML..."
+    },
     "inputs": {
       "mentions": "@ {{number}} models",
       "placeholder": "Send Message..."
