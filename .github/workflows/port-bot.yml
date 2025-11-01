@@ -44,28 +44,11 @@ jobs:
 
       - name: Create Copilot Agent task
         env:
-          GH_TOKEN: ${{ secrets.COPILOT_TOKEN || secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
         run: |
-          # Check if Copilot token is configured
-          if [ -z "${{ secrets.COPILOT_TOKEN }}" ] && [ -z "${{ secrets.GH_PAT }}" ]; then
-            echo "⚠️ WARNING: Using default GITHUB_TOKEN (may not have Copilot access)"
-            echo ""
-            echo "To enable Copilot Agent functionality:"
-            echo "1. Create a PAT with 'repo', 'workflow', 'copilot' scopes"
-            echo "2. Add it as COPILOT_TOKEN secret at:"
-            echo "   https://github.com/${{ github.repository }}/settings/secrets/actions"
-            echo ""
-            echo "Attempting to continue with available token..."
-            echo ""
-          fi
-
-          # Save token and clear GH_TOKEN to allow gh auth login
-          TOKEN_TO_USE="$GH_TOKEN"
-          unset GH_TOKEN
-
           # Authenticate gh CLI
           echo "🔑 Authenticating gh CLI..."
-          echo "$TOKEN_TO_USE" | gh auth login --with-token
+          gh auth login
 
           # Verify authentication
           gh auth status || {
