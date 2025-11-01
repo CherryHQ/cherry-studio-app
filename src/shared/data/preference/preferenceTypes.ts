@@ -1,4 +1,4 @@
-import { ThemeMode } from '@/types'
+import type { ThemeMode } from '@/types'
 
 export type PreferenceDefaultScopeType = PreferenceSchemas['default']
 export type PreferenceKeyType = keyof PreferenceDefaultScopeType

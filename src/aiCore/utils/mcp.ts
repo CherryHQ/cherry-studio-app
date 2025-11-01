@@ -1,13 +1,15 @@
 import { type Tool, type ToolSet } from 'ai'
 import { jsonSchema, tool } from 'ai'
-import { JSONSchema7 } from 'json-schema'
+import type { JSONSchema7 } from 'json-schema'
 
 import { loggerService } from '@/services/LoggerService'
 // import { AiSdkTool, ToolCallResult } from '@renderer/aiCore/tools/types'
-import { MCPToolResponse } from '@/types/mcp'
-import { MCPTool } from '@/types/tool'
+import type { MCPToolResponse } from '@/types/mcp'
+import type { MCPTool } from '@/types/tool'
 import { callMCPTool } from '@/utils/mcpTool'
-import { SystemTool, SystemToolKeys } from '../tools/SystemTools'
+
+import type { SystemToolKeys } from '../tools/SystemTools'
+import { SystemTool } from '../tools/SystemTools'
 
 const logger = loggerService.withContext('MCP-utils')
 

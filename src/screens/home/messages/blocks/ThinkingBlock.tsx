@@ -1,12 +1,12 @@
+import { LinearGradient } from 'expo-linear-gradient'
+import { useTheme } from 'heroui-native'
 import React, { useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 
-import { ThinkingMessageBlock } from '@/types/message'
-
-import { LinearGradient } from 'expo-linear-gradient'
 import { MarqueeComponent } from '@/componentsV2'
+import type { ThinkingMessageBlock } from '@/types/message'
+
 import ReactNativeMarkdown from '../../markdown/ReactNativeMarkdown'
-import { useTheme } from 'heroui-native'
 
 interface Props {
   block: ThinkingMessageBlock

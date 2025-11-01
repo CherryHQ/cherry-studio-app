@@ -1,23 +1,24 @@
+import { DropShadowView } from 'heroui-native'
 import { AnimatePresence, MotiView } from 'moti'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Platform } from 'react-native'
-import { DropShadowView } from 'heroui-native'
 
+import TextField from '@/componentsV2/base/TextField'
+import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
 import { useBottom } from '@/hooks/useBottom'
-import { Assistant, Topic } from '@/types/assistant'
+import type { Assistant, Topic } from '@/types/assistant'
+
 import { FilePreview } from './FilePreview'
-import { ToolButton } from './ToolButton'
-import { ThinkButton } from './ThinkButton'
+import { useMessageInputLogic } from './hooks/useMessageInputLogic'
+import { McpButton } from './McpButton'
 import { MentionButton } from './MentionButton'
-import { ToolPreview } from './ToolPreview'
 import { PauseButton } from './PauseButton'
 import { SendButton } from './SendButton'
-import YStack from '@/componentsV2/layout/YStack'
-import XStack from '@/componentsV2/layout/XStack'
-import TextField from '@/componentsV2/base/TextField'
-import { McpButton } from './McpButton'
-import { useMessageInputLogic } from './hooks/useMessageInputLogic'
+import { ThinkButton } from './ThinkButton'
+import { ToolButton } from './ToolButton'
+import { ToolPreview } from './ToolPreview'
 
 interface MessageInputProps {
   topic: Topic
@@ -33,7 +34,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
 
   return (
     <DropShadowView
-      className="px-5 py-2 rounded-2xl bg-surface-1"
+      className="rounded-2xl bg-surface-1 px-5 py-2"
       shadowSize="xl"
       iosShadowStyle={{
         shadowOffset: { width: 0, height: -4 }
@@ -50,7 +51,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
         <XStack className="top-[5px]">
           <TextField className="w-full p-0">
             <TextField.Input
-              className="h-24 p-0 border-none text-base text-text-primary dark:text-text-primary-dark"
+              className="h-24 border-none p-0 text-base text-text-primary dark:text-text-primary-dark"
               placeholder={t('inputs.placeholder')}
               value={text}
               onChangeText={setText}
@@ -66,8 +67,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
           </TextField>
         </XStack>
         {/* button */}
-        <XStack className="justify-between items-center">
-          <XStack className="flex-1 gap-[10px] items-center">
+        <XStack className="items-center justify-between">
+          <XStack className="flex-1 items-center gap-[10px]">
             <ToolButton
               mentions={mentions}
               files={files}
@@ -85,7 +86,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
             <McpButton assistant={assistant} updateAssistant={updateAssistant} />
             <ToolPreview assistant={assistant} updateAssistant={updateAssistant} />
           </XStack>
-          <XStack className="gap-5 items-center">
+          <XStack className="items-center gap-5">
             <AnimatePresence exitBeforeEnter>
               {topic.isLoading ? (
                 <MotiView

@@ -1,4 +1,5 @@
-import { WebSearchResponse, WebSearchSource } from '@/types/websearch'
+import type { WebSearchResponse } from '@/types/websearch'
+import { WebSearchSource } from '@/types/websearch'
 
 // Counter for numbering links
 let linkCounter = 1

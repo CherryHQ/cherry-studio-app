@@ -1,15 +1,15 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
+import { Accordion, Divider, Switch, useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BackHandler, TouchableOpacity, View } from 'react-native'
 
-import { X } from '@/componentsV2/icons/LucideIcon'
-import { MCPServer } from '@/types/mcp'
-import YStack from '@/componentsV2/layout/YStack'
-import XStack from '@/componentsV2/layout/XStack'
 import Text from '@/componentsV2/base/Text'
-import { Accordion, Divider, Switch, useTheme } from 'heroui-native'
-import { useTranslation } from 'react-i18next'
+import { X } from '@/componentsV2/icons/LucideIcon'
+import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
 import { useMcpTools } from '@/hooks/useMcp'
+import type { MCPServer } from '@/types/mcp'
 
 interface McpServerItemSheetProps {
   selectedMcp: MCPServer | null
@@ -87,8 +87,8 @@ const McpServerItemSheet = forwardRef<BottomSheetModal, McpServerItemSheetProps>
         onDismiss={() => setIsVisible(false)}
         onChange={index => setIsVisible(index >= 0)}>
         {!selectedMcp ? null : (
-          <YStack className="flex-1 gap-10 relative">
-            <XStack className="top-5 w-full justify-center items-center">
+          <YStack className="relative flex-1 gap-10">
+            <XStack className="top-5 w-full items-center justify-center">
               <Text className="text-2xl">{selectedMcp.name}</Text>
             </XStack>
             <TouchableOpacity
@@ -102,10 +102,10 @@ const McpServerItemSheet = forwardRef<BottomSheetModal, McpServerItemSheetProps>
               }}
               onPress={() => (ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </TouchableOpacity>
 
-            <XStack className="w-full justify-center items-center">
+            <XStack className="w-full items-center justify-center">
               <Text className="text-lg">{selectedMcp.description}</Text>
             </XStack>
 
@@ -116,7 +116,7 @@ const McpServerItemSheet = forwardRef<BottomSheetModal, McpServerItemSheetProps>
                 {/* Description */}
                 {selectedMcp.description && (
                   <YStack className="gap-1">
-                    <Text className="leading-5 text-lg font-bold text-text-primary dark:text-text-primary-dark">
+                    <Text className="text-lg font-bold leading-5 text-text-primary dark:text-text-primary-dark">
                       {t('common.description')}
                     </Text>
                     <Text className="leading-5 text-text-secondary dark:text-text-secondary-dark">
@@ -127,7 +127,7 @@ const McpServerItemSheet = forwardRef<BottomSheetModal, McpServerItemSheetProps>
                 {/* Tools */}
                 {tools.length > 0 && (
                   <YStack className="gap-1">
-                    <Text className="leading-5 text-lg font-bold text-text-primary dark:text-text-primary-dark">
+                    <Text className="text-lg font-bold leading-5 text-text-primary dark:text-text-primary-dark">
                       {t('common.tool')}
                     </Text>
                     <Accordion

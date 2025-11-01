@@ -1,5 +1,7 @@
 import React from 'react'
-import { TouchableOpacity, TouchableOpacityProps } from 'react-native'
+import type { TouchableOpacityProps } from 'react-native'
+import { TouchableOpacity } from 'react-native'
+
 import XStack from '../XStack'
 
 export interface PressableRowProps extends TouchableOpacityProps {
@@ -9,7 +11,7 @@ export interface PressableRowProps extends TouchableOpacityProps {
 const PressableRow: React.FC<PressableRowProps> = ({ className, children, ...props }) => {
   return (
     <TouchableOpacity {...props}>
-      <XStack className={`justify-between items-center py-[14px] px-4 ${className || ''}`}>{children}</XStack>
+      <XStack className={`items-center justify-between px-4 py-[14px] ${className || ''}`}>{children}</XStack>
     </TouchableOpacity>
   )
 }

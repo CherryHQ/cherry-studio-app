@@ -1,16 +1,17 @@
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs'
-import { RouteProp, useRoute } from '@react-navigation/native'
+import type { RouteProp } from '@react-navigation/native'
+import { useRoute } from '@react-navigation/native'
+import { cn } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity, View } from 'react-native'
 
-import { AssistantStackParamList } from '@/navigators/AssistantStackNavigator'
+import { Text } from '@/componentsV2'
+import type { AssistantStackParamList } from '@/navigators/AssistantStackNavigator'
 import ModelTabScreen from '@/screens/assistant/tabs/ModelTabScreen'
 import PromptTabScreen from '@/screens/assistant/tabs/PromptTabScreen'
 import ToolTabScreen from '@/screens/assistant/tabs/ToolTabScreen'
-import { Assistant } from '@/types/assistant'
-import { Text } from '@/componentsV2'
-import { cn } from 'heroui-native'
+import type { Assistant } from '@/types/assistant'
 
 export type AssistantDetailTabParamList = {
   PromptTab: { assistant: Assistant }
@@ -36,7 +37,7 @@ function CustomTabBar({ state, navigation }: any) {
   }
 
   return (
-    <View className="rounded-xl flex-row bg-transparent border border-neutral-300/20 mx-[5px] my-1 gap-[5px] py-1 px-[5px]">
+    <View className="mx-[5px] my-1 flex-row gap-[5px] rounded-xl border border-neutral-300/20 bg-transparent px-[5px] py-1">
       {state.routes.map((route: any, index: number) => {
         const isFocused = state.index === index
 
@@ -57,7 +58,7 @@ function CustomTabBar({ state, navigation }: any) {
             key={route.key}
             onPress={onPress}
             className={cn(
-              'flex-1 rounded-lg py-3 px-5 items-center justify-center',
+              'flex-1 items-center justify-center rounded-lg px-5 py-3',
               isFocused && 'bg-green-20 dark:bg-green-dark-20'
             )}>
             <Text className={cn('text-sm font-bold', isFocused && 'text-green-100 dark:text-green-dark-100')}>

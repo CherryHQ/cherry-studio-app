@@ -6,10 +6,10 @@ import {
   files,
   messageBlocks,
   messages,
+  preferenceTable,
   providers,
   topics,
-  websearch_providers,
-  preferenceTable
+  websearch_providers
 } from '../schema'
 
 const logger = loggerService.withContext('Reset Database')

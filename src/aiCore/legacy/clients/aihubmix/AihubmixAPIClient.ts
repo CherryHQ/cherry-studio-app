@@ -1,8 +1,8 @@
 import { isOpenAILLMModel } from '@/config/models'
-import { Model, Provider } from '@/types/assistant'
+import type { Model, Provider } from '@/types/assistant'
 
 import { AnthropicAPIClient } from '../anthropic/AnthropicAPIClient'
-import { BaseApiClient } from '../BaseApiClient'
+import type { BaseApiClient } from '../BaseApiClient'
 import { GeminiAPIClient } from '../gemini/GeminiAPIClient'
 import { MixedBaseAPIClient } from '../MixedBaseApiClient'
 import { OpenAIAPIClient } from '../openai/OpenAIApiClient'

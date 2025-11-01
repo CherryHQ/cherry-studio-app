@@ -3,10 +3,10 @@ import '@/i18n'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import React from 'react'
 
+import { useAppState } from '@/hooks/useAppState'
 import AppDrawerNavigator from '@/navigators/AppDrawerNavigator'
 import WelcomeStackNavigator from '@/navigators/WelcomeStackNavigator'
-import { RootStackParamList } from '@/types/naviagate'
-import { useAppState } from '@/hooks/useAppState'
+import type { RootStackParamList } from '@/types/naviagate'
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
 

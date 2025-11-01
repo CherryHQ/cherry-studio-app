@@ -1,6 +1,6 @@
-import { Store } from '@reduxjs/toolkit'
+import type { Store } from '@reduxjs/toolkit'
 
-import { RootState } from '@/store'
+import type { RootState } from '@/store'
 
 declare global {
   var store: Store<RootState>

@@ -1,7 +1,8 @@
-import React, { forwardRef } from 'react'
-import { View, ViewProps } from 'react-native'
-import Animated from 'react-native-reanimated'
 import { cn } from 'heroui-native'
+import React, { forwardRef } from 'react'
+import type { ViewProps } from 'react-native'
+import { View } from 'react-native'
+import Animated from 'react-native-reanimated'
 
 export interface YStackProps extends ViewProps {
   className?: string

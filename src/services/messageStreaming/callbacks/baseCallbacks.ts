@@ -1,20 +1,15 @@
+import { messageDatabase } from '@database'
+
 import { loggerService } from '@/services/LoggerService'
 import { estimateMessagesUsage } from '@/services/TokenService'
-import { Assistant } from '@/types/assistant'
-import {
-  AssistantMessageStatus,
-  Message,
-  MessageBlockStatus,
-  MessageBlockType,
-  PlaceholderMessageBlock,
-  Response
-} from '@/types/message'
+import type { Assistant } from '@/types/assistant'
+import type { Message, PlaceholderMessageBlock, Response } from '@/types/message'
+import { AssistantMessageStatus, MessageBlockStatus, MessageBlockType } from '@/types/message'
 import { formatErrorMessage, isAbortError } from '@/utils/error'
 import { createBaseMessageBlock, createErrorBlock } from '@/utils/messageUtils/create'
 import { findAllBlocks } from '@/utils/messageUtils/find'
 
-import { messageDatabase } from '@database'
-import { BlockManager } from '../BlockManager'
+import type { BlockManager } from '../BlockManager'
 
 const logger = loggerService.withContext('Base Callbacks')
 

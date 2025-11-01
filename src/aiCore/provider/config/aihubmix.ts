@@ -2,7 +2,7 @@
  * AiHubMix规则集
  */
 import { isOpenAIModel } from '@/config/models'
-import { Provider } from '@/types/assistant'
+import type { Provider } from '@/types/assistant'
 
 import { provider2Provider, startsWith } from './helper'
 import type { RuleSet } from './types'

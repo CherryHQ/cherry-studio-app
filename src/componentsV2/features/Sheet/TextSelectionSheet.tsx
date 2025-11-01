@@ -1,14 +1,14 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
+import { useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Platform, TouchableOpacity } from 'react-native'
 
-import { useTheme } from 'heroui-native'
 import Text from '@/componentsV2/base/Text'
-import YStack from '@/componentsV2/layout/YStack'
-import XStack from '@/componentsV2/layout/XStack'
 import TextField from '@/componentsV2/base/TextField'
 import { X } from '@/componentsV2/icons'
+import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
 
 interface TextSelectionSheetProps {
   content: string
@@ -25,7 +25,7 @@ function SelectableText({ children }) {
     return (
       <TextField className="h-full w-full">
         <TextField.Input
-          className="h-full w-full text-sm leading-6 border-0 px-4 rounded-none"
+          className="h-full w-full rounded-none border-0 px-4 text-sm leading-6"
           multiline
           editable={false}
           value={children}

@@ -1,10 +1,10 @@
-import { Search } from '@/componentsV2/icons/LucideIcon'
 import React from 'react'
-import { Searching, Text, XStack } from '@/componentsV2'
 
-import { WebSearchToolInput, WebSearchToolOutput } from '@/aiCore/tools/WebSearchTool'
+import type { WebSearchToolInput, WebSearchToolOutput } from '@/aiCore/tools/WebSearchTool'
+import { Searching, Text, XStack } from '@/componentsV2'
+import { Search } from '@/componentsV2/icons/LucideIcon'
 import i18n from '@/i18n'
-import { MCPToolResponse } from '@/types/mcp'
+import type { MCPToolResponse } from '@/types/mcp'
 
 export const MessageWebSearchToolTitle = ({ toolResponse }: { toolResponse: MCPToolResponse }) => {
   const toolInput = toolResponse.arguments as WebSearchToolInput
@@ -14,7 +14,7 @@ export const MessageWebSearchToolTitle = ({ toolResponse }: { toolResponse: MCPT
       text={
         <XStack className="flex-1 items-center gap-2.5 pl-0">
           <Text className="text-sm text-gray-500 dark:text-gray-400">{i18n.t('message.searching')}</Text>
-          <Text className="text-sm max-w-[70%] text-gray-500 dark:text-gray-400" numberOfLines={1} ellipsizeMode="tail">
+          <Text className="max-w-[70%] text-sm text-gray-500 dark:text-gray-400" numberOfLines={1} ellipsizeMode="tail">
             {toolInput?.additionalContext ?? ''}
           </Text>
         </XStack>

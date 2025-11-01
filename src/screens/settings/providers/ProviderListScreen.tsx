@@ -1,15 +1,16 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { Plus } from '@/componentsV2/icons/LucideIcon'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { LegendList } from '@legendapp/list'
 import React, { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
-import { SafeAreaContainer, Container, HeaderBar, SearchInput, Group } from '@/componentsV2'
-import { useSearch } from '@/hooks/useSearch'
-import { Provider } from '@/types/assistant'
+
+import { Container, Group, HeaderBar, SafeAreaContainer, SearchInput } from '@/componentsV2'
 import { AddProviderSheet } from '@/componentsV2/features/SettingsScreen/AddProviderSheet'
 import { ProviderItem } from '@/componentsV2/features/SettingsScreen/ProviderItem'
-import { LegendList } from '@legendapp/list'
+import { Plus } from '@/componentsV2/icons/LucideIcon'
 import { useAllProviders } from '@/hooks/useProviders'
+import { useSearch } from '@/hooks/useSearch'
+import type { Provider } from '@/types/assistant'
 
 export default function ProviderListScreen() {
   const { t } = useTranslation()
@@ -60,7 +61,7 @@ export default function ProviderListScreen() {
           <ActivityIndicator />
         </SafeAreaContainer>
       ) : (
-        <Container className="pb-0 gap-4">
+        <Container className="gap-4 pb-0">
           <SearchInput placeholder={t('settings.provider.search')} value={searchText} onChangeText={setSearchText} />
 
           <Group className="flex-1">

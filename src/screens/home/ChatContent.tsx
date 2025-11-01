@@ -1,8 +1,9 @@
 import React from 'react'
 import { StyleSheet, View } from 'react-native'
 
+import type { Assistant, Topic } from '@/types/assistant'
+
 import Messages from './messages/Messages'
-import { Assistant, Topic } from '@/types/assistant'
 
 interface ChatContentProps {
   topic: Topic

@@ -1,9 +1,10 @@
-import { Text, XStack } from '@/componentsV2'
-import { ToolMessageBlock } from '@/types/message'
+import { Accordion, Spinner } from 'heroui-native'
 import React from 'react'
 import { View } from 'react-native'
-import { Accordion, Spinner } from 'heroui-native'
+
+import { Text, XStack } from '@/componentsV2'
 import { Wrench, XCircle } from '@/componentsV2/icons'
+import type { ToolMessageBlock } from '@/types/message'
 
 interface Props {
   block: ToolMessageBlock
@@ -12,7 +13,7 @@ interface Props {
 export default function MessageMcpTool({ block }: Props) {
   const toolResponse = block.metadata?.rawMcpToolResponse
 
-  const { id, tool, status, response } = toolResponse!
+  const { tool, status, response } = toolResponse!
   const isPending = status === 'pending'
   const isDone = status === 'done'
   const isError = status === 'error'
@@ -21,7 +22,7 @@ export default function MessageMcpTool({ block }: Props) {
     <View>
       <Accordion selectionMode="single" variant="default" className="rounded-md">
         <Accordion.Item value="1">
-          <Accordion.Trigger className="py-2 bg-ui-card-background dark:bg-ui-card-background-dark">
+          <Accordion.Trigger className="bg-ui-card-background py-2 dark:bg-ui-card-background-dark">
             <XStack className="flex-1 items-center gap-2">
               {isPending && <Spinner size="sm" />}
               {isDone && <Wrench size={16} />}

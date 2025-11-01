@@ -1,17 +1,17 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import * as ExpoLinking from 'expo-linking'
+import { useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, TouchableOpacity } from 'react-native'
 
+import Text from '@/componentsV2/base/Text'
 import { FallbackFavicon, X } from '@/componentsV2/icons'
-import { useTheme } from 'heroui-native'
-import { loggerService } from '@/services/LoggerService'
-import { Citation } from '@/types/websearch'
-import { getWebsiteBrand } from '@/utils/websearch'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
-import Text from '@/componentsV2/base/Text'
+import { loggerService } from '@/services/LoggerService'
+import type { Citation } from '@/types/websearch'
+import { getWebsiteBrand } from '@/utils/websearch'
 
 const logger = loggerService.withContext('Citation Sheet')
 
@@ -21,7 +21,7 @@ export interface CitationSheetProps {
 
 const CitationTitle = ({ number, title }: { number: number; title: string }) => (
   <XStack className="items-center gap-2.5">
-    <YStack className="w-5 h-5 items-center justify-center rounded-sm border border-green-20 bg-green-10 px-1 py-0.5 dark:border-green-dark-20 dark:bg-green-dark-10">
+    <YStack className="h-5 w-5 items-center justify-center rounded-sm border border-green-20 bg-green-10 px-1 py-0.5 dark:border-green-dark-20 dark:bg-green-dark-10">
       <Text className="text-center text-[10px] text-green-100 dark:text-green-dark-100">{number}</Text>
     </YStack>
     <YStack className="flex-1">

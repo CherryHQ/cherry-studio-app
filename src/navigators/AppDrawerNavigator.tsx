@@ -1,13 +1,15 @@
 import 'react-native-reanimated'
 import '@/i18n'
 
-import { createDrawerNavigator, DrawerNavigationOptions } from '@react-navigation/drawer'
+import type { DrawerNavigationOptions } from '@react-navigation/drawer'
+import { createDrawerNavigator } from '@react-navigation/drawer'
 import React from 'react'
 
+import CustomDrawerContent from '@/componentsV2/features/Menu/CustomDrawerContent'
 import AssistantStackNavigator from '@/navigators/AssistantStackNavigator'
 import HomeStackNavigator from '@/navigators/HomeStackNavigator'
 import { Width } from '@/utils/device'
-import CustomDrawerContent from '@/componentsV2/features/Menu/CustomDrawerContent'
+
 import McpStackNavigator from './McpStackNavigator'
 
 const Drawer = createDrawerNavigator()

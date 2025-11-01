@@ -1,3 +1,6 @@
+import { assistantDatabase, mcpDatabase, providerDatabase, websearchProviderDatabase } from '@database'
+import { db } from '@db'
+import { seedDatabase } from '@db/seeding'
 import * as Localization from 'expo-localization'
 
 import { getSystemAssistants } from '@/config/assistants'
@@ -5,9 +8,6 @@ import { initBuiltinMcp } from '@/config/mcp'
 import { SYSTEM_PROVIDERS } from '@/config/providers'
 import { getWebSearchProviders } from '@/config/websearchProviders'
 import { storage } from '@/utils'
-import { assistantDatabase, mcpDatabase, providerDatabase, websearchProviderDatabase } from '@database'
-import { db } from '@db'
-import { seedDatabase } from '@db/seeding'
 
 import { loggerService } from './LoggerService'
 import { preferenceService } from './PreferenceService'

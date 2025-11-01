@@ -1,11 +1,13 @@
 import { loggerService } from '@/services/LoggerService'
-import { Model } from '@/types/assistant'
-import { ChunkType, TextDeltaChunk, ThinkingCompleteChunk, ThinkingDeltaChunk, ThinkingStartChunk } from '@/types/chunk'
+import type { Model } from '@/types/assistant'
+import type { TextDeltaChunk, ThinkingCompleteChunk, ThinkingDeltaChunk, ThinkingStartChunk } from '@/types/chunk'
+import { ChunkType } from '@/types/chunk'
 import { getLowerBaseModelName } from '@/utils/naming'
-import { TagConfig, TagExtractor } from '@/utils/tagExtraction'
+import type { TagConfig } from '@/utils/tagExtraction'
+import { TagExtractor } from '@/utils/tagExtraction'
 
-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
-import { CompletionsContext, CompletionsMiddleware } from '../types'
+import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+import type { CompletionsContext, CompletionsMiddleware } from '../types'
 
 const logger = loggerService.withContext('ThinkingTagExtractionMiddleware')
 

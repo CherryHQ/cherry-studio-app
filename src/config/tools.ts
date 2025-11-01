@@ -1,6 +1,6 @@
-import { ChatCompletionTool } from 'openai/resources'
+import type { ChatCompletionTool } from 'openai/resources'
 
-import { Model } from '@/types/assistant'
+import type { Model } from '@/types/assistant'
 
 import { WEB_SEARCH_PROMPT_FOR_ZHIPU } from './prompts'
 

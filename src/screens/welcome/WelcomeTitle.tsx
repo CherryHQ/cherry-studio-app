@@ -1,9 +1,9 @@
+import { ImpactFeedbackStyle } from 'expo-haptics'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Text } from '@/componentsV2'
-import { ImpactFeedbackStyle } from 'expo-haptics'
 import { haptic } from '@/utils/haptic'
-import { useTranslation } from 'react-i18next'
 
 type UseTypewriterOptions = {
   text: string | string[]

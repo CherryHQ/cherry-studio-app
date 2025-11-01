@@ -1,10 +1,10 @@
-import { ExternalToolResult } from '.'
-import { KnowledgeReference } from './knowledge'
-import { MCPToolResponse, NormalToolResponse, ToolUseResponse } from './mcp'
-import { Response, ResponseError } from './message'
-import { SdkToolCall } from './sdk'
-import { MCPTool } from './tool'
-import { WebSearchResponse } from './websearch'
+import type { ExternalToolResult } from '.'
+import type { KnowledgeReference } from './knowledge'
+import type { MCPToolResponse, NormalToolResponse, ToolUseResponse } from './mcp'
+import type { Response, ResponseError } from './message'
+import type { SdkToolCall } from './sdk'
+import type { MCPTool } from './tool'
+import type { WebSearchResponse } from './websearch'
 
 // Define Enum for Chunk Types
 // 目前用到的，并没有列出完整的生命周期

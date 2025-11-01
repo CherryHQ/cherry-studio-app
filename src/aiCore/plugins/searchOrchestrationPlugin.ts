@@ -8,7 +8,7 @@
  */
 import { type AiRequestContext, definePlugin } from '@cherrystudio/ai-core'
 // import { generateObject } from '@cherrystudio/ai-core'
-import { generateText, LanguageModel, type ModelMessage } from 'ai'
+import { generateText, type LanguageModel, type ModelMessage } from 'ai'
 import { isEmpty } from 'lodash'
 
 import {
@@ -19,8 +19,8 @@ import {
 import { getDefaultModel } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
 import { getProviderByModel } from '@/services/ProviderService'
-import { Assistant } from '@/types/assistant'
-import { ExtractResults } from '@/types/extract'
+import type { Assistant } from '@/types/assistant'
+import type { ExtractResults } from '@/types/extract'
 import { extractInfoFromXML } from '@/utils/extract'
 
 import { webSearchToolWithPreExtractedKeywords } from '../tools/WebSearchTool'

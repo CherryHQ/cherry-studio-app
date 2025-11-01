@@ -303,6 +303,10 @@
         "empty": " No topics found"
       }
     },
+    "html_preview": {
+      "loading": "Loading HTML...",
+      "title": "HTML Preview"
+    },
     "inputs": {
       "mentions": "@ {{number}} models",
       "placeholder": "Send Message..."
@@ -635,6 +639,10 @@
           "add_model": "Let's add your first model",
           "label": "No Model yet...",
           "tooltip": "The page you were looking for is beyond our reach. Sorry for the inconvenience."
+        },
+        "health_check": {
+          "checking": "Checking...",
+          "title": "Model Health Check"
         },
         "search": "Search Models...",
         "title": "Models"

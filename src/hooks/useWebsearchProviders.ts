@@ -1,14 +1,14 @@
+import { db } from '@db'
+import { transformDbToWebSearchProvider } from '@db/mappers'
+import { websearch_providers } from '@db/schema'
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 
 import { loggerService } from '@/services/LoggerService'
 import { webSearchProviderService } from '@/services/WebSearchProviderService'
-import { WebSearchProvider } from '@/types/websearch'
-import { usePreference } from './usePreference'
+import type { WebSearchProvider } from '@/types/websearch'
 
-import { db } from '@db'
-import { transformDbToWebSearchProvider } from '@db/mappers'
-import { websearch_providers } from '@db/schema'
+import { usePreference } from './usePreference'
 
 const logger = loggerService.withContext('useWebsearchProviders')
 

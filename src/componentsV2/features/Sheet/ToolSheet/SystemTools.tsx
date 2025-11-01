@@ -1,10 +1,10 @@
+import { Button } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button } from 'heroui-native'
 
+import Text from '@/componentsV2/base/Text'
 import { Camera, FolderClosed, Image as ImageIcon } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
-import Text from '@/componentsV2/base/Text'
 
 interface SystemTool {
   key: string
@@ -48,11 +48,11 @@ export const SystemTools: React.FC<SystemToolsProps> = ({ onCameraPress, onImage
       {options.map(option => (
         <Button
           key={option.key}
-          className="flex-1 aspect-[1.618] flex-col items-center justify-center gap-2 rounded-lg bg-gray-20"
+          className="aspect-[1.618] flex-1 flex-col items-center justify-center gap-2 rounded-lg bg-gray-20"
           onPress={option.onPress}>
           {option.icon}
           <Button.Label>
-            <Text className="text-base text-text-primary dark:text-text-primary-dark text-center">{option.label}</Text>
+            <Text className="text-center text-base text-text-primary dark:text-text-primary-dark">{option.label}</Text>
           </Button.Label>
         </Button>
       ))}

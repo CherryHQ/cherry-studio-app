@@ -1,11 +1,10 @@
 // May need Block types if refactoring to use them
 // import type { MessageBlock, MainTextMessageBlock } from '@renderer/types/newMessageTypes';
 
+import { messageBlockDatabase } from '@database'
 import { isEmpty, remove, takeRight } from 'lodash'
 
-import { type GroupedMessage, MainTextMessageBlock, type Message, MessageBlockType } from '@/types/message' // Assuming correct Message type import
-
-import { messageBlockDatabase } from '@database'
+import { type GroupedMessage, type MainTextMessageBlock, type Message, MessageBlockType } from '@/types/message'
 const { getBlockById } = messageBlockDatabase
 // Assuming getGroupedMessages is also moved here or imported
 // import { getGroupedMessages } from './path/to/getGroupedMessages';

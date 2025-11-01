@@ -1,4 +1,3 @@
-import { MessageBlock } from '@/types/message'
 import {
   getAllBlocks as _getAllBlocks,
   getBlockById as _getBlockById,
@@ -7,6 +6,8 @@ import {
   updateOneBlock as _updateOneBlock,
   upsertBlocks as _upsertBlocks
 } from '@db/queries/messageBlocks.queries'
+
+import type { MessageBlock } from '@/types/message'
 
 export async function upsertBlocks(blocks: MessageBlock | MessageBlock[]) {
   return _upsertBlocks(blocks)

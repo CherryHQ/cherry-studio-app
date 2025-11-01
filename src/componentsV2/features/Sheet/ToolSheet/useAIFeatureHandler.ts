@@ -1,6 +1,7 @@
-import { loggerService } from '@/services/LoggerService'
-import { Assistant } from '@/types/assistant'
 import { delay } from 'lodash'
+
+import { loggerService } from '@/services/LoggerService'
+import type { Assistant } from '@/types/assistant'
 
 const logger = loggerService.withContext('AI Feature Handler')
 

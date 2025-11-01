@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+.yarn/
+
+# Build outputs
+dist/
+build/
+.expo/
+.expo-shared/
+
+# Database migrations
+drizzle/
+
+# Generated files
+*.generated.*

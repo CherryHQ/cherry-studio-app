@@ -1,6 +1,8 @@
-import { AssistantMessageStatus, MessageBlock, MessageBlockStatus, MessageBlockType } from '@/types/message'
-
 import { messageBlockDatabase, messageDatabase } from '@database'
+
+import type { MessageBlock } from '@/types/message'
+import { AssistantMessageStatus, MessageBlockStatus, MessageBlockType } from '@/types/message'
+
 import { loggerService } from '../LoggerService'
 
 const logger = loggerService.withContext('Block Manager')

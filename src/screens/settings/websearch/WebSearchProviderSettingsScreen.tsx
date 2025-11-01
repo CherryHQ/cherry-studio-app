@@ -1,29 +1,30 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { RouteProp, useRoute } from '@react-navigation/native'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { RouteProp } from '@react-navigation/native'
+import { useRoute } from '@react-navigation/native'
+import { Button } from 'heroui-native'
 import React, { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
-import { Button } from 'heroui-native'
 
 import {
   Container,
+  ExternalLink,
   GroupTitle,
   HeaderBar,
   SafeAreaContainer,
   Text,
   TextField,
   XStack,
-  YStack,
-  ExternalLink
+  YStack
 } from '@/componentsV2'
+import { WebSearchApiCheckSheet } from '@/componentsV2/features/SettingsScreen/WebSearchApiCheckSheet'
 import { Eye, EyeOff, ShieldCheck } from '@/componentsV2/icons/LucideIcon'
 import { WEB_SEARCH_PROVIDER_CONFIG } from '@/config/websearchProviders'
 import { useDialog } from '@/hooks/useDialog'
 import { useWebSearchProvider } from '@/hooks/useWebsearchProviders'
-import { WebSearchStackParamList } from '@/navigators/settings/WebSearchStackNavigator'
+import type { WebSearchStackParamList } from '@/navigators/settings/WebSearchStackNavigator'
 import WebSearchService from '@/services/WebSearchService'
-import { ApiStatus } from '@/types/assistant'
-import { WebSearchApiCheckSheet } from '@/componentsV2/features/SettingsScreen/WebSearchApiCheckSheet'
+import type { ApiStatus } from '@/types/assistant'
 
 type WebsearchProviderSettingsRouteProp = RouteProp<WebSearchStackParamList, 'WebSearchProviderSettingsScreen'>
 
@@ -55,7 +56,7 @@ export default function WebSearchProviderSettingsScreen() {
       <SafeAreaContainer>
         <HeaderBar title={t('settings.provider.not_found')} />
         <Container>
-          <Text className="text-center text-gray-400 py-6">{t('settings.provider.not_found_message')}</Text>
+          <Text className="py-6 text-center text-gray-400">{t('settings.provider.not_found_message')}</Text>
         </Container>
       </SafeAreaContainer>
     )
@@ -123,7 +124,7 @@ export default function WebSearchProviderSettingsScreen() {
         {/* API Key 配置 */}
         {provider.type === 'api' && (
           <YStack className="gap-2">
-            <XStack className="justify-between items-center">
+            <XStack className="items-center justify-between">
               <GroupTitle>{t('settings.websearch.api_key.label')}</GroupTitle>
               <Button size="sm" isIconOnly variant="ghost" onPress={handleOpenBottomSheet}>
                 <Button.Label>
@@ -132,7 +133,7 @@ export default function WebSearchProviderSettingsScreen() {
               </Button>
             </XStack>
 
-            <XStack className="gap-2 relative">
+            <XStack className="relative gap-2">
               <TextField className="flex-1">
                 <TextField.Input
                   className="h-12 pr-0"
@@ -160,7 +161,7 @@ export default function WebSearchProviderSettingsScreen() {
 
         {/* API Host 配置 */}
         <YStack className="gap-2">
-          <XStack className="pr-3 justify-between items-center">
+          <XStack className="items-center justify-between pr-3">
             <GroupTitle>{t('settings.websearch.api_host.label')}</GroupTitle>
           </XStack>
           <TextField>

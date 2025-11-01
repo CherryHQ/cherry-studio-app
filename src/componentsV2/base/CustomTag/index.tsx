@@ -1,5 +1,5 @@
-import React from 'react'
 import { cn } from 'heroui-native'
+import React from 'react'
 
 import XStack from '@/componentsV2/layout/XStack'
 

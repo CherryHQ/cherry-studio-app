@@ -1,9 +1,9 @@
-import { ModelMessage } from 'ai'
+import type { ModelMessage } from 'ai'
 import { findLast, takeRight } from 'lodash'
 
 import { convertMessagesToSdkMessages } from '@/aiCore/prepareParams'
-import { Assistant } from '@/types/assistant'
-import { Message } from '@/types/message'
+import type { Assistant } from '@/types/assistant'
+import type { Message } from '@/types/message'
 import {
   filterAdjacentUserMessaegs,
   filterAfterContextClearMessages,
@@ -59,7 +59,7 @@ export class ConversationService {
     return !!assistant.webSearchProviderId
   }
 
-  static needsKnowledgeSearch(assistant: Assistant): boolean {
+  static needsKnowledgeSearch(_assistant: Assistant): boolean {
     return false
     // return !isEmpty(assistant.knowledge_bases)
   }

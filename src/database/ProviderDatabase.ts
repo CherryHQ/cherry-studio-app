@@ -1,4 +1,3 @@
-import { Provider } from '@/types/assistant'
 import {
   deleteProvider as _deleteProvider,
   getAllProviders as _getAllProviders,
@@ -6,6 +5,8 @@ import {
   getProviderByIdSync as _getProviderByIdSync,
   upsertProviders as _upsertProviders
 } from '@db/queries/providers.queries'
+
+import type { Provider } from '@/types/assistant'
 
 export async function upsertProviders(providers: Provider[]) {
   return _upsertProviders(providers)

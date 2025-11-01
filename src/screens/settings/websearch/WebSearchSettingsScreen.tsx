@@ -17,7 +17,7 @@ export default function WebSearchSettingsScreen() {
         <HeaderBar title={t('settings.websearch.title')} />
         <View className="flex-1">
           <Container>
-            <YStack className="gap-6 flex-1">
+            <YStack className="flex-1 gap-6">
               <ProviderSettings />
 
               <GeneralSettings />

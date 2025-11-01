@@ -7,7 +7,7 @@ import { useWebsearchProviders } from '@/hooks/useWebsearchProviders'
 
 export default function ProviderSettings() {
   const { t } = useTranslation()
-  const { freeProviders, apiProviders } = useWebsearchProviders()
+  const { apiProviders } = useWebsearchProviders()
 
   return (
     <YStack className="gap-6">

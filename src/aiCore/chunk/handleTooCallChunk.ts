@@ -7,9 +7,10 @@
 import type { ToolSet, TypedToolCall, TypedToolError, TypedToolResult } from 'ai'
 
 import { loggerService } from '@/services/LoggerService'
-import { Chunk, ChunkType } from '@/types/chunk'
-import { MCPToolResponse, NormalToolResponse } from '@/types/mcp'
-import { BaseTool, MCPTool } from '@/types/tool'
+import type { Chunk } from '@/types/chunk'
+import { ChunkType } from '@/types/chunk'
+import type { MCPToolResponse, NormalToolResponse } from '@/types/mcp'
+import type { BaseTool, MCPTool } from '@/types/tool'
 // import type {
 //   AnthropicSearchOutput,
 //   WebSearchPluginConfig

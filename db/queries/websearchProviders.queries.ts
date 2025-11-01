@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 
 import { loggerService } from '@/services/LoggerService'
-import { WebSearchProvider } from '@/types/websearch'
+import type { WebSearchProvider } from '@/types/websearch'
 
 import { db } from '..'
 import { transformDbToWebSearchProvider, transformWebSearchProviderToDb } from '../mappers'
@@ -65,11 +65,7 @@ export async function getAllWebSearchProviders(): Promise<WebSearchProvider[]> {
  */
 export async function getWebSearchProviderById(providerId: string): Promise<WebSearchProvider | null> {
   try {
-    const result = await db
-      .select()
-      .from(websearch_providers)
-      .where(eq(websearch_providers.id, providerId))
-      .get()
+    const result = await db.select().from(websearch_providers).where(eq(websearch_providers.id, providerId)).get()
 
     if (!result) {
       return null

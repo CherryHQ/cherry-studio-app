@@ -70,8 +70,10 @@ screenshot.png
 TOP_ENTRY_IMPLEMENTATION.md
 .cursor/
 
-.vscode/
 .claude/
 .codex/
 .gemini/
 .qwen/
+
+# coverage
+coverage/

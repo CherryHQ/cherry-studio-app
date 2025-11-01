@@ -1,5 +1,7 @@
-import React, { ReactNode } from 'react'
-import { View, ViewStyle } from 'react-native'
+import type { ReactNode } from 'react'
+import React from 'react'
+import type { ViewStyle } from 'react-native'
+import { View } from 'react-native'
 
 interface MarkdownParagraphProps {
   children: ReactNode[]

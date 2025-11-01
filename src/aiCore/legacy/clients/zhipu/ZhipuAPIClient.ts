@@ -1,18 +1,13 @@
-import OpenAI from 'openai'
+import type OpenAI from 'openai'
 
 import { loggerService } from '@/services/LoggerService'
-import { Provider } from '@/types/assistant'
-import { GenerateImageParams } from '@/types/image'
+import type { GenerateImageParams } from '@/types/image'
 
 import { OpenAIAPIClient } from '../openai/OpenAIApiClient'
 
 const logger = loggerService.withContext('ZhipuAPIClient')
 
 export class ZhipuAPIClient extends OpenAIAPIClient {
-  constructor(provider: Provider) {
-    super(provider)
-  }
-
   override getClientCompatibilityType(): string[] {
     return ['ZhipuAPIClient']
   }

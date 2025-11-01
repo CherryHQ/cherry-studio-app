@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 
-import { loggerService } from '@/services/LoggerService'
 import { assistantService } from '@/services/AssistantService'
+import { loggerService } from '@/services/LoggerService'
 import type { Assistant } from '@/types/assistant'
 
 const logger = loggerService.withContext('useAssistant')

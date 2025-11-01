@@ -1,7 +1,8 @@
 import React from 'react'
-
-import { FileMetadata } from '@/types/file'
 import { ScrollView } from 'react-native'
+
+import type { FileMetadata } from '@/types/file'
+
 import PreviewItem from './PreviewItems/PreviewItem'
 
 interface FilePreviewProps {

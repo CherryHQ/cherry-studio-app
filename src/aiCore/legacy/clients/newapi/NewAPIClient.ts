@@ -1,10 +1,10 @@
 import { isSupportedModel } from '@/config/models'
 import { loggerService } from '@/services/LoggerService'
-import { Model, Provider } from '@/types/assistant'
-import { NewApiModel } from '@/types/sdk'
+import type { Model, Provider } from '@/types/assistant'
+import type { NewApiModel } from '@/types/sdk'
 
 import { AnthropicAPIClient } from '../anthropic/AnthropicAPIClient'
-import { BaseApiClient } from '../BaseApiClient'
+import type { BaseApiClient } from '../BaseApiClient'
 import { GeminiAPIClient } from '../gemini/GeminiAPIClient'
 import { MixedBaseAPIClient } from '../MixedBaseApiClient'
 import { OpenAIAPIClient } from '../openai/OpenAIApiClient'

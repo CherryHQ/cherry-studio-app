@@ -1,13 +1,14 @@
-import { RouteProp, useRoute } from '@react-navigation/native'
+import type { RouteProp } from '@react-navigation/native'
+import { useRoute } from '@react-navigation/native'
+import { useTheme } from 'heroui-native'
 import React from 'react'
 import { ActivityIndicator } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 
-import { YStack, SafeAreaContainer } from '@/componentsV2'
-import { useAssistant } from '@/hooks/useAssistant'
-import { useTheme } from 'heroui-native'
-import { AssistantDetailTabParamList } from '@/navigators/AssistantDetailTabNavigator'
+import { SafeAreaContainer, YStack } from '@/componentsV2'
 import { PromptTabContent } from '@/componentsV2/features/Assistant/PromptTabContent'
+import { useAssistant } from '@/hooks/useAssistant'
+import type { AssistantDetailTabParamList } from '@/navigators/AssistantDetailTabNavigator'
 
 type PromptTabRouteProp = RouteProp<AssistantDetailTabParamList, 'PromptTab'>
 
@@ -32,7 +33,7 @@ export default function PromptTabScreen() {
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       bottomOffset={10}>
-      <YStack className="flex-1 pt-2.5 bg-transparent">
+      <YStack className="flex-1 bg-transparent pt-2.5">
         <PromptTabContent assistant={assistant} updateAssistant={updateAssistant} />
       </YStack>
     </KeyboardAwareScrollView>

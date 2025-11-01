@@ -1,4 +1,5 @@
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+
 import { createUpdateTimestamps } from './columnHelpers'
 
 export const providers = sqliteTable('providers', {

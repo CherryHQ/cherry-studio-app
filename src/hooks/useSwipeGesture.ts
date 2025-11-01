@@ -3,7 +3,7 @@ import { ImpactFeedbackStyle } from 'expo-haptics'
 import { Gesture } from 'react-native-gesture-handler'
 import { runOnJS } from 'react-native-reanimated'
 
-import { NavigationProps } from '@/types/naviagate'
+import type { NavigationProps } from '@/types/naviagate'
 import { haptic } from '@/utils/haptic'
 
 export function useSwipeGesture() {

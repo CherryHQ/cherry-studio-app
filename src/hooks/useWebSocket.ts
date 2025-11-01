@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import { io, Socket } from 'socket.io-client'
 import { File } from 'expo-file-system'
+import { useEffect, useRef, useState } from 'react'
+import type { Socket } from 'socket.io-client'
+import { io } from 'socket.io-client'
 
-import { loggerService } from '@/services/LoggerService'
 import { DEFAULT_BACKUP_STORAGE } from '@/constants/storage'
+import { loggerService } from '@/services/LoggerService'
 import type { ConnectionInfo } from '@/types/network'
 const logger = loggerService.withContext('useWebSocket')
 
@@ -94,12 +95,11 @@ export function useWebSocket() {
           // If we reach here, this candidate worked, use it for the actual connection
           socket.current = io(connectionUrl, {
             timeout: 5000,
-            reconnection: false,  // 禁用自动重连，因为这是一次性文件传输
-            transports: ['websocket', 'polling']  // Try both transports
+            reconnection: false, // 禁用自动重连，因为这是一次性文件传输
+            transports: ['websocket', 'polling'] // Try both transports
           })
 
           break // Exit the loop when we find a working candidate
-
         } catch (error) {
           logger.warn(`Failed to connect to ${candidate.host} via ${candidate.interface}:`, error)
           continue // Try next candidate

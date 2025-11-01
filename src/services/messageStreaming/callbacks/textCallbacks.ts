@@ -1,10 +1,12 @@
+import { messageBlockDatabase } from '@database'
+
 import { loggerService } from '@/services/LoggerService'
-import { CitationMessageBlock, MessageBlock, MessageBlockStatus, MessageBlockType } from '@/types/message'
+import type { CitationMessageBlock, MessageBlock } from '@/types/message'
+import { MessageBlockStatus, MessageBlockType } from '@/types/message'
 import { WebSearchSource } from '@/types/websearch'
 import { createMainTextBlock } from '@/utils/messageUtils/create'
 
-import { messageBlockDatabase } from '@database'
-import { BlockManager } from '../BlockManager'
+import type { BlockManager } from '../BlockManager'
 
 const logger = loggerService.withContext('Text Callbacks')
 

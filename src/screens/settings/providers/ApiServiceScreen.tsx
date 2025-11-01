@@ -1,8 +1,9 @@
-import { RouteProp, useRoute } from '@react-navigation/native'
+import type { RouteProp } from '@react-navigation/native'
+import { useRoute } from '@react-navigation/native'
+import { Button, Spinner } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
-import { Button, Spinner } from 'heroui-native'
 
 import {
   Container,
@@ -15,15 +16,15 @@ import {
   XStack,
   YStack
 } from '@/componentsV2'
+import { ModelSelect } from '@/componentsV2/features/SettingsScreen/ModelSelect'
 import { Eye, EyeOff, ShieldCheck, XCircle } from '@/componentsV2/icons/LucideIcon'
 import { PROVIDER_URLS } from '@/config/providers'
 import { useDialog } from '@/hooks/useDialog'
 import { useProvider } from '@/hooks/useProviders'
-import { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
+import type { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
 import { checkApi } from '@/services/ApiService'
 import { loggerService } from '@/services/LoggerService'
-import { ApiStatus, Model } from '@/types/assistant'
-import { ModelSelect } from '@/componentsV2/features/SettingsScreen/ModelSelect'
+import type { ApiStatus, Model } from '@/types/assistant'
 const logger = loggerService.withContext('ApiServiceScreen')
 
 type ProviderSettingsRouteProp = RouteProp<ProvidersStackParamList, 'ApiServiceScreen'>
@@ -65,7 +66,7 @@ export default function ApiServiceScreen() {
       <SafeAreaContainer>
         <HeaderBar title={t('settings.provider.not_found')} />
         <Container>
-          <Text className="text-center text-gray-400 py-6">{t('settings.provider.not_found_message')}</Text>
+          <Text className="py-6 text-center text-gray-400">{t('settings.provider.not_found_message')}</Text>
         </Container>
       </SafeAreaContainer>
     )
@@ -154,7 +155,7 @@ export default function ApiServiceScreen() {
       <Container>
         {/* API Key 配置 */}
         <YStack className="gap-2">
-          <XStack className="justify-between items-center">
+          <XStack className="items-center justify-between">
             <GroupTitle>{t('settings.provider.api_key.label')}</GroupTitle>
             <Button size="sm" isIconOnly variant="ghost" onPress={handleOpenBottomSheet}>
               <Button.Label>
@@ -168,7 +169,7 @@ export default function ApiServiceScreen() {
             </Button>
           </XStack>
 
-          <XStack className="gap-2 relative">
+          <XStack className="relative gap-2">
             <TextField className="flex-1">
               <TextField.Input
                 className="h-12 pr-0"
@@ -195,7 +196,7 @@ export default function ApiServiceScreen() {
 
         {/* API Host 配置 */}
         <YStack className="gap-2">
-          <XStack className="pr-3 justify-between items-center">
+          <XStack className="items-center justify-between pr-3">
             <GroupTitle>{t('settings.provider.api_host.label')}</GroupTitle>
           </XStack>
           <TextField>

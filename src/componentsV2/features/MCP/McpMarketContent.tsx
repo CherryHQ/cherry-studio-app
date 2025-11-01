@@ -1,8 +1,11 @@
-import YStack from '@/componentsV2/layout/YStack'
-import { MCPServer } from '@/types/mcp'
 import { LegendList } from '@legendapp/list'
-import React, { FC } from 'react'
+import type { FC } from 'react'
+import React from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+
+import YStack from '@/componentsV2/layout/YStack'
+import type { MCPServer } from '@/types/mcp'
+
 import { McpItemCard } from './McpItemCard'
 
 interface McpMarketContentProps {

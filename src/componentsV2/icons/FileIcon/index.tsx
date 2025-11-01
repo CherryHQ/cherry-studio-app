@@ -1,7 +1,7 @@
 import React from 'react'
 import Svg, { Path } from 'react-native-svg'
 
-import { IconProps } from '../types'
+import type { IconProps } from '../types'
 
 export function FileIcon(props: IconProps) {
   return (

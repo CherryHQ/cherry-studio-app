@@ -15,7 +15,7 @@ import {
   YStack
 } from '@/componentsV2'
 import { FolderSearch2, Wifi } from '@/componentsV2/icons/LucideIcon'
-import { NavigationProps } from '@/types/naviagate'
+import type { NavigationProps } from '@/types/naviagate'
 
 interface SettingItemConfig {
   title: string
@@ -100,7 +100,7 @@ export default function DataSettingsScreen() {
 
       <YStack className="flex-1">
         <Container>
-          <YStack className="gap-6 flex-1">
+          <YStack className="flex-1 gap-6">
             {settingsItems.map(group => (
               <GroupContainer key={group.title} title={group.title}>
                 {group.items.map(item => (

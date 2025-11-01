@@ -1,23 +1,26 @@
 import { useNavigation } from '@react-navigation/native'
+import { useTheme } from 'heroui-native'
 import { isEmpty } from 'lodash'
-import React, { FC } from 'react'
+import type { FC } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
+import type { ContextMenuListProps } from '@/componentsV2/base/ContextMenu'
+import ContextMenu from '@/componentsV2/base/ContextMenu'
+import Text from '@/componentsV2/base/Text'
 import { Trash2 } from '@/componentsV2/icons/LucideIcon'
-import { useTheme } from 'heroui-native'
-import { useToast } from '@/hooks/useToast'
-import { getCurrentTopicId } from '@/hooks/useTopic'
-import { loggerService } from '@/services/LoggerService'
-import { Assistant } from '@/types/assistant'
-import { HomeNavigationProps } from '@/types/naviagate'
-import EmojiAvatar from './EmojiAvatar'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
-import Text from '@/componentsV2/base/Text'
-import ContextMenu, { ContextMenuListProps } from '@/componentsV2/base/ContextMenu'
+import { useToast } from '@/hooks/useToast'
+import { getCurrentTopicId } from '@/hooks/useTopic'
 import { assistantService } from '@/services/AssistantService'
+import { loggerService } from '@/services/LoggerService'
 import { topicService } from '@/services/TopicService'
+import type { Assistant } from '@/types/assistant'
+import type { HomeNavigationProps } from '@/types/naviagate'
+
+import EmojiAvatar from './EmojiAvatar'
 
 const logger = loggerService.withContext('Assistant Item')
 
@@ -65,7 +68,7 @@ const AssistantItem: FC<AssistantItemProps> = ({ assistant, onAssistantPress }) 
 
   return (
     <ContextMenu borderRadius={16} list={contextMenuItems} onPress={handlePress}>
-      <View className="py-2.5 px-2.5 justify-between items-center rounded-2xl bg-ui-card-background dark:bg-ui-card-background-dark">
+      <View className="items-center justify-between rounded-2xl bg-ui-card-background px-2.5 py-2.5 dark:bg-ui-card-background-dark">
         <XStack className="gap-3.5">
           <EmojiAvatar
             emoji={assistant.emoji}
@@ -74,7 +77,7 @@ const AssistantItem: FC<AssistantItemProps> = ({ assistant, onAssistantPress }) 
             borderWidth={3}
             borderColor={isDark ? '#333333' : '#f7f7f7'}
           />
-          <YStack className="gap-1 flex-1 justify-center">
+          <YStack className="flex-1 justify-center gap-1">
             <Text className="text-sm font-bold" numberOfLines={1} ellipsizeMode="tail">
               {assistant.name}
             </Text>

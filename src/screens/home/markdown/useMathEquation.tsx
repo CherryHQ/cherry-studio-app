@@ -28,7 +28,7 @@ export const useMathEquation = (equationColor: string) => {
     let lastIndex = 0
 
     const blockReg = /\\\[\s*([\s\S]+?)\s*\\\]|\$\$\s*([\s\S]+?)\s*\$\$/g
-    const inlineReg = /\$+([^\$\n]+?)\$+|\\\((.+?)\\\)/g
+    const inlineReg = /\$+([^$\n]+?)\$+|\\\((.+?)\\\)/g
     const regex = type === 'inline' ? inlineReg : blockReg
 
     while ((match = regex.exec(text))) {

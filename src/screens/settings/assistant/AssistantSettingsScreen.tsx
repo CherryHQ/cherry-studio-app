@@ -1,19 +1,19 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { useNavigation } from '@react-navigation/native'
-import { StackNavigationProp } from '@react-navigation/native-stack'
-import { ChevronDown, Languages, MessageSquareMore, Rocket, Settings2 } from '@/componentsV2/icons/LucideIcon'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import { Button, useTheme } from 'heroui-native'
 import React, { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
-import { Button, useTheme } from 'heroui-native'
 
-import { Container, HeaderBar, Image, SafeAreaContainer, Text, XStack, YStack, IconButton } from '@/componentsV2'
+import { Container, HeaderBar, IconButton, Image, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
+import ModelSheet from '@/componentsV2/features/Sheet/ModelSheet'
+import { ChevronDown, Languages, MessageSquareMore, Rocket, Settings2 } from '@/componentsV2/icons/LucideIcon'
 import { useAssistant } from '@/hooks/useAssistant'
-import { AssistantSettingsStackParamList } from '@/navigators/settings/AssistantSettingsStackNavigator'
-import { Assistant, Model } from '@/types/assistant'
+import type { AssistantSettingsStackParamList } from '@/navigators/settings/AssistantSettingsStackNavigator'
+import type { Assistant, Model } from '@/types/assistant'
 import { getModelOrProviderIcon } from '@/utils/icons'
 import { getBaseModelName } from '@/utils/naming'
-import ModelSheet from '@/componentsV2/features/Sheet/ModelSheet'
 
 function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: () => void }) {
   const { t } = useTranslation()
@@ -23,7 +23,7 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
   return (
     <Button
       variant="ghost"
-      className="w-full   bg-ui-card-background dark:bg-ui-card-background-dark px-3  justify-between"
+      className="w-full   justify-between bg-ui-card-background px-3  dark:bg-ui-card-background-dark"
       onPress={onPress}>
       <Button.Label>
         <XStack className="flex-1 items-center gap-2 overflow-hidden">
@@ -33,10 +33,10 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
                 className="h-[18px] w-[18px] rounded-full"
                 source={getModelOrProviderIcon(model.id, model.provider, isDark)}
               />
-              <Text numberOfLines={1} className="shrink-0 max-w-[60%] font-medium">
+              <Text numberOfLines={1} className="max-w-[60%] shrink-0 font-medium">
                 {getBaseModelName(model.name)}
               </Text>
-              <Text className="opacity-45 font-semibold">|</Text>
+              <Text className="font-semibold opacity-45">|</Text>
               <Text numberOfLines={1} className="shrink font-semibold opacity-45">
                 {t(`provider.${model.provider}`)}
               </Text>
@@ -48,7 +48,7 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
           )}
         </XStack>
       </Button.Label>
-      <ChevronDown size={18} className="text-text-secondary dark:text-text-secondary-dark opacity-90" />
+      <ChevronDown size={18} className="text-text-secondary opacity-90 dark:text-text-secondary-dark" />
     </Button>
   )
 }
@@ -71,7 +71,7 @@ function AssistantSettingItem({
   icon
 }: AssistantSettingItemProps) {
   const { t } = useTranslation()
-  const navigation = useNavigation<StackNavigationProp<AssistantSettingsStackParamList>>()
+  const navigation = useNavigation<NativeStackNavigationProp<AssistantSettingsStackParamList>>()
   const sheetRef = useRef<BottomSheetModal>(null)
 
   const handleModelChange = async (models: Model[]) => {
@@ -93,7 +93,7 @@ function AssistantSettingItem({
           />
         </XStack>
         <ModelPicker assistant={assistant} onPress={() => sheetRef.current?.present()} />
-        <Text className="px-[10px] text-text-secondary dark:text-text-secondary-dark opacity-70">
+        <Text className="px-[10px] text-text-secondary opacity-70 dark:text-text-secondary-dark">
           {t(descriptionKey)}
         </Text>
       </YStack>

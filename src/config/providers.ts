@@ -1,12 +1,6 @@
 import { TOKENFLUX_HOST } from '@/constants'
-import {
-  isSystemProvider,
-  OpenAIServiceTiers,
-  Provider,
-  ProviderType,
-  SystemProvider,
-  SystemProviderId
-} from '@/types/assistant'
+import type { Provider, ProviderType, SystemProvider, SystemProviderId } from '@/types/assistant'
+import { isSystemProvider, OpenAIServiceTiers } from '@/types/assistant'
 
 import { SYSTEM_MODELS } from './models/default'
 

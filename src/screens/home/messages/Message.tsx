@@ -1,7 +1,8 @@
-import React, { FC, memo } from 'react'
+import type { FC } from 'react'
+import React, { memo } from 'react'
 
-import { Assistant } from '@/types/assistant'
-import { Message, MessageBlock } from '@/types/message'
+import type { Assistant } from '@/types/assistant'
+import type { Message, MessageBlock } from '@/types/message'
 
 import MessageContent from './MessageContent'
 

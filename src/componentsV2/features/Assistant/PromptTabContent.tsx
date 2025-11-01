@@ -1,11 +1,11 @@
 import { MotiView } from 'moti'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-
-import { Assistant } from '@/types/assistant'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
-import YStack from '@/componentsV2/layout/YStack'
+
 import TextField from '@/componentsV2/base/TextField'
+import YStack from '@/componentsV2/layout/YStack'
+import type { Assistant } from '@/types/assistant'
 
 interface PromptTabContentProps {
   assistant: Assistant
@@ -64,7 +64,7 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
             />
           </TextField>
 
-          <TextField className="gap-2 h-4/5">
+          <TextField className="h-4/5 gap-2">
             <TextField.Label className="text-sm font-medium text-text-secondary dark:text-text-secondary">
               {t('common.prompt')}
             </TextField.Label>

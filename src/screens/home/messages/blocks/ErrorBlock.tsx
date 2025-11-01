@@ -1,14 +1,15 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
-import { Copy } from '@/componentsV2/icons/LucideIcon'
 import * as Clipboard from 'expo-clipboard'
+import { useTheme } from 'heroui-native'
 import React, { forwardRef, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, ScrollView, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Text, XStack, YStack } from '@/componentsV2'
 
-import { useTheme } from 'heroui-native'
+import { Text, XStack, YStack } from '@/componentsV2'
+import { Copy } from '@/componentsV2/icons/LucideIcon'
 import { getHttpMessageLabel } from '@/i18n/label'
+import type { SerializedAiSdkError, SerializedAiSdkErrorUnion, SerializedError } from '@/types/error'
 import {
   isSerializedAiSdkAPICallError,
   isSerializedAiSdkDownloadError,
@@ -31,12 +32,9 @@ import {
   isSerializedAiSdkTooManyEmbeddingValuesForCallError,
   isSerializedAiSdkTypeValidationError,
   isSerializedAiSdkUnsupportedFunctionalityError,
-  isSerializedError,
-  SerializedAiSdkError,
-  SerializedAiSdkErrorUnion,
-  SerializedError
+  isSerializedError
 } from '@/types/error'
-import { ErrorMessageBlock, Message } from '@/types/message'
+import type { ErrorMessageBlock, Message } from '@/types/message'
 import { formatAiSdkError, formatError, safeToString } from '@/utils/error'
 
 const HTTP_ERROR_CODES = [400, 401, 403, 404, 429, 500, 502, 503, 504]
@@ -111,7 +109,6 @@ const ErrorMessage: React.FC<{ block: ErrorMessageBlock }> = ({ block }) => {
 
 const MessageErrorInfo: React.FC<{ block: ErrorMessageBlock; message: Message; onShowDetail: () => void }> = ({
   block,
-  message,
   onShowDetail
 }) => {
   const { t } = useTranslation()
@@ -131,13 +128,13 @@ const MessageErrorInfo: React.FC<{ block: ErrorMessageBlock; message: Message; o
 
   return (
     <TouchableOpacity
-      className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg my-1.5 p-4 active:bg-red-100 dark:active:bg-red-900"
+      className="my-1.5 rounded-lg border border-red-200 bg-red-50 p-4 active:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:active:bg-red-900"
       onPress={onShowDetail}>
-      <XStack className="justify-between w-full items-center gap-2">
+      <XStack className="w-full items-center justify-between gap-2">
         <Text className="flex-1 text-red-600 dark:text-red-400" numberOfLines={1}>
           {getAlertDescription()}
         </Text>
-        <Text className="text-red-500 dark:text-red-500 text-sm">{t('common.detail')}</Text>
+        <Text className="text-sm text-red-500 dark:text-red-500">{t('common.detail')}</Text>
       </XStack>
     </TouchableOpacity>
   )
@@ -216,14 +213,14 @@ const ErrorDetailSheet = forwardRef<BottomSheetModal, ErrorDetailSheetProps>(({ 
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
         showsVerticalScrollIndicator={false}>
-        <YStack className="px-5 pt-2.5 gap-4">
-          <XStack className="justify-between items-center">
+        <YStack className="gap-4 px-5 pt-2.5">
+          <XStack className="items-center justify-between">
             <Text className="text-xl font-semibold">{t('error.detail')}</Text>
             <TouchableOpacity
-              className={`flex-row items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg ${!error ? 'opacity-50' : ''}`}
+              className={`flex-row items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 ${!error ? 'opacity-50' : ''}`}
               onPress={copyErrorDetails}
               disabled={!error}>
-              <Copy className="w-4 h-4" />
+              <Copy className="h-4 w-4" />
               <Text className="text-sm">{copiedText ? t('common.copied') : t('common.copy')}</Text>
             </TouchableOpacity>
           </XStack>
@@ -249,7 +246,7 @@ const ErrorDetailItem: React.FC<{ label: string; children: React.ReactNode }> = 
 
 const ErrorDetailValue: React.FC<{ children: React.ReactNode; isCode?: boolean }> = ({ children, isCode = false }) => {
   return (
-    <View className="bg-gray-100 dark:bg-gray-800 rounded-md p-2 border border-gray-200 dark:border-gray-700">
+    <View className="rounded-md border border-gray-200 bg-gray-100 p-2 dark:border-gray-700 dark:bg-gray-800">
       <Text className={`text-xs text-gray-900 dark:text-gray-100 ${isCode ? 'font-mono' : ''}`}>{children}</Text>
     </View>
   )
@@ -257,8 +254,8 @@ const ErrorDetailValue: React.FC<{ children: React.ReactNode; isCode?: boolean }
 
 const StackTrace: React.FC<{ stack: string }> = ({ stack }) => {
   return (
-    <View className="bg-red-50 dark:bg-red-950 rounded-md p-3 border border-red-300 dark:border-red-700">
-      <Text className="text-xs font-mono text-red-700 dark:text-red-300 leading-5">{stack}</Text>
+    <View className="rounded-md border border-red-300 bg-red-50 p-3 dark:border-red-700 dark:bg-red-950">
+      <Text className="font-mono text-xs leading-5 text-red-700 dark:text-red-300">{stack}</Text>
     </View>
   )
 }
@@ -267,8 +264,8 @@ const JsonViewer: React.FC<{ data: any }> = ({ data }) => {
   const formatted = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View className="bg-gray-100 dark:bg-gray-800 rounded-lg p-2 border border-gray-200 dark:border-gray-700">
-        <Text className="text-xs font-mono text-gray-900 dark:text-gray-100">{formatted}</Text>
+      <View className="rounded-lg border border-gray-200 bg-gray-100 p-2 dark:border-gray-700 dark:bg-gray-800">
+        <Text className="font-mono text-xs text-gray-900 dark:text-gray-100">{formatted}</Text>
       </View>
     </ScrollView>
   )

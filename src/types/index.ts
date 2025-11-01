@@ -1,8 +1,8 @@
-import { WebSearchResponse } from '@/types/websearch'
+import type { WebSearchResponse } from '@/types/websearch'
 
-import { KnowledgeReference } from './knowledge'
-import { MCPToolResponse } from './mcp'
-import { MCPTool } from './tool'
+import type { KnowledgeReference } from './knowledge'
+import type { MCPToolResponse } from './mcp'
+import type { MCPTool } from './tool'
 
 export type LanguageVarious = 'zh-Hans-CN' | 'zh-Hans-TW' | 'en-US' | 'ru-RU' | 'ja-JP'
 // | 'ko-KR'

@@ -1,7 +1,8 @@
 import React from 'react'
 
-import TextField from '../TextField'
 import { Search } from '@/componentsV2/icons'
+
+import TextField from '../TextField'
 
 interface SearchInputProps {
   placeholder: string
@@ -16,7 +17,7 @@ export const SearchInput = ({ placeholder, onChangeText, value }: SearchInputPro
         placeholder={placeholder}
         onChangeText={onChangeText}
         value={value}
-        className="w-full h-10 rounded-lg bg-transparent text-base py-0">
+        className="h-10 w-full rounded-lg bg-transparent py-0 text-base">
         <TextField.InputStartContent>
           <Search size={20} className="text-text-secondary dark:text-text-secondary-dark " />
         </TextField.InputStartContent>

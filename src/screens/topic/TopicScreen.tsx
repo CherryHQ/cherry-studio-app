@@ -3,14 +3,13 @@ import React, { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, View } from 'react-native'
 
+import { DrawerGestureWrapper, HeaderBar, SafeAreaContainer, SearchInput, TopicList, YStack } from '@/componentsV2'
 import { Menu, MessageSquareDiff } from '@/componentsV2/icons/LucideIcon'
-import { YStack, HeaderBar, TopicList, SafeAreaContainer, DrawerGestureWrapper, SearchInput } from '@/componentsV2'
-
 import { useSearch } from '@/hooks/useSearch'
 import { useTopics } from '@/hooks/useTopic'
 import { getDefaultAssistant } from '@/services/AssistantService'
 import { createNewTopic } from '@/services/TopicService'
-import { DrawerNavigationProps } from '@/types/naviagate'
+import type { DrawerNavigationProps } from '@/types/naviagate'
 
 export default function TopicScreen() {
   const { t } = useTranslation()

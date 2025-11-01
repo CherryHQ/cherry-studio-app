@@ -1,15 +1,16 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet'
+import { Button, useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Keyboard, TouchableWithoutFeedback } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Button, useTheme } from 'heroui-native'
-import { loggerService } from '@/services/LoggerService'
-import { Model, Provider } from '@/types/assistant'
-import { getDefaultGroupName } from '@/utils/naming'
-import YStack from '@/componentsV2/layout/YStack'
+
 import Text from '@/componentsV2/base/Text'
 import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
+import { loggerService } from '@/services/LoggerService'
+import type { Model, Provider } from '@/types/assistant'
+import { getDefaultGroupName } from '@/utils/naming'
 
 const logger = loggerService.withContext('AddModelSheet')
 
@@ -114,11 +115,11 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
       onChange={index => setIsVisible(index >= 0)}>
       <BottomSheetView style={{ paddingBottom: insets.bottom }}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <YStack className="items-center pb-7 px-5 gap-2.5">
+          <YStack className="items-center gap-2.5 px-5 pb-7">
             <XStack className="w-full items-center justify-center">
               <Text className="text-xl">{t('settings.models.add.model.label')}</Text>
             </XStack>
-            <YStack className="w-full gap-6 justify-center items-center ">
+            <YStack className="w-full items-center justify-center gap-6 ">
               {/* Model ID Input */}
               <YStack className="w-full gap-2">
                 <XStack className="gap-2 px-3">
@@ -164,7 +165,7 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
               </YStack>
               <Button
                 variant="tertiary"
-                className="h-11 w-4/6 rounded-2xl bg-green-10 border-green-20 dark:bg-green-dark-10 dark:border-green-dark-20"
+                className="h-11 w-4/6 rounded-2xl border-green-20 bg-green-10 dark:border-green-dark-20 dark:bg-green-dark-10"
                 onPress={handleAddModel}
                 isDisabled={!modelId.trim()}>
                 <Button.Label>

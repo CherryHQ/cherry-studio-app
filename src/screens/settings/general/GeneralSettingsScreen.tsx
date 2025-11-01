@@ -15,9 +15,9 @@ import {
   YStack
 } from '@/componentsV2'
 import { languagesOptions } from '@/config/languages'
-import { GeneralSettingsNavigationProps } from '@/types/naviagate'
-import { storage } from '@/utils'
 import { useTheme } from '@/hooks/useTheme'
+import type { GeneralSettingsNavigationProps } from '@/types/naviagate'
+import { storage } from '@/utils'
 
 export default function GeneralSettingsScreen() {
   const { t, i18n } = useTranslation()
@@ -52,7 +52,7 @@ export default function GeneralSettingsScreen() {
     <SafeAreaContainer className="flex-1">
       <HeaderBar title={t('settings.general.title')} />
       <Container>
-        <YStack className="gap-6 flex-1">
+        <YStack className="flex-1 gap-6">
           {/* Display settings */}
           <YStack className="gap-2">
             <GroupTitle>{t('settings.general.display.title')}</GroupTitle>

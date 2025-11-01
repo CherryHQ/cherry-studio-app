@@ -1,20 +1,22 @@
+import type { LegendListRef } from '@legendapp/list'
+import { LegendList } from '@legendapp/list'
+import { Button } from 'heroui-native'
 import { MotiView } from 'moti'
-import React, { FC, useCallback, useRef, useState } from 'react'
-import { NativeScrollEvent, NativeSyntheticEvent, StyleSheet, View } from 'react-native'
+import type { FC } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 
 import { YStack } from '@/componentsV2'
-
-import { useMessages } from '@/hooks/useMessages'
+import { ChevronDown } from '@/componentsV2/icons'
 import { useTopicBlocks } from '@/hooks/useMessageBlocks'
-import { Assistant, Topic } from '@/types/assistant'
-import { GroupedMessage } from '@/types/message'
+import { useMessages } from '@/hooks/useMessages'
+import type { Assistant, Topic } from '@/types/assistant'
+import type { GroupedMessage } from '@/types/message'
 import { getGroupedMessages } from '@/utils/messageUtils/filters'
 
-import MessageGroup from './MessageGroup'
-import { LegendList, LegendListRef } from '@legendapp/list'
-import { Button } from 'heroui-native'
-import { ChevronDown } from '@/componentsV2/icons'
 import WelcomeContent from '../WelcomeContent'
+import MessageGroup from './MessageGroup'
 
 interface MessagesProps {
   assistant: Assistant
@@ -99,7 +101,7 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
           <Button
             isIconOnly
             onPress={handleScrollToEnd}
-            className="w-10 h-10 rounded-full border-2 border-green-20 dark:border-green-20 bg-green-10 dark:bg-green-dark-10 right-2 bottom-2">
+            className="bottom-2 right-2 h-10 w-10 rounded-full border-2 border-green-20 bg-green-10 dark:border-green-20 dark:bg-green-dark-10">
             <Button.Label>
               <ChevronDown size={24} className="text-green-100 dark:text-green-100" />
             </Button.Label>

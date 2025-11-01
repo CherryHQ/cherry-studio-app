@@ -1,10 +1,10 @@
-import { AiPlugin } from '@cherrystudio/ai-core'
+import type { AiPlugin } from '@cherrystudio/ai-core'
 import { createPromptToolUsePlugin, googleToolsPlugin, webSearchPlugin } from '@cherrystudio/ai-core/built-in/plugins'
 
 import { loggerService } from '@/services/LoggerService'
-import { Assistant } from '@/types/assistant'
+import type { Assistant } from '@/types/assistant'
 
-import { AiSdkMiddlewareConfig } from '../middleware/AiSdkMiddlewareBuilder'
+import type { AiSdkMiddlewareConfig } from '../middleware/AiSdkMiddlewareBuilder'
 import reasoningTimePlugin from './reasoningTimePlugin'
 import { searchOrchestrationPlugin } from './searchOrchestrationPlugin'
 

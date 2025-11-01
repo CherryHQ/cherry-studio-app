@@ -1,6 +1,7 @@
-import React, { forwardRef } from 'react'
-import { Image as RNImage, ImageProps as RNImageProps, Animated } from 'react-native'
 import { cn } from 'heroui-native'
+import React, { forwardRef } from 'react'
+import type { ImageProps as RNImageProps } from 'react-native'
+import { Animated, Image as RNImage } from 'react-native'
 
 export interface ImageProps extends RNImageProps {
   className?: string

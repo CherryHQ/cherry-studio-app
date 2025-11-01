@@ -1,4 +1,4 @@
-import { PersonGeneration } from '@google/genai'
+import type { PersonGeneration } from '@google/genai'
 
 export type GenerateImageResponse = {
   type: 'url' | 'base64'

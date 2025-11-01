@@ -5,9 +5,11 @@ import devToolsEnhancer from 'redux-devtools-expo-dev-plugin'
 import { FLUSH, PAUSE, PERSIST, persistReducer, persistStore, PURGE, REGISTER, REHYDRATE } from 'redux-persist'
 
 import app from './app'
+import runtime from './runtime'
 
 const rootReducer = combineReducers({
-  app
+  app,
+  runtime
 })
 
 const persistedReducer = persistReducer(
@@ -15,7 +17,7 @@ const persistedReducer = persistReducer(
     key: 'cherry-studio',
     storage: AsyncStorage,
     version: 1,
-    blacklist: []
+    blacklist: ['runtime']
   },
   rootReducer
 )

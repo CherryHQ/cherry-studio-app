@@ -1,10 +1,12 @@
+import { Switch } from 'heroui-native'
+import type { FC } from 'react'
+import React from 'react'
+import { useTranslation } from 'react-i18next'
+
 import Text from '@/componentsV2/base/Text'
 import PressableRow from '@/componentsV2/layout/PressableRow'
 import YStack from '@/componentsV2/layout/YStack'
-import { MCPServer } from '@/types/mcp'
-import { Switch } from 'heroui-native'
-import React, { FC } from 'react'
-import { useTranslation } from 'react-i18next'
+import type { MCPServer } from '@/types/mcp'
 
 interface McpItemCardProps {
   mcp: MCPServer
@@ -26,7 +28,7 @@ export const McpItemCard: FC<McpItemCardProps> = ({ mcp, updateMcpServers, handl
   return (
     <PressableRow
       onPress={handlePress}
-      className="py-2.5 px-2.5 justify-between items-center rounded-2xl bg-ui-card-background dark:bg-ui-card-background-dark">
+      className="items-center justify-between rounded-2xl bg-ui-card-background px-2.5 py-2.5 dark:bg-ui-card-background-dark">
       <YStack className="h-full gap-2">
         <Text className="text-lg">{mcp.name}</Text>
         <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">{mcp.description}</Text>
@@ -36,7 +38,7 @@ export const McpItemCard: FC<McpItemCardProps> = ({ mcp, updateMcpServers, handl
           <Switch.Thumb colors={{ defaultBackground: 'white', selectedBackground: 'white' }} />
         </Switch>
 
-        <Text className="py-0.5 px-2 rounded-lg border-[0.5px] bg-green-10 border-green-20 text-green-100 text-sm dark:bg-green-dark-10 dark:border-green-dark-20 dark:text-green-dark-100">
+        <Text className="rounded-lg border-[0.5px] border-green-20 bg-green-10 px-2 py-0.5 text-sm text-green-100 dark:border-green-dark-20 dark:bg-green-dark-10 dark:text-green-dark-100">
           {t(`mcp.type.${mcp.type}`)}
         </Text>
       </YStack>

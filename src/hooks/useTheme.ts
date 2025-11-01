@@ -1,6 +1,7 @@
 import { useColorScheme } from 'react-native'
 
 import { ThemeMode } from '@/types'
+
 import { usePreference } from './usePreference'
 
 export function useTheme() {

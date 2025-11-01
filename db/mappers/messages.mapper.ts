@@ -1,4 +1,4 @@
-import { Message } from '@/types/message'
+import type { Message } from '@/types/message'
 import { safeJsonParse } from '@/utils/json'
 
 /**

@@ -1,27 +1,22 @@
-import { CameraView, useCameraPermissions, PermissionStatus } from 'expo-camera'
+import { useNavigation } from '@react-navigation/native'
+import { CameraView, PermissionStatus, useCameraPermissions } from 'expo-camera'
+import { Spinner } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
-import { ActivityIndicator } from 'react-native'
 import { useTranslation } from 'react-i18next'
+import { ActivityIndicator } from 'react-native'
 
 import { Container, Text, XStack, YStack } from '@/componentsV2'
 import { ScanQrCode } from '@/componentsV2/icons/LucideIcon'
+import { useDialog } from '@/hooks/useDialog'
 import { loggerService } from '@/services/LoggerService'
+import type { CompressedConnectionInfo, ConnectionInfo } from '@/types/network'
 
 import { Overlay } from './Overlay'
-import { Spinner } from 'heroui-native'
-import { useDialog } from '@/hooks/useDialog'
-import { useNavigation } from '@react-navigation/native'
-import { ConnectionInfo, CompressedConnectionInfo } from '@/types/network'
 const logger = loggerService.withContext('QRCodeScanner')
 
 // Helper function to convert number back to IP address
 const numberToIp = (num: number): string => {
-  return [
-    (num >>> 24) & 255,
-    (num >>> 16) & 255,
-    (num >>> 8) & 255,
-    num & 255
-  ].join('.')
+  return [(num >>> 24) & 255, (num >>> 16) & 255, (num >>> 8) & 255, num & 255].join('.')
 }
 
 // Function to decompress connection info from QR code
@@ -127,7 +122,7 @@ export function QRCodeScanner({ onQRCodeScanned }: QRCodeScannerProps) {
 
   return (
     <Container>
-      <XStack className="gap-1 items-center">
+      <XStack className="items-center gap-1">
         <ScanQrCode />
         <Text>{t('settings.data.landrop.scan_qr_code.description')}</Text>
       </XStack>
@@ -139,9 +134,13 @@ export function QRCodeScanner({ onQRCodeScanned }: QRCodeScannerProps) {
           minHeight: 300
         }}
         facing="back"
-        onBarcodeScanned={isProcessing ? undefined : (data) => {
-          handleBarcodeScanned(data)
-        }}
+        onBarcodeScanned={
+          isProcessing
+            ? undefined
+            : data => {
+                handleBarcodeScanned(data)
+              }
+        }
         barcodeScannerSettings={{
           barcodeTypes: ['qr']
         }}
@@ -160,7 +159,7 @@ export function QRCodeScanner({ onQRCodeScanned }: QRCodeScannerProps) {
             alignItems: 'center'
           }}>
           <Spinner />
-          <Text className="mt-4 text-white text-lg">
+          <Text className="mt-4 text-lg text-white">
             {t('settings.data.landrop.scan_qr_code.processing') || 'Processing QR code...'}
           </Text>
         </YStack>

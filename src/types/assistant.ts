@@ -1,10 +1,10 @@
-import OpenAI from 'openai'
+import type OpenAI from 'openai'
 
-import { StreamTextParams } from './aiCoretypes'
-import { Chunk } from './chunk'
-import { Message } from './message'
-import { WebSearchProvider } from './websearch'
-import { MCPServer } from './mcp'
+import type { StreamTextParams } from './aiCoretypes'
+import type { Chunk } from './chunk'
+import type { MCPServer } from './mcp'
+import type { Message } from './message'
+import type { WebSearchProvider } from './websearch'
 
 export type Assistant = {
   id: string
@@ -134,6 +134,16 @@ export type Model = {
   endpoint_type?: EndpointType
   supported_endpoint_types?: EndpointType[]
   supported_text_delta?: boolean
+}
+
+export type ModelHealthStatus = 'testing' | 'healthy' | 'unhealthy' | 'idle'
+
+export type ModelHealth = {
+  modelId: string
+  status: ModelHealthStatus
+  latency?: number // Response time in seconds
+  lastChecked?: number
+  error?: string
 }
 
 export type ModelType = 'text' | 'vision' | 'embedding' | 'reasoning' | 'function_calling' | 'web_search' | 'rerank'

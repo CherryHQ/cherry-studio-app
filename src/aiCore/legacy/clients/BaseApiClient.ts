@@ -12,23 +12,20 @@ import { isSupportServiceTierProvider } from '@/config/providers'
 import { defaultTimeout } from '@/constants'
 import { getAssistantSettings } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
+import type { Assistant, Model, OpenAIVerbosity, Provider } from '@/types/assistant'
 import {
-  Assistant,
   GroqServiceTiers,
   isGroqServiceTier,
   isOpenAIServiceTier,
-  Model,
   OpenAIServiceTiers,
-  OpenAIVerbosity,
-  Provider,
   SystemProviderIds
 } from '@/types/assistant'
 import { FileTypes } from '@/types/file'
-import { GenerateImageParams } from '@/types/image'
-import { KnowledgeReference } from '@/types/knowledge'
-import { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
-import { Message } from '@/types/message'
-import {
+import type { GenerateImageParams } from '@/types/image'
+import type { KnowledgeReference } from '@/types/knowledge'
+import type { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
+import type { Message } from '@/types/message'
+import type {
   RequestOptions,
   SdkInstance,
   SdkMessageParam,
@@ -39,15 +36,15 @@ import {
   SdkTool,
   SdkToolCall
 } from '@/types/sdk'
-import { MCPTool } from '@/types/tool'
-import { WebSearchProviderResponse, WebSearchResponse } from '@/types/websearch'
+import type { MCPTool } from '@/types/tool'
+import type { WebSearchProviderResponse, WebSearchResponse } from '@/types/websearch'
 import { storage } from '@/utils'
 import { addAbortController, removeAbortController } from '@/utils/abortController'
 import { isJSON, parseJSON } from '@/utils/json'
 import { findFileBlocks, getMainTextContent } from '@/utils/messageUtils/find'
 
-import { CompletionsContext } from '../middleware/types'
-import { ApiClient, RequestTransformer, ResponseChunkTransformer } from './types'
+import type { CompletionsContext } from '../middleware/types'
+import type { ApiClient, RequestTransformer, ResponseChunkTransformer } from './types'
 
 const logger = loggerService.withContext('BaseApiClient')
 

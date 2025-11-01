@@ -1,7 +1,7 @@
-import { eq, sql, count } from 'drizzle-orm'
+import { count, eq, sql } from 'drizzle-orm'
 
 import { loggerService } from '@/services/LoggerService'
-import { Message } from '@/types/message'
+import type { Message } from '@/types/message'
 
 import { db } from '..'
 import { transformDbToMessage, transformMessageToDb } from '../mappers'

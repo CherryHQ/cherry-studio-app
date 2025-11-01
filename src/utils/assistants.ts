@@ -1,6 +1,4 @@
-import { loggerService } from '@/services/LoggerService'
-import { Assistant } from '@/types/assistant'
-const logger = loggerService.withContext('assistants')
+import type { Assistant } from '@/types/assistant'
 
 export function groupByCategories(data: Assistant[]) {
   const groupedMap = new Map<string, Assistant[]>()

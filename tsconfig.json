@@ -12,7 +12,7 @@
       "@db": ["../db/index"],
       "@database/*": ["./database/*"],
       "@database": ["./database/index"]
-    }
+    },
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "nativewind-env.d.ts"]
 }

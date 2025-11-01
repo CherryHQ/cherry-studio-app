@@ -1,6 +1,6 @@
 import { loggerService } from '@/services/LoggerService'
-import { Assistant } from '@/types/assistant'
-import { MCPTool } from '@/types/tool'
+import type { Assistant } from '@/types/assistant'
+import type { MCPTool } from '@/types/tool'
 const logger = loggerService.withContext('Prompt')
 
 export const buildSystemPrompt = async (

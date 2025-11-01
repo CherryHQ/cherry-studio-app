@@ -1,4 +1,4 @@
-import { LanguageVarious, ThemeMode } from '.'
+import type { LanguageVarious, ThemeMode } from '.'
 
 export interface TopicNamingSetting {
   autoNaming: boolean

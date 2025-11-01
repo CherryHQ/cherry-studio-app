@@ -1,6 +1,6 @@
-import { Assistant } from '@/types/assistant'
+import type { Assistant } from '@/types/assistant'
 
-import { BlockManager } from '../BlockManager'
+import type { BlockManager } from '../BlockManager'
 import { createBaseCallbacks } from './baseCallbacks'
 import { createCitationCallbacks } from './citationCallbacks'
 import { createImageCallbacks } from './imageCallbacks'

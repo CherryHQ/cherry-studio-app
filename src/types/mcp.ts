@@ -1,6 +1,6 @@
-import z from 'zod'
+import * as z from 'zod'
 
-import { BaseTool, MCPTool } from './tool'
+import type { BaseTool, MCPTool } from './tool'
 
 export const MCPConfigSampleSchema = z.object({
   command: z.string(),

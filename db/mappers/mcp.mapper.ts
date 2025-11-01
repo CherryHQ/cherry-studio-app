@@ -1,4 +1,4 @@
-import { MCPServer } from '@/types/mcp'
+import type { MCPServer } from '@/types/mcp'
 import { safeJsonParse } from '@/utils/json'
 
 /**

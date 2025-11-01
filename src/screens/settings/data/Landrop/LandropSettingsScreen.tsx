@@ -1,19 +1,18 @@
-
-import { loggerService } from '@/services/LoggerService'
 import { useNavigation } from '@react-navigation/native'
-import { ConnectionInfo } from '@/types/network'
 import { File } from 'expo-file-system'
+import { Spinner } from 'heroui-native'
 import React, { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { SafeAreaContainer, HeaderBar, RestoreProgressModal, YStack, Text } from '@/componentsV2'
-import { useRestore, LANDROP_RESTORE_STEPS, RESTORE_STEP_CONFIGS } from '@/hooks/useRestore'
+import { HeaderBar, RestoreProgressModal, SafeAreaContainer, Text, YStack } from '@/componentsV2'
+import { DEFAULT_BACKUP_STORAGE } from '@/constants/storage'
+import { LANDROP_RESTORE_STEPS, RESTORE_STEP_CONFIGS, useRestore } from '@/hooks/useRestore'
 import { useWebSocket, WebSocketStatus } from '@/hooks/useWebSocket'
-import { DataSourcesNavigationProps } from '@/types/naviagate'
-import { Spinner } from 'heroui-native'
+import { loggerService } from '@/services/LoggerService'
+import type { DataSourcesNavigationProps } from '@/types/naviagate'
+import type { ConnectionInfo } from '@/types/network'
 
 import { QRCodeScanner } from './QRCodeScanner'
-import { DEFAULT_BACKUP_STORAGE } from '@/constants/storage'
 
 const logger = loggerService.withContext('landropSettingsScreen')
 
@@ -99,7 +98,9 @@ export default function LandropSettingsScreen() {
     if (typeof connectionInfo === 'string') {
       logger.info(`Connecting to Landrop sender at ${connectionInfo} (legacy format)`)
     } else {
-      logger.info(`Connecting to Landrop sender with ${connectionInfo.candidates.length} IP candidates, selected: ${connectionInfo.selectedHost}`)
+      logger.info(
+        `Connecting to Landrop sender with ${connectionInfo.candidates.length} IP candidates, selected: ${connectionInfo.selectedHost}`
+      )
     }
   }
 
@@ -130,7 +131,7 @@ export default function LandropSettingsScreen() {
             zIndex: 10
           }}>
           <Spinner />
-          <Text className="mt-4 text-white text-lg">
+          <Text className="mt-4 text-lg text-white">
             {status === WebSocketStatus.CONNECTING
               ? t('settings.data.landrop.scan_qr_code.connecting')
               : t('settings.data.landrop.scan_qr_code.waiting_for_file')}

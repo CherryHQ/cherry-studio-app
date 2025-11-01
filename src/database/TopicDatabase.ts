@@ -1,4 +1,3 @@
-import { Topic } from '@/types/assistant'
 import {
   deleteTopicById as _deleteTopicById,
   deleteTopicsByAssistantId as _deleteTopicsByAssistantId,
@@ -9,6 +8,8 @@ import {
   isTopicOwnedByAssistant as _isTopicOwnedByAssistant,
   upsertTopics as _upsertTopics
 } from '@db/queries/topics.queries'
+
+import type { Topic } from '@/types/assistant'
 
 export async function upsertTopics(topics: Topic | Topic[]) {
   return _upsertTopics(topics)

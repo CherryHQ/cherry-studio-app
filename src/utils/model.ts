@@ -1,6 +1,6 @@
 import { pick } from 'lodash'
 
-import { Model, ModelType } from '@/types/assistant'
+import type { Model, ModelType } from '@/types/assistant'
 
 /**
  *

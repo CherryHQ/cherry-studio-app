@@ -1,22 +1,23 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet'
 import { File, Paths } from 'expo-file-system'
+import { Button, useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Keyboard, TouchableWithoutFeedback } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Button, useTheme } from 'heroui-native'
 
+import { Text, XStack, YStack } from '@/componentsV2'
 import { DEFAULT_ICONS_STORAGE } from '@/constants/storage'
 import { useDialog } from '@/hooks/useDialog'
 import { uploadFiles } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
-import { Provider, ProviderType } from '@/types/assistant'
-import { FileMetadata } from '@/types/file'
+import { providerService } from '@/services/ProviderService'
+import type { Provider, ProviderType } from '@/types/assistant'
+import type { FileMetadata } from '@/types/file'
 import { uuid } from '@/utils'
-import { YStack, XStack, Text } from '@/componentsV2'
+
 import { ProviderIconButton } from './ProviderIconButton'
 import { ProviderSelect } from './ProviderSelect'
-import { providerService } from '@/services/ProviderService'
 
 const logger = loggerService.withContext('ProviderSheet')
 
@@ -147,13 +148,13 @@ export const AddProviderSheet = forwardRef<BottomSheetModal, ProviderSheetProps>
         onChange={index => setIsVisible(index >= 0)}>
         <BottomSheetView style={{ paddingBottom: insets.bottom }}>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <YStack className="items-center pb-7 px-5 gap-7">
+            <YStack className="items-center gap-7 px-5 pb-7">
               <XStack className="w-full items-center justify-center">
                 <Text className="text-xl">
                   {mode === 'edit' ? t('settings.provider.edit.title') : t('settings.provider.add.title')}
                 </Text>
               </XStack>
-              <YStack className="w-full gap-6 justify-center items-center">
+              <YStack className="w-full items-center justify-center gap-6">
                 <ProviderIconButton
                   providerId={providerId}
                   iconUri={
@@ -169,7 +170,7 @@ export const AddProviderSheet = forwardRef<BottomSheetModal, ProviderSheetProps>
                     <Text className="text-red-500 dark:text-red-500">*</Text>
                   </XStack>
                   <BottomSheetTextInput
-                    className="h-10 px-3 py-3 rounded-md bg-ui-card-background dark:bg-ui-card-background-dark border border-gray-20 text-text-secondary dark:text-text-secondary-dark"
+                    className="h-10 rounded-md border border-gray-20 bg-ui-card-background px-3 py-3 text-text-secondary dark:bg-ui-card-background-dark dark:text-text-secondary-dark"
                     placeholder={t('settings.provider.add.name.placeholder')}
                     value={providerName}
                     onChangeText={setProviderName}
@@ -190,7 +191,7 @@ export const AddProviderSheet = forwardRef<BottomSheetModal, ProviderSheetProps>
 
                 <Button
                   variant="tertiary"
-                  className="h-11 w-4/6 rounded-lg bg-green-10 border-green-20 dark:bg-green-dark-10 dark:border-green-dark-20"
+                  className="h-11 w-4/6 rounded-lg border-green-20 bg-green-10 dark:border-green-dark-20 dark:bg-green-dark-10"
                   onPress={handleSaveProvider}>
                   <Button.Label>
                     <Text className="text-green-100 dark:text-green-dark-100">

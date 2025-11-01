@@ -1,6 +1,8 @@
 import React from 'react'
+
 import { Text } from '@/componentsV2'
-import { ExtractMathResult } from '../useMathEquation'
+
+import type { ExtractMathResult } from '../useMathEquation'
 
 interface MarkdownCodeSpanProps {
   text: string
@@ -20,7 +22,7 @@ export const MarkdownCodeSpan: React.FC<MarkdownCodeSpanProps> = ({
       {result.map(({ type, content }, index) => {
         if (type === 'text') {
           return (
-            <Text key={index} className="text-green-500 font-mono select-none">
+            <Text key={index} className="select-none font-mono text-green-500">
               {content}
             </Text>
           )

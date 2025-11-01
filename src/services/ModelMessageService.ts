@@ -1,7 +1,7 @@
 import { findLast } from 'lodash'
-import { ChatCompletionContentPart, ChatCompletionMessageParam } from 'openai/resources'
+import type { ChatCompletionContentPart, ChatCompletionMessageParam } from 'openai/resources'
 
-import { Model } from '@/types/assistant'
+import type { Model } from '@/types/assistant'
 
 export function processReqMessages(
   model: Model,

@@ -1,19 +1,20 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { MotiView } from 'moti'
 import React, { useRef } from 'react'
-import { Pressable } from 'react-native'
 import { useTranslation } from 'react-i18next'
+import { Pressable } from 'react-native'
 
-import { SquareFunction, Wrench, WebsearchProviderIcon, Globe } from '@/componentsV2/icons'
-import { useWebsearchProviders } from '@/hooks/useWebsearchProviders'
-import { Assistant } from '@/types/assistant'
-import YStack from '@/componentsV2/layout/YStack'
 import Text from '@/componentsV2/base/Text'
-import XStack from '@/componentsV2/layout/XStack'
+import { Globe, SquareFunction, WebsearchProviderIcon, Wrench } from '@/componentsV2/icons'
 import RowRightArrow from '@/componentsV2/layout/Row/RowRightArrow'
-import { WebsearchSheet } from '../Sheet/WebsearchSheet'
-import { ToolUseSheet } from '../Sheet/ToolUseSheet'
+import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
+import { useWebsearchProviders } from '@/hooks/useWebsearchProviders'
+import type { Assistant } from '@/types/assistant'
+
 import { McpServerSheet } from '../Sheet/McpServerSheet'
+import { ToolUseSheet } from '../Sheet/ToolUseSheet'
+import { WebsearchSheet } from '../Sheet/WebsearchSheet'
 
 interface ToolTabContentProps {
   assistant: Assistant
@@ -86,7 +87,7 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
           </Text>
           <Pressable
             onPress={handleToolUsePress}
-            className="flex-row items-center justify-between rounded-lg bg-ui-card-background dark:bg-ui-card-background-dark px-3 py-3 active:opacity-80">
+            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80 dark:bg-ui-card-background-dark">
             <XStack className="flex-1 items-center gap-2">
               {assistant.settings?.toolUseMode ? (
                 <XStack className="flex-1 items-center gap-2">
@@ -114,10 +115,10 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
           </Text>
           <Pressable
             onPress={handleWebsearchPress}
-            className="flex-row items-center justify-between rounded-lg bg-ui-card-background dark:bg-ui-card-background-dark px-3 py-3 active:opacity-80">
+            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80 dark:bg-ui-card-background-dark">
             <XStack className="flex-1 items-center gap-2">
               {websearchContent.isActive ? (
-                <XStack className="flex-1 items-center gap-2 max-w-[80%]">
+                <XStack className="max-w-[80%] flex-1 items-center gap-2">
                   <XStack className="items-center justify-center">{websearchContent.icon}</XStack>
                   <Text className="flex-1 text-base" numberOfLines={1} ellipsizeMode="tail">
                     {websearchContent.text}
@@ -142,7 +143,7 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
           </Text>
           <Pressable
             onPress={handleMcpServerPress}
-            className="flex-row items-center justify-between rounded-lg bg-ui-card-background dark:bg-ui-card-background-dark px-3 py-3 active:opacity-80">
+            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80 dark:bg-ui-card-background-dark">
             <XStack className="flex-1 items-center gap-2">
               {assistant.mcpServers && assistant.mcpServers.length > 0 ? (
                 <Text>{t('mcp.server.selected', { num: assistant.mcpServers.length })}</Text>

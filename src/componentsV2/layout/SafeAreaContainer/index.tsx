@@ -1,7 +1,8 @@
-import React from 'react'
-import { View, ViewProps } from 'react-native'
-import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { cn } from 'heroui-native'
+import React from 'react'
+import type { ViewProps } from 'react-native'
+import { View } from 'react-native'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 
 export interface SafeAreaContainerProps extends ViewProps {
   className?: string

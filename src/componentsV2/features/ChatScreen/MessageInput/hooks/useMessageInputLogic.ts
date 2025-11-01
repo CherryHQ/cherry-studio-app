@@ -5,11 +5,11 @@ import { Keyboard } from 'react-native'
 import { isReasoningModel } from '@/config/models'
 import { useMessageOperations } from '@/hooks/useMessageOperation'
 import { loggerService } from '@/services/LoggerService'
-import { sendMessage as _sendMessage, getUserMessage } from '@/services/MessagesService'
+import { getUserMessage, sendMessage as _sendMessage } from '@/services/MessagesService'
 import { topicService } from '@/services/TopicService'
-import { Assistant, Model, Topic } from '@/types/assistant'
-import { FileMetadata } from '@/types/file'
-import { MessageInputBaseParams } from '@/types/message'
+import type { Assistant, Model, Topic } from '@/types/assistant'
+import type { FileMetadata } from '@/types/file'
+import type { MessageInputBaseParams } from '@/types/message'
 
 const logger = loggerService.withContext('Message Input')
 
@@ -23,6 +23,7 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
 
   useEffect(() => {
     setMentions(assistant.defaultModel ? [assistant.defaultModel] : [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topic.id])
 
   const sendMessage = async () => {

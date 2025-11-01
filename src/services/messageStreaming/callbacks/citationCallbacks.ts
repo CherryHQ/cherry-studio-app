@@ -1,11 +1,13 @@
+import { messageDatabase } from '@database'
+
 import { loggerService } from '@/services/LoggerService'
-import { ExternalToolResult } from '@/types'
-import { CitationMessageBlock, MessageBlockStatus, MessageBlockType } from '@/types/message'
+import type { ExternalToolResult } from '@/types'
+import type { CitationMessageBlock } from '@/types/message'
+import { MessageBlockStatus, MessageBlockType } from '@/types/message'
 import { createCitationBlock } from '@/utils/messageUtils/create'
 import { findMainTextBlocks } from '@/utils/messageUtils/find'
 
-import { messageDatabase } from '@database'
-import { BlockManager } from '../BlockManager'
+import type { BlockManager } from '../BlockManager'
 
 const logger = loggerService.withContext('Citation Callbacks')
 interface CitationCallbacksDependencies {

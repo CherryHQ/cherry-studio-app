@@ -1,15 +1,18 @@
-import SelectionSheet, { SelectionSheetItem } from '@/componentsV2/base/SelectionSheet'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { useNavigation } from '@react-navigation/native'
+import type { FC } from 'react'
+import React from 'react'
+import { useTranslation } from 'react-i18next'
+import { TouchableOpacity } from 'react-native'
+
+import type { SelectionSheetItem } from '@/componentsV2/base/SelectionSheet'
+import SelectionSheet from '@/componentsV2/base/SelectionSheet'
 import Text from '@/componentsV2/base/Text'
 import RowRightArrow from '@/componentsV2/layout/Row/RowRightArrow'
 import XStack from '@/componentsV2/layout/XStack'
 import { useActiveMcpServers } from '@/hooks/useMcp'
-import { Assistant } from '@/types/assistant'
-import { DrawerNavigationProps } from '@/types/naviagate'
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { useNavigation } from '@react-navigation/native'
-import React, { FC } from 'react'
-import { useTranslation } from 'react-i18next'
-import { TouchableOpacity } from 'react-native'
+import type { Assistant } from '@/types/assistant'
+import type { DrawerNavigationProps } from '@/types/naviagate'
 
 interface McpServerProps {
   ref: React.RefObject<BottomSheetModal | null>
@@ -51,8 +54,8 @@ export const McpServerSheet: FC<McpServerProps> = ({ ref, assistant, updateAssis
 
   const emptyContent = (
     <TouchableOpacity onPress={handleNavigateToMcpMarket} activeOpacity={0.7}>
-      <XStack className="w-full items-center gap-2.5 px-5 py-4 rounded-md bg-card dark:bg-ui-card-dark">
-        <Text className="text-foreground text-base flex-1">{t('settings.websearch.empty.label')}</Text>
+      <XStack className="bg-card w-full items-center gap-2.5 rounded-md px-5 py-4 dark:bg-ui-card-dark">
+        <Text className="flex-1 text-base text-foreground">{t('settings.websearch.empty.label')}</Text>
         <XStack className="items-center gap-1.5">
           <Text className="text-[11px] opacity-40">{t('settings.websearch.empty.description')}</Text>
           <RowRightArrow />

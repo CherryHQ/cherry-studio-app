@@ -1,9 +1,9 @@
+import { useTheme } from 'heroui-native'
 import React from 'react'
 
-import { useTheme } from 'heroui-native'
-import { WebSearchProvider } from '@/types/websearch'
-import { getWebSearchProviderIcon } from '@/utils/icons/websearch'
 import Image from '@/componentsV2/base/Image'
+import type { WebSearchProvider } from '@/types/websearch'
+import { getWebSearchProviderIcon } from '@/utils/icons/websearch'
 
 interface WebsearchProviderIconProps {
   provider: WebSearchProvider
@@ -14,5 +14,5 @@ export const WebsearchProviderIcon: React.FC<WebsearchProviderIconProps> = ({ pr
 
   const iconSource = getWebSearchProviderIcon(provider.id, isDark)
 
-  return <Image className="w-5 h-5" source={iconSource} />
+  return <Image className="h-5 w-5" source={iconSource} />
 }

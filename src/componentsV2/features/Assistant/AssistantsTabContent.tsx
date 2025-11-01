@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Text, YStack } from '@/componentsV2'
-import { Assistant } from '@/types/assistant'
+import type { Assistant } from '@/types/assistant'
+
 import AssistantItemCard from './AssistantItemCard'
 
 interface AssistantsTabProps {
@@ -25,8 +26,8 @@ const AssistantsTabContent: React.FC<AssistantsTabProps> = ({ assistants, onAssi
 
   if (!assistants || assistants.length === 0) {
     return (
-      <YStack className="flex-1 justify-center items-center p-5">
-        <Text className="text-gray-60 dark:text-gray-60 text-base">{t('assistants.market.empty_state')}</Text>
+      <YStack className="flex-1 items-center justify-center p-5">
+        <Text className="text-base text-gray-60 dark:text-gray-60">{t('assistants.market.empty_state')}</Text>
       </YStack>
     )
   }

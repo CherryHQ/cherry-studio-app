@@ -1,6 +1,7 @@
-import React, { forwardRef } from 'react'
-import { Text as RNText, TextProps as RNTextProps } from 'react-native'
 import { cn } from 'heroui-native'
+import React, { forwardRef } from 'react'
+import type { TextProps as RNTextProps } from 'react-native'
+import { Text as RNText } from 'react-native'
 
 export interface TextProps extends RNTextProps {
   className?: string

@@ -1,4 +1,4 @@
-import { Topic } from '@/types/assistant'
+import type { Topic } from '@/types/assistant'
 
 /**
  * 将数据库记录转换为 Topic 类型。

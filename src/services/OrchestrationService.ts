@@ -1,6 +1,7 @@
-import { Assistant } from '@/types/assistant'
-import { Chunk, ChunkType } from '@/types/chunk'
-import { Message } from '@/types/message'
+import type { Assistant } from '@/types/assistant'
+import type { Chunk } from '@/types/chunk'
+import { ChunkType } from '@/types/chunk'
+import type { Message } from '@/types/message'
 
 import { fetchChatCompletion } from './ApiService'
 import { ConversationService } from './ConversationService'
@@ -24,11 +25,6 @@ export interface OrchestrationRequest {
  */
 // NOTE：暂时没有用到这个类
 export class OrchestrationService {
-  constructor() {
-    // In the future, this could be a singleton, but for now, a new instance is fine.
-    // this.conversationService = new ConversationService()
-  }
-
   /**
    * This is the core method to handle user messages.
    * It takes the message context and an events object for callbacks,

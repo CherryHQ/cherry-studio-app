@@ -1,4 +1,4 @@
-import { FileMetadata } from '@/types/file'
+import type { FileMetadata } from '@/types/file'
 
 /**
  * 将数据库记录转换为 File 类型。

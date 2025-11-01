@@ -1,4 +1,6 @@
-import { FileMetadata } from '@/types/file'
+import { messageBlockDatabase } from '@database'
+
+import type { FileMetadata } from '@/types/file'
 import {
   type CitationMessageBlock,
   type FileMessageBlock,
@@ -10,8 +12,6 @@ import {
   type ThinkingMessageBlock,
   type TranslationMessageBlock
 } from '@/types/message'
-
-import { messageBlockDatabase } from '@database'
 
 export const findAllBlocks = async (message: Message): Promise<MessageBlock[]> => {
   if (!message || !message.blocks || message.blocks.length === 0) {

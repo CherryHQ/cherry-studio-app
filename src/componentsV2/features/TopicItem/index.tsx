@@ -1,26 +1,27 @@
 import { useNavigation } from '@react-navigation/native'
-import React, { FC, useEffect, useRef, useState } from 'react'
+import { useTheme } from 'heroui-native'
+import type { FC } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import ContentLoader, { Rect } from 'react-content-loader/native'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
-import { Edit3, Sparkles, Trash2 } from '../../icons/LucideIcon'
-
-import { useTheme } from 'heroui-native'
-import { useToast } from '@/hooks/useToast'
-import { useAssistant } from '@/hooks/useAssistant'
-import i18n from '@/i18n'
-import { fetchTopicNaming } from '@/services/ApiService'
-import { Topic } from '@/types/assistant'
-import { DrawerNavigationProps } from '@/types/naviagate'
-import { storage } from '@/utils'
-import EmojiAvatar from '@/componentsV2/features/Assistant/EmojiAvatar'
-import { useDialog } from '@/hooks/useDialog'
-import XStack from '@/componentsV2/layout/XStack'
-import YStack from '@/componentsV2/layout/YStack'
+import ContextMenu from '@/componentsV2/base/ContextMenu'
 import Text from '@/componentsV2/base/Text'
 import TextField from '@/componentsV2/base/TextField'
-import ContextMenu from '@/componentsV2/base/ContextMenu'
+import EmojiAvatar from '@/componentsV2/features/Assistant/EmojiAvatar'
+import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
+import { useAssistant } from '@/hooks/useAssistant'
+import { useDialog } from '@/hooks/useDialog'
+import { useToast } from '@/hooks/useToast'
+import i18n from '@/i18n'
+import { fetchTopicNaming } from '@/services/ApiService'
+import type { Topic } from '@/types/assistant'
+import type { DrawerNavigationProps } from '@/types/naviagate'
+import { storage } from '@/utils'
+
+import { Edit3, Sparkles, Trash2 } from '../../icons/LucideIcon'
 
 type TimeFormat = 'time' | 'date'
 
@@ -113,7 +114,7 @@ export const TopicItem: FC<TopicItemProps> = ({
       confirmText: t('common.save'),
       cancelText: t('common.cancel'),
       content: (
-        <TextField className="w-full mt-2">
+        <TextField className="mt-2 w-full">
           <TextField.Input
             className="rounded-2xl bg-transparent"
             defaultValue={topic.name}
@@ -183,7 +184,7 @@ export const TopicItem: FC<TopicItemProps> = ({
       ]}
       onPress={openTopic}>
       <XStack
-        className={`rounded-lg py-1 px-1 gap-1.5 justify-center items-center ${
+        className={`items-center justify-center gap-1.5 rounded-lg px-1 py-1 ${
           isActive ? 'bg-green-10 dark:bg-green-10' : 'bg-transparent'
         }`}>
         <EmojiAvatar
@@ -194,11 +195,11 @@ export const TopicItem: FC<TopicItemProps> = ({
           borderColor={isDark ? '#444444' : '#ffffff'}
         />
         <YStack className="flex-1 gap-0.5">
-          <XStack className="justify-between items-center gap-2">
+          <XStack className="items-center justify-between gap-2">
             <Text className="flex-1 text-base font-bold" numberOfLines={1} ellipsizeMode="tail">
               {assistant?.name}
             </Text>
-            <Text className="text-xs text-text-secondary dark:text-text-secondary-dark shrink-0 text-wrap-none">
+            <Text className="text-wrap-none shrink-0 text-xs text-text-secondary dark:text-text-secondary-dark">
               {displayTime}
             </Text>
           </XStack>

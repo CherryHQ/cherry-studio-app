@@ -1,4 +1,5 @@
 import 'tsx/cjs'
+
 import packageJson from './package.json'
 
 // Read version from environment variable (set during build) or fallback to package.json
@@ -44,7 +45,7 @@ export default {
       edgeToEdgeEnabled: true,
       package: androidPackage,
       userInterfaceStyle: 'automatic',
-      predictiveBackGestureEnabled: false,
+      predictiveBackGestureEnabled: false
     },
     plugins: [
       [
@@ -58,7 +59,7 @@ export default {
             minSdkVersion: 24,
             gradleVersion: '8.13',
             androidGradlePluginVersion: '8.13.0',
-            buildArchs: ['arm64-v8a'],
+            buildArchs: ['arm64-v8a']
           }
         }
       ],

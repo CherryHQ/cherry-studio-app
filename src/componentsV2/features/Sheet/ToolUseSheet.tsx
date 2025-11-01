@@ -1,11 +1,13 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import React, { FC } from 'react'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { delay } from 'lodash'
+import type { FC } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 
+import type { SelectionSheetItem } from '@/componentsV2/base/SelectionSheet'
+import SelectionSheet from '@/componentsV2/base/SelectionSheet'
 import { SquareFunction, Wrench } from '@/componentsV2/icons/LucideIcon'
-import { Assistant } from '@/types/assistant'
-import SelectionSheet, { SelectionSheetItem } from '@/componentsV2/base/SelectionSheet'
-import { delay } from 'lodash'
+import type { Assistant } from '@/types/assistant'
 
 interface ToolUseSheetProps {
   assistant: Assistant

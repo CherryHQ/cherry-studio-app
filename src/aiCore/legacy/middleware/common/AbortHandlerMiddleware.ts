@@ -1,8 +1,9 @@
 import { loggerService } from '@/services/LoggerService'
-import { Chunk, ChunkType, ErrorChunk } from '@/types/chunk'
+import type { Chunk, ErrorChunk } from '@/types/chunk'
+import { ChunkType } from '@/types/chunk'
 import { addAbortController, removeAbortController } from '@/utils/abortController'
 
-import { CompletionsParams, CompletionsResult } from '../schemas'
+import type { CompletionsParams, CompletionsResult } from '../schemas'
 import type { CompletionsContext, CompletionsMiddleware } from '../types'
 
 const logger = loggerService.withContext('aiCore:AbortHandlerMiddleware')

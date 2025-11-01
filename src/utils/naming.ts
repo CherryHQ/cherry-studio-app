@@ -1,5 +1,6 @@
 import { getProviderLabel } from '@/i18n/label'
-import { isSystemProvider, Provider } from '@/types/assistant'
+import type { Provider } from '@/types/assistant'
+import { isSystemProvider } from '@/types/assistant'
 
 /**
  * 从模型 ID 中提取默认组名。

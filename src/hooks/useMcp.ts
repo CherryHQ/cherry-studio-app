@@ -1,15 +1,14 @@
+import { mcpDatabase } from '@database'
+import { db } from '@db'
+import { transformDbToMcp } from '@db/mappers'
+import { mcp as mcpSchema } from '@db/schema'
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 
 import { loggerService } from '@/services/LoggerService'
 import { mcpService } from '@/services/McpService'
-import { MCPServer } from '@/types/mcp'
-import { MCPTool } from '@/types/tool'
-
-import { db } from '@db'
-import { transformDbToMcp } from '@db/mappers'
-import { mcp as mcpSchema } from '@db/schema'
-import { mcpDatabase } from '@database'
+import type { MCPServer } from '@/types/mcp'
+import type { MCPTool } from '@/types/tool'
 
 const logger = loggerService.withContext('useMcp')
 
@@ -96,7 +95,7 @@ export function useMcpServer(mcpId: string) {
         .then(() => {
           setIsLoading(false)
         })
-        .catch((error) => {
+        .catch(error => {
           logger.error(`Failed to load MCP server ${mcpId}:`, error as Error)
           setIsLoading(false)
         })
@@ -173,7 +172,7 @@ export function useMcpServers() {
 
   const processedMcps = useMemo(() => {
     if (!rawMcps) return []
-    return rawMcps.map((mcp) => transformDbToMcp(mcp))
+    return rawMcps.map(mcp => transformDbToMcp(mcp))
   }, [rawMcps])
 
   if (!updatedAt) {
@@ -216,7 +215,7 @@ export function useActiveMcpServers() {
   const { mcpServers: mcps, isLoading, updateMcpServers } = useMcpServers()
 
   const activeMcpServers = useMemo(() => {
-    return mcps.filter((mcp) => mcp.isActive === true)
+    return mcps.filter(mcp => mcp.isActive === true)
   }, [mcps])
 
   return {

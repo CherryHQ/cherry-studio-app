@@ -1,4 +1,4 @@
-import { Provider } from '@/types/assistant'
+import type { Provider } from '@/types/assistant'
 import { safeJsonParse } from '@/utils/json'
 
 /**

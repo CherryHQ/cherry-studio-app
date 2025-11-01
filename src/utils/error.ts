@@ -1,15 +1,16 @@
-import { InvalidToolInputError, NoSuchToolError } from 'ai'
+import type { NoSuchToolError } from 'ai'
+import { InvalidToolInputError } from 'ai'
 import { t } from 'i18next'
-import { z } from 'zod'
+import type { z } from 'zod'
 
-import {
+import type {
   AiSdkErrorUnion,
-  isSerializedAiSdkAPICallError,
   SerializedAiSdkError,
   SerializedAiSdkInvalidToolInputError,
   SerializedAiSdkNoSuchToolError,
   SerializedError
 } from '@/types/error'
+import { isSerializedAiSdkAPICallError } from '@/types/error'
 
 import { safeSerialize } from './serialize'
 
@@ -34,7 +35,7 @@ export function getErrorDetails(err: any, seen = new WeakSet()): any {
       if (typeof value === 'function') continue
       // Recursively process nested objects
       result[prop] = getErrorDetails(value, seen)
-    } catch (e) {
+    } catch {
       result[prop] = '<Unable to access property>'
     }
   }
@@ -54,7 +55,7 @@ export function formatErrorMessage(error: any): string {
       .map(line => `  ${line}`)
       .join('\n')
     return `Error Details:\n${formattedJson}`
-  } catch (e) {
+  } catch {
     try {
       return `Error: ${String(error)}`
     } catch {

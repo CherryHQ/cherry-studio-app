@@ -1,12 +1,13 @@
-import { InferToolInput, InferToolOutput, tool } from 'ai'
+import type { InferToolInput, InferToolOutput } from 'ai'
+import { tool } from 'ai'
 import { z } from 'zod'
 
 import { REFERENCE_PROMPT } from '@/config/prompts'
 import { loggerService } from '@/services/LoggerService'
-import WebSearchService from '@/services/WebSearchService'
 import { webSearchProviderService } from '@/services/WebSearchProviderService'
-import { ExtractResults } from '@/types/extract'
-import { WebSearchProvider, WebSearchProviderResponse } from '@/types/websearch'
+import WebSearchService from '@/services/WebSearchService'
+import type { ExtractResults } from '@/types/extract'
+import type { WebSearchProvider, WebSearchProviderResponse } from '@/types/websearch'
 
 const logger = loggerService.withContext('WebSearchTool')
 

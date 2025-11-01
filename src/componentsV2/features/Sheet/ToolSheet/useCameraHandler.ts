@@ -1,4 +1,5 @@
-import { CameraView, useCameraPermissions } from 'expo-camera'
+import type { CameraView } from 'expo-camera'
+import { useCameraPermissions } from 'expo-camera'
 import { useRef, useState } from 'react'
 
 import { loggerService } from '@/services/LoggerService'

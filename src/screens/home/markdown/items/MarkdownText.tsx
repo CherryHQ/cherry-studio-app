@@ -1,8 +1,11 @@
-import React, { ReactNode } from 'react'
-import { TextStyle } from 'react-native'
+import type { ReactNode } from 'react'
+import React from 'react'
+import type { TextStyle } from 'react-native'
+
 import { Text } from '@/componentsV2'
+
 import { markdownColors } from '../MarkdownStyles'
-import { ExtractMathResult } from '../useMathEquation'
+import type { ExtractMathResult } from '../useMathEquation'
 
 interface MarkdownTextProps {
   content: string | ReactNode[]

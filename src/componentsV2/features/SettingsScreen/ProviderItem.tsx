@@ -1,18 +1,18 @@
 import { useNavigation } from '@react-navigation/native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { SFSymbol } from 'sf-symbols-typescript'
+import type { SFSymbol } from 'sf-symbols-typescript'
 
+import ContextMenu from '@/componentsV2/base/ContextMenu'
+import Text from '@/componentsV2/base/Text'
+import { Edit3, ProviderIcon, Trash2 } from '@/componentsV2/icons'
+import RowRightArrow from '@/componentsV2/layout/Row/RowRightArrow'
+import XStack from '@/componentsV2/layout/XStack'
 import { useDialog } from '@/hooks/useDialog'
 import { useToast } from '@/hooks/useToast'
 import { deleteProvider } from '@/services/ProviderService'
-import { Provider } from '@/types/assistant'
-import { ProvidersNavigationProps } from '@/types/naviagate'
-import { Edit3, Trash2, ProviderIcon } from '@/componentsV2/icons'
-import XStack from '@/componentsV2/layout/XStack'
-import RowRightArrow from '@/componentsV2/layout/Row/RowRightArrow'
-import Text from '@/componentsV2/base/Text'
-import ContextMenu from '@/componentsV2/base/ContextMenu'
+import type { Provider } from '@/types/assistant'
+import type { ProvidersNavigationProps } from '@/types/naviagate'
 
 interface ProviderItemProps {
   provider: Provider
@@ -58,16 +58,16 @@ export const ProviderItem: React.FC<ProviderItemProps> = ({ provider, mode = 'en
   }
 
   const providerRow = (
-    <XStack className="justify-between items-center py-3 px-4">
-      <XStack className="gap-2 items-center">
+    <XStack className="items-center justify-between px-4 py-3">
+      <XStack className="items-center gap-2">
         <ProviderIcon provider={provider} />
         <Text className="text-lg text-text-primary dark:text-text-primary-dark">
           {t(`provider.${provider.id}`, { defaultValue: provider.name })}
         </Text>
       </XStack>
-      <XStack className="gap-2.5 items-center">
+      <XStack className="items-center gap-2.5">
         {shouldShowStatus && (
-          <Text className="py-0.5 px-2 rounded-lg border-[0.5px] bg-green-10 border-green-20 text-green-100 text-sm dark:bg-green-dark-10 dark:border-green-dark-20 dark:text-green-dark-100">
+          <Text className="rounded-lg border-[0.5px] border-green-20 bg-green-10 px-2 py-0.5 text-sm text-green-100 dark:border-green-dark-20 dark:bg-green-dark-10 dark:text-green-dark-100">
             {statusText}
           </Text>
         )}

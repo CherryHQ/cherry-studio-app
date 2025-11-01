@@ -1,8 +1,7 @@
-import { Message } from '@/types/message'
 import {
-  getAllMessages as _getAllMessages,
   deleteMessageById as _deleteMessageById,
   deleteMessagesByTopicId as _deleteMessagesByTopicId,
+  getAllMessages as _getAllMessages,
   getHasMessagesWithTopicId as _getHasMessagesWithTopicId,
   getMessageById as _getMessageById,
   getMessagesByTopicId as _getMessagesByTopicId,
@@ -10,6 +9,8 @@ import {
   updateMessageById as _updateMessageById,
   upsertMessages as _upsertMessages
 } from '@db/queries/messages.queries'
+
+import type { Message } from '@/types/message'
 
 export async function upsertMessages(messages: Message | Message[]) {
   return _upsertMessages(messages)

@@ -7,13 +7,13 @@ import { topics } from './topics'
 
 export * from './assistants'
 export * from './files'
+export * from './mcp'
 export * from './messageBlocks'
 export * from './messages'
 export * from './preference'
 export * from './providers'
 export * from './topics'
 export * from './websearchProviders'
-export * from './mcp'
 
 export const assistantsRelations = relations(assistants, ({ many }) => ({
   topics: many(topics)

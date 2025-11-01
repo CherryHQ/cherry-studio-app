@@ -1,13 +1,13 @@
+import { fileDatabase } from '@database'
 import { Directory, File, Paths } from 'expo-file-system'
 import * as FileSystem from 'expo-file-system/legacy'
 import * as Sharing from 'expo-sharing'
 
 import { DEFAULT_DOCUMENTS_STORAGE, DEFAULT_IMAGES_STORAGE, DEFAULT_STORAGE } from '@/constants/storage'
 import { loggerService } from '@/services/LoggerService'
-import { FileMetadata, FileTypes } from '@/types/file'
+import type { FileMetadata } from '@/types/file'
+import { FileTypes } from '@/types/file'
 import { uuid } from '@/utils'
-
-import { fileDatabase } from '@database'
 
 export interface ShareFileResult {
   success: boolean
