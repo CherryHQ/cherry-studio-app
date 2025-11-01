@@ -1,16 +1,17 @@
 import dayjs from 'dayjs'
+import type { FetchRequestInit } from 'expo/fetch'
 
 import WebSearchEngineProvider from '@/providers/WebSearchProvider'
 import { loggerService } from '@/services/LoggerService'
 import { preferenceService } from '@/services/PreferenceService'
 import { webSearchProviderService } from '@/services/WebSearchProviderService'
-import {
-  WebSearchState,
+import type { ExtractResults } from '@/types/extract'
+import type {
   WebSearchProvider,
   WebSearchProviderResponse,
-  WebSearchProviderResult
+  WebSearchProviderResult,
+  WebSearchState
 } from '@/types/websearch'
-import { ExtractResults } from '@/types/extract'
 import { hasObjectKey } from '@/utils'
 
 const logger = loggerService.withContext('WebSearch Service')
@@ -95,7 +96,7 @@ class WebSearchService {
   public async search(
     provider: WebSearchProvider,
     query: string,
-    httpOptions?: RequestInit
+    httpOptions?: FetchRequestInit
   ): Promise<WebSearchProviderResponse> {
     const websearch = await this.getWebSearchState()
     const webSearchEngine = new WebSearchEngineProvider(provider)

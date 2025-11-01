@@ -1,14 +1,14 @@
+import { Accordion, AccordionLayoutTransition, Chip } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import Animated from 'react-native-reanimated'
 
-import { Accordion, AccordionLayoutTransition, Chip } from 'heroui-native'
-
-import { ModelIcon } from '@/componentsV2/icons'
-import { Model } from '@/types/assistant'
-import XStack from '@/componentsV2/layout/XStack'
 import Text from '@/componentsV2/base/Text'
+import { ModelIcon } from '@/componentsV2/icons'
+import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
+import type { Model } from '@/types/assistant'
+
 import { ModelTags } from '../ModelTags'
 
 export interface ModelGroupProps {

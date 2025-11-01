@@ -1,9 +1,10 @@
 import React from 'react'
 import { View } from 'react-native'
-import { YStack } from '@/componentsV2'
 
-import { Assistant } from '@/types/assistant'
-import { Message, MessageBlock, MessageBlockType } from '@/types/message'
+import { YStack } from '@/componentsV2'
+import type { Assistant } from '@/types/assistant'
+import type { Message, MessageBlock } from '@/types/message'
+import { MessageBlockType } from '@/types/message'
 
 import MessageBlockRenderer from './blocks'
 import MessageContextMenu from './MessageContextMenu'

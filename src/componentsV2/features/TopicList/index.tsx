@@ -1,6 +1,10 @@
+import { FlashList } from '@shopify/flash-list'
 import React, { useEffect, useMemo, useState } from 'react' // 引入 useMemo
 import { useTranslation } from 'react-i18next'
 
+import Text from '@/componentsV2/base/Text'
+import YStack from '@/componentsV2/layout/YStack'
+import { useDialog } from '@/hooks/useDialog'
 import { useToast } from '@/hooks/useToast'
 import { useCurrentTopic } from '@/hooks/useTopic'
 import { getDefaultAssistant } from '@/services/AssistantService'
@@ -8,12 +12,10 @@ import { loggerService } from '@/services/LoggerService'
 import { deleteMessagesByTopicId } from '@/services/MessagesService'
 import { topicService } from '@/services/TopicService'
 import type { Topic } from '@/types/assistant'
-import { DateGroupKey, getTimeFormatForGroup, groupItemsByDate, TimeFormat } from '@/utils/date'
+import type { DateGroupKey, TimeFormat } from '@/utils/date'
+import { getTimeFormatForGroup, groupItemsByDate } from '@/utils/date'
+
 import { TopicItem } from '../TopicItem'
-import Text from '@/componentsV2/base/Text'
-import YStack from '@/componentsV2/layout/YStack'
-import { useDialog } from '@/hooks/useDialog'
-import { FlashList } from '@shopify/flash-list'
 
 const logger = loggerService.withContext('GroupTopicList')
 

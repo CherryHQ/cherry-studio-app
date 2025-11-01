@@ -1,11 +1,11 @@
 import React from 'react'
-import { View } from 'react-native'
 import { useTranslation } from 'react-i18next'
+import { View } from 'react-native'
 
-import { ModelIcon } from '@/componentsV2/icons'
 import { Text, XStack } from '@/componentsV2'
+import { ModelIcon } from '@/componentsV2/icons'
 import { useProvider } from '@/hooks/useProviders'
-import { Message } from '@/types/message'
+import type { Message } from '@/types/message'
 import { storage } from '@/utils'
 import { getBaseModelName } from '@/utils/naming'
 

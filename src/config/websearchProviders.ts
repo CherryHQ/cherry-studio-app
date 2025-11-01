@@ -1,4 +1,4 @@
-import { WebSearchProvider } from '@/types/websearch'
+import type { WebSearchProvider } from '@/types/websearch'
 
 export function getWebSearchProviders(): WebSearchProvider[] {
   return [

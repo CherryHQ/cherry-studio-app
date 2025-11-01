@@ -1,5 +1,6 @@
-import { SystemProviderId } from '@/types/assistant'
-import { ImageRequireSource } from 'react-native'
+import type { ImageRequireSource } from 'react-native'
+
+import type { SystemProviderId } from '@/types/assistant'
 
 const MODEL_ICONS_DARK = {
   chatgpt: require('@/assets/images/llmIcons/dark/openai.png'),

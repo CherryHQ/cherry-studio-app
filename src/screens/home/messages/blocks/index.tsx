@@ -1,16 +1,11 @@
-import React, { FC, memo, useMemo } from 'react'
-import { XStack } from '@/componentsV2'
+import type { FC } from 'react'
+import React, { memo, useMemo } from 'react'
 import { View } from 'react-native'
 
+import { XStack } from '@/componentsV2'
 import { loggerService } from '@/services/LoggerService'
-import {
-  CitationMessageBlock,
-  MainTextMessageBlock,
-  Message,
-  MessageBlock,
-  MessageBlockStatus,
-  MessageBlockType
-} from '@/types/message'
+import type { CitationMessageBlock, MainTextMessageBlock, Message, MessageBlock } from '@/types/message'
+import { MessageBlockStatus, MessageBlockType } from '@/types/message'
 
 import CitationBlock from './CitationBlock'
 import ErrorBlock from './ErrorBlock'
@@ -102,7 +97,6 @@ const MessageBlockRenderer: FC<MessageBlockRendererProps> = ({ blocks, message }
 
             break
           case MessageBlockType.MAIN_TEXT:
-
           case MessageBlockType.CODE: {
             const mainTextBlock = block as MainTextMessageBlock
             const citationBlockId = mainTextBlock.citationReferences?.[0]?.citationBlockId

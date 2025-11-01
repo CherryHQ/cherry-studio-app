@@ -1,10 +1,10 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import React, { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
+import { IconButton, SelectionSheet, XStack } from '@/componentsV2'
 import { TranslatedIcon, TranslationIcon } from '@/componentsV2/icons'
-import { IconButton, XStack, SelectionSheet } from '@/componentsV2'
 import {
   AudioLines,
   CirclePause,
@@ -16,8 +16,8 @@ import {
   Trash2
 } from '@/componentsV2/icons/LucideIcon'
 import { useMessageActions } from '@/hooks/useMessageActions'
-import { Assistant } from '@/types/assistant'
-import { Message } from '@/types/message'
+import type { Assistant } from '@/types/assistant'
+import type { Message } from '@/types/message'
 
 interface MessageFooterProps {
   assistant: Assistant

@@ -1,6 +1,7 @@
-import Text from '@/componentsV2/base/Text'
 import React from 'react'
-import { TextProps } from 'react-native'
+import type { TextProps } from 'react-native'
+
+import Text from '@/componentsV2/base/Text'
 
 export interface GroupTitleProps extends TextProps {
   className?: string

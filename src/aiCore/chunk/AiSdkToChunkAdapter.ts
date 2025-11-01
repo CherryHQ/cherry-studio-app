@@ -5,9 +5,11 @@
 
 import type { TextStreamPart, ToolSet } from 'ai'
 
-import { Chunk, ChunkType } from '@/types/chunk'
-import { MCPTool } from '@/types/tool'
-import { WebSearchResults, WebSearchSource } from '@/types/websearch'
+import type { Chunk } from '@/types/chunk'
+import { ChunkType } from '@/types/chunk'
+import type { MCPTool } from '@/types/tool'
+import type { WebSearchResults } from '@/types/websearch'
+import { WebSearchSource } from '@/types/websearch'
 
 import { ToolCallChunkHandler } from './handleTooCallChunk'
 

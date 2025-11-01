@@ -1,11 +1,11 @@
 import { BlurView } from 'expo-blur'
+import { cn, useTheme } from 'heroui-native'
 import React from 'react'
 import { Platform, View } from 'react-native'
-import { cn, useTheme } from 'heroui-native'
 
-import { formateEmoji } from '@/utils/formats'
-import YStack from '@/componentsV2/layout/YStack'
 import Text from '@/componentsV2/base/Text'
+import YStack from '@/componentsV2/layout/YStack'
+import { formateEmoji } from '@/utils/formats'
 
 interface EmojiAvatarProps {
   emoji?: string

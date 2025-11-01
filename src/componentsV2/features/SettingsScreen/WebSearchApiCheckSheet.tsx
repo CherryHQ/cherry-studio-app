@@ -1,14 +1,14 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet'
+import { Button, Spinner, useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, View } from 'react-native'
-import { Button, Spinner, useTheme } from 'heroui-native'
 
-import { ApiStatus } from '@/types/assistant'
-import { ChevronsRight } from '@/componentsV2/icons'
-import YStack from '@/componentsV2/layout/YStack'
-import XStack from '@/componentsV2/layout/XStack'
 import Text from '@/componentsV2/base/Text'
+import { ChevronsRight } from '@/componentsV2/icons'
+import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
+import type { ApiStatus } from '@/types/assistant'
 
 interface WebSearchApiCheckSheetProps {
   onStartModelCheck: () => void

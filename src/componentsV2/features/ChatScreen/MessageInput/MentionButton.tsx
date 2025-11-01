@@ -1,14 +1,15 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import React, { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Keyboard, TouchableOpacity } from 'react-native'
 
-import { AtSign } from '@/componentsV2/icons/LucideIcon'
-import { ModelIcon } from '@/componentsV2/icons'
-import { Assistant, Model } from '@/types/assistant'
-import { getBaseModelName } from '@/utils/naming'
-import XStack from '@/componentsV2/layout/XStack'
 import Text from '@/componentsV2/base/Text'
+import { ModelIcon } from '@/componentsV2/icons'
+import { AtSign } from '@/componentsV2/icons/LucideIcon'
+import XStack from '@/componentsV2/layout/XStack'
+import type { Assistant, Model } from '@/types/assistant'
+import { getBaseModelName } from '@/utils/naming'
+
 import ModelSheet from '../../Sheet/ModelSheet'
 
 interface MentionButtonProps {

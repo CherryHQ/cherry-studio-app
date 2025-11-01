@@ -1,16 +1,17 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, BottomSheetView } from '@gorhom/bottom-sheet'
+import { useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, ActivityIndicator } from 'react-native'
+import { ActivityIndicator, BackHandler } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useTheme } from 'heroui-native'
-import { loggerService } from '@/services/LoggerService'
-import { Model, ModelHealth, Provider } from '@/types/assistant'
-import YStack from '@/componentsV2/layout/YStack'
+
 import Text from '@/componentsV2/base/Text'
-import XStack from '@/componentsV2/layout/XStack'
 import { CircleCheck, RefreshCw, XCircle } from '@/componentsV2/icons/LucideIcon'
+import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
+import { loggerService } from '@/services/LoggerService'
 import { modelHealthService } from '@/services/ModelHealthService'
+import type { Model, ModelHealth, Provider } from '@/types/assistant'
 
 const logger = loggerService.withContext('ModelHealthCheckSheet')
 

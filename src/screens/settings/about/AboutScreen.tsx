@@ -1,22 +1,22 @@
-import * as ExpoLinking from 'expo-linking'
 import Constants from 'expo-constants'
+import * as ExpoLinking from 'expo-linking'
 import React from 'react'
-import {
-  Text,
-  Image,
-  XStack,
-  YStack,
-  PressableRow,
-  Row,
-  Group,
-  Container,
-  SafeAreaContainer,
-  HeaderBar
-} from '@/componentsV2'
 import { useTranslation } from 'react-i18next'
 
-import { loggerService } from '@/services/LoggerService'
+import {
+  Container,
+  Group,
+  HeaderBar,
+  Image,
+  PressableRow,
+  Row,
+  SafeAreaContainer,
+  Text,
+  XStack,
+  YStack
+} from '@/componentsV2'
 import { ArrowUpRight, Copyright, Github, Globe, Mail, Rss } from '@/componentsV2/icons/LucideIcon'
+import { loggerService } from '@/services/LoggerService'
 const logger = loggerService.withContext('AboutScreen')
 
 export default function AboutScreen() {

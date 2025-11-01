@@ -26,8 +26,9 @@ import { DEFAULT_MAX_TOKENS } from '@/constants'
 import { getAssistantSettings } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
 import { getProviderByModel } from '@/services/ProviderService'
-import { Assistant, EFFORT_RATIO, isSystemProvider, Model, SystemProviderIds } from '@/types/assistant'
-import { ReasoningEffortOptionalParams } from '@/types/sdk'
+import type { Assistant, Model } from '@/types/assistant'
+import { EFFORT_RATIO, isSystemProvider, SystemProviderIds } from '@/types/assistant'
+import type { ReasoningEffortOptionalParams } from '@/types/sdk'
 
 const logger = loggerService.withContext('reasoning')
 

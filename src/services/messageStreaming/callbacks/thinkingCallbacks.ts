@@ -1,7 +1,8 @@
-import { MessageBlock, MessageBlockStatus, MessageBlockType } from '@/types/message'
+import type { MessageBlock } from '@/types/message'
+import { MessageBlockStatus, MessageBlockType } from '@/types/message'
 import { createThinkingBlock } from '@/utils/messageUtils/create'
 
-import { BlockManager } from '../BlockManager'
+import type { BlockManager } from '../BlockManager'
 
 interface ThinkingCallbacksDependencies {
   blockManager: BlockManager

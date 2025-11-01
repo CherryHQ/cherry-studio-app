@@ -1,13 +1,14 @@
 import { BottomSheetBackdrop, BottomSheetModal, useBottomSheetScrollableCreator } from '@gorhom/bottom-sheet'
 import { LegendList } from '@legendapp/list'
+import { cn, useTheme } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
 import { BackHandler, TouchableOpacity, View } from 'react-native'
 
-import { useTheme, cn } from 'heroui-native'
 import { Check } from '@/componentsV2/icons'
-import Text from '../Text'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
+
+import Text from '../Text'
 
 export interface SelectionSheetItem {
   label: React.ReactNode | string

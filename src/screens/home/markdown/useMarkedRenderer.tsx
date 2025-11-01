@@ -1,20 +1,22 @@
 import * as Clipboard from 'expo-clipboard'
 import { t } from 'i18next'
-import React, { ReactNode, useMemo } from 'react'
-import { TextStyle, ViewStyle } from 'react-native'
+import type { ReactNode } from 'react'
+import React, { useMemo } from 'react'
+import type { TextStyle, ViewStyle } from 'react-native'
 import type { RendererInterface } from 'react-native-marked'
 import { MarkedTokenizer, Renderer } from 'react-native-marked'
 
 import { useToast } from '@/hooks/useToast'
 
-import { markdownColors } from './MarkdownStyles'
-import { ExtractMathResult, useMathEquation } from './useMathEquation'
-import MarkdownImage from './items/MarkdownImage'
 import { MarkdownCode } from './items/MarkdownCode'
 import { MarkdownCodeSpan } from './items/MarkdownCodeSpan'
+import MarkdownImage from './items/MarkdownImage'
 import { MarkdownParagraph } from './items/MarkdownParagraph'
-import { MarkdownText } from './items/MarkdownText'
 import { MarkdownTable } from './items/MarkdownTable'
+import { MarkdownText } from './items/MarkdownText'
+import { markdownColors } from './MarkdownStyles'
+import type { ExtractMathResult } from './useMathEquation'
+import { useMathEquation } from './useMathEquation'
 
 // const logger = loggerService.withContext('useMarkedRenderer')
 

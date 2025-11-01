@@ -1,8 +1,9 @@
+import { MotiView } from 'moti'
 import React from 'react'
 import { View } from 'react-native'
-import { MotiView } from 'moti'
 
-import { MessageBlockStatus, MessageBlockType, PlaceholderMessageBlock } from '@/types/message'
+import type { PlaceholderMessageBlock } from '@/types/message'
+import { MessageBlockStatus, MessageBlockType } from '@/types/message'
 
 interface PlaceholderBlockProps {
   block: PlaceholderMessageBlock

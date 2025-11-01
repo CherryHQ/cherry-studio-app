@@ -1,6 +1,8 @@
 import React from 'react'
+
 import { Text } from '@/componentsV2'
-import { ExtractMathResult } from '../useMathEquation'
+
+import type { ExtractMathResult } from '../useMathEquation'
 
 interface MarkdownCodeSpanProps {
   text: string

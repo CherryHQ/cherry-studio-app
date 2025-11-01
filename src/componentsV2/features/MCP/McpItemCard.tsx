@@ -1,10 +1,12 @@
+import { Switch } from 'heroui-native'
+import type { FC } from 'react'
+import React from 'react'
+import { useTranslation } from 'react-i18next'
+
 import Text from '@/componentsV2/base/Text'
 import PressableRow from '@/componentsV2/layout/PressableRow'
 import YStack from '@/componentsV2/layout/YStack'
-import { MCPServer } from '@/types/mcp'
-import { Switch } from 'heroui-native'
-import React, { FC } from 'react'
-import { useTranslation } from 'react-i18next'
+import type { MCPServer } from '@/types/mcp'
 
 interface McpItemCardProps {
   mcp: MCPServer

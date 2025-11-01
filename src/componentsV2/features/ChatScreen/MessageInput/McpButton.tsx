@@ -1,13 +1,14 @@
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import React, { useRef } from 'react'
-
-import { Hammer } from '@/componentsV2/icons'
-import { IconButton } from '@/componentsV2/base/IconButton'
-import { McpServerSheet } from '../../Sheet/McpServerSheet'
-import { Assistant } from '@/types/assistant'
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import XStack from '@/componentsV2/layout/XStack'
-import Text from '@/componentsV2/base/Text'
 import { Keyboard } from 'react-native'
+
+import { IconButton } from '@/componentsV2/base/IconButton'
+import Text from '@/componentsV2/base/Text'
+import { Hammer } from '@/componentsV2/icons'
+import XStack from '@/componentsV2/layout/XStack'
+import type { Assistant } from '@/types/assistant'
+
+import { McpServerSheet } from '../../Sheet/McpServerSheet'
 
 interface McpButtonProps {
   assistant: Assistant

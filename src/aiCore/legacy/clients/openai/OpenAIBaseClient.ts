@@ -8,9 +8,9 @@ import {
 } from '@/config/models'
 import { getAssistantSettings } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
-import { Assistant, Model } from '@/types/assistant'
-import { GenerateImageParams } from '@/types/image'
-import {
+import type { Assistant, Model } from '@/types/assistant'
+import type { GenerateImageParams } from '@/types/image'
+import type {
   OpenAIResponseSdkMessageParam,
   OpenAIResponseSdkParams,
   OpenAIResponseSdkRawChunk,

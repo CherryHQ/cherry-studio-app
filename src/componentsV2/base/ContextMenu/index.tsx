@@ -1,10 +1,12 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import React, { FC, useRef } from 'react'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { FC } from 'react'
+import React, { useRef } from 'react'
 import { Pressable } from 'react-native'
-import { SFSymbol } from 'sf-symbols-typescript'
+import type { SFSymbol } from 'sf-symbols-typescript'
 import * as ZeegoContextMenu from 'zeego/context-menu'
 
 import { isAndroid, isIOS } from '@/utils/device'
+
 import SelectionSheet from '../SelectionSheet'
 
 export interface ContextMenuListProps {

@@ -1,27 +1,27 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { DrawerActions, useNavigation } from '@react-navigation/native'
+import { FlashList } from '@shopify/flash-list'
 import React, { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, View } from 'react-native'
 
 import {
-  DrawerGestureWrapper,
-  SafeAreaContainer,
   Container,
+  DrawerGestureWrapper,
   HeaderBar,
+  SafeAreaContainer,
+  SearchInput,
   Text,
-  YStack,
-  SearchInput
+  YStack
 } from '@/componentsV2'
+import AssistantItem from '@/componentsV2/features/Assistant/AssistantItem'
+import AssistantItemSheet from '@/componentsV2/features/Assistant/AssistantItemSheet'
 import { Menu, Plus, Store } from '@/componentsV2/icons/LucideIcon'
 import { useExternalAssistants } from '@/hooks/useAssistant'
 import { useSearch } from '@/hooks/useSearch'
 import { createAssistant } from '@/services/AssistantService'
-import { Assistant } from '@/types/assistant'
-import { DrawerNavigationProps } from '@/types/naviagate'
-import AssistantItem from '@/componentsV2/features/Assistant/AssistantItem'
-import AssistantItemSheet from '@/componentsV2/features/Assistant/AssistantItemSheet'
-import { FlashList } from '@shopify/flash-list'
+import type { Assistant } from '@/types/assistant'
+import type { DrawerNavigationProps } from '@/types/naviagate'
 
 export default function AssistantScreen() {
   const { t } = useTranslation()

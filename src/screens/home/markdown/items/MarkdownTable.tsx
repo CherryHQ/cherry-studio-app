@@ -1,6 +1,9 @@
-import React, { ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import React from 'react'
 import { Dimensions, ScrollView, View } from 'react-native'
+
 import { XStack, YStack } from '@/componentsV2'
+
 import { markdownColors } from '../MarkdownStyles'
 
 interface MarkdownTableProps {

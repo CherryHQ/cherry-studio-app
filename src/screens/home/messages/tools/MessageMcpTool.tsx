@@ -1,9 +1,10 @@
-import { Text, XStack } from '@/componentsV2'
-import { ToolMessageBlock } from '@/types/message'
+import { Accordion, Spinner } from 'heroui-native'
 import React from 'react'
 import { View } from 'react-native'
-import { Accordion, Spinner } from 'heroui-native'
+
+import { Text, XStack } from '@/componentsV2'
 import { Wrench, XCircle } from '@/componentsV2/icons'
+import type { ToolMessageBlock } from '@/types/message'
 
 interface Props {
   block: ToolMessageBlock

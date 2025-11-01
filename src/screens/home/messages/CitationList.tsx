@@ -1,11 +1,11 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import React, { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity, View } from 'react-native'
 
-import { FallbackFavicon } from '@/componentsV2/icons'
-import { Citation } from '@/types/websearch'
 import { CitationSheet, Text, YStack } from '@/componentsV2'
+import { FallbackFavicon } from '@/componentsV2/icons'
+import type { Citation } from '@/types/websearch'
 
 interface PreviewIconProps {
   citation: Citation

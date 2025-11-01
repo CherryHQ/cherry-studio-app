@@ -1,22 +1,23 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet'
 import { File, Paths } from 'expo-file-system'
+import { Button, useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Keyboard, TouchableWithoutFeedback } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Button, useTheme } from 'heroui-native'
 
+import { Text, XStack, YStack } from '@/componentsV2'
 import { DEFAULT_ICONS_STORAGE } from '@/constants/storage'
 import { useDialog } from '@/hooks/useDialog'
 import { uploadFiles } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
-import { Provider, ProviderType } from '@/types/assistant'
-import { FileMetadata } from '@/types/file'
+import { providerService } from '@/services/ProviderService'
+import type { Provider, ProviderType } from '@/types/assistant'
+import type { FileMetadata } from '@/types/file'
 import { uuid } from '@/utils'
-import { YStack, XStack, Text } from '@/componentsV2'
+
 import { ProviderIconButton } from './ProviderIconButton'
 import { ProviderSelect } from './ProviderSelect'
-import { providerService } from '@/services/ProviderService'
 
 const logger = loggerService.withContext('ProviderSheet')
 

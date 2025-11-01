@@ -1,16 +1,16 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { useNavigation } from '@react-navigation/native'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, View } from 'react-native'
 
-import { SafeAreaContainer, Container, HeaderBar, SearchInput } from '@/componentsV2'
+import { Container, HeaderBar, SafeAreaContainer, SearchInput } from '@/componentsV2'
+import AssistantItemSheet from '@/componentsV2/features/Assistant/AssistantItemSheet'
+import AssistantsTabContent from '@/componentsV2/features/Assistant/AssistantsTabContent'
 import { useBuiltInAssistants } from '@/hooks/useAssistant'
 import { useSearch } from '@/hooks/useSearch'
-import { Assistant } from '@/types/assistant'
-import { DrawerNavigationProps } from '@/types/naviagate'
-import AssistantsTabContent from '@/componentsV2/features/Assistant/AssistantsTabContent'
-import AssistantItemSheet from '@/componentsV2/features/Assistant/AssistantItemSheet'
+import type { Assistant } from '@/types/assistant'
+import type { DrawerNavigationProps } from '@/types/naviagate'
 
 export default function AssistantMarketScreen() {
   const { t } = useTranslation()

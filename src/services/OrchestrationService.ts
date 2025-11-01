@@ -1,6 +1,7 @@
-import { Assistant } from '@/types/assistant'
-import { Chunk, ChunkType } from '@/types/chunk'
-import { Message } from '@/types/message'
+import type { Assistant } from '@/types/assistant'
+import type { Chunk } from '@/types/chunk'
+import { ChunkType } from '@/types/chunk'
+import type { Message } from '@/types/message'
 
 import { fetchChatCompletion } from './ApiService'
 import { ConversationService } from './ConversationService'

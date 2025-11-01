@@ -1,7 +1,7 @@
 import React from 'react'
 
-import { ArrowUp } from '@/componentsV2/icons'
 import { IconButton } from '@/componentsV2/base/IconButton'
+import { ArrowUp } from '@/componentsV2/icons'
 
 interface SendButtonProps {
   onSend: () => void

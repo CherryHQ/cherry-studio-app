@@ -26,9 +26,11 @@
  * ```
  */
 
+import { providerDatabase } from '@database'
+
 import { loggerService } from '@/services/LoggerService'
 import type { Assistant, Model, Provider } from '@/types/assistant'
-import { providerDatabase } from '@database'
+
 import { getDefaultModel } from './AssistantService'
 
 const logger = loggerService.withContext('ProviderService')

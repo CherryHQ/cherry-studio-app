@@ -1,9 +1,10 @@
-import Text from '@/componentsV2/base/Text'
-import XStack from '@/componentsV2/layout/XStack'
-import YStack from '@/componentsV2/layout/YStack'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity } from 'react-native'
+
+import Text from '@/componentsV2/base/Text'
+import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
 
 interface MenuTabContentProps {
   title: string

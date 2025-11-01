@@ -1,4 +1,3 @@
-import { Assistant } from '@/types/assistant'
 import {
   deleteAssistantById as _deleteAssistantById,
   getAllAssistants as _getAllAssistants,
@@ -6,6 +5,8 @@ import {
   getExternalAssistants as _getExternalAssistants,
   upsertAssistants as _upsertAssistants
 } from '@db/queries/assistants.queries'
+
+import type { Assistant } from '@/types/assistant'
 
 export async function upsertAssistants(assistantsToUpsert: Assistant[]) {
   try {

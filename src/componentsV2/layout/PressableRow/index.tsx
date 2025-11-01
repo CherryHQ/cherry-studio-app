@@ -1,5 +1,7 @@
 import React from 'react'
-import { TouchableOpacity, TouchableOpacityProps } from 'react-native'
+import type { TouchableOpacityProps } from 'react-native'
+import { TouchableOpacity } from 'react-native'
+
 import XStack from '../XStack'
 
 export interface PressableRowProps extends TouchableOpacityProps {

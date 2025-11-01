@@ -1,8 +1,9 @@
-import { ChevronDown } from '@/componentsV2/icons'
-import { ProviderType } from '@/types/assistant'
 import { Button } from 'heroui-native'
 import React from 'react'
 import * as DropdownMenu from 'zeego/dropdown-menu'
+
+import { ChevronDown } from '@/componentsV2/icons'
+import type { ProviderType } from '@/types/assistant'
 
 interface SelectOptionItem {
   label: string

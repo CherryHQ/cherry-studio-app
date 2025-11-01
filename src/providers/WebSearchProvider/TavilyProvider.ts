@@ -1,11 +1,11 @@
 import { fetch } from 'expo/fetch'
 
 import { loggerService } from '@/services/LoggerService'
-import {
-  WebSearchState,
+import type {
   WebSearchProvider,
   WebSearchProviderResponse,
-  WebSearchProviderResult
+  WebSearchProviderResult,
+  WebSearchState
 } from '@/types/websearch'
 
 import BaseWebSearchProvider from './BaseWebSearchProvider'

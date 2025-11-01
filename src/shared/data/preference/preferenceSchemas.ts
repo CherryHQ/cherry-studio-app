@@ -13,6 +13,7 @@
  */
 
 import { ThemeMode } from '@/types'
+
 import type { PreferenceSchemas } from './preferenceTypes'
 
 /**

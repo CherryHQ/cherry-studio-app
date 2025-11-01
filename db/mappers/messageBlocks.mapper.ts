@@ -1,6 +1,6 @@
-import { InferInsertModel } from 'drizzle-orm'
+import type { InferInsertModel } from 'drizzle-orm'
 
-import {
+import type {
   CitationMessageBlock,
   CodeMessageBlock,
   FileMessageBlock,
@@ -8,13 +8,13 @@ import {
   MainTextMessageBlock,
   MessageBlock,
   MessageBlockStatus,
-  MessageBlockType,
   ThinkingMessageBlock,
   ToolMessageBlock,
   TranslationMessageBlock
 } from '@/types/message'
+import { MessageBlockType } from '@/types/message'
 
-import { messageBlocks } from '../schema'
+import type { messageBlocks } from '../schema'
 
 type MessageBlockDbInsert = InferInsertModel<typeof messageBlocks>
 
@@ -90,32 +90,36 @@ export function transformPartialMessageBlockToDb(changes: Partial<MessageBlock>)
       case 'url':
         dbChanges.url = (changes as Partial<ImageMessageBlock>).url
         break
-      case 'file':
+      case 'file': {
         // 'file' exists on ImageMessageBlock and FileMessageBlock
         const file = (changes as Partial<ImageMessageBlock | FileMessageBlock>).file
         dbChanges.file = file ? JSON.stringify(file) : null
         break
+      }
       case 'toolId':
         dbChanges.tool_id = (changes as Partial<ToolMessageBlock>).toolId
         break
       case 'toolName':
         dbChanges.tool_name = (changes as Partial<ToolMessageBlock>).toolName
         break
-      case 'arguments':
+      case 'arguments': {
         const args = (changes as Partial<ToolMessageBlock>).arguments
         dbChanges.arguments = args ? JSON.stringify(args) : null
         break
+      }
       case 'sourceBlockId':
         dbChanges.source_block_id = (changes as Partial<TranslationMessageBlock>).sourceBlockId
         break
-      case 'response':
+      case 'response': {
         const response = (changes as Partial<CitationMessageBlock>).response
         dbChanges.response = response ? JSON.stringify(response) : null
         break
-      case 'knowledge':
+      }
+      case 'knowledge': {
         const knowledge = (changes as Partial<CitationMessageBlock>).knowledge
         dbChanges.knowledge = knowledge ? JSON.stringify(knowledge) : null
         break
+      }
 
       // 'id' is the primary key and typically shouldn't be updated.
       case 'id':

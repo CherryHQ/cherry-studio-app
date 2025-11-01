@@ -1,7 +1,7 @@
 import { desc, eq } from 'drizzle-orm'
 
 import { loggerService } from '@/services/LoggerService'
-import { Topic } from '@/types/assistant'
+import type { Topic } from '@/types/assistant'
 
 import { db } from '..'
 import { transformDbToTopic, transformTopicToDb } from '../mappers'

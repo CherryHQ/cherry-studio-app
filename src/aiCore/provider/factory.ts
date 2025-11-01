@@ -3,7 +3,7 @@ import { createProvider as createProviderCore } from '@cherrystudio/ai-core/prov
 import type { Provider as AiSdkProvider } from 'ai'
 
 import { loggerService } from '@/services/LoggerService'
-import { Provider } from '@/types/assistant'
+import type { Provider } from '@/types/assistant'
 
 const logger = loggerService.withContext('ProviderFactory')
 

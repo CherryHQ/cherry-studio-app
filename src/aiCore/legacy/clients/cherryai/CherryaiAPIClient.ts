@@ -1,6 +1,6 @@
-import OpenAI from 'openai'
+import type OpenAI from 'openai'
 
-import { OpenAISdkParams, OpenAISdkRawOutput } from '@/types/sdk'
+import type { OpenAISdkParams, OpenAISdkRawOutput } from '@/types/sdk'
 
 import { OpenAIAPIClient } from '../openai/OpenAIApiClient'
 

@@ -1,0 +1,24 @@
+{
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "never"
+  },
+  "files.eol": "\n",
+  "search.exclude": {
+    "**/dist/**": true,
+    ".yarn/releases/**": true,
+    "ios/**": true,
+    "android/**": true
+  },
+  "i18n-ally.localesPaths": [
+    "src/i18n",
+    "src/i18n/locales",
+    "src/screens/home/messages",
+    "ios/Pods/RCT-Folly/folly/lang",
+    "ios/Pods/boost/boost/predef/language",
+    "ios/Pods/Headers/Private/RCT-Folly/folly/lang",
+    "ios/Pods/Headers/Public/RCT-Folly/folly/lang"
+  ],
+  "oxc.enable": false
+}

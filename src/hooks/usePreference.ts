@@ -44,8 +44,8 @@
 
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 
-import { preferenceService } from '@/services/PreferenceService'
 import { loggerService } from '@/services/LoggerService'
+import { preferenceService } from '@/services/PreferenceService'
 import { DefaultPreferences } from '@/shared/data/preference/preferenceSchemas'
 import type { PreferenceDefaultScopeType, PreferenceKeyType } from '@/shared/data/preference/preferenceTypes'
 

@@ -1,8 +1,9 @@
-import { RouteProp, useRoute } from '@react-navigation/native'
+import type { RouteProp } from '@react-navigation/native'
+import { useRoute } from '@react-navigation/native'
+import { Button, Spinner } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
-import { Button, Spinner } from 'heroui-native'
 
 import {
   Container,
@@ -15,15 +16,15 @@ import {
   XStack,
   YStack
 } from '@/componentsV2'
+import { ModelSelect } from '@/componentsV2/features/SettingsScreen/ModelSelect'
 import { Eye, EyeOff, ShieldCheck, XCircle } from '@/componentsV2/icons/LucideIcon'
 import { PROVIDER_URLS } from '@/config/providers'
 import { useDialog } from '@/hooks/useDialog'
 import { useProvider } from '@/hooks/useProviders'
-import { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
+import type { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
 import { checkApi } from '@/services/ApiService'
 import { loggerService } from '@/services/LoggerService'
-import { ApiStatus, Model } from '@/types/assistant'
-import { ModelSelect } from '@/componentsV2/features/SettingsScreen/ModelSelect'
+import type { ApiStatus, Model } from '@/types/assistant'
 const logger = loggerService.withContext('ApiServiceScreen')
 
 type ProviderSettingsRouteProp = RouteProp<ProvidersStackParamList, 'ApiServiceScreen'>

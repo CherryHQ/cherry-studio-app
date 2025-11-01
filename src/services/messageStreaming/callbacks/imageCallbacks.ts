@@ -1,9 +1,10 @@
 import { writeBase64File } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
-import { ImageMessageBlock, MessageBlockStatus, MessageBlockType } from '@/types/message'
+import type { ImageMessageBlock } from '@/types/message'
+import { MessageBlockStatus, MessageBlockType } from '@/types/message'
 import { createImageBlock } from '@/utils/messageUtils/create'
 
-import { BlockManager } from '../BlockManager'
+import type { BlockManager } from '../BlockManager'
 
 const logger = loggerService.withContext('createImageCallbacks')
 

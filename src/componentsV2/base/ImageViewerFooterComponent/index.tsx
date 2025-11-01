@@ -1,14 +1,15 @@
+import { File, Paths } from 'expo-file-system'
 import React from 'react'
-import { TouchableOpacity, View } from 'react-native'
 import { useTranslation } from 'react-i18next'
+import { TouchableOpacity, View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import { Download } from '@/componentsV2/icons/LucideIcon'
+import { DEFAULT_IMAGES_STORAGE } from '@/constants/storage'
 import { useToast } from '@/hooks/useToast'
 import { downloadFileAsync, writeBase64File } from '@/services/FileService'
-import { SaveImageResult, saveImageToGallery } from '@/services/ImageService'
-import { DEFAULT_IMAGES_STORAGE } from '@/constants/storage'
-import { Paths, File } from 'expo-file-system'
+import type { SaveImageResult } from '@/services/ImageService'
+import { saveImageToGallery } from '@/services/ImageService'
 import { uuid } from '@/utils'
 
 export interface ImageViewerFooterComponentProps {

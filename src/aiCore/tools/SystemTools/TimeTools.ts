@@ -1,7 +1,8 @@
-import { BuiltinTool } from '@/types/tool'
-import { uuid } from '@/utils'
 import { tool } from 'ai'
 import { z } from 'zod'
+
+import type { BuiltinTool } from '@/types/tool'
+import { uuid } from '@/utils'
 
 export const TIME_TOOLS: BuiltinTool[] = [
   {

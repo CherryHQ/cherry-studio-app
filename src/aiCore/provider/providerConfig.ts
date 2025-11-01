@@ -1,15 +1,11 @@
-import {
-  hasProviderConfig,
-  ProviderConfigFactory,
-  ProviderId,
-  ProviderSettingsMap
-} from '@cherrystudio/ai-core/provider'
+import type { ProviderId, ProviderSettingsMap } from '@cherrystudio/ai-core/provider'
+import { hasProviderConfig, ProviderConfigFactory } from '@cherrystudio/ai-core/provider'
 import { cloneDeep } from 'lodash'
 
 import { isOpenAIChatCompletionOnlyModel } from '@/config/models'
 import { loggerService } from '@/services/LoggerService'
 import { getProviderByModel } from '@/services/ProviderService'
-import { Model, Provider } from '@/types/assistant'
+import type { Model, Provider } from '@/types/assistant'
 import { storage } from '@/utils'
 import { formatApiHost } from '@/utils/api'
 

@@ -1,12 +1,13 @@
-import { ChevronDown } from '@/componentsV2/icons'
-import { isEmbeddingModel } from '@/config/models'
-import { Model, Provider } from '@/types/assistant'
-import { getModelUniqId } from '@/utils/model'
 import { Button } from 'heroui-native'
 import { sortBy } from 'lodash'
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import * as DropdownMenu from 'zeego/dropdown-menu'
+
+import { ChevronDown } from '@/componentsV2/icons'
+import { isEmbeddingModel } from '@/config/models'
+import type { Model, Provider } from '@/types/assistant'
+import { getModelUniqId } from '@/utils/model'
 
 interface ModelSelectProps {
   provider: Provider

@@ -1,7 +1,8 @@
 import React from 'react'
 
 import { useAssistant } from '@/hooks/useAssistant'
-import { Topic } from '@/types/assistant'
+import type { Topic } from '@/types/assistant'
+
 import { MessageInput } from './index'
 
 interface MessageInputContainerProps {

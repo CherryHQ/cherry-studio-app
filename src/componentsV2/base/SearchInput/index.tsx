@@ -1,7 +1,8 @@
 import React from 'react'
 
-import TextField from '../TextField'
 import { Search } from '@/componentsV2/icons'
+
+import TextField from '../TextField'
 
 interface SearchInputProps {
   placeholder: string

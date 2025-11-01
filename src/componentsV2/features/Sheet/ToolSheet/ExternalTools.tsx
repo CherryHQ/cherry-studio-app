@@ -1,14 +1,13 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Check, Globe, Palette } from '@/componentsV2/icons'
-
-import { Assistant, Model } from '@/types/assistant'
-import YStack from '@/componentsV2/layout/YStack'
 import Text from '@/componentsV2/base/Text'
+import { Check, Globe, Palette } from '@/componentsV2/icons'
 import PressableRow from '@/componentsV2/layout/PressableRow'
 import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
 import { isGenerateImageModels, isWebSearchModel } from '@/config/models'
+import type { Assistant, Model } from '@/types/assistant'
 
 interface ExternalTool {
   key: string

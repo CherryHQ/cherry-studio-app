@@ -1,29 +1,30 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { RouteProp, useRoute } from '@react-navigation/native'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { RouteProp } from '@react-navigation/native'
+import { useRoute } from '@react-navigation/native'
+import { Button } from 'heroui-native'
 import React, { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
-import { Button } from 'heroui-native'
 
 import {
   Container,
+  ExternalLink,
   GroupTitle,
   HeaderBar,
   SafeAreaContainer,
   Text,
   TextField,
   XStack,
-  YStack,
-  ExternalLink
+  YStack
 } from '@/componentsV2'
+import { WebSearchApiCheckSheet } from '@/componentsV2/features/SettingsScreen/WebSearchApiCheckSheet'
 import { Eye, EyeOff, ShieldCheck } from '@/componentsV2/icons/LucideIcon'
 import { WEB_SEARCH_PROVIDER_CONFIG } from '@/config/websearchProviders'
 import { useDialog } from '@/hooks/useDialog'
 import { useWebSearchProvider } from '@/hooks/useWebsearchProviders'
-import { WebSearchStackParamList } from '@/navigators/settings/WebSearchStackNavigator'
+import type { WebSearchStackParamList } from '@/navigators/settings/WebSearchStackNavigator'
 import WebSearchService from '@/services/WebSearchService'
-import { ApiStatus } from '@/types/assistant'
-import { WebSearchApiCheckSheet } from '@/componentsV2/features/SettingsScreen/WebSearchApiCheckSheet'
+import type { ApiStatus } from '@/types/assistant'
 
 type WebsearchProviderSettingsRouteProp = RouteProp<WebSearchStackParamList, 'WebSearchProviderSettingsScreen'>
 

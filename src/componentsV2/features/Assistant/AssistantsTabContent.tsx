@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Text, YStack } from '@/componentsV2'
-import { Assistant } from '@/types/assistant'
+import type { Assistant } from '@/types/assistant'
+
 import AssistantItemCard from './AssistantItemCard'
 
 interface AssistantsTabProps {

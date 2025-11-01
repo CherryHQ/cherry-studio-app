@@ -1,10 +1,12 @@
-import React from 'react'
-import EmojiPicker, { EmojiType } from 'rn-emoji-keyboard'
-import { TouchableOpacity } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-
 import { useTheme } from 'heroui-native'
+import React from 'react'
+import { TouchableOpacity } from 'react-native'
+import type { EmojiType } from 'rn-emoji-keyboard'
+import EmojiPicker from 'rn-emoji-keyboard'
+
 import YStack from '@/componentsV2/layout/YStack'
+
 import Text from '../Text'
 
 interface AvatarEditButtonProps {

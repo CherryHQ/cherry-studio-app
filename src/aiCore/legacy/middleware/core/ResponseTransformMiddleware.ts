@@ -1,9 +1,9 @@
 import { loggerService } from '@/services/LoggerService'
-import { SdkRawChunk } from '@/types/sdk'
+import type { SdkRawChunk } from '@/types/sdk'
 
-import { ResponseChunkTransformerContext } from '../../clients/types'
-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
-import { CompletionsContext, CompletionsMiddleware } from '../types'
+import type { ResponseChunkTransformerContext } from '../../clients/types'
+import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+import type { CompletionsContext, CompletionsMiddleware } from '../types'
 
 export const MIDDLEWARE_NAME = 'ResponseTransformMiddleware'
 

@@ -1,9 +1,9 @@
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet'
+import { useTheme } from 'heroui-native'
 import React from 'react'
 import { StyleSheet } from 'react-native'
 
 import { Search } from '@/componentsV2/icons/LucideIcon'
-import { useTheme } from 'heroui-native'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 

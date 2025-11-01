@@ -1,7 +1,8 @@
-import { MCPServer } from '@/types/mcp'
-import { MCPTool } from '@/types/tool'
-import { uuid } from '@/utils'
 import { t } from 'i18next'
+
+import type { MCPServer } from '@/types/mcp'
+import type { MCPTool } from '@/types/tool'
+import { uuid } from '@/utils'
 
 export type BuiltinMcpId = keyof typeof BuiltinMcpIds
 

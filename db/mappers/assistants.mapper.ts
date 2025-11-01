@@ -1,4 +1,4 @@
-import { Assistant } from '@/types/assistant'
+import type { Assistant } from '@/types/assistant'
 import { safeJsonParse } from '@/utils/json'
 
 import { transformDbToTopic } from './topics.mapper'

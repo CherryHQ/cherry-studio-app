@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import { io, Socket } from 'socket.io-client'
 import { File } from 'expo-file-system'
+import { useEffect, useRef, useState } from 'react'
+import type { Socket } from 'socket.io-client'
+import { io } from 'socket.io-client'
 
-import { loggerService } from '@/services/LoggerService'
 import { DEFAULT_BACKUP_STORAGE } from '@/constants/storage'
+import { loggerService } from '@/services/LoggerService'
 import type { ConnectionInfo } from '@/types/network'
 const logger = loggerService.withContext('useWebSocket')
 

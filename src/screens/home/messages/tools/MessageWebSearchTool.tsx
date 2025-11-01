@@ -1,10 +1,10 @@
-import { Search } from '@/componentsV2/icons/LucideIcon'
 import React from 'react'
-import { Searching, Text, XStack } from '@/componentsV2'
 
-import { WebSearchToolInput, WebSearchToolOutput } from '@/aiCore/tools/WebSearchTool'
+import type { WebSearchToolInput, WebSearchToolOutput } from '@/aiCore/tools/WebSearchTool'
+import { Searching, Text, XStack } from '@/componentsV2'
+import { Search } from '@/componentsV2/icons/LucideIcon'
 import i18n from '@/i18n'
-import { MCPToolResponse } from '@/types/mcp'
+import type { MCPToolResponse } from '@/types/mcp'
 
 export const MessageWebSearchToolTitle = ({ toolResponse }: { toolResponse: MCPToolResponse }) => {
   const toolInput = toolResponse.arguments as WebSearchToolInput

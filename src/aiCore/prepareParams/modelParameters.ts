@@ -6,7 +6,7 @@
 import { isClaudeReasoningModel, isNotSupportTemperatureAndTopP, isSupportedFlexServiceTier } from '@/config/models'
 import { defaultTimeout } from '@/constants'
 import { getAssistantSettings } from '@/services/AssistantService'
-import { Assistant, Model } from '@/types/assistant'
+import type { Assistant, Model } from '@/types/assistant'
 
 /**
  * 获取温度参数

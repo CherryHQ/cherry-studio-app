@@ -1,19 +1,20 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { MotiView } from 'moti'
 import React, { useRef } from 'react'
-import { Pressable } from 'react-native'
 import { useTranslation } from 'react-i18next'
+import { Pressable } from 'react-native'
 
-import { SquareFunction, Wrench, WebsearchProviderIcon, Globe } from '@/componentsV2/icons'
-import { useWebsearchProviders } from '@/hooks/useWebsearchProviders'
-import { Assistant } from '@/types/assistant'
-import YStack from '@/componentsV2/layout/YStack'
 import Text from '@/componentsV2/base/Text'
-import XStack from '@/componentsV2/layout/XStack'
+import { Globe, SquareFunction, WebsearchProviderIcon, Wrench } from '@/componentsV2/icons'
 import RowRightArrow from '@/componentsV2/layout/Row/RowRightArrow'
-import { WebsearchSheet } from '../Sheet/WebsearchSheet'
-import { ToolUseSheet } from '../Sheet/ToolUseSheet'
+import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
+import { useWebsearchProviders } from '@/hooks/useWebsearchProviders'
+import type { Assistant } from '@/types/assistant'
+
 import { McpServerSheet } from '../Sheet/McpServerSheet'
+import { ToolUseSheet } from '../Sheet/ToolUseSheet'
+import { WebsearchSheet } from '../Sheet/WebsearchSheet'
 
 interface ToolTabContentProps {
   assistant: Assistant

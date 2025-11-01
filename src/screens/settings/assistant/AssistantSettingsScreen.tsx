@@ -1,19 +1,19 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { useNavigation } from '@react-navigation/native'
-import { StackNavigationProp } from '@react-navigation/stack'
-import { ChevronDown, Languages, MessageSquareMore, Rocket, Settings2 } from '@/componentsV2/icons/LucideIcon'
+import type { StackNavigationProp } from '@react-navigation/stack'
+import { Button, useTheme } from 'heroui-native'
 import React, { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
-import { Button, useTheme } from 'heroui-native'
 
-import { Container, HeaderBar, Image, SafeAreaContainer, Text, XStack, YStack, IconButton } from '@/componentsV2'
+import { Container, HeaderBar, IconButton, Image, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
+import ModelSheet from '@/componentsV2/features/Sheet/ModelSheet'
+import { ChevronDown, Languages, MessageSquareMore, Rocket, Settings2 } from '@/componentsV2/icons/LucideIcon'
 import { useAssistant } from '@/hooks/useAssistant'
-import { AssistantSettingsStackParamList } from '@/navigators/settings/AssistantSettingsStackNavigator'
-import { Assistant, Model } from '@/types/assistant'
+import type { AssistantSettingsStackParamList } from '@/navigators/settings/AssistantSettingsStackNavigator'
+import type { Assistant, Model } from '@/types/assistant'
 import { getModelOrProviderIcon } from '@/utils/icons'
 import { getBaseModelName } from '@/utils/naming'
-import ModelSheet from '@/componentsV2/features/Sheet/ModelSheet'
 
 function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: () => void }) {
   const { t } = useTranslation()

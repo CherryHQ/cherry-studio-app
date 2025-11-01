@@ -1,16 +1,17 @@
-import { Container, DrawerGestureWrapper, HeaderBar, SafeAreaContainer, SearchInput } from '@/componentsV2'
-import { Menu } from '@/componentsV2/icons'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { DrawerActions, useNavigation } from '@react-navigation/native'
 import React, { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, View } from 'react-native'
-import { DrawerActions, useNavigation } from '@react-navigation/native'
-import { DrawerNavigationProps } from '@/types/naviagate'
+
+import { Container, DrawerGestureWrapper, HeaderBar, SafeAreaContainer, SearchInput } from '@/componentsV2'
+import { McpMarketContent } from '@/componentsV2/features/MCP/McpMarketContent'
+import McpServerItemSheet from '@/componentsV2/features/MCP/McpServerItemSheet'
+import { Menu } from '@/componentsV2/icons'
 import { useMcpServers } from '@/hooks/useMcp'
 import { useSearch } from '@/hooks/useSearch'
-import { MCPServer } from '@/types/mcp'
-import { McpMarketContent } from '@/componentsV2/features/MCP/McpMarketContent'
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import McpServerItemSheet from '@/componentsV2/features/MCP/McpServerItemSheet'
+import type { MCPServer } from '@/types/mcp'
+import type { DrawerNavigationProps } from '@/types/naviagate'
 
 export function McpMarketScreen() {
   const { t } = useTranslation()

@@ -1,12 +1,12 @@
-import { CompletionUsage } from 'openai/resources/completions.mjs'
+import type { CompletionUsage } from 'openai/resources/completions.mjs'
 
-import { Assistant, Metrics, Model, Topic, Usage } from './assistant'
-import { SerializedError } from './error'
-import { FileMetadata } from './file'
-import { GenerateImageResponse } from './image'
-import { KnowledgeReference } from './knowledge'
-import { MCPServer, MCPToolResponse } from './mcp'
-import { WebSearchResponse, WebSearchSource } from './websearch'
+import type { Assistant, Metrics, Model, Topic, Usage } from './assistant'
+import type { SerializedError } from './error'
+import type { FileMetadata } from './file'
+import type { GenerateImageResponse } from './image'
+import type { KnowledgeReference } from './knowledge'
+import type { MCPServer, MCPToolResponse } from './mcp'
+import type { WebSearchResponse, WebSearchSource } from './websearch'
 
 // MessageBlock 类型枚举 - 根据实际API返回特性优化
 export enum MessageBlockType {

@@ -1,15 +1,15 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
+import { Accordion, Divider, Switch, useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BackHandler, TouchableOpacity, View } from 'react-native'
 
-import { X } from '@/componentsV2/icons/LucideIcon'
-import { MCPServer } from '@/types/mcp'
-import YStack from '@/componentsV2/layout/YStack'
-import XStack from '@/componentsV2/layout/XStack'
 import Text from '@/componentsV2/base/Text'
-import { Accordion, Divider, Switch, useTheme } from 'heroui-native'
-import { useTranslation } from 'react-i18next'
+import { X } from '@/componentsV2/icons/LucideIcon'
+import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
 import { useMcpTools } from '@/hooks/useMcp'
+import type { MCPServer } from '@/types/mcp'
 
 interface McpServerItemSheetProps {
   selectedMcp: MCPServer | null

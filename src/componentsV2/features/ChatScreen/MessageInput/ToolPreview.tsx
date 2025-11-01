@@ -2,9 +2,9 @@ import React, { useCallback, useMemo } from 'react'
 import { Pressable } from 'react-native'
 
 import { Globe, Palette, X } from '@/componentsV2/icons/LucideIcon'
-import { loggerService } from '@/services/LoggerService'
-import { Assistant } from '@/types/assistant'
 import XStack from '@/componentsV2/layout/XStack'
+import { loggerService } from '@/services/LoggerService'
+import type { Assistant } from '@/types/assistant'
 
 const logger = loggerService.withContext('ToolPreview')
 

@@ -1,4 +1,4 @@
-import { Assistant } from '@/types/assistant'
+import type { Assistant } from '@/types/assistant'
 
 export function groupByCategories(data: Assistant[]) {
   const groupedMap = new Map<string, Assistant[]>()

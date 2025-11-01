@@ -1,26 +1,27 @@
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native'
+import type { RouteProp } from '@react-navigation/native'
+import { useNavigation, useRoute } from '@react-navigation/native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, View } from 'react-native'
 import { GestureDetector } from 'react-native-gesture-handler'
 
-import { DefaultProviderIcon } from '@/componentsV2/icons'
 import {
-  DrawerGestureWrapper,
-  SafeAreaContainer,
+  AvatarEditButton,
   Container,
+  DrawerGestureWrapper,
   HeaderBar,
+  SafeAreaContainer,
   Text,
-  XStack,
-  AvatarEditButton
+  XStack
 } from '@/componentsV2'
+import { DefaultProviderIcon } from '@/componentsV2/icons'
 import { ArrowLeftRight, PenLine } from '@/componentsV2/icons/LucideIcon'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useSwipeGesture } from '@/hooks/useSwipeGesture'
 import AssistantDetailTabNavigator from '@/navigators/AssistantDetailTabNavigator'
-import { AssistantStackParamList } from '@/navigators/AssistantStackNavigator'
+import type { AssistantStackParamList } from '@/navigators/AssistantStackNavigator'
 import { loggerService } from '@/services/LoggerService'
-import { DrawerNavigationProps } from '@/types/naviagate'
+import type { DrawerNavigationProps } from '@/types/naviagate'
 const logger = loggerService.withContext('AssistantDetailScreen')
 
 type AssistantDetailRouteProp = RouteProp<AssistantStackParamList, 'AssistantDetailScreen'>

@@ -1,6 +1,7 @@
-import { Model, ModelHealth, Provider } from '@/types/assistant'
-import { loggerService } from './LoggerService'
+import type { Model, ModelHealth, Provider } from '@/types/assistant'
+
 import { checkApi } from './ApiService'
+import { loggerService } from './LoggerService'
 
 const logger = loggerService.withContext('ModelHealthService')
 

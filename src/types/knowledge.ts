@@ -1,5 +1,5 @@
-import { Model } from './assistant'
-import { FileMetadata } from './file'
+import type { Model } from './assistant'
+import type { FileMetadata } from './file'
 
 export type KnowledgeReference = {
   id: number

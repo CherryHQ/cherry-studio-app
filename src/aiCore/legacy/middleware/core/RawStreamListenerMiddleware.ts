@@ -1,9 +1,9 @@
 import { AnthropicAPIClient } from '@/aiCore/legacy/clients/anthropic/AnthropicAPIClient'
-import { AnthropicSdkRawChunk, AnthropicSdkRawOutput } from '@/types/sdk'
+import type { AnthropicSdkRawChunk, AnthropicSdkRawOutput } from '@/types/sdk'
 
-import { AnthropicStreamListener } from '../../clients/types'
-import { CompletionsParams, CompletionsResult } from '../schemas'
-import { CompletionsContext, CompletionsMiddleware } from '../types'
+import type { AnthropicStreamListener } from '../../clients/types'
+import type { CompletionsParams, CompletionsResult } from '../schemas'
+import type { CompletionsContext, CompletionsMiddleware } from '../types'
 
 export const MIDDLEWARE_NAME = 'RawStreamListenerMiddleware'
 

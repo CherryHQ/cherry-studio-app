@@ -1,7 +1,7 @@
 import React, { memo } from 'react'
 import { View } from 'react-native'
 
-import { MainTextMessageBlock } from '@/types/message'
+import type { MainTextMessageBlock } from '@/types/message'
 
 import ReactNativeMarkdown from '../../markdown/ReactNativeMarkdown'
 

@@ -1,15 +1,16 @@
-import { InvalidToolInputError, NoSuchToolError } from 'ai'
+import type { NoSuchToolError } from 'ai'
+import { InvalidToolInputError } from 'ai'
 import { t } from 'i18next'
-import { z } from 'zod'
+import type { z } from 'zod'
 
-import {
+import type {
   AiSdkErrorUnion,
-  isSerializedAiSdkAPICallError,
   SerializedAiSdkError,
   SerializedAiSdkInvalidToolInputError,
   SerializedAiSdkNoSuchToolError,
   SerializedError
 } from '@/types/error'
+import { isSerializedAiSdkAPICallError } from '@/types/error'
 
 import { safeSerialize } from './serialize'
 

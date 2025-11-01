@@ -1,15 +1,16 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet'
+import { Button, useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Keyboard, TouchableWithoutFeedback } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Button, useTheme } from 'heroui-native'
-import { loggerService } from '@/services/LoggerService'
-import { Model, Provider } from '@/types/assistant'
-import { getDefaultGroupName } from '@/utils/naming'
-import YStack from '@/componentsV2/layout/YStack'
+
 import Text from '@/componentsV2/base/Text'
 import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
+import { loggerService } from '@/services/LoggerService'
+import type { Model, Provider } from '@/types/assistant'
+import { getDefaultGroupName } from '@/utils/naming'
 
 const logger = loggerService.withContext('AddModelSheet')
 

@@ -1,5 +1,8 @@
 import expo from 'eslint-config-expo/flat.js'
+import eslint from '@eslint/js'
+import { defineConfig } from 'eslint/config'
 import unusedImports from 'eslint-plugin-unused-imports'
+import simpleImportSort from 'eslint-plugin-simple-import-sort'
 
 const ignores = [
   'node_modules/**',
@@ -59,17 +62,20 @@ const ignores = [
   'android/app/build/**'
 ]
 
-export default [
-  { ignores },
+export default defineConfig([
   ...expo,
+  eslint.configs.recommended,
+  // Common rules for all JS/JSX/TS/TSX files
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
     plugins: {
+      'simple-import-sort': simpleImportSort,
       'unused-imports': unusedImports
     },
     rules: {
       'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
+      'simple-import-sort/imports': 'error',
+      'simple-import-sort/exports': 'error',
       'unused-imports/no-unused-imports': 'error',
       'unused-imports/no-unused-vars': [
         'warn',
@@ -81,5 +87,33 @@ export default [
         }
       ]
     }
-  }
-]
+  },
+  // TypeScript-specific rules
+  {
+    files: ['**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': 'warn',
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-non-null-asserted-optional-chain': 'off',
+      '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-unused-expressions': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off'
+    }
+  },
+  // Node.js scripts
+  {
+    files: ['scripts/**/*.{js,ts}'],
+    languageOptions: {
+      globals: {
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        RequestInit: 'readonly'
+      }
+    }
+  },
+  { ignores }
+])

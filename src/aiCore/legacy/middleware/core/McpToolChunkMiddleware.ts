@@ -1,13 +1,14 @@
 import { loggerService } from '@/services/LoggerService'
-import { Model } from '@/types/assistant'
-import { ChunkType, MCPToolCreatedChunk } from '@/types/chunk'
-import { MCPCallToolResponse, MCPToolResponse } from '@/types/mcp'
-import { SdkMessageParam, SdkRawOutput, SdkToolCall } from '@/types/sdk'
-import { MCPTool } from '@/types/tool'
+import type { Model } from '@/types/assistant'
+import type { MCPToolCreatedChunk } from '@/types/chunk'
+import { ChunkType } from '@/types/chunk'
+import type { MCPCallToolResponse, MCPToolResponse } from '@/types/mcp'
+import type { SdkMessageParam, SdkRawOutput, SdkToolCall } from '@/types/sdk'
+import type { MCPTool } from '@/types/tool'
 import { parseToolUse, upsertMCPToolResponse } from '@/utils/mcpTool'
 
-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
-import { CompletionsContext, CompletionsMiddleware } from '../types'
+import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+import type { CompletionsContext, CompletionsMiddleware } from '../types'
 
 export const MIDDLEWARE_NAME = 'McpToolChunkMiddleware'
 const MAX_TOOL_RECURSION_DEPTH = 20 // 防止无限递归
@@ -378,28 +379,6 @@ function getCurrentReqMessages(ctx: CompletionsContext): SdkMessageParam[] {
   // 使用API客户端的抽象方法来提取消息，保持provider无关性
   return ctx.apiClientInstance.extractMessagesFromSdkPayload(sdkPayload)
 }
-
-export async function parseAndCallTools<R>(
-  tools: MCPToolResponse[],
-  allToolResponses: MCPToolResponse[],
-  onChunk: CompletionsParams['onChunk'],
-  convertToMessage: (mcpToolResponse: MCPToolResponse, resp: MCPCallToolResponse, model: Model) => R | undefined,
-  model: Model,
-  mcpTools?: MCPTool[],
-  abortSignal?: AbortSignal,
-  topicId?: CompletionsParams['topicId']
-): Promise<{ toolResults: R[]; confirmedToolResponses: MCPToolResponse[] }>
-
-export async function parseAndCallTools<R>(
-  content: string,
-  allToolResponses: MCPToolResponse[],
-  onChunk: CompletionsParams['onChunk'],
-  convertToMessage: (mcpToolResponse: MCPToolResponse, resp: MCPCallToolResponse, model: Model) => R | undefined,
-  model: Model,
-  mcpTools?: MCPTool[],
-  abortSignal?: AbortSignal,
-  topicId?: CompletionsParams['topicId']
-): Promise<{ toolResults: R[]; confirmedToolResponses: MCPToolResponse[] }>
 
 export async function parseAndCallTools<R>(
   content: string | MCPToolResponse[],

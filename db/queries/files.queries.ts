@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 
 import { loggerService } from '@/services/LoggerService'
-import { FileMetadata } from '@/types/file'
+import type { FileMetadata } from '@/types/file'
 
 import { db } from '..'
 import { transformDbToFile, transformFileToDb } from '../mappers'

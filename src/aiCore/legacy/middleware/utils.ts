@@ -1,4 +1,5 @@
-import { ChunkType, ErrorChunk } from '@/types/chunk'
+import type { ErrorChunk } from '@/types/chunk'
+import { ChunkType } from '@/types/chunk'
 
 /**
  * Creates an ErrorChunk object with a standardized structure.

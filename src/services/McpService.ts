@@ -44,11 +44,12 @@
  * ```
  */
 
+import { mcpDatabase } from '@database'
+
 import { BUILTIN_TOOLS } from '@/config/mcp'
 import { loggerService } from '@/services/LoggerService'
-import { MCPServer } from '@/types/mcp'
-import { MCPTool } from '@/types/tool'
-import { mcpDatabase } from '@database'
+import type { MCPServer } from '@/types/mcp'
+import type { MCPTool } from '@/types/tool'
 
 const logger = loggerService.withContext('McpService')
 

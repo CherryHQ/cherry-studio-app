@@ -1,5 +1,5 @@
 import { File } from 'expo-file-system'
-import OpenAI from 'openai'
+import type OpenAI from 'openai'
 import { toFile } from 'openai/uploads'
 
 import { isDedicatedImageGenerationModel } from '@/config/models'
@@ -7,9 +7,9 @@ import { defaultTimeout } from '@/constants'
 import { ChunkType } from '@/types/chunk'
 import { findImageBlocks, getMainTextContent } from '@/utils/messageUtils/find'
 
-import { BaseApiClient } from '../../clients/BaseApiClient'
-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
-import { CompletionsContext, CompletionsMiddleware } from '../types'
+import type { BaseApiClient } from '../../clients/BaseApiClient'
+import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+import type { CompletionsContext, CompletionsMiddleware } from '../types'
 
 export const MIDDLEWARE_NAME = 'ImageGenerationMiddleware'
 

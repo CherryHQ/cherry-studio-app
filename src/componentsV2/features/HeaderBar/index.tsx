@@ -1,10 +1,11 @@
+import { useNavigation } from '@react-navigation/native'
 import React from 'react'
 import { TouchableOpacity } from 'react-native'
-import { useNavigation } from '@react-navigation/native'
+
+import Text from '@/componentsV2/base/Text'
+import XStack from '@/componentsV2/layout/XStack'
 
 import { ArrowLeft } from '../../icons/LucideIcon'
-import XStack from '@/componentsV2/layout/XStack'
-import Text from '@/componentsV2/base/Text'
 
 export interface HeaderBarButton {
   icon: React.ReactNode
@@ -33,9 +34,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
 
   const handleBack = () => {
     if (onBackPress) return onBackPress()
-    try {
-      navigation?.goBack?.()
-    } catch {}
+    navigation?.goBack?.()
   }
 
   return (

@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm'
 
 import { loggerService } from '@/services/LoggerService'
-import { Assistant } from '@/types/assistant'
+import type { Assistant } from '@/types/assistant'
 
 import { db } from '..'
-import { transformDbToAssistant, transformAssistantToDb } from '../mappers'
+import { transformAssistantToDb, transformDbToAssistant } from '../mappers'
 import { assistants } from '../schema'
 import { buildExcludedSet } from '../utils/buildExcludedSet'
 

@@ -1,7 +1,9 @@
-import { CircleDollarSign, Eye, Globe, Languages, Lightbulb, Repeat2, Wrench } from '@/componentsV2/icons/LucideIcon'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CustomTag } from '@/componentsV2/base/CustomTag'
+import { CircleDollarSign, Eye, Globe, Languages, Lightbulb, Repeat2, Wrench } from '@/componentsV2/icons/LucideIcon'
+import XStack from '@/componentsV2/layout/XStack'
 import {
   isEmbeddingModel,
   isFreeModel,
@@ -11,9 +13,7 @@ import {
   isVisionModel,
   isWebSearchModel
 } from '@/config/models'
-import { Model } from '@/types/assistant'
-import XStack from '@/componentsV2/layout/XStack'
-import { CustomTag } from '@/componentsV2/base/CustomTag'
+import type { Model } from '@/types/assistant'
 
 interface ModelTagsProps {
   model: Model

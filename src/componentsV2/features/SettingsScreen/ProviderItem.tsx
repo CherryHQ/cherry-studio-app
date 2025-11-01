@@ -1,18 +1,18 @@
 import { useNavigation } from '@react-navigation/native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { SFSymbol } from 'sf-symbols-typescript'
+import type { SFSymbol } from 'sf-symbols-typescript'
 
+import ContextMenu from '@/componentsV2/base/ContextMenu'
+import Text from '@/componentsV2/base/Text'
+import { Edit3, ProviderIcon, Trash2 } from '@/componentsV2/icons'
+import RowRightArrow from '@/componentsV2/layout/Row/RowRightArrow'
+import XStack from '@/componentsV2/layout/XStack'
 import { useDialog } from '@/hooks/useDialog'
 import { useToast } from '@/hooks/useToast'
 import { deleteProvider } from '@/services/ProviderService'
-import { Provider } from '@/types/assistant'
-import { ProvidersNavigationProps } from '@/types/naviagate'
-import { Edit3, Trash2, ProviderIcon } from '@/componentsV2/icons'
-import XStack from '@/componentsV2/layout/XStack'
-import RowRightArrow from '@/componentsV2/layout/Row/RowRightArrow'
-import Text from '@/componentsV2/base/Text'
-import ContextMenu from '@/componentsV2/base/ContextMenu'
+import type { Provider } from '@/types/assistant'
+import type { ProvidersNavigationProps } from '@/types/naviagate'
 
 interface ProviderItemProps {
   provider: Provider

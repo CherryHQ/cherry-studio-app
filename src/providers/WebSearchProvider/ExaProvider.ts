@@ -1,7 +1,7 @@
 import { fetch } from 'expo/fetch'
 
 import { loggerService } from '@/services/LoggerService'
-import { WebSearchState, WebSearchProvider, WebSearchProviderResponse } from '@/types/websearch'
+import type { WebSearchProvider, WebSearchProviderResponse, WebSearchState } from '@/types/websearch'
 
 import BaseWebSearchProvider from './BaseWebSearchProvider'
 const logger = loggerService.withContext('ExaProvider')

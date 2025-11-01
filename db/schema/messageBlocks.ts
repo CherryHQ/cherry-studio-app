@@ -1,7 +1,7 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
-import { messages } from './messages'
 import { createUpdateTimestamps } from './columnHelpers'
+import { messages } from './messages'
 
 export const messageBlocks = sqliteTable(
   'message_blocks',

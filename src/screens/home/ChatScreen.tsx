@@ -1,19 +1,19 @@
-import { DrawerNavigationProp } from '@react-navigation/drawer'
+import type { DrawerNavigationProp } from '@react-navigation/drawer'
 import { DrawerActions, useNavigation } from '@react-navigation/native'
+import React from 'react'
 import { ActivityIndicator, Platform, View } from 'react-native'
 import { PanGestureHandler, State } from 'react-native-gesture-handler'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
-import { YStack, SafeAreaContainer } from '@/componentsV2'
-import { MessageInputContainer } from '@/componentsV2/features/ChatScreen/MessageInput/MessageInputContainer'
 
+import { SafeAreaContainer, YStack } from '@/componentsV2'
+import { ChatScreenHeader } from '@/componentsV2/features/ChatScreen/Header'
+import { MessageInputContainer } from '@/componentsV2/features/ChatScreen/MessageInput/MessageInputContainer'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useBottom } from '@/hooks/useBottom'
 import { usePreference } from '@/hooks/usePreference'
 import { useCurrentTopic } from '@/hooks/useTopic'
 
 import ChatContent from './ChatContent'
-import { ChatScreenHeader } from '@/componentsV2/features/ChatScreen/Header'
-import React from 'react'
 
 const ChatScreen = () => {
   const navigation = useNavigation<DrawerNavigationProp<any>>()

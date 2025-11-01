@@ -1,20 +1,21 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { useNavigation } from '@react-navigation/native'
-import React, { FC } from 'react'
+import { delay } from 'lodash'
+import type { FC } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity } from 'react-native'
 
-import { Assistant } from '@/types/assistant'
-import { DrawerNavigationProps } from '@/types/naviagate'
-import { WebSearchProvider } from '@/types/websearch'
-
-import { Globe, WebsearchProviderIcon } from '@/componentsV2/icons'
-import SelectionSheet, { SelectionSheetItem } from '@/componentsV2/base/SelectionSheet'
-import XStack from '@/componentsV2/layout/XStack'
+import type { SelectionSheetItem } from '@/componentsV2/base/SelectionSheet'
+import SelectionSheet from '@/componentsV2/base/SelectionSheet'
 import Text from '@/componentsV2/base/Text'
+import { Globe, WebsearchProviderIcon } from '@/componentsV2/icons'
 import RowRightArrow from '@/componentsV2/layout/Row/RowRightArrow'
+import XStack from '@/componentsV2/layout/XStack'
 import { isWebSearchModel } from '@/config/models'
-import { delay } from 'lodash'
+import type { Assistant } from '@/types/assistant'
+import type { DrawerNavigationProps } from '@/types/naviagate'
+import type { WebSearchProvider } from '@/types/websearch'
 
 interface WebsearchSheetProps {
   assistant: Assistant

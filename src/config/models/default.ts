@@ -1,4 +1,4 @@
-import { Model, SystemProviderId } from '@/types/assistant'
+import type { Model, SystemProviderId } from '@/types/assistant'
 
 export const glm45FlashModel: Model = {
   id: 'glm-4.5-flash',

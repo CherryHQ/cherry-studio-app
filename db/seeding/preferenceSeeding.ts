@@ -1,9 +1,9 @@
+import { preferenceTable } from '@db/schema'
 import { eq } from 'drizzle-orm'
 
 import { DefaultPreferences, PreferenceDescriptions } from '@/shared/data/preference/preferenceSchemas'
 import type { PreferenceKeyType } from '@/shared/data/preference/preferenceTypes'
 import { uuid } from '@/utils'
-import { preferenceTable } from '@db/schema'
 
 /**
  * Seed the preference table with default values

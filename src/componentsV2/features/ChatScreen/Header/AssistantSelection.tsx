@@ -1,13 +1,13 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { useNavigation } from '@react-navigation/native'
 import React, { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Pressable, Keyboard } from 'react-native'
+import { Keyboard, Pressable } from 'react-native'
 
 import { Text, XStack, YStack } from '@/componentsV2'
 import AssistantItemSheet from '@/componentsV2/features/Assistant/AssistantItemSheet'
-import { Assistant, Topic } from '@/types/assistant'
-import { DrawerNavigationProps } from '@/types/naviagate'
+import type { Assistant, Topic } from '@/types/assistant'
+import type { DrawerNavigationProps } from '@/types/naviagate'
 
 interface AssistantSelectionProps {
   assistant: Assistant

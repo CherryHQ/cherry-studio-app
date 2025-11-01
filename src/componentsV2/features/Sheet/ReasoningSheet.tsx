@@ -1,7 +1,12 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import React, { FC, useMemo } from 'react'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { delay } from 'lodash'
+import type { FC } from 'react'
+import React, { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { View } from 'react-native'
 
+import type { SelectionSheetItem } from '@/componentsV2/base/SelectionSheet'
+import SelectionSheet from '@/componentsV2/base/SelectionSheet'
 import {
   MdiLightbulbAutoOutline,
   MdiLightbulbOffOutline,
@@ -10,11 +15,8 @@ import {
   MdiLightbulbOn50,
   MdiLightbulbOn80
 } from '@/componentsV2/icons'
-import { getThinkModelType, MODEL_SUPPORTED_OPTIONS, isDoubaoThinkingAutoModel } from '@/config/models'
-import { Assistant, Model, ThinkingOption } from '@/types/assistant'
-import { View } from 'react-native'
-import SelectionSheet, { SelectionSheetItem } from '@/componentsV2/base/SelectionSheet'
-import { delay } from 'lodash'
+import { getThinkModelType, isDoubaoThinkingAutoModel, MODEL_SUPPORTED_OPTIONS } from '@/config/models'
+import type { Assistant, Model, ThinkingOption } from '@/types/assistant'
 
 interface ReasoningSheetProps {
   model: Model

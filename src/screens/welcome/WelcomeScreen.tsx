@@ -1,19 +1,20 @@
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { useNavigation } from '@react-navigation/native'
+import { Button } from 'heroui-native'
 import React, { useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
+import FastSquircleView from 'react-native-fast-squircle'
 
 import { Image, SafeAreaContainer, YStack } from '@/componentsV2'
 import { useAppState } from '@/hooks/useAppState'
 import { useCurrentTopic } from '@/hooks/useTopic'
 import { getDefaultAssistant } from '@/services/AssistantService'
 import { topicService } from '@/services/TopicService'
-import { RootNavigationProps } from '@/types/naviagate'
-import { Button } from 'heroui-native'
-import { useTranslation } from 'react-i18next'
-import FastSquircleView from 'react-native-fast-squircle'
-import WelcomeTitle from './WelcomeTitle'
+import type { RootNavigationProps } from '@/types/naviagate'
+
 import { ImportDataSheet } from './ImportDataSheet'
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import WelcomeTitle from './WelcomeTitle'
 
 export default function WelcomeScreen() {
   const navigation = useNavigation<RootNavigationProps>()

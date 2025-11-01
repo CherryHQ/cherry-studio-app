@@ -1,12 +1,8 @@
-import {
+import type {
   Content,
   FunctionCall,
   GenerateContentConfig,
   GenerateImagesConfig,
-  GoogleGenAI,
-  HarmBlockThreshold,
-  HarmCategory,
-  Modality,
   Model as GeminiModel,
   Part,
   SafetySetting,
@@ -14,6 +10,7 @@ import {
   ThinkingConfig,
   Tool
 } from '@google/genai'
+import { GoogleGenAI, HarmBlockThreshold, HarmCategory, Modality } from '@google/genai'
 import { nanoid } from '@reduxjs/toolkit'
 import { File, Paths } from 'expo-file-system'
 import { t } from 'i18next'
@@ -28,13 +25,16 @@ import {
 import { defaultTimeout } from '@/constants'
 import { loggerService } from '@/services/LoggerService'
 import { estimateTextTokens } from '@/services/TokenService'
-import { Assistant, EFFORT_RATIO, Model } from '@/types/assistant'
-import { ChunkType, LLMWebSearchCompleteChunk, TextStartChunk, ThinkingStartChunk } from '@/types/chunk'
-import { FileMetadata, FileTypes } from '@/types/file'
-import { GenerateImageParams } from '@/types/image'
-import { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
-import { Message } from '@/types/message'
-import {
+import type { Assistant, Model } from '@/types/assistant'
+import { EFFORT_RATIO } from '@/types/assistant'
+import type { LLMWebSearchCompleteChunk, TextStartChunk, ThinkingStartChunk } from '@/types/chunk'
+import { ChunkType } from '@/types/chunk'
+import type { FileMetadata } from '@/types/file'
+import { FileTypes } from '@/types/file'
+import type { GenerateImageParams } from '@/types/image'
+import type { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
+import type { Message } from '@/types/message'
+import type {
   GeminiOptions,
   GeminiSdkMessageParam,
   GeminiSdkParams,
@@ -42,7 +42,7 @@ import {
   GeminiSdkRawOutput,
   GeminiSdkToolCall
 } from '@/types/sdk'
-import { MCPTool } from '@/types/tool'
+import type { MCPTool } from '@/types/tool'
 import { WebSearchSource } from '@/types/websearch'
 import { isToolUseModeFunction } from '@/utils/assistants'
 import {
@@ -53,9 +53,9 @@ import {
 } from '@/utils/mcpTool'
 import { findFileBlocks, findImageBlocks } from '@/utils/messageUtils/find'
 
-import { GenericChunk } from '../../middleware/schemas'
+import type { GenericChunk } from '../../middleware/schemas'
 import { BaseApiClient } from '../BaseApiClient'
-import { RequestTransformer, ResponseChunkTransformer } from '../types'
+import type { RequestTransformer, ResponseChunkTransformer } from '../types'
 
 const logger = loggerService.withContext('GeminiAPIClient')
 

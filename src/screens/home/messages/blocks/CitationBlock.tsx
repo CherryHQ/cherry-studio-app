@@ -1,7 +1,7 @@
 import React from 'react'
 import { View } from 'react-native'
 
-import { CitationMessageBlock } from '@/types/message'
+import type { CitationMessageBlock } from '@/types/message'
 import { formatCitationsFromBlock } from '@/utils/formats'
 
 import CitationsList from '../CitationList'

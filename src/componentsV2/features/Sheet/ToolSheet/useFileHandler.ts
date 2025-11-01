@@ -5,7 +5,8 @@ import { Image } from 'react-native-compressor'
 
 import { uploadFiles } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
-import { FileMetadata, FileTypes } from '@/types/file'
+import type { FileMetadata } from '@/types/file'
+import { FileTypes } from '@/types/file'
 import { uuid } from '@/utils'
 import { getFileType } from '@/utils/file'
 

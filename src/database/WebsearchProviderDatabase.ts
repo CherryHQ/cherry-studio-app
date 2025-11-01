@@ -1,11 +1,12 @@
-import { WebSearchProvider } from '@/types/websearch'
 import {
+  deleteWebSearchProvider as _deleteWebSearchProvider,
   getAllWebSearchProviders as _getAllWebSearchProviders,
   getWebSearchProviderById as _getWebSearchProviderById,
   getWebSearchProviderByIdSync as _getWebSearchProviderByIdSync,
-  upsertWebSearchProviders as _upsertWebSearchProviders,
-  deleteWebSearchProvider as _deleteWebSearchProvider
+  upsertWebSearchProviders as _upsertWebSearchProviders
 } from '@db/queries/websearchProviders.queries'
+
+import type { WebSearchProvider } from '@/types/websearch'
 
 export async function upsertWebSearchProviders(providers: WebSearchProvider[]) {
   return _upsertWebSearchProviders(providers)

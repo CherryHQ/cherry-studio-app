@@ -1,18 +1,18 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet'
+import { useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
 import { BackHandler } from 'react-native'
 
+import YStack from '@/componentsV2/layout/YStack'
 import { useBottom } from '@/hooks/useBottom'
-import { useTheme } from 'heroui-native'
-import { Assistant, Model } from '@/types/assistant'
-import { FileMetadata } from '@/types/file'
+import type { Assistant, Model } from '@/types/assistant'
+import type { FileMetadata } from '@/types/file'
 
 import { useCameraModal } from './CameraModal'
 import { ExternalTools } from './ExternalTools'
 import { SystemTools } from './SystemTools'
 import { useAIFeatureHandler } from './useAIFeatureHandler'
 import { useFileHandler } from './useFileHandler'
-import YStack from '@/componentsV2/layout/YStack'
 
 interface ToolSheetProps {
   mentions: Model[]

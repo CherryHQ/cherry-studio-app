@@ -8,9 +8,10 @@ import { File } from 'expo-file-system'
 
 import { loggerService } from '@/services/LoggerService'
 import { getProviderByModel } from '@/services/ProviderService'
-import { Model } from '@/types/assistant'
-import { FileMetadata, FileTypes } from '@/types/file'
-import { FileMessageBlock, Message } from '@/types/message'
+import type { Model } from '@/types/assistant'
+import type { FileMetadata } from '@/types/file'
+import { FileTypes } from '@/types/file'
+import type { FileMessageBlock, Message } from '@/types/message'
 import { findFileBlocks } from '@/utils/messageUtils/find'
 
 import { getAiSdkProviderId } from '../provider/factory'

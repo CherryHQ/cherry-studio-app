@@ -1,23 +1,23 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { Button, Switch } from 'heroui-native'
 import { MotiView } from 'moti'
 import React, { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { ChevronRight } from '@/componentsV2/icons/LucideIcon'
-import { isReasoningModel } from '@/config/models'
-import { DEFAULT_CONTEXTCOUNT, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE } from '@/constants'
-import { Assistant, AssistantSettings, Model } from '@/types/assistant'
-
-import { Button, Switch } from 'heroui-native'
-import { ReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
 import Text from '@/componentsV2/base/Text'
+import TextField from '@/componentsV2/base/TextField'
+import { ReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
+import { ChevronRight } from '@/componentsV2/icons/LucideIcon'
 import Group from '@/componentsV2/layout/Group'
 import Row from '@/componentsV2/layout/Row'
-import TextField from '@/componentsV2/base/TextField'
-import YStack from '@/componentsV2/layout/YStack'
-import ModelSheet from '../Sheet/ModelSheet'
-import { getBaseModelName } from '@/utils/naming'
 import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
+import { isReasoningModel } from '@/config/models'
+import { DEFAULT_CONTEXTCOUNT, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE } from '@/constants'
+import type { Assistant, AssistantSettings, Model } from '@/types/assistant'
+import { getBaseModelName } from '@/utils/naming'
+
+import ModelSheet from '../Sheet/ModelSheet'
 
 interface ModelTabContentProps {
   assistant: Assistant

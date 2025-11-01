@@ -1,17 +1,3 @@
-import { Dispatch } from '@reduxjs/toolkit'
-import { Directory, File, Paths } from 'expo-file-system'
-import dayjs from 'dayjs'
-import { unzip, zip } from 'react-native-zip-archive'
-
-import { DEFAULT_BACKUP_STORAGE, DEFAULT_DOCUMENTS_STORAGE } from '@/constants/storage'
-import { getSystemAssistants } from '@/config/assistants'
-import { loggerService } from '@/services/LoggerService'
-import { preferenceService } from '@/services/PreferenceService'
-import { Assistant, Topic } from '@/types/assistant'
-import { ExportIndexedData, ExportReduxData, ImportIndexedData, ImportReduxData, Setting } from '@/types/databackup'
-import { FileMetadata } from '@/types/file'
-import { Message } from '@/types/message'
-
 import {
   assistantDatabase,
   messageBlockDatabase,
@@ -20,6 +6,26 @@ import {
   topicDatabase,
   websearchProviderDatabase
 } from '@database'
+import type { Dispatch } from '@reduxjs/toolkit'
+import dayjs from 'dayjs'
+import { Directory, File, Paths } from 'expo-file-system'
+import { unzip, zip } from 'react-native-zip-archive'
+
+import { getSystemAssistants } from '@/config/assistants'
+import { DEFAULT_BACKUP_STORAGE, DEFAULT_DOCUMENTS_STORAGE } from '@/constants/storage'
+import { loggerService } from '@/services/LoggerService'
+import { preferenceService } from '@/services/PreferenceService'
+import type { Assistant, Topic } from '@/types/assistant'
+import type {
+  ExportIndexedData,
+  ExportReduxData,
+  ImportIndexedData,
+  ImportReduxData,
+  Setting
+} from '@/types/databackup'
+import type { FileMetadata } from '@/types/file'
+import type { Message } from '@/types/message'
+
 import { assistantService } from './AssistantService'
 import { providerService } from './ProviderService'
 import { topicService } from './TopicService'

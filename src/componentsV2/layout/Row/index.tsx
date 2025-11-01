@@ -1,5 +1,6 @@
 import React from 'react'
-import { ViewProps } from 'react-native'
+import type { ViewProps } from 'react-native'
+
 import XStack from '../XStack'
 
 export interface RowProps extends ViewProps {

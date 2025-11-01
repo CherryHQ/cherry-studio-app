@@ -1,7 +1,7 @@
 /**
  * NewAPI规则集
  */
-import { Provider } from '@/types/assistant'
+import type { Provider } from '@/types/assistant'
 
 import { endpointIs, provider2Provider } from './helper'
 import type { RuleSet } from './types'

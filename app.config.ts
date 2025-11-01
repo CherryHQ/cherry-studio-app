@@ -1,4 +1,5 @@
 import 'tsx/cjs'
+
 import packageJson from './package.json'
 
 // Read version from environment variable (set during build) or fallback to package.json

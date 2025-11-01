@@ -1,11 +1,13 @@
 // Define the structure for the callbacks that the StreamProcessor will invoke
 import { loggerService } from '@/services/LoggerService'
-import { ExternalToolResult } from '@/types'
-import { Chunk, ChunkType } from '@/types/chunk'
-import { GenerateImageResponse } from '@/types/image'
-import { MCPToolResponse } from '@/types/mcp'
-import { Response, AssistantMessageStatus } from '@/types/message'
-import { WebSearchResponse } from '@/types/websearch'
+import type { ExternalToolResult } from '@/types'
+import type { Chunk } from '@/types/chunk'
+import { ChunkType } from '@/types/chunk'
+import type { GenerateImageResponse } from '@/types/image'
+import type { MCPToolResponse } from '@/types/mcp'
+import type { Response } from '@/types/message'
+import { AssistantMessageStatus } from '@/types/message'
+import type { WebSearchResponse } from '@/types/websearch'
 const logger = loggerService.withContext('StreamProcessingService')
 
 // Define the structure for the callbacks that the StreamProcessor will invoke

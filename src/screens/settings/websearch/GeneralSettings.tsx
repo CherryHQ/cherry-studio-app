@@ -1,9 +1,9 @@
+import { Switch } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Group, GroupTitle, Row, TextField, Text, YStack } from '@/componentsV2'
+import { Group, GroupTitle, Row, Text, TextField, YStack } from '@/componentsV2'
 import { useWebsearchSettings } from '@/hooks/useWebsearchProviders'
-import { Switch } from 'heroui-native'
 
 export default function GeneralSettings() {
   const { t } = useTranslation()

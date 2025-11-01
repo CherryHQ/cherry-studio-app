@@ -1,12 +1,14 @@
-import React, { FC } from 'react'
+import type { FC } from 'react'
+import React from 'react'
 import { View } from 'react-native'
 
-import { Assistant } from '@/types/assistant'
-import { AssistantMessageStatus, GroupedMessage, MessageBlock } from '@/types/message'
+import type { Assistant } from '@/types/assistant'
+import type { GroupedMessage, MessageBlock } from '@/types/message'
+import { AssistantMessageStatus } from '@/types/message'
 
 import MessageItem from './Message'
-import MessageHeader from './MessageHeader'
 import MessageFooter from './MessageFooter'
+import MessageHeader from './MessageHeader'
 import MultiModelTab from './MultiModelTab'
 
 interface MessageGroupProps {

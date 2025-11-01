@@ -1,20 +1,20 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { messageDatabase } from '@database'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { useNavigation } from '@react-navigation/native'
+import { useTheme } from 'heroui-native'
+import { isEmpty } from 'lodash'
 import React, { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pressable } from 'react-native'
 
-import { Text, YStack, SelectionSheet } from '@/componentsV2'
-import { MessageSquareDiff } from '@/componentsV2/icons/LucideIcon'
+import { SelectionSheet, Text, YStack } from '@/componentsV2'
 import EmojiAvatar from '@/componentsV2/features/Assistant/EmojiAvatar'
+import { MessageSquareDiff } from '@/componentsV2/icons/LucideIcon'
 import { useExternalAssistants } from '@/hooks/useAssistant'
 import { useCurrentTopic } from '@/hooks/useTopic'
-import { useTheme } from 'heroui-native'
 import { topicService } from '@/services/TopicService'
 import type { Assistant } from '@/types/assistant'
-import { DrawerNavigationProps } from '@/types/naviagate'
-import { isEmpty } from 'lodash'
-import { messageDatabase } from '@database'
+import type { DrawerNavigationProps } from '@/types/naviagate'
 
 interface NewTopicButtonProps {
   assistant: Assistant

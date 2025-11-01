@@ -1,16 +1,18 @@
+import { useNavigation } from '@react-navigation/native'
 import React from 'react'
-import { ViewStyle, TextStyle, View } from 'react-native'
+import type { TextStyle, ViewStyle } from 'react-native'
+import { View } from 'react-native'
 import CodeHighlighter from 'react-native-code-highlighter'
 import { atomOneDark, atomOneLight } from 'react-syntax-highlighter/dist/esm/styles/hljs'
-import { useNavigation } from '@react-navigation/native'
 
 import { IconButton, Image, Text, XStack } from '@/componentsV2'
 import { Copy, Eye } from '@/componentsV2/icons/LucideIcon'
-import { getCodeLanguageIcon } from '@/utils/icons/codeLanguage'
-import { markdownColors } from '../MarkdownStyles'
-import { HomeNavigationProps } from '@/types/naviagate'
 import { useAppDispatch } from '@/store'
 import { setHtmlPreviewContent } from '@/store/runtime'
+import type { HomeNavigationProps } from '@/types/naviagate'
+import { getCodeLanguageIcon } from '@/utils/icons/codeLanguage'
+
+import { markdownColors } from '../MarkdownStyles'
 
 interface MarkdownCodeProps {
   text: string

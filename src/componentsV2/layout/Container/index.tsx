@@ -1,5 +1,7 @@
 import React from 'react'
-import { ViewProps, Keyboard } from 'react-native'
+import type { ViewProps } from 'react-native'
+import { Keyboard } from 'react-native'
+
 import YStack from '../YStack'
 
 export interface ContainerProps extends ViewProps {

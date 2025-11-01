@@ -1,6 +1,6 @@
 import { isOpenAIWebSearchChatCompletionOnlyModel } from '@/config/models'
 import { WEB_SEARCH_PROMPT_FOR_OPENROUTER } from '@/config/prompts'
-import { Model } from '@/types/assistant'
+import type { Model } from '@/types/assistant'
 
 export function getWebSearchParams(model: Model): Record<string, any> {
   if (model.provider === 'hunyuan') {

@@ -15,9 +15,9 @@ import {
   isWebSearchModel
 } from '@/config/models'
 import { getAssistantSettings, getDefaultModel } from '@/services/AssistantService'
-import { StreamTextParams } from '@/types/aiCoretypes'
-import { Assistant, Provider } from '@/types/assistant'
-import { MCPTool } from '@/types/tool'
+import type { StreamTextParams } from '@/types/aiCoretypes'
+import type { Assistant, Provider } from '@/types/assistant'
+import type { MCPTool } from '@/types/tool'
 
 import { setupToolsConfig } from '../utils/mcp'
 import { buildProviderOptions } from '../utils/options'

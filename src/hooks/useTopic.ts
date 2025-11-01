@@ -1,3 +1,6 @@
+import { db } from '@db'
+import { transformDbToTopic } from '@db/mappers'
+import { topics as topicSchema } from '@db/schema'
 import { desc } from 'drizzle-orm'
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
@@ -5,10 +8,6 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { loggerService } from '@/services/LoggerService'
 import { topicService } from '@/services/TopicService'
 import type { Assistant, Topic } from '@/types/assistant'
-
-import { db } from '@db'
-import { transformDbToTopic } from '@db/mappers'
-import { topics as topicSchema } from '@db/schema'
 
 const logger = loggerService.withContext('useTopic')
 

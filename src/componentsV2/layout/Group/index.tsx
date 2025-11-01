@@ -1,5 +1,6 @@
 import React from 'react'
-import { ViewProps } from 'react-native'
+import type { ViewProps } from 'react-native'
+
 import YStack from '../YStack'
 
 export interface GroupProps extends ViewProps {

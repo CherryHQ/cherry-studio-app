@@ -15,9 +15,9 @@ import {
   YStack
 } from '@/componentsV2'
 import { languagesOptions } from '@/config/languages'
-import { GeneralSettingsNavigationProps } from '@/types/naviagate'
-import { storage } from '@/utils'
 import { useTheme } from '@/hooks/useTheme'
+import type { GeneralSettingsNavigationProps } from '@/types/naviagate'
+import { storage } from '@/utils'
 
 export default function GeneralSettingsScreen() {
   const { t, i18n } = useTranslation()

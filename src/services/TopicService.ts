@@ -38,13 +38,13 @@
  * ```
  */
 
+import { topicDatabase } from '@database'
 import { t } from 'i18next'
 
 import { loggerService } from '@/services/LoggerService'
 import { preferenceService } from '@/services/PreferenceService'
 import type { Assistant, Topic } from '@/types/assistant'
 import { uuid } from '@/utils'
-import { topicDatabase } from '@database'
 
 const logger = loggerService.withContext('TopicService')
 

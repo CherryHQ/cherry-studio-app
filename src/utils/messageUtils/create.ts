@@ -1,9 +1,9 @@
 import { loggerService } from '@/services/LoggerService'
-import { Assistant, Topic } from '@/types/assistant'
-import { SerializedError } from '@/types/error'
-import { FileMetadata, FileTypes } from '@/types/file'
-import {
-  AssistantMessageStatus,
+import type { Assistant, Topic } from '@/types/assistant'
+import type { SerializedError } from '@/types/error'
+import type { FileMetadata } from '@/types/file'
+import { FileTypes } from '@/types/file'
+import type {
   BaseMessageBlock,
   CitationMessageBlock,
   CodeMessageBlock,
@@ -12,13 +12,11 @@ import {
   ImageMessageBlock,
   MainTextMessageBlock,
   Message,
-  MessageBlockStatus,
-  MessageBlockType,
   ThinkingMessageBlock,
   ToolMessageBlock,
-  TranslationMessageBlock,
-  UserMessageStatus
+  TranslationMessageBlock
 } from '@/types/message'
+import { AssistantMessageStatus, MessageBlockStatus, MessageBlockType, UserMessageStatus } from '@/types/message'
 
 import { uuid } from '..'
 const logger = loggerService.withContext('Message Utils Create')

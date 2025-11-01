@@ -1,9 +1,12 @@
-import React, { FC } from 'react'
-
-import { FileMetadata, FileTypes } from '@/types/file'
-import ImageItem from './ImageItem'
-import FileItem from './FileItem'
+import type { FC } from 'react'
+import React from 'react'
 import { View } from 'react-native'
+
+import type { FileMetadata } from '@/types/file'
+import { FileTypes } from '@/types/file'
+
+import FileItem from './FileItem'
+import ImageItem from './ImageItem'
 
 interface PreviewItemProps {
   file: FileMetadata

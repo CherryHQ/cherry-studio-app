@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Container, HeaderBar, PressableRow, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
 import { defaultLanguage, languagesOptions } from '@/config/languages'
 import { useBuiltInAssistants } from '@/hooks/useAssistant'
-import { GeneralSettingsNavigationProps } from '@/types/naviagate'
+import type { GeneralSettingsNavigationProps } from '@/types/naviagate'
 import { storage } from '@/utils'
 
 export default function LanguageChangeScreen() {

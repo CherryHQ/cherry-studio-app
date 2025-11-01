@@ -1,4 +1,6 @@
-import { RouteProp, useRoute } from '@react-navigation/native'
+import type { RouteProp } from '@react-navigation/native'
+import { useRoute } from '@react-navigation/native'
+import { cn, Tabs } from 'heroui-native'
 import { groupBy, isEmpty, uniqBy } from 'lodash'
 import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -8,14 +10,16 @@ import {
   Container,
   Group,
   HeaderBar,
+  IconButton,
   ModelGroup,
   SafeAreaContainer,
+  SearchInput,
   Text,
   XStack,
-  YStack,
-  IconButton,
-  SearchInput
+  YStack
 } from '@/componentsV2'
+import { ModelTags } from '@/componentsV2/features/ModelTags'
+import { ModelIcon } from '@/componentsV2/icons'
 import { Minus, Plus } from '@/componentsV2/icons/LucideIcon'
 import {
   groupQwenModels,
@@ -28,15 +32,12 @@ import {
 } from '@/config/models'
 import { isFreeModel } from '@/config/models/free'
 import { useSearch } from '@/hooks/useSearch'
-import { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
+import type { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
 import { fetchModels } from '@/services/ApiService'
 import { loggerService } from '@/services/LoggerService'
 import { getProviderById, saveProvider } from '@/services/ProviderService'
-import { Model, Provider } from '@/types/assistant'
+import type { Model, Provider } from '@/types/assistant'
 import { getDefaultGroupName } from '@/utils/naming'
-import { ModelIcon } from '@/componentsV2/icons'
-import { ModelTags } from '@/componentsV2/features/ModelTags'
-import { cn, Tabs } from 'heroui-native'
 const logger = loggerService.withContext('ManageModelsScreen')
 
 type ProviderSettingsRouteProp = RouteProp<ProvidersStackParamList, 'ManageModelsScreen'>

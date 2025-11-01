@@ -1,14 +1,15 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
-import { Copy } from '@/componentsV2/icons/LucideIcon'
 import * as Clipboard from 'expo-clipboard'
+import { useTheme } from 'heroui-native'
 import React, { forwardRef, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, ScrollView, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Text, XStack, YStack } from '@/componentsV2'
 
-import { useTheme } from 'heroui-native'
+import { Text, XStack, YStack } from '@/componentsV2'
+import { Copy } from '@/componentsV2/icons/LucideIcon'
 import { getHttpMessageLabel } from '@/i18n/label'
+import type { SerializedAiSdkError, SerializedAiSdkErrorUnion, SerializedError } from '@/types/error'
 import {
   isSerializedAiSdkAPICallError,
   isSerializedAiSdkDownloadError,
@@ -31,12 +32,9 @@ import {
   isSerializedAiSdkTooManyEmbeddingValuesForCallError,
   isSerializedAiSdkTypeValidationError,
   isSerializedAiSdkUnsupportedFunctionalityError,
-  isSerializedError,
-  SerializedAiSdkError,
-  SerializedAiSdkErrorUnion,
-  SerializedError
+  isSerializedError
 } from '@/types/error'
-import { ErrorMessageBlock, Message } from '@/types/message'
+import type { ErrorMessageBlock, Message } from '@/types/message'
 import { formatAiSdkError, formatError, safeToString } from '@/utils/error'
 
 const HTTP_ERROR_CODES = [400, 401, 403, 404, 429, 500, 502, 503, 504]

@@ -1,9 +1,10 @@
 import { loggerService } from '@/services/LoggerService'
-import { Usage } from '@/types/assistant'
-import { Chunk, ChunkType } from '@/types/chunk'
+import type { Usage } from '@/types/assistant'
+import type { Chunk } from '@/types/chunk'
+import { ChunkType } from '@/types/chunk'
 
-import { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
-import { CompletionsContext, CompletionsMiddleware } from '../types'
+import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
+import type { CompletionsContext, CompletionsMiddleware } from '../types'
 
 export const MIDDLEWARE_NAME = 'FinalChunkConsumerAndNotifierMiddleware'
 

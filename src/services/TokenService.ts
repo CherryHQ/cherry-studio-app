@@ -1,7 +1,8 @@
 import { approximateTokenSize } from 'tokenx'
 
-import { Assistant, Usage } from '@/types/assistant'
-import { FileMetadata, FileTypes } from '@/types/file'
+import type { Assistant, Usage } from '@/types/assistant'
+import type { FileMetadata } from '@/types/file'
+import { FileTypes } from '@/types/file'
 import type { Message } from '@/types/message'
 import { findFileBlocks, getMainTextContent, getThinkingContent } from '@/utils/messageUtils/find'
 

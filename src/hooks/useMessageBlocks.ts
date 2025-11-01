@@ -1,12 +1,11 @@
+import { db } from '@db'
+import { transformDbToMessageBlock } from '@db/mappers'
+import { messageBlocks as messageBlocksSchema, messages as messagesSchema } from '@db/schema'
 import { eq } from 'drizzle-orm'
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
 import { useMemo } from 'react'
 
-import { MessageBlock } from '@/types/message'
-
-import { db } from '@db'
-import { transformDbToMessageBlock } from '@db/mappers'
-import { messageBlocks as messageBlocksSchema, messages as messagesSchema } from '@db/schema'
+import type { MessageBlock } from '@/types/message'
 
 /**
  * Topic 级别的 blocks 监听器（推荐使用）

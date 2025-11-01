@@ -1,14 +1,14 @@
 import { useNavigation } from '@react-navigation/native'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { View, ActivityIndicator, StyleSheet } from 'react-native'
+import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import WebView from 'react-native-webview'
 
-import { ArrowLeft } from '@/componentsV2/icons/LucideIcon'
 import { HeaderBar, SafeAreaContainer, Text } from '@/componentsV2'
-import { HomeNavigationProps } from '@/types/naviagate'
+import { ArrowLeft } from '@/componentsV2/icons/LucideIcon'
 import { useAppDispatch, useAppSelector } from '@/store'
 import { setHtmlPreviewContent } from '@/store/runtime'
+import type { HomeNavigationProps } from '@/types/naviagate'
 
 export default function HtmlPreviewScreen() {
   const { t } = useTranslation()

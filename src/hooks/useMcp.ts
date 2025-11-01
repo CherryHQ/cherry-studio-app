@@ -1,15 +1,14 @@
+import { mcpDatabase } from '@database'
+import { db } from '@db'
+import { transformDbToMcp } from '@db/mappers'
+import { mcp as mcpSchema } from '@db/schema'
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 
 import { loggerService } from '@/services/LoggerService'
 import { mcpService } from '@/services/McpService'
-import { MCPServer } from '@/types/mcp'
-import { MCPTool } from '@/types/tool'
-
-import { db } from '@db'
-import { transformDbToMcp } from '@db/mappers'
-import { mcp as mcpSchema } from '@db/schema'
-import { mcpDatabase } from '@database'
+import type { MCPServer } from '@/types/mcp'
+import type { MCPTool } from '@/types/tool'
 
 const logger = loggerService.withContext('useMcp')
 

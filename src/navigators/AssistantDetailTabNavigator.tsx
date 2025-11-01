@@ -1,16 +1,17 @@
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs'
-import { RouteProp, useRoute } from '@react-navigation/native'
+import type { RouteProp } from '@react-navigation/native'
+import { useRoute } from '@react-navigation/native'
+import { cn } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity, View } from 'react-native'
 
-import { AssistantStackParamList } from '@/navigators/AssistantStackNavigator'
+import { Text } from '@/componentsV2'
+import type { AssistantStackParamList } from '@/navigators/AssistantStackNavigator'
 import ModelTabScreen from '@/screens/assistant/tabs/ModelTabScreen'
 import PromptTabScreen from '@/screens/assistant/tabs/PromptTabScreen'
 import ToolTabScreen from '@/screens/assistant/tabs/ToolTabScreen'
-import { Assistant } from '@/types/assistant'
-import { Text } from '@/componentsV2'
-import { cn } from 'heroui-native'
+import type { Assistant } from '@/types/assistant'
 
 export type AssistantDetailTabParamList = {
   PromptTab: { assistant: Assistant }

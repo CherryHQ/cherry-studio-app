@@ -38,13 +38,13 @@
  * ```
  */
 
+import { db } from '@db/index'
+import { preferenceTable } from '@db/schema'
 import { eq } from 'drizzle-orm'
 
 import { loggerService } from '@/services/LoggerService'
 import { DefaultPreferences } from '@/shared/data/preference/preferenceSchemas'
 import type { PreferenceDefaultScopeType, PreferenceKeyType } from '@/shared/data/preference/preferenceTypes'
-import { preferenceTable } from '@db/schema'
-import { db } from '@db/index'
 
 const logger = loggerService.withContext('PreferenceService')
 

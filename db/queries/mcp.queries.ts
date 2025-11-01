@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 
 import { loggerService } from '@/services/LoggerService'
-import { MCPServer } from '@/types/mcp'
+import type { MCPServer } from '@/types/mcp'
 
 import { db } from '..'
 import { transformDbToMcp, transformMcpToDb } from '../mappers'

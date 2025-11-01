@@ -1,7 +1,7 @@
 import { eq, inArray } from 'drizzle-orm'
 
 import { loggerService } from '@/services/LoggerService'
-import { MessageBlock } from '@/types/message'
+import type { MessageBlock } from '@/types/message'
 
 import { db } from '..'
 import { transformDbToMessageBlock, transformMessageBlockToDb, transformPartialMessageBlockToDb } from '../mappers'

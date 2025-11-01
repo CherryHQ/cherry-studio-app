@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import {
+import type {
   Base64ImageSource,
   ImageBlockParam,
   MessageParam,
@@ -8,7 +8,7 @@ import {
   ToolUseBlock,
   WebSearchTool20250305
 } from '@anthropic-ai/sdk/resources'
-import {
+import type {
   ContentBlock,
   ContentBlockParam,
   MessageCreateParamsBase,
@@ -31,9 +31,9 @@ import { DEFAULT_MAX_TOKENS } from '@/constants'
 import { getAssistantSettings } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
 import { estimateTextTokens } from '@/services/TokenService'
-import { Assistant, EFFORT_RATIO, Model } from '@/types/assistant'
-import {
-  ChunkType,
+import type { Assistant, Model } from '@/types/assistant'
+import { EFFORT_RATIO } from '@/types/assistant'
+import type {
   ErrorChunk,
   LLMWebSearchCompleteChunk,
   LLMWebSearchInProgressChunk,
@@ -43,11 +43,18 @@ import {
   ThinkingDeltaChunk,
   ThinkingStartChunk
 } from '@/types/chunk'
+import { ChunkType } from '@/types/chunk'
 import { FileTypes } from '@/types/file'
-import { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
+import type { GenerateImageParams } from '@/types/image'
+import type { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
 import { type Message } from '@/types/message'
-import { AnthropicSdkMessageParam, AnthropicSdkParams, AnthropicSdkRawChunk, AnthropicSdkRawOutput } from '@/types/sdk'
-import { MCPTool } from '@/types/tool'
+import type {
+  AnthropicSdkMessageParam,
+  AnthropicSdkParams,
+  AnthropicSdkRawChunk,
+  AnthropicSdkRawOutput
+} from '@/types/sdk'
+import type { MCPTool } from '@/types/tool'
 import { WebSearchSource } from '@/types/websearch'
 import { addImageFileToContents } from '@/utils/formats'
 import {
@@ -58,9 +65,9 @@ import {
 } from '@/utils/mcpTool'
 import { findFileBlocks, findImageBlocks } from '@/utils/messageUtils/find'
 
-import { GenericChunk } from '../../middleware/schemas'
+import type { GenericChunk } from '../../middleware/schemas'
 import { BaseApiClient } from '../BaseApiClient'
-import { AnthropicStreamListener, RawStreamListener, RequestTransformer, ResponseChunkTransformer } from '../types'
+import type { AnthropicStreamListener, RawStreamListener, RequestTransformer, ResponseChunkTransformer } from '../types'
 
 const logger = loggerService.withContext('AnthropicAPIClient')
 
@@ -761,7 +768,6 @@ export class AnthropicAPIClient extends BaseApiClient<
                 }
 
                 case 'thinking':
-
                 case 'redacted_thinking': {
                   controller.enqueue({
                     type: ChunkType.THINKING_START

@@ -1,18 +1,19 @@
-import { FC, useState } from 'react'
+import type { FC } from 'react'
+import { useState } from 'react'
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import ImageView from 'react-native-image-viewing'
 
+import ContextMenu from '@/componentsV2/base/ContextMenu'
+import Image from '@/componentsV2/base/Image'
+import ImageViewerFooterComponent from '@/componentsV2/base/ImageViewerFooterComponent'
+import { Download, ImageOff, Share, X } from '@/componentsV2/icons'
 import { useToast } from '@/hooks/useToast'
 import { shareFile } from '@/services/FileService'
 import { saveImageToGallery } from '@/services/ImageService'
 import { loggerService } from '@/services/LoggerService'
-import { FileMetadata } from '@/types/file'
-import { Download, Share, X, ImageOff } from '@/componentsV2/icons'
-import Image from '@/componentsV2/base/Image'
-import ImageViewerFooterComponent from '@/componentsV2/base/ImageViewerFooterComponent'
-import ContextMenu from '@/componentsV2/base/ContextMenu'
+import type { FileMetadata } from '@/types/file'
 
 const logger = loggerService.withContext('Image Item')
 

@@ -1,9 +1,10 @@
-import { WebSearchResultBlock } from '@anthropic-ai/sdk/resources'
-import { GroundingMetadata } from '@google/genai'
+import type { WebSearchResultBlock } from '@anthropic-ai/sdk/resources'
+import type { GroundingMetadata } from '@google/genai'
 import type OpenAI from 'openai'
 
-import { CitationMessageBlock, Message } from '@/types/message'
-import { Citation, WebSearchProviderResponse, WebSearchSource } from '@/types/websearch'
+import type { CitationMessageBlock, Message } from '@/types/message'
+import type { Citation, WebSearchProviderResponse } from '@/types/websearch'
+import { WebSearchSource } from '@/types/websearch'
 
 import { findImageBlocks } from './messageUtils/find'
 

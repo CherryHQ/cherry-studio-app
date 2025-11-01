@@ -25,11 +25,10 @@
  * ```
  */
 
-import { loggerService } from '@/services/LoggerService'
-import type { Assistant, AssistantSettings } from '@/types/assistant'
-import { uuid } from '@/utils'
 import { assistantDatabase } from '@database'
-import i18n from '@/i18n'
+
+import { getBuiltInAssistants } from '@/config/assistants'
+import { SYSTEM_MODELS } from '@/config/models/default'
 import {
   DEFAULT_CONTEXTCOUNT,
   DEFAULT_MAX_TOKENS,
@@ -37,8 +36,10 @@ import {
   MAX_CONTEXT_COUNT,
   UNLIMITED_CONTEXT_COUNT
 } from '@/constants'
-import { SYSTEM_MODELS } from '@/config/models/default'
-import { getBuiltInAssistants } from '@/config/assistants'
+import i18n from '@/i18n'
+import { loggerService } from '@/services/LoggerService'
+import type { Assistant, AssistantSettings } from '@/types/assistant'
+import { uuid } from '@/utils'
 
 const logger = loggerService.withContext('AssistantService')
 

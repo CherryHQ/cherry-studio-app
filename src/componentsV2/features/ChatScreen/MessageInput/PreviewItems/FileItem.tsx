@@ -1,18 +1,19 @@
-import React, { FC } from 'react'
+import { viewDocument } from '@react-native-documents/viewer'
+import type { FC } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity, View } from 'react-native'
-import { viewDocument } from '@react-native-documents/viewer'
 
+import ContextMenu from '@/componentsV2/base/ContextMenu'
+import Text from '@/componentsV2/base/Text'
 import { FileIcon, Share, X } from '@/componentsV2/icons'
+import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
 import { useToast } from '@/hooks/useToast'
 import { shareFile } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
-import { FileMetadata } from '@/types/file'
+import type { FileMetadata } from '@/types/file'
 import { formatFileSize } from '@/utils/file'
-import Text from '@/componentsV2/base/Text'
-import XStack from '@/componentsV2/layout/XStack'
-import YStack from '@/componentsV2/layout/YStack'
-import ContextMenu from '@/componentsV2/base/ContextMenu'
 
 const logger = loggerService.withContext('File Item')
 

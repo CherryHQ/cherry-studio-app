@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { ToolMessageBlock } from '@/types/message'
+import type { ToolMessageBlock } from '@/types/message'
 
 import MessageTools from '../tools/MessageTools'
 

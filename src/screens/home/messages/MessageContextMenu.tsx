@@ -1,3 +1,12 @@
+import type { FC } from 'react'
+import React, { memo, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import type { ContextMenuListProps } from '@/componentsV2'
+import { ContextMenu } from '@/componentsV2'
+import type { TextSelectionSheetRef } from '@/componentsV2/features/Sheet/TextSelectionSheet'
+import TextSelectionSheet from '@/componentsV2/features/Sheet/TextSelectionSheet'
+import { TranslatedIcon, TranslationIcon } from '@/componentsV2/icons'
 import {
   AudioLines,
   CirclePause,
@@ -8,15 +17,9 @@ import {
   ThumbsUp,
   Trash2
 } from '@/componentsV2/icons/LucideIcon'
-import React, { FC, memo, useEffect, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-
-import { TranslatedIcon, TranslationIcon } from '@/componentsV2/icons'
-import TextSelectionSheet, { TextSelectionSheetRef } from '@/componentsV2/features/Sheet/TextSelectionSheet'
 import { useMessageActions } from '@/hooks/useMessageActions'
-import { Assistant } from '@/types/assistant'
-import { Message } from '@/types/message'
-import { ContextMenu, ContextMenuListProps } from '@/componentsV2'
+import type { Assistant } from '@/types/assistant'
+import type { Message } from '@/types/message'
 
 interface MessageItemProps {
   children: React.ReactNode

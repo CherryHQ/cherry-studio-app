@@ -1,14 +1,13 @@
 import { baseProviderIdSchema, customProviderIdSchema } from '@cherrystudio/ai-core/provider'
+
 import { isOpenAIModel, isSupportFlexServiceTierModel } from '@/config/models'
 import { isSupportServiceTierProvider } from '@/config/providers'
+import type { Assistant, Model, Provider } from '@/types/assistant'
 import {
-  Assistant,
   GroqServiceTiers,
   isGroqServiceTier,
   isOpenAIServiceTier,
-  Model,
   OpenAIServiceTiers,
-  Provider,
   SystemProviderIds
 } from '@/types/assistant'
 

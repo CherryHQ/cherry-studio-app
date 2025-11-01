@@ -1,3 +1,4 @@
+import { databaseMaintenance } from '@database'
 import { useNavigation } from '@react-navigation/native'
 import { reloadAppAsync } from 'expo'
 import * as DocumentPicker from 'expo-document-picker'
@@ -24,14 +25,12 @@ import {
 import { FileText, Folder, FolderOpen, RotateCcw, Save, Trash2 } from '@/componentsV2/icons/LucideIcon'
 import { useDialog } from '@/hooks/useDialog'
 import { DEFAULT_RESTORE_STEPS, useRestore } from '@/hooks/useRestore'
+import { backup } from '@/services/BackupService'
 import { getCacheDirectorySize, resetCacheDirectory, shareFile } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import { persistor } from '@/store'
-import { NavigationProps } from '@/types/naviagate'
+import type { NavigationProps } from '@/types/naviagate'
 import { formatFileSize } from '@/utils/file'
-
-import { databaseMaintenance } from '@database'
-import { backup } from '@/services/BackupService'
 const logger = loggerService.withContext('BasicDataSettingsScreen')
 
 interface SettingItemConfig {

@@ -1,5 +1,5 @@
 import React from 'react'
-import { View, TouchableOpacity, useWindowDimensions } from 'react-native'
+import { TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import ImageView from 'react-native-image-viewing'
 
 import { Image, ImageViewerFooterComponent } from '@/componentsV2'

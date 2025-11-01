@@ -1,17 +1,17 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import * as ExpoLinking from 'expo-linking'
+import { useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, TouchableOpacity } from 'react-native'
 
+import Text from '@/componentsV2/base/Text'
 import { FallbackFavicon, X } from '@/componentsV2/icons'
-import { useTheme } from 'heroui-native'
-import { loggerService } from '@/services/LoggerService'
-import { Citation } from '@/types/websearch'
-import { getWebsiteBrand } from '@/utils/websearch'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
-import Text from '@/componentsV2/base/Text'
+import { loggerService } from '@/services/LoggerService'
+import type { Citation } from '@/types/websearch'
+import { getWebsiteBrand } from '@/utils/websearch'
 
 const logger = loggerService.withContext('Citation Sheet')
 

@@ -1,39 +1,40 @@
-import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import type { RouteProp } from '@react-navigation/native'
+import { useNavigation, useRoute } from '@react-navigation/native'
+import { Switch, useTheme } from 'heroui-native'
 import { groupBy } from 'lodash'
 import React, { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { ActivityIndicator } from 'react-native'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 
 import {
   Container,
   Group,
   GroupTitle,
   HeaderBar,
+  IconButton,
   ModelGroup,
   PressableRow,
   Row,
   RowRightArrow,
   SafeAreaContainer,
+  SearchInput,
   Text,
   XStack,
-  YStack,
-  IconButton,
-  SearchInput
+  YStack
 } from '@/componentsV2'
+import { ModelTags } from '@/componentsV2/features/ModelTags'
+import { AddModelSheet } from '@/componentsV2/features/SettingsScreen/AddModelSheet'
+import { ModelIcon } from '@/componentsV2/icons'
 import { CircleCheck, HeartPulse, Minus, Plus, RefreshCw, Settings2, XCircle } from '@/componentsV2/icons/LucideIcon'
 import { useProvider } from '@/hooks/useProviders'
 import { useSearch } from '@/hooks/useSearch'
-import { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
+import type { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
 import { loggerService } from '@/services/LoggerService'
-import { Model, ModelHealth } from '@/types/assistant'
-import { ProvidersNavigationProps } from '@/types/naviagate'
-import { Switch, useTheme } from 'heroui-native'
-import { AddModelSheet } from '@/componentsV2/features/SettingsScreen/AddModelSheet'
 import { modelHealthService } from '@/services/ModelHealthService'
-import { ModelIcon } from '@/componentsV2/icons'
-import { ModelTags } from '@/componentsV2/features/ModelTags'
+import type { Model, ModelHealth } from '@/types/assistant'
+import type { ProvidersNavigationProps } from '@/types/naviagate'
 
 const logger = loggerService.withContext('ProviderSettingsScreen')
 

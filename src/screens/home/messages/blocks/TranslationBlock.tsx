@@ -1,10 +1,11 @@
-import React, { FC } from 'react'
-import { View } from 'react-native'
 import { Divider } from 'heroui-native'
+import type { FC } from 'react'
+import React from 'react'
+import { View } from 'react-native'
+
 import { XStack } from '@/componentsV2'
 import { Languages } from '@/componentsV2/icons/LucideIcon'
-
-import { TranslationMessageBlock } from '@/types/message'
+import type { TranslationMessageBlock } from '@/types/message'
 
 import ReactNativeMarkdown from '../../markdown/ReactNativeMarkdown'
 

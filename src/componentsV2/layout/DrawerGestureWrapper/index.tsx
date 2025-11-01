@@ -1,6 +1,7 @@
-import { DrawerNavigationProp } from '@react-navigation/drawer'
+import type { DrawerNavigationProp } from '@react-navigation/drawer'
 import { DrawerActions, useNavigation } from '@react-navigation/native'
-import React, { PropsWithChildren } from 'react'
+import type { PropsWithChildren } from 'react'
+import React from 'react'
 import { PanGestureHandler, State } from 'react-native-gesture-handler'
 
 interface DrawerGestureWrapperProps extends PropsWithChildren {

@@ -1,7 +1,7 @@
-import { Model } from '@/types/assistant'
-import { GenerateImageParams } from '@/types/image'
-import { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
-import {
+import type { Model } from '@/types/assistant'
+import type { GenerateImageParams } from '@/types/image'
+import type { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
+import type {
   RequestOptions,
   SdkInstance,
   SdkMessageParam,
@@ -12,15 +12,15 @@ import {
   SdkTool,
   SdkToolCall
 } from '@/types/sdk'
-import { MCPTool } from '@/types/tool'
+import type { MCPTool } from '@/types/tool'
 
-import { CompletionsContext } from '../middleware/types'
-import { AnthropicAPIClient } from './anthropic/AnthropicAPIClient'
+import type { CompletionsContext } from '../middleware/types'
+import type { AnthropicAPIClient } from './anthropic/AnthropicAPIClient'
 import { BaseApiClient } from './BaseApiClient'
-import { GeminiAPIClient } from './gemini/GeminiAPIClient'
-import { OpenAIAPIClient } from './openai/OpenAIApiClient'
-import { OpenAIResponseAPIClient } from './openai/OpenAIResponseAPIClient'
-import { RequestTransformer, ResponseChunkTransformer } from './types'
+import type { GeminiAPIClient } from './gemini/GeminiAPIClient'
+import type { OpenAIAPIClient } from './openai/OpenAIApiClient'
+import type { OpenAIResponseAPIClient } from './openai/OpenAIResponseAPIClient'
+import type { RequestTransformer, ResponseChunkTransformer } from './types'
 
 /**
  * MixedAPIClient - 适用于可能含有多种接口类型的Provider

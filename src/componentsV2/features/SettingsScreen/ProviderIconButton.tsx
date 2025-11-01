@@ -1,16 +1,16 @@
 import * as ImagePicker from 'expo-image-picker'
+import { LinearGradient } from 'expo-linear-gradient'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity } from 'react-native'
-import { LinearGradient } from 'expo-linear-gradient'
 
+import Image from '@/componentsV2/base/Image'
 import { DefaultProviderIcon, PenLine } from '@/componentsV2/icons'
+import YStack from '@/componentsV2/layout/YStack'
 import { useDialog } from '@/hooks/useDialog'
 import { loggerService } from '@/services/LoggerService'
-import { FileMetadata } from '@/types/file'
+import type { FileMetadata } from '@/types/file'
 import { getFileType } from '@/utils/file'
-import YStack from '@/componentsV2/layout/YStack'
-import Image from '@/componentsV2/base/Image'
 
 const logger = loggerService.withContext('ProviderIconButton')
 

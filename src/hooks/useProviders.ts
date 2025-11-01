@@ -1,13 +1,12 @@
+import { db } from '@db'
+import { transformDbToProvider } from '@db/mappers'
+import { providers as providersSchema } from '@db/schema'
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 
 import { loggerService } from '@/services/LoggerService'
 import { providerService } from '@/services/ProviderService'
 import type { Provider } from '@/types/assistant'
-
-import { db } from '@db'
-import { transformDbToProvider } from '@db/mappers'
-import { providers as providersSchema } from '@db/schema'
 
 const logger = loggerService.withContext('useProvider')
 

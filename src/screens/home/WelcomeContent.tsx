@@ -1,8 +1,9 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Keyboard, Pressable } from 'react-native'
-import { Image, Text, YStack } from '@/componentsV2'
 import FastSquircleView from 'react-native-fast-squircle'
+
+import { Image, Text, YStack } from '@/componentsV2'
 
 const WelcomeContent = () => {
   const { t } = useTranslation()

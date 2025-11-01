@@ -1,13 +1,14 @@
+import { Spinner } from 'heroui-native'
 import { AnimatePresence, MotiView } from 'moti'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Spinner } from 'heroui-native'
 
-import { MessageBlockStatus, ThinkingMessageBlock } from '@/types/message'
-import { ChevronsRight } from '@/componentsV2/icons'
 import Text from '@/componentsV2/base/Text'
+import { ChevronsRight } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
+import type { ThinkingMessageBlock } from '@/types/message'
+import { MessageBlockStatus } from '@/types/message'
 
 interface MarqueeComponentProps {
   block: ThinkingMessageBlock

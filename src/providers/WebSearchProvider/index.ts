@@ -1,7 +1,9 @@
-import { WebSearchState, WebSearchProvider, WebSearchProviderResponse } from '@/types/websearch'
+import type { FetchRequestInit } from 'expo/fetch'
+
+import type { WebSearchProvider, WebSearchProviderResponse, WebSearchState } from '@/types/websearch'
 import { filterResultWithBlacklist } from '@/utils/blacklistMatchPattern'
 
-import BaseWebSearchProvider from './BaseWebSearchProvider'
+import type BaseWebSearchProvider from './BaseWebSearchProvider'
 import WebSearchProviderFactory from './WebSearchProviderFactory'
 
 export default class WebSearchEngineProvider {
@@ -13,7 +15,7 @@ export default class WebSearchEngineProvider {
   public async search(
     query: string,
     websearch: WebSearchState,
-    httpOptions?: RequestInit
+    httpOptions?: FetchRequestInit
   ): Promise<WebSearchProviderResponse> {
     const result = await this.sdk.search(query, websearch, httpOptions)
     return await filterResultWithBlacklist(result, websearch)

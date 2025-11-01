@@ -1,9 +1,9 @@
+import { useTheme } from 'heroui-native'
 import React from 'react'
 
-import { useTheme } from 'heroui-native'
-import { WebSearchProvider } from '@/types/websearch'
-import { getWebSearchProviderIcon } from '@/utils/icons/websearch'
 import Image from '@/componentsV2/base/Image'
+import type { WebSearchProvider } from '@/types/websearch'
+import { getWebSearchProviderIcon } from '@/utils/icons/websearch'
 
 interface WebsearchProviderIconProps {
   provider: WebSearchProvider

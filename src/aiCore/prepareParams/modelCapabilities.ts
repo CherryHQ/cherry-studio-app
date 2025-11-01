@@ -5,7 +5,7 @@
 
 import { isVisionModel } from '@/config/models'
 import { getProviderByModel } from '@/services/ProviderService'
-import { Model } from '@/types/assistant'
+import type { Model } from '@/types/assistant'
 import { FileTypes } from '@/types/file'
 
 import { getAiSdkProviderId } from '../provider/factory'

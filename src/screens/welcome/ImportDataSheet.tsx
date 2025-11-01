@@ -1,17 +1,17 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet'
-import React, { forwardRef, useEffect, useState } from 'react'
-import { BackHandler } from 'react-native'
-
-import { useBottom } from '@/hooks/useBottom'
-import { useTheme } from 'heroui-native'
-import { Container, Group, PressableRow, RestoreProgressModal, Text, XStack } from '@/componentsV2'
-import { Folder, Wifi } from '@/componentsV2/icons'
-import { useTranslation } from 'react-i18next'
 import { useNavigation } from '@react-navigation/native'
 import * as DocumentPicker from 'expo-document-picker'
+import { useTheme } from 'heroui-native'
+import React, { forwardRef, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { BackHandler } from 'react-native'
+
+import { Container, Group, PressableRow, RestoreProgressModal, Text, XStack } from '@/componentsV2'
+import { Folder, Wifi } from '@/componentsV2/icons'
+import { useBottom } from '@/hooks/useBottom'
 import { DEFAULT_RESTORE_STEPS, useRestore } from '@/hooks/useRestore'
 import { loggerService } from '@/services/LoggerService'
-import { WelcomeNavigationProps } from '@/types/naviagate'
+import type { WelcomeNavigationProps } from '@/types/naviagate'
 
 const logger = loggerService.withContext('ImportDataSheet')
 

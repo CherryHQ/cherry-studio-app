@@ -128,7 +128,7 @@ function checkTranslations() {
       const fileContent = fs.readFileSync(filePath, 'utf-8')
       targetJson = JSON.parse(fileContent)
     } catch (error) {
-      throw new Error(`解析 ${file} 出错。`, error as Error)
+      throw new Error(`解析 ${file} 出错: ${error}`)
     }
 
     // 检查有序性

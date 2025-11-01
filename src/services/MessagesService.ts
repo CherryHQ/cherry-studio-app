@@ -1,11 +1,15 @@
+import { messageBlockDatabase, messageDatabase } from '@database'
+
 import ModernAiProvider from '@/aiCore/index_new'
-import { AiSdkMiddlewareConfig } from '@/aiCore/middleware/AiSdkMiddlewareBuilder'
+import type { AiSdkMiddlewareConfig } from '@/aiCore/middleware/AiSdkMiddlewareBuilder'
 import { buildStreamTextParams, convertMessagesToSdkMessages } from '@/aiCore/prepareParams'
 import { loggerService } from '@/services/LoggerService'
-import { Assistant, Model, Topic, Usage } from '@/types/assistant'
+import type { Assistant, Model, Topic, Usage } from '@/types/assistant'
 import { ChunkType } from '@/types/chunk'
-import { FileMetadata, FileTypes } from '@/types/file'
-import { AssistantMessageStatus, Message, MessageBlock, MessageBlockStatus, MessageBlockType } from '@/types/message'
+import type { FileMetadata } from '@/types/file'
+import { FileTypes } from '@/types/file'
+import type { Message, MessageBlock } from '@/types/message'
+import { AssistantMessageStatus, MessageBlockStatus, MessageBlockType } from '@/types/message'
 import { uuid } from '@/utils'
 import { addAbortController } from '@/utils/abortController'
 import {
@@ -19,13 +23,13 @@ import {
 } from '@/utils/messageUtils/create'
 import { getTopicQueue } from '@/utils/queue'
 
-import { messageBlockDatabase, messageDatabase } from '@database'
 import { fetchTopicNaming } from './ApiService'
 import { assistantService, getDefaultModel } from './AssistantService'
 import { BlockManager, createCallbacks } from './messageStreaming'
 import { transformMessagesAndFetch } from './OrchestrationService'
 import { getAssistantProvider } from './ProviderService'
-import { createStreamProcessor, StreamProcessorCallbacks } from './StreamProcessingService'
+import type { StreamProcessorCallbacks } from './StreamProcessingService'
+import { createStreamProcessor } from './StreamProcessingService'
 import { topicService } from './TopicService'
 
 const logger = loggerService.withContext('Messages Service')

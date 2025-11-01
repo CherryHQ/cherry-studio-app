@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 
 import { loggerService } from '@/services/LoggerService'
-import { WebSearchProvider } from '@/types/websearch'
+import type { WebSearchProvider } from '@/types/websearch'
 
 import { db } from '..'
 import { transformDbToWebSearchProvider, transformWebSearchProviderToDb } from '../mappers'

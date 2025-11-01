@@ -5,22 +5,22 @@ import { View } from 'react-native'
 import { GestureDetector } from 'react-native-gesture-handler'
 
 import {
-  Image,
-  Text,
-  XStack,
-  YStack,
-  SafeAreaContainer,
-  HeaderBar,
   Container,
   Group,
-  PressableRow,
   GroupTitle,
-  RowRightArrow
+  HeaderBar,
+  Image,
+  PressableRow,
+  RowRightArrow,
+  SafeAreaContainer,
+  Text,
+  XStack,
+  YStack
 } from '@/componentsV2'
-import { Cloud, Package, Globe, Settings2, HardDrive, Info } from '@/componentsV2/icons/LucideIcon'
+import { Cloud, Globe, HardDrive, Info, Package, Settings2 } from '@/componentsV2/icons/LucideIcon'
 import { useSettings } from '@/hooks/useSettings'
 import { useSwipeGesture } from '@/hooks/useSwipeGesture'
-import { HomeNavigationProps } from '@/types/naviagate'
+import type { HomeNavigationProps } from '@/types/naviagate'
 
 interface SettingItemConfig {
   title: string

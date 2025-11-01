@@ -1,10 +1,10 @@
-import OpenAI from 'openai'
+import type OpenAI from 'openai'
 
-import { StreamTextParams } from './aiCoretypes'
-import { Chunk } from './chunk'
-import { Message } from './message'
-import { WebSearchProvider } from './websearch'
-import { MCPServer } from './mcp'
+import type { StreamTextParams } from './aiCoretypes'
+import type { Chunk } from './chunk'
+import type { MCPServer } from './mcp'
+import type { Message } from './message'
+import type { WebSearchProvider } from './websearch'
 
 export type Assistant = {
   id: string

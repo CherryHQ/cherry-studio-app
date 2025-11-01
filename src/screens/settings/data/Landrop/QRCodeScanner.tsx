@@ -1,17 +1,17 @@
-import { CameraView, useCameraPermissions, PermissionStatus } from 'expo-camera'
+import { useNavigation } from '@react-navigation/native'
+import { CameraView, PermissionStatus, useCameraPermissions } from 'expo-camera'
+import { Spinner } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
-import { ActivityIndicator } from 'react-native'
 import { useTranslation } from 'react-i18next'
+import { ActivityIndicator } from 'react-native'
 
 import { Container, Text, XStack, YStack } from '@/componentsV2'
 import { ScanQrCode } from '@/componentsV2/icons/LucideIcon'
+import { useDialog } from '@/hooks/useDialog'
 import { loggerService } from '@/services/LoggerService'
+import type { CompressedConnectionInfo, ConnectionInfo } from '@/types/network'
 
 import { Overlay } from './Overlay'
-import { Spinner } from 'heroui-native'
-import { useDialog } from '@/hooks/useDialog'
-import { useNavigation } from '@react-navigation/native'
-import { ConnectionInfo, CompressedConnectionInfo } from '@/types/network'
 const logger = loggerService.withContext('QRCodeScanner')
 
 // Helper function to convert number back to IP address

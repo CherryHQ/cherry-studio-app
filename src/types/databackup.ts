@@ -1,7 +1,7 @@
-import { WebSearchState, WebSearchProvider } from '@/types/websearch'
+import type { WebSearchProvider, WebSearchState } from '@/types/websearch'
 
-import { Assistant, Provider, Topic } from './assistant'
-import { Message, MessageBlock } from './message'
+import type { Assistant, Provider, Topic } from './assistant'
+import type { Message, MessageBlock } from './message'
 
 export type BackupData = {
   time: number

@@ -1,8 +1,8 @@
-import OpenAI from 'openai'
+import type OpenAI from 'openai'
 
 import { isSupportedModel } from '@/config/models'
 import { loggerService } from '@/services/LoggerService'
-import { Model } from '@/types/assistant'
+import type { Model } from '@/types/assistant'
 
 import { OpenAIAPIClient } from '../openai/OpenAIApiClient'
 

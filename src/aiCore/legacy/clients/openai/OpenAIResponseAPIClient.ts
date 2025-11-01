@@ -2,10 +2,10 @@ import { File, Paths } from 'expo-file-system'
 import { t } from 'i18next'
 import { isEmpty } from 'lodash'
 import OpenAI, { AzureOpenAI } from 'openai'
-import { ResponseInput } from 'openai/resources/responses/responses'
+import type { ResponseInput } from 'openai/resources/responses/responses'
 
-import { GenericChunk } from '@/aiCore/legacy/middleware/schemas'
-import { CompletionsContext } from '@/aiCore/legacy/middleware/types'
+import type { GenericChunk } from '@/aiCore/legacy/middleware/schemas'
+import type { CompletionsContext } from '@/aiCore/legacy/middleware/types'
 import {
   isGPT5SeriesModel,
   isOpenAIChatCompletionOnlyModel,
@@ -19,12 +19,13 @@ import { isSupportDeveloperRoleProvider } from '@/config/providers'
 import { MB } from '@/constants'
 import { loggerService } from '@/services/LoggerService'
 import { estimateTextTokens } from '@/services/TokenService'
-import { Model, OpenAIServiceTier, Provider } from '@/types/assistant'
+import type { Model, OpenAIServiceTier, Provider } from '@/types/assistant'
 import { ChunkType } from '@/types/chunk'
-import { FileMetadata, FileTypes } from '@/types/file'
-import { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
-import { Message } from '@/types/message'
-import {
+import type { FileMetadata } from '@/types/file'
+import { FileTypes } from '@/types/file'
+import type { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
+import type { Message } from '@/types/message'
+import type {
   OpenAIResponseSdkMessageParam,
   OpenAIResponseSdkParams,
   OpenAIResponseSdkRawChunk,
@@ -32,7 +33,7 @@ import {
   OpenAIResponseSdkTool,
   OpenAIResponseSdkToolCall
 } from '@/types/sdk'
-import { MCPTool } from '@/types/tool'
+import type { MCPTool } from '@/types/tool'
 import { WebSearchSource } from '@/types/websearch'
 import { addImageFileToContents } from '@/utils/formats'
 import {
@@ -43,7 +44,7 @@ import {
 } from '@/utils/mcpTool'
 import { findFileBlocks, findImageBlocks } from '@/utils/messageUtils/find'
 
-import { RequestTransformer, ResponseChunkTransformer } from '../types'
+import type { RequestTransformer, ResponseChunkTransformer } from '../types'
 import { OpenAIAPIClient } from './OpenAIApiClient'
 import { OpenAIBaseClient } from './OpenAIBaseClient'
 

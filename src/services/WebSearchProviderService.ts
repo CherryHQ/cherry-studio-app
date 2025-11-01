@@ -43,9 +43,10 @@
  * ```
  */
 
-import { loggerService } from '@/services/LoggerService'
-import { WebSearchProvider } from '@/types/websearch'
 import { websearchProviderDatabase } from '@database'
+
+import { loggerService } from '@/services/LoggerService'
+import type { WebSearchProvider } from '@/types/websearch'
 
 const logger = loggerService.withContext('WebSearchProviderService')
 

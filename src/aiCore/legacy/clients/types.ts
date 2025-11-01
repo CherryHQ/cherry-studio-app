@@ -1,9 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk'
-import OpenAI from 'openai'
+import type Anthropic from '@anthropic-ai/sdk'
+import type OpenAI from 'openai'
 
-import { Assistant, Model, Provider } from '@/types/assistant'
-import { MCPToolResponse, ToolCallResponse } from '@/types/mcp'
-import {
+import type { Assistant, Model, Provider } from '@/types/assistant'
+import type { MCPToolResponse, ToolCallResponse } from '@/types/mcp'
+import type {
   AnthropicSdkRawChunk,
   OpenAIResponseSdkRawChunk,
   OpenAIResponseSdkRawOutput,
@@ -15,10 +15,19 @@ import {
   SdkTool,
   SdkToolCall
 } from '@/types/sdk'
-import { MCPTool } from '@/types/tool'
+import type { MCPTool } from '@/types/tool'
 
-import { CompletionsParams, GenericChunk } from '../middleware/schemas'
-import { CompletionsContext } from '../middleware/types'
+import type { CompletionsParams, GenericChunk } from '../middleware/schemas'
+import type { CompletionsContext } from '../middleware/types'
+
+/**
+ * Transformer 接口，用于 TransformStream
+ */
+export interface Transformer<I, O> {
+  start?: (controller: TransformStreamDefaultController<O>) => void | Promise<void>
+  transform?: (chunk: I, controller: TransformStreamDefaultController<O>) => void | Promise<void>
+  flush?: (controller: TransformStreamDefaultController<O>) => void | Promise<void>
+}
 
 /**
  * 原始流监听器接口

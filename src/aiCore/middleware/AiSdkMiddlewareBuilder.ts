@@ -1,10 +1,11 @@
-import { extractReasoningMiddleware, LanguageModelMiddleware, simulateStreamingMiddleware } from 'ai'
+import type { LanguageModelMiddleware } from 'ai'
+import { extractReasoningMiddleware, simulateStreamingMiddleware } from 'ai'
 
 import { loggerService } from '@/services/LoggerService'
-import { Model, Provider } from '@/types/assistant'
-import { Chunk } from '@/types/chunk'
-import { Message } from '@/types/message'
-import { MCPTool } from '@/types/tool'
+import type { Model, Provider } from '@/types/assistant'
+import type { Chunk } from '@/types/chunk'
+import type { Message } from '@/types/message'
+import type { MCPTool } from '@/types/tool'
 
 const logger = loggerService.withContext('AiSdkMiddlewareBuilder')
 /**
@@ -155,7 +156,6 @@ function addProviderSpecificMiddlewares(builder: AiSdkMiddlewareBuilder, config:
       // Anthropic特定中间件
       break
     case 'openai':
-
     case 'azure-openai': {
       if (config.enableReasoning) {
         const tagName = config.model?.id.includes('gemini') ? tagNameArray[1] : tagNameArray[0]

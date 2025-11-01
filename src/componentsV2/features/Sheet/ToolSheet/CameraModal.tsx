@@ -2,8 +2,9 @@ import { CameraView } from 'expo-camera'
 import React from 'react'
 import { Modal, TouchableOpacity, View } from 'react-native'
 
-import { useCameraHandler } from './useCameraHandler'
 import { X } from '@/componentsV2/icons'
+
+import { useCameraHandler } from './useCameraHandler'
 
 interface CameraModalProps {
   onPhotoTaken: (photoUri: string) => void

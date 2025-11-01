@@ -1,7 +1,8 @@
 import React, { memo } from 'react'
 
-import { ImageMessageBlock, MessageBlockStatus } from '@/types/message'
 import { ImageItem, ImageSkeleton } from '@/componentsV2'
+import type { ImageMessageBlock } from '@/types/message'
+import { MessageBlockStatus } from '@/types/message'
 
 interface Props {
   block: ImageMessageBlock

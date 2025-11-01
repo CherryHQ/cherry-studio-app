@@ -1,7 +1,8 @@
 import { File, Paths } from 'expo-file-system'
 import { t } from 'i18next'
-import OpenAI, { AzureOpenAI } from 'openai'
-import { ChatCompletionContentPart, ChatCompletionContentPartRefusal, ChatCompletionTool } from 'openai/resources'
+import type { AzureOpenAI } from 'openai'
+import type OpenAI from 'openai'
+import type { ChatCompletionContentPart, ChatCompletionContentPartRefusal, ChatCompletionTool } from 'openai/resources'
 
 import {
   findTokenLimit,
@@ -43,20 +44,15 @@ import { DEFAULT_MAX_TOKENS } from '@/constants'
 import { loggerService } from '@/services/LoggerService'
 import { processPostsuffixQwen3Model, processReqMessages } from '@/services/ModelMessageService'
 import { estimateTextTokens } from '@/services/TokenService'
-import {
-  Assistant,
-  EFFORT_RATIO,
-  isSystemProvider,
-  Model,
-  OpenAIServiceTier,
-  SystemProviderIds
-} from '@/types/assistant'
+import type { Assistant, Model, OpenAIServiceTier } from '@/types/assistant'
+import { EFFORT_RATIO, isSystemProvider, SystemProviderIds } from '@/types/assistant'
 // For Copilot token
-import { ChunkType, TextStartChunk, ThinkingStartChunk } from '@/types/chunk'
+import type { TextStartChunk, ThinkingStartChunk } from '@/types/chunk'
+import { ChunkType } from '@/types/chunk'
 import { FileTypes } from '@/types/file'
-import { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
-import { Message } from '@/types/message'
-import {
+import type { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
+import type { Message } from '@/types/message'
+import type {
   OpenAIExtraBody,
   OpenAIModality,
   OpenAISdkMessageParam,
@@ -66,7 +62,7 @@ import {
   OpenAISdkRawOutput,
   ReasoningEffortOptionalParams
 } from '@/types/sdk'
-import { MCPTool } from '@/types/tool'
+import type { MCPTool } from '@/types/tool'
 import { WebSearchSource } from '@/types/websearch'
 import { addImageFileToContents } from '@/utils/formats'
 import {
@@ -77,8 +73,8 @@ import {
 } from '@/utils/mcpTool'
 import { findFileBlocks, findImageBlocks } from '@/utils/messageUtils/find'
 
-import { GenericChunk } from '../../middleware/schemas'
-import { RequestTransformer, ResponseChunkTransformer, ResponseChunkTransformerContext } from '../types'
+import type { GenericChunk } from '../../middleware/schemas'
+import type { RequestTransformer, ResponseChunkTransformer, ResponseChunkTransformerContext } from '../types'
 import { OpenAIBaseClient } from './OpenAIBaseClient'
 
 const logger = loggerService.withContext('OpenAIApiClient')

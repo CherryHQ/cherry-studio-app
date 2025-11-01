@@ -2,15 +2,16 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useDispatch } from 'react-redux'
 
-import { useDialog } from '@/hooks/useDialog'
-import { ProgressUpdate, restore, RestoreStepId, StepStatus } from '@/services/BackupService'
-import { loggerService } from '@/services/LoggerService'
+import type { RestoreStep } from '@/componentsV2/features/SettingsScreen/RestoreProgressModal'
 import { databaseMaintenance } from '@/database/DatabaseMaintenance'
+import { useDialog } from '@/hooks/useDialog'
+import type { ProgressUpdate, RestoreStepId, StepStatus } from '@/services/BackupService'
+import { restore } from '@/services/BackupService'
+import { loggerService } from '@/services/LoggerService'
 import { persistor } from '@/store'
-import { FileMetadata } from '@/types/file'
+import type { FileMetadata } from '@/types/file'
 import { uuid } from '@/utils'
 import { getFileType } from '@/utils/file'
-import { RestoreStep } from '@/componentsV2/features/SettingsScreen/RestoreProgressModal'
 const logger = loggerService.withContext('useRestore')
 
 // 定义步骤配置类型
