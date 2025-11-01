@@ -44,7 +44,7 @@ jobs:
 
       - name: Create Copilot Agent task
         env:
-          GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
         run: |
           # Authenticate gh CLI
           echo "🔑 Authenticating gh CLI..."
