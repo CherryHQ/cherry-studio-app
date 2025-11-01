@@ -44,23 +44,24 @@ jobs:
 
       - name: Create Copilot Agent task
         env:
-          GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          COPILOT_TOKEN: ${{ secrets.COPILOT_TOKEN }}
         run: |
-          # Authenticate gh CLI
+          # Authenticate gh CLI (must clear GITHUB_TOKEN first)
           echo "🔑 Authenticating gh CLI..."
-          alias gh="env -u GITHUB_TOKEN gh $1"
-          gh auth login
+
+          # Use env -u to run gh auth login without GITHUB_TOKEN
+          echo "$COPILOT_TOKEN" | env -u GITHUB_TOKEN gh auth login --with-token
 
           # Verify authentication
-          gh auth status || {
+          env -u GITHUB_TOKEN gh auth status || {
             echo "❌ Authentication failed!"
             exit 1
           }
 
           echo "✅ Authentication successful"
 
-          # Let Copilot Agent handle everything
-          gh agent-task create \
+          # Let Copilot Agent handle everything (also clear GITHUB_TOKEN)
+          env -u GITHUB_TOKEN gh agent-task create \
             --base main \
             --repo ${{ github.repository }} \
             --follow \
