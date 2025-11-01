@@ -44,14 +44,12 @@ export const TextChunkMiddleware: CompletionsMiddleware =
           new TransformStream<GenericChunk, GenericChunk>({
             transform(chunk: GenericChunk, controller) {
               logger.silly('chunk', chunk)
-
               if (chunk.type === ChunkType.TEXT_DELTA) {
                 if (model.supported_text_delta === false) {
                   accumulatedTextContent = chunk.text
                 } else {
                   accumulatedTextContent += chunk.text
                 }
-
                 // 处理 onResponse 回调 - 发送增量文本更新
                 if (params.onResponse) {
                   params.onResponse(accumulatedTextContent, false)
@@ -63,7 +61,6 @@ export const TextChunkMiddleware: CompletionsMiddleware =
                 })
               } else if (accumulatedTextContent && chunk.type !== ChunkType.TEXT_START) {
                 ctx._internal.customState!.accumulatedText = accumulatedTextContent
-
                 if (ctx._internal.toolProcessingState && !ctx._internal.toolProcessingState?.output) {
                   ctx._internal.toolProcessingState.output = accumulatedTextContent
                 }
@@ -86,7 +83,6 @@ export const TextChunkMiddleware: CompletionsMiddleware =
                   })
                   controller.enqueue(chunk)
                 }
-
                 accumulatedTextContent = ''
               } else {
                 // 其他类型的chunk直接传递

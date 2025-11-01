@@ -1,10 +1,17 @@
+import { toInteger } from 'lodash'
+
+import { DEFAULT_MAX_TOKENS } from '@/config/constant'
 import {
   findTokenLimit,
   GEMINI_FLASH_MODEL_REGEX,
   getThinkModelType,
   isDeepSeekHybridInferenceModel,
+  isDoubaoSeedAfter251015,
   isDoubaoThinkingAutoModel,
+  isGrok4FastReasoningModel,
   isGrokReasoningModel,
+  isOpenAIDeepResearchModel,
+  isOpenAIModel,
   isOpenAIReasoningModel,
   isQwenAlwaysThinkModel,
   isQwenReasoningModel,
@@ -22,12 +29,12 @@ import {
   MODEL_SUPPORTED_REASONING_EFFORT
 } from '@/config/models'
 import { isSupportEnableThinkingProvider } from '@/config/providers'
-import { DEFAULT_MAX_TOKENS } from '@/constants'
-import { getAssistantSettings } from '@/services/AssistantService'
+import { getStoreSetting } from '@/hooks/useSettings'
+import { getAssistantSettings, getProviderByModel } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
-import { getProviderByModel } from '@/services/ProviderService'
-import type { Assistant, Model } from '@/types/assistant'
-import { EFFORT_RATIO, isSystemProvider, SystemProviderIds } from '@/types/assistant'
+import type { SettingsState } from '@/store/settings'
+import type { Assistant, Model } from '@/types'
+import { EFFORT_RATIO, isSystemProvider, SystemProviderIds } from '@/types'
 import type { ReasoningEffortOptionalParams } from '@/types/sdk'
 
 const logger = loggerService.withContext('reasoning')
@@ -35,7 +42,6 @@ const logger = loggerService.withContext('reasoning')
 // The function is only for generic provider. May extract some logics to independent provider
 export function getReasoningEffort(assistant: Assistant, model: Model): ReasoningEffortOptionalParams {
   const provider = getProviderByModel(model)
-
   if (provider.id === 'groq') {
     return {}
   }
@@ -44,6 +50,11 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
     return {}
   }
 
+  if (isOpenAIDeepResearchModel(model)) {
+    return {
+      reasoning_effort: 'medium'
+    }
+  }
   const reasoningEffort = assistant?.settings?.reasoning_effort
 
   if (!reasoningEffort) {
@@ -53,12 +64,16 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
       if (isSupportedThinkingTokenGeminiModel(model) && !GEMINI_FLASH_MODEL_REGEX.test(model.id)) {
         return {}
       }
-
       // Don't disable reasoning for models that require it
-      if (isGrokReasoningModel(model) || isOpenAIReasoningModel(model)) {
+      if (
+        isGrokReasoningModel(model) ||
+        isOpenAIReasoningModel(model) ||
+        isQwenAlwaysThinkModel(model) ||
+        model.id.includes('seed-oss') ||
+        model.id.includes('minimax-m2')
+      ) {
         return {}
       }
-
       return { reasoning: { enabled: false, exclude: true } }
     }
 
@@ -84,13 +99,12 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
           extra_body: {
             google: {
               thinking_config: {
-                thinking_budget: 0
+                thinkingBudget: 0
               }
             }
           }
         }
       }
-
       return {}
     }
 
@@ -103,6 +117,52 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
   }
 
   // reasoningEffort有效的情况
+
+  // OpenRouter models
+  if (model.provider === SystemProviderIds.openrouter) {
+    // Grok 4 Fast doesn't support effort levels, always use enabled: true
+    if (isGrok4FastReasoningModel(model)) {
+      return {
+        reasoning: {
+          enabled: true // Ignore effort level, just enable reasoning
+        }
+      }
+    }
+
+    // Other OpenRouter models that support effort levels
+    if (isSupportedReasoningEffortModel(model) || isSupportedThinkingTokenModel(model)) {
+      return {
+        reasoning: {
+          effort: reasoningEffort === 'auto' ? 'medium' : reasoningEffort
+        }
+      }
+    }
+  }
+
+  const effortRatio = EFFORT_RATIO[reasoningEffort]
+  const tokenLimit = findTokenLimit(model.id)
+  let budgetTokens: number | undefined
+  if (tokenLimit) {
+    budgetTokens = Math.floor((tokenLimit.max - tokenLimit.min) * effortRatio + tokenLimit.min)
+  }
+
+  // See https://docs.siliconflow.cn/cn/api-reference/chat-completions/chat-completions
+  if (model.provider === SystemProviderIds.silicon) {
+    if (
+      isDeepSeekHybridInferenceModel(model) ||
+      isSupportedThinkingTokenZhipuModel(model) ||
+      isSupportedThinkingTokenQwenModel(model) ||
+      isSupportedThinkingTokenHunyuanModel(model)
+    ) {
+      return {
+        enable_thinking: true,
+        // Hard-encoded maximum, only for silicon
+        thinking_budget: budgetTokens ? toInteger(Math.max(budgetTokens, 32768)) : undefined
+      }
+    }
+    return {}
+  }
+
   // DeepSeek hybrid inference models, v3.1 and maybe more in the future
   // 不同的 provider 有不同的思考控制方式，在这里统一解决
   if (isDeepSeekHybridInferenceModel(model)) {
@@ -113,10 +173,8 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
             enable_thinking: true,
             incremental_output: true
           }
-        case SystemProviderIds.silicon:
-          return {
-            enable_thinking: true
-          }
+        case SystemProviderIds.hunyuan:
+        case SystemProviderIds['tencent-cloud-ti']:
         case SystemProviderIds.doubao:
           return {
             thinking: {
@@ -139,42 +197,13 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
           logger.warn(
             `Skipping thinking options for provider ${provider.name} as DeepSeek v3.1 thinking control method is unknown`
           )
+        case SystemProviderIds.silicon:
+        // specially handled before
       }
     }
   }
 
-  // OpenRouter models
-  if (model.provider === SystemProviderIds.openrouter) {
-    if (isSupportedReasoningEffortModel(model) || isSupportedThinkingTokenModel(model)) {
-      return {
-        reasoning: {
-          effort: reasoningEffort === 'auto' ? 'medium' : reasoningEffort
-        }
-      }
-    }
-  }
-
-  // Doubao 思考模式支持
-  if (isSupportedThinkingTokenDoubaoModel(model)) {
-    // reasoningEffort 为空，默认开启 enabled
-    if (reasoningEffort === 'high') {
-      return { thinking: { type: 'enabled' } }
-    }
-
-    if (reasoningEffort === 'auto' && isDoubaoThinkingAutoModel(model)) {
-      return { thinking: { type: 'auto' } }
-    }
-
-    // 其他情况不带 thinking 字段
-    return {}
-  }
-
-  const effortRatio = EFFORT_RATIO[reasoningEffort]
-  const budgetTokens = Math.floor(
-    (findTokenLimit(model.id)?.max! - findTokenLimit(model.id)?.min!) * effortRatio + findTokenLimit(model.id)?.min!
-  )
-
-  // OpenRouter models, use thinking
+  // OpenRouter models, use reasoning
   if (model.provider === SystemProviderIds.openrouter) {
     if (isSupportedReasoningEffortModel(model) || isSupportedThinkingTokenModel(model)) {
       return {
@@ -191,14 +220,12 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
       enable_thinking: isQwenAlwaysThinkModel(model) || !isSupportEnableThinkingProvider(provider) ? undefined : true,
       thinking_budget: budgetTokens
     }
-
     if (provider.id === SystemProviderIds.dashscope) {
       return {
         ...thinkConfig,
         incremental_output: true
       }
     }
-
     return thinkConfig
   }
 
@@ -214,15 +241,14 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
     // 检查模型是否支持所选选项
     const modelType = getThinkModelType(model)
     const supportedOptions = MODEL_SUPPORTED_REASONING_EFFORT[modelType]
-
     if (supportedOptions.includes(reasoningEffort)) {
       return {
-        reasoning_effort: reasoningEffort
+        reasoningEffort
       }
     } else {
       // 如果不支持，fallback到第一个支持的值
       return {
-        reasoning_effort: supportedOptions[0]
+        reasoningEffort: supportedOptions[0]
       }
     }
   }
@@ -234,20 +260,19 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
         extra_body: {
           google: {
             thinking_config: {
-              thinking_budget: -1,
-              include_thoughts: true
+              thinkingBudget: -1,
+              includeThoughts: true
             }
           }
         }
       }
     }
-
     return {
       extra_body: {
         google: {
           thinking_config: {
-            thinking_budget: budgetTokens,
-            include_thoughts: true
+            thinkingBudget: budgetTokens,
+            includeThoughts: true
           }
         }
       }
@@ -260,24 +285,27 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
     return {
       thinking: {
         type: 'enabled',
-        budget_tokens: Math.floor(
-          Math.max(1024, Math.min(budgetTokens, (maxTokens || DEFAULT_MAX_TOKENS) * effortRatio))
-        )
+        budget_tokens: budgetTokens
+          ? Math.floor(Math.max(1024, Math.min(budgetTokens, (maxTokens || DEFAULT_MAX_TOKENS) * effortRatio)))
+          : undefined
       }
     }
   }
 
   // Use thinking, doubao, zhipu, etc.
   if (isSupportedThinkingTokenDoubaoModel(model)) {
-    if (assistant.settings?.reasoning_effort === 'high') {
-      return {
-        thinking: {
-          type: 'enabled'
-        }
-      }
+    if (isDoubaoSeedAfter251015(model)) {
+      return { reasoningEffort }
     }
+    if (reasoningEffort === 'high') {
+      return { thinking: { type: 'enabled' } }
+    }
+    if (reasoningEffort === 'auto' && isDoubaoThinkingAutoModel(model)) {
+      return { thinking: { type: 'auto' } }
+    }
+    // 其他情况不带 thinking 字段
+    return {}
   }
-
   if (isSupportedThinkingTokenZhipuModel(model)) {
     return { thinking: { type: 'enabled' } }
   }
@@ -295,9 +323,21 @@ export function getOpenAIReasoningParams(assistant: Assistant, model: Model): Re
     return {}
   }
 
-  // const openAI = getStoreSetting('openAI') as SettingsState['openAI']
-  // const summaryText = openAI?.summaryText || 'off'
-  const summaryText = 'off'
+  let reasoningEffort = assistant?.settings?.reasoning_effort
+
+  if (!reasoningEffort) {
+    return {}
+  }
+
+  // 非OpenAI模型，但是Provider类型是responses/azure openai的情况
+  if (!isOpenAIModel(model)) {
+    return {
+      reasoningEffort
+    }
+  }
+
+  const openAI = getStoreSetting('openAI') as SettingsState['openAI']
+  const summaryText = openAI?.summaryText || 'off'
 
   let reasoningSummary: string | undefined = undefined
 
@@ -307,10 +347,8 @@ export function getOpenAIReasoningParams(assistant: Assistant, model: Model): Re
     reasoningSummary = summaryText
   }
 
-  const reasoningEffort = assistant?.settings?.reasoning_effort
-
-  if (!reasoningEffort) {
-    return {}
+  if (isOpenAIDeepResearchModel(model)) {
+    reasoningEffort = 'medium'
   }
 
   // OpenAI 推理参数
@@ -322,6 +360,26 @@ export function getOpenAIReasoningParams(assistant: Assistant, model: Model): Re
   }
 
   return {}
+}
+
+export function getAnthropicThinkingBudget(assistant: Assistant, model: Model): number {
+  const { maxTokens, reasoning_effort: reasoningEffort } = getAssistantSettings(assistant)
+  if (reasoningEffort === undefined) {
+    return 0
+  }
+  const effortRatio = EFFORT_RATIO[reasoningEffort]
+
+  const budgetTokens = Math.max(
+    1024,
+    Math.floor(
+      Math.min(
+        (findTokenLimit(model.id)?.max! - findTokenLimit(model.id)?.min!) * effortRatio +
+          findTokenLimit(model.id)?.min!,
+        (maxTokens || DEFAULT_MAX_TOKENS) * effortRatio
+      )
+    )
+  )
+  return budgetTokens
 }
 
 /**
@@ -345,19 +403,7 @@ export function getAnthropicReasoningParams(assistant: Assistant, model: Model):
 
   // Claude 推理参数
   if (isSupportedThinkingTokenClaudeModel(model)) {
-    const { maxTokens } = getAssistantSettings(assistant)
-    const effortRatio = EFFORT_RATIO[reasoningEffort]
-
-    const budgetTokens = Math.max(
-      1024,
-      Math.floor(
-        Math.min(
-          (findTokenLimit(model.id)?.max! - findTokenLimit(model.id)?.min!) * effortRatio +
-            findTokenLimit(model.id)?.min!,
-          (maxTokens || DEFAULT_MAX_TOKENS) * effortRatio
-        )
-      )
-    )
+    const budgetTokens = getAnthropicThinkingBudget(assistant, model)
 
     return {
       thinking: {
@@ -416,6 +462,13 @@ export function getGeminiReasoningParams(assistant: Assistant, model: Model): Re
   return {}
 }
 
+/**
+ * Get XAI-specific reasoning parameters
+ * This function should only be called for XAI provider models
+ * @param assistant - The assistant configuration
+ * @param model - The model being used
+ * @returns XAI-specific reasoning parameters
+ */
 export function getXAIReasoningParams(assistant: Assistant, model: Model): Record<string, any> {
   if (!isSupportedReasoningEffortGrokModel(model)) {
     return {}
@@ -423,6 +476,11 @@ export function getXAIReasoningParams(assistant: Assistant, model: Model): Recor
 
   const { reasoning_effort: reasoningEffort } = getAssistantSettings(assistant)
 
+  if (!reasoningEffort) {
+    return {}
+  }
+
+  // For XAI provider Grok models, use reasoningEffort parameter directly
   return {
     reasoningEffort
   }
@@ -438,21 +496,17 @@ export function getCustomParameters(assistant: Assistant): Record<string, any> {
       if (!param.name?.trim()) {
         return acc
       }
-
       if (param.type === 'json') {
         const value = param.value as string
-
         if (value === 'undefined') {
           return { ...acc, [param.name]: undefined }
         }
-
         try {
           return { ...acc, [param.name]: JSON.parse(value) }
         } catch {
           return { ...acc, [param.name]: value }
         }
       }
-
       return {
         ...acc,
         [param.name]: param.value

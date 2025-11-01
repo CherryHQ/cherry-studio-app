@@ -17,7 +17,7 @@ export function qwenThinkingMiddleware(enableThinking: boolean): LanguageModelMi
       const transformedParams = { ...params }
       // Process messages in prompt
       if (transformedParams.prompt && Array.isArray(transformedParams.prompt)) {
-        transformedParams.prompt = transformedParams.prompt.map((message) => {
+        transformedParams.prompt = transformedParams.prompt.map(message => {
           // Only process user messages
           if (message.role === 'user') {
             // Process content array

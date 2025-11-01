@@ -1,6 +1,5 @@
-import type { Metrics, Usage } from '@/types/assistant'
+import type { MCPToolResponse, Metrics, Usage, WebSearchResponse } from '@/types'
 import type { Chunk, ErrorChunk } from '@/types/chunk'
-import type { MCPToolResponse } from '@/types/mcp'
 import type {
   SdkInstance,
   SdkMessageParam,
@@ -10,7 +9,6 @@ import type {
   SdkTool,
   SdkToolCall
 } from '@/types/sdk'
-import type { WebSearchResponse } from '@/types/websearch'
 
 import type { BaseApiClient } from '../clients'
 import type { CompletionsParams, CompletionsResult } from './schemas'

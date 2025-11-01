@@ -1,8 +1,8 @@
 import { loggerService } from '@/services/LoggerService'
+import type { MCPTool } from '@/types'
 import type { MCPToolCreatedChunk, TextDeltaChunk } from '@/types/chunk'
 import { ChunkType } from '@/types/chunk'
-import type { MCPTool } from '@/types/tool'
-import { parseToolUse } from '@/utils/mcpTool'
+import { parseToolUse } from '@/utils/mcp-tools'
 import type { TagConfig } from '@/utils/tagExtraction'
 import { TagExtractor } from '@/utils/tagExtraction'
 
@@ -72,7 +72,6 @@ function createToolUseExtractionTransform(
       try {
         // 处理文本内容，检测工具使用标签
         logger.silly('chunk', chunk)
-
         if (chunk.type === ChunkType.TEXT_DELTA) {
           const textChunk = chunk as TextDeltaChunk
 
@@ -107,7 +106,6 @@ function createToolUseExtractionTransform(
             }
             // tool_use 标签内的内容不转发，避免重复显示
           }
-
           return
         }
 
@@ -122,10 +120,8 @@ function createToolUseExtractionTransform(
     async flush(controller) {
       // 检查是否有未完成的 tool_use 标签内容
       const finalToolUseResult = toolUseExtractor.finalize()
-
       if (finalToolUseResult && finalToolUseResult.tagContentExtracted) {
         const toolUseResponses = parseToolUse(finalToolUseResult.tagContentExtracted, mcpTools, toolCounter)
-
         if (toolUseResponses.length > 0) {
           const mcpToolCreatedChunk: MCPToolCreatedChunk = {
             type: ChunkType.MCP_TOOL_CREATED,

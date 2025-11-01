@@ -1,3 +1,4 @@
+import { withSpanResult } from '@/services/SpanManagerService'
 import type {
   RequestOptions,
   SdkInstance,
@@ -39,7 +40,6 @@ function createInitialCallContext<TContext extends BaseContext, TCallArgs extend
   if (specificContextFactory) {
     return specificContextFactory(baseContext, originalCallArgs)
   }
-
   return baseContext as TContext // Fallback to base context if no specific factory
 }
 
@@ -60,11 +60,9 @@ function compose(...funcs: ((...args: any[]) => any)[]): (...args: any[]) => any
     // 如果没有要组合的函数，则返回一个函数，该函数返回其第一个参数，如果没有参数则返回undefined。
     return (...args: any[]) => (args.length > 0 ? args[0] : undefined)
   }
-
   if (funcs.length === 1) {
     return funcs[0]
   }
-
   return funcs.reduce(
     (a, b) =>
       (...args: any[]) =>
@@ -242,7 +240,6 @@ export function applyCompletionsMiddlewares<
       // 如果没有进行转换，我们需要处理它。
 
       const sdkPayload = context._internal?.sdkPayload
-
       if (!sdkPayload) {
         throw new Error('SDK payload not found in context. Middleware chain should have transformed parameters.')
       }
@@ -258,17 +255,17 @@ export function applyCompletionsMiddlewares<
         })
       }
 
-      // const traceParams = {
-      //   name: `${params.assistant?.model?.name}.client`,
-      //   tag: 'LLM',
-      //   topicId: params.topicId || '',
-      //   modelName: params.assistant?.model?.name
-      // }
+      const traceParams = {
+        name: `${params.assistant?.model?.name}.client`,
+        tag: 'LLM',
+        topicId: params.topicId || '',
+        modelName: params.assistant?.model?.name
+      }
 
       // Call the original SDK method with transformed parameters
       // 使用转换后的参数调用原始 SDK 方法
-      // const rawOutput = await withSpanResult(methodCall, traceParams, sdkPayload)
-      const rawOutput = await methodCall(sdkPayload)
+      const rawOutput = await withSpanResult(methodCall, traceParams, sdkPayload)
+
       // Return result wrapped in CompletionsResult format
       // 以 CompletionsResult 格式返回包装的结果
       return { rawOutput } as CompletionsResult

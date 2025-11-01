@@ -1,14 +1,18 @@
+import { isNewApiProvider } from '@/config/providers'
 import { loggerService } from '@/services/LoggerService'
-import type { Provider } from '@/types/assistant'
+import type { Provider } from '@/types'
 
 import { AihubmixAPIClient } from './aihubmix/AihubmixAPIClient'
 import { AnthropicAPIClient } from './anthropic/AnthropicAPIClient'
+import { AwsBedrockAPIClient } from './aws/AwsBedrockAPIClient'
 import type { BaseApiClient } from './BaseApiClient'
-import { CherryinAPIClient } from './cherryai/CherryaiAPIClient'
+import { CherryAiAPIClient } from './cherryai/CherryAiAPIClient'
 import { GeminiAPIClient } from './gemini/GeminiAPIClient'
+import { VertexAPIClient } from './gemini/VertexAPIClient'
 import { NewAPIClient } from './newapi/NewAPIClient'
 import { OpenAIAPIClient } from './openai/OpenAIApiClient'
 import { OpenAIResponseAPIClient } from './openai/OpenAIResponseAPIClient'
+import { OVMSClient } from './ovms/OVMSClient'
 import { PPIOAPIClient } from './ppio/PPIOAPIClient'
 import { ZhipuAPIClient } from './zhipu/ZhipuAPIClient'
 
@@ -33,7 +37,7 @@ export class ApiClientFactory {
 
     // 首先检查特殊的 Provider ID
     if (provider.id === 'cherryai') {
-      instance = new CherryinAPIClient(provider) as BaseApiClient
+      instance = new CherryAiAPIClient(provider) as BaseApiClient
       return instance
     }
 
@@ -43,7 +47,7 @@ export class ApiClientFactory {
       return instance
     }
 
-    if (provider.id === 'new-api') {
+    if (isNewApiProvider(provider)) {
       logger.debug(`Creating NewAPIClient for provider: ${provider.id}`)
       instance = new NewAPIClient(provider) as BaseApiClient
       return instance
@@ -60,6 +64,12 @@ export class ApiClientFactory {
       return instance
     }
 
+    if (provider.id === 'ovms') {
+      logger.debug(`Creating OVMSClient for provider: ${provider.id}`)
+      instance = new OVMSClient(provider) as BaseApiClient
+      return instance
+    }
+
     // 然后检查标准的 Provider Type
     switch (provider.type) {
       case 'openai':
@@ -73,12 +83,15 @@ export class ApiClientFactory {
         instance = new GeminiAPIClient(provider) as BaseApiClient
         break
       case 'vertexai':
-        throw new Error('Vertex AI API Client is not implemented yet')
+        logger.debug(`Creating VertexAPIClient for provider: ${provider.id}`)
+        instance = new VertexAPIClient(provider) as BaseApiClient
+        break
       case 'anthropic':
         instance = new AnthropicAPIClient(provider) as BaseApiClient
         break
       case 'aws-bedrock':
-        throw new Error('AWS Bedrock API Client is not implemented yet')
+        instance = new AwsBedrockAPIClient(provider) as BaseApiClient
+        break
       default:
         logger.debug(`Using default OpenAIApiClient for provider: ${provider.id}`)
         instance = new OpenAIAPIClient(provider) as BaseApiClient

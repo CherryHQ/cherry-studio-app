@@ -1,5 +1,5 @@
 import { isOpenAILLMModel } from '@/config/models'
-import type { Model, Provider } from '@/types/assistant'
+import type { Model, Provider } from '@/types'
 
 import { AnthropicAPIClient } from '../anthropic/AnthropicAPIClient'
 import type { BaseApiClient } from '../BaseApiClient'
@@ -50,7 +50,6 @@ export class AihubmixAPIClient extends MixedBaseAPIClient {
     if (!this.currentClient) {
       return this.provider.apiHost
     }
-
     return this.currentClient.getBaseURL()
   }
 
@@ -63,11 +62,9 @@ export class AihubmixAPIClient extends MixedBaseAPIClient {
     // claude开头
     if (id.startsWith('claude')) {
       const client = this.clients.get('claude')
-
       if (!client || !this.isValidClient(client)) {
         throw new Error('Claude client not properly initialized')
       }
-
       return client
     }
 
@@ -79,22 +76,18 @@ export class AihubmixAPIClient extends MixedBaseAPIClient {
       !id.includes('embedding')
     ) {
       const client = this.clients.get('gemini')
-
       if (!client || !this.isValidClient(client)) {
         throw new Error('Gemini client not properly initialized')
       }
-
       return client
     }
 
     // OpenAI系列模型 不包含gpt-oss
     if (isOpenAILLMModel(model) && !model.id.includes('gpt-oss')) {
       const client = this.clients.get('openai')
-
       if (!client || !this.isValidClient(client)) {
         throw new Error('OpenAI client not properly initialized')
       }
-
       return client
     }
 

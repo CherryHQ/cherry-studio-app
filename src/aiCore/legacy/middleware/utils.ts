@@ -26,10 +26,8 @@ export function createErrorChunk(error: any, chunkType: ChunkType = ChunkType.ER
       },
       {} as Record<string, any>
     )
-
     if (!errorDetails.message && error.toString && typeof error.toString === 'function') {
       const errMsg = error.toString()
-
       if (errMsg !== '[object Object]') {
         errorDetails.message = errMsg
       }

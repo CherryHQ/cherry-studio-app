@@ -1,6 +1,12 @@
-import type { Model } from '@/types/assistant'
-import type { GenerateImageParams } from '@/types/image'
-import type { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
+import type {
+  GenerateImageParams,
+  MCPCallToolResponse,
+  MCPTool,
+  MCPToolResponse,
+  Model,
+  Provider,
+  ToolCallResponse
+} from '@/types'
 import type {
   RequestOptions,
   SdkInstance,
@@ -12,7 +18,6 @@ import type {
   SdkTool,
   SdkToolCall
 } from '@/types/sdk'
-import type { MCPTool } from '@/types/tool'
 
 import type { CompletionsContext } from '../middleware/types'
 import type { AnthropicAPIClient } from './anthropic/AnthropicAPIClient'
@@ -34,11 +39,14 @@ export abstract class MixedBaseAPIClient extends BaseApiClient {
   protected abstract defaultClient: OpenAIAPIClient
   protected abstract currentClient: BaseApiClient
 
+  constructor(provider: Provider) {
+    super(provider)
+  }
+
   override getBaseURL(): string {
     if (!this.currentClient) {
       return this.provider.apiHost
     }
-
     return this.currentClient.getBaseURL()
   }
 
@@ -89,7 +97,6 @@ export abstract class MixedBaseAPIClient extends BaseApiClient {
     if ('model' in payload && typeof payload.model === 'string') {
       return payload.model
     }
-
     return null
   }
 
@@ -98,7 +105,6 @@ export abstract class MixedBaseAPIClient extends BaseApiClient {
   async createCompletions(payload: SdkParams, options?: RequestOptions): Promise<SdkRawOutput> {
     // 尝试从payload中提取模型信息来选择client
     const modelId = this.extractModelFromPayload(payload)
-
     if (modelId) {
       const modelObj = { id: modelId } as Model
       const targetClient = this.getClient(modelObj)

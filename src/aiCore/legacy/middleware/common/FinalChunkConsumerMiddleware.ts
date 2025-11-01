@@ -1,5 +1,5 @@
 import { loggerService } from '@/services/LoggerService'
-import type { Usage } from '@/types/assistant'
+import type { Usage } from '@/types'
 import type { Chunk } from '@/types/chunk'
 import { ChunkType } from '@/types/chunk'
 
@@ -33,7 +33,6 @@ const FinalChunkConsumerMiddleware: CompletionsMiddleware =
       if (!ctx._internal.customState) {
         ctx._internal.customState = {}
       }
-
       ctx._internal.observer = {
         usage: {
           prompt_tokens: 0,
@@ -66,7 +65,6 @@ const FinalChunkConsumerMiddleware: CompletionsMiddleware =
           while (true) {
             const { done, value: chunk } = await reader.read()
             logger.silly('chunk', chunk)
-
             if (done) {
               logger.debug(`Input stream finished.`)
               break
@@ -89,12 +87,10 @@ const FinalChunkConsumerMiddleware: CompletionsMiddleware =
           }
         } catch (error: any) {
           logger.error(`Error consuming stream:`, error as Error)
-
           // FIXME: 临时解决方案。该中间件的异常无法被 ErrorHandlerMiddleware捕获。
           if (params.onError) {
             params.onError(error)
           }
-
           if (params.shouldThrow) {
             throw error
           }
@@ -107,7 +103,6 @@ const FinalChunkConsumerMiddleware: CompletionsMiddleware =
                 metrics: ctx._internal.observer?.metrics ? { ...ctx._internal.observer.metrics } : undefined
               }
             } as Chunk)
-
             if (ctx._internal.toolProcessingState) {
               ctx._internal.toolProcessingState = {}
             }
@@ -149,7 +144,6 @@ function extractAndAccumulateUsageMetrics(ctx: CompletionsContext, chunk: Generi
       ctx._internal.customState.firstTokenTimestamp = Date.now()
       logger.debug(`First token timestamp: ${ctx._internal.customState.firstTokenTimestamp}`)
     }
-
     if (chunk.type === ChunkType.LLM_RESPONSE_COMPLETE) {
       // 从LLM_RESPONSE_COMPLETE chunk中提取usage数据
       if (chunk.response?.usage) {
@@ -183,19 +177,15 @@ function accumulateUsage(accumulated: Usage, newUsage: Usage): void {
   if (newUsage.prompt_tokens !== undefined) {
     accumulated.prompt_tokens += newUsage.prompt_tokens
   }
-
   if (newUsage.completion_tokens !== undefined) {
     accumulated.completion_tokens += newUsage.completion_tokens
   }
-
   if (newUsage.total_tokens !== undefined) {
     accumulated.total_tokens += newUsage.total_tokens
   }
-
   if (newUsage.thoughts_tokens !== undefined) {
     accumulated.thoughts_tokens = (accumulated.thoughts_tokens || 0) + newUsage.thoughts_tokens
   }
-
   // Handle OpenRouter specific cost fields
   if (newUsage.cost !== undefined) {
     accumulated.cost = (accumulated.cost || 0) + newUsage.cost

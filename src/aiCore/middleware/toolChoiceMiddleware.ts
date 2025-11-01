@@ -1,5 +1,6 @@
-import { loggerService } from '@/services/LoggerService'
 import type { LanguageModelMiddleware } from 'ai'
+
+import { loggerService } from '@/services/LoggerService'
 
 const logger = loggerService.withContext('toolChoiceMiddleware')
 
