@@ -4,9 +4,9 @@ import { useTranslation } from 'react-i18next'
 
 import { ExternalLink, GroupTitle, Text, TextField, XStack, YStack } from '@/componentsV2'
 import { PROVIDER_URLS } from '@/config/providers'
-import { getVertexCredentials, saveVertexCredentials } from '@/hooks/useVertexAI'
 import { useDialog } from '@/hooks/useDialog'
 import { loggerService } from '@/services/LoggerService'
+import VertexAIService from '@/services/VertexAIService'
 
 const logger = loggerService.withContext('VertexAISettings')
 
@@ -28,7 +28,7 @@ export const VertexAISettings: React.FC<VertexAISettingsProps> = ({ providerId }
 
   // Load credentials on mount
   useEffect(() => {
-    getVertexCredentials(providerId).then(creds => {
+    VertexAIService.getVertexCredentials(providerId).then(creds => {
       if (creds) {
         setProjectId(creds.project)
         setLocation(creds.location)
@@ -49,7 +49,7 @@ export const VertexAISettings: React.FC<VertexAISettingsProps> = ({ providerId }
     }
 
     try {
-      await saveVertexCredentials(providerId, {
+      await VertexAIService.saveVertexCredentials(providerId, {
         project: projectId,
         location,
         clientEmail,

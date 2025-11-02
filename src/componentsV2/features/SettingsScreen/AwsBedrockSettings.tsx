@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next'
 import { ExternalLink, GroupTitle, Text, TextField, XStack, YStack } from '@/componentsV2'
 import { Eye, EyeOff } from '@/componentsV2/icons/LucideIcon'
 import { PROVIDER_URLS } from '@/config/providers'
-import { getAwsBedrockCredentials, saveAwsBedrockCredentials } from '@/hooks/useAwsBedrock'
 import { useDialog } from '@/hooks/useDialog'
+import AwsBedrockService from '@/services/AwsBedrockService'
 import { loggerService } from '@/services/LoggerService'
 
 const logger = loggerService.withContext('AwsBedrockSettings')
@@ -29,7 +29,7 @@ export const AwsBedrockSettings: React.FC<AwsBedrockSettingsProps> = ({ provider
 
   // Load credentials on mount
   useEffect(() => {
-    getAwsBedrockCredentials(providerId).then(creds => {
+    AwsBedrockService.getAwsBedrockCredentials(providerId).then(creds => {
       if (creds) {
         setRegion(creds.region)
         setAccessKeyId(creds.accessKeyId)
@@ -49,7 +49,7 @@ export const AwsBedrockSettings: React.FC<AwsBedrockSettingsProps> = ({ provider
     }
 
     try {
-      await saveAwsBedrockCredentials(providerId, {
+      await AwsBedrockService.saveAwsBedrockCredentials(providerId, {
         region,
         accessKeyId,
         secretAccessKey

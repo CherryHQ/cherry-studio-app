@@ -22,13 +22,13 @@ import { ModelSelect } from '@/componentsV2/features/SettingsScreen/ModelSelect'
 import { VertexAISettings } from '@/componentsV2/features/SettingsScreen/VertexAISettings'
 import { Eye, EyeOff, ShieldCheck, XCircle } from '@/componentsV2/icons/LucideIcon'
 import { PROVIDER_URLS } from '@/config/providers'
-import { isAwsBedrockProvider } from '@/hooks/useAwsBedrock'
 import { useDialog } from '@/hooks/useDialog'
 import { useProvider } from '@/hooks/useProviders'
-import { isVertexProvider } from '@/hooks/useVertexAI'
 import type { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
 import { checkApi } from '@/services/ApiService'
+import AwsBedrockService from '@/services/AwsBedrockService'
 import { loggerService } from '@/services/LoggerService'
+import VertexAIService from '@/services/VertexAIService'
 import type { ApiStatus, Model } from '@/types/assistant'
 
 const logger = loggerService.withContext('ApiServiceScreen')
@@ -160,12 +160,12 @@ export default function ApiServiceScreen() {
     if (!provider) return null
 
     // VertexAI Configuration
-    if (isVertexProvider(provider)) {
+    if (VertexAIService.isVertexProvider(provider)) {
       return <VertexAISettings providerId={provider.id} />
     }
 
     // AWS Bedrock Configuration
-    if (isAwsBedrockProvider(provider)) {
+    if (AwsBedrockService.isAwsBedrockProvider(provider)) {
       return <AwsBedrockSettings providerId={provider.id} />
     }
 
@@ -182,7 +182,7 @@ export default function ApiServiceScreen() {
       <HeaderBar title={t('settings.provider.api_service')} />
       <Container>
         {/* Standard API Key configuration - hide for Copilot and AWS Bedrock */}
-        {!isAwsBedrockProvider(provider) && provider?.id !== 'copilot' && (
+        {!AwsBedrockService.isAwsBedrockProvider(provider) && provider?.id !== 'copilot' && (
           <>
             <YStack className="gap-2">
               <XStack className="items-center justify-between">
@@ -225,7 +225,7 @@ export default function ApiServiceScreen() {
             </YStack>
 
             {/* API Host configuration - hide for VertexAI as it's auto-generated */}
-            {!isVertexProvider(provider) && (
+            {!VertexAIService.isVertexProvider(provider) && (
               <YStack className="gap-2">
                 <XStack className="items-center justify-between pr-3">
                   <GroupTitle>{t('settings.provider.api_host.label')}</GroupTitle>
