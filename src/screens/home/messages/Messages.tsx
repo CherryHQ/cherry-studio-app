@@ -3,7 +3,7 @@ import { LegendList } from '@legendapp/list'
 import { Button } from 'heroui-native'
 import { MotiView } from 'moti'
 import type { FC } from 'react'
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { StyleSheet, View } from 'react-native'
 
@@ -56,6 +56,14 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
       legendListRef.current.scrollToOffset({ offset: 9999999, animated: true })
     }
   }, [groupedMessages.length])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      scrollToBottom()
+    }, 100)
+
+    return () => clearTimeout(timer)
+  }, [topic.id, scrollToBottom])
 
   const handleScrollToEnd = () => {
     scrollToBottom()
