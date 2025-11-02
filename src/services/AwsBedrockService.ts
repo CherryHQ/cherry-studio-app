@@ -1,7 +1,6 @@
 import * as SecureStore from 'expo-secure-store'
 
 import { loggerService } from '@/services/LoggerService'
-import type { Provider } from '@/types/assistant'
 
 const logger = loggerService.withContext('AwsBedrockService')
 
@@ -12,13 +11,6 @@ const AWS_BEDROCK_KEYS = {
 } as const
 
 class AwsBedrockService {
-  /**
-   * Check if provider is AWS Bedrock
-   */
-  isAwsBedrockProvider(provider: Provider): boolean {
-    return provider.type === 'aws-bedrock'
-  }
-
   /**
    * Get AWS Bedrock Access Key ID
    */

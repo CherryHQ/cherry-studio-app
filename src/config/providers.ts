@@ -1,5 +1,5 @@
 import { TOKENFLUX_HOST } from '@/constants'
-import type { AzureOpenAIProvider, Provider, ProviderType, SystemProvider, SystemProviderId } from '@/types/assistant';
+import type { AzureOpenAIProvider, Provider, ProviderType, SystemProvider, SystemProviderId, VertexProvider } from '@/types/assistant';
 import { isSystemProvider,OpenAIServiceTiers  } from '@/types/assistant'
 
 import { SYSTEM_MODELS } from './models/default'
@@ -1313,6 +1313,14 @@ export function isAnthropicProvider(provider: Provider): boolean {
 
 export function isGeminiProvider(provider: Provider): boolean {
   return provider.type === 'gemini'
+}
+
+export function isVertexProvider(provider: Provider): provider is VertexProvider {
+  return provider.type === 'vertexai'
+}
+
+export function isAwsBedrockProvider(provider: Provider): boolean {
+  return provider.type === 'aws-bedrock'
 }
 
 const NOT_SUPPORT_API_VERSION_PROVIDERS = ['github', 'copilot'] as const satisfies SystemProviderId[]

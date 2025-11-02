@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai'
 import { isEmpty } from 'lodash'
 
+import { isVertexProvider } from '@/config/providers'
 import { loggerService } from '@/services/LoggerService'
 import VertexAIService from '@/services/VertexAIService'
 import type { Model, Provider, VertexProvider } from '@/types'
@@ -20,7 +21,7 @@ export class VertexAPIClient extends GeminiAPIClient {
     super(provider)
     // this.anthropicVertexClient = new AnthropicVertexClient(provider)
     // 如果传入的是普通 Provider，转换为 VertexProvider
-    if (VertexAIService.isVertexProvider(provider)) {
+    if (isVertexProvider(provider)) {
       this.vertexProvider = provider
     } else {
       // For non-vertex providers, we need to load credentials asynchronously
@@ -71,7 +72,7 @@ export class VertexAPIClient extends GeminiAPIClient {
     const vertexProvider = await VertexAIService.createVertexProvider(this.provider)
 
     // Type guard to ensure we have a valid VertexProvider
-    if (!VertexAIService.isVertexProvider(vertexProvider)) {
+    if (!isVertexProvider(vertexProvider)) {
       throw new Error('Invalid VertexProvider configuration')
     }
 

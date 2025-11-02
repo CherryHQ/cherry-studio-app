@@ -1,7 +1,8 @@
 import * as SecureStore from 'expo-secure-store'
 
+import { isVertexProvider } from '@/config/providers'
 import { loggerService } from '@/services/LoggerService'
-import type { Provider, VertexProvider } from '@/types/assistant'
+import { type Provider, type VertexProvider } from '@/types/assistant'
 
 const logger = loggerService.withContext('VertexAIService')
 
@@ -14,17 +15,10 @@ const VERTEX_KEYS = {
 
 class VertexAIService {
   /**
-   * Check if VertexAI provider is properly configured
-   */
-  isVertexProvider(provider: Provider): provider is VertexProvider {
-    return provider.type === 'vertexai' || provider.isVertex === true
-  }
-
-  /**
    * Check if VertexAI has all required configuration
    */
   async isVertexAIConfigured(provider: Provider): Promise<boolean> {
-    if (!this.isVertexProvider(provider)) return false
+    if (!isVertexProvider(provider)) return false
 
     try {
       const [privateKey, clientEmail, project, location] = await Promise.all([
@@ -114,7 +108,7 @@ class VertexAIService {
    * Create a VertexAI provider with credentials
    */
   async createVertexProvider(provider: Provider): Promise<VertexProvider | Provider> {
-    if (!this.isVertexProvider(provider)) {
+    if (!isVertexProvider(provider)) {
       return provider
     }
 
