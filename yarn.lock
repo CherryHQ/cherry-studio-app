@@ -3757,7 +3757,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@openrouter/ai-sdk-provider@npm:^1.1.2":
+"@openrouter/ai-sdk-provider@npm:^1.2.0":
   version: 1.2.0
   resolution: "@openrouter/ai-sdk-provider@npm:1.2.0"
   peerDependencies:
@@ -6675,7 +6675,7 @@ __metadata:
     "@legendapp/list": "npm:^2.0.13"
     "@mistralai/mistralai": "npm:^1.7.4"
     "@mozilla/readability": "npm:^0.6.0"
-    "@openrouter/ai-sdk-provider": "npm:^1.1.2"
+    "@openrouter/ai-sdk-provider": "npm:^1.2.0"
     "@opentelemetry/api": "npm:^1.9.0"
     "@opentelemetry/core": "npm:2.0.0"
     "@opentelemetry/exporter-trace-otlp-http": "npm:^0.200.0"
