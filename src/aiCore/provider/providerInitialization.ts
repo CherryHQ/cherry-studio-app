@@ -18,22 +18,6 @@ export const NEW_PROVIDER_CONFIGS: ProviderConfig[] = [
     aliases: ['openrouter']
   },
   {
-    id: 'google-vertex',
-    name: 'Google Vertex AI',
-    import: () => import('@ai-sdk/google-vertex/edge'),
-    creatorFunctionName: 'createVertex',
-    supportsImageGeneration: true,
-    aliases: ['vertexai']
-  },
-  {
-    id: 'google-vertex-anthropic',
-    name: 'Google Vertex AI Anthropic',
-    import: () => import('@ai-sdk/google-vertex/anthropic/edge'),
-    creatorFunctionName: 'createVertexAnthropic',
-    supportsImageGeneration: true,
-    aliases: ['vertexai-anthropic']
-  },
-  {
     id: 'github-copilot-openai-compatible',
     name: 'GitHub Copilot OpenAI Compatible',
     import: () => import('@opeoginni/github-copilot-openai-compatible'),

@@ -1,6 +1,6 @@
 import { TOKENFLUX_HOST } from '@/constants'
-import type { Provider, ProviderType, SystemProvider, SystemProviderId } from '@/types/assistant'
-import { isSystemProvider, OpenAIServiceTiers } from '@/types/assistant'
+import type { AzureOpenAIProvider, Provider, ProviderType, SystemProvider, SystemProviderId } from '@/types/assistant';
+import { isSystemProvider,OpenAIServiceTiers  } from '@/types/assistant'
 
 import { SYSTEM_MODELS } from './models/default'
 
@@ -248,17 +248,17 @@ export const SYSTEM_PROVIDERS_CONFIG: Record<SystemProviderId, SystemProvider> =
     enabled: false,
     isVertex: false
   },
-  // vertexai: {
-  //   id: 'vertexai',
-  //   name: 'VertexAI',
-  //   type: 'vertexai',
-  //   apiKey: '',
-  //   apiHost: 'https://aiplatform.googleapis.com',
-  //   models: SYSTEM_MODELS.vertexai,
-  //   isSystem: true,
-  //   enabled: false,
-  //   isVertex: true
-  // },
+  vertexai: {
+    id: 'vertexai',
+    name: 'VertexAI',
+    type: 'vertexai',
+    apiKey: '',
+    apiHost: 'https://aiplatform.googleapis.com',
+    models: SYSTEM_MODELS.vertexai,
+    isSystem: true,
+    enabled: false,
+    isVertex: true
+  },
   github: {
     id: 'github',
     name: 'Github Models',
@@ -537,6 +537,36 @@ export const SYSTEM_PROVIDERS_CONFIG: Record<SystemProviderId, SystemProvider> =
     apiKey: '',
     apiHost: 'https://api.poe.com/v1/',
     models: SYSTEM_MODELS['poe'],
+    isSystem: true,
+    enabled: false
+  },
+  aionly: {
+    id: 'aionly',
+    name: 'AIOnly',
+    type: 'openai',
+    apiKey: '',
+    apiHost: 'https://api.aiionly.com',
+    models: SYSTEM_MODELS.aionly,
+    isSystem: true,
+    enabled: false
+  },
+  longcat: {
+    id: 'longcat',
+    name: 'LongCat',
+    type: 'openai',
+    apiKey: '',
+    apiHost: 'https://api.longcat.chat/openai',
+    models: SYSTEM_MODELS.longcat,
+    isSystem: true,
+    enabled: false
+  },
+  huggingface: {
+    id: 'huggingface',
+    name: 'Hugging Face',
+    type: 'openai-response',
+    apiKey: '',
+    apiHost: 'https://router.huggingface.co/v1/',
+    models: [],
     isSystem: true,
     enabled: false
   }
@@ -1090,17 +1120,17 @@ export const PROVIDER_URLS: Record<SystemProviderId, ProviderUrls> = {
       models: 'https://maas.lanyun.net/#/model/modelSquare'
     }
   },
-  // vertexai: {
-  //   api: {
-  //     url: 'https://console.cloud.google.com/apis/api/aiplatform.googleapis.com/overview'
-  //   },
-  //   websites: {
-  //     official: 'https://cloud.google.com/vertex-ai',
-  //     apiKey: 'https://console.cloud.google.com/apis/credentials',
-  //     docs: 'https://cloud.google.com/vertex-ai/generative-ai/docs',
-  //     models: 'https://cloud.google.com/vertex-ai/generative-ai/docs/learn/models'
-  //   }
-  // },
+  vertexai: {
+    api: {
+      url: 'https://console.cloud.google.com/apis/api/aiplatform.googleapis.com/overview'
+    },
+    websites: {
+      official: 'https://cloud.google.com/vertex-ai',
+      apiKey: 'https://console.cloud.google.com/apis/credentials',
+      docs: 'https://cloud.google.com/vertex-ai/generative-ai/docs',
+      models: 'https://cloud.google.com/vertex-ai/generative-ai/docs/learn/models'
+    }
+  },
   'new-api': {
     api: {
       url: 'http://localhost:3000'
@@ -1131,6 +1161,39 @@ export const PROVIDER_URLS: Record<SystemProviderId, ProviderUrls> = {
       docs: 'https://creator.poe.com/docs/external-applications/openai-compatible-api',
       models: 'https://poe.com/'
     }
+  },
+  aionly: {
+    api: {
+      url: 'https://api.aiionly.com'
+    },
+    websites: {
+      official: 'https://www.aiionly.com',
+      apiKey: 'https://www.aiionly.com/keyApi',
+      docs: 'https://www.aiionly.com/document',
+      models: 'https://www.aiionly.com'
+    }
+  },
+  longcat: {
+    api: {
+      url: 'https://api.longcat.chat/openai'
+    },
+    websites: {
+      official: 'https://longcat.chat',
+      apiKey: 'https://longcat.chat/platform/api_keys',
+      docs: 'https://longcat.chat/platform/docs/zh/',
+      models: 'https://longcat.chat/platform/docs/zh/APIDocs.html'
+    }
+  },
+  huggingface: {
+    api: {
+      url: 'https://router.huggingface.co/v1/'
+    },
+    websites: {
+      official: 'https://huggingface.co/',
+      apiKey: 'https://huggingface.co/settings/tokens',
+      docs: 'https://huggingface.co/docs',
+      models: 'https://huggingface.co/models'
+    }
   }
 }
 
@@ -1139,7 +1202,8 @@ const NOT_SUPPORT_ARRAY_CONTENT_PROVIDERS = [
   'baichuan',
   'minimax',
   'xirang',
-  'poe'
+  'poe',
+  'cephalon'
 ] as const satisfies SystemProviderId[]
 
 /**
@@ -1204,15 +1268,58 @@ export const isSupportServiceTierProvider = (provider: Provider) => {
   )
 }
 
-const SUPPORT_GEMINI_URL_CONTEXT_PROVIDER_TYPES = ['gemini', 'vertexai'] as const satisfies ProviderType[]
+const SUPPORT_URL_CONTEXT_PROVIDER_TYPES = [
+  'gemini',
+  'vertexai',
+  'anthropic',
+  'new-api'
+] as const satisfies ProviderType[]
 
 export const isSupportUrlContextProvider = (provider: Provider) => {
-  return SUPPORT_GEMINI_URL_CONTEXT_PROVIDER_TYPES.some(type => type === provider.type)
+  return SUPPORT_URL_CONTEXT_PROVIDER_TYPES.some((type) => type === provider.type)
 }
 
-const SUPPORT_GEMINI_NATIVE_WEB_SEARCH_PROVIDERS = ['gemini'] as const satisfies SystemProviderId[]
+const SUPPORT_GEMINI_NATIVE_WEB_SEARCH_PROVIDERS = ['gemini', 'vertexai'] as const satisfies SystemProviderId[]
 
 /** 判断是否是使用 Gemini 原生搜索工具的 provider. 目前假设只有官方 API 使用原生工具 */
 export const isGeminiWebSearchProvider = (provider: Provider) => {
-  return SUPPORT_GEMINI_NATIVE_WEB_SEARCH_PROVIDERS.some(id => id === provider.id)
+  return SUPPORT_GEMINI_NATIVE_WEB_SEARCH_PROVIDERS.some((id) => id === provider.id)
+}
+
+export const isNewApiProvider = (provider: Provider) => {
+  return ['new-api', 'cherryin'].includes(provider.id) || provider.type === 'new-api'
+}
+
+/**
+ * 判断是否为 OpenAI 兼容的提供商
+ * @param {Provider} provider 提供商对象
+ * @returns {boolean} 是否为 OpenAI 兼容提供商
+ */
+export function isOpenAICompatibleProvider(provider: Provider): boolean {
+  return ['openai', 'new-api', 'mistral'].includes(provider.type)
+}
+
+export function isAzureOpenAIProvider(provider: Provider): provider is AzureOpenAIProvider {
+  return provider.type === 'azure-openai'
+}
+
+export function isOpenAIProvider(provider: Provider): boolean {
+  return provider.type === 'openai-response'
+}
+
+export function isAnthropicProvider(provider: Provider): boolean {
+  return provider.type === 'anthropic'
+}
+
+export function isGeminiProvider(provider: Provider): boolean {
+  return provider.type === 'gemini'
+}
+
+const NOT_SUPPORT_API_VERSION_PROVIDERS = ['github', 'copilot'] as const satisfies SystemProviderId[]
+
+export const isSupportAPIVersionProvider = (provider: Provider) => {
+  if (isSystemProvider(provider)) {
+    return !NOT_SUPPORT_API_VERSION_PROVIDERS.some((pid) => pid === provider.id)
+  }
+  return provider.apiOptions?.isNotSupportAPIVersion !== false
 }

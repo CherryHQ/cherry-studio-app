@@ -1,6 +1,5 @@
 import { toInteger } from 'lodash'
 
-import { DEFAULT_MAX_TOKENS } from '@/config/constant'
 import {
   findTokenLimit,
   GEMINI_FLASH_MODEL_REGEX,
@@ -29,9 +28,11 @@ import {
   MODEL_SUPPORTED_REASONING_EFFORT
 } from '@/config/models'
 import { isSupportEnableThinkingProvider } from '@/config/providers'
+import { DEFAULT_MAX_TOKENS } from '@/constants'
 import { getStoreSetting } from '@/hooks/useSettings'
-import { getAssistantSettings, getProviderByModel } from '@/services/AssistantService'
+import { getAssistantSettings } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
+import { getProviderByModel } from '@/services/ProviderService'
 import type { SettingsState } from '@/store/settings'
 import type { Assistant, Model } from '@/types'
 import { EFFORT_RATIO, isSystemProvider, SystemProviderIds } from '@/types'
@@ -99,7 +100,7 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
           extra_body: {
             google: {
               thinking_config: {
-                thinkingBudget: 0
+                thinking_budget: 0
               }
             }
           }
@@ -193,12 +194,14 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
               thinking: true
             }
           }
+        // specially handled before
+        case SystemProviderIds.silicon: {
+          break
+        }
         default:
           logger.warn(
             `Skipping thinking options for provider ${provider.name} as DeepSeek v3.1 thinking control method is unknown`
-          )
-        case SystemProviderIds.silicon:
-        // specially handled before
+          )          
       }
     }
   }
@@ -260,8 +263,8 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
         extra_body: {
           google: {
             thinking_config: {
-              thinkingBudget: -1,
-              includeThoughts: true
+              thinking_budget: -1,
+              include_thoughts: true
             }
           }
         }
@@ -271,8 +274,8 @@ export function getReasoningEffort(assistant: Assistant, model: Model): Reasonin
       extra_body: {
         google: {
           thinking_config: {
-            thinkingBudget: budgetTokens,
-            includeThoughts: true
+            thinking_budget: budgetTokens ?? 0,
+            include_thoughts: true
           }
         }
       }

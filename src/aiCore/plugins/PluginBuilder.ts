@@ -1,13 +1,13 @@
 import type { AiPlugin } from '@cherrystudio/ai-core'
 import { createPromptToolUsePlugin, webSearchPlugin } from '@cherrystudio/ai-core/built-in/plugins'
 
-import { getEnableDeveloperMode } from '@/hooks/useSettings'
+// import { getEnableDeveloperMode } from '@/hooks/useSettings'
 import { loggerService } from '@/services/LoggerService'
 import type { Assistant } from '@/types'
 
 import type { AiSdkMiddlewareConfig } from '../middleware/AiSdkMiddlewareBuilder'
 import { searchOrchestrationPlugin } from './searchOrchestrationPlugin'
-import { createTelemetryPlugin } from './telemetryPlugin'
+// import { createTelemetryPlugin } from './telemetryPlugin'
 
 const logger = loggerService.withContext('PluginBuilder')
 /**
@@ -18,16 +18,16 @@ export function buildPlugins(
 ): AiPlugin[] {
   const plugins: AiPlugin[] = []
 
-  if (middlewareConfig.topicId && getEnableDeveloperMode()) {
-    // 0. 添加 telemetry 插件
-    plugins.push(
-      createTelemetryPlugin({
-        enabled: true,
-        topicId: middlewareConfig.topicId,
-        assistant: middlewareConfig.assistant
-      })
-    )
-  }
+  // if (middlewareConfig.topicId && getEnableDeveloperMode()) {
+  //   // 0. 添加 telemetry 插件
+  //   plugins.push(
+  //     createTelemetryPlugin({
+  //       enabled: true,
+  //       topicId: middlewareConfig.topicId,
+  //       assistant: middlewareConfig.assistant
+  //     })
+  //   )
+  // }
 
   // 1. 模型内置搜索
   if (middlewareConfig.enableWebSearch && middlewareConfig.webSearchPluginConfig) {

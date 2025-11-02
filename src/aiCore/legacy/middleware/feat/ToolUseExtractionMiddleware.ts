@@ -2,7 +2,7 @@ import { loggerService } from '@/services/LoggerService'
 import type { MCPTool } from '@/types'
 import type { MCPToolCreatedChunk, TextDeltaChunk } from '@/types/chunk'
 import { ChunkType } from '@/types/chunk'
-import { parseToolUse } from '@/utils/mcp-tools'
+import { parseToolUse } from '@/utils/mcpTool'
 import type { TagConfig } from '@/utils/tagExtraction'
 import { TagExtractor } from '@/utils/tagExtraction'
 

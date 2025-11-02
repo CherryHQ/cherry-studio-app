@@ -1,19 +1,17 @@
 import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins'
 import type { LanguageModelMiddleware } from 'ai'
 import { extractReasoningMiddleware, simulateStreamingMiddleware } from 'ai'
-import { isEmpty } from 'lodash'
 
 import { isSupportedThinkingTokenQwenModel } from '@/config/models'
 import { isSupportEnableThinkingProvider } from '@/config/providers'
 import { loggerService } from '@/services/LoggerService'
-import type { type Assistant, MCPTool , type Message, type Model, type Provider } from '@/types'
+import type { Assistant, MCPTool, Message, Model, Provider } from '@/types'
 import type { Chunk } from '@/types/chunk'
 
 import { isOpenRouterGeminiGenerateImageModel } from '../utils/image'
 import { noThinkMiddleware } from './noThinkMiddleware'
 import { openrouterGenerateImageMiddleware } from './openrouterGenerateImageMiddleware'
 import { qwenThinkingMiddleware } from './qwenThinkingMiddleware'
-import { toolChoiceMiddleware } from './toolChoiceMiddleware'
 
 const logger = loggerService.withContext('AiSdkMiddlewareBuilder')
 
@@ -133,14 +131,14 @@ export class AiSdkMiddlewareBuilder {
 export function buildAiSdkMiddlewares(config: AiSdkMiddlewareConfig): LanguageModelMiddleware[] {
   const builder = new AiSdkMiddlewareBuilder()
 
-  // 0. 知识库强制调用中间件（必须在最前面，确保第一轮强制调用知识库）
-  if (!isEmpty(config.assistant?.knowledge_bases?.map(base => base.id)) && config.knowledgeRecognition !== 'on') {
-    builder.add({
-      name: 'force-knowledge-first',
-      middleware: toolChoiceMiddleware('builtin_knowledge_search')
-    })
-    logger.debug('Added toolChoice middleware to force knowledge base search on first round')
-  }
+  // // 0. 知识库强制调用中间件（必须在最前面，确保第一轮强制调用知识库）
+  // if (!isEmpty(config.assistant?.knowledge_bases?.map(base => base.id)) && config.knowledgeRecognition !== 'on') {
+  //   builder.add({
+  //     name: 'force-knowledge-first',
+  //     middleware: toolChoiceMiddleware('builtin_knowledge_search')
+  //   })
+  //   logger.debug('Added toolChoice middleware to force knowledge base search on first round')
+  // }
 
   // 1. 根据provider添加特定中间件
   if (config.provider) {

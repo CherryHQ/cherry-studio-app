@@ -1,6 +1,8 @@
 import * as z from 'zod'
 
+import type { KnowledgeReference } from './knowledge'
 import type { BaseTool, MCPTool } from './tool'
+import type { WebSearchResponse } from './websearch'
 
 export const MCPConfigSampleSchema = z.object({
   command: z.string(),
@@ -325,20 +327,6 @@ export const isBuiltinMCPServerName = (name: string): name is BuiltinMCPServerNa
   return BuiltinMCPServerNamesArray.some(n => n === name)
 }
 
-export interface MCPToolInputSchema {
-  type: string
-  title: string
-  description?: string
-  required?: string[]
-  properties: Record<string, object>
-}
-
-export const MCPToolOutputSchema = z.object({
-  type: z.literal('object'),
-  properties: z.record(z.string(), z.unknown()),
-  required: z.array(z.string())
-})
-
 export interface MCPPromptArguments {
   name: string
   description?: string
@@ -432,4 +420,11 @@ export interface MCPResource {
   size?: number
   text?: string
   blob?: string
+}
+
+export type ExternalToolResult = {
+  mcpTools?: MCPTool[]
+  toolUse?: MCPToolResponse[]
+  webSearch?: WebSearchResponse
+  knowledge?: KnowledgeReference[]
 }

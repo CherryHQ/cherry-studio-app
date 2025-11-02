@@ -1,4 +1,5 @@
-import type OpenAI from 'openai'
+import type OpenAI from '@cherrystudio/openai'
+import * as z from 'zod'
 
 import type { StreamTextParams } from './aiCoretypes'
 import type { Chunk } from './chunk'
@@ -27,24 +28,32 @@ export type Assistant = {
   tags?: string[] // 助手标签
   group?: string[] // 助手分组
   mcpServers?: MCPServer[]
+  // for translate. 更好的做法是定义base assistant，把 Assistant 作为多种不同定义 assistant 的联合类型，但重构代价太大
+  // content?: string
+  // targetLanguage?: TranslateLanguage
 }
 
 const ThinkModelTypes = [
   'default',
   'o',
+  'openai_deep_research',
   'gpt5',
+  'gpt5_codex',
   'grok',
+  'grok4_fast',
   'gemini',
   'gemini_pro',
   'qwen',
   'qwen_thinking',
   'doubao',
   'doubao_no_auto',
+  'doubao_after_251015',
   'hunyuan',
   'zhipu',
   'perplexity',
   'deepseek_hybrid'
 ] as const
+
 
 export type ReasoningEffortOption = NonNullable<OpenAI.ReasoningEffort> | 'auto'
 export type ThinkingOption = ReasoningEffortOption | 'off'
@@ -181,6 +190,8 @@ export type ProviderApiOptions = {
   isSupportServiceTier?: boolean
   /** 是否不支持 enable_thinking 参数 */
   isNotSupportEnableThinking?: boolean
+  /** 是否不支持 APIVersion */
+  isNotSupportAPIVersion?: boolean
 }
 
 export type OpenAIVerbosity = 'high' | 'medium' | 'low'
@@ -252,16 +263,20 @@ export type Provider = {
   extra_headers?: Record<string, string>
 }
 
-export type ProviderType =
-  | 'openai'
-  | 'openai-response'
-  | 'anthropic'
-  | 'gemini'
-  | 'qwenlm'
-  | 'azure-openai'
-  | 'vertexai'
-  | 'mistral'
-  | 'aws-bedrock'
+export const ProviderTypeSchema = z.enum([
+  'openai',
+  'openai-response',
+  'anthropic',
+  'gemini',
+  'azure-openai',
+  'vertexai',
+  'mistral',
+  'aws-bedrock',
+  'vertex-anthropic',
+  'new-api'
+])
+
+export type ProviderType = z.infer<typeof ProviderTypeSchema>
 
 export type ApiStatus = 'idle' | 'processing' | 'success' | 'error'
 
@@ -291,7 +306,7 @@ export const SystemProviderIds = {
   openai: 'openai',
   'azure-openai': 'azure-openai',
   gemini: 'gemini',
-  // vertexai: 'vertexai',
+  vertexai: 'vertexai',
   github: 'github',
   copilot: 'copilot',
   zhipu: 'zhipu',
@@ -320,7 +335,10 @@ export const SystemProviderIds = {
   gpustack: 'gpustack',
   voyageai: 'voyageai',
   'aws-bedrock': 'aws-bedrock',
-  poe: 'poe'
+  poe: 'poe',
+  aionly: 'aionly',
+  longcat: 'longcat',
+  huggingface: 'huggingface'
 } as const
 
 export type SystemProviderId = keyof typeof SystemProviderIds
@@ -333,6 +351,20 @@ export type SystemProvider = Provider & {
   id: SystemProviderId
   isSystem: true
   apiOptions?: never
+}
+
+export type VertexProvider = Provider & {
+  googleCredentials: {
+    privateKey: string
+    clientEmail: string
+  }
+  project: string
+  location: string
+}
+
+export type AzureOpenAIProvider = Provider & {
+  type: 'azure-openai'
+  apiVersion: string
 }
 
 /**

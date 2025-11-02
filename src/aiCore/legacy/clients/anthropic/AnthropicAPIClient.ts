@@ -23,23 +23,22 @@ import type {
   WebSearchToolResultError
 } from '@anthropic-ai/sdk/resources/messages'
 import { MessageStream } from '@anthropic-ai/sdk/resources/messages/messages'
-import type AnthropicVertex from '@anthropic-ai/vertex-sdk'
 import { t } from 'i18next'
 
-import { buildClaudeCodeSystemMessage, getSdkClient } from '@/aiCore/provider/config/anthropic'
-import { DEFAULT_MAX_TOKENS } from '@/config/constant'
 import { findTokenLimit, isClaudeReasoningModel, isReasoningModel, isWebSearchModel } from '@/config/models'
+import { DEFAULT_MAX_TOKENS } from '@/constants'
 import { getAssistantSettings } from '@/services/AssistantService'
-import FileManager from '@/services/FileManager'
+import { fileService } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import { estimateTextTokens } from '@/services/TokenService'
 import type {
   Assistant,
+  GenerateImageParams,
   MCPCallToolResponse,
   MCPTool,
   MCPToolResponse,
+  Message,
   Model,
-  Provider,
   ToolCallResponse
 } from '@/types'
 import { EFFORT_RATIO, FileTypes, WebSearchSource } from '@/types'
@@ -54,20 +53,20 @@ import type {
   ThinkingStartChunk
 } from '@/types/chunk'
 import { ChunkType } from '@/types/chunk'
-import { type Message } from '@/types/newMessage'
 import type {
   AnthropicSdkMessageParam,
   AnthropicSdkParams,
   AnthropicSdkRawChunk,
   AnthropicSdkRawOutput
 } from '@/types/sdk'
+import { getSdkClient } from '@/utils/anthropic'
 import { addImageFileToContents } from '@/utils/formats'
 import {
   anthropicToolUseToMcpTool,
   isSupportedToolUse,
   mcpToolCallResponseToAnthropicMessage,
   mcpToolsToAnthropicTools
-} from '@/utils/mcp-tools'
+} from '@/utils/mcpTool'
 import { findFileBlocks, findImageBlocks } from '@/utils/messageUtils/find'
 
 import type { GenericChunk } from '../../middleware/schemas'
@@ -77,7 +76,7 @@ import type { AnthropicStreamListener, RawStreamListener, RequestTransformer, Re
 const logger = loggerService.withContext('AnthropicAPIClient')
 
 export class AnthropicAPIClient extends BaseApiClient<
-  Anthropic | AnthropicVertex,
+  Anthropic,
   AnthropicSdkParams,
   AnthropicSdkRawOutput,
   AnthropicSdkRawChunk,
@@ -86,18 +85,11 @@ export class AnthropicAPIClient extends BaseApiClient<
   ToolUnion
 > {
   oauthToken: string | undefined = undefined
-  sdkInstance: Anthropic | AnthropicVertex | undefined = undefined
+  sdkInstance: Anthropic | undefined = undefined
 
-  constructor(provider: Provider) {
-    super(provider)
-  }
-
-  async getSdkInstance(): Promise<Anthropic | AnthropicVertex> {
+  async getSdkInstance(): Promise<Anthropic> {
     if (this.sdkInstance) {
       return this.sdkInstance
-    }
-    if (this.provider.authType === 'oauth') {
-      this.oauthToken = await window.api.anthropic_oauth.getAccessToken()
     }
     this.sdkInstance = getSdkClient(this.provider, this.oauthToken)
     return this.sdkInstance
@@ -107,9 +99,6 @@ export class AnthropicAPIClient extends BaseApiClient<
     payload: AnthropicSdkParams,
     options?: Anthropic.RequestOptions
   ): Promise<AnthropicSdkRawOutput> {
-    if (this.provider.authType === 'oauth') {
-      payload.system = buildClaudeCodeSystemMessage(payload.system)
-    }
     const sdk = (await this.getSdkInstance()) as Anthropic
     if (payload.stream) {
       return sdk.messages.stream(payload, options)
@@ -119,7 +108,7 @@ export class AnthropicAPIClient extends BaseApiClient<
 
   // @ts-ignore sdk未提供
   // oxlint-disable-next-line @typescript-eslint/no-unused-vars
-  override async generateImage(generateImageParams: GenerateImageParams): Promise<string[]> {
+  override async generateImage(_enerateImageParams: GenerateImageParams): Promise<string[]> {
     return []
   }
 
@@ -208,13 +197,13 @@ export class AnthropicAPIClient extends BaseApiClient<
 
     if (imageContents.length > 0) {
       for (const imageContent of imageContents) {
-        const base64Data = await window.api.file.base64Image(imageContent.fileId + imageContent.fileExt)
+        const base64Data = await fileService.base64Image(imageContent.fileId + imageContent.fileExt)
         base64Data.mime = base64Data.mime.replace('jpg', 'jpeg')
         if (AnthropicAPIClient.isValidBase64ImageMediaType(base64Data.mime)) {
           parts.push({
             type: 'image',
             source: {
-              data: base64Data.base64,
+              data: base64Data.data,
               media_type: base64Data.mime,
               type: 'base64'
             }
@@ -226,29 +215,29 @@ export class AnthropicAPIClient extends BaseApiClient<
     }
 
     // Get and process image blocks
-    const imageBlocks = findImageBlocks(message)
+    const imageBlocks = await findImageBlocks(message)
     for (const imageBlock of imageBlocks) {
       if (imageBlock.file) {
         // Handle uploaded file
         const file = imageBlock.file
-        const base64Data = await window.api.file.base64Image(file.id + file.ext)
+        const base64Data = await fileService.base64Image(file.id + file.ext)
         parts.push({
           type: 'image',
           source: {
-            data: base64Data.base64,
-            media_type: base64Data.mime.replace('jpg', 'jpeg') as any,
+            data: base64Data.data,
+            media_type: base64Data.mime as Base64ImageSource['media_type'],
             type: 'base64'
           }
         })
       }
     }
     // Get and process file blocks
-    const fileBlocks = findFileBlocks(message)
+    const fileBlocks = await findFileBlocks(message)
     for (const fileBlock of fileBlocks) {
       const { file } = fileBlock
       if ([FileTypes.TEXT, FileTypes.DOCUMENT].includes(file.type)) {
         if (file.ext === '.pdf' && file.size < 32 * 1024 * 1024) {
-          const base64Data = await FileManager.readBase64File(file)
+          const base64Data = await fileService.readBase64(file)
           parts.push({
             type: 'document',
             source: {
@@ -258,7 +247,7 @@ export class AnthropicAPIClient extends BaseApiClient<
             }
           })
         } else {
-          const fileContent = await (await window.api.file.read(file.id + file.ext, true)).trim()
+          const fileContent = fileService.readFile(file).trim()
           parts.push({
             type: 'text',
             text: file.origin_name + '\n' + fileContent
@@ -493,7 +482,7 @@ export class AnthropicAPIClient extends BaseApiClient<
         if (typeof messages === 'string') {
           sdkMessages.push({ role: 'user', content: messages })
         } else {
-          const processedMessages = addImageFileToContents(messages)
+          const processedMessages = await addImageFileToContents(messages)
           for (const message of processedMessages) {
             sdkMessages.push(await this.convertMessageToSdkParam(message))
           }

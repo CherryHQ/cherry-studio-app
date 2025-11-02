@@ -15,8 +15,6 @@ import { formatErrorMessage } from '@/utils/error'
 import { convertLinks, flushLinkConverterBuffer } from '@/utils/linkConverter'
 
 import { ToolCallChunkHandler } from './handleToolCallChunk'
-// ClaudeCodeRawValue type not available in React Native app
-type ClaudeCodeRawValue = any
 
 const logger = loggerService.withContext('AiSdkToChunkAdapter')
 
@@ -127,17 +125,17 @@ export class AiSdkToChunkAdapter {
   ) {
     logger.silly(`AI SDK chunk type: ${chunk.type}`, chunk)
     switch (chunk.type) {
-      case 'raw': {
-        const agentRawMessage = chunk.rawValue as ClaudeCodeRawValue
-        if (agentRawMessage.type === 'init' && agentRawMessage.session_id) {
-          this.onSessionUpdate?.(agentRawMessage.session_id)
-        }
-        this.onChunk({
-          type: ChunkType.RAW,
-          content: agentRawMessage
-        })
-        break
-      }
+      // case 'raw': {
+      //   const agentRawMessage = chunk.rawValue as ClaudeCodeRawValue
+      //   if (agentRawMessage.type === 'init' && agentRawMessage.session_id) {
+      //     this.onSessionUpdate?.(agentRawMessage.session_id)
+      //   }
+      //   this.onChunk({
+      //     type: ChunkType.RAW,
+      //     content: agentRawMessage
+      //   })
+      //   break
+      // }
       // === 文本相关事件 ===
       case 'text-start':
         this.onChunk({

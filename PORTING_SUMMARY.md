@@ -3,7 +3,8 @@
 ## Completed Work
 
 ### Source Information
-- **Upstream Repository**: https://github.com/CherryHQ/cherry-studio  
+
+- **Upstream Repository**: https://github.com/CherryHQ/cherry-studio
 - **Latest Commit Ported**: `28bc89ac7ccd9acf502f9e564848ed1530a7b373`
 - **Commit Range**: HEAD~100..HEAD (last 100 commits)
 - **Total Changes**: 2868 lines across 70 files
@@ -11,6 +12,7 @@
 ### Files Ported
 
 #### New Files Added (16 files)
+
 1. `src/aiCore/chunk/handleToolCallChunk.ts`
 2. `src/aiCore/legacy/clients/__tests__/ApiClientFactory.test.ts`
 3. `src/aiCore/legacy/clients/__tests__/index.clientCompatibilityTypes.test.ts`
@@ -29,7 +31,9 @@
 16. `src/aiCore/trace/AiSdkSpanAdapter.ts`
 
 #### Modified Files (54 files)
+
 All files in the upstream diff have been updated with the latest code changes, including:
+
 - Chunk handling improvements
 - Middleware enhancements
 - Client updates for various providers
@@ -63,6 +67,7 @@ All files were automatically transformed with the following replacements:
 The following modules referenced in the ported code do not yet exist in the React Native app and will need React Native equivalents:
 
 #### Services
+
 - `@/services/KnowledgeService` - Knowledge base search functionality
 - `@/services/SpanManagerService` - Tracing/telemetry span management
 - `@/services/FileManager` - File upload/management
@@ -70,12 +75,14 @@ The following modules referenced in the ported code do not yet exist in the Reac
 - `@/services/WebTraceService` - Web tracing service
 
 #### Hooks
+
 - `@/hooks/useAwsBedrock` - AWS Bedrock configuration hook
 - `@/hooks/useVertexAI` - Google Vertex AI configuration hook
 - `@/hooks/useLMStudio` - LM Studio configuration hook
 - `@/hooks/useSettings` (`getEnableDeveloperMode`) - Settings hooks
 
 #### Types
+
 - `@/types/provider-specific-error` - Provider-specific error types
 - `@/types/newMessage` - New message type definitions
 - `@/types/aiCoreTypes` - AI Core type definitions
@@ -83,6 +90,7 @@ The following modules referenced in the ported code do not yet exist in the Reac
 - Various exported types from `@/types` that are currently internal
 
 #### Utilities
+
 - `@/utils/mcp-tools` - MCP tools utilities
 - `@/utils/aws-bedrock-utils` - AWS Bedrock utilities
 - `@/utils/assistant` - Assistant utilities
@@ -93,6 +101,7 @@ The following modules referenced in the ported code do not yet exist in the Reac
 - `@/config/providers` (`isNewApiProvider`) - Provider configuration
 
 #### External Packages
+
 - `@cherrystudio/openai` - Custom OpenAI package
 - `@cherrystudio/openai/uploads` - File upload support
 - `@anthropic-ai/vertex-sdk` - Anthropic Vertex SDK
@@ -105,6 +114,7 @@ The following modules referenced in the ported code do not yet exist in the Reac
 - `@cherrystudio/ai-core/core/providers/schemas` - AI Core schemas
 
 #### Other
+
 - `@/aiCore/provider/constants` - Provider constants
 - `@/store/memory` - Memory store
 - `window.api.*` - Electron IPC calls (many references need removal/adaptation)
@@ -116,7 +126,7 @@ Many types are declared locally in `@/types` but not exported. The following exp
 
 ```typescript
 // In src/types/index.ts or appropriate files:
-export type { 
+export type {
   AISDKWebSearchResult,
   Assistant,
   BaseTool,
@@ -157,7 +167,7 @@ export type {
 ## Verification Status
 
 - ✅ All upstream files copied and transformed
-- ✅ Import paths transformed to React Native conventions  
+- ✅ Import paths transformed to React Native conventions
 - ✅ Code formatted with Prettier
 - ❌ TypeScript compilation (expected - missing modules)
 - ❌ ESLint (expected - missing modules)
@@ -175,7 +185,7 @@ export type {
 ## Files Changed
 
 - Modified: 54 files
-- Added: 16 files  
+- Added: 16 files
 - Total: 70 files in `src/aiCore/`
 
 See commit `458eeef` for complete diff.

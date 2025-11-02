@@ -16,6 +16,7 @@ import {
 } from '@/config/models'
 import { isSupportDeveloperRoleProvider } from '@/config/providers'
 import { MB } from '@/constants'
+import { fileService } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import { estimateTextTokens } from '@/services/TokenService'
 import type {
@@ -23,6 +24,7 @@ import type {
   MCPCallToolResponse,
   MCPTool,
   MCPToolResponse,
+  Message,
   Model,
   OpenAIServiceTier,
   Provider,
@@ -30,7 +32,6 @@ import type {
 } from '@/types'
 import { FileTypes, WebSearchSource } from '@/types'
 import { ChunkType } from '@/types/chunk'
-import type { Message } from '@/types/newMessage'
 import type {
   OpenAIResponseSdkMessageParam,
   OpenAIResponseSdkParams,
@@ -45,7 +46,7 @@ import {
   mcpToolCallResponseToOpenAIMessage,
   mcpToolsToOpenAIResponseTools,
   openAIToolsToMcpTool
-} from '@/utils/mcp-tools'
+} from '@/utils/mcpTool'
 import { findFileBlocks, findImageBlocks } from '@/utils/messageUtils/find'
 
 import type { RequestTransformer, ResponseChunkTransformer } from '../types'
@@ -149,7 +150,7 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
     options?: OpenAI.RequestOptions
   ): Promise<OpenAIResponseSdkRawOutput> {
     const sdk = await this.getSdkInstance()
-    return await sdk.responses.create(payload, options)
+    return (await sdk.responses.create(payload, options)) as OpenAIResponseSdkRawOutput
   }
 
   private async handlePdfFile(file: FileMetadata): Promise<OpenAI.Responses.ResponseInputFile | undefined> {
@@ -161,19 +162,19 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
       return undefined
     }
 
-    const { data } = await window.api.file.base64File(file.id + file.ext)
+    const base64File = await fileService.base64File(file)
     return {
       type: 'input_file',
       filename: file.origin_name,
-      file_data: `data:application/pdf;base64,${data}`
+      file_data: `data:application/pdf;base64,${base64File.data}`
     } as OpenAI.Responses.ResponseInputFile
   }
 
   public async convertMessageToSdkParam(message: Message, model: Model): Promise<OpenAIResponseSdkMessageParam> {
     const isVision = isVisionModel(model)
     const { textContent, imageContents } = await this.getMessageContent(message)
-    const fileBlocks = findFileBlocks(message)
-    const imageBlocks = findImageBlocks(message)
+    const fileBlocks = await findFileBlocks(message)
+    const imageBlocks = await findImageBlocks(message)
 
     if (fileBlocks.length === 0 && imageBlocks.length === 0 && imageContents.length === 0) {
       if (message.role === 'assistant') {
@@ -199,7 +200,7 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
 
     if (imageContents.length > 0) {
       for (const imageContent of imageContents) {
-        const image = await window.api.file.base64Image(imageContent.fileId + imageContent.fileExt)
+        const image = await fileService.base64Image(imageContent.fileId + imageContent.fileExt)
         parts.push({
           detail: 'auto',
           type: 'input_image',
@@ -211,7 +212,7 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
     for (const imageBlock of imageBlocks) {
       if (isVision) {
         if (imageBlock.file) {
-          const image = await window.api.file.base64Image(imageBlock.file.id + imageBlock.file.ext)
+          const image = await fileService.base64Image(imageBlock.file.id + imageBlock.file.ext)
           parts.push({
             detail: 'auto',
             type: 'input_image',
@@ -240,7 +241,7 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
       }
 
       if ([FileTypes.TEXT, FileTypes.DOCUMENT].includes(file.type)) {
-        const fileContent = (await window.api.file.read(file.id + file.ext, true)).trim()
+        const fileContent = fileService.readFile(file).trim()
         parts.push({
           type: 'input_text',
           text: file.origin_name + '\n' + fileContent
@@ -429,7 +430,7 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
         if (typeof messages === 'string') {
           userMessage.push({ role: 'user', content: messages })
         } else {
-          const processedMessages = addImageFileToContents(messages)
+          const processedMessages = await addImageFileToContents(messages)
           for (const message of processedMessages) {
             userMessage.push(await this.convertMessageToSdkParam(message, model))
           }

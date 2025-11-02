@@ -8,10 +8,11 @@ import {
 import { t } from 'i18next'
 
 import type { GenericChunk } from '@/aiCore/legacy/middleware/schemas'
-import { DEFAULT_MAX_TOKENS } from '@/config/constant'
 import { findTokenLimit, isReasoningModel } from '@/config/models'
+import { DEFAULT_MAX_TOKENS } from '@/constants'
 import { getAwsBedrockAccessKeyId, getAwsBedrockRegion, getAwsBedrockSecretAccessKey } from '@/hooks/useAwsBedrock'
 import { getAssistantSettings } from '@/services/AssistantService'
+import { fileService } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import { estimateTextTokens } from '@/services/TokenService'
 import type {
@@ -20,6 +21,7 @@ import type {
   MCPCallToolResponse,
   MCPTool,
   MCPToolResponse,
+  Message,
   Model,
   Provider,
   ToolCallResponse
@@ -27,7 +29,6 @@ import type {
 import { EFFORT_RATIO, FileTypes } from '@/types'
 import type { MCPToolCreatedChunk, TextDeltaChunk, ThinkingDeltaChunk, ThinkingStartChunk } from '@/types/chunk'
 import { ChunkType } from '@/types/chunk'
-import type { Message } from '@/types/newMessage'
 import type {
   AwsBedrockSdkInstance,
   AwsBedrockSdkMessageParam,
@@ -39,13 +40,13 @@ import type {
   AwsBedrockStreamChunk,
   SdkModel
 } from '@/types/sdk'
-import { convertBase64ImageToAwsBedrockFormat } from '@/utils/aws-bedrock-utils'
+import { convertBase64ImageToAwsBedrockFormat } from '@/utils/aws'
 import {
   awsBedrockToolUseToMcpTool,
   isSupportedToolUse,
   mcpToolCallResponseToAwsBedrockMessage,
   mcpToolsToAwsBedrockTools
-} from '@/utils/mcp-tools'
+} from '@/utils/mcpTool'
 import { findFileBlocks, findImageBlocks } from '@/utils/messageUtils/find'
 
 import { BaseApiClient } from '../BaseApiClient'
@@ -636,9 +637,9 @@ export class AwsBedrockAPIClient extends BaseApiClient<
     if (imageContents.length > 0) {
       for (const imageContent of imageContents) {
         try {
-          const image = await window.api.file.base64Image(imageContent.fileId + imageContent.fileExt)
+          const image = await fileService.base64Image(imageContent.fileId + imageContent.fileExt)
           const mimeType = image.mime || 'image/png'
-          const base64Data = image.base64
+          const base64Data = image.data
 
           const awsImage = convertBase64ImageToAwsBedrockFormat(base64Data, mimeType)
           if (awsImage) {
@@ -655,13 +656,13 @@ export class AwsBedrockAPIClient extends BaseApiClient<
     }
 
     // 处理图片内容
-    const imageBlocks = findImageBlocks(message)
+    const imageBlocks = await findImageBlocks(message)
     for (const imageBlock of imageBlocks) {
       if (imageBlock.file) {
         try {
-          const image = await window.api.file.base64Image(imageBlock.file.id + imageBlock.file.ext)
+          const image = await fileService.base64Image(imageBlock.file.id + imageBlock.file.ext)
           const mimeType = image.mime || 'image/png'
-          const base64Data = image.base64
+          const base64Data = image.data
 
           const awsImage = convertBase64ImageToAwsBedrockFormat(base64Data, mimeType)
           if (awsImage) {
@@ -697,7 +698,7 @@ export class AwsBedrockAPIClient extends BaseApiClient<
     }
 
     // 处理文件内容
-    const fileBlocks = findFileBlocks(message)
+    const fileBlocks = await findFileBlocks(message)
     for (const fileBlock of fileBlocks) {
       const file = fileBlock.file
       if (!file) {
@@ -707,7 +708,7 @@ export class AwsBedrockAPIClient extends BaseApiClient<
 
       if ([FileTypes.TEXT, FileTypes.DOCUMENT].includes(file.type)) {
         try {
-          const fileContent = (await window.api.file.read(file.id + file.ext, true)).trim()
+          const fileContent = fileService.readFile(file).trim()
           if (fileContent) {
             parts.push({
               text: `${file.origin_name}\n${fileContent}`

@@ -1,6 +1,5 @@
 import type {
   Content,
-  File,
   FunctionCall,
   GenerateContentConfig,
   GenerateImagesConfig,
@@ -11,7 +10,7 @@ import type {
   ThinkingConfig,
   Tool
 } from '@google/genai'
-import { createPartFromUri, GoogleGenAI, HarmBlockThreshold, HarmCategory, Modality } from '@google/genai'
+import { GoogleGenAI, HarmBlockThreshold, HarmCategory, Modality } from '@google/genai'
 import { nanoid } from '@reduxjs/toolkit'
 import { t } from 'i18next'
 
@@ -22,25 +21,24 @@ import {
   isSupportedThinkingTokenGeminiModel,
   isVisionModel
 } from '@/config/models'
-import { defaultTimeout, MB } from '@/constants'
+import { defaultTimeout } from '@/constants'
+import { fileService } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import { estimateTextTokens } from '@/services/TokenService'
 import type {
   Assistant,
   FileMetadata,
-  FileUploadResponse,
   GenerateImageParams,
   MCPCallToolResponse,
   MCPTool,
   MCPToolResponse,
+  Message,
   Model,
-  Provider,
   ToolCallResponse
 } from '@/types'
 import { EFFORT_RATIO, FileTypes, WebSearchSource } from '@/types'
 import type { LLMWebSearchCompleteChunk, TextStartChunk, ThinkingStartChunk } from '@/types/chunk'
 import { ChunkType } from '@/types/chunk'
-import type { Message } from '@/types/newMessage'
 import type {
   GeminiOptions,
   GeminiSdkMessageParam,
@@ -49,14 +47,14 @@ import type {
   GeminiSdkRawOutput,
   GeminiSdkToolCall
 } from '@/types/sdk'
-import { isToolUseModeFunction } from '@/utils/assistant'
+import { isToolUseModeFunction } from '@/utils/assistants'
 import {
   geminiFunctionCallToMcpTool,
   isSupportedToolUse,
   mcpToolCallResponseToGeminiMessage,
   mcpToolsToGeminiTools
-} from '@/utils/mcp-tools'
-import { findFileBlocks, findImageBlocks, getMainTextContent } from '@/utils/messageUtils/find'
+} from '@/utils/mcpTool'
+import { findFileBlocks, findImageBlocks } from '@/utils/messageUtils/find'
 
 import type { GenericChunk } from '../../middleware/schemas'
 import { BaseApiClient } from '../BaseApiClient'
@@ -73,10 +71,6 @@ export class GeminiAPIClient extends BaseApiClient<
   GeminiSdkToolCall,
   Tool
 > {
-  constructor(provider: Provider) {
-    super(provider)
-  }
-
   override async createCompletions(payload: GeminiSdkParams, options?: GeminiOptions): Promise<GeminiSdkRawOutput> {
     const sdk = await this.getSdkInstance()
     const { model, history, ...rest } = payload
@@ -197,47 +191,47 @@ export class GeminiAPIClient extends BaseApiClient<
    * @param file - The file
    * @returns The part
    */
-  private async handlePdfFile(file: FileMetadata): Promise<Part> {
-    const smallFileSize = 20 * MB
-    const isSmallFile = file.size < smallFileSize
+  // private async handlePdfFile(file: FileMetadata): Promise<Part> {
+  //   const smallFileSize = 20 * MB
+  //   const isSmallFile = file.size < smallFileSize
 
-    if (isSmallFile) {
-      const { data, mimeType } = await this.base64File(file)
-      return {
-        inlineData: {
-          data,
-          mimeType
-        }
-      }
-    }
+  //   if (isSmallFile) {
+  //     const { data, mimeType } = await this.base64File(file)
+  //     return {
+  //       inlineData: {
+  //         data,
+  //         mimeType
+  //       }
+  //     }
+  //   }
 
-    // Retrieve file from Gemini uploaded files
-    const fileMetadata: FileUploadResponse = await window.api.fileService.retrieve(this.provider, file.id)
+  //   // Retrieve file from Gemini uploaded files
+  //   const fileMetadata: FileUploadResponse = await fileService.retrieve(this.provider, file.id)
 
-    if (fileMetadata.status === 'success') {
-      const remoteFile = fileMetadata.originalFile?.file as File
-      return createPartFromUri(remoteFile.uri!, remoteFile.mimeType!)
-    }
+  //   if (fileMetadata.status === 'success') {
+  //     const remoteFile = fileMetadata.originalFile?.file as File
+  //     return createPartFromUri(remoteFile.uri!, remoteFile.mimeType!)
+  //   }
 
-    // If file is not found, upload it to Gemini
-    const result = await window.api.fileService.upload(this.provider, file)
-    const remoteFile = result.originalFile
-    if (!remoteFile) {
-      throw new Error('File upload failed, please try again')
-    }
-    if (remoteFile.type === 'gemini') {
-      const file = remoteFile.file
-      if (!file.uri) {
-        throw new Error('File URI is required but not found')
-      }
-      if (!file.mimeType) {
-        throw new Error('File MIME type is required but not found')
-      }
-      return createPartFromUri(file.uri, file.mimeType)
-    } else {
-      throw new Error('Unsupported file type for Gemini API')
-    }
-  }
+  //   // If file is not found, upload it to Gemini
+  //   const result = await window.api.fileService.upload(this.provider, file)
+  //   const remoteFile = result.originalFile
+  //   if (!remoteFile) {
+  //     throw new Error('File upload failed, please try again')
+  //   }
+  //   if (remoteFile.type === 'gemini') {
+  //     const file = remoteFile.file
+  //     if (!file.uri) {
+  //       throw new Error('File URI is required but not found')
+  //     }
+  //     if (!file.mimeType) {
+  //       throw new Error('File MIME type is required but not found')
+  //     }
+  //     return createPartFromUri(file.uri, file.mimeType)
+  //   } else {
+  //     throw new Error('Unsupported file type for Gemini API')
+  //   }
+  // }
 
   /**
    * Get the message contents
@@ -251,10 +245,10 @@ export class GeminiAPIClient extends BaseApiClient<
 
     if (imageContents.length > 0) {
       for (const imageContent of imageContents) {
-        const image = await window.api.file.base64Image(imageContent.fileId + imageContent.fileExt)
+        const image = await fileService.base64Image(imageContent.fileId + imageContent.fileExt)
         parts.push({
           inlineData: {
-            data: image.base64,
+            data: image.data,
             mimeType: image.mime
           } satisfies Part['inlineData']
         })
@@ -262,7 +256,7 @@ export class GeminiAPIClient extends BaseApiClient<
     }
 
     // Add any generated images from previous responses
-    const imageBlocks = findImageBlocks(message)
+    const imageBlocks = await findImageBlocks(message)
     for (const imageBlock of imageBlocks) {
       if (
         imageBlock.metadata?.generateImageResponse?.images &&
@@ -287,86 +281,41 @@ export class GeminiAPIClient extends BaseApiClient<
       }
       const file = imageBlock.file
       if (file) {
-        const base64Data = await window.api.file.base64Image(file.id + file.ext)
+        const base64Data = await fileService.base64Image(file.id + file.ext)
         parts.push({
           inlineData: {
-            data: base64Data.base64,
+            data: base64Data.data,
             mimeType: base64Data.mime
           } satisfies Part['inlineData']
         })
       }
     }
 
-    const fileBlocks = findFileBlocks(message)
+    const fileBlocks = await findFileBlocks(message)
     for (const fileBlock of fileBlocks) {
       const file = fileBlock.file
       if (file.type === FileTypes.IMAGE) {
-        const base64Data = await window.api.file.base64Image(file.id + file.ext)
+        const base64Data = await fileService.base64Image(file.id + file.ext)
         parts.push({
           inlineData: {
-            data: base64Data.base64,
+            data: base64Data.data,
             mimeType: base64Data.mime
           } satisfies Part['inlineData']
         })
       }
 
       if (file.ext === '.pdf') {
-        parts.push(await this.handlePdfFile(file))
+        // parts.push(await this.handlePdfFile(file))
         continue
       }
       if ([FileTypes.TEXT, FileTypes.DOCUMENT].includes(file.type)) {
-        const fileContent = await (await window.api.file.read(file.id + file.ext, true)).trim()
+        const fileContent = (await fileService.readFile(file)).trim()
         parts.push({
           text: file.origin_name + '\n' + fileContent
         })
       }
     }
 
-    return {
-      role,
-      parts: parts
-    }
-  }
-
-  // @ts-ignore unused
-  private async getImageFileContents(message: Message): Promise<Content> {
-    const role = message.role === 'user' ? 'user' : 'model'
-    const content = getMainTextContent(message)
-    const parts: Part[] = [{ text: content }]
-    const imageBlocks = findImageBlocks(message)
-    for (const imageBlock of imageBlocks) {
-      if (
-        imageBlock.metadata?.generateImageResponse?.images &&
-        imageBlock.metadata.generateImageResponse.images.length > 0
-      ) {
-        for (const imageUrl of imageBlock.metadata.generateImageResponse.images) {
-          if (imageUrl && imageUrl.startsWith('data:')) {
-            // Extract base64 data and mime type from the data URL
-            const matches = imageUrl.match(/^data:(.+);base64,(.*)$/)
-            if (matches && matches.length === 3) {
-              const mimeType = matches[1]
-              const base64Data = matches[2]
-              parts.push({
-                inlineData: {
-                  data: base64Data,
-                  mimeType: mimeType
-                } satisfies Part['inlineData']
-              })
-            }
-          }
-        }
-      }
-      const file = imageBlock.file
-      if (file) {
-        const base64Data = await window.api.file.base64Image(file.id + file.ext)
-        parts.push({
-          inlineData: {
-            data: base64Data.base64,
-            mimeType: base64Data.mime
-          } satisfies Part['inlineData']
-        })
-      }
-    }
     return {
       role,
       parts: parts
@@ -819,9 +768,8 @@ export class GeminiAPIClient extends BaseApiClient<
   }
 
   private async base64File(file: FileMetadata) {
-    const { data } = await window.api.file.base64File(file.id + file.ext)
     return {
-      data,
+      data: await fileService.base64File(file),
       mimeType: 'application/pdf'
     }
   }

@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type OpenAI from '@cherrystudio/openai'
 
-import type { Assistant, MCPTool, MCPToolResponse, Model, Provider,ToolCallResponse  } from '@/types'
+import type { Assistant, MCPTool, MCPToolResponse, Model, Provider, ToolCallResponse } from '@/types'
 import type {
   AnthropicSdkRawChunk,
   OpenAIResponseSdkRawChunk,
@@ -78,7 +78,9 @@ export interface RequestTransformer<
  */
 export type ResponseChunkTransformer<TRawChunk extends SdkRawChunk = SdkRawChunk, TContext = any> = (
   context?: TContext
-) => Transformer<TRawChunk, GenericChunk>
+) => {
+  transform: (chunk: TRawChunk, controller: TransformStreamDefaultController<GenericChunk>) => Promise<void>
+}
 
 export interface ResponseChunkTransformerContext {
   isStreaming: boolean

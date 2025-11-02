@@ -10,16 +10,11 @@
 import { createExecutor } from '@cherrystudio/ai-core'
 import { type ImageModel, type LanguageModel, type Provider as AiSdkProvider, wrapLanguageModel } from 'ai'
 
-import { buildClaudeCodeSystemModelMessage } from '@/aiCore/provider/config/anthropic'
-import { getEnableDeveloperMode } from '@/hooks/useSettings'
 import { loggerService } from '@/services/LoggerService'
-import { addSpan, endSpan } from '@/services/SpanManagerService'
-import type { StartSpanParams } from '@/trace/types/ModelSpanEntity'
-import type { Assistant, GenerateImageParams, Model, Provider } from '@/types'
-import type { AiSdkModel, StreamTextParams } from '@/types/aiCoreTypes'
-import { SUPPORTED_IMAGE_ENDPOINT_LIST } from '@/utils'
+import type { AiSdkModel, Assistant, GenerateImageParams, Model, Provider, StreamTextParams } from '@/types'
+import { SUPPORTED_IMAGE_ENDPOINT_LIST } from '@/utils/api'
 
-import AiSdkToChunkAdapter from './chunk/AiSdkToChunkAdapter'
+import { AiSdkToChunkAdapter } from './chunk/AiSdkToChunkAdapter'
 import LegacyAiProvider from './legacy/index'
 import type { CompletionsParams, CompletionsResult } from './legacy/middleware/schemas'
 import type { AiSdkMiddlewareConfig } from './middleware/AiSdkMiddlewareBuilder'
@@ -126,13 +121,7 @@ export default class ModernAiProvider {
       }
     }
 
-    if (this.actualProvider.id === 'anthropic' && this.actualProvider.authType === 'oauth') {
-      const claudeCodeSystemMessage = buildClaudeCodeSystemModelMessage(params.system)
-      params.system = undefined // 清除原有system，避免重复
-      params.messages = [...claudeCodeSystemMessage, ...(params.messages || [])]
-    }
-
-    if (providerConfig.topicId && getEnableDeveloperMode()) {
+    if (providerConfig.topicId) {
       // TypeScript类型窄化：确保topicId是string类型
       const traceConfig = {
         ...providerConfig,
@@ -183,77 +172,51 @@ export default class ModernAiProvider {
     config: ModernAiProviderConfig & { topicId: string }
   ): Promise<CompletionsResult> {
     const modelId = this.model!.id
-    const traceName = `${this.actualProvider.name}.${modelId}.${config.callType}`
-    const traceParams: StartSpanParams = {
-      name: traceName,
-      tag: 'LLM',
-      topicId: config.topicId,
-      modelName: config.assistant.model?.name, // 使用modelId而不是provider名称
-      inputs: params
-    }
+    // const traceName = `${this.actualProvider.name}.${modelId}.${config.callType}`
+    // const traceParams: StartSpanParams = {
+    //   name: traceName,
+    //   tag: 'LLM',
+    //   topicId: config.topicId,
+    //   modelName: config.assistant.model?.name, // 使用modelId而不是provider名称
+    //   inputs: params
+    // }
 
-    logger.info('Starting AI SDK trace span', {
-      traceName,
-      topicId: config.topicId,
-      modelId,
-      hasTools: !!params.tools && Object.keys(params.tools).length > 0,
-      toolNames: params.tools ? Object.keys(params.tools) : [],
-      isImageGeneration: config.isImageGenerationEndpoint
-    })
+    // logger.info('Starting AI SDK trace span', {
+    //   traceName,
+    //   topicId: config.topicId,
+    //   modelId,
+    //   hasTools: !!params.tools && Object.keys(params.tools).length > 0,
+    //   toolNames: params.tools ? Object.keys(params.tools) : [],
+    //   isImageGeneration: config.isImageGenerationEndpoint
+    // })
 
-    const span = addSpan(traceParams)
-    if (!span) {
-      logger.warn('Failed to create span, falling back to regular completions', {
-        topicId: config.topicId,
-        modelId,
-        traceName
-      })
-      return await this._completionsOrImageGeneration(model, params, config)
-    }
+    // const span = addSpan(traceParams)
+    // if (!span) {
+    //   logger.warn('Failed to create span, falling back to regular completions', {
+    //     topicId: config.topicId,
+    //     modelId,
+    //     traceName
+    //   })
+    //   return await this._completionsOrImageGeneration(model, params, config)
+    // }
 
     try {
-      logger.info('Created parent span, now calling completions', {
-        spanId: span.spanContext().spanId,
-        traceId: span.spanContext().traceId,
-        topicId: config.topicId,
-        modelId,
-        parentSpanCreated: true
-      })
+      // logger.info('Created parent span, now calling completions', {
+      //   spanId: span.spanContext().spanId,
+      //   traceId: span.spanContext().traceId,
+      //   topicId: config.topicId,
+      //   modelId,
+      //   parentSpanCreated: true
+      // })
 
       const result = await this._completionsOrImageGeneration(model, params, config)
-
-      logger.info('Completions finished, ending parent span', {
-        spanId: span.spanContext().spanId,
-        traceId: span.spanContext().traceId,
-        topicId: config.topicId,
-        modelId,
-        resultLength: result.getText().length
-      })
-
-      // 标记span完成
-      endSpan({
-        topicId: config.topicId,
-        outputs: result,
-        span,
-        modelName: modelId // 使用modelId保持一致性
-      })
-
       return result
     } catch (error) {
       logger.error('Error in completionsForTrace, ending parent span with error', error as Error, {
-        spanId: span.spanContext().spanId,
-        traceId: span.spanContext().traceId,
         topicId: config.topicId,
         modelId
       })
 
-      // 标记span出错
-      endSpan({
-        topicId: config.topicId,
-        error: error as Error,
-        span,
-        modelName: modelId // 使用modelId保持一致性
-      })
       throw error
     }
   }

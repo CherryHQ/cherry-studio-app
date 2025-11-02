@@ -1,15 +1,13 @@
 import { baseProviderIdSchema, customProviderIdSchema } from '@cherrystudio/ai-core/provider'
-import { t } from 'i18next'
 
-import { isOpenAIModel, isQwenMTModel, isSupportFlexServiceTierModel } from '@/config/models'
+import { isOpenAIModel, isSupportFlexServiceTierModel } from '@/config/models'
 import { isSupportServiceTierProvider } from '@/config/providers'
-import { mapLanguageToQwenMTModel } from '@/config/translate'
+// import { mapLanguageToQwenMTModel } from '@/config/translate'
 import type { Assistant, Model, Provider } from '@/types'
 import {
   GroqServiceTiers,
   isGroqServiceTier,
   isOpenAIServiceTier,
-  isTranslateAssistant,
   OpenAIServiceTiers,
   SystemProviderIds
 } from '@/types'
@@ -88,9 +86,6 @@ export function buildProviderOptions(
           ...buildOpenAIProviderOptions(assistant, model, capabilities),
           serviceTier: serviceTierSetting
         }
-        break
-      case 'huggingface':
-        providerSpecificOptions = buildOpenAIProviderOptions(assistant, model, capabilities)
         break
       case 'anthropic':
         providerSpecificOptions = buildAnthropicProviderOptions(assistant, model, capabilities)
@@ -297,21 +292,21 @@ function buildGenericProviderOptions(
   }
 
   // 特殊处理 Qwen MT
-  if (isQwenMTModel(model)) {
-    if (isTranslateAssistant(assistant)) {
-      const targetLanguage = assistant.targetLanguage
-      const translationOptions = {
-        source_lang: 'auto',
-        target_lang: mapLanguageToQwenMTModel(targetLanguage)
-      } as const
-      if (!translationOptions.target_lang) {
-        throw new Error(t('translate.error.not_supported', { language: targetLanguage.value }))
-      }
-      providerOptions.translation_options = translationOptions
-    } else {
-      throw new Error(t('translate.error.chat_qwen_mt'))
-    }
-  }
+  // if (isQwenMTModel(model)) {
+  //   if (isTranslateAssistant(assistant)) {
+  //     const targetLanguage = assistant.targetLanguage
+  //     const translationOptions = {
+  //       source_lang: 'auto',
+  //       target_lang: mapLanguageToQwenMTModel(targetLanguage)
+  //     } as const
+  //     if (!translationOptions.target_lang) {
+  //       throw new Error(t('translate.error.not_supported', { language: targetLanguage.value }))
+  //     }
+  //     providerOptions.translation_options = translationOptions
+  //   } else {
+  //     throw new Error(t('translate.error.chat_qwen_mt'))
+  //   }
+  // }
 
   return providerOptions
 }

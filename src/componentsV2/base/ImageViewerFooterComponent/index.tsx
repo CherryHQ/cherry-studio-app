@@ -38,7 +38,7 @@ const ImageViewerFooterComponent: React.FC<ImageViewerFooterComponentProps> = ({
       } else if (isHttpUrl) {
         const destination = new File(Paths.join(DEFAULT_IMAGES_STORAGE, `${uuid}.jpg`))
         const output = await downloadFileAsync(uri, destination)
-        result = await saveImageToGallery(output.uri)
+        result = await saveImageToGallery(output.path)
       }
 
       if (result?.success) {

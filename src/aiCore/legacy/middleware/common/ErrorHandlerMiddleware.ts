@@ -1,6 +1,8 @@
 import { isZhipuModel } from '@/config/models'
-import { getStoreProviders } from '@/hooks/useStore'
+// import { getStoreProviders } from '@/hooks/useStore'
 import { loggerService } from '@/services/LoggerService'
+import { providerService } from '@/services/ProviderService'
+import { SystemProviderIds } from '@/types'
 import type { Chunk } from '@/types/chunk'
 
 import type { CompletionsParams, CompletionsResult } from '../schemas'
@@ -86,8 +88,8 @@ function handleError(error: any, params: CompletionsParams): any {
  * 1. 只有对话功能（enableGenerateImage为false）才使用自定义错误处理
  * 2. 绘画功能（enableGenerateImage为true）使用通用错误处理
  */
-function handleZhipuError(error: any): any {
-  const provider = getStoreProviders().find(p => p.id === 'zhipu')
+async function handleZhipuError(error: any): Promise<any> {
+  const provider = await providerService.getProvider(SystemProviderIds.zhipu)
   const logger = loggerService.withContext('handleZhipuError')
 
   // 定义错误模式映射
@@ -95,23 +97,23 @@ function handleZhipuError(error: any): any {
     {
       condition: () => error.status === 401 || /令牌已过期|AuthenticationError|Unauthorized/i.test(error.message),
       i18nKey: 'chat.no_api_key',
-      providerId: provider?.id
+      providerId: SystemProviderIds.zhipu
     },
     {
       condition: () => error.error?.code === '1304' || /限额|免费配额|free quota|rate limit/i.test(error.message),
       i18nKey: 'chat.quota_exceeded',
-      providerId: provider?.id
+      providerId: SystemProviderIds.zhipu
     },
     {
       condition: () =>
         (error.status === 429 && error.error?.code === '1113') || /余额不足|insufficient balance/i.test(error.message),
       i18nKey: 'chat.insufficient_balance',
-      providerId: provider?.id
+      providerId: SystemProviderIds.zhipu
     },
     {
       condition: () => !provider?.apiKey?.trim(),
       i18nKey: 'chat.no_api_key',
-      providerId: provider?.id
+      providerId: SystemProviderIds.zhipu
     }
   ]
 

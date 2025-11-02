@@ -1,17 +1,13 @@
 import type OpenAI from '@cherrystudio/openai'
 
 import { loggerService } from '@/services/LoggerService'
-import type { GenerateImageParams,Provider  } from '@/types'
+import type { GenerateImageParams } from '@/types'
 
 import { OpenAIAPIClient } from '../openai/OpenAIApiClient'
 
 const logger = loggerService.withContext('ZhipuAPIClient')
 
 export class ZhipuAPIClient extends OpenAIAPIClient {
-  constructor(provider: Provider) {
-    super(provider)
-  }
-
   override getClientCompatibilityType(): string[] {
     return ['ZhipuAPIClient']
   }

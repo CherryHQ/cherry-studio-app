@@ -1,4 +1,4 @@
-import type OpenAI from 'openai'
+import type OpenAI from '@cherrystudio/openai'
 
 import { getProviderByModel } from '@/services/ProviderService'
 import type {
@@ -66,14 +66,18 @@ export const REASONING_REGEX =
 export const MODEL_SUPPORTED_REASONING_EFFORT: ReasoningEffortConfig = {
   default: ['low', 'medium', 'high'] as const,
   o: ['low', 'medium', 'high'] as const,
+  openai_deep_research: ['medium'] as const,
   gpt5: ['minimal', 'low', 'medium', 'high'] as const,
+  gpt5_codex: ['low', 'medium', 'high'] as const,
   grok: ['low', 'high'] as const,
+  grok4_fast: ['auto'] as const,
   gemini: ['low', 'medium', 'high', 'auto'] as const,
   gemini_pro: ['low', 'medium', 'high', 'auto'] as const,
   qwen: ['low', 'medium', 'high'] as const,
   qwen_thinking: ['low', 'medium', 'high'] as const,
   doubao: ['auto', 'high'] as const,
   doubao_no_auto: ['high'] as const,
+  doubao_after_251015: ['minimal', 'low', 'medium', 'high'] as const,
   hunyuan: ['auto'] as const,
   zhipu: ['auto'] as const,
   perplexity: ['low', 'medium', 'high'] as const,
@@ -84,26 +88,48 @@ export const MODEL_SUPPORTED_REASONING_EFFORT: ReasoningEffortConfig = {
 export const MODEL_SUPPORTED_OPTIONS: ThinkingOptionConfig = {
   default: ['off', ...MODEL_SUPPORTED_REASONING_EFFORT.default] as const,
   o: MODEL_SUPPORTED_REASONING_EFFORT.o,
+  openai_deep_research: MODEL_SUPPORTED_REASONING_EFFORT.openai_deep_research,
   gpt5: [...MODEL_SUPPORTED_REASONING_EFFORT.gpt5] as const,
+  gpt5_codex: MODEL_SUPPORTED_REASONING_EFFORT.gpt5_codex,
   grok: MODEL_SUPPORTED_REASONING_EFFORT.grok,
+  grok4_fast: ['off', ...MODEL_SUPPORTED_REASONING_EFFORT.grok4_fast] as const,
   gemini: ['off', ...MODEL_SUPPORTED_REASONING_EFFORT.gemini] as const,
   gemini_pro: MODEL_SUPPORTED_REASONING_EFFORT.gemini_pro,
   qwen: ['off', ...MODEL_SUPPORTED_REASONING_EFFORT.qwen] as const,
   qwen_thinking: MODEL_SUPPORTED_REASONING_EFFORT.qwen_thinking,
   doubao: ['off', ...MODEL_SUPPORTED_REASONING_EFFORT.doubao] as const,
   doubao_no_auto: ['off', ...MODEL_SUPPORTED_REASONING_EFFORT.doubao_no_auto] as const,
+  doubao_after_251015: MODEL_SUPPORTED_REASONING_EFFORT.doubao_after_251015,
   hunyuan: ['off', ...MODEL_SUPPORTED_REASONING_EFFORT.hunyuan] as const,
   zhipu: ['off', ...MODEL_SUPPORTED_REASONING_EFFORT.zhipu] as const,
   perplexity: MODEL_SUPPORTED_REASONING_EFFORT.perplexity,
   deepseek_hybrid: ['off', ...MODEL_SUPPORTED_REASONING_EFFORT.deepseek_hybrid] as const
 } as const
 
-export const getThinkModelType = (model: Model): ThinkingModelType => {
+const withModelIdAndNameAsId = <T>(model: Model, fn: (model: Model) => T): { idResult: T; nameResult: T } => {
+  const modelWithNameAsId = { ...model, id: model.name }
+  return {
+    idResult: fn(model),
+    nameResult: fn(modelWithNameAsId)
+  }
+}
+
+const _getThinkModelType = (model: Model): ThinkingModelType => {
   let thinkingModelType: ThinkingModelType = 'default'
+  const modelId = getLowerBaseModelName(model.id)
+  if (isOpenAIDeepResearchModel(model)) {
+    return 'openai_deep_research'
+  }
   if (isGPT5SeriesModel(model)) {
-    thinkingModelType = 'gpt5'
+    if (modelId.includes('codex')) {
+      thinkingModelType = 'gpt5_codex'
+    } else {
+      thinkingModelType = 'gpt5'
+    }
   } else if (isSupportedReasoningEffortOpenAIModel(model)) {
     thinkingModelType = 'o'
+  } else if (isGrok4FastReasoningModel(model)) {
+    thinkingModelType = 'grok4_fast'
   } else if (isSupportedThinkingTokenGeminiModel(model)) {
     if (GEMINI_FLASH_MODEL_REGEX.test(model.id)) {
       thinkingModelType = 'gemini'
@@ -115,11 +141,12 @@ export const getThinkModelType = (model: Model): ThinkingModelType => {
     if (isQwenAlwaysThinkModel(model)) {
       thinkingModelType = 'qwen_thinking'
     }
-
     thinkingModelType = 'qwen'
   } else if (isSupportedThinkingTokenDoubaoModel(model)) {
     if (isDoubaoThinkingAutoModel(model)) {
       thinkingModelType = 'doubao'
+    } else if (isDoubaoSeedAfter251015(model)) {
+      thinkingModelType = 'doubao_after_251015'
     } else {
       thinkingModelType = 'doubao_no_auto'
     }
@@ -130,17 +157,31 @@ export const getThinkModelType = (model: Model): ThinkingModelType => {
   return thinkingModelType
 }
 
-/** 用于判断是否支持控制思考，但不一定以reasoning_effort的方式 */
-export function isSupportedThinkingTokenModel(model?: Model): boolean {
-  if (!model) {
-    return false
+export const getThinkModelType = (model: Model): ThinkingModelType => {
+  const { idResult, nameResult } = withModelIdAndNameAsId(model, _getThinkModelType)
+  if (idResult !== 'default') {
+    return idResult
+  } else {
+    return nameResult
   }
+}
 
+function _isSupportedThinkingTokenModel(model: Model): boolean {
   // Specifically for DeepSeek V3.1. White list for now
   if (isDeepSeekHybridInferenceModel(model)) {
     return (
-      ['openrouter', 'dashscope', 'modelscope', 'doubao', 'silicon', 'nvidia', 'ppio'] satisfies SystemProviderId[]
-    ).some(id => id === model.provider)
+      [
+        'openrouter',
+        'dashscope',
+        'modelscope',
+        'doubao',
+        'silicon',
+        'nvidia',
+        'ppio',
+        'hunyuan',
+        'tencent-cloud-ti'
+      ] satisfies SystemProviderId[]
+    ).some((id) => id === model.provider)
   }
 
   return (
@@ -151,6 +192,13 @@ export function isSupportedThinkingTokenModel(model?: Model): boolean {
     isSupportedThinkingTokenHunyuanModel(model) ||
     isSupportedThinkingTokenZhipuModel(model)
   )
+}
+
+/** 用于判断是否支持控制思考，但不一定以reasoning_effort的方式 */
+export function isSupportedThinkingTokenModel(model?: Model): boolean {
+  if (!model) return false
+  const { idResult, nameResult } = withModelIdAndNameAsId(model, _isSupportedThinkingTokenModel)
+  return idResult || nameResult
 }
 
 export function isSupportedReasoningEffortModel(model?: Model): boolean {
@@ -179,14 +227,35 @@ export function isSupportedReasoningEffortGrokModel(model?: Model): boolean {
   return false
 }
 
-export function isGrokReasoningModel(model?: Model): boolean {
+/**
+ * Checks if the model is Grok 4 Fast reasoning version
+ * Explicitly excludes non-reasoning variants (models with 'non-reasoning' in their ID)
+ *
+ * Note: XAI official uses different model IDs for reasoning vs non-reasoning
+ * Third-party providers like OpenRouter expose a single ID with reasoning parameters, while first-party providers require separate IDs. Only the OpenRouter variant supports toggling.
+ *
+ * @param model - The model to check
+ * @returns true if the model is a reasoning-enabled Grok 4 Fast model
+ */
+export function isGrok4FastReasoningModel(model?: Model): boolean {
   if (!model) {
     return false
   }
 
   const modelId = getLowerBaseModelName(model.id)
+  return modelId.includes('grok-4-fast') && !modelId.includes('non-reasoning')
+}
 
-  if (isSupportedReasoningEffortGrokModel(model) || modelId.includes('grok-4')) {
+
+export function isGrokReasoningModel(model?: Model): boolean {
+  if (!model) {
+    return false
+  }
+  const modelId = getLowerBaseModelName(model.id)
+  if (
+    isSupportedReasoningEffortGrokModel(model) ||
+    (modelId.includes('grok-4') && !modelId.includes('non-reasoning'))
+  ) {
     return true
   }
 
@@ -211,14 +280,17 @@ export function isGeminiReasoningModel(model?: Model): boolean {
   return false
 }
 
+
+// Gemini 支持思考模式的模型正则
+export const GEMINI_THINKING_MODEL_REGEX =
+  /gemini-(?:2\.5.*(?:-latest)?|flash-latest|pro-latest|flash-lite-latest)(?:-[\w-]+)*$/i
+
 export const isSupportedThinkingTokenGeminiModel = (model: Model): boolean => {
   const modelId = getLowerBaseModelName(model.id, '/')
-
-  if (modelId.includes('gemini-2.5')) {
+  if (GEMINI_THINKING_MODEL_REGEX.test(modelId)) {
     if (modelId.includes('image') || modelId.includes('tts')) {
       return false
     }
-
     return true
   } else {
     return false
@@ -294,9 +366,12 @@ export function isQwenAlwaysThinkModel(model?: Model): boolean {
   if (!model) {
     return false
   }
-
   const modelId = getLowerBaseModelName(model.id, '/')
-  return modelId.startsWith('qwen3') && modelId.includes('thinking')
+  // 包括 qwen3 开头的 thinking 模型和 qwen3-vl 的 thinking 模型
+  return (
+    (modelId.startsWith('qwen3') && modelId.includes('thinking')) ||
+    (modelId.includes('qwen3-vl') && modelId.includes('thinking'))
+  )
 }
 
 // Doubao 支持思考模式的模型正则
@@ -304,13 +379,21 @@ export const DOUBAO_THINKING_MODEL_REGEX =
   /doubao-(?:1[.-]5-thinking-vision-pro|1[.-]5-thinking-pro-m|seed-1[.-]6(?:-flash)?(?!-(?:thinking)(?:-|$)))(?:-[\w-]+)*/i
 
 // 支持 auto 的 Doubao 模型 doubao-seed-1.6-xxx doubao-seed-1-6-xxx  doubao-1-5-thinking-pro-m-xxx
+// Auto thinking is no longer supported after version 251015, see https://console.volcengine.com/ark/region:ark+cn-beijing/model/detail?Id=doubao-seed-1-6
 export const DOUBAO_THINKING_AUTO_MODEL_REGEX =
-  /doubao-(1-5-thinking-pro-m|seed-1[.-]6)(?!-(?:flash|thinking)(?:-|$))(?:-[\w-]+)*/i
+  /doubao-(1-5-thinking-pro-m|seed-1[.-]6)(?!-(?:flash|thinking)(?:-|$))(?:-lite)?(?!-251015)(?:-\d+)?$/i
 
 export function isDoubaoThinkingAutoModel(model: Model): boolean {
   const modelId = getLowerBaseModelName(model.id)
   return DOUBAO_THINKING_AUTO_MODEL_REGEX.test(modelId) || DOUBAO_THINKING_AUTO_MODEL_REGEX.test(model.name)
 }
+
+export function isDoubaoSeedAfter251015(model: Model): boolean {
+  const pattern = new RegExp(/doubao-seed-1-6-(?:lite-)?251015/i)
+  const result = pattern.test(model.id)
+  return result
+}
+
 
 export function isSupportedThinkingTokenDoubaoModel(model?: Model): boolean {
   if (!model) {
@@ -320,6 +403,12 @@ export function isSupportedThinkingTokenDoubaoModel(model?: Model): boolean {
   const modelId = getLowerBaseModelName(model.id, '/')
 
   return DOUBAO_THINKING_MODEL_REGEX.test(modelId) || DOUBAO_THINKING_MODEL_REGEX.test(model.name)
+}
+
+export function isClaude45ReasoningModel(model: Model): boolean {
+  const modelId = getLowerBaseModelName(model.id, '/')
+  const regex = /claude-(sonnet|opus|haiku)-4(-|.)5(?:-[\w-]+)?$/i
+  return regex.test(modelId)
 }
 
 export function isClaudeReasoningModel(model?: Model): boolean {
@@ -1174,6 +1263,22 @@ export function isOpenRouterBuiltInWebSearchModel(model: Model): boolean {
   const modelId = getLowerBaseModelName(model.id)
 
   return isOpenAIWebSearchChatCompletionOnlyModel(model) || modelId.includes('sonar')
+}
+
+const OPENAI_DEEP_RESEARCH_MODEL_REGEX = /deep[-_]?research/
+
+export function isOpenAIDeepResearchModel(model?: Model): boolean {
+  if (!model) {
+    return false
+  }
+
+  const providerId = model.provider
+  if (providerId !== 'openai' && providerId !== 'openai-chat') {
+    return false
+  }
+
+  const modelId = getLowerBaseModelName(model.id, '/')
+  return OPENAI_DEEP_RESEARCH_MODEL_REGEX.test(modelId)
 }
 
 export function isOpenAIWebSearchChatCompletionOnlyModel(model: Model): boolean {

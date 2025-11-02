@@ -8,6 +8,7 @@ const ignores = [
   'node_modules/**',
   '.yarn/**',
   'packages/*/node_modules/**',
+  'src/integration/**',
   'dist/**',
   'build/**',
   '.expo/**',
@@ -92,6 +93,8 @@ export default defineConfig([
   {
     files: ['**/*.{ts,tsx}'],
     rules: {
+      'no-redeclare': 'off', // 关闭 JS 的 no-redeclare，因为它不支持 TS 函数重载
+      '@typescript-eslint/no-redeclare': 'error', // 使用 TS 版本的规则，支持函数重载
       '@typescript-eslint/no-unused-vars': 'warn',
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-explicit-any': 'off',

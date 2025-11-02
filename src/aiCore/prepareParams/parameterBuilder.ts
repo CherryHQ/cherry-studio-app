@@ -8,7 +8,7 @@ import { google } from '@ai-sdk/google'
 import { vertexAnthropic } from '@ai-sdk/google-vertex/anthropic/edge'
 import { vertex } from '@ai-sdk/google-vertex/edge'
 import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins'
-import { isBaseProvider } from '@cherrystudio/ai-core/core/providers/schemas'
+// import { isBaseProvider } from '@cherrystudio/ai-core/provider'
 import type { ModelMessage, Tool } from 'ai'
 import { stepCountIs } from 'ai'
 
@@ -23,18 +23,14 @@ import {
 } from '@/config/models'
 import { getAssistantSettings, getDefaultModel } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
-import store from '@/store'
-import type { CherryWebSearchConfig } from '@/store/websearch'
-import { type Assistant, type MCPTool, type Provider } from '@/types'
-import type { StreamTextParams } from '@/types/aiCoreTypes'
-import { mapRegexToPatterns } from '@/utils/blacklistMatchPattern'
-import { replacePromptVariables } from '@/utils/prompt'
+// import type { CherryWebSearchConfig } from '@/store/websearch'
+import { type Assistant, type MCPTool, type Provider, type StreamTextParams } from '@/types'
 
+// import { replacePromptVariables } from '@/utils/prompt'
 import { getAiSdkProviderId } from '../provider/factory'
 import { setupToolsConfig } from '../utils/mcp'
 import { buildProviderOptions } from '../utils/options'
 import { getAnthropicThinkingBudget } from '../utils/reasoning'
-import { buildProviderBuiltinWebSearchConfig } from '../utils/websearch'
 import { getTemperature, getTopP } from './modelParameters'
 
 const logger = loggerService.withContext('parameterBuilder')
@@ -52,7 +48,7 @@ export async function buildStreamTextParams(
   options: {
     mcpTools?: MCPTool[]
     webSearchProviderId?: string
-    webSearchConfig?: CherryWebSearchConfig
+    // webSearchConfig?: CherryWebSearchConfig
     requestOptions?: {
       signal?: AbortSignal
       timeout?: number
@@ -101,11 +97,11 @@ export async function buildStreamTextParams(
   let tools = setupToolsConfig(mcpTools)
 
   // 构建真正的 providerOptions
-  const webSearchConfig: CherryWebSearchConfig = {
-    maxResults: store.getState().websearch.maxResults,
-    excludeDomains: store.getState().websearch.excludeDomains,
-    searchWithTime: store.getState().websearch.searchWithTime
-  }
+  // const webSearchConfig: CherryWebSearchConfig = {
+  //   maxResults: store.getState().websearch.maxResults,
+  //   excludeDomains: store.getState().websearch.excludeDomains,
+  //   searchWithTime: store.getState().websearch.searchWithTime
+  // }
 
   const providerOptions = buildProviderOptions(assistant, model, provider, {
     enableReasoning,
@@ -125,19 +121,18 @@ export async function buildStreamTextParams(
 
   let webSearchPluginConfig: WebSearchPluginConfig | undefined = undefined
   if (enableWebSearch) {
-    if (isBaseProvider(aiSdkProviderId)) {
-      webSearchPluginConfig = buildProviderBuiltinWebSearchConfig(aiSdkProviderId, webSearchConfig, model)
-    }
+    // if (isBaseProvider(aiSdkProviderId)) {
+    //   webSearchPluginConfig = buildProviderBuiltinWebSearchConfig(aiSdkProviderId, webSearchConfig, model)
+    // }
     if (!tools) {
       tools = {}
     }
     if (aiSdkProviderId === 'google-vertex') {
       tools.google_search = vertex.tools.googleSearch({}) as ProviderDefinedTool
     } else if (aiSdkProviderId === 'google-vertex-anthropic') {
-      const blockedDomains = mapRegexToPatterns(webSearchConfig.excludeDomains)
       tools.web_search = vertexAnthropic.tools.webSearch_20250305({
-        maxUses: webSearchConfig.maxResults,
-        blockedDomains: blockedDomains.length > 0 ? blockedDomains : undefined
+        // maxUses: webSearchConfig.maxResults,
+        // blockedDomains: blockedDomains.length > 0 ? blockedDomains : undefined
       }) as ProviderDefinedTool
     }
   }
@@ -146,7 +141,6 @@ export async function buildStreamTextParams(
     if (!tools) {
       tools = {}
     }
-    const blockedDomains = mapRegexToPatterns(webSearchConfig.excludeDomains)
 
     switch (aiSdkProviderId) {
       case 'google-vertex':
@@ -160,12 +154,12 @@ export async function buildStreamTextParams(
         tools.web_fetch = (
           aiSdkProviderId === 'anthropic'
             ? anthropic.tools.webFetch_20250910({
-                maxUses: webSearchConfig.maxResults,
-                blockedDomains: blockedDomains.length > 0 ? blockedDomains : undefined
+                // maxUses: webSearchConfig.maxResults,
+                // blockedDomains: blockedDomains.length > 0 ? blockedDomains : undefined
               })
             : vertexAnthropic.tools.webFetch_20250910({
-                maxUses: webSearchConfig.maxResults,
-                blockedDomains: blockedDomains.length > 0 ? blockedDomains : undefined
+                // maxUses: webSearchConfig.maxResults,
+                // blockedDomains: blockedDomains.length > 0 ? blockedDomains : undefined
               })
         ) as ProviderDefinedTool
         break
@@ -188,7 +182,7 @@ export async function buildStreamTextParams(
     params.tools = tools
   }
   if (assistant.prompt) {
-    params.system = await replacePromptVariables(assistant.prompt, model.name)
+    // params.system = await replacePromptVariables(assistant.prompt, model.name)
   }
   logger.debug('params', params)
   return {

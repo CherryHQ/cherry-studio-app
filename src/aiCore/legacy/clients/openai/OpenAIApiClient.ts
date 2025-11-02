@@ -7,7 +7,6 @@ import type {
 } from '@cherrystudio/openai/resources'
 import { t } from 'i18next'
 
-import { DEFAULT_MAX_TOKENS } from '@/config/constant'
 import {
   findTokenLimit,
   GEMINI_FLASH_MODEL_REGEX,
@@ -24,7 +23,6 @@ import {
   isOpenAIOpenWeightModel,
   isOpenAIReasoningModel,
   isQwenAlwaysThinkModel,
-  isQwenMTModel,
   isQwenReasoningModel,
   isReasoningModel,
   isSupportedReasoningEffortModel,
@@ -46,7 +44,8 @@ import {
   isSupportEnableThinkingProvider,
   isSupportStreamOptionsProvider
 } from '@/config/providers'
-import { mapLanguageToQwenMTModel } from '@/config/translate'
+import { DEFAULT_MAX_TOKENS } from '@/constants'
+import { fileService } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import { processPostsuffixQwen3Model, processReqMessages } from '@/services/ModelMessageService'
 import { estimateTextTokens } from '@/services/TokenService'
@@ -56,22 +55,14 @@ import type {
   MCPCallToolResponse,
   MCPTool,
   MCPToolResponse,
+  Message,
   Model,
   OpenAIServiceTier,
-  Provider,
   ToolCallResponse
 } from '@/types'
-import {
-  EFFORT_RATIO,
-  FileTypes,
-  isSystemProvider,
-  isTranslateAssistant,
-  SystemProviderIds,
-  WebSearchSource
-} from '@/types'
+import { EFFORT_RATIO, FileTypes, isSystemProvider, SystemProviderIds, WebSearchSource } from '@/types'
 import type { TextStartChunk, ThinkingStartChunk } from '@/types/chunk'
 import { ChunkType } from '@/types/chunk'
-import type { Message } from '@/types/newMessage'
 import type {
   OpenAIExtraBody,
   OpenAIModality,
@@ -88,7 +79,7 @@ import {
   mcpToolCallResponseToOpenAICompatibleMessage,
   mcpToolsToOpenAIChatTools,
   openAIToolsToMcpTool
-} from '@/utils/mcp-tools'
+} from '@/utils/mcpTool'
 import { findFileBlocks, findImageBlocks } from '@/utils/messageUtils/find'
 
 import type { GenericChunk } from '../../middleware/schemas'
@@ -106,10 +97,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
   OpenAI.Chat.Completions.ChatCompletionMessageToolCall,
   ChatCompletionTool
 > {
-  constructor(provider: Provider) {
-    super(provider)
-  }
-
   override async createCompletions(
     payload: OpenAISdkParams,
     options?: OpenAI.RequestOptions
@@ -193,7 +180,7 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
             extra_body: {
               google: {
                 thinking_config: {
-                  thinkingBudget: 0
+                  thinking_budget: 0
                 }
               }
             }
@@ -328,8 +315,8 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
           extra_body: {
             google: {
               thinking_config: {
-                thinkingBudget: -1,
-                includeThoughts: true
+                thinking_budget: -1,
+                include_thoughts: true
               }
             }
           }
@@ -339,8 +326,8 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
         extra_body: {
           google: {
             thinking_config: {
-              thinkingBudget: budgetTokens,
-              includeThoughts: true
+              thinking_budget: budgetTokens,
+              include_thoughts: true
             }
           }
         }
@@ -396,8 +383,8 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
   public async convertMessageToSdkParam(message: Message, model: Model): Promise<OpenAISdkMessageParam> {
     const isVision = isVisionModel(model)
     const { textContent, imageContents } = await this.getMessageContent(message)
-    const fileBlocks = findFileBlocks(message)
-    const imageBlocks = findImageBlocks(message)
+    const fileBlocks = await findFileBlocks(message)
+    const imageBlocks = await findImageBlocks(message)
 
     // If the model does not support files, extract the file content
     if (this.isNotSupportFiles) {
@@ -426,7 +413,7 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
 
     if (imageContents.length > 0) {
       for (const imageContent of imageContents) {
-        const image = await window.api.file.base64Image(imageContent.fileId + imageContent.fileExt)
+        const image = await fileService.base64Image(imageContent.fileId + imageContent.fileExt)
         parts.push({ type: 'image_url', image_url: { url: image.data } })
       }
     }
@@ -434,7 +421,7 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
     for (const imageBlock of imageBlocks) {
       if (isVision) {
         if (imageBlock.file) {
-          const image = await window.api.file.base64Image(imageBlock.file.id + imageBlock.file.ext)
+          const image = await fileService.base64Image(imageBlock.file.id + imageBlock.file.ext)
           parts.push({ type: 'image_url', image_url: { url: image.data } })
         } else if (imageBlock.url && imageBlock.url.startsWith('data:')) {
           parts.push({ type: 'image_url', image_url: { url: imageBlock.url } })
@@ -449,7 +436,7 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
       }
 
       if ([FileTypes.TEXT, FileTypes.DOCUMENT].includes(file.type)) {
-        const fileContent = await (await window.api.file.read(file.id + file.ext, true)).trim()
+        const fileContent = fileService.readFile(file).trim()
         parts.push({
           type: 'text',
           text: file.origin_name + '\n' + fileContent
@@ -600,21 +587,21 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
 
         const extra_body: OpenAIExtraBody = {}
 
-        if (isQwenMTModel(model)) {
-          if (isTranslateAssistant(assistant)) {
-            const targetLanguage = mapLanguageToQwenMTModel(assistant.targetLanguage)
-            if (!targetLanguage) {
-              throw new Error(t('translate.error.not_supported', { language: assistant.targetLanguage.value }))
-            }
-            const translationOptions = {
-              source_lang: 'auto',
-              target_lang: targetLanguage
-            } as const
-            extra_body.translation_options = translationOptions
-          } else {
-            throw new Error(t('translate.error.chat_qwen_mt'))
-          }
-        }
+        // if (isQwenMTModel(model)) {
+        //   if (isTranslateAssistant(assistant)) {
+        //     const targetLanguage = mapLanguageToQwenMTModel(assistant.targetLanguage)
+        //     if (!targetLanguage) {
+        //       throw new Error(t('translate.error.not_supported', { language: assistant.targetLanguage.value }))
+        //     }
+        //     const translationOptions = {
+        //       source_lang: 'auto',
+        //       target_lang: targetLanguage
+        //     } as const
+        //     extra_body.translation_options = translationOptions
+        //   } else {
+        //     throw new Error(t('translate.error.chat_qwen_mt'))
+        //   }
+        // }
 
         // 1. 处理系统消息
         const systemMessage = { role: 'system', content: assistant.prompt || '' }
@@ -643,7 +630,7 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
         if (typeof messages === 'string') {
           userMessages.push({ role: 'user', content: messages })
         } else {
-          const processedMessages = addImageFileToContents(messages)
+          const processedMessages = await addImageFileToContents(messages)
           for (const message of processedMessages) {
             userMessages.push(await this.convertMessageToSdkParam(message, model))
           }
@@ -671,7 +658,7 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
             } else if (isClaudeReasoningModel(model) && reasoningEffort.thinking?.budget_tokens) {
               suffix = ` --thinking_budget ${reasoningEffort.thinking.budget_tokens}`
             } else if (isGeminiReasoningModel(model) && reasoningEffort.extra_body?.google?.thinking_config) {
-              suffix = ` --thinking_budget ${reasoningEffort.extra_body.google.thinking_config.thinkingBudget}`
+              suffix = ` --thinking_budget ${reasoningEffort.extra_body.google.thinking_config.thinking_budget}`
             }
             // FIXME: poe 不支持多个text part，上传文本文件的时候用的不是file part而是text part，因此会出问题
             // 临时解决方案是强制poe用string content，但是其实poe部分支持array

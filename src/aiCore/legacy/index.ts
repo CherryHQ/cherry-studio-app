@@ -1,13 +1,13 @@
 import { ApiClientFactory } from '@/aiCore/legacy/clients/ApiClientFactory'
 import type { BaseApiClient } from '@/aiCore/legacy/clients/BaseApiClient'
 import { isDedicatedImageGenerationModel, isFunctionCallingModel } from '@/config/models'
-import { getProviderByModel } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
-import { withSpanResult } from '@/services/SpanManagerService'
-import type { StartSpanParams } from '@/trace/types/ModelSpanEntity'
+import { getProviderByModel } from '@/services/ProviderService'
+// import { withSpanResult } from '@/services/SpanManagerService'
+// import type { StartSpanParams } from '@/trace/types/ModelSpanEntity'
 import type { GenerateImageParams, Model, Provider } from '@/types'
 import type { RequestOptions, SdkModel } from '@/types/sdk'
-import { isSupportedToolUse } from '@/utils/mcp-tools'
+import { isSupportedToolUse } from '@/utils/mcpTool'
 
 import { AihubmixAPIClient } from './clients/aihubmix/AihubmixAPIClient'
 import { VertexAPIClient } from './clients/gemini/VertexAPIClient'
@@ -18,7 +18,7 @@ import { MIDDLEWARE_NAME as AbortHandlerMiddlewareName } from './middleware/comm
 import { MIDDLEWARE_NAME as ErrorHandlerMiddlewareName } from './middleware/common/ErrorHandlerMiddleware'
 import { MIDDLEWARE_NAME as FinalChunkConsumerMiddlewareName } from './middleware/common/FinalChunkConsumerMiddleware'
 import { applyCompletionsMiddlewares } from './middleware/composer'
-import { MIDDLEWARE_NAME as McpToolChunkMiddlewareName } from './middleware/core/McpToolChunkMiddleware'
+// import { MIDDLEWARE_NAME as McpToolChunkMiddlewareName } from './middleware/core/McpToolChunkMiddleware'
 import { MIDDLEWARE_NAME as RawStreamListenerMiddlewareName } from './middleware/core/RawStreamListenerMiddleware'
 import { MIDDLEWARE_NAME as WebSearchMiddlewareName } from './middleware/core/WebSearchMiddleware'
 import { MIDDLEWARE_NAME as ImageGenerationMiddlewareName } from './middleware/feat/ImageGenerationMiddleware'
@@ -102,12 +102,12 @@ export default class AiProvider {
         logger.silly('WebSearchMiddleware is removed')
         builder.remove(WebSearchMiddlewareName)
       }
-      if (!params.mcpTools?.length) {
-        builder.remove(ToolUseExtractionMiddlewareName)
-        logger.silly('ToolUseExtractionMiddleware is removed')
-        builder.remove(McpToolChunkMiddlewareName)
-        logger.silly('McpToolChunkMiddleware is removed')
-      }
+      // if (!params.mcpTools?.length) {
+      //   builder.remove(ToolUseExtractionMiddlewareName)
+      //   logger.silly('ToolUseExtractionMiddleware is removed')
+      //   builder.remove(McpToolChunkMiddlewareName)
+      //   logger.silly('McpToolChunkMiddleware is removed')
+      // }
       if (isSupportedToolUse(params.assistant) && isFunctionCallingModel(model)) {
         builder.remove(ToolUseExtractionMiddlewareName)
         logger.silly('ToolUseExtractionMiddleware is removed')
@@ -138,20 +138,20 @@ export default class AiProvider {
     return result
   }
 
-  public async completionsForTrace(params: CompletionsParams, options?: RequestOptions): Promise<CompletionsResult> {
-    const traceName = params.assistant.model?.name
-      ? `${params.assistant.model?.name}.${params.callType}`
-      : `LLM.${params.callType}`
+  // public async completionsForTrace(params: CompletionsParams, options?: RequestOptions): Promise<CompletionsResult> {
+  //   const traceName = params.assistant.model?.name
+  //     ? `${params.assistant.model?.name}.${params.callType}`
+  //     : `LLM.${params.callType}`
 
-    const traceParams: StartSpanParams = {
-      name: traceName,
-      tag: 'LLM',
-      topicId: params.topicId || '',
-      modelName: params.assistant.model?.name
-    }
+  //   const traceParams: StartSpanParams = {
+  //     name: traceName,
+  //     tag: 'LLM',
+  //     topicId: params.topicId || '',
+  //     modelName: params.assistant.model?.name
+  //   }
 
-    return await withSpanResult(this.completions.bind(this), traceParams, params, options)
-  }
+  //   return await withSpanResult(this.completions.bind(this), traceParams, params, options)
+  // }
 
   public async models(): Promise<SdkModel[]> {
     return this.apiClient.listModels()

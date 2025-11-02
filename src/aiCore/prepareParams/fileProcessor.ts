@@ -3,14 +3,13 @@
  * 处理文件内容提取、文件格式转换、文件上传等逻辑
  */
 
-import type OpenAI from '@cherrystudio/openai'
 import type { FilePart, TextPart } from 'ai'
 
-import { getProviderByModel } from '@/services/AssistantService'
+import { fileService } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
-import type { FileMetadata, Message, Model } from '@/types'
+import { getProviderByModel } from '@/services/ProviderService'
+import type { FileMessageBlock, FileMetadata, Message, Model } from '@/types'
 import { FileTypes } from '@/types'
-import type { FileMessageBlock } from '@/types/newMessage'
 import { findFileBlocks } from '@/utils/messageUtils/find'
 
 import { getAiSdkProviderId } from '../provider/factory'
@@ -22,7 +21,7 @@ const logger = loggerService.withContext('fileProcessor')
  * 提取文件内容
  */
 export async function extractFileContent(message: Message): Promise<string> {
-  const fileBlocks = findFileBlocks(message)
+  const fileBlocks = await findFileBlocks(message)
   if (fileBlocks.length > 0) {
     const textFileBlocks = fileBlocks.filter(
       fb => fb.file && [FileTypes.TEXT, FileTypes.DOCUMENT].includes(fb.file.type)
@@ -34,7 +33,7 @@ export async function extractFileContent(message: Message): Promise<string> {
 
       for (const fileBlock of textFileBlocks) {
         const file = fileBlock.file
-        const fileContent = (await window.api.file.read(file.id + file.ext)).trim()
+        const fileContent = fileService.readFile(file).trim()
         const fileNameRow = 'file: ' + file.origin_name + '\n\n'
         text = text + fileNameRow + fileContent + divider
       }
@@ -55,7 +54,7 @@ export async function convertFileBlockToTextPart(fileBlock: FileMessageBlock): P
   // 处理文本文件
   if (file.type === FileTypes.TEXT) {
     try {
-      const fileContent = await window.api.file.read(file.id + file.ext)
+      const fileContent = fileService.readFile(file)
       return {
         type: 'text',
         text: `${file.origin_name}\n${fileContent.trim()}`
@@ -68,7 +67,7 @@ export async function convertFileBlockToTextPart(fileBlock: FileMessageBlock): P
   // 处理文档文件（PDF、Word、Excel等）- 提取为文本内容
   if (file.type === FileTypes.DOCUMENT) {
     try {
-      const fileContent = await window.api.file.read(file.id + file.ext, true) // true表示强制文本提取
+      const fileContent = fileService.readFile(file)
       return {
         type: 'text',
         text: `${file.origin_name}\n${fileContent.trim()}`
@@ -84,112 +83,112 @@ export async function convertFileBlockToTextPart(fileBlock: FileMessageBlock): P
 /**
  * 处理Gemini大文件上传
  */
-export async function handleGeminiFileUpload(file: FileMetadata, model: Model): Promise<FilePart | null> {
-  try {
-    const provider = getProviderByModel(model)
+// export async function handleGeminiFileUpload(file: FileMetadata, model: Model): Promise<FilePart | null> {
+//   try {
+//     const provider = getProviderByModel(model)
 
-    // 检查文件是否已经上传过
-    const fileMetadata = await window.api.fileService.retrieve(provider, file.id)
+//     // 检查文件是否已经上传过
+//     const fileMetadata = await window.api.fileService.retrieve(provider, file.id)
 
-    if (fileMetadata.status === 'success' && fileMetadata.originalFile?.file) {
-      const remoteFile = fileMetadata.originalFile.file as any // 临时类型断言，因为File类型定义可能不完整
-      // 注意：AI SDK的FilePart格式和Gemini原生格式不同，这里需要适配
-      // 暂时返回null让它回退到文本处理，或者需要扩展FilePart支持uri
-      logger.info(`File ${file.origin_name} already uploaded to Gemini with URI: ${remoteFile.uri || 'unknown'}`)
-      return null
-    }
+//     if (fileMetadata.status === 'success' && fileMetadata.originalFile?.file) {
+//       const remoteFile = fileMetadata.originalFile.file as any // 临时类型断言，因为File类型定义可能不完整
+//       // 注意：AI SDK的FilePart格式和Gemini原生格式不同，这里需要适配
+//       // 暂时返回null让它回退到文本处理，或者需要扩展FilePart支持uri
+//       logger.info(`File ${file.origin_name} already uploaded to Gemini with URI: ${remoteFile.uri || 'unknown'}`)
+//       return null
+//     }
 
-    // 如果文件未上传，执行上传
-    const uploadResult = await window.api.fileService.upload(provider, file)
-    if (uploadResult.originalFile?.file) {
-      const remoteFile = uploadResult.originalFile.file as any // 临时类型断言
-      logger.info(`File ${file.origin_name} uploaded to Gemini with URI: ${remoteFile.uri || 'unknown'}`)
-      // 同样，这里需要处理URI格式的文件引用
-      return null
-    }
-  } catch (error) {
-    logger.error(`Failed to upload file ${file.origin_name} to Gemini:`, error as Error)
-  }
+//     // 如果文件未上传，执行上传
+//     const uploadResult = await window.api.fileService.upload(provider, file)
+//     if (uploadResult.originalFile?.file) {
+//       const remoteFile = uploadResult.originalFile.file as any // 临时类型断言
+//       logger.info(`File ${file.origin_name} uploaded to Gemini with URI: ${remoteFile.uri || 'unknown'}`)
+//       // 同样，这里需要处理URI格式的文件引用
+//       return null
+//     }
+//   } catch (error) {
+//     logger.error(`Failed to upload file ${file.origin_name} to Gemini:`, error as Error)
+//   }
 
-  return null
-}
+//   return null
+// }
 
 /**
  * 处理OpenAI兼容大文件上传
  */
-export async function handleOpenAILargeFileUpload(
-  file: FileMetadata,
-  model: Model
-): Promise<(FilePart & { id?: string }) | null> {
-  const provider = getProviderByModel(model)
-  // 如果模型为qwen-long系列，文档中要求purpose需要为'file-extract'
-  if (['qwen-long', 'qwen-doc'].some(modelName => model.name.includes(modelName))) {
-    file = {
-      ...file,
-      // 该类型并不在OpenAI定义中，但符合sdk规范，强制断言
-      purpose: 'file-extract' as OpenAI.FilePurpose
-    }
-  }
-  try {
-    // 检查文件是否已经上传过
-    const fileMetadata = await window.api.fileService.retrieve(provider, file.id)
-    if (fileMetadata.status === 'success' && fileMetadata.originalFile?.file) {
-      // 断言OpenAIFile对象
-      const remoteFile = fileMetadata.originalFile.file as OpenAI.Files.FileObject
-      // 判断用途是否一致
-      if (remoteFile.purpose !== file.purpose) {
-        logger.warn(`File ${file.origin_name} purpose mismatch: ${remoteFile.purpose} vs ${file.purpose}`)
-        throw new Error('File purpose mismatch')
-      }
-      return {
-        type: 'file',
-        filename: file.origin_name,
-        mediaType: '',
-        data: `fileid://${remoteFile.id}`
-      }
-    }
-  } catch (error) {
-    logger.error(`Failed to retrieve file ${file.origin_name}:`, error as Error)
-    return null
-  }
-  try {
-    // 如果文件未上传，执行上传
-    const uploadResult = await window.api.fileService.upload(provider, file)
-    if (uploadResult.originalFile?.file) {
-      // 断言OpenAIFile对象
-      const remoteFile = uploadResult.originalFile.file as OpenAI.Files.FileObject
-      logger.info(`File ${file.origin_name} uploaded.`)
-      return {
-        type: 'file',
-        filename: remoteFile.filename,
-        mediaType: '',
-        data: `fileid://${remoteFile.id}`
-      }
-    }
-  } catch (error) {
-    logger.error(`Failed to upload file ${file.origin_name}:`, error as Error)
-  }
+// export async function handleOpenAILargeFileUpload(
+//   file: FileMetadata,
+//   model: Model
+// ): Promise<(FilePart & { id?: string }) | null> {
+//   const provider = getProviderByModel(model)
+//   // 如果模型为qwen-long系列，文档中要求purpose需要为'file-extract'
+//   if (['qwen-long', 'qwen-doc'].some(modelName => model.name.includes(modelName))) {
+//     file = {
+//       ...file,
+//       // 该类型并不在OpenAI定义中，但符合sdk规范，强制断言
+//       purpose: 'file-extract' as OpenAI.FilePurpose
+//     }
+//   }
+//   try {
+//     // 检查文件是否已经上传过
+//     const fileMetadata = await window.api.fileService.retrieve(provider, file.id)
+//     if (fileMetadata.status === 'success' && fileMetadata.originalFile?.file) {
+//       // 断言OpenAIFile对象
+//       const remoteFile = fileMetadata.originalFile.file as OpenAI.Files.FileObject
+//       // 判断用途是否一致
+//       if (remoteFile.purpose !== file.purpose) {
+//         logger.warn(`File ${file.origin_name} purpose mismatch: ${remoteFile.purpose} vs ${file.purpose}`)
+//         throw new Error('File purpose mismatch')
+//       }
+//       return {
+//         type: 'file',
+//         filename: file.origin_name,
+//         mediaType: '',
+//         data: `fileid://${remoteFile.id}`
+//       }
+//     }
+//   } catch (error) {
+//     logger.error(`Failed to retrieve file ${file.origin_name}:`, error as Error)
+//     return null
+//   }
+//   try {
+//     // 如果文件未上传，执行上传
+//     const uploadResult = await window.api.fileService.upload(provider, file)
+//     if (uploadResult.originalFile?.file) {
+//       // 断言OpenAIFile对象
+//       const remoteFile = uploadResult.originalFile.file as OpenAI.Files.FileObject
+//       logger.info(`File ${file.origin_name} uploaded.`)
+//       return {
+//         type: 'file',
+//         filename: remoteFile.filename,
+//         mediaType: '',
+//         data: `fileid://${remoteFile.id}`
+//       }
+//     }
+//   } catch (error) {
+//     logger.error(`Failed to upload file ${file.origin_name}:`, error as Error)
+//   }
 
-  return null
-}
+//   return null
+// }
 
 /**
  * 大文件上传路由函数
  */
 export async function handleLargeFileUpload(
-  file: FileMetadata,
-  model: Model
+  _file: FileMetadata,
+  _model: Model
 ): Promise<(FilePart & { id?: string }) | null> {
-  const provider = getProviderByModel(model)
-  const aiSdkId = getAiSdkProviderId(provider)
+  // const provider = getProviderByModel(model)
+  // const aiSdkId = getAiSdkProviderId(provider)
 
-  if (['google', 'google-generative-ai', 'google-vertex'].includes(aiSdkId)) {
-    return await handleGeminiFileUpload(file, model)
-  }
+  // if (['google', 'google-generative-ai', 'google-vertex'].includes(aiSdkId)) {
+  //   return await handleGeminiFileUpload(file, model)
+  // }
 
-  if (provider.type === 'openai') {
-    return await handleOpenAILargeFileUpload(file, model)
-  }
+  // if (provider.type === 'openai') {
+  //   return await handleOpenAILargeFileUpload(file, model)
+  // }
 
   return null
 }
@@ -222,7 +221,7 @@ export async function convertFileBlockToFilePart(fileBlock: FileMessageBlock, mo
         }
       }
 
-      const base64Data = await window.api.file.base64File(file.id + file.ext)
+      const base64Data = await fileService.base64File(file)
       return {
         type: 'file',
         data: base64Data.data,
@@ -239,7 +238,7 @@ export async function convertFileBlockToFilePart(fileBlock: FileMessageBlock, mo
         return null
       }
 
-      const base64Data = await window.api.file.base64Image(file.id + file.ext)
+      const base64Data = await fileService.base64Image(file.id + file.ext)
 
       // 处理MIME类型，特别是jpg->jpeg的转换（Anthropic要求）
       let mediaType = base64Data.mime
@@ -252,7 +251,7 @@ export async function convertFileBlockToFilePart(fileBlock: FileMessageBlock, mo
 
       return {
         type: 'file',
-        data: base64Data.base64,
+        data: base64Data.data,
         mediaType: mediaType,
         filename: file.origin_name
       }

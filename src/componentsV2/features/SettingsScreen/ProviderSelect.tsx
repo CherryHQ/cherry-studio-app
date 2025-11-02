@@ -31,7 +31,7 @@ const providerOptions: SelectOptionGroup[] = [
       { label: 'Gemini', value: 'gemini' },
       { label: 'Anthropic', value: 'anthropic' },
       { label: 'Azure OpenAI', value: 'azure-openai' },
-      { label: 'Qwen', value: 'qwenlm' }
+      { label: 'New API', value: 'new-api' }
     ]
   }
 ]

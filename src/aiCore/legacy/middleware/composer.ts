@@ -1,4 +1,4 @@
-import { withSpanResult } from '@/services/SpanManagerService'
+// import { withSpanResult } from '@/services/SpanManagerService'
 import type {
   RequestOptions,
   SdkInstance,
@@ -255,20 +255,20 @@ export function applyCompletionsMiddlewares<
         })
       }
 
-      const traceParams = {
-        name: `${params.assistant?.model?.name}.client`,
-        tag: 'LLM',
-        topicId: params.topicId || '',
-        modelName: params.assistant?.model?.name
-      }
+      // const traceParams = {
+      //   name: `${params.assistant?.model?.name}.client`,
+      //   tag: 'LLM',
+      //   topicId: params.topicId || '',
+      //   modelName: params.assistant?.model?.name
+      // }
 
       // Call the original SDK method with transformed parameters
       // 使用转换后的参数调用原始 SDK 方法
-      const rawOutput = await withSpanResult(methodCall, traceParams, sdkPayload)
+      // const rawOutput = await withSpanResult(methodCall, traceParams, sdkPayload)
 
       // Return result wrapped in CompletionsResult format
       // 以 CompletionsResult 格式返回包装的结果
-      return { rawOutput } as CompletionsResult
+      return { rawOutput: await methodCall(sdkPayload), getText: () => '' }
     }
 
     const chain = middlewares.map(middleware => middleware(api))

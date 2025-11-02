@@ -9,15 +9,17 @@ import { cloneDeep } from 'lodash'
 
 import { isOpenAIChatCompletionOnlyModel } from '@/config/models'
 import { isAnthropicProvider, isAzureOpenAIProvider, isGeminiProvider, isNewApiProvider } from '@/config/providers'
+import { COPILOT_DEFAULT_HEADERS } from '@/constants/copilot'
 import { getAwsBedrockAccessKeyId, getAwsBedrockRegion, getAwsBedrockSecretAccessKey } from '@/hooks/useAwsBedrock'
 import { createVertexProvider, isVertexAIConfigured, isVertexProvider } from '@/hooks/useVertexAI'
-import { getProviderByModel } from '@/services/AssistantService'
+import { generateSignature } from '@/integration/cherryai/index'
+import CopilotService from '@/services/CopilotService'
+import { getProviderByModel } from '@/services/ProviderService'
 import store from '@/store'
 import { isSystemProvider, type Model, type Provider, SystemProviderIds } from '@/types'
 import { formatApiHost, formatAzureOpenAIApiHost, formatVertexApiHost, routeToEndpoint } from '@/utils/api'
 
 import { aihubmixProviderCreator, newApiResolverCreator, vertexAnthropicProviderCreator } from './config'
-import { COPILOT_DEFAULT_HEADERS } from './constants'
 import { getAiSdkProviderId } from './factory'
 
 /**
@@ -72,16 +74,16 @@ function handleSpecialProviders(model: Model, provider: Provider): Provider {
  */
 function formatProviderApiHost(provider: Provider): Provider {
   const formatted = { ...provider }
-  if (formatted.anthropicApiHost) {
-    formatted.anthropicApiHost = formatApiHost(formatted.anthropicApiHost)
-  }
+  // if (formatted.anthropicApiHost) {
+  //   formatted.anthropicApiHost = formatApiHost(formatted.anthropicApiHost)
+  // }
 
   if (isAnthropicProvider(provider)) {
-    const baseHost = formatted.anthropicApiHost || formatted.apiHost
+    const baseHost = formatted.apiHost
     formatted.apiHost = formatApiHost(baseHost)
-    if (!formatted.anthropicApiHost) {
-      formatted.anthropicApiHost = formatted.apiHost
-    }
+    // if (!formatted.anthropicApiHost) {
+    //   formatted.anthropicApiHost = formatted.apiHost
+    // }
   } else if (formatted.id === SystemProviderIds.copilot || formatted.id === SystemProviderIds.github) {
     formatted.apiHost = formatApiHost(formatted.apiHost, false)
   } else if (isGeminiProvider(formatted)) {
@@ -255,7 +257,7 @@ export async function prepareSpecialProviderConfig(
         ...COPILOT_DEFAULT_HEADERS,
         ...defaultHeaders
       }
-      const { token } = await window.api.copilot.getToken(headers)
+      const { token } = await CopilotService.getToken(headers)
       config.options.apiKey = token
       config.options.headers = {
         ...headers,
@@ -266,7 +268,7 @@ export async function prepareSpecialProviderConfig(
     case 'cherryai': {
       config.options.fetch = async (url, options) => {
         // 在这里对最终参数进行签名
-        const signature = await window.api.cherryai.generateSignature({
+        const signature = generateSignature({
           method: 'POST',
           path: '/chat/completions',
           query: '',

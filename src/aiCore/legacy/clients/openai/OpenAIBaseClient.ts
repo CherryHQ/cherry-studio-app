@@ -1,18 +1,19 @@
 import OpenAI, { AzureOpenAI } from '@cherrystudio/openai'
 
-import { COPILOT_DEFAULT_HEADERS } from '@/aiCore/provider/constants'
 import {
   isClaudeReasoningModel,
   isOpenAIReasoningModel,
   isSupportedModel,
   isSupportedReasoningEffortOpenAIModel
 } from '@/config/models'
+import { COPILOT_DEFAULT_HEADERS } from '@/constants/copilot'
 import { getStoreSetting } from '@/hooks/useSettings'
 import { getAssistantSettings } from '@/services/AssistantService'
+import CopilotService from '@/services/CopilotService'
 import { loggerService } from '@/services/LoggerService'
 import store from '@/store'
 import type { SettingsState } from '@/store/settings'
-import type { Assistant, GenerateImageParams, Model, Provider } from '@/types'
+import { type Assistant, type GenerateImageParams, type Model,SystemProviderIds } from '@/types'
 import type {
   OpenAIResponseSdkMessageParam,
   OpenAIResponseSdkParams,
@@ -44,10 +45,6 @@ export abstract class OpenAIBaseClient<
   TToolCall extends OpenAI.Chat.Completions.ChatCompletionMessageToolCall | OpenAIResponseSdkToolCall,
   TSdkSpecificTool extends OpenAI.Chat.Completions.ChatCompletionTool | OpenAIResponseSdkTool
 > extends BaseApiClient<TSdkInstance, TSdkParams, TRawOutput, TRawChunk, TMessageParam, TToolCall, TSdkSpecificTool> {
-  constructor(provider: Provider) {
-    super(provider)
-  }
-
   // 仅适用于openai
   override getBaseURL(): string {
     const host = this.provider.apiHost
@@ -146,9 +143,9 @@ export abstract class OpenAIBaseClient<
 
     let apiKeyForSdkInstance = this.apiKey
 
-    if (this.provider.id === 'copilot') {
+    if (this.provider.id === SystemProviderIds.copilot) {
       const defaultHeaders = store.getState().copilot.defaultHeaders
-      const { token } = await window.api.copilot.getToken(defaultHeaders)
+      const { token } = await CopilotService.getToken(defaultHeaders)
       // this.provider.apiKey不允许修改
       // this.provider.apiKey = token
       apiKeyForSdkInstance = token

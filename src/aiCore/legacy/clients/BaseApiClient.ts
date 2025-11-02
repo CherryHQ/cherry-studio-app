@@ -6,26 +6,24 @@ import {
   isOpenAIModel,
   isSupportFlexServiceTierModel
 } from '@/config/models'
-import { REFERENCE_PROMPT } from '@/config/prompts'
 import { isSupportServiceTierProvider } from '@/config/providers'
 import { defaultTimeout } from '@/constants'
 import { getLMStudioKeepAliveTime } from '@/hooks/useLMStudio'
 import { getAssistantSettings } from '@/services/AssistantService'
+import { fileService } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import type {
   Assistant,
   GenerateImageParams,
-  KnowledgeReference,
   MCPCallToolResponse,
   MCPTool,
   MCPToolResponse,
-  MemoryItem,
+  Message,
+  // MemoryItem,
   Model,
   OpenAIVerbosity,
   Provider,
-  ToolCallResponse,
-  WebSearchProviderResponse,
-  WebSearchResponse
+  ToolCallResponse
 } from '@/types'
 import {
   FileTypes,
@@ -35,7 +33,6 @@ import {
   OpenAIServiceTiers,
   SystemProviderIds
 } from '@/types'
-import type { Message } from '@/types/newMessage'
 import type {
   RequestOptions,
   SdkInstance,
@@ -47,8 +44,8 @@ import type {
   SdkTool,
   SdkToolCall
 } from '@/types/sdk'
-import { defaultAppHeaders,isJSON, parseJSON  } from '@/utils'
 import { addAbortController, removeAbortController } from '@/utils/abortController'
+import { isJSON, parseJSON } from '@/utils/json'
 import { findFileBlocks, getMainTextContent } from '@/utils/messageUtils/find'
 
 import type { CompletionsContext } from '../middleware/types'
@@ -267,7 +264,7 @@ export abstract class BaseApiClient<
   public async getMessageContent(
     message: Message
   ): Promise<{ textContent: string; imageContents: { fileId: string; fileExt: string }[] }> {
-    const content = getMainTextContent(message)
+    const content = await getMainTextContent(message)
 
     if (isEmpty(content)) {
       return {
@@ -276,33 +273,35 @@ export abstract class BaseApiClient<
       }
     }
 
-    const webSearchReferences = await this.getWebSearchReferencesFromCache(message)
-    const knowledgeReferences = await this.getKnowledgeBaseReferencesFromCache(message)
-    const memoryReferences = this.getMemoryReferencesFromCache(message)
+    // const webSearchReferences = await this.getWebSearchReferencesFromCache(message)
+    // const knowledgeReferences = await this.getKnowledgeBaseReferencesFromCache(message)
+    // const memoryReferences = this.getMemoryReferencesFromCache(message)
 
-    const knowledgeTextReferences = knowledgeReferences.filter(k => k.metadata?.type !== 'image')
-    const knowledgeImageReferences = knowledgeReferences.filter(k => k.metadata?.type === 'image')
+    // const knowledgeTextReferences = knowledgeReferences.filter(k => k.metadata?.type !== 'image')
+    // const knowledgeImageReferences = knowledgeReferences.filter(k => k.metadata?.type === 'image')
 
     // 添加偏移量以避免ID冲突
-    const reindexedKnowledgeReferences = knowledgeTextReferences.map(ref => ({
-      ...ref,
-      id: ref.id + webSearchReferences.length // 为知识库引用的ID添加网络搜索引用的数量作为偏移量
-    }))
+    // const reindexedKnowledgeReferences = knowledgeTextReferences.map(ref => ({
+    //   ...ref,
+    //   id: ref.id + webSearchReferences.length // 为知识库引用的ID添加网络搜索引用的数量作为偏移量
+    // }))
 
-    const allReferences = [...webSearchReferences, ...reindexedKnowledgeReferences, ...memoryReferences]
+    // const allReferences = [...webSearchReferences, ...reindexedKnowledgeReferences, ...memoryReferences]
 
-    logger.debug(`Found ${allReferences.length} references for ID: ${message.id}`, allReferences)
+    // logger.debug(`Found ${allReferences.length} references for ID: ${message.id}`, allReferences)
 
-    const referenceContent = `\`\`\`json\n${JSON.stringify(allReferences, null, 2)}\n\`\`\``
-    const imageReferences = knowledgeImageReferences.map(r => {
-      return { fileId: r.metadata?.id, fileExt: r.metadata?.ext }
-    })
+    // const referenceContent = `\`\`\`json\n${JSON.stringify(allReferences, null, 2)}\n\`\`\``
+    // const imageReferences = knowledgeImageReferences.map(r => {
+    //   return { fileId: r.metadata?.id, fileExt: r.metadata?.ext }
+    // })
+
+    // isEmpty(allReferences)
+    //     ? content
+    //     : REFERENCE_PROMPT.replace('{question}', content).replace('{references}', referenceContent)
 
     return {
-      textContent: isEmpty(allReferences)
-        ? content
-        : REFERENCE_PROMPT.replace('{question}', content).replace('{references}', referenceContent),
-      imageContents: isEmpty(knowledgeImageReferences) ? [] : imageReferences
+      textContent: content,
+      imageContents: []
     }
   }
 
@@ -312,7 +311,7 @@ export abstract class BaseApiClient<
    * @returns The file content
    */
   protected async extractFileContent(message: Message) {
-    const fileBlocks = findFileBlocks(message)
+    const fileBlocks = await findFileBlocks(message)
     if (fileBlocks.length > 0) {
       const textFileBlocks = fileBlocks.filter(
         fb => fb.file && [FileTypes.TEXT, FileTypes.DOCUMENT].includes(fb.file.type)
@@ -324,7 +323,7 @@ export abstract class BaseApiClient<
 
         for (const fileBlock of textFileBlocks) {
           const file = fileBlock.file
-          const fileContent = (await window.api.file.read(file.id + file.ext, true)).trim()
+          const fileContent = fileService.readFile(file).trim()
           const fileNameRow = 'file: ' + file.origin_name + '\n\n'
           text = text + fileNameRow + fileContent + divider
         }
@@ -336,61 +335,61 @@ export abstract class BaseApiClient<
     return ''
   }
 
-  private getMemoryReferencesFromCache(message: Message) {
-    const memories = window.keyv.get(`memory-search-${message.id}`) as MemoryItem[] | undefined
-    if (memories) {
-      const memoryReferences: KnowledgeReference[] = memories.map((mem, index) => ({
-        id: index + 1,
-        content: `${mem.memory} -- Created at: ${mem.createdAt}`,
-        sourceUrl: '',
-        type: 'memory'
-      }))
-      return memoryReferences
-    }
-    return []
-  }
+  // private getMemoryReferencesFromCache(message: Message) {
+  //   const memories = window.keyv.get(`memory-search-${message.id}`) as MemoryItem[] | undefined
+  //   if (memories) {
+  //     const memoryReferences: KnowledgeReference[] = memories.map((mem, index) => ({
+  //       id: index + 1,
+  //       content: `${mem.memory} -- Created at: ${mem.createdAt}`,
+  //       sourceUrl: '',
+  //       type: 'memory'
+  //     }))
+  //     return memoryReferences
+  //   }
+  //   return []
+  // }
 
-  private async getWebSearchReferencesFromCache(message: Message) {
-    const content = getMainTextContent(message)
-    if (isEmpty(content)) {
-      return []
-    }
-    const webSearch: WebSearchResponse = window.keyv.get(`web-search-${message.id}`)
+  // private async getWebSearchReferencesFromCache(message: Message) {
+  //   const content = getMainTextContent(message)
+  //   if (isEmpty(content)) {
+  //     return []
+  //   }
+  //   const webSearch: WebSearchResponse = window.keyv.get(`web-search-${message.id}`)
 
-    if (webSearch) {
-      window.keyv.remove(`web-search-${message.id}`)
-      return (webSearch.results as WebSearchProviderResponse).results.map(
-        (result, index) =>
-          ({
-            id: index + 1,
-            content: result.content,
-            sourceUrl: result.url,
-            type: 'url'
-          }) as KnowledgeReference
-      )
-    }
+  //   if (webSearch) {
+  //     window.keyv.remove(`web-search-${message.id}`)
+  //     return (webSearch.results as WebSearchProviderResponse).results.map(
+  //       (result, index) =>
+  //         ({
+  //           id: index + 1,
+  //           content: result.content,
+  //           sourceUrl: result.url,
+  //           type: 'url'
+  //         }) as KnowledgeReference
+  //     )
+  //   }
 
-    return []
-  }
+  //   return []
+  // }
 
   /**
    * 从缓存中获取知识库引用
    */
-  private async getKnowledgeBaseReferencesFromCache(message: Message): Promise<KnowledgeReference[]> {
-    const content = getMainTextContent(message)
-    if (isEmpty(content)) {
-      return []
-    }
-    const knowledgeReferences: KnowledgeReference[] = window.keyv.get(`knowledge-search-${message.id}`)
+  // private async getKnowledgeBaseReferencesFromCache(message: Message): Promise<KnowledgeReference[]> {
+  //   const content = getMainTextContent(message)
+  //   if (isEmpty(content)) {
+  //     return []
+  //   }
+  //   const knowledgeReferences: KnowledgeReference[] = window.keyv.get(`knowledge-search-${message.id}`)
 
-    if (!isEmpty(knowledgeReferences)) {
-      window.keyv.remove(`knowledge-search-${message.id}`)
-      logger.debug(`Found ${knowledgeReferences.length} knowledge base references in cache for ID: ${message.id}`)
-      return knowledgeReferences
-    }
-    logger.debug(`No knowledge base references found in cache for ID: ${message.id}`)
-    return []
-  }
+  //   if (!isEmpty(knowledgeReferences)) {
+  //     window.keyv.remove(`knowledge-search-${message.id}`)
+  //     logger.debug(`Found ${knowledgeReferences.length} knowledge base references in cache for ID: ${message.id}`)
+  //     return knowledgeReferences
+  //   }
+  //   logger.debug(`No knowledge base references found in cache for ID: ${message.id}`)
+  //   return []
+  // }
 
   protected getCustomParameters(assistant: Assistant) {
     return (

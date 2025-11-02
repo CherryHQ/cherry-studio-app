@@ -1,9 +1,10 @@
 import type OpenAI from '@cherrystudio/openai'
 import { toFile } from '@cherrystudio/openai/uploads'
+import { Buffer } from 'buffer'
 
 import { isDedicatedImageGenerationModel } from '@/config/models'
 import { defaultTimeout } from '@/constants'
-import FileManager from '@/services/FileManager'
+import { fileService } from '@/services/FileService'
 import { ChunkType } from '@/types/chunk'
 import { findImageBlocks, getMainTextContent } from '@/utils/messageUtils/find'
 
@@ -41,24 +42,25 @@ export const ImageGenerationMiddleware: CompletionsMiddleware =
             throw new Error('No user message found for image generation.')
           }
 
-          const prompt = getMainTextContent(lastUserMessage)
+          const prompt = await getMainTextContent(lastUserMessage)
           let imageFiles: Blob[] = []
 
           // Collect images from user message
-          const userImageBlocks = findImageBlocks(lastUserMessage)
+          const userImageBlocks = await findImageBlocks(lastUserMessage)
           const userImages = await Promise.all(
             userImageBlocks.map(async block => {
               if (!block.file) return null
-              const binaryData: Uint8Array = await FileManager.readBinaryImage(block.file)
+              const binaryData = await fileService.binaryImage(block.file)
+              const buffer = Buffer.from(binaryData)
               const mimeType = `${block.file.type}/${block.file.ext.slice(1)}`
-              return await toFile(new Blob([binaryData]), block.file.origin_name || 'image.png', { type: mimeType })
+              return await toFile(new Blob([buffer]), block.file.origin_name || 'image.png', { type: mimeType })
             })
           )
           imageFiles = imageFiles.concat(userImages.filter(Boolean) as Blob[])
 
           // Collect images from last assistant message
           if (lastAssistantMessage) {
-            const assistantImageBlocks = findImageBlocks(lastAssistantMessage)
+            const assistantImageBlocks = await findImageBlocks(lastAssistantMessage)
             const assistantImages = await Promise.all(
               assistantImageBlocks.map(async block => {
                 const b64 = block.url?.replace(/^data:image\/\w+;base64,/, '')
