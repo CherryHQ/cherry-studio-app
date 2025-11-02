@@ -14,5 +14,8 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   }
   return context.resolveRequest(context, moduleName, platform)
 }
+config.resolver.extraNodeModules = {
+  buffer: require.resolve('buffer')
+}
 
 module.exports = withNativeWind(config, { input: './global.css' })

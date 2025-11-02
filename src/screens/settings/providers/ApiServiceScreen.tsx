@@ -181,8 +181,10 @@ export default function ApiServiceScreen() {
     <SafeAreaContainer className="flex-1">
       <HeaderBar title={t('settings.provider.api_service')} />
       <Container>
-        {/* Standard API Key configuration - hide for Copilot and AWS Bedrock */}
-        {!AwsBedrockService.isAwsBedrockProvider(provider) && provider?.id !== 'copilot' && (
+        {/* Standard API Key configuration - hide for Copilot, AWS Bedrock and VertexAI */}
+        {!AwsBedrockService.isAwsBedrockProvider(provider) &&
+          !VertexAIService.isVertexProvider(provider) &&
+          provider?.id !== 'copilot' && (
           <>
             <YStack className="gap-2">
               <XStack className="items-center justify-between">
