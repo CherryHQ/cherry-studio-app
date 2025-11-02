@@ -10,11 +10,11 @@ import { cloneDeep } from 'lodash'
 import { isOpenAIChatCompletionOnlyModel } from '@/config/models'
 import { isAnthropicProvider, isAzureOpenAIProvider, isGeminiProvider, isNewApiProvider } from '@/config/providers'
 import { COPILOT_DEFAULT_HEADERS } from '@/constants/copilot'
-import { getAwsBedrockAccessKeyId, getAwsBedrockRegion, getAwsBedrockSecretAccessKey } from '@/hooks/useAwsBedrock'
-import { createVertexProvider, isVertexAIConfigured, isVertexProvider } from '@/hooks/useVertexAI'
 import { generateSignature } from '@/integration/cherryai/index'
+import AwsBedrockService from '@/services/AwsBedrockService'
 import CopilotService from '@/services/CopilotService'
 import { getProviderByModel } from '@/services/ProviderService'
+import VertexAIService from '@/services/VertexAIService'
 import store from '@/store'
 import { isSystemProvider, type Model, type Provider, SystemProviderIds } from '@/types'
 import { formatApiHost, formatAzureOpenAIApiHost, formatVertexApiHost, routeToEndpoint } from '@/utils/api'
@@ -90,7 +90,7 @@ function formatProviderApiHost(provider: Provider): Provider {
     formatted.apiHost = formatApiHost(formatted.apiHost, true, 'v1beta')
   } else if (isAzureOpenAIProvider(formatted)) {
     formatted.apiHost = formatAzureOpenAIApiHost(formatted.apiHost)
-  } else if (isVertexProvider(formatted)) {
+  } else if (VertexAIService.isVertexProvider(formatted)) {
     formatted.apiHost = formatVertexApiHost(formatted)
   } else {
     formatted.apiHost = formatApiHost(formatted.apiHost)
@@ -184,23 +184,23 @@ export function providerToAiSdkConfig(
     }
   }
 
-  // bedrock
+  // bedrock - Note: credentials are loaded synchronously here for config
+  // The actual async loading happens in prepareSpecialProviderConfig
   if (aiSdkProviderId === 'bedrock') {
-    extraOptions.region = getAwsBedrockRegion()
-    extraOptions.accessKeyId = getAwsBedrockAccessKeyId()
-    extraOptions.secretAccessKey = getAwsBedrockSecretAccessKey()
+    // Placeholder values - will be replaced in prepareSpecialProviderConfig
+    extraOptions.region = 'us-east-1'
+    extraOptions.accessKeyId = 'placeholder'
+    extraOptions.secretAccessKey = 'placeholder'
   }
-  // google-vertex
+  // google-vertex - Note: credentials are loaded synchronously here for config
+  // The actual async loading happens in prepareSpecialProviderConfig
   if (aiSdkProviderId === 'google-vertex' || aiSdkProviderId === 'google-vertex-anthropic') {
-    if (!isVertexAIConfigured()) {
-      throw new Error('VertexAI is not configured. Please configure project, location and service account credentials.')
-    }
-    const { project, location, googleCredentials } = createVertexProvider(actualProvider)
-    extraOptions.project = project
-    extraOptions.location = location
+    // Placeholder values - will be replaced in prepareSpecialProviderConfig
+    extraOptions.project = 'placeholder'
+    extraOptions.location = 'us-central1'
     extraOptions.googleCredentials = {
-      ...googleCredentials,
-      privateKey: formatPrivateKey(googleCredentials.privateKey)
+      privateKey: 'placeholder',
+      clientEmail: 'placeholder'
     }
     baseConfig.baseURL += aiSdkProviderId === 'google-vertex' ? '/publishers/google' : '/publishers/anthropic/models'
   }
@@ -230,10 +230,13 @@ export function providerToAiSdkConfig(
  * 检查是否支持使用新的AI SDK
  * 简化版：利用新的别名映射和动态provider系统
  */
-export function isModernSdkSupported(provider: Provider): boolean {
+export async function isModernSdkSupported(provider: Provider): Promise<boolean> {
   // 特殊检查：vertexai需要配置完整
-  if (provider.type === 'vertexai' && !isVertexAIConfigured()) {
-    return false
+  if (provider.type === 'vertexai') {
+    const isConfigured = await VertexAIService.isVertexAIConfigured(provider)
+    if (!isConfigured) {
+      return false
+    }
   }
 
   // 使用getAiSdkProviderId获取映射后的providerId，然后检查AI SDK是否支持
@@ -250,6 +253,34 @@ export async function prepareSpecialProviderConfig(
   provider: Provider,
   config: ReturnType<typeof providerToAiSdkConfig>
 ) {
+  // Load AWS Bedrock credentials if needed
+  if (config.providerId === 'bedrock' || provider.type === 'aws-bedrock') {
+    const credentials = await AwsBedrockService.getAwsBedrockCredentials(provider.id)
+    if (credentials) {
+      config.options.region = credentials.region
+      config.options.accessKeyId = credentials.accessKeyId
+      config.options.secretAccessKey = credentials.secretAccessKey
+    }
+  }
+
+  // Load VertexAI credentials if needed
+  if (config.providerId === 'google-vertex' || config.providerId === 'google-vertex-anthropic') {
+    const vertexProvider = await VertexAIService.createVertexProvider(provider)
+    if (
+      VertexAIService.isVertexProvider(vertexProvider) &&
+      vertexProvider.googleCredentials &&
+      vertexProvider.project &&
+      vertexProvider.location
+    ) {
+      config.options.project = vertexProvider.project
+      config.options.location = vertexProvider.location
+      config.options.googleCredentials = {
+        privateKey: formatPrivateKey(vertexProvider.googleCredentials.privateKey),
+        clientEmail: vertexProvider.googleCredentials.clientEmail
+      }
+    }
+  }
+
   switch (provider.id) {
     case 'copilot': {
       const defaultHeaders = store.getState().copilot.defaultHeaders ?? {}

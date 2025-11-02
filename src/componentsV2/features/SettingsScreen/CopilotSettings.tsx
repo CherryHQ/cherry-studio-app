@@ -6,9 +6,9 @@ import { Linking } from 'react-native'
 import { Group, GroupTitle, PressableRow, Row, Text, XStack, YStack } from '@/componentsV2'
 import { Copy, ExternalLink as ExternalLinkIcon } from '@/componentsV2/icons/LucideIcon'
 import { useDialog } from '@/hooks/useDialog'
-import type { Provider } from '@/types/assistant'
 import CopilotService from '@/services/CopilotService'
 import { loggerService } from '@/services/LoggerService'
+import type { Provider } from '@/types/assistant'
 
 const logger = loggerService.withContext('CopilotSettings')
 

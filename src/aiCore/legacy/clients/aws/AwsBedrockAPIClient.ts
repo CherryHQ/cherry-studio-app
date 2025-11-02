@@ -10,8 +10,8 @@ import { t } from 'i18next'
 import type { GenericChunk } from '@/aiCore/legacy/middleware/schemas'
 import { findTokenLimit, isReasoningModel } from '@/config/models'
 import { DEFAULT_MAX_TOKENS } from '@/constants'
-import { getAwsBedrockAccessKeyId, getAwsBedrockRegion, getAwsBedrockSecretAccessKey } from '@/hooks/useAwsBedrock'
 import { getAssistantSettings } from '@/services/AssistantService'
+import AwsBedrockService from '@/services/AwsBedrockService'
 import { fileService } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import { estimateTextTokens } from '@/services/TokenService'
@@ -72,16 +72,20 @@ export class AwsBedrockAPIClient extends BaseApiClient<
       return this.sdkInstance
     }
 
-    const region = getAwsBedrockRegion()
-    const accessKeyId = getAwsBedrockAccessKeyId()
-    const secretAccessKey = getAwsBedrockSecretAccessKey()
+    const credentials = await AwsBedrockService.getAwsBedrockCredentials(this.provider.id)
+
+    if (!credentials) {
+      throw new Error('AWS Bedrock credentials are not configured. Please configure access key, secret key, and region.')
+    }
+
+    const { region, accessKeyId, secretAccessKey } = credentials
 
     if (!region) {
-      throw new Error('AWS region is required. Please configure AWS-Region in extra headers.')
+      throw new Error('AWS region is required. Please configure AWS region.')
     }
 
     if (!accessKeyId || !secretAccessKey) {
-      throw new Error('AWS credentials are required. Please configure AWS-Access-Key-ID and AWS-Secret-Access-Key.')
+      throw new Error('AWS credentials are required. Please configure AWS access key and secret access key.')
     }
 
     const client = new BedrockRuntimeClient({

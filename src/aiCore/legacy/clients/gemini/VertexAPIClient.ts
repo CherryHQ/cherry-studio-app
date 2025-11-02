@@ -1,8 +1,8 @@
 import { GoogleGenAI } from '@google/genai'
 import { isEmpty } from 'lodash'
 
-import { createVertexProvider, isVertexAIConfigured, isVertexProvider } from '@/hooks/useVertexAI'
 import { loggerService } from '@/services/LoggerService'
+import VertexAIService from '@/services/VertexAIService'
 import type { Model, Provider, VertexProvider } from '@/types'
 
 import { AnthropicVertexClient } from '../anthropic/AnthropicVertexClient'
@@ -17,16 +17,14 @@ export class VertexAPIClient extends GeminiAPIClient {
 
   constructor(provider: Provider) {
     super(provider)
-    // 检查 VertexAI 配置
-    if (!isVertexAIConfigured()) {
-      throw new Error('VertexAI is not configured. Please configure project, location and service account credentials.')
-    }
     this.anthropicVertexClient = new AnthropicVertexClient(provider)
     // 如果传入的是普通 Provider，转换为 VertexProvider
-    if (isVertexProvider(provider)) {
+    if (VertexAIService.isVertexProvider(provider)) {
       this.vertexProvider = provider
     } else {
-      this.vertexProvider = createVertexProvider(provider)
+      // For non-vertex providers, we need to load credentials asynchronously
+      // This will be handled in getSdkInstance
+      this.vertexProvider = provider as VertexProvider
     }
   }
 
@@ -68,9 +66,13 @@ export class VertexAPIClient extends GeminiAPIClient {
       return this.sdkInstance
     }
 
+    // Load credentials from service if not already loaded
+    const vertexProvider = await VertexAIService.createVertexProvider(this.provider)
+    this.vertexProvider = vertexProvider
+
     const { googleCredentials, project, location } = this.vertexProvider
 
-    if (!googleCredentials.privateKey || !googleCredentials.clientEmail || !project || !location) {
+    if (!googleCredentials?.privateKey || !googleCredentials?.clientEmail || !project || !location) {
       throw new Error('Vertex AI settings are not configured')
     }
 
