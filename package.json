@@ -22,7 +22,24 @@
     "analyze:android": "source-map-explorer 'dist/_expo/static/js/android/*.js' 'dist/_expo/static/js/android/*.js.map'"
   },
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "setupFilesAfterEnv": [
+      "<rootDir>/jest.setup.js"
+    ],
+    "transformIgnorePatterns": [
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg)"
+    ],
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/src/$1"
+    },
+    "collectCoverage": true,
+    "collectCoverageFrom": [
+      "src/**/*.{ts,tsx,js,jsx}",
+      "!src/**/*.d.ts",
+      "!src/**/__tests__/**",
+      "!**/node_modules/**",
+      "!**/coverage/**"
+    ]
   },
   "workspaces": {
     "packages": [
@@ -182,6 +199,7 @@
     "@babel/core": "^7.25.2",
     "@babel/plugin-transform-class-static-block": "^7.27.1",
     "@mozilla/readability": "^0.6.0",
+    "@testing-library/react-native": "^13.3.3",
     "@tryfabric/martian": "^1.2.4",
     "@types/cli-progress": "^3",
     "@types/jest": "^29.5.12",

@@ -9,9 +9,11 @@ import { SYSTEM_PROVIDERS } from '@/config/providers'
 import { getWebSearchProviders } from '@/config/websearchProviders'
 import { storage } from '@/utils'
 
+import { assistantService } from './AssistantService'
 import { loggerService } from './LoggerService'
 import { preferenceService } from './PreferenceService'
 import { providerService } from './ProviderService'
+import { topicService } from './TopicService'
 
 type AppDataMigration = {
   version: number
@@ -60,6 +62,13 @@ export async function runAppDataMigrations(): Promise<void> {
     // Initialize ProviderService cache (loads default provider)
     await providerService.initialize()
 
+    // Create a new blank topic on app restart
+    const defaultAssistant = await assistantService.getAssistant('default')
+    if (defaultAssistant) {
+      const newTopic = await topicService.createTopic(defaultAssistant)
+      await topicService.switchToTopic(newTopic.id)
+    }
+
     return
   }
 
@@ -88,6 +97,13 @@ export async function runAppDataMigrations(): Promise<void> {
 
   // Initialize ProviderService cache (loads default provider)
   await providerService.initialize()
+
+  // Create a new blank topic on app restart
+  const defaultAssistant = await assistantService.getAssistant('default')
+  if (defaultAssistant) {
+    const newTopic = await topicService.createTopic(defaultAssistant)
+    await topicService.switchToTopic(newTopic.id)
+  }
 }
 
 export function getAppDataVersion(): number {
