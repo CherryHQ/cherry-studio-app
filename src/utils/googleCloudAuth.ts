@@ -3,6 +3,7 @@
  * Generates OAuth 2.0 JWT tokens for service account authentication
  */
 
+import { Buffer } from 'buffer'
 import crypto from 'react-native-quick-crypto'
 
 import { loggerService } from '@/services/LoggerService'
@@ -48,9 +49,8 @@ function generateJWT(serviceAccount: ServiceAccount, scopes: string[]): string {
   // Sign with private key
   const sign = crypto.createSign('RSA-SHA256')
   sign.update(signatureInput)
-  sign.end()
 
-  const signature = sign.sign(privateKey)
+  const signature = sign.sign({key: privateKey})
   const encodedSignature = base64UrlEncode(signature)
 
   return `${signatureInput}.${encodedSignature}`
