@@ -4,6 +4,7 @@ import { isEmpty } from 'lodash'
 import { loggerService } from '@/services/LoggerService'
 import VertexAIService from '@/services/VertexAIService'
 import type { Model, Provider, VertexProvider } from '@/types'
+import { generateGoogleCloudAuthHeaders } from '@/utils/googleCloudAuth'
 
 // import { AnthropicVertexClient } from '../anthropic/AnthropicVertexClient'
 import { GeminiAPIClient } from './GeminiAPIClient'
@@ -41,7 +42,7 @@ export class VertexAPIClient extends GeminiAPIClient {
     return actualClient.getClientCompatibilityType(model)
   }
 
-  public getClient(model: Model) {
+  public getClient(_model: Model) {
     // if (model.id.includes('claude')) {
     //   return this.anthropicVertexClient
     // }
@@ -68,6 +69,12 @@ export class VertexAPIClient extends GeminiAPIClient {
 
     // Load credentials from service if not already loaded
     const vertexProvider = await VertexAIService.createVertexProvider(this.provider)
+
+    // Type guard to ensure we have a valid VertexProvider
+    if (!VertexAIService.isVertexProvider(vertexProvider)) {
+      throw new Error('Invalid VertexProvider configuration')
+    }
+
     this.vertexProvider = vertexProvider
 
     const { googleCredentials, project, location } = this.vertexProvider
@@ -93,7 +100,7 @@ export class VertexAPIClient extends GeminiAPIClient {
   }
 
   /**
-   * 获取认证头，如果配置了 service account 则从主进程获取
+   * 获取认证头，如果配置了 service account 则生成 OAuth token
    */
   private async getServiceAccountAuthHeaders(): Promise<Record<string, string> | undefined> {
     const { googleCredentials, project } = this.vertexProvider
@@ -110,13 +117,10 @@ export class VertexAPIClient extends GeminiAPIClient {
     }
 
     try {
-      // 从主进程获取认证头
-      this.authHeaders = await window.api.vertexAI.getAuthHeaders({
-        projectId: project,
-        serviceAccount: {
-          privateKey: googleCredentials.privateKey,
-          clientEmail: googleCredentials.clientEmail
-        }
+      // Generate auth headers using service account credentials
+      this.authHeaders = await generateGoogleCloudAuthHeaders({
+        privateKey: googleCredentials.privateKey,
+        clientEmail: googleCredentials.clientEmail
       })
 
       // 设置过期时间（通常认证头有效期为 1 小时）
@@ -135,11 +139,6 @@ export class VertexAPIClient extends GeminiAPIClient {
   clearAuthCache(): void {
     this.authHeaders = undefined
     this.authHeadersExpiry = undefined
-
-    const { googleCredentials, project } = this.vertexProvider
-
-    if (project && googleCredentials.clientEmail) {
-      window.api.vertexAI.clearAuthCache(project, googleCredentials.clientEmail)
-    }
+    // Auth cache cleared - next getSdkInstance() call will generate new tokens
   }
 }

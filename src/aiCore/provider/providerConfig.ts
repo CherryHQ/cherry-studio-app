@@ -13,9 +13,9 @@ import { COPILOT_DEFAULT_HEADERS } from '@/constants/copilot'
 import { generateSignature } from '@/integration/cherryai/index'
 import AwsBedrockService from '@/services/AwsBedrockService'
 import CopilotService from '@/services/CopilotService'
+import { keyValueService } from '@/services/KeyValueService'
 import { getProviderByModel } from '@/services/ProviderService'
 import VertexAIService from '@/services/VertexAIService'
-import store from '@/store'
 import { isSystemProvider, type Model, type Provider, SystemProviderIds } from '@/types'
 import { formatApiHost, formatAzureOpenAIApiHost, formatVertexApiHost, routeToEndpoint } from '@/utils/api'
 
@@ -34,16 +34,16 @@ function getRotatedApiKey(provider: Provider): string {
     return keys[0]
   }
 
-  const lastUsedKey = window.keyv.get(keyName)
+  const lastUsedKey = keyValueService.get<string>(keyName)
   if (!lastUsedKey) {
-    window.keyv.set(keyName, keys[0])
+    keyValueService.set(keyName, keys[0])
     return keys[0]
   }
 
   const currentIndex = keys.indexOf(lastUsedKey)
   const nextIndex = (currentIndex + 1) % keys.length
   const nextKey = keys[nextIndex]
-  window.keyv.set(keyName, nextKey)
+  keyValueService.set(keyName, nextKey)
 
   return nextKey
 }
@@ -135,11 +135,10 @@ export function providerToAiSdkConfig(
 
   const isCopilotProvider = actualProvider.id === SystemProviderIds.copilot
   if (isCopilotProvider) {
-    const storedHeaders = store.getState().copilot.defaultHeaders ?? {}
+    // In mobile version, default headers are managed by CopilotService
     const options = ProviderConfigFactory.fromProvider('github-copilot-openai-compatible', baseConfig, {
       headers: {
         ...COPILOT_DEFAULT_HEADERS,
-        ...storedHeaders,
         ...actualProvider.extra_headers
       },
       name: actualProvider.id,
@@ -284,10 +283,9 @@ export async function prepareSpecialProviderConfig(
 
   switch (provider.id) {
     case 'copilot': {
-      const defaultHeaders = store.getState().copilot.defaultHeaders ?? {}
+      // In mobile version, use default headers from constants
       const headers = {
-        ...COPILOT_DEFAULT_HEADERS,
-        ...defaultHeaders
+        ...COPILOT_DEFAULT_HEADERS
       }
       const { token } = await CopilotService.getToken(headers)
       config.options.apiKey = token
@@ -317,21 +315,11 @@ export async function prepareSpecialProviderConfig(
       break
     }
     case 'anthropic': {
+      // OAuth authentication not supported in mobile version
       if (provider.authType === 'oauth') {
-        const oauthToken = await window.api.anthropic_oauth.getAccessToken()
-        config.options = {
-          ...config.options,
-          headers: {
-            ...(config.options.headers ? config.options.headers : {}),
-            'Content-Type': 'application/json',
-            'anthropic-version': '2023-06-01',
-            'anthropic-beta': 'oauth-2025-04-20',
-            Authorization: `Bearer ${oauthToken}`
-          },
-          baseURL: 'https://api.anthropic.com/v1',
-          apiKey: ''
-        }
+        throw new Error('Anthropic OAuth authentication is not supported in mobile version')
       }
+      break
     }
   }
   return config
