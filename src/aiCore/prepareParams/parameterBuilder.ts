@@ -66,11 +66,13 @@ export async function buildStreamTextParams(
 
   // 判断是否使用内置搜索
   // 条件：没有外部搜索提供商 && (用户开启了内置搜索 || 模型强制使用内置搜索)
+  // 如果用户指定了搜索提供商，则使用用户指定的搜索提供商
   const enableWebSearch =
-    options.webSearchProviderId === 'builtin' &&
-    ((assistant.enableWebSearch && isWebSearchModel(model)) ||
-      isOpenRouterBuiltInWebSearchModel(model) ||
-      model.id.includes('sonar'))
+    options.webSearchProviderId === 'builtin'
+      ? (assistant.enableWebSearch && isWebSearchModel(model)) ||
+        isOpenRouterBuiltInWebSearchModel(model) ||
+        model.id.includes('sonar')
+      : !!options.webSearchProviderId
 
   console.log('enableWebSearch', options, enableWebSearch)
 

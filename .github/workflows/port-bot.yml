@@ -1,0 +1,247 @@
+name: Port Bot - aiCore Changes
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'Source repository ref (branch/tag/commit)'
+        required: false
+        default: 'main'
+      last_commit:
+        description: 'Last ported commit (leave empty to use .github/port-bot-state)'
+        required: false
+        default: ''
+
+jobs:
+  check-and-port:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Install ast-grep
+        run: |
+          echo "📦 Installing ast-grep for precise code transformations..."
+
+          # Install ast-grep via npm
+          npm install -g @ast-grep/cli
+
+          # Verify installation
+          sg --version
+
+          echo "✅ ast-grep installed successfully"
+
+      - name: Get last ported commit
+        id: last-port
+        run: |
+          # Check if user provided last_commit input
+          if [ -n "${{ inputs.last_commit }}" ]; then
+            LAST_COMMIT="${{ inputs.last_commit }}"
+            echo "📝 Using user-provided commit: $LAST_COMMIT"
+          elif [ -f .github/port-bot-state ]; then
+            LAST_COMMIT=$(cat .github/port-bot-state)
+            echo "📝 Using tracked commit: $LAST_COMMIT"
+          else
+            # First run - use a reasonable starting point
+            LAST_COMMIT="HEAD~100"
+            echo "ℹ️ No state file found, using fallback: $LAST_COMMIT"
+          fi
+
+          echo "last_commit=$LAST_COMMIT" >> $GITHUB_OUTPUT
+          echo "last_commit_display=${LAST_COMMIT:0:7}" >> $GITHUB_OUTPUT
+
+      - name: Check for upstream changes
+        id: check-changes
+        run: |
+          echo "🔍 Checking for changes in upstream repository..."
+
+          # Clone upstream repository (shallow)
+          git clone --depth=100 https://github.com/CherryHQ/cherry-studio.git /tmp/upstream
+
+          cd /tmp/upstream
+
+          # Get the latest commit that modified aiCore
+          LATEST_COMMIT=$(git log -1 --format="%H" -- src/renderer/src/aiCore)
+
+          # Check if there are new changes
+          if [ "$LATEST_COMMIT" == "${{ steps.last-port.outputs.last_commit }}" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo ""
+            echo "✨ Already up to date!"
+            echo "   Latest upstream commit: ${LATEST_COMMIT:0:7}"
+            echo "   Last ported commit: ${{ steps.last-port.outputs.last_commit_display }}"
+            echo ""
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
+            echo ""
+            echo "📦 New changes detected!"
+            echo "   Latest upstream: ${LATEST_COMMIT:0:7}"
+            echo "   Last ported: ${{ steps.last-port.outputs.last_commit_display }}"
+            echo ""
+
+            # Count commits between last port and now
+            COMMIT_COUNT=$(git log --oneline ${{ steps.last-port.outputs.last_commit }}..HEAD -- src/renderer/src/aiCore | wc -l)
+            echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+            echo "   New commits: $COMMIT_COUNT"
+          fi
+
+      - name: Create Copilot Agent task
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          gh auth login
+
+          echo "✅ Authentication verified"
+          echo ""
+
+          # Let Copilot Agent handle everything (clear GITHUB_TOKEN to use gh config)
+          gh agent-task create \
+            --base main \
+            --repo ${{ github.repository }} \
+            --follow \
+            "**TASK**: Port ALL code changes from upstream CherryHQ/cherry-studio's \`src/renderer/src/aiCore\` to this repo's \`src/aiCore\` directory.
+
+          **IMPORTANT**: This is NOT just creating a tracking file. You MUST apply ALL actual code changes from upstream.
+
+          **Source**: https://github.com/CherryHQ/cherry-studio
+          **Last ported**: ${{ steps.last-port.outputs.last_commit_display }}
+          **New commits**: ${{ steps.check-changes.outputs.commit_count }}
+          **Context**: React Native/Expo app (target) ← Electron desktop app (source)
+
+          **MANDATORY STEPS - DO ALL OF THESE**:
+
+          1. **Fetch and analyze upstream changes**:
+             \`\`\`bash
+             git clone https://github.com/CherryHQ/cherry-studio.git /tmp/upstream
+             cd /tmp/upstream
+             git diff ${{ steps.last-port.outputs.last_commit }}..HEAD -- src/renderer/src/aiCore > /tmp/changes.patch
+             \`\`\`
+
+          2. **Review the patch** - identify all changed files, additions, deletions, modifications
+
+          3. **Apply changes to src/aiCore/** with transformations:
+
+             **Path transformations**:
+             - Source path: \`src/renderer/src/aiCore/foo.ts\`
+             - Target path: \`src/aiCore/foo.ts\`
+
+             **Import transformations** (use ast-grep):
+             \`\`\`bash
+             # MUST run these on ALL modified files:
+             cd ${{ github.workspace }}
+
+             # @renderer/** → @/**
+             sg --pattern 'import \$\$\$ from \"@renderer/\$\$REST\"' \\
+                --rewrite 'import \$\$\$ from \"@/\$\$REST\"' \\
+                -i 'src/aiCore/**/*.ts' 'src/aiCore/**/*.tsx'
+
+             # import type from @renderer
+             sg --pattern 'import type \$\$\$ from \"@renderer/\$\$REST\"' \\
+                --rewrite 'import type \$\$\$ from \"@/\$\$REST\"' \\
+                -i 'src/aiCore/**/*.ts' 'src/aiCore/**/*.tsx'
+
+             # @logger → @/services/LoggerService
+             sg --pattern 'import \$\$\$ from \"@logger\"' \\
+                --rewrite 'import \$\$\$ from \"@/services/LoggerService\"' \\
+                -i 'src/aiCore/**/*.ts' 'src/aiCore/**/*.tsx'
+             \`\`\`
+
+             **Code adaptations**:
+             - Remove \`import { ipcRenderer } from 'electron'\`
+             - Replace \`import fs from 'fs'\` with \`import * as FileSystem from 'expo-file-system'\`
+             - Replace \`import path from 'path'\` with path string manipulation
+             - Make all file operations async/await
+
+          4. **Handle conflicts manually**:
+             - If upstream adds new Node.js APIs → replace with Expo equivalents
+             - If upstream adds Electron IPC → remove or adapt to RN bridge
+             - Compare upstream changes line-by-line with existing code
+
+          5. **Run quality checks**:
+             \`\`\`bash
+             yarn format
+             yarn lint --fix
+             yarn typecheck
+             \`\`\`
+
+          6. **Update state file**:
+             \`\`\`bash
+             echo \"${{ steps.check-changes.outputs.latest_commit }}\" > .github/port-bot-state
+             \`\`\`
+
+          7. **Create comprehensive PR** with:
+             - List of all upstream commits ported
+             - All file changes made
+             - Import transformations applied
+             - Electron→RN adaptations made
+
+          **VERIFICATION CHECKLIST** - confirm ALL before creating PR:
+          - [ ] Applied EVERY changed file from upstream (not just created state file)
+          - [ ] Transformed ALL @renderer imports to @/
+          - [ ] Replaced ALL Node.js APIs with Expo equivalents
+          - [ ] Removed ALL Electron APIs (ipcRenderer, etc)
+          - [ ] yarn lint passes
+          - [ ] yarn typecheck passes
+          - [ ] .github/port-bot-state updated with latest commit
+
+          **DON'T**:
+          - ❌ Only create tracking file without porting code
+          - ❌ Skip any upstream changes
+          - ❌ Leave @renderer imports unchanged
+          - ❌ Leave Node.js/Electron APIs in code
+          - ❌ Modify .github/workflows/
+
+          **Tools available**: \`sg\` (ast-grep) for AST-based transformations"
+
+          echo ""
+          echo "✅ Copilot Agent task created"
+          echo "🤖 Agent will handle: fetch, diff, transform, port, lint, PR"
+          echo "📍 Monitor: https://github.com/${{ github.repository }}/pulls"
+
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "==================================="
+          echo "🤖 Port Bot - Copilot Agent Mode"
+          echo "==================================="
+          echo ""
+
+          if [ "${{ steps.check-changes.outputs.has_changes }}" == "true" ]; then
+            echo "✅ Copilot Agent task created"
+            echo ""
+            echo "📊 Changes detected:"
+            echo "   • New commits: ${{ steps.check-changes.outputs.commit_count }}"
+            echo "   • Latest upstream: ${{ steps.check-changes.outputs.latest_commit }}"
+            echo ""
+            echo "📋 What happens next:"
+            echo "  1. Copilot Agent fetches upstream changes"
+            echo "  2. Generates and applies transformed patch"
+            echo "  3. Uses ast-grep for precise import rewrites"
+            echo "  4. Runs lint and format"
+            echo "  5. Creates PR automatically"
+            echo ""
+            echo "📍 Track progress at:"
+            echo "   https://github.com/${{ github.repository }}/pulls"
+          else
+            echo "✨ Already up to date!"
+            echo ""
+            echo "ℹ️ No new changes in upstream aiCore directory"
+            echo "   Last ported commit: ${{ steps.last-port.outputs.last_commit_display }}"
+          fi
+
+          echo ""
+          echo "==================================="
