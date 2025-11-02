@@ -6753,7 +6753,7 @@ __metadata:
     expo-localization: "npm:~17.0.7"
     expo-media-library: "npm:~18.2.0"
     expo-network: "npm:~8.0.7"
-    "expo-secure-store\n": "npm:^15.0.7"
+    expo-secure-store: "npm:^15.0.7"
     expo-sharing: "npm:~14.0.7"
     expo-speech: "npm:~14.0.7"
     expo-splash-screen: "npm:~31.0.10"
@@ -10596,12 +10596,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"expo-secure-store\n@npm:^15.0.7":
+"expo-secure-store@npm:^15.0.7":
   version: 15.0.7
-  resolution: "expo-secure-store\n@npm:15.0.7::__archiveUrl=https%3A%2F%2Fregistry.npmjs.org%2Fexpo-secure-store%2F-%2Fexpo-secure-store-15.0.7.tgz"
+  resolution: "expo-secure-store@npm:15.0.7"
   peerDependencies:
     expo: "*"
-  checksum: 10c0/647bbf3bde966d309d8627ce0ec6092b53c06ce91fa26b637d25f61dd7ca9ff8e57ec00c016d4eb8f9d3cd97016d364b351541c52802673065bc8f5a6861a413
+  checksum: 10c0/8273f937c3ee289782beb7dcfc293e3b45d230d46f839fda987029dc130bb00c428a23dffb9f009e11f6a2e963f06e32d60c888e9ccfbf7002c15ea0de93e056
   languageName: node
   linkType: hard
 

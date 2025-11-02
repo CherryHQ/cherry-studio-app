@@ -5,19 +5,19 @@ import { loggerService } from '@/services/LoggerService'
 import VertexAIService from '@/services/VertexAIService'
 import type { Model, Provider, VertexProvider } from '@/types'
 
-import { AnthropicVertexClient } from '../anthropic/AnthropicVertexClient'
+// import { AnthropicVertexClient } from '../anthropic/AnthropicVertexClient'
 import { GeminiAPIClient } from './GeminiAPIClient'
 
 const logger = loggerService.withContext('VertexAPIClient')
 export class VertexAPIClient extends GeminiAPIClient {
   private authHeaders?: Record<string, string>
   private authHeadersExpiry?: number
-  private anthropicVertexClient: AnthropicVertexClient
+  // private anthropicVertexClient: AnthropicVertexClient
   private vertexProvider: VertexProvider
 
   constructor(provider: Provider) {
     super(provider)
-    this.anthropicVertexClient = new AnthropicVertexClient(provider)
+    // this.anthropicVertexClient = new AnthropicVertexClient(provider)
     // 如果传入的是普通 Provider，转换为 VertexProvider
     if (VertexAIService.isVertexProvider(provider)) {
       this.vertexProvider = provider
@@ -42,9 +42,9 @@ export class VertexAPIClient extends GeminiAPIClient {
   }
 
   public getClient(model: Model) {
-    if (model.id.includes('claude')) {
-      return this.anthropicVertexClient
-    }
+    // if (model.id.includes('claude')) {
+    //   return this.anthropicVertexClient
+    // }
     return this
   }
 

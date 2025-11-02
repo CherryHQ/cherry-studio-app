@@ -8,9 +8,9 @@ import {
 } from '@/config/models'
 import { isSupportServiceTierProvider } from '@/config/providers'
 import { defaultTimeout } from '@/constants'
-import { getLMStudioKeepAliveTime } from '@/hooks/useLMStudio'
 import { getAssistantSettings } from '@/services/AssistantService'
 import { fileService } from '@/services/FileService'
+import { keyValueService } from '@/services/KeyValueService'
 import { loggerService } from '@/services/LoggerService'
 import type {
   Assistant,
@@ -169,29 +169,29 @@ export abstract class BaseApiClient<
       return keys[0]
     }
 
-    const lastUsedKey = window.keyv.get(keyName)
+    const lastUsedKey = keyValueService.get<string>(keyName)
     if (!lastUsedKey) {
-      window.keyv.set(keyName, keys[0])
+      keyValueService.set(keyName, keys[0])
       return keys[0]
     }
 
     const currentIndex = keys.indexOf(lastUsedKey)
     const nextIndex = (currentIndex + 1) % keys.length
     const nextKey = keys[nextIndex]
-    window.keyv.set(keyName, nextKey)
+    keyValueService.set(keyName, nextKey)
 
     return nextKey
   }
 
   public defaultHeaders() {
     return {
-      ...defaultAppHeaders(),
       'X-Api-Key': this.apiKey
     }
   }
 
   public get keepAliveTime() {
-    return this.provider.id === 'lmstudio' ? getLMStudioKeepAliveTime() : undefined
+    // LMStudio keep-alive time is not supported in mobile version
+    return undefined
   }
 
   public getTemperature(assistant: Assistant, model: Model): number | undefined {
@@ -241,14 +241,14 @@ export abstract class BaseApiClient<
 
   protected getVerbosity(): OpenAIVerbosity {
     try {
-      const state = window.store?.getState()
-      const verbosity = state?.settings?.openAI?.verbosity
+      // Try to get verbosity from key-value storage
+      const verbosity = keyValueService.get<OpenAIVerbosity>('settings:openai:verbosity')
 
       if (verbosity && ['low', 'medium', 'high'].includes(verbosity)) {
         return verbosity
       }
     } catch (error) {
-      logger.warn('Failed to get verbosity from state:', error as Error)
+      logger.warn('Failed to get verbosity from storage:', error as Error)
     }
 
     return 'medium'

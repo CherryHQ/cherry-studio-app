@@ -23,7 +23,6 @@ import type {
   MCPToolResponse,
   Message,
   Model,
-  Provider,
   ToolCallResponse
 } from '@/types'
 import { EFFORT_RATIO, FileTypes } from '@/types'
@@ -63,10 +62,6 @@ export class AwsBedrockAPIClient extends BaseApiClient<
   AwsBedrockSdkToolCall,
   AwsBedrockSdkTool
 > {
-  constructor(provider: Provider) {
-    super(provider)
-  }
-
   async getSdkInstance(): Promise<AwsBedrockSdkInstance> {
     if (this.sdkInstance) {
       return this.sdkInstance

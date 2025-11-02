@@ -233,6 +233,7 @@ export function providerToAiSdkConfig(
 export async function isModernSdkSupported(provider: Provider): Promise<boolean> {
   // 特殊检查：vertexai需要配置完整
   if (provider.type === 'vertexai') {
+    // Check if credentials are configured asynchronously
     const isConfigured = await VertexAIService.isVertexAIConfigured(provider)
     if (!isConfigured) {
       return false

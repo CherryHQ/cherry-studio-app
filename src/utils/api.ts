@@ -1,5 +1,6 @@
 import { trim } from 'lodash'
 
+import VertexAIService from '@/services/VertexAIService'
 import type { VertexProvider } from '@/types'
 
 /**
@@ -92,7 +93,12 @@ export function formatAzureOpenAIApiHost(host: string): string {
 
 export function formatVertexApiHost(provider: VertexProvider): string {
   const { apiHost } = provider
-  const { projectId: project, location } = store.getState().llm.settings.vertexai
+
+  // For VertexProvider, we can access project and location directly if they exist
+  // Otherwise, they will be loaded asynchronously by the service later
+  const project = VertexAIService.isVertexProvider(provider) ? provider.project : 'placeholder'
+  const location = VertexAIService.isVertexProvider(provider) ? provider.location : 'us-central1'
+
   const trimmedHost = withoutTrailingSlash(trim(apiHost))
   if (!trimmedHost || trimmedHost.endsWith('aiplatform.googleapis.com')) {
     const host =
