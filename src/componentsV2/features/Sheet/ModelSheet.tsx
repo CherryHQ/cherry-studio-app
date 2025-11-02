@@ -198,6 +198,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
         data={listData}
         extraData={{ selectedModels, isMultiSelectActive }}
         renderItem={({ item, index }: { item: ListItem; index: number }) => {
+          if (!item) return null
           if (item.type === 'header') {
             return (
               <TouchableOpacity
@@ -258,9 +259,9 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
           )
         }}
         keyExtractor={(item, index) =>
-          item.type === 'header' ? `header-${(item as any).label}-${index}` : (item as any).value
+          item?.type === 'header' ? `header-${(item as any).label}-${index}` : (item as any).value
         }
-        getItemType={item => item.type}
+        getItemType={item => item?.type ?? 'model'}
         ItemSeparatorComponent={() => <YStack className="h-2" />}
         ListHeaderComponentStyle={{ minHeight: 50 }}
         ListHeaderComponent={
