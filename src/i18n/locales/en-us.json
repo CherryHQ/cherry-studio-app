@@ -754,7 +754,64 @@
         "not_found_message": "There is an error navigate to the provider page.",
         "provider_deleted": "Provider deleted",
         "search": "Search Providers...",
-        "title": "Model Provider"
+        "title": "Model Provider",
+        "vertex_ai": {
+          "service_account": {
+            "title": "Google Cloud Service Account",
+            "description": "Configure your Google Cloud service account credentials to use VertexAI. You need to create a service account with Vertex AI API access.",
+            "client_email": "Client Email",
+            "client_email_placeholder": "service-account@project.iam.gserviceaccount.com",
+            "client_email_help": "Service account email from your JSON key file",
+            "private_key": "Private Key",
+            "private_key_placeholder": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+            "private_key_help": "Private key from your service account JSON file"
+          },
+          "project_id": "Project ID",
+          "project_id_placeholder": "my-project-id",
+          "project_id_help": "Your Google Cloud project ID",
+          "location": "Location",
+          "location_help": "Region where your VertexAI resources are located"
+        },
+        "aws-bedrock": {
+          "title": "AWS Bedrock Settings",
+          "description": "Configure your AWS credentials to use Amazon Bedrock. You need an AWS account with Bedrock access and appropriate IAM permissions.",
+          "access_key_id": "Access Key ID",
+          "access_key_id_help": "Your AWS access key ID from IAM",
+          "secret_access_key": "Secret Access Key",
+          "secret_access_key_help": "Your AWS secret access key from IAM",
+          "region": "AWS Region",
+          "region_help": "AWS region where Bedrock is available (e.g., us-east-1, us-west-2)"
+        },
+        "copilot": {
+          "description": "Authenticate with GitHub to use Copilot models. You need an active GitHub Copilot subscription.",
+          "step_get_code": "Get Code",
+          "step_get_code_desc": "Get verification code from GitHub",
+          "step_get_code_detail": "Click the button to generate a verification code",
+          "step_copy_code": "Copy Code",
+          "step_copy_code_desc": "Copy the verification code",
+          "step_copy_code_detail": "Copy the code to your clipboard",
+          "step_authorize": "Authorize",
+          "step_authorize_desc": "Authorize in GitHub",
+          "step_authorize_detail": "Click the button below to open GitHub and paste the verification code",
+          "step_connect": "Connect",
+          "step_connect_desc": "Complete authentication",
+          "step_connect_detail": "After authorizing in GitHub, click the button below to complete the setup",
+          "start_auth": "Start Authentication",
+          "open_verification_page": "Open GitHub",
+          "open_verification_first": "Please open verification page first",
+          "connect": "Connect GitHub Copilot",
+          "code_copied": "Code copied to clipboard",
+          "code_failed": "Failed to get device code",
+          "auth_success": "Successfully authenticated",
+          "auth_success_title": "Authenticated",
+          "auth_failed": "Authentication failed",
+          "logout": "Logout",
+          "logout_success": "Successfully logged out",
+          "logout_failed": "Failed to logout",
+          "rate_limit": "Rate Limit (requests per minute)"
+        },
+        "error": "Error",
+        "success": "Success"
       },
       "proxy": {
         "title": "Proxy Address"

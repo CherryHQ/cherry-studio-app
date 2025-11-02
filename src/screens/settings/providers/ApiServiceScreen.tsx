@@ -16,15 +16,21 @@ import {
   XStack,
   YStack
 } from '@/componentsV2'
+import { AwsBedrockSettings } from '@/componentsV2/features/SettingsScreen/AwsBedrockSettings'
+import { CopilotSettings } from '@/componentsV2/features/SettingsScreen/CopilotSettings'
 import { ModelSelect } from '@/componentsV2/features/SettingsScreen/ModelSelect'
+import { VertexAISettings } from '@/componentsV2/features/SettingsScreen/VertexAISettings'
 import { Eye, EyeOff, ShieldCheck, XCircle } from '@/componentsV2/icons/LucideIcon'
 import { PROVIDER_URLS } from '@/config/providers'
+import { isAwsBedrockProvider } from '@/hooks/useAwsBedrock'
 import { useDialog } from '@/hooks/useDialog'
 import { useProvider } from '@/hooks/useProviders'
+import { isVertexProvider } from '@/hooks/useVertexAI'
 import type { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
 import { checkApi } from '@/services/ApiService'
 import { loggerService } from '@/services/LoggerService'
 import type { ApiStatus, Model } from '@/types/assistant'
+
 const logger = loggerService.withContext('ApiServiceScreen')
 
 type ProviderSettingsRouteProp = RouteProp<ProvidersStackParamList, 'ApiServiceScreen'>
@@ -42,7 +48,7 @@ export default function ApiServiceScreen() {
   const [apiKey, setApiKey] = useState(provider?.apiKey || '')
   const [apiHost, setApiHost] = useState(provider?.apiHost || '')
 
-  // 当 provider 改变时更新本地状态
+  // Update local state when provider changes
   useEffect(() => {
     if (provider) {
       setApiKey(provider.apiKey || '')
@@ -149,65 +155,96 @@ export default function ApiServiceScreen() {
     }
   }
 
+  // Render provider-specific configuration
+  const renderProviderSpecificConfig = () => {
+    if (!provider) return null
+
+    // VertexAI Configuration
+    if (isVertexProvider(provider)) {
+      return <VertexAISettings providerId={provider.id} />
+    }
+
+    // AWS Bedrock Configuration
+    if (isAwsBedrockProvider(provider)) {
+      return <AwsBedrockSettings providerId={provider.id} />
+    }
+
+    // GitHub Copilot Configuration
+    if (provider.id === 'copilot') {
+      return <CopilotSettings provider={provider} updateProvider={updateProvider} />
+    }
+
+    return null
+  }
+
   return (
     <SafeAreaContainer className="flex-1">
       <HeaderBar title={t('settings.provider.api_service')} />
       <Container>
-        {/* API Key 配置 */}
-        <YStack className="gap-2">
-          <XStack className="items-center justify-between">
-            <GroupTitle>{t('settings.provider.api_key.label')}</GroupTitle>
-            <Button size="sm" isIconOnly variant="ghost" onPress={handleOpenBottomSheet}>
-              <Button.Label>
-                {checkApiStatus === 'idle' && <ShieldCheck size={16} />}
-                {checkApiStatus === 'error' && <XCircle size={16} />}
-                {checkApiStatus === 'processing' && <Spinner size="sm" />}
-                {checkApiStatus === 'success' && (
-                  <ShieldCheck size={16} className="text-green-100 dark:text-green-dark-100" />
-                )}
-              </Button.Label>
-            </Button>
-          </XStack>
+        {/* Standard API Key configuration - hide for Copilot and AWS Bedrock */}
+        {!isAwsBedrockProvider(provider) && provider?.id !== 'copilot' && (
+          <>
+            <YStack className="gap-2">
+              <XStack className="items-center justify-between">
+                <GroupTitle>{t('settings.provider.api_key.label')}</GroupTitle>
+                <Button size="sm" isIconOnly variant="ghost" onPress={handleOpenBottomSheet}>
+                  <Button.Label>
+                    {checkApiStatus === 'idle' && <ShieldCheck size={16} />}
+                    {checkApiStatus === 'error' && <XCircle size={16} />}
+                    {checkApiStatus === 'processing' && <Spinner size="sm" />}
+                    {checkApiStatus === 'success' && (
+                      <ShieldCheck size={16} className="text-green-100 dark:text-green-dark-100" />
+                    )}
+                  </Button.Label>
+                </Button>
+              </XStack>
 
-          <XStack className="relative gap-2">
-            <TextField className="flex-1">
-              <TextField.Input
-                className="h-12 pr-0"
-                value={apiKey}
-                secureTextEntry={!showApiKey}
-                placeholder={t('settings.provider.api_key.placeholder')}
-                onChangeText={text => handleProviderConfigChange('apiKey', text)}>
-                <TextField.InputEndContent>
-                  <Button size="sm" variant="ghost" isIconOnly onPress={toggleApiKeyVisibility}>
-                    <Button.Label>
-                      {showApiKey ? <EyeOff className="text-white" size={16} /> : <Eye size={16} />}
-                    </Button.Label>
-                  </Button>
-                </TextField.InputEndContent>
-              </TextField.Input>
-            </TextField>
-          </XStack>
+              <XStack className="relative gap-2">
+                <TextField className="flex-1">
+                  <TextField.Input
+                    className="h-12 pr-0"
+                    value={apiKey}
+                    secureTextEntry={!showApiKey}
+                    placeholder={t('settings.provider.api_key.placeholder')}
+                    onChangeText={text => handleProviderConfigChange('apiKey', text)}>
+                    <TextField.InputEndContent>
+                      <Button size="sm" variant="ghost" isIconOnly onPress={toggleApiKeyVisibility}>
+                        <Button.Label>
+                          {showApiKey ? <EyeOff className="text-white" size={16} /> : <Eye size={16} />}
+                        </Button.Label>
+                      </Button>
+                    </TextField.InputEndContent>
+                  </TextField.Input>
+                </TextField>
+              </XStack>
 
-          <XStack className="justify-between px-3">
-            <Text className="text-xs opacity-40">{t('settings.provider.api_key.tip')}</Text>
-            <ExternalLink href={apiKeyWebsite} content={t('settings.provider.api_key.get')} />
-          </XStack>
-        </YStack>
+              <XStack className="justify-between px-3">
+                <Text className="text-xs opacity-40">{t('settings.provider.api_key.tip')}</Text>
+                {apiKeyWebsite && <ExternalLink href={apiKeyWebsite} content={t('settings.provider.api_key.get')} />}
+              </XStack>
+            </YStack>
 
-        {/* API Host 配置 */}
-        <YStack className="gap-2">
-          <XStack className="items-center justify-between pr-3">
-            <GroupTitle>{t('settings.provider.api_host.label')}</GroupTitle>
-          </XStack>
-          <TextField>
-            <TextField.Input
-              className="h-12"
-              placeholder={t('settings.provider.api_host.placeholder')}
-              value={apiHost}
-              onChangeText={text => handleProviderConfigChange('apiHost', text)}
-            />
-          </TextField>
-        </YStack>
+            {/* API Host configuration - hide for VertexAI as it's auto-generated */}
+            {!isVertexProvider(provider) && (
+              <YStack className="gap-2">
+                <XStack className="items-center justify-between pr-3">
+                  <GroupTitle>{t('settings.provider.api_host.label')}</GroupTitle>
+                </XStack>
+                <TextField>
+                  <TextField.Input
+                    className="h-12"
+                    placeholder={t('settings.provider.api_host.placeholder')}
+                    value={apiHost}
+                    onChangeText={text => handleProviderConfigChange('apiHost', text)}
+                  />
+                </TextField>
+              </YStack>
+            )}
+          </>
+        )}
+
+        {/* Provider-specific configuration */}
+        {renderProviderSpecificConfig()}
       </Container>
     </SafeAreaContainer>
   )

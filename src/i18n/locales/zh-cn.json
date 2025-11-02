@@ -754,7 +754,64 @@
         "not_found_message": "导航到服务商页面时出现错误",
         "provider_deleted": "服务商已删除",
         "search": "搜索服务商...",
-        "title": "模型服务商"
+        "title": "模型服务商",
+        "vertex_ai": {
+          "service_account": {
+            "title": "Google Cloud 服务账号",
+            "description": "配置您的 Google Cloud 服务账号凭证以使用 VertexAI。您需要创建一个具有 Vertex AI API 访问权限的服务账号。",
+            "client_email": "客户端邮箱",
+            "client_email_placeholder": "service-account@project.iam.gserviceaccount.com",
+            "client_email_help": "来自 JSON 密钥文件的服务账号邮箱",
+            "private_key": "私钥",
+            "private_key_placeholder": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+            "private_key_help": "来自服务账号 JSON 文件的私钥"
+          },
+          "project_id": "项目 ID",
+          "project_id_placeholder": "my-project-id",
+          "project_id_help": "您的 Google Cloud 项目 ID",
+          "location": "位置",
+          "location_help": "VertexAI 资源所在的区域"
+        },
+        "aws-bedrock": {
+          "title": "AWS Bedrock 设置",
+          "description": "配置您的 AWS 凭证以使用 Amazon Bedrock。您需要一个具有 Bedrock 访问权限和适当 IAM 权限的 AWS 账户。",
+          "access_key_id": "访问密钥 ID",
+          "access_key_id_help": "来自 IAM 的 AWS 访问密钥 ID",
+          "secret_access_key": "秘密访问密钥",
+          "secret_access_key_help": "来自 IAM 的 AWS 秘密访问密钥",
+          "region": "AWS 区域",
+          "region_help": "Bedrock 可用的 AWS 区域（例如：us-east-1, us-west-2）"
+        },
+        "copilot": {
+          "description": "使用 GitHub 进行身份验证以使用 Copilot 模型。您需要有效的 GitHub Copilot 订阅。",
+          "step_get_code": "获取代码",
+          "step_get_code_desc": "从 GitHub 获取验证码",
+          "step_get_code_detail": "点击按钮生成验证码",
+          "step_copy_code": "复制代码",
+          "step_copy_code_desc": "复制验证码",
+          "step_copy_code_detail": "将代码复制到剪贴板",
+          "step_authorize": "授权",
+          "step_authorize_desc": "在 GitHub 中授权",
+          "step_authorize_detail": "点击下方按钮打开 GitHub 并粘贴验证码",
+          "step_connect": "连接",
+          "step_connect_desc": "完成身份验证",
+          "step_connect_detail": "在 GitHub 中授权后，点击下方按钮完成设置",
+          "start_auth": "开始身份验证",
+          "open_verification_page": "打开 GitHub",
+          "open_verification_first": "请先打开验证页面",
+          "connect": "连接 GitHub Copilot",
+          "code_copied": "代码已复制到剪贴板",
+          "code_failed": "获取设备代码失败",
+          "auth_success": "身份验证成功",
+          "auth_success_title": "已认证",
+          "auth_failed": "身份验证失败",
+          "logout": "登出",
+          "logout_success": "成功登出",
+          "logout_failed": "登出失败",
+          "rate_limit": "速率限制（每分钟请求数）"
+        },
+        "error": "错误",
+        "success": "成功"
       },
       "proxy": {
         "title": "代理地址"
