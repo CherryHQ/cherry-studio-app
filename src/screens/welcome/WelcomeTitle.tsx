@@ -1,9 +1,7 @@
-import { ImpactFeedbackStyle } from 'expo-haptics'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Text } from '@/componentsV2'
-import { haptic } from '@/utils/haptic'
 
 type UseTypewriterOptions = {
   text: string | string[]
@@ -93,7 +91,6 @@ const useTypewriter = ({ text, speed = 60, onComplete }: UseTypewriterOptions): 
       const tick = () => {
         indexRef.current += 1
         setDisplayedText(currentMessage.slice(0, indexRef.current))
-        haptic(ImpactFeedbackStyle.Soft)
 
         if (indexRef.current >= currentMessage.length) {
           timeoutRef.current = setTimeout(() => {

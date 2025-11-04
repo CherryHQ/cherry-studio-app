@@ -2,9 +2,20 @@ import { TOKENFLUX_HOST } from '@/constants'
 import type { AzureOpenAIProvider, Provider, ProviderType, SystemProvider, SystemProviderId, VertexProvider } from '@/types/assistant';
 import { isSystemProvider,OpenAIServiceTiers  } from '@/types/assistant'
 
-import { SYSTEM_MODELS } from './models/default'
+import { glm45FlashModel, qwen38bModel, SYSTEM_MODELS } from './models/default'
 
-export const SYSTEM_PROVIDERS_CONFIG: Record<SystemProviderId, SystemProvider> = {
+export const CHERRYAI_PROVIDER: SystemProvider = {
+  id: 'cherryai' as SystemProviderId,
+  name: 'CherryAI',
+  type: 'openai',
+  apiKey: '',
+  apiHost: 'https://api.cherry-ai.com/',
+  models: [glm45FlashModel, qwen38bModel],
+  isSystem: true,
+  enabled: true
+}
+
+export const SYSTEM_PROVIDERS_CONFIG: Record<Exclude<SystemProviderId, 'cherryai'>, SystemProvider> = {
   cherryin: {
     id: 'cherryin',
     name: 'CherryIN',
@@ -590,7 +601,7 @@ type ProviderUrls = {
   }
 }
 
-export const PROVIDER_URLS: Record<SystemProviderId, ProviderUrls> = {
+export const PROVIDER_URLS: Record<Exclude<SystemProviderId, 'cherryai'>, ProviderUrls> = {
   cherryin: {
     api: {
       url: 'https://api.cherry-ai.com'

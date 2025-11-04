@@ -31,11 +31,13 @@ export default function ProviderListScreen() {
     { delay: 100 }
   )
 
-  const onAddProvider = useCallback(() => {
+  const providersList = filteredProviders.filter(p => p.id !== 'cherryai')
+
+  const onAddProvider = () => {
     setSheetMode('add')
     setEditingProvider(undefined)
     bottomSheetRef.current?.present()
-  }, [])
+  }
 
   const onEditProvider = useCallback((provider: Provider) => {
     setSheetMode('edit')
@@ -69,7 +71,7 @@ export default function ProviderListScreen() {
 
           <Group className="flex-1">
             <FlashList
-              data={filteredProviders}
+              data={providersList}
               renderItem={renderProviderItem}
               keyExtractor={item => item.id}
               showsVerticalScrollIndicator={false}

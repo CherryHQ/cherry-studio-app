@@ -1,9 +1,4 @@
-import { db } from '@db'
-import { transformDbToTopic } from '@db/mappers'
-import { topics as topicSchema } from '@db/schema'
-import { desc } from 'drizzle-orm'
-import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 
 import { loggerService } from '@/services/LoggerService'
 import { topicService } from '@/services/TopicService'
@@ -322,34 +317,75 @@ export function useTopic(topicId: string) {
   }
 }
 
+/**
+ * React Hook for getting all topics
+ *
+ * Uses TopicService with caching for optimal performance.
+ *
+ * @example
+ * ```typescript
+ * function TopicList() {
+ *   const { topics, isLoading, updateTopics } = useTopics()
+ *
+ *   if (isLoading) return <Loading />
+ *
+ *   return (
+ *     <ul>
+ *       {topics.map(t => <li key={t.id}>{t.name}</li>)}
+ *     </ul>
+ *   )
+ * }
+ * ```
+ */
 export function useTopics() {
-  const query = db
-    .select({
-      id: topicSchema.id,
-      assistant_id: topicSchema.assistant_id,
-      name: topicSchema.name,
-      created_at: topicSchema.created_at,
-      updated_at: topicSchema.updated_at,
-      isLoading: topicSchema.isLoading
+  const [topics, setTopics] = useState<Topic[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  /**
+   * Subscribe to changes
+   */
+  const subscribe = useCallback((callback: () => void) => {
+    logger.verbose('Subscribing to all topics changes')
+    return topicService.subscribeAllTopics(callback)
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = subscribe(() => {
+      // Reload when any topic changes
+      loadAllTopics()
     })
-    .from(topicSchema)
-    .orderBy(desc(topicSchema.created_at))
-  const { data: rawTopics, updatedAt } = useLiveQuery(query)
 
-  const processedTopics = useMemo(() => {
-    if (!rawTopics) return []
-    return rawTopics.map(transformDbToTopic)
-  }, [rawTopics])
+    loadAllTopics()
 
-  if (!updatedAt) {
-    return {
-      topics: [],
-      isLoading: true
+    return unsubscribe
+  }, [subscribe])
+
+  const loadAllTopics = async () => {
+    try {
+      setIsLoading(true)
+      const allTopics = await topicService.getAllTopics()
+      setTopics(allTopics)
+    } catch (error) {
+      logger.error('Failed to load all topics:', error as Error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
+  const updateTopics = useCallback(async (updates: Topic[]) => {
+    for (const topic of updates) {
+      await topicService.updateTopic(topic.id, {
+        name: topic.name,
+        assistantId: topic.assistantId,
+        isLoading: topic.isLoading,
+        updatedAt: topic.updatedAt
+      })
+    }
+  }, [])
+
   return {
-    topics: processedTopics,
-    isLoading: false
+    topics,
+    isLoading,
+    updateTopics
   }
 }

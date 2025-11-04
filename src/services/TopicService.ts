@@ -754,6 +754,25 @@ export class TopicService {
     this.notifyAllTopicsSubscribers()
   }
 
+  /**
+   * Clear caches and reset loading state
+   */
+  public resetState(): void {
+    this.currentTopicCache = null
+    this.topicCache.clear()
+    this.accessOrder = []
+    this.isLoadingCurrentTopic = false
+    this.currentTopicLoadPromise = null
+    this.loadPromises.clear()
+    this.allTopicsCache.clear()
+    this.allTopicsCacheTimestamp = null
+    this.isLoadingAllTopics = false
+    this.loadAllTopicsPromise = null
+    this.updateQueue.clear()
+
+    logger.info('TopicService state reset')
+  }
+
   // ==================== Public API: Subscription ====================
 
   /**

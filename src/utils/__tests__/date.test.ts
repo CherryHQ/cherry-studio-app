@@ -31,7 +31,7 @@ describe('date utils', () => {
 
       const items = [createItem('1', today), createItem('2', yesterday)]
 
-      const result = groupItemsByDate(items, (item) => item.date)
+      const result = groupItemsByDate(items, item => item.date)
 
       expect(result.today).toHaveLength(1)
       expect(result.today[0].id).toBe('1')
@@ -54,7 +54,7 @@ describe('date utils', () => {
 
       const items = [createItem('1', time1), createItem('2', time2), createItem('3', time3)]
 
-      const result = groupItemsByDate(items, (item) => item.date)
+      const result = groupItemsByDate(items, item => item.date)
 
       expect(result.today).toHaveLength(3)
       expect(result.today[0].id).toBe('2') // 14:00
@@ -71,7 +71,7 @@ describe('date utils', () => {
       thisWeek.setDate(now.getDate() - daysBack)
 
       const items = [createItem('1', thisWeek)]
-      const result = groupItemsByDate(items, (item) => item.date)
+      const result = groupItemsByDate(items, item => item.date)
 
       // The item should be in thisWeek, lastWeek, or later depending on the current day
       // Just check that it's not in today
@@ -84,7 +84,7 @@ describe('date utils', () => {
       lastWeek.setDate(now.getDate() - 7 - now.getDay()) // Last week start
 
       const items = [createItem('1', lastWeek)]
-      const result = groupItemsByDate(items, (item) => item.date)
+      const result = groupItemsByDate(items, item => item.date)
 
       expect(result.lastWeek.length).toBeGreaterThanOrEqual(0)
     })
@@ -94,7 +94,7 @@ describe('date utils', () => {
       const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15)
 
       const items = [createItem('1', lastMonth)]
-      const result = groupItemsByDate(items, (item) => item.date)
+      const result = groupItemsByDate(items, item => item.date)
 
       expect(result.lastMonth.length).toBeGreaterThanOrEqual(0)
     })
@@ -104,7 +104,7 @@ describe('date utils', () => {
       const older = new Date(now.getFullYear() - 1, 0, 1)
 
       const items = [createItem('1', older)]
-      const result = groupItemsByDate(items, (item) => item.date)
+      const result = groupItemsByDate(items, item => item.date)
 
       expect(result.older).toHaveLength(1)
       expect(result.older[0].id).toBe('1')
@@ -129,7 +129,7 @@ describe('date utils', () => {
         createItem('3', new Date(now.getFullYear() - 2, 0, 1)) // older
       ]
 
-      const result = groupItemsByDate(items, (item) => item.date)
+      const result = groupItemsByDate(items, item => item.date)
 
       expect(result.today).toHaveLength(1)
       expect(result.yesterday).toHaveLength(1)

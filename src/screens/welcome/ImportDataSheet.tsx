@@ -67,7 +67,7 @@ export const ImportDataSheet = forwardRef<BottomSheetModal, ImportDataSheetProps
 
   const handleNavigateToLandrop = () => {
     ;(ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()
-    navigation.navigate('LandropSettingsScreen')
+    navigation.navigate('LandropSettingsScreen', { redirectToHome: true })
   }
 
   const renderBackdrop = (props: any) => (

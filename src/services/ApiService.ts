@@ -103,16 +103,15 @@ export async function fetchModels(provider: Provider): Promise<SdkModel[]> {
   }
 }
 
+export function hasApiKey(provider: Provider) {
+  if (!provider) return false
+  if (['ollama', 'lmstudio', 'vertexai', 'copilot', 'cherryai'].includes(provider.id)) return true
+  return !isEmpty(provider.apiKey)
+}
+
 export function checkApiProvider(provider: Provider): void {
-  if (
-    provider.id !== 'ollama' &&
-    provider.id !== 'lmstudio' &&
-    provider.type !== 'vertexai' &&
-    provider.id !== 'copilot'
-  ) {
-    if (!provider.apiKey) {
-      throw new Error(i18n.t('message.error.enter.api.key'))
-    }
+  if (!hasApiKey(provider)) {
+    throw new Error(i18n.t('message.error.enter.api.key'))
   }
 
   if (!provider.apiHost && provider.type !== 'vertexai') {

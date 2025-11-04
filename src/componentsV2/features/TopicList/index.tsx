@@ -1,8 +1,11 @@
 import { FlashList } from '@shopify/flash-list'
 import React, { useEffect, useMemo, useState } from 'react' // 引入 useMemo
 import { useTranslation } from 'react-i18next'
+import { TouchableOpacity } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
+import { ChevronDown, ChevronRight } from '@/componentsV2/icons'
+import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useDialog } from '@/hooks/useDialog'
 import { useToast } from '@/hooks/useToast'
@@ -26,7 +29,9 @@ interface GroupedTopicListProps {
 }
 
 // ListItem 类型定义现在使用导入的 TimeFormat
-type ListItem = { type: 'header'; title: string } | { type: 'topic'; topic: Topic; timeFormat: TimeFormat }
+type ListItem =
+  | { type: 'header'; title: string; groupKey: DateGroupKey }
+  | { type: 'topic'; topic: Topic; timeFormat: TimeFormat; groupKey: DateGroupKey }
 
 export function TopicList({ topics, enableScroll, handleNavigateChatScreen }: GroupedTopicListProps) {
   const { t } = useTranslation()
@@ -35,9 +40,27 @@ export function TopicList({ topics, enableScroll, handleNavigateChatScreen }: Gr
   const toast = useToast()
   const dialog = useDialog()
 
+  // 折叠状态管理 - 默认全部展开
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<DateGroupKey, boolean>>({
+    today: false,
+    yesterday: false,
+    thisWeek: false,
+    lastWeek: false,
+    lastMonth: false,
+    older: false
+  })
+
   useEffect(() => {
     setLocalTopics(topics)
   }, [topics])
+
+  // 切换分组折叠状态
+  const toggleGroupCollapse = (groupKey: DateGroupKey) => {
+    setCollapsedGroups(prev => ({
+      ...prev,
+      [groupKey]: !prev[groupKey]
+    }))
+  }
 
   const listData = useMemo(() => {
     const groupedTopics = groupItemsByDate(topics, topic => new Date(topic.updatedAt))
@@ -58,18 +81,22 @@ export function TopicList({ topics, enableScroll, handleNavigateChatScreen }: Gr
       const topicList = groupedTopics[key]
 
       if (topicList.length > 0) {
-        data.push({ type: 'header', title: groupTitles[key] })
+        // 添加分组标题
+        data.push({ type: 'header', title: groupTitles[key], groupKey: key })
 
-        const format = getTimeFormatForGroup(key)
+        // 只有在分组未折叠时才添加话题
+        if (!collapsedGroups[key]) {
+          const format = getTimeFormatForGroup(key)
 
-        topicList.forEach(topic => {
-          data.push({ type: 'topic', topic, timeFormat: format })
-        })
+          topicList.forEach(topic => {
+            data.push({ type: 'topic', topic, timeFormat: format, groupKey: key })
+          })
+        }
       }
     })
 
     return data
-  }, [topics, t])
+  }, [topics, t, collapsedGroups])
 
   const handleDelete = async (topicId: string) => {
     dialog.open({
@@ -144,14 +171,20 @@ export function TopicList({ topics, enableScroll, handleNavigateChatScreen }: Gr
 
   const renderItem = ({ item, index }: { item: ListItem; index: number }) => {
     switch (item.type) {
-      case 'header':
+      case 'header': {
+        const isCollapsed = collapsedGroups[item.groupKey]
         return (
-          <Text
-            className="font-bold text-text-primary dark:text-text-primary-dark"
+          <TouchableOpacity
+            onPress={() => toggleGroupCollapse(item.groupKey)}
+            activeOpacity={0.7}
             style={{ paddingTop: index !== 0 ? 20 : 0 }}>
-            {item.title}
-          </Text>
+            <XStack className="items-center gap-2">
+              {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+              <Text className="font-bold text-text-primary dark:text-text-primary-dark">{item.title}</Text>
+            </XStack>
+          </TouchableOpacity>
         )
+      }
       case 'topic':
         return (
           <TopicItem

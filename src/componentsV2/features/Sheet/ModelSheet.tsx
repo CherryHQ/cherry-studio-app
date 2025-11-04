@@ -69,7 +69,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
 
   const { providers } = useAllProviders()
   const selectOptions = providers
-    .filter(p => p.models && p.models.length > 0 && p.enabled)
+    .filter(p => p.id === 'cherryai' || (p.models && p.models.length > 0 && p.enabled))
     .map(p => ({
       label: p.isSystem ? t(`provider.${p.id}`) : p.name,
       title: p.name,
@@ -89,7 +89,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
           model: m
         }))
     }))
-    .filter(group => group.options.length > 0)
+    .filter(group => group.provider.id === 'cherryai' || group.options.length > 0)
 
   const allModelOptions = selectOptions.flatMap(group => group.options)
 
@@ -217,9 +217,11 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
                   </XStack>
                   <Text className="text-lg font-bold text-gray-80 dark:text-gray-80">{item.label.toUpperCase()}</Text>
                 </XStack>
-                <TouchableOpacity onPress={() => navigateToProvidersSetting(item.provider)}>
-                  <Settings className="text-gray-80 dark:text-gray-80" size={16} />
-                </TouchableOpacity>
+                {item.provider.id !== 'cherryai' && (
+                  <TouchableOpacity onPress={() => navigateToProvidersSetting(item.provider)}>
+                    <Settings className="text-gray-80 dark:text-gray-80" size={16} />
+                  </TouchableOpacity>
+                )}
               </TouchableOpacity>
             )
           }

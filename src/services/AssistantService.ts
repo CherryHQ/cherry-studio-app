@@ -422,6 +422,23 @@ export class AssistantService {
     this.notifyAllAssistantsSubscribers()
   }
 
+  /**
+   * Clear all caches and reset loading state
+   */
+  public clearCache(): void {
+    this.systemAssistantsCache.clear()
+    this.assistantCache.clear()
+    this.accessOrder = []
+    this.loadPromises.clear()
+    this.allAssistantsCache.clear()
+    this.allAssistantsCacheTimestamp = null
+    this.isLoadingAllAssistants = false
+    this.loadAllAssistantsPromise = null
+    this.builtInAssistantsCache = []
+
+    logger.info('AssistantService caches cleared')
+  }
+
   // ==================== Public API: Subscription ====================
 
   /**
@@ -824,7 +841,7 @@ export async function getDefaultAssistant(): Promise<Assistant> {
  * Get default model
  */
 export function getDefaultModel() {
-  return SYSTEM_MODELS.cherryin[0]
+  return SYSTEM_MODELS.cherryai[0]
 }
 
 /**

@@ -402,7 +402,8 @@
       "baidu-cloud": "Baidu Cloud",
       "burncloud": "BurnCloud",
       "cephalon": "Cephalon",
-      "cherryin": "ЧерешняВ",
+      "cherryin": "CherryIN",
+      "cherryai": "CherryAI",
       "copilot": "GitHub Copilot",
       "dashscope": "Alibaba Cloud",
       "deepseek": "DeepSeek",
@@ -528,6 +529,8 @@
             "requesting_permission": "Запрашивается разрешение на доступ к камере...",
             "success": "Подключение успешно 🎉",
             "success_description": "Теперь вы можете нажать кнопку \"Отправить\" для восстановления данных!",
+            "disconnected_title": "Соединение потеряно",
+            "disconnected_message": "Соединение Landrop было разорвано. Попробуйте снова.",
             "title": "Отсканируйте QR-код",
             "waiting_for_file": "Ожидание отправки файла..."
           },

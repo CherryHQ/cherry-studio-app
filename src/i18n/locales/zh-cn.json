@@ -402,7 +402,8 @@
       "baidu-cloud": "百度云千帆",
       "burncloud": "BurnCloud",
       "cephalon": "Cephalon",
-      "cherryin": "CherryIn",
+      "cherryin": "CherryIN",
+      "cherryai": "CherryAI",
       "copilot": "GitHub Copilot",
       "dashscope": "阿里云百炼",
       "deepseek": "深度求索",
@@ -528,6 +529,8 @@
             "requesting_permission": "正在请求相机权限...",
             "success": "连接成功 🎉",
             "success_description": "现在可以点击发送按钮来恢复数据了！",
+            "disconnected_title": "连接已断开",
+            "disconnected_message": "Landrop 连接已断开，请重试。",
             "title": "扫描二维码",
             "waiting_for_file": "等待发送文件..."
           },

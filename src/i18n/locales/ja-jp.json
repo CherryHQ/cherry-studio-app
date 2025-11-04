@@ -402,7 +402,8 @@
       "baidu-cloud": "Baidu Cloud",
       "burncloud": "BurnCloud",
       "cephalon": "Cephalon",
-      "cherryin": "チェリーイン",
+      "cherryin": "CherryIN",
+      "cherryai": "CherryAI",
       "copilot": "GitHub Copilot",
       "dashscope": "Alibaba Cloud",
       "deepseek": "DeepSeek",
@@ -528,6 +529,8 @@
             "requesting_permission": "カメラの権限をリクエスト中...",
             "success": "接続に成功しました 🎉",
             "success_description": "今すぐ送信ボタンをクリックしてデータを復元できます！",
+            "disconnected_title": "接続が切断されました",
+            "disconnected_message": "Landrop の接続が切断されました。もう一度お試しください。",
             "title": "QRコードをスキャン",
             "waiting_for_file": "ファイルの送信を待っています..."
           },

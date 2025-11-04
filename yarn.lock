@@ -6698,9 +6698,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"Cherry Studio Dev@workspace:.":
+"Cherry Studio@workspace:.":
   version: 0.0.0-use.local
-  resolution: "Cherry Studio Dev@workspace:."
+  resolution: "Cherry Studio@workspace:."
   dependencies:
     "@ai-sdk/amazon-bedrock": "npm:^3.0.50"
     "@ai-sdk/anthropic": "npm:^2.0.40"
@@ -6768,6 +6768,7 @@ __metadata:
     buffer: "npm:^6.0.3"
     burnt: "npm:^0.13.0"
     cli-progress: "npm:^3.12.0"
+    crypto-es: "npm:^3.1.2"
     dayjs: "npm:^1.11.13"
     dompurify: "npm:^3.2.6"
     dotenv-cli: "npm:^7.4.2"
@@ -8631,6 +8632,13 @@ __metadata:
   version: 0.0.2
   resolution: "crypt@npm:0.0.2"
   checksum: 10c0/adbf263441dd801665d5425f044647533f39f4612544071b1471962209d235042fb703c27eea2795c7c53e1dfc242405173003f83cf4f4761a633d11f9653f18
+  languageName: node
+  linkType: hard
+
+"crypto-es@npm:^3.1.2":
+  version: 3.1.2
+  resolution: "crypto-es@npm:3.1.2"
+  checksum: 10c0/795f64cc803f55be3deb48602cd11a6291417be8aecd01ec2e66b05e5224e9a93175139e43f58e07a3643e084436854580f6fbe11f8a5faa93565cfe81ed19de
   languageName: node
   linkType: hard
 

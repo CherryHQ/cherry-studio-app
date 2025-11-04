@@ -1,5 +1,5 @@
 import type { DrawerNavigationProp } from '@react-navigation/drawer'
-import type { NavigatorScreenParams } from '@react-navigation/native'
+import type { NavigatorScreenParams, RouteProp } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 
 import type { AssistantStackParamList } from '@/navigators/AssistantStackNavigator'
@@ -60,3 +60,9 @@ export type AboutNavigationProps = StackNavigationProp<AboutStackParamList>
 
 // Legacy compatibility
 export type NavigationProps = RootNavigationProps
+
+type LandropRouteParamList = {
+  LandropSettingsScreen: { redirectToHome?: boolean } | undefined
+}
+
+export type LandropSettingsRouteProp = RouteProp<LandropRouteParamList, 'LandropSettingsScreen'>

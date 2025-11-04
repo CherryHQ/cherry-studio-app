@@ -128,7 +128,7 @@ export function useAssistant(assistantId: string) {
 }
 
 /**
- * React Hook for getting all assistants (Refactored with useSyncExternalStore)
+ * React Hook for getting all assistants
  *
  * Uses AssistantService with caching for optimal performance.
  *
@@ -148,48 +148,39 @@ export function useAssistant(assistantId: string) {
  * ```
  */
 export function useAssistants() {
-  // ==================== Subscription (useSyncExternalStore) ====================
+  const [assistants, setAssistants] = useState<Assistant[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
+  /**
+   * Subscribe to changes
+   */
   const subscribe = useCallback((callback: () => void) => {
     logger.verbose('Subscribing to all assistants changes')
     return assistantService.subscribeAllAssistants(callback)
   }, [])
 
-  const getSnapshot = useCallback(() => {
-    return assistantService.getAllAssistantsCached()
-  }, [])
-
-  const getServerSnapshot = useCallback(() => {
-    return []
-  }, [])
-
-  const assistants = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-
-  // ==================== Loading State ====================
-
-  const [isLoading, setIsLoading] = useState(false)
-
-  /**
-   * Load all assistants from database if cache is empty
-   */
   useEffect(() => {
-    if (assistants.length === 0) {
+    const unsubscribe = subscribe(() => {
+      // Reload when any assistant changes
+      loadAllAssistants()
+    })
+
+    loadAllAssistants()
+
+    return unsubscribe
+  }, [subscribe])
+
+  const loadAllAssistants = async () => {
+    try {
       setIsLoading(true)
-      assistantService
-        .getAllAssistants()
-        .then(() => {
-          setIsLoading(false)
-        })
-        .catch(error => {
-          logger.error('Failed to load all assistants:', error as Error)
-          setIsLoading(false)
-        })
-    } else {
+      const allAssistants = await assistantService.getAllAssistants()
+      setAssistants(allAssistants)
+    } catch (error) {
+      logger.error('Failed to load all assistants:', error as Error)
+    } finally {
       setIsLoading(false)
     }
-  }, [assistants.length])
-
-  // ==================== Action Methods ====================
+  }
 
   const updateAssistants = useCallback(async (updates: Assistant[]) => {
     for (const assistant of updates) {
@@ -269,11 +260,13 @@ export function useExternalAssistants() {
  * @example
  * ```typescript
  * function BuiltInAssistantList() {
- *   const { builtInAssistants, resetBuiltInAssistants } = useBuiltInAssistants()
+ *   const { assistants, isLoading, resetBuiltInAssistants } = useBuiltInAssistants()
+ *
+ *   if (isLoading) return <Loading />
  *
  *   return (
  *     <div>
- *       {builtInAssistants.map(a => <AssistantCard key={a.id} assistant={a} />)}
+ *       {assistants.map(a => <AssistantCard key={a.id} assistant={a} />)}
  *       <button onClick={resetBuiltInAssistants}>Reset to Default</button>
  *     </div>
  *   )
@@ -281,26 +274,53 @@ export function useExternalAssistants() {
  * ```
  */
 export function useBuiltInAssistants() {
+  const [assistants, setAssistants] = useState<Assistant[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  /**
+   * Subscribe to changes
+   */
   const subscribe = useCallback((callback: () => void) => {
     return assistantService.subscribeBuiltInAssistants(callback)
   }, [])
 
-  const getSnapshot = useCallback(() => {
-    return assistantService.getBuiltInAssistants()
-  }, [])
+  useEffect(() => {
+    const unsubscribe = subscribe(() => {
+      // Reload when any built-in assistant changes
+      loadBuiltInAssistants()
+    })
 
-  const getServerSnapshot = useCallback(() => {
-    return []
-  }, [])
+    loadBuiltInAssistants()
 
-  const builtInAssistants = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+    return unsubscribe
+  }, [subscribe])
+
+  const loadBuiltInAssistants = async () => {
+    try {
+      setIsLoading(true)
+      const builtIn = await assistantService.getBuiltInAssistants()
+      setAssistants(builtIn)
+    } catch (error) {
+      logger.error('Failed to load built-in assistants:', error as Error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const resetBuiltInAssistants = useCallback(() => {
     assistantService.resetBuiltInAssistants()
   }, [])
 
+  const updateAssistants = useCallback(async (updates: Assistant[]) => {
+    for (const assistant of updates) {
+      await assistantService.updateAssistant(assistant.id, assistant)
+    }
+  }, [])
+
   return {
-    builtInAssistants,
-    resetBuiltInAssistants
+    assistants,
+    isLoading,
+    resetBuiltInAssistants,
+    updateAssistants
   }
 }

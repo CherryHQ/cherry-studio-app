@@ -1,9 +1,4 @@
-import { mcpDatabase } from '@database'
-import { db } from '@db'
-import { transformDbToMcp } from '@db/mappers'
-import { mcp as mcpSchema } from '@db/schema'
-import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 
 import { loggerService } from '@/services/LoggerService'
 import { mcpService } from '@/services/McpService'
@@ -142,50 +137,71 @@ export function useMcpServer(mcpId: string) {
 }
 
 /**
- * React Hook for managing all MCP servers (Original implementation with useLiveQuery)
+ * React Hook for getting all MCP servers
  *
- * Uses Drizzle's useLiveQuery for reactive database updates.
- * This implementation is kept for backward compatibility.
+ * Uses McpService with caching for optimal performance.
  *
  * @example
  * ```typescript
  * function McpServerList() {
  *   const { mcpServers, isLoading, updateMcpServers } = useMcpServers()
  *
+ *   if (isLoading) return <Loading />
+ *
  *   return (
- *     <div>
+ *     <ul>
  *       {mcpServers.map(server => (
- *         <div key={server.id}>{server.name}</div>
+ *         <li key={server.id}>{server.name}</li>
  *       ))}
- *     </div>
+ *     </ul>
  *   )
  * }
  * ```
  */
 export function useMcpServers() {
-  const query = db.select().from(mcpSchema)
-  const { data: rawMcps, updatedAt } = useLiveQuery(query)
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const updateMcpServers = useCallback(async (mcps: MCPServer[]) => {
-    await mcpDatabase.upsertMcps(mcps)
+  /**
+   * Subscribe to changes
+   */
+  const subscribe = useCallback((callback: () => void) => {
+    logger.verbose('Subscribing to all MCP servers changes')
+    return mcpService.subscribeAllMcpServers(callback)
   }, [])
 
-  const processedMcps = useMemo(() => {
-    if (!rawMcps) return []
-    return rawMcps.map(mcp => transformDbToMcp(mcp))
-  }, [rawMcps])
+  useEffect(() => {
+    const unsubscribe = subscribe(() => {
+      // Reload when any MCP server changes
+      loadAllMcpServers()
+    })
 
-  if (!updatedAt) {
-    return {
-      mcpServers: [],
-      isLoading: true,
-      updateMcpServers
+    loadAllMcpServers()
+
+    return unsubscribe
+  }, [subscribe])
+
+  const loadAllMcpServers = async () => {
+    try {
+      setIsLoading(true)
+      const allMcpServers = await mcpService.getAllMcpServers()
+      setMcpServers(allMcpServers)
+    } catch (error) {
+      logger.error('Failed to load all MCP servers:', error as Error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
+  const updateMcpServers = useCallback(async (updates: MCPServer[]) => {
+    for (const mcpServer of updates) {
+      await mcpService.updateMcpServer(mcpServer.id, mcpServer)
+    }
+  }, [])
+
   return {
-    mcpServers: processedMcps,
-    isLoading: false,
+    mcpServers,
+    isLoading,
     updateMcpServers
   }
 }
@@ -193,12 +209,14 @@ export function useMcpServers() {
 /**
  * React Hook for managing active MCP servers
  *
- * Filters all MCP servers by isActive status.
+ * Uses McpService's getActiveMcpServers method for efficient filtering.
  *
  * @example
  * ```typescript
  * function ActiveMcpServerList() {
- *   const { activeMcpServers, isLoading } = useActiveMcpServers()
+ *   const { activeMcpServers, isLoading, updateMcpServers } = useActiveMcpServers()
+ *
+ *   if (isLoading) return <Loading />
  *
  *   return (
  *     <div>
@@ -212,11 +230,45 @@ export function useMcpServers() {
  * ```
  */
 export function useActiveMcpServers() {
-  const { mcpServers: mcps, isLoading, updateMcpServers } = useMcpServers()
+  const [activeMcpServers, setActiveMcpServers] = useState<MCPServer[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const activeMcpServers = useMemo(() => {
-    return mcps.filter(mcp => mcp.isActive === true)
-  }, [mcps])
+  /**
+   * Subscribe to changes
+   */
+  const subscribe = useCallback((callback: () => void) => {
+    logger.verbose('Subscribing to active MCP servers changes')
+    return mcpService.subscribeAllMcpServers(callback)
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = subscribe(() => {
+      // Reload when any MCP server changes
+      loadActiveMcpServers()
+    })
+
+    loadActiveMcpServers()
+
+    return unsubscribe
+  }, [subscribe])
+
+  const loadActiveMcpServers = async () => {
+    try {
+      setIsLoading(true)
+      const activeServers = await mcpService.getActiveMcpServers()
+      setActiveMcpServers(activeServers)
+    } catch (error) {
+      logger.error('Failed to load active MCP servers:', error as Error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const updateMcpServers = useCallback(async (updates: MCPServer[]) => {
+    for (const mcpServer of updates) {
+      await mcpService.updateMcpServer(mcpServer.id, mcpServer)
+    }
+  }, [])
 
   return {
     activeMcpServers,

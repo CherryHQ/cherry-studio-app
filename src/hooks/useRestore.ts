@@ -5,10 +5,10 @@ import { useDispatch } from 'react-redux'
 import type { RestoreStep } from '@/componentsV2/features/SettingsScreen/RestoreProgressModal'
 import { databaseMaintenance } from '@/database/DatabaseMaintenance'
 import { useDialog } from '@/hooks/useDialog'
+import { resetAppInitializationState, runAppDataMigrations } from '@/services/AppInitializationService'
 import type { ProgressUpdate, RestoreStepId, StepStatus } from '@/services/BackupService'
 import { restore } from '@/services/BackupService'
 import { loggerService } from '@/services/LoggerService'
-import { persistor } from '@/store'
 import type { FileMetadata } from '@/types/file'
 import { uuid } from '@/utils'
 import { getFileType } from '@/utils/file'
@@ -147,7 +147,8 @@ export function useRestore(options: UseRestoreOptions = {}) {
       try {
         logger.info('Clearing existing data before restore...')
         await databaseMaintenance.resetDatabase()
-        await persistor.purge()
+        resetAppInitializationState()
+        await runAppDataMigrations()
         logger.info('Existing data cleared successfully')
       } catch (error) {
         logger.error('Failed to clear existing data:', error)

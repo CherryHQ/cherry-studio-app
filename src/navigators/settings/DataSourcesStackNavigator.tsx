@@ -8,7 +8,7 @@ import LandropSettingsScreen from '@/screens/settings/data/Landrop/LandropSettin
 export type DataSourcesStackParamList = {
   DataSettingsScreen: undefined
   BasicDataSettingsScreen: undefined
-  LandropSettingsScreen: undefined
+  LandropSettingsScreen: { redirectToHome?: boolean } | undefined
 }
 
 const Stack = createStackNavigator<DataSourcesStackParamList>()

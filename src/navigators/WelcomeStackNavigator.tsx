@@ -6,7 +6,7 @@ import WelcomeScreen from '@/screens/welcome/WelcomeScreen'
 
 export type WelcomeStackParamList = {
   WelcomeScreen: undefined
-  LandropSettingsScreen: undefined
+  LandropSettingsScreen: { redirectToHome?: boolean } | undefined
 }
 
 const Stack = createStackNavigator<WelcomeStackParamList>()

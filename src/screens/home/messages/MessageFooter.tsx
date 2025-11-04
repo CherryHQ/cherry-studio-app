@@ -3,7 +3,7 @@ import React, { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
-import { IconButton, SelectionSheet, XStack } from '@/componentsV2'
+import { IconButton, SelectionSheet, Text, XStack } from '@/componentsV2'
 import { TranslatedIcon, TranslationIcon } from '@/componentsV2/icons'
 import {
   AudioLines,
@@ -45,6 +45,14 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
 
   const { t } = useTranslation()
 
+  const inputTokens = message.usage?.prompt_tokens
+  const outputTokens = message.usage?.completion_tokens ?? message.metrics?.completion_tokens
+  const derivedTotal =
+    inputTokens === undefined && outputTokens === undefined ? undefined : (inputTokens ?? 0) + (outputTokens ?? 0)
+  const totalTokens = message.usage?.total_tokens ?? derivedTotal
+  const hasUsage = inputTokens !== undefined || outputTokens !== undefined || totalTokens !== undefined
+  const formatTokens = (value?: number) => (typeof value === 'number' ? value.toLocaleString() : '--')
+
   const moreItems = [
     {
       id: 'translate',
@@ -76,42 +84,57 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
         return <AudioLines size={18} className="text-text-secondary dark:text-text-secondary-dark" />
     }
   }
-
   return (
     <View className="px-5 pb-5">
-      <XStack className="gap-5">
-        <IconButton
-          icon={<Copy size={18} className="text-text-secondary dark:text-text-secondary-dark" />}
-          onPress={handleCopy}
-        />
-        <IconButton
-          icon={<RefreshCw size={18} className="text-text-secondary dark:text-text-secondary-dark" />}
-          onPress={handleRegenerate}
-        />
-
-        <IconButton icon={getAudioIcon()} onPress={handlePlay} />
-        {message.role === 'assistant' && isMultiModel && (
+      <XStack className="items-center justify-between gap-5">
+        <XStack className="gap-5">
           <IconButton
-            icon={
-              message.useful ? (
-                <ThumbsUp size={18} className="text-green-600" />
-              ) : (
-                <ThumbsUp size={18} className="text-text-secondary dark:text-text-secondary-dark" />
-              )
-            }
-            onPress={handleBestAnswer}
+            icon={<Copy size={18} className="text-text-secondary dark:text-text-secondary-dark" />}
+            onPress={handleCopy}
           />
+          <IconButton
+            icon={<RefreshCw size={18} className="text-text-secondary dark:text-text-secondary-dark" />}
+            onPress={handleRegenerate}
+          />
+
+          <IconButton icon={getAudioIcon()} onPress={handlePlay} />
+          {message.role === 'assistant' && isMultiModel && (
+            <IconButton
+              icon={
+                message.useful ? (
+                  <ThumbsUp size={18} className="text-green-600" />
+                ) : (
+                  <ThumbsUp size={18} className="text-text-secondary dark:text-text-secondary-dark" />
+                )
+              }
+              onPress={handleBestAnswer}
+            />
+          )}
+          <IconButton
+            icon={<Share size={18} className="text-text-secondary dark:text-text-secondary-dark" />}
+            onPress={handleShare}
+          />
+          <IconButton
+            icon={<MoreHorizontal size={18} className="text-text-secondary dark:text-text-secondary-dark" />}
+            onPress={() => {
+              bottomSheetModalRef.current?.present()
+            }}
+          />
+        </XStack>
+
+        {hasUsage && (
+          <XStack className="items-center gap-1">
+            <Text className="text-[11px] text-text-secondary dark:text-text-secondary-dark">
+              ↑{formatTokens(inputTokens)}
+            </Text>
+            <Text className="text-[11px] text-text-secondary dark:text-text-secondary-dark">
+              ↓{formatTokens(outputTokens)}
+            </Text>
+            <Text className="text-[11px] text-text-secondary dark:text-text-secondary-dark">
+              Σ{formatTokens(totalTokens)}
+            </Text>
+          </XStack>
         )}
-        <IconButton
-          icon={<Share size={18} className="text-text-secondary dark:text-text-secondary-dark" />}
-          onPress={handleShare}
-        />
-        <IconButton
-          icon={<MoreHorizontal size={18} className="text-text-secondary dark:text-text-secondary-dark" />}
-          onPress={() => {
-            bottomSheetModalRef.current?.present()
-          }}
-        />
       </XStack>
 
       <SelectionSheet ref={bottomSheetModalRef} items={moreItems} />

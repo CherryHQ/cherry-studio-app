@@ -1,7 +1,7 @@
 {
-  "name": "Cherry Studio Dev",
+  "name": "Cherry Studio",
   "main": "index.js",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "scripts": {
     "start": "npx expo start",
     "prebuild": "expo prebuild",
@@ -99,6 +99,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "buffer": "^6.0.3",
     "burnt": "^0.13.0",
+    "crypto-es": "^3.1.2",
     "dayjs": "^1.11.13",
     "dompurify": "^3.2.6",
     "drizzle-orm": "^0.43.1",

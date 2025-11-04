@@ -53,6 +53,14 @@ const APP_DATA_MIGRATIONS: AppDataMigration[] = [
 
 const LATEST_APP_DATA_VERSION = APP_DATA_MIGRATIONS[APP_DATA_MIGRATIONS.length - 1]?.version ?? 0
 
+export function resetAppInitializationState(): void {
+  preferenceService.clearCache()
+  assistantService.clearCache()
+  providerService.clearCache()
+  topicService.resetState()
+  logger.info('App initialization state reset')
+}
+
 export async function runAppDataMigrations(): Promise<void> {
   const currentVersion = await preferenceService.get('app.initialization_version')
 

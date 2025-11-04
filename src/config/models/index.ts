@@ -54,6 +54,10 @@ export function isRerankModel(model: Model): boolean {
 }
 
 export function isFreeModel(model: Model) {
+  if (model.provider === 'cherryai') {
+    return true
+  }
+
   return (model.id + model.name).toLocaleLowerCase().includes('free')
 }
 

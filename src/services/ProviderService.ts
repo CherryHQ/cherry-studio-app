@@ -28,6 +28,7 @@
 
 import { providerDatabase } from '@database'
 
+import { CHERRYAI_PROVIDER } from '@/config/providers'
 import { loggerService } from '@/services/LoggerService'
 import type { Assistant, Model, Provider } from '@/types/assistant'
 
@@ -234,6 +235,11 @@ export class ProviderService {
       return null
     }
 
+    // 0. Check special provider
+    if (providerId === 'cherryai') {
+      return CHERRYAI_PROVIDER
+    }
+
     // 1. Check default provider cache
     if (this.defaultProviderCache && this.defaultProviderCache.id === providerId) {
       logger.verbose(`Returning default provider from cache: ${providerId}`)
@@ -277,6 +283,10 @@ export class ProviderService {
    * @returns The cached provider or null
    */
   public getProviderCached(providerId: string): Provider | null {
+    if (providerId === 'cherryai') {
+      return CHERRYAI_PROVIDER
+    }
+
     // Check default provider cache
     if (this.defaultProviderCache && this.defaultProviderCache.id === providerId) {
       return this.defaultProviderCache
@@ -587,6 +597,23 @@ export class ProviderService {
       this.allProvidersSubscribers.delete(callback)
       logger.verbose(`Removed all providers subscriber, remaining: ${this.allProvidersSubscribers.size}`)
     }
+  }
+
+  /**
+   * Clear cached providers and reset initialization state
+   */
+  public clearCache(): void {
+    this.defaultProviderCache = null
+    this.defaultProviderInitialized = false
+    this.providerCache.clear()
+    this.accessOrder = []
+    this.loadPromises.clear()
+    this.allProvidersCache.clear()
+    this.allProvidersCacheTimestamp = null
+    this.isLoadingAllProviders = false
+    this.loadAllProvidersPromise = null
+
+    logger.info('ProviderService caches cleared')
   }
 
   /**

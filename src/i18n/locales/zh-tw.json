@@ -403,6 +403,7 @@
       "burncloud": "BurnCloud",
       "cephalon": "Cephalon",
       "cherryin": "櫻桃入",
+      "cherryai": "CherryAI",
       "copilot": "GitHub Copilot",
       "dashscope": "阿里雲百鍊",
       "deepseek": "深度求索",
@@ -528,6 +529,8 @@
             "requesting_permission": "正在請求相機權限...",
             "success": "連接成功 🎉",
             "success_description": "您現在可以點擊發送按鈕來恢復資料！",
+            "disconnected_title": "連線已斷開",
+            "disconnected_message": "Landrop 連線已斷開，請重試。",
             "title": "掃描QR碼",
             "waiting_for_file": "等待發送檔案..."
           },

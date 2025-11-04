@@ -5,6 +5,7 @@ import * as DocumentPicker from 'expo-document-picker'
 import { Paths } from 'expo-file-system'
 import * as IntentLauncher from 'expo-intent-launcher'
 import * as Sharing from 'expo-sharing'
+import { delay } from 'lodash'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Platform } from 'react-native'
@@ -116,6 +117,7 @@ export default function BasicDataSettingsScreen() {
       content: t('settings.data.reset_warning'),
       confirmText: t('common.confirm'),
       cancelText: t('common.cancel'),
+      showLoading: true,
       onConFirm: async () => {
         setIsResetting(true)
 
@@ -123,16 +125,16 @@ export default function BasicDataSettingsScreen() {
           await databaseMaintenance.resetDatabase() // reset sqlite
           await persistor.purge() // reset redux
           await resetCacheDirectory() // reset cache
+
+          delay(async () => await reloadAppAsync(), 200)
         } catch (error) {
+          setIsResetting(false)
           dialog.open({
             type: 'error',
             title: t('common.error'),
             content: t('settings.data.data_reset.error')
           })
           logger.error('handleDataReset', error as Error)
-        } finally {
-          setIsResetting(false)
-          await reloadAppAsync()
         }
       }
     })

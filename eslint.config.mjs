@@ -60,7 +60,8 @@ const ignores = [
   '.metro/**',
   'metro.config.js',
   'ios/Pods/**',
-  'android/app/build/**'
+  'android/app/build/**',
+  'src/integration/cherryai/**'
 ]
 
 export default defineConfig([

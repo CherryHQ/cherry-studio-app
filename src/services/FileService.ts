@@ -18,7 +18,7 @@ async function ensureDirExists(dir: Directory) {
   const dirInfo = dir.info()
 
   if (!dirInfo.exists) {
-    dir.create()
+    dir.create({ intermediates: true })
   }
 }
 
@@ -285,12 +285,12 @@ class ExpoFileService implements FileAPI {
         documentPickerDirectory.delete()
       }
 
-      // Recreate Files directory
-      DEFAULT_STORAGE.create()
-    } catch (error) {
-      logger.error('resetCacheDirectory', error)
-    }
+    // Recreate Files directory
+    DEFAULT_STORAGE.create({ intermediates: true })
+  } catch (error) {
+    logger.error('resetCacheDirectory', error)
   }
+}
 
   async get(filePath: string): Promise<FileMetadata | null> {
     const file = new File(filePath)

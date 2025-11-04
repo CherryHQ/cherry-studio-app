@@ -5,12 +5,13 @@ import {
   type ProviderId,
   type ProviderSettingsMap
 } from '@cherrystudio/ai-core/provider'
+import { fetch } from 'expo/fetch'
 import { cloneDeep } from 'lodash'
 
 import { isOpenAIChatCompletionOnlyModel } from '@/config/models'
-import { isAnthropicProvider, isAzureOpenAIProvider, isGeminiProvider, isNewApiProvider } from '@/config/providers'
+import { isAnthropicProvider, isAzureOpenAIProvider, isGeminiProvider, isNewApiProvider, isVertexProvider } from '@/config/providers'
 import { COPILOT_DEFAULT_HEADERS } from '@/constants/copilot'
-import { generateSignature } from '@/integration/cherryai/index'
+import { generateSignature } from '@/integration/cherryai'
 import AwsBedrockService from '@/services/AwsBedrockService'
 import CopilotService from '@/services/CopilotService'
 import { keyValueService } from '@/services/KeyValueService'
@@ -90,7 +91,7 @@ function formatProviderApiHost(provider: Provider): Provider {
     formatted.apiHost = formatApiHost(formatted.apiHost, true, 'v1beta')
   } else if (isAzureOpenAIProvider(formatted)) {
     formatted.apiHost = formatAzureOpenAIApiHost(formatted.apiHost)
-  } else if (VertexAIService.isVertexProvider(formatted)) {
+  } else if (isVertexProvider(formatted)) {
     formatted.apiHost = formatVertexApiHost(formatted)
   } else {
     formatted.apiHost = formatApiHost(formatted.apiHost)
@@ -267,7 +268,7 @@ export async function prepareSpecialProviderConfig(
   if (config.providerId === 'google-vertex' || config.providerId === 'google-vertex-anthropic') {
     const vertexProvider = await VertexAIService.createVertexProvider(provider)
     if (
-      VertexAIService.isVertexProvider(vertexProvider) &&
+      isVertexProvider(vertexProvider) &&
       vertexProvider.googleCredentials &&
       vertexProvider.project &&
       vertexProvider.location
@@ -298,7 +299,7 @@ export async function prepareSpecialProviderConfig(
     case 'cherryai': {
       config.options.fetch = async (url, options) => {
         // 在这里对最终参数进行签名
-        const signature = generateSignature({
+        const signature = await generateSignature({
           method: 'POST',
           path: '/chat/completions',
           query: '',

@@ -60,6 +60,7 @@ async function restoreIndexedDbData(data: ExportIndexedData, onProgress: OnProgr
   // 获取数据库中现有的 assistant IDs，用于验证 topics
   const existingAssistants = await assistantDatabase.getAllAssistants()
   const existingAssistantIds = new Set(existingAssistants.map(a => a.id))
+  logger.info(`Validating topics against ${existingAssistantIds.size} existing assistants`)
 
   // 检查并修复 topics 中的无效 assistantId
   const topicAssistantIds = new Set(data.topics.map(t => t.assistantId))
@@ -335,29 +336,27 @@ function transformBackupData(data: string): { reduxData: ExportReduxData; indexe
 
   logger.info(`Extracted ${allMessages.length} messages from ${indexedDb.topics.length} topics`)
 
-  // 合并 topics：使用 IndexedDB 的 topics，补充 Redux 的元数据
-  let topicsUsingDefaultFallback = 0
-  const topicsWithMessages = indexedDb.topics.map(indexedTopic => {
-    // 尝试从 Redux 中获取对应的 topic 元数据
-    const reduxTopic = topicsFromRedux.find(t => t.id === indexedTopic.id)
+  // 合并 topics：使用 IndexedDB 的 topics，Redux 的元数据用于筛选脏数据
+  const topicsWithMessages = indexedDb.topics
+    .map(indexedTopic => {
+      // 尝试从 Redux 中获取对应的 topic 元数据
+      const reduxTopic = topicsFromRedux.find(t => t.id === indexedTopic.id)
 
-    if (!reduxTopic) {
-      topicsUsingDefaultFallback++
-    }
+      // 如果redux中不存在，则跳过当前数据
+      if (!reduxTopic) {
+        return
+      }
 
-    return {
-      id: indexedTopic.id,
-      assistantId: reduxTopic?.assistantId ?? 'default',
-      name: reduxTopic?.name ?? 'Untitled Topic',
-      createdAt: reduxTopic?.createdAt ?? Date.now(),
-      updatedAt: reduxTopic?.updatedAt ?? Date.now(),
-      isLoading: reduxTopic?.isLoading ?? false
-    } satisfies Topic
-  })
-
-  if (topicsUsingDefaultFallback > 0) {
-    logger.warn(`${topicsUsingDefaultFallback} topics not found in Redux data, using 'default' as assistantId fallback`)
-  }
+      return {
+        id: indexedTopic.id,
+        assistantId: reduxTopic?.assistantId ?? 'default',
+        name: reduxTopic?.name ?? 'Untitled Topic',
+        createdAt: reduxTopic?.createdAt ?? Date.now(),
+        updatedAt: reduxTopic?.updatedAt ?? Date.now(),
+        isLoading: reduxTopic?.isLoading ?? false
+      } as Topic
+    })
+    .filter((topic): topic is Topic => topic !== undefined)
 
   topicToAssistantMap.clear()
   logger.info('Backup data transformation completed')
