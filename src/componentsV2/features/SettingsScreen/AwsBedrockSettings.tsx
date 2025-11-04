@@ -5,11 +5,8 @@ import { useTranslation } from 'react-i18next'
 import { ExternalLink, GroupTitle, Text, TextField, XStack, YStack } from '@/componentsV2'
 import { Eye, EyeOff } from '@/componentsV2/icons/LucideIcon'
 import { PROVIDER_URLS } from '@/config/providers'
+import { useAwsBedrockCredentials } from '@/hooks/useAwsBedrockCredentials'
 import { useDialog } from '@/hooks/useDialog'
-import AwsBedrockService from '@/services/AwsBedrockService'
-import { loggerService } from '@/services/LoggerService'
-
-const logger = loggerService.withContext('AwsBedrockSettings')
 
 interface AwsBedrockSettingsProps {
   providerId: string
@@ -18,6 +15,7 @@ interface AwsBedrockSettingsProps {
 export const AwsBedrockSettings: React.FC<AwsBedrockSettingsProps> = ({ providerId }) => {
   const { t } = useTranslation()
   const dialog = useDialog()
+  const { credentials, saveCredentials, isLoading } = useAwsBedrockCredentials(providerId)
 
   const [region, setRegion] = useState('us-east-1')
   const [accessKeyId, setAccessKeyId] = useState('')
@@ -27,16 +25,14 @@ export const AwsBedrockSettings: React.FC<AwsBedrockSettingsProps> = ({ provider
   const providerConfig = PROVIDER_URLS['aws-bedrock']
   const apiKeyWebsite = providerConfig?.websites?.apiKey
 
-  // Load credentials on mount
+  // Load credentials into local state when they change
   useEffect(() => {
-    AwsBedrockService.getAwsBedrockCredentials(providerId).then(creds => {
-      if (creds) {
-        setRegion(creds.region)
-        setAccessKeyId(creds.accessKeyId)
-        setSecretAccessKey(creds.secretAccessKey)
-      }
-    })
-  }, [providerId])
+    if (credentials) {
+      setRegion(credentials.region)
+      setAccessKeyId(credentials.accessKeyId)
+      setSecretAccessKey(credentials.secretAccessKey)
+    }
+  }, [credentials])
 
   const handleSave = async () => {
     if (!region || !accessKeyId || !secretAccessKey) {
@@ -49,7 +45,7 @@ export const AwsBedrockSettings: React.FC<AwsBedrockSettingsProps> = ({ provider
     }
 
     try {
-      await AwsBedrockService.saveAwsBedrockCredentials(providerId, {
+      await saveCredentials(providerId, {
         region,
         accessKeyId,
         secretAccessKey
@@ -61,7 +57,6 @@ export const AwsBedrockSettings: React.FC<AwsBedrockSettingsProps> = ({ provider
         content: t('common.save_success', { defaultValue: 'Successfully saved' })
       })
     } catch (error) {
-      logger.error('Failed to save AWS Bedrock credentials:', error)
       dialog.open({
         type: 'error',
         title: t('settings.provider.error'),
@@ -134,8 +129,8 @@ export const AwsBedrockSettings: React.FC<AwsBedrockSettingsProps> = ({ provider
         </XStack>
       </YStack>
 
-      <Button onPress={handleSave}>
-        <Button.Label>{t('common.save')}</Button.Label>
+      <Button onPress={handleSave} isDisabled={isLoading}>
+        <Button.Label>{isLoading ? t('common.saving', { defaultValue: 'Saving...' }) : t('common.save')}</Button.Label>
       </Button>
     </YStack>
   )

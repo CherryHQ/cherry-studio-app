@@ -4,11 +4,21 @@
  */
 
 import { Buffer } from 'buffer'
-import crypto from 'react-native-quick-crypto'
 
 import { loggerService } from '@/services/LoggerService'
 
 const logger = loggerService.withContext('GoogleCloudAuth')
+
+// Lazy import crypto to avoid early native module access during app initialization
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+type CryptoModule = typeof import('react-native-quick-crypto')
+let crypto: CryptoModule | null = null
+const getCrypto = async (): Promise<CryptoModule> => {
+  if (!crypto) {
+    crypto = await import('react-native-quick-crypto')
+  }
+  return crypto
+}
 
 interface ServiceAccount {
   privateKey: string
@@ -18,7 +28,7 @@ interface ServiceAccount {
 /**
  * Generate a JWT token for Google Cloud service account authentication
  */
-function generateJWT(serviceAccount: ServiceAccount, scopes: string[]): string {
+async function generateJWT(serviceAccount: ServiceAccount, scopes: string[]): Promise<string> {
   const { privateKey, clientEmail } = serviceAccount
 
   const now = Math.floor(Date.now() / 1000)
@@ -46,8 +56,9 @@ function generateJWT(serviceAccount: ServiceAccount, scopes: string[]): string {
   // Create signature input
   const signatureInput = `${encodedHeader}.${encodedClaimSet}`
 
-  // Sign with private key
-  const sign = crypto.createSign('RSA-SHA256')
+  // Sign with private key - load crypto module lazily
+  const cryptoModule = await getCrypto()
+  const sign = cryptoModule.default.createSign('RSA-SHA256')
   sign.update(signatureInput)
 
   const signature = sign.sign({key: privateKey})
@@ -93,7 +104,7 @@ export async function generateGoogleCloudAccessToken(
   scopes: string[] = ['https://www.googleapis.com/auth/cloud-platform']
 ): Promise<string> {
   try {
-    const jwt = generateJWT(serviceAccount, scopes)
+    const jwt = await generateJWT(serviceAccount, scopes)
     const accessToken = await exchangeJwtForAccessToken(jwt)
     return accessToken
   } catch (error) {

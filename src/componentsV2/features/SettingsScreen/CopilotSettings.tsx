@@ -5,6 +5,7 @@ import { Linking } from 'react-native'
 
 import { Group, GroupTitle, PressableRow, Row, Text, XStack, YStack } from '@/componentsV2'
 import { Copy, ExternalLink as ExternalLinkIcon } from '@/componentsV2/icons/LucideIcon'
+import { useCopilotToken } from '@/hooks/useCopilotToken'
 import { useDialog } from '@/hooks/useDialog'
 import CopilotService from '@/services/CopilotService'
 import { loggerService } from '@/services/LoggerService'
@@ -27,6 +28,7 @@ enum AuthStep {
 export const CopilotSettings: React.FC<CopilotSettingsProps> = ({ provider, updateProvider }) => {
   const { t } = useTranslation()
   const dialog = useDialog()
+  const { token, saveToken, deleteToken } = useCopilotToken(false) // Don't auto-load
 
   const [currentStep, setCurrentStep] = useState<AuthStep>(AuthStep.NOT_STARTED)
   const [userCode, setUserCode] = useState('')
@@ -37,10 +39,10 @@ export const CopilotSettings: React.FC<CopilotSettingsProps> = ({ provider, upda
 
   // Check authentication status on mount
   useEffect(() => {
-    if (provider.isAuthed) {
+    if (provider.isAuthed && token) {
       setCurrentStep(AuthStep.AUTHENTICATED)
       // Try to get user info
-      CopilotService.getToken()
+      CopilotService.getToken(token)
         .then(async tokenResponse => {
           const user = await CopilotService.getUser(tokenResponse.token)
           setCopilotUser(user)
@@ -49,7 +51,7 @@ export const CopilotSettings: React.FC<CopilotSettingsProps> = ({ provider, upda
           logger.error('Failed to get Copilot user info:', error)
         })
     }
-  }, [provider.isAuthed])
+  }, [provider.isAuthed, token])
 
   const handleStartAuth = async () => {
     setIsLoading(true)
@@ -99,7 +101,7 @@ export const CopilotSettings: React.FC<CopilotSettingsProps> = ({ provider, upda
     setIsLoading(true)
     try {
       const tokenResponse = await CopilotService.getCopilotToken(deviceCode)
-      await CopilotService.saveCopilotToken(tokenResponse.access_token)
+      await saveToken(tokenResponse.access_token)
 
       const user = await CopilotService.getUser(tokenResponse.access_token)
       setCopilotUser(user)
@@ -129,7 +131,7 @@ export const CopilotSettings: React.FC<CopilotSettingsProps> = ({ provider, upda
   const handleLogout = async () => {
     setIsLoading(true)
     try {
-      await CopilotService.logout()
+      await deleteToken()
       setCopilotUser(null)
 
       const updatedProvider = { ...provider, isAuthed: false }

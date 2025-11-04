@@ -5,10 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { ExternalLink, GroupTitle, Text, TextField, XStack, YStack } from '@/componentsV2'
 import { PROVIDER_URLS } from '@/config/providers'
 import { useDialog } from '@/hooks/useDialog'
-import { loggerService } from '@/services/LoggerService'
-import VertexAIService from '@/services/VertexAIService'
-
-const logger = loggerService.withContext('VertexAISettings')
+import { useVertexAICredentials } from '@/hooks/useVertexAICredentials'
 
 interface VertexAISettingsProps {
   providerId: string
@@ -17,6 +14,7 @@ interface VertexAISettingsProps {
 export const VertexAISettings: React.FC<VertexAISettingsProps> = ({ providerId }) => {
   const { t } = useTranslation()
   const dialog = useDialog()
+  const { credentials, saveCredentials, isLoading } = useVertexAICredentials(providerId)
 
   const [projectId, setProjectId] = useState('')
   const [location, setLocation] = useState('us-central1')
@@ -26,17 +24,15 @@ export const VertexAISettings: React.FC<VertexAISettingsProps> = ({ providerId }
   const providerConfig = PROVIDER_URLS.vertexai
   const apiKeyWebsite = providerConfig?.websites?.apiKey
 
-  // Load credentials on mount
+  // Load credentials into local state when they change
   useEffect(() => {
-    VertexAIService.getVertexCredentials(providerId).then(creds => {
-      if (creds) {
-        setProjectId(creds.project)
-        setLocation(creds.location)
-        setClientEmail(creds.clientEmail)
-        setPrivateKey(creds.privateKey)
-      }
-    })
-  }, [providerId])
+    if (credentials) {
+      setProjectId(credentials.project)
+      setLocation(credentials.location)
+      setClientEmail(credentials.clientEmail)
+      setPrivateKey(credentials.privateKey)
+    }
+  }, [credentials])
 
   const handleSave = async () => {
     if (!projectId || !location || !clientEmail || !privateKey) {
@@ -49,7 +45,7 @@ export const VertexAISettings: React.FC<VertexAISettingsProps> = ({ providerId }
     }
 
     try {
-      await VertexAIService.saveVertexCredentials(providerId, {
+      await saveCredentials(providerId, {
         project: projectId,
         location,
         clientEmail,
@@ -62,7 +58,6 @@ export const VertexAISettings: React.FC<VertexAISettingsProps> = ({ providerId }
         content: t('common.save_success', { defaultValue: 'Successfully saved' })
       })
     } catch (error) {
-      logger.error('Failed to save VertexAI credentials:', error)
       dialog.open({
         type: 'error',
         title: t('settings.provider.error'),
@@ -136,8 +131,8 @@ export const VertexAISettings: React.FC<VertexAISettingsProps> = ({ providerId }
         </XStack>
       </YStack>
 
-      <Button onPress={handleSave}>
-        <Button.Label>{t('common.save')}</Button.Label>
+      <Button onPress={handleSave} isDisabled={isLoading}>
+        <Button.Label>{isLoading ? t('common.saving', { defaultValue: 'Saving...' }) : t('common.save')}</Button.Label>
       </Button>
     </YStack>
   )

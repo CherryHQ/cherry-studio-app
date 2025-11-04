@@ -2,15 +2,6 @@ import { loggerService } from '@/services/LoggerService'
 
 const logger = loggerService.withContext('CopilotService')
 
-// Lazy import SecureStore to avoid early native module access during app initialization
-let SecureStore: typeof import('expo-secure-store') | null = null
-const getSecureStore = async () => {
-  if (!SecureStore) {
-    SecureStore = await import('expo-secure-store')
-  }
-  return SecureStore
-}
-
 // 配置常量，集中管理
 const CONFIG = {
   GITHUB_CLIENT_ID: 'Iv1.b507a08c87ecfe98',
@@ -67,9 +58,14 @@ class CopilotServiceError extends Error {
   }
 }
 
+/**
+ * Copilot Service
+ *
+ * NOTE: Token management has been moved to useCopilotToken hook.
+ * This service now focuses on GitHub OAuth flow and token exchange logic.
+ */
 class CopilotService {
   private static instance: CopilotService
-  private readonly tokenKey: string = 'copilot_access_token'
   private headers: Record<string, string>
 
   private constructor() {
@@ -212,37 +208,17 @@ class CopilotService {
   }
 
   /**
-   * 保存Copilot令牌到安全存储
+   * 获取Copilot API token (需要传入已保存的 access_token)
    */
-  public saveCopilotToken = async (token: string): Promise<void> => {
-    try {
-      const store = await getSecureStore()
-      await store.setItemAsync(this.tokenKey, token)
-    } catch (error) {
-      logger.error('Failed to save token:', error as Error)
-      throw new CopilotServiceError('无法保存访问令牌', error)
-    }
-  }
-
-  /**
-   * 从安全存储读取令牌并获取Copilot令牌
-   */
-  public getToken = async (headers?: Record<string, string>): Promise<CopilotTokenResponse> => {
+  public getToken = async (accessToken: string, headers?: Record<string, string>): Promise<CopilotTokenResponse> => {
     try {
       this.updateHeaders(headers)
-
-      const store = await getSecureStore()
-      const access_token = await store.getItemAsync(this.tokenKey)
-
-      if (!access_token) {
-        throw new Error('No stored access token found')
-      }
 
       const response = await fetch(CONFIG.API_URLS.COPILOT_TOKEN, {
         method: 'GET',
         headers: {
           ...this.headers,
-          authorization: `token ${access_token}`
+          authorization: `token ${accessToken}`
         }
       })
 
@@ -254,20 +230,6 @@ class CopilotService {
     } catch (error) {
       logger.error('Failed to get Copilot token:', error as Error)
       throw new CopilotServiceError('无法获取Copilot令牌，请重新授权', error)
-    }
-  }
-
-  /**
-   * 退出登录，删除安全存储中的token
-   */
-  public logout = async (): Promise<void> => {
-    try {
-      const store = await getSecureStore()
-      await store.deleteItemAsync(this.tokenKey)
-      logger.debug('Successfully logged out from Copilot')
-    } catch (error) {
-      logger.error('Failed to logout:', error as Error)
-      throw new CopilotServiceError('无法完成退出登录操作', error)
     }
   }
 
