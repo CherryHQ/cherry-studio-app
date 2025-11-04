@@ -1,10 +1,17 @@
-import * as SecureStore from 'expo-secure-store'
-
 import { isVertexProvider } from '@/config/providers'
 import { loggerService } from '@/services/LoggerService'
 import { type Provider, type VertexProvider } from '@/types/assistant'
 
 const logger = loggerService.withContext('VertexAIService')
+
+// Lazy import SecureStore to avoid early native module access during app initialization
+let SecureStore: typeof import('expo-secure-store') | null = null
+const getSecureStore = async () => {
+  if (!SecureStore) {
+    SecureStore = await import('expo-secure-store')
+  }
+  return SecureStore
+}
 
 const VERTEX_KEYS = {
   PRIVATE_KEY: 'vertex_private_key',
@@ -14,6 +21,19 @@ const VERTEX_KEYS = {
 } as const
 
 class VertexAIService {
+  private static instance: VertexAIService
+
+  private constructor() {
+    // Private constructor for singleton pattern
+  }
+
+  public static getInstance(): VertexAIService {
+    if (!VertexAIService.instance) {
+      VertexAIService.instance = new VertexAIService()
+    }
+    return VertexAIService.instance
+  }
+
   /**
    * Check if VertexAI has all required configuration
    */
@@ -21,11 +41,12 @@ class VertexAIService {
     if (!isVertexProvider(provider)) return false
 
     try {
+      const store = await getSecureStore()
       const [privateKey, clientEmail, project, location] = await Promise.all([
-        SecureStore.getItemAsync(`${VERTEX_KEYS.PRIVATE_KEY}_${provider.id}`),
-        SecureStore.getItemAsync(`${VERTEX_KEYS.CLIENT_EMAIL}_${provider.id}`),
-        SecureStore.getItemAsync(`${VERTEX_KEYS.PROJECT}_${provider.id}`),
-        SecureStore.getItemAsync(`${VERTEX_KEYS.LOCATION}_${provider.id}`)
+        store.getItemAsync(`${VERTEX_KEYS.PRIVATE_KEY}_${provider.id}`),
+        store.getItemAsync(`${VERTEX_KEYS.CLIENT_EMAIL}_${provider.id}`),
+        store.getItemAsync(`${VERTEX_KEYS.PROJECT}_${provider.id}`),
+        store.getItemAsync(`${VERTEX_KEYS.LOCATION}_${provider.id}`)
       ])
 
       return !!(privateKey && clientEmail && project && location)
@@ -42,11 +63,12 @@ class VertexAIService {
     providerId: string
   ): Promise<{ privateKey: string; clientEmail: string; project: string; location: string } | null> {
     try {
+      const store = await getSecureStore()
       const [privateKey, clientEmail, project, location] = await Promise.all([
-        SecureStore.getItemAsync(`${VERTEX_KEYS.PRIVATE_KEY}_${providerId}`),
-        SecureStore.getItemAsync(`${VERTEX_KEYS.CLIENT_EMAIL}_${providerId}`),
-        SecureStore.getItemAsync(`${VERTEX_KEYS.PROJECT}_${providerId}`),
-        SecureStore.getItemAsync(`${VERTEX_KEYS.LOCATION}_${providerId}`)
+        store.getItemAsync(`${VERTEX_KEYS.PRIVATE_KEY}_${providerId}`),
+        store.getItemAsync(`${VERTEX_KEYS.CLIENT_EMAIL}_${providerId}`),
+        store.getItemAsync(`${VERTEX_KEYS.PROJECT}_${providerId}`),
+        store.getItemAsync(`${VERTEX_KEYS.LOCATION}_${providerId}`)
       ])
 
       if (!privateKey || !clientEmail || !project || !location) {
@@ -73,11 +95,12 @@ class VertexAIService {
     }
   ): Promise<void> {
     try {
+      const store = await getSecureStore()
       await Promise.all([
-        SecureStore.setItemAsync(`${VERTEX_KEYS.PRIVATE_KEY}_${providerId}`, credentials.privateKey),
-        SecureStore.setItemAsync(`${VERTEX_KEYS.CLIENT_EMAIL}_${providerId}`, credentials.clientEmail),
-        SecureStore.setItemAsync(`${VERTEX_KEYS.PROJECT}_${providerId}`, credentials.project),
-        SecureStore.setItemAsync(`${VERTEX_KEYS.LOCATION}_${providerId}`, credentials.location)
+        store.setItemAsync(`${VERTEX_KEYS.PRIVATE_KEY}_${providerId}`, credentials.privateKey),
+        store.setItemAsync(`${VERTEX_KEYS.CLIENT_EMAIL}_${providerId}`, credentials.clientEmail),
+        store.setItemAsync(`${VERTEX_KEYS.PROJECT}_${providerId}`, credentials.project),
+        store.setItemAsync(`${VERTEX_KEYS.LOCATION}_${providerId}`, credentials.location)
       ])
       logger.info(`VertexAI credentials saved for provider: ${providerId}`)
     } catch (error) {
@@ -91,11 +114,12 @@ class VertexAIService {
    */
   async deleteVertexCredentials(providerId: string): Promise<void> {
     try {
+      const store = await getSecureStore()
       await Promise.all([
-        SecureStore.deleteItemAsync(`${VERTEX_KEYS.PRIVATE_KEY}_${providerId}`),
-        SecureStore.deleteItemAsync(`${VERTEX_KEYS.CLIENT_EMAIL}_${providerId}`),
-        SecureStore.deleteItemAsync(`${VERTEX_KEYS.PROJECT}_${providerId}`),
-        SecureStore.deleteItemAsync(`${VERTEX_KEYS.LOCATION}_${providerId}`)
+        store.deleteItemAsync(`${VERTEX_KEYS.PRIVATE_KEY}_${providerId}`),
+        store.deleteItemAsync(`${VERTEX_KEYS.CLIENT_EMAIL}_${providerId}`),
+        store.deleteItemAsync(`${VERTEX_KEYS.PROJECT}_${providerId}`),
+        store.deleteItemAsync(`${VERTEX_KEYS.LOCATION}_${providerId}`)
       ])
       logger.info(`VertexAI credentials deleted for provider: ${providerId}`)
     } catch (error) {
@@ -129,4 +153,5 @@ class VertexAIService {
   }
 }
 
-export default new VertexAIService()
+// Export singleton instance
+export default VertexAIService.getInstance()

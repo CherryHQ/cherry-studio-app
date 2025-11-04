@@ -1,5 +1,3 @@
-import * as SecureStore from 'expo-secure-store'
-
 import { loggerService } from '@/services/LoggerService'
 
 const logger = loggerService.withContext('AwsBedrockService')
@@ -10,13 +8,35 @@ const AWS_BEDROCK_KEYS = {
   REGION: 'aws_bedrock_region'
 } as const
 
+// Lazy import SecureStore to avoid early native module access during app initialization
+let SecureStore: typeof import('expo-secure-store') | null = null
+const getSecureStore = async () => {
+  if (!SecureStore) {
+    SecureStore = await import('expo-secure-store')
+  }
+  return SecureStore
+}
+
 class AwsBedrockService {
+  private static instance: AwsBedrockService
+
+  private constructor() {
+    // Private constructor for singleton pattern
+  }
+
+  public static getInstance(): AwsBedrockService {
+    if (!AwsBedrockService.instance) {
+      AwsBedrockService.instance = new AwsBedrockService()
+    }
+    return AwsBedrockService.instance
+  }
   /**
    * Get AWS Bedrock Access Key ID
    */
   async getAwsBedrockAccessKeyId(providerId: string): Promise<string | null> {
     try {
-      return await SecureStore.getItemAsync(`${AWS_BEDROCK_KEYS.ACCESS_KEY_ID}_${providerId}`)
+      const store = await getSecureStore()
+      return await store.getItemAsync(`${AWS_BEDROCK_KEYS.ACCESS_KEY_ID}_${providerId}`)
     } catch (error) {
       logger.error('Failed to get AWS Access Key ID:', error as Error)
       return null
@@ -28,7 +48,8 @@ class AwsBedrockService {
    */
   async getAwsBedrockSecretAccessKey(providerId: string): Promise<string | null> {
     try {
-      return await SecureStore.getItemAsync(`${AWS_BEDROCK_KEYS.SECRET_ACCESS_KEY}_${providerId}`)
+      const store = await getSecureStore()
+      return await store.getItemAsync(`${AWS_BEDROCK_KEYS.SECRET_ACCESS_KEY}_${providerId}`)
     } catch (error) {
       logger.error('Failed to get AWS Secret Access Key:', error as Error)
       return null
@@ -40,7 +61,8 @@ class AwsBedrockService {
    */
   async getAwsBedrockRegion(providerId: string): Promise<string | null> {
     try {
-      return await SecureStore.getItemAsync(`${AWS_BEDROCK_KEYS.REGION}_${providerId}`)
+      const store = await getSecureStore()
+      return await store.getItemAsync(`${AWS_BEDROCK_KEYS.REGION}_${providerId}`)
     } catch (error) {
       logger.error('Failed to get AWS Region:', error as Error)
       return null
@@ -59,10 +81,11 @@ class AwsBedrockService {
     }
   ): Promise<void> {
     try {
+      const store = await getSecureStore()
       await Promise.all([
-        SecureStore.setItemAsync(`${AWS_BEDROCK_KEYS.ACCESS_KEY_ID}_${providerId}`, credentials.accessKeyId),
-        SecureStore.setItemAsync(`${AWS_BEDROCK_KEYS.SECRET_ACCESS_KEY}_${providerId}`, credentials.secretAccessKey),
-        SecureStore.setItemAsync(`${AWS_BEDROCK_KEYS.REGION}_${providerId}`, credentials.region)
+        store.setItemAsync(`${AWS_BEDROCK_KEYS.ACCESS_KEY_ID}_${providerId}`, credentials.accessKeyId),
+        store.setItemAsync(`${AWS_BEDROCK_KEYS.SECRET_ACCESS_KEY}_${providerId}`, credentials.secretAccessKey),
+        store.setItemAsync(`${AWS_BEDROCK_KEYS.REGION}_${providerId}`, credentials.region)
       ])
       logger.info(`AWS Bedrock credentials saved for provider: ${providerId}`)
     } catch (error) {
@@ -76,10 +99,11 @@ class AwsBedrockService {
    */
   async deleteAwsBedrockCredentials(providerId: string): Promise<void> {
     try {
+      const store = await getSecureStore()
       await Promise.all([
-        SecureStore.deleteItemAsync(`${AWS_BEDROCK_KEYS.ACCESS_KEY_ID}_${providerId}`),
-        SecureStore.deleteItemAsync(`${AWS_BEDROCK_KEYS.SECRET_ACCESS_KEY}_${providerId}`),
-        SecureStore.deleteItemAsync(`${AWS_BEDROCK_KEYS.REGION}_${providerId}`)
+        store.deleteItemAsync(`${AWS_BEDROCK_KEYS.ACCESS_KEY_ID}_${providerId}`),
+        store.deleteItemAsync(`${AWS_BEDROCK_KEYS.SECRET_ACCESS_KEY}_${providerId}`),
+        store.deleteItemAsync(`${AWS_BEDROCK_KEYS.REGION}_${providerId}`)
       ])
       logger.info(`AWS Bedrock credentials deleted for provider: ${providerId}`)
     } catch (error) {
@@ -131,4 +155,5 @@ class AwsBedrockService {
   }
 }
 
-export default new AwsBedrockService()
+// Export singleton instance
+export default AwsBedrockService.getInstance()

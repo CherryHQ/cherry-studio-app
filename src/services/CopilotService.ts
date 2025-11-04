@@ -1,8 +1,15 @@
-import * as SecureStore from 'expo-secure-store'
-
 import { loggerService } from '@/services/LoggerService'
 
 const logger = loggerService.withContext('CopilotService')
+
+// Lazy import SecureStore to avoid early native module access during app initialization
+let SecureStore: typeof import('expo-secure-store') | null = null
+const getSecureStore = async () => {
+  if (!SecureStore) {
+    SecureStore = await import('expo-secure-store')
+  }
+  return SecureStore
+}
 
 // 配置常量，集中管理
 const CONFIG = {
@@ -61,15 +68,23 @@ class CopilotServiceError extends Error {
 }
 
 class CopilotService {
+  private static instance: CopilotService
   private readonly tokenKey: string = 'copilot_access_token'
   private headers: Record<string, string>
 
-  constructor() {
+  private constructor() {
     this.headers = {
       ...CONFIG.DEFAULT_HEADERS,
       accept: 'application/json',
       'user-agent': 'Visual Studio Code (desktop)'
     }
+  }
+
+  public static getInstance(): CopilotService {
+    if (!CopilotService.instance) {
+      CopilotService.instance = new CopilotService()
+    }
+    return CopilotService.instance
   }
 
   /**
@@ -201,7 +216,8 @@ class CopilotService {
    */
   public saveCopilotToken = async (token: string): Promise<void> => {
     try {
-      await SecureStore.setItemAsync(this.tokenKey, token)
+      const store = await getSecureStore()
+      await store.setItemAsync(this.tokenKey, token)
     } catch (error) {
       logger.error('Failed to save token:', error as Error)
       throw new CopilotServiceError('无法保存访问令牌', error)
@@ -215,7 +231,8 @@ class CopilotService {
     try {
       this.updateHeaders(headers)
 
-      const access_token = await SecureStore.getItemAsync(this.tokenKey)
+      const store = await getSecureStore()
+      const access_token = await store.getItemAsync(this.tokenKey)
 
       if (!access_token) {
         throw new Error('No stored access token found')
@@ -245,7 +262,8 @@ class CopilotService {
    */
   public logout = async (): Promise<void> => {
     try {
-      await SecureStore.deleteItemAsync(this.tokenKey)
+      const store = await getSecureStore()
+      await store.deleteItemAsync(this.tokenKey)
       logger.debug('Successfully logged out from Copilot')
     } catch (error) {
       logger.error('Failed to logout:', error as Error)
@@ -261,4 +279,5 @@ class CopilotService {
   }
 }
 
-export default new CopilotService()
+// Export singleton instance
+export default CopilotService.getInstance()
