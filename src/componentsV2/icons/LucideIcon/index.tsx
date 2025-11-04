@@ -22,6 +22,7 @@ import {
   Copyright,
   Download,
   Edit3,
+  ExternalLink,
   Eye,
   EyeOff,
   FileText,
@@ -71,8 +72,7 @@ import {
   Wifi,
   Wrench,
   X,
-  XCircle
-} from 'lucide-react-native'
+  XCircle} from 'lucide-react-native'
 import { cssInterop } from 'nativewind'
 import React from 'react'
 
@@ -159,6 +159,7 @@ interopIcon(Wifi)
 interopIcon(X)
 interopIcon(XCircle)
 interopIcon(Settings)
+interopIcon(ExternalLink)
 
 function withDefaultIconClass<T extends LucideIcon>(Icon: T): T {
   const Wrapped = (({ className, ...props }: any) => (
@@ -238,6 +239,7 @@ const WifiIcon = withDefaultIconClass(Wifi)
 const XIcon = withDefaultIconClass(X)
 const XCircleIcon = withDefaultIconClass(XCircle)
 const SettingsIcon = withDefaultIconClass(Settings)
+const ExternalLinkIcon = withDefaultIconClass(ExternalLink)
 
 export {
   ArrowLeftIcon as ArrowLeft,
@@ -261,6 +263,7 @@ export {
   CopyrightIcon as Copyright,
   DownloadIcon as Download,
   Edit3Icon as Edit3,
+  ExternalLinkIcon as ExternalLink,
   EyeIcon as Eye,
   EyeOffIcon as EyeOff,
   FileTextIcon as FileText,
@@ -310,5 +313,4 @@ export {
   WifiIcon as Wifi,
   WrenchIcon as Wrench,
   XIcon as X,
-  XCircleIcon as XCircle
-}
+  XCircleIcon as XCircle}
