@@ -6805,7 +6805,7 @@ __metadata:
     expo-localization: "npm:~17.0.7"
     expo-media-library: "npm:~18.2.0"
     expo-network: "npm:~8.0.7"
-    expo-secure-store: "npm:^15.0.7"
+    expo-secure-store: "npm:~15.0.7"
     expo-sharing: "npm:~14.0.7"
     expo-speech: "npm:~14.0.7"
     expo-splash-screen: "npm:~31.0.10"
@@ -10655,7 +10655,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"expo-secure-store@npm:^15.0.7":
+"expo-secure-store@npm:~15.0.7":
   version: 15.0.7
   resolution: "expo-secure-store@npm:15.0.7"
   peerDependencies:
