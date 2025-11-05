@@ -311,64 +311,70 @@ function transformBackupData(data: string): { reduxData: ExportReduxData; indexe
   }
 
   rawReduxData = null
-
-  logger.info('Processing topics and messages...')
-  // 从 Redux 构建 topic 的 assistantId 映射
-  const topicsFromRedux = reduxData.assistants.assistants
-    .flatMap(a => a.topics)
-    .concat(reduxData.assistants.defaultAssistant.topics)
-
-  const topicToAssistantMap = new Map<string, string>()
-  for (const topic of topicsFromRedux) {
-    topicToAssistantMap.set(topic.id, topic.assistantId)
+  let indexedDbData: ExportIndexedData = {
+    topics: [],
+    message_blocks: [],
+    messages: [],
+    settings: indexedDb.settings || []
   }
+  // 如果用户选择了恢复消息
+  if (indexedDb.topics && indexedDb.message_blocks) {
+    logger.info('Processing topics and messages...')
+    // 从 Redux 构建 topic 的 assistantId 映射
+    const topicsFromRedux = reduxData.assistants.assistants
+      .flatMap(a => a.topics)
+      .concat(reduxData.assistants.defaultAssistant.topics)
 
-  const allMessages: Message[] = []
-  const messagesByTopicId: Record<string, Message[]> = {}
-
-  // 从 IndexedDB 提取所有 topics 和 messages
-  for (const topic of indexedDb.topics) {
-    if (topic.messages && topic.messages.length > 0) {
-      messagesByTopicId[topic.id] = topic.messages
-      allMessages.push(...topic.messages)
+    const topicToAssistantMap = new Map<string, string>()
+    for (const topic of topicsFromRedux) {
+      topicToAssistantMap.set(topic.id, topic.assistantId)
     }
-  }
 
-  logger.info(`Extracted ${allMessages.length} messages from ${indexedDb.topics.length} topics`)
+    const allMessages: Message[] = []
+    const messagesByTopicId: Record<string, Message[]> = {}
 
-  // 合并 topics：使用 IndexedDB 的 topics，Redux 的元数据用于筛选脏数据
-  const topicsWithMessages = indexedDb.topics
-    .map(indexedTopic => {
-      // 尝试从 Redux 中获取对应的 topic 元数据
-      const reduxTopic = topicsFromRedux.find(t => t.id === indexedTopic.id)
-
-      // 如果redux中不存在，则跳过当前数据
-      if (!reduxTopic) {
-        return
+    // 从 IndexedDB 提取所有 topics 和 messages
+    for (const topic of indexedDb.topics) {
+      if (topic.messages && topic.messages.length > 0) {
+        messagesByTopicId[topic.id] = topic.messages
+        allMessages.push(...topic.messages)
       }
+    }
 
-      return {
-        id: indexedTopic.id,
-        assistantId: reduxTopic?.assistantId ?? 'default',
-        name: reduxTopic?.name ?? 'Untitled Topic',
-        createdAt: reduxTopic?.createdAt ?? Date.now(),
-        updatedAt: reduxTopic?.updatedAt ?? Date.now(),
-        isLoading: reduxTopic?.isLoading ?? false
-      } as Topic
-    })
-    .filter((topic): topic is Topic => topic !== undefined)
+    logger.info(`Extracted ${allMessages.length} messages from ${indexedDb.topics.length} topics`)
 
-  topicToAssistantMap.clear()
-  logger.info('Backup data transformation completed')
+    // 合并 topics：使用 IndexedDB 的 topics，Redux 的元数据用于筛选脏数据
+    const topicsWithMessages = indexedDb.topics
+      .map(indexedTopic => {
+        // 尝试从 Redux 中获取对应的 topic 元数据
+        const reduxTopic = topicsFromRedux.find(t => t.id === indexedTopic.id)
+
+        // 如果redux中不存在，则跳过当前数据
+        if (!reduxTopic) {
+          return
+        }
+
+        return {
+          id: indexedTopic.id,
+          assistantId: reduxTopic?.assistantId ?? 'default',
+          name: reduxTopic?.name ?? 'Untitled Topic',
+          createdAt: reduxTopic?.createdAt ?? Date.now(),
+          updatedAt: reduxTopic?.updatedAt ?? Date.now(),
+          isLoading: reduxTopic?.isLoading ?? false
+        } as Topic
+      })
+      .filter((topic): topic is Topic => topic !== undefined)
+
+    topicToAssistantMap.clear()
+    indexedDbData.messages = allMessages
+    indexedDbData.topics = topicsWithMessages
+    indexedDbData.message_blocks = indexedDb.message_blocks
+    logger.info('Backup data transformation completed')
+  }
 
   return {
     reduxData: reduxData,
-    indexedData: {
-      topics: topicsWithMessages,
-      message_blocks: indexedDb.message_blocks || [],
-      messages: allMessages,
-      settings: indexedDb.settings || []
-    }
+    indexedData: indexedDbData
   }
 }
 
