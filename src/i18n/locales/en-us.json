@@ -519,6 +519,7 @@
           "error": "Data reset failed. Please try again or contact support if the problem persists."
         },
         "landrop": {
+          "confirm_warning": "Landrop transfer will overwrite all current app data with the received data.",
           "filename": "File Name",
           "scan_qr_code": {
             "connecting": "Connecting...",

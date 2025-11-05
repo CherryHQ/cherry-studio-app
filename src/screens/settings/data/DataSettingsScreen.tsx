@@ -15,12 +15,14 @@ import {
   YStack
 } from '@/componentsV2'
 import { FolderSearch2, Wifi } from '@/componentsV2/icons/LucideIcon'
+import { useDialog } from '@/hooks/useDialog'
 import type { NavigationProps } from '@/types/naviagate'
 
 interface SettingItemConfig {
   title: string
-  screen: string
+  screen?: string
   icon: React.ReactElement
+  onPress?: () => void
 }
 
 interface SettingGroupConfig {
@@ -30,6 +32,29 @@ interface SettingGroupConfig {
 
 export default function DataSettingsScreen() {
   const { t } = useTranslation()
+  const navigation = useNavigation<NavigationProps>()
+  const dialog = useDialog()
+
+  const handleLandrop = () => {
+    dialog.open({
+      type: 'warning',
+      title: t('settings.data.landrop.title'),
+      content: t('settings.data.landrop.confirm_warning'),
+      confirmText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      onConFirm: () => {
+        navigation.navigate('HomeScreen', {
+          screen: 'Home',
+          params: {
+            screen: 'DataSourcesSettings',
+            params: {
+              screen: 'LandropSettingsScreen'
+            }
+          }
+        })
+      }
+    })
+  }
 
   const settingsItems: SettingGroupConfig[] = [
     {
@@ -42,8 +67,8 @@ export default function DataSettingsScreen() {
         },
         {
           title: t('settings.data.landrop.title'),
-          screen: 'LandropSettingsScreen',
-          icon: <Wifi size={24} />
+          icon: <Wifi size={24} />,
+          onPress: handleLandrop
         }
       ]
     }
@@ -104,7 +129,7 @@ export default function DataSettingsScreen() {
             {settingsItems.map(group => (
               <GroupContainer key={group.title} title={group.title}>
                 {group.items.map(item => (
-                  <SettingItem key={item.title} title={item.title} screen={item.screen} icon={item.icon} />
+                  <SettingItem key={item.title} {...item} />
                 ))}
               </GroupContainer>
             ))}
@@ -124,21 +149,31 @@ function GroupContainer({ title, children }: { title: string; children: React.Re
   )
 }
 
-function SettingItem({ title, screen, icon }: SettingItemProps) {
+function SettingItem({ title, screen, icon, onPress }: SettingItemProps) {
   const navigation = useNavigation<NavigationProps>()
+
+  const handlePress = () => {
+    if (onPress) {
+      onPress()
+    } else if (screen) {
+      navigation.navigate(screen as any)
+    }
+  }
+
   return (
-    <PressableRow onPress={() => navigation.navigate(screen as any)}>
+    <PressableRow onPress={handlePress}>
       <XStack className="items-center gap-3">
         {icon}
         <Text>{title}</Text>
       </XStack>
-      <RowRightArrow />
+      {(screen || onPress) && <RowRightArrow />}
     </PressableRow>
   )
 }
 
 interface SettingItemProps {
   title: string
-  screen: string
+  screen?: string
   icon: React.ReactElement
+  onPress?: () => void
 }

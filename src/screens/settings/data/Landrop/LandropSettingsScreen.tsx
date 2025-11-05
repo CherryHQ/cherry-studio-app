@@ -34,7 +34,8 @@ export default function LandropSettingsScreen() {
   const [hasShownDisconnectDialog, setHasShownDisconnectDialog] = useState(false)
   const { isModalOpen, restoreSteps, overallStatus, startRestore, closeModal, updateStepStatus, openModal } =
     useRestore({
-      stepConfigs: LANDROP_RESTORE_STEPS
+      stepConfigs: LANDROP_RESTORE_STEPS,
+      clearBeforeRestore: true
     })
 
   const hasScannedRef = useRef(false)

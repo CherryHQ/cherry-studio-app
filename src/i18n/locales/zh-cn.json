@@ -519,6 +519,7 @@
           "error": "数据重置失败。请重试，如果问题持续存在，请联系技术支持。"
         },
         "landrop": {
+          "confirm_warning": "局域网传输将使用接收到的数据覆盖当前所有应用数据。",
           "filename": "文件名",
           "scan_qr_code": {
             "connecting": "正在连接...",

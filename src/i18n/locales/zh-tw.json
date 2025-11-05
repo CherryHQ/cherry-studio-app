@@ -519,6 +519,7 @@
           "error": "資料重設失敗。請重試，如果問題持續存在，請聯繫技術支援。"
         },
         "landrop": {
+          "confirm_warning": "局域網傳輸將使用接收到的資料覆蓋當前所有應用程式資料。",
           "filename": "檔名",
           "scan_qr_code": {
             "connecting": "正在連接...",
