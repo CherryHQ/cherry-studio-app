@@ -88,13 +88,13 @@ function DatabaseInitializer({ children }: { children: React.ReactNode }) {
 
 // 主题和导航组件
 function ThemedApp() {
-  const { activeTheme, isDark } = useTheme()
+  const { isDark } = useTheme()
 
   return (
     <HeroUINativeProvider>
       <KeyboardProvider>
         <NavigationContainer theme={isDark ? DarkTheme : DefaultTheme}>
-          <SystemBars style={isDark ? 'dark' : 'light'} />
+          <SystemBars style={isDark ? 'light' : 'dark'} />
           <DialogProvider>
             <ToastProvider>
               <BottomSheetModalProvider>
