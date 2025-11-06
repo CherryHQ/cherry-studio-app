@@ -37,7 +37,7 @@ function CustomTabBar({ state, navigation }: any) {
   }
 
   return (
-    <View className="mx-[5px] my-1 flex-row gap-[5px] rounded-xl border border-neutral-300/20 bg-transparent px-[5px] py-1">
+    <View className="mx-[5px] my-1 flex-row gap-[5px] rounded-2xl border border-neutral-300/20 bg-transparent px-1 py-1">
       {state.routes.map((route: any, index: number) => {
         const isFocused = state.index === index
 
@@ -57,11 +57,8 @@ function CustomTabBar({ state, navigation }: any) {
           <TouchableOpacity
             key={route.key}
             onPress={onPress}
-            className={cn(
-              'flex-1 items-center justify-center rounded-lg px-5 py-3',
-              isFocused && 'bg-green-20'
-            )}>
-            <Text className={cn('text-sm font-bold', isFocused && 'text-green-100')}>
+            className={cn('flex-1 items-center justify-center rounded-xl px-5 py-3', isFocused && 'bg-green-20')}>
+            <Text className={cn('text-xs font-bold', isFocused && 'text-green-100')}>
               {tabLabels[route.name as keyof typeof tabLabels]}
             </Text>
           </TouchableOpacity>
