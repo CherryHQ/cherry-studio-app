@@ -5,11 +5,9 @@ module.exports = function (api) {
       [
         'babel-preset-expo',
         {
-          'react-compiler': true,
-          jsxImportSource: 'nativewind'
+          'react-compiler': true
         }
-      ],
-      'nativewind/babel'
+      ]
     ],
     plugins: [
       ['inline-import', { extensions: ['.sql'] }],

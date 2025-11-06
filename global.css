@@ -1,3 +1,74 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@import 'uniwind';
+
+/* CSS Theme Variables - migrated from tailwind.config.js */
+:root {
+  /* Base color tokens */
+  --color-brand: #00b96b;
+  --color-purple-100: #9c96f9;
+  --color-purple-20: #9c96f933;
+  --color-purple-dark-100: #b5affd;
+  --color-purple-dark-20: #b5affd33;
+  --color-orange-100: #ffb26e;
+  --color-orange-20: #ffb26e33;
+  --color-orange-10: #ffb26e1a;
+  --color-orange-dark-100: #ffc27f;
+  --color-orange-dark-20: #ffc27f33;
+  --color-blue-100: #6fb1fa;
+  --color-blue-20: #6fb1fa33;
+  --color-blue-10: #6fb1fa1a;
+  --color-blue-dark-100: #8fc2ff;
+  --color-blue-dark-20: #8fc2ff33;
+  --color-pink-100: #e398c9;
+  --color-pink-20: #e398c933;
+  --color-pink-dark-100: #f0a8d7;
+  --color-pink-dark-20: #f0a8d733;
+  --color-red-100: #ff0000;
+  --color-red-20: #ff000033;
+  --color-red-10: #ff00001a;
+  --color-gray-80: #a0a1b0cc;
+  --color-gray-60: #a0a1b099;
+  --color-gray-40: #a0a1b066;
+  --color-gray-20: #a0a1b033;
+  --color-gray-10: #a0a1b01a;
+  --color-yellow-100: #f2e218;
+  --color-yellow-20: #f2e21833;
+  --color-yellow-dark-100: #f9ea42;
+  --color-yellow-dark-20: #f9ea4233;
+  --color-text-delete: #dc3e42;
+  --color-text-link: #0090ff;
+  --color-border-color: rgba(0, 0, 0, 0.1);
+
+  /* Green colors */
+  --color-green-100: #81df94;
+  --color-green-20: #8de59e4d;
+  --color-green-10: #8de59e26;
+  --color-green-dark-100: #acf3a6;
+  --color-green-dark-20: #acf3a633;
+  --color-green-dark-10: #acf3a61a;
+
+  /* Theme-aware colors - light mode (default) */
+  --color-ui-card-background: #ffffff;
+  --color-color-border-linear: #000000;
+  --color-background-primary: #f7f7f7;
+  --color-background-secondary: #ffffff99;
+  --color-ui-card: #ffffff;
+  --color-text-primary: #202020;
+  --color-text-secondary: #646464;
+  --color-background-opacity: #ffffff;
+}
+
+/* Dark theme colors */
+.dark {
+  --color-ui-card-background: #19191c;
+  --color-color-border-linear: #ffffff;
+  --color-background-primary: #121213;
+  --color-background-secondary: #20202099;
+  --color-ui-card: #19191c;
+  --color-text-primary: #f9f9f9;
+  --color-text-secondary: #cecece;
+  --color-background-opacity: rgba(34,34,34,0.7);
+}
+
+/* Uniwind rem configuration (default 16px, same as tailwind default) */
+/* No need to change unless you want different rem value */
