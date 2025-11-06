@@ -120,7 +120,7 @@ export default function DataSettingsScreen() {
   ]
 
   return (
-    <SafeAreaContainer style={{ flex: 1 }}>
+    <SafeAreaContainer>
       <HeaderBar title={t('settings.data.title')} />
 
       <YStack className="flex-1">

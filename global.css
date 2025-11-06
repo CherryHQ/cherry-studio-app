@@ -1,6 +1,10 @@
 @import 'tailwindcss';
 @import 'uniwind';
 
+@import 'heroui-native/styles';
+
+@source './node_modules/heroui-native/lib';
+
 /* CSS Theme Variables - migrated from tailwind.config.js */
 /*:root {
   --color-brand: #00b96b;

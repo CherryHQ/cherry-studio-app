@@ -235,7 +235,7 @@ export default function BasicDataSettingsScreen() {
         },
         {
           title: isResetting ? t('common.loading') : t('settings.data.reset'),
-          icon: <RotateCcw size={24} className="text-red-500" />,
+          icon: <RotateCcw size={24} className="text-red-500 dark:text-red-500" />,
           danger: true,
           onPress: handleDataReset,
           disabled: isResetting
@@ -257,7 +257,7 @@ export default function BasicDataSettingsScreen() {
         },
         {
           title: t('settings.data.clear_cache.button', { cacheSize }),
-          icon: <Trash2 size={24} className="text-red-500" />,
+          icon: <Trash2 size={24} className="text-red-500 dark:text-red-500" />,
           danger: true,
           onPress: handleClearCache
         }
@@ -266,7 +266,7 @@ export default function BasicDataSettingsScreen() {
   ]
 
   return (
-    <SafeAreaContainer style={{ flex: 1 }}>
+    <SafeAreaContainer>
       <HeaderBar title={t('settings.data.basic_title')} />
 
       <Container>
