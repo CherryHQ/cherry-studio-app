@@ -4,6 +4,7 @@ import React from 'react'
 import { ActivityIndicator, Platform, View } from 'react-native'
 import { PanGestureHandler, State } from 'react-native-gesture-handler'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { SafeAreaContainer, YStack } from '@/componentsV2'
 import { ChatScreenHeader } from '@/componentsV2/features/ChatScreen/Header'
@@ -16,6 +17,7 @@ import { useCurrentTopic } from '@/hooks/useTopic'
 import ChatContent from './ChatContent'
 
 const ChatScreen = () => {
+  const insets = useSafeAreaInsets()
   const navigation = useNavigation<DrawerNavigationProp<any>>()
   const [topicId] = usePreference('topic.current_id')
   const { currentTopic } = useCurrentTopic()
@@ -49,7 +51,13 @@ const ChatScreen = () => {
   }
 
   return (
-    <SafeAreaContainer style={{ paddingBottom: 0 }}>
+    <SafeAreaContainer
+      style={{
+        paddingTop: insets.top,
+        paddingLeft: insets.left,
+        paddingRight: insets.right,
+        paddingBottom: 0
+      }}>
       <PanGestureHandler
         onGestureEvent={handleSwipeGesture}
         onHandlerStateChange={handleSwipeGesture}
