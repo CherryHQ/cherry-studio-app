@@ -26,7 +26,6 @@ export { AnimatedYStack, default as YStack, type YStackProps } from './layout/YS
 // Interactive components
 export { AvatarEditButton } from './base/AvatarEditButton'
 export { default as ContextMenu, ContextMenuListProps, ContextMenuProps } from './base/ContextMenu'
-export { CustomTag } from './base/CustomTag'
 export { ExternalLink } from './base/ExternalLink'
 export { IconButton } from './base/IconButton'
 export { default as ImageViewerFooterComponent } from './base/ImageViewerFooterComponent'
