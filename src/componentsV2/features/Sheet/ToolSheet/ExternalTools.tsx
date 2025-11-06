@@ -69,8 +69,8 @@ export const ExternalTools: React.FC<ExternalToolsProps> = ({
     <YStack className="px-5">
       {visibleOptions.map(option => {
         const activeColorClass = option.isActive
-          ? 'text-green-100 dark:text-green-dark-100'
-          : 'text-text-primary dark:text-text-primary-dark'
+          ? 'text-green-100'
+          : 'text-text-primary'
 
         return (
           <PressableRow
@@ -81,7 +81,7 @@ export const ExternalTools: React.FC<ExternalToolsProps> = ({
               {React.cloneElement(option.icon, { className: activeColorClass } as any)}
               <Text className={`text-base ${activeColorClass}`}>{option.label}</Text>
             </XStack>
-            {option.isActive && <Check size={20} className="text-green-100 dark:text-green-dark-100" />}
+            {option.isActive && <Check size={20} className="text-green-100" />}
           </PressableRow>
         )
       })}

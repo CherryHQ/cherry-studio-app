@@ -50,9 +50,9 @@ export const ModelTags: React.FC<ModelTagsProps> = ({
     if (isVisionModel(model)) {
       result.push({
         key: 'vision',
-        backgroundClassName: 'bg-green-20 dark:bg-green-dark-20',
-        textClassName: 'text-green-100 dark:text-green-dark-100',
-        icon: <Eye size={size} className="text-green-100 dark:text-green-dark-100" />,
+        backgroundClassName: 'bg-green-20',
+        textClassName: 'text-green-100',
+        icon: <Eye size={size} className="text-green-100" />,
         label: t('models.type.vision')
       })
     }
@@ -60,9 +60,9 @@ export const ModelTags: React.FC<ModelTagsProps> = ({
     if (isWebSearchModel(model)) {
       result.push({
         key: 'websearch',
-        backgroundClassName: 'bg-blue-20 dark:bg-blue-dark-20',
-        textClassName: 'text-blue-100 dark:text-blue-dark-100',
-        icon: <Globe size={size} className="text-blue-100 dark:text-blue-dark-100" />,
+        backgroundClassName: 'bg-blue-20',
+        textClassName: 'text-blue-100',
+        icon: <Globe size={size} className="text-blue-100" />,
         label: t('models.type.websearch')
       })
     }
@@ -70,9 +70,9 @@ export const ModelTags: React.FC<ModelTagsProps> = ({
     if (showReasoning && isReasoningModel(model)) {
       result.push({
         key: 'reasoning',
-        backgroundClassName: 'bg-purple-20 dark:bg-purple-dark-20',
-        textClassName: 'text-purple-100 dark:text-purple-dark-100',
-        icon: <Lightbulb size={size} className="text-purple-100 dark:text-purple-dark-100" />,
+        backgroundClassName: 'bg-purple-20',
+        textClassName: 'text-purple-100',
+        icon: <Lightbulb size={size} className="text-purple-100" />,
         label: t('models.type.reasoning')
       })
     }
@@ -80,9 +80,9 @@ export const ModelTags: React.FC<ModelTagsProps> = ({
     if (showToolsCalling && isFunctionCallingModel(model)) {
       result.push({
         key: 'function_calling',
-        backgroundClassName: 'bg-orange-20 dark:bg-orange-dark-20',
-        textClassName: 'text-orange-100 dark:text-orange-dark-100',
-        icon: <Wrench size={size} className="text-orange-100 dark:text-orange-dark-100" />,
+        backgroundClassName: 'bg-orange-20',
+        textClassName: 'text-orange-100',
+        icon: <Wrench size={size} className="text-orange-100" />,
         label: t('models.type.function_calling')
       })
     }
@@ -91,9 +91,9 @@ export const ModelTags: React.FC<ModelTagsProps> = ({
     if (isEmbeddingModel(model)) {
       result.push({
         key: 'embedding',
-        backgroundClassName: 'bg-purple-20 dark:bg-purple-dark-20',
-        textClassName: 'text-purple-100 dark:text-purple-dark-100',
-        icon: <Languages size={size} className="text-purple-100 dark:text-purple-dark-100" />,
+        backgroundClassName: 'bg-purple-20',
+        textClassName: 'text-purple-100',
+        icon: <Languages size={size} className="text-purple-100" />,
         label: t('models.type.embedding')
       })
     }
@@ -101,9 +101,9 @@ export const ModelTags: React.FC<ModelTagsProps> = ({
     if (showFree && isFreeModel(model)) {
       result.push({
         key: 'free',
-        backgroundClassName: 'bg-yellow-20 dark:bg-yellow-dark-20',
-        textClassName: 'text-yellow-100 dark:text-yellow-dark-100',
-        icon: <CircleDollarSign size={size} className="text-yellow-100 dark:text-yellow-dark-100" />,
+        backgroundClassName: 'bg-yellow-20',
+        textClassName: 'text-yellow-100',
+        icon: <CircleDollarSign size={size} className="text-yellow-100" />,
         label: t('models.type.free')
       })
     }
@@ -111,9 +111,9 @@ export const ModelTags: React.FC<ModelTagsProps> = ({
     if (isRerankModel(model)) {
       result.push({
         key: 'rerank',
-        backgroundClassName: 'bg-pink-20 dark:bg-pink-dark-20',
-        textClassName: 'text-pink-100 dark:text-pink-dark-100',
-        icon: <Repeat2 size={size} className="text-pink-100 dark:text-pink-dark-100" />,
+        backgroundClassName: 'bg-pink-20',
+        textClassName: 'text-pink-100',
+        icon: <Repeat2 size={size} className="text-pink-100" />,
         label: t('models.type.rerank')
       })
     }

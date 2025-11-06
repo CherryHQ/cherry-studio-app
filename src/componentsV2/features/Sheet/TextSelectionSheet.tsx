@@ -84,7 +84,7 @@ const TextSelectionSheet = forwardRef<TextSelectionSheetRef, TextSelectionSheetP
       onDismiss={() => setIsVisible(false)}
       onChange={index => setIsVisible(index >= 0)}>
       <YStack className="flex-1">
-        <XStack className="items-center justify-between border-b border-black/10 px-4 pb-4 dark:border-white/10">
+        <XStack className="items-center justify-between border-b border-black/10 px-4 pb-4">
           <Text className="text-base font-bold">{t('common.select_text')}</Text>
           <TouchableOpacity
             style={{

@@ -67,7 +67,7 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
             onPress={handleNavigateAssistantScreen}>
             <XStack className="items-center justify-center gap-2.5">
               <UnionIcon size={24} />
-              <Text className="text-base ">{t('assistants.market.my_assistant')}</Text>
+              <Text className="text-base">{t('assistants.market.my_assistant')}</Text>
             </XStack>
             <RowRightArrow />
           </PressableRow>
@@ -77,7 +77,7 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
             onPress={handleNavigateMcpMarketScreen}>
             <XStack className="items-center justify-center gap-2.5">
               <MCPIcon size={24} />
-              <Text className="text-base ">{t('mcp.market.title')}</Text>
+              <Text className="text-base">{t('mcp.market.title')}</Text>
             </XStack>
             <RowRightArrow />
           </PressableRow>

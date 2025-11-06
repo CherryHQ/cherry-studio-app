@@ -216,11 +216,11 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
                   <XStack className="items-center justify-center">
                     <ProviderIcon provider={item.provider} size={24} />
                   </XStack>
-                  <Text className="text-lg font-bold text-gray-80 dark:text-gray-80">{item.label.toUpperCase()}</Text>
+                  <Text className="text-lg font-bold text-gray-80">{item.label.toUpperCase()}</Text>
                 </XStack>
                 {item.provider.id !== 'cherryai' && (
                   <TouchableOpacity onPress={() => navigateToProvidersSetting(item.provider)}>
-                    <Settings className="text-gray-80 dark:text-gray-80" size={16} />
+                    <Settings className="text-gray-80" size={16} />
                   </TouchableOpacity>
                 )}
               </TouchableOpacity>
@@ -235,7 +235,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
               onPress={() => handleModelToggle(item.value)}
               className={`justify-between rounded-lg border px-2 py-2 ${
                 isSelected
-                  ? 'border-green-20 bg-green-10 dark:border-green-dark-20 dark:bg-green-dark-10'
+                  ? 'border-green-20 bg-green-10'
                   : 'border-transparent bg-transparent'
               }`}>
               <XStack className="w-full flex-1 items-center justify-between gap-2">
@@ -246,8 +246,8 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
                   <Text
                     className={`flex-1 ${
                       isSelected
-                        ? 'text-green-100 dark:text-green-dark-100'
-                        : 'text-text-primary dark:text-text-primary-dark'
+                        ? 'text-green-100'
+                        : 'text-text-primary'
                     }`}
                     numberOfLines={1}
                     ellipsizeMode="tail">
@@ -282,16 +282,16 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
                   size="sm"
                   className={`rounded-full ${
                     isMultiSelectActive
-                      ? 'border border-green-20 bg-green-10 dark:border-green-dark-20 dark:bg-green-dark-10'
-                      : 'border border-transparent bg-ui-card dark:bg-ui-card-dark'
+                      ? 'border border-green-20 bg-green-10'
+                      : 'border border-transparent bg-ui-card'
                   }`}
                   onPress={toggleMultiSelectMode}>
                   <Button.Label>
                     <Text
                       className={
                         isMultiSelectActive
-                          ? 'text-green-100 dark:text-green-dark-100'
-                          : 'text-text-primary dark:text-text-primary-dark'
+                          ? 'text-green-100'
+                          : 'text-text-primary'
                       }>
                       {t('button.multiple')}
                     </Text>
@@ -301,11 +301,11 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
               {multiple && isMultiSelectActive && (
                 <Button
                   size="sm"
-                  className="rounded-full bg-ui-card dark:bg-ui-card-dark"
+                  className="rounded-full bg-ui-card"
                   isIconOnly
                   onPress={handleClearAll}>
                   <Button.Label>
-                    <BrushCleaning size={18} className="text-text-primary dark:text-text-primary-dark" />
+                    <BrushCleaning size={18} className="text-text-primary" />
                   </Button.Label>
                 </Button>
               )}

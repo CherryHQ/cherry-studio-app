@@ -59,9 +59,9 @@ function CustomTabBar({ state, navigation }: any) {
             onPress={onPress}
             className={cn(
               'flex-1 items-center justify-center rounded-lg px-5 py-3',
-              isFocused && 'bg-green-20 dark:bg-green-dark-20'
+              isFocused && 'bg-green-20'
             )}>
-            <Text className={cn('text-sm font-bold', isFocused && 'text-green-100 dark:text-green-dark-100')}>
+            <Text className={cn('text-sm font-bold', isFocused && 'text-green-100')}>
               {tabLabels[route.name as keyof typeof tabLabels]}
             </Text>
           </TouchableOpacity>

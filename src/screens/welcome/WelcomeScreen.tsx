@@ -54,12 +54,12 @@ export default function WelcomeScreen() {
           <View className="items-center justify-center px-4">
             <View className="flex-row flex-wrap items-center justify-center">
               <WelcomeTitle className="text-center text-3xl font-bold" />
-              <View className="ml-2 h-7 w-7 rounded-full bg-black dark:bg-white" />
+              <View className="ml-2 h-7 w-7 rounded-full bg-black" />
             </View>
           </View>
         </View>
         {/* register and login*/}
-        <View className="h-1/4 w-full items-center justify-center bg-ui-card-background dark:bg-ui-card-background-dark ">
+        <View className="h-1/4 w-full items-center justify-center bg-ui-card-background">
           <YStack className="flex-1 items-center justify-center gap-5">
             <Button className="w-3/4" variant="primary" onPress={() => bottomSheetModalRef.current?.present()}>
               <Button.Label className="w-full text-center text-lg">

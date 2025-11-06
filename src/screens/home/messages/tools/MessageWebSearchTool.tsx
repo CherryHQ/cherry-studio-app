@@ -13,8 +13,8 @@ export const MessageWebSearchToolTitle = ({ toolResponse }: { toolResponse: MCPT
     <Searching
       text={
         <XStack className="flex-1 items-center gap-2.5 pl-0">
-          <Text className="text-sm text-gray-500 dark:text-gray-400">{i18n.t('message.searching')}</Text>
-          <Text className="max-w-[70%] text-sm text-gray-500 dark:text-gray-400" numberOfLines={1} ellipsizeMode="tail">
+          <Text className="text-sm text-gray-500">{i18n.t('message.searching')}</Text>
+          <Text className="max-w-[70%] text-sm text-gray-500" numberOfLines={1} ellipsizeMode="tail">
             {toolInput?.additionalContext ?? ''}
           </Text>
         </XStack>
@@ -22,8 +22,8 @@ export const MessageWebSearchToolTitle = ({ toolResponse }: { toolResponse: MCPT
     />
   ) : (
     <XStack className="items-center gap-1">
-      <Search size={16} className=" text-gray-500 dark:text-gray-400" />
-      <Text className="text-sm text-gray-500 dark:text-gray-400">
+      <Search size={16} className=" text-gray-500" />
+      <Text className="text-sm text-gray-500">
         {i18n.t('message.websearch.fetch_complete', {
           count: toolOutput?.results?.length ?? 0
         })}

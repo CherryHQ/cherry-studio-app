@@ -35,7 +35,7 @@ const MessageContent: React.FC<Props> = ({ message, assistant, isMultiModel = fa
         <View className="flex-row justify-end">
           <MessageContextMenu message={message} assistant={assistant}>
             {contentBlocks.length > 0 && (
-              <YStack className="rounded-l-xl rounded-br-sm rounded-tr-xl border border-green-20 bg-green-10 px-5 dark:border-green-dark-20 dark:bg-green-dark-10 ">
+              <YStack className="rounded-l-xl rounded-br-sm rounded-tr-xl border border-green-20 bg-green-10 px-5">
                 <MessageBlockRenderer blocks={contentBlocks} message={message} />
               </YStack>
             )}

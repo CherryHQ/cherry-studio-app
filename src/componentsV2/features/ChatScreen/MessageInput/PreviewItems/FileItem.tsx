@@ -64,23 +64,23 @@ const FileItem: FC<FileItemProps> = ({ file, onRemove, disabledContextMenu }) =>
         {
           title: t('button.share'),
           iOSIcon: 'square.and.arrow.up',
-          androidIcon: <Share size={16} className="text-text-primary dark:text-text-primary-dark" />,
+          androidIcon: <Share size={16} className="text-text-primary" />,
           onSelect: handleShareFile
         }
       ]}
       borderRadius={16}>
-      <XStack className="items-center justify-start gap-1.5 rounded-lg bg-green-20 px-1.5 py-1.5 pr-3 dark:bg-green-dark-20">
-        <View className="h-9 w-9 items-center justify-center gap-2 rounded-[9.5px] bg-green-100 dark:bg-green-dark-100">
-          <FileIcon size={20} className="text-white dark:text-black" />
+      <XStack className="items-center justify-start gap-1.5 rounded-lg bg-green-20 px-1.5 py-1.5 pr-3">
+        <View className="h-9 w-9 items-center justify-center gap-2 rounded-[9.5px] bg-green-100">
+          <FileIcon size={20} className="text-white" />
         </View>
         <YStack className="gap-0.75 justify-center">
           <Text
-            className="leading-3.5 text-sm text-text-primary dark:text-text-primary-dark"
+            className="leading-3.5 text-sm text-text-primary"
             numberOfLines={1}
             ellipsizeMode="middle">
             {file.name}
           </Text>
-          <Text className="leading-2.75 text-xs text-text-secondary dark:text-text-secondary-dark">
+          <Text className="leading-2.75 text-xs text-text-secondary">
             {formatFileSize(file.size)}
           </Text>
         </YStack>

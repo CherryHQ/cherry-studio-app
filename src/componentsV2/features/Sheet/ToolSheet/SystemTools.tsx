@@ -26,19 +26,19 @@ export const SystemTools: React.FC<SystemToolsProps> = ({ onCameraPress, onImage
     {
       key: 'camera',
       label: t('common.camera'),
-      icon: <Camera size={24} className="text-text-primary dark:text-text-primary-dark" />,
+      icon: <Camera size={24} className="text-text-primary" />,
       onPress: onCameraPress
     },
     {
       key: 'photo',
       label: t('common.photo'),
-      icon: <ImageIcon size={24} className="text-text-primary dark:text-text-primary-dark" />,
+      icon: <ImageIcon size={24} className="text-text-primary" />,
       onPress: onImagePress
     },
     {
       key: 'file',
       label: t('common.file'),
-      icon: <FolderClosed size={24} className="text-text-primary dark:text-text-primary-dark" />,
+      icon: <FolderClosed size={24} className="text-text-primary" />,
       onPress: onFilePress
     }
   ]
@@ -52,7 +52,7 @@ export const SystemTools: React.FC<SystemToolsProps> = ({ onCameraPress, onImage
           onPress={option.onPress}>
           {option.icon}
           <Button.Label>
-            <Text className="text-center text-base text-text-primary dark:text-text-primary-dark">{option.label}</Text>
+            <Text className="text-center text-base text-text-primary">{option.label}</Text>
           </Button.Label>
         </Button>
       ))}

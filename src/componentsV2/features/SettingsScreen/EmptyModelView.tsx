@@ -10,7 +10,7 @@ export const EmptyModelView: React.FC = () => {
   return (
     <YStack className="w-full items-center gap-12">
       <YStack className="gap-3">
-        <Text className="text-center text-3xl font-bold text-text-primary dark:text-text-primary-dark">
+        <Text className="text-center text-3xl font-bold text-text-primary">
           {t('settings.models.empty.label')}
         </Text>
       </YStack>

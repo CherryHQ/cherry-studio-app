@@ -28,7 +28,7 @@ const TypingLoader: React.FC = () => {
             loop: true,
             repeatReverse: true
           }}
-          className="rounded-full bg-text-primary dark:bg-text-primary-dark"
+          className="rounded-full bg-text-primary"
           style={{
             width: 6,
             height: 6,

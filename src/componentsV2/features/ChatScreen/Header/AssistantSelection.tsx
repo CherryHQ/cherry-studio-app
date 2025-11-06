@@ -44,12 +44,12 @@ export const AssistantSelection: React.FC<AssistantSelectionProps> = ({ assistan
         <XStack className="items-center justify-center gap-3.5">
           <YStack className="items-center justify-start gap-0.5">
             <Text
-              className="text-base text-text-primary dark:text-text-primary-dark"
+              className="text-base text-text-primary"
               ellipsizeMode="tail"
               numberOfLines={1}>
               {assistant.name}
             </Text>
-            <Text className="text-[11px] text-gray-60 dark:text-gray-60" ellipsizeMode="tail" numberOfLines={1}>
+            <Text className="text-[11px] text-gray-60" ellipsizeMode="tail" numberOfLines={1}>
               {topic.name}
             </Text>
           </YStack>

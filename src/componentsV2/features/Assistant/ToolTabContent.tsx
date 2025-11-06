@@ -87,12 +87,12 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
       }}>
       <YStack className="flex-1 gap-4">
         <YStack className="w-full gap-2">
-          <Text className="text-sm font-medium text-text-secondary dark:text-text-secondary">
+          <Text className="text-sm font-medium text-text-secondary">
             {t('assistants.settings.tooluse.title')}
           </Text>
           <Pressable
             onPress={handleToolUsePress}
-            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80 dark:bg-ui-card-background-dark">
+            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80">
             <XStack className="flex-1 items-center gap-2">
               {assistant.settings?.toolUseMode ? (
                 <XStack className="flex-1 items-center gap-2">
@@ -103,7 +103,7 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
                 </XStack>
               ) : (
                 <Text
-                  className="flex-1 text-base text-text-secondary dark:text-text-secondary"
+                  className="flex-1 text-base text-text-secondary"
                   numberOfLines={1}
                   ellipsizeMode="tail">
                   {t('assistants.settings.tooluse.empty')}
@@ -115,12 +115,12 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
         </YStack>
 
         <YStack className="w-full gap-2">
-          <Text className="text-sm font-medium text-text-secondary dark:text-text-secondary">
+          <Text className="text-sm font-medium text-text-secondary">
             {t('settings.websearch.provider.title')}
           </Text>
           <Pressable
             onPress={handleWebsearchPress}
-            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80 dark:bg-ui-card-background-dark">
+            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80">
             <XStack className="flex-1 items-center gap-2">
               {websearchContent.isActive ? (
                 <XStack className="max-w-[80%] flex-1 items-center gap-2">
@@ -131,7 +131,7 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
                 </XStack>
               ) : (
                 <Text
-                  className="flex-1 text-base text-text-secondary dark:text-text-secondary"
+                  className="flex-1 text-base text-text-secondary"
                   numberOfLines={1}
                   ellipsizeMode="tail">
                   {websearchContent.text}
@@ -143,18 +143,18 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
         </YStack>
 
         <YStack className="w-full gap-2">
-          <Text className="text-sm font-medium text-text-secondary dark:text-text-secondary">
+          <Text className="text-sm font-medium text-text-secondary">
             {t('mcp.server.title')}
           </Text>
           <Pressable
             onPress={handleMcpServerPress}
-            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80 dark:bg-ui-card-background-dark">
+            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80">
             <XStack className="flex-1 items-center gap-2">
               {activeMcpCount > 0 ? (
                 <Text>{t('mcp.server.selected', { num: activeMcpCount })}</Text>
               ) : (
                 <Text
-                  className="flex-1 text-base text-text-secondary dark:text-text-secondary"
+                  className="flex-1 text-base text-text-secondary"
                   numberOfLines={1}
                   ellipsizeMode="tail">
                   {t('mcp.server.empty')}

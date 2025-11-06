@@ -55,14 +55,14 @@ export const WebSearchApiCheckSheet = forwardRef<BottomSheetModal, WebSearchApiC
         <BottomSheetView>
           <YStack className="items-center gap-2.5 px-5 pb-7 pt-2.5">
             <XStack className="w-full items-center justify-center">
-              <Text className="text-2xl text-text-primary dark:text-text-primary-dark">
+              <Text className="text-2xl text-text-primary">
                 {t('settings.provider.api_check.title')}
               </Text>
             </XStack>
             <XStack className="w-full items-center justify-center">
               <Button
                 variant="tertiary"
-                className="h-11 w-1/2 rounded-lg border-green-20 bg-green-10 dark:border-green-dark-20 dark:bg-green-dark-10"
+                className="h-11 w-1/2 rounded-lg border-green-20 bg-green-10"
                 isDisabled={checkApiStatus === 'processing'}
                 onPress={onStartModelCheck}>
                 <Button.Label>
@@ -70,7 +70,7 @@ export const WebSearchApiCheckSheet = forwardRef<BottomSheetModal, WebSearchApiC
                     <View>
                       <XStack className="w-full items-center justify-center gap-2.5">
                         <Spinner size="sm" color="success" />
-                        <Text className="text-lg font-bold text-green-100 dark:text-green-dark-100">
+                        <Text className="text-lg font-bold text-green-100">
                           {t('button.checking')}
                         </Text>
                       </XStack>
@@ -80,10 +80,10 @@ export const WebSearchApiCheckSheet = forwardRef<BottomSheetModal, WebSearchApiC
                   {checkApiStatus === 'idle' && (
                     <View>
                       <XStack className="w-full items-center justify-between">
-                        <Text className="text-lg font-bold text-green-100 dark:text-green-dark-100">
+                        <Text className="text-lg font-bold text-green-100">
                           {t('button.start_check_model')}
                         </Text>
-                        <ChevronsRight className="text-green-100 dark:text-green-dark-100" />
+                        <ChevronsRight className="text-green-100" />
                       </XStack>
                     </View>
                   )}
@@ -91,7 +91,7 @@ export const WebSearchApiCheckSheet = forwardRef<BottomSheetModal, WebSearchApiC
                   {checkApiStatus === 'success' && (
                     <View>
                       <XStack className="w-full items-center justify-center">
-                        <Text className="text-lg font-bold text-green-100 dark:text-green-dark-100">
+                        <Text className="text-lg font-bold text-green-100">
                           {t('button.success')}
                         </Text>
                       </XStack>

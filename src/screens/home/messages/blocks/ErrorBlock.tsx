@@ -128,13 +128,13 @@ const MessageErrorInfo: React.FC<{ block: ErrorMessageBlock; message: Message; o
 
   return (
     <TouchableOpacity
-      className="my-1.5 rounded-lg border border-red-200 bg-red-50 p-4 active:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:active:bg-red-900"
+      className="my-1.5 rounded-lg border border-red-200 bg-red-50 p-4 active:bg-red-100"
       onPress={onShowDetail}>
       <XStack className="w-full items-center justify-between gap-2">
-        <Text className="flex-1 text-red-600 dark:text-red-400" numberOfLines={1}>
+        <Text className="flex-1 text-red-600" numberOfLines={1}>
           {getAlertDescription()}
         </Text>
-        <Text className="text-sm text-red-500 dark:text-red-500">{t('common.detail')}</Text>
+        <Text className="text-sm text-red-500">{t('common.detail')}</Text>
       </XStack>
     </TouchableOpacity>
   )
@@ -217,14 +217,14 @@ const ErrorDetailSheet = forwardRef<BottomSheetModal, ErrorDetailSheetProps>(({ 
           <XStack className="items-center justify-between">
             <Text className="text-xl font-semibold">{t('error.detail')}</Text>
             <TouchableOpacity
-              className={`flex-row items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 ${!error ? 'opacity-50' : ''}`}
+              className={`flex-row items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 ${!error ? 'opacity-50' : ''}`}
               onPress={copyErrorDetails}
               disabled={!error}>
               <Copy className="h-4 w-4" />
               <Text className="text-sm">{copiedText ? t('common.copied') : t('common.copy')}</Text>
             </TouchableOpacity>
           </XStack>
-          <View className="h-px bg-gray-200 dark:bg-gray-700" />
+          <View className="h-px bg-gray-200" />
           {renderErrorDetails(error)}
         </YStack>
       </BottomSheetScrollView>
@@ -238,7 +238,7 @@ ErrorDetailSheet.displayName = 'ErrorDetailSheet'
 const ErrorDetailItem: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => {
   return (
     <YStack className="gap-2">
-      <Text className="text-sm font-semibold text-gray-600 dark:text-gray-400">{label}:</Text>
+      <Text className="text-sm font-semibold text-gray-600">{label}:</Text>
       {children}
     </YStack>
   )
@@ -246,16 +246,16 @@ const ErrorDetailItem: React.FC<{ label: string; children: React.ReactNode }> = 
 
 const ErrorDetailValue: React.FC<{ children: React.ReactNode; isCode?: boolean }> = ({ children, isCode = false }) => {
   return (
-    <View className="rounded-md border border-gray-200 bg-gray-100 p-2 dark:border-gray-700 dark:bg-gray-800">
-      <Text className={`text-xs text-gray-900 dark:text-gray-100 ${isCode ? 'font-mono' : ''}`}>{children}</Text>
+    <View className="rounded-md border border-gray-200 bg-gray-100 p-2">
+      <Text className={`text-xs text-gray-900 ${isCode ? 'font-mono' : ''}`}>{children}</Text>
     </View>
   )
 }
 
 const StackTrace: React.FC<{ stack: string }> = ({ stack }) => {
   return (
-    <View className="rounded-md border border-red-300 bg-red-50 p-3 dark:border-red-700 dark:bg-red-950">
-      <Text className="font-mono text-xs leading-5 text-red-700 dark:text-red-300">{stack}</Text>
+    <View className="rounded-md border border-red-300 bg-red-50 p-3">
+      <Text className="font-mono text-xs leading-5 text-red-700">{stack}</Text>
     </View>
   )
 }
@@ -264,8 +264,8 @@ const JsonViewer: React.FC<{ data: any }> = ({ data }) => {
   const formatted = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View className="rounded-lg border border-gray-200 bg-gray-100 p-2 dark:border-gray-700 dark:bg-gray-800">
-        <Text className="font-mono text-xs text-gray-900 dark:text-gray-100">{formatted}</Text>
+      <View className="rounded-lg border border-gray-200 bg-gray-100 p-2">
+        <Text className="font-mono text-xs text-gray-900">{formatted}</Text>
       </View>
     </ScrollView>
   )

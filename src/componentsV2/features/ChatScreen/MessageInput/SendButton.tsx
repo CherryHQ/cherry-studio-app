@@ -12,7 +12,7 @@ export const SendButton: React.FC<SendButtonProps> = ({ onSend, disabled = false
   return (
     <IconButton
       icon={
-        <ArrowUp className={`${disabled ? 'text-text-primary dark:text-text-primary-dark' : '#ffffff'}`} size={24} />
+        <ArrowUp className={`${disabled ? 'text-text-primary' : '#ffffff'}`} size={24} />
       }
       onPress={disabled ? undefined : onSend}
       style={{

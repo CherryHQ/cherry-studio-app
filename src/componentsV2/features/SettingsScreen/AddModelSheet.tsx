@@ -126,14 +126,14 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
             <XStack className="w-full items-center justify-center">
               <Text className="text-xl">{t('settings.models.add.model.label')}</Text>
             </XStack>
-            <YStack className="w-full items-center justify-center gap-6 ">
+            <YStack className="w-full items-center justify-center gap-6">
               {/* Model ID Input */}
               <YStack className="w-full gap-2">
                 <XStack className="gap-2 px-3">
-                  <Text className="text-text-secondary dark:text-text-secondary-dark">
+                  <Text className="text-text-secondary">
                     {t('settings.models.add.model.id.label')}
                   </Text>
-                  <Text className="text-red-500 dark:text-red-500">*</Text>
+                  <Text className="text-red-500">*</Text>
                 </XStack>
                 <View onStartShouldSetResponder={stopPropagation}>
                   <BottomSheetTextInput
@@ -147,7 +147,7 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
               {/* Model Name Input */}
               <YStack className="w-full gap-2">
                 <XStack className="gap-2 px-3">
-                  <Text className="text-text-secondary dark:text-text-secondary-dark">
+                  <Text className="text-text-secondary">
                     {t('settings.models.add.model.name.label')}
                   </Text>
                 </XStack>
@@ -163,7 +163,7 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
               {/* Model Group Input */}
               <YStack className="w-full gap-2">
                 <XStack className="gap-2 px-3">
-                  <Text className="text-text-secondary dark:text-text-secondary-dark">
+                  <Text className="text-text-secondary">
                     {t('settings.models.add.model.group.label')}
                   </Text>
                 </XStack>
@@ -178,11 +178,11 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
               </YStack>
               <Button
                 variant="tertiary"
-                className="h-11 w-4/6 rounded-2xl border-green-20 bg-green-10 dark:border-green-dark-20 dark:bg-green-dark-10"
+                className="h-11 w-4/6 rounded-2xl border-green-20 bg-green-10"
                 onPress={handleAddModel}
                 isDisabled={!modelId.trim()}>
                 <Button.Label>
-                  <Text className="text-green-100 dark:text-green-dark-100">
+                  <Text className="text-green-100">
                     {t('settings.models.add.model.label')}
                   </Text>
                 </Button.Label>

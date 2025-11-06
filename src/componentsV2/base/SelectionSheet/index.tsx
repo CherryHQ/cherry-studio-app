@@ -73,7 +73,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
       typeof item.label === 'string' ? (
         <Text
           className={cn(
-            `text-base ${item.isSelected ? 'text-green-100 dark:text-green-dark-100' : 'text-text-primary dark:text-text-primary-dark'}`,
+            `text-base ${item.isSelected ? 'text-green-100' : 'text-text-primary'}`,
             item.color && !item.isSelected ? item.color : undefined
           )}>
           {item.label}
@@ -85,7 +85,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
       typeof item.description === 'string' ? (
         <Text
           className={cn(
-            `flex-1 text-[11px] opacity-70 ${item.isSelected ? 'text-green-100 dark:text-green-dark-100' : 'text-text-secondary dark:text-text-secondary-dark'}`,
+            `flex-1 text-[11px] opacity-70 ${item.isSelected ? 'text-green-100' : 'text-text-secondary'}`,
             item.color && !item.isSelected ? item.color : undefined
           )}
           numberOfLines={1}
@@ -101,8 +101,8 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
           className={cn(
             `items-center gap-2.5 rounded-lg border px-3.5 py-3 ${
               item.isSelected
-                ? 'border-green-20 bg-green-10 dark:border-green-dark-20 dark:bg-green-dark-10'
-                : 'border-transparent bg-ui-card-background dark:bg-ui-card-background-dark'
+                ? 'border-green-20 bg-green-10'
+                : 'border-transparent bg-ui-card-background'
             }`,
             item.backgroundColor && !item.isSelected ? item.backgroundColor : undefined
           )}>
@@ -111,7 +111,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
             {labelElement}
             {descriptionElement}
           </XStack>
-          {item.isSelected && <Check size={20} className="text-green-100 dark:text-green-dark-100" />}
+          {item.isSelected && <Check size={20} className="text-green-100" />}
         </XStack>
       </TouchableOpacity>
     )
@@ -151,7 +151,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
         ListHeaderComponent={
           placeholder ? (
             <View className="px-4 pb-2">
-              <Text className="text-center text-sm text-text-secondary opacity-60 dark:text-text-secondary-dark">
+              <Text className="text-center text-sm text-text-secondary opacity-60">
                 {placeholder}
               </Text>
             </View>

@@ -17,8 +17,8 @@ interface ToolConfig {
 
 // 通用样式常量
 const TOOL_ITEM_STYLES =
-  'gap-1 rounded-xl py-1 px-2 bg-green-10 dark:bg-green-dark-10 border-[0.5px] border-green-20 dark:border-green-dark-20 justify-between items-center'
-const ICON_STYLES = 'text-green-100 dark:text-green-dark-100'
+  'gap-1 rounded-xl py-1 px-2 bg-green-10 border-[0.5px] border-green-20 justify-between items-center'
+const ICON_STYLES = 'text-green-100'
 
 interface ToolPreviewProps {
   assistant: Assistant

@@ -30,8 +30,8 @@ export const CustomTag: React.FC<CustomTagProps> = ({
   const padding = Math.max(size / 3, 4)
   const borderRadius = size / 2
 
-  const resolvedBackground = backgroundClassName || color || 'bg-background-primary dark:bg-background-primary-dark'
-  const textClasses = cn('font-medium text-text-primary dark:text-text-primary-dark', textClassName)
+  const resolvedBackground = backgroundClassName || color || 'bg-background-primary'
+  const textClasses = cn('font-medium text-text-primary', textClassName)
 
   return (
     <XStack

@@ -209,7 +209,7 @@ export default function ManageModelsScreen() {
                   <Tabs.Trigger key={value} value={value}>
                     <Tabs.Label
                       className={cn(
-                        activeFilterType === value ? 'text-green-100 dark:text-green-dark-100' : undefined
+                        activeFilterType === value ? 'text-green-100' : undefined
                       )}>
                       {t(i18nKey)}
                     </Tabs.Label>
@@ -242,11 +242,11 @@ export default function ManageModelsScreen() {
                       <IconButton
                         icon={
                           isModelInCurrentProvider(model.id) ? (
-                            <Minus size={18} className="rounded-full bg-red-20 text-red-100 dark:text-red-100" />
+                            <Minus size={18} className="rounded-full bg-red-20 text-red-100" />
                           ) : (
                             <Plus
                               size={18}
-                              className="rounded-full bg-green-20 text-green-100 dark:bg-green-dark-20 dark:text-green-dark-100"
+                              className="rounded-full bg-green-20 text-green-100"
                             />
                           )
                         }
@@ -261,11 +261,11 @@ export default function ManageModelsScreen() {
                   <IconButton
                     icon={
                       isAllModelsInCurrentProvider(models) ? (
-                        <Minus size={18} className="rounded-full bg-red-20 text-red-100 dark:text-red-100" />
+                        <Minus size={18} className="rounded-full bg-red-20 text-red-100" />
                       ) : (
                         <Plus
                           size={18}
-                          className="rounded-full bg-green-20 text-green-100 dark:bg-green-dark-20 dark:text-green-dark-100"
+                          className="rounded-full bg-green-20 text-green-100"
                         />
                       )
                     }

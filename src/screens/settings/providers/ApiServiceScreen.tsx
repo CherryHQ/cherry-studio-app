@@ -163,7 +163,7 @@ export default function ApiServiceScreen() {
                 {checkApiStatus === 'error' && <XCircle size={16} />}
                 {checkApiStatus === 'processing' && <Spinner size="sm" />}
                 {checkApiStatus === 'success' && (
-                  <ShieldCheck size={16} className="text-green-100 dark:text-green-dark-100" />
+                  <ShieldCheck size={16} className="text-green-100" />
                 )}
               </Button.Label>
             </Button>

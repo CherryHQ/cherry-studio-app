@@ -117,10 +117,10 @@ const McpServerItemSheet = forwardRef<BottomSheetModal, McpServerItemSheetProps>
                 {/* Description */}
                 {selectedMcp.description && (
                   <YStack className="gap-1">
-                    <Text className="text-lg font-bold leading-5 text-text-primary dark:text-text-primary-dark">
+                    <Text className="text-lg font-bold leading-5 text-text-primary">
                       {t('common.description')}
                     </Text>
-                    <Text className="leading-5 text-text-secondary dark:text-text-secondary-dark">
+                    <Text className="leading-5 text-text-secondary">
                       {selectedMcp.description}
                     </Text>
                   </YStack>
@@ -128,7 +128,7 @@ const McpServerItemSheet = forwardRef<BottomSheetModal, McpServerItemSheetProps>
                 {/* Tools */}
                 {tools.length > 0 && (
                   <YStack className="gap-1">
-                    <Text className="text-lg font-bold leading-5 text-text-primary dark:text-text-primary-dark">
+                    <Text className="text-lg font-bold leading-5 text-text-primary">
                       {t('common.tool')}
                     </Text>
                     <Accordion

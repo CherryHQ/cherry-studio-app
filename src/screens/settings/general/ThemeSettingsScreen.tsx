@@ -18,7 +18,7 @@ export default function ThemeSettingsScreen() {
             <PressableRow
               key={opt.value}
               onPress={() => setCurrentTheme(opt.value).catch(console.error)}
-              className="rounded-xl bg-ui-card-background p-4 dark:bg-ui-card-background-dark">
+              className="rounded-xl bg-ui-card-background p-4">
               <XStack className="items-center">
                 <Text className="text-base">{t(opt.label)}</Text>
               </XStack>
@@ -26,11 +26,11 @@ export default function ThemeSettingsScreen() {
               <XStack
                 className={`h-5 w-5 items-center justify-center rounded-full border-2 ${
                   currentTheme === opt.value
-                    ? 'border-gray-900 dark:border-gray-100'
-                    : 'border-gray-400 dark:border-gray-600'
+                    ? 'border-gray-900'
+                    : 'border-gray-400'
                 }`}>
                 {currentTheme === opt.value && (
-                  <XStack className="h-2.5 w-2.5 rounded-full bg-gray-900 dark:bg-gray-100" />
+                  <XStack className="h-2.5 w-2.5 rounded-full bg-gray-900" />
                 )}
               </XStack>
             </PressableRow>

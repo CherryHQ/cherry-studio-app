@@ -51,7 +51,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
         <XStack className="top-[5px]">
           <TextField className="w-full p-0">
             <TextField.Input
-              className="h-24 border-none p-0 text-base text-text-primary dark:text-text-primary-dark"
+              className="h-24 border-none p-0 text-base text-text-primary"
               placeholder={t('inputs.placeholder')}
               value={text}
               onChangeText={setText}

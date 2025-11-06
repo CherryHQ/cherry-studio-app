@@ -84,30 +84,30 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   const getConfirmButtonClassName = () => {
     switch (options?.type) {
       case 'info':
-        return 'bg-blue-20 dark:bg-blue-20 border-blue-20 dark:border-blue-20'
+        return 'bg-blue-20 border-blue-20'
       case 'warning':
-        return 'bg-orange-20 dark:bg-orange-20 border-orange-20 dark:border-orange-20'
+        return 'bg-orange-20 border-orange-20'
       case 'error':
-        return 'bg-red-20 dark:bg-red-20 border-red-20 dark:border-red-20'
+        return 'bg-red-20 border-red-20'
       case 'success':
-        return 'bg-green-10 dark:bg-green-dark-10 border-green-20 dark:border-green-dark-20'
+        return 'bg-green-10 border-green-20'
       default:
-        return 'bg-green-10 dark:bg-green-dark-10 border-green-20 dark:border-green-dark-20'
+        return 'bg-green-10 border-green-20'
     }
   }
 
   const getConfirmTextClassName = () => {
     switch (options?.type) {
       case 'info':
-        return 'text-blue-100 dark:text-blue-100'
+        return 'text-blue-100'
       case 'warning':
-        return 'text-orange-100 dark:text-orange-100'
+        return 'text-orange-100'
       case 'error':
-        return 'text-red-100 dark:text-red-100'
+        return 'text-red-100'
       case 'success':
-        return 'text-green-100 dark:text-green-dark-100'
+        return 'text-green-100'
       default:
-        return 'text-green-100 dark:text-green-dark-100'
+        return 'text-green-100'
     }
   }
 
@@ -133,15 +133,15 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
           transition={{ type: 'timing', duration: 300 }}
           className={centeredViewClassName}>
           {maskClosable && <Pressable className="absolute inset-0" onPress={cancel} />}
-          <YStack className="w-3/4 rounded-2xl bg-ui-card-background dark:bg-ui-card-background-dark">
+          <YStack className="w-3/4 rounded-2xl bg-ui-card-background">
             <YStack className="items-center gap-3 p-5">
               {typeof options?.title === 'string' ? (
-                <Text className="text-lg font-bold text-text-primary dark:text-text-primary-dark">{options.title}</Text>
+                <Text className="text-lg font-bold text-text-primary">{options.title}</Text>
               ) : (
                 options?.title
               )}
               {typeof options?.content === 'string' ? (
-                <Text className="text-center text-[15px] leading-5 text-text-secondary dark:text-text-secondary-dark">
+                <Text className="text-center text-[15px] leading-5 text-text-secondary">
                   {options.content}
                 </Text>
               ) : (
@@ -154,13 +154,13 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                 <Button
                   variant="tertiary"
                   className={cn(
-                    'h-[42px] flex-1 rounded-[30px] border-gray-20 bg-transparent dark:border-gray-20',
+                    'h-[42px] flex-1 rounded-[30px] border-gray-20 bg-transparent',
                     options?.cancelStyle?.toString() || ''
                   )}
                   onPress={cancel}
                   isDisabled={isLoading}>
                   <Button.Label>
-                    <Text className="text-[17px] text-gray-80 dark:text-gray-80">
+                    <Text className="text-[17px] text-gray-80">
                       {isLoading && shouldShowLoading ? t('common.loading') : cancelText}
                     </Text>
                   </Button.Label>

@@ -88,25 +88,25 @@ const ImageItem: FC<ImageItemProps> = ({ file, allImages = [], onRemove, size, d
           {
             title: t('button.save_image'),
             iOSIcon: 'square.and.arrow.down',
-            androidIcon: <Download size={16} className="text-text-primary dark:text-text-primary-dark" />,
+            androidIcon: <Download size={16} className="text-text-primary" />,
             onSelect: handleSaveImage
           },
           {
             title: t('button.share'),
             iOSIcon: 'square.and.arrow.up',
-            androidIcon: <Share size={16} className="text-text-primary dark:text-text-primary-dark" />,
+            androidIcon: <Share size={16} className="text-text-primary" />,
             onSelect: handleShareImage
           }
         ]}
         borderRadius={10}>
         {imageError ? (
           <View
-            className="bg-gray-5 dark:bg-gray-dark-5 rounded-2.5 items-center justify-center"
+            className="bg-gray-5 rounded-2.5 items-center justify-center"
             style={{
               width: imageWidth,
               height: imageWidth
             }}>
-            <ImageOff size={imageWidth * 0.3} className="dark:text-gray-dark-20 text-gray-20" />
+            <ImageOff size={imageWidth * 0.3} className="text-gray-20" />
           </View>
         ) : (
           <Image

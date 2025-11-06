@@ -22,16 +22,16 @@ export default function MessageMcpTool({ block }: Props) {
     <View>
       <Accordion selectionMode="single" variant="default" className="rounded-md">
         <Accordion.Item value="1">
-          <Accordion.Trigger className="bg-ui-card-background py-2 dark:bg-ui-card-background-dark">
+          <Accordion.Trigger className="bg-ui-card-background py-2">
             <XStack className="flex-1 items-center gap-2">
               {isPending && <Spinner size="sm" />}
               {isDone && <Wrench size={16} />}
-              {isError && <XCircle size={16} className="text-red-100 dark:text-red-100" />}
+              {isError && <XCircle size={16} className="text-red-100" />}
               <Text>{tool.name}</Text>
             </XStack>
             <Accordion.Indicator />
           </Accordion.Trigger>
-          <Accordion.Content className="bg-ui-card-background dark:bg-ui-card-background-dark">
+          <Accordion.Content className="bg-ui-card-background">
             <View>
               <Text>{JSON.stringify(response, null, 2)}</Text>
             </View>

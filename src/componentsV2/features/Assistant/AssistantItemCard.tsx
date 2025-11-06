@@ -28,7 +28,7 @@ const AssistantItemCard = ({ assistant, onAssistantPress }: AssistantItemCardPro
     <View className="w-full p-1.5">
       <Pressable
         onPress={handlePress}
-        className="h-[230px] overflow-hidden rounded-2xl bg-ui-card-background active:bg-gray-20 dark:bg-ui-card-background-dark dark:active:bg-gray-20"
+        className="h-[230px] overflow-hidden rounded-2xl bg-ui-card-background active:bg-gray-20"
         style={{ height: 230 }}>
         {/* Background blur emoji */}
         <XStack className="absolute left-0 right-0 top-0 h-1/2 w-full flex-wrap">
@@ -55,14 +55,14 @@ const AssistantItemCard = ({ assistant, onAssistantPress }: AssistantItemCardPro
         <YStack className="flex-1 items-center gap-2 rounded-2xl px-3.5 py-4">
           <EmojiAvatar emoji={assistant.emoji} size={90} borderWidth={5} borderColor={isDark ? '#333333' : '#f7f7f7'} />
           <Text
-            className="text-center text-base text-text-primary dark:text-text-primary-dark"
+            className="text-center text-base text-text-primary"
             numberOfLines={1}
             ellipsizeMode="tail">
             {assistant.name}
           </Text>
           <YStack className="flex-1 items-center justify-between">
             <Text
-              className="text-xs leading-[14px] text-text-secondary dark:text-text-secondary-dark"
+              className="text-xs leading-[14px] text-text-secondary"
               numberOfLines={3}
               ellipsizeMode="tail">
               {assistant.description}
@@ -73,7 +73,7 @@ const AssistantItemCard = ({ assistant, onAssistantPress }: AssistantItemCardPro
                   <GroupTag
                     key={index}
                     group={group}
-                    className="border-[0.5px] border-green-20 bg-green-10 text-[10px] text-green-100 dark:border-green-dark-20 dark:bg-green-dark-10 dark:text-green-dark-100"
+                    className="border-[0.5px] border-green-20 bg-green-10 text-[10px] text-green-100"
                   />
                 ))}
             </XStack>

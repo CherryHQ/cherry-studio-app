@@ -101,9 +101,9 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
           <Button
             isIconOnly
             onPress={handleScrollToEnd}
-            className="bottom-2 right-2 h-10 w-10 rounded-full border-2 border-green-20 bg-green-10 dark:border-green-20 dark:bg-green-dark-10">
+            className="bottom-2 right-2 h-10 w-10 rounded-full border-2 border-green-20 bg-green-10">
             <Button.Label>
-              <ChevronDown size={24} className="text-green-100 dark:text-green-100" />
+              <ChevronDown size={24} className="text-green-100" />
             </Button.Label>
           </Button>
         </MotiView>

@@ -62,16 +62,16 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
       ) : (
         <TranslationIcon size={18} />
       ),
-      color: isTranslated ? 'text-red-100 dark:text-red-100' : undefined,
-      backgroundColor: isTranslated ? 'bg-red-20 dark:bg-red-20' : undefined,
+      color: isTranslated ? 'text-red-100' : undefined,
+      backgroundColor: isTranslated ? 'bg-red-20' : undefined,
       onSelect: isTranslated ? handleDeleteTranslation : handleTranslate
     },
     {
       id: 'delete',
       label: t('message.delete_message'),
-      icon: <Trash2 size={18} className="text-red-100 dark:text-red-100" />,
-      color: 'text-red-100 dark:text-red-100',
-      backgroundColor: 'bg-red-20 dark:bg-red-20',
+      icon: <Trash2 size={18} className="text-red-100" />,
+      color: 'text-red-100',
+      backgroundColor: 'bg-red-20',
       onSelect: handleDelete
     }
   ]
@@ -79,9 +79,9 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
   const getAudioIcon = () => {
     switch (playState) {
       case 'playing':
-        return <CirclePause size={18} className="text-text-secondary dark:text-text-secondary-dark " />
+        return <CirclePause size={18} className="text-text-secondary" />
       default:
-        return <AudioLines size={18} className="text-text-secondary dark:text-text-secondary-dark" />
+        return <AudioLines size={18} className="text-text-secondary" />
     }
   }
   return (
@@ -89,11 +89,11 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
       <XStack className="items-center justify-between gap-5">
         <XStack className="gap-5">
           <IconButton
-            icon={<Copy size={18} className="text-text-secondary dark:text-text-secondary-dark" />}
+            icon={<Copy size={18} className="text-text-secondary" />}
             onPress={handleCopy}
           />
           <IconButton
-            icon={<RefreshCw size={18} className="text-text-secondary dark:text-text-secondary-dark" />}
+            icon={<RefreshCw size={18} className="text-text-secondary" />}
             onPress={handleRegenerate}
           />
 
@@ -104,18 +104,18 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
                 message.useful ? (
                   <ThumbsUp size={18} className="text-green-600" />
                 ) : (
-                  <ThumbsUp size={18} className="text-text-secondary dark:text-text-secondary-dark" />
+                  <ThumbsUp size={18} className="text-text-secondary" />
                 )
               }
               onPress={handleBestAnswer}
             />
           )}
           <IconButton
-            icon={<Share size={18} className="text-text-secondary dark:text-text-secondary-dark" />}
+            icon={<Share size={18} className="text-text-secondary" />}
             onPress={handleShare}
           />
           <IconButton
-            icon={<MoreHorizontal size={18} className="text-text-secondary dark:text-text-secondary-dark" />}
+            icon={<MoreHorizontal size={18} className="text-text-secondary" />}
             onPress={() => {
               bottomSheetModalRef.current?.present()
             }}
@@ -124,13 +124,13 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
 
         {hasUsage && (
           <XStack className="items-center gap-1">
-            <Text className="text-[11px] text-text-secondary dark:text-text-secondary-dark">
+            <Text className="text-[11px] text-text-secondary">
               ↑{formatTokens(inputTokens)}
             </Text>
-            <Text className="text-[11px] text-text-secondary dark:text-text-secondary-dark">
+            <Text className="text-[11px] text-text-secondary">
               ↓{formatTokens(outputTokens)}
             </Text>
-            <Text className="text-[11px] text-text-secondary dark:text-text-secondary-dark">
+            <Text className="text-[11px] text-text-secondary">
               Σ{formatTokens(totalTokens)}
             </Text>
           </XStack>

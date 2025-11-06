@@ -164,13 +164,13 @@ export const TopicItem: FC<TopicItemProps> = ({
         {
           title: t('button.generate_topic_name'),
           iOSIcon: 'sparkles',
-          androidIcon: <Sparkles size={16} className="text-text-primary dark:text-text-primary-dark" />,
+          androidIcon: <Sparkles size={16} className="text-text-primary" />,
           onSelect: handleGenerateName
         },
         {
           title: t('button.rename_topic_name'),
           iOSIcon: 'rectangle.and.pencil.and.ellipsis',
-          androidIcon: <Edit3 size={16} className="text-text-primary dark:text-text-primary-dark" />,
+          androidIcon: <Edit3 size={16} className="text-text-primary" />,
           onSelect: handleRename
         },
         {
@@ -185,7 +185,7 @@ export const TopicItem: FC<TopicItemProps> = ({
       onPress={openTopic}>
       <XStack
         className={`items-center justify-center gap-1.5 rounded-lg px-1 py-1 ${
-          isActive ? 'bg-green-10 dark:bg-green-10' : 'bg-transparent'
+          isActive ? 'bg-green-10' : 'bg-transparent'
         }`}>
         <EmojiAvatar
           emoji={assistant?.emoji}
@@ -199,7 +199,7 @@ export const TopicItem: FC<TopicItemProps> = ({
             <Text className="flex-1 text-base font-bold" numberOfLines={1} ellipsizeMode="tail">
               {assistant?.name}
             </Text>
-            <Text className="text-wrap-none shrink-0 text-xs text-text-secondary dark:text-text-secondary-dark">
+            <Text className="text-wrap-none shrink-0 text-xs text-text-secondary">
               {displayTime}
             </Text>
           </XStack>
@@ -207,7 +207,7 @@ export const TopicItem: FC<TopicItemProps> = ({
             <TopicNameSkeleton isDark={isDark} />
           ) : (
             <Text
-              className="text-[13px] font-normal text-text-secondary dark:text-text-secondary-dark"
+              className="text-[13px] font-normal text-text-secondary"
               numberOfLines={1}
               ellipsizeMode="tail">
               {topic.name}

@@ -48,7 +48,7 @@ export const ExternalLink: React.FC<ExternalLinkProps> = ({ href, content }) => 
   }
 
   return (
-    <Text className="text-xs text-text-link dark:text-text-link" onPress={handlePress}>
+    <Text className="text-xs text-text-link" onPress={handlePress}>
       {content}
     </Text>
   )

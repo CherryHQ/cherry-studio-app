@@ -21,11 +21,11 @@ export interface CitationSheetProps {
 
 const CitationTitle = ({ number, title }: { number: number; title: string }) => (
   <XStack className="items-center gap-2.5">
-    <YStack className="h-5 w-5 items-center justify-center rounded-sm border border-green-20 bg-green-10 px-1 py-0.5 dark:border-green-dark-20 dark:bg-green-dark-10">
-      <Text className="text-center text-[10px] text-green-100 dark:text-green-dark-100">{number}</Text>
+    <YStack className="h-5 w-5 items-center justify-center rounded-sm border border-green-20 bg-green-10 px-1 py-0.5">
+      <Text className="text-center text-[10px] text-green-100">{number}</Text>
     </YStack>
     <YStack className="flex-1">
-      <Text className="text-base text-text-primary dark:text-text-primary-dark" numberOfLines={1} ellipsizeMode="tail">
+      <Text className="text-base text-text-primary" numberOfLines={1} ellipsizeMode="tail">
         {title}
       </Text>
     </YStack>
@@ -35,7 +35,7 @@ const CitationTitle = ({ number, title }: { number: number; title: string }) => 
 const Content = ({ content }: { content: string }) => (
   <XStack className="mt-1">
     <Text
-      className="text-sm leading-4 text-text-secondary dark:text-text-secondary-dark"
+      className="text-sm leading-4 text-text-secondary"
       numberOfLines={3}
       ellipsizeMode="tail">
       {content}
@@ -46,7 +46,7 @@ const Content = ({ content }: { content: string }) => (
 const Footer = ({ url, title }: { url: string; title: string }) => (
   <XStack className="mt-1.5 items-center gap-1.5">
     <FallbackFavicon hostname={new URL(url).hostname} alt={title || ''} />
-    <Text className="text-[10px] leading-5 text-text-secondary dark:text-text-secondary-dark">
+    <Text className="text-[10px] leading-5 text-text-secondary">
       {getWebsiteBrand(url)}
     </Text>
   </XStack>
@@ -118,8 +118,8 @@ export const CitationSheet = forwardRef<BottomSheetModal, CitationSheetProps>(({
       backdropComponent={renderBackdrop}
       onDismiss={() => setIsVisible(false)}
       onChange={index => setIsVisible(index >= 0)}>
-      <XStack className="items-center justify-between border-b border-black/10 px-4 pb-4 dark:border-white/10">
-        <Text className="text-base font-bold text-text-primary dark:text-text-primary-dark">{t('common.source')}</Text>
+      <XStack className="items-center justify-between border-b border-black/10 px-4 pb-4">
+        <Text className="text-base font-bold text-text-primary">{t('common.source')}</Text>
         <TouchableOpacity
           style={{
             padding: 4,
@@ -136,7 +136,7 @@ export const CitationSheet = forwardRef<BottomSheetModal, CitationSheetProps>(({
           {citationItems.map((citation, index) => (
             <YStack
               key={`${citation.url}-${index}`}
-              className={`${index < citationItems.length - 1 ? 'border-b border-black/5 dark:border-white/5' : ''}`}>
+              className={`${index < citationItems.length - 1 ? 'border-b border-black/5' : ''}`}>
               <CitationCard citation={citation} onPress={handlePress} />
             </YStack>
           ))}

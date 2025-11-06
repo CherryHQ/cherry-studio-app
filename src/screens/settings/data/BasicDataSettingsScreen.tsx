@@ -235,7 +235,7 @@ export default function BasicDataSettingsScreen() {
         },
         {
           title: isResetting ? t('common.loading') : t('settings.data.reset'),
-          icon: <RotateCcw size={24} className="text-red-500 dark:text-red-500" />,
+          icon: <RotateCcw size={24} className="text-red-500" />,
           danger: true,
           onPress: handleDataReset,
           disabled: isResetting
@@ -257,7 +257,7 @@ export default function BasicDataSettingsScreen() {
         },
         {
           title: t('settings.data.clear_cache.button', { cacheSize }),
-          icon: <Trash2 size={24} className="text-red-500 dark:text-red-500" />,
+          icon: <Trash2 size={24} className="text-red-500" />,
           danger: true,
           onPress: handleClearCache
         }
@@ -318,7 +318,7 @@ function SettingItem({ title, screen, icon, subtitle, danger, onPress, disabled 
       <XStack className="items-center gap-3">
         {icon}
         <YStack>
-          <Text className={danger ? 'text-red-500 dark:text-red-500' : ''}>{title}</Text>
+          <Text className={danger ? 'text-red-500' : ''}>{title}</Text>
           {subtitle && <Text className="text-sm">{subtitle}</Text>}
         </YStack>
       </XStack>

@@ -23,9 +23,9 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({ uri, alt }) => {
       <TouchableOpacity activeOpacity={0.8} onPress={() => !imageError && setVisible(true)} disabled={imageError}>
         {imageError ? (
           <View
-            className="bg-gray-5 dark:bg-gray-dark-5 rounded-2.5 items-center justify-center"
+            className="bg-gray-5 rounded-2.5 items-center justify-center"
             style={{ width: imageWidth, height: imageWidth }}>
-            <ImageOff size={imageWidth * 0.3} className="dark:text-gray-dark-20 text-gray-20" />
+            <ImageOff size={imageWidth * 0.3} className="text-gray-20" />
           </View>
         ) : (
           <Image

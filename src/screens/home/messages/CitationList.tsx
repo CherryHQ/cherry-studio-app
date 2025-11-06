@@ -40,14 +40,14 @@ const CitationsList: React.FC<CitationsListProps> = ({ citations }) => {
   return (
     <YStack className="my-[6px]">
       <TouchableOpacity
-        className="h-7 flex-row items-center gap-2 self-start rounded-lg border border-green-20 bg-green-10 px-2 dark:border-green-dark-20 dark:bg-green-dark-10"
+        className="h-7 flex-row items-center gap-2 self-start rounded-lg border border-green-20 bg-green-10 px-2"
         onPress={handlePress}>
         <View className="flex-row items-center">
           {previewItems.map((c, i) => (
             <PreviewIcon key={i} citation={c} index={i} total={previewItems.length} />
           ))}
         </View>
-        <Text className="text-[10px] text-green-100 dark:text-green-dark-100">{t('chat.citation', { count })}</Text>
+        <Text className="text-[10px] text-green-100">{t('chat.citation', { count })}</Text>
       </TouchableOpacity>
       <CitationSheet ref={bottomSheetModalRef} citations={citations} />
     </YStack>

@@ -26,7 +26,7 @@ export const ToolUseSheet: FC<ToolUseSheetProps> = ({ assistant, updateAssistant
         <SquareFunction
           size={20}
           className={
-            isSelected ? 'text-green-100 dark:text-green-dark-100' : 'text-text-primary dark:text-text-primary-dark'
+            isSelected ? 'text-green-100' : 'text-text-primary'
           }
         />
       ),
@@ -40,7 +40,7 @@ export const ToolUseSheet: FC<ToolUseSheetProps> = ({ assistant, updateAssistant
         <Wrench
           size={20}
           className={
-            isSelected ? 'text-green-100 dark:text-green-dark-100' : 'text-text-primary dark:text-text-primary-dark'
+            isSelected ? 'text-green-100' : 'text-text-primary'
           }
         />
       ),

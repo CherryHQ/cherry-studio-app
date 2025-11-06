@@ -43,7 +43,7 @@ const MultiModelTab: FC<MultiModelTabProps> = ({ assistant, messages, messageBlo
                         {_message.useful && <MultiModalIcon size={14} />}
                         <Tabs.Label
                           className={cn(
-                            currentTab === tabValue ? 'text-green-100 dark:text-green-dark-100' : undefined
+                            currentTab === tabValue ? 'text-green-100' : undefined
                           )}>
                           <MessageHeader message={_message} />
                         </Tabs.Label>

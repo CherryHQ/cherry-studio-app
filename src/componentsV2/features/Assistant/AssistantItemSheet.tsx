@@ -164,7 +164,7 @@ const AssistantItemSheet = forwardRef<BottomSheetModal, AssistantItemSheetProps>
                     borderColor={isDark ? '#333333' : '#ffffff'}
                   />
                 </View>
-                <Text className="text-center text-[22px] font-bold text-text-primary dark:text-text-primary-dark">
+                <Text className="text-center text-[22px] font-bold text-text-primary">
                   {assistant.name}
                 </Text>
                 {assistant.group && assistant.group.length > 0 && (
@@ -173,7 +173,7 @@ const AssistantItemSheet = forwardRef<BottomSheetModal, AssistantItemSheetProps>
                       <GroupTag
                         key={index}
                         group={group}
-                        className="border-[0.5px] border-green-20 bg-green-10 px-2 text-xs text-green-100 dark:border-green-dark-20 dark:bg-green-dark-10 dark:text-green-dark-100"
+                        className="border-[0.5px] border-green-20 bg-green-10 px-2 text-xs text-green-100"
                       />
                     ))}
                   </XStack>
@@ -182,7 +182,7 @@ const AssistantItemSheet = forwardRef<BottomSheetModal, AssistantItemSheetProps>
                   <XStack className="items-center justify-center gap-0.5">
                     <ModelIcon model={assistant.defaultModel} size={14} />
                     <Text
-                      className="text-sm text-text-primary dark:text-text-primary-dark"
+                      className="text-sm text-text-primary"
                       numberOfLines={1}
                       ellipsizeMode="tail">
                       {assistant.defaultModel.name}
@@ -201,10 +201,10 @@ const AssistantItemSheet = forwardRef<BottomSheetModal, AssistantItemSheetProps>
                   {/* Description */}
                   {assistant.description && (
                     <YStack className="gap-1">
-                      <Text className="text-lg font-bold leading-5 text-text-primary dark:text-text-primary-dark">
+                      <Text className="text-lg font-bold leading-5 text-text-primary">
                         {t('common.description')}
                       </Text>
-                      <Text className="leading-5 text-text-secondary dark:text-text-secondary-dark">
+                      <Text className="leading-5 text-text-secondary">
                         {assistant.description}
                       </Text>
                     </YStack>
@@ -213,10 +213,10 @@ const AssistantItemSheet = forwardRef<BottomSheetModal, AssistantItemSheetProps>
                   {/* Additional details could go here */}
                   {assistant.prompt && (
                     <YStack className="gap-1">
-                      <Text className="text-lg font-bold leading-5 text-text-primary dark:text-text-primary-dark">
+                      <Text className="text-lg font-bold leading-5 text-text-primary">
                         {t('common.prompt')}
                       </Text>
-                      <Text className="text-base leading-5 text-text-primary dark:text-text-primary-dark">
+                      <Text className="text-base leading-5 text-text-primary">
                         {assistant.prompt}
                       </Text>
                     </YStack>
@@ -242,10 +242,10 @@ const AssistantItemSheet = forwardRef<BottomSheetModal, AssistantItemSheetProps>
                 </Button>
               )}
               <Button
-                className="flex-1 rounded-[30px] border-green-20 bg-green-10 px-5 py-2.5 dark:border-green-dark-20 dark:bg-green-dark-10"
+                className="flex-1 rounded-[30px] border-green-20 bg-green-10 px-5 py-2.5"
                 onPress={actionButton?.onPress || handleChatPress}>
                 <Button.Label>
-                  <Text className="text-[17px] font-bold text-green-100 dark:text-green-dark-100">
+                  <Text className="text-[17px] font-bold text-green-100">
                     {actionButton?.text || t('assistants.market.button.chat')}
                   </Text>
                 </Button.Label>

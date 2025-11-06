@@ -197,13 +197,13 @@ export default function ProviderSettingsScreen() {
             </XStack>
             <XStack className="items-center gap-2">
               {health && health.latency != null && (
-                <Text className="font-mono text-xs text-text-secondary dark:text-text-secondary-dark">
+                <Text className="font-mono text-xs text-text-secondary">
                   {health.latency.toFixed(2)}s
                 </Text>
               )}
               {getStatusIcon()}
               <IconButton
-                icon={<Minus size={18} className="rounded-full bg-red-20 text-red-100 dark:text-red-100" />}
+                icon={<Minus size={18} className="rounded-full bg-red-20 text-red-100" />}
                 onPress={() => handleRemoveModel(model.id)}
               />
             </XStack>
@@ -277,7 +277,7 @@ export default function ProviderSettingsScreen() {
                   <Text>{t('settings.provider.api_service')}</Text>
                   <XStack className="items-center justify-center">
                     {provider.apiKey && provider.apiHost && (
-                      <Text className="rounded-md border-[0.5px] border-green-20 bg-green-10 px-2 py-0.5 text-xs font-bold text-green-100 dark:text-green-dark-100">
+                      <Text className="rounded-md border-[0.5px] border-green-20 bg-green-10 px-2 py-0.5 text-xs font-bold text-green-100">
                         {t('settings.provider.added')}
                       </Text>
                     )}

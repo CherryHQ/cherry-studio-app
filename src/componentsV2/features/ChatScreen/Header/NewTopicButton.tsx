@@ -83,7 +83,7 @@ export const NewTopicButton: React.FC<NewTopicButtonProps> = ({ assistant }) => 
             <Text
               ellipsizeMode="tail"
               numberOfLines={1}
-              className="text-xs  text-text-secondary dark:text-text-secondary-dark">
+              className="text-xs  text-text-secondary">
               {assistantItem.prompt}
             </Text>
           )}

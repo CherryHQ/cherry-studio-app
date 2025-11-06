@@ -24,7 +24,7 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
   return (
     <Button
       variant="ghost"
-      className="w-full   justify-between bg-ui-card-background px-3  dark:bg-ui-card-background-dark"
+      className="w-full   justify-between bg-ui-card-background px-3"
       onPress={onPress}>
       <Button.Label>
         <XStack className="flex-1 items-center gap-2 overflow-hidden">
@@ -49,7 +49,7 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
           )}
         </XStack>
       </Button.Label>
-      <ChevronDown size={18} className="text-text-secondary opacity-90 dark:text-text-secondary-dark" />
+      <ChevronDown size={18} className="text-text-secondary opacity-90" />
     </Button>
   )
 }
@@ -86,7 +86,7 @@ function AssistantSettingItem({
         <XStack className="items-center justify-between px-[10px]">
           <XStack className="items-center gap-2">
             {icon}
-            <Text className="font-semibold text-text-secondary dark:text-text-secondary-dark">{t(titleKey)}</Text>
+            <Text className="font-semibold text-text-secondary">{t(titleKey)}</Text>
           </XStack>
           <IconButton
             icon={<Settings2 size={16} className="text-text-link" />}
@@ -94,7 +94,7 @@ function AssistantSettingItem({
           />
         </XStack>
         <ModelPicker assistant={assistant} onPress={() => sheetRef.current?.present()} />
-        <Text className="px-[10px] text-text-secondary opacity-70 dark:text-text-secondary-dark">
+        <Text className="px-[10px] text-text-secondary opacity-70">
           {t(descriptionKey)}
         </Text>
       </YStack>
@@ -133,7 +133,7 @@ export default function AssistantSettingsScreen() {
       descriptionKey: 'settings.assistant.default_assistant.description',
       assistant: defaultAssistant,
       updateAssistant: updateDefaultAssistant,
-      icon: <MessageSquareMore size={16} className="text-text-secondary dark:text-text-secondary-dark" />
+      icon: <MessageSquareMore size={16} className="text-text-secondary" />
     },
     {
       id: 'quick',
@@ -141,7 +141,7 @@ export default function AssistantSettingsScreen() {
       descriptionKey: 'settings.assistant.quick_assistant.description',
       assistant: quickAssistant,
       updateAssistant: updateQuickAssistant,
-      icon: <Rocket size={16} className="text-text-secondary dark:text-text-secondary-dark" />
+      icon: <Rocket size={16} className="text-text-secondary" />
     },
     {
       id: 'translate',
@@ -149,7 +149,7 @@ export default function AssistantSettingsScreen() {
       descriptionKey: 'settings.assistant.translate_assistant.description',
       assistant: translateAssistant,
       updateAssistant: updateTranslateAssistant,
-      icon: <Languages size={16} className="text-text-secondary dark:text-text-secondary-dark" />
+      icon: <Languages size={16} className="text-text-secondary" />
     }
   ]
 
