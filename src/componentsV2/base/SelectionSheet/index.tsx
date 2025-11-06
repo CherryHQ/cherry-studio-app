@@ -1,12 +1,13 @@
 import { BottomSheetBackdrop, BottomSheetModal, useBottomSheetScrollableCreator } from '@gorhom/bottom-sheet'
 import { LegendList } from '@legendapp/list'
-import { cn, useTheme } from 'heroui-native'
+import { cn,  } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
 import { BackHandler, TouchableOpacity, View } from 'react-native'
 
 import { Check } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
+import { useTheme } from '@/hooks/useTheme'
 
 import Text from '../Text'
 

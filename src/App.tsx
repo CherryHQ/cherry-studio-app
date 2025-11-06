@@ -10,7 +10,7 @@ import { useDrizzleStudio } from 'expo-drizzle-studio-plugin'
 import { useFonts } from 'expo-font'
 import * as SplashScreen from 'expo-splash-screen'
 import { SQLiteProvider } from 'expo-sqlite'
-import { HeroUINativeProvider, useTheme as useHerouiTheme } from 'heroui-native'
+import { HeroUINativeProvider } from 'heroui-native'
 import React, { Suspense, useEffect } from 'react'
 import { ActivityIndicator } from 'react-native'
 import { SystemBars } from 'react-native-edge-to-edge'
@@ -88,11 +88,10 @@ function DatabaseInitializer({ children }: { children: React.ReactNode }) {
 
 // 主题和导航组件
 function ThemedApp() {
-  const { themeSetting } = useTheme()
-  const { isDark } = useHerouiTheme()
+  const { activeTheme, isDark } = useTheme()
 
   return (
-    <HeroUINativeProvider config={{ colorScheme: themeSetting }}>
+    <HeroUINativeProvider>
       <KeyboardProvider>
         <NavigationContainer theme={isDark ? DarkTheme : DefaultTheme}>
           <SystemBars style={isDark ? 'dark' : 'light'} />

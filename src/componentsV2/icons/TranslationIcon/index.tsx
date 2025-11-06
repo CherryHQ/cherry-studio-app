@@ -1,6 +1,7 @@
-import { useTheme } from 'heroui-native'
 import React from 'react'
 import Svg, { Path } from 'react-native-svg'
+
+import { useTheme } from '@/hooks/useTheme'
 
 import type { IconProps } from '../types'
 

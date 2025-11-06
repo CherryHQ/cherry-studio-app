@@ -1,7 +1,7 @@
-import { useTheme } from 'heroui-native'
 import React from 'react'
 
 import Image from '@/componentsV2/base/Image'
+import { useTheme } from '@/hooks/useTheme'
 import type { WebSearchProvider } from '@/types/websearch'
 import { getWebSearchProviderIcon } from '@/utils/icons/websearch'
 

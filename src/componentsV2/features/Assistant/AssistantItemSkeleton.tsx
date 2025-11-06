@@ -1,8 +1,9 @@
-import { useTheme } from 'heroui-native'
 import type { FC } from 'react'
 import React from 'react'
 import ContentLoader, { Rect } from 'react-content-loader/native'
 import { View } from 'react-native'
+
+import { useTheme } from '@/hooks/useTheme'
 
 const AssistantItemSkeleton: FC = () => {
   const { isDark } = useTheme()

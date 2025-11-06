@@ -1,9 +1,9 @@
 import { BlurView } from 'expo-blur'
-import { useTheme } from 'heroui-native'
 import React, { memo } from 'react'
 import { Platform, Pressable, View } from 'react-native'
 
 import { Text, XStack, YStack } from '@/componentsV2'
+import { useTheme } from '@/hooks/useTheme'
 import type { Assistant } from '@/types/assistant'
 import { formateEmoji } from '@/utils/formats'
 

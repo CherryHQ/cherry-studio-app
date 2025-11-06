@@ -1,6 +1,5 @@
 import type { RouteProp } from '@react-navigation/native'
 import { useRoute } from '@react-navigation/native'
-import { useTheme } from 'heroui-native'
 import React from 'react'
 import { ActivityIndicator } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
@@ -8,6 +7,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaContainer, YStack } from '@/componentsV2'
 import { ToolTabContent } from '@/componentsV2/features/Assistant/ToolTabContent'
 import { useAssistant } from '@/hooks/useAssistant'
+import { useTheme } from '@/hooks/useTheme'
 import type { AssistantDetailTabParamList } from '@/navigators/AssistantDetailTabNavigator'
 
 type ToolTabRouteProp = RouteProp<AssistantDetailTabParamList, 'ToolTab'>

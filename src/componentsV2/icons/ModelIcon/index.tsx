@@ -1,7 +1,7 @@
-import { useTheme } from 'heroui-native'
 import React from 'react'
 
 import Image from '@/componentsV2/base/Image'
+import { useTheme } from '@/hooks/useTheme'
 import type { Model } from '@/types/assistant'
 import { getModelOrProviderIcon } from '@/utils/icons'
 

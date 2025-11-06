@@ -1,4 +1,4 @@
-import { Button, cn, ErrorView, Spinner, useTheme } from 'heroui-native'
+import { Button, cn, ErrorView, Spinner,  } from 'heroui-native'
 import { MotiView } from 'moti'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +8,7 @@ import Text from '@/componentsV2/base/Text'
 import { CircleCheck, TriangleAlert, XCircle } from '@/componentsV2/icons/LucideIcon'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
+import { useTheme } from '@/hooks/useTheme'
 import type { RestoreStepId, StepStatus } from '@/services/BackupService'
 
 export interface RestoreStep {

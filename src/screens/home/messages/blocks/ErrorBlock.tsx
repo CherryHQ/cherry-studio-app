@@ -1,6 +1,5 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import * as Clipboard from 'expo-clipboard'
-import { useTheme } from 'heroui-native'
 import React, { forwardRef, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, ScrollView, TouchableOpacity, View } from 'react-native'
@@ -8,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Text, XStack, YStack } from '@/componentsV2'
 import { Copy } from '@/componentsV2/icons/LucideIcon'
+import { useTheme } from '@/hooks/useTheme'
 import { getHttpMessageLabel } from '@/i18n/label'
 import type { SerializedAiSdkError, SerializedAiSdkErrorUnion, SerializedError } from '@/types/error'
 import {

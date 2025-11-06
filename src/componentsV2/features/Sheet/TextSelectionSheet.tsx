@@ -1,5 +1,4 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
-import { useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Platform, TouchableOpacity } from 'react-native'
@@ -9,6 +8,7 @@ import TextField from '@/componentsV2/base/TextField'
 import { X } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
+import { useTheme } from '@/hooks/useTheme'
 
 interface TextSelectionSheetProps {
   content: string

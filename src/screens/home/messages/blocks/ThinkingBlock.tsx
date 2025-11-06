@@ -1,9 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient'
-import { useTheme } from 'heroui-native'
 import React, { useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 
 import { MarqueeComponent } from '@/componentsV2'
+import { useTheme } from '@/hooks/useTheme'
 import type { ThinkingMessageBlock } from '@/types/message'
 
 import ReactNativeMarkdown from '../../markdown/ReactNativeMarkdown'

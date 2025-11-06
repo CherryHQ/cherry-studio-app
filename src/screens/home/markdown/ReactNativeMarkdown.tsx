@@ -1,4 +1,3 @@
-import { useTheme } from 'heroui-native'
 import { isEmpty } from 'lodash'
 import type { FC } from 'react'
 import React, { memo } from 'react'
@@ -6,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 import Markdown from 'react-native-marked'
 
+import { useTheme } from '@/hooks/useTheme'
 import type { MainTextMessageBlock, ThinkingMessageBlock, TranslationMessageBlock } from '@/types/message'
 import { escapeBrackets, removeSvgEmptyLines } from '@/utils/formats'
 

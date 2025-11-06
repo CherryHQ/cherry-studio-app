@@ -1,9 +1,10 @@
-import { cn, useTheme } from 'heroui-native'
+import { cn } from 'heroui-native'
 import { AnimatePresence, MotiView } from 'moti'
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
+import { useTheme } from '@/hooks/useTheme'
 import { uuid } from '@/utils'
 
 export type ToastOptions = {

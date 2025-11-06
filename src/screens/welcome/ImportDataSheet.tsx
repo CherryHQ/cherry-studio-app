@@ -1,7 +1,6 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet'
 import { useNavigation } from '@react-navigation/native'
 import * as DocumentPicker from 'expo-document-picker'
-import { useTheme } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler } from 'react-native'
@@ -10,6 +9,7 @@ import { Container, Group, PressableRow, RestoreProgressModal, Text, XStack } fr
 import { Folder, Wifi } from '@/componentsV2/icons'
 import { useBottom } from '@/hooks/useBottom'
 import { DEFAULT_RESTORE_STEPS, useRestore } from '@/hooks/useRestore'
+import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
 import type { WelcomeNavigationProps } from '@/types/naviagate'
 

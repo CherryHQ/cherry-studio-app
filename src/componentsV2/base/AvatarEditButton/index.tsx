@@ -1,11 +1,11 @@
 import { LinearGradient } from 'expo-linear-gradient'
-import { useTheme } from 'heroui-native'
 import React from 'react'
 import { TouchableOpacity } from 'react-native'
 import type { EmojiType } from 'rn-emoji-keyboard'
 import EmojiPicker from 'rn-emoji-keyboard'
 
 import YStack from '@/componentsV2/layout/YStack'
+import { useTheme } from '@/hooks/useTheme'
 
 import Text from '../Text'
 

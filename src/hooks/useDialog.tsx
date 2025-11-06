@@ -1,4 +1,4 @@
-import { Button, cn, useTheme } from 'heroui-native'
+import { Button, cn,  } from 'heroui-native'
 import { MotiView } from 'moti'
 import React, { createContext, useContext, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -7,6 +7,7 @@ import { Modal, Pressable } from 'react-native'
 import Text from '@/componentsV2/base/Text'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
+import { useTheme } from '@/hooks/useTheme'
 
 export type DialogOptions = {
   title?: React.ReactNode | string

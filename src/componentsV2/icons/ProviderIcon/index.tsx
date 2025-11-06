@@ -1,11 +1,11 @@
 import { File, Paths } from 'expo-file-system'
-import { useTheme } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
 import type { ImageRequireSource } from 'react-native'
 
 import Image from '@/componentsV2/base/Image'
 import YStack from '@/componentsV2/layout/YStack'
 import { DEFAULT_ICONS_STORAGE } from '@/constants/storage'
+import { useTheme } from '@/hooks/useTheme'
 import type { Provider } from '@/types/assistant'
 import { getProviderIcon } from '@/utils/icons/'
 
