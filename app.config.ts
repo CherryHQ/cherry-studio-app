@@ -25,7 +25,8 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.cherry-ai.cherry-studio-app',
-      userInterfaceStyle: 'automatic'
+      userInterfaceStyle: 'automatic',
+      usesNonExemptEncryption: false
     },
     android: {
       adaptiveIcon: {
@@ -132,6 +133,13 @@ export default {
         {
           calendarPermission: 'Allow Cherry Studio App to access your calendar.',
           remindersPermission: 'Allow Cherry Studio App to access your reminders.'
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": "Allow $(PRODUCT_NAME) to access your Face ID biometric data."
         }
       ],
       ['react-native-compressor'],

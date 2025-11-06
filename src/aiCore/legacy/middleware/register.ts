@@ -2,7 +2,6 @@ import * as AbortHandlerModule from './common/AbortHandlerMiddleware'
 import * as ErrorHandlerModule from './common/ErrorHandlerMiddleware'
 import * as FinalChunkConsumerModule from './common/FinalChunkConsumerMiddleware'
 import * as LoggingModule from './common/LoggingMiddleware'
-import * as McpToolChunkModule from './core/McpToolChunkMiddleware'
 import * as RawStreamListenerModule from './core/RawStreamListenerMiddleware'
 import * as ResponseTransformModule from './core/ResponseTransformMiddleware'
 // import * as SdkCallModule from './core/SdkCallMiddleware'
@@ -69,10 +68,6 @@ export const MiddlewareRegistry = {
     name: ThinkChunkModule.MIDDLEWARE_NAME,
     middleware: ThinkChunkModule.ThinkChunkMiddleware
   },
-  [McpToolChunkModule.MIDDLEWARE_NAME]: {
-    name: McpToolChunkModule.MIDDLEWARE_NAME,
-    middleware: McpToolChunkModule.McpToolChunkMiddleware
-  },
   [WebSearchModule.MIDDLEWARE_NAME]: {
     name: WebSearchModule.MIDDLEWARE_NAME,
     middleware: WebSearchModule.WebSearchMiddleware
@@ -112,7 +107,6 @@ export const DefaultCompletionsNamedMiddlewares = [
   MiddlewareRegistry[ErrorHandlerModule.MIDDLEWARE_NAME], // 错误处理
   MiddlewareRegistry[TransformCoreToSdkParamsModule.MIDDLEWARE_NAME], // 参数转换
   MiddlewareRegistry[AbortHandlerModule.MIDDLEWARE_NAME], // 中止处理
-  MiddlewareRegistry[McpToolChunkModule.MIDDLEWARE_NAME], // 工具处理
   MiddlewareRegistry[TextChunkModule.MIDDLEWARE_NAME], // 文本处理
   MiddlewareRegistry[WebSearchModule.MIDDLEWARE_NAME], // Web搜索处理
   MiddlewareRegistry[ToolUseExtractionMiddleware.MIDDLEWARE_NAME], // 工具使用提取处理
@@ -138,7 +132,6 @@ export {
   AbortHandlerModule,
   FinalChunkConsumerModule,
   LoggingModule,
-  McpToolChunkModule,
   ResponseTransformModule,
   StreamAdapterModule,
   TextChunkModule,

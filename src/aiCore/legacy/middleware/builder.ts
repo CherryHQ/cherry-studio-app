@@ -67,13 +67,11 @@ export class MiddlewareBuilder<TMiddleware = any> {
    */
   insertAfter(targetName: string, middlewareToInsert: NamedMiddleware<TMiddleware>): this {
     const index = this.findMiddlewareIndex(targetName)
-
     if (index !== -1) {
       this.middlewares.splice(index + 1, 0, middlewareToInsert)
     } else {
       logger.warn(`未找到名为 '${targetName}' 的中间件，无法插入`)
     }
-
     return this
   }
 
@@ -85,13 +83,11 @@ export class MiddlewareBuilder<TMiddleware = any> {
    */
   insertBefore(targetName: string, middlewareToInsert: NamedMiddleware<TMiddleware>): this {
     const index = this.findMiddlewareIndex(targetName)
-
     if (index !== -1) {
       this.middlewares.splice(index, 0, middlewareToInsert)
     } else {
       logger.warn(`未找到名为 '${targetName}' 的中间件，无法插入`)
     }
-
     return this
   }
 
@@ -103,13 +99,11 @@ export class MiddlewareBuilder<TMiddleware = any> {
    */
   replace(targetName: string, newMiddleware: NamedMiddleware<TMiddleware>): this {
     const index = this.findMiddlewareIndex(targetName)
-
     if (index !== -1) {
       this.middlewares[index] = newMiddleware
     } else {
       logger.warn(`未找到名为 '${targetName}' 的中间件，无法替换`)
     }
-
     return this
   }
 
@@ -120,11 +114,9 @@ export class MiddlewareBuilder<TMiddleware = any> {
    */
   remove(targetName: string): this {
     const index = this.findMiddlewareIndex(targetName)
-
     if (index !== -1) {
       this.middlewares.splice(index, 1)
     }
-
     return this
   }
 

@@ -1,4 +1,3 @@
-import { File } from 'expo-file-system'
 import { isEmpty } from 'lodash'
 
 import {
@@ -7,24 +6,33 @@ import {
   isOpenAIModel,
   isSupportFlexServiceTierModel
 } from '@/config/models'
-import { REFERENCE_PROMPT } from '@/config/prompts'
 import { isSupportServiceTierProvider } from '@/config/providers'
 import { defaultTimeout } from '@/constants'
 import { getAssistantSettings } from '@/services/AssistantService'
+import { fileService } from '@/services/FileService'
+import { keyValueService } from '@/services/KeyValueService'
 import { loggerService } from '@/services/LoggerService'
-import type { Assistant, Model, OpenAIVerbosity, Provider } from '@/types/assistant'
+import type {
+  Assistant,
+  GenerateImageParams,
+  MCPCallToolResponse,
+  MCPTool,
+  MCPToolResponse,
+  Message,
+  // MemoryItem,
+  Model,
+  OpenAIVerbosity,
+  Provider,
+  ToolCallResponse
+} from '@/types'
 import {
+  FileTypes,
   GroqServiceTiers,
   isGroqServiceTier,
   isOpenAIServiceTier,
   OpenAIServiceTiers,
   SystemProviderIds
-} from '@/types/assistant'
-import { FileTypes } from '@/types/file'
-import type { GenerateImageParams } from '@/types/image'
-import type { KnowledgeReference } from '@/types/knowledge'
-import type { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
-import type { Message } from '@/types/message'
+} from '@/types'
 import type {
   RequestOptions,
   SdkInstance,
@@ -36,9 +44,6 @@ import type {
   SdkTool,
   SdkToolCall
 } from '@/types/sdk'
-import type { MCPTool } from '@/types/tool'
-import type { WebSearchProviderResponse, WebSearchResponse } from '@/types/websearch'
-import { storage } from '@/utils'
 import { addAbortController, removeAbortController } from '@/utils/abortController'
 import { isJSON, parseJSON } from '@/utils/json'
 import { findFileBlocks, getMainTextContent } from '@/utils/messageUtils/find'
@@ -64,13 +69,19 @@ export abstract class BaseApiClient<
 {
   public provider: Provider
   protected host: string
-  protected apiKey: string
   protected sdkInstance?: TSdkInstance
 
   constructor(provider: Provider) {
     this.provider = provider
     this.host = this.getBaseURL()
-    this.apiKey = this.getApiKey()
+  }
+
+  /**
+   * Get the current API key with rotation support
+   * This getter ensures API keys rotate on each access when multiple keys are configured
+   */
+  protected get apiKey(): string {
+    return this.getApiKey()
   }
 
   /**
@@ -78,7 +89,7 @@ export abstract class BaseApiClient<
    * 用于判断客户端是否支持特定功能，避免instanceof检查的类型收窄问题
    * 对于装饰器模式的客户端（如AihubmixAPIClient），应该返回其内部实际使用的客户端类型
    */
-
+  // oxlint-disable-next-line @typescript-eslint/no-unused-vars
   public getClientCompatibilityType(_model?: Model): string[] {
     // 默认返回类的名称
     return [this.constructor.name]
@@ -158,31 +169,28 @@ export abstract class BaseApiClient<
       return keys[0]
     }
 
-    const lastUsedKey = storage.getString(keyName)
-
+    const lastUsedKey = keyValueService.get<string>(keyName)
     if (!lastUsedKey) {
-      storage.set(keyName, keys[0])
+      keyValueService.set(keyName, keys[0])
       return keys[0]
     }
 
     const currentIndex = keys.indexOf(lastUsedKey)
     const nextIndex = (currentIndex + 1) % keys.length
     const nextKey = keys[nextIndex]
-    storage.set(keyName, nextKey)
+    keyValueService.set(keyName, nextKey)
 
     return nextKey
   }
 
   public defaultHeaders() {
     return {
-      'HTTP-Referer': 'https://cherry-ai.com',
-      'X-Title': 'Cherry Studio',
       'X-Api-Key': this.apiKey
     }
   }
 
   public get keepAliveTime() {
-    // return this.provider.id === 'lmstudio' ? getLMStudioKeepAliveTime() : undefined
+    // LMStudio keep-alive time is not supported in mobile version
     return undefined
   }
 
@@ -190,7 +198,6 @@ export abstract class BaseApiClient<
     if (isNotSupportTemperatureAndTopP(model)) {
       return undefined
     }
-
     const assistantSettings = getAssistantSettings(assistant)
     return assistantSettings?.enableTemperature ? assistantSettings?.temperature : undefined
   }
@@ -199,7 +206,6 @@ export abstract class BaseApiClient<
     if (isNotSupportTemperatureAndTopP(model)) {
       return undefined
     }
-
     const assistantSettings = getAssistantSettings(assistant)
     return assistantSettings?.enableTopP ? assistantSettings?.topP : undefined
   }
@@ -235,15 +241,14 @@ export abstract class BaseApiClient<
 
   protected getVerbosity(): OpenAIVerbosity {
     try {
-      // const state = window.store?.getState()
-      // const verbosity = state?.settings?.openAI?.verbosity
-      const verbosity = 'medium'
+      // Try to get verbosity from key-value storage
+      const verbosity = keyValueService.get<OpenAIVerbosity>('settings:openai:verbosity')
 
       if (verbosity && ['low', 'medium', 'high'].includes(verbosity)) {
         return verbosity
       }
     } catch (error) {
-      logger.warn('Failed to get verbosity from state:', error as Error)
+      logger.warn('Failed to get verbosity from storage:', error as Error)
     }
 
     return 'medium'
@@ -253,7 +258,6 @@ export abstract class BaseApiClient<
     if (isSupportFlexServiceTierModel(model)) {
       return 15 * 1000 * 60
     }
-
     return defaultTimeout
   }
 
@@ -269,18 +273,34 @@ export abstract class BaseApiClient<
       }
     }
 
-    const webSearchReferences = await this.getWebSearchReferencesFromCache(message)
+    // const webSearchReferences = await this.getWebSearchReferencesFromCache(message)
+    // const knowledgeReferences = await this.getKnowledgeBaseReferencesFromCache(message)
+    // const memoryReferences = this.getMemoryReferencesFromCache(message)
 
-    const allReferences = [...webSearchReferences]
+    // const knowledgeTextReferences = knowledgeReferences.filter(k => k.metadata?.type !== 'image')
+    // const knowledgeImageReferences = knowledgeReferences.filter(k => k.metadata?.type === 'image')
 
-    logger.debug(`Found ${allReferences.length} references for ID: ${message.id}`, allReferences)
+    // 添加偏移量以避免ID冲突
+    // const reindexedKnowledgeReferences = knowledgeTextReferences.map(ref => ({
+    //   ...ref,
+    //   id: ref.id + webSearchReferences.length // 为知识库引用的ID添加网络搜索引用的数量作为偏移量
+    // }))
 
-    const referenceContent = `\`\`\`json\n${JSON.stringify(allReferences, null, 2)}\n\`\`\``
+    // const allReferences = [...webSearchReferences, ...reindexedKnowledgeReferences, ...memoryReferences]
+
+    // logger.debug(`Found ${allReferences.length} references for ID: ${message.id}`, allReferences)
+
+    // const referenceContent = `\`\`\`json\n${JSON.stringify(allReferences, null, 2)}\n\`\`\``
+    // const imageReferences = knowledgeImageReferences.map(r => {
+    //   return { fileId: r.metadata?.id, fileExt: r.metadata?.ext }
+    // })
+
+    // isEmpty(allReferences)
+    //     ? content
+    //     : REFERENCE_PROMPT.replace('{question}', content).replace('{references}', referenceContent)
 
     return {
-      textContent: isEmpty(allReferences)
-        ? content
-        : REFERENCE_PROMPT.replace('{question}', content).replace('{references}', referenceContent),
+      textContent: content,
       imageContents: []
     }
   }
@@ -292,7 +312,6 @@ export abstract class BaseApiClient<
    */
   protected async extractFileContent(message: Message) {
     const fileBlocks = await findFileBlocks(message)
-
     if (fileBlocks.length > 0) {
       const textFileBlocks = fileBlocks.filter(
         fb => fb.file && [FileTypes.TEXT, FileTypes.DOCUMENT].includes(fb.file.type)
@@ -304,7 +323,7 @@ export abstract class BaseApiClient<
 
         for (const fileBlock of textFileBlocks) {
           const file = fileBlock.file
-          const fileContent = new File(file.path).textSync().trim()
+          const fileContent = fileService.readFile(file).trim()
           const fileNameRow = 'file: ' + file.origin_name + '\n\n'
           text = text + fileNameRow + fileContent + divider
         }
@@ -316,31 +335,61 @@ export abstract class BaseApiClient<
     return ''
   }
 
-  private async getWebSearchReferencesFromCache(message: Message) {
-    const content = getMainTextContent(message)
+  // private getMemoryReferencesFromCache(message: Message) {
+  //   const memories = window.keyv.get(`memory-search-${message.id}`) as MemoryItem[] | undefined
+  //   if (memories) {
+  //     const memoryReferences: KnowledgeReference[] = memories.map((mem, index) => ({
+  //       id: index + 1,
+  //       content: `${mem.memory} -- Created at: ${mem.createdAt}`,
+  //       sourceUrl: '',
+  //       type: 'memory'
+  //     }))
+  //     return memoryReferences
+  //   }
+  //   return []
+  // }
 
-    if (isEmpty(content)) {
-      return []
-    }
+  // private async getWebSearchReferencesFromCache(message: Message) {
+  //   const content = getMainTextContent(message)
+  //   if (isEmpty(content)) {
+  //     return []
+  //   }
+  //   const webSearch: WebSearchResponse = window.keyv.get(`web-search-${message.id}`)
 
-    // might parse error
-    const webSearch: WebSearchResponse = JSON.parse(storage.getString(`web-search-${message.id}`) || '')
+  //   if (webSearch) {
+  //     window.keyv.remove(`web-search-${message.id}`)
+  //     return (webSearch.results as WebSearchProviderResponse).results.map(
+  //       (result, index) =>
+  //         ({
+  //           id: index + 1,
+  //           content: result.content,
+  //           sourceUrl: result.url,
+  //           type: 'url'
+  //         }) as KnowledgeReference
+  //     )
+  //   }
 
-    if (webSearch) {
-      storage.delete(`web-search-${message.id}`)
-      return (webSearch.results as WebSearchProviderResponse).results.map(
-        (result, index) =>
-          ({
-            id: index + 1,
-            content: result.content,
-            sourceUrl: result.url,
-            type: 'url'
-          }) as KnowledgeReference
-      )
-    }
+  //   return []
+  // }
 
-    return []
-  }
+  /**
+   * 从缓存中获取知识库引用
+   */
+  // private async getKnowledgeBaseReferencesFromCache(message: Message): Promise<KnowledgeReference[]> {
+  //   const content = getMainTextContent(message)
+  //   if (isEmpty(content)) {
+  //     return []
+  //   }
+  //   const knowledgeReferences: KnowledgeReference[] = window.keyv.get(`knowledge-search-${message.id}`)
+
+  //   if (!isEmpty(knowledgeReferences)) {
+  //     window.keyv.remove(`knowledge-search-${message.id}`)
+  //     logger.debug(`Found ${knowledgeReferences.length} knowledge base references in cache for ID: ${message.id}`)
+  //     return knowledgeReferences
+  //   }
+  //   logger.debug(`No knowledge base references found in cache for ID: ${message.id}`)
+  //   return []
+  // }
 
   protected getCustomParameters(assistant: Assistant) {
     return (
@@ -348,17 +397,13 @@ export abstract class BaseApiClient<
         if (!param.name?.trim()) {
           return acc
         }
-
         if (param.type === 'json') {
           const value = param.value as string
-
           if (value === 'undefined') {
             return { ...acc, [param.name]: undefined }
           }
-
           return { ...acc, [param.name]: isJSON(value) ? parseJSON(value) : value }
         }
-
         return {
           ...acc,
           [param.name]: param.value
@@ -381,7 +426,6 @@ export abstract class BaseApiClient<
         removeAbortController(messageId, abortFn)
       }
     }
-
     const signalPromise: {
       resolve: (value: unknown) => void
       promise: Promise<unknown>
@@ -393,11 +437,9 @@ export abstract class BaseApiClient<
     if (isAddEventListener) {
       signalPromise.promise = new Promise((resolve, reject) => {
         signalPromise.resolve = resolve
-
         if (abortController.signal.aborted) {
           reject(new Error('Request was aborted.'))
         }
-
         // 捕获abort事件,有些abort事件必须
         abortController.signal.addEventListener('abort', () => {
           reject(new Error('Request was aborted.'))
@@ -409,7 +451,6 @@ export abstract class BaseApiClient<
         signalPromise
       }
     }
-
     return {
       abortController,
       cleanup

@@ -1,7 +1,9 @@
 import structuredClone from '@ungap/structured-clone'
 import { Platform } from 'react-native'
 
+// Polyfill crypto module for Node.js style require('crypto')
 if (Platform.OS !== 'web') {
+
   const setupPolyfills = async () => {
     const { polyfillGlobal } = await import('react-native/Libraries/Utilities/PolyfillFunctions')
 

@@ -1,7 +1,7 @@
 import type { ContentBlockParam, MessageParam, ToolUnion, ToolUseBlock } from '@anthropic-ai/sdk/resources'
+import type OpenAI from '@cherrystudio/openai'
 import type { Content, FunctionCall, Part, Tool } from '@google/genai'
 import { Type as GeminiSchemaType } from '@google/genai'
-import type OpenAI from 'openai'
 import type {
   ChatCompletionContentPart,
   ChatCompletionMessageParam,

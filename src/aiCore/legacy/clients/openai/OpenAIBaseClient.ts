@@ -1,4 +1,4 @@
-import OpenAI, { AzureOpenAI } from 'openai'
+import OpenAI, { AzureOpenAI } from '@cherrystudio/openai'
 
 import {
   isClaudeReasoningModel,
@@ -6,10 +6,14 @@ import {
   isSupportedModel,
   isSupportedReasoningEffortOpenAIModel
 } from '@/config/models'
+import { COPILOT_DEFAULT_HEADERS } from '@/constants/copilot'
+import { getStoreSetting } from '@/hooks/useSettings'
 import { getAssistantSettings } from '@/services/AssistantService'
+import CopilotService from '@/services/CopilotService'
 import { loggerService } from '@/services/LoggerService'
-import type { Assistant, Model } from '@/types/assistant'
-import type { GenerateImageParams } from '@/types/image'
+import store from '@/store'
+import type { SettingsState } from '@/store/settings'
+import { type Assistant, type GenerateImageParams, type Model,SystemProviderIds } from '@/types'
 import type {
   OpenAIResponseSdkMessageParam,
   OpenAIResponseSdkParams,
@@ -94,7 +98,6 @@ export abstract class OpenAIBaseClient<
   override async listModels(): Promise<OpenAI.Models.Model[]> {
     try {
       const sdk = await this.getSdkInstance()
-
       if (this.provider.id === 'github') {
         // GitHub Models 其 models 和 chat completions 两个接口的 baseUrl 不一样
         const baseUrl = 'https://models.github.ai/catalog/'
@@ -111,9 +114,7 @@ export abstract class OpenAIBaseClient<
           }))
           .filter(isSupportedModel)
       }
-
       const response = await sdk.models.list()
-
       if (this.provider.id === 'together') {
         // @ts-ignore key is not typed
         return response?.body.map(model => ({
@@ -123,7 +124,6 @@ export abstract class OpenAIBaseClient<
           owned_by: model.organization
         }))
       }
-
       const models = response.data || []
       models.forEach(model => {
         model.id = model.id.trim()
@@ -141,15 +141,15 @@ export abstract class OpenAIBaseClient<
       return this.sdkInstance
     }
 
-    const apiKeyForSdkInstance = this.apiKey
+    let apiKeyForSdkInstance = this.apiKey
 
-    // if (this.provider.id === 'copilot') {
-    //   const defaultHeaders = store.getState().copilot.defaultHeaders
-    //   const { token } = await window.api.copilot.getToken(defaultHeaders)
-    //   // this.provider.apiKey不允许修改
-    //   // this.provider.apiKey = token
-    //   apiKeyForSdkInstance = token
-    // }
+    if (this.provider.id === SystemProviderIds.copilot) {
+      const defaultHeaders = store.getState().copilot.defaultHeaders
+      const { token } = await CopilotService.getToken(defaultHeaders)
+      // this.provider.apiKey不允许修改
+      // this.provider.apiKey = token
+      apiKeyForSdkInstance = token
+    }
 
     if (this.provider.id === 'azure-openai' || this.provider.type === 'azure-openai') {
       this.sdkInstance = new AzureOpenAI({
@@ -166,12 +166,10 @@ export abstract class OpenAIBaseClient<
         defaultHeaders: {
           ...this.defaultHeaders(),
           ...this.provider.extra_headers,
-          ...(this.provider.id === 'copilot' ? { 'editor-version': 'vscode/1.97.2' } : {}),
-          ...(this.provider.id === 'copilot' ? { 'copilot-vision-request': 'true' } : {})
+          ...(this.provider.id === 'copilot' ? COPILOT_DEFAULT_HEADERS : {})
         }
       }) as TSdkInstance
     }
-
     return this.sdkInstance
   }
 
@@ -179,7 +177,6 @@ export abstract class OpenAIBaseClient<
     if (assistant.settings?.reasoning_effort && isClaudeReasoningModel(model)) {
       return undefined
     }
-
     return super.getTemperature(assistant, model)
   }
 
@@ -187,7 +184,6 @@ export abstract class OpenAIBaseClient<
     if (assistant.settings?.reasoning_effort && isClaudeReasoningModel(model)) {
       return undefined
     }
-
     return super.getTopP(assistant, model)
   }
 
@@ -229,9 +225,8 @@ export abstract class OpenAIBaseClient<
       return {}
     }
 
-    // const openAI = getStoreSetting('openAI') as SettingsState['openAI']
-    // const summaryText = openAI?.summaryText || 'off'
-    const summaryText = 'off'
+    const openAI = getStoreSetting('openAI') as SettingsState['openAI']
+    const summaryText = openAI?.summaryText || 'off'
 
     let summary: string | undefined = undefined
 
@@ -242,7 +237,6 @@ export abstract class OpenAIBaseClient<
     }
 
     const reasoningEffort = assistant?.settings?.reasoning_effort
-
     if (!reasoningEffort) {
       return {}
     }

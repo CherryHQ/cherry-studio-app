@@ -1,5 +1,12 @@
+import { Paths } from 'expo-file-system'
+
 import { audioExts, documentExts, imageExts, KB, MB, textExts, videoExts } from '@/constants'
 import { FileTypes } from '@/types/file'
+
+export function getConfigDir() {
+  // In Expo, use the document directory for config storage
+  return Paths.join(Paths.document, '.cherrystudioapp', 'config')
+}
 
 /**
  * 格式化文件大小，根据大小返回以 MB 或 KB 为单位的字符串。

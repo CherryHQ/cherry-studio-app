@@ -1,7 +1,7 @@
-import type OpenAI from 'openai'
+import type OpenAI from '@cherrystudio/openai'
 
 import { loggerService } from '@/services/LoggerService'
-import type { GenerateImageParams } from '@/types/image'
+import type { GenerateImageParams } from '@/types'
 
 import { OpenAIAPIClient } from '../openai/OpenAIApiClient'
 
@@ -32,7 +32,6 @@ export class ZhipuAPIClient extends OpenAIAPIClient {
     // 智谱AI特有的参数格式
     body.size = imageSize
     body.n = batchSize
-
     if (negativePrompt) {
       body.negative_prompt = negativePrompt
     }
@@ -42,7 +41,6 @@ export class ZhipuAPIClient extends OpenAIAPIClient {
       if (quality) {
         body.quality = quality
       }
-
       body.style = 'vivid'
     }
 

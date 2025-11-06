@@ -1,9 +1,10 @@
-import { File } from 'expo-file-system'
-import type OpenAI from 'openai'
-import { toFile } from 'openai/uploads'
+import type OpenAI from '@cherrystudio/openai'
+import { toFile } from '@cherrystudio/openai/uploads'
+import { Buffer } from 'buffer'
 
 import { isDedicatedImageGenerationModel } from '@/config/models'
 import { defaultTimeout } from '@/constants'
+import { fileService } from '@/services/FileService'
 import { ChunkType } from '@/types/chunk'
 import { findImageBlocks, getMainTextContent } from '@/utils/messageUtils/find'
 
@@ -20,7 +21,6 @@ export const ImageGenerationMiddleware: CompletionsMiddleware =
     const { assistant, messages } = params
     const client = context.apiClientInstance as BaseApiClient<OpenAI>
     const signal = context._internal?.flowControl?.abortSignal
-
     if (!assistant.model || !isDedicatedImageGenerationModel(assistant.model) || typeof messages === 'string') {
       return next(context, params)
     }
@@ -50,12 +50,10 @@ export const ImageGenerationMiddleware: CompletionsMiddleware =
           const userImages = await Promise.all(
             userImageBlocks.map(async block => {
               if (!block.file) return null
-              const binaryData: Uint8Array = await new File(block.file.path).bytes()
-              const standardUint8Array = new Uint8Array(binaryData)
+              const binaryData = await fileService.binaryImage(block.file)
+              const buffer = Buffer.from(binaryData)
               const mimeType = `${block.file.type}/${block.file.ext.slice(1)}`
-              return await toFile(new Blob([standardUint8Array]), block.file.origin_name || 'image.png', {
-                type: mimeType
-              })
+              return await toFile(new Blob([buffer]), block.file.origin_name || 'image.png', { type: mimeType })
             })
           )
           imageFiles = imageFiles.concat(userImages.filter(Boolean) as Blob[])
@@ -70,8 +68,7 @@ export const ImageGenerationMiddleware: CompletionsMiddleware =
                 const binary = atob(b64)
                 const bytes = new Uint8Array(binary.length)
                 for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-                const standardUint8Array = new Uint8Array(bytes)
-                return await toFile(new Blob([standardUint8Array]), 'assistant_image.png', { type: 'image/png' })
+                return await toFile(new Blob([bytes]), 'assistant_image.png', { type: 'image/png' })
               })
             )
             imageFiles = imageFiles.concat(assistantImages.filter(Boolean) as Blob[])
@@ -84,6 +81,12 @@ export const ImageGenerationMiddleware: CompletionsMiddleware =
           const options = { signal, timeout: defaultTimeout }
 
           if (imageFiles.length > 0) {
+            const model = assistant.model
+            const provider = context.apiClientInstance.provider
+            // https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/dall-e?tabs=gpt-image-1#call-the-image-edit-api
+            if (model.id.toLowerCase().includes('gpt-image-1-mini') && provider.type === 'azure-openai') {
+              throw new Error('Azure OpenAI GPT-Image-1-Mini model does not support image editing.')
+            }
             response = await sdk.images.edit(
               {
                 model: assistant.model.id,
@@ -112,7 +115,6 @@ export const ImageGenerationMiddleware: CompletionsMiddleware =
               } else if (image.b64_json) {
                 acc.push(`data:image/png;base64,${image.b64_json}`)
               }
-
               return acc
             }, []) || []
 

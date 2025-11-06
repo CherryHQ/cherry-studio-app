@@ -30,6 +30,8 @@ export const MCPToolOutputSchema = z
 export const MCPToolInputSchema = z
   .object({
     type: z.literal('object'),
+    title: z.string().optional(),
+    description: z.string().optional(),
     properties: z.object({}).loose().optional(),
     required: z.array(z.string()).optional()
   })

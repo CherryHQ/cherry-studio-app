@@ -1,8 +1,8 @@
 /**
  * AiHubMix规则集
  */
-import { isOpenAIModel } from '@/config/models'
-import type { Provider } from '@/types/assistant'
+import { isOpenAILLMModel } from '@/config/models'
+import type { Provider } from '@/types'
 
 import { provider2Provider, startsWith } from './helper'
 import type { RuleSet } from './types'
@@ -32,7 +32,8 @@ const AIHUBMIX_RULES: RuleSet = {
       match: model =>
         (startsWith('gemini')(model) || startsWith('imagen')(model)) &&
         !model.id.endsWith('-nothink') &&
-        !model.id.endsWith('-search'),
+        !model.id.endsWith('-search') &&
+        !model.id.includes('embedding'),
       provider: (provider: Provider) => {
         return extraProviderConfig({
           ...provider,
@@ -42,7 +43,7 @@ const AIHUBMIX_RULES: RuleSet = {
       }
     },
     {
-      match: isOpenAIModel,
+      match: isOpenAILLMModel,
       provider: (provider: Provider) => {
         return extraProviderConfig({
           ...provider,

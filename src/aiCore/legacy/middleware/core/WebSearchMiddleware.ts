@@ -1,6 +1,6 @@
 import { loggerService } from '@/services/LoggerService'
 import { ChunkType } from '@/types/chunk'
-import { flushLinkConverterBuffer, smartLinkConverter } from '@/utils/linkConverter'
+import { convertLinks, flushLinkConverterBuffer } from '@/utils/linkConverter'
 
 import type { CompletionsParams, CompletionsResult, GenericChunk } from '../schemas'
 import type { CompletionsContext, CompletionsMiddleware } from '../types'
@@ -28,8 +28,6 @@ export const WebSearchMiddleware: CompletionsMiddleware =
     }
     // 调用下游中间件
     const result = await next(ctx, params)
-
-    const model = params.assistant?.model!
     let isFirstChunk = true
 
     // 响应后处理：记录Web搜索事件
@@ -42,16 +40,9 @@ export const WebSearchMiddleware: CompletionsMiddleware =
           new TransformStream<GenericChunk, GenericChunk>({
             transform(chunk: GenericChunk, controller) {
               if (chunk.type === ChunkType.TEXT_DELTA) {
-                const providerType = model.provider || 'openai'
                 // 使用当前可用的Web搜索结果进行链接转换
                 const text = chunk.text
-                const result = smartLinkConverter(
-                  text,
-                  providerType,
-                  isFirstChunk,
-                  ctx._internal.webSearchState!.results
-                )
-
+                const result = convertLinks(text, isFirstChunk)
                 if (isFirstChunk) {
                   isFirstChunk = false
                 }
@@ -59,7 +50,6 @@ export const WebSearchMiddleware: CompletionsMiddleware =
                 // - 如果有内容被缓冲，说明convertLinks正在等待后续chunk，不使用原文本避免重复
                 // - 如果没有内容被缓冲且结果为空，可能是其他处理问题，使用原文本作为安全回退
                 let finalText: string
-
                 if (result.hasBufferedContent) {
                   // 有内容被缓冲，使用处理后的结果（可能为空，等待后续chunk）
                   finalText = result.text
@@ -84,14 +74,12 @@ export const WebSearchMiddleware: CompletionsMiddleware =
               } else if (chunk.type === ChunkType.LLM_RESPONSE_COMPLETE) {
                 // 流结束时，清空链接转换器的buffer并处理剩余内容
                 const remainingText = flushLinkConverterBuffer()
-
                 if (remainingText) {
                   controller.enqueue({
                     type: ChunkType.TEXT_DELTA,
                     text: remainingText
                   })
                 }
-
                 // 继续传递LLM_RESPONSE_COMPLETE事件
                 controller.enqueue(chunk)
               } else {

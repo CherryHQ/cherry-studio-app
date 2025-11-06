@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import type Anthropic from '@anthropic-ai/sdk'
 import type {
   Base64ImageSource,
   ImageBlockParam,
@@ -23,16 +23,25 @@ import type {
   WebSearchToolResultError
 } from '@anthropic-ai/sdk/resources/messages'
 import { MessageStream } from '@anthropic-ai/sdk/resources/messages/messages'
-import { File, Paths } from 'expo-file-system'
 import { t } from 'i18next'
 
 import { findTokenLimit, isClaudeReasoningModel, isReasoningModel, isWebSearchModel } from '@/config/models'
 import { DEFAULT_MAX_TOKENS } from '@/constants'
 import { getAssistantSettings } from '@/services/AssistantService'
+import { fileService } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import { estimateTextTokens } from '@/services/TokenService'
-import type { Assistant, Model } from '@/types/assistant'
-import { EFFORT_RATIO } from '@/types/assistant'
+import type {
+  Assistant,
+  GenerateImageParams,
+  MCPCallToolResponse,
+  MCPTool,
+  MCPToolResponse,
+  Message,
+  Model,
+  ToolCallResponse
+} from '@/types'
+import { EFFORT_RATIO, FileTypes, WebSearchSource } from '@/types'
 import type {
   ErrorChunk,
   LLMWebSearchCompleteChunk,
@@ -44,18 +53,13 @@ import type {
   ThinkingStartChunk
 } from '@/types/chunk'
 import { ChunkType } from '@/types/chunk'
-import { FileTypes } from '@/types/file'
-import type { GenerateImageParams } from '@/types/image'
-import type { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
-import { type Message } from '@/types/message'
 import type {
   AnthropicSdkMessageParam,
   AnthropicSdkParams,
   AnthropicSdkRawChunk,
   AnthropicSdkRawOutput
 } from '@/types/sdk'
-import type { MCPTool } from '@/types/tool'
-import { WebSearchSource } from '@/types/websearch'
+import { getSdkClient } from '@/utils/anthropic'
 import { addImageFileToContents } from '@/utils/formats'
 import {
   anthropicToolUseToMcpTool,
@@ -81,119 +85,36 @@ export class AnthropicAPIClient extends BaseApiClient<
   ToolUnion
 > {
   oauthToken: string | undefined = undefined
-  isOAuthMode: boolean = false
   sdkInstance: Anthropic | undefined = undefined
 
   async getSdkInstance(): Promise<Anthropic> {
     if (this.sdkInstance) {
       return this.sdkInstance
     }
-
-    if (this.provider.authType === 'oauth') {
-      if (!this.oauthToken) {
-        throw new Error('OAuth token is not available')
-      }
-
-      this.sdkInstance = new Anthropic({
-        authToken: this.oauthToken,
-        baseURL: 'https://api.anthropic.com',
-        dangerouslyAllowBrowser: true,
-        defaultHeaders: {
-          'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01',
-          'anthropic-beta': 'oauth-2025-04-20'
-          // ...this.provider.extra_headers
-        }
-      })
-    } else {
-      this.sdkInstance = new Anthropic({
-        apiKey: this.apiKey,
-        baseURL: this.getBaseURL(),
-        dangerouslyAllowBrowser: true,
-        defaultHeaders: {
-          'anthropic-beta': 'output-128k-2025-02-19',
-          ...this.provider.extra_headers
-        }
-      })
-    }
-
+    this.sdkInstance = getSdkClient(this.provider, this.oauthToken)
     return this.sdkInstance
-  }
-
-  private buildClaudeCodeSystemMessage(system?: string | TextBlockParam[]): string | TextBlockParam[] {
-    const defaultClaudeCodeSystem = `You are Claude Code, Anthropic's official CLI for Claude.`
-
-    if (!system) {
-      return defaultClaudeCodeSystem
-    }
-
-    if (typeof system === 'string') {
-      if (system.trim() === defaultClaudeCodeSystem) {
-        return system
-      }
-
-      return [
-        {
-          type: 'text',
-          text: defaultClaudeCodeSystem
-        },
-        {
-          type: 'text',
-          text: system
-        }
-      ]
-    }
-
-    if (system[0].text.trim() !== defaultClaudeCodeSystem) {
-      system.unshift({
-        type: 'text',
-        text: defaultClaudeCodeSystem
-      })
-    }
-
-    return system
   }
 
   override async createCompletions(
     payload: AnthropicSdkParams,
     options?: Anthropic.RequestOptions
   ): Promise<AnthropicSdkRawOutput> {
-    if (this.provider.authType === 'oauth') {
-      // this.oauthToken = await window.api.anthropic_oauth.getAccessToken()
-      // this.isOAuthMode = true
-      // logger.info('[Anthropic Provider] Using OAuth token for authentication')
-      // payload.system = this.buildClaudeCodeSystemMessage(payload.system)
-      logger.error('Anthropic OAuth token is not available')
-      throw new Error('Anthropic OAuth token is not available')
-    }
-
     const sdk = (await this.getSdkInstance()) as Anthropic
-
     if (payload.stream) {
       return sdk.messages.stream(payload, options)
     }
-
-    return await sdk.messages.create(payload, options)
+    return sdk.messages.create(payload, options)
   }
 
   // @ts-ignore sdk未提供
-  override async generateImage(_generateImageParams: GenerateImageParams): Promise<string[]> {
+  // oxlint-disable-next-line @typescript-eslint/no-unused-vars
+  override async generateImage(_enerateImageParams: GenerateImageParams): Promise<string[]> {
     return []
   }
 
   override async listModels(): Promise<Anthropic.ModelInfo[]> {
-    if (this.provider.authType === 'oauth') {
-      // this.oauthToken = await window.api.anthropic_oauth.getAccessToken()
-      // this.isOAuthMode = true
-      // logger.info('[Anthropic Provider] Using OAuth token for authentication')
-      //
-      logger.error('Anthropic OAuth token is not available')
-      throw new Error('Anthropic OAuth token is not available')
-    }
-
     const sdk = (await this.getSdkInstance()) as Anthropic
     const response = await sdk.models.list()
-
     return response.data
   }
 
@@ -206,7 +127,6 @@ export class AnthropicAPIClient extends BaseApiClient<
     if (assistant.settings?.reasoning_effort && isClaudeReasoningModel(model)) {
       return undefined
     }
-
     return super.getTemperature(assistant, model)
   }
 
@@ -214,7 +134,6 @@ export class AnthropicAPIClient extends BaseApiClient<
     if (assistant.settings?.reasoning_effort && isClaudeReasoningModel(model)) {
       return undefined
     }
-
     return super.getTopP(assistant, model)
   }
 
@@ -228,7 +147,6 @@ export class AnthropicAPIClient extends BaseApiClient<
     if (!isReasoningModel(model)) {
       return undefined
     }
-
     const { maxTokens } = getAssistantSettings(assistant)
 
     const reasoningEffort = assistant?.settings?.reasoning_effort
@@ -245,8 +163,8 @@ export class AnthropicAPIClient extends BaseApiClient<
       1024,
       Math.floor(
         Math.min(
-          (findTokenLimit(model.id)?.max ?? 0 - (findTokenLimit(model.id)?.min ?? 0)) * effortRatio +
-            (findTokenLimit(model.id)?.min ?? 0),
+          (findTokenLimit(model.id)?.max! - findTokenLimit(model.id)?.min!) * effortRatio +
+            findTokenLimit(model.id)?.min!,
           (maxTokens || DEFAULT_MAX_TOKENS) * effortRatio
         )
       )
@@ -279,57 +197,47 @@ export class AnthropicAPIClient extends BaseApiClient<
 
     if (imageContents.length > 0) {
       for (const imageContent of imageContents) {
-        const image = new File(Paths.join(Paths.cache, 'Files', imageContent.fileId + imageContent.fileExt))
-
-        if (!image.type) {
-          logger.warn('Image type not found', { fileId: imageContent.fileId })
-          throw new Error('Image type not found')
-        }
-
-        image.type = image.type.replace('jpg', 'jpeg')
-
-        if (AnthropicAPIClient.isValidBase64ImageMediaType(image.type)) {
+        const base64Data = await fileService.base64Image(imageContent.fileId + imageContent.fileExt)
+        base64Data.mime = base64Data.mime.replace('jpg', 'jpeg')
+        if (AnthropicAPIClient.isValidBase64ImageMediaType(base64Data.mime)) {
           parts.push({
             type: 'image',
             source: {
-              data: await image.base64(),
-              media_type: image.type,
+              data: base64Data.data,
+              media_type: base64Data.mime,
               type: 'base64'
             }
           })
         } else {
-          logger.warn('Unsupported image type, ignored.', { mime: image.type })
+          logger.warn('Unsupported image type, ignored.', { mime: base64Data.mime })
         }
       }
     }
 
     // Get and process image blocks
     const imageBlocks = await findImageBlocks(message)
-
     for (const imageBlock of imageBlocks) {
       if (imageBlock.file) {
-        const image = new File(imageBlock.file.path)
-
+        // Handle uploaded file
+        const file = imageBlock.file
+        const base64Data = await fileService.base64Image(file.id + file.ext)
         parts.push({
           type: 'image',
           source: {
-            data: await image.base64(),
-            media_type: image.type?.replace('jpg', 'jpeg') as any,
+            data: base64Data.data,
+            media_type: base64Data.mime as Base64ImageSource['media_type'],
             type: 'base64'
           }
         })
       }
     }
-
     // Get and process file blocks
     const fileBlocks = await findFileBlocks(message)
-
     for (const fileBlock of fileBlocks) {
       const { file } = fileBlock
-
       if ([FileTypes.TEXT, FileTypes.DOCUMENT].includes(file.type)) {
         if (file.ext === '.pdf' && file.size < 32 * 1024 * 1024) {
-          const base64Data = await new File(file.path).base64()
+          const base64Data = await fileService.readBase64(file)
           parts.push({
             type: 'document',
             source: {
@@ -339,7 +247,7 @@ export class AnthropicAPIClient extends BaseApiClient<
             }
           })
         } else {
-          const fileContent = new File(file.path).textSync().trim()
+          const fileContent = fileService.readFile(file).trim()
           parts.push({
             type: 'text',
             text: file.origin_name + '\n' + fileContent
@@ -380,7 +288,6 @@ export class AnthropicAPIClient extends BaseApiClient<
                     text: item.text || ''
                   } satisfies TextBlockParam
                 }
-
                 if (item.type === 'image') {
                   return {
                     type: 'image',
@@ -391,7 +298,6 @@ export class AnthropicAPIClient extends BaseApiClient<
                     }
                   } satisfies ImageBlockParam
                 }
-
                 return
               })
               .filter(n => typeof n !== 'undefined'),
@@ -400,7 +306,6 @@ export class AnthropicAPIClient extends BaseApiClient<
         ]
       }
     }
-
     return
   }
 
@@ -433,11 +338,9 @@ export class AnthropicAPIClient extends BaseApiClient<
     }
 
     const newMessages: AnthropicSdkMessageParam[] = [...currentReqMessages, assistantMessage]
-
     if (toolResults && toolResults.length > 0) {
       newMessages.push(...toolResults)
     }
-
     return newMessages
   }
 
@@ -445,20 +348,17 @@ export class AnthropicAPIClient extends BaseApiClient<
     if (typeof message.content === 'string') {
       return estimateTextTokens(message.content)
     }
-
     return message.content
       .map(content => {
         switch (content.type) {
           case 'text':
             return estimateTextTokens(content.text)
-
           case 'image':
             if (content.source.type === 'base64') {
               return estimateTextTokens(content.source.data)
             } else {
               return estimateTextTokens(content.source.url)
             }
-
           case 'tool_use':
             return estimateTextTokens(JSON.stringify(content.input))
           case 'tool_result':
@@ -493,7 +393,6 @@ export class AnthropicAPIClient extends BaseApiClient<
     logger.debug(`Attaching stream listener to raw output`)
     // 专用的Anthropic事件处理
     const anthropicListener = listener as AnthropicStreamListener
-
     // 检查是否为MessageStream
     if (rawOutput instanceof MessageStream) {
       logger.debug(`Detected Anthropic MessageStream, attaching specialized listener`)
@@ -543,7 +442,6 @@ export class AnthropicAPIClient extends BaseApiClient<
     if (!isWebSearchModel(model)) {
       return undefined
     }
-
     return {
       type: 'web_search_20250305',
       name: 'web_search',
@@ -581,12 +479,10 @@ export class AnthropicAPIClient extends BaseApiClient<
 
         // 3. 处理用户消息
         const sdkMessages: AnthropicSdkMessageParam[] = []
-
         if (typeof messages === 'string') {
           sdkMessages.push({ role: 'user', content: messages })
         } else {
           const processedMessages = await addImageFileToContents(messages)
-
           for (const message of processedMessages) {
             sdkMessages.push(await this.convertMessageToSdkParam(message))
           }
@@ -594,7 +490,6 @@ export class AnthropicAPIClient extends BaseApiClient<
 
         if (enableWebSearch) {
           const webSearchTool = await this.getWebSearchParams(model)
-
           if (webSearchTool) {
             tools.push(webSearchTool)
           }
@@ -638,7 +533,6 @@ export class AnthropicAPIClient extends BaseApiClient<
               throw new Error(t('error.chat.chunk.non_json'))
             }
           }
-
           switch (rawChunk.type) {
             case 'message': {
               let i = 0
@@ -654,20 +548,17 @@ export class AnthropicAPIClient extends BaseApiClient<
                       } as TextStartChunk)
                       hasTextContent = true
                     }
-
                     controller.enqueue({
                       type: ChunkType.TEXT_DELTA,
                       text: content.text
                     } as TextDeltaChunk)
                     break
                   }
-
                   case 'tool_use': {
                     toolCalls[i] = content
                     i++
                     break
                   }
-
                   case 'thinking': {
                     if (!hasThinkingContent) {
                       controller.enqueue({
@@ -675,14 +566,12 @@ export class AnthropicAPIClient extends BaseApiClient<
                       } as ThinkingStartChunk)
                       hasThinkingContent = true
                     }
-
                     controller.enqueue({
                       type: ChunkType.THINKING_DELTA,
                       text: content.thinking
                     } as ThinkingDeltaChunk)
                     break
                   }
-
                   case 'web_search_tool_result': {
                     controller.enqueue({
                       type: ChunkType.LLM_WEB_SEARCH_COMPLETE,
@@ -695,14 +584,12 @@ export class AnthropicAPIClient extends BaseApiClient<
                   }
                 }
               }
-
               if (i > 0) {
                 controller.enqueue({
                   type: ChunkType.MCP_TOOL_CREATED,
                   tool_calls: Object.values(toolCalls)
                 } as MCPToolCreatedChunk)
               }
-
               controller.enqueue({
                 type: ChunkType.LLM_RESPONSE_COMPLETE,
                 response: {
@@ -715,10 +602,8 @@ export class AnthropicAPIClient extends BaseApiClient<
               })
               break
             }
-
             case 'content_block_start': {
               const contentBlock = rawChunk.content_block
-
               switch (contentBlock.type) {
                 case 'server_tool_use': {
                   if (contentBlock.name === 'web_search') {
@@ -726,10 +611,8 @@ export class AnthropicAPIClient extends BaseApiClient<
                       type: ChunkType.LLM_WEB_SEARCH_IN_PROGRESS
                     } as LLMWebSearchInProgressChunk)
                   }
-
                   break
                 }
-
                 case 'web_search_tool_result': {
                   if (
                     contentBlock.content &&
@@ -751,22 +634,18 @@ export class AnthropicAPIClient extends BaseApiClient<
                       }
                     } as LLMWebSearchCompleteChunk)
                   }
-
                   break
                 }
-
                 case 'tool_use': {
                   toolCalls[rawChunk.index] = contentBlock
                   break
                 }
-
                 case 'text': {
                   controller.enqueue({
                     type: ChunkType.TEXT_START
                   } as TextStartChunk)
                   break
                 }
-
                 case 'thinking':
                 case 'redacted_thinking': {
                   controller.enqueue({
@@ -775,13 +654,10 @@ export class AnthropicAPIClient extends BaseApiClient<
                   break
                 }
               }
-
               break
             }
-
             case 'content_block_delta': {
               const messageDelta = rawChunk.delta
-
               switch (messageDelta.type) {
                 case 'text_delta': {
                   if (messageDelta.text) {
@@ -790,10 +666,8 @@ export class AnthropicAPIClient extends BaseApiClient<
                       text: messageDelta.text
                     } as TextDeltaChunk)
                   }
-
                   break
                 }
-
                 case 'thinking_delta': {
                   if (messageDelta.thinking) {
                     controller.enqueue({
@@ -801,25 +675,19 @@ export class AnthropicAPIClient extends BaseApiClient<
                       text: messageDelta.thinking
                     } as ThinkingDeltaChunk)
                   }
-
                   break
                 }
-
                 case 'input_json_delta': {
                   if (messageDelta.partial_json) {
                     accumulatedJson += messageDelta.partial_json
                   }
-
                   break
                 }
               }
-
               break
             }
-
             case 'content_block_stop': {
               const toolCall = toolCalls[rawChunk.index]
-
               if (toolCall) {
                 try {
                   toolCall.input = accumulatedJson ? JSON.parse(accumulatedJson) : {}
@@ -832,10 +700,8 @@ export class AnthropicAPIClient extends BaseApiClient<
                   logger.error('Error parsing tool call input:', error as Error)
                 }
               }
-
               break
             }
-
             case 'message_delta': {
               controller.enqueue({
                 type: ChunkType.LLM_RESPONSE_COMPLETE,

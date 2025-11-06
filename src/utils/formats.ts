@@ -1,6 +1,6 @@
 import type { WebSearchResultBlock } from '@anthropic-ai/sdk/resources'
+import type OpenAI from '@cherrystudio/openai'
 import type { GroundingMetadata } from '@google/genai'
-import type OpenAI from 'openai'
 
 import type { CitationMessageBlock, Message } from '@/types/message'
 import type { Citation, WebSearchProviderResponse } from '@/types/websearch'

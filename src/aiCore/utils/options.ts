@@ -2,14 +2,15 @@ import { baseProviderIdSchema, customProviderIdSchema } from '@cherrystudio/ai-c
 
 import { isOpenAIModel, isSupportFlexServiceTierModel } from '@/config/models'
 import { isSupportServiceTierProvider } from '@/config/providers'
-import type { Assistant, Model, Provider } from '@/types/assistant'
+// import { mapLanguageToQwenMTModel } from '@/config/translate'
+import type { Assistant, Model, Provider } from '@/types'
 import {
   GroqServiceTiers,
   isGroqServiceTier,
   isOpenAIServiceTier,
   OpenAIServiceTiers,
   SystemProviderIds
-} from '@/types/assistant'
+} from '@/types'
 
 import { getAiSdkProviderId } from '../provider/factory'
 import { buildGeminiGenerateImageParams } from './image'
@@ -74,7 +75,6 @@ export function buildProviderOptions(
   providerSpecificOptions.serviceTier = serviceTierSetting
   // 根据 provider 类型分离构建逻辑
   const { data: baseProviderId, success } = baseProviderIdSchema.safeParse(rawProviderId)
-
   if (success) {
     // 应该覆盖所有类型
     switch (baseProviderId) {
@@ -87,9 +87,6 @@ export function buildProviderOptions(
           serviceTier: serviceTierSetting
         }
         break
-      // case 'huggingface':
-      //   providerSpecificOptions = buildOpenAIProviderOptions(assistant, model, capabilities)
-      //   break
       case 'anthropic':
         providerSpecificOptions = buildAnthropicProviderOptions(assistant, model, capabilities)
         break
@@ -143,7 +140,6 @@ export function buildProviderOptions(
     ...providerSpecificOptions,
     ...getCustomParameters(assistant)
   }
-
   // vertex需要映射到google或anthropic
   const rawProviderKey =
     {
@@ -171,7 +167,6 @@ function buildOpenAIProviderOptions(
 ): Record<string, any> {
   const { enableReasoning } = capabilities
   let providerOptions: Record<string, any> = {}
-
   // OpenAI 推理参数
   if (enableReasoning) {
     const reasoningParams = getOpenAIReasoningParams(assistant, model)
@@ -180,7 +175,6 @@ function buildOpenAIProviderOptions(
       ...reasoningParams
     }
   }
-
   return providerOptions
 }
 
@@ -305,11 +299,9 @@ function buildGenericProviderOptions(
   //       source_lang: 'auto',
   //       target_lang: mapLanguageToQwenMTModel(targetLanguage)
   //     } as const
-
   //     if (!translationOptions.target_lang) {
   //       throw new Error(t('translate.error.not_supported', { language: targetLanguage.value }))
   //     }
-
   //     providerOptions.translation_options = translationOptions
   //   } else {
   //     throw new Error(t('translate.error.chat_qwen_mt'))

@@ -1,8 +1,11 @@
-import { File, Paths } from 'expo-file-system'
+import type { AzureOpenAI } from '@cherrystudio/openai'
+import type OpenAI from '@cherrystudio/openai'
+import type {
+  ChatCompletionContentPart,
+  ChatCompletionContentPartRefusal,
+  ChatCompletionTool
+} from '@cherrystudio/openai/resources'
 import { t } from 'i18next'
-import type { AzureOpenAI } from 'openai'
-import type OpenAI from 'openai'
-import type { ChatCompletionContentPart, ChatCompletionContentPartRefusal, ChatCompletionTool } from 'openai/resources'
 
 import {
   findTokenLimit,
@@ -16,6 +19,7 @@ import {
   isGPT5SeriesModel,
   isGrokReasoningModel,
   isNotSupportSystemMessageModel,
+  isOpenAIDeepResearchModel,
   isOpenAIOpenWeightModel,
   isOpenAIReasoningModel,
   isQwenAlwaysThinkModel,
@@ -41,17 +45,24 @@ import {
   isSupportStreamOptionsProvider
 } from '@/config/providers'
 import { DEFAULT_MAX_TOKENS } from '@/constants'
+import { fileService } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import { processPostsuffixQwen3Model, processReqMessages } from '@/services/ModelMessageService'
 import { estimateTextTokens } from '@/services/TokenService'
-import type { Assistant, Model, OpenAIServiceTier } from '@/types/assistant'
-import { EFFORT_RATIO, isSystemProvider, SystemProviderIds } from '@/types/assistant'
 // For Copilot token
+import type {
+  Assistant,
+  MCPCallToolResponse,
+  MCPTool,
+  MCPToolResponse,
+  Message,
+  Model,
+  OpenAIServiceTier,
+  ToolCallResponse
+} from '@/types'
+import { EFFORT_RATIO, FileTypes, isSystemProvider, SystemProviderIds, WebSearchSource } from '@/types'
 import type { TextStartChunk, ThinkingStartChunk } from '@/types/chunk'
 import { ChunkType } from '@/types/chunk'
-import { FileTypes } from '@/types/file'
-import type { MCPCallToolResponse, MCPToolResponse, ToolCallResponse } from '@/types/mcp'
-import type { Message } from '@/types/message'
 import type {
   OpenAIExtraBody,
   OpenAIModality,
@@ -62,8 +73,6 @@ import type {
   OpenAISdkRawOutput,
   ReasoningEffortOptionalParams
 } from '@/types/sdk'
-import type { MCPTool } from '@/types/tool'
-import { WebSearchSource } from '@/types/websearch'
 import { addImageFileToContents } from '@/utils/formats'
 import {
   isSupportedToolUse,
@@ -113,6 +122,12 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
       return {}
     }
 
+    if (isOpenAIDeepResearchModel(model)) {
+      return {
+        reasoning_effort: 'medium'
+      }
+    }
+
     const reasoningEffort = assistant?.settings?.reasoning_effort
 
     if (isSupportedThinkingTokenZhipuModel(model)) {
@@ -133,16 +148,13 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
         if (isSupportedThinkingTokenGeminiModel(model) && !GEMINI_FLASH_MODEL_REGEX.test(model.id)) {
           return {}
         }
-
         // Don't disable reasoning for models that require it
         if (isGrokReasoningModel(model) || isOpenAIReasoningModel(model)) {
           return {}
         }
-
         if (isReasoningModel(model) && !isSupportedThinkingTokenModel(model)) {
           return {}
         }
-
         return { reasoning: { enabled: false, exclude: true } }
       }
 
@@ -174,7 +186,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
             }
           }
         }
-
         return {}
       }
 
@@ -188,8 +199,7 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
     // reasoningEffort有效的情况
     const effortRatio = EFFORT_RATIO[reasoningEffort]
     const budgetTokens = Math.floor(
-      (findTokenLimit(model.id)?.max ?? 0 - (findTokenLimit(model.id)?.min ?? 0)) * effortRatio +
-        (findTokenLimit(model.id)?.min ?? 0)
+      (findTokenLimit(model.id)?.max! - findTokenLimit(model.id)?.min!) * effortRatio + findTokenLimit(model.id)?.min!
     )
 
     // DeepSeek hybrid inference models, v3.1 and maybe more in the future
@@ -252,11 +262,9 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
       if (reasoningEffort === 'high') {
         return { thinking: { type: 'enabled' } }
       }
-
       if (reasoningEffort === 'auto' && isDoubaoThinkingAutoModel(model)) {
         return { thinking: { type: 'auto' } }
       }
-
       // 其他情况不带 thinking 字段
       return {}
     }
@@ -268,14 +276,12 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
           isQwenAlwaysThinkModel(model) || !isSupportEnableThinkingProvider(this.provider) ? undefined : true,
         thinking_budget: budgetTokens
       }
-
       if (this.provider.id === SystemProviderIds.dashscope) {
         return {
           ...thinkConfig,
           incremental_output: true
         }
       }
-
       return thinkConfig
     }
 
@@ -291,7 +297,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
       // 检查模型是否支持所选选项
       const modelType = getThinkModelType(model)
       const supportedOptions = MODEL_SUPPORTED_REASONING_EFFORT[modelType]
-
       if (supportedOptions.includes(reasoningEffort)) {
         return {
           reasoning_effort: reasoningEffort
@@ -317,7 +322,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
           }
         }
       }
-
       return {
         extra_body: {
           google: {
@@ -409,16 +413,16 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
 
     if (imageContents.length > 0) {
       for (const imageContent of imageContents) {
-        const image = new File(Paths.join(Paths.cache, 'Files', imageContent.fileId + imageContent.fileExt))
-        parts.push({ type: 'image_url', image_url: { url: await image.base64() } })
+        const image = await fileService.base64Image(imageContent.fileId + imageContent.fileExt)
+        parts.push({ type: 'image_url', image_url: { url: image.data } })
       }
     }
 
     for (const imageBlock of imageBlocks) {
       if (isVision) {
         if (imageBlock.file) {
-          const image = new File(imageBlock.file.path)
-          parts.push({ type: 'image_url', image_url: { url: await image.base64() } })
+          const image = await fileService.base64Image(imageBlock.file.id + imageBlock.file.ext)
+          parts.push({ type: 'image_url', image_url: { url: image.data } })
         } else if (imageBlock.url && imageBlock.url.startsWith('data:')) {
           parts.push({ type: 'image_url', image_url: { url: imageBlock.url } })
         }
@@ -427,13 +431,12 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
 
     for (const fileBlock of fileBlocks) {
       const file = fileBlock.file
-
       if (!file) {
         continue
       }
 
       if ([FileTypes.TEXT, FileTypes.DOCUMENT].includes(file.type)) {
-        const fileContent = new File(file.path).textSync().trim()
+        const fileContent = fileService.readFile(file).trim()
         parts.push({
           type: 'text',
           text: file.origin_name + '\n' + fileContent
@@ -463,7 +466,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
     mcpTool: MCPTool
   ): ToolCallResponse {
     let parsedArgs: any
-
     try {
       if ('function' in toolCall) {
         parsedArgs = JSON.parse(toolCall.function.arguments)
@@ -473,7 +475,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
         parsedArgs = toolCall.function.arguments
       }
     }
-
     return {
       id: toolCall.id,
       toolCallId: toolCall.id,
@@ -504,7 +505,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
         content: JSON.stringify(resp.content)
       } as OpenAI.Chat.Completions.ChatCompletionToolMessageParam
     }
-
     return undefined
   }
 
@@ -529,7 +529,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
 
   override estimateMessageTokens(message: OpenAISdkMessageParam): number {
     let sum = 0
-
     if (typeof message.content === 'string') {
       sum += estimateTextTokens(message.content)
     } else if (Array.isArray(message.content)) {
@@ -550,17 +549,14 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
         })
         .reduce((acc, curr) => acc + curr, 0)
     }
-
     if ('tool_calls' in message && message.tool_calls) {
       sum += message.tool_calls.reduce((acc, toolCall) => {
         if (toolCall.type === 'function' && 'function' in toolCall) {
           return acc + estimateTextTokens(JSON.stringify(toolCall.function.arguments))
         }
-
         return acc
       }, 0)
     }
-
     return sum
   }
 
@@ -594,11 +590,9 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
         // if (isQwenMTModel(model)) {
         //   if (isTranslateAssistant(assistant)) {
         //     const targetLanguage = mapLanguageToQwenMTModel(assistant.targetLanguage)
-
         //     if (!targetLanguage) {
         //       throw new Error(t('translate.error.not_supported', { language: assistant.targetLanguage.value }))
         //     }
-
         //     const translationOptions = {
         //       source_lang: 'auto',
         //       target_lang: targetLanguage
@@ -633,17 +627,14 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
 
         // 3. 处理用户消息
         const userMessages: OpenAISdkMessageParam[] = []
-
         if (typeof messages === 'string') {
           userMessages.push({ role: 'user', content: messages })
         } else {
           const processedMessages = await addImageFileToContents(messages)
-
           for (const message of processedMessages) {
             userMessages.push(await this.convertMessageToSdkParam(message, model))
           }
         }
-
         if (userMessages.length === 0) {
           logger.warn('No user message. Some providers may not support.')
         }
@@ -652,7 +643,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
         const reasoningEffort = this.getReasoningEffort(assistant, model)
 
         const lastUserMsg = userMessages.findLast(m => m.role === 'user')
-
         if (lastUserMsg) {
           if (isSupportedThinkingTokenQwenModel(model) && !isSupportEnableThinkingProvider(this.provider)) {
             const qwenThinkModeEnabled = assistant.settings?.qwenThinkMode === true
@@ -660,11 +650,9 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
 
             lastUserMsg.content = processPostsuffixQwen3Model(currentContent, qwenThinkModeEnabled)
           }
-
           if (this.provider.id === SystemProviderIds.poe) {
             // 如果以后 poe 支持 reasoning_effort 参数了，可以删掉这部分
             let suffix = ''
-
             if (isGPT5SeriesModel(model) && reasoningEffort.reasoning_effort) {
               suffix = ` --reasoning_effort ${reasoningEffort.reasoning_effort}`
             } else if (isClaudeReasoningModel(model) && reasoningEffort.thinking?.budget_tokens) {
@@ -672,7 +660,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
             } else if (isGeminiReasoningModel(model) && reasoningEffort.extra_body?.google?.thinking_config) {
               suffix = ` --thinking_budget ${reasoningEffort.extra_body.google.thinking_config.thinking_budget}`
             }
-
             // FIXME: poe 不支持多个text part，上传文本文件的时候用的不是file part而是text part，因此会出问题
             // 临时解决方案是强制poe用string content，但是其实poe部分支持array
             if (typeof lastUserMsg.content === 'string') {
@@ -683,13 +670,11 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
 
         // 4. 最终请求消息
         let reqMessages: OpenAISdkMessageParam[]
-
         if (!systemMessage.content) {
           reqMessages = [...userMessages]
         } else if (isNotSupportSystemMessageModel(model)) {
           // transform into user message
           const firstUserMsg = userMessages.shift()
-
           if (firstUserMsg) {
             firstUserMsg.content = `System Instruction: \n${systemMessage.content}\n\nUser Message(s):\n${firstUserMsg.content}`
             reqMessages = [firstUserMsg, ...userMessages]
@@ -715,7 +700,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
         const modalities: {
           modalities?: OpenAIModality[]
         } = {}
-
         // for openrouter generate image
         // https://openrouter.ai/docs/features/multimodal/image-generation
         if (enableGenerateImage && this.provider.id === SystemProviderIds.openrouter) {
@@ -759,7 +743,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
   getResponseChunkTransformer(): ResponseChunkTransformer<OpenAISdkRawChunk> {
     let hasBeenCollectedWebSearch = false
     let hasEmittedWebSearchInProgress = false
-
     const collectWebSearchData = (
       chunk: OpenAISdkRawChunk,
       contentSource: OpenAISdkRawContentSource,
@@ -768,11 +751,9 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
       if (hasBeenCollectedWebSearch) {
         return
       }
-
       // OpenAI annotations
       // @ts-ignore - annotations may not be in standard type definitions
       const annotations = contentSource.annotations || chunk.annotations
-
       if (annotations && annotations.length > 0 && annotations[0].type === 'url_citation') {
         hasBeenCollectedWebSearch = true
         return {
@@ -896,7 +877,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
       async transform(chunk: OpenAISdkRawChunk, controller: TransformStreamDefaultController<GenericChunk>) {
         // 持续更新usage信息
         logger.silly('chunk', chunk)
-
         if (chunk.usage) {
           const usage = chunk.usage
           lastUsageInfo = {
@@ -932,7 +912,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
             // 然而某些 OpenAI 兼容平台在非流式请求时会错误地返回一个空对象的 delta 字段。
             // 如果 delta 为空对象或content为空，应当忽略它并回退到 message，避免造成内容缺失。
             let contentSource: OpenAISdkRawContentSource | null = null
-
             if (
               'delta' in choice &&
               choice.delta &&
@@ -955,7 +934,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
             if (!contentSource?.content) {
               accumulatingText = false
             }
-
             // @ts-ignore - reasoning_content is not in standard OpenAI types but some providers use it
             if (!contentSource?.reasoning_content && !contentSource?.reasoning) {
               isThinking = false
@@ -967,18 +945,15 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
                 // 包含 usage 的 chunk 会在包含 finish_reason: stop 的 chunk 之后
                 // 所以试图等到拿到 usage 之后再发出结束信号
                 hasFinishReason = true
-
                 // If we already have usage info, emit completion signals now
                 if (lastUsageInfo && lastUsageInfo.total_tokens > 0) {
                   emitCompletionSignals(controller)
                 }
               }
-
               continue
             }
 
             const webSearchData = collectWebSearchData(chunk, contentSource, context)
-
             if (webSearchData) {
               // 如果还未发送搜索进度事件，先发送进度事件
               if (!hasEmittedWebSearchInProgress) {
@@ -987,7 +962,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
                 })
                 hasEmittedWebSearchInProgress = true
               }
-
               controller.enqueue({
                 type: ChunkType.LLM_WEB_SEARCH_COMPLETE,
                 llm_web_search: webSearchData
@@ -997,7 +971,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
             // 处理推理内容 (e.g. from OpenRouter DeepSeek-R1)
             // @ts-ignore - reasoning_content is not in standard OpenAI types but some providers use it
             const reasoningText = contentSource.reasoning_content || contentSource.reasoning
-
             if (reasoningText) {
               // logger.silly('since reasoningText is trusy, try to enqueue THINKING_START AND THINKING_DELTA')
               if (!isThinking) {
@@ -1027,7 +1000,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
                 } as TextStartChunk)
                 accumulatingText = true
               }
-
               // logger.silly('enqueue TEXT_DELTA')
               // 处理特殊token
               // 智谱api的一个chunk中只会输出一个token，因而使用 ===，避免正常内容被误判
@@ -1068,7 +1040,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
               for (const toolCall of contentSource.tool_calls) {
                 if ('index' in toolCall) {
                   const { id, index, function: fun } = toolCall
-
                   if (fun?.name) {
                     const toolCallObject = {
                       id: id || '',
@@ -1099,7 +1070,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
             if ('finish_reason' in choice && choice.finish_reason) {
               logger.debug(`Stream finished with reason: ${choice.finish_reason}`)
               const webSearchData = collectWebSearchData(chunk, contentSource, context)
-
               if (webSearchData) {
                 // 如果还未发送搜索进度事件，先发送进度事件
                 if (!hasEmittedWebSearchInProgress) {
@@ -1108,7 +1078,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
                   })
                   hasEmittedWebSearchInProgress = true
                 }
-
                 controller.enqueue({
                   type: ChunkType.LLM_WEB_SEARCH_COMPLETE,
                   llm_web_search: webSearchData
@@ -1118,7 +1087,6 @@ export class OpenAIAPIClient extends OpenAIBaseClient<
               // Don't emit completion signals immediately after finish_reason
               // Wait for the usage chunk that comes after
               hasFinishReason = true
-
               // If we already have usage info, emit completion signals now
               if (lastUsageInfo && lastUsageInfo.total_tokens > 0) {
                 emitCompletionSignals(controller)

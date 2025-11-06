@@ -52,16 +52,13 @@ export const AbortHandlerMiddleware: CompletionsMiddleware =
     }
 
     addAbortController(abortKey, abortFn)
-
     const cleanup = (): void => {
       removeAbortController(abortKey, abortFn)
-
       if (ctx._internal?.flowControl) {
         ctx._internal.flowControl.abortController = undefined
         ctx._internal.flowControl.abortSignal = undefined
         ctx._internal.flowControl.cleanup = undefined
       }
-
       abortSignal = null
     }
 
@@ -69,7 +66,6 @@ export const AbortHandlerMiddleware: CompletionsMiddleware =
     if (!ctx._internal.flowControl) {
       ctx._internal.flowControl = {}
     }
-
     ctx._internal.flowControl.abortController = abortController
     ctx._internal.flowControl.abortSignal = abortSignal
     ctx._internal.flowControl.cleanup = cleanup
@@ -112,7 +108,6 @@ export const AbortHandlerMiddleware: CompletionsMiddleware =
             }
             controller.enqueue(errorChunk)
           }
-
           // 在流完全处理完成后清理 AbortController
           cleanup()
         }
