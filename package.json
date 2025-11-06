@@ -130,7 +130,7 @@
     "expo-updates": "~29.0.12",
     "expo-web-browser": "~15.0.7",
     "fast-xml-parser": "^5.2.5",
-    "heroui-native": "^1.0.0-alpha.16",
+    "heroui-native": "^1.0.0-beta.1",
     "i18next": "^24.2.2",
     "jsonstream": "^1.0.3",
     "lodash": "^4.17.21",
@@ -183,6 +183,7 @@
     "temml": "^0.11.9",
     "tokenx": "^1.0.1",
     "turndown": "7.2.2",
+    "uniwind": "^1.0.0",
     "vitest": "^3.2.4",
     "webdav": "^5.8.0",
     "zeego": "^3.0.6"
@@ -218,7 +219,7 @@
     "react-test-renderer": "~19.0.0",
     "remove-markdown": "^0.6.2",
     "source-map-explorer": "^2.5.3",
-    "tailwindcss": "^3.4.17",
+    "tailwindcss": "^4.1.16",
     "tsx": "^4.20.3",
     "typescript": "~5.9.3"
   },
