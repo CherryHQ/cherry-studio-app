@@ -1,11 +1,10 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import type { RouteProp } from '@react-navigation/native'
 import { useNavigation, useRoute } from '@react-navigation/native'
-import { Switch,  } from 'heroui-native'
+import { Spinner, Switch } from 'heroui-native'
 import { groupBy } from 'lodash'
 import React, { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 
 import {
@@ -171,11 +170,11 @@ export default function ProviderSettingsScreen() {
 
         switch (health.status) {
           case 'healthy':
-            return <CircleCheck size={16} className="text-green-500" />
+            return <CircleCheck size={16} className="text-green-100 dark:text-green-100" />
           case 'unhealthy':
-            return <XCircle size={16} className="text-red-500" />
+            return <XCircle size={16} className="text-red-100 dark:text-red-100" />
           case 'testing':
-            return <ActivityIndicator size="small" color={isDark ? '#ffffff' : '#000000'} />
+            return <Spinner size="sm" color={isDark ? '#ffffff' : '#000000'} />
           default:
             return null
         }
@@ -197,19 +196,17 @@ export default function ProviderSettingsScreen() {
             </XStack>
             <XStack className="items-center gap-2">
               {health && health.latency != null && (
-                <Text className="font-mono text-xs text-text-secondary">
-                  {health.latency.toFixed(2)}s
-                </Text>
+                <Text className="text-text-secondary font-mono text-xs">{health.latency.toFixed(2)}s</Text>
               )}
               {getStatusIcon()}
               <IconButton
-                icon={<Minus size={18} className="rounded-full bg-red-20 text-red-100" />}
+                icon={<Minus size={18} className="bg-red-20 rounded-full text-red-100 dark:text-red-100" />}
                 onPress={() => handleRemoveModel(model.id)}
               />
             </XStack>
           </XStack>
           {health?.error && health.status === 'unhealthy' && (
-            <Text className="text-xs text-red-500" numberOfLines={2}>
+            <Text className="text-xs text-red-100" numberOfLines={2}>
               {health.error}
             </Text>
           )}
@@ -277,7 +274,7 @@ export default function ProviderSettingsScreen() {
                   <Text>{t('settings.provider.api_service')}</Text>
                   <XStack className="items-center justify-center">
                     {provider.apiKey && provider.apiHost && (
-                      <Text className="rounded-md border-[0.5px] border-green-20 bg-green-10 px-2 py-0.5 text-xs font-bold text-green-100">
+                      <Text className="border-green-20 bg-green-10 rounded-md border-[0.5px] px-2 py-0.5 text-xs font-bold text-green-100">
                         {t('settings.provider.added')}
                       </Text>
                     )}
