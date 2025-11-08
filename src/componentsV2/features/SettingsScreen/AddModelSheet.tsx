@@ -20,7 +20,7 @@ const stopPropagation = () => true
 
 interface AddModelSheetProps {
   provider?: Provider
-  updateProvider: (provider: Provider) => Promise<void>
+  updateProvider: (updates: Partial<Omit<Provider, 'id'>>) => Promise<void>
 }
 
 export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({ provider, updateProvider }, ref) => {
@@ -68,13 +68,8 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
       group: modelGroup
     }
 
-    const updatedProvider: Provider = {
-      ...provider,
-      models: [...provider.models, newModel]
-    }
-
     try {
-      await updateProvider(updatedProvider)
+      await updateProvider({ models: [...provider.models, newModel] })
       logger.info('Successfully added model:', newModel)
       ;(ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()
     } catch (error) {

@@ -208,7 +208,7 @@ export function useProvider(providerId: string) {
     return {
       provider: CHERRYAI_PROVIDER,
       isLoading: false,
-      updateProvider: () => {}
+      updateProvider: async (_updates: Partial<Omit<Provider, 'id'>>) => {}
     }
   }
 
