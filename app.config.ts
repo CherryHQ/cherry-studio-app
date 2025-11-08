@@ -7,7 +7,7 @@ const appVersion = process.env.APP_VERSION || packageJson.version
 
 export default {
   expo: {
-    name: 'Cherry Studio Dev',
+    name: 'Cherry Studio',
     slug: 'cherry-studio',
     version: appVersion,
     orientation: 'portrait',
@@ -24,7 +24,7 @@ export default {
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.cherry-ai.cherry-studio-app-dev',
+      bundleIdentifier: 'com.cherry-ai.cherry-studio-app',
       userInterfaceStyle: 'automatic'
     },
     android: {
