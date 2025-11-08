@@ -48,7 +48,7 @@ export default function PersonalScreen() {
     <SafeAreaContainer>
       <HeaderBar title={t('settings.personal.title')} />
       <Container>
-        <Card className="rounded-2xl bg-ui-card-background p-4">
+        <Card className="bg-ui-card-background rounded-2xl p-4">
           <YStack className="gap-6">
             <XStack className="mt-2 items-center justify-center">
               <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.8}>
@@ -72,6 +72,7 @@ export default function PersonalScreen() {
 
               <TextField className="flex-1">
                 <TextField.Input
+                  className="rounded-xl"
                   value={userName}
                   onChangeText={setUserName}
                   placeholder={t('settings.personal.namePlaceholder')}

@@ -1,7 +1,7 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
-import { Button,  } from 'heroui-native'
+import { Button } from 'heroui-native'
 import React, { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
@@ -24,7 +24,7 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
   return (
     <Button
       variant="ghost"
-      className="w-full   justify-between bg-ui-card-background px-3"
+      className="bg-ui-card-background   w-full justify-between rounded-2xl px-3"
       onPress={onPress}>
       <Button.Label>
         <XStack className="flex-1 items-center gap-2 overflow-hidden">
@@ -86,7 +86,7 @@ function AssistantSettingItem({
         <XStack className="items-center justify-between px-[10px]">
           <XStack className="items-center gap-2">
             {icon}
-            <Text className="font-semibold text-text-secondary">{t(titleKey)}</Text>
+            <Text className="text-text-secondary font-semibold">{t(titleKey)}</Text>
           </XStack>
           <IconButton
             icon={<Settings2 size={16} className="text-text-link" />}
@@ -94,9 +94,7 @@ function AssistantSettingItem({
           />
         </XStack>
         <ModelPicker assistant={assistant} onPress={() => sheetRef.current?.present()} />
-        <Text className="px-[10px] text-text-secondary opacity-70">
-          {t(descriptionKey)}
-        </Text>
+        <Text className="text-text-secondary px-[10px] opacity-70">{t(descriptionKey)}</Text>
       </YStack>
 
       <ModelSheet

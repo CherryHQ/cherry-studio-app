@@ -62,9 +62,7 @@ export default function GeneralSettingsScreen() {
                   <Text className="text-lg">{t('settings.general.theme.title')}</Text>
                 </XStack>
                 <XStack className="items-center gap-2">
-                  <Text className="text-gray-500">
-                    {t(`settings.general.theme.${themeSetting === 'system' ? 'auto' : themeSetting}`)}
-                  </Text>
+                  <Text>{t(`settings.general.theme.${themeSetting === 'system' ? 'auto' : themeSetting}`)}</Text>
                   <RowRightArrow />
                 </XStack>
               </PressableRow>

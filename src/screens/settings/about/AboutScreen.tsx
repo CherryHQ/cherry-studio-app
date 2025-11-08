@@ -32,7 +32,7 @@ export default function AboutScreen() {
   }
 
   return (
-    <SafeAreaContainer style={{ flex: 1 }}>
+    <SafeAreaContainer>
       <HeaderBar
         title={t('settings.about.header')}
         rightButton={{
@@ -48,10 +48,10 @@ export default function AboutScreen() {
               <Image className="h-[70px] w-[70px] rounded-[41px]" source={require('@/assets/images/favicon.png')} />
               <YStack className="flex-1 gap-[5px] py-1">
                 <Text className="text-[22px] font-bold">{t('common.cherry_studio')}</Text>
-                <Text className="text-sm text-text-secondary" numberOfLines={0}>
+                <Text className="text-text-secondary text-sm" numberOfLines={0}>
                   {t('common.cherry_studio_description')}
                 </Text>
-                <Text className="self-start rounded-[25.37px] border border-green-20 bg-green-10 px-2 py-0.5 text-sm text-green-100">
+                <Text className="border-green-20 bg-green-10 self-start rounded-[25.37px] border px-2 py-0.5 text-sm text-green-100">
                   v{appVersion}
                 </Text>
               </YStack>

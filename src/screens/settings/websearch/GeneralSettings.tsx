@@ -66,6 +66,7 @@ export default function GeneralSettings() {
           <Text>{t('settings.websearch.contentLengthLimit')}</Text>
           <TextField className="max-w-20 flex-1">
             <TextField.Input
+              className="rounded-xl"
               value={contentLimitInput}
               onChangeText={setContentLimitInput}
               onEndEditing={handleContentLimitEndEditing}
@@ -77,6 +78,7 @@ export default function GeneralSettings() {
           <Text>{t('settings.websearch.searchCount')}</Text>
           <TextField className="max-w-20 flex-1">
             <TextField.Input
+              className="rounded-xl"
               value={searchCountInput}
               onChangeText={setSearchCountInput}
               onEndEditing={handleSearchCountEndEditing}

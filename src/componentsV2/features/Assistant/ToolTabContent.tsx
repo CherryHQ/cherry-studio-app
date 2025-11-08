@@ -87,12 +87,10 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
       }}>
       <YStack className="flex-1 gap-4">
         <YStack className="w-full gap-2">
-          <Text className="text-sm font-medium text-text-secondary">
-            {t('assistants.settings.tooluse.title')}
-          </Text>
+          <Text className="text-text-secondary text-sm font-medium">{t('assistants.settings.tooluse.title')}</Text>
           <Pressable
             onPress={handleToolUsePress}
-            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80">
+            className="bg-ui-card-background flex-row items-center justify-between rounded-xl px-3 py-3 active:opacity-80">
             <XStack className="flex-1 items-center gap-2">
               {assistant.settings?.toolUseMode ? (
                 <XStack className="flex-1 items-center gap-2">
@@ -102,10 +100,7 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
                   </Text>
                 </XStack>
               ) : (
-                <Text
-                  className="flex-1 text-base text-text-secondary"
-                  numberOfLines={1}
-                  ellipsizeMode="tail">
+                <Text className="text-text-secondary flex-1 text-base" numberOfLines={1} ellipsizeMode="tail">
                   {t('assistants.settings.tooluse.empty')}
                 </Text>
               )}
@@ -115,12 +110,10 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
         </YStack>
 
         <YStack className="w-full gap-2">
-          <Text className="text-sm font-medium text-text-secondary">
-            {t('settings.websearch.provider.title')}
-          </Text>
+          <Text className="text-text-secondary text-sm font-medium">{t('settings.websearch.provider.title')}</Text>
           <Pressable
             onPress={handleWebsearchPress}
-            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80">
+            className="bg-ui-card-background flex-row items-center justify-between rounded-xl px-3 py-3 active:opacity-80">
             <XStack className="flex-1 items-center gap-2">
               {websearchContent.isActive ? (
                 <XStack className="max-w-[80%] flex-1 items-center gap-2">
@@ -130,10 +123,7 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
                   </Text>
                 </XStack>
               ) : (
-                <Text
-                  className="flex-1 text-base text-text-secondary"
-                  numberOfLines={1}
-                  ellipsizeMode="tail">
+                <Text className="text-text-secondary flex-1 text-base" numberOfLines={1} ellipsizeMode="tail">
                   {websearchContent.text}
                 </Text>
               )}
@@ -143,20 +133,15 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
         </YStack>
 
         <YStack className="w-full gap-2">
-          <Text className="text-sm font-medium text-text-secondary">
-            {t('mcp.server.title')}
-          </Text>
+          <Text className="text-text-secondary text-sm font-medium">{t('mcp.server.title')}</Text>
           <Pressable
             onPress={handleMcpServerPress}
-            className="flex-row items-center justify-between rounded-lg bg-ui-card-background px-3 py-3 active:opacity-80">
+            className="bg-ui-card-background flex-row items-center justify-between rounded-xl px-3 py-3 active:opacity-80">
             <XStack className="flex-1 items-center gap-2">
               {activeMcpCount > 0 ? (
                 <Text>{t('mcp.server.selected', { num: activeMcpCount })}</Text>
               ) : (
-                <Text
-                  className="flex-1 text-base text-text-secondary"
-                  numberOfLines={1}
-                  ellipsizeMode="tail">
+                <Text className="text-text-secondary flex-1 text-base" numberOfLines={1} ellipsizeMode="tail">
                   {t('mcp.server.empty')}
                 </Text>
               )}

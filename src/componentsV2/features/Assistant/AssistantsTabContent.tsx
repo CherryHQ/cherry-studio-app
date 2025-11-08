@@ -27,7 +27,7 @@ const AssistantsTabContent: React.FC<AssistantsTabProps> = ({ assistants, onAssi
   if (!assistants || assistants.length === 0) {
     return (
       <YStack className="flex-1 items-center justify-center p-5">
-        <Text className="text-base text-gray-60">{t('assistants.market.empty_state')}</Text>
+        <Text className="text-gray-60 text-base">{t('assistants.market.empty_state')}</Text>
       </YStack>
     )
   }
@@ -43,7 +43,7 @@ const AssistantsTabContent: React.FC<AssistantsTabProps> = ({ assistants, onAssi
         recycleItems
         drawDistance={100}
         estimatedItemSize={230}
-        contentContainerStyle={{ paddingBottom: insets.bottom }}
+        contentContainerStyle={{ paddingBottom: insets.bottom, gap: 8 }}
       />
     </YStack>
   )

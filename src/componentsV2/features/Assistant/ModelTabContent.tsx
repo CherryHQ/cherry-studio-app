@@ -80,7 +80,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
       }}>
       <Button
         variant="tertiary"
-        className="justify-between rounded-xl border-0 bg-ui-card-background"
+        className="bg-ui-card-background justify-between rounded-xl border-0"
         onPress={handleModelPress}>
         {model.length > 0 ? (
           <XStack className="flex-1 flex-row items-center justify-between">
@@ -105,6 +105,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
           <Text>{t('assistants.settings.temperature')}</Text>
           <TextField className="min-w-[60px]">
             <TextField.Input
+              className="rounded-xl"
               value={temperatureInput}
               onChangeText={setTemperatureInput}
               onEndEditing={() => {
@@ -124,6 +125,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
           <Text>{t('assistants.settings.context')}</Text>
           <TextField className="min-w-[60px]">
             <TextField.Input
+              className="rounded-xl"
               value={contextInput}
               onChangeText={setContextInput}
               onEndEditing={() => {
@@ -193,7 +195,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
                 <Text className="flex-1">{t('assistants.settings.reasoning.label')}</Text>
 
                 <YStack className="justify-end">
-                  <Text className="rounded-lg border-[0.5px] border-green-20 bg-green-10 px-2 py-[2px] text-sm text-green-100">
+                  <Text className="border-green-20 bg-green-10 rounded-lg border-[0.5px] px-2 py-[2px] text-sm text-green-100">
                     {t(`assistants.settings.reasoning.${settings.reasoning_effort || 'off'}`)}
                   </Text>
                 </YStack>
