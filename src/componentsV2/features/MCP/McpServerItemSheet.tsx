@@ -1,5 +1,5 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
-import { Accordion, Divider, Switch,  } from 'heroui-native'
+import { Accordion, Divider, Switch } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, TouchableOpacity, View } from 'react-native'
@@ -117,25 +117,19 @@ const McpServerItemSheet = forwardRef<BottomSheetModal, McpServerItemSheetProps>
                 {/* Description */}
                 {selectedMcp.description && (
                   <YStack className="gap-1">
-                    <Text className="text-lg font-bold leading-5 text-text-primary">
-                      {t('common.description')}
-                    </Text>
-                    <Text className="leading-5 text-text-secondary">
-                      {selectedMcp.description}
-                    </Text>
+                    <Text className="text-text-primary text-lg font-bold leading-5">{t('common.description')}</Text>
+                    <Text className="text-text-secondary leading-5">{selectedMcp.description}</Text>
                   </YStack>
                 )}
                 {/* Tools */}
                 {tools.length > 0 && (
                   <YStack className="gap-1">
-                    <Text className="text-lg font-bold leading-5 text-text-primary">
-                      {t('common.tool')}
-                    </Text>
+                    <Text className="text-text-primary text-lg font-bold leading-5">{t('common.tool')}</Text>
                     <Accordion
                       defaultValue={tools.map(tool => tool.id)}
                       selectionMode="multiple"
-                      variant="border"
-                      className="rounded-lg">
+                      variant="surface"
+                      className="rounded-2xl">
                       {tools.map((tool, index) => (
                         <Accordion.Item key={index} value={tool.id}>
                           <Accordion.Trigger>
