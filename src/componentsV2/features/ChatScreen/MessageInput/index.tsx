@@ -1,8 +1,7 @@
-import { DropShadowView } from 'heroui-native'
 import { AnimatePresence, MotiView } from 'moti'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Platform } from 'react-native'
+import { Platform, View } from 'react-native'
 
 import TextField from '@/componentsV2/base/TextField'
 import XStack from '@/componentsV2/layout/XStack'
@@ -33,33 +32,27 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
     useMessageInputLogic(topic, assistant)
 
   return (
-    <DropShadowView
-      className="rounded-2xl bg-surface-1 px-5 py-2"
-      shadowSize="xl"
-      iosShadowStyle={{
-        shadowOffset: { width: 0, height: -4 }
-      }}
-      androidShadowStyle={{
-        elevation: 10
-      }}
+    <View
+      className="bg-background-secondary dark:bg-background-secondary rounded-3xl px-5 py-2"
       style={{
         paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad
       }}>
-      <YStack className="gap-[10px]">
+      <YStack className="gap-2.5">
         {files.length > 0 && <FilePreview files={files} setFiles={setFiles} />}
         {/* message */}
         <XStack className="top-[5px]">
           <TextField className="w-full p-0">
             <TextField.Input
-              className="h-24 border-none p-0 text-base text-text-primary"
+              className="text-text-primary h-24 border-none p-0 text-base"
               placeholder={t('inputs.placeholder')}
               value={text}
               onChangeText={setText}
               multiline
               numberOfLines={10}
+              selectionColor="#2563eb"
               colors={{
                 blurBackground: 'transparent',
-                // focusBackground: 'transparent',
+                focusBackground: 'transparent',
                 blurBorder: 'transparent',
                 focusBorder: 'transparent'
               }}
@@ -111,6 +104,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
           </XStack>
         </XStack>
       </YStack>
-    </DropShadowView>
+    </View>
   )
 }
