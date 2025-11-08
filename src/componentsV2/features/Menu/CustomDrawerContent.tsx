@@ -1,5 +1,5 @@
 import type { DrawerContentComponentProps } from '@react-navigation/drawer'
-import { Divider,  } from 'heroui-native'
+import { Divider } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'

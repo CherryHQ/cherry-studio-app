@@ -48,11 +48,11 @@ export const SystemTools: React.FC<SystemToolsProps> = ({ onCameraPress, onImage
       {options.map(option => (
         <Button
           key={option.key}
-          className="aspect-[1.618] flex-1 flex-col items-center justify-center gap-2 rounded-lg bg-gray-20"
+          className="bg-gray-20 aspect-[1.618] flex-1 flex-col items-center justify-center gap-2 rounded-lg"
           onPress={option.onPress}>
           {option.icon}
           <Button.Label>
-            <Text className="text-center text-base text-text-primary">{option.label}</Text>
+            <Text className="text-text-primary text-center text-base">{option.label}</Text>
           </Button.Label>
         </Button>
       ))}

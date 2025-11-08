@@ -68,9 +68,7 @@ export const ExternalTools: React.FC<ExternalToolsProps> = ({
   return (
     <YStack className="px-5">
       {visibleOptions.map(option => {
-        const activeColorClass = option.isActive
-          ? 'text-green-100'
-          : 'text-text-primary'
+        const activeColorClass = option.isActive ? 'text-green-100' : 'text-text-primary'
 
         return (
           <PressableRow

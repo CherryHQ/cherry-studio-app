@@ -199,17 +199,12 @@ export const TopicItem: FC<TopicItemProps> = ({
             <Text className="flex-1 text-base font-bold" numberOfLines={1} ellipsizeMode="tail">
               {assistant?.name}
             </Text>
-            <Text className="text-wrap-none shrink-0 text-xs text-text-secondary">
-              {displayTime}
-            </Text>
+            <Text className="text-wrap-none text-text-secondary shrink-0 text-xs">{displayTime}</Text>
           </XStack>
           {isGeneratingName ? (
             <TopicNameSkeleton isDark={isDark} />
           ) : (
-            <Text
-              className="text-[13px] font-normal text-text-secondary"
-              numberOfLines={1}
-              ellipsizeMode="tail">
+            <Text className="text-text-secondary text-[13px] font-normal" numberOfLines={1} ellipsizeMode="tail">
               {topic.name}
             </Text>
           )}

@@ -52,7 +52,7 @@ export default function ModelGroup({
   if (showEmptyState && modelGroups.length === 0) {
     return (
       <YStack className="h-20 flex-1 items-center justify-center">
-        <Text className="text-center text-text-secondary">{t(emptyStateKey)}</Text>
+        <Text className="text-text-secondary text-center">{t(emptyStateKey)}</Text>
       </YStack>
     )
   }
@@ -67,16 +67,14 @@ export default function ModelGroup({
                 <XStack className="flex-1 items-center gap-3">
                   <Accordion.Indicator />
                   <Text className="font-bold">{groupName}</Text>
-                  <Chip variant="tertiary" size="sm" className="rounded-md bg-green-20">
-                    <Chip.Label className="text-[10px] text-green-100">
-                      {models.length}
-                    </Chip.Label>
+                  <Chip variant="tertiary" size="sm" className="bg-green-20 rounded-md">
+                    <Chip.Label className="text-[10px] text-green-100">{models.length}</Chip.Label>
                   </Chip>
                 </XStack>
                 {renderGroupButton && renderGroupButton(groupName, models)}
               </XStack>
             </Accordion.Trigger>
-            <Accordion.Content className="gap-2 bg-ui-card-background">
+            <Accordion.Content className="bg-ui-card-background gap-2">
               {models.map((model, modelIndex) => (
                 <React.Fragment key={model.id || modelIndex}>{renderModelItem(model, modelIndex)}</React.Fragment>
               ))}

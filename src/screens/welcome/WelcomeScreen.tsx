@@ -59,7 +59,7 @@ export default function WelcomeScreen() {
           </View>
         </View>
         {/* register and login*/}
-        <View className="h-1/4 w-full items-center justify-center bg-ui-card-background">
+        <View className="bg-ui-card-background h-1/4 w-full items-center justify-center">
           <YStack className="flex-1 items-center justify-center gap-5">
             <Button className="w-3/4" variant="primary" onPress={() => bottomSheetModalRef.current?.present()}>
               <Button.Label className="w-full text-center text-lg">

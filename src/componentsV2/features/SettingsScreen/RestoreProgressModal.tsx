@@ -1,4 +1,4 @@
-import { Button, cn, ErrorView, Spinner,  } from 'heroui-native'
+import { Button, cn, ErrorView, Spinner } from 'heroui-native'
 import { MotiView } from 'moti'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
@@ -79,10 +79,10 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
         {isDone && (
           <Pressable onPress={onClose} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
         )}
-        <YStack className="w-3/4 gap-3 overflow-hidden rounded-2xl bg-ui-card-background p-4">
+        <YStack className="bg-ui-card-background w-3/4 gap-3 overflow-hidden rounded-2xl p-4">
           <YStack className="items-center gap-3">
             <Text className="text-2xl font-bold">{title}</Text>
-            <Text className="text-lg text-text-secondary">{description}</Text>
+            <Text className="text-text-secondary text-lg">{description}</Text>
           </YStack>
 
           <YStack className="items-center justify-center gap-3">

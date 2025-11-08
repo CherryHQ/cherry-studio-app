@@ -80,10 +80,7 @@ export const NewTopicButton: React.FC<NewTopicButtonProps> = ({ assistant }) => 
             {assistantItem.name}
           </Text>
           {!isEmpty(assistantItem.prompt) && (
-            <Text
-              ellipsizeMode="tail"
-              numberOfLines={1}
-              className="text-xs  text-text-secondary">
+            <Text ellipsizeMode="tail" numberOfLines={1} className="text-text-secondary  text-xs">
               {assistantItem.prompt}
             </Text>
           )}

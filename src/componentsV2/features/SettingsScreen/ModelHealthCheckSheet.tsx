@@ -128,10 +128,8 @@ export const ModelHealthCheckSheet = forwardRef<BottomSheetModal, ModelHealthChe
               <Text className="text-xl font-semibold">{t('settings.models.health_check.title')}</Text>
               {isChecking && (
                 <XStack className="items-center gap-2">
-                  <RefreshCw size={16} className="animate-spin text-text-secondary" />
-                  <Text className="text-sm text-text-secondary">
-                    {t('settings.models.health_check.checking')}
-                  </Text>
+                  <RefreshCw size={16} className="text-text-secondary animate-spin" />
+                  <Text className="text-text-secondary text-sm">{t('settings.models.health_check.checking')}</Text>
                 </XStack>
               )}
             </XStack>
@@ -145,7 +143,7 @@ export const ModelHealthCheckSheet = forwardRef<BottomSheetModal, ModelHealthChe
                   return (
                     <XStack
                       key={model.id}
-                      className="w-full items-center justify-between rounded-2xl border border-border bg-background-secondary px-4 py-3">
+                      className="border-border bg-background-secondary w-full items-center justify-between rounded-2xl border px-4 py-3">
                       <YStack className="flex-1 gap-1">
                         <Text className="text-sm font-medium" numberOfLines={1}>
                           {model.name || model.id}
@@ -158,7 +156,7 @@ export const ModelHealthCheckSheet = forwardRef<BottomSheetModal, ModelHealthChe
                       </YStack>
 
                       <XStack className="items-center gap-3">
-                        <Text className="min-w-[60px] text-right font-mono text-sm text-text-secondary">
+                        <Text className="text-text-secondary min-w-[60px] text-right font-mono text-sm">
                           {latencyText}
                         </Text>
                         {health && getStatusIcon(health.status)}

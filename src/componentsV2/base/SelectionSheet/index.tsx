@@ -1,6 +1,6 @@
 import { BottomSheetBackdrop, BottomSheetModal, useBottomSheetScrollableCreator } from '@gorhom/bottom-sheet'
 import { LegendList } from '@legendapp/list'
-import { cn,  } from 'heroui-native'
+import { cn } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
 import { BackHandler, TouchableOpacity, View } from 'react-native'
 
@@ -100,9 +100,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
         <XStack
           className={cn(
             `items-center gap-2.5 rounded-lg border px-3.5 py-3 ${
-              item.isSelected
-                ? 'border-green-20 bg-green-10'
-                : 'border-transparent bg-ui-card-background'
+              item.isSelected ? 'border-green-20 bg-green-10' : 'bg-ui-card-background border-transparent'
             }`,
             item.backgroundColor && !item.isSelected ? item.backgroundColor : undefined
           )}>
@@ -151,9 +149,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
         ListHeaderComponent={
           placeholder ? (
             <View className="px-4 pb-2">
-              <Text className="text-center text-sm text-text-secondary opacity-60">
-                {placeholder}
-              </Text>
+              <Text className="text-text-secondary text-center text-sm opacity-60">{placeholder}</Text>
             </View>
           ) : undefined
         }

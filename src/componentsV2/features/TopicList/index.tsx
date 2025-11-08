@@ -180,7 +180,7 @@ export function TopicList({ topics, enableScroll, handleNavigateChatScreen }: Gr
             style={{ paddingTop: index !== 0 ? 20 : 0 }}>
             <XStack className="items-center gap-2">
               {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-              <Text className="font-bold text-text-primary">{item.title}</Text>
+              <Text className="text-text-primary font-bold">{item.title}</Text>
             </XStack>
           </TouchableOpacity>
         )

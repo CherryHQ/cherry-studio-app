@@ -28,17 +28,17 @@ export const McpItemCard: FC<McpItemCardProps> = ({ mcp, updateMcpServers, handl
   return (
     <PressableRow
       onPress={handlePress}
-      className="items-center justify-between rounded-2xl bg-ui-card-background px-2.5 py-2.5">
+      className="bg-ui-card-background items-center justify-between rounded-2xl px-2.5 py-2.5">
       <YStack className="h-full gap-2">
         <Text className="text-lg">{mcp.name}</Text>
-        <Text className="text-sm text-text-secondary">{mcp.description}</Text>
+        <Text className="text-text-secondary text-sm">{mcp.description}</Text>
       </YStack>
       <YStack className="justify-between gap-2">
         <Switch color="success" isSelected={mcp.isActive} onSelectedChange={handleSwitchChange}>
           <Switch.Thumb colors={{ defaultBackground: 'white', selectedBackground: 'white' }} />
         </Switch>
 
-        <Text className="rounded-lg border-[0.5px] border-green-20 bg-green-10 px-2 py-0.5 text-sm text-green-100">
+        <Text className="border-green-20 bg-green-10 rounded-lg border-[0.5px] px-2 py-0.5 text-sm text-green-100">
           {t(`mcp.type.${mcp.type}`)}
         </Text>
       </YStack>

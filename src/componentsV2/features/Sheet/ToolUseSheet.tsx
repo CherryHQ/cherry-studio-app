@@ -23,12 +23,7 @@ export const ToolUseSheet: FC<ToolUseSheetProps> = ({ assistant, updateAssistant
       id: 'function',
       label: t('assistants.settings.tooluse.function'),
       icon: (isSelected: boolean) => (
-        <SquareFunction
-          size={20}
-          className={
-            isSelected ? 'text-green-100' : 'text-text-primary'
-          }
-        />
+        <SquareFunction size={20} className={isSelected ? 'text-green-100' : 'text-text-primary'} />
       ),
       isSelected: assistant.settings?.toolUseMode === 'function',
       onSelect: () => handleToolUseModeToggle('function')
@@ -37,12 +32,7 @@ export const ToolUseSheet: FC<ToolUseSheetProps> = ({ assistant, updateAssistant
       id: 'prompt',
       label: t('assistants.settings.tooluse.prompt'),
       icon: (isSelected: boolean) => (
-        <Wrench
-          size={20}
-          className={
-            isSelected ? 'text-green-100' : 'text-text-primary'
-          }
-        />
+        <Wrench size={20} className={isSelected ? 'text-green-100' : 'text-text-primary'} />
       ),
       isSelected: assistant.settings?.toolUseMode === 'prompt',
       onSelect: () => handleToolUseModeToggle('prompt')

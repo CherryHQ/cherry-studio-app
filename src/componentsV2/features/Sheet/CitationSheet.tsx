@@ -21,11 +21,11 @@ export interface CitationSheetProps {
 
 const CitationTitle = ({ number, title }: { number: number; title: string }) => (
   <XStack className="items-center gap-2.5">
-    <YStack className="h-5 w-5 items-center justify-center rounded-sm border border-green-20 bg-green-10 px-1 py-0.5">
+    <YStack className="border-green-20 bg-green-10 h-5 w-5 items-center justify-center rounded-sm border px-1 py-0.5">
       <Text className="text-center text-[10px] text-green-100">{number}</Text>
     </YStack>
     <YStack className="flex-1">
-      <Text className="text-base text-text-primary" numberOfLines={1} ellipsizeMode="tail">
+      <Text className="text-text-primary text-base" numberOfLines={1} ellipsizeMode="tail">
         {title}
       </Text>
     </YStack>
@@ -34,10 +34,7 @@ const CitationTitle = ({ number, title }: { number: number; title: string }) => 
 
 const Content = ({ content }: { content: string }) => (
   <XStack className="mt-1">
-    <Text
-      className="text-sm leading-4 text-text-secondary"
-      numberOfLines={3}
-      ellipsizeMode="tail">
+    <Text className="text-text-secondary text-sm leading-4" numberOfLines={3} ellipsizeMode="tail">
       {content}
     </Text>
   </XStack>
@@ -46,9 +43,7 @@ const Content = ({ content }: { content: string }) => (
 const Footer = ({ url, title }: { url: string; title: string }) => (
   <XStack className="mt-1.5 items-center gap-1.5">
     <FallbackFavicon hostname={new URL(url).hostname} alt={title || ''} />
-    <Text className="text-[10px] leading-5 text-text-secondary">
-      {getWebsiteBrand(url)}
-    </Text>
+    <Text className="text-text-secondary text-[10px] leading-5">{getWebsiteBrand(url)}</Text>
   </XStack>
 )
 
@@ -119,7 +114,7 @@ export const CitationSheet = forwardRef<BottomSheetModal, CitationSheetProps>(({
       onDismiss={() => setIsVisible(false)}
       onChange={index => setIsVisible(index >= 0)}>
       <XStack className="items-center justify-between border-b border-black/10 px-4 pb-4">
-        <Text className="text-base font-bold text-text-primary">{t('common.source')}</Text>
+        <Text className="text-text-primary text-base font-bold">{t('common.source')}</Text>
         <TouchableOpacity
           style={{
             padding: 4,

@@ -76,7 +76,7 @@ const AssistantItem: FC<AssistantItemProps> = ({ assistant, onAssistantPress }) 
 
   return (
     <ContextMenu borderRadius={16} list={contextMenuItems} onPress={handlePress}>
-      <View className="items-center justify-between rounded-2xl bg-ui-card-background px-2.5 py-2.5">
+      <View className="bg-ui-card-background items-center justify-between rounded-2xl px-2.5 py-2.5">
         <XStack className="gap-3.5">
           <EmojiAvatar
             emoji={assistant.emoji}
@@ -90,10 +90,7 @@ const AssistantItem: FC<AssistantItemProps> = ({ assistant, onAssistantPress }) 
               {assistant.name}
             </Text>
             {!isEmpty(assistant.prompt) && (
-              <Text
-                ellipsizeMode="tail"
-                numberOfLines={1}
-                className="text-xs  text-text-secondary">
+              <Text ellipsizeMode="tail" numberOfLines={1} className="text-text-secondary  text-xs">
                 {assistant.prompt}
               </Text>
             )}

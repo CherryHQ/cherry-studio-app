@@ -1,6 +1,6 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet'
 import { File, Paths } from 'expo-file-system'
-import { Button,  } from 'heroui-native'
+import { Button } from 'heroui-native'
 import React, { forwardRef, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Keyboard, TouchableWithoutFeedback, View } from 'react-native'
@@ -197,9 +197,7 @@ export const AddProviderSheet = forwardRef<BottomSheetModal, ProviderSheetProps>
                 />
                 <YStack className="w-full gap-2">
                   <XStack className="gap-2">
-                    <Text className="text-text-secondary">
-                      {t('settings.provider.add.name.label')}
-                    </Text>
+                    <Text className="text-text-secondary">{t('settings.provider.add.name.label')}</Text>
                     <Text className="text-red-500">*</Text>
                   </XStack>
                   <View onStartShouldSetResponder={stopPropagation}>
@@ -213,9 +211,7 @@ export const AddProviderSheet = forwardRef<BottomSheetModal, ProviderSheetProps>
                 </YStack>
                 <YStack className="w-full gap-2">
                   <XStack className="gap-2">
-                    <Text className="text-text-secondary">
-                      {t('settings.provider.add.type')}
-                    </Text>
+                    <Text className="text-text-secondary">{t('settings.provider.add.type')}</Text>
                   </XStack>
                   <ProviderSelect
                     value={selectedProviderType}
@@ -226,7 +222,7 @@ export const AddProviderSheet = forwardRef<BottomSheetModal, ProviderSheetProps>
 
                 <Button
                   variant="tertiary"
-                  className="h-11 w-4/6 rounded-lg border-green-20 bg-green-10"
+                  className="border-green-20 bg-green-10 h-11 w-4/6 rounded-lg"
                   onPress={handleSaveProvider}>
                   <Button.Label>
                     <Text className="text-green-100">

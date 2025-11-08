@@ -1,5 +1,5 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet'
-import { Button,  } from 'heroui-native'
+import { Button } from 'heroui-native'
 import React, { forwardRef, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Keyboard, TouchableWithoutFeedback, View } from 'react-native'
@@ -125,9 +125,7 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
               {/* Model ID Input */}
               <YStack className="w-full gap-2">
                 <XStack className="gap-2 px-3">
-                  <Text className="text-text-secondary">
-                    {t('settings.models.add.model.id.label')}
-                  </Text>
+                  <Text className="text-text-secondary">{t('settings.models.add.model.id.label')}</Text>
                   <Text className="text-red-500">*</Text>
                 </XStack>
                 <View onStartShouldSetResponder={stopPropagation}>
@@ -142,9 +140,7 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
               {/* Model Name Input */}
               <YStack className="w-full gap-2">
                 <XStack className="gap-2 px-3">
-                  <Text className="text-text-secondary">
-                    {t('settings.models.add.model.name.label')}
-                  </Text>
+                  <Text className="text-text-secondary">{t('settings.models.add.model.name.label')}</Text>
                 </XStack>
                 <View onStartShouldSetResponder={stopPropagation}>
                   <BottomSheetTextInput
@@ -158,9 +154,7 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
               {/* Model Group Input */}
               <YStack className="w-full gap-2">
                 <XStack className="gap-2 px-3">
-                  <Text className="text-text-secondary">
-                    {t('settings.models.add.model.group.label')}
-                  </Text>
+                  <Text className="text-text-secondary">{t('settings.models.add.model.group.label')}</Text>
                 </XStack>
                 <View onStartShouldSetResponder={stopPropagation}>
                   <BottomSheetTextInput
@@ -173,13 +167,11 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
               </YStack>
               <Button
                 variant="tertiary"
-                className="h-11 w-4/6 rounded-2xl border-green-20 bg-green-10"
+                className="border-green-20 bg-green-10 h-11 w-4/6 rounded-2xl"
                 onPress={handleAddModel}
                 isDisabled={!modelId.trim()}>
                 <Button.Label>
-                  <Text className="text-green-100">
-                    {t('settings.models.add.model.label')}
-                  </Text>
+                  <Text className="text-green-100">{t('settings.models.add.model.label')}</Text>
                 </Button.Label>
               </Button>
             </YStack>

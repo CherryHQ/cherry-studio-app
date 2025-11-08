@@ -88,14 +88,8 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
     <View className="px-5 pb-5">
       <XStack className="items-center justify-between gap-5">
         <XStack className="gap-5">
-          <IconButton
-            icon={<Copy size={18} className="text-text-secondary" />}
-            onPress={handleCopy}
-          />
-          <IconButton
-            icon={<RefreshCw size={18} className="text-text-secondary" />}
-            onPress={handleRegenerate}
-          />
+          <IconButton icon={<Copy size={18} className="text-text-secondary" />} onPress={handleCopy} />
+          <IconButton icon={<RefreshCw size={18} className="text-text-secondary" />} onPress={handleRegenerate} />
 
           <IconButton icon={getAudioIcon()} onPress={handlePlay} />
           {message.role === 'assistant' && isMultiModel && (
@@ -110,10 +104,7 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
               onPress={handleBestAnswer}
             />
           )}
-          <IconButton
-            icon={<Share size={18} className="text-text-secondary" />}
-            onPress={handleShare}
-          />
+          <IconButton icon={<Share size={18} className="text-text-secondary" />} onPress={handleShare} />
           <IconButton
             icon={<MoreHorizontal size={18} className="text-text-secondary" />}
             onPress={() => {
@@ -124,15 +115,9 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
 
         {hasUsage && (
           <XStack className="items-center gap-1">
-            <Text className="text-[11px] text-text-secondary">
-              ↑{formatTokens(inputTokens)}
-            </Text>
-            <Text className="text-[11px] text-text-secondary">
-              ↓{formatTokens(outputTokens)}
-            </Text>
-            <Text className="text-[11px] text-text-secondary">
-              Σ{formatTokens(totalTokens)}
-            </Text>
+            <Text className="text-text-secondary text-[11px]">↑{formatTokens(inputTokens)}</Text>
+            <Text className="text-text-secondary text-[11px]">↓{formatTokens(outputTokens)}</Text>
+            <Text className="text-text-secondary text-[11px]">Σ{formatTokens(totalTokens)}</Text>
           </XStack>
         )}
       </XStack>

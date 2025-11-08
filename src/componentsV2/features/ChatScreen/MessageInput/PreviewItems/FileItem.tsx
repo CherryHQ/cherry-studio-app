@@ -69,20 +69,15 @@ const FileItem: FC<FileItemProps> = ({ file, onRemove, disabledContextMenu }) =>
         }
       ]}
       borderRadius={16}>
-      <XStack className="items-center justify-start gap-1.5 rounded-lg bg-green-20 px-1.5 py-1.5 pr-3">
+      <XStack className="bg-green-20 items-center justify-start gap-1.5 rounded-lg px-1.5 py-1.5 pr-3">
         <View className="h-9 w-9 items-center justify-center gap-2 rounded-[9.5px] bg-green-100">
           <FileIcon size={20} className="text-white" />
         </View>
         <YStack className="gap-0.75 justify-center">
-          <Text
-            className="leading-3.5 text-sm text-text-primary"
-            numberOfLines={1}
-            ellipsizeMode="middle">
+          <Text className="leading-3.5 text-text-primary text-sm" numberOfLines={1} ellipsizeMode="middle">
             {file.name}
           </Text>
-          <Text className="leading-2.75 text-xs text-text-secondary">
-            {formatFileSize(file.size)}
-          </Text>
+          <Text className="leading-2.75 text-text-secondary text-xs">{formatFileSize(file.size)}</Text>
         </YStack>
       </XStack>
       {onRemove && (

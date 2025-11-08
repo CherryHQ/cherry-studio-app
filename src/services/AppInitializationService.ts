@@ -1,4 +1,4 @@
-import { assistantDatabase, mcpDatabase, messageDatabase,providerDatabase, websearchProviderDatabase  } from '@database'
+import { assistantDatabase, mcpDatabase, messageDatabase, providerDatabase, websearchProviderDatabase } from '@database'
 import { db } from '@db'
 import { seedDatabase } from '@db/seeding'
 import * as Localization from 'expo-localization'

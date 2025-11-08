@@ -1,5 +1,5 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet'
-import { Button, Spinner,  } from 'heroui-native'
+import { Button, Spinner } from 'heroui-native'
 import React, { forwardRef, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, View } from 'react-native'
@@ -55,14 +55,12 @@ export const WebSearchApiCheckSheet = forwardRef<BottomSheetModal, WebSearchApiC
         <BottomSheetView>
           <YStack className="items-center gap-2.5 px-5 pb-7 pt-2.5">
             <XStack className="w-full items-center justify-center">
-              <Text className="text-2xl text-text-primary">
-                {t('settings.provider.api_check.title')}
-              </Text>
+              <Text className="text-text-primary text-2xl">{t('settings.provider.api_check.title')}</Text>
             </XStack>
             <XStack className="w-full items-center justify-center">
               <Button
                 variant="tertiary"
-                className="h-11 w-1/2 rounded-lg border-green-20 bg-green-10"
+                className="border-green-20 bg-green-10 h-11 w-1/2 rounded-lg"
                 isDisabled={checkApiStatus === 'processing'}
                 onPress={onStartModelCheck}>
                 <Button.Label>
@@ -70,9 +68,7 @@ export const WebSearchApiCheckSheet = forwardRef<BottomSheetModal, WebSearchApiC
                     <View>
                       <XStack className="w-full items-center justify-center gap-2.5">
                         <Spinner size="sm" color="success" />
-                        <Text className="text-lg font-bold text-green-100">
-                          {t('button.checking')}
-                        </Text>
+                        <Text className="text-lg font-bold text-green-100">{t('button.checking')}</Text>
                       </XStack>
                     </View>
                   )}
@@ -80,9 +76,7 @@ export const WebSearchApiCheckSheet = forwardRef<BottomSheetModal, WebSearchApiC
                   {checkApiStatus === 'idle' && (
                     <View>
                       <XStack className="w-full items-center justify-between">
-                        <Text className="text-lg font-bold text-green-100">
-                          {t('button.start_check_model')}
-                        </Text>
+                        <Text className="text-lg font-bold text-green-100">{t('button.start_check_model')}</Text>
                         <ChevronsRight className="text-green-100" />
                       </XStack>
                     </View>
@@ -91,9 +85,7 @@ export const WebSearchApiCheckSheet = forwardRef<BottomSheetModal, WebSearchApiC
                   {checkApiStatus === 'success' && (
                     <View>
                       <XStack className="w-full items-center justify-center">
-                        <Text className="text-lg font-bold text-green-100">
-                          {t('button.success')}
-                        </Text>
+                        <Text className="text-lg font-bold text-green-100">{t('button.success')}</Text>
                       </XStack>
                     </View>
                   )}

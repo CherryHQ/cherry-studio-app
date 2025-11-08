@@ -1,5 +1,5 @@
 import { BlurView } from 'expo-blur'
-import { cn,  } from 'heroui-native'
+import { cn } from 'heroui-native'
 import React from 'react'
 import { Platform, View } from 'react-native'
 

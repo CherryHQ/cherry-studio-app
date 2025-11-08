@@ -8,7 +8,7 @@ import { useTheme } from '@/hooks/useTheme'
 const AssistantItemSkeleton: FC = () => {
   const { isDark } = useTheme()
   return (
-    <View className="rounded-2xl bg-ui-card-background px-2.5 py-2.5">
+    <View className="bg-ui-card-background rounded-2xl px-2.5 py-2.5">
       <ContentLoader
         height={46}
         width={300}

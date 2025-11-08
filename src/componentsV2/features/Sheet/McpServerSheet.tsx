@@ -57,7 +57,7 @@ export const McpServerSheet: FC<McpServerProps> = ({ ref, assistant, updateAssis
   const emptyContent = (
     <TouchableOpacity onPress={handleNavigateToMcpMarket} activeOpacity={0.7}>
       <XStack className="bg-card w-full items-center gap-2.5 rounded-md px-5 py-4">
-        <Text className="flex-1 text-base text-foreground">{t('settings.websearch.empty.label')}</Text>
+        <Text className="text-foreground flex-1 text-base">{t('settings.websearch.empty.label')}</Text>
         <XStack className="items-center gap-1.5">
           <Text className="text-[11px] opacity-40">{t('settings.websearch.empty.description')}</Text>
           <RowRightArrow />

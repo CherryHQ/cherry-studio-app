@@ -1,4 +1,4 @@
-import { Button, cn,  } from 'heroui-native'
+import { Button, cn } from 'heroui-native'
 import { MotiView } from 'moti'
 import React, { createContext, useContext, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -133,17 +133,15 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
           transition={{ type: 'timing', duration: 300 }}
           className={centeredViewClassName}>
           {maskClosable && <Pressable className="absolute inset-0" onPress={cancel} />}
-          <YStack className="w-3/4 rounded-2xl bg-ui-card-background">
+          <YStack className="bg-ui-card-background w-3/4 rounded-2xl">
             <YStack className="items-center gap-3 p-5">
               {typeof options?.title === 'string' ? (
-                <Text className="text-lg font-bold text-text-primary">{options.title}</Text>
+                <Text className="text-text-primary text-lg font-bold">{options.title}</Text>
               ) : (
                 options?.title
               )}
               {typeof options?.content === 'string' ? (
-                <Text className="text-center text-[15px] leading-5 text-text-secondary">
-                  {options.content}
-                </Text>
+                <Text className="text-text-secondary text-center text-[15px] leading-5">{options.content}</Text>
               ) : (
                 options?.content
               )}
@@ -154,13 +152,13 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                 <Button
                   variant="tertiary"
                   className={cn(
-                    'h-[42px] flex-1 rounded-[30px] border-gray-20 bg-transparent',
+                    'border-gray-20 h-[42px] flex-1 rounded-[30px] bg-transparent',
                     options?.cancelStyle?.toString() || ''
                   )}
                   onPress={cancel}
                   isDisabled={isLoading}>
                   <Button.Label>
-                    <Text className="text-[17px] text-gray-80">
+                    <Text className="text-gray-80 text-[17px]">
                       {isLoading && shouldShowLoading ? t('common.loading') : cancelText}
                     </Text>
                   </Button.Label>

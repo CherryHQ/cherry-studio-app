@@ -61,13 +61,13 @@ export const ProviderItem: React.FC<ProviderItemProps> = ({ provider, mode = 'en
     <XStack className="items-center justify-between px-4 py-3">
       <XStack className="items-center gap-2">
         <ProviderIcon provider={provider} />
-        <Text className="text-lg text-text-primary">
+        <Text className="text-text-primary text-lg">
           {t(`provider.${provider.id}`, { defaultValue: provider.name })}
         </Text>
       </XStack>
       <XStack className="items-center gap-2.5">
         {shouldShowStatus && (
-          <Text className="rounded-lg border-[0.5px] border-green-20 bg-green-10 px-2 py-0.5 text-sm text-green-100">
+          <Text className="border-green-20 bg-green-10 rounded-lg border-[0.5px] px-2 py-0.5 text-sm text-green-100">
             {statusText}
           </Text>
         )}
