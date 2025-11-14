@@ -3,6 +3,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Platform, View } from 'react-native'
 
+import { MentionButton } from '@/componentsV2'
 import TextField from '@/componentsV2/base/TextField'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
@@ -12,7 +13,6 @@ import type { Assistant, Topic } from '@/types/assistant'
 import { FilePreview } from './FilePreview'
 import { useMessageInputLogic } from './hooks/useMessageInputLogic'
 import { McpButton } from './McpButton'
-import { MentionButton } from './MentionButton'
 import { PauseButton } from './PauseButton'
 import { SendButton } from './SendButton'
 import { ThinkButton } from './ThinkButton'
@@ -61,7 +61,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
         </XStack>
         {/* button */}
         <XStack className="items-center justify-between">
-          <XStack className="flex-1 items-center gap-[10px]">
+          <XStack className="flex-1 items-center gap-2.5">
             <ToolButton
               mentions={mentions}
               files={files}

@@ -13,3 +13,5 @@ drizzle/
 
 # Generated files
 *.generated.*
+
+uniwind-types.d.ts

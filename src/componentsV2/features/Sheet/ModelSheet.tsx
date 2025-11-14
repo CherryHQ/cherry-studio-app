@@ -3,10 +3,9 @@ import { LegendList } from '@legendapp/list'
 import { useNavigation } from '@react-navigation/native'
 import { Button } from 'heroui-native'
 import { sortBy } from 'lodash'
-import debounce from 'lodash/debounce'
-import React, { forwardRef, useEffect, useMemo, useState } from 'react'
+import React, { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, InteractionManager, Platform, TouchableOpacity, useWindowDimensions } from 'react-native'
+import { BackHandler, InteractionManager, TouchableOpacity, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { SearchInput } from '@/componentsV2/base/SearchInput'
@@ -35,7 +34,6 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
   const { t } = useTranslation()
   const { isDark } = useTheme()
   const [selectedModels, setSelectedModels] = useState<string[]>(() => mentions.map(m => getModelUniqId(m)))
-  const [inputValue, setInputValue] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [isMultiSelectActive, setIsMultiSelectActive] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
@@ -43,21 +41,20 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
   const dimensions = useWindowDimensions()
   const navigation = useNavigation<HomeNavigationProps>()
 
-  const debouncedSetQuery = debounce((query: string) => {
-    setSearchQuery(query)
-  }, 300)
-
-  const handleSearchChange = (text: string) => {
-    setInputValue(text)
-    debouncedSetQuery(text)
-  }
+  const handleSearchChange = useCallback((text: string) => {
+    setSearchQuery(text)
+  }, [])
 
   useEffect(() => {
     setSelectedModels(mentions.map(m => getModelUniqId(m)))
   }, [mentions])
 
   useEffect(() => {
-    if (!isVisible) return
+    if (!isVisible) {
+      // 清空搜索状态
+      setSearchQuery('')
+      return
+    }
 
     const backAction = () => {
       ;(ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()
@@ -90,7 +87,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
           model: m
         }))
     }))
-    .filter(group => group.provider.id === 'cherryai' || group.options.length > 0)
+    .filter(group => group.options.length > 0)
 
   const allModelOptions = selectOptions.flatMap(group => group.options)
 
@@ -172,8 +169,8 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
 
   const BottomSheetLegendListScrollable = useBottomSheetScrollableCreator()
 
-  const ESTIMATED_ITEM_SIZE = 20
-  const DRAW_DISTANCE = 1200
+  const ESTIMATED_ITEM_SIZE = 60
+  const DRAW_DISTANCE = 800
 
   return (
     <BottomSheetModal
@@ -190,14 +187,15 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
       enablePanDownToClose={true}
       topInset={insets.top}
       android_keyboardInputMode="adjustResize"
-      keyboardBehavior={Platform.OS === 'ios' ? 'interactive' : 'fillParent'}
+      keyboardBehavior="extend"
       keyboardBlurBehavior="restore"
+      enableDismissOnClose
       maxDynamicContentSize={dimensions.height - 2 * insets.top}
       onDismiss={() => setIsVisible(false)}
       onChange={index => setIsVisible(index >= 0)}>
       <LegendList
         data={listData}
-        extraData={{ selectedModels, isMultiSelectActive }}
+        extraData={{ selectedModels, isMultiSelectActive, searchQuery }}
         renderItem={({ item, index }: { item: ListItem; index: number }) => {
           if (!item) return null
           if (item.type === 'header') {
@@ -236,19 +234,20 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
               className={`justify-between rounded-lg border px-2 py-2 ${
                 isSelected ? 'border-green-20 bg-green-10' : 'border-transparent bg-transparent'
               }`}>
-              <XStack className="w-full flex-1 items-center justify-between gap-2">
-                <XStack className="max-w-[80%] flex-1 items-center gap-2">
-                  <XStack className="flex-shrink-0 items-center justify-center">
+              <XStack className="w-full items-center justify-between gap-2">
+                <XStack className="flex-1 items-center gap-2" style={{ minWidth: 0 }}>
+                  <XStack className="shrink-0 items-center justify-center">
                     <ModelIcon model={item.model} size={24} />
                   </XStack>
                   <Text
-                    className={`flex-1 ${isSelected ? 'text-green-100' : 'text-text-primary'}`}
+                    className={isSelected ? 'text-green-100' : 'text-text-primary'}
                     numberOfLines={1}
-                    ellipsizeMode="tail">
+                    ellipsizeMode="tail"
+                    style={{ flex: 1, minWidth: 0 }}>
                     {item.label}
                   </Text>
                 </XStack>
-                <XStack className="flex-shrink-0 items-center gap-2">
+                <XStack className="shrink-0 items-center gap-2">
                   <ModelTags model={item.model} size={11} />
                 </XStack>
               </XStack>
@@ -266,7 +265,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
             <XStack className="flex-1 items-center justify-center gap-[5px]">
               <YStack className="flex-1">
                 <SearchInput
-                  value={inputValue}
+                  value={searchQuery}
                   onChangeText={handleSearchChange}
                   placeholder={t('common.search_placeholder')}
                 />
@@ -297,13 +296,14 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
         }
         ListEmptyComponent={<EmptyModelView />}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom }}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingBottom: insets.bottom + 20
+        }}
         renderScrollComponent={BottomSheetLegendListScrollable}
         estimatedItemSize={ESTIMATED_ITEM_SIZE}
         drawDistance={DRAW_DISTANCE}
-        maintainVisibleContentPosition
         recycleItems
-        waitForInitialLayout
       />
     </BottomSheetModal>
   )

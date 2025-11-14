@@ -4,12 +4,14 @@ import { Keyboard } from 'react-native'
 
 import { isReasoningModel } from '@/config/models'
 import { useMessageOperations } from '@/hooks/useMessageOperation'
+import { useAllProviders } from '@/hooks/useProviders'
 import { loggerService } from '@/services/LoggerService'
 import { getUserMessage, sendMessage as _sendMessage } from '@/services/MessagesService'
 import { topicService } from '@/services/TopicService'
 import type { Assistant, Model, Topic } from '@/types/assistant'
 import type { FileMetadata } from '@/types/file'
 import type { MessageInputBaseParams } from '@/types/message'
+import { getModelUniqId } from '@/utils/model'
 
 const logger = loggerService.withContext('Message Input')
 
@@ -18,6 +20,7 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
   const [files, setFiles] = useState<FileMetadata[]>([])
   const [mentions, setMentions] = useState<Model[]>([])
   const { pauseMessages } = useMessageOperations(topic)
+  const { providers } = useAllProviders()
 
   const isReasoning = isReasoningModel(assistant.model)
 
@@ -25,6 +28,30 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
     setMentions(assistant.defaultModel ? [assistant.defaultModel] : [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topic.id])
+
+  // Sync mentions with available models from providers
+  useEffect(() => {
+    if (mentions.length === 0) return
+
+    // Build a set of all available model unique IDs
+    const availableModelIds = new Set<string>()
+    providers.forEach(provider => {
+      if (provider.enabled && provider.models) {
+        provider.models.forEach(model => {
+          availableModelIds.add(getModelUniqId(model))
+        })
+      }
+    })
+
+    // Filter out mentions that are no longer available
+    const validMentions = mentions.filter(mention => availableModelIds.has(getModelUniqId(mention)))
+
+    // Update mentions if any were removed
+    if (validMentions.length !== mentions.length) {
+      logger.info(`Removed ${mentions.length - validMentions.length} invalid model(s) from mentions`)
+      setMentions(validMentions)
+    }
+  }, [providers, mentions])
 
   const sendMessage = async () => {
     if (isEmpty(text.trim())) {
