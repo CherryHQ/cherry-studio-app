@@ -38,8 +38,8 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
         setFiles(prev => [...prev, fileMetadata])
         setText('')
         Alert.alert(
-          t('home.inputs.longTextConverted.title'),
-          t('home.inputs.longTextConverted.message', { length: newText.length })
+          t('inputs.longTextConverted.title'),
+          t('inputs.longTextConverted.message', { length: newText.length })
         )
       } catch (error) {
         logger.error('Error converting long text to file:', error)
