@@ -145,6 +145,7 @@ export const AddProviderSheet = forwardRef<BottomSheetModal, ProviderSheetProps>
 
     const handleSaveProvider = async () => {
       try {
+        Keyboard.dismiss()
         await uploadProviderImage(selectedImageFile)
         const providerData = createProviderData()
 
