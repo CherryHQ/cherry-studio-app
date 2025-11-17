@@ -308,6 +308,10 @@
       "title": "HTML 預覽"
     },
     "inputs": {
+      "longTextConverted": {
+        "title": "長文本已轉換",
+        "message": "貼上的文字（{{length}} 字元）已自動轉換為檔案附件"
+      },
       "mentions": "@ {{number}} 個模型",
       "placeholder": "傳送訊息..."
     },

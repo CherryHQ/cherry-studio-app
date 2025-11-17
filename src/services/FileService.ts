@@ -64,6 +64,38 @@ export async function writeBase64File(data: string): Promise<FileMetadata> {
   }
 }
 
+export async function saveTextAsFile(text: string, fileName?: string): Promise<FileMetadata> {
+  await ensureDirExists(DEFAULT_DOCUMENTS_STORAGE)
+
+  const fileId = uuid()
+  const finalFileName = fileName || `pasted-text-${Date.now()}`
+  const fileUri = DEFAULT_DOCUMENTS_STORAGE.uri + `${fileId}.txt`
+
+  // Write text to file
+  await FileSystem.writeAsStringAsync(fileUri, text, {
+    encoding: FileSystem.EncodingType.UTF8
+  })
+
+  const file = new File(fileUri)
+
+  const fileMetadata: FileMetadata = {
+    id: fileId,
+    name: finalFileName,
+    origin_name: `${finalFileName}.txt`,
+    path: fileUri,
+    size: file.size,
+    ext: '.txt',
+    type: FileTypes.DOCUMENT,
+    created_at: Date.now(),
+    count: 1
+  }
+
+  // Save to database
+  fileDatabase.upsertFiles([fileMetadata])
+
+  return fileMetadata
+}
+
 export function readStreamFile(file: FileMetadata): ReadableStream {
   return new File(file.path).readableStream()
 }
@@ -251,6 +283,7 @@ export default {
   readFile,
   readBase64File,
   readStreamFile,
+  saveTextAsFile,
   getFile: getFileById,
   getAllFiles,
   uploadFiles,

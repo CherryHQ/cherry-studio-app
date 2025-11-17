@@ -1,10 +1,12 @@
 import { isEmpty } from 'lodash'
 import { useEffect, useState } from 'react'
-import { Keyboard } from 'react-native'
+import { useTranslation } from 'react-i18next'
+import { Alert, Keyboard } from 'react-native'
 
 import { isReasoningModel } from '@/config/models'
 import { useMessageOperations } from '@/hooks/useMessageOperation'
 import { useAllProviders } from '@/hooks/useProviders'
+import { saveTextAsFile } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import { getUserMessage, sendMessage as _sendMessage } from '@/services/MessagesService'
 import { topicService } from '@/services/TopicService'
@@ -15,7 +17,10 @@ import { getModelUniqId } from '@/utils/model'
 
 const logger = loggerService.withContext('Message Input')
 
+const LONG_TEXT_THRESHOLD = 5000
+
 export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
+  const { t } = useTranslation()
   const [text, setText] = useState('')
   const [files, setFiles] = useState<FileMetadata[]>([])
   const [mentions, setMentions] = useState<Model[]>([])
@@ -23,6 +28,27 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
   const { providers } = useAllProviders()
 
   const isReasoning = isReasoningModel(assistant.model)
+
+  const handleTextChange = async (newText: string) => {
+    // Check if text exceeds threshold
+    if (newText.length > LONG_TEXT_THRESHOLD) {
+      try {
+        logger.info(`Long text detected: ${newText.length} characters, converting to file`)
+        const fileMetadata = await saveTextAsFile(newText)
+        setFiles(prev => [...prev, fileMetadata])
+        setText('')
+        Alert.alert(
+          t('home.inputs.longTextConverted.title'),
+          t('home.inputs.longTextConverted.message', { length: newText.length })
+        )
+      } catch (error) {
+        logger.error('Error converting long text to file:', error)
+        setText(newText)
+      }
+    } else {
+      setText(newText)
+    }
+  }
 
   useEffect(() => {
     setMentions(assistant.defaultModel ? [assistant.defaultModel] : [])
@@ -92,7 +118,7 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
 
   return {
     text,
-    setText,
+    setText: handleTextChange,
     files,
     setFiles,
     mentions,

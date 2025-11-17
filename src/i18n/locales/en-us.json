@@ -308,6 +308,10 @@
       "title": "HTML Preview"
     },
     "inputs": {
+      "longTextConverted": {
+        "title": "Long Text Converted",
+        "message": "The pasted text ({{length}} characters) has been automatically converted to a file attachment"
+      },
       "mentions": "@ {{number}} models",
       "placeholder": "Send Message..."
     },
