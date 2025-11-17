@@ -8,6 +8,7 @@ import TextField from '@/componentsV2/base/TextField'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useBottom } from '@/hooks/useBottom'
+import { useTheme } from '@/hooks/useTheme'
 import type { Assistant, Topic } from '@/types/assistant'
 
 import { FilePreview } from './FilePreview'
@@ -27,6 +28,7 @@ interface MessageInputProps {
 
 export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, updateAssistant }) => {
   const { t } = useTranslation()
+  const { isDark } = useTheme()
   const bottomPad = useBottom()
   const { text, setText, files, setFiles, mentions, setMentions, isReasoning, sendMessage, onPause } =
     useMessageInputLogic(topic, assistant)
@@ -35,7 +37,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
     <View
       className="bg-background-secondary dark:bg-background-secondary rounded-3xl px-5 py-2"
       style={{
-        paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad
+        paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad,
+        shadowColor: isDark ? '#fff' : '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 10
       }}>
       <YStack className="gap-2.5">
         {files.length > 0 && <FilePreview files={files} setFiles={setFiles} />}

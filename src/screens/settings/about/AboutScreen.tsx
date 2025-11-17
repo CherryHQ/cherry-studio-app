@@ -2,6 +2,7 @@ import Constants from 'expo-constants'
 import * as ExpoLinking from 'expo-linking'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import FastSquircleView from 'react-native-fast-squircle'
 
 import {
   Container,
@@ -45,7 +46,16 @@ export default function AboutScreen() {
           {/* Logo and Description */}
           <Group>
             <Row className="gap-4">
-              <Image className="h-[70px] w-[70px] rounded-[41px]" source={require('@/assets/images/favicon.png')} />
+              <FastSquircleView
+                style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 18,
+                  overflow: 'hidden'
+                }}
+                cornerSmoothing={0.6}>
+                <Image className="h-full w-full" source={require('@/assets/images/favicon.png')} />
+              </FastSquircleView>
               <YStack className="flex-1 gap-[5px] py-1">
                 <Text className="text-[22px] font-bold">{t('common.cherry_studio')}</Text>
                 <Text className="text-text-secondary text-sm" numberOfLines={0}>

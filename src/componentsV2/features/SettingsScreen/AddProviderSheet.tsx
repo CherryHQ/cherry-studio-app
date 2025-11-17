@@ -67,12 +67,19 @@ export const AddProviderSheet = forwardRef<BottomSheetModal, ProviderSheetProps>
         setProviderId(editProvider.id)
         setProviderName(editProvider.name || '')
         setSelectedProviderType(editProvider.type || undefined)
-      } else {
+      }
+    }, [editProvider])
+
+    // Reset state whenever the sheet is opened in add mode to avoid reusing the previous provider id
+    useEffect(() => {
+      if (isVisible && mode === 'add' && !editProvider) {
         setProviderId(uuid())
         setProviderName('')
         setSelectedProviderType(undefined)
+        setSelectedImageFile(null)
+        setExistingIconUri(undefined)
       }
-    }, [editProvider])
+    }, [isVisible, mode, editProvider])
 
     // 在编辑模式下查找现有的图标文件
     useEffect(() => {
@@ -138,6 +145,7 @@ export const AddProviderSheet = forwardRef<BottomSheetModal, ProviderSheetProps>
 
     const handleSaveProvider = async () => {
       try {
+        Keyboard.dismiss()
         await uploadProviderImage(selectedImageFile)
         const providerData = createProviderData()
 

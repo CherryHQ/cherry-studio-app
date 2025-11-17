@@ -127,14 +127,12 @@ const MessageErrorInfo: React.FC<{ block: ErrorMessageBlock; message: Message; o
   }
 
   return (
-    <TouchableOpacity
-      className="my-1.5 rounded-lg border border-red-200 bg-red-50 p-4 active:bg-red-100"
-      onPress={onShowDetail}>
+    <TouchableOpacity className="bg-red-10  border-red-20 rounded-lg border p-2" onPress={onShowDetail}>
       <XStack className="w-full items-center justify-between gap-2">
-        <Text className="flex-1 text-red-600" numberOfLines={1}>
+        <Text className="flex-1 text-red-100" numberOfLines={1}>
           {getAlertDescription()}
         </Text>
-        <Text className="text-sm text-red-500">{t('common.detail')}</Text>
+        <Text className="text-sm text-red-100">{t('common.detail')}</Text>
       </XStack>
     </TouchableOpacity>
   )
@@ -254,8 +252,8 @@ const ErrorDetailValue: React.FC<{ children: React.ReactNode; isCode?: boolean }
 
 const StackTrace: React.FC<{ stack: string }> = ({ stack }) => {
   return (
-    <View className="rounded-md border border-red-300 bg-red-50 p-3">
-      <Text className="font-mono text-xs leading-5 text-red-700">{stack}</Text>
+    <View className="border-red-20 bg-red-10 rounded-md border p-3">
+      <Text className="font-mono text-xs leading-5 text-red-100">{stack}</Text>
     </View>
   )
 }
