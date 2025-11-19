@@ -1227,3 +1227,23 @@ const SUPPORT_GEMINI_NATIVE_WEB_SEARCH_PROVIDERS = ['gemini'] as const satisfies
 export const isGeminiWebSearchProvider = (provider: Provider) => {
   return SUPPORT_GEMINI_NATIVE_WEB_SEARCH_PROVIDERS.some(id => id === provider.id)
 }
+
+/** 判断是否是 Gemini 类型的提供商 */
+export const isGeminiProvider = (provider: Provider) => {
+  return provider.type === 'gemini'
+}
+
+/** 判断是否是 New API 提供商 */
+export const isNewApiProvider = (provider: Provider) => {
+  return provider.id === 'new-api'
+}
+
+/** 判断是否是 OpenAI 兼容的提供商 */
+export const isOpenAICompatibleProvider = (provider: Provider) => {
+  return provider.type === 'openai'
+}
+
+/** 判断是否是 OpenAI 官方提供商 */
+export const isOpenAIProvider = (provider: Provider) => {
+  return provider.id === 'openai' || provider.type === 'openai-response'
+}
