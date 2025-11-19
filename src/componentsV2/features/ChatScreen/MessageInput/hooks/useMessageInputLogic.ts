@@ -25,7 +25,7 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
   const [files, setFiles] = useState<FileMetadata[]>([])
   const [mentions, setMentions] = useState<Model[]>([])
   const { pauseMessages } = useMessageOperations(topic)
-  const { providers } = useAllProviders()
+  const { providers, isLoading } = useAllProviders()
 
   const isReasoning = isReasoningModel(assistant.model)
 
@@ -57,7 +57,7 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
 
   // Sync mentions with available models from providers
   useEffect(() => {
-    if (mentions.length === 0) return
+    if (isLoading || mentions.length === 0) return
 
     // Build a set of all available model unique IDs
     const availableModelIds = new Set<string>()
@@ -77,7 +77,7 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
       logger.info(`Removed ${mentions.length - validMentions.length} invalid model(s) from mentions`)
       setMentions(validMentions)
     }
-  }, [providers, mentions])
+  }, [providers, mentions, isLoading])
 
   const sendMessage = async () => {
     if (isEmpty(text.trim())) {

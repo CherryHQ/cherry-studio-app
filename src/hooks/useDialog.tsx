@@ -84,15 +84,15 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   const getConfirmButtonClassName = () => {
     switch (options?.type) {
       case 'info':
-        return 'bg-blue-20 border-blue-20'
+        return 'bg-blue-20 border-blue-20 active:opacity-80 active:bg-blue-20'
       case 'warning':
-        return 'bg-orange-20 border-orange-20'
+        return 'bg-orange-20 border-orange-20 active:opacity-80 active:bg-orange-20'
       case 'error':
-        return 'bg-red-20 border-red-20'
+        return 'bg-red-20 border-red-20 active:opacity-80 active:bg-red-20'
       case 'success':
-        return 'bg-green-10 border-green-20'
+        return 'bg-green-10 border-green-20 active:opacity-80 active:bg-green-10'
       default:
-        return 'bg-green-10 border-green-20'
+        return 'bg-green-10 border-green-20 active:opacity-80 active:bg-green-10'
     }
   }
 
@@ -171,7 +171,8 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                   options?.confirmStyle?.toString() || ''
                 )}
                 onPress={confirm}
-                isDisabled={isLoading}>
+                isDisabled={isLoading}
+                animationConfig={{ highlight: { isDisabled: true } }}>
                 <Button.Label>
                   <Text className={cn(confirmTextClassName, 'text-[17px]')}>
                     {isLoading && shouldShowLoading ? t('common.loading') : confirmText}
