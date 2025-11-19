@@ -2,7 +2,7 @@ import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugi
 import type { LanguageModelMiddleware } from 'ai'
 import { extractReasoningMiddleware, simulateStreamingMiddleware } from 'ai'
 
-import { isOpenRouterGeminiGenerateImageModel, isSupportedThinkingTokenQwenModel } from '@/config/models'
+import { isSupportedThinkingTokenQwenModel } from '@/config/models'
 import { isSupportEnableThinkingProvider } from '@/config/providers'
 import { loggerService } from '@/services/LoggerService'
 import type { Assistant, Model, Provider } from '@/types/assistant'
@@ -10,6 +10,7 @@ import type { Chunk } from '@/types/chunk'
 import type { Message } from '@/types/message'
 import type { MCPTool } from '@/types/tool'
 
+import { isOpenRouterGeminiGenerateImageModel } from '../utils/image'
 import { noThinkMiddleware } from './noThinkMiddleware'
 import { openrouterGenerateImageMiddleware } from './openrouterGenerateImageMiddleware'
 import { qwenThinkingMiddleware } from './qwenThinkingMiddleware'

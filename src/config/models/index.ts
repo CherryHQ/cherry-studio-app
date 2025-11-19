@@ -1,5 +1,6 @@
 export * from './default'
 export * from './embedding'
+export * from './free'
 export * from './reasoning'
 export * from './tooluse'
 export * from './utils'
