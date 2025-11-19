@@ -33,21 +33,28 @@ export type Assistant = {
 const ThinkModelTypes = [
   'default',
   'o',
+  'openai_deep_research',
   'gpt5',
+  'gpt5pro',
+  'gpt5_codex',
+  'gpt5_1',
+  'gpt5_1_codex',
   'grok',
+  'grok4_fast',
   'gemini',
   'gemini_pro',
   'qwen',
   'qwen_thinking',
   'doubao',
   'doubao_no_auto',
+  'doubao_after_251015',
   'hunyuan',
   'zhipu',
   'perplexity',
   'deepseek_hybrid'
 ] as const
 
-export type ReasoningEffortOption = NonNullable<OpenAI.ReasoningEffort> | 'auto'
+export type ReasoningEffortOption = NonNullable<OpenAI.ReasoningEffort> | 'auto' | 'none'
 export type ThinkingOption = ReasoningEffortOption | 'off'
 export type ThinkingModelType = (typeof ThinkModelTypes)[number]
 export type ThinkingOptionConfig = Record<ThinkingModelType, ThinkingOption[]>

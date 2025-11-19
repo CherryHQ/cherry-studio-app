@@ -308,6 +308,10 @@
       "title": "HTML 预览"
     },
     "inputs": {
+      "longTextConverted": {
+        "title": "长文本已转换",
+        "message": "粘贴的文本（{{length}} 字符）已自动转换为文件附件"
+      },
       "mentions": "@ {{number}} 个模型",
       "placeholder": "发送消息..."
     },
