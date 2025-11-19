@@ -1,4 +1,5 @@
-import type OpenAI from 'openai'
+import type OpenAI from '@cherrystudio/openai'
+import * as z from 'zod'
 
 import type { StreamTextParams } from './aiCoretypes'
 import type { Chunk } from './chunk'
@@ -58,13 +59,13 @@ export function isThinkModelType(type: string): type is ThinkingModelType {
 }
 
 export const EFFORT_RATIO: EffortRatio = {
+  none: 0.01,
   minimal: 0.05,
   low: 0.05,
   medium: 0.5,
   high: 0.8,
   auto: 2
 }
-
 export type AssistantSettings = {
   maxTokens?: number
   enableMaxTokens?: boolean
@@ -181,8 +182,9 @@ export type ProviderApiOptions = {
   isSupportServiceTier?: boolean
   /** 是否不支持 enable_thinking 参数 */
   isNotSupportEnableThinking?: boolean
+  /** 是否不支持 APIVersion */
+  isNotSupportAPIVersion?: boolean
 }
-
 export type OpenAIVerbosity = 'high' | 'medium' | 'low'
 
 export type OpenAISummaryText = 'auto' | 'concise' | 'detailed' | 'off'
@@ -226,6 +228,8 @@ export type Provider = {
   name: string
   apiKey: string
   apiHost: string
+  anthropicApiHost?: string
+  isAnthropicModel?: (m: Model) => boolean
   apiVersion?: string
   models: Model[]
   enabled?: boolean
@@ -252,16 +256,21 @@ export type Provider = {
   extra_headers?: Record<string, string>
 }
 
-export type ProviderType =
-  | 'openai'
-  | 'openai-response'
-  | 'anthropic'
-  | 'gemini'
-  | 'qwenlm'
-  | 'azure-openai'
-  | 'vertexai'
-  | 'mistral'
-  | 'aws-bedrock'
+export const ProviderTypeSchema = z.enum([
+  'openai',
+  'openai-response',
+  'anthropic',
+  'gemini',
+  'azure-openai',
+  'vertexai',
+  'mistral',
+  'aws-bedrock',
+  'vertex-anthropic',
+  'new-api',
+  'ai-gateway'
+])
+
+export type ProviderType = z.infer<typeof ProviderTypeSchema>
 
 export type ApiStatus = 'idle' | 'processing' | 'success' | 'error'
 
@@ -269,7 +278,6 @@ export type EndpointType = 'openai' | 'openai-response' | 'anthropic' | 'gemini'
 
 export const SystemProviderIds = {
   cherryin: 'cherryin',
-  cherryai: 'cherryai',
   silicon: 'silicon',
   aihubmix: 'aihubmix',
   ocoolai: 'ocoolai',
@@ -284,15 +292,17 @@ export const SystemProviderIds = {
   cephalon: 'cephalon',
   lanyun: 'lanyun',
   ph8: 'ph8',
+  sophnet: 'sophnet',
   openrouter: 'openrouter',
   ollama: 'ollama',
+  ovms: 'ovms',
   'new-api': 'new-api',
   lmstudio: 'lmstudio',
   anthropic: 'anthropic',
   openai: 'openai',
   'azure-openai': 'azure-openai',
   gemini: 'gemini',
-  // vertexai: 'vertexai',
+  vertexai: 'vertexai',
   github: 'github',
   copilot: 'copilot',
   zhipu: 'zhipu',
@@ -321,9 +331,13 @@ export const SystemProviderIds = {
   gpustack: 'gpustack',
   voyageai: 'voyageai',
   'aws-bedrock': 'aws-bedrock',
-  poe: 'poe'
+  poe: 'poe',
+  aionly: 'aionly',
+  longcat: 'longcat',
+  huggingface: 'huggingface',
+  'ai-gateway': 'ai-gateway',
+  cerebras: 'cerebras'
 } as const
-
 export type SystemProviderId = keyof typeof SystemProviderIds
 
 export const isSystemProviderId = (id: string): id is SystemProviderId => {
@@ -334,6 +348,20 @@ export type SystemProvider = Provider & {
   id: SystemProviderId
   isSystem: true
   apiOptions?: never
+}
+
+export type VertexProvider = Provider & {
+  googleCredentials: {
+    privateKey: string
+    clientEmail: string
+  }
+  project: string
+  location: string
+}
+
+export type AzureOpenAIProvider = Provider & {
+  type: 'azure-openai'
+  apiVersion: string
 }
 
 /**

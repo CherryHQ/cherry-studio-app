@@ -3,7 +3,12 @@
  * 处理温度、TopP、超时等基础参数的获取逻辑
  */
 
-import { isClaudeReasoningModel, isNotSupportTemperatureAndTopP, isSupportedFlexServiceTier } from '@/config/models'
+import {
+  isClaude45ReasoningModel,
+  isClaudeReasoningModel,
+  isNotSupportTemperatureAndTopP,
+  isSupportedFlexServiceTier
+} from '@/config/models'
 import { defaultTimeout } from '@/constants'
 import { getAssistantSettings } from '@/services/AssistantService'
 import type { Assistant, Model } from '@/types/assistant'
@@ -15,11 +20,12 @@ export function getTemperature(assistant: Assistant, model: Model): number | und
   if (assistant.settings?.reasoning_effort && isClaudeReasoningModel(model)) {
     return undefined
   }
-
-  if (isNotSupportTemperatureAndTopP(model)) {
+  if (
+    isNotSupportTemperatureAndTopP(model) ||
+    (isClaude45ReasoningModel(model) && assistant.settings?.enableTopP && !assistant.settings?.enableTemperature)
+  ) {
     return undefined
   }
-
   const assistantSettings = getAssistantSettings(assistant)
   return assistantSettings?.enableTemperature ? assistantSettings?.temperature : undefined
 }
@@ -31,11 +37,12 @@ export function getTopP(assistant: Assistant, model: Model): number | undefined 
   if (assistant.settings?.reasoning_effort && isClaudeReasoningModel(model)) {
     return undefined
   }
-
-  if (isNotSupportTemperatureAndTopP(model)) {
+  if (
+    isNotSupportTemperatureAndTopP(model) ||
+    (isClaude45ReasoningModel(model) && assistant.settings?.enableTemperature)
+  ) {
     return undefined
   }
-
   const assistantSettings = getAssistantSettings(assistant)
   return assistantSettings?.enableTopP ? assistantSettings?.topP : undefined
 }
@@ -47,6 +54,5 @@ export function getTimeout(model: Model): number {
   if (isSupportedFlexServiceTier(model)) {
     return 15 * 1000 * 60
   }
-
   return defaultTimeout
 }

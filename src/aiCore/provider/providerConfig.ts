@@ -4,14 +4,15 @@ import { fetch } from 'expo/fetch'
 import { cloneDeep } from 'lodash'
 
 import { isOpenAIChatCompletionOnlyModel } from '@/config/models'
+import { isNewApiProvider } from '@/config/providers'
 import { generateSignature } from '@/integration/cherryai'
 import { loggerService } from '@/services/LoggerService'
 import { getProviderByModel } from '@/services/ProviderService'
-import type { Model, Provider } from '@/types/assistant'
+import { isSystemProvider, type Model, type Provider } from '@/types/assistant'
 import { storage } from '@/utils'
 import { formatApiHost } from '@/utils/api'
 
-import { aihubmixProviderCreator, newApiResolverCreator } from './config'
+import { aihubmixProviderCreator, newApiResolverCreator, vertexAnthropicProviderCreator } from './config'
 import { getAiSdkProviderId } from './factory'
 
 const logger = loggerService.withContext('ProviderConfigProcessor')
@@ -47,26 +48,18 @@ function getRotatedApiKey(provider: Provider): string {
  * 处理特殊provider的转换逻辑
  */
 function handleSpecialProviders(model: Model, provider: Provider): Provider {
-  // if (provider.type === 'vertexai' && !isVertexProvider(provider)) {
-  //   if (!isVertexAIConfigured()) {
-  //     throw new Error('VertexAI is not configured. Please configure project, location and service account credentials.')
-  //   }
-  //   return createVertexProvider(provider)
-  // }
-
-  if (provider.id === 'aihubmix') {
-    return aihubmixProviderCreator(model, provider)
-  }
-
-  if (provider.id === 'newapi') {
+  if (isNewApiProvider(provider)) {
     return newApiResolverCreator(model, provider)
   }
 
-  if (provider.id === 'vertexai') {
-    throw new Error('VertexAI is not supported yet.')
-    // return vertexAnthropicProviderCreator(model, provider)
+  if (isSystemProvider(provider)) {
+    if (provider.id === 'aihubmix') {
+      return aihubmixProviderCreator(model, provider)
+    }
+    if (provider.id === 'vertexai') {
+      return vertexAnthropicProviderCreator(model, provider)
+    }
   }
-
   return provider
 }
 

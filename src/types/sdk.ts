@@ -79,6 +79,7 @@ export type ReasoningEffortOptionalParams = {
   thinking?: { type: 'disabled' | 'enabled' | 'auto'; budget_tokens?: number }
   reasoning?: { max_tokens?: number; exclude?: boolean; effort?: string; enabled?: boolean } | OpenAI.Reasoning
   reasoningEffort?: OpenAI.Chat.Completions.ChatCompletionCreateParams['reasoning_effort'] | 'none' | 'auto'
+  // WARN: This field will be overwrite to undefined by aisdk if the provider is openai-compatible. Use reasoningEffort instead.
   reasoning_effort?: OpenAI.Chat.Completions.ChatCompletionCreateParams['reasoning_effort'] | 'none' | 'auto'
   enable_thinking?: boolean
   thinking_budget?: number
@@ -96,6 +97,7 @@ export type ReasoningEffortOptionalParams = {
       }
     }
   }
+  disable_reasoning?: boolean
   // Add any other potential reasoning-related keys here if they exist
 }
 
@@ -123,6 +125,10 @@ export type OpenAIExtraBody = {
   translation_options?: {
     source_lang: 'auto'
     target_lang: string
+  }
+  // for gpt-5 series models verbosity control
+  text?: {
+    verbosity?: 'low' | 'medium' | 'high'
   }
 }
 // image is for openrouter. audio is ignored for now

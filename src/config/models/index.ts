@@ -1,14 +1,18 @@
 import type OpenAI from 'openai'
 
+import { DEFAULT_MAX_TOKENS } from '@/constants'
+import { getAssistantSettings } from '@/services/AssistantService'
 import { getProviderByModel } from '@/services/ProviderService'
 import type {
+  Assistant,
   Model,
+  Provider,
   ReasoningEffortConfig,
   SystemProviderId,
   ThinkingModelType,
   ThinkingOptionConfig
 } from '@/types/assistant'
-import { isSystemProviderId } from '@/types/assistant'
+import { EFFORT_RATIO, isSystemProvider, isSystemProviderId, SystemProviderIds } from '@/types/assistant'
 import { isUserSelectedModelType } from '@/utils/model'
 import { getLowerBaseModelName } from '@/utils/naming'
 
@@ -450,6 +454,26 @@ export function isReasoningModel(model?: Model): boolean {
   return REASONING_REGEX.test(modelId) || false
 }
 
+export function getAnthropicThinkingBudget(assistant: Assistant, model: Model): number {
+  const { maxTokens, reasoning_effort: reasoningEffort } = getAssistantSettings(assistant)
+  if (reasoningEffort === undefined || reasoningEffort === 'none') {
+    return 0
+  }
+  const effortRatio = EFFORT_RATIO[reasoningEffort]
+
+  const budgetTokens = Math.max(
+    1024,
+    Math.floor(
+      Math.min(
+        (findTokenLimit(model.id)?.max! - findTokenLimit(model.id)?.min!) * effortRatio +
+          findTokenLimit(model.id)?.min!,
+        (maxTokens || DEFAULT_MAX_TOKENS) * effortRatio
+      )
+    )
+  )
+  return budgetTokens
+}
+
 export function isOpenAIReasoningModel(model: Model): boolean {
   const modelId = getLowerBaseModelName(model.id, '/')
   return isSupportedReasoningEffortOpenAIModel(model) || modelId.includes('o1')
@@ -464,6 +488,12 @@ export function isSupportedReasoningEffortOpenAIModel(model: Model): boolean {
     modelId.includes('gpt-oss') ||
     (isGPT5SeriesModel(model) && !modelId.includes('chat'))
   )
+}
+
+export function isClaude45ReasoningModel(model: Model): boolean {
+  const modelId = getLowerBaseModelName(model.id, '/')
+  const regex = /claude-(sonnet|opus|haiku)-4(-|.)5(?:-[\w-]+)?$/i
+  return regex.test(modelId)
 }
 
 export const THINKING_TOKEN_MAP: Record<string, { min: number; max: number }> = {
@@ -1017,6 +1047,14 @@ export function isImageEnhancementModel(model: Model): boolean {
   return IMAGE_ENHANCEMENT_MODELS_REGEX.test(modelId)
 }
 
+export function isOpenRouterGeminiGenerateImageModel(model: Model, provider: Provider): boolean {
+  return (
+    model.id.includes('gemini-2.5-flash-image') &&
+    isSystemProvider(provider) &&
+    provider.id === SystemProviderIds.openrouter
+  )
+}
+
 export function isVisionModel(model: Model): boolean {
   if (!model || isEmbeddingModel(model) || isRerankModel(model)) {
     return false
@@ -1211,4 +1249,50 @@ export function isHunyuanSearchModel(model?: Model): boolean {
   }
 
   return false
+}
+
+const OPENAI_DEEP_RESEARCH_MODEL_REGEX = /deep[-_]?research/
+
+export function isOpenAIDeepResearchModel(model?: Model): boolean {
+  if (!model) {
+    return false
+  }
+
+  const providerId = model.provider
+  if (providerId !== 'openai' && providerId !== 'openai-chat') {
+    return false
+  }
+
+  const modelId = getLowerBaseModelName(model.id, '/')
+  return OPENAI_DEEP_RESEARCH_MODEL_REGEX.test(modelId)
+}
+
+export function isDoubaoSeedAfter251015(model: Model): boolean {
+  const pattern = new RegExp(/doubao-seed-1-6-(?:lite-)?251015/i)
+  const result = pattern.test(model.id)
+  return result
+}
+
+/**
+ * Checks if the model is Grok 4 Fast reasoning version
+ * Explicitly excludes non-reasoning variants (models with 'non-reasoning' in their ID)
+ *
+ * Note: XAI official uses different model IDs for reasoning vs non-reasoning
+ * Third-party providers like OpenRouter expose a single ID with reasoning parameters, while first-party providers require separate IDs. Only the OpenRouter variant supports toggling.
+ *
+ * @param model - The model to check
+ * @returns true if the model is a reasoning-enabled Grok 4 Fast model
+ */
+export function isGrok4FastReasoningModel(model?: Model): boolean {
+  if (!model) {
+    return false
+  }
+
+  const modelId = getLowerBaseModelName(model.id)
+  return modelId.includes('grok-4-fast') && !modelId.includes('non-reasoning')
+}
+
+export const isGPT51SeriesModel = (model: Model) => {
+  const modelId = getLowerBaseModelName(model.id)
+  return modelId.includes('gpt-5.1')
 }

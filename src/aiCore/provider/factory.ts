@@ -5,7 +5,21 @@ import type { Provider as AiSdkProvider } from 'ai'
 import { loggerService } from '@/services/LoggerService'
 import type { Provider } from '@/types/assistant'
 
+import { initializeNewProviders } from './providerInitialization'
+
 const logger = loggerService.withContext('ProviderFactory')
+
+/**
+ * 初始化动态Provider系统
+ * 在模块加载时自动注册新的providers
+ */
+;(async () => {
+  try {
+    await initializeNewProviders()
+  } catch (error) {
+    logger.warn('Failed to initialize new providers:', error as Error)
+  }
+})()
 
 /**
  * 静态Provider映射表
@@ -15,7 +29,8 @@ const STATIC_PROVIDER_MAPPING: Record<string, ProviderId> = {
   gemini: 'google', // Google Gemini -> google
   'azure-openai': 'azure', // Azure OpenAI -> azure
   'openai-response': 'openai', // OpenAI Responses -> openai
-  grok: 'xai' // Grok -> xai
+  grok: 'xai', // Grok -> xai
+  copilot: 'github-copilot-openai-compatible'
 }
 
 /**
@@ -24,7 +39,6 @@ const STATIC_PROVIDER_MAPPING: Record<string, ProviderId> = {
 function tryResolveProviderId(identifier: string): ProviderId | null {
   // 1. 检查静态映射
   const staticMapping = STATIC_PROVIDER_MAPPING[identifier]
-
   if (staticMapping) {
     return staticMapping
   }
@@ -45,7 +59,6 @@ function tryResolveProviderId(identifier: string): ProviderId | null {
 export function getAiSdkProviderId(provider: Provider): ProviderId | 'openai-compatible' {
   // 1. 尝试解析provider.id
   const resolvedFromId = tryResolveProviderId(provider.id)
-
   if (resolvedFromId) {
     return resolvedFromId
   }
@@ -54,26 +67,27 @@ export function getAiSdkProviderId(provider: Provider): ProviderId | 'openai-com
   // 会把所有类型为openai的自定义provider解析到aisdk的openaiProvider上
   if (provider.type !== 'openai') {
     const resolvedFromType = tryResolveProviderId(provider.type)
-
     if (resolvedFromType) {
       return resolvedFromType
     }
   }
-
+  if (provider.apiHost.includes('api.openai.com')) {
+    return 'openai-chat'
+  }
   // 3. 最后的fallback（通常会成为openai-compatible）
   return provider.id as ProviderId
 }
 
 export async function createAiSdkProvider(config) {
   let localProvider: Awaited<AiSdkProvider> | null = null
-
   try {
     if (config.providerId === 'openai' && config.options?.mode === 'chat') {
       config.providerId = `${config.providerId}-chat`
     } else if (config.providerId === 'azure' && config.options?.mode === 'responses') {
       config.providerId = `${config.providerId}-responses`
+    } else if (config.providerId === 'cherryin' && config.options?.mode === 'chat') {
+      config.providerId = 'cherryin-chat'
     }
-
     localProvider = await createProviderCore(config.providerId, config.options)
 
     logger.debug('Local provider created successfully', {
@@ -88,6 +102,5 @@ export async function createAiSdkProvider(config) {
     })
     throw error
   }
-
   return localProvider
 }

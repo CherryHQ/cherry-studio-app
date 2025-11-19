@@ -59,3 +59,14 @@ export function splitApiKeyString(keyStr: string): string[] {
     .map(k => k.replace(/\\,/g, ','))
     .filter(k => k)
 }
+
+// 目前对话界面只支持这些端点
+export const SUPPORTED_IMAGE_ENDPOINT_LIST = ['images/generations', 'images/edits', 'predict'] as const
+export const SUPPORTED_ENDPOINT_LIST = [
+  'chat/completions',
+  'responses',
+  'messages',
+  'generateContent',
+  'streamGenerateContent',
+  ...SUPPORTED_IMAGE_ENDPOINT_LIST
+] as const

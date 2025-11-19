@@ -1,3 +1,14 @@
+import type {
+  AnthropicSearchConfig,
+  OpenAISearchConfig,
+  WebSearchPluginConfig
+} from '@cherrystudio/ai-core/core/plugins/built-in/webSearchPlugin/helper'
+import type { BaseProviderId } from '@cherrystudio/ai-core/provider'
+
+import { isOpenAIDeepResearchModel } from '@/config/models'
+import type { Model } from '@/types/assistant'
+import type { CherryWebSearchConfig } from '@/types/websearch'
+
 /**
  * 用于展示一些常用的网站名
  */
@@ -31,4 +42,91 @@ export function getWebsiteBrand(url: string): string {
   }
 
   return WEBSITE_BRAND.default
+}
+
+export function buildProviderBuiltinWebSearchConfig(
+  providerId: BaseProviderId,
+  webSearchConfig: CherryWebSearchConfig,
+  model?: Model
+): WebSearchPluginConfig | undefined {
+  switch (providerId) {
+    case 'openai': {
+      const searchContextSize = isOpenAIDeepResearchModel(model)
+        ? 'medium'
+        : mapMaxResultToOpenAIContextSize(webSearchConfig.maxResults)
+      return {
+        openai: {
+          searchContextSize
+        }
+      }
+    }
+    case 'openai-chat': {
+      const searchContextSize = isOpenAIDeepResearchModel(model)
+        ? 'medium'
+        : mapMaxResultToOpenAIContextSize(webSearchConfig.maxResults)
+      return {
+        'openai-chat': {
+          searchContextSize
+        }
+      }
+    }
+    case 'anthropic': {
+      // const blockedDomains = mapRegexToPatterns(webSearchConfig.excludeDomains)
+      const anthropicSearchOptions: AnthropicSearchConfig = {
+        maxUses: webSearchConfig.maxResults,
+        blockedDomains: undefined
+      }
+      return {
+        anthropic: anthropicSearchOptions
+      }
+    }
+    case 'xai': {
+      // const excludeDomains = mapRegexToPatterns(webSearchConfig.excludeDomains)
+      return {
+        xai: {
+          maxSearchResults: webSearchConfig.maxResults,
+          returnCitations: true,
+          sources: [
+            {
+              type: 'web'
+              // excludedWebsites: excludeDomains.slice(0, Math.min(excludeDomains.length, 5))
+            },
+            { type: 'news' },
+            { type: 'x' }
+          ],
+          mode: 'on'
+        }
+      }
+    }
+    case 'openrouter': {
+      return {
+        openrouter: {
+          plugins: [
+            {
+              id: 'web',
+              max_results: webSearchConfig.maxResults
+            }
+          ]
+        }
+      }
+    }
+    case 'cherryin': {
+      const _providerId =
+        { 'openai-response': 'openai', openai: 'openai-chat' }[model?.endpoint_type ?? ''] ?? model?.endpoint_type
+      return buildProviderBuiltinWebSearchConfig(_providerId, webSearchConfig, model)
+    }
+    default: {
+      return {}
+    }
+  }
+}
+
+/**
+ * range in [0, 100]
+ * @param maxResults
+ */
+function mapMaxResultToOpenAIContextSize(maxResults: number): OpenAISearchConfig['searchContextSize'] {
+  if (maxResults <= 33) return 'low'
+  if (maxResults <= 66) return 'medium'
+  return 'high'
 }
