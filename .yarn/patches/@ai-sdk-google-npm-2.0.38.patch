@@ -1,0 +1,26 @@
+diff --git a/dist/index.js b/dist/index.js
+index c2ef089c42e13a8ee4a833899a415564130e5d79..75efa7baafb0f019fb44dd50dec1641eee8879e7 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -471,7 +471,7 @@ function convertToGoogleGenerativeAIMessages(prompt, options) {
+
+ // src/get-model-path.ts
+ function getModelPath(modelId) {
+-  return modelId.includes("/") ? modelId : `models/${modelId}`;
++  return modelId.includes("models/") ? modelId : `models/${modelId}`;
+ }
+
+ // src/google-generative-ai-options.ts
+diff --git a/dist/index.mjs b/dist/index.mjs
+index d75c0cc13c41192408c1f3f2d29d76a7bffa6268..ada730b8cb97d9b7d4cb32883a1d1ff416404d9b 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -477,7 +477,7 @@ function convertToGoogleGenerativeAIMessages(prompt, options) {
+
+ // src/get-model-path.ts
+ function getModelPath(modelId) {
+-  return modelId.includes("/") ? modelId : `models/${modelId}`;
++  return modelId.includes("models/") ? modelId : `models/${modelId}`;
+ }
+
+ // src/google-generative-ai-options.ts

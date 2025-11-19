@@ -49,7 +49,7 @@
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^3.0.0",
     "@ai-sdk/anthropic": "^1.2.12",
-    "@ai-sdk/google": "^1.2.22",
+    "@ai-sdk/google": "patch:@ai-sdk/google@npm%3A2.0.38#~/.yarn/patches/@ai-sdk-google-npm-2.0.38.patch",
     "@ai-sdk/openai": "^1.3.23",
     "@ai-sdk/openai-compatible": "^0.2.16",
     "@anthropic-ai/sdk": "^0.51.0",

@@ -96,15 +96,27 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ai-sdk/google@npm:^1.2.22":
-  version: 1.2.22
-  resolution: "@ai-sdk/google@npm:1.2.22"
+"@ai-sdk/google@npm:2.0.38":
+  version: 2.0.38
+  resolution: "@ai-sdk/google@npm:2.0.38"
   dependencies:
-    "@ai-sdk/provider": "npm:1.1.3"
-    "@ai-sdk/provider-utils": "npm:2.2.8"
+    "@ai-sdk/provider": "npm:2.0.0"
+    "@ai-sdk/provider-utils": "npm:3.0.17"
   peerDependencies:
-    zod: ^3.0.0
-  checksum: 10c0/662005cb4d972e4048d496e9713cd0ff2828f8363c9f1449e5a8580523c34f9ab57126ad3129e4d535561aa1bac0ae0d68bb471c379be80f5a23d455eea49987
+    zod: ^3.25.76 || ^4.1.8
+  checksum: 10c0/417e9dbc5ee82583fcfeedb247195a76bf30c774eeefb8f3476fb3535e74a00b2347c5250ce79f5a80c40ba68708995aafe921f1252367ca65cab95acf25dc3f
+  languageName: node
+  linkType: hard
+
+"@ai-sdk/google@patch:@ai-sdk/google@npm%3A2.0.38#~/.yarn/patches/@ai-sdk-google-npm-2.0.38.patch":
+  version: 2.0.38
+  resolution: "@ai-sdk/google@patch:@ai-sdk/google@npm%3A2.0.38#~/.yarn/patches/@ai-sdk-google-npm-2.0.38.patch::version=2.0.38&hash=656236"
+  dependencies:
+    "@ai-sdk/provider": "npm:2.0.0"
+    "@ai-sdk/provider-utils": "npm:3.0.17"
+  peerDependencies:
+    zod: ^3.25.76 || ^4.1.8
+  checksum: 10c0/801f5cf7ebfc8eff999431ba4e55481b1485c8877d3d9c222b60b6bc631e9348881d8df6ca8f67503146746df793c256c4f5fda3636b9f36fb75c0bad93a4d8b
   languageName: node
   linkType: hard
 
@@ -179,6 +191,19 @@ __metadata:
   peerDependencies:
     zod: ^3.25.76 || ^4.1.8
   checksum: 10c0/83886bf188cad0cc655b680b710a10413989eaba9ec59dd24a58b985c02a8a1d50ad0f96dd5259385c07592ec3c37a7769fdf4a1ef569a73c9edbdb2cd585915
+  languageName: node
+  linkType: hard
+
+"@ai-sdk/provider-utils@npm:3.0.17":
+  version: 3.0.17
+  resolution: "@ai-sdk/provider-utils@npm:3.0.17"
+  dependencies:
+    "@ai-sdk/provider": "npm:2.0.0"
+    "@standard-schema/spec": "npm:^1.0.0"
+    eventsource-parser: "npm:^3.0.6"
+  peerDependencies:
+    zod: ^3.25.76 || ^4.1.8
+  checksum: 10c0/1bae6dc4cacd0305b6aa152f9589bbd61c29f150155482c285a77f83d7ed416d52bc2aa7fdaba2e5764530392d9e8f799baea34a63dce6c72ecd3de364dc62d1
   languageName: node
   linkType: hard
 
@@ -6787,7 +6812,7 @@ __metadata:
   dependencies:
     "@ai-sdk/amazon-bedrock": "npm:^3.0.0"
     "@ai-sdk/anthropic": "npm:^1.2.12"
-    "@ai-sdk/google": "npm:^1.2.22"
+    "@ai-sdk/google": "patch:@ai-sdk/google@npm%3A2.0.38#~/.yarn/patches/@ai-sdk-google-npm-2.0.38.patch"
     "@ai-sdk/openai": "npm:^1.3.23"
     "@ai-sdk/openai-compatible": "npm:^0.2.16"
     "@anthropic-ai/sdk": "npm:^0.51.0"
@@ -10014,7 +10039,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eventsource-parser@npm:^3.0.5":
+"eventsource-parser@npm:^3.0.5, eventsource-parser@npm:^3.0.6":
   version: 3.0.6
   resolution: "eventsource-parser@npm:3.0.6"
   checksum: 10c0/70b8ccec7dac767ef2eca43f355e0979e70415701691382a042a2df8d6a68da6c2fca35363669821f3da876d29c02abe9b232964637c1b6635c940df05ada78a
