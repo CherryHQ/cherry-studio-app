@@ -26,21 +26,8 @@ export const SYSTEM_MODELS: Record<SystemProviderId | 'defaultModel', Model[]> =
     glm45FlashModel
   ],
   cherryin: [],
-  cherryai: [
-    {
-      id: 'openai/gpt-5',
-      name: 'GPT5',
-      provider: 'cherryai',
-      group: 'OpenAI'
-    },
-    {
-      id: 'anthropic/claude-sonnet-4.5',
-      name: 'Claude-Sonnet-4.5',
-      provider: 'cherryai',
-      group: 'Anthropic'
-    }
-  ],
-  // vertexai: [],
+  vertexai: [],
+  sophnet: [],
   '302ai': [
     {
       id: 'deepseek-chat',
@@ -274,6 +261,7 @@ export const SYSTEM_MODELS: Record<SystemProviderId | 'defaultModel', Model[]> =
     { id: 'deepseek-r1', name: 'DeepSeek-R1', provider: 'burncloud', group: 'deepseek-ai' },
     { id: 'deepseek-v3', name: 'DeepSeek-V3', provider: 'burncloud', group: 'deepseek-ai' }
   ],
+  ovms: [],
   ollama: [],
   lmstudio: [],
   silicon: [
@@ -443,6 +431,18 @@ export const SYSTEM_MODELS: Record<SystemProviderId | 'defaultModel', Model[]> =
     }
   ],
   anthropic: [
+    {
+      id: 'claude-haiku-4-5-20251001',
+      provider: 'anthropic',
+      name: 'Claude Haiku 4.5',
+      group: 'Claude 4.5'
+    },
+    {
+      id: 'claude-sonnet-4-5-20250929',
+      provider: 'anthropic',
+      name: 'Claude Sonnet 4.5',
+      group: 'Claude 4.5'
+    },
     {
       id: 'claude-sonnet-4-20250514',
       provider: 'anthropic',
@@ -712,6 +712,12 @@ export const SYSTEM_MODELS: Record<SystemProviderId | 'defaultModel', Model[]> =
       group: 'GLM-4.5'
     },
     {
+      id: 'glm-4.6',
+      provider: 'zhipu',
+      name: 'GLM-4.6',
+      group: 'GLM-4.6'
+    },
+    {
       id: 'glm-4.5',
       provider: 'zhipu',
       name: 'GLM-4.5',
@@ -822,7 +828,8 @@ export const SYSTEM_MODELS: Record<SystemProviderId | 'defaultModel', Model[]> =
     { id: 'qwen-coder-plus', name: 'qwen-coder-plus', provider: 'dashscope', group: 'qwen-coder', owned_by: 'system' },
     { id: 'qwen-flash', name: 'qwen-flash', provider: 'dashscope', group: 'qwen-flash', owned_by: 'system' },
     { id: 'qwen-plus', name: 'qwen-plus', provider: 'dashscope', group: 'qwen-plus', owned_by: 'system' },
-    { id: 'qwen-max', name: 'qwen-max', provider: 'dashscope', group: 'qwen-max', owned_by: 'system' }
+    { id: 'qwen-max', name: 'qwen-max', provider: 'dashscope', group: 'qwen-max', owned_by: 'system' },
+    { id: 'qwen3-max', name: 'qwen3-max', provider: 'dashscope', group: 'qwen-max', owned_by: 'system' }
   ],
   stepfun: [
     {
@@ -996,6 +1003,18 @@ export const SYSTEM_MODELS: Record<SystemProviderId | 'defaultModel', Model[]> =
       provider: 'minimax',
       name: 'minimax-01',
       group: 'minimax-01'
+    },
+    {
+      id: 'MiniMax-M2',
+      provider: 'minimax',
+      name: 'MiniMax M2',
+      group: 'minimax-m2'
+    },
+    {
+      id: 'MiniMax-M2-Stable',
+      provider: 'minimax',
+      name: 'MiniMax M2 Stable',
+      group: 'minimax-m2'
     }
   ],
   hyperbolic: [
@@ -1735,6 +1754,7 @@ export const SYSTEM_MODELS: Record<SystemProviderId | 'defaultModel', Model[]> =
       id: 'DeepSeek-R1',
       provider: 'cephalon',
       name: 'DeepSeek-R1满血版',
+      capabilities: [{ type: 'reasoning' }],
       group: 'DeepSeek'
     }
   ],
@@ -1784,6 +1804,74 @@ export const SYSTEM_MODELS: Record<SystemProviderId | 'defaultModel', Model[]> =
       name: 'GPT-4o',
       provider: 'poe',
       group: 'poe'
+    }
+  ],
+  aionly: [
+    {
+      id: 'claude-opus-4.1',
+      name: 'claude-opus-4.1',
+      provider: 'aionly',
+      group: 'claude'
+    },
+    {
+      id: 'claude-sonnet4',
+      name: 'claude-sonnet4',
+      provider: 'aionly',
+      group: 'claude'
+    },
+    {
+      id: 'claude-3.5-sonnet-v2',
+      name: 'claude-3.5-sonnet-v2',
+      provider: 'aionly',
+      group: 'claude'
+    },
+    {
+      id: 'gpt-4.1',
+      name: 'gpt-4.1',
+      provider: 'aionly',
+      group: 'gpt'
+    },
+    {
+      id: 'gemini-2.5-flash',
+      name: 'gemini-2.5-flash',
+      provider: 'aionly',
+      group: 'gemini'
+    }
+  ],
+  longcat: [
+    {
+      id: 'LongCat-Flash-Chat',
+      name: 'LongCat Flash Chat',
+      provider: 'longcat',
+      group: 'LongCat'
+    },
+    {
+      id: 'LongCat-Flash-Thinking',
+      name: 'LongCat Flash Thinking',
+      provider: 'longcat',
+      group: 'LongCat'
+    }
+  ],
+  huggingface: [],
+  'ai-gateway': [],
+  cerebras: [
+    {
+      id: 'gpt-oss-120b',
+      name: 'GPT oss 120B',
+      provider: 'cerebras',
+      group: 'openai'
+    },
+    {
+      id: 'zai-glm-4.6',
+      name: 'GLM 4.6',
+      provider: 'cerebras',
+      group: 'zai'
+    },
+    {
+      id: 'qwen-3-235b-a22b-instruct-2507',
+      name: 'Qwen 3 235B A22B Instruct',
+      provider: 'cerebras',
+      group: 'qwen'
     }
   ]
 }

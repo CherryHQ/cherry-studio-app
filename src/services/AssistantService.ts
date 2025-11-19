@@ -841,7 +841,7 @@ export async function getDefaultAssistant(): Promise<Assistant> {
  * Get default model
  */
 export function getDefaultModel() {
-  return SYSTEM_MODELS.cherryai[0]
+  return SYSTEM_MODELS.defaultModel[0]
 }
 
 /**
