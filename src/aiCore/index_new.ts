@@ -48,6 +48,7 @@ export default class ModernAiProvider {
   private actualProvider: Provider
   private model?: Model
   private localProvider: Awaited<AiSdkProvider> | null = null
+  private readonly customFetch: typeof expoFetch
 
   // 构造函数重载签名
   constructor(model: Model, provider?: Provider)
@@ -68,19 +69,17 @@ export default class ModernAiProvider {
 
     this.legacyProvider = new LegacyAiProvider(this.actualProvider)
 
-    const customFetch = async (url, options) => {
+    this.customFetch = async (url, options) => {
       const response = await expoFetch(url, {
         ...options,
         headers: {
-          ...options.headers
+          ...options?.headers
         }
       })
       return response
     }
 
-    if (this.config) {
-      this.config.options.fetch = customFetch
-    }
+    this.applyCustomFetchToConfig()
   }
 
   /**
@@ -101,6 +100,7 @@ export default class ModernAiProvider {
 
     // 确保配置存在
     this.config = providerToAiSdkConfig(this.actualProvider, this.model)
+    this.applyCustomFetchToConfig()
     if (SUPPORTED_IMAGE_ENDPOINT_LIST.includes(this.config.options.endpoint)) {
       providerConfig.isImageGenerationEndpoint = true
     }
@@ -533,6 +533,12 @@ export default class ModernAiProvider {
 
   public getApiKey(): string {
     return this.legacyProvider.getApiKey()
+  }
+
+  private applyCustomFetchToConfig() {
+    if (this.config?.options) {
+      this.config.options.fetch = this.customFetch
+    }
   }
 }
 
