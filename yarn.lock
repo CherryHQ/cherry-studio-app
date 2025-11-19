@@ -2291,9 +2291,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@cherrystudio/ai-core@npm:^1.0.6":
-  version: 1.0.6
-  resolution: "@cherrystudio/ai-core@npm:1.0.6"
+"@cherrystudio/ai-core@npm:^1.0.9":
+  version: 1.0.9
+  resolution: "@cherrystudio/ai-core@npm:1.0.9"
   dependencies:
     "@ai-sdk/anthropic": "npm:^2.0.43"
     "@ai-sdk/azure": "npm:^2.0.66"
@@ -2302,19 +2302,19 @@ __metadata:
     "@ai-sdk/provider": "npm:^2.0.0"
     "@ai-sdk/provider-utils": "npm:^3.0.16"
     "@ai-sdk/xai": "npm:^2.0.31"
-    "@cherrystudio/ai-sdk-provider": "npm:^0.1.1"
     zod: "npm:^4.1.5"
   peerDependencies:
     "@ai-sdk/google": ^2.0.36
     "@ai-sdk/openai": ^2.0.64
+    "@cherrystudio/ai-sdk-provider": ^0.1.2
     ai: ^5.0.26
-  checksum: 10c0/5dfefdfe30c3fcb566219c51264676a285890c404a5b4dc4ab0c1e15658aee15e4ed683d7310401753a59d202a44be759676ab52b9a657df9510d1462f9d8150
+  checksum: 10c0/078828ed32556c02b58d08f4b7a89149ae7d4b25634d68c80b2f59e9baa43fd2d34d073c2f463f2ea6b8706e2efb8243ff5c5be198a8727de0762d64d90a8cc1
   languageName: node
   linkType: hard
 
-"@cherrystudio/ai-sdk-provider@npm:^0.1.1":
-  version: 0.1.1
-  resolution: "@cherrystudio/ai-sdk-provider@npm:0.1.1"
+"@cherrystudio/ai-sdk-provider@npm:^0.1.2":
+  version: 0.1.2
+  resolution: "@cherrystudio/ai-sdk-provider@npm:0.1.2"
   dependencies:
     "@ai-sdk/provider": "npm:^2.0.0"
     "@ai-sdk/provider-utils": "npm:^3.0.12"
@@ -2323,7 +2323,7 @@ __metadata:
     "@ai-sdk/google": ^2.0.23
     "@ai-sdk/openai": ^2.0.64
     ai: ^5.0.26
-  checksum: 10c0/a689c095c865c058aabc88813a7e0826c2b0df09db02b45e53933451bcaa0c0f0f4309d3e22b45224a1caefccc8b358fbfa914bb7cbcb89eee44c4b16391c20e
+  checksum: 10c0/c0cf6c8c692d71973c6e92722fdd31fecec442cda498aa6865da14bfa0e3832a3e740f1f499442e234f89942699279caa143b0f0484ef7e5888b6d7e063e9584
   languageName: node
   linkType: hard
 
@@ -7006,7 +7006,8 @@ __metadata:
     "@aws-sdk/client-s3": "npm:^3.840.0"
     "@babel/core": "npm:^7.25.2"
     "@babel/plugin-transform-class-static-block": "npm:^7.27.1"
-    "@cherrystudio/ai-core": "npm:^1.0.6"
+    "@cherrystudio/ai-core": "npm:^1.0.9"
+    "@cherrystudio/ai-sdk-provider": "npm:^0.1.2"
     "@cherrystudio/openai": "npm:^6.9.0"
     "@expo/ui": "npm:~0.2.0-beta.7"
     "@google/genai": "npm:^1.17.0"

@@ -2,7 +2,7 @@ import type {
   AnthropicSearchConfig,
   OpenAISearchConfig,
   WebSearchPluginConfig
-} from '@cherrystudio/ai-core/core/plugins/built-in/webSearchPlugin/helper'
+} from '@cherrystudio/ai-core/built-in/plugins'
 import type { BaseProviderId } from '@cherrystudio/ai-core/provider'
 
 import { isOpenAIDeepResearchModel, isOpenAIWebSearchChatCompletionOnlyModel } from '@/config/models'

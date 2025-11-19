@@ -5,7 +5,7 @@
 import { anthropic } from '@ai-sdk/anthropic'
 import { google } from '@ai-sdk/google'
 import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins'
-import { isBaseProvider } from '@cherrystudio/ai-core/core/providers/schemas'
+import { isBaseProvider } from '@cherrystudio/ai-core/provider'
 import type { ModelMessage, Tool } from 'ai'
 import { stepCountIs } from 'ai'
 
