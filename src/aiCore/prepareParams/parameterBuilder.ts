@@ -10,7 +10,6 @@ import type { ModelMessage, Tool } from 'ai'
 import { stepCountIs } from 'ai'
 
 import {
-  getAnthropicThinkingBudget,
   isGenerateImageModel,
   isOpenRouterBuiltInWebSearchModel,
   isReasoningModel,
@@ -31,6 +30,7 @@ import { buildProviderBuiltinWebSearchConfig } from '@/utils/websearch'
 import { getAiSdkProviderId } from '../provider/factory'
 import { setupToolsConfig } from '../utils/mcp'
 import { buildProviderOptions } from '../utils/options'
+import { getAnthropicThinkingBudget } from '../utils/reasoning'
 import { supportsTopP } from './modelCapabilities'
 import { getTemperature, getTopP } from './modelParameters'
 
