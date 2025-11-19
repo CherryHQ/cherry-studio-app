@@ -100,7 +100,7 @@ const MarqueeComponent: React.FC<MarqueeComponentProps> = ({ block, expanded }) 
         </AnimatePresence>
         <YStack className="h-full flex-1 gap-1">
           <XStack className="h-7 items-center justify-between">
-            <Text className="text-text-primary z-10 text-lg font-bold">
+            <Text className="text-text-primary z-10 text-base font-bold">
               {t('chat.think', { seconds: Math.floor((block.thinking_millsec || 0) / 1000) })}
             </Text>
             <MotiView
