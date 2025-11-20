@@ -30,6 +30,11 @@ export { ExternalLink } from './base/ExternalLink'
 export { IconButton } from './base/IconButton'
 export { default as ImageViewerFooterComponent } from './base/ImageViewerFooterComponent'
 export { SearchInput } from './base/SearchInput'
+export {
+  default as SelectionDropdown,
+  type SelectionDropdownItem,
+  type SelectionDropdownProps
+} from './base/SelectionDropdown'
 export { default as SelectionSheet, type SelectionSheetItem, type SelectionSheetProps } from './base/SelectionSheet'
 export { ImageSkeleton } from './base/Skeleton/ImageSkeleton'
 export { MessageInput } from './features/ChatScreen/MessageInput'

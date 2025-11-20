@@ -1,0 +1,50 @@
+import React from 'react'
+import * as DropdownMenu from 'zeego/dropdown-menu'
+
+export interface SelectionDropdownItem {
+  id?: string
+  key?: string
+  label: React.ReactNode | string
+  description?: React.ReactNode | string
+  icon?: React.ReactNode | ((isSelected: boolean) => React.ReactNode)
+  isSelected?: boolean
+  onSelect?: () => void
+  [x: string]: any
+}
+
+export interface SelectionDropdownProps {
+  items: SelectionDropdownItem[]
+  children: React.ReactNode
+}
+
+/**
+ * 用于显示下拉选择菜单的组件
+ * 使用 Zeego dropdown menu 实现，支持原生体验
+ */
+const SelectionDropdown: React.FC<SelectionDropdownProps> = ({ items, children }) => {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger>{children}</DropdownMenu.Trigger>
+
+      <DropdownMenu.Content>
+        {items.map((item, index) => {
+          const itemKey = item.key?.toString() || item.id?.toString() || index.toString()
+          const iconElement = typeof item.icon === 'function' ? item.icon(item.isSelected ?? false) : item.icon
+
+          return (
+            <DropdownMenu.CheckboxItem
+              key={itemKey}
+              value={item.isSelected ? 'on' : 'off'}
+              onValueChange={() => item.onSelect?.()}>
+              {iconElement && <DropdownMenu.ItemIcon>{iconElement}</DropdownMenu.ItemIcon>}
+              <DropdownMenu.ItemTitle>{item.label}</DropdownMenu.ItemTitle>
+              <DropdownMenu.ItemIndicator />
+            </DropdownMenu.CheckboxItem>
+          )
+        })}
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
+  )
+}
+
+export default SelectionDropdown
