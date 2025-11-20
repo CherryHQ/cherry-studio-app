@@ -29,6 +29,7 @@ export interface SelectionSheetProps {
   ref: React.RefObject<BottomSheetModal | null>
   placeholder?: string
   shouldDismiss?: boolean
+  headerComponent?: React.ReactNode
 }
 
 /**
@@ -41,7 +42,8 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
   snapPoints = [],
   ref,
   placeholder,
-  shouldDismiss = true
+  shouldDismiss = true,
+  headerComponent
 }) => {
   const { isDark } = useTheme()
   const [isVisible, setIsVisible] = useState(false)
@@ -122,6 +124,17 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
     <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} pressBehavior="close" />
   )
 
+  const renderHeader = () => {
+    if (!placeholder && !headerComponent) return undefined
+
+    return (
+      <View className="gap-2 pb-2">
+        {headerComponent}
+        {placeholder && <Text className="text-text-secondary text-center text-sm opacity-60">{placeholder}</Text>}
+      </View>
+    )
+  }
+
   return (
     <BottomSheetModal
       ref={ref}
@@ -146,13 +159,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
         ItemSeparatorComponent={() => <YStack className="h-2.5" />}
         contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 16 }}
         renderScrollComponent={BottomSheetLegendListScrollable}
-        ListHeaderComponent={
-          placeholder ? (
-            <View className="px-4 pb-2">
-              <Text className="text-text-secondary text-center text-sm opacity-60">{placeholder}</Text>
-            </View>
-          ) : undefined
-        }
+        ListHeaderComponent={renderHeader()}
         ListEmptyComponent={emptyContent ? <YStack className="gap-2.5 px-4 pb-7">{emptyContent}</YStack> : undefined}
         recycleItems
       />

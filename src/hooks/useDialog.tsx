@@ -152,11 +152,12 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                 <Button
                   variant="tertiary"
                   className={cn(
-                    'border-gray-20 h-[42px] flex-1 rounded-[30px] bg-transparent',
+                    'border-gray-20 h-[42px] flex-1 rounded-[30px] bg-transparent active:opacity-80',
                     options?.cancelStyle?.toString() || ''
                   )}
                   onPress={cancel}
-                  isDisabled={isLoading}>
+                  isDisabled={isLoading}
+                  animationConfig={{ highlight: { isDisabled: true } }}>
                   <Button.Label>
                     <Text className="text-gray-80 text-[17px]">
                       {isLoading && shouldShowLoading ? t('common.loading') : cancelText}
