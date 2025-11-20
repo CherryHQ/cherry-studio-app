@@ -3,10 +3,11 @@ import { MotiView } from 'moti'
 import React, { useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pressable } from 'react-native'
+import * as DropdownMenu from 'zeego/dropdown-menu'
 
-import { McpServerSheet, ToolUseSheet, WebsearchSheet } from '@/componentsV2'
+import { Group, McpServerSheet, Row, WebsearchSheet } from '@/componentsV2'
 import Text from '@/componentsV2/base/Text'
-import { Globe, SquareFunction, WebsearchProviderIcon, Wrench } from '@/componentsV2/icons'
+import { ChevronsUpDown, Globe, SquareFunction, WebsearchProviderIcon, Wrench } from '@/componentsV2/icons'
 import RowRightArrow from '@/componentsV2/layout/Row/RowRightArrow'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
@@ -21,7 +22,6 @@ interface ToolTabContentProps {
 
 export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentProps) {
   const { t } = useTranslation()
-  const toolUseSheetRef = useRef<BottomSheetModal>(null)
   const websearchSheetRef = useRef<BottomSheetModal>(null)
   const mcpServerSheetRef = useRef<BottomSheetModal>(null)
   const { apiProviders } = useWebsearchProviders()
@@ -33,8 +33,15 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
     return activeMcpServers.filter(mcp => assistantMcpIds.includes(mcp.id)).length
   }, [assistant.mcpServers, activeMcpServers])
 
-  const handleToolUsePress = () => {
-    toolUseSheetRef.current?.present()
+  const handleToolUseModeToggle = async (mode: 'function' | 'prompt') => {
+    const newToolUseMode = mode === assistant.settings?.toolUseMode ? undefined : mode
+    await updateAssistant({
+      ...assistant,
+      settings: {
+        ...assistant.settings,
+        toolUseMode: newToolUseMode
+      }
+    })
   }
 
   const handleWebsearchPress = () => {
@@ -85,29 +92,57 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
       transition={{
         type: 'timing'
       }}>
-      <YStack className="flex-1 gap-4">
-        <YStack className="w-full gap-2">
-          <Text className="text-text-secondary text-sm font-medium">{t('assistants.settings.tooluse.title')}</Text>
-          <Pressable
-            onPress={handleToolUsePress}
-            className="bg-ui-card-background flex-row items-center justify-between rounded-xl px-3 py-3 active:opacity-80">
-            <XStack className="flex-1 items-center gap-2">
-              {assistant.settings?.toolUseMode ? (
-                <XStack className="flex-1 items-center gap-2">
-                  {assistant.settings.toolUseMode === 'function' ? <SquareFunction size={20} /> : <Wrench size={20} />}
-                  <Text className="flex-1 text-base" numberOfLines={1} ellipsizeMode="tail">
-                    {t(`assistants.settings.tooluse.${assistant.settings?.toolUseMode}`)}
+      <Group>
+        <Row>
+          <Text className="text-sm font-medium">{t('assistants.settings.tooluse.title')}</Text>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              <Pressable className="bg-ui-card-background flex-row items-center gap-2 rounded-xl  active:opacity-80">
+                {assistant.settings?.toolUseMode ? (
+                  <>
+                    {assistant.settings.toolUseMode === 'function' ? (
+                      <SquareFunction className="text-text-secondary dark:text-text-secondary" size={18} />
+                    ) : (
+                      <Wrench className="text-text-secondary dark:text-text-secondary" size={18} />
+                    )}
+                    <Text className="text-text-secondary text-sm" numberOfLines={1}>
+                      {t(`assistants.settings.tooluse.${assistant.settings?.toolUseMode}`)}
+                    </Text>
+                  </>
+                ) : (
+                  <Text className="text-text-secondary text-sm" numberOfLines={1}>
+                    {t('assistants.settings.tooluse.empty')}
                   </Text>
-                </XStack>
-              ) : (
-                <Text className="text-text-secondary flex-1 text-base" numberOfLines={1} ellipsizeMode="tail">
-                  {t('assistants.settings.tooluse.empty')}
-                </Text>
-              )}
-            </XStack>
-            <RowRightArrow />
-          </Pressable>
-        </YStack>
+                )}
+                <ChevronsUpDown size={16} className="text-text-secondary dark:text-text-secondary" />
+              </Pressable>
+            </DropdownMenu.Trigger>
+
+            <DropdownMenu.Content>
+              <DropdownMenu.CheckboxItem
+                key="function"
+                value={assistant.settings?.toolUseMode === 'function' ? 'on' : 'off'}
+                onValueChange={() => handleToolUseModeToggle('function')}>
+                <DropdownMenu.ItemIcon>
+                  <SquareFunction size={20} />
+                </DropdownMenu.ItemIcon>
+                <DropdownMenu.ItemTitle>{t('assistants.settings.tooluse.function')}</DropdownMenu.ItemTitle>
+                <DropdownMenu.ItemIndicator />
+              </DropdownMenu.CheckboxItem>
+
+              <DropdownMenu.CheckboxItem
+                key="prompt"
+                value={assistant.settings?.toolUseMode === 'prompt' ? 'on' : 'off'}
+                onValueChange={() => handleToolUseModeToggle('prompt')}>
+                <DropdownMenu.ItemIcon>
+                  <Wrench size={20} />
+                </DropdownMenu.ItemIcon>
+                <DropdownMenu.ItemTitle>{t('assistants.settings.tooluse.prompt')}</DropdownMenu.ItemTitle>
+                <DropdownMenu.ItemIndicator />
+              </DropdownMenu.CheckboxItem>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+        </Row>
 
         <YStack className="w-full gap-2">
           <Text className="text-text-secondary text-sm font-medium">{t('settings.websearch.provider.title')}</Text>
@@ -149,8 +184,7 @@ export function ToolTabContent({ assistant, updateAssistant }: ToolTabContentPro
             <RowRightArrow />
           </Pressable>
         </YStack>
-      </YStack>
-      <ToolUseSheet ref={toolUseSheetRef} assistant={assistant} updateAssistant={updateAssistant} />
+      </Group>
       <WebsearchSheet
         ref={websearchSheetRef}
         assistant={assistant}
