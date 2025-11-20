@@ -15,13 +15,14 @@ export interface SelectionDropdownItem {
 export interface SelectionDropdownProps {
   items: SelectionDropdownItem[]
   children: React.ReactNode
+  shouldDismissMenuOnSelect?: boolean
 }
 
 /**
  * 用于显示下拉选择菜单的组件
  * 使用 Zeego dropdown menu 实现，支持原生体验
  */
-const SelectionDropdown: React.FC<SelectionDropdownProps> = ({ items, children }) => {
+const SelectionDropdown: React.FC<SelectionDropdownProps> = ({ items, children, shouldDismissMenuOnSelect = true }) => {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>{children}</DropdownMenu.Trigger>
@@ -33,6 +34,7 @@ const SelectionDropdown: React.FC<SelectionDropdownProps> = ({ items, children }
 
           return (
             <DropdownMenu.CheckboxItem
+              shouldDismissMenuOnSelect={shouldDismissMenuOnSelect}
               key={itemKey}
               value={item.isSelected ? 'on' : 'off'}
               onValueChange={() => item.onSelect?.()}>

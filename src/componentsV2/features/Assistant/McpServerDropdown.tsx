@@ -65,7 +65,7 @@ export function McpServerDropdown({ assistant, updateAssistant }: McpServerDropd
   }
 
   return (
-    <SelectionDropdown items={mcpOptions}>
+    <SelectionDropdown items={mcpOptions} shouldDismissMenuOnSelect={false}>
       <Pressable className="bg-ui-card-background flex-row items-center gap-2 rounded-xl active:opacity-80">
         {activeMcpCount > 0 ? (
           <Text className="text-text-secondary text-sm">{t('mcp.server.selected', { num: activeMcpCount })}</Text>
