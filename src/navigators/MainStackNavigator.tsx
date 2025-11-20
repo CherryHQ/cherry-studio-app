@@ -1,4 +1,5 @@
 import '@/i18n'
+import '../../global.css'
 
 import { createStackNavigator } from '@react-navigation/stack'
 import React from 'react'

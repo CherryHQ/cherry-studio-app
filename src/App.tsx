@@ -1,6 +1,5 @@
 import '@/i18n'
 import 'react-native-reanimated'
-import '../global.css'
 
 import { DATABASE_NAME, db, expoDb } from '@db'
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
