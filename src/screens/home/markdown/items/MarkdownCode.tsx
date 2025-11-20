@@ -53,8 +53,8 @@ export const MarkdownCode: React.FC<MarkdownCodeProps> = ({
           <Text className="text-base">{lang.toUpperCase()}</Text>
         </XStack>
         <XStack className="gap-2">
-          {isHtml && <IconButton icon={<Eye size={16} color="$gray60" />} onPress={handlePreview} />}
-          <IconButton icon={<Copy size={16} color="$gray60" />} onPress={() => onCopy(text)} />
+          {isHtml && <IconButton icon={<Eye size={16} />} onPress={handlePreview} />}
+          <IconButton icon={<Copy size={16} />} onPress={() => onCopy(text)} />
         </XStack>
       </XStack>
       <CodeHighlighter
