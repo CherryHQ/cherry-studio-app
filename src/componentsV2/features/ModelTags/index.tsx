@@ -158,7 +158,7 @@ export const ModelTags: React.FC<ModelTagsProps> = ({
   }
 
   return (
-    <XStack className="items-center gap-4">
+    <XStack className="items-center gap-2">
       {tags.map(tag => (
         <TagBadge
           key={tag.key}

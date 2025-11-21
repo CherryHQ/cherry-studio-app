@@ -1,7 +1,7 @@
 import { BottomSheetBackdrop, BottomSheetModal, useBottomSheetScrollableCreator } from '@gorhom/bottom-sheet'
 import { LegendList } from '@legendapp/list'
 import { useNavigation } from '@react-navigation/native'
-import { Button } from 'heroui-native'
+import { Button, cn } from 'heroui-native'
 import { sortBy } from 'lodash'
 import React, { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -233,25 +233,22 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() => handleModelToggle(item.value)}
-              className={`justify-between rounded-lg border px-2 py-2 ${
+              className={`justify-between rounded-lg border px-2 ${
                 isSelected ? 'border-green-20 bg-green-10' : 'border-transparent bg-transparent'
               }`}>
-              <XStack className="w-full items-center justify-between gap-2">
-                <XStack className="flex-1 items-center gap-2" style={{ minWidth: 0 }}>
-                  <XStack className="shrink-0 items-center justify-center">
-                    <ModelIcon model={item.model} size={24} />
-                  </XStack>
+              <XStack className="w-full items-center gap-2 py-1">
+                <XStack className="items-center justify-center">
+                  <ModelIcon model={item.model} size={24} />
+                </XStack>
+                <YStack className="flex-1 gap-1">
                   <Text
-                    className={isSelected ? 'text-green-100' : 'text-text-primary'}
+                    className={cn('text-sm leading-none', isSelected ? 'text-green-100' : 'text-text-primary')}
                     numberOfLines={1}
-                    ellipsizeMode="tail"
-                    style={{ flex: 1, minWidth: 0 }}>
+                    ellipsizeMode="tail">
                     {item.label}
                   </Text>
-                </XStack>
-                <XStack className="shrink-0 items-center gap-2">
                   <ModelTags model={item.model} size={11} />
-                </XStack>
+                </YStack>
               </XStack>
             </TouchableOpacity>
           )
@@ -275,7 +272,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
               {multiple && (
                 <Button
                   size="sm"
-                  className={`rounded-full ${
+                  className={`h-10 rounded-lg ${
                     isMultiSelectActive ? 'border-green-20 bg-green-10 border' : 'bg-ui-card border border-transparent'
                   }`}
                   onPress={toggleMultiSelectMode}>

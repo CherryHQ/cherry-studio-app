@@ -186,10 +186,10 @@ export default function ProviderSettingsScreen() {
           <XStack className="w-full items-center justify-between">
             <XStack className="flex-1 gap-2">
               <XStack className="items-center justify-center">
-                <ModelIcon model={model} />
+                <ModelIcon model={model} size={24} />
               </XStack>
               <YStack className="flex-1 gap-1">
-                <Text numberOfLines={1} ellipsizeMode="tail">
+                <Text className="text-sm leading-none" numberOfLines={1} ellipsizeMode="tail">
                   {model.name}
                 </Text>
                 <ModelTags model={model} size={11} />
@@ -292,12 +292,18 @@ export default function ProviderSettingsScreen() {
                 <XStack className="items-center justify-between pr-2.5">
                   <GroupTitle>{t('settings.models.title')}</GroupTitle>
                   <IconButton
-                    icon={isCheckingHealth ? <RefreshCw size={14} className="animate-spin" /> : <HeartPulse size={14} />}
+                    icon={
+                      isCheckingHealth ? <RefreshCw size={14} className="animate-spin" /> : <HeartPulse size={14} />
+                    }
                     onPress={handleHealthCheck}
                     disabled={isCheckingHealth}
                   />
                 </XStack>
-                <SearchInput placeholder={t('settings.models.search')} value={searchText} onChangeText={setSearchText} />
+                <SearchInput
+                  placeholder={t('settings.models.search')}
+                  value={searchText}
+                  onChangeText={setSearchText}
+                />
                 <Group>
                   <ModelGroup modelGroups={sortedModelGroups} renderModelItem={renderModelItem} />
                 </Group>
