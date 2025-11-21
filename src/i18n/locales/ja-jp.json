@@ -36,6 +36,7 @@
           "low": "ロウ",
           "medium": "ミディアム",
           "minimal": "マイニン",
+          "none": "なし",
           "off": "オフ"
         },
         "stream_output": "ストリーム出力",
@@ -308,6 +309,10 @@
       "title": "HTMLプレビュー"
     },
     "inputs": {
+      "longTextConverted": {
+        "message": "貼り付けたテキスト（{{length}} 文字）がファイル添付に自動変換されました",
+        "title": "長文テキストが変換されました"
+      },
       "mentions": "@ {{number}} モデル",
       "placeholder": "メッセージを送信..."
     },
@@ -402,8 +407,8 @@
       "baidu-cloud": "Baidu Cloud",
       "burncloud": "BurnCloud",
       "cephalon": "Cephalon",
-      "cherryin": "CherryIN",
       "cherryai": "CherryAI",
+      "cherryin": "CherryIN",
       "copilot": "GitHub Copilot",
       "dashscope": "Alibaba Cloud",
       "deepseek": "DeepSeek",
@@ -524,14 +529,14 @@
           "scan_qr_code": {
             "connecting": "接続中...",
             "description": "Cherry StudioからQRコードをスキャン",
+            "disconnected_message": "Landrop の接続が切断されました。もう一度お試しください。",
+            "disconnected_title": "接続が切断されました",
             "grant_permission": "権限を付与する",
             "permission_denied": "カメラの権限が許可されていません。QRコードをスキャンするには、デバイスの設定でカメラの権限を有効にしてください。",
-            "processing": "[to be translated]:正在处理二维码...",
+            "processing": "QRコードを処理中...",
             "requesting_permission": "カメラの権限をリクエスト中...",
             "success": "接続に成功しました 🎉",
             "success_description": "今すぐ送信ボタンをクリックしてデータを復元できます！",
-            "disconnected_title": "接続が切断されました",
-            "disconnected_message": "Landrop の接続が切断されました。もう一度お試しください。",
             "title": "QRコードをスキャン",
             "waiting_for_file": "ファイルの送信を待っています..."
           },

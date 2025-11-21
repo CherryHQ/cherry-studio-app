@@ -36,6 +36,7 @@
           "low": "低",
           "medium": "中",
           "minimal": "微念",
+          "none": "關閉",
           "off": "關閉"
         },
         "stream_output": "串流輸出",
@@ -309,8 +310,8 @@
     },
     "inputs": {
       "longTextConverted": {
-        "title": "長文本已轉換",
-        "message": "貼上的文字（{{length}} 字元）已自動轉換為檔案附件"
+        "message": "貼上的文字（{{length}} 字元）已自動轉換為檔案附件",
+        "title": "長文本已轉換"
       },
       "mentions": "@ {{number}} 個模型",
       "placeholder": "傳送訊息..."
@@ -406,8 +407,8 @@
       "baidu-cloud": "百度雲千帆",
       "burncloud": "BurnCloud",
       "cephalon": "Cephalon",
-      "cherryin": "櫻桃入",
       "cherryai": "CherryAI",
+      "cherryin": "櫻桃入",
       "copilot": "GitHub Copilot",
       "dashscope": "阿里雲百鍊",
       "deepseek": "深度求索",
@@ -528,14 +529,14 @@
           "scan_qr_code": {
             "connecting": "正在連接...",
             "description": "從Cherry Studio掃描QR碼",
+            "disconnected_message": "Landrop 連線已斷開，請重試。",
+            "disconnected_title": "連線已斷開",
             "grant_permission": "授與權限",
             "permission_denied": "未取得相機權限。請在裝置設定中啟用相機權限以掃描QR碼。",
             "processing": "[to be translated]:正在处理二维码...",
             "requesting_permission": "正在請求相機權限...",
             "success": "連接成功 🎉",
             "success_description": "您現在可以點擊發送按鈕來恢復資料！",
-            "disconnected_title": "連線已斷開",
-            "disconnected_message": "Landrop 連線已斷開，請重試。",
             "title": "掃描QR碼",
             "waiting_for_file": "等待發送檔案..."
           },

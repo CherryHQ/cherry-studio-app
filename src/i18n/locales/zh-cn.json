@@ -36,6 +36,7 @@
           "low": "浮想",
           "medium": "斟酌",
           "minimal": "微念",
+          "none": "关闭",
           "off": "关闭"
         },
         "stream_output": "流式输出",
@@ -309,8 +310,8 @@
     },
     "inputs": {
       "longTextConverted": {
-        "title": "长文本已转换",
-        "message": "粘贴的文本（{{length}} 字符）已自动转换为文件附件"
+        "message": "粘贴的文本（{{length}} 字符）已自动转换为文件附件",
+        "title": "长文本已转换"
       },
       "mentions": "@ {{number}} 个模型",
       "placeholder": "发送消息..."
@@ -406,8 +407,8 @@
       "baidu-cloud": "百度云千帆",
       "burncloud": "BurnCloud",
       "cephalon": "Cephalon",
-      "cherryin": "CherryIN",
       "cherryai": "CherryAI",
+      "cherryin": "CherryIN",
       "copilot": "GitHub Copilot",
       "dashscope": "阿里云百炼",
       "deepseek": "深度求索",
@@ -528,14 +529,14 @@
           "scan_qr_code": {
             "connecting": "正在连接...",
             "description": "请使用Cherry Studio扫码",
+            "disconnected_message": "Landrop 连接已断开，请重试。",
+            "disconnected_title": "连接已断开",
             "grant_permission": "授予权限",
             "permission_denied": "未获得相机权限。请在设备设置中启用相机权限以扫描二维码。",
             "processing": "正在处理二维码...",
             "requesting_permission": "正在请求相机权限...",
             "success": "连接成功 🎉",
             "success_description": "现在可以点击发送按钮来恢复数据了！",
-            "disconnected_title": "连接已断开",
-            "disconnected_message": "Landrop 连接已断开，请重试。",
             "title": "扫描二维码",
             "waiting_for_file": "等待发送文件..."
           },

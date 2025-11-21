@@ -36,6 +36,7 @@
           "low": "Low",
           "medium": "Medium",
           "minimal": "Weinian",
+          "none": "None",
           "off": "Off"
         },
         "stream_output": "Stream Output",
@@ -309,8 +310,8 @@
     },
     "inputs": {
       "longTextConverted": {
-        "title": "Long Text Converted",
-        "message": "The pasted text ({{length}} characters) has been automatically converted to a file attachment"
+        "message": "The pasted text ({{length}} characters) has been automatically converted to a file attachment",
+        "title": "Long Text Converted"
       },
       "mentions": "@ {{number}} models",
       "placeholder": "Send Message..."
@@ -406,8 +407,8 @@
       "baidu-cloud": "Baidu Cloud",
       "burncloud": "BurnCloud",
       "cephalon": "Cephalon",
-      "cherryin": "CherryIN",
       "cherryai": "CherryAI",
+      "cherryin": "CherryIN",
       "copilot": "GitHub Copilot",
       "dashscope": "Alibaba Cloud",
       "deepseek": "DeepSeek",
@@ -528,14 +529,14 @@
           "scan_qr_code": {
             "connecting": "Connecting...",
             "description": "Scan QR Code from Cherry Studio",
+            "disconnected_message": "The Landrop connection was disconnected. Please try again.",
+            "disconnected_title": "Connection Lost",
             "grant_permission": "Grant Permission",
             "permission_denied": "Camera permission not granted. Please enable it in your device settings to scan QR codes.",
             "processing": "Processing QR code...",
             "requesting_permission": "Requesting camera permission...",
             "success": "Connection Successful 🎉",
             "success_description": "You can now Click Send Button to Restore Data!",
-            "disconnected_title": "Connection Lost",
-            "disconnected_message": "The Landrop connection was disconnected. Please try again.",
             "title": "Scan QR Code",
             "waiting_for_file": "Waiting for file..."
           },
