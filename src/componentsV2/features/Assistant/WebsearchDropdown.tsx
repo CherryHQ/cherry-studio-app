@@ -97,7 +97,7 @@ export function WebsearchDropdown({ assistant, updateAssistant, providers }: Web
         <Text className="text-text-secondary text-sm" numberOfLines={1}>
           {t('settings.websearch.empty.description')}
         </Text>
-        <ChevronRight size={16} className="text-text-secondary dark:text-text-secondary" />
+        <ChevronRight size={16} className="text-text-secondary " />
       </Pressable>
     )
   }
@@ -117,7 +117,7 @@ export function WebsearchDropdown({ assistant, updateAssistant, providers }: Web
             {displayContent.text}
           </Text>
         )}
-        <ChevronsUpDown size={16} className="text-text-secondary dark:text-text-secondary" />
+        <ChevronsUpDown size={16} className="text-text-secondary " />
       </Pressable>
     </SelectionDropdown>
   )

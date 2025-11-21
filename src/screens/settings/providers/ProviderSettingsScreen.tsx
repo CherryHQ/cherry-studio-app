@@ -200,7 +200,7 @@ export default function ProviderSettingsScreen() {
               )}
               {getStatusIcon()}
               <IconButton
-                icon={<Minus size={18} className="bg-red-20 rounded-full text-red-100 dark:text-red-100" />}
+                icon={<Minus size={18} className="bg-red-20 rounded-full text-red-100" />}
                 onPress={() => handleRemoveModel(model.id)}
               />
             </XStack>

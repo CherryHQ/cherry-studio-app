@@ -49,9 +49,9 @@ export function ToolUseDropdown({ assistant, updateAssistant }: ToolUseDropdownP
         {assistant.settings?.toolUseMode ? (
           <>
             {assistant.settings.toolUseMode === 'function' ? (
-              <SquareFunction className="text-text-secondary dark:text-text-secondary" size={18} />
+              <SquareFunction className="text-text-secondary " size={18} />
             ) : (
-              <Wrench className="text-text-secondary dark:text-text-secondary" size={18} />
+              <Wrench className="text-text-secondary " size={18} />
             )}
             <Text className="text-text-secondary text-sm" numberOfLines={1}>
               {t(`assistants.settings.tooluse.${assistant.settings?.toolUseMode}`)}
@@ -62,7 +62,7 @@ export function ToolUseDropdown({ assistant, updateAssistant }: ToolUseDropdownP
             {t('assistants.settings.tooluse.empty')}
           </Text>
         )}
-        <ChevronsUpDown size={16} className="text-text-secondary dark:text-text-secondary" />
+        <ChevronsUpDown size={16} className="text-text-secondary " />
       </Pressable>
     </SelectionDropdown>
   )

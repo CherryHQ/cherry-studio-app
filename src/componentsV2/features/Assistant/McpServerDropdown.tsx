@@ -59,7 +59,7 @@ export function McpServerDropdown({ assistant, updateAssistant }: McpServerDropd
         <Text className="text-text-secondary text-sm" numberOfLines={1}>
           {t('mcp.server.empty.add')}
         </Text>
-        <ChevronRight size={16} className="text-text-secondary dark:text-text-secondary" />
+        <ChevronRight size={16} className="text-text-secondary " />
       </Pressable>
     )
   }
@@ -74,7 +74,7 @@ export function McpServerDropdown({ assistant, updateAssistant }: McpServerDropd
             {t('mcp.server.empty')}
           </Text>
         )}
-        <ChevronsUpDown size={16} className="text-text-secondary dark:text-text-secondary" />
+        <ChevronsUpDown size={16} className="text-text-secondary " />
       </Pressable>
     </SelectionDropdown>
   )
