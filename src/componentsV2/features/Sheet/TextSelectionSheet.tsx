@@ -20,15 +20,19 @@ export interface TextSelectionSheetRef {
 }
 
 // TODO: 自定义选择后弹出的菜单
-function SelectableText({ children }) {
+interface SelectableTextProps {
+  children: string
+}
+
+function SelectableText({ children }: SelectableTextProps) {
   if (Platform.OS === 'ios') {
     return (
-      <TextField className="w-full">
+      <TextField className="w-full flex-1">
         <TextField.Input
-          className="w-full rounded-none border-0 px-4 py-4 text-sm leading-6"
+          className="w-full flex-1 rounded-none border-0 px-4 py-4 text-sm leading-6"
           multiline
           editable={false}
-          value={children}
+          value={String(children)}
         />
       </TextField>
     )
