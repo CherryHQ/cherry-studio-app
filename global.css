@@ -59,6 +59,7 @@
       --color-text-primary: #f9f9f9;
       --color-text-secondary: #cecece;
       --color-background-opacity: rgba(34, 34, 34, 0.7);
+      --color-normal: #ffffff;
     }
     @variant light {
       --color-background-primary: #f7f7f7;
@@ -109,6 +110,7 @@
       --color-text-primary: #202020;
       --color-text-secondary: #646464;
       --color-background-opacity: #ffffff;
+      --color-normal: #000000;
     }
   }
 }

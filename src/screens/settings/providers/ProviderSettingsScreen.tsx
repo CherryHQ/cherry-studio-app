@@ -170,9 +170,9 @@ export default function ProviderSettingsScreen() {
 
         switch (health.status) {
           case 'healthy':
-            return <CircleCheck size={16} className="text-green-100 dark:text-green-100" />
+            return <CircleCheck size={16} className="text-green-100" />
           case 'unhealthy':
-            return <XCircle size={16} className="text-red-100 dark:text-red-100" />
+            return <XCircle size={16} className="text-red-100" />
           case 'testing':
             return <Spinner size="sm" color={isDark ? '#ffffff' : '#000000'} />
           default:

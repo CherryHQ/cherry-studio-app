@@ -28,14 +28,14 @@ interface RestoreProgressModalProps {
 const getIconForStatus = (status: StepStatus) => {
   switch (status) {
     case 'in_progress':
-      return <Spinner size="sm" className="text-text-link dark:text-text-link" />
+      return <Spinner size="sm" className="text-text-link " />
     case 'completed':
-      return <CircleCheck size={20} className="text-green-100 dark:text-green-100" />
+      return <CircleCheck size={20} className="text-green-100" />
     case 'error':
-      return <XCircle size={20} className="text-red-100 dark:text-red-100" />
+      return <XCircle size={20} className="text-red-100" />
     case 'pending':
     default:
-      return <TriangleAlert size={20} className="text-orange-100 dark:text-orange-100" />
+      return <TriangleAlert size={20} className="text-orange-100" />
   }
 }
 
