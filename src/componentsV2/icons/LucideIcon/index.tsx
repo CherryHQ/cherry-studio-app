@@ -81,7 +81,7 @@ const createIcon = (IconComponent: React.ComponentType<any>) => {
   type IconProps = React.ComponentProps<typeof UniwindIcon>
 
   const IconWithDefaultColors = ({ className, ...props }: IconProps) => (
-    <UniwindIcon {...props} className={cn('text-black dark:text-white', className)} />
+    <UniwindIcon {...props} className={cn('text-normal', className)} />
   )
 
   const displayName = IconComponent.displayName ?? IconComponent.name ?? 'Icon'

@@ -66,9 +66,9 @@ export const McpServerSheet: FC<McpServerProps> = ({ ref, assistant, updateAssis
   const warningContent = !assistant.settings?.toolUseMode ? (
     <TouchableOpacity onPress={handleNavigateToToolTab} activeOpacity={0.7}>
       <XStack className="bg-orange-10 mb-2 w-full items-center gap-2.5 rounded-lg px-3.5 py-3">
-        <TriangleAlert size={20} className="text-orange-100 dark:text-orange-100" />
+        <TriangleAlert size={20} className="text-orange-100 " />
         <Text className="flex-1 text-sm text-orange-100">{t('assistants.settings.tooluse.empty')}</Text>
-        <ChevronRight size={20} className="text-orange-100 dark:text-orange-100" />
+        <ChevronRight size={20} className="text-orange-100" />
       </XStack>
     </TouchableOpacity>
   ) : null

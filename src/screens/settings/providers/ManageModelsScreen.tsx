@@ -239,9 +239,9 @@ export default function ManageModelsScreen() {
                       <IconButton
                         icon={
                           isModelInCurrentProvider(model.id) ? (
-                            <Minus size={18} className="bg-red-20 rounded-full text-red-100 dark:text-red-100" />
+                            <Minus size={18} className="bg-red-20 rounded-full text-red-100" />
                           ) : (
-                            <Plus size={18} className="bg-green-20 rounded-full text-green-100 dark:text-green-100" />
+                            <Plus size={18} className="bg-green-20 rounded-full text-green-100" />
                           )
                         }
                         onPress={
@@ -255,9 +255,9 @@ export default function ManageModelsScreen() {
                   <IconButton
                     icon={
                       isAllModelsInCurrentProvider(models) ? (
-                        <Minus size={18} className="bg-red-20 rounded-full text-red-100 dark:text-red-100" />
+                        <Minus size={18} className="bg-red-20 rounded-full text-red-100" />
                       ) : (
-                        <Plus size={18} className="bg-green-20 rounded-full text-green-100 dark:text-green-100" />
+                        <Plus size={18} className="bg-green-20 rounded-full text-green-100" />
                       )
                     }
                     onPress={

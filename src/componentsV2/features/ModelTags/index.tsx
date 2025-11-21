@@ -46,7 +46,7 @@ const TAG_DEFINITIONS: TagDefinition[] = [
     labelKey: 'models.type.vision',
     backgroundClassName: 'bg-green-20',
     textClassName: 'text-green-100',
-    renderIcon: size => <Eye size={size} className="text-green-100 dark:text-green-400" />,
+    renderIcon: size => <Eye size={size} className="text-green-100" />,
     isVisible: ({ model }) => isVisionModel(model)
   },
   {
@@ -54,7 +54,7 @@ const TAG_DEFINITIONS: TagDefinition[] = [
     labelKey: 'models.type.websearch',
     backgroundClassName: 'bg-blue-20',
     textClassName: 'text-blue-100',
-    renderIcon: size => <Globe size={size} className="text-blue-100 dark:text-blue-100" />,
+    renderIcon: size => <Globe size={size} className="text-blue-100" />,
     isVisible: ({ model }) => isWebSearchModel(model)
   },
   {
@@ -62,7 +62,7 @@ const TAG_DEFINITIONS: TagDefinition[] = [
     labelKey: 'models.type.reasoning',
     backgroundClassName: 'bg-purple-20',
     textClassName: 'text-purple-100',
-    renderIcon: size => <Lightbulb size={size} className="text-purple-100 dark:text-purple-100" />,
+    renderIcon: size => <Lightbulb size={size} className="text-purple-100" />,
     isVisible: ({ model, showReasoning }) => showReasoning && isReasoningModel(model)
   },
   {
@@ -70,7 +70,7 @@ const TAG_DEFINITIONS: TagDefinition[] = [
     labelKey: 'models.type.function_calling',
     backgroundClassName: 'bg-orange-20',
     textClassName: 'text-orange-100',
-    renderIcon: size => <Wrench size={size} className="text-orange-100 dark:text-orange-100" />,
+    renderIcon: size => <Wrench size={size} className="text-orange-100" />,
     isVisible: ({ model, showToolsCalling }) => showToolsCalling && isFunctionCallingModel(model)
   },
   {
@@ -78,7 +78,7 @@ const TAG_DEFINITIONS: TagDefinition[] = [
     labelKey: 'models.type.embedding',
     backgroundClassName: 'bg-purple-20',
     textClassName: 'text-purple-100',
-    renderIcon: size => <Languages size={size} className="text-purple-100 dark:text-purple-100" />,
+    renderIcon: size => <Languages size={size} className="text-purple-100" />,
     isVisible: ({ model }) => isEmbeddingModel(model)
   },
   {
@@ -86,7 +86,7 @@ const TAG_DEFINITIONS: TagDefinition[] = [
     labelKey: 'models.type.free',
     backgroundClassName: 'bg-yellow-20',
     textClassName: 'text-yellow-100',
-    renderIcon: size => <CircleDollarSign size={size} className="text-yellow-100 dark:text-yellow-100" />,
+    renderIcon: size => <CircleDollarSign size={size} className="text-yellow-100" />,
     isVisible: ({ model, showFree }) => showFree && isFreeModel(model)
   },
   {
@@ -94,7 +94,7 @@ const TAG_DEFINITIONS: TagDefinition[] = [
     labelKey: 'models.type.rerank',
     backgroundClassName: 'bg-pink-20',
     textClassName: 'text-pink-100',
-    renderIcon: size => <Repeat2 size={size} className="text-pink-100 dark:text-pink-100" />,
+    renderIcon: size => <Repeat2 size={size} className="text-pink-100" />,
     isVisible: ({ model }) => isRerankModel(model)
   }
 ]
