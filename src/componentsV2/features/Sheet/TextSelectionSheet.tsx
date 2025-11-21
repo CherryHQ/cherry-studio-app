@@ -70,6 +70,7 @@ const TextSelectionSheet = forwardRef<TextSelectionSheetRef, TextSelectionSheetP
 
   return (
     <BottomSheetModal
+      stackBehavior="replace"
       ref={bottomSheetModalRef}
       snapPoints={['90%']}
       enableDynamicSizing={false}

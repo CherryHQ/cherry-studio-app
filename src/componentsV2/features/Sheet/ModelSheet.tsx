@@ -174,6 +174,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
 
   return (
     <BottomSheetModal
+      stackBehavior="replace"
       enableDynamicSizing={false}
       snapPoints={['85%']}
       ref={ref}

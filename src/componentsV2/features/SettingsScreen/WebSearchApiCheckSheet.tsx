@@ -40,6 +40,7 @@ export const WebSearchApiCheckSheet = forwardRef<BottomSheetModal, WebSearchApiC
 
     return (
       <BottomSheetModal
+        stackBehavior="replace"
         backdropComponent={renderBackdrop}
         enableDynamicSizing={true}
         ref={ref}

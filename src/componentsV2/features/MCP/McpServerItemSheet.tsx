@@ -76,6 +76,7 @@ const McpServerItemSheet = forwardRef<BottomSheetModal, McpServerItemSheetProps>
 
     return (
       <BottomSheetModal
+        stackBehavior="replace"
         snapPoints={['70%']}
         enableDynamicSizing={false}
         ref={ref}

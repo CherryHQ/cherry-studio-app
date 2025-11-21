@@ -100,6 +100,7 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
 
   return (
     <BottomSheetModal
+      stackBehavior="replace"
       enableDynamicSizing={true}
       ref={ref}
       keyboardBehavior="interactive"
