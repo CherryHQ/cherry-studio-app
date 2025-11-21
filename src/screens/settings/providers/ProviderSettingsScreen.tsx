@@ -5,7 +5,8 @@ import { Spinner, Switch } from 'heroui-native'
 import { groupBy } from 'lodash'
 import React, { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
+import { ScrollView } from 'react-native'
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 
 import {
   Container,
@@ -252,55 +253,58 @@ export default function ProviderSettingsScreen() {
       />
 
       <Container className="pb-0" onStartShouldSetResponder={() => false} onMoveShouldSetResponder={() => false}>
-        <KeyboardAwareScrollView
-          showsVerticalScrollIndicator={false}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ flexGrow: 1 }}>
-          <YStack className="flex-1 gap-6">
-            {/* Auth Card */}
-            {/* <AuthCard provider={provider} /> */}
+        <KeyboardAvoidingView className="flex-1">
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled">
+            <YStack className="flex-1 gap-6">
+              {/* Auth Card */}
+              {/* <AuthCard provider={provider} /> */}
 
-            {/* Manage Card */}
-            <YStack className="gap-2">
-              <GroupTitle>{t('common.manage')}</GroupTitle>
-              <Group>
-                <Row>
-                  <Text>{t('common.enabled')}</Text>
-                  <Switch color="success" isSelected={provider.enabled} onSelectedChange={handleEnabledChange}>
-                    <Switch.Thumb colors={{ defaultBackground: 'white', selectedBackground: 'white' }} />
-                  </Switch>
-                </Row>
-                <PressableRow onPress={onApiService}>
-                  <Text>{t('settings.provider.api_service')}</Text>
-                  <XStack className="items-center justify-center">
-                    {provider.apiKey && provider.apiHost && (
-                      <Text className="border-green-20 bg-green-10 rounded-md border-[0.5px] px-2 py-0.5 text-xs font-bold text-green-100">
-                        {t('settings.provider.added')}
-                      </Text>
-                    )}
-                    <RowRightArrow />
-                  </XStack>
-                </PressableRow>
-              </Group>
-            </YStack>
+              {/* Manage Card */}
+              <YStack className="gap-2">
+                <GroupTitle>{t('common.manage')}</GroupTitle>
+                <Group>
+                  <Row>
+                    <Text>{t('common.enabled')}</Text>
+                    <Switch color="success" isSelected={provider.enabled} onSelectedChange={handleEnabledChange}>
+                      <Switch.Thumb colors={{ defaultBackground: 'white', selectedBackground: 'white' }} />
+                    </Switch>
+                  </Row>
+                  <PressableRow onPress={onApiService}>
+                    <Text>{t('settings.provider.api_service')}</Text>
+                    <XStack className="items-center justify-center">
+                      {provider.apiKey && provider.apiHost && (
+                        <Text className="border-green-20 bg-green-10 rounded-md border-[0.5px] px-2 py-0.5 text-xs font-bold text-green-100">
+                          {t('settings.provider.added')}
+                        </Text>
+                      )}
+                      <RowRightArrow />
+                    </XStack>
+                  </PressableRow>
+                </Group>
+              </YStack>
 
-            {/* Model List Card with Accordion */}
-            <YStack className="flex-1 gap-2">
-              <XStack className="items-center justify-between pr-2.5">
-                <GroupTitle>{t('settings.models.title')}</GroupTitle>
-                <IconButton
-                  icon={isCheckingHealth ? <RefreshCw size={14} className="animate-spin" /> : <HeartPulse size={14} />}
-                  onPress={handleHealthCheck}
-                  disabled={isCheckingHealth}
-                />
-              </XStack>
-              <SearchInput placeholder={t('settings.models.search')} value={searchText} onChangeText={setSearchText} />
-              <Group>
-                <ModelGroup modelGroups={sortedModelGroups} renderModelItem={renderModelItem} />
-              </Group>
+              {/* Model List Card with Accordion */}
+              <YStack className="flex-1 gap-2">
+                <XStack className="items-center justify-between pr-2.5">
+                  <GroupTitle>{t('settings.models.title')}</GroupTitle>
+                  <IconButton
+                    icon={isCheckingHealth ? <RefreshCw size={14} className="animate-spin" /> : <HeartPulse size={14} />}
+                    onPress={handleHealthCheck}
+                    disabled={isCheckingHealth}
+                  />
+                </XStack>
+                <SearchInput placeholder={t('settings.models.search')} value={searchText} onChangeText={setSearchText} />
+                <Group>
+                  <ModelGroup modelGroups={sortedModelGroups} renderModelItem={renderModelItem} />
+                </Group>
+              </YStack>
             </YStack>
-          </YStack>
-        </KeyboardAwareScrollView>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Container>
 
       <AddModelSheet ref={bottomSheetRef} provider={provider} updateProvider={updateProvider} />
