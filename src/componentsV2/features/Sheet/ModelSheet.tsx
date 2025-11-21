@@ -174,7 +174,8 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
 
   return (
     <BottomSheetModal
-      enableDynamicSizing={true}
+      enableDynamicSizing={false}
+      snapPoints={['85%']}
       ref={ref}
       backgroundStyle={{
         borderRadius: 30,
