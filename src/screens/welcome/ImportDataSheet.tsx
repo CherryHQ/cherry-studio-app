@@ -77,6 +77,7 @@ export const ImportDataSheet = forwardRef<BottomSheetModal, ImportDataSheetProps
   return (
     <>
       <BottomSheetModal
+        stackBehavior="replace"
         enableDynamicSizing={true}
         ref={ref}
         backgroundStyle={{

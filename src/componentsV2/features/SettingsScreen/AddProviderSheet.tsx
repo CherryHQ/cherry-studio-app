@@ -174,6 +174,7 @@ export const AddProviderSheet = forwardRef<BottomSheetModal, ProviderSheetProps>
 
     return (
       <BottomSheetModal
+        stackBehavior="replace"
         enableDynamicSizing={true}
         ref={ref}
         keyboardBehavior="interactive"

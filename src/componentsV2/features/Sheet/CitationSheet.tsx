@@ -100,6 +100,7 @@ export const CitationSheet = forwardRef<BottomSheetModal, CitationSheetProps>(({
 
   return (
     <BottomSheetModal
+      stackBehavior="replace"
       snapPoints={['40%', '90%']}
       enableDynamicSizing={false}
       ref={ref}

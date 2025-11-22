@@ -194,6 +194,7 @@ const ErrorDetailSheet = forwardRef<BottomSheetModal, ErrorDetailSheetProps>(({ 
 
   return (
     <BottomSheetModal
+      stackBehavior="replace"
       ref={ref}
       backdropComponent={renderBackdrop}
       enableDynamicSizing={false}

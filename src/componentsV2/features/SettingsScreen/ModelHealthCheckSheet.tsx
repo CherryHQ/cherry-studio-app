@@ -109,6 +109,7 @@ export const ModelHealthCheckSheet = forwardRef<BottomSheetModal, ModelHealthChe
 
     return (
       <BottomSheetModal
+        stackBehavior="replace"
         enableDynamicSizing={false}
         snapPoints={['80%']}
         ref={ref}

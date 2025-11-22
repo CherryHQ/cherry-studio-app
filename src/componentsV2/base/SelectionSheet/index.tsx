@@ -137,6 +137,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
 
   return (
     <BottomSheetModal
+      stackBehavior="replace"
       ref={ref}
       snapPoints={snapPoints}
       enableDynamicSizing={snapPoints.length === 0}

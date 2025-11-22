@@ -101,6 +101,7 @@ const AssistantItemSheet = forwardRef<BottomSheetModal, AssistantItemSheetProps>
 
     return (
       <BottomSheetModal
+        stackBehavior="replace"
         snapPoints={['90%']}
         enableDynamicSizing={false}
         ref={ref}

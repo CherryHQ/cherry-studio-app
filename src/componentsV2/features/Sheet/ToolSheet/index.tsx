@@ -73,6 +73,7 @@ export const ToolSheet = forwardRef<BottomSheetModal, ToolSheetProps>(
     return (
       <>
         <BottomSheetModal
+          stackBehavior="replace"
           enableDynamicSizing={true}
           ref={ref}
           backgroundStyle={{
