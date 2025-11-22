@@ -9,6 +9,7 @@ export interface SelectionDropdownItem {
   icon?: React.ReactNode | ((isSelected: boolean) => React.ReactNode)
   isSelected?: boolean
   onSelect?: () => void
+  destructive?: boolean
   [x: string]: any
 }
 
@@ -34,6 +35,7 @@ const SelectionDropdown: React.FC<SelectionDropdownProps> = ({ items, children, 
 
           return (
             <DropdownMenu.CheckboxItem
+              destructive={item.destructive}
               shouldDismissMenuOnSelect={shouldDismissMenuOnSelect}
               key={itemKey}
               value={item.isSelected ? 'on' : 'off'}
