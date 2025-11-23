@@ -125,11 +125,7 @@ export function getBlockByIdSync(blockId: string): MessageBlock | null {
   try {
     const dbRecord = db.select().from(messageBlocks).where(eq(messageBlocks.id, blockId)).limit(1).get()
 
-    if (!dbRecord) {
-      return null
-    }
-
-    return transformDbToMessageBlock(dbRecord[0])
+    return transformDbToMessageBlock(dbRecord)
   } catch (error) {
     logger.error(`Error getting block with ID ${blockId}:`, error)
     throw error
