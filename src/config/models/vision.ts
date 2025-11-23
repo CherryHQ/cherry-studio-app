@@ -71,6 +71,8 @@ export const VISION_REGEX = new RegExp(
   'i'
 )
 
+export const GEMINI_IMAGE_REGEX = /gemini.*image/i
+
 // For middleware to identify models that must use the dedicated Image API
 export const DEDICATED_IMAGE_MODELS = [
   'grok-2-image',
@@ -111,6 +113,7 @@ export const GENERATE_IMAGE_MODELS = [
   'gemini-2.0-flash-exp-image-generation',
   'gemini-2.0-flash-preview-image-generation',
   'gemini-2.5-flash-image',
+  'gemini-3-pro-image-preview',
   ...DEDICATED_IMAGE_MODELS
 ]
 
@@ -118,14 +121,14 @@ export const isDedicatedImageGenerationModel = (model: Model): boolean => {
   if (!model) return false
 
   const modelId = getLowerBaseModelName(model.id)
-  return DEDICATED_IMAGE_MODELS.some((m) => modelId.includes(m))
+  return DEDICATED_IMAGE_MODELS.some(m => modelId.includes(m))
 }
 
 export const isAutoEnableImageGenerationModel = (model: Model): boolean => {
   if (!model) return false
 
   const modelId = getLowerBaseModelName(model.id)
-  return AUTO_ENABLE_IMAGE_MODELS.some((m) => modelId.includes(m))
+  return AUTO_ENABLE_IMAGE_MODELS.some(m => modelId.includes(m))
 }
 
 /**
@@ -148,12 +151,12 @@ export function isGenerateImageModel(model: Model): boolean {
 
   if (provider.type === 'openai-response') {
     return (
-      OPENAI_IMAGE_GENERATION_MODELS.some((imageModel) => modelId.includes(imageModel)) ||
-      GENERATE_IMAGE_MODELS.some((imageModel) => modelId.includes(imageModel))
+      OPENAI_IMAGE_GENERATION_MODELS.some(imageModel => modelId.includes(imageModel)) ||
+      GENERATE_IMAGE_MODELS.some(imageModel => modelId.includes(imageModel))
     )
   }
 
-  return GENERATE_IMAGE_MODELS.some((imageModel) => modelId.includes(imageModel))
+  return GENERATE_IMAGE_MODELS.some(imageModel => modelId.includes(imageModel))
 }
 
 /**
@@ -167,7 +170,7 @@ export function isPureGenerateImageModel(model: Model): boolean {
   }
 
   const modelId = getLowerBaseModelName(model.id)
-  return !OPENAI_TOOL_USE_IMAGE_GENERATION_MODELS.some((imageModel) => modelId.includes(imageModel))
+  return !OPENAI_TOOL_USE_IMAGE_GENERATION_MODELS.some(imageModel => modelId.includes(imageModel))
 }
 
 // Text to image models
