@@ -327,6 +327,9 @@
         "reminder": {
           "description": "リマインダーの取得、作成、更新、削除"
         },
+        "shortcuts": {
+          "description": "iOSショートカットを実行して結果を取得する"
+        },
         "time": {
           "description": "現在時刻を取得する"
         }

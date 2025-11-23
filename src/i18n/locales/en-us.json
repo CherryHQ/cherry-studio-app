@@ -327,6 +327,9 @@
         "reminder": {
           "description": "Get, create, update, and delete reminders"
         },
+        "shortcuts": {
+          "description": "Run iOS Shortcuts and get results"
+        },
         "time": {
           "description": "Get the current time"
         }

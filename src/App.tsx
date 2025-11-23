@@ -23,6 +23,7 @@ import { loggerService } from '@/services/LoggerService'
 import store, { persistor } from '@/store'
 
 import migrations from '../drizzle/migrations'
+import { ShortcutCallbackManager } from './aiCore/tools/SystemTools/ShortcutCallbackManager'
 import { DialogProvider } from './hooks/useDialog'
 import { ToastProvider } from './hooks/useToast'
 import MainStackNavigator from './navigators/MainStackNavigator'
@@ -44,6 +45,8 @@ function DatabaseInitializer({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (success) {
       initializationLogger.info('Database migrations completed successfully', expoDb.databasePath)
+      // Initialize iOS Shortcuts callback listener
+      ShortcutCallbackManager.initializeListener()
     }
 
     if (error) {

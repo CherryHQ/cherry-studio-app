@@ -48,6 +48,28 @@ const APP_DATA_MIGRATIONS: AppDataMigration[] = [
       const builtinMcp = initBuiltinMcp()
       await mcpDatabase.upsertMcps(builtinMcp)
     }
+  },
+  {
+    version: 2,
+    description: 'Sync built-in MCP servers (add @cherry/shortcuts)',
+    migrate: async () => {
+      // Get existing MCP servers from database
+      const existingMcps = await mcpDatabase.getMcps()
+      const existingIds = new Set(existingMcps.map(mcp => mcp.id))
+
+      // Get all built-in MCP servers
+      const builtinMcp = initBuiltinMcp()
+
+      // Filter to only add new MCP servers that don't exist yet
+      const newMcps = builtinMcp.filter(mcp => !existingIds.has(mcp.id))
+
+      if (newMcps.length > 0) {
+        await mcpDatabase.upsertMcps(newMcps)
+        logger.info(`Added ${newMcps.length} new built-in MCP server(s): ${newMcps.map(m => m.id).join(', ')}`)
+      } else {
+        logger.info('No new built-in MCP servers to add')
+      }
+    }
   }
 ]
 

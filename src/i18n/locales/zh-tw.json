@@ -327,6 +327,9 @@
         "reminder": {
           "description": "獲取、添加、修改、刪除提醒事項"
         },
+        "shortcuts": {
+          "description": "執行 iOS 捷徑並取得結果"
+        },
         "time": {
           "description": "取得目前時間"
         }

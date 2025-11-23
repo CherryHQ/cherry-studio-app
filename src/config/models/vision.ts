@@ -71,6 +71,8 @@ export const VISION_REGEX = new RegExp(
   'i'
 )
 
+export const GEMINI_IMAGE_REGEX = /gemini.*image/i
+
 // For middleware to identify models that must use the dedicated Image API
 export const DEDICATED_IMAGE_MODELS = [
   'grok-2-image',
@@ -111,6 +113,7 @@ export const GENERATE_IMAGE_MODELS = [
   'gemini-2.0-flash-exp-image-generation',
   'gemini-2.0-flash-preview-image-generation',
   'gemini-2.5-flash-image',
+  'gemini-3-pro-image-preview',
   ...DEDICATED_IMAGE_MODELS
 ]
 

@@ -219,7 +219,7 @@ export class OpenAIResponseAPIClient extends OpenAIBaseClient<
           parts.push({
             detail: 'auto',
             type: 'input_image',
-            image_url: image.base64()
+            image_url: await image.base64()
           })
         } else if (imageBlock.url && imageBlock.url.startsWith('data:')) {
           parts.push({

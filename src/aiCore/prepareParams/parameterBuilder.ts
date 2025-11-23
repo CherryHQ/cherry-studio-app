@@ -200,6 +200,11 @@ export async function buildStreamTextParams(
     params.tools = tools
   }
 
+  if (assistant.prompt) {
+    // params.system = await replacePromptVariables(assistant.prompt, model.name)
+    params.system = assistant.prompt
+  }
+
   logger.debug('params', params)
 
   return {

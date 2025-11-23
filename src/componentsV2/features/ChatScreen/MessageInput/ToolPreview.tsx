@@ -3,6 +3,8 @@ import { Pressable } from 'react-native'
 
 import { Globe, Palette, X } from '@/componentsV2/icons/LucideIcon'
 import XStack from '@/componentsV2/layout/XStack'
+import { isGenerateImageModel } from '@/config/models/vision'
+import { isWebSearchModel } from '@/config/models/websearch'
 import { loggerService } from '@/services/LoggerService'
 import type { Assistant } from '@/types/assistant'
 
@@ -58,19 +60,22 @@ export const ToolPreview: React.FC<ToolPreviewProps> = ({ assistant, updateAssis
 
   // 工具配置数组
   const toolConfigs = useMemo(
-    (): ToolConfig[] => [
-      {
-        key: 'enableGenerateImage',
-        icon: Palette,
-        enabled: assistant.enableGenerateImage ?? false
-      },
-      {
-        key: 'enableWebSearch',
-        icon: Globe,
-        enabled: assistant.enableWebSearch ?? false
-      }
-    ],
-    [assistant.enableGenerateImage, assistant.enableWebSearch]
+    (): ToolConfig[] => {
+      const { model } = assistant
+      return [
+        {
+          key: 'enableGenerateImage',
+          icon: Palette,
+          enabled: (assistant.enableGenerateImage ?? false) && (model ? isGenerateImageModel(model) : false)
+        },
+        {
+          key: 'enableWebSearch',
+          icon: Globe,
+          enabled: (assistant.enableWebSearch ?? false) && (model ? isWebSearchModel(model) : false)
+        }
+      ]
+    },
+    [assistant.enableGenerateImage, assistant.enableWebSearch, assistant.model]
   )
 
   // 如果没有模型，不显示任何工具

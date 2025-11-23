@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 
 import { loggerService } from '@/services/LoggerService'
 import type { Assistant } from '@/types/assistant'
@@ -71,7 +71,8 @@ export async function getAllAssistants(): Promise<Assistant[]> {
     const results = await db.query.assistants.findMany({
       with: {
         topics: true
-      }
+      },
+      orderBy: [desc(assistants.created_at)]
     })
     return results.map(transformDbToAssistant)
   } catch (error) {
