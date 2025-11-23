@@ -75,7 +75,11 @@ const AssistantItem: FC<AssistantItemProps> = ({ assistant, onAssistantPress }) 
   ]
 
   return (
-    <ContextMenu borderRadius={16} list={contextMenuItems} onPress={handlePress}>
+    <ContextMenu
+      borderRadius={16}
+      list={contextMenuItems}
+      onPress={handlePress}
+      disableContextMenu={assistant.type === 'system'}>
       <View className="bg-ui-card-background items-center justify-between rounded-2xl px-2.5 py-2.5">
         <XStack className="gap-3.5">
           <EmojiAvatar

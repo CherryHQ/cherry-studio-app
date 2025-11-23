@@ -9,7 +9,7 @@ import { Pressable } from 'react-native'
 import { SelectionSheet, Text, YStack } from '@/componentsV2'
 import EmojiAvatar from '@/componentsV2/features/Assistant/EmojiAvatar'
 import { MessageSquareDiff } from '@/componentsV2/icons/LucideIcon'
-import { useExternalAssistants } from '@/hooks/useAssistant'
+import { useAssistants } from '@/hooks/useAssistant'
 import { useTheme } from '@/hooks/useTheme'
 import { useCurrentTopic } from '@/hooks/useTopic'
 import { topicService } from '@/services/TopicService'
@@ -24,7 +24,7 @@ export const NewTopicButton: React.FC<NewTopicButtonProps> = ({ assistant }) => 
   const { t } = useTranslation()
   const navigation = useNavigation<DrawerNavigationProps>()
   const { switchTopic } = useCurrentTopic()
-  const { assistants, isLoading } = useExternalAssistants()
+  const { assistants, isLoading } = useAssistants()
 
   const selectionSheetRef = useRef<BottomSheetModal | null>(null)
   const { isDark } = useTheme()
