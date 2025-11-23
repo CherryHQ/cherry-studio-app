@@ -1,6 +1,7 @@
 import {
   getAllBlocks as _getAllBlocks,
   getBlockById as _getBlockById,
+  getBlockByIdSync as _getBlockByIdSync,
   removeAllBlocks as _removeAllBlocks,
   removeManyBlocks as _removeManyBlocks,
   updateOneBlock as _updateOneBlock,
@@ -29,6 +30,10 @@ export async function getBlockById(blockId: string) {
   return _getBlockById(blockId)
 }
 
+export function getBlockByIdSync(blockId: string) {
+  return _getBlockByIdSync(blockId)
+}
+
 export async function getAllBlocks() {
   return _getAllBlocks()
 }
@@ -39,5 +44,6 @@ export const messageBlockDatabase = {
   removeAllBlocks,
   updateOneBlock,
   getBlockById,
+  getBlockByIdSync,
   getAllBlocks
 }
