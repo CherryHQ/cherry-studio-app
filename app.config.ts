@@ -26,7 +26,10 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.cherry-ai.cherry-studio-app',
-      userInterfaceStyle: 'automatic'
+      userInterfaceStyle: 'automatic',
+      infoPlist: {
+        LSApplicationQueriesSchemes: ['shortcuts']
+      }
     },
     android: {
       adaptiveIcon: {
