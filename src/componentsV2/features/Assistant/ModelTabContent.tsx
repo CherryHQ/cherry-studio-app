@@ -147,20 +147,14 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
         <Row>
           <Text>{t('assistants.settings.stream_output')}</Text>
           <Switch
-            color="success"
             isSelected={settings.streamOutput ?? true}
-            onSelectedChange={checked => handleSettingsChange('streamOutput', checked)}>
-            <Switch.Thumb colors={{ defaultBackground: 'white', selectedBackground: 'white' }} />
-          </Switch>
+            onSelectedChange={checked => handleSettingsChange('streamOutput', checked)}></Switch>
         </Row>
         <Row>
           <Text>{t('assistants.settings.max_tokens')}</Text>
           <Switch
-            color="success"
             isSelected={settings.enableMaxTokens ?? false}
-            onSelectedChange={checked => handleSettingsChange('enableMaxTokens', checked)}>
-            <Switch.Thumb colors={{ defaultBackground: 'white', selectedBackground: 'white' }} />
-          </Switch>
+            onSelectedChange={checked => handleSettingsChange('enableMaxTokens', checked)}></Switch>
         </Row>
         {settings.enableMaxTokens && (
           <Row>

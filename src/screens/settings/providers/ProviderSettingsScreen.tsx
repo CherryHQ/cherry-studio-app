@@ -269,9 +269,7 @@ export default function ProviderSettingsScreen() {
                 <Group>
                   <Row>
                     <Text>{t('common.enabled')}</Text>
-                    <Switch color="success" isSelected={provider.enabled} onSelectedChange={handleEnabledChange}>
-                      <Switch.Thumb colors={{ defaultBackground: 'white', selectedBackground: 'white' }} />
-                    </Switch>
+                    <Switch isSelected={provider.enabled} onSelectedChange={handleEnabledChange}></Switch>
                   </Row>
                   <PressableRow onPress={onApiService}>
                     <Text>{t('settings.provider.api_service')}</Text>

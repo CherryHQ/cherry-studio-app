@@ -139,7 +139,7 @@
     "expo-updates": "~29.0.12",
     "expo-web-browser": "~15.0.7",
     "fast-xml-parser": "^5.2.5",
-    "heroui-native": "^1.0.0-beta.1",
+    "heroui-native": "^1.0.0-beta.3",
     "i18next": "^24.2.2",
     "jsonstream": "^1.0.3",
     "lodash": "^4.17.21",
