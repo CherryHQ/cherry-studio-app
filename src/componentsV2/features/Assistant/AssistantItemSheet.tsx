@@ -216,20 +216,21 @@ const AssistantItemSheet = forwardRef<BottomSheetModal, AssistantItemSheetProps>
             {/* Footer positioned absolutely at the bottom */}
             <XStack className="flex-shrink-0 items-center justify-between gap-4 px-6" style={{ bottom }}>
               {source === 'builtIn' && (
-                <Button variant="ghost" isIconOnly onPress={handleAddAssistant}>
+                <Button feedbackVariant="ripple" variant="ghost" isIconOnly onPress={handleAddAssistant}>
                   <Button.Label>
                     <UnionPlusIcon size={30} />
                   </Button.Label>
                 </Button>
               )}
               {source === 'external' && (
-                <Button variant="ghost" isIconOnly onPress={handleEditAssistant}>
+                <Button feedbackVariant="ripple" variant="ghost" isIconOnly onPress={handleEditAssistant}>
                   <Button.Label>
                     <Settings2 size={30} />
                   </Button.Label>
                 </Button>
               )}
               <Button
+                feedbackVariant="ripple"
                 className="border-green-20 bg-green-10 flex-1 rounded-[30px] px-5 py-2.5"
                 onPress={actionButton?.onPress || handleChatPress}>
                 <Button.Label>

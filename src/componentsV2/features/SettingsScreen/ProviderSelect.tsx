@@ -47,7 +47,7 @@ export function ProviderSelect({ value, onValueChange, placeholder }: ProviderSe
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
-        <Button className="justify-between rounded-lg" variant="tertiary" size="sm">
+        <Button feedbackVariant="ripple" className="justify-between rounded-lg" variant="tertiary" size="sm">
           <Button.Label className="text-base">{selectedOption ? selectedOption.label : placeholder}</Button.Label>
           <ChevronDown />
         </Button>

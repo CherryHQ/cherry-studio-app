@@ -271,6 +271,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
               </YStack>
               {multiple && (
                 <Button
+                  feedbackVariant="ripple"
                   size="sm"
                   className={`h-10 rounded-lg ${
                     isMultiSelectActive ? 'border-green-20 bg-green-10 border' : 'bg-ui-card border border-transparent'
@@ -284,7 +285,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
                 </Button>
               )}
               {multiple && isMultiSelectActive && (
-                <Button size="sm" className="bg-ui-card rounded-full" isIconOnly onPress={handleClearAll}>
+                <Button feedbackVariant="ripple" size="sm" className="bg-ui-card rounded-full" isIconOnly onPress={handleClearAll}>
                   <Button.Label>
                     <BrushCleaning size={18} className="text-text-primary" />
                   </Button.Label>

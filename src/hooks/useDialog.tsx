@@ -150,14 +150,14 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
             <XStack className="gap-5 p-5 pt-0">
               {showCancel && (
                 <Button
+                  feedbackVariant="ripple"
                   variant="tertiary"
                   className={cn(
                     'border-gray-20 h-[42px] flex-1 rounded-[30px] bg-transparent active:opacity-80',
                     options?.cancelStyle?.toString() || ''
                   )}
                   onPress={cancel}
-                  isDisabled={isLoading}
-                  animationConfig={{ highlight: { isDisabled: true } }}>
+                  isDisabled={isLoading}>
                   <Button.Label>
                     <Text className="text-gray-80 text-[17px]">
                       {isLoading && shouldShowLoading ? t('common.loading') : cancelText}
@@ -166,14 +166,14 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                 </Button>
               )}
               <Button
+                feedbackVariant="ripple"
                 className={cn(
                   'h-[42px] flex-1 rounded-[30px] border',
                   confirmButtonClassName,
                   options?.confirmStyle?.toString() || ''
                 )}
                 onPress={confirm}
-                isDisabled={isLoading}
-                animationConfig={{ highlight: { isDisabled: true } }}>
+                isDisabled={isLoading}>
                 <Button.Label>
                   <Text className={cn(confirmTextClassName, 'text-[17px]')}>
                     {isLoading && shouldShowLoading ? t('common.loading') : confirmText}

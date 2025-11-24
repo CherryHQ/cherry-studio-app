@@ -230,6 +230,7 @@ export const AddProviderSheet = forwardRef<BottomSheetModal, ProviderSheetProps>
                 </YStack>
 
                 <Button
+                  feedbackVariant="ripple"
                   variant="tertiary"
                   className="border-green-20 bg-green-10 h-11 w-4/6 rounded-lg"
                   onPress={handleSaveProvider}>

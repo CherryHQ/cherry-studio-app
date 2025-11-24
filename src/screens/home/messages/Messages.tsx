@@ -89,7 +89,6 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
         keyboardDismissMode="on-drag"
         ListEmptyComponent={<WelcomeContent />}
       />
-
       {showScrollButton && (
         <MotiView
           key="scroll-to-bottom-button"
@@ -99,6 +98,7 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
           exit={{ opacity: 0 }}
           transition={{ type: 'timing' }}>
           <Button
+            feedbackVariant="ripple"
             isIconOnly
             onPress={handleScrollToEnd}
             className="border-green-20 bg-green-10 bottom-2 right-2 h-10 w-10 rounded-full border-2">
