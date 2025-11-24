@@ -31,11 +31,13 @@ import {
   isWebSearchModel
 } from '@/config/models'
 import { isFreeModel } from '@/config/models/free'
+import { isNotSupportedTextDelta } from '@/config/models/utils'
+import { isNewApiProvider } from '@/config/providers'
 import { useSearch } from '@/hooks/useSearch'
 import type { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
 import { fetchModels } from '@/services/ApiService'
 import { loggerService } from '@/services/LoggerService'
-import { getProviderById, saveProvider } from '@/services/ProviderService'
+import { providerService } from '@/services/ProviderService'
 import type { Model, Provider } from '@/types/assistant'
 import { getDefaultGroupName } from '@/utils/naming'
 const logger = loggerService.withContext('ManageModelsScreen')
@@ -93,12 +95,19 @@ const groupAndSortModels = (models: Model[], providerId: string) => {
 const transformApiModels = (apiModels: any[], provider: Provider): Model[] => {
   return apiModels
     .map(model => ({
+      // @ts-ignore modelId
       id: model?.id || model?.name,
+      // @ts-ignore name
       name: model?.display_name || model?.displayName || model?.name || model?.id,
       provider: provider.id,
+      // @ts-ignore group
       group: getDefaultGroupName(model?.id || model?.name, provider.id),
+      // @ts-ignore description
       description: model?.description || '',
-      owned_by: model?.owned_by || ''
+      // @ts-ignore owned_by
+      owned_by: model?.owned_by || '',
+      // @ts-ignore supported_endpoint_types
+      supported_endpoint_types: model?.supported_endpoint_types
     }))
     .filter(model => !isEmpty(model.name))
 }
@@ -144,15 +153,41 @@ export default function ManageModelsScreen() {
   const filteredModels = filterModels(searchFilteredModels, '', activeFilterType)
   const sortedModelGroups = groupAndSortModels(filteredModels, provider?.id || '')
 
+  const prepareModelForAdd = (model: Model): Model | null => {
+    if (isEmpty(model.name)) {
+      return null
+    }
+
+    if (isNewApiProvider(provider!)) {
+      const endpointTypes = model.supported_endpoint_types
+      if (endpointTypes && endpointTypes.length > 0) {
+        return {
+          ...model,
+          endpoint_type: endpointTypes.includes('image-generation') ? 'image-generation' : endpointTypes[0],
+          supported_text_delta: !isNotSupportedTextDelta(model)
+        }
+      }
+      return null
+    } else {
+      return {
+        ...model,
+        supported_text_delta: !isNotSupportedTextDelta(model)
+      }
+    }
+  }
+
   const handleUpdateModels = async (newModels: Model[]) => {
     if (!provider) return
     const updatedProvider = { ...provider, models: newModels }
     setProvider(updatedProvider)
-    await saveProvider(updatedProvider)
+    await providerService.updateProvider(updatedProvider.id, updatedProvider)
   }
 
   const onAddModel = async (model: Model) => {
-    await handleUpdateModels(uniqBy([...(provider?.models || []), model], 'id'))
+    const preparedModel = prepareModelForAdd(model)
+    if (!preparedModel) return
+
+    await handleUpdateModels(uniqBy([...(provider?.models || []), preparedModel], 'id'))
   }
 
   const onRemoveModel = async (model: Model) => {
@@ -160,7 +195,13 @@ export default function ManageModelsScreen() {
   }
 
   const onAddAllModels = async (modelsToAdd: Model[]) => {
-    await handleUpdateModels(uniqBy([...(provider?.models || []), ...modelsToAdd], 'id'))
+    const preparedModels = modelsToAdd
+      .map(prepareModelForAdd)
+      .filter((model): model is Model => model !== null)
+
+    if (preparedModels.length === 0) return
+
+    await handleUpdateModels(uniqBy([...(provider?.models || []), ...preparedModels], 'id'))
   }
 
   const onRemoveAllModels = async (modelsToRemove: Model[]) => {
@@ -170,7 +211,8 @@ export default function ManageModelsScreen() {
 
   useEffect(() => {
     const fetchAndSetModels = async () => {
-      const fetchedProvider = await getProviderById(providerId)
+      const fetchedProvider = await providerService.getProvider(providerId)
+      if (!fetchedProvider) return
       setProvider(fetchedProvider)
 
       if (!fetchedProvider) return
@@ -179,6 +221,7 @@ export default function ManageModelsScreen() {
       try {
         const modelsFromApi = await fetchModels(fetchedProvider)
         const transformedModels = transformApiModels(modelsFromApi, fetchedProvider)
+        console.log('transformedModels', transformedModels)
         setAllModels(uniqBy(transformedModels, 'id'))
       } catch (error) {
         logger.error('Failed to fetch models', error)
