@@ -17,6 +17,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
 import { Provider } from 'react-redux'
 import { PersistGate } from 'redux-persist/integration/react'
+import { Uniwind } from 'uniwind'
 
 import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
@@ -91,6 +92,10 @@ function DatabaseInitializer({ children }: { children: React.ReactNode }) {
 // 主题和导航组件
 function ThemedApp() {
   const { isDark } = useTheme()
+
+  useEffect(() => {
+    Uniwind.setTheme(isDark ? 'dark' : 'light')
+  }, [isDark])
 
   return (
     <HeroUINativeProvider>
