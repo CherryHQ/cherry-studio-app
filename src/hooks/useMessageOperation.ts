@@ -3,6 +3,7 @@ import { useCallback } from 'react'
 
 import { topicService } from '@/services/TopicService'
 import type { Topic } from '@/types/assistant'
+import { AssistantMessageStatus } from '@/types/message'
 import { abortCompletion } from '@/utils/abortController'
 
 import { useTopic } from './useTopic'
@@ -25,6 +26,16 @@ export function useMessageOperations(topic: Topic) {
 
     for (const askId of askIds) {
       abortCompletion(askId)
+    }
+
+    // 直接更新消息状态为 SUCCESS，确保即使 onError 回调未触发，状态也能正确更新
+    if (streamingMessages.length > 0) {
+      const messagesToUpdate = streamingMessages.map(msg => ({
+        ...msg,
+        status: AssistantMessageStatus.SUCCESS,
+        updatedAt: Date.now()
+      }))
+      await messageDatabase.upsertMessages(messagesToUpdate)
     }
 
     await topicService.updateTopic(topic.id, { isLoading: false })
