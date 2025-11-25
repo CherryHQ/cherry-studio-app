@@ -19,6 +19,7 @@ import { Provider } from 'react-redux'
 import { PersistGate } from 'redux-persist/integration/react'
 import { Uniwind } from 'uniwind'
 
+import { UpdateChecker } from '@/componentsV2'
 import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
 import store, { persistor } from '@/store'
@@ -104,9 +105,11 @@ function ThemedApp() {
           <SystemBars style={isDark ? 'light' : 'dark'} />
           <DialogProvider>
             <ToastProvider>
-              <BottomSheetModalProvider>
-                <MainStackNavigator />
-              </BottomSheetModalProvider>
+              <UpdateChecker>
+                <BottomSheetModalProvider>
+                  <MainStackNavigator />
+                </BottomSheetModalProvider>
+              </UpdateChecker>
             </ToastProvider>
           </DialogProvider>
         </NavigationContainer>

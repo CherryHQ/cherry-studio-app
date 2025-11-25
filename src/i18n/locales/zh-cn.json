@@ -911,6 +911,14 @@
         "label": "话题",
         "recent": "最近的话题"
       }
+    },
+    "update": {
+      "got_it": "知道了",
+      "later": "稍后再说",
+      "new_version_available": "发现新版本",
+      "new_version_content": "新版本 {{version}} 已发布，是否立即更新？",
+      "new_version_content_ios": "新版本 {{version}} 已发布，请前往 TestFlight 更新。",
+      "update_now": "立即更新"
     }
   }
 }

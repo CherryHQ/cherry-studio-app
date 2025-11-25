@@ -911,6 +911,14 @@
         "label": "トピック",
         "recent": "最近のトピック"
       }
+    },
+    "update": {
+      "got_it": "了解",
+      "later": "後で",
+      "new_version_available": "新しいバージョンがあります",
+      "new_version_content": "バージョン {{version}} が利用可能です。今すぐ更新しますか？",
+      "new_version_content_ios": "バージョン {{version}} が利用可能です。TestFlightで更新してください。",
+      "update_now": "今すぐ更新"
     }
   }
 }

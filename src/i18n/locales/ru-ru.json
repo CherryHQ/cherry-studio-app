@@ -911,6 +911,14 @@
         "label": "Тема",
         "recent": "Недавние темы"
       }
+    },
+    "update": {
+      "got_it": "Понятно",
+      "later": "Позже",
+      "new_version_available": "Доступна новая версия",
+      "new_version_content": "Версия {{version}} доступна. Хотите обновить сейчас?",
+      "new_version_content_ios": "Версия {{version}} доступна. Пожалуйста, обновите через TestFlight.",
+      "update_now": "Обновить сейчас"
     }
   }
 }

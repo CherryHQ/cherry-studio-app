@@ -32,6 +32,7 @@ export { default as ImageViewerFooterComponent } from './base/ImageViewerFooterC
 export { SearchInput } from './base/SearchInput'
 export { default as SelectionSheet, type SelectionSheetItem, type SelectionSheetProps } from './base/SelectionSheet'
 export { ImageSkeleton } from './base/Skeleton/ImageSkeleton'
+export { UpdateChecker } from './features/AppUpdate/UpdateChecker'
 export { MessageInput } from './features/ChatScreen/MessageInput'
 export { FilePreview } from './features/ChatScreen/MessageInput/FilePreview'
 export { MentionButton } from './features/ChatScreen/MessageInput/MentionButton'
