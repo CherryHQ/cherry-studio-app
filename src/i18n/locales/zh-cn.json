@@ -911,6 +911,14 @@
         "label": "话题",
         "recent": "最近的话题"
       }
+    },
+    "voice": {
+      "error": "语音识别出错",
+      "not_available": "语音识别不可用",
+      "permission_denied": "麦克风权限被拒绝",
+      "permission_denied_message": "请在设置中允许 Cherry Studio 访问麦克风",
+      "start": "开始语音输入",
+      "stop": "停止语音输入"
     }
   }
 }

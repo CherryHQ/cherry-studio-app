@@ -132,6 +132,7 @@
     "expo-network": "~8.0.7",
     "expo-sharing": "~14.0.7",
     "expo-speech": "~14.0.7",
+    "expo-speech-recognition": "^3.0.0",
     "expo-splash-screen": "~31.0.10",
     "expo-sqlite": "~16.0.8",
     "expo-symbols": "~1.0.7",

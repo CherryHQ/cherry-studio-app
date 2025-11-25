@@ -15,6 +15,7 @@ import {
   CircleCheck,
   CircleDollarSign,
   CirclePause,
+  CircleStop,
   CircleUserRound,
   Cloud,
   Copy,
@@ -42,6 +43,7 @@ import {
   Menu,
   MessageSquareDiff,
   MessageSquareMore,
+  Mic,
   Minus,
   MoreHorizontal,
   Package,
@@ -106,6 +108,7 @@ const ChevronsRightIcon = createIcon(ChevronsRight)
 const CircleCheckIcon = createIcon(CircleCheck)
 const CircleDollarSignIcon = createIcon(CircleDollarSign)
 const CirclePauseIcon = createIcon(CirclePause)
+const CircleStopIcon = createIcon(CircleStop)
 const CloudIcon = createIcon(Cloud)
 const CopyIcon = createIcon(Copy)
 const CopyrightIcon = createIcon(Copyright)
@@ -133,6 +136,7 @@ const MailIcon = createIcon(Mail)
 const MenuIcon = createIcon(Menu)
 const MessageSquareDiffIcon = createIcon(MessageSquareDiff)
 const MessageSquareMoreIcon = createIcon(MessageSquareMore)
+const MicIcon = createIcon(Mic)
 const MinusIcon = createIcon(Minus)
 const MoreHorizontalIcon = createIcon(MoreHorizontal)
 const PackageIcon = createIcon(Package)
@@ -177,6 +181,7 @@ export {
   CircleCheckIcon as CircleCheck,
   CircleDollarSignIcon as CircleDollarSign,
   CirclePauseIcon as CirclePause,
+  CircleStopIcon as CircleStop,
   CircleUserRoundIcon as CircleUserRound,
   CloudIcon as Cloud,
   CopyIcon as Copy,
@@ -204,6 +209,7 @@ export {
   MenuIcon as Menu,
   MessageSquareDiffIcon as MessageSquareDiff,
   MessageSquareMoreIcon as MessageSquareMore,
+  MicIcon as Mic,
   MinusIcon as Minus,
   MoreHorizontalIcon as MoreHorizontal,
   PackageIcon as Package,

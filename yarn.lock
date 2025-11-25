@@ -7098,6 +7098,7 @@ __metadata:
     expo-network: "npm:~8.0.7"
     expo-sharing: "npm:~14.0.7"
     expo-speech: "npm:~14.0.7"
+    expo-speech-recognition: "npm:^3.0.0"
     expo-splash-screen: "npm:~31.0.10"
     expo-sqlite: "npm:~16.0.8"
     expo-symbols: "npm:~1.0.7"
@@ -10696,6 +10697,17 @@ __metadata:
   peerDependencies:
     expo: "*"
   checksum: 10c0/ef0bb6f5fa3e80767e10d685d075118171b81319c7ced425374a021810449d54195ce053e2daf73ec0b86472ef0d06d15693eaa0ab03c9446bbc17e741f495ef
+  languageName: node
+  linkType: hard
+
+"expo-speech-recognition@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "expo-speech-recognition@npm:3.0.0"
+  peerDependencies:
+    expo: "*"
+    react: "*"
+    react-native: "*"
+  checksum: 10c0/30c9e693f93863b5b0c13b6ebea8542fddc16d0098ea10ded6d42b4de40a82299de0231f68b184bbcf673034202e851a7976498453b5541be607a77a2d0224a2
   languageName: node
   linkType: hard
 

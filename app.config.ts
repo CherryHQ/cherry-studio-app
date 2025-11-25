@@ -28,7 +28,8 @@ export default {
       bundleIdentifier: 'com.cherry-ai.cherry-studio-app',
       userInterfaceStyle: 'automatic',
       infoPlist: {
-        LSApplicationQueriesSchemes: ['shortcuts']
+        LSApplicationQueriesSchemes: ['shortcuts'],
+        NSSpeechRecognitionUsageDescription: 'Allow Cherry Studio App to use speech recognition for voice input.'
       }
     },
     android: {
@@ -139,6 +140,13 @@ export default {
         }
       ],
       ['react-native-compressor'],
+      [
+        'expo-speech-recognition',
+        {
+          microphonePermission: 'Allow Cherry Studio App to use your microphone for voice input.',
+          speechRecognitionPermission: 'Allow Cherry Studio App to use speech recognition.'
+        }
+      ],
       [
         'react-native-edge-to-edge',
         {
