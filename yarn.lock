@@ -2312,9 +2312,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@cherrystudio/ai-sdk-provider@npm:^0.1.2":
-  version: 0.1.2
-  resolution: "@cherrystudio/ai-sdk-provider@npm:0.1.2"
+"@cherrystudio/ai-sdk-provider@npm:^0.1.3":
+  version: 0.1.3
+  resolution: "@cherrystudio/ai-sdk-provider@npm:0.1.3"
   dependencies:
     "@ai-sdk/provider": "npm:^2.0.0"
     "@ai-sdk/provider-utils": "npm:^3.0.12"
@@ -2323,7 +2323,7 @@ __metadata:
     "@ai-sdk/google": ^2.0.23
     "@ai-sdk/openai": ^2.0.64
     ai: ^5.0.26
-  checksum: 10c0/c0cf6c8c692d71973c6e92722fdd31fecec442cda498aa6865da14bfa0e3832a3e740f1f499442e234f89942699279caa143b0f0484ef7e5888b6d7e063e9584
+  checksum: 10c0/4508c4bbf3990c2308f5d539661138e331702e34a62748c2f0e152349a0344a1b06057a18ab018067c090e7a4fb758472f75471b189ea4e70c18e0199c1f7cc4
   languageName: node
   linkType: hard
 
@@ -7007,7 +7007,7 @@ __metadata:
     "@babel/core": "npm:^7.25.2"
     "@babel/plugin-transform-class-static-block": "npm:^7.27.1"
     "@cherrystudio/ai-core": "npm:^1.0.9"
-    "@cherrystudio/ai-sdk-provider": "npm:^0.1.2"
+    "@cherrystudio/ai-sdk-provider": "npm:^0.1.3"
     "@cherrystudio/openai": "npm:^6.9.0"
     "@expo/ui": "npm:~0.2.0-beta.7"
     "@google/genai": "npm:^1.17.0"
