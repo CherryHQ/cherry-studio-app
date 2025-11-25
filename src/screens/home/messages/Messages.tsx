@@ -3,12 +3,14 @@ import { LegendList } from '@legendapp/list'
 import { Button } from 'heroui-native'
 import { MotiView } from 'moti'
 import type { FC } from 'react'
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { StyleSheet, View } from 'react-native'
+import { useSharedValue } from 'react-native-reanimated'
 
 import { YStack } from '@/componentsV2'
 import { ChevronDown } from '@/componentsV2/icons'
+import { useInitialScrollToEnd } from '@/hooks/chat/useInitialScrollToEnd'
 import { useTopicBlocks } from '@/hooks/useMessageBlocks'
 import { useMessages } from '@/hooks/useMessages'
 import type { Assistant, Topic } from '@/types/assistant'
@@ -29,6 +31,34 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
   const groupedMessages = Object.entries(getGroupedMessages(messages))
   const legendListRef = useRef<LegendListRef>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
+
+  // Initial scroll to end logic
+  const listLayoutReady = useSharedValue(0)
+  const hasMessages = groupedMessages.length > 0
+
+  const scrollToEnd = useCallback(
+    ({ animated }: { animated: boolean }) => {
+      if (legendListRef.current && groupedMessages.length > 0) {
+        legendListRef.current.scrollToOffset({
+          offset: 9999999,
+          animated
+        })
+      }
+    },
+    [groupedMessages.length]
+  )
+
+  useInitialScrollToEnd(listLayoutReady, scrollToEnd, hasMessages)
+
+  // Trigger scroll when messages are loaded (not on layout)
+  useEffect(() => {
+    if (hasMessages && listLayoutReady.get() === 0) {
+      // Delay to ensure list has rendered
+      requestAnimationFrame(() => {
+        listLayoutReady.set(1)
+      })
+    }
+  }, [hasMessages, listLayoutReady])
 
   const renderMessageGroup = ({ item }: { item: [string, GroupedMessage[]] }) => {
     return (
