@@ -1,20 +1,11 @@
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { Button } from 'heroui-native'
-import React, { useState } from 'react'
-import * as DropdownMenu from 'zeego/dropdown-menu'
+import React, { useRef, useState } from 'react'
+import { TouchableOpacity } from 'react-native'
 
+import SelectionSheet, { type SelectionSheetItem } from '@/componentsV2/base/SelectionSheet'
 import { ChevronDown } from '@/componentsV2/icons'
 import type { ProviderType } from '@/types/assistant'
-
-interface SelectOptionItem {
-  label: string
-  value: ProviderType
-}
-
-interface SelectOptionGroup {
-  label: string
-  title?: string
-  options: SelectOptionItem[]
-}
 
 interface ProviderSelectProps {
   value: ProviderType | undefined
@@ -32,32 +23,23 @@ interface DisplayOptionItem {
   mappedValue?: ProviderType // Actual value to save
 }
 
-interface DisplayOptionGroup {
-  label: string
-  options: DisplayOptionItem[]
-}
-
 // Map display value to actual ProviderType for saving
 const VALUE_MAPPING: Partial<Record<DisplayValue, ProviderType>> = {
   'cherry-in': 'new-api'
 }
 
-const providerOptions: DisplayOptionGroup[] = [
-  {
-    label: 'Providers',
-    options: [
-      { label: 'OpenAI', value: 'openai' },
-      { label: 'OpenAI-Response', value: 'openai-response' },
-      { label: 'Gemini', value: 'gemini' },
-      { label: 'Anthropic', value: 'anthropic' },
-      { label: 'Azure OpenAI', value: 'azure-openai' },
-      { label: 'New API', value: 'new-api' },
-      { label: 'CherryIN', value: 'cherry-in', mappedValue: 'new-api' }
-    ]
-  }
+const providerOptions: DisplayOptionItem[] = [
+  { label: 'OpenAI', value: 'openai' },
+  { label: 'OpenAI-Response', value: 'openai-response' },
+  { label: 'Gemini', value: 'gemini' },
+  { label: 'Anthropic', value: 'anthropic' },
+  { label: 'Azure OpenAI', value: 'azure-openai' },
+  { label: 'New API', value: 'new-api' },
+  { label: 'CherryIN', value: 'cherry-in', mappedValue: 'new-api' }
 ]
 
 export function ProviderSelect({ value, onValueChange, placeholder, className }: ProviderSelectProps) {
+  const sheetRef = useRef<BottomSheetModal>(null)
   // Internal state to track the actual selected display value (for UI differentiation)
   const [displayValue, setDisplayValue] = useState<DisplayValue | undefined>(value)
 
@@ -68,32 +50,29 @@ export function ProviderSelect({ value, onValueChange, placeholder, className }:
     onValueChange(actualValue)
   }
 
-  const selectedOption = providerOptions.flatMap(group => group.options).find(opt => opt.value === displayValue)
+  const selectedOption = providerOptions.find(opt => opt.value === displayValue)
+
+  const sheetItems: SelectionSheetItem[] = providerOptions.map(option => ({
+    id: option.value,
+    label: option.label,
+    isSelected: displayValue === option.value,
+    onSelect: () => handleValueChange(option.value)
+  }))
 
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger className={className}>
-        <Button feedbackVariant="ripple" className="h-8 w-full justify-between rounded-lg" variant="tertiary" size="sm">
+    <>
+      <TouchableOpacity onPress={() => sheetRef.current?.present()} activeOpacity={0.7} className={className}>
+        <Button
+          feedbackVariant="ripple"
+          className="h-8 w-full justify-between rounded-lg"
+          variant="tertiary"
+          size="sm"
+          pointerEvents="none">
           <Button.Label className="text-base">{selectedOption ? selectedOption.label : placeholder}</Button.Label>
           <ChevronDown />
         </Button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Content>
-        {providerOptions.map(group => (
-          <DropdownMenu.Group key={group.label}>
-            <DropdownMenu.Label>{group.label}</DropdownMenu.Label>
-            {group.options.map(option => (
-              <DropdownMenu.CheckboxItem
-                key={option.value}
-                value={displayValue === option.value}
-                onValueChange={() => handleValueChange(option.value)}>
-                <DropdownMenu.ItemIndicator />
-                <DropdownMenu.ItemTitle>{option.label}</DropdownMenu.ItemTitle>
-              </DropdownMenu.CheckboxItem>
-            ))}
-          </DropdownMenu.Group>
-        ))}
-      </DropdownMenu.Content>
-    </DropdownMenu.Root>
+      </TouchableOpacity>
+      <SelectionSheet items={sheetItems} ref={sheetRef} placeholder={placeholder} />
+    </>
   )
 }
