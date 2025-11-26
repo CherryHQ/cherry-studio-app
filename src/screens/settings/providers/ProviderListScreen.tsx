@@ -1,25 +1,22 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { useNavigation } from '@react-navigation/native'
 import { FlashList } from '@shopify/flash-list'
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
 
 import { Container, Group, HeaderBar, SafeAreaContainer, SearchInput } from '@/componentsV2'
-import { AddProviderSheet } from '@/componentsV2/features/SettingsScreen/AddProviderSheet'
 import { ProviderItem } from '@/componentsV2/features/SettingsScreen/ProviderItem'
 import { Plus } from '@/componentsV2/icons'
 import { useAllProviders } from '@/hooks/useProviders'
 import { useSearch } from '@/hooks/useSearch'
 import type { Provider } from '@/types/assistant'
+import type { ProvidersNavigationProps } from '@/types/naviagate'
 
 export default function ProviderListScreen() {
   const { t } = useTranslation()
+  const navigation = useNavigation<ProvidersNavigationProps>()
 
-  const bottomSheetRef = useRef<BottomSheetModal>(null)
   const { providers, isLoading } = useAllProviders()
-
-  const [sheetMode, setSheetMode] = useState<'add' | 'edit'>('add')
-  const [editingProvider, setEditingProvider] = useState<Provider | undefined>(undefined)
 
   const {
     searchText,
@@ -34,16 +31,15 @@ export default function ProviderListScreen() {
   const providersList = filteredProviders.filter(p => p.id !== 'cherryai')
 
   const onAddProvider = () => {
-    setSheetMode('add')
-    setEditingProvider(undefined)
-    bottomSheetRef.current?.present()
+    navigation.navigate('AddProviderScreen', { mode: 'add' })
   }
 
-  const onEditProvider = useCallback((provider: Provider) => {
-    setSheetMode('edit')
-    setEditingProvider(provider)
-    bottomSheetRef.current?.present()
-  }, [])
+  const onEditProvider = useCallback(
+    (provider: Provider) => {
+      navigation.navigate('AddProviderScreen', { mode: 'edit', providerId: provider.id })
+    },
+    [navigation]
+  )
 
   const renderProviderItem = useCallback(
     ({ item }: { item: Provider }) => (
@@ -80,8 +76,6 @@ export default function ProviderListScreen() {
           </Group>
         </Container>
       )}
-
-      <AddProviderSheet ref={bottomSheetRef} mode={sheetMode} editProvider={editingProvider} />
     </SafeAreaContainer>
   )
 }

@@ -1,6 +1,7 @@
 import { createStackNavigator, TransitionPresets } from '@react-navigation/stack'
 import React from 'react'
 
+import AddProviderScreen from '@/screens/settings/providers/AddProviderScreen'
 import ApiServiceScreen from '@/screens/settings/providers/ApiServiceScreen'
 import ManageModelsScreen from '@/screens/settings/providers/ManageModelsScreen'
 import ProviderListScreen from '@/screens/settings/providers/ProviderListScreen'
@@ -11,6 +12,7 @@ export type ProvidersStackParamList = {
   ProviderListScreen: undefined
   ManageModelsScreen: { providerId: string }
   ApiServiceScreen: { providerId: string }
+  AddProviderScreen: { mode: 'add' | 'edit'; providerId?: string } | undefined
 }
 
 const Stack = createStackNavigator<ProvidersStackParamList>()
@@ -27,6 +29,7 @@ export default function ProvidersStackNavigator() {
       <Stack.Screen name="ProviderListScreen" component={ProviderListScreen} />
       <Stack.Screen name="ManageModelsScreen" component={ManageModelsScreen} />
       <Stack.Screen name="ApiServiceScreen" component={ApiServiceScreen} />
+      <Stack.Screen name="AddProviderScreen" component={AddProviderScreen} />
     </Stack.Navigator>
   )
 }

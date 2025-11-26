@@ -1,5 +1,5 @@
 import { Button } from 'heroui-native'
-import React from 'react'
+import React, { useState } from 'react'
 import * as DropdownMenu from 'zeego/dropdown-menu'
 
 import { ChevronDown } from '@/componentsV2/icons'
@@ -20,9 +20,29 @@ interface ProviderSelectProps {
   value: ProviderType | undefined
   onValueChange: (value: ProviderType) => void
   placeholder: string
+  className?: string
 }
 
-const providerOptions: SelectOptionGroup[] = [
+// Internal display value for UI differentiation
+type DisplayValue = ProviderType | 'cherry-in'
+
+interface DisplayOptionItem {
+  label: string
+  value: DisplayValue
+  mappedValue?: ProviderType // Actual value to save
+}
+
+interface DisplayOptionGroup {
+  label: string
+  options: DisplayOptionItem[]
+}
+
+// Map display value to actual ProviderType for saving
+const VALUE_MAPPING: Partial<Record<DisplayValue, ProviderType>> = {
+  'cherry-in': 'new-api'
+}
+
+const providerOptions: DisplayOptionGroup[] = [
   {
     label: 'Providers',
     options: [
@@ -32,22 +52,28 @@ const providerOptions: SelectOptionGroup[] = [
       { label: 'Anthropic', value: 'anthropic' },
       { label: 'Azure OpenAI', value: 'azure-openai' },
       { label: 'New API', value: 'new-api' },
-      { label: 'CherryIN', value: 'new-api' }
+      { label: 'CherryIN', value: 'cherry-in', mappedValue: 'new-api' }
     ]
   }
 ]
 
-export function ProviderSelect({ value, onValueChange, placeholder }: ProviderSelectProps) {
-  const handleValueChange = (newValue: string) => {
-    onValueChange(newValue as ProviderType)
+export function ProviderSelect({ value, onValueChange, placeholder, className }: ProviderSelectProps) {
+  // Internal state to track the actual selected display value (for UI differentiation)
+  const [displayValue, setDisplayValue] = useState<DisplayValue | undefined>(value)
+
+  const handleValueChange = (newValue: DisplayValue) => {
+    setDisplayValue(newValue)
+    // Map display value to actual ProviderType
+    const actualValue = VALUE_MAPPING[newValue] ?? (newValue as ProviderType)
+    onValueChange(actualValue)
   }
 
-  const selectedOption = providerOptions.flatMap(group => group.options).find(opt => opt.value === value)
+  const selectedOption = providerOptions.flatMap(group => group.options).find(opt => opt.value === displayValue)
 
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger>
-        <Button feedbackVariant="ripple" className="justify-between rounded-lg" variant="tertiary" size="sm">
+      <DropdownMenu.Trigger className={className}>
+        <Button feedbackVariant="ripple" className="h-8 w-full justify-between rounded-lg" variant="tertiary" size="sm">
           <Button.Label className="text-base">{selectedOption ? selectedOption.label : placeholder}</Button.Label>
           <ChevronDown />
         </Button>
@@ -57,9 +83,13 @@ export function ProviderSelect({ value, onValueChange, placeholder }: ProviderSe
           <DropdownMenu.Group key={group.label}>
             <DropdownMenu.Label>{group.label}</DropdownMenu.Label>
             {group.options.map(option => (
-              <DropdownMenu.Item key={option.value} onSelect={() => handleValueChange(option.value)}>
-                {option.label}
-              </DropdownMenu.Item>
+              <DropdownMenu.CheckboxItem
+                key={option.value}
+                value={displayValue === option.value}
+                onValueChange={() => handleValueChange(option.value)}>
+                <DropdownMenu.ItemIndicator />
+                <DropdownMenu.ItemTitle>{option.label}</DropdownMenu.ItemTitle>
+              </DropdownMenu.CheckboxItem>
             ))}
           </DropdownMenu.Group>
         ))}
