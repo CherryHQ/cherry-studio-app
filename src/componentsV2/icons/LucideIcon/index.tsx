@@ -7,7 +7,6 @@ import {
   AtSign,
   AudioLines,
   BrushCleaning,
-  Bug,
   Camera,
   Check,
   ChevronDown,
@@ -101,7 +100,6 @@ const ArrowUpRightIcon = createIcon(ArrowUpRight)
 const AtSignIcon = createIcon(AtSign)
 const AudioLinesIcon = createIcon(AudioLines)
 const BrushCleaningIcon = createIcon(BrushCleaning)
-const BugIcon = createIcon(Bug)
 const CameraIcon = createIcon(Camera)
 const CheckIcon = createIcon(Check)
 const ChevronDownIcon = createIcon(ChevronDown)
@@ -173,7 +171,6 @@ export {
   AtSignIcon as AtSign,
   AudioLinesIcon as AudioLines,
   BrushCleaningIcon as BrushCleaning,
-  BugIcon as Bug,
   CameraIcon as Camera,
   CheckIcon as Check,
   ChevronDownIcon as ChevronDown,

@@ -1,7 +1,7 @@
-import React from 'react'
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import React, { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Keyboard, TouchableOpacity } from 'react-native'
-import { SheetManager } from 'react-native-actions-sheet'
 
 import Text from '@/componentsV2/base/Text'
 import { ModelIcon } from '@/componentsV2/icons'
@@ -9,6 +9,8 @@ import { AtSign } from '@/componentsV2/icons/LucideIcon'
 import XStack from '@/componentsV2/layout/XStack'
 import type { Assistant, Model } from '@/types/assistant'
 import { getBaseModelName } from '@/utils/naming'
+
+import ModelSheet from '../../Sheet/ModelSheet'
 
 interface MentionButtonProps {
   mentions: Model[]
@@ -31,7 +33,12 @@ const DISPLAY_CONSTANTS = {
 
 export const MentionButton: React.FC<MentionButtonProps> = ({ mentions, setMentions, assistant, updateAssistant }) => {
   const { t } = useTranslation()
+  const bottomSheetModalRef = useRef<BottomSheetModal>(null)
 
+  const handlePress = () => {
+    Keyboard.dismiss()
+    bottomSheetModalRef.current?.present()
+  }
   /**
    * @description Change Model Event
    * 1. Assistant没有defaultModel时，选择模型后设定defaultModel和model，如果为多选，则设置第一个模型为defaultModel
@@ -51,17 +58,6 @@ export const MentionButton: React.FC<MentionButtonProps> = ({ mentions, setMenti
     }
 
     await updateAssistant(updatedAssistant)
-  }
-
-  const handlePress = () => {
-    Keyboard.dismiss()
-    SheetManager.show('model-sheet', {
-      payload: {
-        mentions,
-        setMentions: handleModelChange,
-        multiple: true
-      }
-    })
   }
 
   const renderEmptyState = () => <AtSign size={DISPLAY_CONSTANTS.ICON_SIZE} />
@@ -91,8 +87,12 @@ export const MentionButton: React.FC<MentionButtonProps> = ({ mentions, setMenti
   }
 
   return (
-    <TouchableOpacity style={{ maxWidth: BUTTON_STYLES.maxWidth }} onPress={handlePress} hitSlop={5}>
-      {renderButtonContent()}
-    </TouchableOpacity>
+    <>
+      <TouchableOpacity style={{ maxWidth: BUTTON_STYLES.maxWidth }} onPress={handlePress} hitSlop={5}>
+        {renderButtonContent()}
+      </TouchableOpacity>
+
+      <ModelSheet ref={bottomSheetModalRef} mentions={mentions} setMentions={handleModelChange} multiple={true} />
+    </>
   )
 }

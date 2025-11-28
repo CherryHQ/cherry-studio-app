@@ -7127,7 +7127,6 @@ __metadata:
     react-dom: "npm:19.1.0"
     react-i18next: "npm:^15.4.1"
     react-native: "npm:0.81.4"
-    react-native-actions-sheet: "npm:^10.0.0-alpha.6"
     react-native-code-highlighter: "npm:^1.3.0"
     react-native-compressor: "npm:^1.13.0"
     react-native-edge-to-edge: "npm:^1.7.0"
@@ -16164,18 +16163,6 @@ __metadata:
   version: 19.2.0
   resolution: "react-is@npm:19.2.0"
   checksum: 10c0/a63cb346aeced8ac0e671b0f9b33720d2906de02a066ca067075d871a5d4c64cdb328f495baf9b5842d5868c0d5edd1ce18465a7358b52f4b6aa983479c9bfa2
-  languageName: node
-  linkType: hard
-
-"react-native-actions-sheet@npm:^10.0.0-alpha.6":
-  version: 10.0.0-alpha.6
-  resolution: "react-native-actions-sheet@npm:10.0.0-alpha.6"
-  peerDependencies:
-    react-native: "*"
-    react-native-gesture-handler: "*"
-    react-native-reanimated: "*"
-    react-native-safe-area-context: "*"
-  checksum: 10c0/0230ee9cf8004f7535d7e9d21159efd54d33608de964985b216c6f68ad990cdb318feeba938cbe599224ed131cd96eab629cd58b3367c5216c7253610ad36bb4
   languageName: node
   linkType: hard
 
