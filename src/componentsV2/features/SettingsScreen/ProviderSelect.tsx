@@ -1,69 +1,78 @@
+import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { Button } from 'heroui-native'
-import React from 'react'
-import * as DropdownMenu from 'zeego/dropdown-menu'
+import React, { useRef, useState } from 'react'
+import { TouchableOpacity } from 'react-native'
 
+import SelectionSheet, { type SelectionSheetItem } from '@/componentsV2/base/SelectionSheet'
 import { ChevronDown } from '@/componentsV2/icons'
 import type { ProviderType } from '@/types/assistant'
-
-interface SelectOptionItem {
-  label: string
-  value: ProviderType
-}
-
-interface SelectOptionGroup {
-  label: string
-  title?: string
-  options: SelectOptionItem[]
-}
 
 interface ProviderSelectProps {
   value: ProviderType | undefined
   onValueChange: (value: ProviderType) => void
   placeholder: string
+  className?: string
 }
 
-const providerOptions: SelectOptionGroup[] = [
-  {
-    label: 'Providers',
-    options: [
-      { label: 'OpenAI', value: 'openai' },
-      { label: 'OpenAI-Response', value: 'openai-response' },
-      { label: 'Gemini', value: 'gemini' },
-      { label: 'Anthropic', value: 'anthropic' },
-      { label: 'Azure OpenAI', value: 'azure-openai' },
-      { label: 'New API', value: 'new-api' },
-      { label: 'CherryIN', value: 'new-api' }
-    ]
-  }
+// Internal display value for UI differentiation
+type DisplayValue = ProviderType | 'cherry-in'
+
+interface DisplayOptionItem {
+  label: string
+  value: DisplayValue
+  mappedValue?: ProviderType // Actual value to save
+}
+
+// Map display value to actual ProviderType for saving
+const VALUE_MAPPING: Partial<Record<DisplayValue, ProviderType>> = {
+  'cherry-in': 'new-api'
+}
+
+const providerOptions: DisplayOptionItem[] = [
+  { label: 'OpenAI', value: 'openai' },
+  { label: 'OpenAI-Response', value: 'openai-response' },
+  { label: 'Gemini', value: 'gemini' },
+  { label: 'Anthropic', value: 'anthropic' },
+  { label: 'Azure OpenAI', value: 'azure-openai' },
+  { label: 'New API', value: 'new-api' },
+  { label: 'CherryIN', value: 'cherry-in', mappedValue: 'new-api' }
 ]
 
-export function ProviderSelect({ value, onValueChange, placeholder }: ProviderSelectProps) {
-  const handleValueChange = (newValue: string) => {
-    onValueChange(newValue as ProviderType)
+export function ProviderSelect({ value, onValueChange, placeholder, className }: ProviderSelectProps) {
+  const sheetRef = useRef<BottomSheetModal>(null)
+  // Internal state to track the actual selected display value (for UI differentiation)
+  const [displayValue, setDisplayValue] = useState<DisplayValue | undefined>(value)
+
+  const handleValueChange = (newValue: DisplayValue) => {
+    setDisplayValue(newValue)
+    // Map display value to actual ProviderType
+    const actualValue = VALUE_MAPPING[newValue] ?? (newValue as ProviderType)
+    onValueChange(actualValue)
   }
 
-  const selectedOption = providerOptions.flatMap(group => group.options).find(opt => opt.value === value)
+  const selectedOption = providerOptions.find(opt => opt.value === displayValue)
+
+  const sheetItems: SelectionSheetItem[] = providerOptions.map(option => ({
+    id: option.value,
+    label: option.label,
+    isSelected: displayValue === option.value,
+    onSelect: () => handleValueChange(option.value)
+  }))
 
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger>
-        <Button className="justify-between rounded-lg" variant="tertiary" size="sm">
+    <>
+      <TouchableOpacity onPress={() => sheetRef.current?.present()} activeOpacity={0.7} className={className}>
+        <Button
+          feedbackVariant="ripple"
+          className="h-8 w-full justify-between rounded-lg"
+          variant="tertiary"
+          size="sm"
+          pointerEvents="none">
           <Button.Label className="text-base">{selectedOption ? selectedOption.label : placeholder}</Button.Label>
           <ChevronDown />
         </Button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Content>
-        {providerOptions.map(group => (
-          <DropdownMenu.Group key={group.label}>
-            <DropdownMenu.Label>{group.label}</DropdownMenu.Label>
-            {group.options.map(option => (
-              <DropdownMenu.Item key={option.value} onSelect={() => handleValueChange(option.value)}>
-                {option.label}
-              </DropdownMenu.Item>
-            ))}
-          </DropdownMenu.Group>
-        ))}
-      </DropdownMenu.Content>
-    </DropdownMenu.Root>
+      </TouchableOpacity>
+      <SelectionSheet items={sheetItems} ref={sheetRef} placeholder={placeholder} />
+    </>
   )
 }

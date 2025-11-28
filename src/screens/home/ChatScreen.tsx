@@ -3,7 +3,7 @@ import { DrawerActions, useNavigation } from '@react-navigation/native'
 import React from 'react'
 import { ActivityIndicator, Platform, View } from 'react-native'
 import { PanGestureHandler, State } from 'react-native-gesture-handler'
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
+import { KeyboardAvoidingView, KeyboardController } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { SafeAreaContainer, YStack } from '@/componentsV2'
@@ -15,6 +15,8 @@ import { usePreference } from '@/hooks/usePreference'
 import { useCurrentTopic } from '@/hooks/useTopic'
 
 import ChatContent from './ChatContent'
+
+KeyboardController.preload()
 
 const ChatScreen = () => {
   const insets = useSafeAreaInsets()
@@ -66,7 +68,7 @@ const ChatScreen = () => {
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           keyboardVerticalOffset={Platform.OS === 'ios' ? -20 : -specificBottom}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          behavior="padding">
           <YStack className="flex-1">
             <ChatScreenHeader topic={currentTopic} />
 

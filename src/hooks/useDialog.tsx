@@ -1,6 +1,6 @@
 import { Button, cn } from 'heroui-native'
 import { MotiView } from 'moti'
-import React, { createContext, useContext, useState } from 'react'
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Modal, Pressable } from 'react-native'
 
@@ -40,12 +40,12 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
     ? 'flex-1 justify-center items-center bg-black/70'
     : 'flex-1 justify-center items-center bg-black/40'
 
-  const close = () => {
+  const close = useCallback(() => {
     setOpen(false)
     setTimeout(() => {
       setOptions(null)
     }, 300)
-  }
+  }, [])
 
   const cancel = async () => {
     if (isLoading) return
@@ -75,11 +75,11 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const open = (newOptions: DialogOptions) => {
+  const open = useCallback((newOptions: DialogOptions) => {
     setOptions(newOptions)
     setIsLoading(false)
     setOpen(true)
-  }
+  }, [])
 
   const getConfirmButtonClassName = () => {
     switch (options?.type) {
@@ -111,7 +111,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const api = { open, close }
+  const api = useMemo(() => ({ open, close }), [open, close])
 
   const showCancel = options?.showCancel ?? true
   const maskClosable = options?.maskClosable ?? true
@@ -150,14 +150,14 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
             <XStack className="gap-5 p-5 pt-0">
               {showCancel && (
                 <Button
+                  feedbackVariant="ripple"
                   variant="tertiary"
                   className={cn(
                     'border-gray-20 h-[42px] flex-1 rounded-[30px] bg-transparent active:opacity-80',
                     options?.cancelStyle?.toString() || ''
                   )}
                   onPress={cancel}
-                  isDisabled={isLoading}
-                  animationConfig={{ highlight: { isDisabled: true } }}>
+                  isDisabled={isLoading}>
                   <Button.Label>
                     <Text className="text-gray-80 text-[17px]">
                       {isLoading && shouldShowLoading ? t('common.loading') : cancelText}
@@ -166,14 +166,14 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                 </Button>
               )}
               <Button
+                feedbackVariant="ripple"
                 className={cn(
                   'h-[42px] flex-1 rounded-[30px] border',
                   confirmButtonClassName,
                   options?.confirmStyle?.toString() || ''
                 )}
                 onPress={confirm}
-                isDisabled={isLoading}
-                animationConfig={{ highlight: { isDisabled: true } }}>
+                isDisabled={isLoading}>
                 <Button.Label>
                   <Text className={cn(confirmTextClassName, 'text-[17px]')}>
                     {isLoading && shouldShowLoading ? t('common.loading') : confirmText}

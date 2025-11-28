@@ -17,10 +17,11 @@ import { SheetProvider } from 'react-native-actions-sheet'
 import { SystemBars } from 'react-native-edge-to-edge'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
-import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { Provider } from 'react-redux'
 import { PersistGate } from 'redux-persist/integration/react'
+import { Uniwind } from 'uniwind'
 
+import { UpdateChecker } from '@/componentsV2'
 import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
 import store, { persistor } from '@/store'
@@ -95,23 +96,27 @@ function DatabaseInitializer({ children }: { children: React.ReactNode }) {
 function ThemedApp() {
   const { isDark } = useTheme()
 
+  useEffect(() => {
+    Uniwind.setTheme(isDark ? 'dark' : 'light')
+  }, [isDark])
+
   return (
     <HeroUINativeProvider>
       <KeyboardProvider>
-        <SafeAreaProvider>
-          <NavigationContainer theme={isDark ? DarkTheme : DefaultTheme}>
-            <SystemBars style={isDark ? 'light' : 'dark'} />
-            <DialogProvider>
-              <ToastProvider>
+        <NavigationContainer theme={isDark ? DarkTheme : DefaultTheme}>
+          <SystemBars style={isDark ? 'light' : 'dark'} />
+          <DialogProvider>
+            <ToastProvider>
+              <UpdateChecker>
                 <BottomSheetModalProvider>
-                  <SheetProvider context="global">
-                    <MainStackNavigator />
+                   <SheetProvider context="global">
+                  <MainStackNavigator />
                   </SheetProvider>
                 </BottomSheetModalProvider>
-              </ToastProvider>
-            </DialogProvider>
-          </NavigationContainer>
-        </SafeAreaProvider>
+              </UpdateChecker>
+            </ToastProvider>
+          </DialogProvider>
+        </NavigationContainer>
       </KeyboardProvider>
     </HeroUINativeProvider>
   )

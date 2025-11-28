@@ -83,6 +83,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
         type: 'timing'
       }}>
       <Button
+        feedbackVariant="ripple"
         variant="tertiary"
         className="bg-ui-card-background justify-between rounded-xl border-0"
         onPress={handleModelPress}>
@@ -151,20 +152,14 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
         <Row>
           <Text>{t('assistants.settings.stream_output')}</Text>
           <Switch
-            color="success"
             isSelected={settings.streamOutput ?? true}
-            onSelectedChange={checked => handleSettingsChange('streamOutput', checked)}>
-            <Switch.Thumb colors={{ defaultBackground: 'white', selectedBackground: 'white' }} />
-          </Switch>
+            onSelectedChange={checked => handleSettingsChange('streamOutput', checked)}></Switch>
         </Row>
         <Row>
           <Text>{t('assistants.settings.max_tokens')}</Text>
           <Switch
-            color="success"
             isSelected={settings.enableMaxTokens ?? false}
-            onSelectedChange={checked => handleSettingsChange('enableMaxTokens', checked)}>
-            <Switch.Thumb colors={{ defaultBackground: 'white', selectedBackground: 'white' }} />
-          </Switch>
+            onSelectedChange={checked => handleSettingsChange('enableMaxTokens', checked)}></Switch>
         </Row>
         {settings.enableMaxTokens && (
           <Row>
@@ -191,6 +186,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
 
         {isReasoningModel(model[0]) && (
           <Button
+            feedbackVariant="ripple"
             variant="tertiary"
             className="justify-between rounded-xl border-0 bg-transparent py-3 pl-4 pr-5"
             onPress={handleReasoningPress}>

@@ -150,11 +150,8 @@ const McpServerItemSheet = forwardRef<BottomSheetModal, McpServerItemSheetProps>
                                 </XStack>
 
                                 <Switch
-                                  color="success"
                                   isSelected={localDisabledTools.includes(tool.name) ? false : true}
-                                  onSelectedChange={() => updateToolSwitch(tool.name)}>
-                                  <Switch.Thumb colors={{ defaultBackground: 'white', selectedBackground: 'white' }} />
-                                </Switch>
+                                  onSelectedChange={() => updateToolSwitch(tool.name)}></Switch>
                               </XStack>
                             </YStack>
                           </Accordion.Content>

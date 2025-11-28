@@ -29,7 +29,7 @@ const MessageContent: React.FC<Props> = ({ message, assistant, isMultiModel = fa
   if (isUser)
     return (
       // item-end 会导致android端消息框重叠
-      <View className="w-full max-w-full flex-1 rounded-2xl px-[14px]">
+      <View className="w-full max-w-full flex-1 rounded-2xl px-3.5">
         {mediaBlocks.length > 0 && <MessageBlockRenderer blocks={mediaBlocks} message={message} />}
         {mediaBlocks.length > 0 && <View className="h-2" />}
         <View className="flex-row justify-end">
@@ -46,9 +46,8 @@ const MessageContent: React.FC<Props> = ({ message, assistant, isMultiModel = fa
 
   return (
     <View className="flex-1">
-      {/*使用expo/ui的contextmenu存在bug，当滑动messages时会偏移，zeego由于上游问题暂时没有迁移到expo 54*/}
       <MessageContextMenu message={message} assistant={assistant} isMultiModel={isMultiModel}>
-        <View className="w-full max-w-full flex-1 rounded-2xl px-[14px]">
+        <View className="w-full max-w-full flex-1 rounded-2xl px-3.5">
           {mediaBlocks.length > 0 && <MessageBlockRenderer blocks={mediaBlocks} message={message} />}
           {contentBlocks.length > 0 && (
             <YStack

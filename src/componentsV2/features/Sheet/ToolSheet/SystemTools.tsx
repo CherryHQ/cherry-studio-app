@@ -47,6 +47,7 @@ export const SystemTools: React.FC<SystemToolsProps> = ({ onCameraPress, onImage
     <XStack className="justify-between gap-3 px-5">
       {options.map(option => (
         <Button
+          feedbackVariant="ripple"
           key={option.key}
           className="bg-gray-20 aspect-[1.618] flex-1 flex-col items-center justify-center gap-2 rounded-lg"
           onPress={option.onPress}>

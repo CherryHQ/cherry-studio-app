@@ -2312,9 +2312,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@cherrystudio/ai-sdk-provider@npm:^0.1.2":
-  version: 0.1.2
-  resolution: "@cherrystudio/ai-sdk-provider@npm:0.1.2"
+"@cherrystudio/ai-sdk-provider@npm:^0.1.3":
+  version: 0.1.3
+  resolution: "@cherrystudio/ai-sdk-provider@npm:0.1.3"
   dependencies:
     "@ai-sdk/provider": "npm:^2.0.0"
     "@ai-sdk/provider-utils": "npm:^3.0.12"
@@ -2323,7 +2323,7 @@ __metadata:
     "@ai-sdk/google": ^2.0.23
     "@ai-sdk/openai": ^2.0.64
     ai: ^5.0.26
-  checksum: 10c0/c0cf6c8c692d71973c6e92722fdd31fecec442cda498aa6865da14bfa0e3832a3e740f1f499442e234f89942699279caa143b0f0484ef7e5888b6d7e063e9584
+  checksum: 10c0/4508c4bbf3990c2308f5d539661138e331702e34a62748c2f0e152349a0344a1b06057a18ab018067c090e7a4fb758472f75471b189ea4e70c18e0199c1f7cc4
   languageName: node
   linkType: hard
 
@@ -3720,15 +3720,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@legendapp/list@npm:^2.0.13":
-  version: 2.0.13
-  resolution: "@legendapp/list@npm:2.0.13"
+"@legendapp/list@npm:^2.0.15":
+  version: 2.0.15
+  resolution: "@legendapp/list@npm:2.0.15"
   dependencies:
     use-sync-external-store: "npm:^1.5.0"
   peerDependencies:
     react: "*"
     react-native: "*"
-  checksum: 10c0/92cdcf709986143a1d8494646216094e8bd1b28a70b85ceb9bd8a8aec00df61778c19f101b7d9876c709d44b60f7ad4cd197e389e29c08f58478ab138c064e65
+  checksum: 10c0/381e80e48c7267c091193b73086f3450398e5ec7517da60d2968d6ee8ec470a3e13f4159b7f079cd7cf3be5fa9e1452150e574bb12690af6713e375ae6ed430b
   languageName: node
   linkType: hard
 
@@ -7007,12 +7007,12 @@ __metadata:
     "@babel/core": "npm:^7.25.2"
     "@babel/plugin-transform-class-static-block": "npm:^7.27.1"
     "@cherrystudio/ai-core": "npm:^1.0.9"
-    "@cherrystudio/ai-sdk-provider": "npm:^0.1.2"
+    "@cherrystudio/ai-sdk-provider": "npm:^0.1.3"
     "@cherrystudio/openai": "npm:^6.9.0"
     "@expo/ui": "npm:~0.2.0-beta.7"
     "@google/genai": "npm:^1.17.0"
     "@gorhom/bottom-sheet": "npm:^5.2.6"
-    "@legendapp/list": "npm:^2.0.13"
+    "@legendapp/list": "npm:^2.0.15"
     "@mistralai/mistralai": "npm:^1.7.4"
     "@mozilla/readability": "npm:^0.6.0"
     "@openrouter/ai-sdk-provider": "npm:^1.1.2"
@@ -7105,7 +7105,7 @@ __metadata:
     expo-updates: "npm:~29.0.12"
     expo-web-browser: "npm:~15.0.7"
     fast-xml-parser: "npm:^5.2.5"
-    heroui-native: "npm:^1.0.0-beta.1"
+    heroui-native: "npm:^1.0.0-beta.3"
     i18next: "npm:^24.2.2"
     jest: "npm:^29.2.1"
     jest-expo: "npm:~54.0.12"
@@ -7136,7 +7136,7 @@ __metadata:
     react-native-image-viewing: "npm:^0.2.2"
     react-native-ios-context-menu: "npm:3.2.1"
     react-native-ios-utilities: "npm:5.2.0"
-    react-native-keyboard-controller: "npm:1.18.5"
+    react-native-keyboard-controller: "npm:1.19.6"
     react-native-marked: "npm:^7.0.2"
     react-native-mathjax-svg: "npm:^0.9.9"
     react-native-mmkv: "npm:^3.3.0"
@@ -7171,6 +7171,7 @@ __metadata:
     turndown: "npm:7.2.2"
     typescript: "npm:~5.9.3"
     uniwind: "npm:^1.0.0"
+    use-latest-callback: "npm:^0.3.2"
     vitest: "npm:^3.2.4"
     webdav: "npm:^5.8.0"
     zeego: "npm:^3.0.6"
@@ -11769,9 +11770,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"heroui-native@npm:^1.0.0-beta.1":
-  version: 1.0.0-beta.1
-  resolution: "heroui-native@npm:1.0.0-beta.1"
+"heroui-native@npm:^1.0.0-beta.3":
+  version: 1.0.0-beta.3
+  resolution: "heroui-native@npm:1.0.0-beta.3"
   peerDependencies:
     "@gorhom/bottom-sheet": ^5
     react: "*"
@@ -11783,7 +11784,7 @@ __metadata:
     react-native-worklets: ^0.5.1
     tailwind-merge: ^3.3.1
     tailwind-variants: ^3.1.0
-  checksum: 10c0/5622885ac4ba7190a074e4faebdf668d800b197f9ab750dd0a53f089eb50810d6942f8288cfe919b0268c73815077b9ec6403955ff88be57963f252dd076c24e
+  checksum: 10c0/af0b3aa0b2034db78b2187bf08dbfb66d41b0572bc41e659c011e6e726c6ebf67136401042d28650d8ccf3a34d1470823f664db8e8ab0d342beec5bbe13fb509
   languageName: node
   linkType: hard
 
@@ -16294,16 +16295,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-keyboard-controller@npm:1.18.5":
-  version: 1.18.5
-  resolution: "react-native-keyboard-controller@npm:1.18.5"
+"react-native-keyboard-controller@npm:1.19.6":
+  version: 1.19.6
+  resolution: "react-native-keyboard-controller@npm:1.19.6"
   dependencies:
     react-native-is-edge-to-edge: "npm:^1.2.1"
   peerDependencies:
     react: "*"
     react-native: "*"
     react-native-reanimated: ">=3.0.0"
-  checksum: 10c0/708b8c299fdfc11749db4d84238330a2f04a07a92f40a5f0aa2870ffedb9e47c05455d50c3441a321f5cd5cacf7c936d5706e74cfb234a132e6c6c9ebb0d5e57
+  checksum: 10c0/162f9c2f9006e041e891d24f07277f77d4524302ccd534ba370d6047d727e21648a6e737ef46aa4442fa672e02945d517dbd81ca24094430dacb0f29154f79ad
   languageName: node
   linkType: hard
 
@@ -19076,6 +19077,15 @@ __metadata:
   peerDependencies:
     react: ">=16.8"
   checksum: 10c0/6523747b2d76f12a91cf80a3cd9803449571e9defa8db69e9a03b8199b211127d88c038063714fe31d3c2e63ca51a491bd05f4e34203795a1c692a5a44416610
+  languageName: node
+  linkType: hard
+
+"use-latest-callback@npm:^0.3.2":
+  version: 0.3.2
+  resolution: "use-latest-callback@npm:0.3.2"
+  peerDependencies:
+    react: ">=16.8"
+  checksum: 10c0/4cf833e47db8f62819af24065cc1597c1fa2a3f562fe2cf1c6142bc8bc578dfaeee512d9449735fd2b1737e01a7c1cdf5a16bffa8b9b338fb3e941a273130923
   languageName: node
   linkType: hard
 

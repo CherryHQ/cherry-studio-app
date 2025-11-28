@@ -22,6 +22,7 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
 
   return (
     <Button
+      feedbackVariant="ripple"
       variant="ghost"
       className="bg-ui-card-background   w-full justify-between rounded-2xl px-3"
       onPress={onPress}>

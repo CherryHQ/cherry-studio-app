@@ -62,6 +62,7 @@ export default function WelcomeScreen() {
         <View className="bg-ui-card-background h-1/4 w-full items-center justify-center">
           <YStack className="flex-1 items-center justify-center gap-5">
             <Button
+              feedbackVariant="ripple"
               className="w-3/4 rounded-lg"
               variant="secondary"
               onPress={() => bottomSheetModalRef.current?.present()}>
@@ -70,7 +71,7 @@ export default function WelcomeScreen() {
               </Button.Label>
             </Button>
 
-            <Button className="w-3/4 rounded-lg" variant="secondary" onPress={handleStart}>
+            <Button feedbackVariant="ripple" className="w-3/4 rounded-lg" variant="secondary" onPress={handleStart}>
               <Button.Label className="text-text-primary w-full text-center text-lg">{t('common.start')}</Button.Label>
             </Button>
           </YStack>

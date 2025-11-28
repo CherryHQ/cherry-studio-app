@@ -167,6 +167,7 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
                 </View>
               </YStack>
               <Button
+                feedbackVariant="ripple"
                 variant="tertiary"
                 className="border-green-20 bg-green-10 h-11 w-4/6 rounded-2xl"
                 onPress={handleAddModel}

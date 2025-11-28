@@ -60,6 +60,7 @@ export const WebSearchApiCheckSheet = forwardRef<BottomSheetModal, WebSearchApiC
             </XStack>
             <XStack className="w-full items-center justify-center">
               <Button
+                feedbackVariant="ripple"
                 variant="tertiary"
                 className="border-green-20 bg-green-10 h-11 w-1/2 rounded-lg"
                 isDisabled={checkApiStatus === 'processing'}

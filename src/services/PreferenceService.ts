@@ -424,23 +424,26 @@ export class PreferenceService {
         // Query database from preference table
         const result = await db.select().from(preferenceTable).where(eq(preferenceTable.key, key)).get()
 
+        let value: PreferenceValue<K>
+
         if (result) {
-          const value = result.value as PreferenceValue<K>
-          this.cache.set(key, value)
+          value = result.value as PreferenceValue<K>
           logger.debug(`Loaded ${key} from database: ${JSON.stringify(value)}`)
-          return value
         } else {
           // Not found in database → use default value
-          const defaultValue = DefaultPreferences.default[key] as PreferenceValue<K>
-          this.cache.set(key, defaultValue)
-          logger.debug(`Preference ${key} not found in database, using default: ${JSON.stringify(defaultValue)}`)
-          return defaultValue
+          value = DefaultPreferences.default[key] as PreferenceValue<K>
+          logger.debug(`Preference ${key} not found in database, using default: ${JSON.stringify(value)}`)
         }
+
+        this.cache.set(key, value)
+        this.notify(key)
+        return value
       } catch (error) {
         // Database error → use default value
         const defaultValue = DefaultPreferences.default[key] as PreferenceValue<K>
         logger.error(`Failed to load preference ${key}, using default:`, error as Error)
         this.cache.set(key, defaultValue)
+        this.notify(key)
         return defaultValue
       } finally {
         this.loadingKeys.delete(key)

@@ -98,6 +98,7 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
 
           <XStack className="items-center justify-center">
             <Button
+              feedbackVariant="ripple"
               size="sm"
               className={cn(
                 'w-40 items-center justify-center rounded-[30px] border text-base active:opacity-80',
@@ -108,8 +109,7 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
                     : 'border-yellow-20 bg-yellow-20'
               )}
               isDisabled={!isDone}
-              onPress={onClose}
-              animationConfig={{ highlight: { isDisabled: true } }}>
+              onPress={onClose}>
               <Button.Label>
                 <Text
                   className={cn(

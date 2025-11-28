@@ -75,5 +75,7 @@ TOP_ENTRY_IMPLEMENTATION.md
 .gemini/
 .qwen/
 
+plan/
+
 # coverage
 coverage/
