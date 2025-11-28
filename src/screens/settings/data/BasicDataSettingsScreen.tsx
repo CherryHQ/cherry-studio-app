@@ -4,7 +4,6 @@ import { reloadAppAsync } from 'expo'
 import * as DocumentPicker from 'expo-document-picker'
 import { Paths } from 'expo-file-system'
 import * as IntentLauncher from 'expo-intent-launcher'
-import * as Sharing from 'expo-sharing'
 import { delay } from 'lodash'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -27,7 +26,7 @@ import { FileText, Folder, FolderOpen, RotateCcw, Save, Trash2 } from '@/compone
 import { useDialog } from '@/hooks/useDialog'
 import { DEFAULT_RESTORE_STEPS, useRestore } from '@/hooks/useRestore'
 import { backup } from '@/services/BackupService'
-import { getCacheDirectorySize, resetCacheDirectory, shareFile } from '@/services/FileService'
+import { getCacheDirectorySize, resetCacheDirectory, saveFileToFolder } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import { persistor } from '@/store'
 import type { NavigationProps } from '@/types/naviagate'
@@ -79,7 +78,9 @@ export default function BasicDataSettingsScreen() {
       setIsBackup(true)
       const backupUri = await backup()
       setIsBackup(false)
-      await shareFile(backupUri)
+
+      const fileName = backupUri.split('/').pop() || `cherry-studio.${Date.now()}.zip`
+      await saveFileToFolder(backupUri, fileName, 'application/zip')
     } catch (error) {
       logger.error('handleBackup', error as Error)
     }
@@ -198,10 +199,9 @@ export default function BasicDataSettingsScreen() {
   const handleOpenAppLogs = async () => {
     try {
       const logPath = Paths.join(Paths.document.uri, 'app.log')
+      const result = await saveFileToFolder(logPath, 'app.log', 'text/plain')
 
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(logPath)
-      } else {
+      if (!result.success && result.message !== 'cancelled') {
         dialog.open({
           type: 'info',
           title: t('settings.data.app_logs'),

@@ -1,52 +1,12 @@
-import { useFocusEffect, useNavigation } from '@react-navigation/native'
-import React, { useCallback, useState } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 
-import {
-  Container,
-  Group,
-  GroupTitle,
-  HeaderBar,
-  PressableRow,
-  RowRightArrow,
-  SafeAreaContainer,
-  Text,
-  XStack,
-  YStack
-} from '@/componentsV2'
-import { languagesOptions } from '@/config/languages'
-import { useTheme } from '@/hooks/useTheme'
-import type { GeneralSettingsNavigationProps } from '@/types/naviagate'
-import { storage } from '@/utils'
+import { Container, Group, GroupTitle, HeaderBar, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
+import { LanguageDropdown } from '@/componentsV2/features/SettingsScreen/LanguageDropdown'
+import { ThemeDropdown } from '@/componentsV2/features/SettingsScreen/ThemeDropdown'
 
 export default function GeneralSettingsScreen() {
-  const { t, i18n } = useTranslation()
-
-  const [language, setLanguage] = useState('zh-CN')
-  const { themeSetting } = useTheme()
-
-  const navigation = useNavigation<GeneralSettingsNavigationProps>()
-
-  const handleFocus = useCallback(() => {
-    const loadSettings = async () => {
-      const storedLanguage = storage.getString('language')
-
-      if (storedLanguage) {
-        setLanguage(storedLanguage)
-      } else {
-        setLanguage(i18n.language)
-      }
-    }
-
-    loadSettings()
-  }, [i18n.language])
-
-  useFocusEffect(handleFocus)
-
-  const getCurrentLanguage = () => {
-    const currentLang = languagesOptions.find(item => item.value === language)
-    return currentLang ? `${currentLang.flag} ${currentLang.label}` : 'English'
-  }
+  const { t } = useTranslation()
 
   return (
     <SafeAreaContainer className="flex-1">
@@ -57,15 +17,10 @@ export default function GeneralSettingsScreen() {
           <YStack className="gap-2">
             <GroupTitle>{t('settings.general.display.title')}</GroupTitle>
             <Group>
-              <PressableRow onPress={() => navigation.navigate('ThemeSettingsScreen')}>
-                <XStack className="items-center">
-                  <Text className="text-lg">{t('settings.general.theme.title')}</Text>
-                </XStack>
-                <XStack className="items-center gap-2">
-                  <Text>{t(`settings.general.theme.${themeSetting === 'system' ? 'auto' : themeSetting}`)}</Text>
-                  <RowRightArrow />
-                </XStack>
-              </PressableRow>
+              <XStack className="items-center justify-between p-4">
+                <Text className="text-lg">{t('settings.general.theme.title')}</Text>
+                <ThemeDropdown />
+              </XStack>
             </Group>
           </YStack>
 
@@ -73,15 +28,10 @@ export default function GeneralSettingsScreen() {
           <YStack className="gap-2">
             <GroupTitle>{t('settings.general.title')}</GroupTitle>
             <Group>
-              <PressableRow onPress={() => navigation.navigate('LanguageChangeScreen')}>
-                <XStack className="items-center">
-                  <Text className="text-lg">{t('settings.general.language.title')}</Text>
-                </XStack>
-                <XStack className="items-center gap-2">
-                  <Text>{getCurrentLanguage()}</Text>
-                  <RowRightArrow />
-                </XStack>
-              </PressableRow>
+              <XStack className="items-center justify-between p-4">
+                <Text className="text-lg">{t('settings.general.language.title')}</Text>
+                <LanguageDropdown />
+              </XStack>
             </Group>
           </YStack>
 

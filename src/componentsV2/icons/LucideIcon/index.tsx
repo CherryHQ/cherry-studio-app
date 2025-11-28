@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronsRight,
+  ChevronsUpDown,
   CircleCheck,
   CircleDollarSign,
   CirclePause,
@@ -103,6 +104,7 @@ const CameraIcon = createIcon(Camera)
 const CheckIcon = createIcon(Check)
 const ChevronDownIcon = createIcon(ChevronDown)
 const ChevronsRightIcon = createIcon(ChevronsRight)
+const ChevronsUpDownIcon = createIcon(ChevronsUpDown)
 const CircleCheckIcon = createIcon(CircleCheck)
 const CircleDollarSignIcon = createIcon(CircleDollarSign)
 const CirclePauseIcon = createIcon(CirclePause)
@@ -174,6 +176,7 @@ export {
   ChevronDownIcon as ChevronDown,
   ChevronRightIcon as ChevronRight,
   ChevronsRightIcon as ChevronsRight,
+  ChevronsUpDownIcon as ChevronsUpDown,
   CircleCheckIcon as CircleCheck,
   CircleDollarSignIcon as CircleDollarSign,
   CirclePauseIcon as CirclePause,

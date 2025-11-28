@@ -339,6 +339,7 @@
       },
       "server": {
         "empty": "暂无MCP服务器...",
+        "empty.add": "前往添加MCP服务器",
         "selected": "已选择{{num}}个MCP服务器",
         "title": "MCP服务器"
       },
