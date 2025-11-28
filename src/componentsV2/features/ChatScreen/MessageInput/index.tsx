@@ -35,7 +35,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
 
   return (
     <View
-      className="bg-background-secondary dark:bg-background-secondary rounded-3xl px-5 py-2"
+      className="bg-background-secondary rounded-3xl p-3"
       style={{
         paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad,
         shadowColor: isDark ? '#fff' : '#000',
@@ -45,6 +45,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
         elevation: 10
       }}>
       <YStack className="gap-2.5">
+        <ToolPreview assistant={assistant} updateAssistant={updateAssistant} />
         {files.length > 0 && <FilePreview files={files} setFiles={setFiles} />}
         {/* message */}
         <XStack className="top-[5px]">
@@ -84,7 +85,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
               updateAssistant={updateAssistant}
             />
             <McpButton assistant={assistant} updateAssistant={updateAssistant} />
-            <ToolPreview assistant={assistant} updateAssistant={updateAssistant} />
           </XStack>
           <XStack className="items-center gap-5">
             <AnimatePresence exitBeforeEnter>
