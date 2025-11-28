@@ -42,7 +42,6 @@ const SelectionDropdown: React.FC<SelectionDropdownProps> = ({ items, children, 
               onValueChange={() => item.onSelect?.()}>
               {iconElement && <DropdownMenu.ItemIcon>{iconElement}</DropdownMenu.ItemIcon>}
               <DropdownMenu.ItemTitle>{item.label}</DropdownMenu.ItemTitle>
-              <DropdownMenu.ItemIndicator />
             </DropdownMenu.CheckboxItem>
           )
         })}
