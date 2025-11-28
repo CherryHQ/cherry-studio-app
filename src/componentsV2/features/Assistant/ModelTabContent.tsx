@@ -3,6 +3,7 @@ import { Button, Switch } from 'heroui-native'
 import { MotiView } from 'moti'
 import React, { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { SheetManager } from 'react-native-actions-sheet'
 
 import Text from '@/componentsV2/base/Text'
 import TextField from '@/componentsV2/base/TextField'
@@ -17,8 +18,6 @@ import { DEFAULT_CONTEXTCOUNT, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE } from '@
 import type { Assistant, AssistantSettings, Model } from '@/types/assistant'
 import { getBaseModelName } from '@/utils/naming'
 
-import ModelSheet from '../Sheet/ModelSheet'
-
 interface ModelTabContentProps {
   assistant: Assistant
   updateAssistant: (assistant: Assistant) => Promise<void>
@@ -26,7 +25,6 @@ interface ModelTabContentProps {
 
 export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentProps) {
   const { t } = useTranslation()
-  const modelSheetRef = useRef<BottomSheetModal>(null)
   const reasoningSheetRef = useRef<BottomSheetModal>(null)
 
   // Local state for input values
@@ -56,7 +54,13 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
   }
 
   const handleModelPress = () => {
-    modelSheetRef.current?.present()
+    SheetManager.show('model-sheet', {
+      payload: {
+        mentions: model,
+        setMentions: handleModelChange,
+        multiple: false
+      }
+    })
   }
 
   const handleReasoningPress = () => {
@@ -205,7 +209,6 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
           </Button>
         )}
       </Group>
-      <ModelSheet ref={modelSheetRef} mentions={model} setMentions={handleModelChange} multiple={false} />
       {model[0] && (
         <ReasoningSheet
           ref={reasoningSheetRef}

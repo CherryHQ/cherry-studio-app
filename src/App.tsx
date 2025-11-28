@@ -1,5 +1,6 @@
 import '@/i18n'
 import 'react-native-reanimated'
+import '@/componentsV2/sheets/sheets'
 
 import { DATABASE_NAME, db, expoDb } from '@db'
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
@@ -12,9 +13,11 @@ import { SQLiteProvider } from 'expo-sqlite'
 import { HeroUINativeProvider } from 'heroui-native'
 import React, { Suspense, useEffect } from 'react'
 import { ActivityIndicator } from 'react-native'
+import { SheetProvider } from 'react-native-actions-sheet'
 import { SystemBars } from 'react-native-edge-to-edge'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { Provider } from 'react-redux'
 import { PersistGate } from 'redux-persist/integration/react'
 
@@ -95,16 +98,20 @@ function ThemedApp() {
   return (
     <HeroUINativeProvider>
       <KeyboardProvider>
-        <NavigationContainer theme={isDark ? DarkTheme : DefaultTheme}>
-          <SystemBars style={isDark ? 'light' : 'dark'} />
-          <DialogProvider>
-            <ToastProvider>
-              <BottomSheetModalProvider>
-                <MainStackNavigator />
-              </BottomSheetModalProvider>
-            </ToastProvider>
-          </DialogProvider>
-        </NavigationContainer>
+        <SafeAreaProvider>
+          <NavigationContainer theme={isDark ? DarkTheme : DefaultTheme}>
+            <SystemBars style={isDark ? 'light' : 'dark'} />
+            <DialogProvider>
+              <ToastProvider>
+                <BottomSheetModalProvider>
+                  <SheetProvider context="global">
+                    <MainStackNavigator />
+                  </SheetProvider>
+                </BottomSheetModalProvider>
+              </ToastProvider>
+            </DialogProvider>
+          </NavigationContainer>
+        </SafeAreaProvider>
       </KeyboardProvider>
     </HeroUINativeProvider>
   )
