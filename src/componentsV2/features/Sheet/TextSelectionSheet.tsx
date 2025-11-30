@@ -1,25 +1,28 @@
-import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { TrueSheet } from '@lodev09/react-native-true-sheet'
+import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, Platform, TouchableOpacity } from 'react-native'
+import { BackHandler, Platform, ScrollView, TouchableOpacity, View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import TextField from '@/componentsV2/base/TextField'
 import { X } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
-import YStack from '@/componentsV2/layout/YStack'
 import { useTheme } from '@/hooks/useTheme'
 
-interface TextSelectionSheetProps {
-  content: string
+const SHEET_NAME = 'text-selection-sheet'
+
+// Global state for content
+let currentContent = ''
+let updateContentCallback: ((content: string) => void) | null = null
+
+export const presentTextSelectionSheet = (content: string) => {
+  currentContent = content
+  updateContentCallback?.(content)
+  return TrueSheet.present(SHEET_NAME)
 }
 
-export interface TextSelectionSheetRef {
-  present: () => void
-  dismiss: () => void
-}
+export const dismissTextSelectionSheet = () => TrueSheet.dismiss(SHEET_NAME)
 
-// TODO: 自定义选择后弹出的菜单
 interface SelectableTextProps {
   children: string
 }
@@ -33,6 +36,9 @@ function SelectableText({ children }: SelectableTextProps) {
           multiline
           editable={false}
           value={String(children)}
+          colors={{
+            blurBackground: 'transparent'
+          }}
         />
       </TextField>
     )
@@ -45,22 +51,24 @@ function SelectableText({ children }: SelectableTextProps) {
   }
 }
 
-const TextSelectionSheet = forwardRef<TextSelectionSheetRef, TextSelectionSheetProps>(({ content }, ref) => {
+const TextSelectionSheet: React.FC = () => {
   const { t } = useTranslation()
   const { isDark } = useTheme()
-  const bottomSheetModalRef = useRef<BottomSheetModal>(null)
   const [isVisible, setIsVisible] = useState(false)
+  const [content, setContent] = useState(currentContent)
 
-  useImperativeHandle(ref, () => ({
-    present: () => bottomSheetModalRef.current?.present(),
-    dismiss: () => bottomSheetModalRef.current?.dismiss()
-  }))
+  useEffect(() => {
+    updateContentCallback = setContent
+    return () => {
+      updateContentCallback = null
+    }
+  }, [])
 
   useEffect(() => {
     if (!isVisible) return
 
     const backAction = () => {
-      bottomSheetModalRef.current?.dismiss()
+      dismissTextSelectionSheet()
       return true
     }
 
@@ -68,50 +76,48 @@ const TextSelectionSheet = forwardRef<TextSelectionSheetRef, TextSelectionSheetP
     return () => backHandler.remove()
   }, [isVisible])
 
-  const renderBackdrop = (props: any) => (
-    <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} pressBehavior="close" />
+  const header = (
+    <XStack className="border-normal/10 items-center justify-between border-b px-4 pb-4 pt-5">
+      <Text className="text-text-primary text-base font-bold">{t('common.select_text')}</Text>
+      <TouchableOpacity
+        style={{
+          padding: 4,
+          backgroundColor: isDark ? '#333333' : '#dddddd',
+          borderRadius: 16
+        }}
+        onPress={dismissTextSelectionSheet}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <X size={16} />
+      </TouchableOpacity>
+    </XStack>
   )
 
   return (
-    <BottomSheetModal
-      stackBehavior="replace"
-      ref={bottomSheetModalRef}
-      snapPoints={['90%']}
-      enableDynamicSizing={false}
-      backgroundStyle={{
-        borderRadius: 24,
-        backgroundColor: isDark ? '#121213ff' : '#f7f7f7ff'
-      }}
-      handleIndicatorStyle={{
-        backgroundColor: isDark ? '#f9f9f9ff' : '#202020ff'
-      }}
-      backdropComponent={renderBackdrop}
-      onDismiss={() => setIsVisible(false)}
-      onChange={index => setIsVisible(index >= 0)}>
-      <YStack className="flex-1">
-        <XStack className="items-center justify-between border-b border-black/10 px-4 pb-4">
-          <Text className="text-base font-bold">{t('common.select_text')}</Text>
-          <TouchableOpacity
-            style={{
-              padding: 4,
-              backgroundColor: isDark ? '#333333' : '#dddddd',
-              borderRadius: 16
-            }}
-            onPress={() => bottomSheetModalRef.current?.dismiss()}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <X size={16} />
-          </TouchableOpacity>
-        </XStack>
-        <BottomSheetScrollView
+    <TrueSheet
+      name={SHEET_NAME}
+      detents={[0.9]}
+      cornerRadius={30}
+      grabber
+      dismissible
+      dimmed
+      scrollable
+      header={header}
+      onDidDismiss={() => setIsVisible(false)}
+      onDidPresent={() => setIsVisible(true)}>
+      <View className="h-[70vh] flex-1 ">
+        <ScrollView
           contentContainerStyle={{
-            flexGrow: 1
-          }}>
+            flexGrow: 1,
+            paddingBottom: 40
+          }}
+          nestedScrollEnabled={Platform.OS === 'android'}
+          showsVerticalScrollIndicator={false}>
           <SelectableText>{content}</SelectableText>
-        </BottomSheetScrollView>
-      </YStack>
-    </BottomSheetModal>
+        </ScrollView>
+      </View>
+    </TrueSheet>
   )
-})
+}
 
 TextSelectionSheet.displayName = 'TextSelectionSheet'
 

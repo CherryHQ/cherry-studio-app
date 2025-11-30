@@ -1,13 +1,13 @@
-import { BottomSheetBackdrop, BottomSheetModal, useBottomSheetScrollableCreator } from '@gorhom/bottom-sheet'
 import { LegendList } from '@legendapp/list'
+import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { cn } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
-import { BackHandler, TouchableOpacity, View } from 'react-native'
+import { BackHandler, Platform, TouchableOpacity, View } from 'react-native'
 
 import { Check } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
-import { useTheme } from '@/hooks/useTheme'
+import { useBottom } from '@/hooks/useBottom'
 
 import Text from '../Text'
 
@@ -23,47 +23,56 @@ export interface SelectionSheetItem {
 }
 
 export interface SelectionSheetProps {
+  name: string
   items: SelectionSheetItem[]
   emptyContent?: React.ReactNode
-  snapPoints?: string[]
-  ref: React.RefObject<BottomSheetModal | null>
+  detents?: ('auto' | number)[]
   placeholder?: string
   shouldDismiss?: boolean
   headerComponent?: React.ReactNode
 }
 
 /**
- * 用于在BottomSheetModal中显示列表
+ * Present the SelectionSheet globally by name
+ */
+export const presentSelectionSheet = (name: string) => TrueSheet.present(name)
+
+/**
+ * Dismiss the SelectionSheet globally by name
+ */
+export const dismissSelectionSheet = (name: string) => TrueSheet.dismiss(name)
+
+/**
+ * 用于在 TrueSheet 中显示列表
  */
 
 const SelectionSheet: React.FC<SelectionSheetProps> = ({
+  name,
   items,
   emptyContent,
-  snapPoints = [],
-  ref,
+  detents = ['auto'],
   placeholder,
   shouldDismiss = true,
   headerComponent
 }) => {
-  const { isDark } = useTheme()
   const [isVisible, setIsVisible] = useState(false)
-  const BottomSheetLegendListScrollable = useBottomSheetScrollableCreator()
+  const bottom = useBottom()
 
   useEffect(() => {
-    if (!isVisible || !ref?.current) return
+    if (!isVisible) return
 
     const backAction = () => {
-      ref.current?.dismiss()
+      TrueSheet.dismiss(name)
       return true
     }
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction)
     return () => backHandler.remove()
-  }, [ref, isVisible])
+  }, [name, isVisible])
 
   const handleSelect = (item: SelectionSheetItem) => {
     if (shouldDismiss) {
-      ref.current?.dismiss()
+      TrueSheet.dismiss(name)
     }
 
     item.onSelect?.()
@@ -102,7 +111,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
         <XStack
           className={cn(
             `items-center gap-2.5 rounded-lg border px-3.5 py-3 ${
-              item.isSelected ? 'border-green-20 bg-green-10' : 'bg-ui-card-background border-transparent'
+              item.isSelected ? 'border-green-20 bg-green-10' : 'bg-gray-10 border-transparent'
             }`,
             item.backgroundColor && !item.isSelected ? item.backgroundColor : undefined
           )}>
@@ -120,51 +129,43 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
   const keyExtractor = (item: SelectionSheetItem, index: number) =>
     item.key?.toString() || item.id?.toString() || item.label?.toString() || index.toString()
 
-  const renderBackdrop = (props: any) => (
-    <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} pressBehavior="close" />
-  )
-
-  const renderHeader = () => {
-    if (!placeholder && !headerComponent) return undefined
-
-    return (
-      <View className="gap-2 pb-2">
+  const sheetHeader =
+    placeholder || headerComponent ? (
+      <View className="gap-2 px-4 pb-2 pt-5">
         {headerComponent}
         {placeholder && <Text className="text-text-secondary text-center text-sm opacity-60">{placeholder}</Text>}
       </View>
-    )
-  }
+    ) : undefined
 
   return (
-    <BottomSheetModal
-      stackBehavior="replace"
-      ref={ref}
-      snapPoints={snapPoints}
-      enableDynamicSizing={snapPoints.length === 0}
-      backgroundStyle={{
-        borderRadius: 24,
-        backgroundColor: isDark ? '#121213ff' : '#f7f7f7ff'
-      }}
-      handleIndicatorStyle={{
-        backgroundColor: isDark ? '#f9f9f9ff' : '#202020ff'
-      }}
-      backdropComponent={renderBackdrop}
-      onDismiss={() => setIsVisible(false)}
-      onChange={index => setIsVisible(index >= 0)}>
-      <LegendList
-        data={items}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        showsVerticalScrollIndicator={false}
-        estimatedItemSize={60}
-        ItemSeparatorComponent={() => <YStack className="h-2.5" />}
-        contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 16 }}
-        renderScrollComponent={BottomSheetLegendListScrollable}
-        ListHeaderComponent={renderHeader()}
-        ListEmptyComponent={emptyContent ? <YStack className="gap-2.5 px-4 pb-7">{emptyContent}</YStack> : undefined}
-        recycleItems
-      />
-    </BottomSheetModal>
+    <TrueSheet
+      name={name}
+      detents={detents}
+      cornerRadius={24}
+      grabber
+      dismissible
+      dimmed
+      scrollable
+      header={sheetHeader}
+      onDidDismiss={() => setIsVisible(false)}
+      onDidPresent={() => setIsVisible(true)}
+      style={{ paddingBottom: bottom + 10 }}>
+      <View className="flex-1">
+        <LegendList
+          data={items}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          nestedScrollEnabled={Platform.OS === 'android'}
+          showsVerticalScrollIndicator={false}
+          estimatedItemSize={60}
+          ListHeaderComponent={() => <YStack className="h-5" />}
+          ItemSeparatorComponent={() => <YStack className="h-2.5" />}
+          contentContainerStyle={{ paddingHorizontal: 16 }}
+          ListEmptyComponent={emptyContent ? <YStack className="gap-2.5 px-4 pb-7">{emptyContent}</YStack> : undefined}
+          recycleItems
+        />
+      </View>
+    </TrueSheet>
   )
 }
 

@@ -1,4 +1,4 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { delay } from 'lodash'
 import type { FC } from 'react'
 import React, { useMemo } from 'react'
@@ -19,11 +19,14 @@ import { getThinkModelType, isDoubaoThinkingAutoModel, MODEL_SUPPORTED_OPTIONS }
 import type { Assistant, Model, ThinkingOption } from '@/types/assistant'
 
 interface ReasoningSheetProps {
+  name: string
   model: Model
   assistant: Assistant
   updateAssistant: (assistant: Assistant) => Promise<void>
-  ref: React.RefObject<BottomSheetModal | null>
 }
+
+export const presentReasoningSheet = (name: string) => TrueSheet.present(name)
+export const dismissReasoningSheet = (name: string) => TrueSheet.dismiss(name)
 
 const createThinkingIcon = (option?: ThinkingOption) => {
   switch (option) {
@@ -44,7 +47,7 @@ const createThinkingIcon = (option?: ThinkingOption) => {
   }
 }
 
-export const ReasoningSheet: FC<ReasoningSheetProps> = ({ model, assistant, updateAssistant, ref }) => {
+export const ReasoningSheet: FC<ReasoningSheetProps> = ({ name, model, assistant, updateAssistant }) => {
   const { t } = useTranslation()
 
   // Converted from useMemo to a simple const
@@ -89,7 +92,7 @@ export const ReasoningSheet: FC<ReasoningSheetProps> = ({ model, assistant, upda
         }
       })
     }
-    delay(() => ref.current?.dismiss(), 50)
+    delay(() => TrueSheet.dismiss(name), 50)
   }
 
   const sheetOptions: SelectionSheetItem[] = supportedOptions.map(option => ({
@@ -100,5 +103,5 @@ export const ReasoningSheet: FC<ReasoningSheetProps> = ({ model, assistant, upda
     onSelect: () => onValueChange(option)
   }))
 
-  return <SelectionSheet items={sheetOptions} ref={ref} />
+  return <SelectionSheet name={name} items={sheetOptions} />
 }

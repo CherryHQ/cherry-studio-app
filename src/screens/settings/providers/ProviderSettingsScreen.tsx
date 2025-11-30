@@ -1,9 +1,8 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import type { RouteProp } from '@react-navigation/native'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import { Spinner, Switch } from 'heroui-native'
 import { groupBy } from 'lodash'
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ScrollView } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
@@ -25,7 +24,7 @@ import {
   YStack
 } from '@/componentsV2'
 import { ModelTags } from '@/componentsV2/features/ModelTags'
-import { AddModelSheet } from '@/componentsV2/features/SettingsScreen/AddModelSheet'
+import { presentAddModelSheet } from '@/componentsV2/features/SettingsScreen/AddModelSheet'
 import { ModelIcon } from '@/componentsV2/icons'
 import { CircleCheck, HeartPulse, Minus, Plus, RefreshCw, Settings2, XCircle } from '@/componentsV2/icons/LucideIcon'
 import { useProvider } from '@/hooks/useProviders'
@@ -47,13 +46,8 @@ export default function ProviderSettingsScreen() {
   const navigation = useNavigation<ProvidersNavigationProps>()
   const route = useRoute<ProviderSettingsRouteProp>()
 
-  const bottomSheetRef = useRef<BottomSheetModal>(null)
   const [healthResults, setHealthResults] = useState<Record<string, ModelHealth>>({})
   const [isCheckingHealth, setIsCheckingHealth] = useState(false)
-
-  const handleOpenBottomSheet = () => {
-    bottomSheetRef.current?.present()
-  }
 
   const { providerId } = route.params
   const { provider, isLoading, updateProvider } = useProvider(providerId)
@@ -80,7 +74,9 @@ export default function ProviderSettingsScreen() {
   const sortedModelGroups = Object.entries(filteredModelGroups).sort(([a], [b]) => a.localeCompare(b))
 
   const onAddModel = () => {
-    handleOpenBottomSheet()
+    if (provider) {
+      presentAddModelSheet(provider, updateProvider)
+    }
   }
 
   const onManageModel = () => {
@@ -311,7 +307,6 @@ export default function ProviderSettingsScreen() {
         </KeyboardAvoidingView>
       </Container>
 
-      <AddModelSheet ref={bottomSheetRef} provider={provider} updateProvider={updateProvider} />
     </SafeAreaContainer>
   )
 }

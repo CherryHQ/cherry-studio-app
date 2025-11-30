@@ -1,8 +1,8 @@
 import { messageDatabase } from '@database'
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { useNavigation } from '@react-navigation/native'
 import { isEmpty } from 'lodash'
-import React, { useRef } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pressable } from 'react-native'
 
@@ -16,6 +16,8 @@ import { topicService } from '@/services/TopicService'
 import type { Assistant } from '@/types/assistant'
 import type { DrawerNavigationProps } from '@/types/naviagate'
 
+const SHEET_NAME = 'new-topic-assistant-selection'
+
 interface NewTopicButtonProps {
   assistant: Assistant
 }
@@ -26,7 +28,6 @@ export const NewTopicButton: React.FC<NewTopicButtonProps> = ({ assistant }) => 
   const { switchTopic } = useCurrentTopic()
   const { assistants, isLoading } = useAssistants()
 
-  const selectionSheetRef = useRef<BottomSheetModal | null>(null)
   const { isDark } = useTheme()
 
   const handleAddNewTopic = async (selectedAssistant?: Assistant) => {
@@ -54,11 +55,11 @@ export const NewTopicButton: React.FC<NewTopicButtonProps> = ({ assistant }) => 
   }
 
   const openAssistantSelection = () => {
-    selectionSheetRef.current?.present()
+    TrueSheet.present(SHEET_NAME)
   }
 
   const closeBottomSheet = () => {
-    selectionSheetRef.current?.dismiss()
+    TrueSheet.dismiss(SHEET_NAME)
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -112,9 +113,9 @@ export const NewTopicButton: React.FC<NewTopicButtonProps> = ({ assistant }) => 
       </Pressable>
 
       <SelectionSheet
+        detents={['auto', 0.9]}
+        name={SHEET_NAME}
         items={selectionItems}
-        snapPoints={['40%', '90%']}
-        ref={selectionSheetRef}
         placeholder={t('topics.select_assistant')}
       />
     </>

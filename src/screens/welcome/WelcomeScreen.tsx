@@ -1,7 +1,6 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { useNavigation } from '@react-navigation/native'
 import { Button } from 'heroui-native'
-import React, { useRef } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 import FastSquircleView from 'react-native-fast-squircle'
@@ -13,7 +12,7 @@ import { getDefaultAssistant } from '@/services/AssistantService'
 import { topicService } from '@/services/TopicService'
 import type { RootNavigationProps } from '@/types/naviagate'
 
-import { ImportDataSheet } from './ImportDataSheet'
+import { ImportDataSheet, presentImportDataSheet } from './ImportDataSheet'
 import WelcomeTitle from './WelcomeTitle'
 
 export default function WelcomeScreen() {
@@ -21,7 +20,6 @@ export default function WelcomeScreen() {
   const { setWelcomeShown } = useAppState()
   const { switchTopic } = useCurrentTopic()
   const { t } = useTranslation()
-  const bottomSheetModalRef = useRef<BottomSheetModal>(null)
 
   const handleStart = async () => {
     const defaultAssistant = await getDefaultAssistant()
@@ -65,7 +63,7 @@ export default function WelcomeScreen() {
               feedbackVariant="ripple"
               className="w-3/4 rounded-lg"
               variant="secondary"
-              onPress={() => bottomSheetModalRef.current?.present()}>
+              onPress={presentImportDataSheet}>
               <Button.Label className="text-text-primary w-full text-center text-lg">
                 {t('common.import_from_cherry_studio')}
               </Button.Label>
@@ -76,7 +74,7 @@ export default function WelcomeScreen() {
             </Button>
           </YStack>
         </View>
-        <ImportDataSheet ref={bottomSheetModalRef} handleStart={handleStart} />
+        <ImportDataSheet handleStart={handleStart} />
       </SafeAreaContainer>
     </>
   )

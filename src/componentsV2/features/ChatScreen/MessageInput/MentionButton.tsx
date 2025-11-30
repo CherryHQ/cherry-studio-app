@@ -1,5 +1,4 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
-import React, { useRef } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Keyboard, TouchableOpacity } from 'react-native'
 
@@ -10,7 +9,7 @@ import XStack from '@/componentsV2/layout/XStack'
 import type { Assistant, Model } from '@/types/assistant'
 import { getBaseModelName } from '@/utils/naming'
 
-import ModelSheet from '../../Sheet/ModelSheet'
+import ModelSheet, { presentModelSheet } from '../../Sheet/ModelSheet'
 
 interface MentionButtonProps {
   mentions: Model[]
@@ -18,6 +17,8 @@ interface MentionButtonProps {
   assistant: Assistant
   updateAssistant: (assistant: Assistant) => Promise<void>
 }
+
+const SHEET_NAME = 'mention-model-sheet'
 
 const BUTTON_STYLES = {
   maxWidth: 150,
@@ -33,11 +34,10 @@ const DISPLAY_CONSTANTS = {
 
 export const MentionButton: React.FC<MentionButtonProps> = ({ mentions, setMentions, assistant, updateAssistant }) => {
   const { t } = useTranslation()
-  const bottomSheetModalRef = useRef<BottomSheetModal>(null)
 
   const handlePress = () => {
     Keyboard.dismiss()
-    bottomSheetModalRef.current?.present()
+    presentModelSheet(SHEET_NAME)
   }
   /**
    * @description Change Model Event
@@ -92,7 +92,7 @@ export const MentionButton: React.FC<MentionButtonProps> = ({ mentions, setMenti
         {renderButtonContent()}
       </TouchableOpacity>
 
-      <ModelSheet ref={bottomSheetModalRef} mentions={mentions} setMentions={handleModelChange} multiple={true} />
+      <ModelSheet name={SHEET_NAME} mentions={mentions} setMentions={handleModelChange} multiple={true} />
     </>
   )
 }

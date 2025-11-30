@@ -1,13 +1,12 @@
-import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
+import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import * as Clipboard from 'expo-clipboard'
-import React, { forwardRef, useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, ScrollView, TouchableOpacity, View } from 'react-native'
+import { BackHandler, Platform, ScrollView, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Text, XStack, YStack } from '@/componentsV2'
 import { Copy } from '@/componentsV2/icons/LucideIcon'
-import { useTheme } from '@/hooks/useTheme'
 import { getHttpMessageLabel } from '@/i18n/label'
 import type { SerializedAiSdkError, SerializedAiSdkErrorUnion, SerializedError } from '@/types/error'
 import {
@@ -39,24 +38,31 @@ import { formatAiSdkError, formatError, safeToString } from '@/utils/error'
 
 const HTTP_ERROR_CODES = [400, 401, 403, 404, 429, 500, 502, 503, 504]
 
+const SHEET_NAME = 'error-detail-sheet'
+
+// Global state for error
+let currentError: SerializedError | undefined
+let updateErrorCallback: ((error: SerializedError | undefined) => void) | null = null
+
+export const presentErrorDetailSheet = (error: SerializedError | undefined) => {
+  currentError = error
+  updateErrorCallback?.(error)
+  return TrueSheet.present(SHEET_NAME)
+}
+
+export const dismissErrorDetailSheet = () => TrueSheet.dismiss(SHEET_NAME)
+
 interface Props {
   block: ErrorMessageBlock
   message: Message
 }
 
 const ErrorBlock: React.FC<Props> = ({ block, message }) => {
-  const sheetRef = useRef<BottomSheetModal>(null)
-
   const handleShowDetail = useCallback(() => {
-    sheetRef.current?.present()
-  }, [])
+    presentErrorDetailSheet(block.error)
+  }, [block.error])
 
-  return (
-    <>
-      <MessageErrorInfo block={block} message={message} onShowDetail={handleShowDetail} />
-      <ErrorDetailSheet ref={sheetRef} error={block.error} />
-    </>
-  )
+  return <MessageErrorInfo block={block} message={message} onShowDetail={handleShowDetail} />
 }
 
 const ErrorMessage: React.FC<{ block: ErrorMessageBlock }> = ({ block }) => {
@@ -138,115 +144,20 @@ const MessageErrorInfo: React.FC<{ block: ErrorMessageBlock; message: Message; o
   )
 }
 
-interface ErrorDetailSheetProps {
-  error?: SerializedError
-}
-
-const renderBackdrop = (props: any) => (
-  <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} pressBehavior="close" />
-)
-
-const ErrorDetailSheet = forwardRef<BottomSheetModal, ErrorDetailSheetProps>(({ error }, ref) => {
-  const { t } = useTranslation()
-  const { isDark } = useTheme()
-  const insets = useSafeAreaInsets()
-  const [copiedText, setCopiedText] = useState(false)
-  const [isVisible, setIsVisible] = useState(false)
-
-  useEffect(() => {
-    if (!isVisible) return
-
-    const backAction = () => {
-      ;(ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()
-      return true
-    }
-
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction)
-    return () => backHandler.remove()
-  }, [ref, isVisible])
-
-  const copyErrorDetails = async () => {
-    if (!error) return
-    let errorText: string
-
-    if (isSerializedAiSdkError(error)) {
-      errorText = formatAiSdkError(error)
-    } else if (isSerializedError(error)) {
-      errorText = formatError(error)
-    } else {
-      errorText = safeToString(error)
-    }
-
-    await Clipboard.setStringAsync(errorText)
-    setCopiedText(true)
-    setTimeout(() => setCopiedText(false), 2000)
-  }
-
-  const renderErrorDetails = (error?: SerializedError) => {
-    if (!error) return <Text>{t('error.unknown')}</Text>
-
-    if (isSerializedAiSdkErrorUnion(error)) {
-      return <AiSdkError error={error} />
-    }
-
-    return <BuiltinError error={error} />
-  }
-
-  return (
-    <BottomSheetModal
-      stackBehavior="replace"
-      ref={ref}
-      backdropComponent={renderBackdrop}
-      enableDynamicSizing={false}
-      snapPoints={['50%', '75%', '90%']}
-      backgroundStyle={{
-        borderRadius: 30,
-        backgroundColor: isDark ? '#121213ff' : '#f7f7f7ff'
-      }}
-      handleIndicatorStyle={{
-        backgroundColor: isDark ? '#f9f9f9ff' : '#202020ff'
-      }}
-      onDismiss={() => setIsVisible(false)}
-      onChange={index => setIsVisible(index >= 0)}>
-      <BottomSheetScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-        showsVerticalScrollIndicator={false}>
-        <YStack className="gap-4 px-5 pt-2.5">
-          <XStack className="items-center justify-between">
-            <Text className="text-xl font-semibold">{t('error.detail')}</Text>
-            <TouchableOpacity
-              className={`flex-row items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 ${!error ? 'opacity-50' : ''}`}
-              onPress={copyErrorDetails}
-              disabled={!error}>
-              <Copy className="h-4 w-4" />
-              <Text className="text-sm">{copiedText ? t('common.copied') : t('common.copy')}</Text>
-            </TouchableOpacity>
-          </XStack>
-          <View className="h-px bg-gray-200" />
-          {renderErrorDetails(error)}
-        </YStack>
-      </BottomSheetScrollView>
-    </BottomSheetModal>
-  )
-})
-
-ErrorDetailSheet.displayName = 'ErrorDetailSheet'
-
 // Error detail components
 const ErrorDetailItem: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => {
   return (
     <YStack className="gap-2">
-      <Text className="text-sm font-semibold text-gray-600">{label}:</Text>
+      <Text className="text-sm">{label}:</Text>
       {children}
     </YStack>
   )
 }
 
-const ErrorDetailValue: React.FC<{ children: React.ReactNode; isCode?: boolean }> = ({ children, isCode = false }) => {
+const ErrorDetailValue: React.FC<{ children: React.ReactNode; isCode?: boolean }> = ({ children }) => {
   return (
-    <View className="rounded-md border border-gray-200 bg-gray-100 p-2">
-      <Text className={`text-xs text-gray-900 ${isCode ? 'font-mono' : ''}`}>{children}</Text>
+    <View className="border-normal rounded-md border-[0.5px] p-2">
+      <Text className="text-xs">{children}</Text>
     </View>
   )
 }
@@ -551,5 +462,99 @@ const AiSdkError = ({ error }: { error: SerializedAiSdkErrorUnion }) => {
     </YStack>
   )
 }
+
+const ErrorDetails: React.FC<{ error?: SerializedError }> = ({ error }) => {
+  const { t } = useTranslation()
+
+  if (!error) return <Text>{t('error.unknown')}</Text>
+
+  if (isSerializedAiSdkErrorUnion(error)) {
+    return <AiSdkError error={error} />
+  }
+
+  return <BuiltinError error={error} />
+}
+
+export const ErrorDetailSheet: React.FC = () => {
+  const { t } = useTranslation()
+  const insets = useSafeAreaInsets()
+  const [copiedText, setCopiedText] = useState(false)
+  const [isVisible, setIsVisible] = useState(false)
+  const [error, setError] = useState<SerializedError | undefined>(currentError)
+
+  useEffect(() => {
+    updateErrorCallback = setError
+    return () => {
+      updateErrorCallback = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isVisible) return
+
+    const backAction = () => {
+      dismissErrorDetailSheet()
+      return true
+    }
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction)
+    return () => backHandler.remove()
+  }, [isVisible])
+
+  const copyErrorDetails = async () => {
+    if (!error) return
+    let errorText: string
+
+    if (isSerializedAiSdkError(error)) {
+      errorText = formatAiSdkError(error)
+    } else if (isSerializedError(error)) {
+      errorText = formatError(error)
+    } else {
+      errorText = safeToString(error)
+    }
+
+    await Clipboard.setStringAsync(errorText)
+    setCopiedText(true)
+    setTimeout(() => setCopiedText(false), 2000)
+  }
+
+  const header = (
+    <XStack className="items-center justify-between px-5 pb-4 pt-5">
+      <Text className="text-text-primary text-xl font-semibold">{t('error.detail')}</Text>
+      <TouchableOpacity
+        className={`flex-row items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 ${!error ? 'opacity-50' : ''}`}
+        onPress={copyErrorDetails}
+        disabled={!error}>
+        <Copy className="h-4 w-4" />
+        <Text className="text-sm">{copiedText ? t('common.copied') : t('common.copy')}</Text>
+      </TouchableOpacity>
+    </XStack>
+  )
+
+  return (
+    <TrueSheet
+      name={SHEET_NAME}
+      detents={[0.5, 0.75, 0.9]}
+      cornerRadius={30}
+      grabber
+      dismissible
+      dimmed
+      scrollable
+      header={header}
+      onDidDismiss={() => setIsVisible(false)}
+      onDidPresent={() => setIsVisible(true)}>
+      <View className="flex-1">
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: insets.bottom + 20, paddingHorizontal: 20, paddingTop: 8 }}
+          nestedScrollEnabled={Platform.OS === 'android'}
+          showsVerticalScrollIndicator={false}>
+          <ErrorDetails error={error} />
+        </ScrollView>
+      </View>
+    </TrueSheet>
+  )
+}
+
+ErrorDetailSheet.displayName = 'ErrorDetailSheet'
 
 export default React.memo(ErrorBlock)

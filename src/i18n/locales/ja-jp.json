@@ -725,6 +725,7 @@
           }
         },
         "api_check": {
+          "confirm_message": "APIチェックを開始しますか？",
           "title": "検出",
           "tooltip": "検出に使用するモデルを選択"
         },

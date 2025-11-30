@@ -1,11 +1,10 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { useNavigation } from '@react-navigation/native'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, View } from 'react-native'
 
 import { Container, HeaderBar, SafeAreaContainer, SearchInput } from '@/componentsV2'
-import AssistantItemSheet from '@/componentsV2/features/Assistant/AssistantItemSheet'
+import { presentAssistantItemSheet } from '@/componentsV2/features/Assistant/AssistantItemSheet'
 import AssistantsTabContent from '@/componentsV2/features/Assistant/AssistantsTabContent'
 import { useBuiltInAssistants } from '@/hooks/useAssistant'
 import { useSearch } from '@/hooks/useSearch'
@@ -16,8 +15,6 @@ export default function AssistantMarketScreen() {
   const { t } = useTranslation()
   const navigation = useNavigation<DrawerNavigationProps>()
 
-  const bottomSheetRef = useRef<BottomSheetModal>(null)
-  const [selectedAssistant, setSelectedAssistant] = useState<Assistant | null>(null)
   const [isInitializing, setIsInitializing] = useState(true)
 
   const { assistants: builtInAssistants } = useBuiltInAssistants()
@@ -30,13 +27,16 @@ export default function AssistantMarketScreen() {
     useCallback((assistant: Assistant) => [assistant.name || '', assistant.id || ''], [])
   )
 
-  const handleAssistantItemPress = (assistant: Assistant) => {
-    setSelectedAssistant(assistant)
-    bottomSheetRef.current?.present()
-  }
-
   const onChatNavigation = async (topicId: string) => {
     navigation.navigate('Home', { screen: 'ChatScreen', params: { topicId } })
+  }
+
+  const handleAssistantItemPress = (assistant: Assistant) => {
+    presentAssistantItemSheet({
+      assistant,
+      source: 'builtIn',
+      onChatNavigation
+    })
   }
 
   useEffect(() => {
@@ -69,12 +69,6 @@ export default function AssistantMarketScreen() {
 
           <AssistantsTabContent assistants={filteredAssistants} onAssistantPress={handleAssistantItemPress} />
         </Container>
-        <AssistantItemSheet
-          ref={bottomSheetRef}
-          assistant={selectedAssistant}
-          source="builtIn"
-          onChatNavigation={onChatNavigation}
-        />
       </View>
     </SafeAreaContainer>
   )

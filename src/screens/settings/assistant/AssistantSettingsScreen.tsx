@@ -1,13 +1,12 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { Button } from 'heroui-native'
-import React, { useRef } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
 
 import { Container, HeaderBar, IconButton, Image, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
-import ModelSheet from '@/componentsV2/features/Sheet/ModelSheet'
+import ModelSheet, { presentModelSheet } from '@/componentsV2/features/Sheet/ModelSheet'
 import { ChevronDown, Languages, MessageSquareMore, Rocket, Settings2 } from '@/componentsV2/icons/LucideIcon'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useTheme } from '@/hooks/useTheme'
@@ -74,11 +73,15 @@ function AssistantSettingItem({
 }: AssistantSettingItemProps) {
   const { t } = useTranslation()
   const navigation = useNavigation<StackNavigationProp<AssistantSettingsStackParamList>>()
-  const sheetRef = useRef<BottomSheetModal>(null)
+  const sheetName = `assistant-settings-model-sheet-${assistantId}`
 
   const handleModelChange = async (models: Model[]) => {
     const newModel = models[0]
     await updateAssistant({ ...assistant, model: newModel, defaultModel: newModel })
+  }
+
+  const handlePress = () => {
+    presentModelSheet(sheetName)
   }
 
   return (
@@ -94,12 +97,12 @@ function AssistantSettingItem({
             onPress={() => navigation.navigate('AssistantDetailScreen', { assistantId })}
           />
         </XStack>
-        <ModelPicker assistant={assistant} onPress={() => sheetRef.current?.present()} />
+        <ModelPicker assistant={assistant} onPress={handlePress} />
         <Text className="text-text-secondary px-[10px] opacity-70">{t(descriptionKey)}</Text>
       </YStack>
 
       <ModelSheet
-        ref={sheetRef}
+        name={sheetName}
         mentions={assistant.defaultModel ? [assistant.defaultModel] : []}
         setMentions={handleModelChange}
         multiple={false}

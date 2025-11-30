@@ -726,6 +726,7 @@
           }
         },
         "api_check": {
+          "confirm_message": "确认开始 API 检查？",
           "title": "检测",
           "tooltip": "选择用于检测的模型"
         },
@@ -862,7 +863,7 @@
         "check_error": "检查错误",
         "check_fail": "检查失败",
         "check_success": "检查成功 🎉",
-        "check_success_message": "API 运作正常",
+        "check_success_message": "API 连接正常",
         "contentLengthLimit": "内容长度限制",
         "empty": {
           "description": "前往添加服务商",

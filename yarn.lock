@@ -3732,6 +3732,23 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@lodev09/react-native-true-sheet@npm:^3.0.0-beta.12":
+  version: 3.0.0-beta.12
+  resolution: "@lodev09/react-native-true-sheet@npm:3.0.0-beta.12"
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+    react-native-reanimated: ">=4.0.0"
+    react-native-worklets: "*"
+  peerDependenciesMeta:
+    react-native-reanimated:
+      optional: true
+    react-native-worklets:
+      optional: true
+  checksum: 10c0/8cb51900969481909bca7d1293f22419f735925934357abefa239088e8f22e6f8763b9ac88248316f681a2c93cf4b7d01157eb21d816f1a55aa6392112f921ba
+  languageName: node
+  linkType: hard
+
 "@mistralai/mistralai@npm:^1.7.4":
   version: 1.10.0
   resolution: "@mistralai/mistralai@npm:1.10.0"
@@ -7013,6 +7030,7 @@ __metadata:
     "@google/genai": "npm:^1.17.0"
     "@gorhom/bottom-sheet": "npm:^5.2.6"
     "@legendapp/list": "npm:^2.0.15"
+    "@lodev09/react-native-true-sheet": "npm:^3.0.0-beta.12"
     "@mistralai/mistralai": "npm:^1.7.4"
     "@mozilla/readability": "npm:^0.6.0"
     "@openrouter/ai-sdk-provider": "npm:^1.1.2"

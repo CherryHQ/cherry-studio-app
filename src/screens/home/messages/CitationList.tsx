@@ -1,9 +1,9 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
-import React, { useRef } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity, View } from 'react-native'
 
-import { CitationSheet, Text, YStack } from '@/componentsV2'
+import { Text, YStack } from '@/componentsV2'
+import { presentCitationSheet } from '@/componentsV2/features/Sheet/CitationSheet'
 import { FallbackFavicon } from '@/componentsV2/icons'
 import type { Citation } from '@/types/websearch'
 
@@ -27,14 +27,13 @@ interface CitationsListProps {
 
 const CitationsList: React.FC<CitationsListProps> = ({ citations }) => {
   const { t } = useTranslation()
-  const bottomSheetModalRef = useRef<BottomSheetModal>(null)
 
   const previewItems = citations.slice(0, 3)
   const count = citations.length
   if (!count) return null
 
   const handlePress = () => {
-    bottomSheetModalRef.current?.present()
+    presentCitationSheet(citations)
   }
 
   return (
@@ -49,7 +48,6 @@ const CitationsList: React.FC<CitationsListProps> = ({ citations }) => {
         </View>
         <Text className="text-[10px] text-green-100">{t('chat.citation', { count })}</Text>
       </TouchableOpacity>
-      <CitationSheet ref={bottomSheetModalRef} citations={citations} />
     </YStack>
   )
 }

@@ -725,6 +725,7 @@
           }
         },
         "api_check": {
+          "confirm_message": "Start API check?",
           "title": "Detection",
           "tooltip": "Select the model to use for detection"
         },

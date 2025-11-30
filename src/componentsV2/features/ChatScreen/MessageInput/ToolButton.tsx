@@ -1,5 +1,4 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
-import React, { useRef } from 'react'
+import React from 'react'
 import { Keyboard } from 'react-native'
 
 import { IconButton } from '@/componentsV2/base/IconButton'
@@ -7,7 +6,7 @@ import { AssetsIcon } from '@/componentsV2/icons'
 import type { Assistant, Model } from '@/types/assistant'
 import type { FileMetadata } from '@/types/file'
 
-import { ToolSheet } from '../../Sheet/ToolSheet'
+import { presentToolSheet, ToolSheet } from '../../Sheet/ToolSheet'
 
 interface AddAssetsButtonProps {
   mentions: Model[]
@@ -24,11 +23,9 @@ export const ToolButton: React.FC<AddAssetsButtonProps> = ({
   assistant,
   updateAssistant
 }) => {
-  const bottomSheetModalRef = useRef<BottomSheetModal>(null)
-
   const handlePress = () => {
     Keyboard.dismiss()
-    bottomSheetModalRef.current?.present()
+    presentToolSheet()
   }
 
   return (
@@ -36,7 +33,6 @@ export const ToolButton: React.FC<AddAssetsButtonProps> = ({
       <IconButton icon={<AssetsIcon size={20} />} onPress={handlePress} />
 
       <ToolSheet
-        ref={bottomSheetModalRef}
         mentions={mentions}
         files={files}
         setFiles={setFiles}

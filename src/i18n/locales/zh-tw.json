@@ -725,6 +725,7 @@
           }
         },
         "api_check": {
+          "confirm_message": "確認開始 API 檢查？",
           "title": "檢測",
           "tooltip": "選擇用於檢測的模型"
         },
