@@ -5,6 +5,7 @@ import { hasUpdateUrl } from '@/config/update'
 import { useDialog } from '@/hooks/useDialog'
 import { appUpdateService } from '@/services/AppUpdateService'
 import { loggerService } from '@/services/LoggerService'
+import { preferenceService } from '@/services/PreferenceService'
 
 const logger = loggerService.withContext('useAppUpdate')
 
@@ -48,6 +49,13 @@ export function useAppUpdate() {
           latest: result.latestVersion
         })
 
+        // Check if this version was previously dismissed by user
+        const dismissedVersion = await preferenceService.get('app.dismissed_update_version')
+        if (dismissedVersion === result.latestVersion) {
+          logger.info('Update dismissed by user, skipping', { version: result.latestVersion })
+          return
+        }
+
         // iOS: Only show notification (no direct link)
         // Android: Show update button with link to GitHub releases
         if (hasUpdateUrl()) {
@@ -59,6 +67,9 @@ export function useAppUpdate() {
             cancelText: t('update.later'),
             onConFirm: () => {
               appUpdateService.openUpdatePage()
+            },
+            onCancel: () => {
+              preferenceService.set('app.dismissed_update_version', result.latestVersion)
             }
           })
         } else {
@@ -68,7 +79,10 @@ export function useAppUpdate() {
             title: t('update.new_version_available'),
             content: t('update.new_version_content_ios', { version: result.latestVersion }),
             confirmText: t('update.got_it'),
-            showCancel: false
+            showCancel: false,
+            onConFirm: () => {
+              preferenceService.set('app.dismissed_update_version', result.latestVersion)
+            }
           })
         }
       } else {
