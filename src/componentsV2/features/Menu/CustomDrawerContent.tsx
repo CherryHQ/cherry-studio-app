@@ -1,3 +1,4 @@
+import { messageDatabase } from '@database'
 import type { DrawerContentComponentProps } from '@react-navigation/drawer'
 import { Divider } from 'heroui-native'
 import React from 'react'
@@ -7,33 +8,40 @@ import { View } from 'react-native'
 import { IconButton } from '@/componentsV2/base/IconButton'
 import Image from '@/componentsV2/base/Image'
 import Text from '@/componentsV2/base/Text'
-import { MCPIcon, Settings, UnionIcon } from '@/componentsV2/icons'
+import { MarketIcon, MCPIcon, Settings } from '@/componentsV2/icons'
 import PressableRow from '@/componentsV2/layout/PressableRow'
 import RowRightArrow from '@/componentsV2/layout/Row/RowRightArrow'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
+import { useAssistants } from '@/hooks/useAssistant'
 import { useSafeArea } from '@/hooks/useSafeArea'
 import { useSettings } from '@/hooks/useSettings'
 import { useTheme } from '@/hooks/useTheme'
-import { useTopics } from '@/hooks/useTopic'
+import { useCurrentTopic } from '@/hooks/useTopic'
+import { loggerService } from '@/services/LoggerService'
+import { topicService } from '@/services/TopicService'
+import type { Assistant } from '@/types/assistant'
 
-import { TopicList } from '../TopicList'
+import { AssistantList } from './AssistantList'
 import { MenuTabContent } from './MenuTabContent'
+
+const logger = loggerService.withContext('CustomDrawerContent')
 
 export default function CustomDrawerContent(props: DrawerContentComponentProps) {
   const { t } = useTranslation()
   const { isDark } = useTheme()
   const { avatar, userName } = useSettings()
   const insets = useSafeArea()
+  const { switchTopic } = useCurrentTopic()
 
-  const { topics } = useTopics()
-
-  const handleNavigateTopicScreen = () => {
-    props.navigation.navigate('Home', { screen: 'TopicScreen' })
-  }
+  const { assistants, isLoading: isAssistantsLoading } = useAssistants()
 
   const handleNavigateAssistantScreen = () => {
     props.navigation.navigate('Assistant', { screen: 'AssistantScreen' })
+  }
+
+  const handleNavigateAssistantMarketScreen = () => {
+    props.navigation.navigate('Assistant', { screen: 'AssistantMarketScreen' })
   }
 
   const handleNavigateMcpMarketScreen = () => {
@@ -52,6 +60,28 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
     props.navigation.navigate('Home', { screen: 'ChatScreen', params: { topicId: topicId } })
   }
 
+  const handleAssistantItemPress = async (assistant: Assistant) => {
+    try {
+      const assistantTopics = await topicService.getTopicsByAssistantId(assistant.id)
+      const latestTopic = assistantTopics[0]
+
+      if (latestTopic) {
+        const hasMessages = await messageDatabase.getHasMessagesWithTopicId(latestTopic.id)
+        if (!hasMessages) {
+          await switchTopic(latestTopic.id)
+          handleNavigateChatScreen(latestTopic.id)
+          return
+        }
+      }
+
+      const newTopic = await topicService.createTopic(assistant)
+      await switchTopic(newTopic.id)
+      handleNavigateChatScreen(newTopic.id)
+    } catch (error) {
+      logger.error('Failed to open assistant topic from drawer', error as Error)
+    }
+  }
+
   return (
     <View
       style={{
@@ -64,10 +94,10 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
         <YStack className="gap-1.5 px-2.5">
           <PressableRow
             className="flex-row items-center justify-between rounded-lg px-2.5 py-2.5"
-            onPress={handleNavigateAssistantScreen}>
+            onPress={handleNavigateAssistantMarketScreen}>
             <XStack className="items-center justify-center gap-2.5">
-              <UnionIcon size={24} />
-              <Text className="text-base">{t('assistants.market.my_assistant')}</Text>
+              <MarketIcon size={24} />
+              <Text className="text-base">{t('assistants.market.title')}</Text>
             </XStack>
             <RowRightArrow />
           </PressableRow>
@@ -86,12 +116,12 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
           </YStack>
         </YStack>
 
-        <MenuTabContent title={t('menu.topic.recent')} onSeeAllPress={handleNavigateTopicScreen}>
-          <YStack className="min-h-[200px] flex-1">
-            {topics.length > 0 && (
-              <TopicList topics={topics} enableScroll={true} handleNavigateChatScreen={handleNavigateChatScreen} />
-            )}
-          </YStack>
+        <MenuTabContent title={t('assistants.title.mine')} onSeeAllPress={handleNavigateAssistantScreen}>
+          <AssistantList
+            assistants={assistants}
+            isLoading={isAssistantsLoading}
+            onAssistantPress={handleAssistantItemPress}
+          />
         </MenuTabContent>
       </YStack>
 
