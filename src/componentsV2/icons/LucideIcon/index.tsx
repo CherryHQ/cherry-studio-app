@@ -9,6 +9,7 @@ import {
   BrushCleaning,
   Camera,
   Check,
+  CheckSquare,
   ChevronDown,
   ChevronRight,
   ChevronsRight,
@@ -102,6 +103,7 @@ const AudioLinesIcon = createIcon(AudioLines)
 const BrushCleaningIcon = createIcon(BrushCleaning)
 const CameraIcon = createIcon(Camera)
 const CheckIcon = createIcon(Check)
+const CheckSquareIcon = createIcon(CheckSquare)
 const ChevronDownIcon = createIcon(ChevronDown)
 const ChevronsRightIcon = createIcon(ChevronsRight)
 const ChevronsUpDownIcon = createIcon(ChevronsUpDown)
@@ -173,6 +175,7 @@ export {
   BrushCleaningIcon as BrushCleaning,
   CameraIcon as Camera,
   CheckIcon as Check,
+  CheckSquareIcon as CheckSquare,
   ChevronDownIcon as ChevronDown,
   ChevronRightIcon as ChevronRight,
   ChevronsRightIcon as ChevronsRight,

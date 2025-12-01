@@ -176,7 +176,12 @@ export default function ApiServiceScreen() {
                 placeholder={t('settings.provider.api_key.placeholder')}
                 onChangeText={text => handleProviderConfigChange('apiKey', text)}>
                 <TextField.InputEndContent>
-                  <Button feedbackVariant="ripple" size="sm" variant="ghost" isIconOnly onPress={toggleApiKeyVisibility}>
+                  <Button
+                    feedbackVariant="ripple"
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    onPress={toggleApiKeyVisibility}>
                     <Button.Label>
                       {showApiKey ? <EyeOff className="text-white" size={16} /> : <Eye size={16} />}
                     </Button.Label>

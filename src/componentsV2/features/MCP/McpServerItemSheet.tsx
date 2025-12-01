@@ -20,10 +20,7 @@ let currentUpdateMcpServers: ((mcps: MCPServer[]) => Promise<void>) | null = nul
 let updateSelectedMcpCallback: ((mcp: MCPServer | null) => void) | null = null
 let updateMcpServersCallback: ((fn: (mcps: MCPServer[]) => Promise<void>) => void) | null = null
 
-export const presentMcpServerItemSheet = (
-  mcp: MCPServer,
-  updateMcpServers: (mcps: MCPServer[]) => Promise<void>
-) => {
+export const presentMcpServerItemSheet = (mcp: MCPServer, updateMcpServers: (mcps: MCPServer[]) => Promise<void>) => {
   currentSelectedMcp = mcp
   currentUpdateMcpServers = updateMcpServers
   updateSelectedMcpCallback?.(mcp)
@@ -38,16 +35,16 @@ const McpServerItemSheet: React.FC = () => {
   const { t } = useTranslation()
   const [isVisible, setIsVisible] = useState(false)
   const [selectedMcp, setSelectedMcp] = useState<MCPServer | null>(currentSelectedMcp)
-  const [updateMcpServers, setUpdateMcpServers] = useState<
-    ((mcps: MCPServer[]) => Promise<void>) | null
-  >(() => currentUpdateMcpServers)
+  const [updateMcpServers, setUpdateMcpServers] = useState<((mcps: MCPServer[]) => Promise<void>) | null>(
+    () => currentUpdateMcpServers
+  )
   const { tools } = useMcpTools(selectedMcp?.id || '')
   // Keep a local copy so switch updates reflect immediately
   const [localDisabledTools, setLocalDisabledTools] = useState<string[]>([])
 
   useEffect(() => {
     updateSelectedMcpCallback = setSelectedMcp
-    updateMcpServersCallback = (fn) => setUpdateMcpServers(() => fn)
+    updateMcpServersCallback = fn => setUpdateMcpServers(() => fn)
     return () => {
       updateSelectedMcpCallback = null
       updateMcpServersCallback = null

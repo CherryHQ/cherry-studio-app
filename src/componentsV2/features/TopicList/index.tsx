@@ -26,6 +26,10 @@ interface GroupedTopicListProps {
   topics: Topic[]
   enableScroll: boolean
   handleNavigateChatScreen?: (topicId: string) => void
+  isMultiSelectMode?: boolean
+  selectedTopicIds?: string[]
+  onToggleTopicSelection?: (topicId: string) => void
+  onEnterMultiSelectMode?: (topicId: string) => void
 }
 
 // ListItem 类型定义现在使用导入的 TimeFormat
@@ -33,12 +37,24 @@ type ListItem =
   | { type: 'header'; title: string; groupKey: DateGroupKey }
   | { type: 'topic'; topic: Topic; timeFormat: TimeFormat; groupKey: DateGroupKey }
 
-export function TopicList({ topics, enableScroll, handleNavigateChatScreen }: GroupedTopicListProps) {
+export function TopicList({
+  topics,
+  enableScroll,
+  handleNavigateChatScreen,
+  isMultiSelectMode = false,
+  selectedTopicIds = [],
+  onToggleTopicSelection,
+  onEnterMultiSelectMode
+}: GroupedTopicListProps) {
   const { t } = useTranslation()
   const [localTopics, setLocalTopics] = useState<Topic[]>([])
   const { currentTopicId, switchTopic } = useCurrentTopic()
   const toast = useToast()
   const dialog = useDialog()
+  const selectionKey = useMemo(() => {
+    return selectedTopicIds.slice().sort().join(',')
+  }, [selectedTopicIds])
+  const selectionSet = useMemo(() => new Set(selectedTopicIds), [selectedTopicIds])
 
   // 折叠状态管理 - 默认全部展开
   const [collapsedGroups, setCollapsedGroups] = useState<Record<DateGroupKey, boolean>>({
@@ -195,6 +211,10 @@ export function TopicList({ topics, enableScroll, handleNavigateChatScreen }: Gr
             currentTopicId={currentTopicId}
             switchTopic={switchTopic}
             handleNavigateChatScreen={handleNavigateChatScreen}
+            isMultiSelectMode={isMultiSelectMode}
+            isSelected={selectionSet.has(item.topic.id)}
+            onToggleSelect={onToggleTopicSelection}
+            onEnterMultiSelectMode={onEnterMultiSelectMode}
           />
         )
       default:
@@ -208,6 +228,7 @@ export function TopicList({ topics, enableScroll, handleNavigateChatScreen }: Gr
       renderItem={renderItem}
       showsVerticalScrollIndicator={false}
       scrollEnabled={enableScroll}
+      extraData={{ isMultiSelectMode, selectionKey }}
       keyExtractor={(item, index) => {
         if (item.type === 'header') {
           return `header-${item.title}-${index}`
@@ -216,7 +237,7 @@ export function TopicList({ topics, enableScroll, handleNavigateChatScreen }: Gr
         return item.topic.id
       }}
       ItemSeparatorComponent={() => <YStack className="h-2.5" />}
-      contentContainerStyle={{ paddingHorizontal: 20 }}
+      contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: isMultiSelectMode ? 140 : 20 }}
     />
   )
 }

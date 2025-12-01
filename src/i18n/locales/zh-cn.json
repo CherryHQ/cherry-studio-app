@@ -150,6 +150,7 @@
       "saved": "已保存",
       "search_placeholder": "搜索...",
       "see_all": "查看全部",
+      "select_all": "全选",
       "select_text": "选择文本",
       "source": "来源",
       "start": "开始使用Cherry Studio App 🎉",
@@ -912,6 +913,13 @@
       "title": {
         "label": "话题",
         "recent": "最近的话题"
+      },
+      "multi_select": {
+        "action": "多选",
+        "selected_count": "已选 {{count}} 项",
+        "delete_confirm_title": "删除 {{count}} 个话题？",
+        "delete_confirm_message": "此操作无法撤销。",
+        "delete_success": "已删除 {{count}} 个话题"
       }
     },
     "update": {

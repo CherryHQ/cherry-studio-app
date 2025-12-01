@@ -150,6 +150,7 @@
       "saved": "Saved",
       "search_placeholder": "Search...",
       "see_all": "See All",
+      "select_all": "Select All",
       "select_text": "Select Text",
       "source": "Source",
       "start": "Get Started with Cherry Studio App 🎉",
@@ -911,6 +912,13 @@
       "title": {
         "label": "Topic",
         "recent": "Recent Topics"
+      },
+      "multi_select": {
+        "action": "Multi-select",
+        "selected_count": "{{count}} selected",
+        "delete_confirm_title": "Delete {{count}} topics?",
+        "delete_confirm_message": "This action cannot be undone.",
+        "delete_success": "Deleted {{count}} topics"
       }
     },
     "update": {

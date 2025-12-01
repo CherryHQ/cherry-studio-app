@@ -306,7 +306,6 @@ export default function ProviderSettingsScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </Container>
-
     </SafeAreaContainer>
   )
 }

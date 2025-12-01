@@ -195,9 +195,7 @@ export default function ManageModelsScreen() {
   }
 
   const onAddAllModels = async (modelsToAdd: Model[]) => {
-    const preparedModels = modelsToAdd
-      .map(prepareModelForAdd)
-      .filter((model): model is Model => model !== null)
+    const preparedModels = modelsToAdd.map(prepareModelForAdd).filter((model): model is Model => model !== null)
 
     if (preparedModels.length === 0) return
 

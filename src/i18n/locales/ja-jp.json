@@ -150,6 +150,7 @@
       "saved": "保存しました",
       "search_placeholder": "検索...",
       "see_all": "すべて表示",
+      "select_all": "すべて選択",
       "select_text": "テキストを選択",
       "source": "ソース",
       "start": "Cherry Studioアプリを使ってみましょう 🎉",
@@ -911,6 +912,13 @@
       "title": {
         "label": "トピック",
         "recent": "最近のトピック"
+      },
+      "multi_select": {
+        "action": "複数選択",
+        "selected_count": "{{count}} 件を選択",
+        "delete_confirm_title": "{{count}} 件のトピックを削除しますか？",
+        "delete_confirm_message": "この操作は取り消せません。",
+        "delete_success": "{{count}} 件のトピックを削除しました"
       }
     },
     "update": {
