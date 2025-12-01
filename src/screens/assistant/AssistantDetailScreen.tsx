@@ -18,6 +18,7 @@ import { DefaultProviderIcon } from '@/componentsV2/icons'
 import { ArrowLeftRight, PenLine } from '@/componentsV2/icons/LucideIcon'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useSwipeGesture } from '@/hooks/useSwipeGesture'
+import { useCurrentTopic } from '@/hooks/useTopic'
 import AssistantDetailTabNavigator from '@/navigators/AssistantDetailTabNavigator'
 import type { AssistantStackParamList } from '@/navigators/AssistantStackNavigator'
 import { loggerService } from '@/services/LoggerService'
@@ -31,9 +32,23 @@ export default function AssistantDetailScreen() {
 
   const route = useRoute<AssistantDetailRouteProp>()
   const navigation = useNavigation<DrawerNavigationProps>()
-  const { assistantId } = route.params
+  const { assistantId, returnTo, topicId } = route.params
   const { assistant, isLoading, updateAssistant } = useAssistant(assistantId)
   const panGesture = useSwipeGesture()
+  const { currentTopicId } = useCurrentTopic()
+
+  const handleBackPress = React.useCallback(() => {
+    if (returnTo === 'chat') {
+      const targetTopicId = topicId || currentTopicId
+      if (targetTopicId) {
+        navigation.navigate('Home', { screen: 'ChatScreen', params: { topicId: targetTopicId } })
+      } else {
+        navigation.navigate('Home', { screen: 'TopicScreen' })
+      }
+      return
+    }
+    navigation.goBack()
+  }, [currentTopicId, navigation, returnTo, topicId])
 
   const updateAvatar = async (avatar: string) => {
     if (!assistant) return
@@ -75,7 +90,7 @@ export default function AssistantDetailScreen() {
         <View collapsable={false} className="flex-1">
           <HeaderBar
             title={!assistant?.emoji ? t('assistants.title.create') : t('assistants.title.edit')}
-            onBackPress={() => navigation.goBack()}
+            onBackPress={handleBackPress}
           />
           <View className="flex-1">
             <Container>

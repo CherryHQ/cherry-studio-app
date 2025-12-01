@@ -6,7 +6,12 @@ import AssistantScreen from '@/screens/assistant/AssistantScreen'
 
 export type AssistantStackParamList = {
   AssistantScreen: undefined
-  AssistantDetailScreen: { assistantId: string; tab?: string }
+  AssistantDetailScreen: {
+    assistantId: string
+    tab?: string
+    returnTo?: 'chat'
+    topicId?: string
+  }
 }
 
 const Stack = createStackNavigator<AssistantStackParamList>()

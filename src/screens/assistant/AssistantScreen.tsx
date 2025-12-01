@@ -4,10 +4,18 @@ import React, { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, View } from 'react-native'
 
-import { Container, HeaderBar, SafeAreaContainer, SearchInput, Text, YStack } from '@/componentsV2'
+import {
+  Container,
+  DrawerGestureWrapper,
+  HeaderBar,
+  SafeAreaContainer,
+  SearchInput,
+  Text,
+  YStack
+} from '@/componentsV2'
 import AssistantItem from '@/componentsV2/features/Assistant/AssistantItem'
 import { presentAssistantItemSheet } from '@/componentsV2/features/Assistant/AssistantItemSheet'
-import { Plus } from '@/componentsV2/icons/LucideIcon'
+import { Menu, Plus } from '@/componentsV2/icons/LucideIcon'
 import { useAssistants } from '@/hooks/useAssistant'
 import { useSearch } from '@/hooks/useSearch'
 import { createAssistant } from '@/services/AssistantService'
@@ -70,35 +78,45 @@ export default function AssistantScreen() {
 
   return (
     <SafeAreaContainer className="pb-0">
-      <View collapsable={false} className="flex-1">
-        <HeaderBar
-          title={t('assistants.title.mine')}
-          rightButtons={[
-            {
-              icon: <Plus size={24} />,
-              onPress: onAddAssistant
-            }
-          ]}
-        />
-        <Container className="p-0">
-          <View className="px-4">
-            <SearchInput placeholder={t('common.search_placeholder')} value={searchText} onChangeText={setSearchText} />
-          </View>
-          <FlashList
-            showsVerticalScrollIndicator={false}
-            data={filteredAssistants}
-            renderItem={({ item }) => <AssistantItem assistant={item} onAssistantPress={handleAssistantItemPress} />}
-            keyExtractor={item => item.id}
-            ItemSeparatorComponent={() => <YStack className="h-2" />}
-            ListEmptyComponent={
-              <YStack className="flex-1 items-center justify-center">
-                <Text>{t('settings.assistant.empty')}</Text>
-              </YStack>
-            }
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
+      <DrawerGestureWrapper>
+        <View collapsable={false} className="flex-1">
+          <HeaderBar
+            title={t('assistants.title.mine')}
+            leftButton={{
+              icon: <Menu size={24} />,
+              onPress: handleMenuPress
+            }}
+            rightButtons={[
+              {
+                icon: <Plus size={24} />,
+                onPress: onAddAssistant
+              }
+            ]}
           />
-        </Container>
-      </View>
+          <Container className="p-0">
+            <View className="px-4">
+              <SearchInput
+                placeholder={t('common.search_placeholder')}
+                value={searchText}
+                onChangeText={setSearchText}
+              />
+            </View>
+            <FlashList
+              showsVerticalScrollIndicator={false}
+              data={filteredAssistants}
+              renderItem={({ item }) => <AssistantItem assistant={item} onAssistantPress={handleAssistantItemPress} />}
+              keyExtractor={item => item.id}
+              ItemSeparatorComponent={() => <YStack className="h-2" />}
+              ListEmptyComponent={
+                <YStack className="flex-1 items-center justify-center">
+                  <Text>{t('settings.assistant.empty')}</Text>
+                </YStack>
+              }
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
+            />
+          </Container>
+        </View>
+      </DrawerGestureWrapper>
     </SafeAreaContainer>
   )
 }

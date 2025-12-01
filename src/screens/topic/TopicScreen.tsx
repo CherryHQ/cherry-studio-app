@@ -208,57 +208,51 @@ export default function TopicScreen() {
 
   return (
     <SafeAreaContainer className="flex-1">
-      <DrawerGestureWrapper>
-        <View collapsable={false} className="flex-1">
-          {isMultiSelectMode ? (
-            <HeaderBar
-              title={t('topics.multi_select.selected_count', { count: selectionCount })}
-              showBackButton={false}
-              rightButton={{
-                icon: <Text className="text-base font-medium">{t('common.cancel')}</Text>,
-                onPress: handleCancelMultiSelect
-              }}
+      <View collapsable={false} className="flex-1">
+        {isMultiSelectMode ? (
+          <HeaderBar
+            title={t('topics.multi_select.selected_count', { count: selectionCount })}
+            showBackButton={false}
+            rightButton={{
+              icon: <Text className="text-base font-medium">{t('common.cancel')}</Text>,
+              onPress: handleCancelMultiSelect
+            }}
+          />
+        ) : (
+          <HeaderBar
+            title={t('topics.title.recent')}
+            rightButton={{
+              icon: <MessageSquareDiff size={24} />,
+              onPress: handleAddNewTopic
+            }}
+          />
+        )}
+        <YStack className="flex-1 gap-[15px]">
+          <View className="px-5">
+            <SearchInput placeholder={t('common.search_placeholder')} value={searchText} onChangeText={setSearchText} />
+          </View>
+          <View className="flex-1">
+            <TopicList
+              topics={filteredTopics}
+              enableScroll={true}
+              isMultiSelectMode={isMultiSelectMode}
+              selectedTopicIds={selectedTopicIds}
+              onToggleTopicSelection={handleToggleTopicSelection}
+              onEnterMultiSelectMode={handleEnterMultiSelectMode}
+              getAssistantForNewTopic={getAssistantForNewTopic}
             />
-          ) : (
-            <HeaderBar
-              title={t('topics.title.recent')}
-              rightButton={{
-                icon: <MessageSquareDiff size={24} />,
-                onPress: handleAddNewTopic
-              }}
-            />
-          )}
-          <YStack className="flex-1 gap-[15px]">
-            <View className="px-5">
-              <SearchInput
-                placeholder={t('common.search_placeholder')}
-                value={searchText}
-                onChangeText={setSearchText}
-              />
-            </View>
-            <View className="flex-1">
-              <TopicList
-                topics={filteredTopics}
-                enableScroll={true}
-                isMultiSelectMode={isMultiSelectMode}
-                selectedTopicIds={selectedTopicIds}
-                onToggleTopicSelection={handleToggleTopicSelection}
-                onEnterMultiSelectMode={handleEnterMultiSelectMode}
-                getAssistantForNewTopic={getAssistantForNewTopic}
-              />
-            </View>
-          </YStack>
-          {isMultiSelectMode && (
-            <View className="absolute bottom-0 left-0 right-0 px-5">
-              <XStack className="items-center justify-end gap-2">
-                <LiquidGlassButton size={40} onPress={handleBatchDelete}>
-                  {isIOS ? <SymbolView name="trash" size={20} tintColor={'red'} /> : <Trash2 size={20} color="red" />}
-                </LiquidGlassButton>
-              </XStack>
-            </View>
-          )}
-        </View>
-      </DrawerGestureWrapper>
+          </View>
+        </YStack>
+        {isMultiSelectMode && (
+          <View className="absolute bottom-0 left-0 right-0 px-5">
+            <XStack className="items-center justify-end gap-2">
+              <LiquidGlassButton size={40} onPress={handleBatchDelete}>
+                {isIOS ? <SymbolView name="trash" size={20} tintColor={'red'} /> : <Trash2 size={20} color="red" />}
+              </LiquidGlassButton>
+            </XStack>
+          </View>
+        )}
+      </View>
     </SafeAreaContainer>
   )
 }

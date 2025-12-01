@@ -29,7 +29,10 @@ export type AppDrawerParamList = {
     | undefined
   Assistant:
     | { screen: 'AssistantScreen' }
-    | { screen: 'AssistantDetailScreen'; params: { assistantId: string; tab?: string } }
+    | {
+        screen: 'AssistantDetailScreen'
+        params: { assistantId: string; tab?: string; returnTo?: 'chat'; topicId?: string }
+      }
     | undefined
   AssistantMarket: { screen: 'AssistantMarketScreen' } | undefined
   Mcp: { screen: 'McpMarketScreen' }
