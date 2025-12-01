@@ -19,6 +19,7 @@ import {
   CircleDollarSign,
   CirclePause,
   CircleUserRound,
+  Clock,
   Cloud,
   Copy,
   Copyright,
@@ -109,6 +110,7 @@ const CheckSquareIcon = createIcon(CheckSquare)
 const ChevronDownIcon = createIcon(ChevronDown)
 const ChevronsRightIcon = createIcon(ChevronsRight)
 const ChevronsUpDownIcon = createIcon(ChevronsUpDown)
+const ClockIcon = createIcon(Clock)
 const CircleCheckIcon = createIcon(CircleCheck)
 const CircleDollarSignIcon = createIcon(CircleDollarSign)
 const CirclePauseIcon = createIcon(CirclePause)
@@ -187,6 +189,7 @@ export {
   CircleDollarSignIcon as CircleDollarSign,
   CirclePauseIcon as CirclePause,
   CircleUserRoundIcon as CircleUserRound,
+  ClockIcon as Clock,
   CloudIcon as Cloud,
   CopyIcon as Copy,
   CopyrightIcon as Copyright,

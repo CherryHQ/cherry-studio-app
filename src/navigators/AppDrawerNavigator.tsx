@@ -6,6 +6,7 @@ import { createDrawerNavigator } from '@react-navigation/drawer'
 import React from 'react'
 
 import CustomDrawerContent from '@/componentsV2/features/Menu/CustomDrawerContent'
+import AssistantMarketStackNavigator from '@/navigators/AssistantMarketStackNavigator'
 import AssistantStackNavigator from '@/navigators/AssistantStackNavigator'
 import HomeStackNavigator from '@/navigators/HomeStackNavigator'
 import { Width } from '@/utils/device'
@@ -20,6 +21,7 @@ export default function AppDrawerNavigator() {
       {/* Main grouped navigators */}
       <Drawer.Screen name="Home" options={options} component={HomeStackNavigator} />
       <Drawer.Screen name="Assistant" options={options} component={AssistantStackNavigator} />
+      <Drawer.Screen name="AssistantMarket" options={options} component={AssistantMarketStackNavigator} />
       <Drawer.Screen name="Mcp" options={options} component={McpStackNavigator} />
 
       {/* Individual screens for backward compatibility */}

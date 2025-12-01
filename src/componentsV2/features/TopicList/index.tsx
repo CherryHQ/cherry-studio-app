@@ -1,5 +1,5 @@
 import { FlashList } from '@shopify/flash-list'
-import React, { useEffect, useMemo, useState } from 'react' // 引入 useMemo
+import React, { useCallback, useEffect, useMemo, useState } from 'react' // 引入 hooks
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity } from 'react-native'
 
@@ -14,7 +14,7 @@ import { getDefaultAssistant } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
 import { deleteMessagesByTopicId } from '@/services/MessagesService'
 import { topicService } from '@/services/TopicService'
-import type { Topic } from '@/types/assistant'
+import type { Assistant, Topic } from '@/types/assistant'
 import type { DateGroupKey, TimeFormat } from '@/utils/date'
 import { getTimeFormatForGroup, groupItemsByDate } from '@/utils/date'
 
@@ -30,6 +30,7 @@ interface GroupedTopicListProps {
   selectedTopicIds?: string[]
   onToggleTopicSelection?: (topicId: string) => void
   onEnterMultiSelectMode?: (topicId: string) => void
+  getAssistantForNewTopic?: () => Promise<Assistant>
 }
 
 // ListItem 类型定义现在使用导入的 TimeFormat
@@ -44,7 +45,8 @@ export function TopicList({
   isMultiSelectMode = false,
   selectedTopicIds = [],
   onToggleTopicSelection,
-  onEnterMultiSelectMode
+  onEnterMultiSelectMode,
+  getAssistantForNewTopic
 }: GroupedTopicListProps) {
   const { t } = useTranslation()
   const [localTopics, setLocalTopics] = useState<Topic[]>([])
@@ -69,6 +71,20 @@ export function TopicList({
   useEffect(() => {
     setLocalTopics(topics)
   }, [topics])
+
+  const resolveAssistantForNewTopic = useCallback(async () => {
+    if (getAssistantForNewTopic) {
+      try {
+        const assistant = await getAssistantForNewTopic()
+        if (assistant) {
+          return assistant
+        }
+      } catch (error) {
+        logger.error('Failed to get assistant for new topic, falling back to default', error as Error)
+      }
+    }
+    return await getDefaultAssistant()
+  }, [getAssistantForNewTopic])
 
   // 切换分组折叠状态
   const toggleGroupCollapse = (groupKey: DateGroupKey) => {
@@ -147,8 +163,8 @@ export function TopicList({
               handleNavigateChatScreen?.(nextTopic.id)
               logger.info('Switched to next topic after delete', nextTopic)
             } else {
-              const defaultAssistant = await getDefaultAssistant()
-              const newTopic = await topicService.createTopic(defaultAssistant)
+              const assistantForNewTopic = await resolveAssistantForNewTopic()
+              const newTopic = await topicService.createTopic(assistantForNewTopic)
               await switchTopic(newTopic.id)
               handleNavigateChatScreen?.(newTopic.id)
               logger.info('Created new topic after deleting last topic', newTopic)

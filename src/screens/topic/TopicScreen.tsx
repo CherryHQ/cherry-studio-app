@@ -1,4 +1,5 @@
-import { DrawerActions, useNavigation } from '@react-navigation/native'
+import type { RouteProp } from '@react-navigation/native'
+import { DrawerActions, useNavigation, useRoute } from '@react-navigation/native'
 import { SymbolView } from 'expo-symbols'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -15,13 +16,14 @@ import {
 } from '@/componentsV2'
 import { LiquidGlassButton } from '@/componentsV2/base/LiquidGlassButton'
 import Text from '@/componentsV2/base/Text'
-import { Menu, MessageSquareDiff, Trash2 } from '@/componentsV2/icons/LucideIcon'
+import { MessageSquareDiff, Trash2 } from '@/componentsV2/icons/LucideIcon'
 import { useDialog } from '@/hooks/useDialog'
 import { useSearch } from '@/hooks/useSearch'
 import { useTheme } from '@/hooks/useTheme'
 import { useToast } from '@/hooks/useToast'
 import { useCurrentTopic, useTopics } from '@/hooks/useTopic'
-import { getDefaultAssistant } from '@/services/AssistantService'
+import type { HomeStackParamList } from '@/navigators/HomeStackNavigator'
+import { assistantService, getDefaultAssistant } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
 import { deleteMessagesByTopicId } from '@/services/MessagesService'
 import { createNewTopic, topicService } from '@/services/TopicService'
@@ -33,6 +35,8 @@ const logger = loggerService.withContext('TopicScreen')
 export default function TopicScreen() {
   const { t } = useTranslation()
   const navigation = useNavigation<DrawerNavigationProps>()
+  const route = useRoute<RouteProp<HomeStackParamList, 'TopicScreen'>>()
+  const assistantId = route.params?.assistantId
   const { topics, isLoading } = useTopics()
   const { currentTopicId, switchTopic } = useCurrentTopic()
   const toast = useToast()
@@ -42,12 +46,19 @@ export default function TopicScreen() {
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState(false)
 
+  const assistantTopics = useMemo(() => {
+    if (!assistantId) {
+      return topics
+    }
+    return topics.filter(topic => topic.assistantId === assistantId)
+  }, [assistantId, topics])
+
   const {
     searchText,
     setSearchText,
     filteredItems: filteredTopics
   } = useSearch(
-    topics,
+    assistantTopics,
     useCallback(topic => [topic.name], []),
     { delay: 100 }
   )
@@ -55,6 +66,16 @@ export default function TopicScreen() {
   const visibleTopicIds = useMemo(() => filteredTopics.map(topic => topic.id), [filteredTopics])
   const selectionCount = selectedTopicIds.length
   const hasSelection = selectionCount > 0
+
+  const getAssistantForNewTopic = useCallback(async () => {
+    if (assistantId) {
+      const assistant = await assistantService.getAssistant(assistantId)
+      if (assistant) {
+        return assistant
+      }
+    }
+    return await getDefaultAssistant()
+  }, [assistantId])
 
   useEffect(() => {
     if (!isMultiSelectMode) return
@@ -69,8 +90,8 @@ export default function TopicScreen() {
   }, [isMultiSelectMode, visibleTopicIds])
 
   const handleAddNewTopic = async () => {
-    const defaultAssistant = await getDefaultAssistant()
-    const newTopic = await createNewTopic(defaultAssistant)
+    const targetAssistant = await getAssistantForNewTopic()
+    const newTopic = await createNewTopic(targetAssistant)
     navigation.navigate('Home', { screen: 'ChatScreen', params: { topicId: newTopic.id } })
   }
 
@@ -134,8 +155,8 @@ export default function TopicScreen() {
         if (nextTopic) {
           await switchTopic(nextTopic.id)
         } else {
-          const defaultAssistant = await getDefaultAssistant()
-          const newTopic = await topicService.createTopic(defaultAssistant)
+          const targetAssistant = await getAssistantForNewTopic()
+          const newTopic = await topicService.createTopic(targetAssistant)
           await switchTopic(newTopic.id)
         }
       }
@@ -148,7 +169,16 @@ export default function TopicScreen() {
     } finally {
       setIsDeleting(false)
     }
-  }, [currentTopicId, handleCancelMultiSelect, selectedTopicIds, switchTopic, t, toast, topics])
+  }, [
+    currentTopicId,
+    getAssistantForNewTopic,
+    handleCancelMultiSelect,
+    selectedTopicIds,
+    switchTopic,
+    t,
+    toast,
+    topics
+  ])
 
   const handleBatchDelete = useCallback(() => {
     if (!hasSelection || isDeleting) return
@@ -192,10 +222,6 @@ export default function TopicScreen() {
           ) : (
             <HeaderBar
               title={t('topics.title.recent')}
-              leftButton={{
-                icon: <Menu size={24} />,
-                onPress: handleMenuPress
-              }}
               rightButton={{
                 icon: <MessageSquareDiff size={24} />,
                 onPress: handleAddNewTopic
@@ -218,6 +244,7 @@ export default function TopicScreen() {
                 selectedTopicIds={selectedTopicIds}
                 onToggleTopicSelection={handleToggleTopicSelection}
                 onEnterMultiSelectMode={handleEnterMultiSelectMode}
+                getAssistantForNewTopic={getAssistantForNewTopic}
               />
             </View>
           </YStack>

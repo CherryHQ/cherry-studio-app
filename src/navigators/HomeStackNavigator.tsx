@@ -15,7 +15,7 @@ import WebSearchStackNavigator from './settings/WebSearchStackNavigator'
 
 export type HomeStackParamList = {
   ChatScreen: { topicId: string }
-  TopicScreen: undefined
+  TopicScreen: { assistantId?: string } | undefined
   SettingsScreen: undefined
   HtmlPreviewScreen: undefined
   GeneralSettings: { screen?: string; params?: any } | undefined

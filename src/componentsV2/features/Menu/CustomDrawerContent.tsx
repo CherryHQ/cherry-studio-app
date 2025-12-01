@@ -41,7 +41,7 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
   }
 
   const handleNavigateAssistantMarketScreen = () => {
-    props.navigation.navigate('Assistant', { screen: 'AssistantMarketScreen' })
+    props.navigation.navigate('AssistantMarket', { screen: 'AssistantMarketScreen' })
   }
 
   const handleNavigateMcpMarketScreen = () => {
