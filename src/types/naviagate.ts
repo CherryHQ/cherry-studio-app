@@ -14,11 +14,19 @@ import type { WebSearchStackParamList } from '@/navigators/settings/WebSearchSta
 import type { SettingsStackParamList } from '@/navigators/SettingsStackNavigator'
 import type { WelcomeStackParamList } from '@/navigators/WelcomeStackNavigator'
 
+export type AssistantDetailScreenParams = {
+  assistantId: string
+  tab?: string
+  returnTo?: 'chat'
+  topicId?: string
+}
+
 // App Drawer Navigator
 export type AppDrawerParamList = {
   Home:
     | { screen: 'ChatScreen'; params: { topicId: string } }
     | { screen: 'TopicScreen'; params?: { assistantId?: string } }
+    | { screen: 'AssistantDetailScreen'; params: AssistantDetailScreenParams }
     | { screen: 'SettingsScreen' }
     | { screen: 'GeneralSettings'; params?: any }
     | { screen: 'AssistantSettings'; params?: any }
@@ -31,7 +39,7 @@ export type AppDrawerParamList = {
     | { screen: 'AssistantScreen' }
     | {
         screen: 'AssistantDetailScreen'
-        params: { assistantId: string; tab?: string; returnTo?: 'chat'; topicId?: string }
+        params: AssistantDetailScreenParams
       }
     | undefined
   AssistantMarket: { screen: 'AssistantMarketScreen' } | undefined

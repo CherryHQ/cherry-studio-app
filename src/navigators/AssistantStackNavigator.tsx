@@ -3,15 +3,11 @@ import React from 'react'
 
 import AssistantDetailScreen from '@/screens/assistant/AssistantDetailScreen'
 import AssistantScreen from '@/screens/assistant/AssistantScreen'
+import type { AssistantDetailScreenParams } from '@/types/naviagate'
 
 export type AssistantStackParamList = {
   AssistantScreen: undefined
-  AssistantDetailScreen: {
-    assistantId: string
-    tab?: string
-    returnTo?: 'chat'
-    topicId?: string
-  }
+  AssistantDetailScreen: AssistantDetailScreenParams
 }
 
 const Stack = createStackNavigator<AssistantStackParamList>()

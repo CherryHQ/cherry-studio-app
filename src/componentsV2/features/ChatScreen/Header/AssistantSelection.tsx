@@ -5,7 +5,7 @@ import { Keyboard, Pressable } from 'react-native'
 import { Text, XStack, YStack } from '@/componentsV2'
 import { ChevronRight } from '@/componentsV2/icons'
 import type { Assistant, Topic } from '@/types/assistant'
-import type { DrawerNavigationProps } from '@/types/naviagate'
+import type { HomeNavigationProps } from '@/types/naviagate'
 
 interface AssistantSelectionProps {
   assistant: Assistant
@@ -13,13 +13,14 @@ interface AssistantSelectionProps {
 }
 
 export const AssistantSelection: React.FC<AssistantSelectionProps> = ({ assistant, topic }) => {
-  const navigation = useNavigation<DrawerNavigationProps>()
+  const navigation = useNavigation<HomeNavigationProps>()
 
   const handlePress = () => {
     Keyboard.dismiss()
-    navigation.navigate('Assistant', {
-      screen: 'AssistantDetailScreen',
-      params: { assistantId: assistant.id, returnTo: 'chat', topicId: topic.id }
+    navigation.navigate('AssistantDetailScreen', {
+      assistantId: assistant.id,
+      returnTo: 'chat',
+      topicId: topic.id
     })
   }
 

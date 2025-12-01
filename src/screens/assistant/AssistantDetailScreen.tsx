@@ -20,25 +20,29 @@ import { useAssistant } from '@/hooks/useAssistant'
 import { useSwipeGesture } from '@/hooks/useSwipeGesture'
 import { useCurrentTopic } from '@/hooks/useTopic'
 import AssistantDetailTabNavigator from '@/navigators/AssistantDetailTabNavigator'
-import type { AssistantStackParamList } from '@/navigators/AssistantStackNavigator'
 import { loggerService } from '@/services/LoggerService'
-import type { DrawerNavigationProps } from '@/types/naviagate'
+import type { AssistantDetailScreenParams, DrawerNavigationProps } from '@/types/naviagate'
 const logger = loggerService.withContext('AssistantDetailScreen')
 
-type AssistantDetailRouteProp = RouteProp<AssistantStackParamList, 'AssistantDetailScreen'>
+type AssistantDetailRouteProp = RouteProp<{ AssistantDetailScreen: AssistantDetailScreenParams }, 'AssistantDetailScreen'>
 
 export default function AssistantDetailScreen() {
   const { t } = useTranslation()
 
   const route = useRoute<AssistantDetailRouteProp>()
   const navigation = useNavigation<DrawerNavigationProps>()
-  const { assistantId, returnTo, topicId } = route.params
+  const { assistantId, returnTo, topicId, tab } = route.params
   const { assistant, isLoading, updateAssistant } = useAssistant(assistantId)
   const panGesture = useSwipeGesture()
   const { currentTopicId } = useCurrentTopic()
 
   const handleBackPress = React.useCallback(() => {
     if (returnTo === 'chat') {
+      if (navigation.canGoBack()) {
+        navigation.goBack()
+        return
+      }
+
       const targetTopicId = topicId || currentTopicId
       if (targetTopicId) {
         navigation.navigate('Home', { screen: 'ChatScreen', params: { topicId: targetTopicId } })
@@ -105,7 +109,7 @@ export default function AssistantDetailScreen() {
 
               {/* Material Top Tabs Navigator */}
               <View className="flex-1">
-                <AssistantDetailTabNavigator assistant={assistant} />
+                <AssistantDetailTabNavigator assistant={assistant} initialTab={tab} />
               </View>
             </Container>
           </View>
