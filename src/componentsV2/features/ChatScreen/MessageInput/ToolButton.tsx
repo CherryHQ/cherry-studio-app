@@ -6,7 +6,7 @@ import { AssetsIcon } from '@/componentsV2/icons'
 import type { Assistant, Model } from '@/types/assistant'
 import type { FileMetadata } from '@/types/file'
 
-import { presentToolSheet, ToolSheet } from '../../Sheet/ToolSheet'
+import { presentToolSheet } from '../../Sheet/ToolSheet'
 
 interface AddAssetsButtonProps {
   mentions: Model[]
@@ -25,20 +25,14 @@ export const ToolButton: React.FC<AddAssetsButtonProps> = ({
 }) => {
   const handlePress = () => {
     Keyboard.dismiss()
-    presentToolSheet()
+    presentToolSheet({
+      mentions,
+      files,
+      setFiles,
+      assistant,
+      updateAssistant
+    })
   }
 
-  return (
-    <>
-      <IconButton icon={<AssetsIcon size={20} />} onPress={handlePress} />
-
-      <ToolSheet
-        mentions={mentions}
-        files={files}
-        setFiles={setFiles}
-        assistant={assistant}
-        updateAssistant={updateAssistant}
-      />
-    </>
-  )
+  return <IconButton icon={<AssetsIcon size={20} />} onPress={handlePress} />
 }

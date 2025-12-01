@@ -17,39 +17,54 @@ import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { isEmbeddingModel, isRerankModel } from '@/config/models'
 import { useAllProviders } from '@/hooks/useProviders'
-import { useTheme } from '@/hooks/useTheme'
 import type { Model, Provider } from '@/types/assistant'
 import type { HomeNavigationProps } from '@/types/naviagate'
 import { getModelUniqId } from '@/utils/model'
 
 import { EmptyModelView } from '../SettingsScreen/EmptyModelView'
 
-interface ModelSheetProps {
-  name: string
+const SHEET_NAME = 'global-model-sheet'
+
+interface ModelSheetData {
   mentions: Model[]
-  setMentions: (mentions: Model[], isMultiSelectActive?: boolean) => Promise<void>
+  setMentions: (mentions: Model[], isMultiSelectActive?: boolean) => Promise<void> | void
   multiple?: boolean
 }
 
-/**
- * Present the ModelSheet globally by name
- */
-export const presentModelSheet = (name: string) => TrueSheet.present(name)
+const defaultModelSheetData: ModelSheetData = {
+  mentions: [],
+  setMentions: async () => {},
+  multiple: false
+}
 
-/**
- * Dismiss the ModelSheet globally by name
- */
-export const dismissModelSheet = (name: string) => TrueSheet.dismiss(name)
+let currentSheetData: ModelSheetData = defaultModelSheetData
+let updateSheetDataCallback: ((data: ModelSheetData) => void) | null = null
 
-function ModelSheet({ name, mentions, setMentions, multiple }: ModelSheetProps) {
+export const presentModelSheet = (data: ModelSheetData) => {
+  currentSheetData = data
+  updateSheetDataCallback?.(data)
+  return TrueSheet.present(SHEET_NAME)
+}
+
+export const dismissModelSheet = () => TrueSheet.dismiss(SHEET_NAME)
+
+const ModelSheet: React.FC = () => {
+  const [sheetData, setSheetData] = useState<ModelSheetData>(currentSheetData)
+  const { mentions, setMentions, multiple = false } = sheetData
   const { t } = useTranslation()
-  const { isDark } = useTheme()
   const [selectedModels, setSelectedModels] = useState<string[]>(() => mentions.map(m => getModelUniqId(m)))
   const [searchQuery, setSearchQuery] = useState('')
   const [isMultiSelectActive, setIsMultiSelectActive] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const insets = useSafeAreaInsets()
   const navigation = useNavigation<HomeNavigationProps>()
+
+  useEffect(() => {
+    updateSheetDataCallback = setSheetData
+    return () => {
+      updateSheetDataCallback = null
+    }
+  }, [])
 
   const handleSearchChange = useCallback((text: string) => {
     setSearchQuery(text)
@@ -65,13 +80,13 @@ function ModelSheet({ name, mentions, setMentions, multiple }: ModelSheetProps) 
     }
 
     const backAction = () => {
-      TrueSheet.dismiss(name)
+      dismissModelSheet()
       return true
     }
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction)
     return () => backHandler.remove()
-  }, [name, isVisible])
+  }, [isVisible])
 
   const { providers } = useAllProviders()
   const selectOptions = providers
@@ -134,7 +149,7 @@ function ModelSheet({ name, mentions, setMentions, multiple }: ModelSheetProps) 
         newSelection = [] // 取消选中
       }
 
-      TrueSheet.dismiss(name)
+      dismissModelSheet()
     }
 
     setSelectedModels(newSelection)
@@ -143,13 +158,13 @@ function ModelSheet({ name, mentions, setMentions, multiple }: ModelSheetProps) 
       .filter(option => newSelection.includes(option.value))
       .map(option => option.model)
     InteractionManager.runAfterInteractions(async () => {
-      await setMentions(newMentions, isMultiSelectActive)
+      await Promise.resolve(setMentions(newMentions, isMultiSelectActive))
     })
   }
 
   const handleClearAll = async () => {
     setSelectedModels([])
-    await setMentions([])
+    await Promise.resolve(setMentions([]))
   }
 
   const toggleMultiSelectMode = async () => {
@@ -161,12 +176,12 @@ function ModelSheet({ name, mentions, setMentions, multiple }: ModelSheetProps) 
       const firstSelected = selectedModels[0]
       setSelectedModels([firstSelected])
       const newMentions = allModelOptions.filter(option => option.value === firstSelected).map(option => option.model)
-      await setMentions(newMentions)
+      await Promise.resolve(setMentions(newMentions))
     }
   }
 
   const navigateToProvidersSetting = (provider: Provider) => {
-    TrueSheet.dismiss(name)
+    dismissModelSheet()
     navigation.navigate('ProvidersSettings', { screen: 'ProviderSettingsScreen', params: { providerId: provider.id } })
   }
 
@@ -182,8 +197,8 @@ function ModelSheet({ name, mentions, setMentions, multiple }: ModelSheetProps) 
   const ESTIMATED_ITEM_SIZE = 60
   const DRAW_DISTANCE = 800
 
-  const headerComponent = (
-    <YStack className="gap-4 px-5 pb-2 pt-4">
+  const listHeaderComponent = (
+    <YStack className="gap-4 pb-2 pt-5">
       <XStack className="flex-1 items-center justify-center gap-[5px]">
         <YStack className="flex-1">
           <SearchInput
@@ -196,7 +211,7 @@ function ModelSheet({ name, mentions, setMentions, multiple }: ModelSheetProps) 
           <Button
             feedbackVariant="ripple"
             size="sm"
-            className={`h-10 rounded-lg ${
+            className={`h-10 rounded-xl ${
               isMultiSelectActive ? 'border-green-20 bg-green-10 border' : 'bg-ui-card border border-transparent'
             }`}
             onPress={toggleMultiSelectMode}>
@@ -211,7 +226,7 @@ function ModelSheet({ name, mentions, setMentions, multiple }: ModelSheetProps) 
           <Button
             size="sm"
             feedbackVariant="ripple"
-            className="bg-ui-card rounded-full"
+            className="bg-ui-card h-10 rounded-full"
             isIconOnly
             onPress={handleClearAll}>
             <Button.Label>
@@ -225,18 +240,17 @@ function ModelSheet({ name, mentions, setMentions, multiple }: ModelSheetProps) 
 
   return (
     <TrueSheet
-      name={name}
+      name={SHEET_NAME}
       detents={[0.85]}
       cornerRadius={30}
-      grabber
+      grabber={Platform.OS === 'ios' ? true : false}
       dismissible
       dimmed
       keyboardMode="pan"
       scrollable
-      header={headerComponent}
       onDidDismiss={handleDidDismiss}
       onDidPresent={handleDidPresent}>
-      <View className="flex-1">
+      <View>
         <LegendList
           data={listData}
           extraData={{ selectedModels, isMultiSelectActive, searchQuery }}
@@ -300,6 +314,7 @@ function ModelSheet({ name, mentions, setMentions, multiple }: ModelSheetProps) 
             item?.type === 'header' ? `header-${(item as any).label}-${index}` : (item as any).value
           }
           getItemType={item => item?.type ?? 'model'}
+          ListHeaderComponent={listHeaderComponent}
           ItemSeparatorComponent={() => <YStack className="h-2" />}
           ListEmptyComponent={<EmptyModelView />}
           showsVerticalScrollIndicator={false}
@@ -316,6 +331,6 @@ function ModelSheet({ name, mentions, setMentions, multiple }: ModelSheetProps) 
   )
 }
 
-ModelSheet.displayName = 'MentionSheet'
+ModelSheet.displayName = 'ModelSheet'
 
 export default ModelSheet

@@ -2,8 +2,13 @@ import React from 'react'
 
 import AssistantItemSheet from '@/componentsV2/features/Assistant/AssistantItemSheet'
 import { AddModelSheet } from '@/componentsV2/features/SettingsScreen/AddModelSheet'
+import ModelSheet from '@/componentsV2/features/Sheet/ModelSheet'
+import { ReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
 import TextSelectionSheet from '@/componentsV2/features/Sheet/TextSelectionSheet'
+import { McpServerSheet } from '@/componentsV2/features/Sheet/McpServerSheet'
+import { ToolSheet } from '@/componentsV2/features/Sheet/ToolSheet'
 import { ErrorDetailSheet } from '@/screens/home/messages/blocks/ErrorBlock'
+import { ImportDataSheet } from '@/screens/welcome/ImportDataSheet'
 
 /**
  * SheetManager - 统一管理所有全局 TrueSheet 实例
@@ -20,8 +25,13 @@ const SheetManager: React.FC = () => {
     <>
       <AssistantItemSheet />
       <TextSelectionSheet />
+      <ModelSheet />
+      <ReasoningSheet />
       <AddModelSheet />
       <ErrorDetailSheet />
+      <McpServerSheet />
+      <ToolSheet />
+      <ImportDataSheet />
     </>
   )
 }

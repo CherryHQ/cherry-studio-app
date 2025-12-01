@@ -72,7 +72,7 @@ export function ProviderSelect({ value, onValueChange, placeholder, className }:
           <ChevronDown />
         </Button>
       </TouchableOpacity>
-      <SelectionSheet name={sheetName} items={sheetItems} placeholder={placeholder} />
+      <SelectionSheet detents={['auto', 0.6]} name={sheetName} items={sheetItems} placeholder={placeholder} />
     </>
   )
 }

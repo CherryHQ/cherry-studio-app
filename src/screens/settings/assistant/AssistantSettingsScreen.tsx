@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
 
 import { Container, HeaderBar, IconButton, Image, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
-import ModelSheet, { presentModelSheet } from '@/componentsV2/features/Sheet/ModelSheet'
+import { presentModelSheet } from '@/componentsV2/features/Sheet/ModelSheet'
 import { ChevronDown, Languages, MessageSquareMore, Rocket, Settings2 } from '@/componentsV2/icons/LucideIcon'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useTheme } from '@/hooks/useTheme'
@@ -73,7 +73,6 @@ function AssistantSettingItem({
 }: AssistantSettingItemProps) {
   const { t } = useTranslation()
   const navigation = useNavigation<StackNavigationProp<AssistantSettingsStackParamList>>()
-  const sheetName = `assistant-settings-model-sheet-${assistantId}`
 
   const handleModelChange = async (models: Model[]) => {
     const newModel = models[0]
@@ -81,7 +80,11 @@ function AssistantSettingItem({
   }
 
   const handlePress = () => {
-    presentModelSheet(sheetName)
+    presentModelSheet({
+      mentions: assistant.defaultModel ? [assistant.defaultModel] : [],
+      setMentions: handleModelChange,
+      multiple: false
+    })
   }
 
   return (
@@ -100,13 +103,6 @@ function AssistantSettingItem({
         <ModelPicker assistant={assistant} onPress={handlePress} />
         <Text className="text-text-secondary px-[10px] opacity-70">{t(descriptionKey)}</Text>
       </YStack>
-
-      <ModelSheet
-        name={sheetName}
-        mentions={assistant.defaultModel ? [assistant.defaultModel] : []}
-        setMentions={handleModelChange}
-        multiple={false}
-      />
     </>
   )
 }

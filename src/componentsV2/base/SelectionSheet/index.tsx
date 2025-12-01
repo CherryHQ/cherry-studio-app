@@ -129,24 +129,25 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
   const keyExtractor = (item: SelectionSheetItem, index: number) =>
     item.key?.toString() || item.id?.toString() || item.label?.toString() || index.toString()
 
-  const sheetHeader =
+  const listHeaderComponent = () =>
     placeholder || headerComponent ? (
       <View className="gap-2 px-4 pb-2 pt-5">
         {headerComponent}
         {placeholder && <Text className="text-text-secondary text-center text-sm opacity-60">{placeholder}</Text>}
       </View>
-    ) : undefined
+    ) : (
+      <YStack className="h-5" />
+    )
 
   return (
     <TrueSheet
       name={name}
       detents={detents}
       cornerRadius={24}
-      grabber
+      grabber={Platform.OS === 'ios' ? true : false}
       dismissible
       dimmed
       scrollable
-      header={sheetHeader}
       onDidDismiss={() => setIsVisible(false)}
       onDidPresent={() => setIsVisible(true)}
       style={{ paddingBottom: bottom + 10 }}>
@@ -158,7 +159,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
           nestedScrollEnabled={Platform.OS === 'android'}
           showsVerticalScrollIndicator={false}
           estimatedItemSize={60}
-          ListHeaderComponent={() => <YStack className="h-5" />}
+          ListHeaderComponent={listHeaderComponent}
           ItemSeparatorComponent={() => <YStack className="h-2.5" />}
           contentContainerStyle={{ paddingHorizontal: 16 }}
           ListEmptyComponent={emptyContent ? <YStack className="gap-2.5 px-4 pb-7">{emptyContent}</YStack> : undefined}

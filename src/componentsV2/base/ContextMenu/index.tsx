@@ -115,6 +115,7 @@ const ContextMenu: FC<ContextMenuProps> = ({
 
         <SelectionSheet
           name={sheetName}
+          detents={['auto', 0.6]}
           items={list.map(item => ({
             key: item.title,
             label: item.title,

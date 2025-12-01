@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 
 import Text from '@/componentsV2/base/Text'
 import TextField from '@/componentsV2/base/TextField'
-import { presentReasoningSheet, ReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
+import { presentReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
 import { ChevronRight } from '@/componentsV2/icons/LucideIcon'
 import Group from '@/componentsV2/layout/Group'
 import Row from '@/componentsV2/layout/Row'
@@ -16,15 +16,12 @@ import { DEFAULT_CONTEXTCOUNT, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE } from '@
 import type { Assistant, AssistantSettings, Model } from '@/types/assistant'
 import { getBaseModelName } from '@/utils/naming'
 
-import ModelSheet, { presentModelSheet } from '../Sheet/ModelSheet'
+import { presentModelSheet } from '../Sheet/ModelSheet'
 
 interface ModelTabContentProps {
   assistant: Assistant
   updateAssistant: (assistant: Assistant) => Promise<void>
 }
-
-const MODEL_SHEET_NAME = 'model-tab-model-sheet'
-const REASONING_SHEET_NAME = 'model-tab-reasoning-sheet'
 
 export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentProps) {
   const { t } = useTranslation()
@@ -56,11 +53,20 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
   }
 
   const handleModelPress = () => {
-    presentModelSheet(MODEL_SHEET_NAME)
+    presentModelSheet({
+      mentions: model,
+      setMentions: handleModelChange,
+      multiple: false
+    })
   }
 
   const handleReasoningPress = () => {
-    presentReasoningSheet(REASONING_SHEET_NAME)
+    if (!model[0]) return
+    presentReasoningSheet({
+      model: model[0],
+      assistant,
+      updateAssistant: handleAssistantChange
+    })
   }
 
   const model = assistant?.defaultModel ? [assistant.defaultModel] : []
@@ -201,15 +207,6 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
           </Button>
         )}
       </Group>
-      <ModelSheet name={MODEL_SHEET_NAME} mentions={model} setMentions={handleModelChange} multiple={false} />
-      {model[0] && (
-        <ReasoningSheet
-          name={REASONING_SHEET_NAME}
-          model={model[0]}
-          assistant={assistant}
-          updateAssistant={handleAssistantChange}
-        />
-      )}
     </MotiView>
   )
 }

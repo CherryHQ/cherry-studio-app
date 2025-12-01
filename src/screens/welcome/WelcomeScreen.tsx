@@ -12,7 +12,7 @@ import { getDefaultAssistant } from '@/services/AssistantService'
 import { topicService } from '@/services/TopicService'
 import type { RootNavigationProps } from '@/types/naviagate'
 
-import { ImportDataSheet, presentImportDataSheet } from './ImportDataSheet'
+import { presentImportDataSheet } from './ImportDataSheet'
 import WelcomeTitle from './WelcomeTitle'
 
 export default function WelcomeScreen() {
@@ -33,6 +33,10 @@ export default function WelcomeScreen() {
     })
     await switchTopic(newTopic.id)
     await setWelcomeShown(true)
+  }
+
+  const handleImportData = () => {
+    presentImportDataSheet({ handleStart })
   }
 
   return (
@@ -59,11 +63,7 @@ export default function WelcomeScreen() {
         {/* register and login*/}
         <View className="bg-ui-card-background h-1/4 w-full items-center justify-center">
           <YStack className="flex-1 items-center justify-center gap-5">
-            <Button
-              feedbackVariant="ripple"
-              className="w-3/4 rounded-lg"
-              variant="secondary"
-              onPress={presentImportDataSheet}>
+            <Button feedbackVariant="ripple" className="w-3/4 rounded-lg" variant="secondary" onPress={handleImportData}>
               <Button.Label className="text-text-primary w-full text-center text-lg">
                 {t('common.import_from_cherry_studio')}
               </Button.Label>
@@ -74,7 +74,6 @@ export default function WelcomeScreen() {
             </Button>
           </YStack>
         </View>
-        <ImportDataSheet handleStart={handleStart} />
       </SafeAreaContainer>
     </>
   )

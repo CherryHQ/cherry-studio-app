@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react'
 import { Keyboard } from 'react-native'
 
-import { McpServerSheet } from '@/componentsV2'
 import { IconButton } from '@/componentsV2/base/IconButton'
 import Text from '@/componentsV2/base/Text'
 import { Hammer } from '@/componentsV2/icons'
@@ -10,8 +9,6 @@ import { useActiveMcpServers } from '@/hooks/useMcp'
 import type { Assistant } from '@/types/assistant'
 
 import { presentMcpServerSheet } from '../../Sheet/McpServerSheet'
-
-const MCP_SHEET_NAME = 'mcp-button-server-sheet'
 
 interface McpButtonProps {
   assistant: Assistant
@@ -23,7 +20,10 @@ export const McpButton: React.FC<McpButtonProps> = ({ assistant, updateAssistant
 
   const openMcpServerSheet = () => {
     Keyboard.dismiss()
-    presentMcpServerSheet(MCP_SHEET_NAME)
+    presentMcpServerSheet({
+      assistant,
+      updateAssistant
+    })
   }
 
   // Calculate active MCP count based on real-time active MCP servers
@@ -44,10 +44,5 @@ export const McpButton: React.FC<McpButtonProps> = ({ assistant, updateAssistant
     return <Hammer size={20} />
   }
 
-  return (
-    <>
-      <IconButton icon={<McpIconContent />} onPress={openMcpServerSheet} />
-      <McpServerSheet name={MCP_SHEET_NAME} assistant={assistant} updateAssistant={updateAssistant} />
-    </>
-  )
+  return <IconButton icon={<McpIconContent />} onPress={openMcpServerSheet} />
 }

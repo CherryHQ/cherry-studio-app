@@ -3,9 +3,9 @@ import { useNavigation } from '@react-navigation/native'
 import * as DocumentPicker from 'expo-document-picker'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, View } from 'react-native'
+import { BackHandler, Platform, View } from 'react-native'
 
-import { Container, Group, PressableRow, RestoreProgressModal, Text, XStack } from '@/componentsV2'
+import { Group, PressableRow, RestoreProgressModal, Text, XStack } from '@/componentsV2'
 import { Folder, Wifi } from '@/componentsV2/icons'
 import { useBottom } from '@/hooks/useBottom'
 import { DEFAULT_RESTORE_STEPS, useRestore } from '@/hooks/useRestore'
@@ -16,14 +16,28 @@ const logger = loggerService.withContext('ImportDataSheet')
 
 const SHEET_NAME = 'import-data-sheet'
 
-export const presentImportDataSheet = () => TrueSheet.present(SHEET_NAME)
-export const dismissImportDataSheet = () => TrueSheet.dismiss(SHEET_NAME)
-
-interface ImportDataSheetProps {
+interface ImportDataSheetData {
   handleStart: () => Promise<void>
 }
 
-export const ImportDataSheet: React.FC<ImportDataSheetProps> = ({ handleStart }) => {
+const defaultImportDataSheetData: ImportDataSheetData = {
+  handleStart: async () => {}
+}
+
+let currentSheetData: ImportDataSheetData = defaultImportDataSheetData
+let updateSheetDataCallback: ((data: ImportDataSheetData) => void) | null = null
+
+export const presentImportDataSheet = (data: ImportDataSheetData) => {
+  currentSheetData = data
+  updateSheetDataCallback?.(data)
+  return TrueSheet.present(SHEET_NAME)
+}
+
+export const dismissImportDataSheet = () => TrueSheet.dismiss(SHEET_NAME)
+
+export const ImportDataSheet: React.FC = () => {
+  const [sheetData, setSheetData] = useState<ImportDataSheetData>(currentSheetData)
+  const { handleStart } = sheetData
   const { t } = useTranslation()
   const bottom = useBottom()
   const navigation = useNavigation<WelcomeNavigationProps>()
@@ -31,6 +45,13 @@ export const ImportDataSheet: React.FC<ImportDataSheetProps> = ({ handleStart })
   const { isModalOpen, restoreSteps, overallStatus, startRestore, closeModal } = useRestore({
     stepConfigs: DEFAULT_RESTORE_STEPS
   })
+
+  useEffect(() => {
+    updateSheetDataCallback = setSheetData
+    return () => {
+      updateSheetDataCallback = null
+    }
+  }, [])
 
   useEffect(() => {
     if (!isVisible) return
@@ -79,28 +100,26 @@ export const ImportDataSheet: React.FC<ImportDataSheetProps> = ({ handleStart })
         name={SHEET_NAME}
         detents={['auto']}
         cornerRadius={30}
-        grabber
+        grabber={Platform.OS === 'ios' ? true : false}
         dismissible
         dimmed
         onDidDismiss={() => setIsVisible(false)}
         onDidPresent={() => setIsVisible(true)}>
-        <View style={{ paddingBottom: bottom }}>
-          <Container>
-            <Group>
-              <PressableRow onPress={handleRestore}>
-                <XStack className="items-center gap-3">
-                  <Folder size={24} />
-                  <Text>{t('settings.data.restore.title')}</Text>
-                </XStack>
-              </PressableRow>
-              <PressableRow onPress={handleNavigateToLandrop}>
-                <XStack className="items-center gap-3">
-                  <Wifi size={24} />
-                  <Text>{t('settings.data.landrop.title')}</Text>
-                </XStack>
-              </PressableRow>
-            </Group>
-          </Container>
+        <View className="gap-5 overflow-hidden bg-transparent p-4 pt-5" style={{ paddingBottom: bottom }}>
+          <Group className="bg-gray-10">
+            <PressableRow onPress={handleRestore}>
+              <XStack className="items-center gap-3">
+                <Folder size={24} />
+                <Text>{t('settings.data.restore.title')}</Text>
+              </XStack>
+            </PressableRow>
+            <PressableRow onPress={handleNavigateToLandrop}>
+              <XStack className="items-center gap-3">
+                <Wifi size={24} />
+                <Text>{t('settings.data.landrop.title')}</Text>
+              </XStack>
+            </PressableRow>
+          </Group>
         </View>
       </TrueSheet>
       <RestoreProgressModal

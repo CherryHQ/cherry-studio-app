@@ -14,24 +14,50 @@ import { useAIFeatureHandler } from './useAIFeatureHandler'
 import { useFileHandler } from './useFileHandler'
 
 export const TOOL_SHEET_NAME = 'tool-sheet'
-export const presentToolSheet = () => TrueSheet.present(TOOL_SHEET_NAME)
-export const dismissToolSheet = () => TrueSheet.dismiss(TOOL_SHEET_NAME)
 
-interface ToolSheetProps {
+interface ToolSheetData {
   mentions: Model[]
   files: FileMetadata[]
   setFiles: (files: FileMetadata[]) => void
-  assistant: Assistant
-  updateAssistant: (assistant: Assistant) => Promise<void>
+  assistant: Assistant | null
+  updateAssistant: ((assistant: Assistant) => Promise<void>) | null
 }
 
-export const ToolSheet: React.FC<ToolSheetProps> = ({ mentions, files, setFiles, assistant, updateAssistant }) => {
+const defaultToolSheetData: ToolSheetData = {
+  mentions: [],
+  files: [],
+  setFiles: () => {},
+  assistant: null,
+  updateAssistant: null
+}
+
+let currentSheetData: ToolSheetData = defaultToolSheetData
+let updateSheetDataCallback: ((data: ToolSheetData) => void) | null = null
+
+export const presentToolSheet = (data: ToolSheetData) => {
+  currentSheetData = data
+  updateSheetDataCallback?.(data)
+  return TrueSheet.present(TOOL_SHEET_NAME)
+}
+
+export const dismissToolSheet = () => TrueSheet.dismiss(TOOL_SHEET_NAME)
+
+export const ToolSheet: React.FC = () => {
+  const [sheetData, setSheetData] = useState<ToolSheetData>(currentSheetData)
+  const { mentions, files, setFiles, assistant, updateAssistant } = sheetData
   const bottom = useBottom()
   const [isVisible, setIsVisible] = useState(false)
 
   const dismissSheet = () => {
     TrueSheet.dismiss(TOOL_SHEET_NAME)
   }
+
+  useEffect(() => {
+    updateSheetDataCallback = setSheetData
+    return () => {
+      updateSheetDataCallback = null
+    }
+  }, [])
 
   const { handleAddImage, handleAddFile, handleAddPhotoFromCamera } = useFileHandler({
     files,
@@ -54,7 +80,7 @@ export const ToolSheet: React.FC<ToolSheetProps> = ({ mentions, files, setFiles,
     if (!isVisible) return
 
     const backAction = () => {
-      TrueSheet.dismiss(TOOL_SHEET_NAME)
+      dismissSheet()
       return true
     }
 
@@ -81,12 +107,14 @@ export const ToolSheet: React.FC<ToolSheetProps> = ({ mentions, files, setFiles,
         <View style={{ paddingBottom: bottom }}>
           <YStack className="gap-3 pt-5">
             <SystemTools onCameraPress={handleCameraPress} onImagePress={handleAddImage} onFilePress={handleAddFile} />
-            <ExternalTools
-              mentions={mentions}
-              assistant={assistant}
-              onWebSearchToggle={handleEnableWebSearch}
-              onGenerateImageToggle={handleEnableGenerateImage}
-            />
+            {assistant && updateAssistant && (
+              <ExternalTools
+                mentions={mentions}
+                assistant={assistant}
+                onWebSearchToggle={handleEnableWebSearch}
+                onGenerateImageToggle={handleEnableGenerateImage}
+              />
+            )}
           </YStack>
         </View>
       </TrueSheet>

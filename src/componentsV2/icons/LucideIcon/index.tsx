@@ -1,5 +1,6 @@
 import { cn } from 'heroui-native'
 import {
+  ArrowDown,
   ArrowLeft,
   ArrowLeftRight,
   ArrowUp,
@@ -94,6 +95,7 @@ const createIcon = (IconComponent: React.ComponentType<any>) => {
 const SaveIcon = createIcon(Save)
 const StoreIcon = createIcon(Store)
 const HammerIcon = createIcon(Hammer)
+const ArrowDownIcon = createIcon(ArrowDown)
 const ArrowUpIcon = createIcon(ArrowUp)
 const ArrowLeftIcon = createIcon(ArrowLeft)
 const ArrowLeftRightIcon = createIcon(ArrowLeftRight)
@@ -166,6 +168,7 @@ const XCircleIcon = createIcon(XCircle)
 const SettingsIcon = createIcon(Settings)
 
 export {
+  ArrowDownIcon as ArrowDown,
   ArrowLeftIcon as ArrowLeft,
   ArrowLeftRightIcon as ArrowLeftRight,
   ArrowUpIcon as ArrowUp,

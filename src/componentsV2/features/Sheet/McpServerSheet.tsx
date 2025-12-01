@@ -1,7 +1,6 @@
 import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { useNavigation } from '@react-navigation/native'
-import type { FC } from 'react'
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity } from 'react-native'
 
@@ -15,31 +14,54 @@ import { useActiveMcpServers } from '@/hooks/useMcp'
 import type { Assistant } from '@/types/assistant'
 import type { DrawerNavigationProps } from '@/types/naviagate'
 
-interface McpServerProps {
-  name: string
-  assistant: Assistant
-  updateAssistant: (assistant: Assistant) => Promise<void>
+const SHEET_NAME = 'global-mcp-server-sheet'
+
+interface McpServerSheetData {
+  assistant: Assistant | null
+  updateAssistant: ((assistant: Assistant) => Promise<void>) | null
 }
 
-export const presentMcpServerSheet = (name: string) => TrueSheet.present(name)
-export const dismissMcpServerSheet = (name: string) => TrueSheet.dismiss(name)
+const defaultMcpServerData: McpServerSheetData = {
+  assistant: null,
+  updateAssistant: null
+}
 
-export const McpServerSheet: FC<McpServerProps> = ({ name, assistant, updateAssistant }) => {
+let currentSheetData: McpServerSheetData = defaultMcpServerData
+let updateSheetDataCallback: ((data: McpServerSheetData) => void) | null = null
+
+export const presentMcpServerSheet = (data: McpServerSheetData) => {
+  currentSheetData = data
+  updateSheetDataCallback?.(data)
+  return TrueSheet.present(SHEET_NAME)
+}
+
+export const dismissMcpServerSheet = () => TrueSheet.dismiss(SHEET_NAME)
+
+export const McpServerSheet: React.FC = () => {
+  const [sheetData, setSheetData] = useState<McpServerSheetData>(currentSheetData)
+  const { assistant, updateAssistant } = sheetData
   const { activeMcpServers, isLoading } = useActiveMcpServers()
   const { t } = useTranslation()
   const navigation = useNavigation<DrawerNavigationProps>()
 
-  if (isLoading) {
-    return null
+  useEffect(() => {
+    updateSheetDataCallback = setSheetData
+    return () => {
+      updateSheetDataCallback = null
+    }
+  }, [])
+
+  if (isLoading || !assistant || !updateAssistant) {
+    return <SelectionSheet name={SHEET_NAME} detents={['auto', 0.5]} items={[]} shouldDismiss={false} />
   }
 
   const handleNavigateToMcpMarket = () => {
-    TrueSheet.dismiss(name)
+    dismissMcpServerSheet()
     navigation.navigate('Mcp', { screen: 'McpMarketScreen' })
   }
 
   const handleNavigateToToolTab = () => {
-    TrueSheet.dismiss(name)
+    dismissMcpServerSheet()
     navigation.navigate('Assistant', {
       screen: 'AssistantDetailScreen',
       params: { assistantId: assistant.id, tab: 'tool' }
@@ -90,7 +112,8 @@ export const McpServerSheet: FC<McpServerProps> = ({ name, assistant, updateAssi
 
   return (
     <SelectionSheet
-      name={name}
+      name={SHEET_NAME}
+      detents={['auto', 0.5]}
       items={providerItems}
       emptyContent={emptyContent}
       headerComponent={warningContent}

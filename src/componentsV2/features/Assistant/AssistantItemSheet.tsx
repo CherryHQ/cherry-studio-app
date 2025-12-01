@@ -1,6 +1,6 @@
 import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { BlurView } from 'expo-blur'
-import { Button, Divider } from 'heroui-native'
+import { Button, cn, Divider } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Platform, ScrollView, TouchableOpacity, View } from 'react-native'
@@ -16,6 +16,7 @@ import { assistantService } from '@/services/AssistantService'
 import { topicService } from '@/services/TopicService'
 import type { Assistant } from '@/types/assistant'
 import { uuid } from '@/utils'
+import { isIOS } from '@/utils/device'
 import { formateEmoji } from '@/utils/formats'
 
 import EmojiAvatar from './EmojiAvatar'
@@ -128,10 +129,11 @@ const AssistantItemSheet: React.FC = () => {
       cornerRadius={30}
       dismissible
       dimmed
+      grabber={Platform.OS === 'ios' ? true : false}
       onDidDismiss={() => setIsVisible(false)}
       onDidPresent={() => setIsVisible(true)}>
       {!assistant ? null : (
-        <YStack className="relative h-[85vh] flex-1 gap-5">
+        <YStack className={cn('relative gap-5', isIOS ? 'h-[85vh]' : 'h-full')}>
           {/* Background blur emoji */}
           <XStack className="absolute left-0 right-0 top-0 h-[200px] w-full flex-wrap overflow-hidden rounded-[30px]">
             {Array.from({ length: 70 }).map((_, index) => (

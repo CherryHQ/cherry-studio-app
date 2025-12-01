@@ -12,9 +12,7 @@ import {
 } from '@/componentsV2/icons'
 import type { Assistant } from '@/types/assistant'
 
-import { presentReasoningSheet, ReasoningSheet } from '../../Sheet/ReasoningSheet'
-
-const REASONING_SHEET_NAME = 'think-button-reasoning-sheet'
+import { presentReasoningSheet } from '../../Sheet/ReasoningSheet'
 
 interface ThinkButtonProps {
   assistant: Assistant
@@ -44,21 +42,16 @@ export const ThinkButton: React.FC<ThinkButtonProps> = ({ assistant, updateAssis
 
   const handlePress = () => {
     Keyboard.dismiss()
-    presentReasoningSheet(REASONING_SHEET_NAME)
+    if (!assistant.model) return
+
+    presentReasoningSheet({
+      model: assistant.model,
+      assistant,
+      updateAssistant
+    })
   }
 
   return (
-    <>
-      <IconButton icon={getIcon()} onPress={handlePress} />
-
-      {assistant.model && (
-        <ReasoningSheet
-          name={REASONING_SHEET_NAME}
-          model={assistant.model}
-          assistant={assistant}
-          updateAssistant={updateAssistant}
-        />
-      )}
-    </>
+    <IconButton icon={getIcon()} onPress={handlePress} />
   )
 }

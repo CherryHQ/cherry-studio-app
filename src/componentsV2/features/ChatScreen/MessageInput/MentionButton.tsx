@@ -9,7 +9,7 @@ import XStack from '@/componentsV2/layout/XStack'
 import type { Assistant, Model } from '@/types/assistant'
 import { getBaseModelName } from '@/utils/naming'
 
-import ModelSheet, { presentModelSheet } from '../../Sheet/ModelSheet'
+import { presentModelSheet } from '../../Sheet/ModelSheet'
 
 interface MentionButtonProps {
   mentions: Model[]
@@ -17,8 +17,6 @@ interface MentionButtonProps {
   assistant: Assistant
   updateAssistant: (assistant: Assistant) => Promise<void>
 }
-
-const SHEET_NAME = 'mention-model-sheet'
 
 const BUTTON_STYLES = {
   maxWidth: 150,
@@ -37,7 +35,11 @@ export const MentionButton: React.FC<MentionButtonProps> = ({ mentions, setMenti
 
   const handlePress = () => {
     Keyboard.dismiss()
-    presentModelSheet(SHEET_NAME)
+    presentModelSheet({
+      mentions,
+      setMentions: handleModelChange,
+      multiple: true
+    })
   }
   /**
    * @description Change Model Event
@@ -87,12 +89,8 @@ export const MentionButton: React.FC<MentionButtonProps> = ({ mentions, setMenti
   }
 
   return (
-    <>
-      <TouchableOpacity style={{ maxWidth: BUTTON_STYLES.maxWidth }} onPress={handlePress} hitSlop={5}>
-        {renderButtonContent()}
-      </TouchableOpacity>
-
-      <ModelSheet name={SHEET_NAME} mentions={mentions} setMentions={handleModelChange} multiple={true} />
-    </>
+    <TouchableOpacity style={{ maxWidth: BUTTON_STYLES.maxWidth }} onPress={handlePress} hitSlop={5}>
+      {renderButtonContent()}
+    </TouchableOpacity>
   )
 }
