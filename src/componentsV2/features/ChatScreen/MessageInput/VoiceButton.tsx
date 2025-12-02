@@ -1,35 +1,34 @@
-import { MotiView } from 'moti'
 import React, { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
 
 import { IconButton } from '@/componentsV2/base/IconButton'
-import { CircleStop, VoiceIcon } from '@/componentsV2/icons'
+import { Mic, Square } from '@/componentsV2/icons'
 import { useDialog } from '@/hooks/useDialog'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
+import { useTheme } from '@/hooks/useTheme'
 
 interface VoiceButtonProps {
   onTranscript: (text: string) => void
   onListeningChange?: (isListening: boolean) => void
-  disabled?: boolean
 }
 
-export const VoiceButton: React.FC<VoiceButtonProps> = ({
-  onTranscript,
-  onListeningChange,
-  disabled = false
-}) => {
+export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscript, onListeningChange }) => {
   const { t } = useTranslation()
+  const { isDark } = useTheme()
   const dialog = useDialog()
 
   const { isListening, isProcessing, transcript, toggleListening } = useSpeechRecognition({
     onTranscript: (text, isFinal) => {
-      // Only update on final results to avoid overwriting during interim results
       if (isFinal) {
         onTranscript(text)
       }
     },
     onError: errorMessage => {
+      // If speech is not detected, do not display an error dialog.
+      const isNoSpeechError = errorMessage.toLowerCase().includes('no speech')
+      if (isNoSpeechError) return
+
       dialog.open({
         type: 'error',
         title: t('common.error_occurred'),
@@ -51,16 +50,23 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
   }, [isListening, isProcessing, onListeningChange])
 
   const handlePress = () => {
-    if (disabled || isProcessing) return
+    if (isProcessing) return
     toggleListening()
   }
+
+  const backgroundColor = isDark ? '#ffffff' : '#000000'
 
   // Render loading indicator when processing
   if (isProcessing) {
     return (
       <IconButton
         disabled
-        icon={<ActivityIndicator size="small" className="text-text-primary" />}
+        icon={<ActivityIndicator size="small" />}
+        style={{
+          backgroundColor,
+          borderRadius: 99,
+          padding: 3
+        }}
       />
     )
   }
@@ -68,26 +74,15 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
   return (
     <IconButton
       onPress={handlePress}
-      disabled={disabled}
-      icon={
-        isListening ? (
-          <MotiView
-            from={{ scale: 1 }}
-            animate={{ scale: [1, 1.1, 1] }}
-            transition={{
-              type: 'timing',
-              duration: 800,
-              loop: true
-            }}>
-            <CircleStop size={24} className="text-text-delete" />
-          </MotiView>
-        ) : (
-          <VoiceIcon
-            size={20}
-            className={disabled ? 'text-text-tertiary' : 'text-text-primary'}
-          />
-        )
-      }
+      style={{
+        backgroundColor: isListening ? 'red' : backgroundColor,
+        borderRadius: 99,
+        height: 30,
+        width: 30,
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+      icon={isListening ? <Square size={18} fill="white" /> : <Mic size={24} className="text-white  dark:text-black" />}
     />
   )
 }

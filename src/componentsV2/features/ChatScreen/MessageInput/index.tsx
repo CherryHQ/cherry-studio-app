@@ -89,36 +89,36 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
             <McpButton assistant={assistant} updateAssistant={updateAssistant} />
           </XStack>
           <XStack className="items-center gap-2.5">
-            {(!text || isVoiceActive) && (
-              <VoiceButton
-                onTranscript={newText => setText(newText)}
-                onListeningChange={setIsVoiceActive}
-                disabled={topic.isLoading}
-              />
-            )}
-            {!isVoiceActive && (
-              <AnimatePresence exitBeforeEnter>
-                {topic.isLoading ? (
-                  <MotiView
-                    key="pause-button"
-                    from={{ opacity: 0, scale: 0.5 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.5 }}
-                    transition={{ type: 'timing', duration: 200 }}>
-                    <PauseButton onPause={onPause} />
-                  </MotiView>
-                ) : (
-                  <MotiView
-                    key="send-button"
-                    from={{ opacity: 0, scale: 0.5 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.5 }}
-                    transition={{ type: 'timing', duration: 200 }}>
-                    <SendButton onSend={sendMessage} disabled={!text} />
-                  </MotiView>
-                )}
-              </AnimatePresence>
-            )}
+            <AnimatePresence exitBeforeEnter>
+              {topic.isLoading ? (
+                <MotiView
+                  key="pause-button"
+                  from={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ type: 'timing', duration: 200 }}>
+                  <PauseButton onPause={onPause} />
+                </MotiView>
+              ) : isVoiceActive || !text ? (
+                <MotiView
+                  key="voice-button"
+                  from={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ type: 'timing', duration: 200 }}>
+                  <VoiceButton onTranscript={newText => setText(newText)} onListeningChange={setIsVoiceActive} />
+                </MotiView>
+              ) : (
+                <MotiView
+                  key="send-button"
+                  from={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ type: 'timing', duration: 200 }}>
+                  <SendButton onSend={sendMessage} />
+                </MotiView>
+              )}
+            </AnimatePresence>
           </XStack>
         </XStack>
       </YStack>
