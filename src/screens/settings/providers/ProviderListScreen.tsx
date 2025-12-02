@@ -1,10 +1,9 @@
 import { useNavigation } from '@react-navigation/native'
 import { FlashList } from '@shopify/flash-list'
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator } from 'react-native'
 
-import { Container, Group, HeaderBar, SafeAreaContainer, SearchInput } from '@/componentsV2'
+import { Container, Group, HeaderBar, ListSkeleton, SafeAreaContainer, SearchInput } from '@/componentsV2'
 import { ProviderItem } from '@/componentsV2/features/SettingsScreen/ProviderItem'
 import { Plus } from '@/componentsV2/icons'
 import { useAllProviders } from '@/hooks/useProviders'
@@ -27,6 +26,26 @@ export default function ProviderListScreen() {
     useCallback((provider: Provider) => [provider.name || ''], []),
     { delay: 100 }
   )
+
+  const [showSkeleton, setShowSkeleton] = useState(true)
+  const loadingStartTime = useRef(Date.now())
+
+  useEffect(() => {
+    if (isLoading) {
+      loadingStartTime.current = Date.now()
+      setShowSkeleton(true)
+      return
+    }
+    const elapsed = Date.now() - loadingStartTime.current
+    const minDuration = 300
+    const remaining = minDuration - elapsed
+    if (remaining <= 0) {
+      setShowSkeleton(false)
+      return
+    }
+    const timer = setTimeout(() => setShowSkeleton(false), remaining)
+    return () => clearTimeout(timer)
+  }, [isLoading])
 
   const providersList = filteredProviders.filter(p => p.id !== 'cherryai')
 
@@ -57,15 +76,13 @@ export default function ProviderListScreen() {
           onPress: onAddProvider
         }}
       />
-      {isLoading ? (
-        <SafeAreaContainer style={{ alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator />
-        </SafeAreaContainer>
-      ) : (
-        <Container className="gap-4 pb-0">
-          <SearchInput placeholder={t('settings.provider.search')} value={searchText} onChangeText={setSearchText} />
+      <Container className="gap-4 pb-0">
+        <SearchInput placeholder={t('settings.provider.search')} value={searchText} onChangeText={setSearchText} />
 
-          <Group className="flex-1">
+        <Group className="flex-1">
+          {showSkeleton ? (
+            <ListSkeleton variant="provider" count={15} />
+          ) : (
             <FlashList
               data={providersList}
               renderItem={renderProviderItem}
@@ -73,9 +90,9 @@ export default function ProviderListScreen() {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 30 }}
             />
-          </Group>
-        </Container>
-      )}
+          )}
+        </Group>
+      </Container>
     </SafeAreaContainer>
   )
 }

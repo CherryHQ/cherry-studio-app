@@ -1,9 +1,9 @@
 import { DrawerActions, useNavigation } from '@react-navigation/native'
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, View } from 'react-native'
+import { View } from 'react-native'
 
-import { Container, DrawerGestureWrapper, HeaderBar, SafeAreaContainer, SearchInput } from '@/componentsV2'
+import { Container, DrawerGestureWrapper, HeaderBar, ListSkeleton, SafeAreaContainer, SearchInput } from '@/componentsV2'
 import { McpMarketContent } from '@/componentsV2/features/MCP/McpMarketContent'
 import McpServerItemSheet, { presentMcpServerItemSheet } from '@/componentsV2/features/MCP/McpServerItemSheet'
 import { Menu } from '@/componentsV2/icons'
@@ -25,6 +25,26 @@ export function McpMarketScreen() {
     useCallback((mcp: MCPServer) => [mcp.name || '', mcp.id || ''], [])
   )
 
+  const [showSkeleton, setShowSkeleton] = useState(true)
+  const loadingStartTime = useRef(Date.now())
+
+  useEffect(() => {
+    if (isLoading) {
+      loadingStartTime.current = Date.now()
+      setShowSkeleton(true)
+      return
+    }
+    const elapsed = Date.now() - loadingStartTime.current
+    const minDuration = 300
+    const remaining = minDuration - elapsed
+    if (remaining <= 0) {
+      setShowSkeleton(false)
+      return
+    }
+    const timer = setTimeout(() => setShowSkeleton(false), remaining)
+    return () => clearTimeout(timer)
+  }, [isLoading])
+
   const handleMenuPress = () => {
     navigation.dispatch(DrawerActions.openDrawer())
   }
@@ -33,13 +53,6 @@ export function McpMarketScreen() {
     presentMcpServerItemSheet(mcp, updateMcpServers)
   }
 
-  if (isLoading) {
-    return (
-      <SafeAreaContainer style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator />
-      </SafeAreaContainer>
-    )
-  }
   return (
     <SafeAreaContainer className="pb-0">
       <DrawerGestureWrapper>
@@ -57,11 +70,15 @@ export function McpMarketScreen() {
               value={searchText}
               onChangeText={setSearchText}
             />
-            <McpMarketContent
-              mcps={filteredMcps}
-              updateMcpServers={updateMcpServers}
-              handleMcpServerItemPress={handleMcpServerItemPress}
-            />
+            {showSkeleton ? (
+              <ListSkeleton variant="mcp" />
+            ) : (
+              <McpMarketContent
+                mcps={filteredMcps}
+                updateMcpServers={updateMcpServers}
+                handleMcpServerItemPress={handleMcpServerItemPress}
+              />
+            )}
           </Container>
           <McpServerItemSheet />
         </View>

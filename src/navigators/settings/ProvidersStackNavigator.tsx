@@ -10,7 +10,7 @@ import ProviderSettingsScreen from '@/screens/settings/providers/ProviderSetting
 export type ProvidersStackParamList = {
   ProviderSettingsScreen: { providerId: string }
   ProviderListScreen: undefined
-  ManageModelsScreen: { providerId: string }
+  ManageModelsScreen: { providerId: string; providerName: string }
   ApiServiceScreen: { providerId: string }
   AddProviderScreen: { mode: 'add' | 'edit'; providerId?: string } | undefined
 }

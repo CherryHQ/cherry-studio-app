@@ -80,7 +80,7 @@ export default function ProviderSettingsScreen() {
   }
 
   const onManageModel = () => {
-    navigation.navigate('ManageModelsScreen', { providerId })
+    navigation.navigate('ManageModelsScreen', { providerId, providerName: provider?.name ?? '' })
   }
 
   const onApiService = () => {

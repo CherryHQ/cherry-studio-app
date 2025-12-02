@@ -1,9 +1,9 @@
 import { DrawerActions, useNavigation } from '@react-navigation/native'
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, View } from 'react-native'
+import { View } from 'react-native'
 
-import { Container, DrawerGestureWrapper, HeaderBar, SafeAreaContainer, SearchInput } from '@/componentsV2'
+import { Container, DrawerGestureWrapper, GridSkeleton, HeaderBar, SafeAreaContainer, SearchInput } from '@/componentsV2'
 import { presentAssistantItemSheet } from '@/componentsV2/features/Assistant/AssistantItemSheet'
 import AssistantsTabContent from '@/componentsV2/features/Assistant/AssistantsTabContent'
 import { Menu } from '@/componentsV2/icons'
@@ -16,8 +16,6 @@ export default function AssistantMarketScreen() {
   const { t } = useTranslation()
   const navigation = useNavigation<DrawerNavigationProps>()
 
-  const [isInitializing, setIsInitializing] = useState(true)
-
   const { assistants: builtInAssistants } = useBuiltInAssistants()
   const {
     searchText,
@@ -27,6 +25,28 @@ export default function AssistantMarketScreen() {
     builtInAssistants,
     useCallback((assistant: Assistant) => [assistant.name || '', assistant.id || ''], [])
   )
+
+  const [showSkeleton, setShowSkeleton] = useState(true)
+  const loadingStartTime = useRef(Date.now())
+
+  const isLoading = !builtInAssistants || builtInAssistants.length === 0
+
+  useEffect(() => {
+    if (isLoading) {
+      loadingStartTime.current = Date.now()
+      setShowSkeleton(true)
+      return
+    }
+    const elapsed = Date.now() - loadingStartTime.current
+    const minDuration = 300
+    const remaining = minDuration - elapsed
+    if (remaining <= 0) {
+      setShowSkeleton(false)
+      return
+    }
+    const timer = setTimeout(() => setShowSkeleton(false), remaining)
+    return () => clearTimeout(timer)
+  }, [isLoading])
 
   const handleMenuPress = () => {
     navigation.dispatch(DrawerActions.openDrawer())
@@ -42,23 +62,6 @@ export default function AssistantMarketScreen() {
       source: 'builtIn',
       onChatNavigation
     })
-  }
-
-  useEffect(() => {
-    if (builtInAssistants && builtInAssistants.length > 0 && isInitializing) {
-      const id = setTimeout(() => {
-        setIsInitializing(false)
-      }, 100)
-      return () => clearTimeout(id)
-    }
-  }, [builtInAssistants, isInitializing])
-
-  if (isInitializing) {
-    return (
-      <SafeAreaContainer style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator />
-      </SafeAreaContainer>
-    )
   }
 
   return (
@@ -78,8 +81,11 @@ export default function AssistantMarketScreen() {
               value={searchText}
               onChangeText={setSearchText}
             />
-
-            <AssistantsTabContent assistants={filteredAssistants} onAssistantPress={handleAssistantItemPress} />
+            {showSkeleton ? (
+              <GridSkeleton />
+            ) : (
+              <AssistantsTabContent assistants={filteredAssistants} onAssistantPress={handleAssistantItemPress} />
+            )}
           </Container>
         </View>
       </DrawerGestureWrapper>

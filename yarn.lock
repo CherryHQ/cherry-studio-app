@@ -7124,7 +7124,7 @@ __metadata:
     expo-updates: "npm:~29.0.12"
     expo-web-browser: "npm:~15.0.7"
     fast-xml-parser: "npm:^5.2.5"
-    heroui-native: "npm:^1.0.0-beta.3"
+    heroui-native: "npm:^1.0.0-beta.4"
     i18next: "npm:^24.2.2"
     jest: "npm:^29.2.1"
     jest-expo: "npm:~54.0.12"
@@ -11799,9 +11799,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"heroui-native@npm:^1.0.0-beta.3":
-  version: 1.0.0-beta.3
-  resolution: "heroui-native@npm:1.0.0-beta.3"
+"heroui-native@npm:^1.0.0-beta.4":
+  version: 1.0.0-beta.4
+  resolution: "heroui-native@npm:1.0.0-beta.4"
   peerDependencies:
     "@gorhom/bottom-sheet": ^5
     react: "*"
@@ -11813,7 +11813,7 @@ __metadata:
     react-native-worklets: ^0.5.1
     tailwind-merge: ^3.3.1
     tailwind-variants: ^3.1.0
-  checksum: 10c0/af0b3aa0b2034db78b2187bf08dbfb66d41b0572bc41e659c011e6e726c6ebf67136401042d28650d8ccf3a34d1470823f664db8e8ab0d342beec5bbe13fb509
+  checksum: 10c0/9e50ee7a2cb50d21e330b296852f04120c15be93c609cf1529e89039c89b82ea85dab9e6e63098f2d77e941d42ed65994fb947bb0a0dff755bc4b1be7b2b6396
   languageName: node
   linkType: hard
 

@@ -1,19 +1,11 @@
 import type { RouteProp } from '@react-navigation/native'
-import { DrawerActions, useNavigation, useRoute } from '@react-navigation/native'
+import { useNavigation, useRoute } from '@react-navigation/native'
 import { SymbolView } from 'expo-symbols'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, View } from 'react-native'
+import { View } from 'react-native'
 
-import {
-  DrawerGestureWrapper,
-  HeaderBar,
-  SafeAreaContainer,
-  SearchInput,
-  TopicList,
-  XStack,
-  YStack
-} from '@/componentsV2'
+import { HeaderBar, ListSkeleton, SafeAreaContainer, SearchInput, TopicList, XStack, YStack } from '@/componentsV2'
 import { LiquidGlassButton } from '@/componentsV2/base/LiquidGlassButton'
 import Text from '@/componentsV2/base/Text'
 import { MessageSquareDiff, Trash2 } from '@/componentsV2/icons/LucideIcon'
@@ -26,7 +18,7 @@ import type { HomeStackParamList } from '@/navigators/HomeStackNavigator'
 import { assistantService, getDefaultAssistant } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
 import { deleteMessagesByTopicId } from '@/services/MessagesService'
-import { createNewTopic, topicService } from '@/services/TopicService'
+import { topicService } from '@/services/TopicService'
 import type { DrawerNavigationProps } from '@/types/naviagate'
 import { isIOS } from '@/utils/device'
 
@@ -45,6 +37,8 @@ export default function TopicScreen() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showSkeleton, setShowSkeleton] = useState(true)
+  const loadingStartTime = useRef(Date.now())
 
   const assistantTopics = useMemo(() => {
     if (!assistantId) {
@@ -89,14 +83,27 @@ export default function TopicScreen() {
     })
   }, [isMultiSelectMode, visibleTopicIds])
 
+  useEffect(() => {
+    if (isLoading) {
+      loadingStartTime.current = Date.now()
+      setShowSkeleton(true)
+      return
+    }
+    const elapsed = Date.now() - loadingStartTime.current
+    const minDuration = 300
+    const remaining = minDuration - elapsed
+    if (remaining <= 0) {
+      setShowSkeleton(false)
+      return
+    }
+    const timer = setTimeout(() => setShowSkeleton(false), remaining)
+    return () => clearTimeout(timer)
+  }, [isLoading])
+
   const handleAddNewTopic = async () => {
     const targetAssistant = await getAssistantForNewTopic()
-    const newTopic = await createNewTopic(targetAssistant)
+    const newTopic = await topicService.createTopic(targetAssistant)
     navigation.navigate('Home', { screen: 'ChatScreen', params: { topicId: newTopic.id } })
-  }
-
-  const handleMenuPress = () => {
-    navigation.dispatch(DrawerActions.openDrawer())
   }
 
   const handleEnterMultiSelectMode = useCallback((topicId: string) => {
@@ -194,18 +201,6 @@ export default function TopicScreen() {
     })
   }, [dialog, hasSelection, isDeleting, performBatchDelete, selectionCount, t])
 
-  if (isLoading) {
-    return (
-      <SafeAreaContainer className="items-center justify-center">
-        <DrawerGestureWrapper>
-          <View collapsable={false} className="flex-1 items-center justify-center">
-            <ActivityIndicator />
-          </View>
-        </DrawerGestureWrapper>
-      </SafeAreaContainer>
-    )
-  }
-
   return (
     <SafeAreaContainer className="flex-1">
       <View collapsable={false} className="flex-1">
@@ -232,15 +227,19 @@ export default function TopicScreen() {
             <SearchInput placeholder={t('common.search_placeholder')} value={searchText} onChangeText={setSearchText} />
           </View>
           <View className="flex-1">
-            <TopicList
-              topics={filteredTopics}
-              enableScroll={true}
-              isMultiSelectMode={isMultiSelectMode}
-              selectedTopicIds={selectedTopicIds}
-              onToggleTopicSelection={handleToggleTopicSelection}
-              onEnterMultiSelectMode={handleEnterMultiSelectMode}
-              getAssistantForNewTopic={getAssistantForNewTopic}
-            />
+            {showSkeleton ? (
+              <ListSkeleton />
+            ) : (
+              <TopicList
+                topics={filteredTopics}
+                enableScroll={true}
+                isMultiSelectMode={isMultiSelectMode}
+                selectedTopicIds={selectedTopicIds}
+                onToggleTopicSelection={handleToggleTopicSelection}
+                onEnterMultiSelectMode={handleEnterMultiSelectMode}
+                getAssistantForNewTopic={getAssistantForNewTopic}
+              />
+            )}
           </View>
         </YStack>
         {isMultiSelectMode && (

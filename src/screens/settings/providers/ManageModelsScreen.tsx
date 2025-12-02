@@ -2,15 +2,16 @@ import type { RouteProp } from '@react-navigation/native'
 import { useRoute } from '@react-navigation/native'
 import { cn, Tabs } from 'heroui-native'
 import { groupBy, isEmpty, uniqBy } from 'lodash'
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, ScrollView } from 'react-native'
+import { ScrollView } from 'react-native'
 
 import {
   Container,
   Group,
   HeaderBar,
   IconButton,
+  ListSkeleton,
   ModelGroup,
   SafeAreaContainer,
   SearchInput,
@@ -132,8 +133,10 @@ export default function ManageModelsScreen() {
   const [allModels, setAllModels] = useState<Model[]>([])
   const [activeFilterType, setActiveFilterType] = useState<string>('all')
   const [isLoading, setIsLoading] = useState(true)
+  const [showSkeleton, setShowSkeleton] = useState(true)
+  const loadingStartTime = useRef(Date.now())
 
-  const { providerId } = route.params
+  const { providerId, providerName } = route.params
   const [provider, setProvider] = useState<Provider | undefined>(undefined)
   // const { provider, updateProvider } = useProvider(providerId)
 
@@ -232,33 +235,50 @@ export default function ManageModelsScreen() {
     fetchAndSetModels()
   }, [providerId])
 
+  useEffect(() => {
+    if (isLoading) {
+      loadingStartTime.current = Date.now()
+      setShowSkeleton(true)
+      return
+    }
+    const elapsed = Date.now() - loadingStartTime.current
+    const minDuration = 300
+    const remaining = minDuration - elapsed
+    if (remaining <= 0) {
+      setShowSkeleton(false)
+      return
+    }
+    const timer = setTimeout(() => setShowSkeleton(false), remaining)
+    return () => clearTimeout(timer)
+  }, [isLoading])
+
   return (
     <SafeAreaContainer className="flex-1">
-      {provider && <HeaderBar title={t(`provider.${provider.id}`, { defaultValue: provider.name })} />}
-      {isLoading ? (
-        <SafeAreaContainer style={{ alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator />
-        </SafeAreaContainer>
-      ) : (
-        <Container className="pb-0" onStartShouldSetResponder={() => false} onMoveShouldSetResponder={() => false}>
-          {/* Filter Tabs */}
-          <Tabs value={activeFilterType} onValueChange={setActiveFilterType}>
-            <Tabs.ScrollView>
-              <Tabs.List aria-label="Model filter tabs" className="bg-transparent">
-                <Tabs.Indicator />
-                {TAB_CONFIGS.map(({ value, i18nKey }) => (
-                  <Tabs.Trigger key={value} value={value}>
-                    <Tabs.Label className={cn(activeFilterType === value ? 'text-green-100' : undefined)}>
-                      {t(i18nKey)}
-                    </Tabs.Label>
-                  </Tabs.Trigger>
-                ))}
-              </Tabs.List>
-            </Tabs.ScrollView>
-          </Tabs>
+      <HeaderBar title={t(`provider.${providerId}`, { defaultValue: providerName })} />
+      <Container className="pb-0" onStartShouldSetResponder={() => false} onMoveShouldSetResponder={() => false}>
+        {/* Filter Tabs */}
+        <Tabs value={activeFilterType} onValueChange={setActiveFilterType}>
+          <Tabs.ScrollView>
+            <Tabs.List aria-label="Model filter tabs" className="bg-transparent">
+              <Tabs.Indicator />
+              {TAB_CONFIGS.map(({ value, i18nKey }) => (
+                <Tabs.Trigger key={value} value={value}>
+                  <Tabs.Label className={cn(activeFilterType === value ? 'text-green-100' : undefined)}>
+                    {t(i18nKey)}
+                  </Tabs.Label>
+                </Tabs.Trigger>
+              ))}
+            </Tabs.List>
+          </Tabs.ScrollView>
+        </Tabs>
 
-          <SearchInput placeholder={t('settings.models.search')} value={searchText} onChangeText={setSearchText} />
+        <SearchInput placeholder={t('settings.models.search')} value={searchText} onChangeText={setSearchText} />
 
+        {showSkeleton ? (
+          <Group className="flex-1">
+            <ListSkeleton variant="model" count={8} />
+          </Group>
+        ) : (
           <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
             <Group className="flex-1">
               <ModelGroup
@@ -311,8 +331,8 @@ export default function ManageModelsScreen() {
               />
             </Group>
           </ScrollView>
-        </Container>
-      )}
+        )}
+      </Container>
     </SafeAreaContainer>
   )
 }

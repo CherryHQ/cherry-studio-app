@@ -1,13 +1,14 @@
 import { DrawerActions, useNavigation } from '@react-navigation/native'
 import { FlashList } from '@shopify/flash-list'
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, View } from 'react-native'
+import { View } from 'react-native'
 
 import {
   Container,
   DrawerGestureWrapper,
   HeaderBar,
+  ListSkeleton,
   SafeAreaContainer,
   SearchInput,
   Text,
@@ -37,6 +38,26 @@ export default function AssistantScreen() {
     useCallback((assistant: Assistant) => [assistant.name, assistant.description || ''], []),
     { delay: 100 }
   )
+
+  const [showSkeleton, setShowSkeleton] = useState(true)
+  const loadingStartTime = useRef(Date.now())
+
+  useEffect(() => {
+    if (isLoading) {
+      loadingStartTime.current = Date.now()
+      setShowSkeleton(true)
+      return
+    }
+    const elapsed = Date.now() - loadingStartTime.current
+    const minDuration = 300
+    const remaining = minDuration - elapsed
+    if (remaining <= 0) {
+      setShowSkeleton(false)
+      return
+    }
+    const timer = setTimeout(() => setShowSkeleton(false), remaining)
+    return () => clearTimeout(timer)
+  }, [isLoading])
 
   const handleEditAssistant = (assistantId: string) => {
     navigation.navigate('Assistant', { screen: 'AssistantDetailScreen', params: { assistantId } })
@@ -68,14 +89,6 @@ export default function AssistantScreen() {
     navigation.dispatch(DrawerActions.openDrawer())
   }
 
-  if (isLoading) {
-    return (
-      <SafeAreaContainer style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator />
-      </SafeAreaContainer>
-    )
-  }
-
   return (
     <SafeAreaContainer className="pb-0">
       <DrawerGestureWrapper>
@@ -101,19 +114,23 @@ export default function AssistantScreen() {
                 onChangeText={setSearchText}
               />
             </View>
-            <FlashList
-              showsVerticalScrollIndicator={false}
-              data={filteredAssistants}
-              renderItem={({ item }) => <AssistantItem assistant={item} onAssistantPress={handleAssistantItemPress} />}
-              keyExtractor={item => item.id}
-              ItemSeparatorComponent={() => <YStack className="h-2" />}
-              ListEmptyComponent={
-                <YStack className="flex-1 items-center justify-center">
-                  <Text>{t('settings.assistant.empty')}</Text>
-                </YStack>
-              }
-              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
-            />
+            {showSkeleton ? (
+              <ListSkeleton variant="card" />
+            ) : (
+              <FlashList
+                showsVerticalScrollIndicator={false}
+                data={filteredAssistants}
+                renderItem={({ item }) => <AssistantItem assistant={item} onAssistantPress={handleAssistantItemPress} />}
+                keyExtractor={item => item.id}
+                ItemSeparatorComponent={() => <YStack className="h-2" />}
+                ListEmptyComponent={
+                  <YStack className="flex-1 items-center justify-center">
+                    <Text>{t('settings.assistant.empty')}</Text>
+                  </YStack>
+                }
+                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
+              />
+            )}
           </Container>
         </View>
       </DrawerGestureWrapper>
