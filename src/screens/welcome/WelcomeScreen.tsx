@@ -56,7 +56,7 @@ export default function WelcomeScreen() {
           <View className="items-center justify-center px-4">
             <View className="flex-row flex-wrap items-center justify-center">
               <WelcomeTitle className="text-center text-2xl font-bold" />
-              <View className="bg-text-brand-300 ml-2 h-7 w-7 rounded-full" />
+              <View className="bg-primary-text ml-2 h-7 w-7 rounded-full" />
             </View>
           </View>
         </View>

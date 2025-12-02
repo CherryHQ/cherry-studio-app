@@ -65,9 +65,7 @@ export const ProviderItem: React.FC<ProviderItemProps> = ({ provider, mode = 'en
       </XStack>
       <XStack className="items-center gap-2.5">
         {shouldShowStatus && (
-          <Text className="border-brand-300/30 bg-brand-300/5 text-brand-300 rounded-lg border-[0.5px] px-2 py-0.5 text-sm">
-            {statusText}
-          </Text>
+          <Text className="primary-badge rounded-lg border-[0.5px] px-2 py-0.5 text-sm">{statusText}</Text>
         )}
         <RowRightArrow />
       </XStack>

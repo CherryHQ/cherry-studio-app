@@ -30,7 +30,7 @@ const getIconForStatus = (status: StepStatus) => {
     case 'in_progress':
       return <Spinner size="sm" className="text-blue-500 " />
     case 'completed':
-      return <CircleCheck size={20} className="text-brand-300" />
+      return <CircleCheck size={20} className="primary-text" />
     case 'error':
       return <XCircle size={20} className="text-red-600" />
     case 'pending':
@@ -105,7 +105,7 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
                 overallStatus === 'error'
                   ? 'border-red-600/20 bg-red-600/20'
                   : overallStatus === 'success'
-                    ? 'border-brand-300/30 bg-brand-300/20'
+                    ? 'primary-container'
                     : 'border-yellow-400/20 bg-yellow-400/20'
               )}
               isDisabled={!isDone}
@@ -114,7 +114,7 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
                 <Text
                   className={cn(
                     overallStatus === 'error' && 'text-red-600',
-                    overallStatus === 'success' && 'text-brand-300',
+                    overallStatus === 'success' && 'primary-text',
                     overallStatus === 'running' && 'text-yellow-400'
                   )}>
                   {isDone ? t('common.close') : t('settings.data.restore.progress.pending')}

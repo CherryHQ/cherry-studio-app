@@ -34,7 +34,7 @@ export const McpItemCard: FC<McpItemCardProps> = ({ mcp, updateMcpServers, handl
       <YStack className="justify-between gap-2">
         <Switch isSelected={mcp.isActive} onSelectedChange={handleSwitchChange}></Switch>
 
-        <Text className="border-brand-300/30 bg-brand-300/5 text-brand-300 rounded-lg border-[0.5px] px-2 py-0.5 text-sm">
+        <Text className="primary-badge rounded-lg border-[0.5px] px-2 py-0.5 text-sm">
           {t(`mcp.type.${mcp.type}`)}
         </Text>
       </YStack>

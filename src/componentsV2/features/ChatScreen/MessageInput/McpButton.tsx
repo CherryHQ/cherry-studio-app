@@ -35,9 +35,9 @@ export const McpButton: React.FC<McpButtonProps> = ({ assistant, updateAssistant
   const McpIconContent = () => {
     if (activeMcpCount > 0) {
       return (
-        <XStack className="border-brand-300/30 bg-brand-300/5 items-center justify-between gap-1 rounded-xl border-[0.5px] px-2 py-1">
-          <Hammer size={20} className="text-brand-300" />
-          <Text className="text-brand-300">{activeMcpCount}</Text>
+        <XStack className="primary-container items-center justify-between gap-1 rounded-xl border-[0.5px] px-2 py-1">
+          <Hammer size={20} className="primary-text" />
+          <Text className="primary-text">{activeMcpCount}</Text>
         </XStack>
       )
     }

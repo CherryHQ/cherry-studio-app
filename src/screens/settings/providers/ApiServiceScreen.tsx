@@ -162,7 +162,7 @@ export default function ApiServiceScreen() {
                 {checkApiStatus === 'idle' && <ShieldCheck size={16} />}
                 {checkApiStatus === 'error' && <XCircle size={16} />}
                 {checkApiStatus === 'processing' && <Spinner size="sm" />}
-                {checkApiStatus === 'success' && <ShieldCheck size={16} className="text-brand-300" />}
+                {checkApiStatus === 'success' && <ShieldCheck size={16} className="primary-text" />}
               </Button.Label>
             </Button>
           </XStack>

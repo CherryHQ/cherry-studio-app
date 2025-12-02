@@ -41,7 +41,7 @@ const MultiModelTab: FC<MultiModelTabProps> = ({ assistant, messages, messageBlo
                     <Tabs.Trigger key={tabValue} value={tabValue}>
                       <XStack className="items-center justify-center gap-1">
                         {_message.useful && <MultiModalIcon size={14} />}
-                        <Tabs.Label className={cn(currentTab === tabValue ? 'text-brand-300' : undefined)}>
+                        <Tabs.Label className={cn(currentTab === tabValue ? 'primary-text' : undefined)}>
                           <MessageHeader message={_message} />
                         </Tabs.Label>
                       </XStack>

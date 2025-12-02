@@ -212,11 +212,11 @@ const ModelSheet: React.FC = () => {
             feedbackVariant="ripple"
             size="sm"
             className={`h-10 rounded-xl ${
-              isMultiSelectActive ? 'border-brand-300/30 bg-brand-300/5 border' : 'bg-card border border-transparent'
+              isMultiSelectActive ? 'primary-container border' : 'bg-card border border-transparent'
             }`}
             onPress={toggleMultiSelectMode}>
             <Button.Label>
-              <Text className={isMultiSelectActive ? 'text-brand-300' : 'text-foreground'}>{t('button.multiple')}</Text>
+              <Text className={isMultiSelectActive ? 'primary-text' : 'text-foreground'}>{t('button.multiple')}</Text>
             </Button.Label>
           </Button>
         )}
@@ -289,7 +289,7 @@ const ModelSheet: React.FC = () => {
                 activeOpacity={0.7}
                 onPress={() => handleModelToggle(item.value)}
                 className={`justify-between rounded-lg border px-2 ${
-                  isSelected ? 'border-brand-300/30 bg-brand-300/5' : 'border-transparent bg-transparent'
+                  isSelected ? 'primary-container' : 'border-transparent bg-transparent'
                 }`}>
                 <XStack className="w-full items-center gap-2 py-1">
                   <XStack className="items-center justify-center">
@@ -297,7 +297,7 @@ const ModelSheet: React.FC = () => {
                   </XStack>
                   <YStack className="flex-1 gap-1">
                     <Text
-                      className={cn('text-sm leading-none', isSelected ? 'text-brand-300' : 'text-foreground')}
+                      className={cn('text-sm leading-none', isSelected ? 'primary-text' : 'text-foreground')}
                       numberOfLines={1}
                       ellipsizeMode="tail">
                       {item.label}

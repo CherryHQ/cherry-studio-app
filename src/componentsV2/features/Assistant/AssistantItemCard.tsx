@@ -64,11 +64,7 @@ const AssistantItemCard = ({ assistant, onAssistantPress }: AssistantItemCardPro
             <XStack className="h-[18px] flex-wrap justify-center gap-2.5 overflow-hidden">
               {assistant.group &&
                 assistant.group.map((group, index) => (
-                  <GroupTag
-                    key={index}
-                    group={group}
-                    className="border-brand-300/30 bg-brand-300/5 text-brand-300 border-[0.5px] text-[10px]"
-                  />
+                  <GroupTag key={index} group={group} className="primary-badge border-[0.5px] text-[10px]" />
                 ))}
             </XStack>
           </YStack>

@@ -188,11 +188,7 @@ const AssistantItemSheet: React.FC = () => {
               {assistant.group && assistant.group.length > 0 && (
                 <XStack className="flex-wrap justify-center gap-2.5">
                   {assistant.group.map((group, index) => (
-                    <GroupTag
-                      key={index}
-                      group={group}
-                      className="border-brand-300/30 bg-brand-300/5 text-brand-300 border-[0.5px] px-2 text-xs"
-                    />
+                    <GroupTag key={index} group={group} className="primary-badge border-[0.5px] px-2 text-xs" />
                   ))}
                 </XStack>
               )}
@@ -250,10 +246,10 @@ const AssistantItemSheet: React.FC = () => {
             )}
             <Button
               feedbackVariant="ripple"
-              className="border-brand-300/30 bg-brand-300/5 flex-1 rounded-[30px] px-5 py-2.5"
+              className="primary-container flex-1 rounded-[30px] px-5 py-2.5"
               onPress={actionButton?.onPress || handleChatPress}>
               <Button.Label>
-                <Text className="text-brand-300 text-[17px] font-bold">
+                <Text className="primary-text text-[17px] font-bold">
                   {actionButton?.text || t('assistants.market.button.chat')}
                 </Text>
               </Button.Label>

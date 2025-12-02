@@ -44,9 +44,9 @@ const TAG_DEFINITIONS: TagDefinition[] = [
   {
     key: 'vision',
     labelKey: 'models.type.vision',
-    backgroundClassName: 'bg-brand-300/20',
-    textClassName: 'text-brand-300',
-    renderIcon: size => <Eye size={size} className="text-brand-300" />,
+    backgroundClassName: 'primary-container',
+    textClassName: 'primary-text',
+    renderIcon: size => <Eye size={size} className="primary-text" />,
     isVisible: ({ model }) => isVisionModel(model)
   },
   {

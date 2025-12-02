@@ -167,7 +167,7 @@ export default function ProviderSettingsScreen() {
 
         switch (health.status) {
           case 'healthy':
-            return <CircleCheck size={16} className="text-brand-300" />
+            return <CircleCheck size={16} className="primary-text" />
           case 'unhealthy':
             return <XCircle size={16} className="text-red-600" />
           case 'testing':
@@ -271,7 +271,7 @@ export default function ProviderSettingsScreen() {
                     <Text>{t('settings.provider.api_service')}</Text>
                     <XStack className="items-center justify-center">
                       {provider.apiKey && provider.apiHost && (
-                        <Text className="border-brand-300/30 bg-brand-300/5 text-brand-300 rounded-md border-[0.5px] px-2 py-0.5 text-xs font-bold">
+                        <Text className="primary-badge rounded-md border-[0.5px] px-2 py-0.5 text-xs">
                           {t('settings.provider.added')}
                         </Text>
                       )}

@@ -53,8 +53,11 @@ function CustomTabBar({ state, navigation }: any) {
           <TouchableOpacity
             key={route.key}
             onPress={onPress}
-            className={cn('flex-1 items-center justify-center rounded-xl px-5 py-3', isFocused && 'bg-brand-300/20')}>
-            <Text className={cn('text-xs font-bold', isFocused && 'text-brand-300')}>
+            className={cn(
+              'flex-1 items-center justify-center rounded-xl px-5 py-3',
+              isFocused && 'secondary-container'
+            )}>
+            <Text className={cn('text-xs font-bold', isFocused && 'primary-text')}>
               {tabLabels[route.name as keyof typeof tabLabels]}
             </Text>
           </TouchableOpacity>

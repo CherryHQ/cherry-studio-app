@@ -84,7 +84,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
       typeof item.label === 'string' ? (
         <Text
           className={cn(
-            `text-base ${item.isSelected ? 'text-brand-300' : 'text-foreground'}`,
+            `text-base ${item.isSelected ? 'primary-text' : 'text-foreground'}`,
             item.color && !item.isSelected ? item.color : undefined
           )}>
           {item.label}
@@ -96,7 +96,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
       typeof item.description === 'string' ? (
         <Text
           className={cn(
-            `flex-1 text-[11px] opacity-70 ${item.isSelected ? 'text-brand-300' : 'text-foreground-secondary'}`,
+            `flex-1 text-[11px] opacity-70 ${item.isSelected ? 'primary-text' : 'text-foreground-secondary'}`,
             item.color && !item.isSelected ? item.color : undefined
           )}
           numberOfLines={1}
@@ -111,7 +111,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
         <XStack
           className={cn(
             `items-center gap-2.5 rounded-lg border px-3.5 py-3 ${
-              item.isSelected ? 'border-brand-300/30 bg-brand-300/5' : 'border-transparent bg-zinc-400/10'
+              item.isSelected ? 'secondary-container' : 'border-transparent bg-zinc-400/10'
             }`,
             item.backgroundColor && !item.isSelected ? item.backgroundColor : undefined
           )}>
@@ -120,7 +120,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
             {labelElement}
             {descriptionElement}
           </XStack>
-          {item.isSelected && <Check size={20} className="text-brand-300" />}
+          {item.isSelected && <Check size={20} className="primary-text" />}
         </XStack>
       </TouchableOpacity>
     )

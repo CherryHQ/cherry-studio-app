@@ -95,9 +95,9 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
       case 'error':
         return 'bg-red-600/20 border-red-600/20 active:opacity-80 active:bg-red-600/20'
       case 'success':
-        return 'bg-brand-300/5 border-brand-300/30 active:opacity-80 active:bg-brand-300/5'
+        return 'primary-container active:opacity-80'
       default:
-        return 'bg-brand-300/5 border-brand-300/30 active:opacity-80 active:bg-brand-300/5'
+        return 'primary-container active:opacity-80'
     }
   }
 
@@ -110,9 +110,9 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
       case 'error':
         return 'text-red-600'
       case 'success':
-        return 'text-brand-300'
+        return 'primary-text'
       default:
-        return 'text-brand-300'
+        return 'primary-text'
     }
   }
 

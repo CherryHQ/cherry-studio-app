@@ -61,7 +61,7 @@ export default function AboutScreen() {
                 <Text className="text-foreground-secondary text-sm" numberOfLines={0}>
                   {t('common.cherry_studio_description')}
                 </Text>
-                <Text className="border-brand-300/30 bg-brand-300/5 text-brand-300 self-start rounded-[25.37px] border px-2 py-0.5 text-sm">
+                <Text className="primary-badge self-start rounded-[25.37px] border px-2 py-0.5 text-sm">
                   v{appVersion}
                 </Text>
               </YStack>

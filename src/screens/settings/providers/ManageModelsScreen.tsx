@@ -260,10 +260,10 @@ export default function ManageModelsScreen() {
         <Tabs value={activeFilterType} onValueChange={setActiveFilterType}>
           <Tabs.ScrollView>
             <Tabs.List aria-label="Model filter tabs" className="bg-transparent">
-              <Tabs.Indicator className="bg-brand-300/15 border-brand-300/30 rounded-xl border" />
+              <Tabs.Indicator className="primary-container rounded-xl border" />
               {TAB_CONFIGS.map(({ value, i18nKey }) => (
                 <Tabs.Trigger key={value} value={value}>
-                  <Tabs.Label className={cn(activeFilterType === value ? 'text-brand-300' : undefined)}>
+                  <Tabs.Label className={cn(activeFilterType === value ? 'primary-text' : undefined)}>
                     {t(i18nKey)}
                   </Tabs.Label>
                 </Tabs.Trigger>
@@ -302,7 +302,7 @@ export default function ManageModelsScreen() {
                           isModelInCurrentProvider(model.id) ? (
                             <Minus size={18} className="rounded-full bg-red-600/20 text-red-600" />
                           ) : (
-                            <Plus size={18} className="bg-brand-300/20 text-brand-300 rounded-full" />
+                            <Plus size={18} className="secondary-container primary-text rounded-full" />
                           )
                         }
                         onPress={
@@ -318,7 +318,7 @@ export default function ManageModelsScreen() {
                       isAllModelsInCurrentProvider(models) ? (
                         <Minus size={18} className="rounded-full bg-red-600/20 text-red-600" />
                       ) : (
-                        <Plus size={18} className="bg-brand-300/20 text-brand-300 rounded-full" />
+                        <Plus size={18} className="bg-brand-300/20 primary-text rounded-full" />
                       )
                     }
                     onPress={

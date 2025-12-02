@@ -214,7 +214,7 @@ export const TopicItem: FC<TopicItemProps> = ({
       disableContextMenu={isMultiSelectMode}>
       <XStack
         className={`items-center justify-center gap-1.5 rounded-lg px-1 py-1 ${
-          isActive ? 'bg-brand-300/15' : 'bg-transparent'
+          isActive ? 'secondary-container' : 'bg-transparent'
         }`}>
         {isMultiSelectMode && (
           <View className="border-foreground mr-1 h-6 w-6 items-center justify-center rounded-full border">
