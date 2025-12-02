@@ -61,7 +61,7 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscript, onListen
     return (
       <IconButton
         disabled
-        icon={<ActivityIndicator size="small" />}
+        icon={<ActivityIndicator size={24} className="text-white  dark:text-black" />}
         style={{
           backgroundColor,
           borderRadius: 99,
