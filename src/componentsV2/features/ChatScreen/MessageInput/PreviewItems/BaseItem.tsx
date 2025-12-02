@@ -72,7 +72,7 @@ const BaseItem: FC<BaseItemProps> = ({
     {
       title: t('button.share'),
       iOSIcon: 'square.and.arrow.up',
-      androidIcon: <Share size={16} className="text-text-primary" />,
+      androidIcon: <Share size={16} className="text-foreground" />,
       onSelect: handleShare
     }
   ]

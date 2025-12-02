@@ -122,7 +122,7 @@ const TagBadge: React.FC<TagBadgeProps> = ({ icon, label, size, backgroundClassN
       }}>
       {icon}
       {label ? (
-        <Text className={cn('text-text-primary font-medium', textClassName)} style={{ fontSize }} numberOfLines={1}>
+        <Text className={cn('text-foreground font-medium', textClassName)} style={{ fontSize }} numberOfLines={1}>
           {label}
         </Text>
       ) : null}

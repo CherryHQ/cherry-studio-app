@@ -193,7 +193,7 @@ export default function ProviderSettingsScreen() {
             </XStack>
             <XStack className="items-center gap-2">
               {health && health.latency != null && (
-                <Text className="text-text-secondary font-mono text-xs">{health.latency.toFixed(2)}s</Text>
+                <Text className="text-foreground-secondary font-mono text-xs">{health.latency.toFixed(2)}s</Text>
               )}
               {getStatusIcon()}
               <IconButton

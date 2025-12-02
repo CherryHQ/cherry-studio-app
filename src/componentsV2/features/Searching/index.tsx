@@ -23,8 +23,8 @@ export default function Searching({ text }: SearchingProps) {
         loop: true,
         repeatReverse: true
       }}>
-      <Search size={16} className="text-text-primary" />
-      <MotiText className="text-text-primary text-sm">{text}</MotiText>
+      <Search size={16} className="text-foreground" />
+      <MotiText className="text-foreground text-sm">{text}</MotiText>
     </MotiView>
   )
 }

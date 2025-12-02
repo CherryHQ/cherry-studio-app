@@ -93,31 +93,31 @@ export function WebsearchDropdown({ assistant, updateAssistant, providers }: Web
     return (
       <Pressable
         onPress={() => navigation.navigate('Home', { screen: 'WebSearchSettings' })}
-        className="bg-ui-card-background flex-row items-center gap-2 rounded-xl active:opacity-80">
-        <Text className="text-text-secondary text-sm" numberOfLines={1}>
+        className="bg-card flex-row items-center gap-2 rounded-xl active:opacity-80">
+        <Text className="text-foreground-secondary text-sm" numberOfLines={1}>
           {t('settings.websearch.empty.description')}
         </Text>
-        <ChevronRight size={16} className="text-text-secondary " />
+        <ChevronRight size={16} className="text-foreground-secondary " />
       </Pressable>
     )
   }
 
   return (
     <SelectionDropdown items={websearchOptions}>
-      <Pressable className="bg-ui-card-background flex-row items-center gap-2 rounded-xl active:opacity-80">
+      <Pressable className="bg-card flex-row items-center gap-2 rounded-xl active:opacity-80">
         {displayContent.isActive ? (
           <XStack className="items-center gap-2">
             {displayContent.icon}
-            <Text className="text-text-secondary text-sm" numberOfLines={1}>
+            <Text className="text-foreground-secondary text-sm" numberOfLines={1}>
               {displayContent.text}
             </Text>
           </XStack>
         ) : (
-          <Text className="text-text-secondary text-sm" numberOfLines={1}>
+          <Text className="text-foreground-secondary text-sm" numberOfLines={1}>
             {displayContent.text}
           </Text>
         )}
-        <ChevronsUpDown size={16} className="text-text-secondary " />
+        <ChevronsUpDown size={16} className="text-foreground-secondary " />
       </Pressable>
     </SelectionDropdown>
   )

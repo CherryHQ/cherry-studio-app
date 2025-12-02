@@ -156,7 +156,7 @@ const ErrorDetailItem: React.FC<{ label: string; children: React.ReactNode }> = 
 
 const ErrorDetailValue: React.FC<{ children: React.ReactNode; isCode?: boolean }> = ({ children }) => {
   return (
-    <View className="border-normal rounded-md border-[0.5px] p-2">
+    <View className="border-foreground rounded-md border-[0.5px] p-2">
       <Text className="text-xs">{children}</Text>
     </View>
   )
@@ -520,7 +520,7 @@ export const ErrorDetailSheet: React.FC = () => {
 
   const header = (
     <XStack className="items-center justify-between px-5 pb-4 pt-5">
-      <Text className="text-text-primary text-xl font-semibold">{t('error.detail')}</Text>
+      <Text className="text-foreground text-xl font-semibold">{t('error.detail')}</Text>
       <TouchableOpacity
         className={`flex-row items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 ${!error ? 'opacity-50' : ''}`}
         onPress={copyErrorDetails}

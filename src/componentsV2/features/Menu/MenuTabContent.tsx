@@ -20,10 +20,10 @@ export function MenuTabContent({ title, onSeeAllPress, children }: MenuTabConten
       <YStack className="px-5">
         <XStack className="items-center justify-between">
           <XStack className="items-center gap-2 py-2.5">
-            <Text className="text-text-primary">{title}</Text>
+            <Text className="text-foreground">{title}</Text>
           </XStack>
           <TouchableOpacity onPress={onSeeAllPress} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Text className="text-text-link">{t('menu.see_all')}</Text>
+            <Text className="text-blue-500">{t('menu.see_all')}</Text>
           </TouchableOpacity>
         </XStack>
       </YStack>

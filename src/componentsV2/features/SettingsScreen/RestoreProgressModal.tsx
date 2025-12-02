@@ -28,7 +28,7 @@ interface RestoreProgressModalProps {
 const getIconForStatus = (status: StepStatus) => {
   switch (status) {
     case 'in_progress':
-      return <Spinner size="sm" className="text-text-link " />
+      return <Spinner size="sm" className="text-blue-500 " />
     case 'completed':
       return <CircleCheck size={20} className="text-green-100" />
     case 'error':
@@ -79,10 +79,10 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
         {isDone && (
           <Pressable onPress={onClose} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
         )}
-        <YStack className="bg-ui-card-background w-3/4 gap-3 overflow-hidden rounded-2xl p-4">
+        <YStack className="bg-card w-3/4 gap-3 overflow-hidden rounded-2xl p-4">
           <YStack className="items-center gap-3">
             <Text className="text-2xl font-bold">{title}</Text>
-            <Text className="text-text-secondary text-lg">{description}</Text>
+            <Text className="text-foreground-secondary text-lg">{description}</Text>
           </YStack>
 
           <YStack className="items-center justify-center gap-3">

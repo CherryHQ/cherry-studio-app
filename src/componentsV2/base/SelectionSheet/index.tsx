@@ -84,7 +84,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
       typeof item.label === 'string' ? (
         <Text
           className={cn(
-            `text-base ${item.isSelected ? 'text-green-100' : 'text-text-primary'}`,
+            `text-base ${item.isSelected ? 'text-green-100' : 'text-foreground'}`,
             item.color && !item.isSelected ? item.color : undefined
           )}>
           {item.label}
@@ -96,7 +96,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
       typeof item.description === 'string' ? (
         <Text
           className={cn(
-            `flex-1 text-[11px] opacity-70 ${item.isSelected ? 'text-green-100' : 'text-text-secondary'}`,
+            `flex-1 text-[11px] opacity-70 ${item.isSelected ? 'text-green-100' : 'text-foreground-secondary'}`,
             item.color && !item.isSelected ? item.color : undefined
           )}
           numberOfLines={1}
@@ -133,7 +133,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
     placeholder || headerComponent ? (
       <View className="gap-2 px-4 pb-2 pt-5">
         {headerComponent}
-        {placeholder && <Text className="text-text-secondary text-center text-sm opacity-60">{placeholder}</Text>}
+        {placeholder && <Text className="text-foreground-secondary text-center text-sm opacity-60">{placeholder}</Text>}
       </View>
     ) : (
       <YStack className="h-5" />

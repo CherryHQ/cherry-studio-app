@@ -6,17 +6,18 @@
 
 | 旧变量 | 新变量 | 旧 Tailwind 类 | 新 Tailwind 类 |
 |--------|--------|----------------|----------------|
-| `--color-background-primary` | `--color-background` | `bg-background-primary` | `bg-background` |
-| `--color-background-secondary` | `--color-secondary` | `bg-background-secondary` | `bg-secondary` |
-| `--color-ui-card` | `--color-card` | `bg-ui-card` | `bg-card` |
-| `--color-ui-card-background` | `--color-card` | `bg-ui-card-background` | `bg-card` |
-| `--color-text-primary` | `--color-foreground` | `text-text-primary` | `text-foreground` |
-| `--color-text-secondary` | `--color-foreground-secondary` | `text-text-secondary` | `text-foreground-secondary` |
-| `--color-text-delete` | `--color-error-base` | `text-text-delete` | `text-error-base` |
-| `--color-text-link` | `--color-blue-500` | `text-text-link` | `text-blue-500` |
-| `--color-normal` | `--color-foreground` | `text-normal` | `text-foreground` |
+| `--color-background-primary` | `--color-background` | `bg-background-primary` | `bg-background` | ✅ 已完成 |
+| `--color-background-secondary` | `--color-secondary` | `bg-background-secondary` | `bg-secondary` | ✅ 已完成 |
+| `--color-ui-card` | `--color-card` | `bg-ui-card` | `bg-card` | ✅ 已完成 |
+| `--color-ui-card-background` | `--color-card` | `bg-ui-card-background` | `bg-card` | ✅ 已完成 |
+| `--color-text-primary` | `--color-foreground` | `text-text-primary` | `text-foreground` | ✅ 已完成 |
+| `--color-text-secondary` | `--color-foreground-secondary` | `text-text-secondary` | `text-foreground-secondary` | ✅ 已完成 |
+| `--color-text-delete` | `--color-error-base` | `text-text-delete` | `text-error-base` | ✅ 已完成 |
+| `--color-text-link` | `--color-blue-500` | `text-text-link` | `text-blue-500` | ✅ 已完成 |
+| `--color-normal` | `--color-foreground` | `text-normal` | `text-foreground` | ✅ 已完成 |
+| `--color-normal` | `--color-foreground` | `border-normal` | `border-foreground` | ✅ 已完成 |
 
-### 批量替换命令
+### 批量替换命令（✅ 全部已完成）
 
 ```bash
 # 背景色

@@ -179,7 +179,7 @@ export const TopicItem: FC<TopicItemProps> = ({
           {
             title: t('topics.multi_select.action'),
             iOSIcon: 'checkmark.circle',
-            androidIcon: <CheckSquare size={16} className="text-text-primary" />,
+            androidIcon: <CheckSquare size={16} className="text-foreground" />,
             onSelect: () => onEnterMultiSelectMode(topic.id)
           }
         ]
@@ -187,13 +187,13 @@ export const TopicItem: FC<TopicItemProps> = ({
     {
       title: t('button.generate_topic_name'),
       iOSIcon: 'sparkles',
-      androidIcon: <Sparkles size={16} className="text-text-primary" />,
+      androidIcon: <Sparkles size={16} className="text-foreground" />,
       onSelect: handleGenerateName
     },
     {
       title: t('button.rename_topic_name'),
       iOSIcon: 'rectangle.and.pencil.and.ellipsis',
-      androidIcon: <Edit3 size={16} className="text-text-primary" />,
+      androidIcon: <Edit3 size={16} className="text-foreground" />,
       onSelect: handleRename
     },
     {
@@ -217,7 +217,7 @@ export const TopicItem: FC<TopicItemProps> = ({
           isActive ? 'bg-green-10' : 'bg-transparent'
         }`}>
         {isMultiSelectMode && (
-          <View className="border-normal mr-1 h-6 w-6 items-center justify-center rounded-full border">
+          <View className="border-foreground mr-1 h-6 w-6 items-center justify-center rounded-full border">
             {isSelected && <Check size={14} className="text-white" />}
           </View>
         )}
@@ -233,12 +233,12 @@ export const TopicItem: FC<TopicItemProps> = ({
             <Text className="flex-1 text-base font-bold" numberOfLines={1} ellipsizeMode="tail">
               {assistant?.name}
             </Text>
-            <Text className="text-wrap-none text-text-secondary shrink-0 text-xs">{displayTime}</Text>
+            <Text className="text-wrap-none text-foreground-secondary shrink-0 text-xs">{displayTime}</Text>
           </XStack>
           {isGeneratingName ? (
             <TopicNameSkeleton isDark={isDark} />
           ) : (
-            <Text className="text-text-secondary text-[13px] font-normal" numberOfLines={1} ellipsizeMode="tail">
+            <Text className="text-foreground-secondary text-[13px] font-normal" numberOfLines={1} ellipsizeMode="tail">
               {topic.name}
             </Text>
           )}

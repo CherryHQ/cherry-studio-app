@@ -22,7 +22,7 @@ export default function MessageMcpTool({ block }: Props) {
     <View>
       <Accordion selectionMode="single" variant="default" className="rounded-md">
         <Accordion.Item value="1">
-          <Accordion.Trigger className="bg-ui-card-background py-2">
+          <Accordion.Trigger className="bg-card py-2">
             <XStack className="flex-1 items-center gap-2">
               {isPending && <Spinner size="sm" />}
               {isDone && <Wrench size={16} />}
@@ -31,7 +31,7 @@ export default function MessageMcpTool({ block }: Props) {
             </XStack>
             <Accordion.Indicator />
           </Accordion.Trigger>
-          <Accordion.Content className="bg-ui-card-background">
+          <Accordion.Content className="bg-card">
             <View>
               <Text>{JSON.stringify(response, null, 2)}</Text>
             </View>

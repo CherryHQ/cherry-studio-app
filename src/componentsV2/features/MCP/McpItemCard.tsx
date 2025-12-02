@@ -28,10 +28,10 @@ export const McpItemCard: FC<McpItemCardProps> = ({ mcp, updateMcpServers, handl
   return (
     <PressableRow
       onPress={handlePress}
-      className="bg-ui-card-background items-center justify-between rounded-2xl px-2.5 py-2.5">
+      className="bg-card items-center justify-between rounded-2xl px-2.5 py-2.5">
       <YStack className="h-full gap-2">
         <Text className="text-lg">{mcp.name}</Text>
-        <Text className="text-text-secondary text-sm">{mcp.description}</Text>
+        <Text className="text-foreground-secondary text-sm">{mcp.description}</Text>
       </YStack>
       <YStack className="justify-between gap-2">
         <Switch isSelected={mcp.isActive} onSelectedChange={handleSwitchChange}></Switch>

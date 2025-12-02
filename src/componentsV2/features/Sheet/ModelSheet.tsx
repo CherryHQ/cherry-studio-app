@@ -212,11 +212,11 @@ const ModelSheet: React.FC = () => {
             feedbackVariant="ripple"
             size="sm"
             className={`h-10 rounded-xl ${
-              isMultiSelectActive ? 'border-green-20 bg-green-10 border' : 'bg-ui-card border border-transparent'
+              isMultiSelectActive ? 'border-green-20 bg-green-10 border' : 'bg-card border border-transparent'
             }`}
             onPress={toggleMultiSelectMode}>
             <Button.Label>
-              <Text className={isMultiSelectActive ? 'text-green-100' : 'text-text-primary'}>
+              <Text className={isMultiSelectActive ? 'text-green-100' : 'text-foreground'}>
                 {t('button.multiple')}
               </Text>
             </Button.Label>
@@ -226,11 +226,11 @@ const ModelSheet: React.FC = () => {
           <Button
             size="sm"
             feedbackVariant="ripple"
-            className="bg-ui-card h-10 rounded-full"
+            className="bg-card h-10 rounded-full"
             isIconOnly
             onPress={handleClearAll}>
             <Button.Label>
-              <BrushCleaning size={18} className="text-text-primary" />
+              <BrushCleaning size={18} className="text-foreground" />
             </Button.Label>
           </Button>
         )}
@@ -299,7 +299,7 @@ const ModelSheet: React.FC = () => {
                   </XStack>
                   <YStack className="flex-1 gap-1">
                     <Text
-                      className={cn('text-sm leading-none', isSelected ? 'text-green-100' : 'text-text-primary')}
+                      className={cn('text-sm leading-none', isSelected ? 'text-green-100' : 'text-foreground')}
                       numberOfLines={1}
                       ellipsizeMode="tail">
                       {item.label}

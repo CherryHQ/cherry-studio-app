@@ -8,7 +8,7 @@ export interface TextProps extends RNTextProps {
 }
 
 const Text = forwardRef<RNText, TextProps>(({ className = '', ...rest }, ref) => {
-  const composed = cn('text-base text-text-primary', className)
+  const composed = cn('text-base text-foreground', className)
 
   return <RNText ref={ref} className={composed} {...rest} />
 })

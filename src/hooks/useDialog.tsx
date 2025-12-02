@@ -138,15 +138,15 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
           transition={{ type: 'timing', duration: 300 }}
           className={centeredViewClassName}>
           {maskClosable && <Pressable className="absolute inset-0" onPress={cancel} />}
-          <YStack className="bg-ui-card-background w-3/4 rounded-2xl">
+          <YStack className="bg-card w-3/4 rounded-2xl">
             <YStack className="items-center gap-3 p-5">
               {typeof options?.title === 'string' ? (
-                <Text className="text-text-primary text-lg font-bold">{options.title}</Text>
+                <Text className="text-foreground text-lg font-bold">{options.title}</Text>
               ) : (
                 options?.title
               )}
               {typeof options?.content === 'string' ? (
-                <Text className="text-text-secondary text-center text-[15px] leading-5">{options.content}</Text>
+                <Text className="text-foreground-secondary text-center text-[15px] leading-5">{options.content}</Text>
               ) : (
                 options?.content
               )}

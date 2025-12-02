@@ -375,47 +375,97 @@
 }
 
 /* ==================== */
-/* Dark Mode */
+/* Theme Variants */
 /* ==================== */
 @layer theme {
-  .dark {
-    --color-background: oklch(0.21 0.006 286);
-    --color-background-subtle: oklch(1 0 0 / 0.02);
-    --color-foreground: oklch(1 0 0 / 0.9);
-    --color-foreground-secondary: oklch(1 0 0 / 0.6);
-    --color-foreground-muted: oklch(1 0 0 / 0.4);
-    --color-card: oklch(0 0 0);
-    --color-popover: oklch(0 0 0);
-    --color-border: oklch(1 0 0 / 0.1);
-    --color-border-hover: oklch(1 0 0 / 0.2);
-    --color-border-active: oklch(1 0 0 / 0.3);
-    --color-ring: oklch(0.76 0.204 131 / 0.4);
-    --color-secondary: oklch(1 0 0 / 0.1);
-    --color-secondary-hover: oklch(1 0 0 / 0.2);
-    --color-secondary-active: oklch(1 0 0 / 0.25);
-    --color-muted: oklch(1 0 0 / 0.1);
-    --color-accent: oklch(1 0 0 / 0.1);
-    --color-ghost-hover: oklch(1 0 0 / 0.1);
-    --color-ghost-active: oklch(1 0 0 / 0.15);
-    --color-sidebar: oklch(0 0 0);
-    --color-sidebar-accent: oklch(1 0 0 / 0.1);
-    --color-error-base: oklch(0.71 0.166 22);
-    --color-error-text: oklch(0.93 0.031 18);
-    --color-error-bg: oklch(0.4 0.135 26);
-    --color-error-text-hover: oklch(0.88 0.062 18);
-    --color-error-bg-hover: oklch(0.44 0.16 27);
-    --color-error-border: oklch(0.51 0.192 28);
-    --color-error-border-hover: oklch(0.58 0.214 27);
-    --color-error-active: oklch(0.81 0.103 20);
-    --color-success-base: oklch(0.8 0.182 152);
-    --color-success-text-hover: oklch(0.92 0.081 156);
-    --color-success-bg: oklch(0.39 0.089 153);
-    --color-success-bg-hover: oklch(0.45 0.107 151);
-    --color-warning-base: oklch(0.83 0.164 84);
-    --color-warning-text-hover: oklch(0.93 0.114 96);
-    --color-warning-bg: oklch(0.41 0.104 46);
-    --color-warning-bg-hover: oklch(0.47 0.124 47);
-    --color-warning-active: oklch(0.67 0.159 58);
+  :root {
+    @variant light {
+      --color-primary: oklch(0.77 0.208 146);
+      --color-primary-hover: oklch(0.85 0.13 149);
+      --color-destructive: oklch(0.64 0.208 25);
+      --color-destructive-hover: oklch(0.71 0.166 22);
+      --color-background: oklch(0.98 0 0);
+      --color-background-subtle: oklch(0 0 0 / 0.02);
+      --color-foreground: oklch(0 0 0 / 0.9);
+      --color-foreground-secondary: oklch(0 0 0 / 0.6);
+      --color-foreground-muted: oklch(0 0 0 / 0.4);
+      --color-card: oklch(1 0 0);
+      --color-popover: oklch(1 0 0);
+      --color-border: oklch(0 0 0 / 0.1);
+      --color-border-hover: oklch(0 0 0 / 0.2);
+      --color-border-active: oklch(0 0 0 / 0.3);
+      --color-ring: color-mix(in srgb, oklch(0.77 0.208 146) 40%, transparent);
+      --color-secondary: oklch(0 0 0 / 0.05);
+      --color-secondary-hover: oklch(0 0 0 / 0.85);
+      --color-secondary-active: oklch(0 0 0 / 0.7);
+      --color-muted: oklch(0 0 0 / 0.05);
+      --color-accent: oklch(0 0 0 / 0.05);
+      --color-ghost-hover: oklch(0 0 0 / 0.05);
+      --color-ghost-active: oklch(0 0 0 / 0.1);
+      --color-sidebar: oklch(1 0 0);
+      --color-sidebar-accent: oklch(0 0 0 / 0.05);
+      --color-error-base: oklch(0.64 0.208 25);
+      --color-error-text: oklch(0.44 0.16 27);
+      --color-error-bg: oklch(0.97 0.014 17);
+      --color-error-text-hover: oklch(0.51 0.192 28);
+      --color-error-bg-hover: oklch(0.93 0.031 18);
+      --color-error-border: oklch(0.88 0.062 18);
+      --color-error-border-hover: oklch(0.81 0.103 20);
+      --color-error-active: oklch(0.58 0.214 27);
+      --color-success-base: oklch(0.72 0.192 149);
+      --color-success-text-hover: oklch(0.52 0.137 150);
+      --color-success-bg: oklch(0.98 0.016 156);
+      --color-success-bg-hover: oklch(0.92 0.081 156);
+      --color-warning-base: oklch(0.83 0.164 84);
+      --color-warning-text-hover: oklch(0.55 0.145 49);
+      --color-warning-bg: oklch(0.99 0.022 95);
+      --color-warning-bg-hover: oklch(0.96 0.057 96);
+      --color-warning-active: oklch(0.67 0.159 58);
+    }
+
+    @variant dark {
+      --color-primary: oklch(0.77 0.208 146);
+      --color-primary-hover: oklch(0.85 0.13 149);
+      --color-destructive: oklch(0.64 0.208 25);
+      --color-destructive-hover: oklch(0.71 0.166 22);
+      --color-background: oklch(0 0 0);
+      --color-background-subtle: oklch(1 0 0 / 0.02);
+      --color-foreground: oklch(1 0 0 / 0.9);
+      --color-foreground-secondary: oklch(1 0 0 / 0.6);
+      --color-foreground-muted: oklch(1 0 0 / 0.4);
+      --color-card: oklch(0.21 0.006 286);
+      --color-popover: oklch(0 0 0);
+      --color-border: oklch(1 0 0 / 0.1);
+      --color-border-hover: oklch(1 0 0 / 0.2);
+      --color-border-active: oklch(1 0 0 / 0.3);
+      --color-ring: oklch(0.76 0.204 131 / 0.4);
+      --color-secondary: oklch(1 0 0 / 0.1);
+      --color-secondary-hover: oklch(1 0 0 / 0.2);
+      --color-secondary-active: oklch(1 0 0 / 0.25);
+      --color-muted: oklch(1 0 0 / 0.1);
+      --color-accent: oklch(1 0 0 / 0.1);
+      --color-ghost-hover: oklch(1 0 0 / 0.1);
+      --color-ghost-active: oklch(1 0 0 / 0.15);
+      --color-sidebar: oklch(0 0 0);
+      --color-sidebar-accent: oklch(1 0 0 / 0.1);
+      --color-error-base: oklch(0.71 0.166 22);
+      --color-error-text: oklch(0.93 0.031 18);
+      --color-error-bg: oklch(0.4 0.135 26);
+      --color-error-text-hover: oklch(0.88 0.062 18);
+      --color-error-bg-hover: oklch(0.44 0.16 27);
+      --color-error-border: oklch(0.51 0.192 28);
+      --color-error-border-hover: oklch(0.58 0.214 27);
+      --color-error-active: oklch(0.81 0.103 20);
+      --color-success-base: oklch(0.8 0.182 152);
+      --color-success-text-hover: oklch(0.92 0.081 156);
+      --color-success-bg: oklch(0.39 0.089 153);
+      --color-success-bg-hover: oklch(0.45 0.107 151);
+      --color-warning-base: oklch(0.83 0.164 84);
+      --color-warning-text-hover: oklch(0.93 0.114 96);
+      --color-warning-bg: oklch(0.41 0.104 46);
+      --color-warning-bg-hover: oklch(0.47 0.124 47);
+      --color-warning-active: oklch(0.67 0.159 58);
+    }
   }
 }
 

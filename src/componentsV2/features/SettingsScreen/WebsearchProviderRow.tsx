@@ -29,7 +29,7 @@ export const WebsearchProviderRow = ({ provider, need_config }: WebsearchProvide
     <PressableRow onPress={onPress} disabled={!need_config}>
       <XStack className="items-center gap-3">
         <WebsearchProviderIcon provider={provider} />
-        <Text className="text-text-primary text-[14px]">{provider.name}</Text>
+        <Text className="text-foreground text-[14px]">{provider.name}</Text>
       </XStack>
       <XStack className="items-center gap-2">
         {provider.apiKey && (

@@ -40,7 +40,7 @@ const FileItem: FC<FileItemProps> = ({ file, onRemove, size, disabledContextMenu
             <Text className="w-full  text-start text-xl" numberOfLines={2} ellipsizeMode="middle">
               {file.name.split('.')[1].toLocaleUpperCase()}
             </Text>
-            <Text className="text-text-secondary text-md">{formatFileSize(file.size)}</Text>
+            <Text className="text-foreground-secondary text-md">{formatFileSize(file.size)}</Text>
             <Text className="text-center text-xl" numberOfLines={1} ellipsizeMode="middle">
               {file.name.split('.')[0]}
             </Text>

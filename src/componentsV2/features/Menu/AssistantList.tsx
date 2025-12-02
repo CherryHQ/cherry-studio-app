@@ -51,7 +51,7 @@ export function AssistantList({ assistants, isLoading = false, onAssistantPress 
                   {item.name}
                 </Text>
                 {!isEmpty(item.prompt) && (
-                  <Text ellipsizeMode="tail" numberOfLines={1} className="text-text-secondary text-xs">
+                  <Text ellipsizeMode="tail" numberOfLines={1} className="text-foreground-secondary text-xs">
                     {item.prompt}
                   </Text>
                 )}
@@ -64,7 +64,7 @@ export function AssistantList({ assistants, isLoading = false, onAssistantPress 
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={() => (
           <YStack className="flex-1 items-center justify-center py-5">
-            <Text className="text-text-secondary text-sm">{t('settings.assistant.empty')}</Text>
+            <Text className="text-foreground-secondary text-sm">{t('settings.assistant.empty')}</Text>
           </YStack>
         )}
       />

@@ -87,7 +87,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
       <Button
         feedbackVariant="ripple"
         variant="tertiary"
-        className="bg-ui-card-background justify-between rounded-xl border-0"
+        className="bg-card justify-between rounded-xl border-0"
         onPress={handleModelPress}>
         {model.length > 0 ? (
           <XStack className="flex-1 flex-row items-center justify-between">

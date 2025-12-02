@@ -184,7 +184,7 @@ const AssistantItemSheet: React.FC = () => {
                   borderColor={isDark ? '#333333' : '#ffffff'}
                 />
               </View>
-              <Text className="text-text-primary text-center text-[22px] font-bold">{assistant.name}</Text>
+              <Text className="text-foreground text-center text-[22px] font-bold">{assistant.name}</Text>
               {assistant.group && assistant.group.length > 0 && (
                 <XStack className="flex-wrap justify-center gap-2.5">
                   {assistant.group.map((group, index) => (
@@ -199,7 +199,7 @@ const AssistantItemSheet: React.FC = () => {
               {assistant.defaultModel && (
                 <XStack className="items-center justify-center gap-0.5">
                   <ModelIcon model={assistant.defaultModel} size={14} />
-                  <Text className="text-text-primary text-sm" numberOfLines={1} ellipsizeMode="tail">
+                  <Text className="text-foreground text-sm" numberOfLines={1} ellipsizeMode="tail">
                     {assistant.defaultModel.name}
                   </Text>
                 </XStack>
@@ -216,16 +216,16 @@ const AssistantItemSheet: React.FC = () => {
                 {/* Description */}
                 {assistant.description && (
                   <YStack className="gap-1">
-                    <Text className="text-text-primary text-lg font-bold leading-5">{t('common.description')}</Text>
-                    <Text className="text-text-secondary leading-5">{assistant.description}</Text>
+                    <Text className="text-foreground text-lg font-bold leading-5">{t('common.description')}</Text>
+                    <Text className="text-foreground-secondary leading-5">{assistant.description}</Text>
                   </YStack>
                 )}
 
                 {/* Additional details could go here */}
                 {assistant.prompt && (
                   <YStack className="gap-1">
-                    <Text className="text-text-primary text-lg font-bold leading-5">{t('common.prompt')}</Text>
-                    <Text className="text-text-primary text-base leading-5">{assistant.prompt}</Text>
+                    <Text className="text-foreground text-lg font-bold leading-5">{t('common.prompt')}</Text>
+                    <Text className="text-foreground text-base leading-5">{assistant.prompt}</Text>
                   </YStack>
                 )}
               </YStack>

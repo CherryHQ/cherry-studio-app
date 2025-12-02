@@ -105,7 +105,7 @@ export const AddModelSheet: React.FC = () => {
 
   const header = (
     <XStack className="w-full items-center justify-center pb-2 pt-5">
-      <Text className="text-text-primary text-xl">{t('settings.models.add.model.label')}</Text>
+      <Text className="text-foreground text-xl">{t('settings.models.add.model.label')}</Text>
     </XStack>
   )
 
@@ -129,7 +129,7 @@ export const AddModelSheet: React.FC = () => {
             {/* Model ID Input */}
             <YStack className="w-full gap-2">
               <XStack className="gap-2 px-3">
-                <Text className="text-text-secondary">{t('settings.models.add.model.id.label')}</Text>
+                <Text className="text-foreground-secondary">{t('settings.models.add.model.id.label')}</Text>
                 <Text className="text-red-500">*</Text>
               </XStack>
               <TextField className="rounded-2xl">
@@ -145,7 +145,7 @@ export const AddModelSheet: React.FC = () => {
             {/* Model Name Input */}
             <YStack className="w-full gap-2">
               <XStack className="gap-2 px-3">
-                <Text className="text-text-secondary">{t('settings.models.add.model.name.label')}</Text>
+                <Text className="text-foreground-secondary">{t('settings.models.add.model.name.label')}</Text>
               </XStack>
               <TextField className="rounded-2xl">
                 <TextField.Input
@@ -160,7 +160,7 @@ export const AddModelSheet: React.FC = () => {
             {/* Model Group Input */}
             <YStack className="w-full gap-2">
               <XStack className="gap-2 px-3">
-                <Text className="text-text-secondary">{t('settings.models.add.model.group.label')}</Text>
+                <Text className="text-foreground-secondary">{t('settings.models.add.model.group.label')}</Text>
               </XStack>
               <TextField className="rounded-2xl">
                 <TextField.Input

@@ -55,7 +55,7 @@ export function AvatarEditButton({
           })
         }}>
         {isEmoji ? (
-          <Text style={{ fontSize: size * 0.5, lineHeight: size * 0.5 }} className="text-text-primary">
+          <Text style={{ fontSize: size * 0.5, lineHeight: size * 0.5 }} className="text-foreground">
             {content}
           </Text>
         ) : (

@@ -45,24 +45,24 @@ export function ToolUseDropdown({ assistant, updateAssistant }: ToolUseDropdownP
 
   return (
     <SelectionDropdown items={toolUseOptions}>
-      <Pressable className="bg-ui-card-background flex-row items-center gap-2 rounded-xl  active:opacity-80">
+      <Pressable className="bg-card flex-row items-center gap-2 rounded-xl  active:opacity-80">
         {assistant.settings?.toolUseMode ? (
           <>
             {assistant.settings.toolUseMode === 'function' ? (
-              <SquareFunction className="text-text-secondary " size={18} />
+              <SquareFunction className="text-foreground-secondary " size={18} />
             ) : (
-              <Wrench className="text-text-secondary " size={18} />
+              <Wrench className="text-foreground-secondary " size={18} />
             )}
-            <Text className="text-text-secondary text-sm" numberOfLines={1}>
+            <Text className="text-foreground-secondary text-sm" numberOfLines={1}>
               {t(`assistants.settings.tooluse.${assistant.settings?.toolUseMode}`)}
             </Text>
           </>
         ) : (
-          <Text className="text-text-secondary text-sm" numberOfLines={1}>
+          <Text className="text-foreground-secondary text-sm" numberOfLines={1}>
             {t('assistants.settings.tooluse.empty')}
           </Text>
         )}
-        <ChevronsUpDown size={16} className="text-text-secondary " />
+        <ChevronsUpDown size={16} className="text-foreground-secondary " />
       </Pressable>
     </SelectionDropdown>
   )

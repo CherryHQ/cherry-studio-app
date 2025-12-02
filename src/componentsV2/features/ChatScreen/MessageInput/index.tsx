@@ -37,7 +37,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
 
   return (
     <View
-      className="bg-background-secondary rounded-3xl p-3"
+      className="bg-secondary rounded-3xl p-3"
       style={{
         paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad,
         shadowColor: isDark ? '#fff' : '#000',
@@ -53,7 +53,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
         <XStack className="top-[5px]">
           <TextField className="w-full p-0">
             <TextField.Input
-              className="text-text-primary h-24 border-none p-0 text-base"
+              className="text-foreground h-24 border-none p-0 text-base"
               placeholder={t('inputs.placeholder')}
               value={text}
               onChangeText={setText}

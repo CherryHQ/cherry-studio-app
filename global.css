@@ -11,7 +11,7 @@
 /* Uniwind rem configuration (default 16px, same as tailwind default) */
 /* No need to change unless you want different rem value */
 
-@layer theme {
+/*@layer theme {
   :root {
     @variant dark {
       --color-background-primary: #121213;
@@ -116,4 +116,4 @@
       --color-normal: #000000;
     }
   }
-}
+}*/

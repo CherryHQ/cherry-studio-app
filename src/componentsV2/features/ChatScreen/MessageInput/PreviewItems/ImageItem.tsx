@@ -81,7 +81,7 @@ const ImageItem: FC<ImageItemProps> = ({ file, allImages = [], onRemove, size, d
           {
             title: t('button.save_image'),
             iOSIcon: 'square.and.arrow.down',
-            androidIcon: <Download size={16} className="text-text-primary" />,
+            androidIcon: <Download size={16} className="text-foreground" />,
             onSelect: handleSaveImage
           }
         ]}

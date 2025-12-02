@@ -138,7 +138,7 @@ export default function AddProviderScreen() {
               <YStack className="w-full gap-2">
                 <XStack className="flex items-center gap-2">
                   <XStack className="w-1/3">
-                    <Text className="text-text-secondary">{t('settings.provider.add.name.label')}</Text>
+                    <Text className="text-foreground-secondary">{t('settings.provider.add.name.label')}</Text>
                     <Text className="text-red-500">*</Text>
                   </XStack>
                   <TextField className="flex-1">
@@ -154,7 +154,7 @@ export default function AddProviderScreen() {
 
               <YStack className="w-full gap-2">
                 <XStack className="flex items-center gap-2">
-                  <Text className="text-text-secondary w-1/3">{t('settings.provider.add.type')}</Text>
+                  <Text className="text-foreground-secondary w-1/3">{t('settings.provider.add.type')}</Text>
                   <XStack className="flex-1">
                     <ProviderSelect
                       value={selectedProviderType}
