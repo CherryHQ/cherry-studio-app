@@ -35,7 +35,7 @@ export const McpButton: React.FC<McpButtonProps> = ({ assistant, updateAssistant
   const McpIconContent = () => {
     if (activeMcpCount > 0) {
       return (
-        <XStack className="primary-container items-center justify-between gap-1 rounded-xl border-[0.5px] px-2 py-1">
+        <XStack className="message-input-container items-center justify-between gap-1 rounded-xl border-[0.5px] px-2 py-1">
           <Hammer size={20} className="primary-text" />
           <Text className="primary-text">{activeMcpCount}</Text>
         </XStack>

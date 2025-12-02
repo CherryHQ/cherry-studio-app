@@ -13,6 +13,10 @@
     @apply border-primary/30 bg-primary/10 dark:border-brand-300/30 dark:bg-brand-300/15;
   }
 
+  .message-input-container {
+    @apply border-primary/30 bg-primary/10 dark:border-brand-300/30 dark:bg-brand-300/5;
+  }
+
   /* Primary text color */
   .primary-text {
     @apply text-primary dark:text-brand-300;

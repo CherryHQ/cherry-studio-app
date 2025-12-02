@@ -20,7 +20,7 @@ interface MentionButtonProps {
 
 const BUTTON_STYLES = {
   maxWidth: 150,
-  container: 'gap-1 items-center secondary-container rounded-xl border-[0.5px] py-1 px-1',
+  container: 'gap-1 items-center message-input-container rounded-xl border-[0.5px] py-1 px-1',
   text: 'primary-text'
 }
 

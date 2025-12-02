@@ -8,7 +8,6 @@ import TextField from '@/componentsV2/base/TextField'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useBottom } from '@/hooks/useBottom'
-import { useTheme } from '@/hooks/useTheme'
 import type { Assistant, Topic } from '@/types/assistant'
 
 import { FilePreview } from './FilePreview'
@@ -29,14 +28,13 @@ interface MessageInputProps {
 
 export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, updateAssistant }) => {
   const { t } = useTranslation()
-  const { isDark } = useTheme()
   const bottomPad = useBottom()
   const { text, setText, files, setFiles, mentions, setMentions, isReasoning, sendMessage, onPause } =
     useMessageInputLogic(topic, assistant)
   const [isVoiceActive, setIsVoiceActive] = useState(false)
   return (
     <View
-      className="bg-foreground-secondary/12 rounded-3xl p-3"
+      className="bg-foreground-secondary/5 dark:bg-foreground-secondary/12 rounded-3xl p-3"
       style={{
         paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad
       }}>

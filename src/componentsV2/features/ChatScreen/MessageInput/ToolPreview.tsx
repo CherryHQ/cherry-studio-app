@@ -33,7 +33,7 @@ interface ToolItemProps {
 }
 
 const ToolItem: React.FC<ToolItemProps> = ({ icon: Icon, label, onToggle }) => (
-  <XStack className="secondary-container items-center justify-between gap-1 rounded-full border px-2 py-1">
+  <XStack className="message-input-container items-center justify-between gap-1 rounded-full border px-2 py-1">
     <Icon size={20} className="primary-text" />
     <Text className="primary-text">{label}</Text>
     <Pressable onPress={onToggle}>

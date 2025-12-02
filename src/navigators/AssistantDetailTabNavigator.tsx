@@ -55,7 +55,7 @@ function CustomTabBar({ state, navigation }: any) {
             onPress={onPress}
             className={cn(
               'flex-1 items-center justify-center rounded-xl px-5 py-3',
-              isFocused && 'secondary-container'
+              isFocused && 'secondary-container border-[0.5px]'
             )}>
             <Text className={cn('text-xs font-bold', isFocused && 'primary-text')}>
               {tabLabels[route.name as keyof typeof tabLabels]}
