@@ -43,6 +43,9 @@ export const McpServerSheet: React.FC = () => {
   const { activeMcpServers, isLoading } = useActiveMcpServers()
   const { t } = useTranslation()
   const navigation = useNavigation<DrawerNavigationProps>()
+  const [selectedMcpIds, setSelectedMcpIds] = useState<string[]>(
+    () => assistant?.mcpServers?.map(server => server.id) ?? []
+  )
 
   useEffect(() => {
     updateSheetDataCallback = setSheetData
@@ -50,6 +53,29 @@ export const McpServerSheet: React.FC = () => {
       updateSheetDataCallback = null
     }
   }, [])
+
+  useEffect(() => {
+    if (!assistant) {
+      setSelectedMcpIds([])
+      return
+    }
+    setSelectedMcpIds(assistant.mcpServers?.map(server => server.id) ?? [])
+  }, [assistant])
+
+  const handleToggleMcpServer = async (mcpServerId: string) => {
+    if (!assistant || !updateAssistant) {
+      return
+    }
+    const activeMcpIds = new Set(activeMcpServers.map(server => server.id))
+    const validSelectedIds = selectedMcpIds.filter(id => activeMcpIds.has(id))
+    const exists = validSelectedIds.includes(mcpServerId)
+    const updatedIds = exists ? validSelectedIds.filter(id => id !== mcpServerId) : [...validSelectedIds, mcpServerId]
+
+    setSelectedMcpIds(updatedIds)
+
+    const updatedMcpServers = activeMcpServers.filter(server => updatedIds.includes(server.id))
+    await updateAssistant({ ...assistant, mcpServers: updatedMcpServers })
+  }
 
   if (isLoading || !assistant || !updateAssistant) {
     return <SelectionSheet name={SHEET_NAME} detents={['auto', 0.5]} items={[]} shouldDismiss={false} />
@@ -72,19 +98,8 @@ export const McpServerSheet: React.FC = () => {
     return {
       id: mcpServer.id,
       label: mcpServer.name,
-      isSelected: !!assistant.mcpServers?.find(s => s.id === mcpServer.id),
-      onSelect: async () => {
-        // Filter out inactive MCPs to keep data consistent
-        const activeMcpIds = new Set(activeMcpServers.map(s => s.id))
-        const currentMcpServers = (assistant.mcpServers || []).filter(s => activeMcpIds.has(s.id))
-        const exists = currentMcpServers.some(s => s.id === mcpServer.id)
-
-        const updatedMcpServers = exists
-          ? currentMcpServers.filter(s => s.id !== mcpServer.id)
-          : [...currentMcpServers, mcpServer]
-
-        await updateAssistant({ ...assistant, mcpServers: updatedMcpServers })
-      }
+      isSelected: selectedMcpIds.includes(mcpServer.id),
+      onSelect: () => handleToggleMcpServer(mcpServer.id)
     }
   })
 
