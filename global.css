@@ -5,6 +5,9 @@
 
 @source './node_modules/heroui-native/lib';
 
+/* CherryStudio Design System */
+@import './styles/theme.css';
+
 /* Uniwind rem configuration (default 16px, same as tailwind default) */
 /* No need to change unless you want different rem value */
 

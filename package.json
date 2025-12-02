@@ -194,7 +194,7 @@
     "temml": "^0.11.9",
     "tokenx": "^1.0.1",
     "turndown": "7.2.2",
-    "uniwind": "^1.0.0",
+    "uniwind": "^1.0.5",
     "use-latest-callback": "^0.3.2",
     "vitest": "^3.2.4",
     "webdav": "^5.8.0",
