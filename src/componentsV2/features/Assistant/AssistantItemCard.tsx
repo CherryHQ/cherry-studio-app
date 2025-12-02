@@ -67,7 +67,7 @@ const AssistantItemCard = ({ assistant, onAssistantPress }: AssistantItemCardPro
                   <GroupTag
                     key={index}
                     group={group}
-                    className="border-brand-300/20 bg-brand-300/10 text-brand-300 border-[0.5px] text-[10px]"
+                    className="border-brand-300/30 bg-brand-300/5 text-brand-300 border-[0.5px] text-[10px]"
                   />
                 ))}
             </XStack>

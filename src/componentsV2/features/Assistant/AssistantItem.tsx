@@ -112,7 +112,7 @@ const AssistantItem: FC<AssistantItemProps> = ({
         <XStack className="gap-3.5">
           {isMultiSelectMode && canBeSelected && (
             <View className="border-foreground h-6 w-6 items-center justify-center self-center rounded-full border">
-              {isSelected && <Check size={14} className="text-white" />}
+              {isSelected && <Check size={14} />}
             </View>
           )}
           <EmojiAvatar

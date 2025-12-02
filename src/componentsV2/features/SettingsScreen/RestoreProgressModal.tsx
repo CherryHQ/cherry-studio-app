@@ -105,7 +105,7 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
                 overallStatus === 'error'
                   ? 'border-red-600/20 bg-red-600/20'
                   : overallStatus === 'success'
-                    ? 'border-brand-300/20 bg-brand-300/20'
+                    ? 'border-brand-300/30 bg-brand-300/20'
                     : 'border-yellow-400/20 bg-yellow-400/20'
               )}
               isDisabled={!isDone}

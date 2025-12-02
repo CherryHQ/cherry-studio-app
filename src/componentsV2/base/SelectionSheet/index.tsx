@@ -111,7 +111,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
         <XStack
           className={cn(
             `items-center gap-2.5 rounded-lg border px-3.5 py-3 ${
-              item.isSelected ? 'border-brand-300/20 bg-brand-300/10' : 'border-transparent bg-zinc-400/10'
+              item.isSelected ? 'border-brand-300/30 bg-brand-300/5' : 'border-transparent bg-zinc-400/10'
             }`,
             item.backgroundColor && !item.isSelected ? item.backgroundColor : undefined
           )}>
@@ -131,7 +131,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
 
   const listHeaderComponent = () =>
     placeholder || headerComponent ? (
-      <View className="gap-2 px-4 pb-2 pt-5">
+      <View className="gap-2 pb-2 pt-5">
         {headerComponent}
         {placeholder && <Text className="text-foreground-secondary text-center text-sm opacity-60">{placeholder}</Text>}
       </View>

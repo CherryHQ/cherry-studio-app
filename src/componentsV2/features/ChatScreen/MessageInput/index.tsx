@@ -34,10 +34,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
   const { text, setText, files, setFiles, mentions, setMentions, isReasoning, sendMessage, onPause } =
     useMessageInputLogic(topic, assistant)
   const [isVoiceActive, setIsVoiceActive] = useState(false)
-
   return (
     <View
-      className="bg-secondary rounded-3xl p-3"
+      className="bg-foreground-secondary/12 rounded-3xl p-3"
       style={{
         paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad,
         shadowColor: isDark ? '#fff' : '#000',

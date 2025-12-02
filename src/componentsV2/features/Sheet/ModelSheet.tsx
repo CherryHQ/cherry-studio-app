@@ -212,7 +212,7 @@ const ModelSheet: React.FC = () => {
             feedbackVariant="ripple"
             size="sm"
             className={`h-10 rounded-xl ${
-              isMultiSelectActive ? 'border-brand-300/20 bg-brand-300/10 border' : 'bg-card border border-transparent'
+              isMultiSelectActive ? 'border-brand-300/30 bg-brand-300/5 border' : 'bg-card border border-transparent'
             }`}
             onPress={toggleMultiSelectMode}>
             <Button.Label>
@@ -289,7 +289,7 @@ const ModelSheet: React.FC = () => {
                 activeOpacity={0.7}
                 onPress={() => handleModelToggle(item.value)}
                 className={`justify-between rounded-lg border px-2 ${
-                  isSelected ? 'border-brand-300/20 bg-brand-300/10' : 'border-transparent bg-transparent'
+                  isSelected ? 'border-brand-300/30 bg-brand-300/5' : 'border-transparent bg-transparent'
                 }`}>
                 <XStack className="w-full items-center gap-2 py-1">
                   <XStack className="items-center justify-center">

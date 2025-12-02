@@ -95,9 +95,9 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
       case 'error':
         return 'bg-red-600/20 border-red-600/20 active:opacity-80 active:bg-red-600/20'
       case 'success':
-        return 'bg-brand-300/10 border-brand-300/20 active:opacity-80 active:bg-brand-300/10'
+        return 'bg-brand-300/5 border-brand-300/30 active:opacity-80 active:bg-brand-300/5'
       default:
-        return 'bg-brand-300/10 border-brand-300/20 active:opacity-80 active:bg-brand-300/10'
+        return 'bg-brand-300/5 border-brand-300/30 active:opacity-80 active:bg-brand-300/5'
     }
   }
 

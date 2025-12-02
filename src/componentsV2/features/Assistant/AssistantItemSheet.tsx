@@ -191,7 +191,7 @@ const AssistantItemSheet: React.FC = () => {
                     <GroupTag
                       key={index}
                       group={group}
-                      className="border-brand-300/20 bg-brand-300/10 text-brand-300 border-[0.5px] px-2 text-xs"
+                      className="border-brand-300/30 bg-brand-300/5 text-brand-300 border-[0.5px] px-2 text-xs"
                     />
                   ))}
                 </XStack>
@@ -250,7 +250,7 @@ const AssistantItemSheet: React.FC = () => {
             )}
             <Button
               feedbackVariant="ripple"
-              className="border-brand-300/20 bg-brand-300/10 flex-1 rounded-[30px] px-5 py-2.5"
+              className="border-brand-300/30 bg-brand-300/5 flex-1 rounded-[30px] px-5 py-2.5"
               onPress={actionButton?.onPress || handleChatPress}>
               <Button.Label>
                 <Text className="text-brand-300 text-[17px] font-bold">

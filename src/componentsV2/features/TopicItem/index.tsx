@@ -214,11 +214,11 @@ export const TopicItem: FC<TopicItemProps> = ({
       disableContextMenu={isMultiSelectMode}>
       <XStack
         className={`items-center justify-center gap-1.5 rounded-lg px-1 py-1 ${
-          isActive ? 'bg-brand-300/10' : 'bg-transparent'
+          isActive ? 'bg-brand-300/15' : 'bg-transparent'
         }`}>
         {isMultiSelectMode && (
           <View className="border-foreground mr-1 h-6 w-6 items-center justify-center rounded-full border">
-            {isSelected && <Check size={14} className="text-white" />}
+            {isSelected && <Check size={14} />}
           </View>
         )}
         <EmojiAvatar
@@ -226,7 +226,7 @@ export const TopicItem: FC<TopicItemProps> = ({
           size={42}
           borderRadius={16}
           borderWidth={3}
-          borderColor={isDark ? '#444444' : '#ffffff'}
+          borderColor={isDark ? '#333333' : '#f7f7f7'}
         />
         <YStack className="flex-1 gap-0.5">
           <XStack className="items-center justify-between gap-2">

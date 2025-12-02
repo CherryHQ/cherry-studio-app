@@ -32,7 +32,7 @@ export const dismissCitationSheet = () => TrueSheet.dismiss(SHEET_NAME)
 
 const CitationTitle = ({ number, title }: { number: number; title: string }) => (
   <XStack className="items-center gap-2.5">
-    <YStack className="border-brand-300/20 bg-brand-300/10 h-5 w-5 items-center justify-center rounded-sm border px-1 py-0.5">
+    <YStack className="border-brand-300/30 bg-brand-300/5 h-5 w-5 items-center justify-center rounded-sm border px-1 py-0.5">
       <Text className="text-brand-300 text-center text-[10px]">{number}</Text>
     </YStack>
     <YStack className="flex-1">

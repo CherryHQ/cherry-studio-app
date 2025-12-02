@@ -33,7 +33,7 @@ export const WebsearchProviderRow = ({ provider, need_config }: WebsearchProvide
       </XStack>
       <XStack className="items-center gap-2">
         {provider.apiKey && (
-          <Text className="border-brand-300/20 bg-brand-300/10 text-brand-300 rounded-lg border px-2 py-0.5 text-xs">
+          <Text className="border-brand-300/30 bg-brand-300/5 text-brand-300 rounded-lg border px-2 py-0.5 text-xs">
             {t('common.added')}
           </Text>
         )}

@@ -175,7 +175,7 @@ export const AddModelSheet: React.FC = () => {
             <Button
               feedbackVariant="ripple"
               variant="tertiary"
-              className="border-brand-300/20 bg-brand-300/10 h-11 w-4/6 rounded-2xl"
+              className="border-brand-300/30 bg-brand-300/5 h-11 w-4/6 rounded-2xl"
               onPress={handleAddModel}
               isDisabled={!modelId.trim()}>
               <Button.Label>
