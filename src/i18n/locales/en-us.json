@@ -20,6 +20,13 @@
         "search_placeholder": "Search assistants...",
         "title": "Assistant Market"
       },
+      "multi_select": {
+        "action": "Multi-select",
+        "delete_confirm_message": "This will also delete all topics associated with these assistants. This action cannot be undone.",
+        "delete_confirm_title": "Delete {{count}} assistants?",
+        "delete_success": "Deleted {{count}} assistants",
+        "selected_count": "{{count}} selected"
+      },
       "name": "Assistant Name",
       "save": "Save Assistant",
       "search": {
@@ -150,9 +157,10 @@
       "saved": "Saved",
       "search_placeholder": "Search...",
       "see_all": "See All",
+      "select_all": "Select All",
       "select_text": "Select Text",
       "source": "Source",
-      "start": "Get Started with Cherry Studio App 🎉",
+      "start": "Get Started with Cherry Studio 🎉",
       "stop": "Stop",
       "this_week": "This Week",
       "today": "Today",
@@ -339,6 +347,7 @@
       },
       "server": {
         "empty": "No MCP servers available...",
+        "empty.add": "[to be translated]:前往添加MCP服务器",
         "selected": "{{num}} MCP servers selected",
         "title": "MCP Server"
       },
@@ -725,6 +734,7 @@
           }
         },
         "api_check": {
+          "confirm_message": "Start API check?",
           "title": "Detection",
           "tooltip": "Select the model to use for detection"
         },
@@ -902,6 +912,13 @@
       }
     },
     "topics": {
+      "multi_select": {
+        "action": "Multi-select",
+        "delete_confirm_message": "This action cannot be undone.",
+        "delete_confirm_title": "Delete {{count}} topics?",
+        "delete_success": "Deleted {{count}} topics",
+        "selected_count": "{{count}} selected"
+      },
       "new_topic": "New Topic",
       "rename": {
         "title": "Rename Topic"
@@ -919,6 +936,14 @@
       "permission_denied_message": "Please allow Cherry Studio to access your microphone in Settings",
       "start": "Start voice input",
       "stop": "Stop voice input"
+    },
+    "update": {
+      "got_it": "Got it",
+      "later": "Later",
+      "new_version_available": "New Version Available",
+      "new_version_content": "Version {{version}} is now available. Would you like to update?",
+      "new_version_content_ios": "Version {{version}} is now available. Please update via TestFlight.",
+      "update_now": "Update Now"
     }
   }
 }

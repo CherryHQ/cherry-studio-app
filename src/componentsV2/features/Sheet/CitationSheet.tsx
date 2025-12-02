@@ -1,8 +1,9 @@
-import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
+import { LegendList } from '@legendapp/list'
+import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import * as ExpoLinking from 'expo-linking'
-import React, { forwardRef, useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, TouchableOpacity } from 'react-native'
+import { BackHandler, Platform, TouchableOpacity, View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import { FallbackFavicon, X } from '@/componentsV2/icons'
@@ -15,9 +16,19 @@ import { getWebsiteBrand } from '@/utils/websearch'
 
 const logger = loggerService.withContext('Citation Sheet')
 
-export interface CitationSheetProps {
-  citations: Citation[]
+const SHEET_NAME = 'citation-sheet'
+
+// Global state for citations
+let currentCitations: Citation[] = []
+let updateCitationsCallback: ((citations: Citation[]) => void) | null = null
+
+export const presentCitationSheet = (citations: Citation[]) => {
+  currentCitations = citations
+  updateCitationsCallback?.(citations)
+  return TrueSheet.present(SHEET_NAME)
 }
+
+export const dismissCitationSheet = () => TrueSheet.dismiss(SHEET_NAME)
 
 const CitationTitle = ({ number, title }: { number: number; title: string }) => (
   <XStack className="items-center gap-2.5">
@@ -57,26 +68,30 @@ const CitationCard = ({ citation, onPress }: { citation: Citation; onPress: (url
   </YStack>
 )
 
-export const CitationSheet = forwardRef<BottomSheetModal, CitationSheetProps>(({ citations }, ref) => {
+export const CitationSheet: React.FC = () => {
   const { t } = useTranslation()
   const { isDark } = useTheme()
   const [isVisible, setIsVisible] = useState(false)
+  const [citations, setCitations] = useState<Citation[]>(currentCitations)
+
+  useEffect(() => {
+    updateCitationsCallback = setCitations
+    return () => {
+      updateCitationsCallback = null
+    }
+  }, [])
 
   useEffect(() => {
     if (!isVisible) return
 
     const backAction = () => {
-      ;(ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()
+      dismissCitationSheet()
       return true
     }
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction)
     return () => backHandler.remove()
-  }, [ref, isVisible])
-
-  const renderBackdrop = (props: any) => (
-    <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} pressBehavior="close" />
-  )
+  }, [isVisible])
 
   const handlePress = async (url: string) => {
     const supported = await ExpoLinking.canOpenURL(url)
@@ -96,51 +111,53 @@ export const CitationSheet = forwardRef<BottomSheetModal, CitationSheetProps>(({
     }
   }
 
-  const citationItems = citations ?? []
+  const header = (
+    <XStack className="border-normal/10 items-center justify-between border-b px-4 pb-4 pt-5">
+      <Text className="text-text-primary text-lg font-bold">{t('common.source')}</Text>
+      <TouchableOpacity
+        style={{
+          padding: 4,
+          backgroundColor: isDark ? '#333333' : '#dddddd',
+          borderRadius: 16
+        }}
+        onPress={dismissCitationSheet}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <X size={16} />
+      </TouchableOpacity>
+    </XStack>
+  )
 
   return (
-    <BottomSheetModal
-      stackBehavior="replace"
-      snapPoints={['40%', '90%']}
-      enableDynamicSizing={false}
-      ref={ref}
-      backgroundStyle={{
-        borderRadius: 30,
-        backgroundColor: isDark ? '#121213ff' : '#f7f7f7ff'
-      }}
-      handleIndicatorStyle={{
-        backgroundColor: isDark ? '#f9f9f9ff' : '#202020ff'
-      }}
-      backdropComponent={renderBackdrop}
-      onDismiss={() => setIsVisible(false)}
-      onChange={index => setIsVisible(index >= 0)}>
-      <XStack className="items-center justify-between border-b border-black/10 px-4 pb-4">
-        <Text className="text-text-primary text-base font-bold">{t('common.source')}</Text>
-        <TouchableOpacity
-          style={{
-            padding: 4,
-            backgroundColor: isDark ? '#333333' : '#dddddd',
-            borderRadius: 16
-          }}
-          onPress={() => (ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <X size={16} />
-        </TouchableOpacity>
-      </XStack>
-      <BottomSheetScrollView showsVerticalScrollIndicator={false}>
-        <YStack className="px-5 pb-10 pt-2">
-          {citationItems.map((citation, index) => (
-            <YStack
-              key={`${citation.url}-${index}`}
-              className={`${index < citationItems.length - 1 ? 'border-b border-black/5' : ''}`}>
+    <TrueSheet
+      name={SHEET_NAME}
+      detents={[0.4, 0.9]}
+      cornerRadius={30}
+      grabber
+      dismissible
+      dimmed
+      scrollable
+      header={header}
+      onDidDismiss={() => setIsVisible(false)}
+      onDidPresent={() => setIsVisible(true)}>
+      <View className="flex-1">
+        <LegendList
+          data={citations}
+          keyExtractor={(citation, index) => `${citation.url}-${index}`}
+          renderItem={({ item: citation, index }) => (
+            <YStack className={`${index < citations.length - 1 ? 'border-normal/10 border-b' : ''}`}>
               <CitationCard citation={citation} onPress={handlePress} />
             </YStack>
-          ))}
-        </YStack>
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+          )}
+          nestedScrollEnabled={Platform.OS === 'android'}
+          showsVerticalScrollIndicator={false}
+          estimatedItemSize={100}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40, paddingTop: 8 }}
+          recycleItems
+        />
+      </View>
+    </TrueSheet>
   )
-})
+}
 
 CitationSheet.displayName = 'CitationSheet'
 

@@ -2,6 +2,7 @@ import type { DrawerNavigationProp } from '@react-navigation/drawer'
 import type { NavigatorScreenParams, RouteProp } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 
+import type { AssistantMarketStackParamList } from '@/navigators/AssistantMarketStackNavigator'
 import type { AssistantStackParamList } from '@/navigators/AssistantStackNavigator'
 import type { HomeStackParamList } from '@/navigators/HomeStackNavigator'
 import type { McpStackParamList } from '@/navigators/McpStackNavigator'
@@ -13,11 +14,19 @@ import type { WebSearchStackParamList } from '@/navigators/settings/WebSearchSta
 import type { SettingsStackParamList } from '@/navigators/SettingsStackNavigator'
 import type { WelcomeStackParamList } from '@/navigators/WelcomeStackNavigator'
 
+export type AssistantDetailScreenParams = {
+  assistantId: string
+  tab?: string
+  returnTo?: 'chat'
+  topicId?: string
+}
+
 // App Drawer Navigator
 export type AppDrawerParamList = {
   Home:
     | { screen: 'ChatScreen'; params: { topicId: string } }
-    | { screen: 'TopicScreen' }
+    | { screen: 'TopicScreen'; params?: { assistantId?: string } }
+    | { screen: 'AssistantDetailScreen'; params: AssistantDetailScreenParams }
     | { screen: 'SettingsScreen' }
     | { screen: 'GeneralSettings'; params?: any }
     | { screen: 'AssistantSettings'; params?: any }
@@ -28,9 +37,12 @@ export type AppDrawerParamList = {
     | undefined
   Assistant:
     | { screen: 'AssistantScreen' }
-    | { screen: 'AssistantMarketScreen' }
-    | { screen: 'AssistantDetailScreen'; params: { assistantId: string; tab?: string } }
+    | {
+        screen: 'AssistantDetailScreen'
+        params: AssistantDetailScreenParams
+      }
     | undefined
+  AssistantMarket: { screen: 'AssistantMarketScreen' } | undefined
   Mcp: { screen: 'McpMarketScreen' }
 }
 
@@ -47,6 +59,7 @@ export type DrawerNavigationProps = DrawerNavigationProp<AppDrawerParamList>
 // Nested Navigator Props
 export type HomeNavigationProps = StackNavigationProp<HomeStackParamList>
 export type AssistantNavigationProps = StackNavigationProp<AssistantStackParamList>
+export type AssistantMarketNavigationProps = StackNavigationProp<AssistantMarketStackParamList>
 export type McpNavigationProps = StackNavigationProp<McpStackParamList>
 export type SettingsNavigationProps = StackNavigationProp<SettingsStackParamList>
 export type WelcomeNavigationProps = StackNavigationProp<WelcomeStackParamList>

@@ -20,6 +20,13 @@
         "search_placeholder": "搜尋助理...",
         "title": "助理市場"
       },
+      "multi_select": {
+        "action": "複選",
+        "delete_confirm_message": "這將同時刪除這些助理的所有對話。此操作無法撤銷。",
+        "delete_confirm_title": "刪除 {{count}} 個助理？",
+        "delete_success": "已刪除 {{count}} 個助理",
+        "selected_count": "已選擇 {{count}} 項"
+      },
       "name": "助理名稱",
       "save": "保存助理",
       "search": {
@@ -150,6 +157,7 @@
       "saved": "保存",
       "search_placeholder": "搜尋...",
       "see_all": "查看全部",
+      "select_all": "全選",
       "select_text": "選擇文本",
       "source": "來源",
       "start": "開始使用Cherry Studio App 🎉",
@@ -339,6 +347,7 @@
       },
       "server": {
         "empty": "暫無MCP伺服器...",
+        "empty.add": "[to be translated]:前往添加MCP服务器",
         "selected": "已選擇{{num}}個MCP伺服器",
         "title": "MCP伺服器"
       },
@@ -725,6 +734,7 @@
           }
         },
         "api_check": {
+          "confirm_message": "確認開始 API 檢查？",
           "title": "檢測",
           "tooltip": "選擇用於檢測的模型"
         },
@@ -902,6 +912,13 @@
       }
     },
     "topics": {
+      "multi_select": {
+        "action": "多選",
+        "delete_confirm_message": "此操作無法復原。",
+        "delete_confirm_title": "要刪除 {{count}} 個主題嗎？",
+        "delete_success": "已刪除 {{count}} 個主題",
+        "selected_count": "已選 {{count}} 項"
+      },
       "new_topic": "新主題",
       "rename": {
         "title": "重新命名主題"
@@ -919,6 +936,14 @@
       "permission_denied_message": "請在設定中允許 Cherry Studio 存取麥克風",
       "start": "開始語音輸入",
       "stop": "停止語音輸入"
+    },
+    "update": {
+      "got_it": "知道了",
+      "later": "稍後再說",
+      "new_version_available": "發現新版本",
+      "new_version_content": "新版本 {{version}} 已發布，是否立即更新？",
+      "new_version_content_ios": "新版本 {{version}} 已發布，請前往 TestFlight 更新。",
+      "update_now": "立即更新"
     }
   }
 }

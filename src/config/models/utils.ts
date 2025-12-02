@@ -197,11 +197,11 @@ export function groupQwenModels(models: Model[]): Record<string, Model[]> {
 
 // 模型集合功能测试
 export const isVisionModels = (models: Model[]) => {
-  return models.every((model) => isVisionModel(model))
+  return models.every(model => isVisionModel(model))
 }
 
 export const isGenerateImageModels = (models: Model[]) => {
-  return models.every((model) => isGenerateImageModel(model))
+  return models.every(model => isGenerateImageModel(model))
 }
 
 export const isAnthropicModel = (model?: Model): boolean => {

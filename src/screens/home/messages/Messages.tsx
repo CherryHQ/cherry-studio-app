@@ -1,6 +1,6 @@
 import type { LegendListRef } from '@legendapp/list'
 import { LegendList } from '@legendapp/list'
-import { Button } from 'heroui-native'
+import { SymbolView } from 'expo-symbols'
 import { MotiView } from 'moti'
 import type { FC } from 'react'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
@@ -9,12 +9,15 @@ import { StyleSheet, View } from 'react-native'
 import { useSharedValue } from 'react-native-reanimated'
 
 import { YStack } from '@/componentsV2'
-import { ChevronDown } from '@/componentsV2/icons'
+import { LiquidGlassButton } from '@/componentsV2/base/LiquidGlassButton'
+import { ArrowDown } from '@/componentsV2/icons'
 import { useInitialScrollToEnd } from '@/hooks/chat/useInitialScrollToEnd'
 import { useTopicBlocks } from '@/hooks/useMessageBlocks'
 import { useMessages } from '@/hooks/useMessages'
+import { useTheme } from '@/hooks/useTheme'
 import type { Assistant, Topic } from '@/types/assistant'
 import type { GroupedMessage } from '@/types/message'
+import { isIOS } from '@/utils/device'
 import { getGroupedMessages } from '@/utils/messageUtils/filters'
 
 import WelcomeContent from '../WelcomeContent'
@@ -28,6 +31,7 @@ interface MessagesProps {
 const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
   const { messages } = useMessages(topic.id)
   const { messageBlocks } = useTopicBlocks(topic.id)
+  const { isDark } = useTheme()
   const groupedMessages = Object.entries(getGroupedMessages(messages))
   const legendListRef = useRef<LegendListRef>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
@@ -127,15 +131,13 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ type: 'timing' }}>
-          <Button
-            feedbackVariant="ripple"
-            isIconOnly
-            onPress={handleScrollToEnd}
-            className="border-green-20 bg-green-10 bottom-2 right-2 h-10 w-10 rounded-full border-2">
-            <Button.Label>
-              <ChevronDown size={24} className="text-green-100" />
-            </Button.Label>
-          </Button>
+          <LiquidGlassButton size={35} onPress={handleScrollToEnd}>
+            {isIOS ? (
+              <SymbolView name="arrow.down" size={20} tintColor={isDark ? 'white' : 'black'} />
+            ) : (
+              <ArrowDown size={24} />
+            )}
+          </LiquidGlassButton>
         </MotiView>
       )}
     </View>
@@ -145,8 +147,8 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    right: 0,
-    bottom: 0,
+    right: '50%',
+    bottom: 8,
     width: 40,
     height: 40,
     justifyContent: 'center',

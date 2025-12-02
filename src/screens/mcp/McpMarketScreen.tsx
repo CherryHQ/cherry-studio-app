@@ -1,12 +1,11 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { DrawerActions, useNavigation } from '@react-navigation/native'
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, View } from 'react-native'
+import { View } from 'react-native'
 
-import { Container, DrawerGestureWrapper, HeaderBar, SafeAreaContainer, SearchInput } from '@/componentsV2'
+import { Container, DrawerGestureWrapper, HeaderBar, ListSkeleton, SafeAreaContainer, SearchInput } from '@/componentsV2'
 import { McpMarketContent } from '@/componentsV2/features/MCP/McpMarketContent'
-import McpServerItemSheet from '@/componentsV2/features/MCP/McpServerItemSheet'
+import McpServerItemSheet, { presentMcpServerItemSheet } from '@/componentsV2/features/MCP/McpServerItemSheet'
 import { Menu } from '@/componentsV2/icons'
 import { useMcpServers } from '@/hooks/useMcp'
 import { useSearch } from '@/hooks/useSearch'
@@ -17,8 +16,6 @@ export function McpMarketScreen() {
   const { t } = useTranslation()
   const navigation = useNavigation<DrawerNavigationProps>()
   const { mcpServers, isLoading, updateMcpServers } = useMcpServers()
-  const bottomSheetRef = useRef<BottomSheetModal>(null)
-  const [selectedMcp, setSelectedMcp] = useState<MCPServer | null>(null)
   const {
     searchText,
     setSearchText,
@@ -28,22 +25,34 @@ export function McpMarketScreen() {
     useCallback((mcp: MCPServer) => [mcp.name || '', mcp.id || ''], [])
   )
 
+  const [showSkeleton, setShowSkeleton] = useState(true)
+  const loadingStartTime = useRef(Date.now())
+
+  useEffect(() => {
+    if (isLoading) {
+      loadingStartTime.current = Date.now()
+      setShowSkeleton(true)
+      return
+    }
+    const elapsed = Date.now() - loadingStartTime.current
+    const minDuration = 300
+    const remaining = minDuration - elapsed
+    if (remaining <= 0) {
+      setShowSkeleton(false)
+      return
+    }
+    const timer = setTimeout(() => setShowSkeleton(false), remaining)
+    return () => clearTimeout(timer)
+  }, [isLoading])
+
   const handleMenuPress = () => {
     navigation.dispatch(DrawerActions.openDrawer())
   }
 
   const handleMcpServerItemPress = (mcp: MCPServer) => {
-    setSelectedMcp(mcp)
-    bottomSheetRef.current?.present()
+    presentMcpServerItemSheet(mcp, updateMcpServers)
   }
 
-  if (isLoading) {
-    return (
-      <SafeAreaContainer style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator />
-      </SafeAreaContainer>
-    )
-  }
   return (
     <SafeAreaContainer className="pb-0">
       <DrawerGestureWrapper>
@@ -61,13 +70,17 @@ export function McpMarketScreen() {
               value={searchText}
               onChangeText={setSearchText}
             />
-            <McpMarketContent
-              mcps={filteredMcps}
-              updateMcpServers={updateMcpServers}
-              handleMcpServerItemPress={handleMcpServerItemPress}
-            />
+            {showSkeleton ? (
+              <ListSkeleton variant="mcp" />
+            ) : (
+              <McpMarketContent
+                mcps={filteredMcps}
+                updateMcpServers={updateMcpServers}
+                handleMcpServerItemPress={handleMcpServerItemPress}
+              />
+            )}
           </Container>
-          <McpServerItemSheet ref={bottomSheetRef} selectedMcp={selectedMcp} updateMcpServers={updateMcpServers} />
+          <McpServerItemSheet />
         </View>
       </DrawerGestureWrapper>
     </SafeAreaContainer>

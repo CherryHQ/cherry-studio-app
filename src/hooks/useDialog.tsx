@@ -1,6 +1,6 @@
 import { Button, cn } from 'heroui-native'
 import { MotiView } from 'moti'
-import React, { createContext, useContext, useState } from 'react'
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Modal, Pressable } from 'react-native'
 
@@ -23,6 +23,7 @@ export type DialogOptions = {
   onConFirm?: () => void | Promise<void>
   onCancel?: () => void | Promise<void>
   showLoading?: boolean
+  closeOnConfirm?: boolean
 }
 
 type DialogContextValue = { open: (options: DialogOptions) => void; close: () => void } | undefined
@@ -40,12 +41,12 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
     ? 'flex-1 justify-center items-center bg-black/70'
     : 'flex-1 justify-center items-center bg-black/40'
 
-  const close = () => {
+  const close = useCallback(() => {
     setOpen(false)
     setTimeout(() => {
       setOptions(null)
     }, 300)
-  }
+  }, [])
 
   const cancel = async () => {
     if (isLoading) return
@@ -61,6 +62,8 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   const confirm = async () => {
     if (isLoading) return
 
+    const shouldCloseOnConfirm = options?.closeOnConfirm ?? true
+
     if (options?.showLoading) {
       setIsLoading(true)
     }
@@ -71,15 +74,17 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
       console.error('Dialog onConFirm error:', error)
     } finally {
       setIsLoading(false)
-      close()
+      if (shouldCloseOnConfirm) {
+        close()
+      }
     }
   }
 
-  const open = (newOptions: DialogOptions) => {
+  const open = useCallback((newOptions: DialogOptions) => {
     setOptions(newOptions)
     setIsLoading(false)
     setOpen(true)
-  }
+  }, [])
 
   const getConfirmButtonClassName = () => {
     switch (options?.type) {
@@ -111,7 +116,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const api = { open, close }
+  const api = useMemo(() => ({ open, close }), [open, close])
 
   const showCancel = options?.showCancel ?? true
   const maskClosable = options?.maskClosable ?? true

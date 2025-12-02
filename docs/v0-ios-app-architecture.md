@@ -29,6 +29,7 @@ The core MessagesList component implements features as composable plugins, each 
 ### Animation Strategy
 
 **First Message Flow**: When users send initial messages, the system:
+
 1. Sets a Reanimated shared value to trigger animations
 2. Fades and slides user messages smoothly upward
 3. After user message animation completes, fades in assistant responses
@@ -42,6 +43,7 @@ A critical challenge emerged: how to make new messages appear at the top of the 
 Rather than using Views with specific heights or padding (which caused jitters), they leveraged ScrollView's native `contentInset` property, which directly maps to UIKit's UIScrollView. This approach paired with `scrollToEnd({ offset })` eliminated animation artifacts.
 
 The blank size calculation accounts for:
+
 - Assistant message height
 - Preceding user message height
 - Chat container dimensions
@@ -52,6 +54,7 @@ The blank size calculation accounts for:
 Handling the iOS keyboard proved exceptionally challenging, requiring constant adjustments as Apple released new iOS versions. The team credits Kiryl Ziusko (react-native-keyboard-controller maintainer) for rapid updates during beta testing cycles.
 
 The custom `useKeyboardAwareMessageList` hook (approximately 1,000 lines) handles complex scenarios:
+
 - Shrinking blank size when keyboards open
 - Shifting content intelligently based on scroll position
 - Supporting interactive keyboard dismissal
@@ -61,6 +64,7 @@ The custom `useKeyboardAwareMessageList` hook (approximately 1,000 lines) handle
 ## Text Input Enhancement
 
 React Native's default TextInput felt inconsistent with native iOS apps. The team patched the native `RCTUITextView` component to:
+
 - Disable scroll indicators
 - Remove bounce effects
 - Enable interactive keyboard dismissal
@@ -71,6 +75,7 @@ While maintaining patches across React Native updates isn't ideal, it was pragma
 ## Floating Composer
 
 The composer floats above scrollable content using:
+
 1. `position: absolute; bottom: 0`
 2. `KeyboardStickyView` wrapper with keyboard-aware offsets
 3. Synchronous height measurement stored in shared values
@@ -93,6 +98,7 @@ Animation state gets removed after completion, replacing animated wrappers with 
 ## Code Sharing Between Platforms
 
 Rather than attempting full UI parity, the team:
+
 - Shared types and helper functions
 - Migrated business logic to the server
 - Built a hand-rolled backend with Zod-enforced type safety
@@ -104,6 +110,7 @@ This approach led to developing the v0 Platform API, now available to all custom
 ## Native UI Components
 
 Instead of JavaScript component libraries, the team used native equivalents:
+
 - **Menus**: Zeego (wrapping react-native-ios-context-menu) renders native UIMenu with automatic Liquid Glass support in Xcode 16
 - **Alerts**: Applied upstream React Native patches fixing off-screen rendering
 - **Bottom Sheets**: Used native modal with `presentationStyle="formSheet"`, patching React Native for smooth dragging and Yoga synchronization issues

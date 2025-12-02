@@ -1,6 +1,8 @@
 import React, { useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Pressable } from 'react-native'
 
+import Text from '@/componentsV2/base/Text'
 import { Globe, Palette, X } from '@/componentsV2/icons/LucideIcon'
 import XStack from '@/componentsV2/layout/XStack'
 import { isGenerateImageModel } from '@/config/models/vision'
@@ -13,14 +15,10 @@ const logger = loggerService.withContext('ToolPreview')
 // 工具配置类型
 interface ToolConfig {
   key: keyof Assistant
+  label: string
   icon: React.ComponentType<{ size: number; className: string }>
   enabled: boolean
 }
-
-// 通用样式常量
-const TOOL_ITEM_STYLES =
-  'gap-1 rounded-xl py-1 px-2 bg-green-10 border-[0.5px] border-green-20 justify-between items-center'
-const ICON_STYLES = 'text-green-100'
 
 interface ToolPreviewProps {
   assistant: Assistant
@@ -30,19 +28,23 @@ interface ToolPreviewProps {
 // 工具项组件
 interface ToolItemProps {
   icon: React.ComponentType<{ size: number; className: string }>
+  label: string
   onToggle: () => void
 }
 
-const ToolItem: React.FC<ToolItemProps> = ({ icon: Icon, onToggle }) => (
-  <XStack className={TOOL_ITEM_STYLES}>
-    <Icon size={20} className={ICON_STYLES} />
+const ToolItem: React.FC<ToolItemProps> = ({ icon: Icon, label, onToggle }) => (
+  <XStack className="bg-green-10 border-green-20 items-center justify-between gap-1 rounded-full border-[0.5px] px-2 py-1">
+    <Icon size={20} className="text-green-100" />
+    <Text className="text-green-100">{label}</Text>
     <Pressable onPress={onToggle}>
-      <X size={20} className={ICON_STYLES} />
+      <X size={20} className="text-green-100" />
     </Pressable>
   </XStack>
 )
 
 export const ToolPreview: React.FC<ToolPreviewProps> = ({ assistant, updateAssistant }) => {
+  const { t } = useTranslation()
+
   // 通用切换处理函数
   const handleToggleTool = useCallback(
     async (toolKey: keyof Assistant) => {
@@ -59,24 +61,26 @@ export const ToolPreview: React.FC<ToolPreviewProps> = ({ assistant, updateAssis
   )
 
   // 工具配置数组
-  const toolConfigs = useMemo(
-    (): ToolConfig[] => {
-      const { model } = assistant
-      return [
-        {
-          key: 'enableGenerateImage',
-          icon: Palette,
-          enabled: (assistant.enableGenerateImage ?? false) && (model ? isGenerateImageModel(model) : false)
-        },
-        {
-          key: 'enableWebSearch',
-          icon: Globe,
-          enabled: (assistant.enableWebSearch ?? false) && (model ? isWebSearchModel(model) : false)
-        }
-      ]
-    },
-    [assistant.enableGenerateImage, assistant.enableWebSearch, assistant.model]
-  )
+  const toolConfigs = useMemo((): ToolConfig[] => {
+    const { model } = assistant
+    return [
+      {
+        key: 'enableGenerateImage',
+        label: t('common.generateImage'),
+        icon: Palette,
+        enabled: (assistant.enableGenerateImage ?? false) && (model ? isGenerateImageModel(model) : false)
+      },
+      {
+        key: 'enableWebSearch',
+        label: t('common.websearch'),
+        icon: Globe,
+        enabled:
+          (assistant.enableWebSearch ?? false) &&
+          !!model &&
+          (isWebSearchModel(model) || (!!assistant.settings?.toolUseMode && !!assistant.webSearchProviderId))
+      }
+    ]
+  }, [assistant, t])
 
   // 如果没有模型，不显示任何工具
   if (!assistant.model) {
@@ -93,8 +97,8 @@ export const ToolPreview: React.FC<ToolPreviewProps> = ({ assistant, updateAssis
 
   return (
     <XStack className="gap-2">
-      {enabledTools.map(({ key, icon }) => (
-        <ToolItem key={key} icon={icon} onToggle={() => handleToggleTool(key)} />
+      {enabledTools.map(({ key, icon, label }) => (
+        <ToolItem key={key} icon={icon} label={label} onToggle={() => handleToggleTool(key)} />
       ))}
     </XStack>
   )

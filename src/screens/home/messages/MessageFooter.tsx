@@ -1,9 +1,8 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
-import React, { useRef } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { View } from 'react-native'
+import { Pressable, View } from 'react-native'
 
-import { IconButton, SelectionSheet, Text, XStack } from '@/componentsV2'
+import { IconButton, SelectionDropdown, Text, XStack } from '@/componentsV2'
 import { TranslatedIcon, TranslationIcon } from '@/componentsV2/icons'
 import {
   AudioLines,
@@ -26,7 +25,6 @@ interface MessageFooterProps {
 }
 
 const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFooterProps) => {
-  const bottomSheetModalRef = useRef<BottomSheetModal>(null)
   const {
     isTranslated,
     playState,
@@ -57,21 +55,14 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
     {
       id: 'translate',
       label: isTranslated ? t('common.delete_translation') : t('message.translate_message'),
-      icon: isTranslated ? (
-        <TranslatedIcon size={18} color={isTranslated ? 'red' : undefined} />
-      ) : (
-        <TranslationIcon size={18} />
-      ),
-      color: isTranslated ? 'text-red-100' : undefined,
-      backgroundColor: isTranslated ? 'bg-red-20' : undefined,
+      icon: isTranslated ? <TranslatedIcon size={18} /> : <TranslationIcon size={18} />,
       onSelect: isTranslated ? handleDeleteTranslation : handleTranslate
     },
     {
       id: 'delete',
       label: t('message.delete_message'),
-      icon: <Trash2 size={18} className="text-red-100" />,
-      color: 'text-red-100',
-      backgroundColor: 'bg-red-20',
+      icon: <Trash2 size={18} />,
+      destructive: true,
       onSelect: handleDelete
     }
   ]
@@ -105,12 +96,11 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
             />
           )}
           <IconButton icon={<Share size={18} className="text-text-secondary" />} onPress={handleShare} />
-          <IconButton
-            icon={<MoreHorizontal size={18} className="text-text-secondary" />}
-            onPress={() => {
-              bottomSheetModalRef.current?.present()
-            }}
-          />
+          <SelectionDropdown items={moreItems}>
+            <Pressable>
+              <MoreHorizontal size={18} className="text-text-secondary" />
+            </Pressable>
+          </SelectionDropdown>
         </XStack>
 
         {hasUsage && (
@@ -121,8 +111,6 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
           </XStack>
         )}
       </XStack>
-
-      <SelectionSheet ref={bottomSheetModalRef} items={moreItems} />
     </View>
   )
 }

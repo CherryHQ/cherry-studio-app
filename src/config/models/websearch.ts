@@ -69,10 +69,7 @@ export function isWebSearchModel(model: Model): boolean {
   const modelId = getLowerBaseModelName(model.id, '/')
 
   // bedrock不支持
-  if (
-    isAnthropicModel(model) &&
-    provider.id !== SystemProviderIds['aws-bedrock']
-  ) {
+  if (isAnthropicModel(model) && provider.id !== SystemProviderIds['aws-bedrock']) {
     return CLAUDE_SUPPORTED_WEBSEARCH_REGEX.test(modelId)
   }
 
@@ -123,7 +120,7 @@ export function isWebSearchModel(model: Model): boolean {
   if (provider.id === 'dashscope') {
     const models = ['qwen-turbo', 'qwen-max', 'qwen-plus', 'qwq', 'qwen-flash', 'qwen3-max']
     // matches id like qwen-max-0919, qwen-max-latest
-    return models.some((i) => modelId.startsWith(i))
+    return models.some(i => modelId.startsWith(i))
   }
 
   if (provider.id === 'openrouter') {

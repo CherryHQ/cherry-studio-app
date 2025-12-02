@@ -6,13 +6,17 @@ import type { Assistant } from '@/types/assistant'
 const logger = loggerService.withContext('AI Feature Handler')
 
 interface UseAIFeatureHandlerProps {
-  assistant: Assistant
-  updateAssistant: (assistant: Assistant) => Promise<void>
+  assistant?: Assistant | null
+  updateAssistant?: ((assistant: Assistant) => Promise<void>) | null
   onSuccess?: () => void
 }
 
 export const useAIFeatureHandler = ({ assistant, updateAssistant, onSuccess }: UseAIFeatureHandlerProps) => {
   const handleAiFeatureChange = async (value: string) => {
+    if (!assistant || !updateAssistant) {
+      return
+    }
+
     try {
       const updatedAssistant = {
         ...assistant,
@@ -29,12 +33,12 @@ export const useAIFeatureHandler = ({ assistant, updateAssistant, onSuccess }: U
   }
 
   const handleEnableGenerateImage = async () => {
-    const newValue = assistant.enableGenerateImage ? 'none' : 'generateImage'
+    const newValue = assistant?.enableGenerateImage ? 'none' : 'generateImage'
     await handleAiFeatureChange(newValue)
   }
 
   const handleEnableWebSearch = async () => {
-    const newValue = assistant.enableWebSearch ? 'none' : 'webSearch'
+    const newValue = assistant?.enableWebSearch ? 'none' : 'webSearch'
     await handleAiFeatureChange(newValue)
   }
 

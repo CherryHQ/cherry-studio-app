@@ -1,5 +1,6 @@
 import { cn } from 'heroui-native'
 import {
+  ArrowDown,
   ArrowLeft,
   ArrowLeftRight,
   ArrowUp,
@@ -9,14 +10,17 @@ import {
   BrushCleaning,
   Camera,
   Check,
+  CheckSquare,
   ChevronDown,
   ChevronRight,
   ChevronsRight,
+  ChevronsUpDown,
   CircleCheck,
   CircleDollarSign,
   CirclePause,
   CircleStop,
   CircleUserRound,
+  Clock,
   Cloud,
   Copy,
   Copyright,
@@ -94,6 +98,7 @@ const createIcon = (IconComponent: React.ComponentType<any>) => {
 const SaveIcon = createIcon(Save)
 const StoreIcon = createIcon(Store)
 const HammerIcon = createIcon(Hammer)
+const ArrowDownIcon = createIcon(ArrowDown)
 const ArrowUpIcon = createIcon(ArrowUp)
 const ArrowLeftIcon = createIcon(ArrowLeft)
 const ArrowLeftRightIcon = createIcon(ArrowLeftRight)
@@ -103,8 +108,11 @@ const AudioLinesIcon = createIcon(AudioLines)
 const BrushCleaningIcon = createIcon(BrushCleaning)
 const CameraIcon = createIcon(Camera)
 const CheckIcon = createIcon(Check)
+const CheckSquareIcon = createIcon(CheckSquare)
 const ChevronDownIcon = createIcon(ChevronDown)
 const ChevronsRightIcon = createIcon(ChevronsRight)
+const ChevronsUpDownIcon = createIcon(ChevronsUpDown)
+const ClockIcon = createIcon(Clock)
 const CircleCheckIcon = createIcon(CircleCheck)
 const CircleDollarSignIcon = createIcon(CircleDollarSign)
 const CirclePauseIcon = createIcon(CirclePause)
@@ -166,6 +174,7 @@ const XCircleIcon = createIcon(XCircle)
 const SettingsIcon = createIcon(Settings)
 
 export {
+  ArrowDownIcon as ArrowDown,
   ArrowLeftIcon as ArrowLeft,
   ArrowLeftRightIcon as ArrowLeftRight,
   ArrowUpIcon as ArrowUp,
@@ -175,14 +184,17 @@ export {
   BrushCleaningIcon as BrushCleaning,
   CameraIcon as Camera,
   CheckIcon as Check,
+  CheckSquareIcon as CheckSquare,
   ChevronDownIcon as ChevronDown,
   ChevronRightIcon as ChevronRight,
   ChevronsRightIcon as ChevronsRight,
+  ChevronsUpDownIcon as ChevronsUpDown,
   CircleCheckIcon as CircleCheck,
   CircleDollarSignIcon as CircleDollarSign,
   CirclePauseIcon as CirclePause,
   CircleStopIcon as CircleStop,
   CircleUserRoundIcon as CircleUserRound,
+  ClockIcon as Clock,
   CloudIcon as Cloud,
   CopyIcon as Copy,
   CopyrightIcon as Copyright,

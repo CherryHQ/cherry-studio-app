@@ -1,37 +1,55 @@
-import { BottomSheetBackdrop, BottomSheetModal, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet'
+import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { Button } from 'heroui-native'
-import React, { forwardRef, useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Keyboard, TouchableWithoutFeedback, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import Text from '@/componentsV2/base/Text'
+import TextField from '@/componentsV2/base/TextField'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
-import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
 import type { Model, Provider } from '@/types/assistant'
 import { getDefaultGroupName } from '@/utils/naming'
 
 const logger = loggerService.withContext('AddModelSheet')
 
-// Stable handler to prevent re-renders
-const stopPropagation = () => true
+const SHEET_NAME = 'add-model-sheet'
 
-interface AddModelSheetProps {
-  provider?: Provider
+// Global state for provider and updateProvider
+let currentProvider: Provider | undefined
+let currentUpdateProvider: ((updates: Partial<Omit<Provider, 'id'>>) => Promise<void>) | undefined
+let updateProviderCallback: ((provider: Provider | undefined) => void) | null = null
+
+export const presentAddModelSheet = (
+  provider: Provider,
   updateProvider: (updates: Partial<Omit<Provider, 'id'>>) => Promise<void>
+) => {
+  currentProvider = provider
+  currentUpdateProvider = updateProvider
+  updateProviderCallback?.(provider)
+  return TrueSheet.present(SHEET_NAME)
 }
 
-export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({ provider, updateProvider }, ref) => {
-  const { t } = useTranslation()
-  const { isDark } = useTheme()
+export const dismissAddModelSheet = () => TrueSheet.dismiss(SHEET_NAME)
 
+export const AddModelSheet: React.FC = () => {
+  const { t } = useTranslation()
+
+  const [provider, setProvider] = useState<Provider | undefined>(currentProvider)
   const [modelId, setModelId] = useState('')
   const [modelName, setModelName] = useState('')
   const [modelGroup, setModelGroup] = useState('')
   const [isVisible, setIsVisible] = useState(false)
   const insets = useSafeAreaInsets()
+
+  useEffect(() => {
+    updateProviderCallback = setProvider
+    return () => {
+      updateProviderCallback = null
+    }
+  }, [])
 
   useEffect(() => {
     setModelName(modelId)
@@ -42,16 +60,22 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
     if (!isVisible) return
 
     const backAction = () => {
-      ;(ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()
+      dismissAddModelSheet()
       return true
     }
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction)
     return () => backHandler.remove()
-  }, [ref, isVisible])
+  }, [isVisible])
+
+  const resetForm = () => {
+    setModelId('')
+    setModelName('')
+    setModelGroup('')
+  }
 
   const handleAddModel = async () => {
-    if (!provider || !modelId.trim()) {
+    if (!provider || !currentUpdateProvider || !modelId.trim()) {
       logger.warn('Provider not available or Model ID is required.')
       return
     }
@@ -69,118 +93,100 @@ export const AddModelSheet = forwardRef<BottomSheetModal, AddModelSheetProps>(({
     }
 
     try {
-      await updateProvider({ models: [...provider.models, newModel] })
+      await currentUpdateProvider({ models: [...provider.models, newModel] })
       logger.info('Successfully added model:', newModel)
-      ;(ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()
+      dismissAddModelSheet()
     } catch (error) {
       logger.error('Failed to add model:', error)
     } finally {
-      setModelId('')
-      setModelName('')
-      setModelGroup('')
+      resetForm()
     }
   }
 
-  const renderBackdrop = (props: any) => (
-    <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} pressBehavior="close" />
-  )
-
-  const inputStyle = useMemo(
-    () => ({
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      borderRadius: 16,
-      backgroundColor: isDark ? '#19191C' : '#ffffffff',
-      borderWidth: 0.5,
-      borderColor: '#a0a1b066',
-      color: isDark ? '#f9f9f9ff' : '#202020ff'
-    }),
-    [isDark]
+  const header = (
+    <XStack className="w-full items-center justify-center pb-2 pt-5">
+      <Text className="text-text-primary text-xl">{t('settings.models.add.model.label')}</Text>
+    </XStack>
   )
 
   return (
-    <BottomSheetModal
-      stackBehavior="replace"
-      enableDynamicSizing={true}
-      ref={ref}
-      keyboardBehavior="interactive"
-      keyboardBlurBehavior="restore"
-      android_keyboardInputMode="adjustResize"
-      backgroundStyle={{
-        borderRadius: 30,
-        backgroundColor: isDark ? '#121213ff' : '#f7f7f7ff'
+    <TrueSheet
+      name={SHEET_NAME}
+      detents={['auto']}
+      cornerRadius={30}
+      grabber
+      dismissible
+      dimmed
+      header={header}
+      onDidDismiss={() => {
+        setIsVisible(false)
+        resetForm()
       }}
-      handleIndicatorStyle={{
-        backgroundColor: isDark ? '#f9f9f9ff' : '#202020ff'
-      }}
-      backdropComponent={renderBackdrop}
-      onDismiss={() => setIsVisible(false)}
-      onChange={index => setIsVisible(index >= 0)}>
-      <BottomSheetView style={{ paddingBottom: insets.bottom }}>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <YStack className="items-center gap-2.5 px-5 pb-7">
-            <XStack className="w-full items-center justify-center">
-              <Text className="text-xl">{t('settings.models.add.model.label')}</Text>
-            </XStack>
-            <YStack className="w-full items-center justify-center gap-6">
-              {/* Model ID Input */}
-              <YStack className="w-full gap-2">
-                <XStack className="gap-2 px-3">
-                  <Text className="text-text-secondary">{t('settings.models.add.model.id.label')}</Text>
-                  <Text className="text-red-500">*</Text>
-                </XStack>
-                <View onStartShouldSetResponder={stopPropagation}>
-                  <BottomSheetTextInput
-                    style={inputStyle}
-                    placeholder={t('settings.models.add.model.id.placeholder')}
-                    value={modelId}
-                    onChangeText={setModelId}
-                  />
-                </View>
-              </YStack>
-              {/* Model Name Input */}
-              <YStack className="w-full gap-2">
-                <XStack className="gap-2 px-3">
-                  <Text className="text-text-secondary">{t('settings.models.add.model.name.label')}</Text>
-                </XStack>
-                <View onStartShouldSetResponder={stopPropagation}>
-                  <BottomSheetTextInput
-                    style={inputStyle}
-                    placeholder={t('settings.models.add.model.name.placeholder')}
-                    value={modelName}
-                    onChangeText={setModelName}
-                  />
-                </View>
-              </YStack>
-              {/* Model Group Input */}
-              <YStack className="w-full gap-2">
-                <XStack className="gap-2 px-3">
-                  <Text className="text-text-secondary">{t('settings.models.add.model.group.label')}</Text>
-                </XStack>
-                <View onStartShouldSetResponder={stopPropagation}>
-                  <BottomSheetTextInput
-                    style={inputStyle}
-                    placeholder={t('settings.models.add.model.group.placeholder')}
-                    value={modelGroup}
-                    onChangeText={setModelGroup}
-                  />
-                </View>
-              </YStack>
-              <Button
-                feedbackVariant="ripple"
-                variant="tertiary"
-                className="border-green-20 bg-green-10 h-11 w-4/6 rounded-2xl"
-                onPress={handleAddModel}
-                isDisabled={!modelId.trim()}>
-                <Button.Label>
-                  <Text className="text-green-100">{t('settings.models.add.model.label')}</Text>
-                </Button.Label>
-              </Button>
+      onDidPresent={() => setIsVisible(true)}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={{ paddingBottom: insets.bottom }}>
+          <YStack className="items-center gap-6 px-5 pb-7">
+            {/* Model ID Input */}
+            <YStack className="w-full gap-2">
+              <XStack className="gap-2 px-3">
+                <Text className="text-text-secondary">{t('settings.models.add.model.id.label')}</Text>
+                <Text className="text-red-500">*</Text>
+              </XStack>
+              <TextField className="rounded-2xl">
+                <TextField.Input
+                  className="h-11"
+                  placeholder={t('settings.models.add.model.id.placeholder')}
+                  value={modelId}
+                  onChangeText={setModelId}
+                />
+              </TextField>
             </YStack>
+
+            {/* Model Name Input */}
+            <YStack className="w-full gap-2">
+              <XStack className="gap-2 px-3">
+                <Text className="text-text-secondary">{t('settings.models.add.model.name.label')}</Text>
+              </XStack>
+              <TextField className="rounded-2xl">
+                <TextField.Input
+                  className="h-11"
+                  placeholder={t('settings.models.add.model.name.placeholder')}
+                  value={modelName}
+                  onChangeText={setModelName}
+                />
+              </TextField>
+            </YStack>
+
+            {/* Model Group Input */}
+            <YStack className="w-full gap-2">
+              <XStack className="gap-2 px-3">
+                <Text className="text-text-secondary">{t('settings.models.add.model.group.label')}</Text>
+              </XStack>
+              <TextField className="rounded-2xl">
+                <TextField.Input
+                  className="h-11"
+                  placeholder={t('settings.models.add.model.group.placeholder')}
+                  value={modelGroup}
+                  onChangeText={setModelGroup}
+                />
+              </TextField>
+            </YStack>
+
+            <Button
+              feedbackVariant="ripple"
+              variant="tertiary"
+              className="border-green-20 bg-green-10 h-11 w-4/6 rounded-2xl"
+              onPress={handleAddModel}
+              isDisabled={!modelId.trim()}>
+              <Button.Label>
+                <Text className="text-green-100">{t('settings.models.add.model.label')}</Text>
+              </Button.Label>
+            </Button>
           </YStack>
-        </TouchableWithoutFeedback>
-      </BottomSheetView>
-    </BottomSheetModal>
+        </View>
+      </TouchableWithoutFeedback>
+    </TrueSheet>
   )
-})
+}
+
 AddModelSheet.displayName = 'AddModelSheet'

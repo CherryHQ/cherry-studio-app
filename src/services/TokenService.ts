@@ -1,14 +1,68 @@
+import { flatten, takeRight } from 'lodash'
 import { approximateTokenSize } from 'tokenx'
 
 import type { Assistant, Usage } from '@/types/assistant'
 import type { FileMetadata } from '@/types/file'
 import { FileTypes } from '@/types/file'
 import type { Message } from '@/types/message'
+import { filterAfterContextClearMessages, filterMessages } from '@/utils/messageUtils/filters'
 import { findFileBlocks, getMainTextContent, getThinkingContent } from '@/utils/messageUtils/find'
 
+import { getAssistantSettings } from './AssistantService'
+import { readFile } from './FileService'
 import { loggerService } from './LoggerService'
 
 const logger = loggerService.withContext('TokenService')
+
+interface MessageItem {
+  name?: string
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+async function getFileContent(file?: FileMetadata | null): Promise<string> {
+  if (!file) {
+    return ''
+  }
+
+  if (![FileTypes.TEXT, FileTypes.DOCUMENT].includes(file.type)) {
+    return ''
+  }
+
+  try {
+    return readFile(file)
+  } catch (error) {
+    logger.warn('Failed to read file content for token estimation', { fileId: file.id, error })
+    return ''
+  }
+}
+
+async function getMessageParam(message: Message): Promise<MessageItem[]> {
+  const param: MessageItem[] = []
+  const content = await getMainTextContent(message)
+
+  param.push({
+    role: message.role,
+    content
+  })
+
+  const files = await findFileBlocks(message)
+
+  if (files.length > 0) {
+    for (const fileBlock of files) {
+      const fileContent = await getFileContent(fileBlock.file)
+
+      if (fileContent) {
+        param.push({
+          role: 'assistant',
+          content: fileContent
+        })
+      }
+    }
+  }
+
+  return param
+}
 
 /**
  * 估算文本内容的 token 数量
@@ -97,8 +151,8 @@ export async function estimateMessageUsage(message: Partial<Message>): Promise<U
     }
   }
 
-  const content = getMainTextContent(message as Message)
-  const reasoningContent = getThinkingContent(message as Message)
+  const content = await getMainTextContent(message as Message)
+  const reasoningContent = await getThinkingContent(message as Message)
   const combinedContent = [content, reasoningContent].filter(s => s !== undefined).join(' ')
   const tokens = estimateTextTokens(combinedContent)
 
@@ -130,34 +184,34 @@ export async function estimateMessagesUsage({
 
 export async function estimateHistoryTokens(assistant: Assistant, msgs: Message[]) {
   logger.info('assistant', assistant.id, msgs.length)
-  // const { contextCount } = getAssistantSettings(assistant)
-  // const maxContextCount = contextCount
-  // const messages = filterMessages(filterContextMessages(takeRight(msgs, maxContextCount)))
+  const { contextCount } = getAssistantSettings(assistant)
+  const limitedByContext = takeRight(msgs, contextCount)
+  const afterContextClear = filterAfterContextClearMessages(limitedByContext)
+  const messages = await filterMessages(afterContextClear)
 
-  // // 有 usage 数据的消息，快速计算总数
-  // const uasageTokens = messages
-  //   .filter(m => m.usage)
-  //   .reduce((acc, message) => {
-  //     const inputTokens = message.usage?.total_tokens ?? 0
-  //     const outputTokens = message.usage!.completion_tokens ?? 0
-  //     return acc + (message.role === 'user' ? inputTokens : outputTokens)
-  //   }, 0)
+  if (messages.length === 0) {
+    return estimateTextTokens(assistant.prompt || '')
+  }
 
-  // // 没有 usage 数据的消息，需要计算每条消息的 token
-  // let allMessages: MessageItem[][] = []
+  const uasageTokens = messages
+    .filter(m => m.usage)
+    .reduce((acc, message) => {
+      const inputTokens = message.usage?.total_tokens ?? 0
+      const outputTokens = message.usage?.completion_tokens ?? 0
+      return acc + (message.role === 'user' ? inputTokens : outputTokens)
+    }, 0)
 
-  // for (const message of messages.filter(m => !m.usage)) {
-  //   const items = await getMessageParam(message)
-  //   allMessages = allMessages.concat(items)
-  // }
+  const allMessages: MessageItem[][] = []
 
-  // const prompt = assistant.prompt
-  // const input = flatten(allMessages)
-  //   .map(m => m.content)
-  //   .join('\n')
+  for (const message of messages.filter(m => !m.usage)) {
+    const items = await getMessageParam(message)
+    allMessages.push(items)
+  }
 
-  // return estimateTextTokens(prompt + input) + uasageTokens
+  const prompt = assistant.prompt || ''
+  const input = flatten(allMessages)
+    .map(m => m.content)
+    .join('\n')
 
-  // todo
-  return 99999
+  return estimateTextTokens(prompt + input) + uasageTokens
 }

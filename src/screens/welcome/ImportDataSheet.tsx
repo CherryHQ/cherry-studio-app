@@ -1,26 +1,43 @@
-import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet'
+import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { useNavigation } from '@react-navigation/native'
 import * as DocumentPicker from 'expo-document-picker'
-import React, { forwardRef, useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler } from 'react-native'
+import { BackHandler, Platform, View } from 'react-native'
 
-import { Container, Group, PressableRow, RestoreProgressModal, Text, XStack } from '@/componentsV2'
+import { Group, PressableRow, RestoreProgressModal, Text, XStack } from '@/componentsV2'
 import { Folder, Wifi } from '@/componentsV2/icons'
 import { useBottom } from '@/hooks/useBottom'
 import { DEFAULT_RESTORE_STEPS, useRestore } from '@/hooks/useRestore'
-import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
 import type { WelcomeNavigationProps } from '@/types/naviagate'
 
 const logger = loggerService.withContext('ImportDataSheet')
 
-interface ImportDataSheetProps {
+const SHEET_NAME = 'import-data-sheet'
+
+interface ImportDataSheetData {
   handleStart: () => Promise<void>
 }
 
-export const ImportDataSheet = forwardRef<BottomSheetModal, ImportDataSheetProps>(({ handleStart }, ref) => {
-  const { isDark } = useTheme()
+const defaultImportDataSheetData: ImportDataSheetData = {
+  handleStart: async () => {}
+}
+
+let currentSheetData: ImportDataSheetData = defaultImportDataSheetData
+let updateSheetDataCallback: ((data: ImportDataSheetData) => void) | null = null
+
+export const presentImportDataSheet = (data: ImportDataSheetData) => {
+  currentSheetData = data
+  updateSheetDataCallback?.(data)
+  return TrueSheet.present(SHEET_NAME)
+}
+
+export const dismissImportDataSheet = () => TrueSheet.dismiss(SHEET_NAME)
+
+export const ImportDataSheet: React.FC = () => {
+  const [sheetData, setSheetData] = useState<ImportDataSheetData>(currentSheetData)
+  const { handleStart } = sheetData
   const { t } = useTranslation()
   const bottom = useBottom()
   const navigation = useNavigation<WelcomeNavigationProps>()
@@ -30,16 +47,23 @@ export const ImportDataSheet = forwardRef<BottomSheetModal, ImportDataSheetProps
   })
 
   useEffect(() => {
+    updateSheetDataCallback = setSheetData
+    return () => {
+      updateSheetDataCallback = null
+    }
+  }, [])
+
+  useEffect(() => {
     if (!isVisible) return
 
     const backAction = () => {
-      ;(ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()
+      dismissImportDataSheet()
       return true
     }
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction)
     return () => backHandler.remove()
-  }, [ref, isVisible])
+  }, [isVisible])
 
   const handleRestore = async () => {
     try {
@@ -56,7 +80,7 @@ export const ImportDataSheet = forwardRef<BottomSheetModal, ImportDataSheetProps
     } catch (error) {
       logger.error('Failed to restore data:', error)
     } finally {
-      ;(ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()
+      dismissImportDataSheet()
     }
   }
 
@@ -66,49 +90,38 @@ export const ImportDataSheet = forwardRef<BottomSheetModal, ImportDataSheetProps
   }
 
   const handleNavigateToLandrop = () => {
-    ;(ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()
+    dismissImportDataSheet()
     navigation.navigate('LandropSettingsScreen', { redirectToHome: true })
   }
 
-  const renderBackdrop = (props: any) => (
-    <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} pressBehavior="close" />
-  )
-
   return (
     <>
-      <BottomSheetModal
-        stackBehavior="replace"
-        enableDynamicSizing={true}
-        ref={ref}
-        backgroundStyle={{
-          borderRadius: 30,
-          backgroundColor: isDark ? '#121213ff' : '#f7f7f7ff'
-        }}
-        handleIndicatorStyle={{
-          backgroundColor: isDark ? '#f9f9f9ff' : '#202020ff'
-        }}
-        backdropComponent={renderBackdrop}
-        onDismiss={() => setIsVisible(false)}
-        onChange={index => setIsVisible(index >= 0)}>
-        <BottomSheetView style={{ paddingBottom: bottom }}>
-          <Container>
-            <Group>
-              <PressableRow onPress={handleRestore}>
-                <XStack className="items-center gap-3">
-                  <Folder size={24} />
-                  <Text>{t('settings.data.restore.title')}</Text>
-                </XStack>
-              </PressableRow>
-              <PressableRow onPress={handleNavigateToLandrop}>
-                <XStack className="items-center gap-3">
-                  <Wifi size={24} />
-                  <Text>{t('settings.data.landrop.title')}</Text>
-                </XStack>
-              </PressableRow>
-            </Group>
-          </Container>
-        </BottomSheetView>
-      </BottomSheetModal>
+      <TrueSheet
+        name={SHEET_NAME}
+        detents={['auto']}
+        cornerRadius={30}
+        grabber={Platform.OS === 'ios' ? true : false}
+        dismissible
+        dimmed
+        onDidDismiss={() => setIsVisible(false)}
+        onDidPresent={() => setIsVisible(true)}>
+        <View className="gap-5 overflow-hidden bg-transparent p-4 pt-5" style={{ paddingBottom: bottom }}>
+          <Group className="bg-gray-10">
+            <PressableRow onPress={handleRestore}>
+              <XStack className="items-center gap-3">
+                <Folder size={24} />
+                <Text>{t('settings.data.restore.title')}</Text>
+              </XStack>
+            </PressableRow>
+            <PressableRow onPress={handleNavigateToLandrop}>
+              <XStack className="items-center gap-3">
+                <Wifi size={24} />
+                <Text>{t('settings.data.landrop.title')}</Text>
+              </XStack>
+            </PressableRow>
+          </Group>
+        </View>
+      </TrueSheet>
       <RestoreProgressModal
         isOpen={isModalOpen}
         steps={restoreSteps}
@@ -117,6 +130,6 @@ export const ImportDataSheet = forwardRef<BottomSheetModal, ImportDataSheetProps
       />
     </>
   )
-})
+}
 
 ImportDataSheet.displayName = 'ImportDataSheet'

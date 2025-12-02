@@ -1,13 +1,10 @@
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs'
-import type { RouteProp } from '@react-navigation/native'
-import { useRoute } from '@react-navigation/native'
 import { cn } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity, View } from 'react-native'
 
 import { Text } from '@/componentsV2'
-import type { AssistantStackParamList } from '@/navigators/AssistantStackNavigator'
 import ModelTabScreen from '@/screens/assistant/tabs/ModelTabScreen'
 import PromptTabScreen from '@/screens/assistant/tabs/PromptTabScreen'
 import ToolTabScreen from '@/screens/assistant/tabs/ToolTabScreen'
@@ -21,10 +18,9 @@ export type AssistantDetailTabParamList = {
 
 const Tab = createMaterialTopTabNavigator<AssistantDetailTabParamList>()
 
-type AssistantDetailRouteProp = RouteProp<AssistantStackParamList, 'AssistantDetailScreen'>
-
 interface AssistantDetailTabNavigatorProps {
   assistant: Assistant
+  initialTab?: string
 }
 
 function CustomTabBar({ state, navigation }: any) {
@@ -68,14 +64,12 @@ function CustomTabBar({ state, navigation }: any) {
   )
 }
 
-export default function AssistantDetailTabNavigator({ assistant }: AssistantDetailTabNavigatorProps) {
+export default function AssistantDetailTabNavigator({ assistant, initialTab }: AssistantDetailTabNavigatorProps) {
   const { t } = useTranslation()
-  const route = useRoute<AssistantDetailRouteProp>()
-  const { tab } = route.params
 
   return (
     <Tab.Navigator
-      initialRouteName={getInitialTabRoute(tab)}
+      initialRouteName={getInitialTabRoute(initialTab)}
       tabBar={props => <CustomTabBar {...props} />}
       screenOptions={{
         swipeEnabled: true,

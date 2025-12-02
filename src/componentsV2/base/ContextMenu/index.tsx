@@ -1,6 +1,6 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import type { FC } from 'react'
-import React, { useRef } from 'react'
+import React, { useId } from 'react'
 import { Pressable } from 'react-native'
 import type { SFSymbol } from 'sf-symbols-typescript'
 import * as ZeegoContextMenu from 'zeego/context-menu'
@@ -37,7 +37,7 @@ const ContextMenu: FC<ContextMenuProps> = ({
   borderRadius = 0,
   withHighLight = true
 }) => {
-  const selectionSheetRef = useRef<BottomSheetModal>(null)
+  const sheetName = useId()
 
   if (isIOS) {
     const { Root, Trigger, Content, Item, ItemTitle, ItemIcon } = ZeegoContextMenu
@@ -84,11 +84,11 @@ const ContextMenu: FC<ContextMenuProps> = ({
   if (isAndroid) {
     const openBottomSheet = () => {
       if (disableContextMenu) return
-      selectionSheetRef.current?.present()
+      TrueSheet.present(sheetName)
     }
 
     const closeBottomSheet = () => {
-      selectionSheetRef.current?.dismiss()
+      TrueSheet.dismiss(sheetName)
     }
 
     const onAndroidSelect = (fn: () => void) => {
@@ -114,7 +114,8 @@ const ContextMenu: FC<ContextMenuProps> = ({
         </Pressable>
 
         <SelectionSheet
-          ref={selectionSheetRef}
+          name={sheetName}
+          detents={['auto', 0.6]}
           items={list.map(item => ({
             key: item.title,
             label: item.title,

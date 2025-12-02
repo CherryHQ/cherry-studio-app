@@ -1,93 +1,53 @@
 import { viewDocument } from '@react-native-documents/viewer'
 import type { FC } from 'react'
 import React from 'react'
-import { useTranslation } from 'react-i18next'
-import { TouchableOpacity, View } from 'react-native'
+import { View } from 'react-native'
 
-import ContextMenu from '@/componentsV2/base/ContextMenu'
 import Text from '@/componentsV2/base/Text'
-import { FileIcon, Share, X } from '@/componentsV2/icons'
-import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
-import { useToast } from '@/hooks/useToast'
-import { shareFile } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import type { FileMetadata } from '@/types/file'
 import { formatFileSize } from '@/utils/file'
+
+import BaseItem from './BaseItem'
 
 const logger = loggerService.withContext('File Item')
 
 interface FileItemProps {
   file: FileMetadata
   onRemove?: (file: FileMetadata) => void
-  width?: number
-  height?: number
+  size?: number
   disabledContextMenu?: boolean
 }
 
-const FileItem: FC<FileItemProps> = ({ file, onRemove, disabledContextMenu }) => {
-  const { t } = useTranslation()
-  const toast = useToast()
-
+const FileItem: FC<FileItemProps> = ({ file, onRemove, size, disabledContextMenu }) => {
   const handlePreview = () => {
     viewDocument({ uri: file.path, mimeType: file.type }).catch(error => {
       logger.error('Handle Preview Error', error)
     })
   }
 
-  const handleRemove = (e: any) => {
-    e.stopPropagation()
-    onRemove?.(file)
-  }
-
-  const handleShareFile = async () => {
-    try {
-      const result = await shareFile(file.path)
-
-      if (result.success) {
-        logger.info('File shared successfully')
-      } else {
-        toast.show(result.message, { color: 'red', duration: 2500 })
-        logger.warn('Failed to share file:', result.message)
-      }
-    } catch (error) {
-      toast.show(t('common.error_occurred'), { color: 'red', duration: 2500 })
-      logger.error('Error in handleShareFile:', error)
-    }
-  }
-
   return (
-    <ContextMenu
+    <BaseItem
+      file={file}
+      onRemove={onRemove}
       onPress={handlePreview}
-      disableContextMenu={disabledContextMenu}
-      list={[
-        {
-          title: t('button.share'),
-          iOSIcon: 'square.and.arrow.up',
-          androidIcon: <Share size={16} className="text-text-primary" />,
-          onSelect: handleShareFile
-        }
-      ]}
-      borderRadius={16}>
-      <XStack className="bg-green-20 items-center justify-start gap-1.5 rounded-lg px-1.5 py-1.5 pr-3">
-        <View className="h-9 w-9 items-center justify-center gap-2 rounded-[9.5px] bg-green-100">
-          <FileIcon size={20} className="text-white" />
+      size={size}
+      disabledContextMenu={disabledContextMenu}
+      renderContent={({ width }) => (
+        <View className="bg-gray-20 items-center justify-center rounded-2xl" style={{ width, height: width }}>
+          <YStack className="h-full w-full items-center justify-between gap-1 p-1">
+            <Text className="w-full  text-start text-xl" numberOfLines={2} ellipsizeMode="middle">
+              {file.name.split('.')[1].toLocaleUpperCase()}
+            </Text>
+            <Text className="text-text-secondary text-md">{formatFileSize(file.size)}</Text>
+            <Text className="text-center text-xl" numberOfLines={1} ellipsizeMode="middle">
+              {file.name.split('.')[0]}
+            </Text>
+          </YStack>
         </View>
-        <YStack className="gap-0.75 justify-center">
-          <Text className="leading-3.5 text-text-primary text-sm" numberOfLines={1} ellipsizeMode="middle">
-            {file.name}
-          </Text>
-          <Text className="leading-2.75 text-text-secondary text-xs">{formatFileSize(file.size)}</Text>
-        </YStack>
-      </XStack>
-      {onRemove && (
-        <TouchableOpacity onPress={handleRemove} hitSlop={5} className="absolute -right-1.5 -top-1.5 rounded-full">
-          <View className="rounded-full border border-white p-0.5">
-            <X size={14} />
-          </View>
-        </TouchableOpacity>
       )}
-    </ContextMenu>
+    />
   )
 }
 

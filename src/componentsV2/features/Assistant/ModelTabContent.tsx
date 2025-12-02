@@ -1,12 +1,11 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { Button, Switch } from 'heroui-native'
 import { MotiView } from 'moti'
-import React, { useRef, useState } from 'react'
+import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import Text from '@/componentsV2/base/Text'
 import TextField from '@/componentsV2/base/TextField'
-import { ReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
+import { presentReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
 import { ChevronRight } from '@/componentsV2/icons/LucideIcon'
 import Group from '@/componentsV2/layout/Group'
 import Row from '@/componentsV2/layout/Row'
@@ -17,7 +16,7 @@ import { DEFAULT_CONTEXTCOUNT, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE } from '@
 import type { Assistant, AssistantSettings, Model } from '@/types/assistant'
 import { getBaseModelName } from '@/utils/naming'
 
-import ModelSheet from '../Sheet/ModelSheet'
+import { presentModelSheet } from '../Sheet/ModelSheet'
 
 interface ModelTabContentProps {
   assistant: Assistant
@@ -26,8 +25,6 @@ interface ModelTabContentProps {
 
 export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentProps) {
   const { t } = useTranslation()
-  const modelSheetRef = useRef<BottomSheetModal>(null)
-  const reasoningSheetRef = useRef<BottomSheetModal>(null)
 
   // Local state for input values
   const [temperatureInput, setTemperatureInput] = useState(
@@ -56,11 +53,20 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
   }
 
   const handleModelPress = () => {
-    modelSheetRef.current?.present()
+    presentModelSheet({
+      mentions: model,
+      setMentions: handleModelChange,
+      multiple: false
+    })
   }
 
   const handleReasoningPress = () => {
-    reasoningSheetRef.current?.present()
+    if (!model[0]) return
+    presentReasoningSheet({
+      model: model[0],
+      assistant,
+      updateAssistant: handleAssistantChange
+    })
   }
 
   const model = assistant?.defaultModel ? [assistant.defaultModel] : []
@@ -201,15 +207,6 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
           </Button>
         )}
       </Group>
-      <ModelSheet ref={modelSheetRef} mentions={model} setMentions={handleModelChange} multiple={false} />
-      {model[0] && (
-        <ReasoningSheet
-          ref={reasoningSheetRef}
-          model={model[0]}
-          assistant={assistant}
-          updateAssistant={handleAssistantChange}
-        />
-      )}
     </MotiView>
   )
 }
