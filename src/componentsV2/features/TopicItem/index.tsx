@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/useToast'
 import i18n from '@/i18n'
 import { fetchTopicNaming } from '@/services/ApiService'
 import type { Topic } from '@/types/assistant'
-import type { DrawerNavigationProps } from '@/types/naviagate'
+import type { HomeNavigationProps } from '@/types/naviagate'
 import { storage } from '@/utils'
 
 import { Check, CheckSquare, Edit3, Sparkles, Trash2 } from '../../icons/LucideIcon'
@@ -72,7 +72,7 @@ export const TopicItem: FC<TopicItemProps> = ({
 }) => {
   const { t } = useTranslation()
   const [currentLanguage, setCurrentLanguage] = useState<string>(i18n.language)
-  const navigation = useNavigation<DrawerNavigationProps>()
+  const navigation = useNavigation<HomeNavigationProps>()
   const { assistant } = useAssistant(topic.assistantId)
   const [isGeneratingName, setIsGeneratingName] = useState(false)
   const dialog = useDialog()
@@ -84,7 +84,7 @@ export const TopicItem: FC<TopicItemProps> = ({
     if (handleNavigateChatScreen) {
       handleNavigateChatScreen(topic.id)
     } else {
-      navigation.navigate('Home', { screen: 'ChatScreen', params: { topicId: topic.id } })
+      navigation.navigate('ChatScreen', { topicId: topic.id })
     }
     switchTopic(topic.id).catch(console.error)
   }

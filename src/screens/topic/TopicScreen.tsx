@@ -18,14 +18,14 @@ import { assistantService, getDefaultAssistant } from '@/services/AssistantServi
 import { loggerService } from '@/services/LoggerService'
 import { deleteMessagesByTopicId } from '@/services/MessagesService'
 import { topicService } from '@/services/TopicService'
-import type { DrawerNavigationProps } from '@/types/naviagate'
+import type { HomeNavigationProps } from '@/types/naviagate'
 import { isIOS } from '@/utils/device'
 
 const logger = loggerService.withContext('TopicScreen')
 
 export default function TopicScreen() {
   const { t } = useTranslation()
-  const navigation = useNavigation<DrawerNavigationProps>()
+  const navigation = useNavigation<HomeNavigationProps>()
   const route = useRoute<RouteProp<HomeStackParamList, 'TopicScreen'>>()
   const assistantId = route.params?.assistantId
   const { topics, isLoading } = useTopics()
@@ -85,10 +85,21 @@ export default function TopicScreen() {
     return () => clearTimeout(timer)
   }, [isLoading])
 
+  const handleNavigateChatScreen = useCallback(
+    (topicId: string) => {
+      if (navigation.canGoBack()) {
+        navigation.goBack()
+      } else {
+        navigation.navigate('ChatScreen', { topicId })
+      }
+    },
+    [navigation]
+  )
+
   const handleAddNewTopic = async () => {
     const targetAssistant = await getAssistantForNewTopic()
     const newTopic = await topicService.createTopic(targetAssistant)
-    navigation.navigate('Home', { screen: 'ChatScreen', params: { topicId: newTopic.id } })
+    handleNavigateChatScreen(newTopic.id)
   }
 
   const handleEnterMultiSelectMode = useCallback((topicId: string) => {
@@ -216,6 +227,7 @@ export default function TopicScreen() {
                 selectedTopicIds={selectedTopicIds}
                 onToggleTopicSelection={handleToggleTopicSelection}
                 onEnterMultiSelectMode={handleEnterMultiSelectMode}
+                handleNavigateChatScreen={handleNavigateChatScreen}
                 getAssistantForNewTopic={getAssistantForNewTopic}
               />
             )}
