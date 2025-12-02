@@ -29,13 +29,11 @@ export const WebsearchProviderRow = ({ provider, need_config }: WebsearchProvide
     <PressableRow onPress={onPress} disabled={!need_config}>
       <XStack className="items-center gap-3">
         <WebsearchProviderIcon provider={provider} />
-        <Text className="text-text-primary text-[14px]">{provider.name}</Text>
+        <Text className="text-foreground text-[14px]">{provider.name}</Text>
       </XStack>
       <XStack className="items-center gap-2">
         {provider.apiKey && (
-          <Text className="border-green-20 bg-green-10 rounded-lg border px-2 py-0.5 text-xs text-green-100">
-            {t('common.added')}
-          </Text>
+          <Text className="primary-badge rounded-lg border px-2 py-0.5 text-xs">{t('common.added')}</Text>
         )}
         {need_config && <RowRightArrow />}
       </XStack>

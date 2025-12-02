@@ -8,7 +8,6 @@ import TextField from '@/componentsV2/base/TextField'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useBottom } from '@/hooks/useBottom'
-import { useTheme } from '@/hooks/useTheme'
 import type { Assistant, Topic } from '@/types/assistant'
 
 import { FilePreview } from './FilePreview'
@@ -29,22 +28,15 @@ interface MessageInputProps {
 
 export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, updateAssistant }) => {
   const { t } = useTranslation()
-  const { isDark } = useTheme()
   const bottomPad = useBottom()
   const { text, setText, files, setFiles, mentions, setMentions, isReasoning, sendMessage, onPause } =
     useMessageInputLogic(topic, assistant)
   const [isVoiceActive, setIsVoiceActive] = useState(false)
-
   return (
     <View
-      className="bg-background-secondary rounded-3xl p-3"
+      className="bg-foreground-secondary/5 dark:bg-foreground-secondary/12 rounded-3xl p-3"
       style={{
-        paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad,
-        shadowColor: isDark ? '#fff' : '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 10
+        paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad
       }}>
       <YStack className="gap-2.5">
         <ToolPreview assistant={assistant} updateAssistant={updateAssistant} />
@@ -53,7 +45,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
         <XStack className="top-[5px]">
           <TextField className="w-full p-0">
             <TextField.Input
-              className="text-text-primary h-24 border-none p-0 text-base"
+              className="text-foreground h-24 border-none p-0 text-base"
               placeholder={t('inputs.placeholder')}
               value={text}
               onChangeText={setText}

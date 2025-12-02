@@ -28,14 +28,14 @@ interface RestoreProgressModalProps {
 const getIconForStatus = (status: StepStatus) => {
   switch (status) {
     case 'in_progress':
-      return <Spinner size="sm" className="text-text-link " />
+      return <Spinner size="sm" className="text-blue-500 " />
     case 'completed':
-      return <CircleCheck size={20} className="text-green-100" />
+      return <CircleCheck size={20} className="primary-text" />
     case 'error':
-      return <XCircle size={20} className="text-red-100" />
+      return <XCircle size={20} className="text-red-600" />
     case 'pending':
     default:
-      return <TriangleAlert size={20} className="text-orange-100" />
+      return <TriangleAlert size={20} className="text-orange-400" />
   }
 }
 
@@ -79,10 +79,10 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
         {isDone && (
           <Pressable onPress={onClose} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
         )}
-        <YStack className="bg-ui-card-background w-3/4 gap-3 overflow-hidden rounded-2xl p-4">
+        <YStack className="bg-card w-3/4 gap-3 overflow-hidden rounded-2xl p-4">
           <YStack className="items-center gap-3">
             <Text className="text-2xl font-bold">{title}</Text>
-            <Text className="text-text-secondary text-lg">{description}</Text>
+            <Text className="text-foreground-secondary text-lg">{description}</Text>
           </YStack>
 
           <YStack className="items-center justify-center gap-3">
@@ -103,19 +103,19 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
               className={cn(
                 'w-40 items-center justify-center rounded-[30px] border text-base active:opacity-80',
                 overallStatus === 'error'
-                  ? 'border-red-20 bg-red-20'
+                  ? 'border-red-600/20 bg-red-600/20'
                   : overallStatus === 'success'
-                    ? 'border-green-20 bg-green-20'
-                    : 'border-yellow-20 bg-yellow-20'
+                    ? 'primary-container'
+                    : 'border-yellow-400/20 bg-yellow-400/20'
               )}
               isDisabled={!isDone}
               onPress={onClose}>
               <Button.Label>
                 <Text
                   className={cn(
-                    overallStatus === 'error' && 'text-red-100',
-                    overallStatus === 'success' && 'text-green-100',
-                    overallStatus === 'running' && 'text-yellow-100'
+                    overallStatus === 'error' && 'text-red-600',
+                    overallStatus === 'success' && 'primary-text',
+                    overallStatus === 'running' && 'text-yellow-400'
                   )}>
                   {isDone ? t('common.close') : t('settings.data.restore.progress.pending')}
                 </Text>

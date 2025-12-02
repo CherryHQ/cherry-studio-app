@@ -70,7 +70,7 @@ export const ListSkeleton = ({ variant = 'default', count = 3 }: ListSkeletonPro
             isLoading
             isSkeletonOnly
             animationType="shimmer"
-            className="flex-row items-center justify-between rounded-2xl bg-ui-card-background px-2.5 py-2.5"
+            className="flex-row items-center justify-between rounded-2xl bg-card px-2.5 py-2.5"
           >
             <View className="flex-1 gap-2">
               <SkeletonGroup.Item className="h-5 w-1/3 rounded-md" />
@@ -100,7 +100,7 @@ export const ListSkeleton = ({ variant = 'default', count = 3 }: ListSkeletonPro
           animationType="shimmer"
           className={
             isCard
-              ? 'flex-row items-center gap-3.5 rounded-2xl bg-ui-card-background px-2.5 py-2.5'
+              ? 'flex-row items-center gap-3.5 rounded-2xl bg-card px-2.5 py-2.5'
               : 'flex-row items-center gap-3'
           }
         >

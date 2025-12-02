@@ -260,10 +260,10 @@ export default function ManageModelsScreen() {
         <Tabs value={activeFilterType} onValueChange={setActiveFilterType}>
           <Tabs.ScrollView>
             <Tabs.List aria-label="Model filter tabs" className="bg-transparent">
-              <Tabs.Indicator />
+              <Tabs.Indicator className="primary-container rounded-xl border" />
               {TAB_CONFIGS.map(({ value, i18nKey }) => (
                 <Tabs.Trigger key={value} value={value}>
-                  <Tabs.Label className={cn(activeFilterType === value ? 'text-green-100' : undefined)}>
+                  <Tabs.Label className={cn(activeFilterType === value ? 'primary-text' : undefined)}>
                     {t(i18nKey)}
                   </Tabs.Label>
                 </Tabs.Trigger>
@@ -300,9 +300,9 @@ export default function ManageModelsScreen() {
                       <IconButton
                         icon={
                           isModelInCurrentProvider(model.id) ? (
-                            <Minus size={18} className="bg-red-20 rounded-full text-red-100" />
+                            <Minus size={18} className="rounded-full bg-red-600/20 text-red-600" />
                           ) : (
-                            <Plus size={18} className="bg-green-20 rounded-full text-green-100" />
+                            <Plus size={18} className="secondary-container primary-text rounded-full" />
                           )
                         }
                         onPress={
@@ -316,9 +316,9 @@ export default function ManageModelsScreen() {
                   <IconButton
                     icon={
                       isAllModelsInCurrentProvider(models) ? (
-                        <Minus size={18} className="bg-red-20 rounded-full text-red-100" />
+                        <Minus size={18} className="rounded-full bg-red-600/20 text-red-600" />
                       ) : (
-                        <Plus size={18} className="bg-green-20 rounded-full text-green-100" />
+                        <Plus size={18} className="bg-brand-300/20 primary-text rounded-full" />
                       )
                     }
                     onPress={

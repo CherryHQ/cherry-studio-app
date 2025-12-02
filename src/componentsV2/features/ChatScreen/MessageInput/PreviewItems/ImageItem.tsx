@@ -66,7 +66,7 @@ const ImageItem: FC<ImageItemProps> = ({ file, allImages = [], onRemove, size, d
         hasError={imageError}
         renderErrorPlaceholder={width => (
           <View className="bg-gray-5 rounded-2.5 items-center justify-center" style={{ width, height: width }}>
-            <ImageOff size={width * 0.3} className="text-gray-20" />
+            <ImageOff size={width * 0.3} className="text-zinc-400/20" />
           </View>
         )}
         renderContent={({ width }) => (
@@ -81,7 +81,7 @@ const ImageItem: FC<ImageItemProps> = ({ file, allImages = [], onRemove, size, d
           {
             title: t('button.save_image'),
             iOSIcon: 'square.and.arrow.down',
-            androidIcon: <Download size={16} className="text-text-primary" />,
+            androidIcon: <Download size={16} className="text-foreground" />,
             onSelect: handleSaveImage
           }
         ]}

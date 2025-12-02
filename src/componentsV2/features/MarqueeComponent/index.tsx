@@ -100,7 +100,7 @@ const MarqueeComponent: React.FC<MarqueeComponentProps> = ({ block, expanded }) 
         </AnimatePresence>
         <YStack className="h-full flex-1 gap-1">
           <XStack className="h-7 items-center justify-between">
-            <Text className="text-text-primary z-10 text-base font-bold">
+            <Text className="text-foreground z-10 text-base font-bold">
               {t('chat.think', { seconds: Math.floor((block.thinking_millsec || 0) / 1000) })}
             </Text>
             <MotiView
@@ -112,7 +112,7 @@ const MarqueeComponent: React.FC<MarqueeComponentProps> = ({ block, expanded }) 
                 duration: 150
               }}
               style={{ zIndex: 2 }}>
-              <ChevronsRight size={20} className="text-text-primary" />
+              <ChevronsRight size={20} className="text-foreground" />
             </MotiView>
           </XStack>
           <AnimatePresence>
@@ -127,7 +127,7 @@ const MarqueeComponent: React.FC<MarqueeComponentProps> = ({ block, expanded }) 
                   type: 'timing',
                   duration: 50
                 }}>
-                <Text className="text-text-secondary text-xs opacity-50">{t('chat.think_expand')}</Text>
+                <Text className="text-foreground-secondary text-xs opacity-50">{t('chat.think_expand')}</Text>
               </MotiView>
             )}
             {isStreaming && !expanded && messages.length > 0 && (

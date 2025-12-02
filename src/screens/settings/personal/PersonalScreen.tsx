@@ -48,7 +48,7 @@ export default function PersonalScreen() {
     <SafeAreaContainer>
       <HeaderBar title={t('settings.personal.title')} />
       <Container>
-        <Card className="bg-ui-card-background rounded-2xl p-4">
+        <Card className="bg-card rounded-2xl p-4">
           <YStack className="gap-6">
             <XStack className="mt-2 items-center justify-center">
               <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.8}>
@@ -57,7 +57,7 @@ export default function PersonalScreen() {
                     className="h-24 w-24 rounded-full"
                     source={avatar ? { uri: avatar } : require('@/assets/images/favicon.png')}
                   />
-                  <XStack className="absolute bottom-0 right-0 rounded-full border-2 border-white bg-blue-100 p-1.5">
+                  <XStack className="absolute bottom-0 right-0 rounded-full border-2 border-white bg-sky-500 p-1.5">
                     <Camera className="text-white" size={14} />
                   </XStack>
                 </XStack>

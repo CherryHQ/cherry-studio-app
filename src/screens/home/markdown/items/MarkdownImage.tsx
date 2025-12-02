@@ -25,7 +25,7 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({ uri, alt }) => {
           <View
             className="bg-gray-5 rounded-2.5 items-center justify-center"
             style={{ width: imageWidth, height: imageWidth }}>
-            <ImageOff size={imageWidth * 0.3} className="text-gray-20" />
+            <ImageOff size={imageWidth * 0.3} className="text-zinc-400/20" />
           </View>
         ) : (
           <Image

@@ -29,12 +29,12 @@ export const AssistantSelection: React.FC<AssistantSelectionProps> = ({ assistan
       <XStack className="items-center justify-center">
         <YStack className="items-center justify-start gap-0.5">
           <XStack className="items-center justify-start gap-0.5">
-            <Text className="text-text-primary text-base" ellipsizeMode="tail" numberOfLines={1}>
+            <Text className="text-foreground text-base" ellipsizeMode="tail" numberOfLines={1}>
               {assistant.name}
             </Text>
-            <ChevronRight className="text-text-secondary" size={20} />
+            <ChevronRight className="text-foreground-secondary" size={20} />
           </XStack>
-          <Text className="text-gray-60 text-[11px]" ellipsizeMode="tail" numberOfLines={1}>
+          <Text className="text-zinc-400/60 text-[11px]" ellipsizeMode="tail" numberOfLines={1}>
             {topic.name}
           </Text>
         </YStack>

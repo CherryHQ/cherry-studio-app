@@ -184,22 +184,18 @@ const AssistantItemSheet: React.FC = () => {
                   borderColor={isDark ? '#333333' : '#ffffff'}
                 />
               </View>
-              <Text className="text-text-primary text-center text-[22px] font-bold">{assistant.name}</Text>
+              <Text className="text-foreground text-center text-[22px] font-bold">{assistant.name}</Text>
               {assistant.group && assistant.group.length > 0 && (
                 <XStack className="flex-wrap justify-center gap-2.5">
                   {assistant.group.map((group, index) => (
-                    <GroupTag
-                      key={index}
-                      group={group}
-                      className="border-green-20 bg-green-10 border-[0.5px] px-2 text-xs text-green-100"
-                    />
+                    <GroupTag key={index} group={group} className="primary-badge border-[0.5px] px-2 text-xs" />
                   ))}
                 </XStack>
               )}
               {assistant.defaultModel && (
                 <XStack className="items-center justify-center gap-0.5">
                   <ModelIcon model={assistant.defaultModel} size={14} />
-                  <Text className="text-text-primary text-sm" numberOfLines={1} ellipsizeMode="tail">
+                  <Text className="text-foreground text-sm" numberOfLines={1} ellipsizeMode="tail">
                     {assistant.defaultModel.name}
                   </Text>
                 </XStack>
@@ -216,16 +212,16 @@ const AssistantItemSheet: React.FC = () => {
                 {/* Description */}
                 {assistant.description && (
                   <YStack className="gap-1">
-                    <Text className="text-text-primary text-lg font-bold leading-5">{t('common.description')}</Text>
-                    <Text className="text-text-secondary leading-5">{assistant.description}</Text>
+                    <Text className="text-foreground text-lg font-bold leading-5">{t('common.description')}</Text>
+                    <Text className="text-foreground-secondary leading-5">{assistant.description}</Text>
                   </YStack>
                 )}
 
                 {/* Additional details could go here */}
                 {assistant.prompt && (
                   <YStack className="gap-1">
-                    <Text className="text-text-primary text-lg font-bold leading-5">{t('common.prompt')}</Text>
-                    <Text className="text-text-primary text-base leading-5">{assistant.prompt}</Text>
+                    <Text className="text-foreground text-lg font-bold leading-5">{t('common.prompt')}</Text>
+                    <Text className="text-foreground text-base leading-5">{assistant.prompt}</Text>
                   </YStack>
                 )}
               </YStack>
@@ -250,10 +246,10 @@ const AssistantItemSheet: React.FC = () => {
             )}
             <Button
               feedbackVariant="ripple"
-              className="border-green-20 bg-green-10 flex-1 rounded-[30px] px-5 py-2.5"
+              className="primary-container flex-1 rounded-[30px] px-5 py-2.5"
               onPress={actionButton?.onPress || handleChatPress}>
               <Button.Label>
-                <Text className="text-[17px] font-bold text-green-100">
+                <Text className="primary-text text-[17px] font-bold">
                   {actionButton?.text || t('assistants.market.button.chat')}
                 </Text>
               </Button.Label>

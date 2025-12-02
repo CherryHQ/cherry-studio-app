@@ -1,0 +1,32 @@
+@layer components {
+  /* Primary badge: border + background + text color */
+  .primary-badge {
+    @apply border-primary/30 bg-primary/5 text-primary dark:border-brand-300/30 dark:bg-brand-300/5 dark:text-brand-300;
+  }
+
+  /* Primary container: border + background */
+  .primary-container {
+    @apply border-primary/30 bg-primary/15 dark:border-brand-300/30 dark:bg-brand-300/5;
+  }
+
+  .secondary-container {
+    @apply border-primary/30 bg-primary/10 dark:border-brand-300/30 dark:bg-brand-300/15;
+  }
+
+  .message-input-container {
+    @apply border-primary/30 bg-primary/10 dark:border-brand-300/30 dark:bg-brand-300/5;
+  }
+
+  /* Primary text color */
+  .primary-text {
+    @apply text-primary dark:text-brand-300;
+  }
+
+  .primary-border {
+    @apply border-primary dark:border-brand-300;
+  }
+
+  .primary-background {
+    @apply bg-primary dark:bg-brand-300;
+  }
+}

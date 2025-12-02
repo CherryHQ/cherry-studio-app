@@ -56,21 +56,25 @@ export default function WelcomeScreen() {
           <View className="items-center justify-center px-4">
             <View className="flex-row flex-wrap items-center justify-center">
               <WelcomeTitle className="text-center text-2xl font-bold" />
-              <View className="bg-text-primary ml-2 h-7 w-7 rounded-full" />
+              <View className="bg-primary-text ml-2 h-7 w-7 rounded-full" />
             </View>
           </View>
         </View>
         {/* register and login*/}
-        <View className="bg-ui-card-background h-1/4 w-full items-center justify-center">
+        <View className="bg-card h-1/4 w-full items-center justify-center">
           <YStack className="flex-1 items-center justify-center gap-5">
-            <Button feedbackVariant="ripple" className="w-3/4 rounded-lg" variant="secondary" onPress={handleImportData}>
-              <Button.Label className="text-text-primary w-full text-center text-lg">
+            <Button
+              feedbackVariant="ripple"
+              className="w-3/4 rounded-lg"
+              variant="secondary"
+              onPress={handleImportData}>
+              <Button.Label className="text-foreground w-full text-center text-lg">
                 {t('common.import_from_cherry_studio')}
               </Button.Label>
             </Button>
 
             <Button feedbackVariant="ripple" className="w-3/4 rounded-lg" variant="secondary" onPress={handleStart}>
-              <Button.Label className="text-text-primary w-full text-center text-lg">{t('common.start')}</Button.Label>
+              <Button.Label className="text-foreground w-full text-center text-lg">{t('common.start')}</Button.Label>
             </Button>
           </YStack>
         </View>

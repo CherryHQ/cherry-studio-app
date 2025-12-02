@@ -138,7 +138,7 @@ export default function AddProviderScreen() {
               <YStack className="w-full gap-2">
                 <XStack className="flex items-center gap-2">
                   <XStack className="w-1/3">
-                    <Text className="text-text-secondary">{t('settings.provider.add.name.label')}</Text>
+                    <Text className="text-foreground-secondary">{t('settings.provider.add.name.label')}</Text>
                     <Text className="text-red-500">*</Text>
                   </XStack>
                   <TextField className="flex-1">
@@ -154,7 +154,7 @@ export default function AddProviderScreen() {
 
               <YStack className="w-full gap-2">
                 <XStack className="flex items-center gap-2">
-                  <Text className="text-text-secondary w-1/3">{t('settings.provider.add.type')}</Text>
+                  <Text className="text-foreground-secondary w-1/3">{t('settings.provider.add.type')}</Text>
                   <XStack className="flex-1">
                     <ProviderSelect
                       value={selectedProviderType}
@@ -168,11 +168,11 @@ export default function AddProviderScreen() {
               <Button
                 feedbackVariant="ripple"
                 variant="tertiary"
-                className="border-green-20 bg-green-10 h-11 w-4/6 rounded-2xl"
+                className="secondary-container h-11 w-4/6 rounded-2xl border"
                 isDisabled={!providerName.trim()}
                 onPress={handleSaveProvider}>
                 <Button.Label>
-                  <Text className={providerName.trim() ? 'text-green-100' : 'text-neutral-60'}>
+                  <Text className={providerName.trim() ? 'primary-text' : 'text-neutral-60'}>
                     {mode === 'edit' ? t('common.save') : t('settings.provider.add.title')}
                   </Text>
                 </Button.Label>

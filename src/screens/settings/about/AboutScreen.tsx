@@ -58,10 +58,10 @@ export default function AboutScreen() {
               </FastSquircleView>
               <YStack className="flex-1 gap-[5px] py-1">
                 <Text className="text-[22px] font-bold">{t('common.cherry_studio')}</Text>
-                <Text className="text-text-secondary text-sm" numberOfLines={0}>
+                <Text className="text-foreground-secondary text-sm" numberOfLines={0}>
                   {t('common.cherry_studio_description')}
                 </Text>
-                <Text className="border-green-20 bg-green-10 self-start rounded-[25.37px] border px-2 py-0.5 text-sm text-green-100">
+                <Text className="primary-badge self-start rounded-[25.37px] border px-2 py-0.5 text-sm">
                   v{appVersion}
                 </Text>
               </YStack>

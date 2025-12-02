@@ -212,13 +212,11 @@ const ModelSheet: React.FC = () => {
             feedbackVariant="ripple"
             size="sm"
             className={`h-10 rounded-xl ${
-              isMultiSelectActive ? 'border-green-20 bg-green-10 border' : 'bg-ui-card border border-transparent'
+              isMultiSelectActive ? 'primary-container border' : 'bg-card border border-transparent'
             }`}
             onPress={toggleMultiSelectMode}>
             <Button.Label>
-              <Text className={isMultiSelectActive ? 'text-green-100' : 'text-text-primary'}>
-                {t('button.multiple')}
-              </Text>
+              <Text className={isMultiSelectActive ? 'primary-text' : 'text-foreground'}>{t('button.multiple')}</Text>
             </Button.Label>
           </Button>
         )}
@@ -226,11 +224,11 @@ const ModelSheet: React.FC = () => {
           <Button
             size="sm"
             feedbackVariant="ripple"
-            className="bg-ui-card h-10 rounded-full"
+            className="bg-card h-10 rounded-full"
             isIconOnly
             onPress={handleClearAll}>
             <Button.Label>
-              <BrushCleaning size={18} className="text-text-primary" />
+              <BrushCleaning size={18} className="text-foreground" />
             </Button.Label>
           </Button>
         )}
@@ -273,11 +271,11 @@ const ModelSheet: React.FC = () => {
                     <XStack className="items-center justify-center">
                       <ProviderIcon provider={item.provider} size={24} />
                     </XStack>
-                    <Text className="text-lg font-bold text-gray-400 ">{item.label.toUpperCase()}</Text>
+                    <Text className="text-zinc-400/400 text-lg font-bold ">{item.label.toUpperCase()}</Text>
                   </XStack>
                   {item.provider.id !== 'cherryai' && (
                     <TouchableOpacity onPress={() => navigateToProvidersSetting(item.provider)}>
-                      <Settings className="text-gray-80" size={16} />
+                      <Settings className="text-zinc-600/80" size={16} />
                     </TouchableOpacity>
                   )}
                 </TouchableOpacity>
@@ -291,7 +289,7 @@ const ModelSheet: React.FC = () => {
                 activeOpacity={0.7}
                 onPress={() => handleModelToggle(item.value)}
                 className={`justify-between rounded-lg border px-2 ${
-                  isSelected ? 'border-green-20 bg-green-10' : 'border-transparent bg-transparent'
+                  isSelected ? 'primary-container' : 'border-transparent bg-transparent'
                 }`}>
                 <XStack className="w-full items-center gap-2 py-1">
                   <XStack className="items-center justify-center">
@@ -299,7 +297,7 @@ const ModelSheet: React.FC = () => {
                   </XStack>
                   <YStack className="flex-1 gap-1">
                     <Text
-                      className={cn('text-sm leading-none', isSelected ? 'text-green-100' : 'text-text-primary')}
+                      className={cn('text-sm leading-none', isSelected ? 'primary-text' : 'text-foreground')}
                       numberOfLines={1}
                       ellipsizeMode="tail">
                       {item.label}

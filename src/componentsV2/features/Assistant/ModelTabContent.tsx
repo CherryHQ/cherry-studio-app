@@ -87,7 +87,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
       <Button
         feedbackVariant="ripple"
         variant="tertiary"
-        className="bg-ui-card-background justify-between rounded-xl border-0"
+        className="bg-card justify-between rounded-xl border-0"
         onPress={handleModelPress}>
         {model.length > 0 ? (
           <XStack className="flex-1 flex-row items-center justify-between">
@@ -197,7 +197,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
                 <Text className="flex-1">{t('assistants.settings.reasoning.label')}</Text>
 
                 <YStack className="justify-end">
-                  <Text className="border-green-20 bg-green-10 rounded-lg border-[0.5px] px-2 py-[2px] text-sm text-green-100">
+                  <Text className="primary-badge rounded-lg border-[0.5px] px-2 py-[2px] text-sm">
                     {t(`assistants.settings.reasoning.${settings.reasoning_effort || 'off'}`)}
                   </Text>
                 </YStack>

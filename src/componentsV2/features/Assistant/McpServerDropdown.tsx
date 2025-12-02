@@ -55,26 +55,26 @@ export function McpServerDropdown({ assistant, updateAssistant }: McpServerDropd
     return (
       <Pressable
         onPress={() => navigation.navigate('Mcp', { screen: 'McpMarketScreen' })}
-        className="bg-ui-card-background flex-row items-center gap-2 rounded-xl active:opacity-80">
-        <Text className="text-text-secondary text-sm" numberOfLines={1}>
+        className="bg-card flex-row items-center gap-2 rounded-xl active:opacity-80">
+        <Text className="text-foreground-secondary text-sm" numberOfLines={1}>
           {t('mcp.server.empty.add')}
         </Text>
-        <ChevronRight size={16} className="text-text-secondary " />
+        <ChevronRight size={16} className="text-foreground-secondary " />
       </Pressable>
     )
   }
 
   return (
     <SelectionDropdown items={mcpOptions} shouldDismissMenuOnSelect={false}>
-      <Pressable className="bg-ui-card-background flex-row items-center gap-2 rounded-xl active:opacity-80">
+      <Pressable className="bg-card flex-row items-center gap-2 rounded-xl active:opacity-80">
         {activeMcpCount > 0 ? (
-          <Text className="text-text-secondary text-sm">{t('mcp.server.selected', { num: activeMcpCount })}</Text>
+          <Text className="text-foreground-secondary text-sm">{t('mcp.server.selected', { num: activeMcpCount })}</Text>
         ) : (
-          <Text className="text-text-secondary text-sm" numberOfLines={1}>
+          <Text className="text-foreground-secondary text-sm" numberOfLines={1}>
             {t('mcp.server.empty')}
           </Text>
         )}
-        <ChevronsUpDown size={16} className="text-text-secondary " />
+        <ChevronsUpDown size={16} className="text-foreground-secondary " />
       </Pressable>
     </SelectionDropdown>
   )

@@ -84,7 +84,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
       typeof item.label === 'string' ? (
         <Text
           className={cn(
-            `text-base ${item.isSelected ? 'text-green-100' : 'text-text-primary'}`,
+            `text-base ${item.isSelected ? 'primary-text' : 'text-foreground'}`,
             item.color && !item.isSelected ? item.color : undefined
           )}>
           {item.label}
@@ -96,7 +96,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
       typeof item.description === 'string' ? (
         <Text
           className={cn(
-            `flex-1 text-[11px] opacity-70 ${item.isSelected ? 'text-green-100' : 'text-text-secondary'}`,
+            `flex-1 text-[11px] opacity-70 ${item.isSelected ? 'primary-text' : 'text-foreground-secondary'}`,
             item.color && !item.isSelected ? item.color : undefined
           )}
           numberOfLines={1}
@@ -111,7 +111,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
         <XStack
           className={cn(
             `items-center gap-2.5 rounded-lg border px-3.5 py-3 ${
-              item.isSelected ? 'border-green-20 bg-green-10' : 'bg-gray-10 border-transparent'
+              item.isSelected ? 'secondary-container' : 'border-transparent bg-zinc-400/10'
             }`,
             item.backgroundColor && !item.isSelected ? item.backgroundColor : undefined
           )}>
@@ -120,7 +120,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
             {labelElement}
             {descriptionElement}
           </XStack>
-          {item.isSelected && <Check size={20} className="text-green-100" />}
+          {item.isSelected && <Check size={20} className="primary-text" />}
         </XStack>
       </TouchableOpacity>
     )
@@ -131,9 +131,9 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
 
   const listHeaderComponent = () =>
     placeholder || headerComponent ? (
-      <View className="gap-2 px-4 pb-2 pt-5">
+      <View className="gap-2 pb-2 pt-5">
         {headerComponent}
-        {placeholder && <Text className="text-text-secondary text-center text-sm opacity-60">{placeholder}</Text>}
+        {placeholder && <Text className="text-foreground-secondary text-center text-sm opacity-60">{placeholder}</Text>}
       </View>
     ) : (
       <YStack className="h-5" />

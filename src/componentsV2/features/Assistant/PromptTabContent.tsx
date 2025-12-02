@@ -52,7 +52,7 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
       <KeyboardAvoidingView className="flex-1">
         <YStack className="flex-1 gap-4">
           <TextField className="gap-2">
-            <TextField.Label className="text-text-secondary text-sm font-medium">{t('common.name')}</TextField.Label>
+            <TextField.Label className="text-foreground-secondary text-sm font-medium">{t('common.name')}</TextField.Label>
             <TextField.Input
               className="h-12 rounded-lg  px-3 py-0 text-sm"
               placeholder={t('assistants.name')}
@@ -63,7 +63,7 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
           </TextField>
 
           <TextField className="h-4/5 gap-2">
-            <TextField.Label className="text-text-secondary text-sm font-medium">{t('common.prompt')}</TextField.Label>
+            <TextField.Label className="text-foreground-secondary text-sm font-medium">{t('common.prompt')}</TextField.Label>
             <TextField.Input
               className="flex-1 rounded-lg  px-3 py-3 text-sm"
               placeholder={t('common.prompt')}

@@ -10,7 +10,7 @@ export interface SafeAreaContainerProps extends ViewProps {
 
 const SafeAreaContainer: React.FC<SafeAreaContainerProps> = ({ className = '', children, ...props }) => {
   const insets = useSafeAreaInsets()
-  const composed = cn('flex-1 bg-background-primary', className)
+  const composed = cn('flex-1 bg-background', className)
 
   return (
     <SafeAreaProvider>

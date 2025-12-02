@@ -1,9 +1,8 @@
-import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { Button } from 'heroui-native'
-import React, { useId, useState } from 'react'
-import { TouchableOpacity } from 'react-native'
+import React, { useState } from 'react'
+import { Pressable } from 'react-native'
 
-import SelectionSheet, { type SelectionSheetItem } from '@/componentsV2/base/SelectionSheet'
+import { SelectionDropdown, type SelectionDropdownItem } from '@/componentsV2'
 import { ChevronDown } from '@/componentsV2/icons'
 import type { ProviderType } from '@/types/assistant'
 
@@ -39,7 +38,6 @@ const providerOptions: DisplayOptionItem[] = [
 ]
 
 export function ProviderSelect({ value, onValueChange, placeholder, className }: ProviderSelectProps) {
-  const sheetName = useId()
   // Internal state to track the actual selected display value (for UI differentiation)
   const [displayValue, setDisplayValue] = useState<DisplayValue | undefined>(value)
 
@@ -52,7 +50,7 @@ export function ProviderSelect({ value, onValueChange, placeholder, className }:
 
   const selectedOption = providerOptions.find(opt => opt.value === displayValue)
 
-  const sheetItems: SelectionSheetItem[] = providerOptions.map(option => ({
+  const dropdownItems: SelectionDropdownItem[] = providerOptions.map(option => ({
     id: option.value,
     label: option.label,
     isSelected: displayValue === option.value,
@@ -60,8 +58,8 @@ export function ProviderSelect({ value, onValueChange, placeholder, className }:
   }))
 
   return (
-    <>
-      <TouchableOpacity onPress={() => TrueSheet.present(sheetName)} activeOpacity={0.7} className={className}>
+    <SelectionDropdown items={dropdownItems}>
+      <Pressable className={className}>
         <Button
           feedbackVariant="ripple"
           className="h-8 w-full justify-between rounded-lg"
@@ -71,8 +69,7 @@ export function ProviderSelect({ value, onValueChange, placeholder, className }:
           <Button.Label className="text-base">{selectedOption ? selectedOption.label : placeholder}</Button.Label>
           <ChevronDown />
         </Button>
-      </TouchableOpacity>
-      <SelectionSheet detents={['auto', 0.6]} name={sheetName} items={sheetItems} placeholder={placeholder} />
-    </>
+      </Pressable>
+    </SelectionDropdown>
   )
 }

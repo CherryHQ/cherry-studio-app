@@ -24,7 +24,7 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
     <Button
       feedbackVariant="ripple"
       variant="ghost"
-      className="bg-ui-card-background   w-full justify-between rounded-2xl px-3"
+      className="bg-card   w-full justify-between rounded-2xl px-3"
       onPress={onPress}>
       <Button.Label>
         <XStack className="flex-1 items-center gap-2 overflow-hidden">
@@ -49,7 +49,7 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
           )}
         </XStack>
       </Button.Label>
-      <ChevronDown size={18} className="text-text-secondary opacity-90" />
+      <ChevronDown size={18} className="text-foreground-secondary opacity-90" />
     </Button>
   )
 }
@@ -93,15 +93,15 @@ function AssistantSettingItem({
         <XStack className="items-center justify-between px-[10px]">
           <XStack className="items-center gap-2">
             {icon}
-            <Text className="text-text-secondary font-semibold">{t(titleKey)}</Text>
+            <Text className="text-foreground-secondary font-semibold">{t(titleKey)}</Text>
           </XStack>
           <IconButton
-            icon={<Settings2 size={16} className="text-text-link" />}
+            icon={<Settings2 size={16} className="text-blue-500" />}
             onPress={() => navigation.navigate('AssistantDetailScreen', { assistantId })}
           />
         </XStack>
         <ModelPicker assistant={assistant} onPress={handlePress} />
-        <Text className="text-text-secondary px-[10px] opacity-70">{t(descriptionKey)}</Text>
+        <Text className="text-foreground-secondary px-[10px] opacity-70">{t(descriptionKey)}</Text>
       </YStack>
     </>
   )
@@ -131,7 +131,7 @@ export default function AssistantSettingsScreen() {
       descriptionKey: 'settings.assistant.default_assistant.description',
       assistant: defaultAssistant,
       updateAssistant: updateDefaultAssistant,
-      icon: <MessageSquareMore size={16} className="text-text-secondary" />
+      icon: <MessageSquareMore size={16} className="text-foreground-secondary" />
     },
     {
       id: 'quick',
@@ -139,7 +139,7 @@ export default function AssistantSettingsScreen() {
       descriptionKey: 'settings.assistant.quick_assistant.description',
       assistant: quickAssistant,
       updateAssistant: updateQuickAssistant,
-      icon: <Rocket size={16} className="text-text-secondary" />
+      icon: <Rocket size={16} className="text-foreground-secondary" />
     },
     {
       id: 'translate',
@@ -147,7 +147,7 @@ export default function AssistantSettingsScreen() {
       descriptionKey: 'settings.assistant.translate_assistant.description',
       assistant: translateAssistant,
       updateAssistant: updateTranslateAssistant,
-      icon: <Languages size={16} className="text-text-secondary" />
+      icon: <Languages size={16} className="text-foreground-secondary" />
     }
   ]
 

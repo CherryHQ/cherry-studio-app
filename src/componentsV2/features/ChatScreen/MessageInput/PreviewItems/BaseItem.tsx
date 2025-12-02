@@ -72,7 +72,7 @@ const BaseItem: FC<BaseItemProps> = ({
     {
       title: t('button.share'),
       iOSIcon: 'square.and.arrow.up',
-      androidIcon: <Share size={16} className="text-text-primary" />,
+      androidIcon: <Share size={16} className="text-foreground" />,
       onSelect: handleShare
     }
   ]
@@ -88,8 +88,8 @@ const BaseItem: FC<BaseItemProps> = ({
       </ContextMenu>
       {onRemove && (
         <TouchableOpacity onPress={handleRemove} hitSlop={5} className="absolute right-1 top-1 rounded-full">
-          <View className="bg-green-20 rounded-full p-0.5">
-            <X size={14} className="text-green-100" />
+          <View className="message-input-container rounded-full p-0.5">
+            <X size={14} className="primary-text" />
           </View>
         </TouchableOpacity>
       )}

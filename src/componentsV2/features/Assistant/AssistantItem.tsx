@@ -87,7 +87,7 @@ const AssistantItem: FC<AssistantItemProps> = ({
           {
             title: t('assistants.multi_select.action'),
             iOSIcon: 'checkmark.circle',
-            androidIcon: <CheckSquare size={16} className="text-text-primary" />,
+            androidIcon: <CheckSquare size={16} className="text-foreground" />,
             onSelect: () => onEnterMultiSelectMode(assistant.id)
           }
         ]
@@ -95,7 +95,7 @@ const AssistantItem: FC<AssistantItemProps> = ({
     {
       title: t('common.delete'),
       iOSIcon: 'trash',
-      androidIcon: <Trash2 size={16} className="text-red-100" />,
+      androidIcon: <Trash2 size={16} className="text-red-600" />,
       destructive: true,
       color: 'red',
       onSelect: handleDelete
@@ -108,11 +108,11 @@ const AssistantItem: FC<AssistantItemProps> = ({
       list={contextMenuItems}
       onPress={handlePress}
       disableContextMenu={assistant.type === 'system' || isMultiSelectMode}>
-      <View className="bg-ui-card-background items-center justify-between rounded-2xl px-2.5 py-2.5">
+      <View className="bg-card items-center justify-between rounded-2xl px-2.5 py-2.5">
         <XStack className="gap-3.5">
           {isMultiSelectMode && canBeSelected && (
-            <View className="border-normal h-6 w-6 items-center justify-center self-center rounded-full border">
-              {isSelected && <Check size={14} className="text-white" />}
+            <View className="border-foreground h-6 w-6 items-center justify-center self-center rounded-full border">
+              {isSelected && <Check size={14} />}
             </View>
           )}
           <EmojiAvatar
@@ -127,7 +127,7 @@ const AssistantItem: FC<AssistantItemProps> = ({
               {assistant.name}
             </Text>
             {!isEmpty(assistant.prompt) && (
-              <Text ellipsizeMode="tail" numberOfLines={1} className="text-text-secondary  text-xs">
+              <Text ellipsizeMode="tail" numberOfLines={1} className="text-foreground-secondary  text-xs">
                 {assistant.prompt}
               </Text>
             )}

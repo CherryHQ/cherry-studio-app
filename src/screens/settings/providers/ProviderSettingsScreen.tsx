@@ -167,9 +167,9 @@ export default function ProviderSettingsScreen() {
 
         switch (health.status) {
           case 'healthy':
-            return <CircleCheck size={16} className="text-green-100" />
+            return <CircleCheck size={16} className="primary-text" />
           case 'unhealthy':
-            return <XCircle size={16} className="text-red-100" />
+            return <XCircle size={16} className="text-red-600" />
           case 'testing':
             return <Spinner size="sm" color={isDark ? '#ffffff' : '#000000'} />
           default:
@@ -193,17 +193,17 @@ export default function ProviderSettingsScreen() {
             </XStack>
             <XStack className="items-center gap-2">
               {health && health.latency != null && (
-                <Text className="text-text-secondary font-mono text-xs">{health.latency.toFixed(2)}s</Text>
+                <Text className="text-foreground-secondary font-mono text-xs">{health.latency.toFixed(2)}s</Text>
               )}
               {getStatusIcon()}
               <IconButton
-                icon={<Minus size={18} className="bg-red-20 rounded-full text-red-100" />}
+                icon={<Minus size={18} className="rounded-full bg-red-600/20 text-red-600" />}
                 onPress={() => handleRemoveModel(model.id)}
               />
             </XStack>
           </XStack>
           {health?.error && health.status === 'unhealthy' && (
-            <Text className="text-xs text-red-100" numberOfLines={2}>
+            <Text className="text-xs text-red-600" numberOfLines={2}>
               {health.error}
             </Text>
           )}
@@ -271,7 +271,7 @@ export default function ProviderSettingsScreen() {
                     <Text>{t('settings.provider.api_service')}</Text>
                     <XStack className="items-center justify-center">
                       {provider.apiKey && provider.apiHost && (
-                        <Text className="border-green-20 bg-green-10 rounded-md border-[0.5px] px-2 py-0.5 text-xs font-bold text-green-100">
+                        <Text className="primary-badge rounded-md border-[0.5px] px-2 py-0.5 text-xs">
                           {t('settings.provider.added')}
                         </Text>
                       )}

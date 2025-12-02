@@ -33,12 +33,12 @@ export function ThemeDropdown() {
 
   return (
     <SelectionDropdown items={themeDropdownOptions}>
-      <Pressable className="bg-ui-card-background flex-row items-center gap-2 rounded-xl active:opacity-80">
-        <Palette className="text-text-secondary" size={18} />
-        <Text className="text-text-secondary text-sm" numberOfLines={1}>
+      <Pressable className="bg-card flex-row items-center gap-2 rounded-xl active:opacity-80">
+        <Palette className="text-foreground-secondary" size={18} />
+        <Text className="text-foreground-secondary text-sm" numberOfLines={1}>
           {getCurrentThemeLabel()}
         </Text>
-        <ChevronsUpDown size={16} className="text-text-secondary" />
+        <ChevronsUpDown size={16} className="text-foreground-secondary" />
       </Pressable>
     </SelectionDropdown>
   )

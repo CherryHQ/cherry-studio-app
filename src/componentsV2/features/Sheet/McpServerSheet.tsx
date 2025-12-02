@@ -43,6 +43,9 @@ export const McpServerSheet: React.FC = () => {
   const { activeMcpServers, isLoading } = useActiveMcpServers()
   const { t } = useTranslation()
   const navigation = useNavigation<DrawerNavigationProps>()
+  const [selectedMcpIds, setSelectedMcpIds] = useState<string[]>(
+    () => assistant?.mcpServers?.map(server => server.id) ?? []
+  )
 
   useEffect(() => {
     updateSheetDataCallback = setSheetData
@@ -50,6 +53,29 @@ export const McpServerSheet: React.FC = () => {
       updateSheetDataCallback = null
     }
   }, [])
+
+  useEffect(() => {
+    if (!assistant) {
+      setSelectedMcpIds([])
+      return
+    }
+    setSelectedMcpIds(assistant.mcpServers?.map(server => server.id) ?? [])
+  }, [assistant])
+
+  const handleToggleMcpServer = async (mcpServerId: string) => {
+    if (!assistant || !updateAssistant) {
+      return
+    }
+    const activeMcpIds = new Set(activeMcpServers.map(server => server.id))
+    const validSelectedIds = selectedMcpIds.filter(id => activeMcpIds.has(id))
+    const exists = validSelectedIds.includes(mcpServerId)
+    const updatedIds = exists ? validSelectedIds.filter(id => id !== mcpServerId) : [...validSelectedIds, mcpServerId]
+
+    setSelectedMcpIds(updatedIds)
+
+    const updatedMcpServers = activeMcpServers.filter(server => updatedIds.includes(server.id))
+    await updateAssistant({ ...assistant, mcpServers: updatedMcpServers })
+  }
 
   if (isLoading || !assistant || !updateAssistant) {
     return <SelectionSheet name={SHEET_NAME} detents={['auto', 0.5]} items={[]} shouldDismiss={false} />
@@ -72,35 +98,24 @@ export const McpServerSheet: React.FC = () => {
     return {
       id: mcpServer.id,
       label: mcpServer.name,
-      isSelected: !!assistant.mcpServers?.find(s => s.id === mcpServer.id),
-      onSelect: async () => {
-        // Filter out inactive MCPs to keep data consistent
-        const activeMcpIds = new Set(activeMcpServers.map(s => s.id))
-        const currentMcpServers = (assistant.mcpServers || []).filter(s => activeMcpIds.has(s.id))
-        const exists = currentMcpServers.some(s => s.id === mcpServer.id)
-
-        const updatedMcpServers = exists
-          ? currentMcpServers.filter(s => s.id !== mcpServer.id)
-          : [...currentMcpServers, mcpServer]
-
-        await updateAssistant({ ...assistant, mcpServers: updatedMcpServers })
-      }
+      isSelected: selectedMcpIds.includes(mcpServer.id),
+      onSelect: () => handleToggleMcpServer(mcpServer.id)
     }
   })
 
   const warningContent = !assistant.settings?.toolUseMode ? (
     <TouchableOpacity onPress={handleNavigateToToolTab} activeOpacity={0.7}>
-      <XStack className="bg-orange-10 w-full items-center gap-2.5 rounded-lg px-3.5 py-3">
-        <TriangleAlert size={20} className="text-orange-100 " />
-        <Text className="flex-1 text-sm text-orange-100">{t('assistants.settings.tooluse.empty')}</Text>
-        <ChevronRight size={20} className="text-orange-100" />
+      <XStack className="w-full items-center gap-2.5 rounded-lg bg-orange-400/10 px-3.5 py-3">
+        <TriangleAlert size={20} className="text-orange-400 " />
+        <Text className="flex-1 text-sm text-orange-400">{t('assistants.settings.tooluse.empty')}</Text>
+        <ChevronRight size={20} className="text-orange-400" />
       </XStack>
     </TouchableOpacity>
   ) : null
 
   const emptyContent = (
     <TouchableOpacity onPress={handleNavigateToMcpMarket} activeOpacity={0.7}>
-      <XStack className="bg-gray-10 w-full items-center gap-2.5 rounded-lg px-3.5 py-3">
+      <XStack className="w-full items-center gap-2.5 rounded-lg bg-zinc-400/10 px-3.5 py-3">
         <Text className="text-foreground flex-1 text-base">{t('settings.websearch.empty.label')}</Text>
         <XStack className="items-center gap-1.5">
           <Text className="text-sm opacity-40">{t('settings.websearch.empty.description')}</Text>

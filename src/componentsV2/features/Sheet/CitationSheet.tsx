@@ -32,11 +32,11 @@ export const dismissCitationSheet = () => TrueSheet.dismiss(SHEET_NAME)
 
 const CitationTitle = ({ number, title }: { number: number; title: string }) => (
   <XStack className="items-center gap-2.5">
-    <YStack className="border-green-20 bg-green-10 h-5 w-5 items-center justify-center rounded-sm border px-1 py-0.5">
-      <Text className="text-center text-[10px] text-green-100">{number}</Text>
+    <YStack className="primary-container h-5 w-5 items-center justify-center rounded-sm border px-1 py-0.5">
+      <Text className="primary-text text-center text-[10px]">{number}</Text>
     </YStack>
     <YStack className="flex-1">
-      <Text className="text-text-primary text-base" numberOfLines={1} ellipsizeMode="tail">
+      <Text className="text-foreground text-base" numberOfLines={1} ellipsizeMode="tail">
         {title}
       </Text>
     </YStack>
@@ -45,7 +45,7 @@ const CitationTitle = ({ number, title }: { number: number; title: string }) => 
 
 const Content = ({ content }: { content: string }) => (
   <XStack className="mt-1">
-    <Text className="text-text-secondary text-sm leading-4" numberOfLines={3} ellipsizeMode="tail">
+    <Text className="text-foreground-secondary text-sm leading-4" numberOfLines={3} ellipsizeMode="tail">
       {content}
     </Text>
   </XStack>
@@ -54,7 +54,7 @@ const Content = ({ content }: { content: string }) => (
 const Footer = ({ url, title }: { url: string; title: string }) => (
   <XStack className="mt-1.5 items-center gap-1.5">
     <FallbackFavicon hostname={new URL(url).hostname} alt={title || ''} />
-    <Text className="text-text-secondary text-[10px] leading-5">{getWebsiteBrand(url)}</Text>
+    <Text className="text-foreground-secondary text-[10px] leading-5">{getWebsiteBrand(url)}</Text>
   </XStack>
 )
 
@@ -112,8 +112,8 @@ export const CitationSheet: React.FC = () => {
   }
 
   const header = (
-    <XStack className="border-normal/10 items-center justify-between border-b px-4 pb-4 pt-5">
-      <Text className="text-text-primary text-lg font-bold">{t('common.source')}</Text>
+    <XStack className="border-foreground/10 items-center justify-between border-b px-4 pb-4 pt-5">
+      <Text className="text-foreground text-lg font-bold">{t('common.source')}</Text>
       <TouchableOpacity
         style={{
           padding: 4,
@@ -144,7 +144,7 @@ export const CitationSheet: React.FC = () => {
           data={citations}
           keyExtractor={(citation, index) => `${citation.url}-${index}`}
           renderItem={({ item: citation, index }) => (
-            <YStack className={`${index < citations.length - 1 ? 'border-normal/10 border-b' : ''}`}>
+            <YStack className={`${index < citations.length - 1 ? 'border-foreground/10 border-b' : ''}`}>
               <CitationCard citation={citation} onPress={handlePress} />
             </YStack>
           )}

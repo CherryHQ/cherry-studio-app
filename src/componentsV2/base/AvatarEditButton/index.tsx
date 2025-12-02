@@ -43,7 +43,7 @@ export function AvatarEditButton({
     <YStack className="relative">
       <TouchableOpacity
         onPress={() => setIsOpen(prev => !prev)}
-        className="overflow-hidden rounded-full border-[5px] border-green-100"
+        className="primary-border overflow-hidden rounded-full border-[5px]"
         style={{
           width: size,
           height: size,
@@ -55,7 +55,7 @@ export function AvatarEditButton({
           })
         }}>
         {isEmoji ? (
-          <Text style={{ fontSize: size * 0.5, lineHeight: size * 0.5 }} className="text-text-primary">
+          <Text style={{ fontSize: size * 0.5, lineHeight: size * 0.5 }} className="text-foreground">
             {content}
           </Text>
         ) : (
@@ -64,7 +64,7 @@ export function AvatarEditButton({
       </TouchableOpacity>
 
       <YStack
-        className="absolute bottom-0 right-0 z-10 rounded-full bg-green-100"
+        className="primary-background absolute bottom-0 right-0 z-10 rounded-full"
         style={{
           width: editButtonSize,
           height: editButtonSize

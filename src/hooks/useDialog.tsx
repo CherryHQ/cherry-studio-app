@@ -89,30 +89,30 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   const getConfirmButtonClassName = () => {
     switch (options?.type) {
       case 'info':
-        return 'bg-blue-20 border-blue-20 active:opacity-80 active:bg-blue-20'
+        return 'bg-sky-500/20 border-sky-500/20 active:opacity-80 active:bg-sky-500/20'
       case 'warning':
-        return 'bg-orange-20 border-orange-20 active:opacity-80 active:bg-orange-20'
+        return 'bg-orange-400/20 border-orange-400/20 active:opacity-80 active:bg-orange-400/20'
       case 'error':
-        return 'bg-red-20 border-red-20 active:opacity-80 active:bg-red-20'
+        return 'bg-red-600/20 border-red-600/20 active:opacity-80 active:bg-red-600/20'
       case 'success':
-        return 'bg-green-10 border-green-20 active:opacity-80 active:bg-green-10'
+        return 'primary-container active:opacity-80'
       default:
-        return 'bg-green-10 border-green-20 active:opacity-80 active:bg-green-10'
+        return 'primary-container active:opacity-80'
     }
   }
 
   const getConfirmTextClassName = () => {
     switch (options?.type) {
       case 'info':
-        return 'text-blue-100'
+        return 'text-sky-500'
       case 'warning':
-        return 'text-orange-100'
+        return 'text-orange-400'
       case 'error':
-        return 'text-red-100'
+        return 'text-red-600'
       case 'success':
-        return 'text-green-100'
+        return 'primary-text'
       default:
-        return 'text-green-100'
+        return 'primary-text'
     }
   }
 
@@ -138,15 +138,15 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
           transition={{ type: 'timing', duration: 300 }}
           className={centeredViewClassName}>
           {maskClosable && <Pressable className="absolute inset-0" onPress={cancel} />}
-          <YStack className="bg-ui-card-background w-3/4 rounded-2xl">
+          <YStack className="bg-card w-3/4 rounded-2xl">
             <YStack className="items-center gap-3 p-5">
               {typeof options?.title === 'string' ? (
-                <Text className="text-text-primary text-lg font-bold">{options.title}</Text>
+                <Text className="text-foreground text-lg font-bold">{options.title}</Text>
               ) : (
                 options?.title
               )}
               {typeof options?.content === 'string' ? (
-                <Text className="text-text-secondary text-center text-[15px] leading-5">{options.content}</Text>
+                <Text className="text-foreground-secondary text-center text-[15px] leading-5">{options.content}</Text>
               ) : (
                 options?.content
               )}
@@ -158,13 +158,13 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                   feedbackVariant="ripple"
                   variant="tertiary"
                   className={cn(
-                    'border-gray-20 h-[42px] flex-1 rounded-[30px] bg-transparent active:opacity-80',
+                    'h-[42px] flex-1 rounded-[30px] border-zinc-400/20 bg-transparent active:opacity-80',
                     options?.cancelStyle?.toString() || ''
                   )}
                   onPress={cancel}
                   isDisabled={isLoading}>
                   <Button.Label>
-                    <Text className="text-gray-80 text-[17px]">
+                    <Text className="text-[17px] text-zinc-600/80">
                       {isLoading && shouldShowLoading ? t('common.loading') : cancelText}
                     </Text>
                   </Button.Label>

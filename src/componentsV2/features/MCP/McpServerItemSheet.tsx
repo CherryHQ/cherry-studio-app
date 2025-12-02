@@ -137,14 +137,14 @@ const McpServerItemSheet: React.FC = () => {
             {/* Description */}
             {selectedMcp.description && (
               <YStack className="gap-1">
-                <Text className="text-text-primary text-lg font-bold leading-5">{t('common.description')}</Text>
-                <Text className="text-text-secondary leading-5">{selectedMcp.description}</Text>
+                <Text className="text-foreground text-lg font-bold leading-5">{t('common.description')}</Text>
+                <Text className="text-foreground-secondary leading-5">{selectedMcp.description}</Text>
               </YStack>
             )}
             {/* Tools */}
             {tools.length > 0 && (
               <YStack className="gap-1">
-                <Text className="text-text-primary text-lg font-bold leading-5">{t('common.tool')}</Text>
+                <Text className="text-foreground text-lg font-bold leading-5">{t('common.tool')}</Text>
                 <Accordion
                   defaultValue={tools.map(tool => tool.id)}
                   selectionMode="multiple"

@@ -76,7 +76,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               {toast.icon && toast.icon}
 
               {typeof toast?.content === 'string' ? (
-                <Text className={cn('text-base', toast.color || 'text-green-100')}>{toast.content}</Text>
+                <Text className={cn('text-base', toast.color || 'primary-text')}>{toast.content}</Text>
               ) : (
                 toast?.content
               )}

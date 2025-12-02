@@ -52,7 +52,7 @@ export default function ModelGroup({
   if (showEmptyState && modelGroups.length === 0) {
     return (
       <YStack className="h-20 flex-1 items-center justify-center">
-        <Text className="text-text-secondary text-center">{t(emptyStateKey)}</Text>
+        <Text className="text-foreground-secondary text-center">{t(emptyStateKey)}</Text>
       </YStack>
     )
   }
@@ -62,19 +62,19 @@ export default function ModelGroup({
       <Accordion className="flex-1" selectionMode="multiple" variant="default">
         {modelGroups.map(([groupName, models], index) => (
           <Accordion.Item key={index} value={groupName}>
-            <Accordion.Trigger className="bg-ui-card-background">
+            <Accordion.Trigger className="bg-card">
               <XStack className="flex-1 items-center justify-between gap-3">
                 <XStack className="flex-1 items-center gap-3">
                   <Accordion.Indicator />
                   <Text className="font-bold">{groupName}</Text>
-                  <Chip variant="tertiary" size="sm" className="bg-green-20 rounded-md">
-                    <Chip.Label className="text-[10px] text-green-100">{models.length}</Chip.Label>
+                  <Chip variant="tertiary" size="sm" className="primary-container rounded-md">
+                    <Chip.Label className="primary-text text-[10px]">{models.length}</Chip.Label>
                   </Chip>
                 </XStack>
                 {renderGroupButton && renderGroupButton(groupName, models)}
               </XStack>
             </Accordion.Trigger>
-            <Accordion.Content className="bg-ui-card-background gap-2">
+            <Accordion.Content className="bg-card gap-2">
               {models.map((model, modelIndex) => (
                 <React.Fragment key={model.id || modelIndex}>{renderModelItem(model, modelIndex)}</React.Fragment>
               ))}

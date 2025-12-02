@@ -77,8 +77,8 @@ const TextSelectionSheet: React.FC = () => {
   }, [isVisible])
 
   const header = (
-    <XStack className="border-normal/10 items-center justify-between border-b px-4 pb-4 pt-5">
-      <Text className="text-text-primary text-base font-bold">{t('common.select_text')}</Text>
+    <XStack className="border-foreground/10 items-center justify-between border-b px-4 pb-4 pt-5">
+      <Text className="text-foreground text-base font-bold">{t('common.select_text')}</Text>
       <TouchableOpacity
         style={{
           padding: 4,

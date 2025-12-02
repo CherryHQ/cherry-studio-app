@@ -133,12 +133,12 @@ const MessageErrorInfo: React.FC<{ block: ErrorMessageBlock; message: Message; o
   }
 
   return (
-    <TouchableOpacity className="bg-red-10  border-red-20 rounded-lg border p-2" onPress={onShowDetail}>
+    <TouchableOpacity className="bg-red-600/10  border-red-600/20 rounded-lg border p-2" onPress={onShowDetail}>
       <XStack className="w-full items-center justify-between gap-2">
-        <Text className="flex-1 text-red-100" numberOfLines={1}>
+        <Text className="flex-1 text-red-600" numberOfLines={1}>
           {getAlertDescription()}
         </Text>
-        <Text className="text-sm text-red-100">{t('common.detail')}</Text>
+        <Text className="text-sm text-red-600">{t('common.detail')}</Text>
       </XStack>
     </TouchableOpacity>
   )
@@ -156,7 +156,7 @@ const ErrorDetailItem: React.FC<{ label: string; children: React.ReactNode }> = 
 
 const ErrorDetailValue: React.FC<{ children: React.ReactNode; isCode?: boolean }> = ({ children }) => {
   return (
-    <View className="border-normal rounded-md border-[0.5px] p-2">
+    <View className="border-foreground rounded-md border-[0.5px] p-2">
       <Text className="text-xs">{children}</Text>
     </View>
   )
@@ -164,8 +164,8 @@ const ErrorDetailValue: React.FC<{ children: React.ReactNode; isCode?: boolean }
 
 const StackTrace: React.FC<{ stack: string }> = ({ stack }) => {
   return (
-    <View className="border-red-20 bg-red-10 rounded-md border p-3">
-      <Text className="font-mono text-xs leading-5 text-red-100">{stack}</Text>
+    <View className="border-red-600/20 bg-red-600/10 rounded-md border p-3">
+      <Text className="font-mono text-xs leading-5 text-red-600">{stack}</Text>
     </View>
   )
 }
@@ -174,7 +174,7 @@ const JsonViewer: React.FC<{ data: any }> = ({ data }) => {
   const formatted = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View className="rounded-lg border border-gray-200 bg-gray-100 p-2">
+      <View className="rounded-lg border border-zinc-400/200 bg-zinc-400/100 p-2">
         <Text className="font-mono text-xs text-gray-900">{formatted}</Text>
       </View>
     </ScrollView>
@@ -520,7 +520,7 @@ export const ErrorDetailSheet: React.FC = () => {
 
   const header = (
     <XStack className="items-center justify-between px-5 pb-4 pt-5">
-      <Text className="text-text-primary text-xl font-semibold">{t('error.detail')}</Text>
+      <Text className="text-foreground text-xl font-semibold">{t('error.detail')}</Text>
       <TouchableOpacity
         className={`flex-row items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 ${!error ? 'opacity-50' : ''}`}
         onPress={copyErrorDetails}

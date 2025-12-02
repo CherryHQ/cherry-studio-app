@@ -31,8 +31,8 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ message }) => {
             {getBaseModelName(message.model?.name)}
           </Text>
           <Text>|</Text>
-          <Text className="text-text-secondary text-base">{providerDisplayName}</Text>
-          <Text className="text-text-secondary text-xs">
+          <Text className="text-foreground-secondary text-base">{providerDisplayName}</Text>
+          <Text className="text-foreground-secondary text-xs">
             {new Date(message.createdAt).toLocaleTimeString(currentLanguage, {
               hour: '2-digit',
               minute: '2-digit',

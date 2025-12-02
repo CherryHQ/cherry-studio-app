@@ -165,7 +165,7 @@ export default function LandropSettingsScreen() {
   const showLoading = status === WebSocketStatus.CONNECTING || status === WebSocketStatus.CONNECTED
 
   return (
-    <SafeAreaContainer style={{ flex: 1 }}>
+    <SafeAreaContainer>
       <HeaderBar title={t('settings.data.landrop.scan_qr_code.title')} />
 
       {!isModalOpen && !scannedIP && <QRCodeScanner onQRCodeScanned={handleQRCodeScanned} />}
