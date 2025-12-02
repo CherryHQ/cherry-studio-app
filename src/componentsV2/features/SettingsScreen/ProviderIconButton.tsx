@@ -116,9 +116,9 @@ export function ProviderIconButton({ providerId, iconUri, onImageSelected }: Pro
         className="primary-border h-[120px] w-[120px] overflow-hidden rounded-full border-[5px]"
         style={{ justifyContent: 'center', alignItems: 'center' }}>
         {image ? (
-          <Image source={{ uri: image }} className="h-[120px] w-[120px]" style={{ width: 120, height: 120 }} />
+          <Image source={{ uri: image }} className="h-[120px] w-[120px]" />
         ) : (
-          <YStack className="boder-white h-full w-full border pl-5 pt-3">
+          <YStack className="border-background h-full w-full border pl-5 pt-3">
             <DefaultProviderIcon />
           </YStack>
         )}

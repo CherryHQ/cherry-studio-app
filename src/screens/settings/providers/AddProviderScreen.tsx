@@ -168,7 +168,7 @@ export default function AddProviderScreen() {
               <Button
                 feedbackVariant="ripple"
                 variant="tertiary"
-                className="primary-container h-11 w-4/6 rounded-2xl"
+                className="secondary-container h-11 w-4/6 rounded-2xl border"
                 isDisabled={!providerName.trim()}
                 onPress={handleSaveProvider}>
                 <Button.Label>
