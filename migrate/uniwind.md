@@ -1,5 +1,49 @@
 # Tailwind CSS 颜色配置详细统计报告
 
+## 迁移映射表
+
+### CSS 变量迁移
+
+| 旧变量 | 新变量 | 旧 Tailwind 类 | 新 Tailwind 类 |
+|--------|--------|----------------|----------------|
+| `--color-background-primary` | `--color-background` | `bg-background-primary` | `bg-background` |
+| `--color-background-secondary` | `--color-secondary` | `bg-background-secondary` | `bg-secondary` |
+| `--color-ui-card` | `--color-card` | `bg-ui-card` | `bg-card` |
+| `--color-ui-card-background` | `--color-card` | `bg-ui-card-background` | `bg-card` |
+| `--color-text-primary` | `--color-foreground` | `text-text-primary` | `text-foreground` |
+| `--color-text-secondary` | `--color-foreground-secondary` | `text-text-secondary` | `text-foreground-secondary` |
+| `--color-text-delete` | `--color-error-base` | `text-text-delete` | `text-error-base` |
+| `--color-text-link` | `--color-blue-500` | `text-text-link` | `text-blue-500` |
+| `--color-normal` | `--color-foreground` | `text-normal` | `text-foreground` |
+
+### 批量替换命令
+
+```bash
+# 背景色
+find src -name "*.tsx" -exec sed -i '' 's/bg-background-primary/bg-background/g' {} \;
+find src -name "*.tsx" -exec sed -i '' 's/bg-background-secondary/bg-secondary/g' {} \;
+find src -name "*.tsx" -exec sed -i '' 's/bg-ui-card-background/bg-card/g' {} \;
+find src -name "*.tsx" -exec sed -i '' 's/bg-ui-card/bg-card/g' {} \;
+
+# 文本色
+find src -name "*.tsx" -exec sed -i '' 's/text-text-primary/text-foreground/g' {} \;
+find src -name "*.tsx" -exec sed -i '' 's/text-text-secondary/text-foreground-secondary/g' {} \;
+find src -name "*.tsx" -exec sed -i '' 's/text-text-delete/text-error-base/g' {} \;
+find src -name "*.tsx" -exec sed -i '' 's/text-text-link/text-blue-500/g' {} \;
+find src -name "*.tsx" -exec sed -i '' 's/text-normal/text-foreground/g' {} \;
+
+# 边框色
+find src -name "*.tsx" -exec sed -i '' 's/border-normal/border-foreground/g' {} \;
+```
+
+### 迁移注意事项
+
+1. **ui-card 合并**: `bg-ui-card` 和 `bg-ui-card-background` 统一为 `bg-card`
+2. **text-normal 合并**: `text-normal` 和 `text-text-primary` 统一为 `text-foreground`
+3. **语义化命名**: 新变量遵循 shadcn/ui 命名规范，更加语义化
+
+---
+
 ## 项目颜色系统概览
 
 根据 `global.css` 中的定义，项目使用了以下颜色变量（支持 dark/light 两种主题）：

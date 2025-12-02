@@ -336,21 +336,6 @@
   --spacing-8xl: 7rem;
 
   /* ==================== */
-  /* Radius */
-  /* ==================== */
-  --radius-4xs: 0.25rem; /* 4px */
-  --radius-3xs: 0.5rem; /* 8px */
-  --radius-2xs: 0.75rem; /* 12px */
-  --radius-xs: 1rem; /* 16px */
-  --radius-sm: 1.5rem; /* 24px */
-  --radius-md: 2rem; /* 32px */
-  --radius-lg: 2.5rem; /* 40px */
-  --radius-xl: 3rem; /* 48px */
-  --radius-2xl: 3.5rem; /* 56px */
-  --radius-3xl: 4rem; /* 64px */
-  --radius-round: 999px; /* 完全圆角 */
-
-  /* ==================== */
   /* Typography */
   /* ==================== */
   --font-family-heading: Inter;
