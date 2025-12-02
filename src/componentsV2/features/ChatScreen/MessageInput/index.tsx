@@ -38,12 +38,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
     <View
       className="bg-foreground-secondary/12 rounded-3xl p-3"
       style={{
-        paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad,
-        shadowColor: isDark ? '#fff' : '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 10
+        paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad
       }}>
       <YStack className="gap-2.5">
         <ToolPreview assistant={assistant} updateAssistant={updateAssistant} />
