@@ -20,6 +20,13 @@
         "search_placeholder": "検索アシスタント...",
         "title": "アシスタントマーケット"
       },
+      "multi_select": {
+        "action": "複数選択",
+        "delete_confirm_message": "これらのアシスタントに関連するすべての会話も削除されます。この操作は取り消せません。",
+        "delete_confirm_title": "{{count}}件のアシスタントを削除しますか？",
+        "delete_success": "{{count}}件のアシスタントを削除しました",
+        "selected_count": "{{count}}件選択中"
+      },
       "name": "アシスタント名",
       "save": "セーブアシスタント",
       "search": {
@@ -340,6 +347,7 @@
       },
       "server": {
         "empty": "MCPサーバーがありません...",
+        "empty.add": "[to be translated]:前往添加MCP服务器",
         "selected": "選択された{{num}}個のMCPサーバー",
         "title": "MCPサーバー"
       },
@@ -904,6 +912,13 @@
       }
     },
     "topics": {
+      "multi_select": {
+        "action": "複数選択",
+        "delete_confirm_message": "この操作は取り消せません。",
+        "delete_confirm_title": "{{count}} 件のトピックを削除しますか？",
+        "delete_success": "{{count}} 件のトピックを削除しました",
+        "selected_count": "{{count}} 件を選択"
+      },
       "new_topic": "新しいトピック",
       "rename": {
         "title": "トピック名を変更"
@@ -912,13 +927,6 @@
       "title": {
         "label": "トピック",
         "recent": "最近のトピック"
-      },
-      "multi_select": {
-        "action": "複数選択",
-        "selected_count": "{{count}} 件を選択",
-        "delete_confirm_title": "{{count}} 件のトピックを削除しますか？",
-        "delete_confirm_message": "この操作は取り消せません。",
-        "delete_success": "{{count}} 件のトピックを削除しました"
       }
     },
     "update": {

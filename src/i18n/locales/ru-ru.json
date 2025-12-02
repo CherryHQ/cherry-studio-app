@@ -20,6 +20,13 @@
         "search_placeholder": "Поисковые помощники...",
         "title": "Ассистент Маркет"
       },
+      "multi_select": {
+        "action": "Множественный выбор",
+        "delete_confirm_message": "Это также удалит все беседы, связанные с этими ассистентами. Это действие нельзя отменить.",
+        "delete_confirm_title": "Удалить {{count}} ассистентов?",
+        "delete_success": "Удалено {{count}} ассистентов",
+        "selected_count": "Выбрано {{count}}"
+      },
       "name": "Имя помощника",
       "save": "Сохранить помощника",
       "search": {
@@ -340,6 +347,7 @@
       },
       "server": {
         "empty": "Нет доступных серверов MCP...",
+        "empty.add": "[to be translated]:前往添加MCP服务器",
         "selected": "Выбрано {{num}} серверов MCP",
         "title": "Сервер MCP"
       },
@@ -904,6 +912,13 @@
       }
     },
     "topics": {
+      "multi_select": {
+        "action": "Множественный выбор",
+        "delete_confirm_message": "Это действие нельзя отменить.",
+        "delete_confirm_title": "Удалить {{count}} тем?",
+        "delete_success": "Удалено тем: {{count}}",
+        "selected_count": "Выбрано: {{count}}"
+      },
       "new_topic": "Новая тема",
       "rename": {
         "title": "Переименовать тему"
@@ -912,13 +927,6 @@
       "title": {
         "label": "Тема",
         "recent": "Недавние темы"
-      },
-      "multi_select": {
-        "action": "Множественный выбор",
-        "selected_count": "Выбрано: {{count}}",
-        "delete_confirm_title": "Удалить {{count}} тем?",
-        "delete_confirm_message": "Это действие нельзя отменить.",
-        "delete_success": "Удалено тем: {{count}}"
       }
     },
     "update": {

@@ -20,6 +20,13 @@
         "search_placeholder": "Search assistants...",
         "title": "Assistant Market"
       },
+      "multi_select": {
+        "action": "Multi-select",
+        "delete_confirm_message": "This will also delete all topics associated with these assistants. This action cannot be undone.",
+        "delete_confirm_title": "Delete {{count}} assistants?",
+        "delete_success": "Deleted {{count}} assistants",
+        "selected_count": "{{count}} selected"
+      },
       "name": "Assistant Name",
       "save": "Save Assistant",
       "search": {
@@ -340,6 +347,7 @@
       },
       "server": {
         "empty": "No MCP servers available...",
+        "empty.add": "[to be translated]:前往添加MCP服务器",
         "selected": "{{num}} MCP servers selected",
         "title": "MCP Server"
       },
@@ -904,6 +912,13 @@
       }
     },
     "topics": {
+      "multi_select": {
+        "action": "Multi-select",
+        "delete_confirm_message": "This action cannot be undone.",
+        "delete_confirm_title": "Delete {{count}} topics?",
+        "delete_success": "Deleted {{count}} topics",
+        "selected_count": "{{count}} selected"
+      },
       "new_topic": "New Topic",
       "rename": {
         "title": "Rename Topic"
@@ -912,13 +927,6 @@
       "title": {
         "label": "Topic",
         "recent": "Recent Topics"
-      },
-      "multi_select": {
-        "action": "Multi-select",
-        "selected_count": "{{count}} selected",
-        "delete_confirm_title": "Delete {{count}} topics?",
-        "delete_confirm_message": "This action cannot be undone.",
-        "delete_success": "Deleted {{count}} topics"
       }
     },
     "update": {

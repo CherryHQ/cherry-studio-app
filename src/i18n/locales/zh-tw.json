@@ -20,6 +20,13 @@
         "search_placeholder": "搜尋助理...",
         "title": "助理市場"
       },
+      "multi_select": {
+        "action": "複選",
+        "delete_confirm_message": "這將同時刪除這些助理的所有對話。此操作無法撤銷。",
+        "delete_confirm_title": "刪除 {{count}} 個助理？",
+        "delete_success": "已刪除 {{count}} 個助理",
+        "selected_count": "已選擇 {{count}} 項"
+      },
       "name": "助理名稱",
       "save": "保存助理",
       "search": {
@@ -340,6 +347,7 @@
       },
       "server": {
         "empty": "暫無MCP伺服器...",
+        "empty.add": "[to be translated]:前往添加MCP服务器",
         "selected": "已選擇{{num}}個MCP伺服器",
         "title": "MCP伺服器"
       },
@@ -904,6 +912,13 @@
       }
     },
     "topics": {
+      "multi_select": {
+        "action": "多選",
+        "delete_confirm_message": "此操作無法復原。",
+        "delete_confirm_title": "要刪除 {{count}} 個主題嗎？",
+        "delete_success": "已刪除 {{count}} 個主題",
+        "selected_count": "已選 {{count}} 項"
+      },
       "new_topic": "新主題",
       "rename": {
         "title": "重新命名主題"
@@ -912,13 +927,6 @@
       "title": {
         "label": "主題",
         "recent": "最近的主題"
-      },
-      "multi_select": {
-        "action": "多選",
-        "selected_count": "已選 {{count}} 項",
-        "delete_confirm_title": "要刪除 {{count}} 個主題嗎？",
-        "delete_confirm_message": "此操作無法復原。",
-        "delete_success": "已刪除 {{count}} 個主題"
       }
     },
     "update": {

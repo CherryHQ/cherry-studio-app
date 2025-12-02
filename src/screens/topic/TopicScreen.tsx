@@ -11,7 +11,6 @@ import Text from '@/componentsV2/base/Text'
 import { MessageSquareDiff, Trash2 } from '@/componentsV2/icons/LucideIcon'
 import { useDialog } from '@/hooks/useDialog'
 import { useSearch } from '@/hooks/useSearch'
-import { useTheme } from '@/hooks/useTheme'
 import { useToast } from '@/hooks/useToast'
 import { useCurrentTopic, useTopics } from '@/hooks/useTopic'
 import type { HomeStackParamList } from '@/navigators/HomeStackNavigator'
@@ -33,7 +32,6 @@ export default function TopicScreen() {
   const { currentTopicId, switchTopic } = useCurrentTopic()
   const toast = useToast()
   const dialog = useDialog()
-  const { isDark } = useTheme()
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState(false)
@@ -57,7 +55,6 @@ export default function TopicScreen() {
     { delay: 100 }
   )
 
-  const visibleTopicIds = useMemo(() => filteredTopics.map(topic => topic.id), [filteredTopics])
   const selectionCount = selectedTopicIds.length
   const hasSelection = selectionCount > 0
 
@@ -70,18 +67,6 @@ export default function TopicScreen() {
     }
     return await getDefaultAssistant()
   }, [assistantId])
-
-  useEffect(() => {
-    if (!isMultiSelectMode) return
-    setSelectedTopicIds(prev => {
-      const visibleSet = new Set(visibleTopicIds)
-      const next = prev.filter(id => visibleSet.has(id))
-      if (next.length === prev.length) {
-        return prev
-      }
-      return next
-    })
-  }, [isMultiSelectMode, visibleTopicIds])
 
   useEffect(() => {
     if (isLoading) {
@@ -133,12 +118,6 @@ export default function TopicScreen() {
     setIsMultiSelectMode(false)
     setSelectedTopicIds([])
   }, [])
-
-  const handleSelectAll = useCallback(() => {
-    if (visibleTopicIds.length === 0) return
-    setIsMultiSelectMode(true)
-    setSelectedTopicIds([...visibleTopicIds])
-  }, [visibleTopicIds])
 
   const performBatchDelete = useCallback(async () => {
     if (!selectedTopicIds.length) return
