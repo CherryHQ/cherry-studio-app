@@ -88,8 +88,8 @@ const BaseItem: FC<BaseItemProps> = ({
       </ContextMenu>
       {onRemove && (
         <TouchableOpacity onPress={handleRemove} hitSlop={5} className="absolute right-1 top-1 rounded-full">
-          <View className="bg-green-20 rounded-full p-0.5">
-            <X size={14} className="text-green-100" />
+          <View className="bg-brand-300/20 rounded-full p-0.5">
+            <X size={14} className="text-brand-300" />
           </View>
         </TouchableOpacity>
       )}

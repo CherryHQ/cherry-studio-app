@@ -168,11 +168,11 @@ export default function AddProviderScreen() {
               <Button
                 feedbackVariant="ripple"
                 variant="tertiary"
-                className="border-green-20 bg-green-10 h-11 w-4/6 rounded-2xl"
+                className="border-brand-300/20 bg-brand-300/10 h-11 w-4/6 rounded-2xl"
                 isDisabled={!providerName.trim()}
                 onPress={handleSaveProvider}>
                 <Button.Label>
-                  <Text className={providerName.trim() ? 'text-green-100' : 'text-neutral-60'}>
+                  <Text className={providerName.trim() ? 'text-brand-300' : 'text-neutral-60'}>
                     {mode === 'edit' ? t('common.save') : t('settings.provider.add.title')}
                   </Text>
                 </Button.Label>

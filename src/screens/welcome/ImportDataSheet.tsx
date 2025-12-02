@@ -106,7 +106,7 @@ export const ImportDataSheet: React.FC = () => {
         onDidDismiss={() => setIsVisible(false)}
         onDidPresent={() => setIsVisible(true)}>
         <View className="gap-5 overflow-hidden bg-transparent p-4 pt-5" style={{ paddingBottom: bottom }}>
-          <Group className="bg-gray-10">
+          <Group className="bg-zinc-400/10">
             <PressableRow onPress={handleRestore}>
               <XStack className="items-center gap-3">
                 <Folder size={24} />

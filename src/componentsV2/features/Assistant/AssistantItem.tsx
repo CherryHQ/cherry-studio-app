@@ -95,7 +95,7 @@ const AssistantItem: FC<AssistantItemProps> = ({
     {
       title: t('common.delete'),
       iOSIcon: 'trash',
-      androidIcon: <Trash2 size={16} className="text-red-100" />,
+      androidIcon: <Trash2 size={16} className="text-red-600" />,
       destructive: true,
       color: 'red',
       onSelect: handleDelete

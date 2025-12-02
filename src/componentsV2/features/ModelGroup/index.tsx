@@ -67,8 +67,8 @@ export default function ModelGroup({
                 <XStack className="flex-1 items-center gap-3">
                   <Accordion.Indicator />
                   <Text className="font-bold">{groupName}</Text>
-                  <Chip variant="tertiary" size="sm" className="bg-green-20 rounded-md">
-                    <Chip.Label className="text-[10px] text-green-100">{models.length}</Chip.Label>
+                  <Chip variant="tertiary" size="sm" className="bg-brand-300/20 rounded-md">
+                    <Chip.Label className="text-brand-300 text-[10px]">{models.length}</Chip.Label>
                   </Chip>
                 </XStack>
                 {renderGroupButton && renderGroupButton(groupName, models)}

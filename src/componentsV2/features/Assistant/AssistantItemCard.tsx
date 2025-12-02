@@ -28,7 +28,7 @@ const AssistantItemCard = ({ assistant, onAssistantPress }: AssistantItemCardPro
     <View className="w-full">
       <Pressable
         onPress={handlePress}
-        className="bg-card active:bg-gray-20 h-[230px] overflow-hidden rounded-2xl"
+        className="bg-card h-[230px] overflow-hidden rounded-2xl active:bg-zinc-400/20"
         style={{ height: 230 }}>
         {/* Background blur emoji */}
         <XStack className="absolute left-0 right-0 top-0 h-1/2 w-full flex-wrap">
@@ -67,7 +67,7 @@ const AssistantItemCard = ({ assistant, onAssistantPress }: AssistantItemCardPro
                   <GroupTag
                     key={index}
                     group={group}
-                    className="border-green-20 bg-green-10 border-[0.5px] text-[10px] text-green-100"
+                    className="border-brand-300/20 bg-brand-300/10 text-brand-300 border-[0.5px] text-[10px]"
                   />
                 ))}
             </XStack>

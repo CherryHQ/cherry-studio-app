@@ -17,9 +17,9 @@ const TranslationBlock: FC<Props> = ({ block }) => {
   return (
     <View>
       <XStack className="items-center justify-center gap-2.5">
-        <Divider className="bg-gray-40 flex-1" thickness={1} />
+        <Divider className="bg-zinc-400/40 flex-1" thickness={1} />
         <Languages size={16} className="text-gray-700" />
-        <Divider className="bg-gray-40 flex-1" thickness={1} />
+        <Divider className="bg-zinc-400/40 flex-1" thickness={1} />
       </XStack>
       <ReactNativeMarkdown block={block} />
     </View>

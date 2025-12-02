@@ -263,7 +263,7 @@ export default function ManageModelsScreen() {
               <Tabs.Indicator />
               {TAB_CONFIGS.map(({ value, i18nKey }) => (
                 <Tabs.Trigger key={value} value={value}>
-                  <Tabs.Label className={cn(activeFilterType === value ? 'text-green-100' : undefined)}>
+                  <Tabs.Label className={cn(activeFilterType === value ? 'text-brand-300' : undefined)}>
                     {t(i18nKey)}
                   </Tabs.Label>
                 </Tabs.Trigger>
@@ -300,9 +300,9 @@ export default function ManageModelsScreen() {
                       <IconButton
                         icon={
                           isModelInCurrentProvider(model.id) ? (
-                            <Minus size={18} className="bg-red-20 rounded-full text-red-100" />
+                            <Minus size={18} className="rounded-full bg-red-600/20 text-red-600" />
                           ) : (
-                            <Plus size={18} className="bg-green-20 rounded-full text-green-100" />
+                            <Plus size={18} className="bg-brand-300/20 text-brand-300 rounded-full" />
                           )
                         }
                         onPress={
@@ -316,9 +316,9 @@ export default function ManageModelsScreen() {
                   <IconButton
                     icon={
                       isAllModelsInCurrentProvider(models) ? (
-                        <Minus size={18} className="bg-red-20 rounded-full text-red-100" />
+                        <Minus size={18} className="rounded-full bg-red-600/20 text-red-600" />
                       ) : (
-                        <Plus size={18} className="bg-green-20 rounded-full text-green-100" />
+                        <Plus size={18} className="bg-brand-300/20 text-brand-300 rounded-full" />
                       )
                     }
                     onPress={

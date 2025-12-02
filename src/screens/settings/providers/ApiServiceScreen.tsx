@@ -66,7 +66,7 @@ export default function ApiServiceScreen() {
       <SafeAreaContainer>
         <HeaderBar title={t('settings.provider.not_found')} />
         <Container>
-          <Text className="py-6 text-center text-gray-400">{t('settings.provider.not_found_message')}</Text>
+          <Text className="text-zinc-400/400 py-6 text-center">{t('settings.provider.not_found_message')}</Text>
         </Container>
       </SafeAreaContainer>
     )
@@ -162,7 +162,7 @@ export default function ApiServiceScreen() {
                 {checkApiStatus === 'idle' && <ShieldCheck size={16} />}
                 {checkApiStatus === 'error' && <XCircle size={16} />}
                 {checkApiStatus === 'processing' && <Spinner size="sm" />}
-                {checkApiStatus === 'success' && <ShieldCheck size={16} className="text-green-100" />}
+                {checkApiStatus === 'success' && <ShieldCheck size={16} className="text-brand-300" />}
               </Button.Label>
             </Button>
           </XStack>

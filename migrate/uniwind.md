@@ -21,24 +21,24 @@
 
 为方便迁移 `green-20`、`red-10` 这类旧色值，以下表格列出了颜色族与新的 CSS 变量之间的对应关系，整体遵循“基础色用纯变量、不同透明度用 `/XX`”的规则。
 
-| 色系 | 旧颜色 Token | 新 CSS 变量 | 说明 |
-|------|--------------|-------------|------|
-| 绿色（Primary） | `green-100` | `--color-primary` | 成功/主行动主色 |
-| 绿色（Primary） | `green-20` | `--color-primary/20` | 浅绿色；其它 `green-XX` 同理，如 `green-10 → --color-primary/10` |
-| 红色（Error） | `red-100` | `--color-red-600` | 错误/危险主色 |
-| 红色（Error） | `red-20` | `--color-red-600/20` | 其它 `red-XX` 以 `/XX` 形式（如 `red-10 → --color-red-600/10`） |
-| 橙色（Warning） | `orange-100` | `--color-orange-600` | 警告/提醒主色 |
-| 橙色（Warning） | `orange-20` | `--color-orange-600/20` | 其它 `orange-XX` 同理（`orange-10 → --color-orange-600/10`） |
-| 蓝色（Info） | `blue-100` | `--color-sky-500` | 信息/链接主色 |
-| 蓝色（Info） | `blue-20` | `--color-sky-500/20` | 其它 `blue-XX` 仍以 `/XX` 结尾（如 `blue-10 → --color-sky-500/10`） |
-| 紫色（Reasoning/Embedding） | `purple-100` | `--color-violet-600` | Reasoning / Embedding 主色 |
-| 紫色（Reasoning/Embedding） | `purple-20` | `--color-violet-600/20` | 若存在 `purple-10` 等浅色，同样写成 `/10` |
-| 粉色（Rerank） | `pink-100` | `--color-pink-500` | Rerank 主色 |
-| 粉色（Rerank） | `pink-20` | `--color-pink-500/20` | 其它 `pink-XX` 依次替换 |
-| 黄色（Running/Free） | `yellow-100` | `--color-yellow-400` | 免费/运行中主色 |
-| 黄色（Running/Free） | `yellow-20` | `--color-yellow-400/20` | 其它 `yellow-XX` 继续使用 `/XX` |
-| 灰色（Neutral） | `gray-100` | `--color-zinc-600` | 主体文字/深灰 |
-| 灰色（Neutral） | `gray-20` | `--color-zinc-400/20` | 所有浅灰（`gray-80/60/40/10` 等）统一映射到 `--color-zinc-400/XX` |
+| 色系 | 旧颜色 Token | 新 CSS 变量 | 说明 | 状态 |
+|------|--------------|-------------|------|------|
+| 绿色（Primary） | `green-100` | `--color-primary` | 成功/主行动主色 | ✅ 已完成 |
+| 绿色（Primary） | `green-20` | `--color-primary/20` | 浅绿色；其它 `green-XX` 同理，如 `green-10 → --color-primary/10` | ✅ 已完成 |
+| 红色（Error） | `red-100` | `--color-red-600` | 错误/危险主色 | ✅ 已完成 |
+| 红色（Error） | `red-20` | `--color-red-600/20` | 其它 `red-XX` 以 `/XX` 形式（如 `red-10 → --color-red-600/10`） | ✅ 已完成 |
+| 橙色（Warning） | `orange-100` | `--color-orange-600` | 警告/提醒主色 | ✅ 已完成 |
+| 橙色（Warning） | `orange-20` | `--color-orange-600/20` | 其它 `orange-XX` 同理（`orange-10 → --color-orange-600/10`） | ✅ 已完成 |
+| 蓝色（Info） | `blue-100` | `--color-sky-500` | 信息/链接主色 | ✅ 已完成 |
+| 蓝色（Info） | `blue-20` | `--color-sky-500/20` | 其它 `blue-XX` 仍以 `/XX` 结尾（如 `blue-10 → --color-sky-500/10`） | ✅ 已完成 |
+| 紫色（Reasoning/Embedding） | `purple-100` | `--color-violet-600` | Reasoning / Embedding 主色 | ✅ 已完成 |
+| 紫色（Reasoning/Embedding） | `purple-20` | `--color-violet-600/20` | 若存在 `purple-10` 等浅色，同样写成 `/10` | ✅ 已完成 |
+| 粉色（Rerank） | `pink-100` | `--color-pink-500` | Rerank 主色 | ✅ 已完成 |
+| 粉色（Rerank） | `pink-20` | `--color-pink-500/20` | 其它 `pink-XX` 依次替换 | ✅ 已完成 |
+| 黄色（Running/Free） | `yellow-100` | `--color-yellow-400` | 免费/运行中主色 | ✅ 已完成 |
+| 黄色（Running/Free） | `yellow-20` | `--color-yellow-400/20` | 其它 `yellow-XX` 继续使用 `/XX` | ✅ 已完成 |
+| 灰色（Neutral） | `gray-100` | `--color-zinc-600` | 主体文字/深灰 | ✅ 已完成 |
+| 灰色（Neutral） | `gray-20` | `--color-zinc-400/20` | 所有浅灰（`gray-80/60/40/10` 等）统一映射到 `--color-zinc-400/XX` | ✅ 已完成 |
 
 ### 批量替换命令（✅ 全部已完成）
 

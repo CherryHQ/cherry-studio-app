@@ -66,7 +66,7 @@ const ImageItem: FC<ImageItemProps> = ({ file, allImages = [], onRemove, size, d
         hasError={imageError}
         renderErrorPlaceholder={width => (
           <View className="bg-gray-5 rounded-2.5 items-center justify-center" style={{ width, height: width }}>
-            <ImageOff size={width * 0.3} className="text-gray-20" />
+            <ImageOff size={width * 0.3} className="text-zinc-400/20" />
           </View>
         )}
         renderContent={({ width }) => (

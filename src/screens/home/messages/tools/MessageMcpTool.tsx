@@ -26,7 +26,7 @@ export default function MessageMcpTool({ block }: Props) {
             <XStack className="flex-1 items-center gap-2">
               {isPending && <Spinner size="sm" />}
               {isDone && <Wrench size={16} />}
-              {isError && <XCircle size={16} className="text-red-100" />}
+              {isError && <XCircle size={16} className="text-red-600" />}
               <Text>{tool.name}</Text>
             </XStack>
             <Accordion.Indicator />

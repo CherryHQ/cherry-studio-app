@@ -212,13 +212,11 @@ const ModelSheet: React.FC = () => {
             feedbackVariant="ripple"
             size="sm"
             className={`h-10 rounded-xl ${
-              isMultiSelectActive ? 'border-green-20 bg-green-10 border' : 'bg-card border border-transparent'
+              isMultiSelectActive ? 'border-brand-300/20 bg-brand-300/10 border' : 'bg-card border border-transparent'
             }`}
             onPress={toggleMultiSelectMode}>
             <Button.Label>
-              <Text className={isMultiSelectActive ? 'text-green-100' : 'text-foreground'}>
-                {t('button.multiple')}
-              </Text>
+              <Text className={isMultiSelectActive ? 'text-brand-300' : 'text-foreground'}>{t('button.multiple')}</Text>
             </Button.Label>
           </Button>
         )}
@@ -273,11 +271,11 @@ const ModelSheet: React.FC = () => {
                     <XStack className="items-center justify-center">
                       <ProviderIcon provider={item.provider} size={24} />
                     </XStack>
-                    <Text className="text-lg font-bold text-gray-400 ">{item.label.toUpperCase()}</Text>
+                    <Text className="text-zinc-400/400 text-lg font-bold ">{item.label.toUpperCase()}</Text>
                   </XStack>
                   {item.provider.id !== 'cherryai' && (
                     <TouchableOpacity onPress={() => navigateToProvidersSetting(item.provider)}>
-                      <Settings className="text-gray-80" size={16} />
+                      <Settings className="text-zinc-600/80" size={16} />
                     </TouchableOpacity>
                   )}
                 </TouchableOpacity>
@@ -291,7 +289,7 @@ const ModelSheet: React.FC = () => {
                 activeOpacity={0.7}
                 onPress={() => handleModelToggle(item.value)}
                 className={`justify-between rounded-lg border px-2 ${
-                  isSelected ? 'border-green-20 bg-green-10' : 'border-transparent bg-transparent'
+                  isSelected ? 'border-brand-300/20 bg-brand-300/10' : 'border-transparent bg-transparent'
                 }`}>
                 <XStack className="w-full items-center gap-2 py-1">
                   <XStack className="items-center justify-center">
@@ -299,7 +297,7 @@ const ModelSheet: React.FC = () => {
                   </XStack>
                   <YStack className="flex-1 gap-1">
                     <Text
-                      className={cn('text-sm leading-none', isSelected ? 'text-green-100' : 'text-foreground')}
+                      className={cn('text-sm leading-none', isSelected ? 'text-brand-300' : 'text-foreground')}
                       numberOfLines={1}
                       ellipsizeMode="tail">
                       {item.label}

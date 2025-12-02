@@ -175,11 +175,11 @@ export const AddModelSheet: React.FC = () => {
             <Button
               feedbackVariant="ripple"
               variant="tertiary"
-              className="border-green-20 bg-green-10 h-11 w-4/6 rounded-2xl"
+              className="border-brand-300/20 bg-brand-300/10 h-11 w-4/6 rounded-2xl"
               onPress={handleAddModel}
               isDisabled={!modelId.trim()}>
               <Button.Label>
-                <Text className="text-green-100">{t('settings.models.add.model.label')}</Text>
+                <Text className="text-brand-300">{t('settings.models.add.model.label')}</Text>
               </Button.Label>
             </Button>
           </YStack>

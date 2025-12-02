@@ -90,17 +90,17 @@ export const McpServerSheet: React.FC = () => {
 
   const warningContent = !assistant.settings?.toolUseMode ? (
     <TouchableOpacity onPress={handleNavigateToToolTab} activeOpacity={0.7}>
-      <XStack className="bg-orange-10 w-full items-center gap-2.5 rounded-lg px-3.5 py-3">
-        <TriangleAlert size={20} className="text-orange-100 " />
-        <Text className="flex-1 text-sm text-orange-100">{t('assistants.settings.tooluse.empty')}</Text>
-        <ChevronRight size={20} className="text-orange-100" />
+      <XStack className="w-full items-center gap-2.5 rounded-lg bg-orange-400/10 px-3.5 py-3">
+        <TriangleAlert size={20} className="text-orange-400 " />
+        <Text className="flex-1 text-sm text-orange-400">{t('assistants.settings.tooluse.empty')}</Text>
+        <ChevronRight size={20} className="text-orange-400" />
       </XStack>
     </TouchableOpacity>
   ) : null
 
   const emptyContent = (
     <TouchableOpacity onPress={handleNavigateToMcpMarket} activeOpacity={0.7}>
-      <XStack className="bg-gray-10 w-full items-center gap-2.5 rounded-lg px-3.5 py-3">
+      <XStack className="w-full items-center gap-2.5 rounded-lg bg-zinc-400/10 px-3.5 py-3">
         <Text className="text-foreground flex-1 text-base">{t('settings.websearch.empty.label')}</Text>
         <XStack className="items-center gap-1.5">
           <Text className="text-sm opacity-40">{t('settings.websearch.empty.description')}</Text>
