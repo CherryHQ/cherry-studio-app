@@ -1,7 +1,4 @@
-import {
-  ExpoSpeechRecognitionModule,
-  useSpeechRecognitionEvent
-} from 'expo-speech-recognition'
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition'
 import { useRef, useState } from 'react'
 import { Platform } from 'react-native'
 
@@ -31,7 +28,6 @@ const getRecognitionLocale = (): string => {
     'zh-Hans-TW': 'zh-TW',
     'zh-TW': 'zh-TW',
     'ja-JP': 'ja-JP',
-    'ja': 'ja-JP',
     'ru-RU': 'ru-RU'
   }
 
@@ -137,7 +133,7 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
       ExpoSpeechRecognitionModule.start({
         lang: getRecognitionLocale(),
         interimResults: true,
-        continuous: false,
+        continuous: true,
         maxAlternatives: 1,
         addsPunctuation: true,
         // iOS: Use dictation task hint for better pause tolerance
