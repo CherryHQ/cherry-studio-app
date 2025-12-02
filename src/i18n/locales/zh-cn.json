@@ -20,6 +20,13 @@
         "search_placeholder": "搜索助手...",
         "title": "助手市场"
       },
+      "multi_select": {
+        "action": "多选",
+        "delete_confirm_message": "这将同时删除这些助手的所有对话。此操作无法撤销。",
+        "delete_confirm_title": "删除 {{count}} 个助手？",
+        "delete_success": "已删除 {{count}} 个助手",
+        "selected_count": "已选择 {{count}} 项"
+      },
       "name": "助手名称",
       "save": "保存助手",
       "search": {
@@ -150,6 +157,7 @@
       "saved": "已保存",
       "search_placeholder": "搜索...",
       "see_all": "查看全部",
+      "select_all": "全选",
       "select_text": "选择文本",
       "source": "来源",
       "start": "开始使用Cherry Studio App 🎉",
@@ -726,6 +734,7 @@
           }
         },
         "api_check": {
+          "confirm_message": "确认开始 API 检查？",
           "title": "检测",
           "tooltip": "选择用于检测的模型"
         },
@@ -862,7 +871,7 @@
         "check_error": "检查错误",
         "check_fail": "检查失败",
         "check_success": "检查成功 🎉",
-        "check_success_message": "API 运作正常",
+        "check_success_message": "API 连接正常",
         "contentLengthLimit": "内容长度限制",
         "empty": {
           "description": "前往添加服务商",
@@ -903,6 +912,13 @@
       }
     },
     "topics": {
+      "multi_select": {
+        "action": "多选",
+        "delete_confirm_message": "此操作无法撤销。",
+        "delete_confirm_title": "删除 {{count}} 个话题？",
+        "delete_success": "已删除 {{count}} 个话题",
+        "selected_count": "已选 {{count}} 项"
+      },
       "new_topic": "新话题",
       "rename": {
         "title": "重命名话题"

@@ -1,6 +1,6 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { Button } from 'heroui-native'
-import React, { useRef, useState } from 'react'
+import React, { useId, useState } from 'react'
 import { TouchableOpacity } from 'react-native'
 
 import SelectionSheet, { type SelectionSheetItem } from '@/componentsV2/base/SelectionSheet'
@@ -39,7 +39,7 @@ const providerOptions: DisplayOptionItem[] = [
 ]
 
 export function ProviderSelect({ value, onValueChange, placeholder, className }: ProviderSelectProps) {
-  const sheetRef = useRef<BottomSheetModal>(null)
+  const sheetName = useId()
   // Internal state to track the actual selected display value (for UI differentiation)
   const [displayValue, setDisplayValue] = useState<DisplayValue | undefined>(value)
 
@@ -61,7 +61,7 @@ export function ProviderSelect({ value, onValueChange, placeholder, className }:
 
   return (
     <>
-      <TouchableOpacity onPress={() => sheetRef.current?.present()} activeOpacity={0.7} className={className}>
+      <TouchableOpacity onPress={() => TrueSheet.present(sheetName)} activeOpacity={0.7} className={className}>
         <Button
           feedbackVariant="ripple"
           className="h-8 w-full justify-between rounded-lg"
@@ -72,7 +72,7 @@ export function ProviderSelect({ value, onValueChange, placeholder, className }:
           <ChevronDown />
         </Button>
       </TouchableOpacity>
-      <SelectionSheet items={sheetItems} ref={sheetRef} placeholder={placeholder} />
+      <SelectionSheet detents={['auto', 0.6]} name={sheetName} items={sheetItems} placeholder={placeholder} />
     </>
   )
 }

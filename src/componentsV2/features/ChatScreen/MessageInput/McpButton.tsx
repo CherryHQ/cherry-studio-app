@@ -1,8 +1,6 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
-import React, { useMemo, useRef } from 'react'
+import React, { useMemo } from 'react'
 import { Keyboard } from 'react-native'
 
-import { McpServerSheet } from '@/componentsV2'
 import { IconButton } from '@/componentsV2/base/IconButton'
 import Text from '@/componentsV2/base/Text'
 import { Hammer } from '@/componentsV2/icons'
@@ -10,18 +8,22 @@ import XStack from '@/componentsV2/layout/XStack'
 import { useActiveMcpServers } from '@/hooks/useMcp'
 import type { Assistant } from '@/types/assistant'
 
+import { presentMcpServerSheet } from '../../Sheet/McpServerSheet'
+
 interface McpButtonProps {
   assistant: Assistant
   updateAssistant: (assistant: Assistant) => Promise<void>
 }
 
 export const McpButton: React.FC<McpButtonProps> = ({ assistant, updateAssistant }) => {
-  const mcpServerSheetRef = useRef<BottomSheetModal>(null)
   const { activeMcpServers } = useActiveMcpServers()
 
   const openMcpServerSheet = () => {
     Keyboard.dismiss()
-    mcpServerSheetRef.current?.present()
+    presentMcpServerSheet({
+      assistant,
+      updateAssistant
+    })
   }
 
   // Calculate active MCP count based on real-time active MCP servers
@@ -42,10 +44,5 @@ export const McpButton: React.FC<McpButtonProps> = ({ assistant, updateAssistant
     return <Hammer size={20} />
   }
 
-  return (
-    <>
-      <IconButton icon={<McpIconContent />} onPress={openMcpServerSheet} />
-      <McpServerSheet ref={mcpServerSheetRef} assistant={assistant} updateAssistant={updateAssistant} />
-    </>
-  )
+  return <IconButton icon={<McpIconContent />} onPress={openMcpServerSheet} />
 }

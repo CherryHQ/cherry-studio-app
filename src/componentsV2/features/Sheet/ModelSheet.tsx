@@ -1,11 +1,11 @@
-import { BottomSheetBackdrop, BottomSheetModal, useBottomSheetScrollableCreator } from '@gorhom/bottom-sheet'
 import { LegendList } from '@legendapp/list'
+import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { useNavigation } from '@react-navigation/native'
 import { Button, cn } from 'heroui-native'
 import { sortBy } from 'lodash'
-import React, { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, InteractionManager, TouchableOpacity, useWindowDimensions } from 'react-native'
+import { BackHandler, InteractionManager, Platform, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { SearchInput } from '@/componentsV2/base/SearchInput'
@@ -17,29 +17,54 @@ import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { isEmbeddingModel, isRerankModel } from '@/config/models'
 import { useAllProviders } from '@/hooks/useProviders'
-import { useTheme } from '@/hooks/useTheme'
 import type { Model, Provider } from '@/types/assistant'
 import type { HomeNavigationProps } from '@/types/naviagate'
 import { getModelUniqId } from '@/utils/model'
 
 import { EmptyModelView } from '../SettingsScreen/EmptyModelView'
 
-interface ModelSheetProps {
+const SHEET_NAME = 'global-model-sheet'
+
+interface ModelSheetData {
   mentions: Model[]
-  setMentions: (mentions: Model[], isMultiSelectActive?: boolean) => Promise<void>
+  setMentions: (mentions: Model[], isMultiSelectActive?: boolean) => Promise<void> | void
   multiple?: boolean
 }
 
-const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, setMentions, multiple }, ref) => {
+const defaultModelSheetData: ModelSheetData = {
+  mentions: [],
+  setMentions: async () => {},
+  multiple: false
+}
+
+let currentSheetData: ModelSheetData = defaultModelSheetData
+let updateSheetDataCallback: ((data: ModelSheetData) => void) | null = null
+
+export const presentModelSheet = (data: ModelSheetData) => {
+  currentSheetData = data
+  updateSheetDataCallback?.(data)
+  return TrueSheet.present(SHEET_NAME)
+}
+
+export const dismissModelSheet = () => TrueSheet.dismiss(SHEET_NAME)
+
+const ModelSheet: React.FC = () => {
+  const [sheetData, setSheetData] = useState<ModelSheetData>(currentSheetData)
+  const { mentions, setMentions, multiple = false } = sheetData
   const { t } = useTranslation()
-  const { isDark } = useTheme()
   const [selectedModels, setSelectedModels] = useState<string[]>(() => mentions.map(m => getModelUniqId(m)))
   const [searchQuery, setSearchQuery] = useState('')
   const [isMultiSelectActive, setIsMultiSelectActive] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const insets = useSafeAreaInsets()
-  const dimensions = useWindowDimensions()
   const navigation = useNavigation<HomeNavigationProps>()
+
+  useEffect(() => {
+    updateSheetDataCallback = setSheetData
+    return () => {
+      updateSheetDataCallback = null
+    }
+  }, [])
 
   const handleSearchChange = useCallback((text: string) => {
     setSearchQuery(text)
@@ -51,19 +76,17 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
 
   useEffect(() => {
     if (!isVisible) {
-      // 清空搜索状态
-      setSearchQuery('')
       return
     }
 
     const backAction = () => {
-      ;(ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()
+      dismissModelSheet()
       return true
     }
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction)
     return () => backHandler.remove()
-  }, [ref, isVisible])
+  }, [isVisible])
 
   const { providers } = useAllProviders()
   const selectOptions = providers
@@ -126,7 +149,7 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
         newSelection = [] // 取消选中
       }
 
-      ;(ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()
+      dismissModelSheet()
     }
 
     setSelectedModels(newSelection)
@@ -135,13 +158,13 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
       .filter(option => newSelection.includes(option.value))
       .map(option => option.model)
     InteractionManager.runAfterInteractions(async () => {
-      await setMentions(newMentions, isMultiSelectActive)
+      await Promise.resolve(setMentions(newMentions, isMultiSelectActive))
     })
   }
 
   const handleClearAll = async () => {
     setSelectedModels([])
-    await setMentions([])
+    await Promise.resolve(setMentions([]))
   }
 
   const toggleMultiSelectMode = async () => {
@@ -153,167 +176,161 @@ const ModelSheet = forwardRef<BottomSheetModal, ModelSheetProps>(({ mentions, se
       const firstSelected = selectedModels[0]
       setSelectedModels([firstSelected])
       const newMentions = allModelOptions.filter(option => option.value === firstSelected).map(option => option.model)
-      await setMentions(newMentions)
+      await Promise.resolve(setMentions(newMentions))
     }
   }
 
   const navigateToProvidersSetting = (provider: Provider) => {
-    ;(ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()
+    dismissModelSheet()
     navigation.navigate('ProvidersSettings', { screen: 'ProviderSettingsScreen', params: { providerId: provider.id } })
   }
 
-  // 添加背景组件渲染函数
-  const renderBackdrop = (props: any) => (
-    <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} pressBehavior="close" />
-  )
+  const handleDidDismiss = () => {
+    setIsVisible(false)
+    setSearchQuery('')
+  }
 
-  const BottomSheetLegendListScrollable = useBottomSheetScrollableCreator()
+  const handleDidPresent = () => {
+    setIsVisible(true)
+  }
 
   const ESTIMATED_ITEM_SIZE = 60
   const DRAW_DISTANCE = 800
 
+  const listHeaderComponent = (
+    <YStack className="gap-4 pb-2 pt-5">
+      <XStack className="flex-1 items-center justify-center gap-[5px]">
+        <YStack className="flex-1">
+          <SearchInput
+            value={searchQuery}
+            onChangeText={handleSearchChange}
+            placeholder={t('common.search_placeholder')}
+          />
+        </YStack>
+        {multiple && (
+          <Button
+            feedbackVariant="ripple"
+            size="sm"
+            className={`h-10 rounded-xl ${
+              isMultiSelectActive ? 'border-green-20 bg-green-10 border' : 'bg-ui-card border border-transparent'
+            }`}
+            onPress={toggleMultiSelectMode}>
+            <Button.Label>
+              <Text className={isMultiSelectActive ? 'text-green-100' : 'text-text-primary'}>
+                {t('button.multiple')}
+              </Text>
+            </Button.Label>
+          </Button>
+        )}
+        {multiple && isMultiSelectActive && (
+          <Button
+            size="sm"
+            feedbackVariant="ripple"
+            className="bg-ui-card h-10 rounded-full"
+            isIconOnly
+            onPress={handleClearAll}>
+            <Button.Label>
+              <BrushCleaning size={18} className="text-text-primary" />
+            </Button.Label>
+          </Button>
+        )}
+      </XStack>
+    </YStack>
+  )
+
   return (
-    <BottomSheetModal
-      stackBehavior="replace"
-      enableDynamicSizing={false}
-      snapPoints={['85%']}
-      ref={ref}
-      backgroundStyle={{
-        borderRadius: 30,
-        backgroundColor: isDark ? '#121213ff' : '#f7f7f7ff'
-      }}
-      handleIndicatorStyle={{
-        backgroundColor: isDark ? '#f9f9f9ff' : '#202020ff'
-      }}
-      backdropComponent={renderBackdrop}
-      enablePanDownToClose={true}
-      topInset={insets.top}
-      android_keyboardInputMode="adjustResize"
-      keyboardBehavior="extend"
-      keyboardBlurBehavior="restore"
-      enableDismissOnClose
-      maxDynamicContentSize={dimensions.height - 2 * insets.top}
-      onDismiss={() => setIsVisible(false)}
-      onChange={index => setIsVisible(index >= 0)}>
-      <LegendList
-        data={listData}
-        extraData={{ selectedModels, isMultiSelectActive, searchQuery }}
-        renderItem={({ item, index }: { item: ListItem; index: number }) => {
-          if (!item) return null
-          if (item.type === 'header') {
+    <TrueSheet
+      name={SHEET_NAME}
+      detents={[0.85]}
+      cornerRadius={30}
+      grabber={Platform.OS === 'ios' ? true : false}
+      dismissible
+      dimmed
+      keyboardMode="pan"
+      scrollable
+      onDidDismiss={handleDidDismiss}
+      onDidPresent={handleDidPresent}>
+      <View>
+        <LegendList
+          data={listData}
+          extraData={{ selectedModels, isMultiSelectActive, searchQuery }}
+          nestedScrollEnabled={Platform.OS === 'android'}
+          renderItem={({ item, index }: { item: ListItem; index: number }) => {
+            if (!item) return null
+            if (item.type === 'header') {
+              return (
+                <TouchableOpacity
+                  disabled
+                  activeOpacity={1}
+                  style={{
+                    marginTop: index !== 0 ? 12 : 0,
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                  className="px-2">
+                  <XStack className="items-center justify-start gap-3 px-0">
+                    <XStack className="items-center justify-center">
+                      <ProviderIcon provider={item.provider} size={24} />
+                    </XStack>
+                    <Text className="text-lg font-bold text-gray-400 ">{item.label.toUpperCase()}</Text>
+                  </XStack>
+                  {item.provider.id !== 'cherryai' && (
+                    <TouchableOpacity onPress={() => navigateToProvidersSetting(item.provider)}>
+                      <Settings className="text-gray-80" size={16} />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+              )
+            }
+
+            // model item
+            const isSelected = selectedModels.includes(item.value)
             return (
               <TouchableOpacity
-                disabled
-                activeOpacity={1}
-                style={{
-                  marginTop: index !== 0 ? 12 : 0,
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-                className="px-2">
-                <XStack className="items-center justify-start gap-3 px-0">
+                activeOpacity={0.7}
+                onPress={() => handleModelToggle(item.value)}
+                className={`justify-between rounded-lg border px-2 ${
+                  isSelected ? 'border-green-20 bg-green-10' : 'border-transparent bg-transparent'
+                }`}>
+                <XStack className="w-full items-center gap-2 py-1">
                   <XStack className="items-center justify-center">
-                    <ProviderIcon provider={item.provider} size={24} />
+                    <ModelIcon model={item.model} size={24} />
                   </XStack>
-                  <Text className="text-lg font-bold text-gray-400 ">{item.label.toUpperCase()}</Text>
+                  <YStack className="flex-1 gap-1">
+                    <Text
+                      className={cn('text-sm leading-none', isSelected ? 'text-green-100' : 'text-text-primary')}
+                      numberOfLines={1}
+                      ellipsizeMode="tail">
+                      {item.label}
+                    </Text>
+                    <ModelTags model={item.model} size={11} />
+                  </YStack>
                 </XStack>
-                {item.provider.id !== 'cherryai' && (
-                  <TouchableOpacity onPress={() => navigateToProvidersSetting(item.provider)}>
-                    <Settings className="text-gray-80" size={16} />
-                  </TouchableOpacity>
-                )}
               </TouchableOpacity>
             )
+          }}
+          keyExtractor={(item, index) =>
+            item?.type === 'header' ? `header-${(item as any).label}-${index}` : (item as any).value
           }
-
-          // model item
-          const isSelected = selectedModels.includes(item.value)
-          return (
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => handleModelToggle(item.value)}
-              className={`justify-between rounded-lg border px-2 ${
-                isSelected ? 'border-green-20 bg-green-10' : 'border-transparent bg-transparent'
-              }`}>
-              <XStack className="w-full items-center gap-2 py-1">
-                <XStack className="items-center justify-center">
-                  <ModelIcon model={item.model} size={24} />
-                </XStack>
-                <YStack className="flex-1 gap-1">
-                  <Text
-                    className={cn('text-sm leading-none', isSelected ? 'text-green-100' : 'text-text-primary')}
-                    numberOfLines={1}
-                    ellipsizeMode="tail">
-                    {item.label}
-                  </Text>
-                  <ModelTags model={item.model} size={11} />
-                </YStack>
-              </XStack>
-            </TouchableOpacity>
-          )
-        }}
-        keyExtractor={(item, index) =>
-          item?.type === 'header' ? `header-${(item as any).label}-${index}` : (item as any).value
-        }
-        getItemType={item => item?.type ?? 'model'}
-        ItemSeparatorComponent={() => <YStack className="h-2" />}
-        ListHeaderComponentStyle={{ minHeight: 50 }}
-        ListHeaderComponent={
-          <YStack className="gap-4" style={{ paddingTop: 4 }}>
-            <XStack className="flex-1 items-center justify-center gap-[5px]">
-              <YStack className="flex-1">
-                <SearchInput
-                  value={searchQuery}
-                  onChangeText={handleSearchChange}
-                  placeholder={t('common.search_placeholder')}
-                />
-              </YStack>
-              {multiple && (
-                <Button
-                  feedbackVariant="ripple"
-                  size="sm"
-                  className={`h-10 rounded-lg ${
-                    isMultiSelectActive ? 'border-green-20 bg-green-10 border' : 'bg-ui-card border border-transparent'
-                  }`}
-                  onPress={toggleMultiSelectMode}>
-                  <Button.Label>
-                    <Text className={isMultiSelectActive ? 'text-green-100' : 'text-text-primary'}>
-                      {t('button.multiple')}
-                    </Text>
-                  </Button.Label>
-                </Button>
-              )}
-              {multiple && isMultiSelectActive && (
-                <Button
-                  size="sm"
-                  feedbackVariant="ripple"
-                  className="bg-ui-card rounded-full"
-                  isIconOnly
-                  onPress={handleClearAll}>
-                  <Button.Label>
-                    <BrushCleaning size={18} className="text-text-primary" />
-                  </Button.Label>
-                </Button>
-              )}
-            </XStack>
-          </YStack>
-        }
-        ListEmptyComponent={<EmptyModelView />}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingBottom: insets.bottom + 20
-        }}
-        renderScrollComponent={BottomSheetLegendListScrollable}
-        estimatedItemSize={ESTIMATED_ITEM_SIZE}
-        drawDistance={DRAW_DISTANCE}
-        recycleItems
-      />
-    </BottomSheetModal>
+          getItemType={item => item?.type ?? 'model'}
+          ListHeaderComponent={listHeaderComponent}
+          ItemSeparatorComponent={() => <YStack className="h-2" />}
+          ListEmptyComponent={<EmptyModelView />}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingBottom: insets.bottom + 20
+          }}
+          estimatedItemSize={ESTIMATED_ITEM_SIZE}
+          drawDistance={DRAW_DISTANCE}
+          recycleItems
+        />
+      </View>
+    </TrueSheet>
   )
-})
+}
 
-ModelSheet.displayName = 'MentionSheet'
+ModelSheet.displayName = 'ModelSheet'
 
 export default ModelSheet

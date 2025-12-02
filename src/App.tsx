@@ -2,7 +2,6 @@ import '@/i18n'
 import 'react-native-reanimated'
 
 import { DATABASE_NAME, db, expoDb } from '@db'
-import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
 import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native'
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator'
 import { useDrizzleStudio } from 'expo-drizzle-studio-plugin'
@@ -15,11 +14,13 @@ import { ActivityIndicator } from 'react-native'
 import { SystemBars } from 'react-native-edge-to-edge'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { Provider } from 'react-redux'
 import { PersistGate } from 'redux-persist/integration/react'
 import { Uniwind } from 'uniwind'
 
 import { UpdateChecker } from '@/componentsV2'
+import SheetManager from '@/componentsV2/features/Sheet/SheetManager'
 import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
 import store, { persistor } from '@/store'
@@ -106,9 +107,8 @@ function ThemedApp() {
           <DialogProvider>
             <ToastProvider>
               <UpdateChecker>
-                <BottomSheetModalProvider>
-                  <MainStackNavigator />
-                </BottomSheetModalProvider>
+                <MainStackNavigator />
+                <SheetManager />
               </UpdateChecker>
             </ToastProvider>
           </DialogProvider>
@@ -135,11 +135,13 @@ function AppWithRedux() {
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <Suspense fallback={<ActivityIndicator size="large" />}>
-        <SQLiteProvider databaseName={DATABASE_NAME} options={{ enableChangeListener: true }} useSuspense>
-          <AppWithRedux />
-        </SQLiteProvider>
-      </Suspense>
+      <SafeAreaProvider>
+        <Suspense fallback={<ActivityIndicator size="large" />}>
+          <SQLiteProvider databaseName={DATABASE_NAME} options={{ enableChangeListener: true }} useSuspense>
+            <AppWithRedux />
+          </SQLiteProvider>
+        </Suspense>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   )
 }

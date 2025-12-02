@@ -23,6 +23,7 @@ export type DialogOptions = {
   onConFirm?: () => void | Promise<void>
   onCancel?: () => void | Promise<void>
   showLoading?: boolean
+  closeOnConfirm?: boolean
 }
 
 type DialogContextValue = { open: (options: DialogOptions) => void; close: () => void } | undefined
@@ -61,6 +62,8 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   const confirm = async () => {
     if (isLoading) return
 
+    const shouldCloseOnConfirm = options?.closeOnConfirm ?? true
+
     if (options?.showLoading) {
       setIsLoading(true)
     }
@@ -71,7 +74,9 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
       console.error('Dialog onConFirm error:', error)
     } finally {
       setIsLoading(false)
-      close()
+      if (shouldCloseOnConfirm) {
+        close()
+      }
     }
   }
 

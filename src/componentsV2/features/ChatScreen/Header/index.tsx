@@ -9,6 +9,7 @@ import { useAssistant } from '@/hooks/useAssistant'
 import type { Topic } from '@/types/assistant'
 
 import { AssistantSelection } from './AssistantSelection'
+import { HistoryTopicButton } from './HistoryTopicButton'
 import { NewTopicButton } from './NewTopicButton'
 
 interface HeaderBarProps {
@@ -28,15 +29,18 @@ export const ChatScreenHeader = ({ topic }: HeaderBarProps) => {
   }
 
   return (
-    <XStack className="h-11 items-center justify-between px-3.5">
+    <XStack className="relative h-11 items-center justify-between px-3.5">
       <XStack className="min-w-10 items-center">
         <IconButton onPress={handleMenuPress} icon={<Menu size={24} />} />
       </XStack>
-      <XStack className="flex-1 items-center justify-center">
-        <AssistantSelection assistant={assistant} topic={topic} />
-      </XStack>
-      <XStack className="min-w-10 items-center justify-end">
+      <XStack className="min-w-10 items-center justify-end gap-4">
         <NewTopicButton assistant={assistant} />
+        <HistoryTopicButton assistant={assistant} />
+      </XStack>
+      <XStack
+        pointerEvents="box-none"
+        className="absolute inset-y-0 left-3.5 right-3.5 items-center justify-center">
+        <AssistantSelection assistant={assistant} topic={topic} />
       </XStack>
     </XStack>
   )

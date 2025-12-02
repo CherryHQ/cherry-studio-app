@@ -1,8 +1,7 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import type { RouteProp } from '@react-navigation/native'
 import { useRoute } from '@react-navigation/native'
 import { Button } from 'heroui-native'
-import React, { useRef, useState } from 'react'
+import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
 
@@ -17,14 +16,12 @@ import {
   XStack,
   YStack
 } from '@/componentsV2'
-import { WebSearchApiCheckSheet } from '@/componentsV2/features/SettingsScreen/WebSearchApiCheckSheet'
 import { Eye, EyeOff, ShieldCheck } from '@/componentsV2/icons/LucideIcon'
 import { WEB_SEARCH_PROVIDER_CONFIG } from '@/config/websearchProviders'
 import { useDialog } from '@/hooks/useDialog'
 import { useWebSearchProvider } from '@/hooks/useWebsearchProviders'
 import type { WebSearchStackParamList } from '@/navigators/settings/WebSearchStackNavigator'
 import WebSearchService from '@/services/WebSearchService'
-import type { ApiStatus } from '@/types/assistant'
 
 type WebsearchProviderSettingsRouteProp = RouteProp<WebSearchStackParamList, 'WebSearchProviderSettingsScreen'>
 
@@ -34,9 +31,6 @@ export default function WebSearchProviderSettingsScreen() {
   const route = useRoute<WebsearchProviderSettingsRouteProp>()
 
   const [showApiKey, setShowApiKey] = useState(false)
-  const [checkApiStatus, setCheckApiStatus] = useState<ApiStatus>('idle')
-
-  const bottomSheetRef = useRef<BottomSheetModal>(null)
 
   const { providerId } = route.params
   const { provider, isLoading, updateProvider } = useWebSearchProvider(providerId)
@@ -62,14 +56,6 @@ export default function WebSearchProviderSettingsScreen() {
     )
   }
 
-  const handleOpenBottomSheet = () => {
-    bottomSheetRef.current?.present()
-  }
-
-  const handleBottomSheetClose = () => {
-    bottomSheetRef.current?.dismiss()
-  }
-
   const toggleApiKeyVisibility = () => {
     setShowApiKey(prevShowApiKey => !prevShowApiKey)
   }
@@ -79,10 +65,24 @@ export default function WebSearchProviderSettingsScreen() {
     await updateProvider(updatedProvider)
   }
 
+  const handleApiCheck = () => {
+    dialog.open({
+      type: 'info',
+      title: t('settings.provider.api_check.title'),
+      content: t('settings.provider.api_check.confirm_message'),
+      showLoading: true,
+      closeOnConfirm: false,
+      maskClosable: false,
+      onConFirm: async () => {
+        // 确认后开始检查
+        await new Promise(resolve => setTimeout(resolve, 300))
+        await checkSearch()
+      }
+    })
+  }
+
   async function checkSearch() {
-    // TODO : 支持多个 API Key 检测
     if (!provider) return
-    setCheckApiStatus('processing')
 
     try {
       const { valid, error } = await WebSearchService.checkSearch(provider)
@@ -92,28 +92,27 @@ export default function WebSearchProviderSettingsScreen() {
           : ''
 
       if (valid) {
-        setCheckApiStatus('success')
+        dialog.open({
+          type: 'success',
+          title: t('settings.websearch.check_success'),
+          content: t('settings.websearch.check_success_message'),
+          showCancel: false
+        })
       } else {
         dialog.open({
           type: 'error',
           title: t('settings.websearch.check_fail'),
           content: errorMessage,
-          onConFirm: () => handleBottomSheetClose()
+          showCancel: false
         })
       }
-    } catch (error) {
+    } catch {
       dialog.open({
         type: 'error',
         title: t('settings.websearch.check_error'),
         content: t('common.error_occurred'),
-        onConFirm: () => handleBottomSheetClose()
+        showCancel: false
       })
-      throw error
-    } finally {
-      setTimeout(() => {
-        setCheckApiStatus('idle')
-        handleBottomSheetClose()
-      }, 500)
     }
   }
 
@@ -126,7 +125,7 @@ export default function WebSearchProviderSettingsScreen() {
           <YStack className="gap-2">
             <XStack className="items-center justify-between">
               <GroupTitle>{t('settings.websearch.api_key.label')}</GroupTitle>
-              <Button feedbackVariant="ripple" size="sm" isIconOnly variant="ghost" onPress={handleOpenBottomSheet}>
+              <Button feedbackVariant="ripple" size="sm" isIconOnly variant="ghost" onPress={handleApiCheck}>
                 <Button.Label>
                   <ShieldCheck size={16} className="text-blue-500" />
                 </Button.Label>
@@ -142,7 +141,12 @@ export default function WebSearchProviderSettingsScreen() {
                   placeholder={t('settings.websearch.api_key.placeholder')}
                   onChangeText={text => handleProviderConfigChange('apiKey', text)}>
                   <TextField.InputEndContent>
-                    <Button feedbackVariant="ripple" size="sm" variant="ghost" isIconOnly onPress={toggleApiKeyVisibility}>
+                    <Button
+                      feedbackVariant="ripple"
+                      size="sm"
+                      variant="ghost"
+                      isIconOnly
+                      onPress={toggleApiKeyVisibility}>
                       <Button.Label>
                         {showApiKey ? <EyeOff className="text-white" size={16} /> : <Eye size={16} />}
                       </Button.Label>
@@ -174,7 +178,6 @@ export default function WebSearchProviderSettingsScreen() {
           </TextField>
         </YStack>
       </Container>
-      <WebSearchApiCheckSheet ref={bottomSheetRef} onStartModelCheck={checkSearch} checkApiStatus={checkApiStatus} />
     </SafeAreaContainer>
   )
 }

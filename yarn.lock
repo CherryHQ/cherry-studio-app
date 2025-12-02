@@ -3732,6 +3732,23 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@lodev09/react-native-true-sheet@npm:^3.0.0-beta.12":
+  version: 3.0.0-beta.12
+  resolution: "@lodev09/react-native-true-sheet@npm:3.0.0-beta.12"
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+    react-native-reanimated: ">=4.0.0"
+    react-native-worklets: "*"
+  peerDependenciesMeta:
+    react-native-reanimated:
+      optional: true
+    react-native-worklets:
+      optional: true
+  checksum: 10c0/8cb51900969481909bca7d1293f22419f735925934357abefa239088e8f22e6f8763b9ac88248316f681a2c93cf4b7d01157eb21d816f1a55aa6392112f921ba
+  languageName: node
+  linkType: hard
+
 "@mistralai/mistralai@npm:^1.7.4":
   version: 1.10.0
   resolution: "@mistralai/mistralai@npm:1.10.0"
@@ -7013,6 +7030,7 @@ __metadata:
     "@google/genai": "npm:^1.17.0"
     "@gorhom/bottom-sheet": "npm:^5.2.6"
     "@legendapp/list": "npm:^2.0.15"
+    "@lodev09/react-native-true-sheet": "npm:^3.0.0-beta.12"
     "@mistralai/mistralai": "npm:^1.7.4"
     "@mozilla/readability": "npm:^0.6.0"
     "@openrouter/ai-sdk-provider": "npm:^1.1.2"
@@ -7086,6 +7104,7 @@ __metadata:
     expo-drizzle-studio-plugin: "npm:^0.2.0"
     expo-file-system: "npm:~19.0.17"
     expo-font: "npm:~14.0.8"
+    expo-glass-effect: "npm:^0.1.7"
     expo-haptics: "npm:~15.0.7"
     expo-image: "npm:~3.0.8"
     expo-image-picker: "npm:~17.0.8"
@@ -7100,12 +7119,12 @@ __metadata:
     expo-speech: "npm:~14.0.7"
     expo-splash-screen: "npm:~31.0.10"
     expo-sqlite: "npm:~16.0.8"
-    expo-symbols: "npm:~1.0.7"
+    expo-symbols: "npm:^1.0.7"
     expo-system-ui: "npm:~6.0.7"
     expo-updates: "npm:~29.0.12"
     expo-web-browser: "npm:~15.0.7"
     fast-xml-parser: "npm:^5.2.5"
-    heroui-native: "npm:^1.0.0-beta.3"
+    heroui-native: "npm:^1.0.0-beta.4"
     i18next: "npm:^24.2.2"
     jest: "npm:^29.2.1"
     jest-expo: "npm:~54.0.12"
@@ -10506,6 +10525,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"expo-glass-effect@npm:^0.1.7":
+  version: 0.1.7
+  resolution: "expo-glass-effect@npm:0.1.7"
+  peerDependencies:
+    expo: "*"
+    react: "*"
+    react-native: "*"
+  checksum: 10c0/a531a68fd0cd822ed34ea38547843a26455869c62168bd6bf4d49d32ea69887845ceeb182f5aabd129ecbd20b9e9365da29f9a90d57659eb163c61b813e86c77
+  languageName: node
+  linkType: hard
+
 "expo-haptics@npm:~15.0.7":
   version: 15.0.7
   resolution: "expo-haptics@npm:15.0.7"
@@ -10739,7 +10769,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"expo-symbols@npm:~1.0.7":
+"expo-symbols@npm:^1.0.7":
   version: 1.0.7
   resolution: "expo-symbols@npm:1.0.7"
   dependencies:
@@ -11769,9 +11799,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"heroui-native@npm:^1.0.0-beta.3":
-  version: 1.0.0-beta.3
-  resolution: "heroui-native@npm:1.0.0-beta.3"
+"heroui-native@npm:^1.0.0-beta.4":
+  version: 1.0.0-beta.4
+  resolution: "heroui-native@npm:1.0.0-beta.4"
   peerDependencies:
     "@gorhom/bottom-sheet": ^5
     react: "*"
@@ -11783,7 +11813,7 @@ __metadata:
     react-native-worklets: ^0.5.1
     tailwind-merge: ^3.3.1
     tailwind-variants: ^3.1.0
-  checksum: 10c0/af0b3aa0b2034db78b2187bf08dbfb66d41b0572bc41e659c011e6e726c6ebf67136401042d28650d8ccf3a34d1470823f664db8e8ab0d342beec5bbe13fb509
+  checksum: 10c0/9e50ee7a2cb50d21e330b296852f04120c15be93c609cf1529e89039c89b82ea85dab9e6e63098f2d77e941d42ed65994fb947bb0a0dff755bc4b1be7b2b6396
   languageName: node
   linkType: hard
 

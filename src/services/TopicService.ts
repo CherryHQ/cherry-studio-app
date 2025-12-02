@@ -347,6 +347,13 @@ export class TopicService {
 
     logger.info('Creating new topic (optimistic):', newTopic.id)
 
+    // Optimistically cache the new topic so subsequent switchToTopic calls
+    // can reuse it without hitting the database again.
+    this.addToCache(newTopic.id, newTopic)
+    if (this.allTopicsCache.size > 0 || this.allTopicsCacheTimestamp !== null) {
+      this.allTopicsCache.set(newTopic.id, newTopic)
+    }
+
     // Optimistic: return immediately
     // Background: save to database
     this.performTopicCreate(newTopic).catch(error => {

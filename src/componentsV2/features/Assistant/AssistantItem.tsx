@@ -8,7 +8,7 @@ import { View } from 'react-native'
 import type { ContextMenuListProps } from '@/componentsV2/base/ContextMenu'
 import ContextMenu from '@/componentsV2/base/ContextMenu'
 import Text from '@/componentsV2/base/Text'
-import { Trash2 } from '@/componentsV2/icons/LucideIcon'
+import { Check, CheckSquare, Trash2 } from '@/componentsV2/icons/LucideIcon'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useTheme } from '@/hooks/useTheme'
@@ -27,15 +27,33 @@ const logger = loggerService.withContext('Assistant Item')
 interface AssistantItemProps {
   assistant: Assistant
   onAssistantPress: (assistant: Assistant) => void
+  isMultiSelectMode?: boolean
+  isSelected?: boolean
+  onToggleSelection?: (assistantId: string) => void
+  onEnterMultiSelectMode?: (assistantId: string) => void
 }
 
-const AssistantItem: FC<AssistantItemProps> = ({ assistant, onAssistantPress }) => {
+const AssistantItem: FC<AssistantItemProps> = ({
+  assistant,
+  onAssistantPress,
+  isMultiSelectMode = false,
+  isSelected = false,
+  onToggleSelection,
+  onEnterMultiSelectMode
+}) => {
   const { t } = useTranslation()
   const navigation = useNavigation<DrawerNavigationProps>()
   const toast = useToast()
   const { isDark } = useTheme()
 
+  const isDefaultAssistant = assistant.id === 'default'
+  const canBeSelected = !isDefaultAssistant && assistant.type !== 'system'
+
   const handlePress = () => {
+    if (isMultiSelectMode && canBeSelected) {
+      onToggleSelection?.(assistant.id)
+      return
+    }
     onAssistantPress(assistant)
   }
 
@@ -64,6 +82,16 @@ const AssistantItem: FC<AssistantItemProps> = ({ assistant, onAssistantPress }) 
   }
 
   const contextMenuItems: ContextMenuListProps[] = [
+    ...(!isMultiSelectMode && canBeSelected && onEnterMultiSelectMode
+      ? [
+          {
+            title: t('assistants.multi_select.action'),
+            iOSIcon: 'checkmark.circle',
+            androidIcon: <CheckSquare size={16} className="text-text-primary" />,
+            onSelect: () => onEnterMultiSelectMode(assistant.id)
+          }
+        ]
+      : []),
     {
       title: t('common.delete'),
       iOSIcon: 'trash',
@@ -79,9 +107,14 @@ const AssistantItem: FC<AssistantItemProps> = ({ assistant, onAssistantPress }) 
       borderRadius={16}
       list={contextMenuItems}
       onPress={handlePress}
-      disableContextMenu={assistant.type === 'system'}>
+      disableContextMenu={assistant.type === 'system' || isMultiSelectMode}>
       <View className="bg-ui-card-background items-center justify-between rounded-2xl px-2.5 py-2.5">
         <XStack className="gap-3.5">
+          {isMultiSelectMode && canBeSelected && (
+            <View className="border-normal h-6 w-6 items-center justify-center self-center rounded-full border">
+              {isSelected && <Check size={14} className="text-white" />}
+            </View>
+          )}
           <EmojiAvatar
             emoji={assistant.emoji}
             size={46}

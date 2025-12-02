@@ -1,11 +1,10 @@
 import type { FC } from 'react'
-import React, { memo, useEffect, useRef, useState } from 'react'
+import React, { memo, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ContextMenuListProps } from '@/componentsV2'
 import { ContextMenu } from '@/componentsV2'
-import type { TextSelectionSheetRef } from '@/componentsV2/features/Sheet/TextSelectionSheet'
-import TextSelectionSheet from '@/componentsV2/features/Sheet/TextSelectionSheet'
+import { presentTextSelectionSheet } from '@/componentsV2/features/Sheet/TextSelectionSheet'
 import { TranslatedIcon, TranslationIcon } from '@/componentsV2/icons'
 import {
   AudioLines,
@@ -30,7 +29,6 @@ interface MessageItemProps {
 
 const MessageContextMenu: FC<MessageItemProps> = ({ children, message, assistant, isMultiModel = false }) => {
   const { t } = useTranslation()
-  const textSelectionSheetRef = useRef<TextSelectionSheetRef>(null)
   const [messageContent, setMessageContent] = useState('')
 
   const {
@@ -48,9 +46,9 @@ const MessageContextMenu: FC<MessageItemProps> = ({ children, message, assistant
     handleShare
   } = useMessageActions({ message, assistant })
 
-  const handleSelectText = async () => {
+  const handleSelectText = () => {
     requestAnimationFrame(() => {
-      textSelectionSheetRef.current?.present()
+      presentTextSelectionSheet(messageContent)
     })
   }
 
@@ -138,13 +136,9 @@ const MessageContextMenu: FC<MessageItemProps> = ({ children, message, assistant
   ]
 
   return (
-    <>
-      <ContextMenu list={contextMenuItems} withHighLight={false}>
-        {children}
-      </ContextMenu>
-
-      <TextSelectionSheet ref={textSelectionSheetRef} content={messageContent} />
-    </>
+    <ContextMenu list={contextMenuItems} withHighLight={false}>
+      {children}
+    </ContextMenu>
   )
 }
 

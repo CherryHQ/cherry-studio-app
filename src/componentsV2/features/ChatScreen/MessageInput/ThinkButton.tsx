@@ -1,5 +1,4 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
-import React, { useRef } from 'react'
+import React from 'react'
 import { Keyboard } from 'react-native'
 
 import { IconButton } from '@/componentsV2/base/IconButton'
@@ -13,7 +12,7 @@ import {
 } from '@/componentsV2/icons'
 import type { Assistant } from '@/types/assistant'
 
-import { ReasoningSheet } from '../../Sheet/ReasoningSheet'
+import { presentReasoningSheet } from '../../Sheet/ReasoningSheet'
 
 interface ThinkButtonProps {
   assistant: Assistant
@@ -21,8 +20,6 @@ interface ThinkButtonProps {
 }
 
 export const ThinkButton: React.FC<ThinkButtonProps> = ({ assistant, updateAssistant }) => {
-  const bottomSheetModalRef = useRef<BottomSheetModal>(null)
-
   const getIcon = () => {
     const size = 20
 
@@ -45,21 +42,16 @@ export const ThinkButton: React.FC<ThinkButtonProps> = ({ assistant, updateAssis
 
   const handlePress = () => {
     Keyboard.dismiss()
-    bottomSheetModalRef.current?.present()
+    if (!assistant.model) return
+
+    presentReasoningSheet({
+      model: assistant.model,
+      assistant,
+      updateAssistant
+    })
   }
 
   return (
-    <>
-      <IconButton icon={getIcon()} onPress={handlePress} />
-
-      {assistant.model && (
-        <ReasoningSheet
-          ref={bottomSheetModalRef}
-          model={assistant.model}
-          assistant={assistant}
-          updateAssistant={updateAssistant}
-        />
-      )}
-    </>
+    <IconButton icon={getIcon()} onPress={handlePress} />
   )
 }

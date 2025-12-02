@@ -5,7 +5,7 @@ import ContentLoader, { Rect } from 'react-content-loader/native'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
-import ContextMenu from '@/componentsV2/base/ContextMenu'
+import ContextMenu, { type ContextMenuListProps } from '@/componentsV2/base/ContextMenu'
 import Text from '@/componentsV2/base/Text'
 import TextField from '@/componentsV2/base/TextField'
 import EmojiAvatar from '@/componentsV2/features/Assistant/EmojiAvatar'
@@ -18,10 +18,10 @@ import { useToast } from '@/hooks/useToast'
 import i18n from '@/i18n'
 import { fetchTopicNaming } from '@/services/ApiService'
 import type { Topic } from '@/types/assistant'
-import type { DrawerNavigationProps } from '@/types/naviagate'
+import type { HomeNavigationProps } from '@/types/naviagate'
 import { storage } from '@/utils'
 
-import { Edit3, Sparkles, Trash2 } from '../../icons/LucideIcon'
+import { Check, CheckSquare, Edit3, Sparkles, Trash2 } from '../../icons/LucideIcon'
 
 type TimeFormat = 'time' | 'date'
 
@@ -51,6 +51,10 @@ interface TopicItemProps {
   currentTopicId: string
   switchTopic: (topicId: string) => Promise<void>
   handleNavigateChatScreen?: (topicId: string) => void
+  isMultiSelectMode?: boolean
+  isSelected?: boolean
+  onToggleSelect?: (topicId: string) => void
+  onEnterMultiSelectMode?: (topicId: string) => void
 }
 
 export const TopicItem: FC<TopicItemProps> = ({
@@ -60,11 +64,15 @@ export const TopicItem: FC<TopicItemProps> = ({
   onRename,
   currentTopicId,
   switchTopic,
-  handleNavigateChatScreen
+  handleNavigateChatScreen,
+  isMultiSelectMode = false,
+  isSelected = false,
+  onToggleSelect,
+  onEnterMultiSelectMode
 }) => {
   const { t } = useTranslation()
   const [currentLanguage, setCurrentLanguage] = useState<string>(i18n.language)
-  const navigation = useNavigation<DrawerNavigationProps>()
+  const navigation = useNavigation<HomeNavigationProps>()
   const { assistant } = useAssistant(topic.assistantId)
   const [isGeneratingName, setIsGeneratingName] = useState(false)
   const dialog = useDialog()
@@ -76,9 +84,17 @@ export const TopicItem: FC<TopicItemProps> = ({
     if (handleNavigateChatScreen) {
       handleNavigateChatScreen(topic.id)
     } else {
-      navigation.navigate('Home', { screen: 'ChatScreen', params: { topicId: topic.id } })
+      navigation.navigate('ChatScreen', { topicId: topic.id })
     }
     switchTopic(topic.id).catch(console.error)
+  }
+
+  const handleTopicPress = () => {
+    if (isMultiSelectMode) {
+      onToggleSelect?.(topic.id)
+      return
+    }
+    openTopic()
   }
 
   const date = new Date(topic.updatedAt)
@@ -157,36 +173,54 @@ export const TopicItem: FC<TopicItemProps> = ({
     }
   }
 
+  const contextMenuItems: ContextMenuListProps[] = [
+    ...(!isMultiSelectMode && onEnterMultiSelectMode
+      ? [
+          {
+            title: t('topics.multi_select.action'),
+            iOSIcon: 'checkmark.circle',
+            androidIcon: <CheckSquare size={16} className="text-text-primary" />,
+            onSelect: () => onEnterMultiSelectMode(topic.id)
+          }
+        ]
+      : []),
+    {
+      title: t('button.generate_topic_name'),
+      iOSIcon: 'sparkles',
+      androidIcon: <Sparkles size={16} className="text-text-primary" />,
+      onSelect: handleGenerateName
+    },
+    {
+      title: t('button.rename_topic_name'),
+      iOSIcon: 'rectangle.and.pencil.and.ellipsis',
+      androidIcon: <Edit3 size={16} className="text-text-primary" />,
+      onSelect: handleRename
+    },
+    {
+      title: t('common.delete'),
+      iOSIcon: 'trash',
+      androidIcon: <Trash2 size={16} className="text-red-500" />,
+      destructive: true,
+      color: 'red',
+      onSelect: () => onDelete?.(topic.id)
+    }
+  ]
+
   return (
     <ContextMenu
       borderRadius={16}
-      list={[
-        {
-          title: t('button.generate_topic_name'),
-          iOSIcon: 'sparkles',
-          androidIcon: <Sparkles size={16} className="text-text-primary" />,
-          onSelect: handleGenerateName
-        },
-        {
-          title: t('button.rename_topic_name'),
-          iOSIcon: 'rectangle.and.pencil.and.ellipsis',
-          androidIcon: <Edit3 size={16} className="text-text-primary" />,
-          onSelect: handleRename
-        },
-        {
-          title: t('common.delete'),
-          iOSIcon: 'trash',
-          androidIcon: <Trash2 size={16} className="text-red-500" />,
-          destructive: true,
-          color: 'red',
-          onSelect: () => onDelete?.(topic.id)
-        }
-      ]}
-      onPress={openTopic}>
+      list={contextMenuItems}
+      onPress={handleTopicPress}
+      disableContextMenu={isMultiSelectMode}>
       <XStack
         className={`items-center justify-center gap-1.5 rounded-lg px-1 py-1 ${
           isActive ? 'bg-green-10' : 'bg-transparent'
         }`}>
+        {isMultiSelectMode && (
+          <View className="border-normal mr-1 h-6 w-6 items-center justify-center rounded-full border">
+            {isSelected && <Check size={14} className="text-white" />}
+          </View>
+        )}
         <EmojiAvatar
           emoji={assistant?.emoji}
           size={42}

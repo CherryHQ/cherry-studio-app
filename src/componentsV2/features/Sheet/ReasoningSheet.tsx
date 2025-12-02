@@ -1,7 +1,6 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { delay } from 'lodash'
-import type { FC } from 'react'
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
@@ -18,12 +17,30 @@ import {
 import { getThinkModelType, isDoubaoThinkingAutoModel, MODEL_SUPPORTED_OPTIONS } from '@/config/models'
 import type { Assistant, Model, ThinkingOption } from '@/types/assistant'
 
-interface ReasoningSheetProps {
-  model: Model
-  assistant: Assistant
-  updateAssistant: (assistant: Assistant) => Promise<void>
-  ref: React.RefObject<BottomSheetModal | null>
+const SHEET_NAME = 'global-reasoning-sheet'
+
+interface ReasoningSheetData {
+  model: Model | null
+  assistant: Assistant | null
+  updateAssistant: ((assistant: Assistant) => Promise<void>) | null
 }
+
+const defaultReasoningSheetData: ReasoningSheetData = {
+  model: null,
+  assistant: null,
+  updateAssistant: null
+}
+
+let currentSheetData: ReasoningSheetData = defaultReasoningSheetData
+let updateSheetDataCallback: ((data: ReasoningSheetData) => void) | null = null
+
+export const presentReasoningSheet = (data: ReasoningSheetData) => {
+  currentSheetData = data
+  updateSheetDataCallback?.(data)
+  return TrueSheet.present(SHEET_NAME)
+}
+
+export const dismissReasoningSheet = () => TrueSheet.dismiss(SHEET_NAME)
 
 const createThinkingIcon = (option?: ThinkingOption) => {
   switch (option) {
@@ -44,16 +61,26 @@ const createThinkingIcon = (option?: ThinkingOption) => {
   }
 }
 
-export const ReasoningSheet: FC<ReasoningSheetProps> = ({ model, assistant, updateAssistant, ref }) => {
+export const ReasoningSheet: React.FC = () => {
   const { t } = useTranslation()
+  const [sheetData, setSheetData] = useState<ReasoningSheetData>(currentSheetData)
+  const { model, assistant, updateAssistant } = sheetData
 
-  // Converted from useMemo to a simple const
-  const currentReasoningEffort = assistant.settings?.reasoning_effort || 'off'
+  useEffect(() => {
+    updateSheetDataCallback = setSheetData
+    return () => {
+      updateSheetDataCallback = null
+    }
+  }, [])
 
-  const modelType = getThinkModelType(model)
+  const currentReasoningEffort = assistant?.settings?.reasoning_effort || 'off'
+  const modelType = model ? getThinkModelType(model) : null
 
-  // 获取当前模型支持的选项
   const supportedOptions: ThinkingOption[] = useMemo(() => {
+    if (!model || !modelType) {
+      return []
+    }
+
     if (modelType === 'doubao') {
       if (isDoubaoThinkingAutoModel(model)) {
         return ['off', 'auto', 'high']
@@ -66,6 +93,10 @@ export const ReasoningSheet: FC<ReasoningSheetProps> = ({ model, assistant, upda
   }, [model, modelType])
 
   const onValueChange = async (option?: ThinkingOption) => {
+    if (!assistant || !updateAssistant) {
+      return
+    }
+
     const isEnabled = option !== undefined && option !== 'off'
 
     if (!isEnabled) {
@@ -89,7 +120,8 @@ export const ReasoningSheet: FC<ReasoningSheetProps> = ({ model, assistant, upda
         }
       })
     }
-    delay(() => ref.current?.dismiss(), 50)
+
+    delay(() => dismissReasoningSheet(), 50)
   }
 
   const sheetOptions: SelectionSheetItem[] = supportedOptions.map(option => ({
@@ -100,5 +132,5 @@ export const ReasoningSheet: FC<ReasoningSheetProps> = ({ model, assistant, upda
     onSelect: () => onValueChange(option)
   }))
 
-  return <SelectionSheet items={sheetOptions} ref={ref} />
+  return <SelectionSheet detents={['auto', 0.3]} name={SHEET_NAME} items={sheetOptions} />
 }
