@@ -260,7 +260,7 @@ export default function ManageModelsScreen() {
         <Tabs value={activeFilterType} onValueChange={setActiveFilterType}>
           <Tabs.ScrollView>
             <Tabs.List aria-label="Model filter tabs" className="bg-transparent">
-              <Tabs.Indicator />
+              <Tabs.Indicator className="bg-brand-300/15 border-brand-300/30 rounded-xl border" />
               {TAB_CONFIGS.map(({ value, i18nKey }) => (
                 <Tabs.Trigger key={value} value={value}>
                   <Tabs.Label className={cn(activeFilterType === value ? 'text-brand-300' : undefined)}>

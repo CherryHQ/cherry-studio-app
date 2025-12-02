@@ -7,14 +7,12 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaContainer, YStack } from '@/componentsV2'
 import { ModelTabContent } from '@/componentsV2/features/Assistant/ModelTabContent'
 import { useAssistant } from '@/hooks/useAssistant'
-import { useTheme } from '@/hooks/useTheme'
 import type { AssistantDetailTabParamList } from '@/navigators/AssistantDetailTabNavigator'
 
 type ModelTabRouteProp = RouteProp<AssistantDetailTabParamList, 'ModelTab'>
 
 export default function ModelTabScreen() {
   const route = useRoute<ModelTabRouteProp>()
-  const { isDark } = useTheme()
   const { assistant: _assistant } = route.params
   const { assistant, updateAssistant } = useAssistant(_assistant.id)
 
@@ -28,7 +26,7 @@ export default function ModelTabScreen() {
 
   return (
     <KeyboardAwareScrollView
-      className={`flex-1 ${isDark ? 'bg-[#121213ff]' : 'bg-[#f7f7f7ff]'}`}
+      className="flex-1"
       contentContainerStyle={{ flexGrow: 1 }}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
