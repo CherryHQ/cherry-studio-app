@@ -37,9 +37,7 @@ export const ChatScreenHeader = ({ topic }: HeaderBarProps) => {
         <NewTopicButton assistant={assistant} />
         <HistoryTopicButton assistant={assistant} />
       </XStack>
-      <XStack
-        pointerEvents="box-none"
-        className="absolute inset-y-0 left-3.5 right-3.5 items-center justify-center">
+      <XStack className="absolute inset-y-0 left-3.5 right-3.5 items-center justify-center">
         <AssistantSelection assistant={assistant} topic={topic} />
       </XStack>
     </XStack>
