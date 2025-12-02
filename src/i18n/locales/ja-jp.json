@@ -929,6 +929,14 @@
         "recent": "最近のトピック"
       }
     },
+    "voice": {
+      "error": "音声認識エラー",
+      "not_available": "音声認識は利用できません",
+      "permission_denied": "マイクの権限が拒否されました",
+      "permission_denied_message": "設定でCherry Studioにマイクへのアクセスを許可してください",
+      "start": "音声入力を開始",
+      "stop": "音声入力を停止"
+    },
     "update": {
       "got_it": "了解",
       "later": "後で",

@@ -18,6 +18,7 @@ import {
   CircleCheck,
   CircleDollarSign,
   CirclePause,
+  CircleStop,
   CircleUserRound,
   Clock,
   Cloud,
@@ -46,6 +47,7 @@ import {
   Menu,
   MessageSquareDiff,
   MessageSquareMore,
+  Mic,
   Minus,
   MoreHorizontal,
   Package,
@@ -65,6 +67,7 @@ import {
   Share,
   ShieldCheck,
   Sparkles,
+  Square,
   SquareFunction,
   Store,
   TextSelect,
@@ -114,6 +117,7 @@ const ClockIcon = createIcon(Clock)
 const CircleCheckIcon = createIcon(CircleCheck)
 const CircleDollarSignIcon = createIcon(CircleDollarSign)
 const CirclePauseIcon = createIcon(CirclePause)
+const CircleStopIcon = createIcon(CircleStop)
 const CloudIcon = createIcon(Cloud)
 const CopyIcon = createIcon(Copy)
 const CopyrightIcon = createIcon(Copyright)
@@ -141,11 +145,13 @@ const MailIcon = createIcon(Mail)
 const MenuIcon = createIcon(Menu)
 const MessageSquareDiffIcon = createIcon(MessageSquareDiff)
 const MessageSquareMoreIcon = createIcon(MessageSquareMore)
+const MicIcon = createIcon(Mic)
 const MinusIcon = createIcon(Minus)
 const MoreHorizontalIcon = createIcon(MoreHorizontal)
 const PackageIcon = createIcon(Package)
 const PenLineIcon = createIcon(PenLine)
 const PlusIcon = createIcon(Plus)
+const SquareIcon = createIcon(Square)
 const SquareFunctionIcon = createIcon(SquareFunction)
 const RefreshCwIcon = createIcon(RefreshCw)
 const Repeat2Icon = createIcon(Repeat2)
@@ -188,6 +194,7 @@ export {
   CircleCheckIcon as CircleCheck,
   CircleDollarSignIcon as CircleDollarSign,
   CirclePauseIcon as CirclePause,
+  CircleStopIcon as CircleStop,
   CircleUserRoundIcon as CircleUserRound,
   ClockIcon as Clock,
   CloudIcon as Cloud,
@@ -216,6 +223,7 @@ export {
   MenuIcon as Menu,
   MessageSquareDiffIcon as MessageSquareDiff,
   MessageSquareMoreIcon as MessageSquareMore,
+  MicIcon as Mic,
   MinusIcon as Minus,
   MoreHorizontalIcon as MoreHorizontal,
   PackageIcon as Package,
@@ -235,6 +243,7 @@ export {
   ShareIcon as Share,
   ShieldCheckIcon as ShieldCheck,
   SparklesIcon as Sparkles,
+  SquareIcon as Square,
   SquareFunctionIcon as SquareFunction,
   StoreIcon as Store,
   TextSelectIcon as TextSelect,

@@ -74,8 +74,6 @@ TOP_ENTRY_IMPLEMENTATION.md
 .codex/
 .gemini/
 .qwen/
-
-plan/
-
+plan/*
 # coverage
 coverage/

@@ -929,6 +929,14 @@
         "recent": "Recent Topics"
       }
     },
+    "voice": {
+      "error": "Speech recognition error",
+      "not_available": "Speech recognition is not available",
+      "permission_denied": "Microphone permission denied",
+      "permission_denied_message": "Please allow Cherry Studio to access your microphone in Settings",
+      "start": "Start voice input",
+      "stop": "Stop voice input"
+    },
     "update": {
       "got_it": "Got it",
       "later": "Later",

@@ -1,5 +1,5 @@
 import { AnimatePresence, MotiView } from 'moti'
-import React from 'react'
+import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Platform, View } from 'react-native'
 
@@ -19,6 +19,7 @@ import { SendButton } from './SendButton'
 import { ThinkButton } from './ThinkButton'
 import { ToolButton } from './ToolButton'
 import { ToolPreview } from './ToolPreview'
+import { VoiceButton } from './VoiceButton'
 
 interface MessageInputProps {
   topic: Topic
@@ -32,6 +33,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
   const bottomPad = useBottom()
   const { text, setText, files, setFiles, mentions, setMentions, isReasoning, sendMessage, onPause } =
     useMessageInputLogic(topic, assistant)
+  const [isVoiceActive, setIsVoiceActive] = useState(false)
 
   return (
     <View
@@ -86,7 +88,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
             />
             <McpButton assistant={assistant} updateAssistant={updateAssistant} />
           </XStack>
-          <XStack className="items-center gap-5">
+          <XStack className="items-center gap-2.5">
             <AnimatePresence exitBeforeEnter>
               {topic.isLoading ? (
                 <MotiView
@@ -97,6 +99,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
                   transition={{ type: 'timing', duration: 200 }}>
                   <PauseButton onPause={onPause} />
                 </MotiView>
+              ) : isVoiceActive || !text ? (
+                <MotiView
+                  key="voice-button"
+                  from={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ type: 'timing', duration: 200 }}>
+                  <VoiceButton onTranscript={newText => setText(newText)} onListeningChange={setIsVoiceActive} />
+                </MotiView>
               ) : (
                 <MotiView
                   key="send-button"
@@ -104,7 +115,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.5 }}
                   transition={{ type: 'timing', duration: 200 }}>
-                  <SendButton onSend={sendMessage} disabled={!text} />
+                  <SendButton onSend={sendMessage} />
                 </MotiView>
               )}
             </AnimatePresence>

@@ -929,6 +929,14 @@
         "recent": "最近的主題"
       }
     },
+    "voice": {
+      "error": "語音識別出錯",
+      "not_available": "語音識別不可用",
+      "permission_denied": "麥克風權限被拒絕",
+      "permission_denied_message": "請在設定中允許 Cherry Studio 存取麥克風",
+      "start": "開始語音輸入",
+      "stop": "停止語音輸入"
+    },
     "update": {
       "got_it": "知道了",
       "later": "稍後再說",

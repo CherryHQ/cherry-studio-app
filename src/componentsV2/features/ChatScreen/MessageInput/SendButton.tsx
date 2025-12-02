@@ -5,20 +5,18 @@ import { ArrowUp } from '@/componentsV2/icons'
 
 interface SendButtonProps {
   onSend: () => void
-  disabled?: boolean
 }
 
-export const SendButton: React.FC<SendButtonProps> = ({ onSend, disabled = false }) => {
+export const SendButton: React.FC<SendButtonProps> = ({ onSend }) => {
   return (
     <IconButton
-      icon={<ArrowUp className={`${disabled ? 'text-text-primary' : '#ffffff'}`} size={24} />}
-      onPress={disabled ? undefined : onSend}
+      icon={<ArrowUp size={24} />}
+      onPress={onSend}
       style={{
         borderRadius: 99,
         padding: 3,
-        backgroundColor: disabled ? '#a0a1b099' : '#81df94'
+        backgroundColor: '#81df94'
       }}
-      disabled={disabled}
     />
   )
 }
