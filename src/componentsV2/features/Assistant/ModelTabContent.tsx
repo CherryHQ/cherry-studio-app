@@ -138,7 +138,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
               onEndEditing={() => {
                 const parsedValue = parseInt(contextInput)
 
-                if (!isNaN(parsedValue) && parsedValue >= 0 && parsedValue <= 30) {
+                if (!isNaN(parsedValue) && parsedValue >= 0 && parsedValue <= 100) {
                   handleSettingsChange('contextCount', parsedValue)
                 } else {
                   setContextInput((settings.contextCount ?? DEFAULT_CONTEXTCOUNT).toString())

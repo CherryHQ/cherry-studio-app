@@ -3,7 +3,7 @@
  */
 export const DEFAULT_TIMEOUT = 5 * 1000 * 60
 export const DEFAULT_TEMPERATURE = 0.7
-export const DEFAULT_CONTEXTCOUNT = 5
+export const DEFAULT_CONTEXTCOUNT = 20
 export const DEFAULT_MAX_TOKENS = 4096
 export const SYSTEM_PROMPT_THRESHOLD = 128
 export const DEFAULT_KNOWLEDGE_DOCUMENT_COUNT = 6
