@@ -84,7 +84,7 @@ export async function buildStreamTextParams(
 
   // 判断是否使用内置搜索
   // 条件：没有外部搜索提供商 && (用户开启了内置搜索 || 模型强制使用内置搜索)
-  const hasExternalSearch = !!options.webSearchProviderId
+  const hasExternalSearch = !!options.webSearchProviderId && options.webSearchProviderId !== 'builtin'
   const enableWebSearch =
     !hasExternalSearch &&
     ((assistant.enableWebSearch && isWebSearchModel(model)) ||

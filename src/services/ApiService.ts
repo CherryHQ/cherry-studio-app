@@ -60,7 +60,8 @@ export async function fetchChatCompletion({
   const {
     params: aiSdkParams,
     modelId,
-    capabilities
+    capabilities,
+    webSearchPluginConfig
   } = await buildStreamTextParams(messages, assistant, provider, {
     mcpTools: mcpTools,
     webSearchProviderId: assistant.webSearchProviderId,
@@ -79,7 +80,8 @@ export async function fetchChatCompletion({
     enableGenerateImage: capabilities.enableGenerateImage,
     enableUrlContext: capabilities.enableUrlContext,
     mcpTools,
-    uiMessages
+    uiMessages,
+    webSearchPluginConfig
   }
 
   // --- Call AI Completions ---

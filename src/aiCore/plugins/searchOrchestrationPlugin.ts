@@ -260,8 +260,8 @@ export const searchOrchestrationPlugin = (assistant: Assistant, topicId: string)
           params.tools = {}
         }
 
-        // 🌐 网络搜索工具配置
-        if (analysisResult?.websearch && assistant.webSearchProviderId) {
+        // 🌐 网络搜索工具配置 (排除 builtin，builtin 使用模型原生搜索能力)
+        if (analysisResult?.websearch && assistant.webSearchProviderId && assistant.webSearchProviderId !== 'builtin') {
           const needsSearch = analysisResult.websearch.question && analysisResult.websearch.question[0] !== 'not_needed'
 
           if (needsSearch) {
