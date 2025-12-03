@@ -16,7 +16,7 @@
     "typecheck": "npx tsc --noEmit",
     "lint": "eslint . --fix",
     "format": "prettier --write .",
-    "check": "yarn check:i18n && yarn lint:check && yarn format:check",
+    "check": "yarn typecheck &&yarn check:i18n && yarn lint && yarn format",
     "eas-build-pre-install": "corepack enable && yarn set version 4",
     "analyze:ios": "source-map-explorer 'dist/_expo/static/js/ios/*.js' 'dist/_expo/static/js/ios/*.js.map'",
     "analyze:android": "source-map-explorer 'dist/_expo/static/js/android/*.js' 'dist/_expo/static/js/android/*.js.map'"

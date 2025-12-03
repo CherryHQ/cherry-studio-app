@@ -197,7 +197,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
                 <Text className="flex-1">{t('assistants.settings.reasoning.label')}</Text>
 
                 <YStack className="justify-end">
-                  <Text className="primary-badge rounded-lg border-[0.5px] px-2 py-[2px] text-sm">
+                  <Text className="primary-badge rounded-lg border-[0.5px] px-2 py-0.5 text-sm">
                     {t(`assistants.settings.reasoning.${settings.reasoning_effort || 'off'}`)}
                   </Text>
                 </YStack>

@@ -58,7 +58,7 @@ const AssistantItemCard = ({ assistant, onAssistantPress }: AssistantItemCardPro
             {assistant.name}
           </Text>
           <YStack className="flex-1 items-center justify-between">
-            <Text className="text-foreground-secondary text-xs leading-[14px]" numberOfLines={3} ellipsizeMode="tail">
+            <Text className="text-foreground-secondary leading-3.5 text-xs" numberOfLines={3} ellipsizeMode="tail">
               {assistant.description}
             </Text>
             <XStack className="h-[18px] flex-wrap justify-center gap-2.5 overflow-hidden">

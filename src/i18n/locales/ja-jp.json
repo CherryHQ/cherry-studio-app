@@ -346,8 +346,10 @@
         "title": "MCP市場"
       },
       "server": {
-        "empty": "MCPサーバーがありません...",
-        "empty.add": "[to be translated]:前往添加MCP服务器",
+        "empty": {
+          "add": "MCPサーバーを追加する",
+          "label": "MCPサーバーがありません..."
+        },
         "selected": "選択された{{num}}個のMCPサーバー",
         "title": "MCPサーバー"
       },
@@ -929,14 +931,6 @@
         "recent": "最近のトピック"
       }
     },
-    "voice": {
-      "error": "音声認識エラー",
-      "not_available": "音声認識は利用できません",
-      "permission_denied": "マイクの権限が拒否されました",
-      "permission_denied_message": "設定でCherry Studioにマイクへのアクセスを許可してください",
-      "start": "音声入力を開始",
-      "stop": "音声入力を停止"
-    },
     "update": {
       "got_it": "了解",
       "later": "後で",
@@ -944,6 +938,14 @@
       "new_version_content": "バージョン {{version}} が利用可能です。今すぐ更新しますか？",
       "new_version_content_ios": "バージョン {{version}} が利用可能です。TestFlightで更新してください。",
       "update_now": "今すぐ更新"
+    },
+    "voice": {
+      "error": "音声認識エラー",
+      "not_available": "音声認識は利用できません",
+      "permission_denied": "マイクの権限が拒否されました",
+      "permission_denied_message": "設定でCherry Studioにマイクへのアクセスを許可してください",
+      "start": "音声入力を開始",
+      "stop": "音声入力を停止"
     }
   }
 }

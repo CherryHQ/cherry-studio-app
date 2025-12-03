@@ -50,7 +50,7 @@ export default function WebSearchProviderSettingsScreen() {
       <SafeAreaContainer>
         <HeaderBar title={t('settings.provider.not_found')} />
         <Container>
-          <Text className="py-6 text-center text-zinc-400/400">{t('settings.provider.not_found_message')}</Text>
+          <Text className="text-zinc-400/400 py-6 text-center">{t('settings.provider.not_found_message')}</Text>
         </Container>
       </SafeAreaContainer>
     )

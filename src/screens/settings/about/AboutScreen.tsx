@@ -71,7 +71,7 @@ export default function AboutScreen() {
           <Group>
             <PressableRow
               onPress={async () => await openLink('https://github.com/CherryHQ/cherry-studio-app/releases/')}>
-              <XStack className="items-center gap-[10px]">
+              <XStack className="items-center gap-2.5">
                 <Rss size={20} />
                 <Text>{t('settings.about.releases.title')}</Text>
               </XStack>

@@ -3,7 +3,14 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
-import { Container, DrawerGestureWrapper, GridSkeleton, HeaderBar, SafeAreaContainer, SearchInput } from '@/componentsV2'
+import {
+  Container,
+  DrawerGestureWrapper,
+  GridSkeleton,
+  HeaderBar,
+  SafeAreaContainer,
+  SearchInput
+} from '@/componentsV2'
 import { presentAssistantItemSheet } from '@/componentsV2/features/Assistant/AssistantItemSheet'
 import AssistantsTabContent from '@/componentsV2/features/Assistant/AssistantsTabContent'
 import { Menu } from '@/componentsV2/icons'

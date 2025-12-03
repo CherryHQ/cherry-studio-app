@@ -5,14 +5,14 @@ import { getLowerBaseModelName } from '@/utils/naming'
 
 import { WEB_SEARCH_PROMPT_FOR_OPENROUTER } from '../prompts'
 import { getWebSearchTools } from '../tools'
-import { isGPT5SeriesModel,isGPT51SeriesModel } from './base'
+import { isGPT5SeriesModel, isGPT51SeriesModel } from './base'
 import { isEmbeddingModel, isRerankModel } from './embedding'
 import { isOpenAIReasoningModel } from './reasoning'
 import { isGenerateImageModel, isTextToImageModel, isVisionModel } from './vision'
 import { isOpenAIWebSearchChatCompletionOnlyModel } from './websearch'
 
 // Re-export from base for backward compatibility
-export { isAnthropicModel, isGPT5ProModel, isGPT5SeriesModel,isGPT51SeriesModel } from './base'
+export { isAnthropicModel, isGPT5ProModel, isGPT5SeriesModel, isGPT51SeriesModel } from './base'
 export const NOT_SUPPORTED_REGEX = /(?:^tts|whisper|speech)/i
 
 export const OPENAI_NO_SUPPORT_DEV_ROLE_MODELS = ['o1-preview', 'o1-mini']
@@ -207,7 +207,6 @@ export const isVisionModels = (models: Model[]) => {
 export const isGenerateImageModels = (models: Model[]) => {
   return models.every(model => isGenerateImageModel(model))
 }
-
 
 export const isQwenMTModel = (model: Model): boolean => {
   const modelId = getLowerBaseModelName(model.id)

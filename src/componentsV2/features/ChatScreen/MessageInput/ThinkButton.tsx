@@ -51,7 +51,5 @@ export const ThinkButton: React.FC<ThinkButtonProps> = ({ assistant, updateAssis
     })
   }
 
-  return (
-    <IconButton icon={getIcon()} onPress={handlePress} />
-  )
+  return <IconButton icon={getIcon()} onPress={handlePress} />
 }
