@@ -1,7 +1,7 @@
 import type { NavigationProp, ParamListBase } from '@react-navigation/native'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import { File } from 'expo-file-system'
-import { Spinner } from 'heroui-native'
+import { Button, Spinner } from 'heroui-native'
 import React, { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -28,7 +28,7 @@ export default function LandropSettingsScreen() {
   const route = useRoute<LandropSettingsRouteProp>()
   const { setWelcomeShown } = useAppState()
   const { switchTopic } = useCurrentTopic()
-  const { status, filename, connect, disconnect } = useWebSocket()
+  const { status, filename, connect, disconnect, errorMessage } = useWebSocket()
   const dialog = useDialog()
   const [scannedIP, setScannedIP] = useState<string | null>(null)
   const [hasShownDisconnectDialog, setHasShownDisconnectDialog] = useState(false)
@@ -162,13 +162,34 @@ export default function LandropSettingsScreen() {
     navigation.goBack()
   }
 
+  const handleRetryScan = () => {
+    setScannedIP(null)
+    hasScannedRef.current = false
+    disconnect()
+  }
+
   const showLoading = status === WebSocketStatus.CONNECTING || status === WebSocketStatus.CONNECTED
+  const showErrorState = status === WebSocketStatus.ERROR && !isModalOpen
 
   return (
     <SafeAreaContainer>
       <HeaderBar title={t('settings.data.landrop.scan_qr_code.title')} />
 
       {!isModalOpen && !scannedIP && <QRCodeScanner onQRCodeScanned={handleQRCodeScanned} />}
+
+      {showErrorState && (
+        <YStack className="flex-1 items-center justify-center px-6">
+          <Text className="text-error-base text-lg font-semibold">{t('settings.data.landrop.status.error')}</Text>
+          <Text className="mt-2 text-center text-base">
+            {errorMessage || t('settings.data.landrop.scan_qr_code.connection_error_message')}
+          </Text>
+          <Button className="secondary-container mt-6 rounded-xl border" onPress={handleRetryScan}>
+            <Button.Label className="primary-text">
+              {t('settings.data.landrop.scan_qr_code.retry_scan_button')}
+            </Button.Label>
+          </Button>
+        </YStack>
+      )}
 
       {showLoading && (
         <YStack

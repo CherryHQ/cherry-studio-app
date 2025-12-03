@@ -27,6 +27,7 @@ export function useWebSocket() {
   const [status, setStatus] = useState<WebSocketStatus>(WebSocketStatus.IDLE)
   const [progress, setProgress] = useState<number>(0)
   const [filename, setFilename] = useState<string>('')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
     return () => {
@@ -82,6 +83,7 @@ export function useWebSocket() {
     }
 
     try {
+      setErrorMessage(null)
       setStatus(WebSocketStatus.CONNECTING)
 
       // Sort candidates by priority (lower number = higher priority)
@@ -108,6 +110,7 @@ export function useWebSocket() {
 
       // If no candidates worked
       if (!socket.current) {
+        setErrorMessage('Failed to connect to any IP candidate')
         throw new Error('Failed to connect to any IP candidate')
       }
 
@@ -140,6 +143,7 @@ export function useWebSocket() {
       // 连接错误
       socket.current.on('connect_error', error => {
         logger.error('WebSocket connection error:', error)
+        setErrorMessage(error.message || 'Connection failed')
         setStatus(WebSocketStatus.ERROR)
         socket.current = null
       })
@@ -188,5 +192,5 @@ export function useWebSocket() {
     socket.current = null
   }
 
-  return { connect, status, progress, filename, disconnect }
+  return { connect, status, progress, filename, disconnect, errorMessage }
 }
