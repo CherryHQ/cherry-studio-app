@@ -103,8 +103,9 @@ export const ToolSheet: React.FC = () => {
         dismissible
         dimmed
         onDidDismiss={() => setIsVisible(false)}
-        onDidPresent={() => setIsVisible(true)}>
-        <View style={{ paddingBottom: bottom }}>
+        onDidPresent={() => setIsVisible(true)}
+        style={{ paddingBottom: bottom + 10 }}>
+        <View>
           <YStack className="gap-3 pt-5">
             <SystemTools onCameraPress={handleCameraPress} onImagePress={handleAddImage} onFilePress={handleAddFile} />
             {assistant && updateAssistant && (
