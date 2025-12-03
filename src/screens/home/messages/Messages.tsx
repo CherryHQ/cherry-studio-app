@@ -103,7 +103,7 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
   }
 
   return (
-    <View className="flex-1 py-4">
+    <View className="flex-1">
       <LegendList
         ref={legendListRef}
         showsVerticalScrollIndicator={false}
@@ -147,11 +147,9 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    right: '50%',
+    left: 0,
+    right: 0,
     bottom: 8,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
     alignItems: 'center'
   }
 })
