@@ -542,6 +542,7 @@
           "confirm_warning": "局域网传输将使用接收到的数据覆盖当前所有应用数据。",
           "filename": "文件名",
           "scan_qr_code": {
+            "connection_error_message": "连接失败，请检查局域网状态并重新扫描二维码。",
             "connecting": "正在连接...",
             "connection_error_message": "连接失败，请检查局域网状态并重新扫描二维码。",
             "description": "请使用Cherry Studio扫码",
