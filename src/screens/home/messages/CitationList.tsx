@@ -39,7 +39,7 @@ const CitationsList: React.FC<CitationsListProps> = ({ citations }) => {
   return (
     <YStack className="my-[6px]">
       <TouchableOpacity
-        className="primary-container h-7 flex-row items-center gap-2 self-start rounded-lg border px-2"
+        className="secondary-container h-7 flex-row items-center gap-2 self-start rounded-lg border px-2"
         onPress={handlePress}>
         <View className="flex-row items-center">
           {previewItems.map((c, i) => (
