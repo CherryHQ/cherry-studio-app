@@ -16,6 +16,7 @@ import type { SdkModel } from '@/types/sdk'
 import type { MCPTool } from '@/types/tool'
 import { isPromptToolUse, isSupportedToolUse } from '@/utils/mcpTool'
 import { filterMainTextMessages } from '@/utils/messageUtils/filters'
+import { hasApiKey } from '@/utils/providerUtils'
 
 import AiProviderNew from '../aiCore/index_new'
 import { assistantService, getDefaultModel } from './AssistantService'
@@ -103,12 +104,6 @@ export async function fetchModels(provider: Provider): Promise<SdkModel[]> {
     logger.error('fetchChatCompletion', error as Error)
     return []
   }
-}
-
-export function hasApiKey(provider: Provider) {
-  if (!provider) return false
-  if (['ollama', 'lmstudio', 'vertexai', 'copilot', 'cherryai'].includes(provider.id)) return true
-  return !isEmpty(provider.apiKey)
 }
 
 export function checkApiProvider(provider: Provider): void {

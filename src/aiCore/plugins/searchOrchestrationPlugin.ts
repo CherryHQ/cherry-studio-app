@@ -15,13 +15,13 @@ import {
   SEARCH_SUMMARY_PROMPT_KNOWLEDGE_ONLY,
   SEARCH_SUMMARY_PROMPT_WEB_ONLY
 } from '@/config/prompts'
-import { hasApiKey } from '@/services/ApiService'
 import { getDefaultModel } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
 import { getProviderByModel } from '@/services/ProviderService'
 import type { Assistant } from '@/types/assistant'
 import type { ExtractResults } from '@/types/extract'
 import { extractInfoFromXML } from '@/utils/extract'
+import { hasApiKey } from '@/utils/providerUtils'
 
 import { webSearchToolWithPreExtractedKeywords } from '../tools/WebSearchTool'
 
