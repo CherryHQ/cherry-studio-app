@@ -5,6 +5,7 @@ import { Pressable } from 'react-native'
 
 import { MessageSquareDiff } from '@/componentsV2/icons/LucideIcon'
 import { useCurrentTopic } from '@/hooks/useTopic'
+import { assistantService } from '@/services/AssistantService'
 import { topicService } from '@/services/TopicService'
 import type { Assistant } from '@/types/assistant'
 import type { DrawerNavigationProps } from '@/types/naviagate'
@@ -19,6 +20,11 @@ export const NewTopicButton: React.FC<NewTopicButtonProps> = ({ assistant }) => 
 
   const handleAddNewTopic = async (selectedAssistant?: Assistant) => {
     const targetAssistant = selectedAssistant || assistant
+
+    // Reset model to defaultModel when creating new topic
+    if (targetAssistant.defaultModel && targetAssistant.model?.id !== targetAssistant.defaultModel.id) {
+      await assistantService.updateAssistant(targetAssistant.id, { model: targetAssistant.defaultModel })
+    }
 
     // Check if the newest topic has messages
     const newestTopic = await topicService.getNewestTopic()

@@ -9,11 +9,7 @@ import { useMessageOperations } from '@/hooks/useMessageOperation'
 import { useAllProviders } from '@/hooks/useProviders'
 import { saveTextAsFile } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
-import {
-  editUserMessageAndRegenerate,
-  getUserMessage,
-  sendMessage as _sendMessage
-} from '@/services/MessagesService'
+import { editUserMessageAndRegenerate, getUserMessage, sendMessage as _sendMessage } from '@/services/MessagesService'
 import { topicService } from '@/services/TopicService'
 import type { Assistant, Model, Topic } from '@/types/assistant'
 import type { FileMetadata } from '@/types/file'
@@ -73,7 +69,7 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
   }
 
   useEffect(() => {
-    setMentions(assistant.defaultModel ? [assistant.defaultModel] : [])
+    setMentions(assistant.model ? [assistant.model] : assistant.defaultModel ? [assistant.defaultModel] : [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topic.id])
 
@@ -120,13 +116,7 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
       await topicService.updateTopic(topic.id, { isLoading: true })
 
       try {
-        await editUserMessageAndRegenerate(
-          currentEditingMessage.id,
-          currentText,
-          currentFiles,
-          assistant,
-          topic.id
-        )
+        await editUserMessageAndRegenerate(currentEditingMessage.id, currentText, currentFiles, assistant, topic.id)
       } catch (error) {
         logger.error('Error editing message:', error)
       }
