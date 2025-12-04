@@ -346,8 +346,10 @@
         "title": "MCP市场"
       },
       "server": {
-        "empty": "暂无MCP服务器...",
-        "empty.add": "前往添加MCP服务器",
+        "empty": {
+          "add": "前往添加MCP服务器",
+          "label": "暂无MCP服务器..."
+        },
         "selected": "已选择{{num}}个MCP服务器",
         "title": "MCP服务器"
       },
@@ -376,6 +378,7 @@
       "delete_topic": "删除话题",
       "delete_topic_confirmation": "您确定要删除这个话题吗？",
       "delete_translation": "删除翻译",
+      "editing_message": "编辑",
       "marked_as_best_answer": "已标记为最佳回复",
       "searching": "正在搜索...",
       "share_message": "分享消息",
@@ -540,6 +543,7 @@
           "filename": "文件名",
           "scan_qr_code": {
             "connecting": "正在连接...",
+            "connection_error_message": "连接失败，请检查局域网状态并重新扫描二维码。",
             "description": "请使用Cherry Studio扫码",
             "disconnected_message": "Landrop 连接已断开，请重试。",
             "disconnected_title": "连接已断开",
@@ -547,6 +551,7 @@
             "permission_denied": "未获得相机权限。请在设备设置中启用相机权限以扫描二维码。",
             "processing": "正在处理二维码...",
             "requesting_permission": "正在请求相机权限...",
+            "retry_scan_button": "重新扫描",
             "success": "连接成功 🎉",
             "success_description": "现在可以点击发送按钮来恢复数据了！",
             "title": "扫描二维码",
@@ -929,14 +934,6 @@
         "recent": "最近的话题"
       }
     },
-    "voice": {
-      "error": "语音识别出错",
-      "not_available": "语音识别不可用",
-      "permission_denied": "麦克风权限被拒绝",
-      "permission_denied_message": "请在设置中允许 Cherry Studio 访问麦克风",
-      "start": "开始语音输入",
-      "stop": "停止语音输入"
-    },
     "update": {
       "got_it": "知道了",
       "later": "稍后再说",
@@ -944,6 +941,14 @@
       "new_version_content": "新版本 {{version}} 已发布，是否立即更新？",
       "new_version_content_ios": "新版本 {{version}} 已发布，请前往 TestFlight 更新。",
       "update_now": "立即更新"
+    },
+    "voice": {
+      "error": "语音识别出错",
+      "not_available": "语音识别不可用",
+      "permission_denied": "麦克风权限被拒绝",
+      "permission_denied_message": "请在设置中允许 Cherry Studio 访问麦克风",
+      "start": "开始语音输入",
+      "stop": "停止语音输入"
     }
   }
 }

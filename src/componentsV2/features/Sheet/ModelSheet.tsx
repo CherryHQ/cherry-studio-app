@@ -198,7 +198,7 @@ const ModelSheet: React.FC = () => {
   const DRAW_DISTANCE = 800
 
   const listHeaderComponent = (
-    <YStack className="gap-4 pb-2 pt-5">
+    <YStack className="h-20 gap-4">
       <XStack className="flex-1 items-center justify-center gap-[5px]">
         <YStack className="flex-1">
           <SearchInput

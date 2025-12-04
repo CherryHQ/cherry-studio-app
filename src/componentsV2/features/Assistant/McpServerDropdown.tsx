@@ -71,7 +71,7 @@ export function McpServerDropdown({ assistant, updateAssistant }: McpServerDropd
           <Text className="text-foreground-secondary text-sm">{t('mcp.server.selected', { num: activeMcpCount })}</Text>
         ) : (
           <Text className="text-foreground-secondary text-sm" numberOfLines={1}>
-            {t('mcp.server.empty')}
+            {t('mcp.server.empty.label')}
           </Text>
         )}
         <ChevronsUpDown size={16} className="text-foreground-secondary " />

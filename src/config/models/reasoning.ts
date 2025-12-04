@@ -8,8 +8,8 @@ import type {
 import { isUserSelectedModelType } from '@/utils/model'
 import { getLowerBaseModelName } from '@/utils/naming'
 
+import { isGPT5ProModel, isGPT5SeriesModel, isGPT51SeriesModel } from './base'
 import { isEmbeddingModel, isRerankModel } from './embedding'
-import { isGPT5ProModel, isGPT5SeriesModel, isGPT51SeriesModel } from './utils'
 import { isTextToImageModel } from './vision'
 import { GEMINI_FLASH_MODEL_REGEX, isOpenAIDeepResearchModel } from './websearch'
 

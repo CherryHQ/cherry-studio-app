@@ -24,7 +24,10 @@ import { loggerService } from '@/services/LoggerService'
 import type { AssistantDetailScreenParams, DrawerNavigationProps } from '@/types/naviagate'
 const logger = loggerService.withContext('AssistantDetailScreen')
 
-type AssistantDetailRouteProp = RouteProp<{ AssistantDetailScreen: AssistantDetailScreenParams }, 'AssistantDetailScreen'>
+type AssistantDetailRouteProp = RouteProp<
+  { AssistantDetailScreen: AssistantDetailScreenParams },
+  'AssistantDetailScreen'
+>
 
 export default function AssistantDetailScreen() {
   const { t } = useTranslation()

@@ -90,7 +90,7 @@ function AssistantSettingItem({
   return (
     <>
       <YStack className="gap-2">
-        <XStack className="items-center justify-between px-[10px]">
+        <XStack className="items-center justify-between px-2.5">
           <XStack className="items-center gap-2">
             {icon}
             <Text className="text-foreground-secondary font-semibold">{t(titleKey)}</Text>
@@ -101,7 +101,7 @@ function AssistantSettingItem({
           />
         </XStack>
         <ModelPicker assistant={assistant} onPress={handlePress} />
-        <Text className="text-foreground-secondary px-[10px] opacity-70">{t(descriptionKey)}</Text>
+        <Text className="text-foreground-secondary px-2.5 opacity-70">{t(descriptionKey)}</Text>
       </YStack>
     </>
   )

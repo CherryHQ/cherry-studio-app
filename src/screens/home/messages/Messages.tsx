@@ -1,12 +1,14 @@
 import type { LegendListRef } from '@legendapp/list'
 import { LegendList } from '@legendapp/list'
+import { BlurView } from 'expo-blur'
 import { SymbolView } from 'expo-symbols'
 import { MotiView } from 'moti'
 import type { FC } from 'react'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
-import { StyleSheet, View } from 'react-native'
-import { useSharedValue } from 'react-native-reanimated'
+import { Platform, StyleSheet, View } from 'react-native'
+import Animated, { useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated'
+import { useSelector } from 'react-redux'
 
 import { YStack } from '@/componentsV2'
 import { LiquidGlassButton } from '@/componentsV2/base/LiquidGlassButton'
@@ -15,6 +17,7 @@ import { useInitialScrollToEnd } from '@/hooks/chat/useInitialScrollToEnd'
 import { useTopicBlocks } from '@/hooks/useMessageBlocks'
 import { useMessages } from '@/hooks/useMessages'
 import { useTheme } from '@/hooks/useTheme'
+import type { RootState } from '@/store'
 import type { Assistant, Topic } from '@/types/assistant'
 import type { GroupedMessage } from '@/types/message'
 import { isIOS } from '@/utils/device'
@@ -22,6 +25,8 @@ import { getGroupedMessages } from '@/utils/messageUtils/filters'
 
 import WelcomeContent from '../WelcomeContent'
 import MessageGroup from './MessageGroup'
+
+const AnimatedBlurView = Animated.createAnimatedComponent(BlurView)
 
 interface MessagesProps {
   assistant: Assistant
@@ -35,6 +40,21 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
   const groupedMessages = Object.entries(getGroupedMessages(messages))
   const legendListRef = useRef<LegendListRef>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
+
+  // Editing state
+  const editingMessage = useSelector((state: RootState) => state.runtime.editingMessage)
+  const isEditing = !!editingMessage
+
+  // Blur animation
+  const blurIntensity = useSharedValue(0)
+
+  useEffect(() => {
+    blurIntensity.value = withTiming(isEditing ? 10 : 0, { duration: 200 })
+  }, [isEditing, blurIntensity])
+
+  const blurAnimatedProps = useAnimatedProps(() => ({
+    intensity: blurIntensity.value
+  }))
 
   // Initial scroll to end logic
   const listLayoutReady = useSharedValue(0)
@@ -103,7 +123,7 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
   }
 
   return (
-    <View className="flex-1 py-4">
+    <View className="flex-1">
       <LegendList
         ref={legendListRef}
         showsVerticalScrollIndicator={false}
@@ -122,6 +142,12 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
         keyboardShouldPersistTaps="never"
         keyboardDismissMode="on-drag"
         ListEmptyComponent={<WelcomeContent />}
+      />
+      <AnimatedBlurView
+        animatedProps={blurAnimatedProps}
+        experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : 'none'}
+        tint={isDark ? 'dark' : 'light'}
+        style={[styles.blurOverlay, { pointerEvents: isEditing ? 'auto' : 'none' }]}
       />
       {showScrollButton && (
         <MotiView
@@ -147,12 +173,17 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    right: '50%',
+    left: 0,
+    right: 0,
     bottom: 8,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
     alignItems: 'center'
+  },
+  blurOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0
   }
 })
 

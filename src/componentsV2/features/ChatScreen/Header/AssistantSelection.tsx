@@ -20,7 +20,8 @@ export const AssistantSelection: React.FC<AssistantSelectionProps> = ({ assistan
     navigation.navigate('AssistantDetailScreen', {
       assistantId: assistant.id,
       returnTo: 'chat',
-      topicId: topic.id
+      topicId: topic.id,
+      tab: 'model'
     })
   }
 
@@ -34,7 +35,7 @@ export const AssistantSelection: React.FC<AssistantSelectionProps> = ({ assistan
             </Text>
             <ChevronRight className="text-foreground-secondary" size={20} />
           </XStack>
-          <Text className="text-zinc-400/60 text-[11px]" ellipsizeMode="tail" numberOfLines={1}>
+          <Text className="text-[11px] text-zinc-400/60" ellipsizeMode="tail" numberOfLines={1}>
             {topic.name}
           </Text>
         </YStack>

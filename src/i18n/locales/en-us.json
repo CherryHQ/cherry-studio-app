@@ -346,8 +346,10 @@
         "title": "MCP Market"
       },
       "server": {
-        "empty": "No MCP servers available...",
-        "empty.add": "[to be translated]:前往添加MCP服务器",
+        "empty": {
+          "add": "Go to add MCP server",
+          "label": "No MCP servers available..."
+        },
         "selected": "{{num}} MCP servers selected",
         "title": "MCP Server"
       },
@@ -539,6 +541,7 @@
           "confirm_warning": "Landrop transfer will overwrite all current app data with the received data.",
           "filename": "File Name",
           "scan_qr_code": {
+            "connection_error_message": "Unable to connect. Please check your LAN and scan the QR code again.",
             "connecting": "Connecting...",
             "description": "Scan QR Code from Cherry Studio",
             "disconnected_message": "The Landrop connection was disconnected. Please try again.",
@@ -547,6 +550,7 @@
             "permission_denied": "Camera permission not granted. Please enable it in your device settings to scan QR codes.",
             "processing": "Processing QR code...",
             "requesting_permission": "Requesting camera permission...",
+            "retry_scan_button": "Scan Again",
             "success": "Connection Successful 🎉",
             "success_description": "You can now Click Send Button to Restore Data!",
             "title": "Scan QR Code",
@@ -929,14 +933,6 @@
         "recent": "Recent Topics"
       }
     },
-    "voice": {
-      "error": "Speech recognition error",
-      "not_available": "Speech recognition is not available",
-      "permission_denied": "Microphone permission denied",
-      "permission_denied_message": "Please allow Cherry Studio to access your microphone in Settings",
-      "start": "Start voice input",
-      "stop": "Stop voice input"
-    },
     "update": {
       "got_it": "Got it",
       "later": "Later",
@@ -944,6 +940,14 @@
       "new_version_content": "Version {{version}} is now available. Would you like to update?",
       "new_version_content_ios": "Version {{version}} is now available. Please update via TestFlight.",
       "update_now": "Update Now"
+    },
+    "voice": {
+      "error": "Speech recognition error",
+      "not_available": "Speech recognition is not available",
+      "permission_denied": "Microphone permission denied",
+      "permission_denied_message": "Please allow Cherry Studio to access your microphone in Settings",
+      "start": "Start voice input",
+      "stop": "Stop voice input"
     }
   }
 }

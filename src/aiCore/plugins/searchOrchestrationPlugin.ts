@@ -9,13 +9,13 @@
 import { type AiRequestContext, definePlugin } from '@cherrystudio/ai-core'
 // import { generateObject } from '@cherrystudio/ai-core'
 import { generateText, type LanguageModel, type ModelMessage } from 'ai'
-import { isEmpty } from 'lodash'
 
 import {
   SEARCH_SUMMARY_PROMPT,
   SEARCH_SUMMARY_PROMPT_KNOWLEDGE_ONLY,
   SEARCH_SUMMARY_PROMPT_WEB_ONLY
 } from '@/config/prompts'
+import { hasApiKey } from '@/services/ApiService'
 import { getDefaultModel } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
 import { getProviderByModel } from '@/services/ProviderService'
@@ -115,8 +115,26 @@ async function analyzeSearchIntent(
   const model = assistant.model || getDefaultModel()
   const provider = getProviderByModel(model)
 
-  if (!provider || isEmpty(provider.apiKey)) {
-    logger.error('Provider not found or missing API key')
+  if (!provider) {
+    logger.error('Provider not found for model', {
+      modelId: model.id,
+      modelName: model.name,
+      providerId: model.provider,
+      assistantId: assistant.id,
+      assistantName: assistant.name
+    })
+    return getFallbackResult()
+  }
+
+  if (!hasApiKey(provider)) {
+    logger.error('Provider API key is missing', {
+      modelId: model.id,
+      modelName: model.name,
+      providerId: provider.id,
+      providerName: provider.name,
+      assistantId: assistant.id,
+      assistantName: assistant.name
+    })
     return getFallbackResult()
   }
 
@@ -242,8 +260,8 @@ export const searchOrchestrationPlugin = (assistant: Assistant, topicId: string)
           params.tools = {}
         }
 
-        // 🌐 网络搜索工具配置
-        if (analysisResult?.websearch && assistant.webSearchProviderId) {
+        // 🌐 网络搜索工具配置 (排除 builtin，builtin 使用模型原生搜索能力)
+        if (analysisResult?.websearch && assistant.webSearchProviderId && assistant.webSearchProviderId !== 'builtin') {
           const needsSearch = analysisResult.websearch.question && analysisResult.websearch.question[0] !== 'not_needed'
 
           if (needsSearch) {

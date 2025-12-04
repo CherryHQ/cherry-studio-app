@@ -11,16 +11,15 @@ export const ListSkeleton = ({ variant = 'default', count = 3 }: ListSkeletonPro
   if (variant === 'model') {
     return (
       <View className="w-full gap-3">
-        {Array.from({ length: count }, (_, i) => i + 1).map((item) => (
+        {Array.from({ length: count }, (_, i) => i + 1).map(item => (
           <SkeletonGroup
             key={item}
             isLoading
             isSkeletonOnly
             animationType="shimmer"
-            className="flex-row items-center justify-between"
-          >
+            className="flex-row items-center justify-between">
             <View className="flex-1 flex-row items-center gap-2">
-              <SkeletonGroup.Item className="size-5 rounded-md" />
+              <SkeletonGroup.Item className="size-8 rounded-md" />
               <View className="flex-1 gap-1">
                 <SkeletonGroup.Item className="h-4 w-2/3 rounded-md" />
                 <View className="flex-row gap-1">
@@ -29,7 +28,7 @@ export const ListSkeleton = ({ variant = 'default', count = 3 }: ListSkeletonPro
                 </View>
               </View>
             </View>
-            <SkeletonGroup.Item className="size-[18px] rounded-full" />
+            <SkeletonGroup.Item className="size-5 rounded-full" />
           </SkeletonGroup>
         ))}
       </View>
@@ -39,14 +38,13 @@ export const ListSkeleton = ({ variant = 'default', count = 3 }: ListSkeletonPro
   if (variant === 'provider') {
     return (
       <View className="w-full gap-0">
-        {Array.from({ length: count }, (_, i) => i + 1).map((item) => (
+        {Array.from({ length: count }, (_, i) => i + 1).map(item => (
           <SkeletonGroup
             key={item}
             isLoading
             isSkeletonOnly
             animationType="shimmer"
-            className="flex-row items-center justify-between px-4 py-3"
-          >
+            className="flex-row items-center justify-between px-4 py-3">
             <View className="flex-row items-center gap-2">
               <SkeletonGroup.Item className="size-6 rounded-md" />
               <SkeletonGroup.Item className="h-5 w-24 rounded-md" />
@@ -64,14 +62,13 @@ export const ListSkeleton = ({ variant = 'default', count = 3 }: ListSkeletonPro
   if (variant === 'mcp') {
     return (
       <View className="w-full gap-2">
-        {Array.from({ length: count }, (_, i) => i + 1).map((item) => (
+        {Array.from({ length: count }, (_, i) => i + 1).map(item => (
           <SkeletonGroup
             key={item}
             isLoading
             isSkeletonOnly
             animationType="shimmer"
-            className="flex-row items-center justify-between rounded-2xl bg-card px-2.5 py-2.5"
-          >
+            className="bg-card flex-row items-center justify-between rounded-2xl px-2.5 py-2.5">
             <View className="flex-1 gap-2">
               <SkeletonGroup.Item className="h-5 w-1/3 rounded-md" />
               <SkeletonGroup.Item className="h-4 w-2/3 rounded-md" />
@@ -92,18 +89,15 @@ export const ListSkeleton = ({ variant = 'default', count = 3 }: ListSkeletonPro
 
   return (
     <View className={isCard ? 'w-full gap-2 px-4' : 'w-full gap-3 px-5'}>
-      {Array.from({ length: count }, (_, i) => i + 1).map((item) => (
+      {Array.from({ length: count }, (_, i) => i + 1).map(item => (
         <SkeletonGroup
           key={item}
           isLoading
           isSkeletonOnly
           animationType="shimmer"
           className={
-            isCard
-              ? 'flex-row items-center gap-3.5 rounded-2xl bg-card px-2.5 py-2.5'
-              : 'flex-row items-center gap-3'
-          }
-        >
+            isCard ? 'bg-card flex-row items-center gap-3.5 rounded-2xl px-2.5 py-2.5' : 'flex-row items-center gap-3'
+          }>
           <SkeletonGroup.Item className={`${avatarSize} ${avatarRadius}`} />
           <View className="flex-1 gap-1.5">
             <SkeletonGroup.Item className="h-4 w-full rounded-md" />

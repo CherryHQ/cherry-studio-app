@@ -49,7 +49,7 @@ export const SystemTools: React.FC<SystemToolsProps> = ({ onCameraPress, onImage
         <Button
           feedbackVariant="ripple"
           key={option.key}
-          className="bg-zinc-400/20 aspect-[1.618] flex-1 flex-col items-center justify-center gap-2 rounded-lg"
+          className="aspect-[1.618] flex-1 flex-col items-center justify-center gap-2 rounded-lg bg-zinc-400/20"
           onPress={option.onPress}>
           {option.icon}
           <Button.Label>

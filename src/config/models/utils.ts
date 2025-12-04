@@ -5,10 +5,14 @@ import { getLowerBaseModelName } from '@/utils/naming'
 
 import { WEB_SEARCH_PROMPT_FOR_OPENROUTER } from '../prompts'
 import { getWebSearchTools } from '../tools'
+import { isGPT5SeriesModel, isGPT51SeriesModel } from './base'
 import { isEmbeddingModel, isRerankModel } from './embedding'
 import { isOpenAIReasoningModel } from './reasoning'
 import { isGenerateImageModel, isTextToImageModel, isVisionModel } from './vision'
 import { isOpenAIWebSearchChatCompletionOnlyModel } from './websearch'
+
+// Re-export from base for backward compatibility
+export { isAnthropicModel, isGPT5ProModel, isGPT5SeriesModel, isGPT51SeriesModel } from './base'
 export const NOT_SUPPORTED_REGEX = /(?:^tts|whisper|speech)/i
 
 export const OPENAI_NO_SUPPORT_DEV_ROLE_MODELS = ['o1-preview', 'o1-mini']
@@ -204,15 +208,6 @@ export const isGenerateImageModels = (models: Model[]) => {
   return models.every(model => isGenerateImageModel(model))
 }
 
-export const isAnthropicModel = (model?: Model): boolean => {
-  if (!model) {
-    return false
-  }
-
-  const modelId = getLowerBaseModelName(model.id)
-  return modelId.startsWith('claude')
-}
-
 export const isQwenMTModel = (model: Model): boolean => {
   const modelId = getLowerBaseModelName(model.id)
   return modelId.includes('qwen-mt')
@@ -226,19 +221,9 @@ export const isNotSupportSystemMessageModel = (model: Model): boolean => {
   return isQwenMTModel(model) || isGemmaModel(model)
 }
 
-export const isGPT5SeriesModel = (model: Model) => {
-  const modelId = getLowerBaseModelName(model.id)
-  return modelId.includes('gpt-5') && !modelId.includes('gpt-5.1')
-}
-
 export const isGPT5SeriesReasoningModel = (model: Model) => {
   const modelId = getLowerBaseModelName(model.id)
   return isGPT5SeriesModel(model) && !modelId.includes('chat')
-}
-
-export const isGPT51SeriesModel = (model: Model) => {
-  const modelId = getLowerBaseModelName(model.id)
-  return modelId.includes('gpt-5.1')
 }
 
 // GPT-5 verbosity configuration
@@ -271,9 +256,4 @@ export const ZHIPU_RESULT_TOKENS = ['<|begin_of_box|>', '<|end_of_box|>'] as con
 
 export const agentModelFilter = (model: Model): boolean => {
   return !isEmbeddingModel(model) && !isRerankModel(model) && !isTextToImageModel(model)
-}
-
-export const isGPT5ProModel = (model: Model) => {
-  const modelId = getLowerBaseModelName(model.id)
-  return modelId.includes('gpt-5-pro')
 }

@@ -15,7 +15,7 @@ interface PreviewIconProps {
 
 const PreviewIcon: React.FC<PreviewIconProps> = ({ citation, index, total }) => (
   <View
-    className="flex h-[14px] w-[14px] items-center justify-center overflow-hidden rounded-full border border-transparent bg-transparent"
+    className="flex h-3.5 w-3.5 items-center justify-center overflow-hidden rounded-full border border-transparent bg-transparent"
     style={[{ zIndex: total - index, marginLeft: index === 0 ? 0 : -2 }]}>
     <FallbackFavicon hostname={new URL(citation.url).hostname} alt={citation.title || ''} />
   </View>
@@ -37,9 +37,9 @@ const CitationsList: React.FC<CitationsListProps> = ({ citations }) => {
   }
 
   return (
-    <YStack className="my-[6px]">
+    <YStack className="my-1.5">
       <TouchableOpacity
-        className="primary-container h-7 flex-row items-center gap-2 self-start rounded-lg border px-2"
+        className="secondary-container h-7 flex-row items-center gap-2 self-start rounded-lg border px-2"
         onPress={handlePress}>
         <View className="flex-row items-center">
           {previewItems.map((c, i) => (

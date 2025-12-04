@@ -275,7 +275,7 @@ export default function ManageModelsScreen() {
         <SearchInput placeholder={t('settings.models.search')} value={searchText} onChangeText={setSearchText} />
 
         {showSkeleton ? (
-          <Group className="flex-1">
+          <Group className="flex-1 p-3">
             <ListSkeleton variant="model" count={8} />
           </Group>
         ) : (

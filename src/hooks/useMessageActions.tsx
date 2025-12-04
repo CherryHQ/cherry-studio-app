@@ -5,9 +5,11 @@ import * as Speech from 'expo-speech'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Share from 'react-native-share'
+import { useDispatch } from 'react-redux'
 
 import { loggerService } from '@/services/LoggerService'
 import { deleteMessageById, fetchTranslateThunk, regenerateAssistantMessage } from '@/services/MessagesService'
+import { setEditingMessage } from '@/store/runtime'
 import type { Assistant } from '@/types/assistant'
 import type { Message } from '@/types/message'
 import type { HomeNavigationProps } from '@/types/naviagate'
@@ -28,6 +30,7 @@ interface UseMessageActionsProps {
 
 export const useMessageActions = ({ message, assistant }: UseMessageActionsProps) => {
   const { t } = useTranslation()
+  const dispatch = useDispatch()
   const [playState, setPlayState] = useState<PlayState>('idle')
   const [isTranslating, setIsTranslating] = useState(false)
   const [isTranslated, setIsTranslated] = useState(false)
@@ -244,6 +247,14 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
     }
   }
 
+  const handleEdit = () => {
+    if (message.role !== 'user') {
+      logger.warn('Cannot edit non-user messages')
+      return
+    }
+    dispatch(setEditingMessage(message))
+  }
+
   return {
     playState,
     isTranslating,
@@ -257,6 +268,7 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
     getMessageContent,
     handleBestAnswer,
     isUseful: message.useful,
-    handleShare
+    handleShare,
+    handleEdit
   }
 }

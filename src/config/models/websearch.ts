@@ -5,8 +5,8 @@ import { isUserSelectedModelType } from '@/utils/model'
 import { getLowerBaseModelName } from '@/utils/naming'
 
 import { isGeminiProvider, isNewApiProvider, isOpenAICompatibleProvider, isOpenAIProvider } from '../providers'
+import { isAnthropicModel } from './base'
 import { isEmbeddingModel, isRerankModel } from './embedding'
-import { isAnthropicModel } from './utils'
 import { isPureGenerateImageModel, isTextToImageModel } from './vision'
 
 export const CLAUDE_SUPPORTED_WEBSEARCH_REGEX = new RegExp(

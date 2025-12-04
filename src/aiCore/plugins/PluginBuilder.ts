@@ -21,8 +21,8 @@ export function buildPlugins(
   if (middlewareConfig.enableWebSearch && middlewareConfig.webSearchPluginConfig) {
     plugins.push(webSearchPlugin(middlewareConfig.webSearchPluginConfig))
   }
-  // 2. 支持工具调用时添加搜索插件
-  if (middlewareConfig.isSupportedToolUse || middlewareConfig.isPromptToolUse) {
+  // 2. 开启网络搜索并且支持工具调用时添加搜索插件
+  if (middlewareConfig.enableWebSearch && (middlewareConfig.isSupportedToolUse || middlewareConfig.isPromptToolUse)) {
     plugins.push(searchOrchestrationPlugin(middlewareConfig.assistant, middlewareConfig.topicId || ''))
   }
 

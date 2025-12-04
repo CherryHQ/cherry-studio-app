@@ -2,6 +2,7 @@ import React from 'react'
 
 import AssistantItemSheet from '@/componentsV2/features/Assistant/AssistantItemSheet'
 import { AddModelSheet } from '@/componentsV2/features/SettingsScreen/AddModelSheet'
+import ExpandInputSheet from '@/componentsV2/features/Sheet/ExpandInputSheet'
 import { McpServerSheet } from '@/componentsV2/features/Sheet/McpServerSheet'
 import ModelSheet from '@/componentsV2/features/Sheet/ModelSheet'
 import { ReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
@@ -32,6 +33,7 @@ const SheetManager: React.FC = () => {
       <McpServerSheet />
       <ToolSheet />
       <ImportDataSheet />
+      <ExpandInputSheet />
     </>
   )
 }

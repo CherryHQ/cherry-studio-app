@@ -10,6 +10,7 @@ import {
   AudioLines,
   CirclePause,
   Copy,
+  PenLine,
   RefreshCw,
   Share,
   TextSelect,
@@ -43,7 +44,8 @@ const MessageContextMenu: FC<MessageItemProps> = ({ children, message, assistant
     getMessageContent,
     handleBestAnswer,
     isUseful,
-    handleShare
+    handleShare,
+    handleEdit
   } = useMessageActions({ message, assistant })
 
   const handleSelectText = () => {
@@ -78,6 +80,16 @@ const MessageContextMenu: FC<MessageItemProps> = ({ children, message, assistant
       androidIcon: <TextSelect size={16} />,
       onSelect: handleSelectText
     },
+    ...(message.role === 'user'
+      ? [
+          {
+            title: t('common.edit'),
+            iOSIcon: 'pencil',
+            androidIcon: <PenLine size={16} />,
+            onSelect: handleEdit
+          }
+        ]
+      : []),
     ...(message.role === 'assistant'
       ? [
           {

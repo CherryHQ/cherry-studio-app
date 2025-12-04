@@ -34,7 +34,7 @@ import { runAppDataMigrations } from './services/AppInitializationService'
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync()
-const initializationLogger = loggerService.withContext('AppInitialization')
+const logger = loggerService.withContext('AppInitialization')
 
 // 数据库初始化组件
 function DatabaseInitializer({ children }: { children: React.ReactNode }) {
@@ -47,13 +47,13 @@ function DatabaseInitializer({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (success) {
-      initializationLogger.info('Database migrations completed successfully', expoDb.databasePath)
+      logger.info('Database migrations completed successfully', expoDb.databasePath)
       // Initialize iOS Shortcuts callback listener
       ShortcutCallbackManager.initializeListener()
     }
 
     if (error) {
-      initializationLogger.error('Database migrations failed', error as Error)
+      logger.error('Database migrations failed', error as Error)
     }
   }, [success, error])
 
@@ -62,8 +62,9 @@ function DatabaseInitializer({ children }: { children: React.ReactNode }) {
       const initializeApp = async () => {
         try {
           await runAppDataMigrations()
+          logger.info('App data initialized successfully')
         } catch (e) {
-          initializationLogger.error('Failed to initialize app data', e as Error)
+          logger.error('Failed to initialize app data', e as Error)
         }
       }
 

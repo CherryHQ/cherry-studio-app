@@ -133,7 +133,7 @@ const MessageErrorInfo: React.FC<{ block: ErrorMessageBlock; message: Message; o
   }
 
   return (
-    <TouchableOpacity className="bg-red-600/10  border-red-600/20 rounded-lg border p-2" onPress={onShowDetail}>
+    <TouchableOpacity className="rounded-lg  border border-red-600/20 bg-red-600/10 p-2" onPress={onShowDetail}>
       <XStack className="w-full items-center justify-between gap-2">
         <Text className="flex-1 text-red-600" numberOfLines={1}>
           {getAlertDescription()}
@@ -164,7 +164,7 @@ const ErrorDetailValue: React.FC<{ children: React.ReactNode; isCode?: boolean }
 
 const StackTrace: React.FC<{ stack: string }> = ({ stack }) => {
   return (
-    <View className="border-red-600/20 bg-red-600/10 rounded-md border p-3">
+    <View className="rounded-md border border-red-600/20 bg-red-600/10 p-3">
       <Text className="font-mono text-xs leading-5 text-red-600">{stack}</Text>
     </View>
   )
@@ -174,7 +174,7 @@ const JsonViewer: React.FC<{ data: any }> = ({ data }) => {
   const formatted = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View className="rounded-lg border border-zinc-400/200 bg-zinc-400/100 p-2">
+      <View className="border-zinc-400/200 rounded-lg border bg-zinc-400 p-2">
         <Text className="font-mono text-xs text-gray-900">{formatted}</Text>
       </View>
     </ScrollView>

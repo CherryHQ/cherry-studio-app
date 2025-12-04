@@ -33,7 +33,7 @@ export interface AiSdkMiddlewareConfig {
   isSupportedToolUse: boolean
   // image generation endpoint
   isImageGenerationEndpoint: boolean
-  // 是否开启内置搜索
+  // 是否开启网络搜索
   enableWebSearch: boolean
   enableGenerateImage: boolean
   enableUrlContext: boolean

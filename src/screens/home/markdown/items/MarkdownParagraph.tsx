@@ -10,7 +10,7 @@ interface MarkdownParagraphProps {
 
 export const MarkdownParagraph: React.FC<MarkdownParagraphProps> = ({ children, styles }) => {
   return (
-    <View className="select-none" style={{ ...styles }}>
+    <View className="select-none" style={{ ...styles, paddingVertical: 0 }}>
       {children}
     </View>
   )

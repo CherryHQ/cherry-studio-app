@@ -1,18 +1,19 @@
 import { AnimatePresence, MotiView } from 'moti'
 import React, { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Platform, View } from 'react-native'
 
-import { MentionButton } from '@/componentsV2'
-import TextField from '@/componentsV2/base/TextField'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useBottom } from '@/hooks/useBottom'
 import type { Assistant, Topic } from '@/types/assistant'
 
+import { presentExpandInputSheet } from '../../Sheet/ExpandInputSheet'
+import { EditingPreview } from './EditingPreview'
 import { FilePreview } from './FilePreview'
 import { useMessageInputLogic } from './hooks/useMessageInputLogic'
 import { McpButton } from './McpButton'
+import { MentionButton } from './MentionButton'
+import { MessageTextField } from './MessageTextField'
 import { PauseButton } from './PauseButton'
 import { SendButton } from './SendButton'
 import { ThinkButton } from './ThinkButton'
@@ -27,11 +28,25 @@ interface MessageInputProps {
 }
 
 export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, updateAssistant }) => {
-  const { t } = useTranslation()
   const bottomPad = useBottom()
-  const { text, setText, files, setFiles, mentions, setMentions, isReasoning, sendMessage, onPause } =
-    useMessageInputLogic(topic, assistant)
+  const {
+    text,
+    setText,
+    files,
+    setFiles,
+    mentions,
+    setMentions,
+    isReasoning,
+    isEditing,
+    sendMessage,
+    onPause,
+    cancelEditing
+  } = useMessageInputLogic(topic, assistant)
   const [isVoiceActive, setIsVoiceActive] = useState(false)
+
+  const handleExpand = () => {
+    presentExpandInputSheet(text, setText, sendMessage)
+  }
   return (
     <View
       className="bg-foreground-secondary/5 dark:bg-foreground-secondary/12 rounded-3xl p-3"
@@ -39,28 +54,10 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
         paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad
       }}>
       <YStack className="gap-2.5">
+        {isEditing && <EditingPreview onCancel={cancelEditing} />}
         <ToolPreview assistant={assistant} updateAssistant={updateAssistant} />
         {files.length > 0 && <FilePreview files={files} setFiles={setFiles} />}
-        {/* message */}
-        <XStack className="top-[5px]">
-          <TextField className="w-full p-0">
-            <TextField.Input
-              className="text-foreground h-24 border-none p-0 text-base"
-              placeholder={t('inputs.placeholder')}
-              value={text}
-              onChangeText={setText}
-              multiline
-              numberOfLines={10}
-              selectionColor="#2563eb"
-              colors={{
-                blurBackground: 'transparent',
-                focusBackground: 'transparent',
-                blurBorder: 'transparent',
-                focusBorder: 'transparent'
-              }}
-            />
-          </TextField>
-        </XStack>
+        <MessageTextField text={text} setText={setText} onExpand={handleExpand} />
         {/* button */}
         <XStack className="items-center justify-between">
           <XStack className="flex-1 items-center gap-2.5">
