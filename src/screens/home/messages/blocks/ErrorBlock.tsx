@@ -174,7 +174,7 @@ const JsonViewer: React.FC<{ data: any }> = ({ data }) => {
   const formatted = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View className="border-zinc-400/200 rounded-lg border bg-zinc-400/100 p-2">
+      <View className="border-zinc-400/200 rounded-lg border bg-zinc-400 p-2">
         <Text className="font-mono text-xs text-gray-900">{formatted}</Text>
       </View>
     </ScrollView>
