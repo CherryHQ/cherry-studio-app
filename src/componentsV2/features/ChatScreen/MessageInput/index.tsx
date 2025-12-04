@@ -9,6 +9,7 @@ import YStack from '@/componentsV2/layout/YStack'
 import { useBottom } from '@/hooks/useBottom'
 import type { Assistant, Topic } from '@/types/assistant'
 
+import { EditingPreview } from './EditingPreview'
 import { FilePreview } from './FilePreview'
 import { useMessageInputLogic } from './hooks/useMessageInputLogic'
 import { McpButton } from './McpButton'
@@ -29,8 +30,19 @@ interface MessageInputProps {
 export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, updateAssistant }) => {
   const { t } = useTranslation()
   const bottomPad = useBottom()
-  const { text, setText, files, setFiles, mentions, setMentions, isReasoning, sendMessage, onPause } =
-    useMessageInputLogic(topic, assistant)
+  const {
+    text,
+    setText,
+    files,
+    setFiles,
+    mentions,
+    setMentions,
+    isReasoning,
+    isEditing,
+    sendMessage,
+    onPause,
+    cancelEditing
+  } = useMessageInputLogic(topic, assistant)
   const [isVoiceActive, setIsVoiceActive] = useState(false)
   return (
     <View
@@ -39,6 +51,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
         paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad
       }}>
       <YStack className="gap-2.5">
+        {isEditing && <EditingPreview onCancel={cancelEditing} />}
         <ToolPreview assistant={assistant} updateAssistant={updateAssistant} />
         {files.length > 0 && <FilePreview files={files} setFiles={setFiles} />}
         {/* message */}

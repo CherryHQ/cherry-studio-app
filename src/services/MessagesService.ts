@@ -8,7 +8,7 @@ import type { Assistant, Model, Topic, Usage } from '@/types/assistant'
 import { ChunkType } from '@/types/chunk'
 import type { FileMetadata } from '@/types/file'
 import { FileTypes } from '@/types/file'
-import type { Message, MessageBlock } from '@/types/message'
+import type { MainTextMessageBlock, Message, MessageBlock } from '@/types/message'
 import { AssistantMessageStatus, MessageBlockStatus, MessageBlockType } from '@/types/message'
 import { uuid } from '@/utils'
 import { addAbortController } from '@/utils/abortController'
@@ -21,6 +21,7 @@ import {
   createTranslationBlock,
   resetAssistantMessage
 } from '@/utils/messageUtils/create'
+import { findMainTextBlocks } from '@/utils/messageUtils/find'
 import { getTopicQueue } from '@/utils/queue'
 
 import { fetchTopicNaming } from './ApiService'
@@ -222,6 +223,117 @@ export async function regenerateAssistantMessage(assistantMessage: Message, assi
     logger.error('Error in regenerateAssistantMessage:', error)
   } finally {
     await finishTopicLoading(topicId)
+  }
+}
+
+/**
+ * Edit a user message and regenerate the assistant response.
+ * This function:
+ * 1. Updates the user message content
+ * 2. Handles new files if provided
+ * 3. Deletes all linked assistant responses
+ * 4. Creates a new assistant message and triggers regeneration
+ */
+export async function editUserMessageAndRegenerate(
+  userMessageId: string,
+  newContent: string,
+  newFiles: FileMetadata[],
+  assistant: Assistant,
+  topicId: string
+) {
+  try {
+    // 1. Get and validate user message
+    const userMessage = await messageDatabase.getMessageById(userMessageId)
+    if (!userMessage || userMessage.role !== 'user') {
+      logger.error(`[editUserMessageAndRegenerate] Invalid user message: ${userMessageId}`)
+      throw new Error('Invalid user message')
+    }
+
+    // 2. Find and update MainTextMessageBlock
+    const mainTextBlocks = await findMainTextBlocks(userMessage)
+    if (mainTextBlocks.length > 0) {
+      const mainTextBlock = mainTextBlocks[0] as MainTextMessageBlock
+      await messageBlockDatabase.updateOneBlock({
+        id: mainTextBlock.id,
+        changes: {
+          content: newContent,
+          status: MessageBlockStatus.SUCCESS,
+          updatedAt: Date.now()
+        }
+      })
+    } else {
+      // If no main text block exists, create one
+      const newTextBlock = createMainTextBlock(userMessageId, newContent, {
+        status: MessageBlockStatus.SUCCESS
+      })
+      await messageBlockDatabase.upsertBlocks([newTextBlock])
+      userMessage.blocks = [...userMessage.blocks, newTextBlock.id]
+    }
+
+    // 3. Handle file blocks - remove old file/image blocks
+    const oldBlocks = await Promise.all(userMessage.blocks.map(id => messageBlockDatabase.getBlockById(id)))
+    const fileBlockIds = oldBlocks
+      .filter(
+        (block): block is MessageBlock =>
+          block !== null && (block.type === MessageBlockType.FILE || block.type === MessageBlockType.IMAGE)
+      )
+      .map(block => block.id)
+
+    if (fileBlockIds.length > 0) {
+      await cleanupMultipleBlocks(fileBlockIds)
+    }
+
+    // 4. Add new file blocks if provided
+    const newBlockIds: string[] = []
+    if (newFiles.length > 0) {
+      for (const file of newFiles) {
+        if (file.type === FileTypes.IMAGE) {
+          const imgBlock = createImageBlock(userMessageId, { file, status: MessageBlockStatus.SUCCESS })
+          await messageBlockDatabase.upsertBlocks([imgBlock])
+          newBlockIds.push(imgBlock.id)
+        } else {
+          const fileBlock = createFileBlock(userMessageId, file, { status: MessageBlockStatus.SUCCESS })
+          await messageBlockDatabase.upsertBlocks([fileBlock])
+          newBlockIds.push(fileBlock.id)
+        }
+      }
+    }
+
+    // 5. Update user message blocks array
+    const remainingBlockIds = userMessage.blocks.filter(id => !fileBlockIds.includes(id))
+    const updatedBlockIds = [...newBlockIds, ...remainingBlockIds]
+
+    await messageDatabase.updateMessageById(userMessageId, {
+      blocks: updatedBlockIds,
+      updatedAt: Date.now()
+    })
+
+    // 6. Find and delete all linked assistant messages
+    const allMessages = await messageDatabase.getMessagesByTopicId(topicId)
+    const linkedAssistantMessages = allMessages.filter(m => m.role === 'assistant' && m.askId === userMessageId)
+
+    for (const assistantMsg of linkedAssistantMessages) {
+      // Delete blocks first
+      if (assistantMsg.blocks.length > 0) {
+        await cleanupMultipleBlocks(assistantMsg.blocks)
+      }
+      // Delete message
+      await messageDatabase.deleteMessageById(assistantMsg.id)
+    }
+
+    // 7. Create new assistant message and trigger regeneration
+    const newAssistantMessage = createAssistantMessage(assistant.id, topicId, {
+      askId: userMessageId,
+      model: assistant.model
+    })
+    await saveMessageAndBlocksToDB(newAssistantMessage, [])
+
+    // 8. Fetch and process assistant response
+    await fetchAndProcessAssistantResponseImpl(topicId, assistant, newAssistantMessage)
+  } catch (error) {
+    logger.error('Error in editUserMessageAndRegenerate:', error)
+    await finishTopicLoading(topicId)
+    throw error
   }
 }
 

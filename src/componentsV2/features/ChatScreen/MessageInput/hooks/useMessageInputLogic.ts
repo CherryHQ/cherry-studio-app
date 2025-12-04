@@ -1,14 +1,19 @@
 import { isEmpty } from 'lodash'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Keyboard } from 'react-native'
 
 import { isReasoningModel } from '@/config/models'
+import { useMessageEdit } from '@/hooks/useMessageEdit'
 import { useMessageOperations } from '@/hooks/useMessageOperation'
 import { useAllProviders } from '@/hooks/useProviders'
 import { saveTextAsFile } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
-import { getUserMessage, sendMessage as _sendMessage } from '@/services/MessagesService'
+import {
+  editUserMessageAndRegenerate,
+  getUserMessage,
+  sendMessage as _sendMessage
+} from '@/services/MessagesService'
 import { topicService } from '@/services/TopicService'
 import type { Assistant, Model, Topic } from '@/types/assistant'
 import type { FileMetadata } from '@/types/file'
@@ -28,6 +33,23 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
   const { providers, isLoading } = useAllProviders()
 
   const isReasoning = isReasoningModel(assistant.model)
+
+  // Edit message hook callbacks
+  const handleEditStart = useCallback((content: string) => {
+    setText(content)
+    setFiles([])
+  }, [])
+
+  const handleEditCancel = useCallback(() => {
+    setText('')
+    setFiles([])
+  }, [])
+
+  const { editingMessage, isEditing, cancelEdit, clearEditingState } = useMessageEdit({
+    topicId: topic.id,
+    onEditStart: handleEditStart,
+    onEditCancel: handleEditCancel
+  })
 
   const handleTextChange = async (newText: string) => {
     // Check if text exceeds threshold
@@ -84,16 +106,41 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
       return
     }
 
+    const currentText = text
+    const currentFiles = files
+    const currentEditingMessage = editingMessage
+
     setText('')
     setFiles([])
     Keyboard.dismiss()
+
+    // Handle editing mode
+    if (currentEditingMessage) {
+      clearEditingState()
+      await topicService.updateTopic(topic.id, { isLoading: true })
+
+      try {
+        await editUserMessageAndRegenerate(
+          currentEditingMessage.id,
+          currentText,
+          currentFiles,
+          assistant,
+          topic.id
+        )
+      } catch (error) {
+        logger.error('Error editing message:', error)
+      }
+      return
+    }
+
+    // Normal send message flow
     await topicService.updateTopic(topic.id, { isLoading: true })
 
     try {
-      const baseUserMessage: MessageInputBaseParams = { assistant, topic, content: text }
+      const baseUserMessage: MessageInputBaseParams = { assistant, topic, content: currentText }
 
-      if (files.length > 0) {
-        baseUserMessage.files = files
+      if (currentFiles.length > 0) {
+        baseUserMessage.files = currentFiles
       }
 
       const { message, blocks } = getUserMessage(baseUserMessage)
@@ -124,7 +171,9 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
     mentions,
     setMentions,
     isReasoning,
+    isEditing,
     sendMessage,
-    onPause
+    onPause,
+    cancelEditing: cancelEdit
   }
 }
