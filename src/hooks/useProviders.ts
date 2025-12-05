@@ -55,10 +55,17 @@ export function useAllProviders() {
       setIsLoading(true)
       const allProviders = await providerService.getAllProviders()
 
-      // Sort by enabled: true first, then false
+      // Sort by: 1. enabled first, 2. has API key second
       const sortedProviders = allProviders.sort((a, b) => {
-        if (a.enabled === b.enabled) return 0
-        return a.enabled ? -1 : 1
+        if (a.enabled !== b.enabled) {
+          return a.enabled ? -1 : 1
+        }
+        const aHasKey = Boolean(a.apiKey?.trim())
+        const bHasKey = Boolean(b.apiKey?.trim())
+        if (aHasKey !== bHasKey) {
+          return aHasKey ? -1 : 1
+        }
+        return 0
       })
 
       // If no providers exist, return CHERRYAI_PROVIDER
