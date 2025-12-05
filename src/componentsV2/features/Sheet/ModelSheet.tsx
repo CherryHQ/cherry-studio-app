@@ -1,12 +1,13 @@
+import type { LegendListRef } from '@legendapp/list'
 import { LegendList } from '@legendapp/list'
 import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { useNavigation } from '@react-navigation/native'
-import { Button, cn } from 'heroui-native'
+import { Button, cn, Tabs } from 'heroui-native'
 import { sortBy } from 'lodash'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, InteractionManager, Platform, TouchableOpacity, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import type { NativeScrollEvent } from 'react-native'
+import { BackHandler, InteractionManager, Platform, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 
 import { SearchInput } from '@/componentsV2/base/SearchInput'
 import Text from '@/componentsV2/base/Text'
@@ -16,14 +17,25 @@ import { BrushCleaning, Settings } from '@/componentsV2/icons/LucideIcon'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { isEmbeddingModel, isRerankModel } from '@/config/models'
+import { useBottom } from '@/hooks/useBottom'
 import { useAllProviders } from '@/hooks/useProviders'
+import { useTheme } from '@/hooks/useTheme'
 import type { Model, Provider } from '@/types/assistant'
 import type { HomeNavigationProps } from '@/types/naviagate'
+import { isIOS } from '@/utils/device'
 import { getModelUniqId } from '@/utils/model'
 
 import { EmptyModelView } from '../SettingsScreen/EmptyModelView'
 
 const SHEET_NAME = 'global-model-sheet'
+
+// Provider Tab Bar 相关常量
+const HEADER_HEIGHT = 80 // 搜索栏区域高度
+const HEADER_ITEM_HEIGHT = 40 // provider header 高度
+const MODEL_ITEM_HEIGHT = 48 // model 项高度
+const SEPARATOR_HEIGHT = 8 // 分隔符高度
+const GROUP_MARGIN_TOP = 12 // provider 组间距
+const TAB_BAR_HEIGHT = 56 // 底部 tab 栏高度
 
 interface ModelSheetData {
   mentions: Model[]
@@ -56,9 +68,14 @@ const ModelSheet: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [isMultiSelectActive, setIsMultiSelectActive] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
-  const insets = useSafeAreaInsets()
+  const [activeProvider, setActiveProvider] = useState<string>('')
+  const bottom = useBottom()
   const navigation = useNavigation<HomeNavigationProps>()
-
+  const listRef = useRef<LegendListRef>(null)
+  const isScrollingByTab = useRef(false)
+  const { height: windowHeight } = useWindowDimensions()
+  const sheetContentHeight = windowHeight * 0.85 // 与 detents 保持一致
+  const { isDark } = useTheme()
   useEffect(() => {
     updateSheetDataCallback = setSheetData
     return () => {
@@ -129,6 +146,78 @@ const ModelSheet: React.FC = () => {
     })
     return items
   }, [selectOptions])
+
+  // 计算每个 Provider Header 在列表中的偏移量
+  const providerOffsets = useMemo(() => {
+    const offsets: Record<string, number> = {}
+    let currentOffset = HEADER_HEIGHT // 搜索栏高度
+
+    selectOptions.forEach((group, index) => {
+      if (index !== 0) {
+        currentOffset += GROUP_MARGIN_TOP
+      }
+      offsets[group.label] = currentOffset
+      // header高度 + 所有model项高度 + 分隔符高度
+      currentOffset += HEADER_ITEM_HEIGHT + group.options.length * (MODEL_ITEM_HEIGHT + SEPARATOR_HEIGHT)
+    })
+
+    return offsets
+  }, [selectOptions])
+
+  // 滚动同步：根据滚动位置更新当前 Tab
+  const handleScroll = useCallback(
+    (event: NativeScrollEvent) => {
+      if (isScrollingByTab.current) return
+
+      const offsetY = event.contentOffset.y
+
+      // 找到当前可见的 provider
+      let currentProvider = selectOptions[0]?.label || ''
+      const sortedOffsets = Object.entries(providerOffsets).sort((a, b) => a[1] - b[1])
+      for (const [label, offset] of sortedOffsets) {
+        if (offsetY >= offset - 50) {
+          // 50px 容差
+          currentProvider = label
+        } else {
+          break
+        }
+      }
+
+      if (currentProvider !== activeProvider) {
+        setActiveProvider(currentProvider)
+      }
+    },
+    [providerOffsets, activeProvider, selectOptions]
+  )
+
+  // 点击 Tab 滚动到对应 Provider
+  const handleProviderChange = useCallback(
+    (providerLabel: string) => {
+      setActiveProvider(providerLabel)
+      isScrollingByTab.current = true
+
+      const offset = providerOffsets[providerLabel]
+      if (listRef.current && offset !== undefined) {
+        listRef.current.scrollToOffset({
+          offset,
+          animated: true
+        })
+      }
+
+      // 滚动动画完成后重置标记
+      setTimeout(() => {
+        isScrollingByTab.current = false
+      }, 500)
+    },
+    [providerOffsets]
+  )
+
+  // 初始化 activeProvider
+  useEffect(() => {
+    if (isVisible && selectOptions.length > 0 && !activeProvider) {
+      setActiveProvider(selectOptions[0].label)
+    }
+  }, [isVisible, selectOptions, activeProvider])
 
   const handleModelToggle = async (modelValue: string) => {
     const isSelected = selectedModels.includes(modelValue)
@@ -248,11 +337,15 @@ const ModelSheet: React.FC = () => {
       scrollable
       onDidDismiss={handleDidDismiss}
       onDidPresent={handleDidPresent}>
-      <View>
+      <View className={isIOS ? undefined : 'bg-card'} style={{ height: sheetContentHeight, position: 'relative' }}>
         <LegendList
+          style={{ flex: 1 }}
+          ref={listRef}
           data={listData}
-          extraData={{ selectedModels, isMultiSelectActive, searchQuery }}
+          extraData={{ selectedModels, isMultiSelectActive, searchQuery, activeProvider }}
           nestedScrollEnabled={Platform.OS === 'android'}
+          onScroll={e => handleScroll(e.nativeEvent)}
+          scrollEventThrottle={16}
           renderItem={({ item, index }: { item: ListItem; index: number }) => {
             if (!item) return null
             if (item.type === 'header') {
@@ -318,12 +411,36 @@ const ModelSheet: React.FC = () => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             paddingHorizontal: 20,
-            paddingBottom: insets.bottom + 20
+            paddingBottom: bottom + TAB_BAR_HEIGHT + 20
           }}
           estimatedItemSize={ESTIMATED_ITEM_SIZE}
           drawDistance={DRAW_DISTANCE}
           recycleItems
         />
+        {/* Floating Provider Tab Bar */}
+        {selectOptions.length > 0 && (
+          <View
+            className="bg-card absolute bottom-0 left-0 right-0 overflow-hidden "
+            style={{ paddingBottom: isIOS ? bottom + 35 : bottom, paddingHorizontal: 10 }}>
+            <Tabs value={activeProvider} onValueChange={handleProviderChange}>
+              <Tabs.ScrollView>
+                <Tabs.List aria-label="Provider tabs" className="bg-transparent">
+                  <Tabs.Indicator className="primary-container rounded-xl border" />
+                  {selectOptions.map(group => (
+                    <Tabs.Trigger key={group.label} value={group.label}>
+                      <XStack className="items-center gap-1.5 px-1">
+                        <ProviderIcon provider={group.provider} size={18} />
+                        <Tabs.Label className={cn(activeProvider === group.label ? 'primary-text' : undefined)}>
+                          {group.label}
+                        </Tabs.Label>
+                      </XStack>
+                    </Tabs.Trigger>
+                  ))}
+                </Tabs.List>
+              </Tabs.ScrollView>
+            </Tabs>
+          </View>
+        )}
       </View>
     </TrueSheet>
   )
