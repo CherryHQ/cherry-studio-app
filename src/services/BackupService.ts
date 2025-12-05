@@ -27,7 +27,7 @@ import type {
 import type { FileMetadata } from '@/types/file'
 import type { Message } from '@/types/message'
 
-import { runAppDataMigrations } from './AppInitializationService'
+import { resetAppInitializationState, runAppDataMigrations } from './AppInitializationService'
 import { assistantService } from './AssistantService'
 import { providerService } from './ProviderService'
 import { topicService } from './TopicService'
@@ -280,6 +280,9 @@ export async function restore(
     logger.info(`Setting app initialization version to ${versionToSet} and running incremental migrations...`)
     await preferenceService.set('app.initialization_version', versionToSet)
     await runAppDataMigrations()
+
+    // 刷新所有服务缓存，确保使用恢复后的数据
+    resetAppInitializationState()
 
     logger.info('Restore completed successfully')
   } catch (error) {

@@ -161,7 +161,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                   feedbackVariant="ripple"
                   variant="tertiary"
                   className={cn(
-                    'h-[42px] flex-1 rounded-[30px] border-zinc-400/20 bg-transparent active:opacity-80',
+                    'h-[42px] flex-1 rounded-[30px] border border-zinc-400/20 bg-transparent active:opacity-80',
                     options?.cancelStyle?.toString() || ''
                   )}
                   onPress={cancel}
