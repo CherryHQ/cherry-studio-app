@@ -143,11 +143,14 @@ export function useRestore(options: UseRestoreOptions = {}) {
     if (!validateFile(file)) return
 
     // 清除现有数据（如果启用）
+    // 流程：重置数据库 -> 运行 v1 seed -> 恢复备份数据 -> restore() 内部运行增量迁移
     if (clearBeforeRestore) {
       try {
         logger.info('Clearing existing data before restore...')
         await databaseMaintenance.resetDatabase()
         resetAppInitializationState()
+        // 运行迁移以初始化系统数据（v1 seed）
+        // restore() 会在恢复后根据备份版本运行增量迁移
         await runAppDataMigrations()
         logger.info('Existing data cleared successfully')
       } catch (error) {

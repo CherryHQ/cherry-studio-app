@@ -1,5 +1,6 @@
 import {
   assistantDatabase,
+  mcpDatabase,
   messageBlockDatabase,
   messageDatabase,
   providerDatabase,
@@ -26,6 +27,7 @@ import type {
 import type { FileMetadata } from '@/types/file'
 import type { Message } from '@/types/message'
 
+import { runAppDataMigrations } from './AppInitializationService'
 import { assistantService } from './AssistantService'
 import { providerService } from './ProviderService'
 import { topicService } from './TopicService'
@@ -209,6 +211,13 @@ async function restoreReduxData(data: ExportReduxData, onProgress: OnProgressCal
   await assistantDatabase.upsertAssistants(assistants)
 
   await websearchProviderDatabase.upsertWebSearchProviders(data.websearch.providers)
+
+  // 恢复 MCP 数据（如果存在，兼容旧备份）
+  if (data.mcp?.servers && data.mcp.servers.length > 0) {
+    logger.info(`Restoring ${data.mcp.servers.length} MCP servers`)
+    await mcpDatabase.upsertMcps(data.mcp.servers)
+  }
+
   await new Promise(resolve => setTimeout(resolve, 200)) // Delay between steps
 
   await preferenceService.set('user.name', data.settings.userName)
@@ -256,11 +265,21 @@ export async function restore(
     logger.info('Restoring IndexedDB data...')
     await restoreIndexedDbData(parsedData.indexedData, onProgress, dispatch)
 
+    // 保存备份版本号用于后续迁移
+    const backupVersion = parsedData.appInitializationVersion
+
     // IndexedDB 数据已写入，释放内存
     // @ts-ignore
     parsedData.indexedData = null
     // @ts-ignore
     parsedData = null
+
+    // 设置备份时的版本号（旧备份默认为 1，跳过初始 seed）
+    // 然后运行增量迁移（从 backupVersion+1 到 latest）
+    const versionToSet = backupVersion ?? 1
+    logger.info(`Setting app initialization version to ${versionToSet} and running incremental migrations...`)
+    await preferenceService.set('app.initialization_version', versionToSet)
+    await runAppDataMigrations()
 
     logger.info('Restore completed successfully')
   } catch (error) {
@@ -277,7 +296,11 @@ export async function restore(
   }
 }
 
-function transformBackupData(data: string): { reduxData: ExportReduxData; indexedData: ExportIndexedData } {
+function transformBackupData(data: string): {
+  reduxData: ExportReduxData
+  indexedData: ExportIndexedData
+  appInitializationVersion?: number
+} {
   let orginalData: any
 
   try {
@@ -297,6 +320,9 @@ function transformBackupData(data: string): { reduxData: ExportReduxData; indexe
   // 从 IndexedDB 提取 topics（这是数据的真实来源，包含所有 topics）
   const indexedDb: ImportIndexedData = orginalData.indexedDB
 
+  // 提取 app_initialization_version（旧备份可能没有此字段）
+  const appInitializationVersion: number | undefined = orginalData.app_initialization_version
+
   orginalData = null
   let persistDataString = localStorageData['persist:cherry-studio']
   localStorageData = null
@@ -307,7 +333,8 @@ function transformBackupData(data: string): { reduxData: ExportReduxData; indexe
     assistants: JSON.parse(rawReduxData.assistants),
     llm: JSON.parse(rawReduxData.llm),
     websearch: JSON.parse(rawReduxData.websearch),
-    settings: JSON.parse(rawReduxData.settings)
+    settings: JSON.parse(rawReduxData.settings),
+    mcp: rawReduxData.mcp ? JSON.parse(rawReduxData.mcp) : undefined
   }
 
   rawReduxData = null
@@ -374,19 +401,21 @@ function transformBackupData(data: string): { reduxData: ExportReduxData; indexe
 
   return {
     reduxData: reduxData,
-    indexedData: indexedDbData
+    indexedData: indexedDbData,
+    appInitializationVersion
   }
 }
 
 async function getAllData(): Promise<string> {
   try {
-    const [providers, webSearchProviders, assistants, topics, messages, messageBlocks] = await Promise.all([
+    const [providers, webSearchProviders, assistants, topics, messages, messageBlocks, mcpServers] = await Promise.all([
       providerDatabase.getAllProviders(),
       websearchProviderDatabase.getAllWebSearchProviders(),
       assistantService.getExternalAssistants(),
       topicService.getTopics(),
       messageDatabase.getAllMessages(),
-      messageBlockDatabase.getAllBlocks()
+      messageBlockDatabase.getAllBlocks(),
+      mcpDatabase.getMcps()
     ])
 
     // Get preferences for backup
@@ -396,6 +425,7 @@ async function getAllData(): Promise<string> {
     const maxResults = await preferenceService.get('websearch.max_results')
     const overrideSearchService = await preferenceService.get('websearch.override_search_service')
     const contentLimit = await preferenceService.get('websearch.content_limit')
+    const appInitializationVersion = await preferenceService.get('app.initialization_version')
 
     let defaultAssistant: Assistant | null = null
 
@@ -458,11 +488,16 @@ async function getAllData(): Promise<string> {
       userName
     }
 
+    const mcpPayload = {
+      servers: mcpServers
+    }
+
     const persistDataString = JSON.stringify({
       assistants: JSON.stringify(assistantsPayload),
       llm: JSON.stringify(llmPayload),
       websearch: JSON.stringify(websearchPayload),
-      settings: JSON.stringify(settingsPayload)
+      settings: JSON.stringify(settingsPayload),
+      mcp: JSON.stringify(mcpPayload)
     })
 
     const localStorage: Record<string, string> = {
@@ -499,6 +534,7 @@ async function getAllData(): Promise<string> {
     const backupData = JSON.stringify({
       time: Date.now(),
       version: 5,
+      app_initialization_version: appInitializationVersion,
       indexedDB,
       localStorage: localStorage
     })

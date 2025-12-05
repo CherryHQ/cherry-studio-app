@@ -59,6 +59,14 @@ export default function BasicDataSettingsScreen() {
     clearBeforeRestore: true
   })
 
+  const handleRestoreClose = () => {
+    closeModal()
+    if (overallStatus === 'success') {
+      // 恢复成功后重启应用，与重置数据行为一致
+      delay(async () => await reloadAppAsync(), 200)
+    }
+  }
+
   const loadCacheSize = async () => {
     try {
       const size = await getCacheDirectorySize()
@@ -285,7 +293,7 @@ export default function BasicDataSettingsScreen() {
         isOpen={isModalOpen}
         steps={restoreSteps}
         overallStatus={overallStatus}
-        onClose={closeModal}
+        onClose={handleRestoreClose}
       />
     </SafeAreaContainer>
   )
