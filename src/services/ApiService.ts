@@ -86,13 +86,19 @@ export async function fetchChatCompletion({
   }
 
   // --- Call AI Completions ---
-  await AI.completions(modelId, aiSdkParams, {
-    ...middlewareConfig,
-    assistant,
-    topicId,
-    callType: 'chat',
-    uiMessages
-  })
+  try {
+    await AI.completions(modelId, aiSdkParams, {
+      ...middlewareConfig,
+      assistant,
+      topicId,
+      callType: 'chat',
+      uiMessages
+    })
+  } catch (error) {
+    logger.error('fetchChatCompletion completions failed', error as Error)
+    onChunkReceived({ type: ChunkType.ERROR, error: error as any })
+    throw error
+  }
 }
 
 export async function fetchModels(provider: Provider): Promise<SdkModel[]> {

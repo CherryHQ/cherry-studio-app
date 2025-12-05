@@ -115,6 +115,13 @@ export class AiSdkToChunkAdapter {
         // 转换并发送 chunk
         this.convertAndEmitChunk(value, final)
       }
+    } catch (error) {
+      // 捕获流读取异常并发送 ERROR chunk
+      logger.error('Stream reading error', error instanceof Error ? error : new Error(String(error)))
+      this.onChunk({
+        type: ChunkType.ERROR,
+        error: error instanceof Error ? error : new Error(String(error))
+      })
     } finally {
       reader.releaseLock()
       this.resetTimingState()

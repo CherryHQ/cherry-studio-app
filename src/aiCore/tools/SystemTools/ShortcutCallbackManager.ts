@@ -1,6 +1,10 @@
 import * as Linking from 'expo-linking'
 import { Platform } from 'react-native'
 
+import { loggerService } from '@/services/LoggerService'
+
+const logger = loggerService.withContext('ShortcutCallbackManager')
+
 /**
  * Callback data structure for pending shortcut executions
  */
@@ -61,7 +65,7 @@ class ShortcutCallbackManagerClass {
         this.handleCallback(initialUrl)
       }
     } catch (err) {
-      console.error('Error checking initial URL:', err)
+      logger.error('Error checking initial URL', err as Error)
     }
   }
 
@@ -107,7 +111,7 @@ class ShortcutCallbackManagerClass {
         })
       }
     } catch (err) {
-      console.error('Error handling shortcut callback:', err)
+      logger.error('Error handling shortcut callback', err as Error)
     }
   }
 

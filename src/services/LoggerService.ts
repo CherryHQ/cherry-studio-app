@@ -7,9 +7,6 @@ export type LogSourceWithContext = {
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'verbose' | 'silly'
 
-// Use Expo's global __DEV__ variable. It's synchronous and readily available.
-const IS_DEV = __DEV__
-
 // The level map remains the same.
 const LEVEL_MAP: Record<LogLevel, number> = {
   error: 5,
@@ -20,8 +17,11 @@ const LEVEL_MAP: Record<LogLevel, number> = {
   silly: 0
 }
 
-// Default levels are adjusted slightly. In production, we'll log to a file by default.
-const DEFAULT_CONSOLE_LEVEL = IS_DEV ? 'silly' : 'info'
+// Use Expo's global __DEV__ variable for environment detection
+const IS_DEV = __DEV__
+
+// Default levels: dev shows all, release shows warn+
+const DEFAULT_CONSOLE_LEVEL: LogLevel = IS_DEV ? 'silly' : 'warn'
 const DEFAULT_FILE_LOG_LEVEL = 'warn' // Only log warnings and errors to file
 
 export class LoggerService {

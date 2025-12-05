@@ -8,6 +8,9 @@ import Text from '@/componentsV2/base/Text'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useTheme } from '@/hooks/useTheme'
+import { loggerService } from '@/services/LoggerService'
+
+const logger = loggerService.withContext('useDialog')
 
 export type DialogOptions = {
   title?: React.ReactNode | string
@@ -54,7 +57,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
     try {
       await options?.onCancel?.()
     } catch (error) {
-      console.error('Dialog onCancel error:', error)
+      logger.error('Dialog onCancel error', error as Error)
     }
     close()
   }
@@ -71,7 +74,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
     try {
       await options?.onConFirm?.()
     } catch (error) {
-      console.error('Dialog onConFirm error:', error)
+      logger.error('Dialog onConfirm error', error as Error)
     } finally {
       setIsLoading(false)
       if (shouldCloseOnConfirm) {

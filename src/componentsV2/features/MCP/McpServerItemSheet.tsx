@@ -10,7 +10,10 @@ import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useMcpTools } from '@/hooks/useMcp'
 import { useTheme } from '@/hooks/useTheme'
+import { loggerService } from '@/services/LoggerService'
 import type { MCPServer } from '@/types/mcp'
+
+const logger = loggerService.withContext('McpServerItemSheet')
 
 const SHEET_NAME = 'mcp-server-item-sheet'
 
@@ -91,7 +94,7 @@ const McpServerItemSheet: React.FC = () => {
 
       await updateMcpServers([updatedMcpServer])
     } catch (error) {
-      console.error(error)
+      logger.error('Failed to update disabled tools', error as Error)
     }
   }
 

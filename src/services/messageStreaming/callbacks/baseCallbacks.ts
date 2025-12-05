@@ -24,6 +24,9 @@ interface BaseCallbacksDependencies {
 export const createBaseCallbacks = async (deps: BaseCallbacksDependencies) => {
   const { blockManager, topicId, assistantMsgId, saveUpdatesToDB, assistant } = deps
 
+  // 防止 onError 被多次调用
+  let errorHandled = false
+
   // 通用的 block 查找函数
   const findBlockIdForCompletion = async (message?: any) => {
     // 优先使用 BlockManager 中的 activeBlockInfo
@@ -68,21 +71,40 @@ export const createBaseCallbacks = async (deps: BaseCallbacksDependencies) => {
     // },
 
     onError: async (error: any) => {
-      console.dir(error, { depth: null })
-      const isErrorTypeAbort = isAbortError(error)
-      let pauseErrorLanguagePlaceholder = ''
+      // 防止重复处理错误
+      if (errorHandled) {
+        logger.debug('onError already handled, skipping duplicate call')
+        return
+      }
+      errorHandled = true
 
+      let isErrorTypeAbort = false
+      try {
+        isErrorTypeAbort = isAbortError(error)
+      } catch {
+        // isAbortError failed, treat as non-abort error
+      }
+
+      let pauseErrorLanguagePlaceholder = ''
       if (isErrorTypeAbort) {
         pauseErrorLanguagePlaceholder = 'pause_placeholder'
       }
 
-      const serializableError = {
-        name: error.name,
-        message: pauseErrorLanguagePlaceholder || error.message || formatErrorMessage(error),
-        originalMessage: error.message,
-        stack: error.stack,
-        status: error.status || error.code,
-        requestId: error.request_id
+      let serializableError: any
+      try {
+        serializableError = {
+          name: error?.name || 'UnknownError',
+          message: pauseErrorLanguagePlaceholder || error?.message || formatErrorMessage(error),
+          originalMessage: error?.message,
+          stack: error?.stack,
+          status: error?.status || error?.code,
+          requestId: error?.request_id
+        }
+      } catch {
+        serializableError = {
+          name: 'UnknownError',
+          message: 'Error serialization failed'
+        }
       }
 
       const possibleBlockId = await findBlockIdForCompletion()
