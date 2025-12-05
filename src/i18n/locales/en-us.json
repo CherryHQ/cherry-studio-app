@@ -873,6 +873,7 @@
         "blacklist_description": "Results from the following websites will not appear in search results",
         "blacklist_placeholder": "Please use the following format (separated by newlines)\nPattern matching: *://*.example.com/*\nRegular expression: /example\\.(net|org)/",
         "builtin": "Built-in web search",
+        "change_provider": "Switch web search provider",
         "check_error": "Check Error",
         "check_fail": "Check Fail",
         "check_success": "Check Success",

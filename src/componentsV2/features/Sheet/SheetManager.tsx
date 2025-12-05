@@ -8,6 +8,7 @@ import ModelSheet from '@/componentsV2/features/Sheet/ModelSheet'
 import { ReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
 import TextSelectionSheet from '@/componentsV2/features/Sheet/TextSelectionSheet'
 import { ToolSheet } from '@/componentsV2/features/Sheet/ToolSheet'
+import { WebSearchProviderSheet } from '@/componentsV2/features/Sheet/WebSearchProviderSheet'
 import { ErrorDetailSheet } from '@/screens/home/messages/blocks/ErrorBlock'
 import { ImportDataSheet } from '@/screens/welcome/ImportDataSheet'
 
@@ -32,6 +33,7 @@ const SheetManager: React.FC = () => {
       <ErrorDetailSheet />
       <McpServerSheet />
       <ToolSheet />
+      <WebSearchProviderSheet />
       <ImportDataSheet />
       <ExpandInputSheet />
     </>

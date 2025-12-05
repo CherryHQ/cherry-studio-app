@@ -1,8 +1,9 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { Pressable } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
-import { Check, Globe, Palette } from '@/componentsV2/icons'
+import { Check, ChevronsUpDown, Globe, Palette } from '@/componentsV2/icons'
 import PressableRow from '@/componentsV2/layout/PressableRow'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
@@ -14,6 +15,7 @@ interface ExternalTool {
   label: string
   icon: React.ReactElement
   onPress: () => void
+  onSwitchPress?: () => void
   isActive: boolean
   shouldShow: boolean
 }
@@ -22,6 +24,7 @@ interface ExternalToolsProps {
   mentions: Model[]
   assistant: Assistant
   onWebSearchToggle: () => void
+  onWebSearchSwitchPress?: () => void
   onGenerateImageToggle: () => void
 }
 
@@ -29,6 +32,7 @@ export const ExternalTools: React.FC<ExternalToolsProps> = ({
   mentions,
   assistant,
   onWebSearchToggle,
+  onWebSearchSwitchPress,
   onGenerateImageToggle
 }) => {
   const { t } = useTranslation()
@@ -43,6 +47,7 @@ export const ExternalTools: React.FC<ExternalToolsProps> = ({
         : t('common.websearch'),
       icon: <Globe size={20} />,
       onPress: onWebSearchToggle,
+      onSwitchPress: onWebSearchSwitchPress,
       isActive: !!assistant.enableWebSearch,
       // 网络搜索模型 && 设置了工具调用 && 设置了网络搜索服务商 才能开启网络搜索
       shouldShow:
@@ -81,7 +86,17 @@ export const ExternalTools: React.FC<ExternalToolsProps> = ({
               {React.cloneElement(option.icon, { className: activeColorClass } as any)}
               <Text className={`text-lg ${activeColorClass}`}>{option.label}</Text>
             </XStack>
-            {option.isActive && <Check size={20} className="primary-text" />}
+            <XStack className="items-center gap-2">
+              {option.isActive && <Check size={20} className="primary-text" />}
+              {option.onSwitchPress && (
+                <Pressable
+                  onPress={option.onSwitchPress}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  className="ml-1 rounded-lg p-1 active:opacity-60">
+                  <ChevronsUpDown size={18} className="text-foreground-secondary" />
+                </Pressable>
+              )}
+            </XStack>
           </PressableRow>
         )
       })}

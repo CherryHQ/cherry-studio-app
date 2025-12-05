@@ -7,6 +7,7 @@ import { useBottom } from '@/hooks/useBottom'
 import type { Assistant, Model } from '@/types/assistant'
 import type { FileMetadata } from '@/types/file'
 
+import { presentWebSearchProviderSheet } from '../WebSearchProviderSheet'
 import { useCameraModal } from './CameraModal'
 import { ExternalTools } from './ExternalTools'
 import { SystemTools } from './SystemTools'
@@ -76,6 +77,15 @@ export const ToolSheet: React.FC = () => {
     onSuccess: dismissSheet
   })
 
+  const handleWebSearchSwitchPress = () => {
+    dismissSheet()
+    presentWebSearchProviderSheet({
+      mentions,
+      assistant,
+      updateAssistant
+    })
+  }
+
   useEffect(() => {
     if (!isVisible) return
 
@@ -113,6 +123,7 @@ export const ToolSheet: React.FC = () => {
                 mentions={mentions}
                 assistant={assistant}
                 onWebSearchToggle={handleEnableWebSearch}
+                onWebSearchSwitchPress={handleWebSearchSwitchPress}
                 onGenerateImageToggle={handleEnableGenerateImage}
               />
             )}

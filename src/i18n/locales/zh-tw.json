@@ -873,6 +873,7 @@
         "blacklist_description": "來自以下網站的結果將不會出現在搜尋結果中",
         "blacklist_placeholder": "請使用以下格式（按行分隔）\n模式匹配：*://*.example.com/*\n正則表達式：/example\\.(net|org)/",
         "builtin": "內建網路搜尋",
+        "change_provider": "切換網路搜尋服務商",
         "check_error": "檢查錯誤",
         "check_fail": "檢查失敗",
         "check_success": "檢查成功",

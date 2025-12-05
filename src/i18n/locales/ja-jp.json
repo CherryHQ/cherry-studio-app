@@ -873,6 +873,7 @@
         "blacklist_description": "以下のウェブサイトからの結果は検索結果に表示されません",
         "blacklist_placeholder": "以下の形式を使用してください（改行で区切る）\nパターンマッチング：*://*.example.com/*\n正規表現：/example\\.(net|org)/",
         "builtin": "内蔵ネットワーク検索",
+        "change_provider": "ウェブ検索プロバイダーを切り替え",
         "check_error": "チェックエラー",
         "check_fail": "チェック失敗",
         "check_success": "チェック成功",
