@@ -166,9 +166,9 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
         {settings.enableMaxTokens && (
           <Row>
             <Text>{t('assistants.settings.max_tokens_value')}</Text>
-            <TextField className="min-w-[60px]">
+            <TextField className="min-w-24">
               <TextField.Input
-                className="h-[25px] text-center text-xs leading-[14.4px]"
+                className="rounded-xl"
                 value={maxTokensInput}
                 onChangeText={setMaxTokensInput}
                 onEndEditing={() => {

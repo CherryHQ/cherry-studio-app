@@ -1,9 +1,12 @@
 import { MotiView } from 'moti'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { View } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 
 import TextField from '@/componentsV2/base/TextField'
+import { ExpandButton } from '@/componentsV2/features/ChatScreen/MessageInput/ExpandButton'
+import { presentExpandTextSheet } from '@/componentsV2/features/Sheet/ExpandTextSheet'
 import YStack from '@/componentsV2/layout/YStack'
 import type { Assistant } from '@/types/assistant'
 
@@ -68,16 +71,28 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
             <TextField.Label className="text-foreground-secondary text-sm font-medium">
               {t('common.prompt')}
             </TextField.Label>
-            <TextField.Input
-              className="flex-1 rounded-lg  px-3 py-3 text-sm"
-              placeholder={t('common.prompt')}
-              multiline
-              numberOfLines={20}
-              textAlignVertical="top"
-              value={formData.prompt}
-              onChangeText={prompt => setFormData(prev => ({ ...prev, prompt }))}
-              onEndEditing={handleSave}
-            />
+            <View className="relative flex-1">
+              <ExpandButton
+                style={{ top: 8, right: 8 }}
+                onPress={() => {
+                  presentExpandTextSheet(
+                    formData.prompt,
+                    prompt => setFormData(prev => ({ ...prev, prompt })),
+                    t('common.prompt')
+                  )
+                }}
+              />
+              <TextField.Input
+                className="flex-1 rounded-lg  px-3 py-3 text-sm"
+                placeholder={t('common.prompt')}
+                multiline
+                numberOfLines={20}
+                textAlignVertical="top"
+                value={formData.prompt}
+                onChangeText={prompt => setFormData(prev => ({ ...prev, prompt }))}
+                onEndEditing={handleSave}
+              />
+            </View>
           </TextField>
         </YStack>
       </KeyboardAvoidingView>
