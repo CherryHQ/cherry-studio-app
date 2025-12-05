@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native'
 import { FlashList } from '@shopify/flash-list'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Container, Group, HeaderBar, ListSkeleton, SafeAreaContainer, SearchInput } from '@/componentsV2'
@@ -8,6 +8,7 @@ import { ProviderItem } from '@/componentsV2/features/SettingsScreen/ProviderIte
 import { Plus } from '@/componentsV2/icons'
 import { useAllProviders } from '@/hooks/useProviders'
 import { useSearch } from '@/hooks/useSearch'
+import { useSkeletonLoading } from '@/hooks/useSkeletonLoading'
 import type { Provider } from '@/types/assistant'
 import type { ProvidersNavigationProps } from '@/types/naviagate'
 
@@ -27,25 +28,7 @@ export default function ProviderListScreen() {
     { delay: 100 }
   )
 
-  const [showSkeleton, setShowSkeleton] = useState(true)
-  const loadingStartTime = useRef(Date.now())
-
-  useEffect(() => {
-    if (isLoading) {
-      loadingStartTime.current = Date.now()
-      setShowSkeleton(true)
-      return
-    }
-    const elapsed = Date.now() - loadingStartTime.current
-    const minDuration = 300
-    const remaining = minDuration - elapsed
-    if (remaining <= 0) {
-      setShowSkeleton(false)
-      return
-    }
-    const timer = setTimeout(() => setShowSkeleton(false), remaining)
-    return () => clearTimeout(timer)
-  }, [isLoading])
+  const showSkeleton = useSkeletonLoading(isLoading)
 
   const providersList = filteredProviders.filter(p => p.id !== 'cherryai')
 

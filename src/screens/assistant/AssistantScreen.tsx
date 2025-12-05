@@ -1,7 +1,7 @@
 import { DrawerActions, useNavigation } from '@react-navigation/native'
 import { FlashList } from '@shopify/flash-list'
 import { SymbolView } from 'expo-symbols'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
@@ -23,6 +23,7 @@ import { Menu, Plus, Trash2 } from '@/componentsV2/icons/LucideIcon'
 import { useAssistants } from '@/hooks/useAssistant'
 import { useDialog } from '@/hooks/useDialog'
 import { useSearch } from '@/hooks/useSearch'
+import { useSkeletonLoading } from '@/hooks/useSkeletonLoading'
 import { useToast } from '@/hooks/useToast'
 import { getCurrentTopicId } from '@/hooks/useTopic'
 import { assistantService, createAssistant, getDefaultAssistant } from '@/services/AssistantService'
@@ -52,31 +53,13 @@ export default function AssistantScreen() {
     { delay: 100 }
   )
 
-  const [showSkeleton, setShowSkeleton] = useState(true)
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedAssistantIds, setSelectedAssistantIds] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState(false)
-  const loadingStartTime = useRef(Date.now())
+  const showSkeleton = useSkeletonLoading(isLoading)
 
   const selectionCount = selectedAssistantIds.length
   const hasSelection = selectionCount > 0
-
-  useEffect(() => {
-    if (isLoading) {
-      loadingStartTime.current = Date.now()
-      setShowSkeleton(true)
-      return
-    }
-    const elapsed = Date.now() - loadingStartTime.current
-    const minDuration = 300
-    const remaining = minDuration - elapsed
-    if (remaining <= 0) {
-      setShowSkeleton(false)
-      return
-    }
-    const timer = setTimeout(() => setShowSkeleton(false), remaining)
-    return () => clearTimeout(timer)
-  }, [isLoading])
 
   const handleEditAssistant = (assistantId: string) => {
     navigation.navigate('Assistant', { screen: 'AssistantDetailScreen', params: { assistantId } })

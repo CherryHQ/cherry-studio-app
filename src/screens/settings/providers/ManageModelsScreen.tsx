@@ -2,7 +2,7 @@ import type { RouteProp } from '@react-navigation/native'
 import { useRoute } from '@react-navigation/native'
 import { cn, Tabs } from 'heroui-native'
 import { groupBy, isEmpty, uniqBy } from 'lodash'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ScrollView } from 'react-native'
 
@@ -35,6 +35,7 @@ import { isFreeModel } from '@/config/models/free'
 import { isNotSupportedTextDelta } from '@/config/models/utils'
 import { isNewApiProvider } from '@/config/providers'
 import { useSearch } from '@/hooks/useSearch'
+import { useSkeletonLoading } from '@/hooks/useSkeletonLoading'
 import type { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
 import { fetchModels } from '@/services/ApiService'
 import { loggerService } from '@/services/LoggerService'
@@ -133,8 +134,7 @@ export default function ManageModelsScreen() {
   const [allModels, setAllModels] = useState<Model[]>([])
   const [activeFilterType, setActiveFilterType] = useState<string>('all')
   const [isLoading, setIsLoading] = useState(true)
-  const [showSkeleton, setShowSkeleton] = useState(true)
-  const loadingStartTime = useRef(Date.now())
+  const showSkeleton = useSkeletonLoading(isLoading)
 
   const { providerId, providerName } = route.params
   const [provider, setProvider] = useState<Provider | undefined>(undefined)
@@ -234,23 +234,6 @@ export default function ManageModelsScreen() {
 
     fetchAndSetModels()
   }, [providerId])
-
-  useEffect(() => {
-    if (isLoading) {
-      loadingStartTime.current = Date.now()
-      setShowSkeleton(true)
-      return
-    }
-    const elapsed = Date.now() - loadingStartTime.current
-    const minDuration = 300
-    const remaining = minDuration - elapsed
-    if (remaining <= 0) {
-      setShowSkeleton(false)
-      return
-    }
-    const timer = setTimeout(() => setShowSkeleton(false), remaining)
-    return () => clearTimeout(timer)
-  }, [isLoading])
 
   return (
     <SafeAreaContainer className="flex-1">

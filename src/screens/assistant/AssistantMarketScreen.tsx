@@ -1,5 +1,5 @@
 import { DrawerActions, useNavigation } from '@react-navigation/native'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
@@ -16,6 +16,7 @@ import AssistantsTabContent from '@/componentsV2/features/Assistant/AssistantsTa
 import { Menu } from '@/componentsV2/icons'
 import { useBuiltInAssistants } from '@/hooks/useAssistant'
 import { useSearch } from '@/hooks/useSearch'
+import { useSkeletonLoading } from '@/hooks/useSkeletonLoading'
 import type { Assistant } from '@/types/assistant'
 import type { DrawerNavigationProps } from '@/types/naviagate'
 
@@ -33,27 +34,8 @@ export default function AssistantMarketScreen() {
     useCallback((assistant: Assistant) => [assistant.name || '', assistant.id || ''], [])
   )
 
-  const [showSkeleton, setShowSkeleton] = useState(true)
-  const loadingStartTime = useRef(Date.now())
-
   const isLoading = !builtInAssistants || builtInAssistants.length === 0
-
-  useEffect(() => {
-    if (isLoading) {
-      loadingStartTime.current = Date.now()
-      setShowSkeleton(true)
-      return
-    }
-    const elapsed = Date.now() - loadingStartTime.current
-    const minDuration = 300
-    const remaining = minDuration - elapsed
-    if (remaining <= 0) {
-      setShowSkeleton(false)
-      return
-    }
-    const timer = setTimeout(() => setShowSkeleton(false), remaining)
-    return () => clearTimeout(timer)
-  }, [isLoading])
+  const showSkeleton = useSkeletonLoading(isLoading)
 
   const handleMenuPress = () => {
     navigation.dispatch(DrawerActions.openDrawer())

@@ -1,7 +1,7 @@
 import type { RouteProp } from '@react-navigation/native'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import { SymbolView } from 'expo-symbols'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
@@ -11,6 +11,7 @@ import Text from '@/componentsV2/base/Text'
 import { MessageSquareDiff, Trash2 } from '@/componentsV2/icons/LucideIcon'
 import { useDialog } from '@/hooks/useDialog'
 import { useSearch } from '@/hooks/useSearch'
+import { useSkeletonLoading } from '@/hooks/useSkeletonLoading'
 import { useToast } from '@/hooks/useToast'
 import { useCurrentTopic, useTopics } from '@/hooks/useTopic'
 import type { HomeStackParamList } from '@/navigators/HomeStackNavigator'
@@ -35,8 +36,7 @@ export default function TopicScreen() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState(false)
-  const [showSkeleton, setShowSkeleton] = useState(true)
-  const loadingStartTime = useRef(Date.now())
+  const showSkeleton = useSkeletonLoading(isLoading)
 
   const assistantTopics = useMemo(() => {
     if (!assistantId) {
@@ -67,23 +67,6 @@ export default function TopicScreen() {
     }
     return await getDefaultAssistant()
   }, [assistantId])
-
-  useEffect(() => {
-    if (isLoading) {
-      loadingStartTime.current = Date.now()
-      setShowSkeleton(true)
-      return
-    }
-    const elapsed = Date.now() - loadingStartTime.current
-    const minDuration = 300
-    const remaining = minDuration - elapsed
-    if (remaining <= 0) {
-      setShowSkeleton(false)
-      return
-    }
-    const timer = setTimeout(() => setShowSkeleton(false), remaining)
-    return () => clearTimeout(timer)
-  }, [isLoading])
 
   const handleNavigateChatScreen = useCallback(
     (topicId: string) => {
