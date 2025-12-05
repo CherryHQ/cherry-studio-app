@@ -98,7 +98,7 @@ export const ImportDataSheet: React.FC = () => {
     <>
       <TrueSheet
         name={SHEET_NAME}
-        detents={['auto']}
+        detents={[0.19]}
         cornerRadius={30}
         grabber={Platform.OS === 'ios' ? true : false}
         dismissible
