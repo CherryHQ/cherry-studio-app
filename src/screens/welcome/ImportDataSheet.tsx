@@ -43,7 +43,8 @@ export const ImportDataSheet: React.FC = () => {
   const navigation = useNavigation<WelcomeNavigationProps>()
   const [isVisible, setIsVisible] = useState(false)
   const { isModalOpen, restoreSteps, overallStatus, startRestore, closeModal } = useRestore({
-    stepConfigs: DEFAULT_RESTORE_STEPS
+    stepConfigs: DEFAULT_RESTORE_STEPS,
+    clearBeforeRestore: true
   })
 
   useEffect(() => {
