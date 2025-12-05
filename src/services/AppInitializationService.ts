@@ -5,7 +5,7 @@ import * as Localization from 'expo-localization'
 
 import { getSystemAssistants } from '@/config/assistants'
 import { initBuiltinMcp } from '@/config/mcp'
-import { SYSTEM_PROVIDERS } from '@/config/providers'
+import { SYSTEM_PROVIDERS, SYSTEM_PROVIDERS_CONFIG } from '@/config/providers'
 import { getWebSearchProviders } from '@/config/websearchProviders'
 import { storage } from '@/utils'
 
@@ -17,6 +17,7 @@ import { topicService } from './TopicService'
 
 type AppDataMigration = {
   version: number
+  app_version: string
   description: string
   migrate: () => Promise<void>
 }
@@ -26,6 +27,7 @@ const logger = loggerService.withContext('AppInitializationService')
 const APP_DATA_MIGRATIONS: AppDataMigration[] = [
   {
     version: 1,
+    app_version: '0.1.0',
     description: 'Initial app data seeding',
     migrate: async () => {
       await seedDatabase(db)
@@ -51,6 +53,7 @@ const APP_DATA_MIGRATIONS: AppDataMigration[] = [
   },
   {
     version: 2,
+    app_version: '0.1.3',
     description: 'Sync built-in MCP servers (add @cherry/shortcuts)',
     migrate: async () => {
       // Get existing MCP servers from database
@@ -69,6 +72,39 @@ const APP_DATA_MIGRATIONS: AppDataMigration[] = [
       } else {
         logger.info('No new built-in MCP servers to add')
       }
+    }
+  },
+  {
+    version: 3,
+    app_version: '0.1.4',
+    description: 'Update AI Gateway host to new endpoint',
+    migrate: async () => {
+      const aiGatewayProvider = await providerDatabase.getProviderById('ai-gateway')
+      const desiredHost = SYSTEM_PROVIDERS_CONFIG['ai-gateway']?.apiHost
+
+      if (!desiredHost) {
+        logger.warn('AI Gateway provider configuration missing desired host; skipping migration')
+        return
+      }
+
+      if (!aiGatewayProvider) {
+        logger.info('AI Gateway provider not found in database; skipping host update')
+        return
+      }
+
+      if (aiGatewayProvider.apiHost === desiredHost) {
+        logger.info('AI Gateway provider already uses the updated host')
+        return
+      }
+
+      await providerDatabase.upsertProviders([
+        {
+          ...aiGatewayProvider,
+          apiHost: desiredHost
+        }
+      ])
+
+      logger.info(`AI Gateway provider host updated to ${desiredHost}`)
     }
   }
 ]

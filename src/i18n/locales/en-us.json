@@ -378,6 +378,7 @@
       "delete_topic": "Delete Topic",
       "delete_topic_confirmation": "Are you sure you want to delete this topic?",
       "delete_translation": "Remove Translation",
+      "editing_message": "[to be translated]:编辑",
       "marked_as_best_answer": "Marked as best answer",
       "searching": "Searching...",
       "share_message": "Share news",
@@ -541,8 +542,8 @@
           "confirm_warning": "Landrop transfer will overwrite all current app data with the received data.",
           "filename": "File Name",
           "scan_qr_code": {
-            "connection_error_message": "Unable to connect. Please check your LAN and scan the QR code again.",
             "connecting": "Connecting...",
+            "connection_error_message": "Unable to connect. Please check your LAN and scan the QR code again.",
             "description": "Scan QR Code from Cherry Studio",
             "disconnected_message": "The Landrop connection was disconnected. Please try again.",
             "disconnected_title": "Connection Lost",
@@ -890,6 +891,16 @@
             "title": "Free Service Providers"
           },
           "title": "Web Search Provider"
+        },
+        "providers": {
+          "bocha": "Bocha",
+          "builtin": "Built-in",
+          "exa": "Exa",
+          "local-baidu": "Baidu",
+          "local-bing": "Bing",
+          "local-google": "Google",
+          "searxng": "Searxng",
+          "tavily": "Tavily"
         },
         "searchCount": "Search Count",
         "searchWithDates": "Search with dates included",

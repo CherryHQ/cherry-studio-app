@@ -378,6 +378,7 @@
       "delete_topic": "トピックを削除",
       "delete_topic_confirmation": "このトピックを削除しますか？",
       "delete_translation": "翻訳を削除",
+      "editing_message": "[to be translated]:编辑",
       "marked_as_best_answer": "最適な回答として設定しました",
       "searching": "検索中...",
       "share_message": "メッセージを共有",
@@ -541,8 +542,8 @@
           "confirm_warning": "ランドロップ転送は、受信したデータで現在のアプリデータをすべて上書きします。",
           "filename": "ファイル名",
           "scan_qr_code": {
-            "connection_error_message": "接続に失敗しました。LAN の状態を確認し、QR コードをもう一度スキャンしてください。",
             "connecting": "接続中...",
+            "connection_error_message": "接続に失敗しました。LAN の状態を確認し、QR コードをもう一度スキャンしてください。",
             "description": "Cherry StudioからQRコードをスキャン",
             "disconnected_message": "Landrop の接続が切断されました。もう一度お試しください。",
             "disconnected_title": "接続が切断されました",
@@ -890,6 +891,16 @@
             "title": "無料サービスプロバイダー"
           },
           "title": "Web検索プロバイダー"
+        },
+        "providers": {
+          "bocha": "Bocha",
+          "builtin": "組み込み",
+          "exa": "Exa",
+          "local-baidu": "Baidu",
+          "local-bing": "Bing",
+          "local-google": "Google",
+          "searxng": "Searxng",
+          "tavily": "Tavily"
         },
         "searchCount": "検索数",
         "searchWithDates": "日付を含めて検索",

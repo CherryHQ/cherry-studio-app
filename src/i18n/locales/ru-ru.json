@@ -378,6 +378,7 @@
       "delete_topic": "Удалить тему",
       "delete_topic_confirmation": "Вы уверены, что хотите удалить эту тему?",
       "delete_translation": "Удалить перевод",
+      "editing_message": "[to be translated]:编辑",
       "marked_as_best_answer": "Отмечено как лучший ответ",
       "searching": "Поиск...",
       "share_message": "Поделиться новостью",
@@ -541,8 +542,8 @@
           "confirm_warning": "Передача через LanDrop перезапишет все текущие данные приложения полученными данными.",
           "filename": "Имя файла",
           "scan_qr_code": {
-            "connection_error_message": "Не удалось подключиться. Проверьте сеть и просканируйте QR-код ещё раз.",
             "connecting": "Подключение...",
+            "connection_error_message": "Не удалось подключиться. Проверьте сеть и просканируйте QR-код ещё раз.",
             "description": "Отсканируйте QR-код в Cherry Studio",
             "disconnected_message": "Соединение Landrop было разорвано. Попробуйте снова.",
             "disconnected_title": "Соединение потеряно",
@@ -890,6 +891,16 @@
             "title": "Бесплатные поставщики услуг"
           },
           "title": "Поставщик веб-поиска"
+        },
+        "providers": {
+          "bocha": "Bocha",
+          "builtin": "Встроенный",
+          "exa": "Exa",
+          "local-baidu": "Baidu",
+          "local-bing": "Bing",
+          "local-google": "Google",
+          "searxng": "Searxng",
+          "tavily": "Tavily"
         },
         "searchCount": "Количество поисков",
         "searchWithDates": "Поиск с включением дат",

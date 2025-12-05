@@ -38,7 +38,9 @@ export const ExternalTools: React.FC<ExternalToolsProps> = ({
   const options: ExternalTool[] = [
     {
       key: 'webSearch',
-      label: t('common.websearch'),
+      label: assistant.webSearchProviderId
+        ? `${t('common.websearch')}(${t(`settings.websearch.providers.${assistant.webSearchProviderId}`)})`
+        : t('common.websearch'),
       icon: <Globe size={20} />,
       onPress: onWebSearchToggle,
       isActive: !!assistant.enableWebSearch,
@@ -75,9 +77,9 @@ export const ExternalTools: React.FC<ExternalToolsProps> = ({
             key={option.key}
             className="my-1 w-full items-center justify-between rounded-xl px-0 py-2"
             onPress={option.onPress}>
-            <XStack className="gap-5">
+            <XStack className="items-center gap-2">
               {React.cloneElement(option.icon, { className: activeColorClass } as any)}
-              <Text className={`text-base ${activeColorClass}`}>{option.label}</Text>
+              <Text className={`text-lg ${activeColorClass}`}>{option.label}</Text>
             </XStack>
             {option.isActive && <Check size={20} className="primary-text" />}
           </PressableRow>

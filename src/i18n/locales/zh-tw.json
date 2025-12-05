@@ -378,6 +378,7 @@
       "delete_topic": "刪除主題",
       "delete_topic_confirmation": "您確定要刪除這個主題嗎？",
       "delete_translation": "刪除翻譯",
+      "editing_message": "[to be translated]:编辑",
       "marked_as_best_answer": "已標記為最佳回答",
       "searching": "搜尋中...",
       "share_message": "分享訊息",
@@ -541,8 +542,8 @@
           "confirm_warning": "局域網傳輸將使用接收到的資料覆蓋當前所有應用程式資料。",
           "filename": "檔名",
           "scan_qr_code": {
-            "connection_error_message": "連線失敗，請檢查區域網路狀態並重新掃描 QR Code。",
             "connecting": "正在連接...",
+            "connection_error_message": "連線失敗，請檢查區域網路狀態並重新掃描 QR Code。",
             "description": "從Cherry Studio掃描QR碼",
             "disconnected_message": "Landrop 連線已斷開，請重試。",
             "disconnected_title": "連線已斷開",
@@ -890,6 +891,16 @@
             "title": "免費服務提供商"
           },
           "title": "網頁搜尋服務供應商"
+        },
+        "providers": {
+          "bocha": "Bocha",
+          "builtin": "內建",
+          "exa": "Exa",
+          "local-baidu": "Baidu",
+          "local-bing": "Bing",
+          "local-google": "Google",
+          "searxng": "Searxng",
+          "tavily": "Tavily"
         },
         "searchCount": "搜尋數量",
         "searchWithDates": "包含日期搜尋",

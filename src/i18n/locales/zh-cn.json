@@ -542,7 +542,6 @@
           "confirm_warning": "局域网传输将使用接收到的数据覆盖当前所有应用数据。",
           "filename": "文件名",
           "scan_qr_code": {
-            "connection_error_message": "连接失败，请检查局域网状态并重新扫描二维码。",
             "connecting": "正在连接...",
             "connection_error_message": "连接失败，请检查局域网状态并重新扫描二维码。",
             "description": "请使用Cherry Studio扫码",
@@ -892,6 +891,16 @@
             "title": "免费服务服务商"
           },
           "title": "网络搜索服务服务商"
+        },
+        "providers": {
+          "bocha": "Bocha",
+          "builtin": "内置",
+          "exa": "Exa",
+          "local-baidu": "Baidu",
+          "local-bing": "Bing",
+          "local-google": "Google",
+          "searxng": "Searxng",
+          "tavily": "Tavily"
         },
         "searchCount": "搜索数量",
         "searchWithDates": "包含日期搜索",
