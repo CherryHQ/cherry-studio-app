@@ -9,7 +9,7 @@ import { BrushCleaning } from '@/componentsV2/icons/LucideIcon'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 
-export const HEADER_HEIGHT = 80
+export const HEADER_HEIGHT = 60
 
 interface ModelListHeaderProps {
   searchQuery: string
@@ -56,7 +56,7 @@ export const ModelListHeader: React.FC<ModelListHeaderProps> = ({
               feedbackVariant="ripple"
               size="sm"
               className={`h-10 rounded-xl ${
-                isMultiSelectActive ? 'primary-container border' : 'bg-card border border-transparent'
+                isMultiSelectActive ? 'primary-container border' : 'bg-secondary border border-transparent'
               }`}
               onPress={onToggleMultiSelect}>
               <Button.Label>
@@ -68,7 +68,7 @@ export const ModelListHeader: React.FC<ModelListHeaderProps> = ({
             <Button
               size="sm"
               feedbackVariant="ripple"
-              className="bg-card h-10 rounded-full"
+              className="bg-secondary h-10 rounded-full"
               isIconOnly
               onPress={onClearAll}>
               <Button.Label>

@@ -124,7 +124,7 @@ const ModelSheet: React.FC = () => {
       onDidPresent={handleDidPresent}>
       <View className={isIOS ? undefined : 'bg-card'} style={{ height: sheetContentHeight, position: 'relative' }}>
         <SectionList
-          style={{ flex: 1, paddingTop: HEADER_HEIGHT }}
+          style={{ flex: 1, paddingTop: HEADER_HEIGHT * 2 }}
           ref={listRef}
           sections={sections}
           extraData={{ selectedModels, isMultiSelectActive, searchQuery, activeProvider }}

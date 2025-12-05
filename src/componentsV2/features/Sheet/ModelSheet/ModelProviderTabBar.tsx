@@ -4,8 +4,8 @@ import { View } from 'react-native'
 
 import { ProviderIcon } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
-import { isIOS } from '@/utils/device'
 
+import { HEADER_HEIGHT } from './ModelListHeader'
 import type { SelectOption } from './types'
 
 interface ModelProviderTabBarProps {
@@ -14,12 +14,12 @@ interface ModelProviderTabBarProps {
   onProviderChange: (provider: string) => void
   bottom: number
 }
+export const TAB_BAR_HEIGHT = 48
 
 export const ModelProviderTabBar: React.FC<ModelProviderTabBarProps> = ({
   selectOptions,
   activeProvider,
-  onProviderChange,
-  bottom
+  onProviderChange
 }) => {
   if (selectOptions.length === 0) {
     return null
@@ -27,15 +27,15 @@ export const ModelProviderTabBar: React.FC<ModelProviderTabBarProps> = ({
 
   return (
     <View
-      className="bg-card absolute bottom-0 left-0 right-0 overflow-hidden "
-      style={{ paddingBottom: isIOS ? bottom + 35 : bottom, paddingHorizontal: 10 }}>
+      className="bg-card absolute left-0 right-0 overflow-hidden"
+      style={{ paddingHorizontal: 20, height: TAB_BAR_HEIGHT, top: HEADER_HEIGHT }}>
       <Tabs value={activeProvider} onValueChange={onProviderChange}>
         <Tabs.ScrollView>
-          <Tabs.List aria-label="Provider tabs" className="bg-transparent">
+          <Tabs.List aria-label="Provider tabs" className="bg-transparent px-0">
             <Tabs.Indicator className="primary-container rounded-xl border" />
             {selectOptions.map(group => (
               <Tabs.Trigger key={group.label} value={group.label}>
-                <XStack className="items-center gap-1.5 px-1">
+                <XStack className="items-center gap-1.5">
                   <ProviderIcon provider={group.provider} size={18} />
                   <Tabs.Label className={cn(activeProvider === group.label ? 'primary-text' : undefined)}>
                     {group.label}
