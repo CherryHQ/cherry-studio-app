@@ -54,7 +54,8 @@
           "prompt": "提示词调用",
           "title": "工具调用方式"
         },
-        "top_p": "Top P"
+        "top_p": "Top P",
+        "unlimited_context": "启用最大上下文限制"
       },
       "sort": {
         "alphabetical": "按字母顺序的",

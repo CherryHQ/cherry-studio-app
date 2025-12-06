@@ -54,7 +54,8 @@
           "prompt": "提示詞呼叫",
           "title": "工具呼叫方式"
         },
-        "top_p": "Top P"
+        "top_p": "Top P",
+        "unlimited_context": "啟用最大上下文限制"
       },
       "sort": {
         "alphabetical": "按字母順序排列的",

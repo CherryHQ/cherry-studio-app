@@ -12,7 +12,7 @@ import Row from '@/componentsV2/layout/Row'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { isReasoningModel } from '@/config/models'
-import { DEFAULT_CONTEXTCOUNT, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE } from '@/constants'
+import { DEFAULT_CONTEXTCOUNT, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, MAX_CONTEXT_COUNT } from '@/constants'
 import type { Assistant, AssistantSettings, Model } from '@/types/assistant'
 import { getBaseModelName } from '@/utils/naming'
 
@@ -129,25 +129,46 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
           </TextField>
         </Row>
         <Row>
-          <Text>{t('assistants.settings.context')}</Text>
-          <TextField className="min-w-[60px]">
-            <TextField.Input
-              className="rounded-xl"
-              value={contextInput}
-              onChangeText={setContextInput}
-              onEndEditing={() => {
-                const parsedValue = parseInt(contextInput)
-
-                if (!isNaN(parsedValue) && parsedValue >= 0 && parsedValue <= 100) {
-                  handleSettingsChange('contextCount', parsedValue)
-                } else {
-                  setContextInput((settings.contextCount ?? DEFAULT_CONTEXTCOUNT).toString())
-                }
-              }}
-              keyboardType="numeric"
-            />
-          </TextField>
+          <Text>{t('assistants.settings.unlimited_context')}</Text>
+          <Switch
+            isSelected={(settings.contextCount ?? DEFAULT_CONTEXTCOUNT) < MAX_CONTEXT_COUNT}
+            onSelectedChange={checked => {
+              if (checked) {
+                // 启用限制 → 使用有限值
+                handleSettingsChange('contextCount', DEFAULT_CONTEXTCOUNT)
+                setContextInput(DEFAULT_CONTEXTCOUNT.toString())
+              } else {
+                // 关闭限制 → 无限
+                handleSettingsChange('contextCount', MAX_CONTEXT_COUNT)
+              }
+            }}
+          />
         </Row>
+        {(settings.contextCount ?? DEFAULT_CONTEXTCOUNT) < MAX_CONTEXT_COUNT && (
+          <Row>
+            <Text>{t('assistants.settings.context')}</Text>
+            <TextField className="min-w-[60px]">
+              <TextField.Input
+                className="rounded-xl"
+                value={contextInput}
+                onChangeText={setContextInput}
+                onEndEditing={() => {
+                  const parsedValue = parseInt(contextInput)
+
+                  if (!isNaN(parsedValue) && parsedValue >= 0) {
+                    // >= 100 自动设为无限
+                    const finalValue = parsedValue >= MAX_CONTEXT_COUNT ? MAX_CONTEXT_COUNT : parsedValue
+                    handleSettingsChange('contextCount', finalValue)
+                    setContextInput(finalValue.toString())
+                  } else {
+                    setContextInput((settings.contextCount ?? DEFAULT_CONTEXTCOUNT).toString())
+                  }
+                }}
+                keyboardType="numeric"
+              />
+            </TextField>
+          </Row>
+        )}
       </Group>
 
       <Group>

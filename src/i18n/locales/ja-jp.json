@@ -54,7 +54,8 @@
           "prompt": "プロンプト呼び出し",
           "title": "ツール呼び出し方法"
         },
-        "top_p": "トップP"
+        "top_p": "トップP",
+        "unlimited_context": "最大コンテキスト制限を有効化"
       },
       "sort": {
         "alphabetical": "アルファベット順",

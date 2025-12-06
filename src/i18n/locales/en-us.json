@@ -54,7 +54,8 @@
           "prompt": "Prompt invocation",
           "title": "Tool invocation method"
         },
-        "top_p": "Top P"
+        "top_p": "Top P",
+        "unlimited_context": "Enable Max Context Limit"
       },
       "sort": {
         "alphabetical": "Alphabetical",
