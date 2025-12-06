@@ -9,6 +9,7 @@ import { presentDialog } from '@/componentsV2'
 import ContextMenu, { type ContextMenuListProps } from '@/componentsV2/base/ContextMenu'
 import Text from '@/componentsV2/base/Text'
 import EmojiAvatar from '@/componentsV2/features/Assistant/EmojiAvatar'
+import { ExportOptionsContent } from '@/componentsV2/features/TopicItem/ExportOptionsContent'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useAssistant } from '@/hooks/useAssistant'
@@ -123,6 +124,21 @@ export const TopicItem: FC<TopicItemProps> = ({
   }, [])
 
   const tempNameRef = useRef(topic.name)
+  const exportOptionsRef = useRef({ includeReasoning: false })
+
+  const handleExport = () => {
+    exportOptionsRef.current = { includeReasoning: false }
+    presentDialog('success', {
+      title: t('export.options.title'),
+      content: <ExportOptionsContent optionsRef={exportOptionsRef} />,
+      confirmText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      showCancel: true,
+      onConfirm: () => {
+        exportTopic(topic, exportOptionsRef.current)
+      }
+    })
+  }
 
   const handleRename = () => {
     presentDialog('info', {
@@ -188,7 +204,7 @@ export const TopicItem: FC<TopicItemProps> = ({
       title: t('export.md.label'),
       iOSIcon: 'arrow.down.doc',
       androidIcon: <Download size={16} className="text-foreground" />,
-      onSelect: () => exportTopic(topic)
+      onSelect: handleExport
     },
     {
       title: t('common.delete'),

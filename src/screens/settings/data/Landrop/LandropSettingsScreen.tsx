@@ -5,7 +5,7 @@ import { Button, Spinner } from 'heroui-native'
 import React, { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { HeaderBar, presentDialog,RestoreProgressModal, SafeAreaContainer, Text, YStack  } from '@/componentsV2'
+import { HeaderBar, presentDialog, RestoreProgressModal, SafeAreaContainer, Text, YStack } from '@/componentsV2'
 import { DEFAULT_BACKUP_STORAGE } from '@/constants/storage'
 import { useAppState } from '@/hooks/useAppState'
 import { LANDROP_RESTORE_STEPS, RESTORE_STEP_CONFIGS, useRestore } from '@/hooks/useRestore'

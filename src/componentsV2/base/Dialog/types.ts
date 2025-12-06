@@ -39,9 +39,9 @@ export const DIALOG_COLORS: Record<DialogType, { border: string; bg: string; tex
     spinner: '#fbbf24'
   },
   success: {
-    border: 'border-green-400/40',
-    bg: 'bg-green-400/15',
-    text: 'text-green-400',
-    spinner: '#4ade80'
+    border: 'border-primary/30',
+    bg: 'bg-primary/15',
+    text: 'primary-text',
+    spinner: 'primary-text'
   }
 }

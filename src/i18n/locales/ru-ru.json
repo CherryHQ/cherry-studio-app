@@ -297,6 +297,10 @@
       "obsidian_title_required": "Заголовок не может быть пустым",
       "obsidian_vault": "Хранилище",
       "obsidian_vault_placeholder": "Выберите имя хранилища",
+      "options": {
+        "include_reasoning": "Включить цепочку рассуждений",
+        "title": "Параметры экспорта"
+      },
       "siyuan": "Экспорт в Siyuan Note",
       "success": "Экспорт успешно завершён",
       "title": "Экспортировать сообщения",

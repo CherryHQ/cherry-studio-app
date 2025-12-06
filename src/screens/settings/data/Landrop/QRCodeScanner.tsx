@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
 
-import { Container, presentDialog,Text, XStack, YStack  } from '@/componentsV2'
+import { Container, presentDialog, Text, XStack, YStack } from '@/componentsV2'
 import { ScanQrCode } from '@/componentsV2/icons/LucideIcon'
 import { loggerService } from '@/services/LoggerService'
 import type { CompressedConnectionInfo, ConnectionInfo } from '@/types/network'

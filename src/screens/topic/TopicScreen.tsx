@@ -5,7 +5,16 @@ import React, { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
-import { HeaderBar, ListSkeleton, presentDialog,SafeAreaContainer, SearchInput, TopicList, XStack, YStack  } from '@/componentsV2'
+import {
+  HeaderBar,
+  ListSkeleton,
+  presentDialog,
+  SafeAreaContainer,
+  SearchInput,
+  TopicList,
+  XStack,
+  YStack
+} from '@/componentsV2'
 import { LiquidGlassButton } from '@/componentsV2/base/LiquidGlassButton'
 import Text from '@/componentsV2/base/Text'
 import { MessageSquareDiff, Trash2 } from '@/componentsV2/icons/LucideIcon'

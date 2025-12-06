@@ -297,6 +297,10 @@
       "obsidian_title_required": "The title cannot be empty",
       "obsidian_vault": "Vault",
       "obsidian_vault_placeholder": "Please select the vault name",
+      "options": {
+        "include_reasoning": "Include reasoning chain",
+        "title": "Export Options"
+      },
       "siyuan": "Export to Siyuan Note",
       "success": "Exported successfully",
       "title": "Export Message",

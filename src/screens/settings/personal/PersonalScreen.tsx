@@ -4,7 +4,17 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity } from 'react-native'
 
-import { Container, HeaderBar, Image, presentDialog,SafeAreaContainer, Text, TextField, XStack, YStack  } from '@/componentsV2'
+import {
+  Container,
+  HeaderBar,
+  Image,
+  presentDialog,
+  SafeAreaContainer,
+  Text,
+  TextField,
+  XStack,
+  YStack
+} from '@/componentsV2'
 import { Camera, CircleUserRound } from '@/componentsV2/icons/LucideIcon'
 import { useSettings } from '@/hooks/useSettings'
 import { loggerService } from '@/services/LoggerService'

@@ -297,6 +297,10 @@
       "obsidian_title_required": "タイトルは空白にできません",
       "obsidian_vault": "保管庫",
       "obsidian_vault_placeholder": "保管庫名を選択してください",
+      "options": {
+        "include_reasoning": "推論チェーンを含める",
+        "title": "エクスポートオプション"
+      },
       "siyuan": "思源笔记にエクスポート",
       "success": "エクスポート成功",
       "title": "エクスポートメッセージ",

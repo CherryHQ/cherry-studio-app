@@ -297,6 +297,10 @@
       "obsidian_title_required": "标题不能为空",
       "obsidian_vault": "保管库",
       "obsidian_vault_placeholder": "请选择保管库名称",
+      "options": {
+        "include_reasoning": "包含推理链",
+        "title": "导出选项"
+      },
       "siyuan": "导出到思源笔记",
       "success": "导出成功",
       "title": "导出消息",

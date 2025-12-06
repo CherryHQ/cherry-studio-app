@@ -7,13 +7,14 @@ import {
   Group,
   GroupTitle,
   HeaderBar,
-presentDialog,  PressableRow,
+  presentDialog,
+  PressableRow,
   RowRightArrow,
   SafeAreaContainer,
   Text,
   XStack,
   YStack
- } from '@/componentsV2'
+} from '@/componentsV2'
 import { FolderSearch2, Wifi } from '@/componentsV2/icons/LucideIcon'
 import type { NavigationProps } from '@/types/naviagate'
 

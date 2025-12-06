@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { Keyboard, TouchableWithoutFeedback } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 
-import { Container, HeaderBar, presentDialog,SafeAreaContainer, Text, TextField, XStack, YStack  } from '@/componentsV2'
+import { Container, HeaderBar, presentDialog, SafeAreaContainer, Text, TextField, XStack, YStack } from '@/componentsV2'
 import { ProviderIconButton } from '@/componentsV2/features/SettingsScreen/ProviderIconButton'
 import { ProviderSelect } from '@/componentsV2/features/SettingsScreen/ProviderSelect'
 import { DEFAULT_ICONS_STORAGE } from '@/constants/storage'

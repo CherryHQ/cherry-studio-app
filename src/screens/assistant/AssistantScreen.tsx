@@ -10,12 +10,13 @@ import {
   DrawerGestureWrapper,
   HeaderBar,
   ListSkeleton,
-presentDialog,  SafeAreaContainer,
+  presentDialog,
+  SafeAreaContainer,
   SearchInput,
   Text,
   XStack,
   YStack
- } from '@/componentsV2'
+} from '@/componentsV2'
 import { LiquidGlassButton } from '@/componentsV2/base/LiquidGlassButton'
 import AssistantItem from '@/componentsV2/features/Assistant/AssistantItem'
 import { presentAssistantItemSheet } from '@/componentsV2/features/Assistant/AssistantItemSheet'

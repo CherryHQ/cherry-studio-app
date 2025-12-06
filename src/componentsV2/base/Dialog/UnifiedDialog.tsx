@@ -30,11 +30,7 @@ export function UnifiedDialog({
   const { t } = useTranslation()
   const colors = DIALOG_COLORS[type]
   const dialogContent =
-    typeof content === 'string' ? (
-      <Dialog.Description className="text-zinc-300">{content}</Dialog.Description>
-    ) : (
-      content
-    )
+    typeof content === 'string' ? <Dialog.Description className="text-zinc-300">{content}</Dialog.Description> : content
 
   return (
     <Dialog isOpen={isOpen} onOpenChange={onOpenChange}>
@@ -53,11 +49,11 @@ export function UnifiedDialog({
             )}
             <Button
               variant="ghost"
-              className={`h-8 rounded-xl border ${colors.border} ${colors.bg}`}
+              className={`h-8 items-center justify-center rounded-xl border ${colors.border} ${colors.bg}`}
               onPress={onConfirmPress}
               isIconOnly={isLoading}>
               {isLoading ? (
-                <Spinner size="sm" color={colors.spinner} />
+                <Spinner className={colors.spinner} size="sm" />
               ) : (
                 <Button.Label className={colors.text}>{confirmText ?? t('common.confirm')}</Button.Label>
               )}
