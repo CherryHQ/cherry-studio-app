@@ -14,10 +14,12 @@ interface CallbacksDependencies {
   assistantMsgId: string
   saveUpdatesToDB: any
   assistant: Assistant
+  startTime: number
+  onNotify?: (message: string) => void
 }
 
 export const createCallbacks = async (deps: CallbacksDependencies) => {
-  const { blockManager, topicId, assistantMsgId, saveUpdatesToDB, assistant } = deps
+  const { blockManager, topicId, assistantMsgId, saveUpdatesToDB, assistant, startTime, onNotify } = deps
 
   // 创建基础回调
   const baseCallbacks = await createBaseCallbacks({
@@ -25,7 +27,9 @@ export const createCallbacks = async (deps: CallbacksDependencies) => {
     topicId,
     assistantMsgId,
     saveUpdatesToDB,
-    assistant
+    assistant,
+    startTime,
+    onNotify
   })
 
   // 创建各类回调

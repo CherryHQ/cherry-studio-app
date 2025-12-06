@@ -40,7 +40,7 @@
 
 import { db } from '@db/index'
 import { preferenceTable } from '@db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 
 import { loggerService } from '@/services/LoggerService'
 import { DefaultPreferences } from '@/shared/data/preference/preferenceSchemas'
@@ -480,11 +480,22 @@ export class PreferenceService {
     this.notify(key)
 
     try {
-      // 4. Persist to database in background
+      // 4. Persist to database in background using upsert
+      // INSERT if not exists, UPDATE if exists
       await db
-        .update(preferenceTable)
-        .set({ value: newValue as any })
-        .where(eq(preferenceTable.key, key))
+        .insert(preferenceTable)
+        .values({
+          key,
+          value: newValue as any,
+          updatedAt: sql`(datetime('now'))`
+        })
+        .onConflictDoUpdate({
+          target: preferenceTable.key,
+          set: {
+            value: newValue as any,
+            updatedAt: sql`(datetime('now'))`
+          }
+        })
 
       logger.debug(`Preference ${key} saved to database: ${JSON.stringify(newValue)}`)
     } catch (error) {

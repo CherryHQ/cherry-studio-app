@@ -536,6 +536,7 @@ export async function fetchAndProcessAssistantResponseImpl(
   assistantMessage: Message
 ) {
   const assistantMsgId = assistantMessage.id
+  const startTime = Date.now()
   let callbacks: StreamProcessorCallbacks = {}
 
   try {
@@ -576,7 +577,8 @@ export async function fetchAndProcessAssistantResponseImpl(
       topicId,
       assistantMsgId,
       saveUpdatesToDB,
-      assistant
+      assistant,
+      startTime
     })
     const streamProcessorCallbacks = createStreamProcessor(callbacks)
 
@@ -698,6 +700,7 @@ export async function deleteMessageById(messageId: string): Promise<void> {
 }
 
 export async function fetchTranslateThunk(assistantMessageId: string, message: Message) {
+  const startTime = Date.now()
   let callbacks: StreamProcessorCallbacks = {}
   const translateAssistant = await assistantService.getAssistant('translate')
 
@@ -724,7 +727,8 @@ export async function fetchTranslateThunk(assistantMessageId: string, message: M
     topicId: message.topicId,
     assistantMsgId: assistantMessageId,
     saveUpdatesToDB,
-    assistant: translateAssistant
+    assistant: translateAssistant,
+    startTime
   })
 
   callbacks.onTextStart = async () => {

@@ -1,7 +1,7 @@
 import type { NoSuchToolError } from 'ai'
 import { InvalidToolInputError } from 'ai'
 import { t } from 'i18next'
-import type { z } from 'zod'
+import { ZodError } from 'zod'
 
 import type {
   AiSdkErrorUnion,
@@ -12,6 +12,7 @@ import type {
 } from '@/types/error'
 import { isSerializedAiSdkAPICallError } from '@/types/error'
 
+import { parseJSON } from './json'
 import { safeSerialize } from './serialize'
 
 // const logger = loggerService.withContext('Utils:error')
@@ -43,24 +44,28 @@ export function getErrorDetails(err: any, seen = new WeakSet()): any {
   return result
 }
 
-export function formatErrorMessage(error: any): string {
-  try {
-    const detailedError = getErrorDetails(error)
-    delete detailedError?.headers
-    delete detailedError?.stack
-    delete detailedError?.request_id
+export function formatErrorMessage(error: unknown): string {
+  if (error instanceof ZodError) {
+    return formatZodError(error)
+  }
 
-    const formattedJson = JSON.stringify(detailedError, null, 2)
-      .split('\n')
-      .map(line => `  ${line}`)
-      .join('\n')
-    return `Error Details:\n${formattedJson}`
-  } catch {
-    try {
-      return `Error: ${String(error)}`
-    } catch {
-      return 'Error: Unable to format error message'
-    }
+  const detailedError = getErrorDetails(error)
+  delete detailedError?.headers
+  delete detailedError?.stack
+  delete detailedError?.request_id
+
+  const formattedJson = JSON.stringify(detailedError, null, 2)
+    .split('\n')
+    .map(line => `  ${line}`)
+    .join('\n')
+  return detailedError.message ? detailedError.message : `Error Details:\n${formattedJson}`
+}
+
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  } else {
+    return t('error.unknown')
   }
 }
 
@@ -138,7 +143,22 @@ export const serializeError = (error: AiSdkErrorUnion): SerializedError => {
   if ('url' in error) serializedError.url = error.url
   if ('requestBodyValues' in error) serializedError.requestBodyValues = safeSerialize(error.requestBodyValues)
   if ('statusCode' in error) serializedError.statusCode = error.statusCode ?? null
-  if ('responseBody' in error) serializedError.responseBody = error.responseBody ?? null
+  if ('responseBody' in error && error.responseBody) {
+    const body = parseJSON(error.responseBody)
+    if (body) {
+      const message = body.message || body.msg
+      if (message) {
+        if (serializedError.message === null) {
+          serializedError.message = message
+        } else {
+          serializedError.message += ' ' + message
+        }
+      }
+      serializedError.responseBody = JSON.stringify(body, null, 2)
+    } else {
+      serializedError.responseBody = error.responseBody
+    }
+  }
   if ('isRetryable' in error) serializedError.isRetryable = error.isRetryable
   if ('data' in error) serializedError.data = safeSerialize(error.data)
   if ('responseHeaders' in error) serializedError.responseHeaders = error.responseHeaders ?? null
@@ -168,6 +188,7 @@ export const serializeError = (error: AiSdkErrorUnion): SerializedError => {
       ? serializeInvalidToolInputError(error.originalError)
       : serializeNoSuchToolError(error.originalError)
   if ('functionality' in error) serializedError.functionality = error.functionality
+  if ('provider' in error) serializedError.provider = error.provider
 
   return serializedError
 }
@@ -178,7 +199,7 @@ export const serializeError = (error: AiSdkErrorUnion): SerializedError => {
  * @param title - 可选的错误标题，会作为前缀添加到错误信息中
  * @returns 格式化后的错误信息字符串。
  */
-export const formatZodError = (error: z.ZodError, title?: string) => {
+export const formatZodError = (error: ZodError, title?: string) => {
   const readableErrors = error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`)
   const errorMessage = readableErrors.join('\n')
   return title ? `${title}: \n${errorMessage}` : errorMessage

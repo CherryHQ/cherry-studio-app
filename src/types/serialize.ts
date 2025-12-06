@@ -27,7 +27,6 @@ export function isSerializable(value: unknown): boolean {
       if (seen.has(val)) {
         return true // 避免无限递归，假设循环引用对象本身结构合法（但实际 JSON.stringify 会报错）
       }
-
       seen.add(val)
 
       if (Array.isArray(val)) {
@@ -36,7 +35,6 @@ export function isSerializable(value: unknown): boolean {
 
       // 检查是否为纯对象（plain object）
       const proto = Object.getPrototypeOf(val)
-
       if (proto !== null && proto !== Object.prototype && proto !== Array.prototype) {
         return false // 不是 plain object，比如 class 实例
       }

@@ -598,6 +598,9 @@
       },
       "dataAndSecurity": "Данные и безопасность",
       "general": {
+        "developer_mode": {
+          "title": "Режим разработчика"
+        },
         "display": {
           "title": "Настройки отображения"
         },

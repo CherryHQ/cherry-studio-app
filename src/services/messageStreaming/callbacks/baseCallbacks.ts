@@ -1,11 +1,13 @@
 import { messageDatabase } from '@database'
+import { NoObjectGeneratedError } from 'ai'
 
 import { loggerService } from '@/services/LoggerService'
 import { estimateMessagesUsage } from '@/services/TokenService'
 import type { Assistant } from '@/types/assistant'
+import type { AiSdkErrorUnion } from '@/types/error'
 import type { Message, PlaceholderMessageBlock, Response } from '@/types/message'
 import { AssistantMessageStatus, MessageBlockStatus, MessageBlockType } from '@/types/message'
-import { formatErrorMessage, isAbortError } from '@/utils/error'
+import { isAbortError, serializeError } from '@/utils/error'
 import { createBaseMessageBlock, createErrorBlock } from '@/utils/messageUtils/create'
 import { findAllBlocks } from '@/utils/messageUtils/find'
 
@@ -19,10 +21,12 @@ interface BaseCallbacksDependencies {
   assistantMsgId: string
   saveUpdatesToDB: any
   assistant: Assistant
+  startTime: number
+  onNotify?: (message: string) => void
 }
 
 export const createBaseCallbacks = async (deps: BaseCallbacksDependencies) => {
-  const { blockManager, topicId, assistantMsgId, saveUpdatesToDB, assistant } = deps
+  const { blockManager, topicId, assistantMsgId, saveUpdatesToDB, assistant, startTime, onNotify } = deps
 
   // 防止 onError 被多次调用
   let errorHandled = false
@@ -70,7 +74,7 @@ export const createBaseCallbacks = async (deps: BaseCallbacksDependencies) => {
     //   await blockManager.handleBlockTransition(baseBlock as PlaceholderMessageBlock, MessageBlockType.UNKNOWN)
     // },
 
-    onError: async (error: any) => {
+    onError: async (error: AiSdkErrorUnion) => {
       // 防止重复处理错误
       if (errorHandled) {
         logger.debug('onError already handled, skipping duplicate call')
@@ -78,33 +82,24 @@ export const createBaseCallbacks = async (deps: BaseCallbacksDependencies) => {
       }
       errorHandled = true
 
-      let isErrorTypeAbort = false
-      try {
-        isErrorTypeAbort = isAbortError(error)
-      } catch {
-        // isAbortError failed, treat as non-abort error
+      // Early return for NoObjectGeneratedError (no error block needed)
+      if (NoObjectGeneratedError.isInstance(error)) {
+        logger.debug('NoObjectGeneratedError detected, skipping error handling')
+        return
       }
 
-      let pauseErrorLanguagePlaceholder = ''
+      const isErrorTypeAbort = isAbortError(error)
+
+      // Use serializeError utility for proper serialization
+      const serializableError = serializeError(error)
       if (isErrorTypeAbort) {
-        pauseErrorLanguagePlaceholder = 'pause_placeholder'
+        serializableError.message = 'pause_placeholder'
       }
 
-      let serializableError: any
-      try {
-        serializableError = {
-          name: error?.name || 'UnknownError',
-          message: pauseErrorLanguagePlaceholder || error?.message || formatErrorMessage(error),
-          originalMessage: error?.message,
-          stack: error?.stack,
-          status: error?.status || error?.code,
-          requestId: error?.request_id
-        }
-      } catch {
-        serializableError = {
-          name: 'UnknownError',
-          message: 'Error serialization failed'
-        }
+      // Duration-based notification for long-running errors
+      const duration = Date.now() - startTime
+      if (!isErrorTypeAbort && duration > 30 * 1000) {
+        onNotify?.(serializableError.message ?? 'An error occurred')
       }
 
       const possibleBlockId = await findBlockIdForCompletion()

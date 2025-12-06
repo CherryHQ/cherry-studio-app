@@ -598,6 +598,9 @@
       },
       "dataAndSecurity": "資料與安全性",
       "general": {
+        "developer_mode": {
+          "title": "開發者模式"
+        },
         "display": {
           "title": "顯示設定"
         },

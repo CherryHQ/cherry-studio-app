@@ -33,5 +33,6 @@ export interface PreferenceSchemas {
     // App State
     'app.initialization_version': number
     'app.dismissed_update_version': string
+    'app.developer_mode': boolean
   }
 }

@@ -1,12 +1,15 @@
+import { Switch } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Container, Group, GroupTitle, HeaderBar, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
 import { LanguageDropdown } from '@/componentsV2/features/SettingsScreen/LanguageDropdown'
 import { ThemeDropdown } from '@/componentsV2/features/SettingsScreen/ThemeDropdown'
+import { usePreference } from '@/hooks/usePreference'
 
 export default function GeneralSettingsScreen() {
   const { t } = useTranslation()
+  const [developerMode, setDeveloperMode] = usePreference('app.developer_mode')
 
   return (
     <SafeAreaContainer className="flex-1">
@@ -35,18 +38,16 @@ export default function GeneralSettingsScreen() {
             </Group>
           </YStack>
 
-          {/* Privacy settings */}
-          {/*<YStack gap={8}>
-            <SettingGroupTitle>{t('settings.general.display.title')}</SettingGroupTitle>
-            <SettingGroup>
-              <SettingRow>
-                <XStack alignItems="center">
-                  <Text fontSize="$5">{t('settings.general.privacy.anonymous')}</Text>
-                </XStack>
-                <CustomSwitch />
-              </SettingRow>
-            </SettingGroup>
-          </YStack>*/}
+          {/* Developer settings */}
+          <YStack className="gap-2">
+            <GroupTitle>{t('settings.general.developer_mode.title')}</GroupTitle>
+            <Group>
+              <XStack className="items-center justify-between p-4">
+                <Text className="text-lg">{t('settings.general.developer_mode.title')}</Text>
+                <Switch isSelected={developerMode} onSelectedChange={setDeveloperMode} />
+              </XStack>
+            </Group>
+          </YStack>
         </YStack>
       </Container>
     </SafeAreaContainer>
