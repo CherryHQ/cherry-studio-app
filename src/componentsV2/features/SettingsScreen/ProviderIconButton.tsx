@@ -4,10 +4,10 @@ import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity } from 'react-native'
 
+import { presentDialog } from '@/componentsV2'
 import Image from '@/componentsV2/base/Image'
 import { DefaultProviderIcon, PenLine } from '@/componentsV2/icons'
 import YStack from '@/componentsV2/layout/YStack'
-import { useDialog } from '@/hooks/useDialog'
 import { loggerService } from '@/services/LoggerService'
 import type { FileMetadata } from '@/types/file'
 import { getFileType } from '@/utils/file'
@@ -61,7 +61,6 @@ const validateImage = (asset: ImagePicker.ImagePickerAsset): string | null => {
 
 export function ProviderIconButton({ providerId, iconUri, onImageSelected }: ProviderIconButtonProps) {
   const { t } = useTranslation()
-  const dialog = useDialog()
   const [image, setImage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -88,8 +87,7 @@ export function ProviderIconButton({ providerId, iconUri, onImageSelected }: Pro
       const validationError = validateImage(asset)
 
       if (validationError) {
-        dialog.open({
-          type: 'error',
+        presentDialog('error', {
           title: t('common.error'),
           content: validationError
         })
@@ -101,8 +99,7 @@ export function ProviderIconButton({ providerId, iconUri, onImageSelected }: Pro
       onImageSelected?.(file)
     } catch (error) {
       logger.error('handleUploadIcon Error', error)
-      dialog.open({
-        type: 'error',
+      presentDialog('error', {
         title: t('common.error_occurred'),
         content: 'Failed to upload image. Please try again.'
       })

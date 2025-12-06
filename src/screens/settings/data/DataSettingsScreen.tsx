@@ -7,15 +7,14 @@ import {
   Group,
   GroupTitle,
   HeaderBar,
-  PressableRow,
+presentDialog,  PressableRow,
   RowRightArrow,
   SafeAreaContainer,
   Text,
   XStack,
   YStack
-} from '@/componentsV2'
+ } from '@/componentsV2'
 import { FolderSearch2, Wifi } from '@/componentsV2/icons/LucideIcon'
-import { useDialog } from '@/hooks/useDialog'
 import type { NavigationProps } from '@/types/naviagate'
 
 interface SettingItemConfig {
@@ -33,16 +32,15 @@ interface SettingGroupConfig {
 export default function DataSettingsScreen() {
   const { t } = useTranslation()
   const navigation = useNavigation<NavigationProps>()
-  const dialog = useDialog()
 
   const handleLandrop = () => {
-    dialog.open({
-      type: 'warning',
+    presentDialog('warning', {
       title: t('settings.data.landrop.title'),
       content: t('settings.data.landrop.confirm_warning'),
       confirmText: t('common.confirm'),
       cancelText: t('common.cancel'),
-      onConFirm: () => {
+      showCancel: true,
+      onConfirm: () => {
         navigation.navigate('HomeScreen', {
           screen: 'Home',
           params: {

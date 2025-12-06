@@ -7,11 +7,10 @@ import { useTranslation } from 'react-i18next'
 import { Keyboard, TouchableWithoutFeedback } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 
-import { Container, HeaderBar, SafeAreaContainer, Text, TextField, XStack, YStack } from '@/componentsV2'
+import { Container, HeaderBar, presentDialog,SafeAreaContainer, Text, TextField, XStack, YStack  } from '@/componentsV2'
 import { ProviderIconButton } from '@/componentsV2/features/SettingsScreen/ProviderIconButton'
 import { ProviderSelect } from '@/componentsV2/features/SettingsScreen/ProviderSelect'
 import { DEFAULT_ICONS_STORAGE } from '@/constants/storage'
-import { useDialog } from '@/hooks/useDialog'
 import { useProvider } from '@/hooks/useProviders'
 import type { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
 import { uploadFiles } from '@/services/FileService'
@@ -28,7 +27,6 @@ type AddProviderScreenRouteProp = RouteProp<ProvidersStackParamList, 'AddProvide
 
 export default function AddProviderScreen() {
   const { t } = useTranslation()
-  const dialog = useDialog()
   const navigation = useNavigation<ProvidersNavigationProps>()
   const route = useRoute<AddProviderScreenRouteProp>()
 
@@ -114,8 +112,7 @@ export default function AddProviderScreen() {
       }
     } catch (error) {
       logger.error('handleSaveProvider', error as Error)
-      dialog.open({
-        type: 'error',
+      presentDialog('error', {
         title: t('common.error_occurred'),
         content: error instanceof Error ? error.message : t('common.unknown_error')
       })

@@ -45,7 +45,9 @@ export function useModelSelection({ mentions, allModelOptions, setMentions }: Us
 
     setSelectedModels(newSelection)
 
-    const newMentions = allModelOptions.filter(option => newSelection.includes(option.value)).map(option => option.model)
+    const newMentions = allModelOptions
+      .filter(option => newSelection.includes(option.value))
+      .map(option => option.model)
     InteractionManager.runAfterInteractions(async () => {
       await Promise.resolve(setMentions(newMentions, isMultiSelectActive))
     })

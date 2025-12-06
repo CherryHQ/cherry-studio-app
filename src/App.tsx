@@ -19,7 +19,7 @@ import { Provider } from 'react-redux'
 import { PersistGate } from 'redux-persist/integration/react'
 import { Uniwind } from 'uniwind'
 
-import { UpdateChecker } from '@/componentsV2'
+import { DialogManager, UpdateChecker } from '@/componentsV2'
 import SheetManager from '@/componentsV2/features/Sheet/SheetManager'
 import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
@@ -110,6 +110,7 @@ function ThemedApp() {
               <UpdateChecker>
                 <MainStackNavigator />
                 <SheetManager />
+                <DialogManager />
               </UpdateChecker>
             </ToastProvider>
           </DialogProvider>

@@ -10,18 +10,17 @@ import {
   DrawerGestureWrapper,
   HeaderBar,
   ListSkeleton,
-  SafeAreaContainer,
+presentDialog,  SafeAreaContainer,
   SearchInput,
   Text,
   XStack,
   YStack
-} from '@/componentsV2'
+ } from '@/componentsV2'
 import { LiquidGlassButton } from '@/componentsV2/base/LiquidGlassButton'
 import AssistantItem from '@/componentsV2/features/Assistant/AssistantItem'
 import { presentAssistantItemSheet } from '@/componentsV2/features/Assistant/AssistantItemSheet'
 import { Menu, Plus, Trash2 } from '@/componentsV2/icons/LucideIcon'
 import { useAssistants } from '@/hooks/useAssistant'
-import { useDialog } from '@/hooks/useDialog'
 import { useSearch } from '@/hooks/useSearch'
 import { useSkeletonLoading } from '@/hooks/useSkeletonLoading'
 import { useToast } from '@/hooks/useToast'
@@ -39,7 +38,6 @@ export default function AssistantScreen() {
   const { t } = useTranslation()
   const navigation = useNavigation<DrawerNavigationProps>()
   const toast = useToast()
-  const dialog = useDialog()
 
   const { assistants, isLoading } = useAssistants()
 
@@ -159,17 +157,17 @@ export default function AssistantScreen() {
 
   const handleBatchDelete = useCallback(() => {
     if (!hasSelection || isDeleting) return
-    dialog.open({
-      type: 'error',
+    presentDialog('error', {
       title: t('assistants.multi_select.delete_confirm_title', { count: selectionCount }),
       content: t('assistants.multi_select.delete_confirm_message', { count: selectionCount }),
       confirmText: t('common.delete'),
       cancelText: t('common.cancel'),
-      onConFirm: () => {
+      showCancel: true,
+      onConfirm: () => {
         void performBatchDelete()
       }
     })
-  }, [dialog, hasSelection, isDeleting, performBatchDelete, selectionCount, t])
+  }, [hasSelection, isDeleting, performBatchDelete, selectionCount, t])
 
   return (
     <SafeAreaContainer className="pb-0">

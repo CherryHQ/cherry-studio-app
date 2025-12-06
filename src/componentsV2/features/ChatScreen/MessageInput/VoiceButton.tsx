@@ -2,9 +2,9 @@ import React, { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
 
+import { presentDialog } from '@/componentsV2'
 import { IconButton } from '@/componentsV2/base/IconButton'
 import { Mic, Square } from '@/componentsV2/icons'
-import { useDialog } from '@/hooks/useDialog'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { useTheme } from '@/hooks/useTheme'
 
@@ -16,7 +16,6 @@ interface VoiceButtonProps {
 export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscript, onListeningChange }) => {
   const { t } = useTranslation()
   const { isDark } = useTheme()
-  const dialog = useDialog()
 
   const { isListening, isProcessing, transcript, toggleListening } = useSpeechRecognition({
     onTranscript: (text, isFinal) => {
@@ -29,8 +28,7 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscript, onListen
       const isNoSpeechError = errorMessage.toLowerCase().includes('no speech')
       if (isNoSpeechError) return
 
-      dialog.open({
-        type: 'error',
+      presentDialog('error', {
         title: t('common.error_occurred'),
         content: errorMessage
       })

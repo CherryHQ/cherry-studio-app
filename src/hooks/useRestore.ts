@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useDispatch } from 'react-redux'
 
+import { presentDialog } from '@/componentsV2'
 import type { RestoreStep } from '@/componentsV2/features/SettingsScreen/RestoreProgressModal'
 import { databaseMaintenance } from '@/database/DatabaseMaintenance'
-import { useDialog } from '@/hooks/useDialog'
 import { resetAppInitializationState, runAppDataMigrations } from '@/services/AppInitializationService'
 import type { ProgressUpdate, RestoreStepId, StepStatus } from '@/services/BackupService'
 import { restore } from '@/services/BackupService'
@@ -69,7 +69,6 @@ export interface UseRestoreOptions {
 export function useRestore(options: UseRestoreOptions = {}) {
   const { t } = useTranslation()
   const dispatch = useDispatch()
-  const dialog = useDialog()
 
   const { stepConfigs = DEFAULT_RESTORE_STEPS, clearBeforeRestore = false, customRestoreFunction = restore } = options
 
@@ -81,8 +80,7 @@ export function useRestore(options: UseRestoreOptions = {}) {
     const isValid = file.name.includes('cherry-studio')
 
     if (!isValid) {
-      dialog.open({
-        type: 'error',
+      presentDialog('error', {
         title: t('error.backup.title'),
         content: t('error.backup.file_invalid')
       })
@@ -155,8 +153,7 @@ export function useRestore(options: UseRestoreOptions = {}) {
         logger.info('Existing data cleared successfully')
       } catch (error) {
         logger.error('Failed to clear existing data:', error)
-        dialog.open({
-          type: 'error',
+        presentDialog('error', {
           title: t('common.error'),
           content: t('settings.data.restore.clear_error')
         })

@@ -10,6 +10,7 @@ import {
   ExternalLink,
   GroupTitle,
   HeaderBar,
+  presentDialog,
   SafeAreaContainer,
   Text,
   TextField,
@@ -18,16 +19,16 @@ import {
 } from '@/componentsV2'
 import { Eye, EyeOff, ShieldCheck } from '@/componentsV2/icons/LucideIcon'
 import { WEB_SEARCH_PROVIDER_CONFIG } from '@/config/websearchProviders'
-import { useDialog } from '@/hooks/useDialog'
 import { useWebSearchProvider } from '@/hooks/useWebsearchProviders'
 import type { WebSearchStackParamList } from '@/navigators/settings/WebSearchStackNavigator'
 import WebSearchService from '@/services/WebSearchService'
 
 type WebsearchProviderSettingsRouteProp = RouteProp<WebSearchStackParamList, 'WebSearchProviderSettingsScreen'>
 
+const waitForDialogSpinner = () => new Promise(resolve => setTimeout(resolve, 50))
+
 export default function WebSearchProviderSettingsScreen() {
   const { t } = useTranslation()
-  const dialog = useDialog()
   const route = useRoute<WebsearchProviderSettingsRouteProp>()
 
   const [showApiKey, setShowApiKey] = useState(false)
@@ -66,54 +67,40 @@ export default function WebSearchProviderSettingsScreen() {
   }
 
   const handleApiCheck = () => {
-    dialog.open({
-      type: 'info',
+    presentDialog('info', {
       title: t('settings.provider.api_check.title'),
       content: t('settings.provider.api_check.confirm_message'),
-      showLoading: true,
-      closeOnConfirm: false,
-      maskClosable: false,
-      onConFirm: async () => {
-        // 确认后开始检查
-        await new Promise(resolve => setTimeout(resolve, 300))
-        await checkSearch()
+      showCancel: true,
+      onConfirm: async () => {
+        if (!provider) return
+        await waitForDialogSpinner()
+
+        try {
+          const { valid, error } = await WebSearchService.checkSearch(provider)
+          const errorMessage =
+            error && error?.message
+              ? ' ' + (error.message.length > 100 ? error.message.substring(0, 100) + '...' : error.message)
+              : ''
+
+          if (valid) {
+            presentDialog('success', {
+              title: t('settings.websearch.check_success'),
+              content: t('settings.websearch.check_success_message')
+            })
+          } else {
+            presentDialog('error', {
+              title: t('settings.websearch.check_fail'),
+              content: errorMessage
+            })
+          }
+        } catch {
+          presentDialog('error', {
+            title: t('settings.websearch.check_error'),
+            content: t('common.error_occurred')
+          })
+        }
       }
     })
-  }
-
-  async function checkSearch() {
-    if (!provider) return
-
-    try {
-      const { valid, error } = await WebSearchService.checkSearch(provider)
-      const errorMessage =
-        error && error?.message
-          ? ' ' + (error.message.length > 100 ? error.message.substring(0, 100) + '...' : error.message)
-          : ''
-
-      if (valid) {
-        dialog.open({
-          type: 'success',
-          title: t('settings.websearch.check_success'),
-          content: t('settings.websearch.check_success_message'),
-          showCancel: false
-        })
-      } else {
-        dialog.open({
-          type: 'error',
-          title: t('settings.websearch.check_fail'),
-          content: errorMessage,
-          showCancel: false
-        })
-      }
-    } catch {
-      dialog.open({
-        type: 'error',
-        title: t('settings.websearch.check_error'),
-        content: t('common.error_occurred'),
-        showCancel: false
-      })
-    }
   }
 
   return (

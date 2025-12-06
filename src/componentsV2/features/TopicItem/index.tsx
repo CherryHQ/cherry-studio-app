@@ -5,14 +5,13 @@ import ContentLoader, { Rect } from 'react-content-loader/native'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
+import { presentDialog } from '@/componentsV2'
 import ContextMenu, { type ContextMenuListProps } from '@/componentsV2/base/ContextMenu'
 import Text from '@/componentsV2/base/Text'
-import TextField from '@/componentsV2/base/TextField'
 import EmojiAvatar from '@/componentsV2/features/Assistant/EmojiAvatar'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useAssistant } from '@/hooks/useAssistant'
-import { useDialog } from '@/hooks/useDialog'
 import { useExport } from '@/hooks/useExport'
 import { useTheme } from '@/hooks/useTheme'
 import { useToast } from '@/hooks/useToast'
@@ -76,7 +75,6 @@ export const TopicItem: FC<TopicItemProps> = ({
   const navigation = useNavigation<HomeNavigationProps>()
   const { assistant } = useAssistant(topic.assistantId)
   const [isGeneratingName, setIsGeneratingName] = useState(false)
-  const dialog = useDialog()
   const { isDark } = useTheme()
   const isActive = currentTopicId === topic.id
   const toast = useToast()
@@ -127,24 +125,13 @@ export const TopicItem: FC<TopicItemProps> = ({
   const tempNameRef = useRef(topic.name)
 
   const handleRename = () => {
-    dialog.open({
+    presentDialog('info', {
       title: t('topics.rename.title'),
+      content: topic.name,
       confirmText: t('common.save'),
       cancelText: t('common.cancel'),
-      content: (
-        <TextField className="mt-2 w-full">
-          <TextField.Input
-            className="rounded-2xl bg-transparent"
-            defaultValue={topic.name}
-            onChangeText={value => {
-              tempNameRef.current = value
-            }}
-            autoFocus
-            placeholder={t('common.please_enter') || ''}
-          />
-        </TextField>
-      ),
-      onConFirm: () => {
+      showCancel: true,
+      onConfirm: () => {
         handleSaveRename(tempNameRef.current)
       }
     })
@@ -166,8 +153,7 @@ export const TopicItem: FC<TopicItemProps> = ({
       try {
         onRename?.(topic.id, newName.trim())
       } catch (error) {
-        dialog.open({
-          type: 'error',
+        presentDialog('error', {
           title: t('common.error_occurred'),
           content: (error as Error).message || 'Unknown error'
         })

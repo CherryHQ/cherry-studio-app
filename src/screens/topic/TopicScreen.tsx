@@ -5,11 +5,10 @@ import React, { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
-import { HeaderBar, ListSkeleton, SafeAreaContainer, SearchInput, TopicList, XStack, YStack } from '@/componentsV2'
+import { HeaderBar, ListSkeleton, presentDialog,SafeAreaContainer, SearchInput, TopicList, XStack, YStack  } from '@/componentsV2'
 import { LiquidGlassButton } from '@/componentsV2/base/LiquidGlassButton'
 import Text from '@/componentsV2/base/Text'
 import { MessageSquareDiff, Trash2 } from '@/componentsV2/icons/LucideIcon'
-import { useDialog } from '@/hooks/useDialog'
 import { useSearch } from '@/hooks/useSearch'
 import { useSkeletonLoading } from '@/hooks/useSkeletonLoading'
 import { useToast } from '@/hooks/useToast'
@@ -24,6 +23,8 @@ import { isIOS } from '@/utils/device'
 
 const logger = loggerService.withContext('TopicScreen')
 
+const waitForDialogSpinner = () => new Promise(resolve => setTimeout(resolve, 50))
+
 export default function TopicScreen() {
   const { t } = useTranslation()
   const navigation = useNavigation<HomeNavigationProps>()
@@ -32,7 +33,6 @@ export default function TopicScreen() {
   const { topics, isLoading } = useTopics()
   const { currentTopicId, switchTopic } = useCurrentTopic()
   const toast = useToast()
-  const dialog = useDialog()
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState(false)
@@ -162,17 +162,18 @@ export default function TopicScreen() {
 
   const handleBatchDelete = useCallback(() => {
     if (!hasSelection || isDeleting) return
-    dialog.open({
-      type: 'error',
+    presentDialog('error', {
       title: t('topics.multi_select.delete_confirm_title', { count: selectionCount }),
       content: t('topics.multi_select.delete_confirm_message', { count: selectionCount }),
       confirmText: t('common.delete'),
       cancelText: t('common.cancel'),
-      onConFirm: () => {
-        void performBatchDelete()
+      showCancel: true,
+      onConfirm: async () => {
+        await waitForDialogSpinner() // ensure dialog shows spinner before heavy delete
+        await performBatchDelete()
       }
     })
-  }, [dialog, hasSelection, isDeleting, performBatchDelete, selectionCount, t])
+  }, [hasSelection, isDeleting, performBatchDelete, selectionCount, t])
 
   return (
     <SafeAreaContainer className="flex-1">

@@ -4,9 +4,8 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity } from 'react-native'
 
-import { Container, HeaderBar, Image, SafeAreaContainer, Text, TextField, XStack, YStack } from '@/componentsV2'
+import { Container, HeaderBar, Image, presentDialog,SafeAreaContainer, Text, TextField, XStack, YStack  } from '@/componentsV2'
 import { Camera, CircleUserRound } from '@/componentsV2/icons/LucideIcon'
-import { useDialog } from '@/hooks/useDialog'
 import { useSettings } from '@/hooks/useSettings'
 import { loggerService } from '@/services/LoggerService'
 
@@ -14,7 +13,6 @@ const logger = loggerService.withContext('PersonalScreen')
 
 export default function PersonalScreen() {
   const { t } = useTranslation()
-  const dialog = useDialog()
   const { avatar, userName, setAvatar, setUserName } = useSettings()
 
   const handleAvatarPress = async () => {
@@ -35,8 +33,7 @@ export default function PersonalScreen() {
         }
       }
     } catch (error) {
-      dialog.open({
-        type: 'error',
+      presentDialog('error', {
         title: 'Error',
         content: 'Failed to pick image'
       })

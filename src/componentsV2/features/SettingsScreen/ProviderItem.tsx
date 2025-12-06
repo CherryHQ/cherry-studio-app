@@ -3,12 +3,12 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SFSymbol } from 'sf-symbols-typescript'
 
+import { presentDialog } from '@/componentsV2'
 import ContextMenu from '@/componentsV2/base/ContextMenu'
 import Text from '@/componentsV2/base/Text'
 import { Edit3, ProviderIcon, Trash2 } from '@/componentsV2/icons'
 import RowRightArrow from '@/componentsV2/layout/Row/RowRightArrow'
 import XStack from '@/componentsV2/layout/XStack'
-import { useDialog } from '@/hooks/useDialog'
 import { useToast } from '@/hooks/useToast'
 import { deleteProvider } from '@/services/ProviderService'
 import type { Provider } from '@/types/assistant'
@@ -23,7 +23,6 @@ interface ProviderItemProps {
 export const ProviderItem: React.FC<ProviderItemProps> = ({ provider, mode = 'enabled', onEdit }) => {
   const { t } = useTranslation()
   const navigation = useNavigation<ProvidersNavigationProps>()
-  const dialog = useDialog()
   const toast = useToast()
 
   // Determine display conditions and text based on mode
@@ -35,13 +34,13 @@ export const ProviderItem: React.FC<ProviderItemProps> = ({ provider, mode = 'en
   }
 
   const handleDelete = () => {
-    dialog.open({
-      type: 'error',
+    presentDialog('error', {
       title: t('settings.provider.delete.title'),
       content: t('settings.provider.delete.content'),
       confirmText: t('common.delete'),
       cancelText: t('common.cancel'),
-      onConFirm: async () => {
+      showCancel: true,
+      onConfirm: async () => {
         try {
           await deleteProvider(provider.id)
           toast.show(t('settings.provider.provider_deleted'))

@@ -16,22 +16,17 @@ import {
   XStack,
   YStack
 } from '@/componentsV2'
-import { ModelSelect } from '@/componentsV2/features/SettingsScreen/ModelSelect'
+import { presentProviderCheckSheet } from '@/componentsV2/features/Sheet/ProviderCheckSheet'
 import { Eye, EyeOff, ShieldCheck, XCircle } from '@/componentsV2/icons/LucideIcon'
 import { PROVIDER_URLS } from '@/config/providers'
-import { useDialog } from '@/hooks/useDialog'
 import { useProvider } from '@/hooks/useProviders'
 import type { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
-import { checkApi } from '@/services/ApiService'
-import { loggerService } from '@/services/LoggerService'
-import type { ApiStatus, Model } from '@/types/assistant'
-const logger = loggerService.withContext('ApiServiceScreen')
+import type { ApiStatus } from '@/types/assistant'
 
 type ProviderSettingsRouteProp = RouteProp<ProvidersStackParamList, 'ApiServiceScreen'>
 
 export default function ApiServiceScreen() {
   const { t } = useTranslation()
-  const dialog = useDialog()
   const route = useRoute<ProviderSettingsRouteProp>()
 
   const { providerId } = route.params
@@ -72,24 +67,8 @@ export default function ApiServiceScreen() {
     )
   }
 
-  const handleOpenBottomSheet = () => {
-    let selectedModel: Model | undefined
-
-    dialog.open({
-      type: 'success',
-      title: t('settings.provider.api_check.title'),
-      content: (
-        <ModelSelect
-          provider={provider}
-          onSelectModel={model => {
-            selectedModel = model
-          }}
-        />
-      ),
-      onConFirm: async () => {
-        await handleStartModelCheck(selectedModel)
-      }
-    })
+  const handleProviderCheck = () => {
+    presentProviderCheckSheet(provider, setCheckApiStatus)
   }
 
   const toggleApiKeyVisibility = () => {
@@ -107,48 +86,6 @@ export default function ApiServiceScreen() {
     await updateProvider(updatedProvider)
   }
 
-  // 模型检测处理
-  const handleStartModelCheck = async (model: Model | undefined) => {
-    if (!model || !apiKey) {
-      let errorKey = ''
-
-      if (!model && !apiKey) {
-        errorKey = 'model_api_key_empty'
-      } else if (!model) {
-        errorKey = 'model_empty'
-      } else if (!apiKey) {
-        errorKey = 'api_key_empty'
-      }
-
-      dialog.open({
-        type: 'error',
-        title: t('settings.provider.check_failed.title'),
-        content: t(`settings.provider.check_failed.${errorKey}`)
-      })
-      return
-    }
-
-    try {
-      setCheckApiStatus('processing')
-      await checkApi(provider, model)
-      setCheckApiStatus('success')
-    } catch (error: any) {
-      logger.error('Model check failed:', error)
-      const errorMessage =
-        error && error.message
-          ? ' ' + (error.message.length > 100 ? error.message.substring(0, 100) + '...' : error.message)
-          : ''
-
-      setCheckApiStatus('error')
-
-      dialog.open({
-        type: 'error',
-        title: t('settings.provider.check_failed.title'),
-        content: errorMessage
-      })
-    }
-  }
-
   return (
     <SafeAreaContainer className="flex-1">
       <HeaderBar title={t('settings.provider.api_service')} />
@@ -157,7 +94,7 @@ export default function ApiServiceScreen() {
         <YStack className="gap-2">
           <XStack className="items-center justify-between">
             <GroupTitle>{t('settings.provider.api_key.label')}</GroupTitle>
-            <Button feedbackVariant="ripple" size="sm" isIconOnly variant="ghost" onPress={handleOpenBottomSheet}>
+            <Button feedbackVariant="ripple" size="sm" isIconOnly variant="ghost" onPress={handleProviderCheck}>
               <Button.Label>
                 {checkApiStatus === 'idle' && <ShieldCheck size={16} />}
                 {checkApiStatus === 'error' && <XCircle size={16} />}

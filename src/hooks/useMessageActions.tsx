@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import Share from 'react-native-share'
 import { useDispatch } from 'react-redux'
 
+import { presentDialog } from '@/componentsV2'
 import { loggerService } from '@/services/LoggerService'
 import { deleteMessageById, fetchTranslateThunk, regenerateAssistantMessage } from '@/services/MessagesService'
 import { setEditingMessage } from '@/store/runtime'
@@ -16,7 +17,6 @@ import type { HomeNavigationProps } from '@/types/naviagate'
 import { filterMessages } from '@/utils/messageUtils/filters'
 import { findTranslationBlocks, getMainTextContent } from '@/utils/messageUtils/find'
 
-import { useDialog } from './useDialog'
 import { useToast } from './useToast'
 
 const logger = loggerService.withContext('useMessageActions')
@@ -35,7 +35,6 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
   const [isTranslating, setIsTranslating] = useState(false)
   const [isTranslated, setIsTranslated] = useState(false)
   const toast = useToast()
-  const dialog = useDialog()
   const navigation = useNavigation<HomeNavigationProps>()
 
   useEffect(() => {
@@ -68,13 +67,13 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
 
   const handleDelete = async () => {
     return new Promise<void>((resolve, reject) => {
-      dialog.open({
-        type: 'error',
+      presentDialog('error', {
         title: t('message.delete_message'),
         content: t('message.delete_message_confirmation'),
         confirmText: t('common.delete'),
         cancelText: t('common.cancel'),
-        onConFirm: async () => {
+        showCancel: true,
+        onConfirm: async () => {
           try {
             await deleteMessageById(message.id)
 
@@ -86,8 +85,7 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
             resolve()
           } catch (error) {
             logger.error('Error deleting message:', error)
-            dialog.open({
-              type: 'error',
+            presentDialog('error', {
               title: t('common.error'),
               content: t('common.error_occurred')
             })
@@ -145,22 +143,20 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
       const errorMessage = error instanceof Error ? error.message : String(error)
 
       if (errorMessage.includes('Translate assistant model is not defined')) {
-        dialog.open({
-          type: 'warning',
+        presentDialog('warning', {
           title: t('common.error_occurred'),
           content: t('error.translate_assistant_model_not_defined'),
           confirmText: t('common.go_to_settings'),
-          onConFirm: () => {
+          onConfirm: () => {
             navigation.navigate('AssistantSettings', {
               screen: 'AssistantSettingsScreen'
             })
           }
         })
       } else {
-        dialog.open({
+        presentDialog('error', {
           title: t('common.error_occurred'),
-          content: errorMessage,
-          type: 'error'
+          content: errorMessage
         })
       }
     } finally {

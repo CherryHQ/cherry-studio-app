@@ -3,11 +3,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react' // å¼•å
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity } from 'react-native'
 
+import { presentDialog } from '@/componentsV2'
 import Text from '@/componentsV2/base/Text'
 import { ChevronDown, ChevronRight } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
-import { useDialog } from '@/hooks/useDialog'
 import { useToast } from '@/hooks/useToast'
 import { useCurrentTopic } from '@/hooks/useTopic'
 import { getDefaultAssistant } from '@/services/AssistantService'
@@ -21,6 +21,8 @@ import { getTimeFormatForGroup, groupItemsByDate } from '@/utils/date'
 import { TopicItem } from '../TopicItem'
 
 const logger = loggerService.withContext('GroupTopicList')
+
+const waitForDialogSpinner = () => new Promise(resolve => setTimeout(resolve, 50))
 
 interface GroupedTopicListProps {
   topics: Topic[]
@@ -52,7 +54,6 @@ export function TopicList({
   const [localTopics, setLocalTopics] = useState<Topic[]>([])
   const { currentTopicId, switchTopic } = useCurrentTopic()
   const toast = useToast()
-  const dialog = useDialog()
   const selectionKey = useMemo(() => {
     return selectedTopicIds.slice().sort().join(',')
   }, [selectedTopicIds])
@@ -131,13 +132,14 @@ export function TopicList({
   }, [topics, t, collapsedGroups])
 
   const handleDelete = async (topicId: string) => {
-    dialog.open({
-      type: 'error',
+    presentDialog('error', {
       title: t('message.delete_topic'),
       content: t('message.delete_topic_confirmation'),
       confirmText: t('common.delete'),
       cancelText: t('common.cancel'),
-      onConFirm: async () => {
+      showCancel: true,
+      onConfirm: async () => {
+        await waitForDialogSpinner() // allow dialog spinner to render before work starts
         try {
           // Optimistically update local state
           const updatedTopics = localTopics.filter(topic => topic.id !== topicId)

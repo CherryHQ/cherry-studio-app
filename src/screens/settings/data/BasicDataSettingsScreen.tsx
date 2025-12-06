@@ -14,6 +14,7 @@ import {
   Group,
   GroupTitle,
   HeaderBar,
+  presentDialog,
   PressableRow,
   RestoreProgressModal,
   RowRightArrow,
@@ -23,7 +24,6 @@ import {
   YStack
 } from '@/componentsV2'
 import { FileText, Folder, FolderOpen, RotateCcw, Save, Trash2 } from '@/componentsV2/icons/LucideIcon'
-import { useDialog } from '@/hooks/useDialog'
 import { DEFAULT_RESTORE_STEPS, useRestore } from '@/hooks/useRestore'
 import { backup } from '@/services/BackupService'
 import { getCacheDirectorySize, resetCacheDirectory, saveFileToFolder } from '@/services/FileService'
@@ -50,7 +50,6 @@ interface SettingGroupConfig {
 
 export default function BasicDataSettingsScreen() {
   const { t } = useTranslation()
-  const dialog = useDialog()
   const [isResetting, setIsResetting] = useState(false)
   const [isBackup, setIsBackup] = useState(false)
   const [cacheSize, setCacheSize] = useState<string>('--')
@@ -94,15 +93,14 @@ export default function BasicDataSettingsScreen() {
     }
   }
 
-  const handleRestore = async () => {
-    dialog.open({
-      type: 'warning',
+  const handleRestore = () => {
+    presentDialog('warning', {
       title: t('settings.data.restore.title'),
       content: t('settings.data.restore.confirm_warning'),
       confirmText: t('common.confirm'),
       cancelText: t('common.cancel'),
-      showLoading: true,
-      onConFirm: async () => {
+      showCancel: true,
+      onConfirm: async () => {
         const result = await DocumentPicker.getDocumentAsync({ type: 'application/zip' })
         if (result.canceled) return
 
@@ -117,17 +115,16 @@ export default function BasicDataSettingsScreen() {
     })
   }
 
-  const handleDataReset = async () => {
+  const handleDataReset = () => {
     if (isResetting) return
 
-    dialog.open({
-      type: 'warning',
+    presentDialog('warning', {
       title: t('settings.data.reset'),
       content: t('settings.data.reset_warning'),
       confirmText: t('common.confirm'),
       cancelText: t('common.cancel'),
-      showLoading: true,
-      onConFirm: async () => {
+      showCancel: true,
+      onConfirm: async () => {
         setIsResetting(true)
 
         try {
@@ -138,8 +135,7 @@ export default function BasicDataSettingsScreen() {
           delay(async () => await reloadAppAsync(), 200)
         } catch (error) {
           setIsResetting(false)
-          dialog.open({
-            type: 'error',
+          presentDialog('error', {
             title: t('common.error'),
             content: t('settings.data.data_reset.error')
           })
@@ -149,24 +145,23 @@ export default function BasicDataSettingsScreen() {
     })
   }
 
-  const handleClearCache = async () => {
+  const handleClearCache = () => {
     if (isResetting) return
 
-    dialog.open({
-      type: 'warning',
+    presentDialog('warning', {
       title: t('settings.data.clear_cache.title'),
       content: t('settings.data.clear_cache.warning'),
       confirmText: t('common.confirm'),
       cancelText: t('common.cancel'),
-      onConFirm: async () => {
+      showCancel: true,
+      onConfirm: async () => {
         setIsResetting(true)
 
         try {
           await resetCacheDirectory() // reset cache
           await loadCacheSize() // refresh cache size after clearing
         } catch (error) {
-          dialog.open({
-            type: 'error',
+          presentDialog('error', {
             title: t('common.error'),
             content: t('settings.data.clear_cache.error')
           })
@@ -188,16 +183,14 @@ export default function BasicDataSettingsScreen() {
         })
       } else {
         // On iOS, we can only share the directory info
-        dialog.open({
-          type: 'info',
+        presentDialog('info', {
           title: t('settings.data.app_data'),
           content: `${t('settings.data.app_data_location')}: ${Paths.document.uri}`
         })
       }
     } catch (error) {
       logger.error('handleOpenAppData', error as Error)
-      dialog.open({
-        type: 'info',
+      presentDialog('info', {
         title: t('settings.data.app_data'),
         content: `${t('settings.data.app_data_location')}: ${Paths.document.uri}`
       })
@@ -210,19 +203,16 @@ export default function BasicDataSettingsScreen() {
       const result = await saveFileToFolder(logPath, 'app.log', 'text/plain')
 
       if (!result.success && result.message !== 'cancelled') {
-        dialog.open({
-          type: 'info',
+        presentDialog('info', {
           title: t('settings.data.app_logs'),
-          content: `${t('settings.data.log_location')}: ${logPath}`
+          content: `${t('settings.data.log_location')}: ${Paths.join(Paths.document.uri, 'app.log')}`
         })
       }
     } catch (error) {
       logger.error('handleOpenAppLogs', error as Error)
-      const logPath = Paths.join(Paths.document.uri, 'app.log')
-      dialog.open({
-        type: 'info',
+      presentDialog('info', {
         title: t('settings.data.app_logs'),
-        content: `${t('settings.data.log_location')}: ${logPath}`
+        content: `${t('settings.data.log_location')}: ${Paths.join(Paths.document.uri, 'app.log')}`
       })
     }
   }

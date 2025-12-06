@@ -5,9 +5,8 @@ import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
 
-import { Container, Text, XStack, YStack } from '@/componentsV2'
+import { Container, presentDialog,Text, XStack, YStack  } from '@/componentsV2'
 import { ScanQrCode } from '@/componentsV2/icons/LucideIcon'
-import { useDialog } from '@/hooks/useDialog'
 import { loggerService } from '@/services/LoggerService'
 import type { CompressedConnectionInfo, ConnectionInfo } from '@/types/network'
 
@@ -42,19 +41,16 @@ interface QRCodeScannerProps {
 export function QRCodeScanner({ onQRCodeScanned }: QRCodeScannerProps) {
   const { t } = useTranslation()
   const navigation = useNavigation()
-  const dialog = useDialog()
   const [permission, requestPermission] = useCameraPermissions()
   const [isRequestingPermission, setIsRequestingPermission] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
     if (permission?.status === PermissionStatus.DENIED) {
-      dialog.open({
-        type: 'error',
+      presentDialog('error', {
         title: t('common.error_occurred'),
         content: t('settings.data.landrop.scan_qr_code.permission_denied'),
-        showCancel: false,
-        onConFirm: () => navigation.goBack()
+        onConfirm: () => navigation.goBack()
       })
       return
     }
@@ -70,7 +66,7 @@ export function QRCodeScanner({ onQRCodeScanned }: QRCodeScannerProps) {
     if (permission === null || !permission?.granted) {
       getPermission()
     }
-  }, [permission, requestPermission, isRequestingPermission, dialog, t, navigation])
+  }, [permission, requestPermission, isRequestingPermission, t, navigation])
 
   const handleBarcodeScanned = ({ data }: { data: string }) => {
     if (isProcessing) {

@@ -6,6 +6,7 @@ import ExpandInputSheet from '@/componentsV2/features/Sheet/ExpandInputSheet'
 import ExpandTextSheet from '@/componentsV2/features/Sheet/ExpandTextSheet'
 import { McpServerSheet } from '@/componentsV2/features/Sheet/McpServerSheet'
 import ModelSheet from '@/componentsV2/features/Sheet/ModelSheet'
+import ProviderCheckSheet from '@/componentsV2/features/Sheet/ProviderCheckSheet'
 import { ReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
 import TextSelectionSheet from '@/componentsV2/features/Sheet/TextSelectionSheet'
 import { ToolSheet } from '@/componentsV2/features/Sheet/ToolSheet'
@@ -38,6 +39,7 @@ const SheetManager: React.FC = () => {
       <ImportDataSheet />
       <ExpandInputSheet />
       <ExpandTextSheet />
+      <ProviderCheckSheet />
     </>
   )
 }

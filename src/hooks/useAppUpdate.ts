@@ -1,8 +1,8 @@
 import { useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { presentDialog } from '@/componentsV2'
 import { hasUpdateUrl } from '@/config/update'
-import { useDialog } from '@/hooks/useDialog'
 import { appUpdateService } from '@/services/AppUpdateService'
 import { loggerService } from '@/services/LoggerService'
 import { preferenceService } from '@/services/PreferenceService'
@@ -18,12 +18,11 @@ const logger = loggerService.withContext('useAppUpdate')
  *
  * useEffect(() => {
  *   checkUpdate()
- * }, [])
+ * }, [checkUpdate])
  * ```
  */
 export function useAppUpdate() {
   const { t } = useTranslation()
-  const dialog = useDialog()
   const isCheckingRef = useRef(false)
 
   const checkUpdate = useCallback(async () => {
@@ -59,13 +58,13 @@ export function useAppUpdate() {
         // iOS: Only show notification (no direct link)
         // Android: Show update button with link to GitHub releases
         if (hasUpdateUrl()) {
-          dialog.open({
-            type: 'info',
+          presentDialog('info', {
             title: t('update.new_version_available'),
             content: t('update.new_version_content', { version: result.latestVersion }),
             confirmText: t('update.update_now'),
+            showCancel: true,
             cancelText: t('update.later'),
-            onConFirm: () => {
+            onConfirm: () => {
               appUpdateService.openUpdatePage()
             },
             onCancel: () => {
@@ -74,13 +73,11 @@ export function useAppUpdate() {
           })
         } else {
           // iOS: Just notify, user should check TestFlight manually
-          dialog.open({
-            type: 'info',
+          presentDialog('info', {
             title: t('update.new_version_available'),
             content: t('update.new_version_content_ios', { version: result.latestVersion }),
             confirmText: t('update.got_it'),
-            showCancel: false,
-            onConFirm: () => {
+            onConfirm: () => {
               preferenceService.set('app.dismissed_update_version', result.latestVersion)
             }
           })
@@ -96,7 +93,7 @@ export function useAppUpdate() {
     } finally {
       isCheckingRef.current = false
     }
-  }, [dialog, t])
+  }, [t])
 
   return { checkUpdate }
 }
