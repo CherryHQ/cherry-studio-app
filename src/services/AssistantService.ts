@@ -586,8 +586,9 @@ export class AssistantService {
 
       // Update cache if it exists
       if (this.allAssistantsCache.size > 0 || this.allAssistantsCacheTimestamp !== null) {
-        this.allAssistantsCache.set(assistant.id, assistant)
-        logger.verbose(`Added new assistant to cache: ${assistant.id}`)
+        // Prepend new assistant to cache to maintain "newest first" order
+        this.allAssistantsCache = new Map([[assistant.id, assistant], ...this.allAssistantsCache])
+        logger.verbose(`Added new assistant to cache (prepended): ${assistant.id}`)
       }
 
       // Notify subscribers
