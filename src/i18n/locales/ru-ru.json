@@ -256,6 +256,8 @@
       "linkErrorTitle": "Ошибка открытия ссылки"
     },
     "export": {
+      "already_exporting": "Экспорт выполняется",
+      "failed": "Ошибка экспорта",
       "image": "Экспорт как изображение",
       "joplin": "Экспорт в Joplin",
       "md": {
@@ -295,6 +297,7 @@
       "obsidian_vault": "Хранилище",
       "obsidian_vault_placeholder": "Выберите имя хранилища",
       "siyuan": "Экспорт в Siyuan Note",
+      "success": "Экспорт успешно завершён",
       "title": "Экспортировать сообщения",
       "title_naming_failed": "Не удалось создать заголовок, используется заголовок по умолчанию",
       "title_naming_success": "Заголовок успешно создан",

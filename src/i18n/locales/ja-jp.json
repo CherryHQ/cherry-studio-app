@@ -256,6 +256,8 @@
       "linkErrorTitle": "リンクのオープンに失敗"
     },
     "export": {
+      "already_exporting": "エクスポート中",
+      "failed": "エクスポート失敗",
       "image": "画像としてエクスポート",
       "joplin": "Joplin にエクスポート",
       "md": {
@@ -295,6 +297,7 @@
       "obsidian_vault": "保管庫",
       "obsidian_vault_placeholder": "保管庫名を選択してください",
       "siyuan": "思源笔记にエクスポート",
+      "success": "エクスポート成功",
       "title": "エクスポートメッセージ",
       "title_naming_failed": "タイトルの生成に失敗しました。デフォルトのタイトルを使用します",
       "title_naming_success": "タイトルの生成に成功しました",

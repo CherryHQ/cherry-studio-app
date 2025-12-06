@@ -256,6 +256,8 @@
       "linkErrorTitle": "打開連結錯誤"
     },
     "export": {
+      "already_exporting": "正在匯出中",
+      "failed": "匯出失敗",
       "image": "匯出為圖片",
       "joplin": "匯出到 Joplin",
       "md": {
@@ -295,6 +297,7 @@
       "obsidian_vault": "保管庫",
       "obsidian_vault_placeholder": "請選擇保管庫名稱",
       "siyuan": "匯出到思源筆記",
+      "success": "匯出成功",
       "title": "匯出訊息",
       "title_naming_failed": "標題生成失敗，使用預設標題",
       "title_naming_success": "標題生成成功",

@@ -256,6 +256,8 @@
       "linkErrorTitle": "打开链接出错"
     },
     "export": {
+      "already_exporting": "正在导出中",
+      "failed": "导出失败",
       "image": "导出为图片",
       "joplin": "导出到 Joplin",
       "md": {
@@ -295,6 +297,7 @@
       "obsidian_vault": "保管库",
       "obsidian_vault_placeholder": "请选择保管库名称",
       "siyuan": "导出到思源笔记",
+      "success": "导出成功",
       "title": "导出消息",
       "title_naming_failed": "标题生成失败，使用默认标题",
       "title_naming_success": "标题生成成功",

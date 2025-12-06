@@ -256,6 +256,8 @@
       "linkErrorTitle": "Link Opening Error"
     },
     "export": {
+      "already_exporting": "Export in progress",
+      "failed": "Export failed",
       "image": "Export as image",
       "joplin": "Export to Joplin",
       "md": {
@@ -295,6 +297,7 @@
       "obsidian_vault": "Vault",
       "obsidian_vault_placeholder": "Please select the vault name",
       "siyuan": "Export to Siyuan Note",
+      "success": "Exported successfully",
       "title": "Export Message",
       "title_naming_failed": "Failed to generate title, using default title",
       "title_naming_success": "Title generated successfully",

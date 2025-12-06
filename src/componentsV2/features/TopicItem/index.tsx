@@ -13,6 +13,7 @@ import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useDialog } from '@/hooks/useDialog'
+import { useExport } from '@/hooks/useExport'
 import { useTheme } from '@/hooks/useTheme'
 import { useToast } from '@/hooks/useToast'
 import i18n from '@/i18n'
@@ -21,7 +22,7 @@ import type { Topic } from '@/types/assistant'
 import type { HomeNavigationProps } from '@/types/naviagate'
 import { storage } from '@/utils'
 
-import { Check, CheckSquare, Edit3, Sparkles, Trash2 } from '../../icons/LucideIcon'
+import { Check, CheckSquare, Download, Edit3, Sparkles, Trash2 } from '../../icons/LucideIcon'
 
 type TimeFormat = 'time' | 'date'
 
@@ -79,6 +80,7 @@ export const TopicItem: FC<TopicItemProps> = ({
   const { isDark } = useTheme()
   const isActive = currentTopicId === topic.id
   const toast = useToast()
+  const { exportTopic } = useExport()
 
   const openTopic = () => {
     if (handleNavigateChatScreen) {
@@ -195,6 +197,12 @@ export const TopicItem: FC<TopicItemProps> = ({
       iOSIcon: 'rectangle.and.pencil.and.ellipsis',
       androidIcon: <Edit3 size={16} className="text-foreground" />,
       onSelect: handleRename
+    },
+    {
+      title: t('export.md.label'),
+      iOSIcon: 'arrow.down.doc',
+      androidIcon: <Download size={16} className="text-foreground" />,
+      onSelect: () => exportTopic(topic)
     },
     {
       title: t('common.delete'),
