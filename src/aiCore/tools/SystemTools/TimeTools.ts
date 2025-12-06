@@ -25,8 +25,13 @@ export const getCurrentTime = tool({
   description: 'Get current time and date',
   inputSchema: z.object({}),
   execute: () => {
+    const now = new Date()
+    const date = now.toISOString().split('T')[0]
+    const time = now.toLocaleTimeString('en-US', { hour12: false })
+    const weekday = now.toLocaleDateString('en-US', { weekday: 'long' })
+
     return {
-      time: new Date().toLocaleString()
+      time: `${date} ${time} (${weekday})`
     }
   }
 })

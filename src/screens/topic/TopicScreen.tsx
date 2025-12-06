@@ -131,7 +131,7 @@ export default function TopicScreen() {
     const selectionSet = new Set(idsToDelete)
 
     try {
-      const remainingTopics = topics
+      const remainingTopics = assistantTopics
         .filter(topic => !selectionSet.has(topic.id))
         .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
 
@@ -163,6 +163,7 @@ export default function TopicScreen() {
       setIsDeleting(false)
     }
   }, [
+    assistantTopics,
     createNewTopic,
     currentTopicId,
     getAssistantForNewTopic,
@@ -170,8 +171,7 @@ export default function TopicScreen() {
     selectedTopicIds,
     switchTopic,
     t,
-    toast,
-    topics
+    toast
   ])
 
   const handleBatchDelete = useCallback(() => {
