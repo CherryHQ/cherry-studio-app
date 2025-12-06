@@ -89,9 +89,83 @@ export const BUILTIN_TOOLS: Record<BuiltinMcpId, MCPTool[]> = {
           duration: {
             type: 'number',
             description: 'Duration in minutes'
+          },
+          notes: {
+            type: 'string',
+            description: 'Event notes/description'
+          },
+          alarmMinutes: {
+            type: 'array',
+            items: { type: 'number' },
+            description:
+              'Array of minutes before event to trigger alarms (e.g., [5, 30] means reminders at 5 and 30 minutes before)'
           }
         },
         required: ['calendarId', 'title', 'date']
+      }
+    },
+    {
+      id: uuid(),
+      name: 'UpdateCalendarEvent',
+      serverId: uuid(),
+      serverName: '@cherry/calendar',
+      isBuiltIn: true,
+      type: 'mcp',
+      description: 'Update an existing calendar event',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          eventId: {
+            type: 'string',
+            description: 'ID of the event to update'
+          },
+          title: {
+            type: 'string',
+            description: 'New event title'
+          },
+          date: {
+            type: 'string',
+            description: 'New event date (YYYY-MM-DD)'
+          },
+          time: {
+            type: 'string',
+            description: 'New event time (HH:MM)'
+          },
+          duration: {
+            type: 'number',
+            description: 'New duration in minutes'
+          },
+          notes: {
+            type: 'string',
+            description: 'Event notes/description'
+          },
+          alarmMinutes: {
+            type: 'array',
+            items: { type: 'number' },
+            description:
+              'Array of minutes before event to trigger alarms (e.g., [5, 30] means reminders at 5 and 30 minutes before)'
+          }
+        },
+        required: ['eventId']
+      }
+    },
+    {
+      id: uuid(),
+      name: 'DeleteCalendarEvent',
+      serverId: uuid(),
+      serverName: '@cherry/calendar',
+      isBuiltIn: true,
+      type: 'mcp',
+      description: 'Delete a calendar event',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          eventId: {
+            type: 'string',
+            description: 'ID of the event to delete'
+          }
+        },
+        required: ['eventId']
       }
     }
   ],
