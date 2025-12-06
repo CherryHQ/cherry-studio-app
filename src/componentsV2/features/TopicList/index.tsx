@@ -153,7 +153,7 @@ export function TopicList({
 
           toast.show(t('message.topic_deleted'))
 
-          // If deleted topic was current, switch to next or create new
+          // If deleted topic was current, switch to next available
           if (topicId === currentTopicId) {
             const nextTopic =
               updatedTopics.length > 0
@@ -164,13 +164,16 @@ export function TopicList({
               await switchTopic(nextTopic.id)
               handleNavigateChatScreen?.(nextTopic.id)
               logger.info('Switched to next topic after delete', nextTopic)
-            } else {
-              const assistantForNewTopic = await resolveAssistantForNewTopic()
-              const newTopic = await topicService.createTopic(assistantForNewTopic)
-              await switchTopic(newTopic.id)
-              handleNavigateChatScreen?.(newTopic.id)
-              logger.info('Created new topic after deleting last topic', newTopic)
             }
+          }
+
+          // Ensure at least one topic exists
+          if (updatedTopics.length === 0) {
+            const assistantForNewTopic = await resolveAssistantForNewTopic()
+            const newTopic = await topicService.createTopic(assistantForNewTopic)
+            await switchTopic(newTopic.id)
+            handleNavigateChatScreen?.(newTopic.id)
+            logger.info('Created new topic after deleting last topic', newTopic)
           }
         } catch (error) {
           logger.error('Error deleting topic:', error)

@@ -9,6 +9,7 @@ import { HeaderBar, ListSkeleton, presentDialog,SafeAreaContainer, SearchInput, 
 import { LiquidGlassButton } from '@/componentsV2/base/LiquidGlassButton'
 import Text from '@/componentsV2/base/Text'
 import { MessageSquareDiff, Trash2 } from '@/componentsV2/icons/LucideIcon'
+import { useCreateNewTopic } from '@/hooks/useCreateNewTopic'
 import { useSearch } from '@/hooks/useSearch'
 import { useSkeletonLoading } from '@/hooks/useSkeletonLoading'
 import { useToast } from '@/hooks/useToast'
@@ -32,6 +33,7 @@ export default function TopicScreen() {
   const assistantId = route.params?.assistantId
   const { topics, isLoading } = useTopics()
   const { currentTopicId, switchTopic } = useCurrentTopic()
+  const { createNewTopic } = useCreateNewTopic()
   const toast = useToast()
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([])
@@ -81,8 +83,8 @@ export default function TopicScreen() {
 
   const handleAddNewTopic = async () => {
     const targetAssistant = await getAssistantForNewTopic()
-    const newTopic = await topicService.createTopic(targetAssistant)
-    handleNavigateChatScreen(newTopic.id)
+    const topicId = await createNewTopic(targetAssistant)
+    handleNavigateChatScreen(topicId)
   }
 
   const handleEnterMultiSelectMode = useCallback((topicId: string) => {
@@ -129,16 +131,18 @@ export default function TopicScreen() {
         await topicService.deleteTopic(topicId)
       }
 
+      // If current topic was deleted, switch to next available
       if (selectionSet.has(currentTopicId)) {
         const nextTopic = remainingTopics.length > 0 ? remainingTopics[0] : null
-
         if (nextTopic) {
           await switchTopic(nextTopic.id)
-        } else {
-          const targetAssistant = await getAssistantForNewTopic()
-          const newTopic = await topicService.createTopic(targetAssistant)
-          await switchTopic(newTopic.id)
         }
+      }
+
+      // Ensure at least one topic exists
+      if (remainingTopics.length === 0) {
+        const targetAssistant = await getAssistantForNewTopic()
+        await createNewTopic(targetAssistant)
       }
 
       toast.show(t('topics.multi_select.delete_success', { count: idsToDelete.length }))
@@ -150,6 +154,7 @@ export default function TopicScreen() {
       setIsDeleting(false)
     }
   }, [
+    createNewTopic,
     currentTopicId,
     getAssistantForNewTopic,
     handleCancelMultiSelect,
