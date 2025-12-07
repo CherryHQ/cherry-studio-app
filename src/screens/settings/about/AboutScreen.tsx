@@ -1,4 +1,3 @@
-import Constants from 'expo-constants'
 import * as ExpoLinking from 'expo-linking'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
@@ -18,11 +17,13 @@ import {
 } from '@/componentsV2'
 import { ArrowUpRight, Copyright, Github, Globe, Mail, Rss } from '@/componentsV2/icons/LucideIcon'
 import { loggerService } from '@/services/LoggerService'
+
+import packageJson from '../../../../package.json'
 const logger = loggerService.withContext('AboutScreen')
 
 export default function AboutScreen() {
   const { t } = useTranslation()
-  const appVersion = Constants.expoConfig?.version || 'latest'
+  const appVersion = packageJson.version ?? 'latest'
 
   const openLink = async (url: string) => {
     try {

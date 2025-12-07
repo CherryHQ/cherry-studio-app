@@ -3,7 +3,7 @@ import 'tsx/cjs'
 import packageJson from './package.json'
 
 // Read version from environment variable (set during build) or fallback to package.json
-const appVersion = process.env.APP_VERSION || packageJson.version
+const appVersion = packageJson.version
 
 export default {
   expo: {
