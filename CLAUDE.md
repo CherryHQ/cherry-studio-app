@@ -79,7 +79,7 @@ Key entities managed via Drizzle ORM:
 - UI components in `src/components/` with clear separation (ui/, sheets/, message-input/)
 - Screen components in `src/screens/` organized by feature area
 - Custom hooks in `src/hooks/` for reusable logic
-- Tamagui for consistent theming and design tokens
+- HeroUI components styled with UniwindCSS utilities for consistent design tokens
 
 ### Navigation Structure
 
