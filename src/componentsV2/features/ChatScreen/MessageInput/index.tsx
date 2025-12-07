@@ -1,5 +1,4 @@
-import { AnimatePresence, MotiView } from 'moti'
-import React, { useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import { Platform, View } from 'react-native'
 
 import XStack from '@/componentsV2/layout/XStack'
@@ -8,18 +7,11 @@ import { useBottom } from '@/hooks/useBottom'
 import type { Assistant, Topic } from '@/types/assistant'
 
 import { presentExpandInputSheet } from '../../Sheet/ExpandInputSheet'
-import { EditingPreview } from './EditingPreview'
-import { FilePreview } from './FilePreview'
+import { AccessoryActionsBar } from './components/AccessoryActionsBar'
+import { PreviewPanel } from './components/PreviewPanel'
+import { PrimaryActionSwitcher } from './components/PrimaryActionSwitcher'
 import { useMessageInputLogic } from './hooks/useMessageInputLogic'
-import { McpButton } from './McpButton'
-import { MentionButton } from './MentionButton'
-import { MessageTextField } from './MessageTextField'
-import { PauseButton } from './PauseButton'
-import { SendButton } from './SendButton'
-import { ThinkButton } from './ThinkButton'
 import { ToolButton } from './ToolButton'
-import { ToolPreview } from './ToolPreview'
-import { VoiceButton } from './VoiceButton'
 
 interface MessageInputProps {
   topic: Topic
@@ -44,72 +36,58 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
   } = useMessageInputLogic(topic, assistant)
   const [isVoiceActive, setIsVoiceActive] = useState(false)
 
-  const handleExpand = () => {
+  const handleExpand = useCallback(() => {
     presentExpandInputSheet(text, setText, sendMessage)
-  }
+  }, [sendMessage, setText, text])
+
   return (
     <View
-      className="bg-foreground-secondary/5 dark:bg-foreground-secondary/12 rounded-3xl p-3"
+      className="p-3"
       style={{
         paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad
       }}>
       <YStack className="gap-2.5">
-        {isEditing && <EditingPreview onCancel={cancelEditing} />}
-        <ToolPreview assistant={assistant} updateAssistant={updateAssistant} />
-        {files.length > 0 && <FilePreview files={files} setFiles={setFiles} />}
-        <MessageTextField text={text} setText={setText} onExpand={handleExpand} />
-        {/* button */}
-        <XStack className="items-center justify-between">
-          <XStack className="flex-1 items-center gap-2.5">
-            <ToolButton
-              mentions={mentions}
+        <View>
+          <XStack className="items-end gap-2">
+            <View className="h-[42px] items-center justify-center">
+              <ToolButton
+                mentions={mentions}
+                files={files}
+                setFiles={setFiles}
+                assistant={assistant}
+                updateAssistant={updateAssistant}
+              />
+            </View>
+            <PreviewPanel
+              assistant={assistant}
+              updateAssistant={updateAssistant}
+              isEditing={isEditing}
+              onCancelEditing={cancelEditing}
               files={files}
               setFiles={setFiles}
-              assistant={assistant}
-              updateAssistant={updateAssistant}
+              text={text}
+              onTextChange={setText}
+              onExpand={handleExpand}
             />
-            {isReasoning && <ThinkButton assistant={assistant} updateAssistant={updateAssistant} />}
-            <MentionButton
-              mentions={mentions}
-              setMentions={setMentions}
-              assistant={assistant}
-              updateAssistant={updateAssistant}
+            <PrimaryActionSwitcher
+              isTopicLoading={Boolean(topic.isLoading)}
+              isVoiceActive={isVoiceActive}
+              hasText={Boolean(text)}
+              onPause={onPause}
+              onSend={sendMessage}
+              onTranscript={setText}
+              onVoiceActiveChange={setIsVoiceActive}
             />
-            <McpButton assistant={assistant} updateAssistant={updateAssistant} />
           </XStack>
-          <XStack className="items-center gap-2.5">
-            <AnimatePresence exitBeforeEnter>
-              {topic.isLoading ? (
-                <MotiView
-                  key="pause-button"
-                  from={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.5 }}
-                  transition={{ type: 'timing', duration: 200 }}>
-                  <PauseButton onPause={onPause} />
-                </MotiView>
-              ) : isVoiceActive || !text ? (
-                <MotiView
-                  key="voice-button"
-                  from={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.5 }}
-                  transition={{ type: 'timing', duration: 200 }}>
-                  <VoiceButton onTranscript={newText => setText(newText)} onListeningChange={setIsVoiceActive} />
-                </MotiView>
-              ) : (
-                <MotiView
-                  key="send-button"
-                  from={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.5 }}
-                  transition={{ type: 'timing', duration: 200 }}>
-                  <SendButton onSend={sendMessage} />
-                </MotiView>
-              )}
-            </AnimatePresence>
-          </XStack>
-        </XStack>
+        </View>
+
+        <AccessoryActionsBar
+          assistant={assistant}
+          updateAssistant={updateAssistant}
+          isReasoning={isReasoning}
+          mentions={mentions}
+          setMentions={setMentions}
+        />
       </YStack>
     </View>
   )

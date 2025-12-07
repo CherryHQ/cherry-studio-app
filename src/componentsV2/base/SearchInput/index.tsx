@@ -12,12 +12,22 @@ interface SearchInputProps {
 
 export const SearchInput = ({ placeholder, onChangeText, value }: SearchInputProps) => {
   return (
-    <TextField>
+    <TextField className="bg-secondary rounded-3xl">
       <TextField.Input
         placeholder={placeholder}
         onChangeText={onChangeText}
         value={value}
-        className="h-10 w-full rounded-xl bg-transparent px-2 py-0 text-base">
+        className="h-10 w-full"
+        selectionColor="#2563eb"
+        colors={{
+          blurBackground: 'transparent',
+          focusBackground: 'transparent',
+          blurBorder: 'transparent',
+          focusBorder: 'transparent'
+        }}
+        style={{
+          fontSize: 18
+        }}>
         <TextField.InputStartContent>
           <Search size={20} className="text-foreground-secondary" />
         </TextField.InputStartContent>

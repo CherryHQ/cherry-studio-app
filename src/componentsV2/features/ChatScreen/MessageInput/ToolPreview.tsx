@@ -12,17 +12,41 @@ import type { Assistant } from '@/types/assistant'
 
 const logger = loggerService.withContext('ToolPreview')
 
-// 工具配置类型
-interface ToolConfig {
-  key: keyof Assistant
-  label: string
-  icon: React.ComponentType<{ size: number; className: string }>
-  enabled: boolean
-}
+type ToolKey = 'enableGenerateImage' | 'enableWebSearch'
 
 interface ToolPreviewProps {
   assistant: Assistant
   updateAssistant: (assistant: Assistant) => Promise<void>
+}
+
+const TOOL_DEFINITIONS: Record<ToolKey, { icon: React.ComponentType<{ size: number; className: string }>; labelKey: string }> = {
+  enableGenerateImage: {
+    icon: Palette,
+    labelKey: 'common.generateImage'
+  },
+  enableWebSearch: {
+    icon: Globe,
+    labelKey: 'common.websearch'
+  }
+}
+
+export const getEnabledToolKeys = (assistant: Assistant): ToolKey[] => {
+  const { model, enableGenerateImage, enableWebSearch, settings, webSearchProviderId } = assistant
+  if (!model) return []
+
+  const enabledTools: ToolKey[] = []
+  if ((enableGenerateImage ?? false) && isGenerateImageModel(model)) {
+    enabledTools.push('enableGenerateImage')
+  }
+
+  if (
+    (enableWebSearch ?? false) &&
+    (isWebSearchModel(model) || (!!settings?.toolUseMode && !!webSearchProviderId))
+  ) {
+    enabledTools.push('enableWebSearch')
+  }
+
+  return enabledTools
 }
 
 // 工具项组件
@@ -60,46 +84,19 @@ export const ToolPreview: React.FC<ToolPreviewProps> = ({ assistant, updateAssis
     [assistant, updateAssistant]
   )
 
-  // 工具配置数组
-  const toolConfigs = useMemo((): ToolConfig[] => {
-    const { model } = assistant
-    return [
-      {
-        key: 'enableGenerateImage',
-        label: t('common.generateImage'),
-        icon: Palette,
-        enabled: (assistant.enableGenerateImage ?? false) && (model ? isGenerateImageModel(model) : false)
-      },
-      {
-        key: 'enableWebSearch',
-        label: t('common.websearch'),
-        icon: Globe,
-        enabled:
-          (assistant.enableWebSearch ?? false) &&
-          !!model &&
-          (isWebSearchModel(model) || (!!assistant.settings?.toolUseMode && !!assistant.webSearchProviderId))
-      }
-    ]
-  }, [assistant, t])
+  const enabledToolKeys = useMemo(() => getEnabledToolKeys(assistant), [assistant])
 
-  // 如果没有模型，不显示任何工具
-  if (!assistant.model) {
-    return null
-  }
-
-  // 过滤出已启用的工具
-  const enabledTools = toolConfigs.filter(config => config.enabled)
-
-  // 如果没有启用的工具，不渲染任何内容
-  if (enabledTools.length === 0) {
+  if (enabledToolKeys.length === 0) {
     return null
   }
 
   return (
     <XStack className="gap-2">
-      {enabledTools.map(({ key, icon, label }) => (
-        <ToolItem key={key} icon={icon} label={label} onToggle={() => handleToggleTool(key)} />
-      ))}
+      {enabledToolKeys.map(key => {
+        const { icon, labelKey } = TOOL_DEFINITIONS[key]
+        const label = t(labelKey)
+        return <ToolItem key={key} icon={icon} label={label} onToggle={() => handleToggleTool(key)} />
+      })}
     </XStack>
   )
 }

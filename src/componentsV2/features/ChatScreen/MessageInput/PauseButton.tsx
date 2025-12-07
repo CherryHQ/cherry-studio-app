@@ -8,5 +8,11 @@ interface PauseButtonProps {
 }
 
 export const PauseButton: React.FC<PauseButtonProps> = ({ onPause }) => {
-  return <IconButton icon={<CirclePause size={24} className="text-error-base" />} onPress={onPause} />
+  return (
+    <IconButton
+      style={{ height: 36, width: 36, alignItems: 'center', justifyContent: 'center' }}
+      icon={<CirclePause size={32} className="text-red-600" />}
+      onPress={onPause}
+    />
+  )
 }

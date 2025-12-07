@@ -1,8 +1,8 @@
 import React from 'react'
 import { Keyboard } from 'react-native'
 
-import { IconButton } from '@/componentsV2/base/IconButton'
-import { AssetsIcon } from '@/componentsV2/icons'
+import { LiquidGlassButton } from '@/componentsV2/base/LiquidGlassButton'
+import { Plus } from '@/componentsV2/icons/LucideIcon'
 import type { Assistant, Model } from '@/types/assistant'
 import type { FileMetadata } from '@/types/file'
 
@@ -34,5 +34,9 @@ export const ToolButton: React.FC<AddAssetsButtonProps> = ({
     })
   }
 
-  return <IconButton icon={<AssetsIcon size={20} />} onPress={handlePress} />
+  return (
+    <LiquidGlassButton size={38} onPress={handlePress}>
+      <Plus size={24} />
+    </LiquidGlassButton>
+  )
 }

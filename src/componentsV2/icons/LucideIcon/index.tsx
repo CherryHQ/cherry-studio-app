@@ -19,6 +19,7 @@ import {
   CircleCheck,
   CircleDollarSign,
   CirclePause,
+  CirclePlus,
   CircleStop,
   CircleUserRound,
   Clock,
@@ -120,6 +121,7 @@ const ClockIcon = createIcon(Clock)
 const CircleCheckIcon = createIcon(CircleCheck)
 const CircleDollarSignIcon = createIcon(CircleDollarSign)
 const CirclePauseIcon = createIcon(CirclePause)
+const CirclePlusIcon = createIcon(CirclePlus)
 const CircleStopIcon = createIcon(CircleStop)
 const CloudIcon = createIcon(Cloud)
 const CopyIcon = createIcon(Copy)
@@ -199,6 +201,7 @@ export {
   CircleCheckIcon as CircleCheck,
   CircleDollarSignIcon as CircleDollarSign,
   CirclePauseIcon as CirclePause,
+  CirclePlusIcon as CirclePlus,
   CircleStopIcon as CircleStop,
   CircleUserRoundIcon as CircleUserRound,
   ClockIcon as Clock,

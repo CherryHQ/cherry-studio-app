@@ -9,6 +9,7 @@ import { ExpandButton } from './ExpandButton'
 
 const LINE_HEIGHT = 20
 const MAX_VISIBLE_LINES = 4
+const MAX_INPUT_HEIGHT = 96
 
 interface MessageTextFieldProps {
   text: string
@@ -19,20 +20,24 @@ interface MessageTextFieldProps {
 export const MessageTextField: React.FC<MessageTextFieldProps> = ({ text, setText, onExpand }) => {
   const { t } = useTranslation()
   const [showExpandButton, setShowExpandButton] = useState(false)
+  const [inputHeight, setInputHeight] = useState<number | undefined>(undefined)
 
   const handleContentSizeChange = (e: TextInputContentSizeChangeEvent) => {
     const { height } = e.nativeEvent.contentSize
     const lineCount = Math.ceil(height / LINE_HEIGHT)
     setShowExpandButton(lineCount > MAX_VISIBLE_LINES)
+    setInputHeight(height)
   }
+
+  const computedInputHeight = inputHeight === undefined ? undefined : Math.min(inputHeight, MAX_INPUT_HEIGHT)
 
   return (
     <>
       {/* hidden measurement input */}
       <View style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} className="w-full">
-        <TextField className="w-full p-0">
+        <TextField className="w-full rounded-2xl p-0">
           <TextField.Input
-            className="text-foreground h-auto border-none p-0 text-base"
+            className="text-foreground h-auto"
             value={text}
             multiline
             onContentSizeChange={handleContentSizeChange}
@@ -42,21 +47,35 @@ export const MessageTextField: React.FC<MessageTextFieldProps> = ({ text, setTex
               blurBorder: 'transparent',
               focusBorder: 'transparent'
             }}
+            style={{
+              minHeight: 36,
+              fontSize: 20,
+              lineHeight: 26,
+              paddingVertical: 6
+            }}
           />
         </TextField>
       </View>
       {/* visible input */}
-      <View className="relative top-[5px]">
-        {showExpandButton && <ExpandButton onPress={onExpand} />}
-        <TextField className="w-full p-0">
+      <View className="relative">
+        <View className="right-2 top-2">{showExpandButton && <ExpandButton onPress={onExpand} />}</View>
+        <TextField className="w-full rounded-3xl p-0">
           <TextField.Input
-            className="text-foreground h-24 border-none p-0 text-base"
+            className="text-foreground h-auto"
             placeholder={t('inputs.placeholder')}
             value={text}
             onChangeText={setText}
             multiline
             numberOfLines={10}
             selectionColor="#2563eb"
+            style={{
+              height: computedInputHeight,
+              maxHeight: MAX_INPUT_HEIGHT,
+              minHeight: 36,
+              fontSize: 20,
+              lineHeight: 26,
+              paddingVertical: 6
+            }}
             colors={{
               blurBackground: 'transparent',
               focusBackground: 'transparent',

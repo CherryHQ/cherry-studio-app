@@ -59,11 +59,15 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscript, onListen
     return (
       <IconButton
         disabled
-        icon={<ActivityIndicator size={24} className="text-white  dark:text-black" />}
+        icon={<ActivityIndicator size={24} className="text-foreground" />}
         style={{
           backgroundColor,
           borderRadius: 99,
-          padding: 3
+          padding: 3,
+          height: 36,
+          width: 36,
+          alignItems: 'center',
+          justifyContent: 'center'
         }}
       />
     )
@@ -75,12 +79,12 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscript, onListen
       style={{
         backgroundColor: isListening ? 'red' : backgroundColor,
         borderRadius: 99,
-        height: 30,
-        width: 30,
+        height: 36,
+        width: 36,
         alignItems: 'center',
         justifyContent: 'center'
       }}
-      icon={isListening ? <Square size={18} fill="white" /> : <Mic size={24} className="text-white  dark:text-black" />}
+      icon={isListening ? <Square size={24} fill="white" /> : <Mic size={24} className="text-white  dark:text-black" />}
     />
   )
 }
