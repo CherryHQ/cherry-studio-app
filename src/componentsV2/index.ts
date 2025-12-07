@@ -40,7 +40,6 @@ export { default as SelectionSheet, type SelectionSheetItem, type SelectionSheet
 export { GridSkeleton } from './base/Skeleton/GridSkeleton'
 export { ImageSkeleton } from './base/Skeleton/ImageSkeleton'
 export { ListSkeleton } from './base/Skeleton/ListSkeleton'
-export { UpdateChecker } from './features/AppUpdate/UpdateChecker'
 export { MessageInput } from './features/ChatScreen/MessageInput'
 export { FilePreview } from './features/ChatScreen/MessageInput/FilePreview'
 export { MentionButton } from './features/ChatScreen/MessageInput/MentionButton'

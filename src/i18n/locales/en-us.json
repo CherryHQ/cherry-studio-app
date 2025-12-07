@@ -957,14 +957,6 @@
         "recent": "Recent Topics"
       }
     },
-    "update": {
-      "got_it": "Got it",
-      "later": "Later",
-      "new_version_available": "New Version Available",
-      "new_version_content": "Version {{version}} is now available. Would you like to update?",
-      "new_version_content_ios": "Version {{version}} is now available. Please update via TestFlight.",
-      "update_now": "Update Now"
-    },
     "voice": {
       "error": "Speech recognition error",
       "not_available": "Speech recognition is not available",
