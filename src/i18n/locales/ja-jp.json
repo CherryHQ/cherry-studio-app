@@ -247,7 +247,22 @@
       "usage": "使用状況",
       "user_message_not_found": "元のユーザーメッセージが見つかりません",
       "value": "値",
-      "values": "値"
+      "values": "値",
+      "permission": {
+        "camera_denied": "カメラの許可が拒否されました。設定で有効にしてください。",
+        "media_library_denied": "写真ライブラリの許可が拒否されました。設定で有効にしてください。"
+      },
+      "upload": {
+        "failed": "ファイルのアップロードに失敗しました。もう一度お試しください。"
+      },
+      "ai_feature": {
+        "update_failed": "AI機能の更新に失敗しました。もう一度お試しください。",
+        "not_available": "AI機能は利用できません。"
+      },
+      "camera": {
+        "file_not_found": "写真ファイルが見つかりません。",
+        "failed": "撮影に失敗しました。もう一度お試しください。"
+      }
     },
     "errors": {
       "cannotOpenLink": "リンクを開けません: {{error}}",

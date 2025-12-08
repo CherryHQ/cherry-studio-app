@@ -1,96 +1,77 @@
 import { TrueSheet } from '@lodev09/react-native-true-sheet'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BackHandler, View } from 'react-native'
 
 import YStack from '@/componentsV2/layout/YStack'
 import { useBottom } from '@/hooks/useBottom'
-import type { Assistant, Model } from '@/types/assistant'
-import type { FileMetadata } from '@/types/file'
+import { useToast } from '@/hooks/useToast'
 
 import { presentWebSearchProviderSheet } from '../WebSearchProviderSheet'
-import { useCameraModal } from './CameraModal'
 import { ExternalTools } from './ExternalTools'
+import {
+  dismissToolSheet,
+  presentToolSheet,
+  TOOL_SHEET_NAME,
+  useAIFeatureHandler,
+  useFileHandler,
+  useToolSheetData
+} from './hooks'
 import { SystemTools } from './SystemTools'
-import { useAIFeatureHandler } from './useAIFeatureHandler'
-import { useFileHandler } from './useFileHandler'
 
-export const TOOL_SHEET_NAME = 'tool-sheet'
-
-interface ToolSheetData {
-  mentions: Model[]
-  files: FileMetadata[]
-  setFiles: (files: FileMetadata[]) => void
-  assistant: Assistant | null
-  updateAssistant: ((assistant: Assistant) => Promise<void>) | null
-}
-
-const defaultToolSheetData: ToolSheetData = {
-  mentions: [],
-  files: [],
-  setFiles: () => {},
-  assistant: null,
-  updateAssistant: null
-}
-
-let currentSheetData: ToolSheetData = defaultToolSheetData
-let updateSheetDataCallback: ((data: ToolSheetData) => void) | null = null
-
-export const presentToolSheet = (data: ToolSheetData) => {
-  currentSheetData = data
-  updateSheetDataCallback?.(data)
-  return TrueSheet.present(TOOL_SHEET_NAME)
-}
-
-export const dismissToolSheet = () => TrueSheet.dismiss(TOOL_SHEET_NAME)
+export { dismissToolSheet, presentToolSheet, TOOL_SHEET_NAME }
+export type { ToolSheetData } from './types'
 
 export const ToolSheet: React.FC = () => {
-  const [sheetData, setSheetData] = useState<ToolSheetData>(currentSheetData)
-  const { mentions, files, setFiles, assistant, updateAssistant } = sheetData
+  const { t } = useTranslation()
   const bottom = useBottom()
-  const [isVisible, setIsVisible] = useState(false)
+  const toast = useToast()
 
-  const dismissSheet = () => {
-    TrueSheet.dismiss(TOOL_SHEET_NAME)
-  }
+  const { sheetData, isVisible, handleDidDismiss, handleDidPresent } = useToolSheetData()
+  const { mentions, files, setFiles, assistant, updateAssistant } = sheetData
 
-  useEffect(() => {
-    updateSheetDataCallback = setSheetData
-    return () => {
-      updateSheetDataCallback = null
-    }
-  }, [])
-
-  const { handleAddImage, handleAddFile, handleAddPhotoFromCamera } = useFileHandler({
+  const {
+    handleAddImage,
+    handleAddFile,
+    handleTakePhoto,
+    loadingState: fileLoadingState,
+    error: fileError,
+    clearError: clearFileError
+  } = useFileHandler({
     files,
     setFiles,
-    onSuccess: dismissSheet
+    onSuccess: dismissToolSheet
   })
 
-  const { handleEnableGenerateImage, handleEnableWebSearch } = useAIFeatureHandler({
+  const {
+    handleEnableGenerateImage,
+    handleEnableWebSearch,
+    isLoading: isAIFeatureLoading,
+    error: aiError,
+    clearError: clearAIError
+  } = useAIFeatureHandler({
     assistant,
     updateAssistant,
-    onSuccess: dismissSheet
+    onSuccess: dismissToolSheet
   })
 
-  const cameraModal = useCameraModal({
-    onPhotoTaken: handleAddPhotoFromCamera,
-    onSuccess: dismissSheet
-  })
+  // Display errors via toast
+  useEffect(() => {
+    const error = fileError || aiError
+    if (error) {
+      const message = error.translationKey ? t(error.translationKey) : error.message
+      toast.show(message)
+      clearFileError()
+      clearAIError()
+    }
+  }, [fileError, aiError, t, toast, clearFileError, clearAIError])
 
-  const handleWebSearchSwitchPress = () => {
-    dismissSheet()
-    presentWebSearchProviderSheet({
-      mentions,
-      assistant,
-      updateAssistant
-    })
-  }
-
+  // Handle Android back button
   useEffect(() => {
     if (!isVisible) return
 
     const backAction = () => {
-      dismissSheet()
+      dismissToolSheet()
       return true
     }
 
@@ -98,40 +79,51 @@ export const ToolSheet: React.FC = () => {
     return () => backHandler.remove()
   }, [isVisible])
 
+  const handleWebSearchSwitchPress = () => {
+    dismissToolSheet()
+    presentWebSearchProviderSheet({
+      mentions,
+      assistant,
+      updateAssistant
+    })
+  }
+
   const handleCameraPress = () => {
-    dismissSheet()
-    cameraModal.handleOpenCamera()
+    dismissToolSheet()
+    handleTakePhoto()
   }
 
   return (
-    <>
-      <TrueSheet
-        name={TOOL_SHEET_NAME}
-        detents={['auto']}
-        cornerRadius={30}
-        grabber
-        dismissible
-        dimmed
-        onDidDismiss={() => setIsVisible(false)}
-        onDidPresent={() => setIsVisible(true)}
-        style={{ paddingBottom: bottom + 10 }}>
-        <View>
-          <YStack className="gap-3 pt-5">
-            <SystemTools onCameraPress={handleCameraPress} onImagePress={handleAddImage} onFilePress={handleAddFile} />
-            {assistant && updateAssistant && (
-              <ExternalTools
-                mentions={mentions}
-                assistant={assistant}
-                onWebSearchToggle={handleEnableWebSearch}
-                onWebSearchSwitchPress={handleWebSearchSwitchPress}
-                onGenerateImageToggle={handleEnableGenerateImage}
-              />
-            )}
-          </YStack>
-        </View>
-      </TrueSheet>
-
-      {cameraModal.modal}
-    </>
+    <TrueSheet
+      name={TOOL_SHEET_NAME}
+      detents={['auto']}
+      cornerRadius={30}
+      grabber
+      dismissible
+      dimmed
+      onDidDismiss={handleDidDismiss}
+      onDidPresent={handleDidPresent}
+      style={{ paddingBottom: bottom + 10 }}>
+      <View>
+        <YStack className="gap-3 pt-5">
+          <SystemTools
+            onCameraPress={handleCameraPress}
+            onImagePress={handleAddImage}
+            onFilePress={handleAddFile}
+            loadingState={fileLoadingState}
+          />
+          {assistant && updateAssistant && (
+            <ExternalTools
+              mentions={mentions}
+              assistant={assistant}
+              onWebSearchToggle={handleEnableWebSearch}
+              onWebSearchSwitchPress={handleWebSearchSwitchPress}
+              onGenerateImageToggle={handleEnableGenerateImage}
+              isLoading={isAIFeatureLoading}
+            />
+          )}
+        </YStack>
+      </View>
+    </TrueSheet>
   )
 }

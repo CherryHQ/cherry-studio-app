@@ -247,7 +247,22 @@
       "usage": "Usage",
       "user_message_not_found": "Unable to locate the original user message",
       "value": "Value",
-      "values": "Values"
+      "values": "Values",
+      "permission": {
+        "camera_denied": "Camera permission denied. Please enable it in Settings.",
+        "media_library_denied": "Photo library permission denied. Please enable it in Settings."
+      },
+      "upload": {
+        "failed": "Failed to upload file. Please try again."
+      },
+      "ai_feature": {
+        "update_failed": "Failed to update AI feature. Please try again.",
+        "not_available": "AI feature is not available."
+      },
+      "camera": {
+        "file_not_found": "Photo file not found.",
+        "failed": "Failed to take photo. Please try again."
+      }
     },
     "errors": {
       "cannotOpenLink": "Cannot open link: {{error}}",

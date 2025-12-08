@@ -247,7 +247,22 @@
       "usage": "使用情形",
       "user_message_not_found": "無法找到原始使用者訊息",
       "value": "值",
-      "values": "值"
+      "values": "值",
+      "permission": {
+        "camera_denied": "相機權限被拒絕，請在設定中啟用",
+        "media_library_denied": "相簿權限被拒絕，請在設定中啟用"
+      },
+      "upload": {
+        "failed": "檔案上傳失敗，請重試"
+      },
+      "ai_feature": {
+        "update_failed": "AI 功能更新失敗，請重試",
+        "not_available": "AI 功能不可用"
+      },
+      "camera": {
+        "file_not_found": "照片檔案未找到",
+        "failed": "拍照失敗，請重試"
+      }
     },
     "errors": {
       "cannotOpenLink": "無法打開連結: {{error}}",
