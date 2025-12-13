@@ -28,3 +28,44 @@ npm install -g expo-cli eas-cli
     maven { url 'https://maven.aliyun.com/repository/jcenter' }
     maven { url 'https://maven.aliyun.com/repository/public' }
 ```
+
+## Windows 上打包存在的长路径问题
+
+由于 `@lodev09/react-native-true-sheet` 等node_modules 依赖包的路径过长，导致 Windows 系统上打包时，很容易遇到 CMake 所使用的 Ninja 构建工具报错，提示路径过长。
+
+这是一个已知的生态系统级问题，由于expo默认捆绑的 CMake 版本过低（3.22.1），其内置的 Ninja 版本为1.10.2，尚不支持 Windows 的长路径功能。
+
+相关联的 issue 如下：
+
+- https://github.com/ninja-build/ninja/issues/1900
+- https://github.com/expo/expo/issues/36274
+
+在此问题解决之前，在 Windows 系统上打包只有以下3种解决方案：
+
+1. 将项目路径移动到更短的位置，例如 `C:\proj`。
+2. 使用 Windows 子系统 Linux (WSL) 来进行打包。
+3. 启用 Windows 的长路径支持，然后手动下载 Ninja 1.12.1，并替换 Android SDK 中的 ninja.exe，然后将将下载的 ninja.exe 复制到 $cmakeBin
+
+下载地址：
+https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-win.zip
+
+替换地址：
+
+%LOCALAPPDATA%\Android\Sdk\cmake\3.22.1\bin\ninja.exe
+
+或者运行此 [PowerShell 脚本](scripts/upgrade-ninja.ps1) 来自动完成替换。
+
+使用示例
+```
+# 自动检测并升级
+.\scripts\upgrade-ninja.ps1
+
+# 指定 SDK 路径
+.\scripts\upgrade-ninja.ps1 -AndroidSdkPath "C:\Android\Sdk"
+
+# 强制升级（跳过确认）
+.\scripts\upgrade-ninja.ps1 -Force
+
+# 恢复原始版本
+.\scripts\upgrade-ninja.ps1 -Restore
+```
