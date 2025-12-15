@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Pressable } from 'react-native'
 import { Uniwind } from 'uniwind'
 
-import { SelectionDropdown, type SelectionDropdownItem } from '@/componentsV2'
+import SelectionDropdown, { type SelectionDropdownItem } from '@/componentsV2/base/SelectionDropdown'
 import Text from '@/componentsV2/base/Text'
 import { ChevronsUpDown, Palette } from '@/componentsV2/icons'
 import { themeOptions } from '@/config/theme'

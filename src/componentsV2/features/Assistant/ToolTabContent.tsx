@@ -2,8 +2,9 @@ import { MotiView } from 'moti'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Group, Row } from '@/componentsV2'
 import Text from '@/componentsV2/base/Text'
+import Group from '@/componentsV2/layout/Group'
+import Row from '@/componentsV2/layout/Row'
 import { useWebsearchProviders } from '@/hooks/useWebsearchProviders'
 import type { Assistant } from '@/types/assistant'
 

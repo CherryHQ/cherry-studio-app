@@ -2,7 +2,7 @@ import React, { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
 
-import { presentDialog } from '@/componentsV2'
+import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import { IconButton } from '@/componentsV2/base/IconButton'
 import { Mic, Square } from '@/componentsV2/icons'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'

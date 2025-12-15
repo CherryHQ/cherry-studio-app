@@ -3,7 +3,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SFSymbol } from 'sf-symbols-typescript'
 
-import { presentDialog } from '@/componentsV2'
+import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import ContextMenu from '@/componentsV2/base/ContextMenu'
 import Text from '@/componentsV2/base/Text'
 import { Edit3, ProviderIcon, Trash2 } from '@/componentsV2/icons'

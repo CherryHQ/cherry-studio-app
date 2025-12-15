@@ -1,7 +1,7 @@
 import { useNavigation } from '@react-navigation/native'
 import React, { useCallback } from 'react'
 
-import { IconButton } from '@/componentsV2'
+import { IconButton } from '@/componentsV2/base/IconButton'
 import { Clock } from '@/componentsV2/icons/LucideIcon'
 import type { Assistant } from '@/types/assistant'
 import type { HomeNavigationProps } from '@/types/naviagate'

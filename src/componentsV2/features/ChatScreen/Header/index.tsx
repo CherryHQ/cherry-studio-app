@@ -3,8 +3,9 @@ import type { ParamListBase } from '@react-navigation/native'
 import { DrawerActions, useNavigation } from '@react-navigation/native'
 import React from 'react'
 
-import { IconButton, XStack } from '@/componentsV2'
+import { IconButton } from '@/componentsV2/base/IconButton'
 import { Menu } from '@/componentsV2/icons/LucideIcon'
+import XStack from '@/componentsV2/layout/XStack'
 import { useAssistant } from '@/hooks/useAssistant'
 import type { Topic } from '@/types/assistant'
 

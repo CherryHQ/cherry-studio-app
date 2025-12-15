@@ -1,7 +1,6 @@
 import React from 'react'
 
-import type { TextProps } from '@/componentsV2'
-import { Text } from '@/componentsV2'
+import Text, { type TextProps } from '@/componentsV2/base/Text'
 
 interface GroupTagProps extends Omit<TextProps, 'children' | 'group'> {
   group: string

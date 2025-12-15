@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react' // å¼•å
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity } from 'react-native'
 
-import { presentDialog } from '@/componentsV2'
+import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import Text from '@/componentsV2/base/Text'
 import { ChevronDown, ChevronRight } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'

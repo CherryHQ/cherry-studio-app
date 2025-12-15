@@ -5,7 +5,7 @@ import ContentLoader, { Rect } from 'react-content-loader/native'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
-import { presentDialog } from '@/componentsV2'
+import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import ContextMenu, { type ContextMenuListProps } from '@/componentsV2/base/ContextMenu'
 import Text from '@/componentsV2/base/Text'
 import EmojiAvatar from '@/componentsV2/features/Assistant/EmojiAvatar'

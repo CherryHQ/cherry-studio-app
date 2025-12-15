@@ -4,7 +4,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { StyleSheet } from 'react-native'
 
-import { XStack } from '@/componentsV2'
+import XStack from '@/componentsV2/layout/XStack'
 
 import { DIALOG_COLORS, type DialogState } from './types'
 

@@ -2,8 +2,10 @@ import { useNavigation } from '@react-navigation/native'
 import React from 'react'
 import { Keyboard, Pressable } from 'react-native'
 
-import { Text, XStack, YStack } from '@/componentsV2'
+import Text from '@/componentsV2/base/Text'
 import { ChevronRight } from '@/componentsV2/icons'
+import XStack from '@/componentsV2/layout/XStack'
+import YStack from '@/componentsV2/layout/YStack'
 import type { Assistant, Topic } from '@/types/assistant'
 import type { HomeNavigationProps } from '@/types/naviagate'
 

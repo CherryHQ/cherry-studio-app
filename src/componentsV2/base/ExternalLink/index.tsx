@@ -2,7 +2,7 @@ import * as ExpoLinking from 'expo-linking'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { presentDialog } from '@/componentsV2'
+import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import { loggerService } from '@/services/LoggerService'
 
 import Text from '../Text'

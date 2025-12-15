@@ -2,7 +2,7 @@ import { Button } from 'heroui-native'
 import React, { useState } from 'react'
 import { Pressable } from 'react-native'
 
-import { SelectionDropdown, type SelectionDropdownItem } from '@/componentsV2'
+import SelectionDropdown, { type SelectionDropdownItem } from '@/componentsV2/base/SelectionDropdown'
 import { ChevronDown } from '@/componentsV2/icons'
 import type { ProviderType } from '@/types/assistant'
 

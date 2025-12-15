@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TouchableOpacity } from 'react-native'
 
-import { presentDialog } from '@/componentsV2'
+import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import Image from '@/componentsV2/base/Image'
 import { DefaultProviderIcon, PenLine } from '@/componentsV2/icons'
 import YStack from '@/componentsV2/layout/YStack'

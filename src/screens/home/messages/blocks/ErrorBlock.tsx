@@ -545,7 +545,7 @@ export const ErrorDetailSheet: React.FC = () => {
   return (
     <TrueSheet
       name={SHEET_NAME}
-      detents={['auto', 0.5, 0.75, 0.9]}
+      detents={['auto', 0.5, 0.9]}
       cornerRadius={30}
       grabber
       dismissible

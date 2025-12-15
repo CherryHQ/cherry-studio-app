@@ -3,7 +3,7 @@ import React, { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pressable } from 'react-native'
 
-import { SelectionDropdown, type SelectionDropdownItem } from '@/componentsV2'
+import SelectionDropdown, { type SelectionDropdownItem } from '@/componentsV2/base/SelectionDropdown'
 import Text from '@/componentsV2/base/Text'
 import { ChevronRight, ChevronsUpDown } from '@/componentsV2/icons'
 import { useActiveMcpServers } from '@/hooks/useMcp'

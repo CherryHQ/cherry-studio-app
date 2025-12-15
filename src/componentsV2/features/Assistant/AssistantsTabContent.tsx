@@ -3,7 +3,8 @@ import React, { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { Text, YStack } from '@/componentsV2'
+import Text from '@/componentsV2/base/Text'
+import YStack from '@/componentsV2/layout/YStack'
 import type { Assistant } from '@/types/assistant'
 
 import AssistantItemCard from './AssistantItemCard'
