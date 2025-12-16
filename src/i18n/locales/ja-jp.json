@@ -177,12 +177,20 @@
       "yesterday": "昨日"
     },
     "error": {
+      "ai_feature": {
+        "not_available": "AI機能は利用できません。",
+        "update_failed": "AI機能の更新に失敗しました。もう一度お試しください。"
+      },
       "availableProviders": "利用可能なプロバイダー",
       "availableTools": "利用可能なツール",
       "backup": {
         "file_format": "バックアップファイルの形式が正しくありません",
         "file_invalid": "バックアップファイルが無効です。Cherry Studioでモバイル端末にエクスポートして取得する必要があります",
         "title": "バックアップ失敗"
+      },
+      "camera": {
+        "failed": "撮影に失敗しました。もう一度お試しください。",
+        "file_not_found": "写真ファイルが見つかりません。"
       },
       "cause": "原因",
       "chat": {
@@ -220,6 +228,10 @@
       "originalMessage": "元メッセージ",
       "parameter": "パラメータ",
       "pause_placeholder": "中断しました",
+      "permission": {
+        "camera_denied": "カメラの許可が拒否されました。設定で有効にしてください。",
+        "media_library_denied": "写真ライブラリの許可が拒否されました。設定で有効にしてください。"
+      },
       "prompt": "プロンプト",
       "provider": "プロバイダ",
       "providerId": "プロバイダーID",
@@ -244,25 +256,13 @@
       "toolName": "ツール名",
       "translate_assistant_model_not_defined": "翻訳アシスタントモデルが設定されていません。設定＞デフォルトアシスタントで翻訳アシスタントのモデルを設定してください。",
       "unknown": "不明なエラー",
-      "usage": "使用状況",
-      "user_message_not_found": "元のユーザーメッセージが見つかりません",
-      "value": "値",
-      "values": "値",
-      "permission": {
-        "camera_denied": "カメラの許可が拒否されました。設定で有効にしてください。",
-        "media_library_denied": "写真ライブラリの許可が拒否されました。設定で有効にしてください。"
-      },
       "upload": {
         "failed": "ファイルのアップロードに失敗しました。もう一度お試しください。"
       },
-      "ai_feature": {
-        "update_failed": "AI機能の更新に失敗しました。もう一度お試しください。",
-        "not_available": "AI機能は利用できません。"
-      },
-      "camera": {
-        "file_not_found": "写真ファイルが見つかりません。",
-        "failed": "撮影に失敗しました。もう一度お試しください。"
-      }
+      "usage": "使用状況",
+      "user_message_not_found": "元のユーザーメッセージが見つかりません",
+      "value": "値",
+      "values": "値"
     },
     "errors": {
       "cannotOpenLink": "リンクを開けません: {{error}}",
@@ -562,36 +562,39 @@
         "data_reset": {
           "error": "データのリセットに失敗しました。もう一度試してください。問題が解決しない場合は、技術サポートまでお問い合わせください。"
         },
-        "landrop": {
-          "confirm_warning": "ランドロップ転送は、受信したデータで現在のアプリデータをすべて上書きします。",
-          "filename": "ファイル名",
-          "scan_qr_code": {
-            "connecting": "接続中...",
-            "connection_error_message": "接続に失敗しました。LAN の状態を確認し、QR コードをもう一度スキャンしてください。",
-            "description": "Cherry StudioからQRコードをスキャン",
-            "disconnected_message": "Landrop の接続が切断されました。もう一度お試しください。",
-            "disconnected_title": "接続が切断されました",
-            "grant_permission": "権限を付与する",
-            "permission_denied": "カメラの権限が許可されていません。QRコードをスキャンするには、デバイスの設定でカメラの権限を有効にしてください。",
-            "processing": "QRコードを処理中...",
-            "requesting_permission": "カメラの権限をリクエスト中...",
-            "retry_scan_button": "もう一度スキャン",
-            "success": "接続に成功しました 🎉",
-            "success_description": "今すぐ送信ボタンをクリックしてデータを復元できます！",
-            "title": "QRコードをスキャン",
-            "waiting_for_file": "ファイルの送信を待っています..."
-          },
-          "status": {
-            "connected": "接続済み",
-            "connecting": "接続中...",
-            "disconnected": "切断されました",
-            "error": "接続エラー",
-            "idle": "アイドル",
-            "title": "接続ステータス",
-            "zip_file_end": "ファイル転送完了",
-            "zip_file_start": "ファイル転送を開始しました"
-          },
-          "title": "ランドロップ"
+        "lan_transfer": {
+          "app_version": "アプリバージョン",
+          "backup_detected_body": "バックアップファイルを検出しました。復元しますか？",
+          "backup_detected_title": "バックアップファイルを検出",
+          "chunks": "チャンク",
+          "connected": "接続済み",
+          "device": "デバイス",
+          "device_name": "デバイス名",
+          "error": "エラー",
+          "eta": "残り時間",
+          "file_transfer": "ファイル転送",
+          "hint": "デスクトップ版 Cherry Studio でこのデバイスを選択してバックアップを送信してください",
+          "info": "転送情報",
+          "ip_address": "IPアドレス",
+          "no_connection_warning": "Cherry Studioクライアントで LAN 転送を開いてください",
+          "port": "ポート",
+          "preparing": "準備中...",
+          "receiving": "ファイル受信中...",
+          "restore_confirm": "復元",
+          "restore_later": "後で",
+          "service": "サービス",
+          "start_service": "受信を開始",
+          "status": "ステータス",
+          "stop_service": "サービスを停止",
+          "title": "LAN転送",
+          "transfer_cancelled_body": "ファイル転送がキャンセルされました",
+          "transfer_cancelled_title": "転送がキャンセルされました",
+          "transfer_error": "転送エラー",
+          "unknown": "不明",
+          "waiting_connection": "デスクトップの接続を待っています...",
+          "warning_content": "既存のデータを削除し、デスクトップから復元します。重要なデータは必ずバックアップしてください。",
+          "warning_title": "注意",
+          "zeroconf_error": "Zeroconfエラー"
         },
         "log_location": "ログファイルの場所",
         "reset": "データリセット",

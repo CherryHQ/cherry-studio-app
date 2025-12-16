@@ -177,12 +177,20 @@
       "yesterday": "昨天"
     },
     "error": {
+      "ai_feature": {
+        "not_available": "AI 功能不可用",
+        "update_failed": "AI 功能更新失败，请重试"
+      },
       "availableProviders": "可用提供商",
       "availableTools": "可用工具",
       "backup": {
         "file_format": "备份文件格式错误",
         "file_invalid": "备份文件无效，需要在Cherry Studio中通过导出到移动端获取",
         "title": "备份失败"
+      },
+      "camera": {
+        "failed": "拍照失败，请重试",
+        "file_not_found": "照片文件未找到"
       },
       "cause": "原因",
       "chat": {
@@ -220,6 +228,10 @@
       "originalMessage": "原始消息",
       "parameter": "参数",
       "pause_placeholder": "已中断",
+      "permission": {
+        "camera_denied": "相机权限被拒绝，请在设置中启用",
+        "media_library_denied": "相册权限被拒绝，请在设置中启用"
+      },
       "prompt": "提示词",
       "provider": "提供商",
       "providerId": "提供商ID",
@@ -244,25 +256,13 @@
       "toolName": "工具名称",
       "translate_assistant_model_not_defined": "翻译助手模型未配置，请前往设置 > 默认助手中配置翻译助手的模型",
       "unknown": "未知错误",
-      "usage": "使用情况",
-      "user_message_not_found": "无法找到原始用户消息",
-      "value": "值",
-      "values": "值",
-      "permission": {
-        "camera_denied": "相机权限被拒绝，请在设置中启用",
-        "media_library_denied": "相册权限被拒绝，请在设置中启用"
-      },
       "upload": {
         "failed": "文件上传失败，请重试"
       },
-      "ai_feature": {
-        "update_failed": "AI 功能更新失败，请重试",
-        "not_available": "AI 功能不可用"
-      },
-      "camera": {
-        "file_not_found": "照片文件未找到",
-        "failed": "拍照失败，请重试"
-      }
+      "usage": "使用情况",
+      "user_message_not_found": "无法找到原始用户消息",
+      "value": "值",
+      "values": "值"
     },
     "errors": {
       "cannotOpenLink": "无法打开链接: {{error}}",
@@ -562,36 +562,39 @@
         "data_reset": {
           "error": "数据重置失败。请重试，如果问题持续存在，请联系技术支持。"
         },
-        "landrop": {
-          "confirm_warning": "局域网传输将使用接收到的数据覆盖当前所有应用数据。",
-          "filename": "文件名",
-          "scan_qr_code": {
-            "connecting": "正在连接...",
-            "connection_error_message": "连接失败，请检查局域网状态并重新扫描二维码。",
-            "description": "请使用Cherry Studio扫码",
-            "disconnected_message": "Landrop 连接已断开，请重试。",
-            "disconnected_title": "连接已断开",
-            "grant_permission": "授予权限",
-            "permission_denied": "未获得相机权限。请在设备设置中启用相机权限以扫描二维码。",
-            "processing": "正在处理二维码...",
-            "requesting_permission": "正在请求相机权限...",
-            "retry_scan_button": "重新扫描",
-            "success": "连接成功 🎉",
-            "success_description": "现在可以点击发送按钮来恢复数据了！",
-            "title": "扫描二维码",
-            "waiting_for_file": "等待发送文件..."
-          },
-          "status": {
-            "connected": "已连接",
-            "connecting": "连接中...",
-            "disconnected": "断开连接",
-            "error": "连接错误",
-            "idle": "待机",
-            "title": "连接状态",
-            "zip_file_end": "文件传输完成",
-            "zip_file_start": "文件传输已开始"
-          },
-          "title": "局域网传输"
+        "lan_transfer": {
+          "app_version": "应用版本",
+          "backup_detected_body": "检测到备份文件，是否进行恢复？",
+          "backup_detected_title": "检测到备份文件",
+          "chunks": "分块",
+          "connected": "已连接",
+          "device": "设备",
+          "device_name": "设备名称",
+          "error": "错误",
+          "eta": "预计剩余",
+          "file_transfer": "文件传输",
+          "hint": "请在桌面端 Cherry Studio 中选择此设备发送备份",
+          "info": "传输信息",
+          "ip_address": "IP 地址",
+          "no_connection_warning": "请在Cherry Studio客户端打开局域网传输",
+          "port": "端口",
+          "preparing": "准备中...",
+          "receiving": "正在接收文件...",
+          "restore_confirm": "恢复",
+          "restore_later": "稍后",
+          "service": "服务",
+          "start_service": "开始接收",
+          "status": "状态",
+          "stop_service": "停止服务",
+          "title": "局域网传输",
+          "transfer_cancelled_body": "文件发送已取消",
+          "transfer_cancelled_title": "传输已取消",
+          "transfer_error": "传输错误",
+          "unknown": "未知",
+          "waiting_connection": "等待桌面端连接...",
+          "warning_content": "此操作将清除现有数据并从桌面端恢复。请确保已备份重要数据。",
+          "warning_title": "注意",
+          "zeroconf_error": "服务发现错误"
         },
         "log_location": "日志文件位置",
         "reset": "数据重置",

@@ -57,6 +57,7 @@ import {
   Palette,
   PenLine,
   Plus,
+  Radio,
   RefreshCw,
   Repeat2,
   Rocket,
@@ -157,6 +158,7 @@ const MoreHorizontalIcon = createIcon(MoreHorizontal)
 const PackageIcon = createIcon(Package)
 const PenLineIcon = createIcon(PenLine)
 const PlusIcon = createIcon(Plus)
+const RadioIcon = createIcon(Radio)
 const SquareIcon = createIcon(Square)
 const SquareFunctionIcon = createIcon(SquareFunction)
 const RefreshCwIcon = createIcon(RefreshCw)
@@ -239,6 +241,7 @@ export {
   PaletteIcon as Palette,
   PenLineIcon as PenLine,
   PlusIcon as Plus,
+  RadioIcon as Radio,
   RefreshCwIcon as RefreshCw,
   Repeat2Icon as Repeat2,
   RocketIcon as Rocket,

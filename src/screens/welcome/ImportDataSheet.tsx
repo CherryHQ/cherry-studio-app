@@ -90,9 +90,9 @@ export const ImportDataSheet: React.FC = () => {
     handleStart()
   }
 
-  const handleNavigateToLandrop = () => {
+  const handleLanTransfer = () => {
     dismissImportDataSheet()
-    navigation.navigate('LandropSettingsScreen', { redirectToHome: true })
+    navigation.navigate('LanTransferScreen', { redirectToHome: true })
   }
 
   return (
@@ -114,10 +114,10 @@ export const ImportDataSheet: React.FC = () => {
                 <Text>{t('settings.data.restore.title')}</Text>
               </XStack>
             </PressableRow>
-            <PressableRow onPress={handleNavigateToLandrop}>
+            <PressableRow onPress={handleLanTransfer}>
               <XStack className="items-center gap-3">
                 <Wifi size={24} />
-                <Text>{t('settings.data.landrop.title')}</Text>
+                <Text>{t('settings.data.lan_transfer.title')}</Text>
               </XStack>
             </PressableRow>
           </Group>

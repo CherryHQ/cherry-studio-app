@@ -7,7 +7,7 @@ const appVersion = packageJson.version
 
 export default {
   expo: {
-    name: 'Cherry Studio',
+    name: 'Cherry Studio Dev',
     slug: 'cherry-studio',
     version: appVersion,
     // orientation: 'portrait', 锁定竖屏
@@ -25,11 +25,14 @@ export default {
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.cherry-ai.cherry-studio-app',
+      bundleIdentifier: 'com.cherry-ai.cherry-studio-app-dev',
       userInterfaceStyle: 'automatic',
       infoPlist: {
         LSApplicationQueriesSchemes: ['shortcuts'],
-        NSSpeechRecognitionUsageDescription: 'Allow Cherry Studio App to use speech recognition for voice input.'
+        NSSpeechRecognitionUsageDescription: 'Allow Cherry Studio App to use speech recognition for voice input.',
+        NSBonjourServices: ['_cherrystudio._tcp', '_http._tcp'],
+        NSLocalNetworkUsageDescription:
+          'Cherry Studio needs to access the local network to discover and connect to desktop applications.'
       }
     },
     android: {
@@ -40,7 +43,8 @@ export default {
       edgeToEdgeEnabled: true,
       package: 'com.cherry_ai.cherry_studio_app',
       userInterfaceStyle: 'automatic',
-      predictiveBackGestureEnabled: false
+      predictiveBackGestureEnabled: false,
+      permissions: ['android.permission.ACCESS_WIFI_STATE', 'android.permission.CHANGE_WIFI_MULTICAST_STATE']
     },
     plugins: [
       [

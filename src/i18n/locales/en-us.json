@@ -177,12 +177,20 @@
       "yesterday": "Yesterday"
     },
     "error": {
+      "ai_feature": {
+        "not_available": "AI feature is not available.",
+        "update_failed": "Failed to update AI feature. Please try again."
+      },
       "availableProviders": "Available Providers",
       "availableTools": "Available Tools",
       "backup": {
         "file_format": "Backup file format error",
         "file_invalid": "The backup file is invalid. You need to export it to a mobile device through Cherry Studio.",
         "title": "Backup failed"
+      },
+      "camera": {
+        "failed": "Failed to take photo. Please try again.",
+        "file_not_found": "Photo file not found."
       },
       "cause": "Cause",
       "chat": {
@@ -220,6 +228,10 @@
       "originalMessage": "Original Message",
       "parameter": "Parameter",
       "pause_placeholder": "Interrupted",
+      "permission": {
+        "camera_denied": "Camera permission denied. Please enable it in Settings.",
+        "media_library_denied": "Photo library permission denied. Please enable it in Settings."
+      },
       "prompt": "Prompt",
       "provider": "Provider",
       "providerId": "Provider ID",
@@ -244,25 +256,13 @@
       "toolName": "Tool Name",
       "translate_assistant_model_not_defined": "Translate assistant model is not configured. Please go to Settings > Default Assistant to configure the translation assistant model",
       "unknown": "Unknown error",
-      "usage": "Usage",
-      "user_message_not_found": "Unable to locate the original user message",
-      "value": "Value",
-      "values": "Values",
-      "permission": {
-        "camera_denied": "Camera permission denied. Please enable it in Settings.",
-        "media_library_denied": "Photo library permission denied. Please enable it in Settings."
-      },
       "upload": {
         "failed": "Failed to upload file. Please try again."
       },
-      "ai_feature": {
-        "update_failed": "Failed to update AI feature. Please try again.",
-        "not_available": "AI feature is not available."
-      },
-      "camera": {
-        "file_not_found": "Photo file not found.",
-        "failed": "Failed to take photo. Please try again."
-      }
+      "usage": "Usage",
+      "user_message_not_found": "Unable to locate the original user message",
+      "value": "Value",
+      "values": "Values"
     },
     "errors": {
       "cannotOpenLink": "Cannot open link: {{error}}",
@@ -562,36 +562,39 @@
         "data_reset": {
           "error": "Data reset failed. Please try again or contact support if the problem persists."
         },
-        "landrop": {
-          "confirm_warning": "Landrop transfer will overwrite all current app data with the received data.",
-          "filename": "File Name",
-          "scan_qr_code": {
-            "connecting": "Connecting...",
-            "connection_error_message": "Unable to connect. Please check your LAN and scan the QR code again.",
-            "description": "Scan QR Code from Cherry Studio",
-            "disconnected_message": "The Landrop connection was disconnected. Please try again.",
-            "disconnected_title": "Connection Lost",
-            "grant_permission": "Grant Permission",
-            "permission_denied": "Camera permission not granted. Please enable it in your device settings to scan QR codes.",
-            "processing": "Processing QR code...",
-            "requesting_permission": "Requesting camera permission...",
-            "retry_scan_button": "Scan Again",
-            "success": "Connection Successful 🎉",
-            "success_description": "You can now Click Send Button to Restore Data!",
-            "title": "Scan QR Code",
-            "waiting_for_file": "Waiting for file..."
-          },
-          "status": {
-            "connected": "Connected",
-            "connecting": "Connecting...",
-            "disconnected": "Disconnected",
-            "error": "Connection Error",
-            "idle": "Idle",
-            "title": "Connection Status",
-            "zip_file_end": "File Transfer Completed",
-            "zip_file_start": "File Transfer Started"
-          },
-          "title": "Landrop"
+        "lan_transfer": {
+          "app_version": "App Version",
+          "backup_detected_body": "A backup file is ready. Restore now?",
+          "backup_detected_title": "Backup file detected",
+          "chunks": "chunks",
+          "connected": "Connected",
+          "device": "Device",
+          "device_name": "Device name",
+          "error": "Error",
+          "eta": "ETA",
+          "file_transfer": "File Transfer",
+          "hint": "Select this device in Cherry Studio desktop to send the backup",
+          "info": "Transfer Info",
+          "ip_address": "IP address",
+          "no_connection_warning": "Please open LAN Transfer in Cherry Studio desktop client",
+          "port": "Port",
+          "preparing": "Preparing...",
+          "receiving": "Receiving file...",
+          "restore_confirm": "Restore",
+          "restore_later": "Later",
+          "service": "Service",
+          "start_service": "Start receiving",
+          "status": "Status",
+          "stop_service": "Stop service",
+          "title": "LAN Transfer",
+          "transfer_cancelled_body": "File transfer has been cancelled",
+          "transfer_cancelled_title": "Transfer Cancelled",
+          "transfer_error": "LAN Transfer Error",
+          "unknown": "Unknown",
+          "waiting_connection": "Waiting for desktop to connect...",
+          "warning_content": "This will clear existing data and restore from desktop. Make sure important data is backed up.",
+          "warning_title": "Heads up",
+          "zeroconf_error": "Zeroconf Error"
         },
         "log_location": "Log file location",
         "reset": "Data Reset",

@@ -177,12 +177,20 @@
       "yesterday": "昨天"
     },
     "error": {
+      "ai_feature": {
+        "not_available": "AI 功能不可用",
+        "update_failed": "AI 功能更新失敗，請重試"
+      },
       "availableProviders": "可用供應商",
       "availableTools": "可用工具",
       "backup": {
         "file_format": "備份檔案格式錯誤",
         "file_invalid": "備份檔案無效，需在Cherry Studio中透過匯出至行動裝置取得",
         "title": "備份失敗"
+      },
+      "camera": {
+        "failed": "拍照失敗，請重試",
+        "file_not_found": "照片檔案未找到"
       },
       "cause": "原因",
       "chat": {
@@ -220,6 +228,10 @@
       "originalMessage": "原始訊息",
       "parameter": "參數",
       "pause_placeholder": "已中斷",
+      "permission": {
+        "camera_denied": "相機權限被拒絕，請在設定中啟用",
+        "media_library_denied": "相簿權限被拒絕，請在設定中啟用"
+      },
       "prompt": "提示詞",
       "provider": "供應商",
       "providerId": "供應商ID",
@@ -244,25 +256,13 @@
       "toolName": "工具名稱",
       "translate_assistant_model_not_defined": "翻譯助手模型未配置，請前往設定 > 預設助手中配置翻譯助手的模型",
       "unknown": "未知錯誤",
-      "usage": "使用情形",
-      "user_message_not_found": "無法找到原始使用者訊息",
-      "value": "值",
-      "values": "值",
-      "permission": {
-        "camera_denied": "相機權限被拒絕，請在設定中啟用",
-        "media_library_denied": "相簿權限被拒絕，請在設定中啟用"
-      },
       "upload": {
         "failed": "檔案上傳失敗，請重試"
       },
-      "ai_feature": {
-        "update_failed": "AI 功能更新失敗，請重試",
-        "not_available": "AI 功能不可用"
-      },
-      "camera": {
-        "file_not_found": "照片檔案未找到",
-        "failed": "拍照失敗，請重試"
-      }
+      "usage": "使用情形",
+      "user_message_not_found": "無法找到原始使用者訊息",
+      "value": "值",
+      "values": "值"
     },
     "errors": {
       "cannotOpenLink": "無法打開連結: {{error}}",
@@ -562,36 +562,39 @@
         "data_reset": {
           "error": "資料重設失敗。請重試，如果問題持續存在，請聯繫技術支援。"
         },
-        "landrop": {
-          "confirm_warning": "局域網傳輸將使用接收到的資料覆蓋當前所有應用程式資料。",
-          "filename": "檔名",
-          "scan_qr_code": {
-            "connecting": "正在連接...",
-            "connection_error_message": "連線失敗，請檢查區域網路狀態並重新掃描 QR Code。",
-            "description": "從Cherry Studio掃描QR碼",
-            "disconnected_message": "Landrop 連線已斷開，請重試。",
-            "disconnected_title": "連線已斷開",
-            "grant_permission": "授與權限",
-            "permission_denied": "未取得相機權限。請在裝置設定中啟用相機權限以掃描QR碼。",
-            "processing": "[to be translated]:正在处理二维码...",
-            "requesting_permission": "正在請求相機權限...",
-            "retry_scan_button": "重新掃描",
-            "success": "連接成功 🎉",
-            "success_description": "您現在可以點擊發送按鈕來恢復資料！",
-            "title": "掃描QR碼",
-            "waiting_for_file": "等待發送檔案..."
-          },
-          "status": {
-            "connected": "已連線",
-            "connecting": "連線中...",
-            "disconnected": "已斷線",
-            "error": "連接錯誤",
-            "idle": "閒置",
-            "title": "連線狀態",
-            "zip_file_end": "檔案傳輸完成",
-            "zip_file_start": "檔案傳輸已開始"
-          },
-          "title": "Landrop"
+        "lan_transfer": {
+          "app_version": "應用程式版本",
+          "backup_detected_body": "檢測到備份檔案，是否進行恢復？",
+          "backup_detected_title": "檢測到備份檔案",
+          "chunks": "分塊",
+          "connected": "已連線",
+          "device": "裝置",
+          "device_name": "裝置名稱",
+          "error": "錯誤",
+          "eta": "預計剩餘",
+          "file_transfer": "檔案傳輸",
+          "hint": "請在桌面端 Cherry Studio 中選擇此裝置傳送備份",
+          "info": "傳輸資訊",
+          "ip_address": "IP 位址",
+          "no_connection_warning": "請在Cherry Studio客戶端打開區域網傳輸",
+          "port": "連接埠",
+          "preparing": "準備中...",
+          "receiving": "正在接收檔案...",
+          "restore_confirm": "恢復",
+          "restore_later": "稍後",
+          "service": "服務",
+          "start_service": "開始接收",
+          "status": "狀態",
+          "stop_service": "停止服務",
+          "title": "區域網路傳輸",
+          "transfer_cancelled_body": "檔案傳送已取消",
+          "transfer_cancelled_title": "傳輸已取消",
+          "transfer_error": "傳輸錯誤",
+          "unknown": "未知",
+          "waiting_connection": "等待桌面端連線...",
+          "warning_content": "此操作將清除現有資料並從桌面端恢復。請先備份重要資料。",
+          "warning_title": "注意",
+          "zeroconf_error": "服務發現錯誤"
         },
         "log_location": "記錄檔位置",
         "reset": "資料重置",
