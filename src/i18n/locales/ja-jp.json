@@ -566,6 +566,7 @@
           "app_version": "アプリバージョン",
           "backup_detected_body": "バックアップファイルを検出しました。復元しますか？",
           "backup_detected_title": "バックアップファイルを検出",
+          "cancel_receive": "受信をキャンセル",
           "chunks": "チャンク",
           "connected": "接続済み",
           "device": "デバイス",

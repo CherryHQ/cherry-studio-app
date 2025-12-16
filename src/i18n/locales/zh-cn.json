@@ -566,6 +566,7 @@
           "app_version": "应用版本",
           "backup_detected_body": "检测到备份文件，是否进行恢复？",
           "backup_detected_title": "检测到备份文件",
+          "cancel_receive": "取消接收",
           "chunks": "分块",
           "connected": "已连接",
           "device": "设备",

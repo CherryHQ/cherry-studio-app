@@ -116,6 +116,22 @@ class LanTransferService {
     this.updateState({ transferCancelled: undefined })
   }
 
+  cancelCurrentTransfer = () => {
+    logger.info('cancelCurrentTransfer called', { hasCurrentTransfer: !!this.currentTransfer })
+
+    if (!this.currentTransfer) {
+      // 即使没有 currentTransfer，也清理状态（处理状态不同步的情况）
+      logger.warn('cancelCurrentTransfer: no current transfer, cleaning up state')
+      this.updateState({
+        status: LanTransferServerStatus.CONNECTED,
+        fileTransfer: undefined,
+        transferCancelled: true
+      })
+      return
+    }
+    this.completeTransfer(false, 'Transfer cancelled by user', undefined, undefined, 'CANCELLED')
+  }
+
   // ==================== Connection Handling ====================
 
   private handleIncomingConnection = (socket: NonNullable<TcpClientSocket>) => {
@@ -359,41 +375,44 @@ class LanTransferService {
       this.stateUpdateTimeoutId = null
     }
 
-    if (this.currentTransfer) {
-      // Close file handle if open
-      if (this.currentTransfer.fileHandle) {
-        try {
-          this.currentTransfer.fileHandle.close()
-        } catch {
-          // Ignore close errors
-        }
-        this.currentTransfer.fileHandle = null
-      }
+    const transferToCleanup = this.currentTransfer
+    this.currentTransfer = null // Clear reference immediately to prevent duplicate cleanup
 
-      // Delete temp file if it exists
-      try {
-        const tempFile = new File(this.currentTransfer.tempFilePath)
-        if (tempFile.exists) {
-          tempFile.delete()
+    // Defer file I/O operations to avoid blocking UI
+    if (transferToCleanup) {
+      setImmediate(() => {
+        // Close file handle if open
+        if (transferToCleanup.fileHandle) {
+          try {
+            transferToCleanup.fileHandle.close()
+          } catch {
+            // Ignore close errors
+          }
         }
-      } catch {
-        // Ignore cleanup errors
-      }
 
-      // Clean up target file on failure if provided
-      if (targetFilePath) {
+        // Delete temp file if it exists
         try {
-          const targetFile = new File(targetFilePath)
-          if (targetFile.exists) {
-            targetFile.delete()
+          const tempFile = new File(transferToCleanup.tempFilePath)
+          if (tempFile.exists) {
+            tempFile.delete()
           }
         } catch {
           // Ignore cleanup errors
         }
-      }
-    }
 
-    this.currentTransfer = null
+        // Clean up target file on failure if provided
+        if (targetFilePath) {
+          try {
+            const targetFile = new File(targetFilePath)
+            if (targetFile.exists) {
+              targetFile.delete()
+            }
+          } catch {
+            // Ignore cleanup errors
+          }
+        }
+      })
+    }
   }
 
   // ==================== Timeout Management ====================

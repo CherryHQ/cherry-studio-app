@@ -39,6 +39,7 @@ export function useLanTransfer() {
     startServer: lanTransferService.startServer,
     stopServer: lanTransferService.stopServer,
     clearCompletedFile: lanTransferService.clearCompletedFile,
-    clearTransferCancelled: lanTransferService.clearTransferCancelled
+    clearTransferCancelled: lanTransferService.clearTransferCancelled,
+    cancelTransfer: lanTransferService.cancelCurrentTransfer
   }
 }

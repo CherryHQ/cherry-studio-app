@@ -566,6 +566,7 @@
           "app_version": "App Version",
           "backup_detected_body": "A backup file is ready. Restore now?",
           "backup_detected_title": "Backup file detected",
+          "cancel_receive": "Cancel Receive",
           "chunks": "chunks",
           "connected": "Connected",
           "device": "Device",

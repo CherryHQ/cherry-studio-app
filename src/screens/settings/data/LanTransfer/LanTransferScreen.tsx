@@ -1,7 +1,7 @@
 import type { NavigationProp, ParamListBase } from '@react-navigation/native'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import * as Device from 'expo-device'
-import { Spinner } from 'heroui-native'
+import { Button, Spinner } from 'heroui-native'
 import React, { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Platform } from 'react-native'
@@ -10,11 +10,7 @@ import Zeroconf from 'react-native-zeroconf'
 import { Container, HeaderBar, presentDialog, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
 import { RestoreProgressModal } from '@/componentsV2/features/SettingsScreen/RestoreProgressModal'
 import { TriangleAlert } from '@/componentsV2/icons'
-import {
-  LAN_TRANSFER_DOMAIN,
-  LAN_TRANSFER_PROTOCOL_VERSION,
-  LAN_TRANSFER_SERVICE_TYPE
-} from '@/constants/lanTransfer'
+import { LAN_TRANSFER_DOMAIN, LAN_TRANSFER_PROTOCOL_VERSION, LAN_TRANSFER_SERVICE_TYPE } from '@/constants/lanTransfer'
 import { useAppState } from '@/hooks/useAppState'
 import { useLanTransfer } from '@/hooks/useLanTransfer'
 import { useRestore } from '@/hooks/useRestore'
@@ -22,7 +18,7 @@ import { useCurrentTopic } from '@/hooks/useTopic'
 import { getDefaultAssistant } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
 import { topicService } from '@/services/TopicService'
-import { LanTransferServerStatus } from '@/types/lanTransfer'
+import { FileTransferStatus, LanTransferServerStatus } from '@/types/lanTransfer'
 import type { LanTransferRouteProp } from '@/types/naviagate'
 import { getLanTransferServiceName } from '@/utils'
 
@@ -63,7 +59,8 @@ export default function LanTransferScreen() {
     completedFilePath,
     clearCompletedFile,
     transferCancelled,
-    clearTransferCancelled
+    clearTransferCancelled,
+    cancelTransfer
   } = useLanTransfer()
   const { isModalOpen, restoreSteps, overallStatus, startRestore, closeModal } = useRestore({
     clearBeforeRestore: true
@@ -315,15 +312,29 @@ export default function LanTransferScreen() {
                 </Text>
               </XStack>
 
-              {fileTransfer.estimatedRemainingMs != null && fileTransfer.estimatedRemainingMs > 0 && (
-                <Text>
-                  {t('settings.data.lan_transfer.eta')}: {formatDuration(fileTransfer.estimatedRemainingMs)}
-                </Text>
-              )}
-
-              <Text>
-                {t('settings.data.lan_transfer.status')}: {fileTransfer.status}
-              </Text>
+              <XStack className="items-center justify-between">
+                <YStack>
+                  {fileTransfer.estimatedRemainingMs != null && fileTransfer.estimatedRemainingMs > 0 && (
+                    <Text>
+                      {t('settings.data.lan_transfer.eta')}: {formatDuration(fileTransfer.estimatedRemainingMs)}
+                    </Text>
+                  )}
+                  <Text>
+                    {t('settings.data.lan_transfer.status')}: {fileTransfer.status}
+                  </Text>
+                </YStack>
+                {fileTransfer.status === FileTransferStatus.RECEIVING && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onPress={cancelTransfer}
+                    className="rounded-lg border border-red-500/80 bg-red-500/20 ">
+                    <Button.Label className="text-red-500">
+                      {t('settings.data.lan_transfer.cancel_receive')}
+                    </Button.Label>
+                  </Button>
+                )}
+              </XStack>
 
               {fileTransfer.error && <Text className="text-error-base text-md">{fileTransfer.error}</Text>}
             </YStack>

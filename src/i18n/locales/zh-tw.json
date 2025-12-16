@@ -566,6 +566,7 @@
           "app_version": "應用程式版本",
           "backup_detected_body": "檢測到備份檔案，是否進行恢復？",
           "backup_detected_title": "檢測到備份檔案",
+          "cancel_receive": "取消接收",
           "chunks": "分塊",
           "connected": "已連線",
           "device": "裝置",
