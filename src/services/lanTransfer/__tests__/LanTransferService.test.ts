@@ -131,3 +131,290 @@ describe('LanTransferService binary protocol (v3)', () => {
     expect(fileHandle.writeBytes).toHaveBeenCalledTimes(1)
   })
 })
+
+// Helper to create service without mocking handleJsonMessage
+const createServiceForJsonTests = () => {
+  const service: any = new (lanTransferService as any).constructor()
+
+  // Mock sendJsonMessage to capture sent messages
+  const sentMessages: any[] = []
+  service.sendJsonMessage = jest.fn((msg: any) => sentMessages.push(msg))
+
+  // Mock cleanupClient
+  service.cleanupClient = jest.fn()
+
+  // Set initial state
+  service.state = {
+    status: LanTransferServerStatus.HANDSHAKING
+  }
+  service.binaryBuffer = Buffer.alloc(0)
+
+  return { service, sentMessages }
+}
+
+describe('LanTransferService JSON message handling', () => {
+  test('parses and routes valid handshake message', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    const handshake = {
+      type: 'handshake',
+      deviceName: 'Test Device',
+      version: '3',
+      platform: 'darwin'
+    }
+    const json = Buffer.from(JSON.stringify(handshake) + '\n')
+
+    service.handleSocketData(json)
+
+    // Should send handshake_ack
+    expect(sentMessages.length).toBe(1)
+    expect(sentMessages[0].type).toBe('handshake_ack')
+    expect(sentMessages[0].accepted).toBe(true)
+  })
+
+  test('rejects handshake with wrong protocol version', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    const handshake = {
+      type: 'handshake',
+      deviceName: 'Test Device',
+      version: '1.0', // wrong version
+      platform: 'darwin'
+    }
+    const json = Buffer.from(JSON.stringify(handshake) + '\n')
+
+    service.handleSocketData(json)
+
+    expect(sentMessages.length).toBe(1)
+    expect(sentMessages[0].type).toBe('handshake_ack')
+    expect(sentMessages[0].accepted).toBe(false)
+    expect(sentMessages[0].message).toContain('Protocol mismatch')
+  })
+
+  test('handles malformed JSON without crashing', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    const malformedJson = Buffer.from('{"type": "handshake", invalid json\n')
+
+    // Should not throw
+    expect(() => service.handleSocketData(malformedJson)).not.toThrow()
+
+    // No message sent for malformed JSON
+    expect(sentMessages.length).toBe(0)
+  })
+
+  test('ignores unknown message type', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    const unknownMsg = Buffer.from('{"type":"unknown_type","data":"test"}\n')
+
+    service.handleSocketData(unknownMsg)
+
+    // No response for unknown type
+    expect(sentMessages.length).toBe(0)
+  })
+
+  test('ignores message that fails validation', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    // handshake without required 'version' field
+    const invalidHandshake = Buffer.from('{"type":"handshake","platform":"darwin"}\n')
+
+    service.handleSocketData(invalidHandshake)
+
+    // No response for invalid message
+    expect(sentMessages.length).toBe(0)
+  })
+
+  test('handles multiple JSON messages in single buffer', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    service.state.status = LanTransferServerStatus.CONNECTED
+
+    const msg1 = '{"type":"ping"}\n'
+    const msg2 = '{"type":"ping","payload":"test"}\n'
+    const combined = Buffer.from(msg1 + msg2)
+
+    service.handleSocketData(combined)
+
+    // Both pong responses should be sent
+    expect(sentMessages.length).toBe(2)
+    expect(sentMessages[0].type).toBe('pong')
+    expect(sentMessages[1].type).toBe('pong')
+    expect(sentMessages[1].payload).toBe('test')
+  })
+
+  test('handles ping message when connected', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    service.state.status = LanTransferServerStatus.CONNECTED
+
+    const ping = Buffer.from('{"type":"ping","payload":"hello"}\n')
+    service.handleSocketData(ping)
+
+    expect(sentMessages.length).toBe(1)
+    expect(sentMessages[0]).toEqual({
+      type: 'pong',
+      received: true,
+      payload: 'hello'
+    })
+  })
+
+  test('ignores ping message when not connected', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    service.state.status = LanTransferServerStatus.HANDSHAKING
+
+    const ping = Buffer.from('{"type":"ping"}\n')
+    service.handleSocketData(ping)
+
+    // No pong response when not connected
+    expect(sentMessages.length).toBe(0)
+  })
+
+  test('handles JSON with Chinese characters', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    const handshake = {
+      type: 'handshake',
+      deviceName: '我的MacBook Pro',
+      version: '3',
+      platform: 'darwin'
+    }
+    const json = Buffer.from(JSON.stringify(handshake) + '\n')
+
+    service.handleSocketData(json)
+
+    expect(sentMessages.length).toBe(1)
+    expect(sentMessages[0].accepted).toBe(true)
+    expect(service.state.connectedClient.deviceName).toBe('我的MacBook Pro')
+  })
+
+  test('handles JSON with escaped characters', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    const handshake = {
+      type: 'handshake',
+      deviceName: 'Device "Pro" with\\backslash',
+      version: '3',
+      platform: 'darwin'
+    }
+    const json = Buffer.from(JSON.stringify(handshake) + '\n')
+
+    service.handleSocketData(json)
+
+    expect(sentMessages.length).toBe(1)
+    expect(sentMessages[0].accepted).toBe(true)
+    expect(service.state.connectedClient.deviceName).toBe('Device "Pro" with\\backslash')
+  })
+
+  test('buffers incomplete JSON and processes when complete', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    const handshake = {
+      type: 'handshake',
+      deviceName: 'Test Device',
+      version: '3',
+      platform: 'darwin'
+    }
+    const fullJson = JSON.stringify(handshake) + '\n'
+
+    // Send first half
+    service.handleSocketData(Buffer.from(fullJson.slice(0, 20)))
+    expect(sentMessages.length).toBe(0)
+
+    // Send second half
+    service.handleSocketData(Buffer.from(fullJson.slice(20)))
+    expect(sentMessages.length).toBe(1)
+    expect(sentMessages[0].accepted).toBe(true)
+  })
+
+  test('handles JSON message followed by binary frame', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    service.state.status = LanTransferServerStatus.CONNECTED
+
+    const pingJson = Buffer.from('{"type":"ping"}\n')
+    const binaryFrame = buildFrame('tid-123', 0, Buffer.from([1, 2, 3, 4]))
+    const combined = Buffer.concat([pingJson, binaryFrame])
+
+    // Note: Binary frame won't be processed correctly without currentTransfer
+    // but this test verifies JSON is processed first
+    service.handleSocketData(combined)
+
+    expect(sentMessages.length).toBe(1)
+    expect(sentMessages[0].type).toBe('pong')
+  })
+
+  test('handles empty JSON object gracefully', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    const emptyObj = Buffer.from('{}\n')
+
+    // Should not throw
+    expect(() => service.handleSocketData(emptyObj)).not.toThrow()
+
+    // No response for object without type
+    expect(sentMessages.length).toBe(0)
+  })
+
+  test('handles JSON array (invalid message format) gracefully', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    const jsonArray = Buffer.from('[1, 2, 3]\n')
+
+    // Should not throw
+    expect(() => service.handleSocketData(jsonArray)).not.toThrow()
+
+    // No response for array
+    expect(sentMessages.length).toBe(0)
+  })
+
+  test('handles whitespace before JSON', () => {
+    const { service, sentMessages } = createServiceForJsonTests()
+    // Whitespace before { means isJsonMessage will return false
+    // and parseNextMessage will skip byte by byte
+    const wsJson = Buffer.from('  {"type":"ping"}\n')
+
+    service.handleSocketData(wsJson)
+
+    // After skipping whitespace bytes, should eventually parse the JSON
+    // But since whitespace bytes are not '{', they get skipped one by one
+    // This tests the skip behavior
+    expect(sentMessages.length).toBe(0) // Won't parse because leading spaces
+  })
+})
+
+describe('LanTransferService mixed protocol handling', () => {
+  test('correctly processes binary frame followed by multiple JSON messages', () => {
+    const service: any = new (lanTransferService as any).constructor()
+    const sentMessages: any[] = []
+    service.sendJsonMessage = jest.fn((msg: any) => sentMessages.push(msg))
+    service.cleanupClient = jest.fn()
+
+    service.state = {
+      status: LanTransferServerStatus.RECEIVING_FILE
+    }
+
+    const fileHandle = {
+      offset: 0,
+      writeBytes: jest.fn(),
+      close: jest.fn()
+    }
+
+    service.currentTransfer = {
+      transferId: 'tid-123',
+      fileName: 'demo.zip',
+      fileSize: 8,
+      expectedChecksum: '0'.repeat(64),
+      totalChunks: 2,
+      chunkSize: 4,
+      receivedChunks: new Set<number>(),
+      tempFilePath: '/tmp/demo',
+      fileHandle,
+      bytesReceived: 0,
+      startTime: Date.now(),
+      lastChunkTime: Date.now(),
+      status: FileTransferStatus.RECEIVING
+    }
+
+    service.binaryBuffer = Buffer.alloc(0)
+
+    // Binary frame followed by JSON
+    const binaryFrame = buildFrame('tid-123', 0, Buffer.from([1, 2, 3, 4]))
+    const jsonMsg = Buffer.from('{"type":"file_end","transferId":"tid-123"}\n')
+    const combined = Buffer.concat([binaryFrame, jsonMsg])
+
+    service.handleSocketData(combined)
+
+    // Binary frame should be processed
+    expect(fileHandle.writeBytes).toHaveBeenCalled()
+    // file_end message should trigger file completion flow
+  })
+})

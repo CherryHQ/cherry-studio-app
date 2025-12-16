@@ -81,7 +81,7 @@
   protocol: "tcp",                 // 协议
   port: 53317,                     // TCP 监听端口
   txt: {                           // TXT 记录（可选）
-    version: "1",
+    version: "3",
     platform: "ios"                // 或 "android"
   }
 }

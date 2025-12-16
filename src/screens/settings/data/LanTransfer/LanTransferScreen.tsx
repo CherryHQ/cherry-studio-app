@@ -46,9 +46,11 @@ export default function LanTransferScreen() {
   const { setWelcomeShown } = useAppState()
   const { switchTopic } = useCurrentTopic()
 
-  const zeroconfRef = useRef<Zeroconf | null>(null)
-  const publishedServiceNameRef = useRef<string | null>(null)
-  const startedRef = useRef(false)
+  const serviceRef = useRef<{
+    zeroconf: Zeroconf | null
+    publishedName: string | null
+    started: boolean
+  }>({ zeroconf: null, publishedName: null, started: false })
 
   const {
     startServer,
@@ -67,96 +69,90 @@ export default function LanTransferScreen() {
   })
   const { t } = useTranslation()
 
-  useEffect(() => {
-    zeroconfRef.current = new Zeroconf()
-
-    const zc = zeroconfRef.current
-    zc.on('error', error => {
-      logger.error('Zeroconf error', error)
-    })
-
-    return () => {
-      try {
-        zc.stop()
-        if (publishedServiceNameRef.current) {
-          zc.unpublishService(publishedServiceNameRef.current)
-        }
-        zc.removeDeviceListeners()
-      } catch (err) {
-        logger.warn('Failed to cleanup Zeroconf', err as Error)
-      }
-      stopServer()
-    }
-  }, [stopServer])
-
   const serviceName = useMemo(() => {
     const modelName = Device.modelName || `Cherry-${Platform.OS}`
     return `Cherry Studio (${modelName})`
   }, [])
 
-  const handleStartService = () => {
-    if (!zeroconfRef.current || startedRef.current) return
-
-    try {
-      zeroconfRef.current.publishService(
-        LAN_TRANSFER_SERVICE_TYPE,
-        'tcp',
-        LAN_TRANSFER_DOMAIN,
-        serviceName,
-        LAN_TRANSFER_TCP_PORT,
-        {
-          version: LAN_TRANSFER_PROTOCOL_VERSION,
-          modelName: Device.modelName || `Cherry-${Platform.OS}`,
-          platform: Platform.OS,
-          appVersion: Device.osVersion || 'unknown'
-        }
-      )
-      publishedServiceNameRef.current = serviceName
-      logger.info(`Publishing service: ${serviceName}`)
-    } catch (error) {
-      logger.error('Failed to publish Zeroconf service', error)
-      presentDialog('error', {
-        title: t('settings.data.lan_transfer.zeroconf_error'),
-        content: `${error}`
-      })
-      return
-    }
-
-    startServer()
-    startedRef.current = true
-  }
-
-  const handleStopService = () => {
-    if (zeroconfRef.current && publishedServiceNameRef.current) {
-      try {
-        zeroconfRef.current.unpublishService(publishedServiceNameRef.current)
-      } catch (error) {
-        logger.error('Failed to unpublish Zeroconf service', error)
-      }
-      publishedServiceNameRef.current = null
-    }
-
-    stopServer()
-    startedRef.current = false
-  }
-
+  // 合并的服务生命周期 effect：初始化 Zeroconf、启动/停止服务
   useEffect(() => {
-    handleStartService()
+    const service = serviceRef.current
+    service.zeroconf = new Zeroconf()
+
+    const zc = service.zeroconf
+    zc.on('error', error => {
+      logger.error('Zeroconf error', error)
+    })
+
+    // 启动服务
+    const doStartService = () => {
+      if (!service.zeroconf || service.started) return
+
+      try {
+        service.zeroconf.publishService(
+          LAN_TRANSFER_SERVICE_TYPE,
+          'tcp',
+          LAN_TRANSFER_DOMAIN,
+          serviceName,
+          LAN_TRANSFER_TCP_PORT,
+          {
+            version: LAN_TRANSFER_PROTOCOL_VERSION,
+            modelName: Device.modelName || `Cherry-${Platform.OS}`,
+            platform: Platform.OS,
+            appVersion: Device.osVersion || 'unknown'
+          }
+        )
+        service.publishedName = serviceName
+        logger.info(`Publishing service: ${serviceName}`)
+      } catch (error) {
+        logger.error('Failed to publish Zeroconf service', error)
+        presentDialog('error', {
+          title: t('settings.data.lan_transfer.zeroconf_error'),
+          content: `${error}`
+        })
+        return
+      }
+
+      startServer()
+      service.started = true
+    }
+
+    doStartService()
 
     return () => {
-      handleStopService()
+      // 停止服务
+      if (service.zeroconf && service.publishedName) {
+        try {
+          service.zeroconf.unpublishService(service.publishedName)
+        } catch (error) {
+          logger.error('Failed to unpublish Zeroconf service', error)
+        }
+        service.publishedName = null
+      }
+      stopServer()
+      service.started = false
+
+      // 清理 Zeroconf
+      try {
+        zc.stop()
+        zc.removeDeviceListeners()
+      } catch (err) {
+        logger.warn('Failed to cleanup Zeroconf', err as Error)
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [serviceName, startServer, stopServer, t])
 
   useEffect(() => {
     if (serverStatus === LanTransferServerStatus.ERROR && serverError) {
       presentDialog('error', {
         title: t('settings.data.lan_transfer.transfer_error'),
-        content: serverError
+        content: serverError,
+        onConfirm: () => {
+          navigation.goBack()
+        }
       })
     }
-  }, [serverStatus, serverError, t])
+  }, [serverStatus, serverError, navigation, t])
 
   useEffect(() => {
     if (transferCancelled) {
@@ -171,7 +167,18 @@ export default function LanTransferScreen() {
   useEffect(() => {
     if (!completedFilePath) return
 
-    handleStopService()
+    // 内联停止服务逻辑，避免不稳定的函数依赖
+    const service = serviceRef.current
+    if (service.zeroconf && service.publishedName) {
+      try {
+        service.zeroconf.unpublishService(service.publishedName)
+      } catch (error) {
+        logger.error('Failed to unpublish Zeroconf service', error)
+      }
+      service.publishedName = null
+    }
+    stopServer()
+    service.started = false
 
     presentDialog('info', {
       title: t('settings.data.lan_transfer.backup_detected_title'),
@@ -198,7 +205,7 @@ export default function LanTransferScreen() {
         navigation.goBack()
       }
     })
-  }, [clearCompletedFile, completedFilePath, handleStopService, navigation, startRestore, t])
+  }, [clearCompletedFile, completedFilePath, navigation, startRestore, stopServer, t])
 
   const handleModalClose = async () => {
     closeModal()
@@ -227,8 +234,6 @@ export default function LanTransferScreen() {
     navigation.goBack()
   }
 
-  const isStarting = serverStatus === LanTransferServerStatus.STARTING
-
   return (
     <SafeAreaContainer>
       <HeaderBar title={t('settings.data.lan_transfer.title')} />
@@ -249,11 +254,18 @@ export default function LanTransferScreen() {
           </XStack>
 
           <YStack className="bg-secondary gap-1 rounded-xl p-3">
-            <Text>{t('settings.data.lan_transfer.status')}: {serverStatus}</Text>
-            <Text>{t('settings.data.lan_transfer.service')}: {serviceName}</Text>
-            <Text>{t('settings.data.lan_transfer.port')}: {LAN_TRANSFER_TCP_PORT}</Text>
             <Text>
-              {t('settings.data.lan_transfer.device')}: {Device.modelName || t('settings.data.lan_transfer.unknown')} ({Device.osName} {Device.osVersion})
+              {t('settings.data.lan_transfer.status')}: {serverStatus}
+            </Text>
+            <Text>
+              {t('settings.data.lan_transfer.service')}: {serviceName}
+            </Text>
+            <Text>
+              {t('settings.data.lan_transfer.port')}: {LAN_TRANSFER_TCP_PORT}
+            </Text>
+            <Text>
+              {t('settings.data.lan_transfer.device')}: {Device.modelName || t('settings.data.lan_transfer.unknown')} (
+              {Device.osName} {Device.osVersion})
             </Text>
             {connectedClient && (
               <>
@@ -261,10 +273,18 @@ export default function LanTransferScreen() {
                   {t('settings.data.lan_transfer.device')}: {connectedClient.deviceName}
                   {connectedClient.platform ? ` (${connectedClient.platform})` : ''}
                 </Text>
-                {connectedClient.appVersion && <Text>{t('settings.data.lan_transfer.app_version')}: {connectedClient.appVersion}</Text>}
+                {connectedClient.appVersion && (
+                  <Text>
+                    {t('settings.data.lan_transfer.app_version')}: {connectedClient.appVersion}
+                  </Text>
+                )}
               </>
             )}
-            {serverError && <Text className="text-error-base text-md">{t('settings.data.lan_transfer.error')}: {serverError}</Text>}
+            {serverError && (
+              <Text className="text-error-base text-md">
+                {t('settings.data.lan_transfer.error')}: {serverError}
+              </Text>
+            )}
           </YStack>
 
           {fileTransfer && (
@@ -287,10 +307,14 @@ export default function LanTransferScreen() {
               </XStack>
 
               {fileTransfer.estimatedRemainingMs != null && fileTransfer.estimatedRemainingMs > 0 && (
-                <Text>{t('settings.data.lan_transfer.eta')}: {formatDuration(fileTransfer.estimatedRemainingMs)}</Text>
+                <Text>
+                  {t('settings.data.lan_transfer.eta')}: {formatDuration(fileTransfer.estimatedRemainingMs)}
+                </Text>
               )}
 
-              <Text>{t('settings.data.lan_transfer.status')}: {fileTransfer.status}</Text>
+              <Text>
+                {t('settings.data.lan_transfer.status')}: {fileTransfer.status}
+              </Text>
 
               {fileTransfer.error && <Text className="text-error-base text-md">{fileTransfer.error}</Text>}
             </YStack>
@@ -299,18 +323,7 @@ export default function LanTransferScreen() {
       </Container>
 
       {(serverStatus === LanTransferServerStatus.STARTING || serverStatus === LanTransferServerStatus.HANDSHAKING) && (
-        <YStack
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 10
-          }}>
+        <YStack className="absolute inset-0 z-10 items-center justify-center bg-black/60">
           <Spinner />
           <Text className="mt-4 text-lg text-white">{t('settings.data.lan_transfer.preparing')}</Text>
         </YStack>

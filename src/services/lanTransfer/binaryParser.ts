@@ -119,7 +119,7 @@ export const parseJsonMessage = (buffer: Buffer): BinaryParserResult => {
   const terminatorIndex = buffer.indexOf(NEWLINE_BYTE)
 
   // Debug logging
-  // eslint-disable-next-line no-console
+   
   console.log('[binaryParser] parseJsonMessage called', {
     bufferLength: buffer.length,
     terminatorIndex,
@@ -137,7 +137,7 @@ export const parseJsonMessage = (buffer: Buffer): BinaryParserResult => {
   const rawMessage = Buffer.from(buffer.subarray(0, terminatorIndex)).toString('utf8').trim()
   const consumedBytes = terminatorIndex + 1 // newline is always 1 byte
 
-  // eslint-disable-next-line no-console
+   
   console.log('[binaryParser] extracted message', {
     rawMessageLength: rawMessage.length,
     consumedBytes,
