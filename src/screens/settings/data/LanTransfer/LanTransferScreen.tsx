@@ -13,8 +13,7 @@ import { TriangleAlert } from '@/componentsV2/icons'
 import {
   LAN_TRANSFER_DOMAIN,
   LAN_TRANSFER_PROTOCOL_VERSION,
-  LAN_TRANSFER_SERVICE_TYPE,
-  LAN_TRANSFER_TCP_PORT
+  LAN_TRANSFER_SERVICE_TYPE
 } from '@/constants/lanTransfer'
 import { useAppState } from '@/hooks/useAppState'
 import { useLanTransfer } from '@/hooks/useLanTransfer'
@@ -25,6 +24,7 @@ import { loggerService } from '@/services/LoggerService'
 import { topicService } from '@/services/TopicService'
 import { LanTransferServerStatus } from '@/types/lanTransfer'
 import type { LanTransferRouteProp } from '@/types/naviagate'
+import { getLanTransferServiceName } from '@/utils'
 
 const logger = loggerService.withContext('LanTransferScreen')
 
@@ -56,6 +56,7 @@ export default function LanTransferScreen() {
     startServer,
     stopServer,
     status: serverStatus,
+    port: serverPort,
     connectedClient,
     lastError: serverError,
     fileTransfer,
@@ -69,58 +70,21 @@ export default function LanTransferScreen() {
   })
   const { t } = useTranslation()
 
-  const serviceName = useMemo(() => {
-    const modelName = Device.modelName || `Cherry-${Platform.OS}`
-    return `Cherry Studio (${modelName})`
-  }, [])
+  const modelName = useMemo(() => Device.modelName || `Cherry-${Platform.OS}`, [])
+  const serviceName = useMemo(() => getLanTransferServiceName(modelName, serverPort), [modelName, serverPort])
 
-  // 合并的服务生命周期 effect：初始化 Zeroconf、启动/停止服务
+  // Effect 1: 初始化 Zeroconf 和启动 TCP server
   useEffect(() => {
     const service = serviceRef.current
     service.zeroconf = new Zeroconf()
-
-    const zc = service.zeroconf
-    zc.on('error', error => {
+    service.zeroconf.on('error', error => {
       logger.error('Zeroconf error', error)
     })
 
-    // 启动服务
-    const doStartService = () => {
-      if (!service.zeroconf || service.started) return
-
-      try {
-        service.zeroconf.publishService(
-          LAN_TRANSFER_SERVICE_TYPE,
-          'tcp',
-          LAN_TRANSFER_DOMAIN,
-          serviceName,
-          LAN_TRANSFER_TCP_PORT,
-          {
-            version: LAN_TRANSFER_PROTOCOL_VERSION,
-            modelName: Device.modelName || `Cherry-${Platform.OS}`,
-            platform: Platform.OS,
-            appVersion: Device.osVersion || 'unknown'
-          }
-        )
-        service.publishedName = serviceName
-        logger.info(`Publishing service: ${serviceName}`)
-      } catch (error) {
-        logger.error('Failed to publish Zeroconf service', error)
-        presentDialog('error', {
-          title: t('settings.data.lan_transfer.zeroconf_error'),
-          content: `${error}`
-        })
-        return
-      }
-
-      startServer()
-      service.started = true
-    }
-
-    doStartService()
+    startServer()
 
     return () => {
-      // 停止服务
+      // 清理 mDNS
       if (service.zeroconf && service.publishedName) {
         try {
           service.zeroconf.unpublishService(service.publishedName)
@@ -134,13 +98,58 @@ export default function LanTransferScreen() {
 
       // 清理 Zeroconf
       try {
-        zc.stop()
-        zc.removeDeviceListeners()
+        service.zeroconf?.stop()
+        service.zeroconf?.removeDeviceListeners()
       } catch (err) {
         logger.warn('Failed to cleanup Zeroconf', err as Error)
       }
     }
-  }, [serviceName, startServer, stopServer, t])
+  }, [startServer, stopServer])
+
+  // Effect 2: 当端口可用时发布 mDNS
+  useEffect(() => {
+    const service = serviceRef.current
+    if (!serverPort || !service.zeroconf || service.publishedName) return
+
+    // 先尝试注销可能残留的旧服务（防止名称冲突 -72001）
+    try {
+      service.zeroconf.unpublishService(serviceName)
+    } catch {
+      // 忽略注销错误 - 可能本来就不存在
+    }
+
+    // 延迟一小段时间确保旧服务完全注销
+    const publishTimeout = setTimeout(() => {
+      try {
+        service.zeroconf?.publishService(
+          LAN_TRANSFER_SERVICE_TYPE,
+          'tcp',
+          LAN_TRANSFER_DOMAIN,
+          serviceName,
+          serverPort,
+          {
+            version: LAN_TRANSFER_PROTOCOL_VERSION,
+            modelName: Device.modelName || `Cherry-${Platform.OS}`,
+            platform: Platform.OS,
+            appVersion: Device.osVersion || 'unknown'
+          }
+        )
+        service.publishedName = serviceName
+        service.started = true
+        logger.info(`Publishing service: ${serviceName} on port ${serverPort}`)
+      } catch (error) {
+        logger.error('Failed to publish Zeroconf service', error)
+        presentDialog('error', {
+          title: t('settings.data.lan_transfer.zeroconf_error'),
+          content: `${error}`
+        })
+      }
+    }, 100)
+
+    return () => {
+      clearTimeout(publishTimeout)
+    }
+  }, [serverPort, serviceName, t])
 
   useEffect(() => {
     if (serverStatus === LanTransferServerStatus.ERROR && serverError) {
@@ -261,7 +270,7 @@ export default function LanTransferScreen() {
               {t('settings.data.lan_transfer.service')}: {serviceName}
             </Text>
             <Text>
-              {t('settings.data.lan_transfer.port')}: {LAN_TRANSFER_TCP_PORT}
+              {t('settings.data.lan_transfer.port')}: {serverPort || '...'}
             </Text>
             <Text>
               {t('settings.data.lan_transfer.device')}: {Device.modelName || t('settings.data.lan_transfer.unknown')} (

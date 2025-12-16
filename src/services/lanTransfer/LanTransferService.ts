@@ -2,11 +2,7 @@ import { Buffer } from 'buffer'
 import { File } from 'expo-file-system'
 import TcpSocket from 'react-native-tcp-socket'
 
-import {
-  LAN_TRANSFER_GLOBAL_TIMEOUT_MS,
-  LAN_TRANSFER_MESSAGE_TERMINATOR,
-  LAN_TRANSFER_TCP_PORT
-} from '@/constants/lanTransfer'
+import { LAN_TRANSFER_GLOBAL_TIMEOUT_MS, LAN_TRANSFER_MESSAGE_TERMINATOR } from '@/constants/lanTransfer'
 import { loggerService } from '@/services/LoggerService'
 import type {
   FileTransferProgress,
@@ -80,8 +76,14 @@ class LanTransferService {
         this.cleanupClient(false, preserveErrorState ? LanTransferServerStatus.ERROR : LanTransferServerStatus.IDLE)
       })
 
-      this.server.listen({ port: LAN_TRANSFER_TCP_PORT, host: '0.0.0.0', reuseAddress: true }, () => {
-        this.updateState({ status: LanTransferServerStatus.LISTENING })
+      this.server.listen({ port: 0, host: '0.0.0.0', reuseAddress: true }, () => {
+        const address = this.server?.address()
+        const actualPort = typeof address === 'object' && address?.port ? address.port : 0
+        logger.info(`TCP server listening on port ${actualPort}`)
+        this.updateState({
+          status: LanTransferServerStatus.LISTENING,
+          port: actualPort
+        })
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error while starting server'
@@ -462,6 +464,7 @@ class LanTransferService {
     this.binaryBuffer = Buffer.alloc(0)
     this.updateState({
       status: nextStatus,
+      port: undefined,
       connectedClient: undefined,
       fileTransfer: undefined,
       lastError: clearLastError ? undefined : (errorMessage ?? this.state.lastError)

@@ -42,6 +42,7 @@ export interface FileTransferProgress {
 
 export interface LanTransferState {
   status: LanTransferServerStatus
+  port?: number
   connectedClient?: LanTransferClientInfo
   lastError?: string
   fileTransfer?: FileTransferProgress
