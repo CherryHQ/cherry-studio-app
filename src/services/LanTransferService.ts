@@ -1,5 +1,4 @@
 import { Buffer } from 'buffer'
-import { SHA256Algo, WordArray } from 'crypto-es'
 import { File, type FileHandle } from 'expo-file-system'
 import TcpSocket from 'react-native-tcp-socket'
 
@@ -7,7 +6,6 @@ import {
   LAN_TRANSFER_ALLOWED_EXTENSIONS,
   LAN_TRANSFER_ALLOWED_MIME_TYPES,
   LAN_TRANSFER_CHUNK_SIZE,
-  LAN_TRANSFER_CHUNK_TIMEOUT_MS,
   LAN_TRANSFER_GLOBAL_TIMEOUT_MS,
   LAN_TRANSFER_MAX_FILE_SIZE,
   LAN_TRANSFER_MESSAGE_TERMINATOR,
@@ -22,6 +20,7 @@ import {
   type LanTransferClientInfo,
   type LanTransferFileCancelMessage,
   type LanTransferFileChunkMessage,
+  type LanTransferFileCompleteErrorCode,
   type LanTransferFileEndMessage,
   type LanTransferFileStartMessage,
   type LanTransferIncomingMessage,
@@ -100,21 +99,24 @@ interface InternalFileTransfer {
   startTime: number
   lastChunkTime: number
   status: FileTransferStatus
-  hasher: InstanceType<typeof SHA256Algo> | null // Incremental SHA-256 hasher
-  nextHashIndex: number // Next chunk index to hash (for in-order hashing)
 }
 
 class LanTransferService {
   private server: TcpServer = null
   private clientSocket: TcpClientSocket = null
   private binaryBuffer = Buffer.alloc(0)
-  private listeners = new Set<(state: LanTransferState) => void>()
+  private listeners = new Set<() => void>()
 
   private currentTransfer: InternalFileTransfer | null = null
-  private chunkTimeoutId: ReturnType<typeof setTimeout> | null = null
-  private globalTimeoutId: ReturnType<typeof setTimeout> | null = null // P1-3: Global transfer timeout
+  // v3: chunkTimeoutId removed - streaming mode, no per-chunk timeout
+  private globalTimeoutId: ReturnType<typeof setTimeout> | null = null
 
   private state: LanTransferState = {
+    status: LanTransferServerStatus.IDLE
+  }
+
+  // Cached snapshot for useSyncExternalStore - must be stable reference
+  private cachedSnapshot: LanTransferState = {
     status: LanTransferServerStatus.IDLE
   }
 
@@ -150,11 +152,10 @@ class LanTransferService {
     this.shutdownServer(LanTransferServerStatus.IDLE, undefined, true)
   }
 
-  subscribe = (listener: (state: LanTransferState) => void) => {
-    this.listeners.add(listener)
-    listener(this.getSnapshot())
+  subscribe = (callback: () => void) => {
+    this.listeners.add(callback)
     return () => {
-      this.listeners.delete(listener)
+      this.listeners.delete(callback)
     }
   }
 
@@ -483,9 +484,7 @@ class LanTransferService {
         bytesReceived: 0,
         startTime: Date.now(),
         lastChunkTime: Date.now(),
-        status: FileTransferStatus.RECEIVING,
-        hasher: SHA256Algo.create(), // Incremental SHA-256 hasher
-        nextHashIndex: 0 // Start hashing from chunk 0
+        status: FileTransferStatus.RECEIVING
       }
 
       this.updateState({
@@ -494,29 +493,27 @@ class LanTransferService {
       })
 
       this.sendFileStartAck(message.transferId, true)
-      this.startChunkTimeout()
-      this.startGlobalTimeout() // P1-3: Start global transfer timeout
+      // v3: startChunkTimeout() removed - streaming mode
+      this.startGlobalTimeout()
     } catch (error) {
       logger.error('Failed to initialize file transfer', error)
       this.sendFileStartAck(message.transferId, false, 'Failed to create temp file')
     }
   }
 
+  // v3: handleFileChunk simplified - no ACK sent, streaming mode
   private handleFileChunk = (message: LanTransferFileChunkMessage) => {
-    // P1-1: Validate server status - only accept chunks in RECEIVING_FILE state
+    // Validate server status
     if (this.state.status !== LanTransferServerStatus.RECEIVING_FILE) {
-      this.sendChunkAck(message.transferId, message.chunkIndex, false, 'Not in receiving state')
       return
     }
 
     if (!this.currentTransfer || this.currentTransfer.transferId !== message.transferId) {
-      this.sendChunkAck(message.transferId, message.chunkIndex, false, 'No active transfer')
       return
     }
 
     if (this.currentTransfer.receivedChunks.has(message.chunkIndex)) {
-      // Duplicate chunk, just acknowledge
-      this.sendChunkAck(message.transferId, message.chunkIndex, true)
+      // Duplicate chunk, ignore silently
       return
     }
 
@@ -525,35 +522,30 @@ class LanTransferService {
       this.handleBinaryFileChunk(message.transferId, message.chunkIndex, binaryData)
     } catch (error) {
       logger.error(`Failed to process chunk ${message.chunkIndex}`, error)
-      this.sendChunkAck(message.transferId, message.chunkIndex, false, 'Failed to process chunk')
-      // P0-4: Clean up timeout and fail the transfer on chunk processing error
-      this.completeTransfer(false, `Failed to process chunk ${message.chunkIndex}`)
+      this.completeTransfer(false, `Failed to process chunk ${message.chunkIndex}`, undefined, undefined, 'DISK_ERROR')
     }
   }
 
-  // 二进制帧到达后直接处理，无 Base64
+  // v3: Binary frame handler - no ACK sent, streaming mode
   private handleBinaryFileChunk = (transferId: string, chunkIndex: number, data: Buffer) => {
-    // P1-1: Validate server status - only accept chunks in RECEIVING_FILE state
+    // Validate server status
     if (this.state.status !== LanTransferServerStatus.RECEIVING_FILE) {
-      this.sendChunkAck(transferId, chunkIndex, false, 'Not in receiving state')
       return
     }
 
     if (!this.currentTransfer || this.currentTransfer.transferId !== transferId) {
-      this.sendChunkAck(transferId, chunkIndex, false, 'No active transfer')
       return
     }
 
     if (this.currentTransfer.receivedChunks.has(chunkIndex)) {
-      // Duplicate chunk, just acknowledge
-      this.sendChunkAck(transferId, chunkIndex, true)
+      // Duplicate chunk, ignore silently
       return
     }
 
     try {
       const chunk = new Uint8Array(data)
 
-      // P0-1: Write chunk directly to file (streaming write)
+      // Write chunk directly to file (streaming write)
       const { fileHandle, chunkSize } = this.currentTransfer
       if (fileHandle) {
         fileHandle.offset = chunkIndex * chunkSize
@@ -565,38 +557,25 @@ class LanTransferService {
       this.currentTransfer.bytesReceived += chunk.length
       this.currentTransfer.lastChunkTime = Date.now()
 
-      // Incremental hashing: hash chunks in order for faster completion
-      if (chunkIndex === this.currentTransfer.nextHashIndex && this.currentTransfer.hasher) {
-        this.currentTransfer.hasher.update(WordArray.create(chunk))
-        this.currentTransfer.nextHashIndex++
-      }
-
-      // Reset timeout
-      this.resetChunkTimeout()
+      // v3: No chunk timeout reset - streaming mode
+      // v4: No hash verification - TCP provides checksum
 
       // Update state for UI
       this.updateState({
         fileTransfer: this.getTransferProgress()
       })
 
-      // Send acknowledgment
-      this.sendChunkAck(transferId, chunkIndex, true)
+      // v3: No ACK sent - streaming mode
     } catch (error) {
       logger.error(`Failed to process chunk ${chunkIndex}`, error)
-      this.sendChunkAck(transferId, chunkIndex, false, 'Failed to process chunk')
-      // P0-4: Clean up timeout and fail the transfer on chunk processing error
-      this.completeTransfer(false, `Failed to process chunk ${chunkIndex}`)
+      this.completeTransfer(false, `Failed to process chunk ${chunkIndex}`, undefined, undefined, 'DISK_ERROR')
     }
   }
 
-  private handleFileEnd = async (message: LanTransferFileEndMessage) => {
+  private handleFileEnd = (message: LanTransferFileEndMessage) => {
     if (!this.currentTransfer || this.currentTransfer.transferId !== message.transferId) {
       return
     }
-
-    this.clearChunkTimeout()
-    this.currentTransfer.status = FileTransferStatus.VERIFYING
-    this.updateState({ fileTransfer: this.getTransferProgress() })
 
     // Check all chunks received
     if (this.currentTransfer.receivedChunks.size !== this.currentTransfer.totalChunks) {
@@ -608,12 +587,15 @@ class LanTransferService {
       }
       this.completeTransfer(
         false,
-        `Missing chunks: ${missing.slice(0, 10).join(', ')}${missing.length > 10 ? '...' : ''}`
+        `Missing chunks: ${missing.slice(0, 10).join(', ')}${missing.length > 10 ? '...' : ''}`,
+        undefined,
+        undefined,
+        'INCOMPLETE_TRANSFER'
       )
       return
     }
 
-    // P0-1: Close file handle before verification
+    // Close file handle
     if (this.currentTransfer.fileHandle) {
       try {
         this.currentTransfer.fileHandle.close()
@@ -623,47 +605,22 @@ class LanTransferService {
       this.currentTransfer.fileHandle = null
     }
 
+    // v4: No hash verification - TCP provides checksum, move directly to final location
+    this.currentTransfer.status = FileTransferStatus.COMPLETING
+    this.updateState({ fileTransfer: this.getTransferProgress() })
+
+    const tempFile = new File(this.currentTransfer.tempFilePath)
+    const finalFile = new File(DEFAULT_LAN_TRANSFER_STORAGE, this.currentTransfer.fileName)
+
     try {
-      let actualChecksum: string
-
-      // Check if we hashed all chunks incrementally (in-order arrival)
-      if (
-        this.currentTransfer.nextHashIndex === this.currentTransfer.totalChunks &&
-        this.currentTransfer.hasher
-      ) {
-        // All chunks were hashed in order - just finalize (fast path)
-        actualChecksum = this.currentTransfer.hasher.finalize().toString()
-      } else {
-        // Some chunks arrived out of order - fall back to reading unhashed portions
-        actualChecksum = await this.computeRemainingChecksum()
+      if (finalFile.exists) {
+        finalFile.delete()
       }
-
-      if (actualChecksum.toLowerCase() !== this.currentTransfer.expectedChecksum.toLowerCase()) {
-        this.completeTransfer(false, 'Checksum mismatch')
-        return
-      }
-
-      // Move to final location
-      this.currentTransfer.status = FileTransferStatus.COMPLETING
-      this.updateState({ fileTransfer: this.getTransferProgress() })
-
-      // P0-1: Move temp file to final location (data already written during chunk processing)
-      const tempFile = new File(this.currentTransfer.tempFilePath)
-      const finalFile = new File(DEFAULT_LAN_TRANSFER_STORAGE, this.currentTransfer.fileName)
-
-      try {
-        if (finalFile.exists) {
-          finalFile.delete()
-        }
-        tempFile.move(finalFile)
-        this.completeTransfer(true, undefined, finalFile.uri)
-      } catch (moveError) {
-        logger.error('Failed to move file to final location', moveError)
-        this.completeTransfer(false, 'Failed to move file', undefined, finalFile.uri)
-      }
-    } catch (error) {
-      logger.error('Failed to verify file', error)
-      this.completeTransfer(false, 'Verification failed')
+      tempFile.move(finalFile)
+      this.completeTransfer(true, undefined, finalFile.uri)
+    } catch (moveError) {
+      logger.error('Failed to move file to final location', moveError)
+      this.completeTransfer(false, 'Failed to move file', undefined, finalFile.uri, 'DISK_ERROR')
     }
   }
 
@@ -682,11 +639,15 @@ class LanTransferService {
 
   // ==================== File Transfer Helpers ====================
 
-  // P1-4: Added failedTargetPath parameter for cleanup on write failure
-  private completeTransfer = (success: boolean, error?: string, filePath?: string, failedTargetPath?: string) => {
+  // v3: Added errorCode parameter for enhanced error reporting
+  private completeTransfer = (
+    success: boolean,
+    error?: string,
+    filePath?: string,
+    failedTargetPath?: string,
+    errorCode?: LanTransferFileCompleteErrorCode
+  ) => {
     if (!this.currentTransfer) return
-
-    const duration = Date.now() - this.currentTransfer.startTime
 
     if (success) {
       this.currentTransfer.status = FileTransferStatus.COMPLETE
@@ -694,12 +655,16 @@ class LanTransferService {
       this.currentTransfer.status = FileTransferStatus.ERROR
     }
 
+    // v3: Send enhanced file_complete message with errorCode, receivedChunks, receivedBytes
     this.sendJsonMessage({
       type: 'file_complete',
       transferId: this.currentTransfer.transferId,
       success,
       filePath,
-      error
+      error,
+      errorCode,
+      receivedChunks: this.currentTransfer.receivedChunks.size,
+      receivedBytes: this.currentTransfer.bytesReceived
     })
 
     this.updateState({
@@ -712,8 +677,8 @@ class LanTransferService {
   }
 
   private cleanupTransfer = (targetFilePath?: string) => {
-    this.clearChunkTimeout()
-    this.clearGlobalTimeout() // P1-3: Clear global timeout
+    // v3: No chunk timeout to clear - streaming mode
+    this.clearGlobalTimeout()
 
     if (this.currentTransfer) {
       // P0-1: Close file handle if open
@@ -725,9 +690,6 @@ class LanTransferService {
         }
         this.currentTransfer.fileHandle = null
       }
-
-      // Clear incremental hasher
-      this.currentTransfer.hasher = null
 
       // Delete temp file if it exists
       try {
@@ -763,90 +725,6 @@ class LanTransferService {
     this.updateState({ transferCancelled: undefined })
   }
 
-  private computeFileChecksum = async (filePath: string): Promise<string> => {
-    const file = new File(filePath)
-    if (!file.exists) {
-      throw new Error('Temp file not found')
-    }
-
-    const fileHandle = file.open()
-
-    try {
-      fileHandle.offset = 0
-
-      const hasher = SHA256Algo.create()
-      const bufferSizeBytes = 256 * 1024
-      let iterations = 0
-
-      // Read sequentially to compute checksum (works even if chunks arrived out-of-order).
-      while (true) {
-        const bytes = fileHandle.readBytes(bufferSizeBytes)
-        if (bytes.length === 0) {
-          break
-        }
-
-        hasher.update(WordArray.create(bytes))
-        iterations += 1
-
-        // Yield occasionally to avoid blocking the JS thread for too long.
-        if (iterations % 64 === 0) {
-          await new Promise(resolve => setTimeout(resolve, 0))
-        }
-      }
-
-      return hasher.finalize().toString()
-    } finally {
-      try {
-        fileHandle.close()
-      } catch {
-        // Ignore close errors
-      }
-    }
-  }
-
-  // Fallback: Continue hashing from where incremental hashing left off (for out-of-order chunks)
-  private computeRemainingChecksum = async (): Promise<string> => {
-    if (!this.currentTransfer) {
-      throw new Error('No active transfer')
-    }
-
-    const { hasher, nextHashIndex, chunkSize, tempFilePath } = this.currentTransfer
-    const file = new File(tempFilePath)
-    const fileHandle = file.open()
-
-    try {
-      // Use existing hasher and continue from where we left off,
-      // or create new hasher and start from beginning if none exists
-      const finalHasher = hasher || SHA256Algo.create()
-      fileHandle.offset = hasher ? nextHashIndex * chunkSize : 0
-
-      const bufferSize = 256 * 1024
-      let iterations = 0
-
-      while (true) {
-        const bytes = fileHandle.readBytes(bufferSize)
-        if (bytes.length === 0) {
-          break
-        }
-        finalHasher.update(WordArray.create(bytes))
-        iterations++
-
-        // Yield occasionally to avoid blocking the JS thread
-        if (iterations % 64 === 0) {
-          await new Promise(resolve => setTimeout(resolve, 0))
-        }
-      }
-
-      return finalHasher.finalize().toString()
-    } finally {
-      try {
-        fileHandle.close()
-      } catch {
-        // Ignore close errors
-      }
-    }
-  }
-
   private sendFileStartAck = (transferId: string, accepted: boolean, message?: string) => {
     this.sendJsonMessage({
       type: 'file_start_ack',
@@ -856,15 +734,7 @@ class LanTransferService {
     })
   }
 
-  private sendChunkAck = (transferId: string, chunkIndex: number, received: boolean, error?: string) => {
-    this.sendJsonMessage({
-      type: 'file_chunk_ack',
-      transferId,
-      chunkIndex,
-      received,
-      error
-    })
-  }
+  // v3: sendChunkAck removed - streaming mode, no per-chunk ACK
 
   private getTransferProgress = (): FileTransferProgress | undefined => {
     if (!this.currentTransfer) return undefined
@@ -888,27 +758,9 @@ class LanTransferService {
     }
   }
 
-  private startChunkTimeout = () => {
-    this.chunkTimeoutId = setTimeout(() => {
-      if (this.currentTransfer) {
-        this.completeTransfer(false, 'Timeout')
-      }
-    }, LAN_TRANSFER_CHUNK_TIMEOUT_MS)
-  }
+  // v3: Chunk timeout methods removed - streaming mode, only global timeout remains
 
-  private resetChunkTimeout = () => {
-    this.clearChunkTimeout()
-    this.startChunkTimeout()
-  }
-
-  private clearChunkTimeout = () => {
-    if (this.chunkTimeoutId) {
-      clearTimeout(this.chunkTimeoutId)
-      this.chunkTimeoutId = null
-    }
-  }
-
-  // P1-3: Global transfer timeout management
+  // Global transfer timeout management
   private startGlobalTimeout = () => {
     this.clearGlobalTimeout()
     this.globalTimeoutId = setTimeout(() => {
@@ -961,7 +813,7 @@ class LanTransferService {
     if (this.currentTransfer) {
       this.cleanupTransfer()
     } else {
-      this.clearChunkTimeout()
+      // v3: No chunk timeout to clear - streaming mode
       this.clearGlobalTimeout()
     }
 
@@ -996,7 +848,7 @@ class LanTransferService {
     if (this.currentTransfer) {
       this.cleanupTransfer()
     } else {
-      this.clearChunkTimeout()
+      // v3: No chunk timeout to clear - streaming mode
       this.clearGlobalTimeout()
     }
 
@@ -1025,19 +877,21 @@ class LanTransferService {
 
   private updateState = (partial: Partial<LanTransferState>) => {
     this.state = { ...this.state, ...partial }
+    // Update cached snapshot with new object reference for useSyncExternalStore
+    this.cachedSnapshot = {
+      ...this.state,
+      connectedClient: this.state.connectedClient ? { ...this.state.connectedClient } : undefined,
+      fileTransfer: this.state.fileTransfer ? { ...this.state.fileTransfer } : undefined
+    }
     this.notify()
   }
 
   private notify = () => {
-    const snapshot = this.getSnapshot()
-    this.listeners.forEach(listener => listener(snapshot))
+    this.listeners.forEach(callback => callback())
   }
 
-  private getSnapshot = (): LanTransferState => ({
-    ...this.state,
-    connectedClient: this.state.connectedClient ? { ...this.state.connectedClient } : undefined,
-    fileTransfer: this.state.fileTransfer ? { ...this.state.fileTransfer } : undefined
-  })
+  // Return stable reference - only changes when updateState is called
+  private getSnapshot = (): LanTransferState => this.cachedSnapshot
 }
 
 export const lanTransferService = new LanTransferService()

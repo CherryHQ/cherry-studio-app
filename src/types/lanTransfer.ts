@@ -113,13 +113,9 @@ export interface LanTransferFileStartAckMessage {
   message?: string
 }
 
-export interface LanTransferFileChunkAckMessage {
-  type: 'file_chunk_ack'
-  transferId: string
-  chunkIndex: number
-  received: boolean
-  error?: string
-}
+// v3: LanTransferFileChunkAckMessage removed - streaming mode, no per-chunk ACK
+
+export type LanTransferFileCompleteErrorCode = 'CHECKSUM_MISMATCH' | 'INCOMPLETE_TRANSFER' | 'DISK_ERROR' | 'CANCELLED'
 
 export interface LanTransferFileCompleteMessage {
   type: 'file_complete'
@@ -127,6 +123,10 @@ export interface LanTransferFileCompleteMessage {
   success: boolean
   filePath?: string
   error?: string
+  // v3 new fields
+  errorCode?: LanTransferFileCompleteErrorCode
+  receivedChunks?: number
+  receivedBytes?: number
 }
 
 export type LanTransferIncomingMessage =
@@ -137,9 +137,9 @@ export type LanTransferIncomingMessage =
   | LanTransferFileEndMessage
   | LanTransferFileCancelMessage
 
+// v3: LanTransferFileChunkAckMessage removed from union - streaming mode
 export type LanTransferOutgoingMessage =
   | LanTransferHandshakeAckMessage
   | LanTransferPongMessage
   | LanTransferFileStartAckMessage
-  | LanTransferFileChunkAckMessage
   | LanTransferFileCompleteMessage

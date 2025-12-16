@@ -1,18 +1,27 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 
 import { lanTransferService } from '@/services/LanTransferService'
-import { LanTransferServerStatus, type LanTransferState } from '@/types/lanTransfer'
+import { LanTransferServerStatus } from '@/types/lanTransfer'
 
 export function useLanTransfer() {
-  const [state, setState] = useState<LanTransferState>(lanTransferService.getState())
+  // ==================== Subscription (useSyncExternalStore) ====================
 
-  useEffect(() => {
-    const unsubscribe = lanTransferService.subscribe(nextState => {
-      setState(nextState)
-    })
-
-    return unsubscribe
+  const subscribe = useCallback((callback: () => void) => {
+    return lanTransferService.subscribe(callback)
   }, [])
+
+  const getSnapshot = useCallback(() => {
+    return lanTransferService.getState()
+  }, [])
+
+  const getServerSnapshot = useCallback(() => {
+    return lanTransferService.getState()
+  }, [])
+
+  // Use useSyncExternalStore for reactive updates
+  const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+
+  // ==================== Computed Properties ====================
 
   const isServerRunning =
     state.status === LanTransferServerStatus.LISTENING ||
