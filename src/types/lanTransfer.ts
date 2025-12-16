@@ -86,12 +86,13 @@ export interface LanTransferFileStartMessage {
   chunkSize: number
 }
 
+// v3: data 字段仅用于 JSON 模式兼容，二进制帧模式下不使用
+// v3: 移除 chunkChecksum - 依赖最终文件校验
 export interface LanTransferFileChunkMessage {
   type: 'file_chunk'
   transferId: string
   chunkIndex: number
-  data: string // Base64 encoded
-  chunkChecksum: string
+  data: string // Base64 encoded (仅 JSON 模式)
 }
 
 export interface LanTransferFileEndMessage {

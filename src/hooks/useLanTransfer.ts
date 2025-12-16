@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react'
 
-import { lanTransferService } from '@/services/LanTransferService'
+import { lanTransferService } from '@/services/lanTransfer'
 import { LanTransferServerStatus } from '@/types/lanTransfer'
 
 export function useLanTransfer() {

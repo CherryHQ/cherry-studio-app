@@ -34,9 +34,7 @@ const buildFrame = (transferId: string, chunkIndex: number, data: Buffer, type =
 const createService = () => {
   const service: any = new (lanTransferService as any).constructor()
 
-  // Stub side-effectful pieces
-  service.sendChunkAck = jest.fn()
-  service.resetChunkTimeout = jest.fn()
+  // v3: Stub side-effectful pieces (no sendChunkAck in v3 streaming mode)
   service.handleJsonMessage = jest.fn()
 
   // Provide a minimal transfer context
@@ -62,15 +60,15 @@ const createService = () => {
     tempFilePath: '/tmp/demo',
     fileHandle,
     bytesReceived: 0,
-    startTime: 0,
-    lastChunkTime: 0,
+    startTime: Date.now(),
+    lastChunkTime: Date.now(),
     status: FileTransferStatus.RECEIVING
   }
 
   return { service, fileHandle }
 }
 
-describe('LanTransferService binary protocol', () => {
+describe('LanTransferService binary protocol (v3)', () => {
   test('handles a complete binary frame', () => {
     const { service, fileHandle } = createService()
     const data = Buffer.from([1, 2, 3, 4])
@@ -79,7 +77,7 @@ describe('LanTransferService binary protocol', () => {
     service.handleSocketData(frame)
 
     expect(fileHandle.writeBytes).toHaveBeenCalledWith(new Uint8Array(data))
-    expect(service.sendChunkAck).toHaveBeenCalledWith('tid-123', 0, true)
+    // v3: No ACK sent in streaming mode
     expect(service.currentTransfer.receivedChunks.has(0)).toBe(true)
     expect(service.currentTransfer.bytesReceived).toBe(data.length)
   })
@@ -96,7 +94,6 @@ describe('LanTransferService binary protocol', () => {
     // Send remainder to complete the frame
     service.handleSocketData(frame.subarray(5))
     expect(fileHandle.writeBytes).toHaveBeenCalledTimes(1)
-    expect(service.sendChunkAck).toHaveBeenCalledWith('tid-123', 1, true)
   })
 
   test('skips unknown binary frame type', () => {
@@ -107,7 +104,6 @@ describe('LanTransferService binary protocol', () => {
     service.handleSocketData(frame)
 
     expect(fileHandle.writeBytes).not.toHaveBeenCalled()
-    expect(service.sendChunkAck).not.toHaveBeenCalled()
   })
 
   test('processes JSON messages alongside binary', () => {
@@ -119,15 +115,19 @@ describe('LanTransferService binary protocol', () => {
     expect(service.handleJsonMessage).toHaveBeenCalledWith('{"type":"ping"}')
   })
 
-  test('handles duplicate chunk by ack without rewriting', () => {
+  test('handles duplicate chunk without rewriting (v3 streaming mode)', () => {
     const { service, fileHandle } = createService()
     const data = Buffer.from([1, 1, 1, 1])
 
-    service.handleBinaryFileChunk('tid-123', 0, data)
-    service.handleBinaryFileChunk('tid-123', 0, data)
+    // First chunk write
+    const frame1 = buildFrame('tid-123', 0, data)
+    service.handleSocketData(frame1)
 
+    // Duplicate chunk - should be ignored
+    const frame2 = buildFrame('tid-123', 0, data)
+    service.handleSocketData(frame2)
+
+    // Only written once
     expect(fileHandle.writeBytes).toHaveBeenCalledTimes(1)
-    expect(service.sendChunkAck).toHaveBeenCalledTimes(2)
-    expect(service.sendChunkAck).toHaveBeenLastCalledWith('tid-123', 0, true)
   })
 })
