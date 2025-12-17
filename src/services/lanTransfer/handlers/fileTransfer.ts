@@ -367,8 +367,10 @@ export const handleFileEnd = (message: LanTransferFileEndMessage, context: FileT
   if (currentTransfer.fileHandle) {
     try {
       currentTransfer.fileHandle.close()
-    } catch {
-      // Ignore close errors
+    } catch (error) {
+      logger.warn('Failed to close file handle in handleFileEnd', error, {
+        transferId: currentTransfer.transferId
+      })
     }
     currentTransfer.fileHandle = null
   }

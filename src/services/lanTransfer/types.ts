@@ -1,7 +1,13 @@
 import type { FileHandle } from 'expo-file-system'
 import type TcpSocket from 'react-native-tcp-socket'
 
-import type { FileTransferStatus } from '@/types/lanTransfer'
+import type {
+  FileTransferProgress,
+  FileTransferStatus,
+  LanTransferFileCompleteErrorCode,
+  LanTransferOutgoingMessage,
+  LanTransferState
+} from '@/types/lanTransfer'
 
 /**
  * Internal file transfer state
@@ -43,18 +49,18 @@ export type TcpClientSocket = ReturnType<typeof TcpSocket.createConnection> | nu
  * Service context passed to handlers
  */
 export interface ServiceContext {
-  sendJsonMessage: (payload: object) => void
-  updateState: (partial: object) => void
+  sendJsonMessage: (payload: LanTransferOutgoingMessage) => void
+  updateState: (partial: Partial<LanTransferState>) => void
   getCurrentTransfer: () => InternalFileTransfer | null
   setCurrentTransfer: (transfer: InternalFileTransfer | null) => void
-  getTransferProgress: () => object | undefined
+  getTransferProgress: () => FileTransferProgress | undefined
   cleanupTransfer: (targetFilePath?: string) => void
   completeTransfer: (
     success: boolean,
     error?: string,
     filePath?: string,
     failedTargetPath?: string,
-    errorCode?: string
+    errorCode?: LanTransferFileCompleteErrorCode
   ) => void
   startGlobalTimeout: () => void
   clearGlobalTimeout: () => void

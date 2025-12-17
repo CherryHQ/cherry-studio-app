@@ -1,7 +1,6 @@
 export const LAN_TRANSFER_SERVICE_TYPE = 'cherrystudio'
 export const LAN_TRANSFER_SERVICE_FULL_NAME = '_cherrystudio._tcp'
 export const LAN_TRANSFER_DOMAIN = 'local.'
-export const LAN_TRANSFER_TCP_PORT = 53317
 export const LAN_TRANSFER_PROTOCOL_VERSION = '1'
 export const LAN_TRANSFER_MESSAGE_TERMINATOR = '\n'
 

@@ -11,7 +11,6 @@ export enum LanTransferServerStatus {
 export enum FileTransferStatus {
   IDLE = 'idle',
   RECEIVING = 'receiving',
-  VERIFYING = 'verifying',
   COMPLETING = 'completing',
   COMPLETE = 'complete',
   ERROR = 'error'

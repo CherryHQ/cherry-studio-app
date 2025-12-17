@@ -195,6 +195,8 @@ class LanTransferService {
             updateState: this.updateState,
             cleanupClient: () => this.cleanupClient()
           })
+        } else {
+          logger.warn('Invalid handshake message', { receivedFields: Object.keys(parsed as object) })
         }
         break
       case 'ping':
@@ -203,21 +205,29 @@ class LanTransferService {
             sendJsonMessage: this.sendJsonMessage,
             getStatus: () => this.state.status
           })
+        } else {
+          logger.warn('Invalid ping message', { receivedFields: Object.keys(parsed as object) })
         }
         break
       case 'file_start':
         if (isValidFileStartMessage(parsed)) {
           handleFileStart(parsed, this.createFileTransferContext())
+        } else {
+          logger.warn('Invalid file_start message', { receivedFields: Object.keys(parsed as object) })
         }
         break
       case 'file_chunk':
         if (isValidFileChunkMessage(parsed)) {
           handleFileChunk(parsed, this.createFileTransferContext())
+        } else {
+          logger.warn('Invalid file_chunk message', { receivedFields: Object.keys(parsed as object) })
         }
         break
       case 'file_end':
         if (isValidFileEndMessage(parsed)) {
           handleFileEnd(parsed, this.createFileTransferContext())
+        } else {
+          logger.warn('Invalid file_end message', { receivedFields: Object.keys(parsed as object) })
         }
         break
       default:
@@ -243,6 +253,7 @@ class LanTransferService {
     cleanupTransfer: this.cleanupTransfer,
     completeTransfer: this.completeTransfer,
     startGlobalTimeout: this.startGlobalTimeout,
+    clearGlobalTimeout: this.clearGlobalTimeout,
     onProgressUpdate: this.onProgressUpdate
   })
 
@@ -251,8 +262,8 @@ class LanTransferService {
   private getTransferProgress = (): FileTransferProgress | undefined => {
     if (!this.currentTransfer) return undefined
 
-    const elapsed = Date.now() - this.currentTransfer.startTime
-    const bytesPerMs = this.currentTransfer.bytesReceived / elapsed
+    const elapsed = Math.max(1, Date.now() - this.currentTransfer.startTime)
+    const bytesPerMs = elapsed > 0 ? this.currentTransfer.bytesReceived / elapsed : 0
     const remainingBytes = this.currentTransfer.fileSize - this.currentTransfer.bytesReceived
 
     return {
@@ -260,7 +271,10 @@ class LanTransferService {
       fileName: this.currentTransfer.fileName,
       fileSize: this.currentTransfer.fileSize,
       bytesReceived: this.currentTransfer.bytesReceived,
-      percentage: Math.round((this.currentTransfer.bytesReceived / this.currentTransfer.fileSize) * 100),
+      percentage:
+        this.currentTransfer.fileSize > 0
+          ? Math.round((this.currentTransfer.bytesReceived / this.currentTransfer.fileSize) * 100)
+          : 0,
       chunksReceived: this.currentTransfer.receivedChunks.size,
       totalChunks: this.currentTransfer.totalChunks,
       status: this.currentTransfer.status,
@@ -343,8 +357,11 @@ class LanTransferService {
         if (transferToCleanup.fileHandle) {
           try {
             transferToCleanup.fileHandle.close()
-          } catch {
-            // Ignore close errors
+          } catch (error) {
+            logger.warn('Failed to close file handle', error, {
+              transferId: transferToCleanup.transferId,
+              tempFilePath: transferToCleanup.tempFilePath
+            })
           }
         }
 
@@ -354,8 +371,11 @@ class LanTransferService {
           if (tempFile.exists) {
             tempFile.delete()
           }
-        } catch {
-          // Ignore cleanup errors
+        } catch (error) {
+          logger.warn('Failed to delete temp file', error, {
+            transferId: transferToCleanup.transferId,
+            tempFilePath: transferToCleanup.tempFilePath
+          })
         }
 
         // Clean up target file on failure if provided
@@ -365,8 +385,11 @@ class LanTransferService {
             if (targetFile.exists) {
               targetFile.delete()
             }
-          } catch {
-            // Ignore cleanup errors
+          } catch (error) {
+            logger.warn('Failed to delete target file on cleanup', error, {
+              transferId: transferToCleanup.transferId,
+              targetFilePath
+            })
           }
         }
       })
@@ -395,13 +418,17 @@ class LanTransferService {
 
   private sendJsonMessage = (payload: LanTransferOutgoingMessage) => {
     if (!this.clientSocket) {
+      logger.warn('Attempted to send message with no client socket', {
+        messageType: payload.type
+      })
       return
     }
 
     try {
       this.clientSocket.write(JSON.stringify(payload) + LAN_TRANSFER_MESSAGE_TERMINATOR)
     } catch (error) {
-      logger.error('Failed to send TCP message', error)
+      logger.error('Failed to send TCP message', error, { messageType: payload.type })
+      this.cleanupClient()
     }
   }
 

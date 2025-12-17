@@ -62,7 +62,11 @@ const createService = () => {
     bytesReceived: 0,
     startTime: Date.now(),
     lastChunkTime: Date.now(),
-    status: FileTransferStatus.RECEIVING
+    status: FileTransferStatus.RECEIVING,
+    // Memory buffer fields for batched writes
+    pendingChunks: new Map<number, Uint8Array>(),
+    pendingBytesSize: 0,
+    flushScheduled: false
   }
 
   return { service, fileHandle }
@@ -70,40 +74,45 @@ const createService = () => {
 
 describe('LanTransferService binary protocol (v1)', () => {
   test('handles a complete binary frame', () => {
-    const { service, fileHandle } = createService()
+    const { service } = createService()
     const data = Buffer.from([1, 2, 3, 4])
     const frame = buildFrame('tid-123', 0, data)
 
     service.handleSocketData(frame)
 
-    expect(fileHandle.writeBytes).toHaveBeenCalledWith(new Uint8Array(data))
+    // v1: Data is buffered in memory, not written immediately to disk
+    expect(service.currentTransfer.pendingChunks.has(0)).toBe(true)
+    expect(service.currentTransfer.pendingChunks.get(0)).toEqual(new Uint8Array(data))
     // v1: No ACK sent in streaming mode
     expect(service.currentTransfer.receivedChunks.has(0)).toBe(true)
     expect(service.currentTransfer.bytesReceived).toBe(data.length)
   })
 
   test('buffers partial frame and processes when complete', () => {
-    const { service, fileHandle } = createService()
+    const { service } = createService()
     const data = Buffer.from([9, 8, 7, 6])
     const frame = buildFrame('tid-123', 1, data)
 
     // Send first half (incomplete)
     service.handleSocketData(frame.subarray(0, 5))
-    expect(fileHandle.writeBytes).not.toHaveBeenCalled()
+    expect(service.currentTransfer.pendingChunks.size).toBe(0)
 
     // Send remainder to complete the frame
     service.handleSocketData(frame.subarray(5))
-    expect(fileHandle.writeBytes).toHaveBeenCalledTimes(1)
+    // v1: Data is buffered in memory, not written immediately to disk
+    expect(service.currentTransfer.pendingChunks.has(1)).toBe(true)
+    expect(service.currentTransfer.pendingChunks.get(1)).toEqual(new Uint8Array(data))
   })
 
   test('skips unknown binary frame type', () => {
-    const { service, fileHandle } = createService()
+    const { service } = createService()
     const data = Buffer.from([0xaa])
     const frame = buildFrame('tid-123', 0, data, 0x02)
 
     service.handleSocketData(frame)
 
-    expect(fileHandle.writeBytes).not.toHaveBeenCalled()
+    // Unknown frame type should not be buffered
+    expect(service.currentTransfer.pendingChunks.size).toBe(0)
   })
 
   test('processes JSON messages alongside binary', () => {
@@ -116,19 +125,22 @@ describe('LanTransferService binary protocol (v1)', () => {
   })
 
   test('handles duplicate chunk without rewriting (v1 streaming mode)', () => {
-    const { service, fileHandle } = createService()
+    const { service } = createService()
     const data = Buffer.from([1, 1, 1, 1])
 
     // First chunk write
     const frame1 = buildFrame('tid-123', 0, data)
     service.handleSocketData(frame1)
 
+    const initialPendingSize = service.currentTransfer.pendingBytesSize
+
     // Duplicate chunk - should be ignored
     const frame2 = buildFrame('tid-123', 0, data)
     service.handleSocketData(frame2)
 
-    // Only written once
-    expect(fileHandle.writeBytes).toHaveBeenCalledTimes(1)
+    // Only buffered once - pendingBytesSize should not increase
+    expect(service.currentTransfer.pendingBytesSize).toBe(initialPendingSize)
+    expect(service.currentTransfer.pendingChunks.size).toBe(1)
   })
 })
 
@@ -372,11 +384,8 @@ describe('LanTransferService JSON message handling', () => {
 })
 
 describe('LanTransferService mixed protocol handling', () => {
-  test('correctly processes binary frame followed by multiple JSON messages', () => {
+  test('correctly processes binary frame followed by JSON messages', () => {
     const service: any = new (lanTransferService as any).constructor()
-    const sentMessages: any[] = []
-    service.sendJsonMessage = jest.fn((msg: any) => sentMessages.push(msg))
-    service.cleanupClient = jest.fn()
 
     service.state = {
       status: LanTransferServerStatus.RECEIVING_FILE
@@ -401,20 +410,26 @@ describe('LanTransferService mixed protocol handling', () => {
       bytesReceived: 0,
       startTime: Date.now(),
       lastChunkTime: Date.now(),
-      status: FileTransferStatus.RECEIVING
+      status: FileTransferStatus.RECEIVING,
+      // Memory buffer fields for batched writes
+      pendingChunks: new Map<number, Uint8Array>(),
+      pendingBytesSize: 0,
+      flushScheduled: false
     }
 
     service.binaryBuffer = Buffer.alloc(0)
 
-    // Binary frame followed by JSON
+    // Binary frame followed by an unknown JSON message (won't trigger completion flow)
     const binaryFrame = buildFrame('tid-123', 0, Buffer.from([1, 2, 3, 4]))
-    const jsonMsg = Buffer.from('{"type":"file_end","transferId":"tid-123"}\n')
+    const jsonMsg = Buffer.from('{"type":"unknown_test_type"}\n')
     const combined = Buffer.concat([binaryFrame, jsonMsg])
 
     service.handleSocketData(combined)
 
-    // Binary frame should be processed
-    expect(fileHandle.writeBytes).toHaveBeenCalled()
-    // file_end message should trigger file completion flow
+    // Binary frame should be buffered in memory
+    expect(service.currentTransfer.pendingChunks.has(0)).toBe(true)
+    expect(service.currentTransfer.pendingChunks.get(0)).toEqual(new Uint8Array([1, 2, 3, 4]))
+    expect(service.currentTransfer.receivedChunks.has(0)).toBe(true)
+    expect(service.currentTransfer.bytesReceived).toBe(4)
   })
 })

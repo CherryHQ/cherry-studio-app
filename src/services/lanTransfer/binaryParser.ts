@@ -118,15 +118,6 @@ export const parseJsonMessage = (buffer: Buffer): BinaryParserResult => {
   // Use explicit byte value to avoid React Native buffer polyfill issues with string indexOf
   const terminatorIndex = buffer.indexOf(NEWLINE_BYTE)
 
-  // Debug logging
-   
-  console.log('[binaryParser] parseJsonMessage called', {
-    bufferLength: buffer.length,
-    terminatorIndex,
-    firstBytes: buffer.subarray(0, Math.min(20, buffer.length)).toString('hex'),
-    bufferPreview: buffer.subarray(0, Math.min(100, buffer.length)).toString('utf8')
-  })
-
   if (terminatorIndex === -1) {
     // Terminator not found, wait for more data
     return { type: 'incomplete', consumedBytes: 0 }
@@ -136,13 +127,6 @@ export const parseJsonMessage = (buffer: Buffer): BinaryParserResult => {
   // which doesn't properly handle toString('utf8') in React Native polyfill
   const rawMessage = Buffer.from(buffer.subarray(0, terminatorIndex)).toString('utf8').trim()
   const consumedBytes = terminatorIndex + 1 // newline is always 1 byte
-
-   
-  console.log('[binaryParser] extracted message', {
-    rawMessageLength: rawMessage.length,
-    consumedBytes,
-    rawMessage: rawMessage.substring(0, 200)
-  })
 
   if (rawMessage.length === 0) {
     return { type: 'skip', consumedBytes }
