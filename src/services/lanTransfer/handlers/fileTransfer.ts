@@ -27,6 +27,9 @@ const logger = loggerService.withContext('FileTransferHandler')
 // SHA-256 checksum regex (64 hex characters)
 const CHECKSUM_REGEX = /^[a-fA-F0-9]{64}$/
 
+// Memory buffer flush threshold (512KB) - balances memory usage vs I/O frequency
+const FLUSH_THRESHOLD = 512 * 1024
+
 interface FileTransferContext {
   sendJsonMessage: (payload: LanTransferOutgoingMessage) => void
   updateState: (partial: object) => void
@@ -66,10 +69,7 @@ const sendFileStartAck = (
 /**
  * Handle file_start message
  */
-export const handleFileStart = (
-  message: LanTransferFileStartMessage,
-  context: FileTransferContext
-): void => {
+export const handleFileStart = (message: LanTransferFileStartMessage, context: FileTransferContext): void => {
   const status = context.getStatus()
 
   // Validate preconditions
@@ -178,7 +178,11 @@ export const handleFileStart = (
       bytesReceived: 0,
       startTime: Date.now(),
       lastChunkTime: Date.now(),
-      status: FileTransferStatus.RECEIVING
+      status: FileTransferStatus.RECEIVING,
+      // Memory buffer for batched disk writes (reduces UI blocking)
+      pendingChunks: new Map(),
+      pendingBytesSize: 0,
+      flushScheduled: false
     }
 
     context.setCurrentTransfer(transfer)
@@ -199,16 +203,18 @@ export const handleFileStart = (
  * Handle file_chunk message (JSON mode - for backward compatibility)
  * v3: Streaming mode, no ACK sent
  */
-export const handleFileChunk = (
-  message: LanTransferFileChunkMessage,
-  context: FileTransferContext
-): void => {
+export const handleFileChunk = (message: LanTransferFileChunkMessage, context: FileTransferContext): void => {
   if (context.getStatus() !== LanTransferServerStatus.RECEIVING_FILE) {
     return
   }
 
   const currentTransfer = context.getCurrentTransfer()
   if (!currentTransfer || currentTransfer.transferId !== message.transferId) {
+    return
+  }
+
+  // Only accept chunks while actively receiving
+  if (currentTransfer.status !== FileTransferStatus.RECEIVING) {
     return
   }
 
@@ -227,8 +233,61 @@ export const handleFileChunk = (
 }
 
 /**
+ * Flush pending chunks from memory buffer to disk
+ * Uses setImmediate to avoid blocking the current event loop iteration
+ */
+const flushPendingChunksNow = (transfer: InternalFileTransfer, context: FileTransferContext): boolean => {
+  if (transfer.status !== FileTransferStatus.RECEIVING) {
+    return true
+  }
+
+  const { fileHandle, chunkSize } = transfer
+  if (!fileHandle) {
+    if (transfer.pendingChunks.size === 0) {
+      return true
+    }
+    context.completeTransfer(false, 'Disk write error', undefined, undefined, 'DISK_ERROR')
+    return false
+  }
+
+  if (transfer.pendingChunks.size === 0) {
+    return true
+  }
+
+  const chunksToWrite = new Map(transfer.pendingChunks)
+  transfer.pendingChunks.clear()
+  transfer.pendingBytesSize = 0
+
+  try {
+    for (const [idx, data] of chunksToWrite) {
+      fileHandle.offset = idx * chunkSize
+      fileHandle.writeBytes(data)
+    }
+    return true
+  } catch (error) {
+    logger.error('Failed to flush chunks to disk', error)
+    context.completeTransfer(false, 'Disk write error', undefined, undefined, 'DISK_ERROR')
+    return false
+  }
+}
+
+const scheduleFlushPendingChunks = (transfer: InternalFileTransfer, context: FileTransferContext): void => {
+  if (transfer.flushScheduled || transfer.status !== FileTransferStatus.RECEIVING) {
+    return
+  }
+
+  transfer.flushScheduled = true
+
+  // Defer disk writes to next event loop iteration, allowing UI to update
+  setImmediate(() => {
+    transfer.flushScheduled = false
+    flushPendingChunksNow(transfer, context)
+  })
+}
+
+/**
  * Handle binary file chunk (from binary frame parser)
- * v3: Streaming mode, no ACK sent
+ * v3: Streaming mode with memory buffering to reduce UI blocking
  */
 export const handleBinaryFileChunk = (
   transferId: string,
@@ -245,6 +304,11 @@ export const handleBinaryFileChunk = (
     return
   }
 
+  // Only accept chunks while actively receiving
+  if (currentTransfer.status !== FileTransferStatus.RECEIVING) {
+    return
+  }
+
   if (currentTransfer.receivedChunks.has(chunkIndex)) {
     // Duplicate chunk, ignore silently
     return
@@ -253,17 +317,19 @@ export const handleBinaryFileChunk = (
   try {
     const chunk = new Uint8Array(data)
 
-    // Write chunk directly to file (streaming write)
-    const { fileHandle, chunkSize } = currentTransfer
-    if (fileHandle) {
-      fileHandle.offset = chunkIndex * chunkSize
-      fileHandle.writeBytes(chunk)
-    }
+    // Store chunk in memory buffer (non-blocking)
+    currentTransfer.pendingChunks.set(chunkIndex, chunk)
+    currentTransfer.pendingBytesSize += chunk.length
 
     // Update tracking
     currentTransfer.receivedChunks.add(chunkIndex)
     currentTransfer.bytesReceived += chunk.length
     currentTransfer.lastChunkTime = Date.now()
+
+    // Flush to disk when buffer reaches threshold
+    if (currentTransfer.pendingBytesSize >= FLUSH_THRESHOLD) {
+      scheduleFlushPendingChunks(currentTransfer, context)
+    }
 
     // Notify progress update (throttled in main service)
     context.onProgressUpdate?.()
@@ -276,12 +342,13 @@ export const handleBinaryFileChunk = (
 /**
  * Handle file_end message
  */
-export const handleFileEnd = (
-  message: LanTransferFileEndMessage,
-  context: FileTransferContext
-): void => {
+export const handleFileEnd = (message: LanTransferFileEndMessage, context: FileTransferContext): void => {
   const currentTransfer = context.getCurrentTransfer()
   if (!currentTransfer || currentTransfer.transferId !== message.transferId) {
+    return
+  }
+
+  if (currentTransfer.status !== FileTransferStatus.RECEIVING) {
     return
   }
 
@@ -300,6 +367,12 @@ export const handleFileEnd = (
       undefined,
       'INCOMPLETE_TRANSFER'
     )
+    return
+  }
+
+  // Flush any remaining buffered chunks (synchronous to ensure data integrity)
+  const flushed = flushPendingChunksNow(currentTransfer, context)
+  if (!flushed) {
     return
   }
 
@@ -335,14 +408,16 @@ export const handleFileEnd = (
 /**
  * Handle file_cancel message
  */
-export const handleFileCancel = (
-  message: LanTransferFileCancelMessage,
-  context: FileTransferContext
-): void => {
+export const handleFileCancel = (message: LanTransferFileCancelMessage, context: FileTransferContext): void => {
   const currentTransfer = context.getCurrentTransfer()
   if (!currentTransfer || currentTransfer.transferId !== message.transferId) {
     return
   }
+
+  // Clear memory buffer before cleanup (release memory immediately)
+  currentTransfer.pendingChunks.clear()
+  currentTransfer.pendingBytesSize = 0
+  currentTransfer.flushScheduled = false
 
   context.cleanupTransfer()
   context.updateState({

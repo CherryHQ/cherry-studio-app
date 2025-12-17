@@ -573,6 +573,16 @@
           "device_name": "设备名称",
           "error": "错误",
           "eta": "预计剩余",
+          "file_status": {
+            "cancelled": "已取消",
+            "cancelling": "正在取消...",
+            "complete": "已完成",
+            "completing": "完成中...",
+            "error": "错误",
+            "idle": "空闲",
+            "receiving": "接收中",
+            "verifying": "校验中..."
+          },
           "file_transfer": "文件传输",
           "hint": "请在桌面端 Cherry Studio 中选择此设备发送备份",
           "info": "传输信息",

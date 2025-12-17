@@ -20,6 +20,13 @@ export interface InternalFileTransfer {
   startTime: number
   lastChunkTime: number
   status: FileTransferStatus
+
+  // Memory buffer for pending chunks (reduces blocking disk I/O)
+  pendingChunks: Map<number, Uint8Array> // chunkIndex -> data
+  pendingBytesSize: number // Current buffer size in bytes
+
+  // Disk flush scheduling (avoid clearing buffer before flush actually runs)
+  flushScheduled: boolean
 }
 
 /**

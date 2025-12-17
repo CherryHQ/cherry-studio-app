@@ -13,6 +13,7 @@ export enum FileTransferStatus {
   RECEIVING = 'receiving',
   VERIFYING = 'verifying',
   COMPLETING = 'completing',
+  CANCELLING = 'cancelling',
   COMPLETE = 'complete',
   ERROR = 'error',
   CANCELLED = 'cancelled'

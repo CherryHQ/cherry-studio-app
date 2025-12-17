@@ -573,6 +573,16 @@
           "device_name": "Device name",
           "error": "Error",
           "eta": "ETA",
+          "file_status": {
+            "cancelled": "Cancelled",
+            "cancelling": "Cancelling...",
+            "complete": "Complete",
+            "completing": "Completing...",
+            "error": "Error",
+            "idle": "Idle",
+            "receiving": "Receiving",
+            "verifying": "Verifying..."
+          },
           "file_transfer": "File Transfer",
           "hint": "Select this device in Cherry Studio desktop to send the backup",
           "info": "Transfer Info",

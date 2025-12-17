@@ -573,6 +573,16 @@
           "device_name": "Имя устройства",
           "error": "Ошибка",
           "eta": "Осталось",
+          "file_status": {
+            "cancelled": "[to be translated]:已取消",
+            "cancelling": "[to be translated]:正在取消...",
+            "complete": "[to be translated]:已完成",
+            "completing": "[to be translated]:完成中...",
+            "error": "[to be translated]:错误",
+            "idle": "[to be translated]:空闲",
+            "receiving": "[to be translated]:接收中",
+            "verifying": "[to be translated]:校验中..."
+          },
           "file_transfer": "Передача файла",
           "hint": "Выберите это устройство в Cherry Studio на десктопе, чтобы отправить резервную копию",
           "info": "Информация о передаче",

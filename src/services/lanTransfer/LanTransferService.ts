@@ -119,6 +119,19 @@ class LanTransferService {
   cancelCurrentTransfer = () => {
     logger.info('cancelCurrentTransfer called', { hasCurrentTransfer: !!this.currentTransfer })
 
+    // 立即暂停 socket，停止接收新数据（关键：防止底层 TCP 处理阻塞 JS 线程）
+    if (this.clientSocket) {
+      try {
+        this.clientSocket.pause()
+      } catch (e) {
+        logger.warn('Failed to pause socket', e)
+      }
+    }
+
+    // 然后移除 socket 监听器
+    this.removeSocketDataListener()
+    this.binaryBuffer = Buffer.alloc(0)
+
     if (!this.currentTransfer) {
       // 即使没有 currentTransfer，也清理状态（处理状态不同步的情况）
       logger.warn('cancelCurrentTransfer: no current transfer, cleaning up state')
@@ -127,12 +140,40 @@ class LanTransferService {
         fileTransfer: undefined,
         transferCancelled: true
       })
+
+      // 重置连接，确保不会残留 pause/data listener 状态
+      setImmediate(() => {
+        this.cleanupClient(true)
+      })
       return
     }
-    this.completeTransfer(false, 'Transfer cancelled by user', undefined, undefined, 'CANCELLED')
+
+    // 先设置 CANCELLING 状态，让 UI 显示 loading
+    this.currentTransfer.status = FileTransferStatus.CANCELLING
+
+    // 立即清理内存缓冲区，防止内存增长
+    this.currentTransfer.pendingChunks.clear()
+    this.currentTransfer.pendingBytesSize = 0
+    this.currentTransfer.flushScheduled = false
+
+    this.updateState({ fileTransfer: this.getTransferProgress() })
+
+    // 异步执行实际的取消逻辑，让 UI 有机会先渲染 CANCELLING 状态
+    setImmediate(() => {
+      this.completeTransfer(false, 'Transfer cancelled by user', undefined, undefined, 'CANCELLED')
+
+      // 主动断开连接，避免残留数据继续触发 JS 线程处理
+      this.cleanupClient(true)
+    })
   }
 
   // ==================== Connection Handling ====================
+
+  private removeSocketDataListener = () => {
+    if (this.clientSocket) {
+      this.clientSocket.removeListener('data', this.handleSocketData)
+    }
+  }
 
   private handleIncomingConnection = (socket: NonNullable<TcpClientSocket>) => {
     if (this.clientSocket) {
@@ -162,16 +203,15 @@ class LanTransferService {
   // ==================== Message Parsing ====================
 
   private handleSocketData = (chunk: Buffer | string) => {
+    // 如果正在取消，快速跳过已排队的数据事件（避免 3-5 秒的处理延迟）
+    if (
+      this.currentTransfer?.status === FileTransferStatus.CANCELLING ||
+      this.currentTransfer?.status === FileTransferStatus.CANCELLED
+    ) {
+      return
+    }
+
     const incoming = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, 'utf8')
-
-    // Debug: log incoming data
-    logger.info('Socket data received', {
-      isBuffer: Buffer.isBuffer(chunk),
-      incomingLength: incoming.length,
-      hexDump: incoming.subarray(0, 100).toString('hex'),
-      asString: incoming.toString('utf8').substring(0, 200)
-    })
-
     this.binaryBuffer = Buffer.concat([this.binaryBuffer, incoming])
 
     while (this.binaryBuffer.length > 0) {
@@ -195,15 +235,6 @@ class LanTransferService {
 
   private handleJsonMessage = (rawMessage: string) => {
     let parsed: unknown = null
-
-    // Debug: log raw message details
-    logger.info('Raw JSON message received', {
-      length: rawMessage.length,
-      preview: rawMessage.substring(0, 200),
-      firstChar: rawMessage.charCodeAt(0),
-      lastChar: rawMessage.charCodeAt(rawMessage.length - 1),
-      hexDump: Buffer.from(rawMessage).subarray(0, 50).toString('hex')
-    })
 
     try {
       parsed = JSON.parse(rawMessage)
@@ -339,6 +370,8 @@ class LanTransferService {
 
     if (success) {
       this.currentTransfer.status = FileTransferStatus.COMPLETE
+    } else if (errorCode === 'CANCELLED') {
+      this.currentTransfer.status = FileTransferStatus.CANCELLED
     } else {
       this.currentTransfer.status = FileTransferStatus.ERROR
     }
@@ -357,8 +390,9 @@ class LanTransferService {
 
     this.updateState({
       status: LanTransferServerStatus.CONNECTED,
-      fileTransfer: success ? undefined : { ...this.getTransferProgress()!, error },
-      completedFilePath: success ? filePath : undefined
+      fileTransfer: success || errorCode === 'CANCELLED' ? undefined : { ...this.getTransferProgress()!, error },
+      completedFilePath: success ? filePath : undefined,
+      transferCancelled: errorCode === 'CANCELLED' ? true : this.state.transferCancelled
     })
 
     this.cleanupTransfer(failedTargetPath)
@@ -462,31 +496,39 @@ class LanTransferService {
       this.clearGlobalTimeout()
     }
 
-    if (this.clientSocket) {
-      try {
-        this.clientSocket.destroy()
-      } catch (error) {
-        logger.warn('Error destroying client socket', error)
-      }
-      this.clientSocket = null
-    }
-
-    if (this.server) {
-      try {
-        this.server.close()
-      } catch (error) {
-        logger.warn('Error closing TCP server', error)
-      }
-      this.server = null
-    }
-
-    this.binaryBuffer = Buffer.alloc(0)
+    // 先更新状态，让 UI 立即响应
     this.updateState({
       status: nextStatus,
       port: undefined,
       connectedClient: undefined,
       fileTransfer: undefined,
       lastError: clearLastError ? undefined : (errorMessage ?? this.state.lastError)
+    })
+
+    // 保存引用，异步关闭
+    const socketToDestroy = this.clientSocket
+    const serverToClose = this.server
+    this.clientSocket = null
+    this.server = null
+    this.binaryBuffer = Buffer.alloc(0)
+
+    // 异步执行网络关闭操作，不阻塞 UI
+    setImmediate(() => {
+      if (socketToDestroy) {
+        try {
+          socketToDestroy.destroy()
+        } catch (error) {
+          logger.warn('Error destroying client socket', error)
+        }
+      }
+
+      if (serverToClose) {
+        try {
+          serverToClose.close()
+        } catch (error) {
+          logger.warn('Error closing TCP server', error)
+        }
+      }
     })
   }
 

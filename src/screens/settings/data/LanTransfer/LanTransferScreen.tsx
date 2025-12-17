@@ -81,25 +81,40 @@ export default function LanTransferScreen() {
     startServer()
 
     return () => {
-      // 清理 mDNS
-      if (service.zeroconf && service.publishedName) {
-        try {
-          service.zeroconf.unpublishService(service.publishedName)
-        } catch (error) {
-          logger.error('Failed to unpublish Zeroconf service', error)
-        }
-        service.publishedName = null
-      }
-      stopServer()
-      service.started = false
+      const cleanupStart = Date.now()
+      logger.info('[CLEANUP] Starting cleanup')
 
-      // 清理 Zeroconf
-      try {
-        service.zeroconf?.stop()
-        service.zeroconf?.removeDeviceListeners()
-      } catch (err) {
-        logger.warn('Failed to cleanup Zeroconf', err as Error)
-      }
+      // 异步清理，不阻塞 UI（让返回按钮立即响应）
+      setImmediate(() => {
+        // 清理 mDNS
+        if (service.zeroconf && service.publishedName) {
+          const unpublishStart = Date.now()
+          try {
+            service.zeroconf.unpublishService(service.publishedName)
+          } catch (error) {
+            logger.error('[CLEANUP] unpublishService error', error)
+          }
+          logger.info('[CLEANUP] unpublishService took', { elapsed: Date.now() - unpublishStart })
+          service.publishedName = null
+        }
+
+        const stopServerStart = Date.now()
+        stopServer()
+        logger.info('[CLEANUP] stopServer took', { elapsed: Date.now() - stopServerStart })
+        service.started = false
+
+        // 清理 Zeroconf
+        const zeroconfStopStart = Date.now()
+        try {
+          service.zeroconf?.stop()
+          service.zeroconf?.removeDeviceListeners()
+        } catch (err) {
+          logger.warn('[CLEANUP] Zeroconf cleanup error', err as Error)
+        }
+        logger.info('[CLEANUP] zeroconf.stop took', { elapsed: Date.now() - zeroconfStopStart })
+
+        logger.info('[CLEANUP] Total cleanup took', { elapsed: Date.now() - cleanupStart })
+      })
     }
   }, [startServer, stopServer])
 
@@ -320,18 +335,25 @@ export default function LanTransferScreen() {
                     </Text>
                   )}
                   <Text>
-                    {t('settings.data.lan_transfer.status')}: {fileTransfer.status}
+                    {t('settings.data.lan_transfer.status')}:{' '}
+                    {t(`settings.data.lan_transfer.file_status.${fileTransfer.status}`)}
                   </Text>
                 </YStack>
-                {fileTransfer.status === FileTransferStatus.RECEIVING && (
+                {(fileTransfer.status === FileTransferStatus.RECEIVING ||
+                  fileTransfer.status === FileTransferStatus.CANCELLING) && (
                   <Button
                     size="sm"
                     variant="ghost"
                     onPress={cancelTransfer}
-                    className="rounded-lg border border-red-500/80 bg-red-500/20 ">
-                    <Button.Label className="text-red-500">
-                      {t('settings.data.lan_transfer.cancel_receive')}
-                    </Button.Label>
+                    isDisabled={fileTransfer.status === FileTransferStatus.CANCELLING}
+                    className="rounded-lg border border-red-500/80 bg-red-500/20">
+                    {fileTransfer.status === FileTransferStatus.CANCELLING ? (
+                      <Spinner size="sm" className="text-red-500" />
+                    ) : (
+                      <Button.Label className="text-red-500">
+                        {t('settings.data.lan_transfer.cancel_receive')}
+                      </Button.Label>
+                    )}
                   </Button>
                 )}
               </XStack>
