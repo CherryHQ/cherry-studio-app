@@ -564,6 +564,8 @@
         },
         "lan_transfer": {
           "app_version": "应用版本",
+          "back_cancel_receive_body": "返回将会取消当前正在接收的文件，是否继续？",
+          "back_cancel_receive_title": "返回将取消接收",
           "backup_detected_body": "检测到备份文件，是否进行恢复？",
           "backup_detected_title": "检测到备份文件",
           "cancel_receive": "取消接收",

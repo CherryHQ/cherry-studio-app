@@ -564,6 +564,8 @@
         },
         "lan_transfer": {
           "app_version": "App Version",
+          "back_cancel_receive_body": "Going back will cancel the current transfer. Continue?",
+          "back_cancel_receive_title": "Leave this page?",
           "backup_detected_body": "A backup file is ready. Restore now?",
           "backup_detected_title": "Backup file detected",
           "cancel_receive": "Cancel Receive",

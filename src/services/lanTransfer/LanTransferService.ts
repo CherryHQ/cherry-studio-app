@@ -34,8 +34,8 @@ import {
 
 const logger = loggerService.withContext('LanTransferService')
 
-// State update throttle interval (ms)
-const STATE_UPDATE_THROTTLE_MS = 100
+// State update throttle interval (ms) - 250ms to reduce JS thread saturation
+const STATE_UPDATE_THROTTLE_MS = 250
 
 class LanTransferService {
   private server: TcpServer = null
@@ -119,31 +119,28 @@ class LanTransferService {
   cancelCurrentTransfer = () => {
     logger.info('cancelCurrentTransfer called', { hasCurrentTransfer: !!this.currentTransfer })
 
-    // 立即暂停 socket，停止接收新数据（关键：防止底层 TCP 处理阻塞 JS 线程）
+    // 立即暂停并销毁 socket，彻底停止所有数据接收
+    // 关键：必须立即 destroy，否则 native 层已缓冲的数据会继续发送到 JS 线程
     if (this.clientSocket) {
+      this.removeSocketDataListener()
       try {
-        this.clientSocket.pause()
+        this.clientSocket.destroy()
       } catch (e) {
-        logger.warn('Failed to pause socket', e)
+        logger.warn('Failed to destroy socket', e)
       }
+      this.clientSocket = null
     }
 
-    // 然后移除 socket 监听器
-    this.removeSocketDataListener()
     this.binaryBuffer = Buffer.alloc(0)
 
     if (!this.currentTransfer) {
       // 即使没有 currentTransfer，也清理状态（处理状态不同步的情况）
       logger.warn('cancelCurrentTransfer: no current transfer, cleaning up state')
       this.updateState({
-        status: LanTransferServerStatus.CONNECTED,
+        status: LanTransferServerStatus.LISTENING,
+        connectedClient: undefined,
         fileTransfer: undefined,
         transferCancelled: true
-      })
-
-      // 重置连接，确保不会残留 pause/data listener 状态
-      setImmediate(() => {
-        this.cleanupClient(true)
       })
       return
     }
@@ -158,13 +155,8 @@ class LanTransferService {
 
     this.updateState({ fileTransfer: this.getTransferProgress() })
 
-    // 异步执行实际的取消逻辑，让 UI 有机会先渲染 CANCELLING 状态
-    setImmediate(() => {
-      this.completeTransfer(false, 'Transfer cancelled by user', undefined, undefined, 'CANCELLED')
-
-      // 主动断开连接，避免残留数据继续触发 JS 线程处理
-      this.cleanupClient(true)
-    })
+    // 立即执行取消逻辑（socket 已销毁，不会有延迟）
+    this.completeTransfer(false, 'Transfer cancelled by user', undefined, undefined, 'CANCELLED')
   }
 
   // ==================== Connection Handling ====================
@@ -389,7 +381,8 @@ class LanTransferService {
     })
 
     this.updateState({
-      status: LanTransferServerStatus.CONNECTED,
+      status: LanTransferServerStatus.LISTENING,
+      connectedClient: undefined,
       fileTransfer: success || errorCode === 'CANCELLED' ? undefined : { ...this.getTransferProgress()!, error },
       completedFilePath: success ? filePath : undefined,
       transferCancelled: errorCode === 'CANCELLED' ? true : this.state.transferCancelled

@@ -1,13 +1,14 @@
 import type { NavigationProp, ParamListBase } from '@react-navigation/native'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import * as Device from 'expo-device'
-import { Button, Spinner } from 'heroui-native'
+import { Spinner } from 'heroui-native'
 import React, { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Platform } from 'react-native'
 import Zeroconf from 'react-native-zeroconf'
 
 import { Container, HeaderBar, presentDialog, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
+import { ReceiveProgressModal } from '@/componentsV2/features/SettingsScreen/ReceiveProgressModal'
 import { RestoreProgressModal } from '@/componentsV2/features/SettingsScreen/RestoreProgressModal'
 import { TriangleAlert } from '@/componentsV2/icons'
 import { LAN_TRANSFER_DOMAIN, LAN_TRANSFER_PROTOCOL_VERSION, LAN_TRANSFER_SERVICE_TYPE } from '@/constants/lanTransfer'
@@ -23,18 +24,6 @@ import type { LanTransferRouteProp } from '@/types/naviagate'
 import { getLanTransferServiceName } from '@/utils'
 
 const logger = loggerService.withContext('LanTransferScreen')
-
-const formatBytes = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-}
-
-const formatDuration = (ms: number): string => {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(0)}s`
-  return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`
-}
 
 export default function LanTransferScreen() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>()
@@ -57,10 +46,7 @@ export default function LanTransferScreen() {
     lastError: serverError,
     fileTransfer,
     completedFilePath,
-    clearCompletedFile,
-    transferCancelled,
-    clearTransferCancelled,
-    cancelTransfer
+    clearCompletedFile
   } = useLanTransfer()
   const { isModalOpen, restoreSteps, overallStatus, startRestore, closeModal } = useRestore({
     clearBeforeRestore: true
@@ -69,6 +55,8 @@ export default function LanTransferScreen() {
 
   const modelName = useMemo(() => Device.modelName || `Cherry-${Platform.OS}`, [])
   const serviceName = useMemo(() => getLanTransferServiceName(modelName, serverPort), [modelName, serverPort])
+
+  const isReceiving = fileTransfer?.status === FileTransferStatus.RECEIVING
 
   // Effect 1: 初始化 Zeroconf 和启动 TCP server
   useEffect(() => {
@@ -174,16 +162,6 @@ export default function LanTransferScreen() {
       })
     }
   }, [serverStatus, serverError, navigation, t])
-
-  useEffect(() => {
-    if (transferCancelled) {
-      presentDialog('info', {
-        title: t('settings.data.lan_transfer.transfer_cancelled_title'),
-        content: t('settings.data.lan_transfer.transfer_cancelled_body')
-      })
-      clearTransferCancelled()
-    }
-  }, [transferCancelled, clearTransferCancelled, t])
 
   useEffect(() => {
     if (!completedFilePath) return
@@ -308,59 +286,6 @@ export default function LanTransferScreen() {
             )}
           </YStack>
 
-          {fileTransfer && (
-            <YStack className="bg-secondary gap-2 rounded-xl p-3">
-              <Text className="text-sm font-semibold">{t('settings.data.lan_transfer.file_transfer')}</Text>
-              <Text className="text-md">{fileTransfer.fileName}</Text>
-              <Text>
-                {formatBytes(fileTransfer.bytesReceived)} / {formatBytes(fileTransfer.fileSize)}
-              </Text>
-
-              <YStack className="bg-background h-2 overflow-hidden rounded-full">
-                <YStack className="bg-primary h-full rounded-full" style={{ width: `${fileTransfer.percentage}%` }} />
-              </YStack>
-
-              <XStack className="justify-between">
-                <Text>{fileTransfer.percentage}%</Text>
-                <Text>
-                  {fileTransfer.chunksReceived}/{fileTransfer.totalChunks} {t('settings.data.lan_transfer.chunks')}
-                </Text>
-              </XStack>
-
-              <XStack className="items-center justify-between">
-                <YStack>
-                  {fileTransfer.estimatedRemainingMs != null && fileTransfer.estimatedRemainingMs > 0 && (
-                    <Text>
-                      {t('settings.data.lan_transfer.eta')}: {formatDuration(fileTransfer.estimatedRemainingMs)}
-                    </Text>
-                  )}
-                  <Text>
-                    {t('settings.data.lan_transfer.status')}:{' '}
-                    {t(`settings.data.lan_transfer.file_status.${fileTransfer.status}`)}
-                  </Text>
-                </YStack>
-                {(fileTransfer.status === FileTransferStatus.RECEIVING ||
-                  fileTransfer.status === FileTransferStatus.CANCELLING) && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onPress={cancelTransfer}
-                    isDisabled={fileTransfer.status === FileTransferStatus.CANCELLING}
-                    className="rounded-lg border border-red-500/80 bg-red-500/20">
-                    {fileTransfer.status === FileTransferStatus.CANCELLING ? (
-                      <Spinner size="sm" className="text-red-500" />
-                    ) : (
-                      <Button.Label className="text-red-500">
-                        {t('settings.data.lan_transfer.cancel_receive')}
-                      </Button.Label>
-                    )}
-                  </Button>
-                )}
-              </XStack>
-
-              {fileTransfer.error && <Text className="text-error-base text-md">{fileTransfer.error}</Text>}
-            </YStack>
-          )}
         </YStack>
       </Container>
 
@@ -370,6 +295,8 @@ export default function LanTransferScreen() {
           <Text className="mt-4 text-lg text-white">{t('settings.data.lan_transfer.preparing')}</Text>
         </YStack>
       )}
+
+      <ReceiveProgressModal isOpen={isReceiving} fileTransfer={fileTransfer ?? null} />
 
       <RestoreProgressModal
         isOpen={isModalOpen}

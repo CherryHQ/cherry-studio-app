@@ -38,8 +38,6 @@ export function useLanTransfer() {
     isReceivingFile,
     startServer: lanTransferService.startServer,
     stopServer: lanTransferService.stopServer,
-    clearCompletedFile: lanTransferService.clearCompletedFile,
-    clearTransferCancelled: lanTransferService.clearTransferCancelled,
-    cancelTransfer: lanTransferService.cancelCurrentTransfer
+    clearCompletedFile: lanTransferService.clearCompletedFile
   }
 }
