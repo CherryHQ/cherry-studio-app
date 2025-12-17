@@ -154,7 +154,7 @@ type LanTransferHandshakeMessage = {
 
 v3 使用"控制 JSON + 二进制数据帧"的混合协议（流式传输模式，无 per-chunk ACK）：
 
-- **控制消息**（握手、心跳、file_start/ack、file_end、file_complete、file_cancel）：UTF-8 JSON，`\n` 分隔
+- **控制消息**（握手、心跳、file_start/ack、file_end、file_complete）：UTF-8 JSON，`\n` 分隔
 - **数据消息**（`file_chunk`）：二进制帧，使用 Magic + 总长度做分帧，不经 Base64
 
 ### 4.1 控制消息编码（JSON + `\n`）
@@ -218,7 +218,6 @@ function sendControlMessage(socket: Socket, message: object): void {
 | `file_chunk_ack` | Server → Client | JSON+\n | 数据块确认 |
 | `file_end` | Client → Server | JSON+\n | 文件传输结束 |
 | `file_complete` | Server → Client | JSON+\n | 传输完成结果 |
-| `file_cancel` | Client → Server | JSON+\n | 取消传输 |
 ```
 {"type":"message_type",...其他字段...}\n
 ```
@@ -269,7 +268,6 @@ socket.on('data', (chunk: Buffer) => {
 | `file_chunk_ack` | Server → Client | 数据块确认 |
 | `file_end` | Client → Server | 文件传输结束 |
 | `file_complete` | Server → Client | 传输完成结果 |
-| `file_cancel` | Client → Server | 取消传输 |
 
 ---
 
@@ -475,28 +473,6 @@ type LanTransferFileCompleteMessage = {
 }
 ```
 
-#### 5.2.7 `file_cancel` - 取消传输
-
-**方向：** Client → Server
-
-```typescript
-type LanTransferFileCancelMessage = {
-  type: 'file_cancel'
-  transferId: string           // 传输 ID
-  reason?: string              // 取消原因
-}
-```
-
-**示例：**
-
-```json
-{
-  "type": "file_cancel",
-  "transferId": "550e8400-e29b-41d4-a716-446655440000",
-  "reason": "Cancelled by user"
-}
-```
-
 ### 5.3 校验和算法
 
 #### 整个文件校验和（保持不变）
@@ -612,8 +588,7 @@ type LanTransferPongMessage = {
 | 握手超时 | 断开连接，通知 UI | 关闭 socket |
 | 握手被拒绝 | 显示拒绝原因 | - |
 | 数据块处理失败 | 中止传输，清理状态 | 发送 `received: false` |
-| 数据块 ACK 超时 | 中止传输，发送 `file_cancel` | 清理临时文件 |
-| 用户取消 | 发送 `file_cancel`，清理 | 清理临时文件 |
+| 数据块 ACK 超时 | 中止传输，清理状态 | 清理临时文件 |
 | 连接意外断开 | 清理状态，通知 UI | 清理临时文件 |
 | 存储空间不足 | - | 发送 `accepted: false` |
 
@@ -790,10 +765,6 @@ export const LAN_TRANSFER_ALLOWED_MIME_TYPES = [
    - 处理 `file_end`，完成增量哈希并校验 checksum
    - 发送 `file_complete` 结果
 
-6. **取消处理**
-   - 监听 `file_cancel` 消息
-   - 清理临时文件和状态
-
 ### 10.2 推荐的库
 
 **React Native / Expo：**
@@ -831,9 +802,6 @@ class FileReceiver {
       // v3: file_chunk 为二进制帧，不再走 JSON 分支
       case 'file_end':
         this.handleFileEnd(message)
-        break
-      case 'file_cancel':
-        this.handleFileCancel(message)
         break
     }
   }
@@ -918,12 +886,6 @@ export interface LanTransferFileChunkMessage {
 export interface LanTransferFileEndMessage {
   type: 'file_end'
   transferId: string
-}
-
-export interface LanTransferFileCancelMessage {
-  type: 'file_cancel'
-  transferId: string
-  reason?: string
 }
 
 // 文件传输响应消息 (Server -> Client)

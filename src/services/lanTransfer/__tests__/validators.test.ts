@@ -1,5 +1,4 @@
 import {
-  isValidFileCancelMessage,
   isValidFileChunkMessage,
   isValidFileEndMessage,
   isValidFileStartMessage,
@@ -329,43 +328,6 @@ describe('validators', () => {
     })
   })
 
-  // ==================== isValidFileCancelMessage ====================
-
-  describe('isValidFileCancelMessage', () => {
-    test('returns true for valid file_cancel without reason', () => {
-      const msg = { type: 'file_cancel', transferId: 'tid-123' }
-      expect(isValidFileCancelMessage(msg)).toBe(true)
-    })
-
-    test('returns true for valid file_cancel with reason', () => {
-      const msg = { type: 'file_cancel', transferId: 'tid-123', reason: 'User cancelled' }
-      expect(isValidFileCancelMessage(msg)).toBe(true)
-    })
-
-    test('returns false when type is not file_cancel', () => {
-      const msg = { type: 'file_end', transferId: 'tid-123' }
-      expect(isValidFileCancelMessage(msg)).toBe(false)
-    })
-
-    test('returns false when transferId is missing', () => {
-      const msg = { type: 'file_cancel' }
-      expect(isValidFileCancelMessage(msg)).toBe(false)
-    })
-
-    test('returns false when transferId is not string', () => {
-      const msg = { type: 'file_cancel', transferId: 123 }
-      expect(isValidFileCancelMessage(msg)).toBe(false)
-    })
-
-    test('returns false for null', () => {
-      expect(isValidFileCancelMessage(null)).toBe(false)
-    })
-
-    test('returns false for undefined', () => {
-      expect(isValidFileCancelMessage(undefined)).toBe(false)
-    })
-  })
-
   // ==================== Edge Cases ====================
 
   describe('edge cases across all validators', () => {
@@ -376,7 +338,6 @@ describe('validators', () => {
       expect(isValidFileStartMessage(arrayInput)).toBe(false)
       expect(isValidFileChunkMessage(arrayInput)).toBe(false)
       expect(isValidFileEndMessage(arrayInput)).toBe(false)
-      expect(isValidFileCancelMessage(arrayInput)).toBe(false)
     })
 
     test('all validators return false for function input', () => {
@@ -386,7 +347,6 @@ describe('validators', () => {
       expect(isValidFileStartMessage(fnInput)).toBe(false)
       expect(isValidFileChunkMessage(fnInput)).toBe(false)
       expect(isValidFileEndMessage(fnInput)).toBe(false)
-      expect(isValidFileCancelMessage(fnInput)).toBe(false)
     })
 
     test('validators handle prototype pollution attempts', () => {

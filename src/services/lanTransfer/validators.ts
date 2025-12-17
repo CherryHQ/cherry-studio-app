@@ -1,5 +1,4 @@
 import type {
-  LanTransferFileCancelMessage,
   LanTransferFileChunkMessage,
   LanTransferFileEndMessage,
   LanTransferFileStartMessage,
@@ -102,16 +101,3 @@ export const isValidFileEndMessage = (
   return typeof m.transferId === 'string'
 }
 
-/**
- * Validates file_cancel message
- */
-export const isValidFileCancelMessage = (
-  msg: unknown
-): msg is LanTransferFileCancelMessage => {
-  if (!validateMessage(msg, 'file_cancel', ['transferId'])) {
-    return false
-  }
-
-  const m = msg as Record<string, unknown>
-  return typeof m.transferId === 'string'
-}

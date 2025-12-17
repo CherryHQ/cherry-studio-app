@@ -15,7 +15,6 @@ import { FileTransferStatus, LanTransferServerStatus } from '@/types/lanTransfer
 import { parseNextMessage } from './binaryParser'
 import {
   handleBinaryFileChunk,
-  handleFileCancel,
   handleFileChunk,
   handleFileEnd,
   handleFileStart,
@@ -24,7 +23,6 @@ import {
 } from './handlers'
 import type { InternalFileTransfer, TcpClientSocket, TcpServer } from './types'
 import {
-  isValidFileCancelMessage,
   isValidFileChunkMessage,
   isValidFileEndMessage,
   isValidFileStartMessage,
@@ -112,53 +110,6 @@ class LanTransferService {
     this.updateState({ completedFilePath: undefined })
   }
 
-  clearTransferCancelled = () => {
-    this.updateState({ transferCancelled: undefined })
-  }
-
-  cancelCurrentTransfer = () => {
-    logger.info('cancelCurrentTransfer called', { hasCurrentTransfer: !!this.currentTransfer })
-
-    // 立即暂停并销毁 socket，彻底停止所有数据接收
-    // 关键：必须立即 destroy，否则 native 层已缓冲的数据会继续发送到 JS 线程
-    if (this.clientSocket) {
-      this.removeSocketDataListener()
-      try {
-        this.clientSocket.destroy()
-      } catch (e) {
-        logger.warn('Failed to destroy socket', e)
-      }
-      this.clientSocket = null
-    }
-
-    this.binaryBuffer = Buffer.alloc(0)
-
-    if (!this.currentTransfer) {
-      // 即使没有 currentTransfer，也清理状态（处理状态不同步的情况）
-      logger.warn('cancelCurrentTransfer: no current transfer, cleaning up state')
-      this.updateState({
-        status: LanTransferServerStatus.LISTENING,
-        connectedClient: undefined,
-        fileTransfer: undefined,
-        transferCancelled: true
-      })
-      return
-    }
-
-    // 先设置 CANCELLING 状态，让 UI 显示 loading
-    this.currentTransfer.status = FileTransferStatus.CANCELLING
-
-    // 立即清理内存缓冲区，防止内存增长
-    this.currentTransfer.pendingChunks.clear()
-    this.currentTransfer.pendingBytesSize = 0
-    this.currentTransfer.flushScheduled = false
-
-    this.updateState({ fileTransfer: this.getTransferProgress() })
-
-    // 立即执行取消逻辑（socket 已销毁，不会有延迟）
-    this.completeTransfer(false, 'Transfer cancelled by user', undefined, undefined, 'CANCELLED')
-  }
-
   // ==================== Connection Handling ====================
 
   private removeSocketDataListener = () => {
@@ -195,14 +146,6 @@ class LanTransferService {
   // ==================== Message Parsing ====================
 
   private handleSocketData = (chunk: Buffer | string) => {
-    // 如果正在取消，快速跳过已排队的数据事件（避免 3-5 秒的处理延迟）
-    if (
-      this.currentTransfer?.status === FileTransferStatus.CANCELLING ||
-      this.currentTransfer?.status === FileTransferStatus.CANCELLED
-    ) {
-      return
-    }
-
     const incoming = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, 'utf8')
     this.binaryBuffer = Buffer.concat([this.binaryBuffer, incoming])
 
@@ -275,11 +218,6 @@ class LanTransferService {
       case 'file_end':
         if (isValidFileEndMessage(parsed)) {
           handleFileEnd(parsed, this.createFileTransferContext())
-        }
-        break
-      case 'file_cancel':
-        if (isValidFileCancelMessage(parsed)) {
-          handleFileCancel(parsed, this.createFileTransferContext())
         }
         break
       default:
@@ -360,13 +298,7 @@ class LanTransferService {
   ) => {
     if (!this.currentTransfer) return
 
-    if (success) {
-      this.currentTransfer.status = FileTransferStatus.COMPLETE
-    } else if (errorCode === 'CANCELLED') {
-      this.currentTransfer.status = FileTransferStatus.CANCELLED
-    } else {
-      this.currentTransfer.status = FileTransferStatus.ERROR
-    }
+    this.currentTransfer.status = success ? FileTransferStatus.COMPLETE : FileTransferStatus.ERROR
 
     // Send enhanced file_complete message
     this.sendJsonMessage({
@@ -383,9 +315,8 @@ class LanTransferService {
     this.updateState({
       status: LanTransferServerStatus.LISTENING,
       connectedClient: undefined,
-      fileTransfer: success || errorCode === 'CANCELLED' ? undefined : { ...this.getTransferProgress()!, error },
-      completedFilePath: success ? filePath : undefined,
-      transferCancelled: errorCode === 'CANCELLED' ? true : this.state.transferCancelled
+      fileTransfer: success ? undefined : { ...this.getTransferProgress()!, error },
+      completedFilePath: success ? filePath : undefined
     })
 
     this.cleanupTransfer(failedTargetPath)

@@ -11,7 +11,6 @@ import { DEFAULT_LAN_TRANSFER_STORAGE, DEFAULT_LAN_TRANSFER_TEMP } from '@/const
 import { loggerService } from '@/services/LoggerService'
 import type {
   FileTransferProgress,
-  LanTransferFileCancelMessage,
   LanTransferFileChunkMessage,
   LanTransferFileCompleteErrorCode,
   LanTransferFileEndMessage,
@@ -405,24 +404,3 @@ export const handleFileEnd = (message: LanTransferFileEndMessage, context: FileT
   }
 }
 
-/**
- * Handle file_cancel message
- */
-export const handleFileCancel = (message: LanTransferFileCancelMessage, context: FileTransferContext): void => {
-  const currentTransfer = context.getCurrentTransfer()
-  if (!currentTransfer || currentTransfer.transferId !== message.transferId) {
-    return
-  }
-
-  // Clear memory buffer before cleanup (release memory immediately)
-  currentTransfer.pendingChunks.clear()
-  currentTransfer.pendingBytesSize = 0
-  currentTransfer.flushScheduled = false
-
-  context.cleanupTransfer()
-  context.updateState({
-    status: LanTransferServerStatus.CONNECTED,
-    fileTransfer: undefined,
-    transferCancelled: true
-  })
-}

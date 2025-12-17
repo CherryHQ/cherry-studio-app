@@ -13,10 +13,8 @@ export enum FileTransferStatus {
   RECEIVING = 'receiving',
   VERIFYING = 'verifying',
   COMPLETING = 'completing',
-  CANCELLING = 'cancelling',
   COMPLETE = 'complete',
-  ERROR = 'error',
-  CANCELLED = 'cancelled'
+  ERROR = 'error'
 }
 
 export interface LanTransferClientInfo {
@@ -48,7 +46,6 @@ export interface LanTransferState {
   lastError?: string
   fileTransfer?: FileTransferProgress
   completedFilePath?: string
-  transferCancelled?: boolean
 }
 
 export interface LanTransferHandshakeMessage {
@@ -102,12 +99,6 @@ export interface LanTransferFileEndMessage {
   transferId: string
 }
 
-export interface LanTransferFileCancelMessage {
-  type: 'file_cancel'
-  transferId: string
-  reason?: string
-}
-
 // File transfer response messages (Mobile -> Electron)
 export interface LanTransferFileStartAckMessage {
   type: 'file_start_ack'
@@ -118,7 +109,7 @@ export interface LanTransferFileStartAckMessage {
 
 // v3: LanTransferFileChunkAckMessage removed - streaming mode, no per-chunk ACK
 
-export type LanTransferFileCompleteErrorCode = 'CHECKSUM_MISMATCH' | 'INCOMPLETE_TRANSFER' | 'DISK_ERROR' | 'CANCELLED'
+export type LanTransferFileCompleteErrorCode = 'CHECKSUM_MISMATCH' | 'INCOMPLETE_TRANSFER' | 'DISK_ERROR'
 
 export interface LanTransferFileCompleteMessage {
   type: 'file_complete'
@@ -138,7 +129,6 @@ export type LanTransferIncomingMessage =
   | LanTransferFileStartMessage
   | LanTransferFileChunkMessage
   | LanTransferFileEndMessage
-  | LanTransferFileCancelMessage
 
 // v3: LanTransferFileChunkAckMessage removed from union - streaming mode
 export type LanTransferOutgoingMessage =
