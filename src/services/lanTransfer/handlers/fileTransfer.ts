@@ -4,8 +4,7 @@ import { File } from 'expo-file-system'
 import {
   LAN_TRANSFER_ALLOWED_EXTENSIONS,
   LAN_TRANSFER_ALLOWED_MIME_TYPES,
-  LAN_TRANSFER_CHUNK_SIZE,
-  LAN_TRANSFER_MAX_FILE_SIZE
+  LAN_TRANSFER_CHUNK_SIZE
 } from '@/constants/lanTransfer'
 import { DEFAULT_LAN_TRANSFER_STORAGE, DEFAULT_LAN_TRANSFER_TEMP } from '@/constants/storage'
 import { loggerService } from '@/services/LoggerService'
@@ -92,17 +91,6 @@ export const handleFileStart = (message: LanTransferFileStartMessage, context: F
   // Validate MIME type
   if (!LAN_TRANSFER_ALLOWED_MIME_TYPES.includes(message.mimeType)) {
     sendFileStartAck(context, message.transferId, false, `MIME type ${message.mimeType} not allowed`)
-    return
-  }
-
-  // Validate file size
-  if (message.fileSize > LAN_TRANSFER_MAX_FILE_SIZE) {
-    sendFileStartAck(
-      context,
-      message.transferId,
-      false,
-      `File too large (max ${LAN_TRANSFER_MAX_FILE_SIZE / 1024 / 1024}MB)`
-    )
     return
   }
 

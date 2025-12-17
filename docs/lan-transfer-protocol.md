@@ -1,6 +1,6 @@
 # Cherry Studio 局域网传输协议规范
 
-> 版本: 3.0
+> 版本: 1.0
 > 最后更新: 2025-12
 
 本文档定义了 Cherry Studio 桌面客户端（Electron）与移动端（Expo）之间的局域网文件传输协议。
@@ -31,7 +31,7 @@
 | **Client（客户端）** | Electron 桌面端 | 扫描服务、发起连接、发送文件 |
 | **Server（服务端）** | Expo 移动端 | 发布服务、接受连接、接收文件 |
 
-### 1.2 协议栈（v3）
+### 1.2 协议栈（v1）
 
 ```
 ┌─────────────────────────────────────┐
@@ -50,7 +50,7 @@
 
 ```
 1. 服务发现 → 移动端发布 mDNS 服务，桌面端扫描发现
-2. TCP 握手 → 建立连接，交换设备信息（`version=3`）
+2. TCP 握手 → 建立连接，交换设备信息（`version=1`）
 3. 文件传输 → 控制消息使用 JSON，`file_chunk` 使用二进制帧分块传输
 4. 连接保活 → ping/pong 心跳
 ```
@@ -124,7 +124,7 @@ const preferredAddress = addresses.find(addr => isIPv4(addr)) || addresses[0]
 2. 连接成功后立即发送握手消息
 3. 等待服务端响应握手确认
 
-### 3.2 握手消息（协议版本 v3）
+### 3.2 握手消息（协议版本 v1）
 
 #### Client → Server: `handshake`
 
@@ -132,7 +132,7 @@ const preferredAddress = addresses.find(addr => isIPv4(addr)) || addresses[0]
 type LanTransferHandshakeMessage = {
   type: 'handshake'
   deviceName: string               // 设备名称
-  version: string                  // 协议版本，当前为 "3"
+  version: string                  // 协议版本，当前为 "1"
   platform?: string                // 平台：'darwin' | 'win32' | 'linux'
   appVersion?: string              // 应用版本
 }
@@ -144,7 +144,7 @@ type LanTransferHandshakeMessage = {
 {
   "type": "handshake",
   "deviceName": "Cherry Studio 1.7.2",
-  "version": "3",
+  "version": "1",
   "platform": "darwin",
   "appVersion": "1.7.2"
 }
@@ -152,7 +152,7 @@ type LanTransferHandshakeMessage = {
 
 ### 4. 消息格式规范（混合协议）
 
-v3 使用"控制 JSON + 二进制数据帧"的混合协议（流式传输模式，无 per-chunk ACK）：
+v1 使用"控制 JSON + 二进制数据帧"的混合协议（流式传输模式，无 per-chunk ACK）：
 
 - **控制消息**（握手、心跳、file_start/ack、file_end、file_complete）：UTF-8 JSON，`\n` 分隔
 - **数据消息**（`file_chunk`）：二进制帧，使用 Magic + 总长度做分帧，不经 Base64
@@ -204,11 +204,11 @@ function sendControlMessage(socket: Socket, message: object): void {
 3. 否则若首字节为 `{` → 按 JSON + `\n` 解析控制消息
 4. 其它数据丢弃 1 字节并继续循环，避免阻塞。
 
-### 4.4 消息类型汇总（v3）
+### 4.4 消息类型汇总（v1）
 
 | 类型 | 方向 | 编码 | 用途 |
 |------|------|------|------|
-| `handshake` | Client → Server | JSON+\n | 握手请求（version=3） |
+| `handshake` | Client → Server | JSON+\n | 握手请求（version=1） |
 | `handshake_ack` | Server → Client | JSON+\n | 握手响应 |
 | `ping` | Client → Server | JSON+\n | 心跳请求 |
 | `pong` | Server → Client | JSON+\n | 心跳响应 |
@@ -492,7 +492,7 @@ async function calculateFileChecksum(filePath: string): Promise<string> {
 
 #### 数据块校验和
 
-v3 默认 **不传输分块校验和**，依赖最终文件 checksum。若需要，可在应用层自定义（非协议字段）。
+v1 默认 **不传输分块校验和**，依赖最终文件 checksum。若需要，可在应用层自定义（非协议字段）。
 
 ### 5.4 校验流程
 
@@ -631,8 +631,8 @@ function cleanup(): void {
 ### 8.1 协议常量
 
 ```typescript
-// 协议版本（v3 = 控制 JSON + 二进制 chunk + 流式传输）
-export const LAN_TRANSFER_PROTOCOL_VERSION = '3'
+// 协议版本（v1 = 控制 JSON + 二进制 chunk + 流式传输）
+export const LAN_TRANSFER_PROTOCOL_VERSION = '1'
 
 // 服务发现
 export const LAN_TRANSFER_SERVICE_TYPE = 'cherrystudio'
@@ -643,7 +643,6 @@ export const LAN_TRANSFER_TCP_PORT = 53317
 
 // 文件传输（与二进制帧一致）
 export const LAN_TRANSFER_CHUNK_SIZE = 64 * 1024             // 64KB
-export const LAN_TRANSFER_MAX_FILE_SIZE = 500 * 1024 * 1024  // 500MB
 export const LAN_TRANSFER_GLOBAL_TIMEOUT_MS = 10 * 60 * 1000 // 10 分钟
 
 // 超时设置
@@ -668,7 +667,7 @@ export const LAN_TRANSFER_ALLOWED_MIME_TYPES = [
 
 ## 9. 完整时序图
 
-### 9.1 完整传输流程（v3，流式传输）
+### 9.1 完整传输流程（v1，流式传输）
 
 ```
 ┌─────────┐                           ┌─────────┐                           ┌─────────┐
@@ -736,7 +735,7 @@ export const LAN_TRANSFER_ALLOWED_MIME_TYPES = [
 
 ---
 
-## 10. 移动端实现指南（v3 要点）
+## 10. 移动端实现指南（v1 要点）
 
 ### 10.1 必须实现的功能
 
@@ -761,7 +760,7 @@ export const LAN_TRANSFER_ALLOWED_MIME_TYPES = [
 5. **文件接收（流式模式）**
    - 解析 `file_start`，准备接收
    - 接收 `file_chunk` 二进制帧，直接写入文件/缓冲并增量哈希
-   - v3 不发送 per-chunk ACK（流式传输）
+   - v1 不发送 per-chunk ACK（流式传输）
    - 处理 `file_end`，完成增量哈希并校验 checksum
    - 发送 `file_complete` 结果
 
@@ -784,7 +783,7 @@ class FileReceiver {
     totalChunks: number
     receivedChunks: number
     tempPath: string
-    // v3: 边收边写文件，避免大文件 OOM
+    // v1: 边收边写文件，避免大文件 OOM
     // stream: FileSystem writable stream (平台相关封装)
   }
 
@@ -799,7 +798,7 @@ class FileReceiver {
       case 'file_start':
         this.handleFileStart(message)
         break
-      // v3: file_chunk 为二进制帧，不再走 JSON 分支
+      // v1: file_chunk 为二进制帧，不再走 JSON 分支
       case 'file_end':
         this.handleFileEnd(message)
         break
@@ -813,12 +812,12 @@ class FileReceiver {
     // 4. 发送 file_start_ack
   }
 
-  // v3: 二进制帧处理在 socket data 流中解析，随后调用 handleBinaryFileChunk
+  // v1: 二进制帧处理在 socket data 流中解析，随后调用 handleBinaryFileChunk
   handleBinaryFileChunk(transferId: string, chunkIndex: number, data: Buffer) {
     // 直接使用二进制数据，按 chunkSize/lastChunk 计算长度
     // 写入文件流并更新增量 SHA-256
     this.transfer.receivedChunks++
-    // v3: 流式传输，不发送 per-chunk ACK
+    // v1: 流式传输，不发送 per-chunk ACK
   }
 
   handleFileEnd(msg: LanTransferFileEndMessage) {
@@ -880,7 +879,7 @@ export interface LanTransferFileChunkMessage {
   type: 'file_chunk'
   transferId: string
   chunkIndex: number
-  data: string // Base64 encoded (v3: 二进制帧模式下不使用)
+  data: string // Base64 encoded (v1: 二进制帧模式下不使用)
 }
 
 export interface LanTransferFileEndMessage {
@@ -915,7 +914,6 @@ export interface LanTransferFileCompleteMessage {
 // 常量
 export const LAN_TRANSFER_TCP_PORT = 53317
 export const LAN_TRANSFER_CHUNK_SIZE = 64 * 1024
-export const LAN_TRANSFER_MAX_FILE_SIZE = 500 * 1024 * 1024
 export const LAN_TRANSFER_CHUNK_TIMEOUT_MS = 30_000
 ```
 
@@ -925,6 +923,4 @@ export const LAN_TRANSFER_CHUNK_TIMEOUT_MS = 30_000
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| 3.0 | 2025-12 | 流式传输模式，移除 per-chunk ACK |
-| 2.0 | 2025-12 | 引入二进制帧格式 |
-| 1.0 | 2025-12 | 初始版本，与移动端实现对齐 |
+| 1.0 | 2025-12 | 初始发布版本，支持二进制帧格式与流式传输 |
