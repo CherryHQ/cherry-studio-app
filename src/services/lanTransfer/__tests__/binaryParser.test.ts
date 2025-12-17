@@ -165,7 +165,7 @@ describe('binaryParser', () => {
       const handshake = {
         type: 'handshake',
         deviceName: 'Test Device',
-        version: '3.0',
+        version: '1',
         platform: 'darwin',
         appVersion: '1.0.0'
       }

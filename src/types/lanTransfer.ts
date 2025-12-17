@@ -85,8 +85,8 @@ export interface LanTransferFileStartMessage {
   chunkSize: number
 }
 
-// v3: data 字段仅用于 JSON 模式兼容，二进制帧模式下不使用
-// v3: 移除 chunkChecksum - 依赖最终文件校验
+// v1: data 字段仅用于 JSON 模式兼容，二进制帧模式下不使用
+// v1: 移除 chunkChecksum - 依赖最终文件校验
 export interface LanTransferFileChunkMessage {
   type: 'file_chunk'
   transferId: string
@@ -107,7 +107,7 @@ export interface LanTransferFileStartAckMessage {
   message?: string
 }
 
-// v3: LanTransferFileChunkAckMessage removed - streaming mode, no per-chunk ACK
+// v1: LanTransferFileChunkAckMessage removed - streaming mode, no per-chunk ACK
 
 export type LanTransferFileCompleteErrorCode = 'CHECKSUM_MISMATCH' | 'INCOMPLETE_TRANSFER' | 'DISK_ERROR'
 
@@ -117,7 +117,7 @@ export interface LanTransferFileCompleteMessage {
   success: boolean
   filePath?: string
   error?: string
-  // v3 new fields
+  // v1 new fields
   errorCode?: LanTransferFileCompleteErrorCode
   receivedChunks?: number
   receivedBytes?: number
@@ -130,7 +130,7 @@ export type LanTransferIncomingMessage =
   | LanTransferFileChunkMessage
   | LanTransferFileEndMessage
 
-// v3: LanTransferFileChunkAckMessage removed from union - streaming mode
+// v1: LanTransferFileChunkAckMessage removed from union - streaming mode
 export type LanTransferOutgoingMessage =
   | LanTransferHandshakeAckMessage
   | LanTransferPongMessage

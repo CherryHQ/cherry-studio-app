@@ -13,7 +13,7 @@ describe('validators', () => {
     test('returns true for valid handshake with required fields', () => {
       const msg = {
         type: 'handshake',
-        version: '3.0',
+        version: '1',
         platform: 'darwin'
       }
       expect(isValidHandshakeMessage(msg)).toBe(true)
@@ -22,7 +22,7 @@ describe('validators', () => {
     test('returns true for valid handshake with all optional fields', () => {
       const msg = {
         type: 'handshake',
-        version: '3.0',
+        version: '1',
         platform: 'darwin',
         deviceName: 'Test Device',
         appVersion: '1.0.0'
@@ -33,7 +33,7 @@ describe('validators', () => {
     test('returns false when type is not handshake', () => {
       const msg = {
         type: 'ping',
-        version: '3.0',
+        version: '1',
         platform: 'darwin'
       }
       expect(isValidHandshakeMessage(msg)).toBe(false)
@@ -50,7 +50,7 @@ describe('validators', () => {
     test('returns false when platform is missing', () => {
       const msg = {
         type: 'handshake',
-        version: '3.0'
+        version: '1'
       }
       expect(isValidHandshakeMessage(msg)).toBe(false)
     })
@@ -81,7 +81,7 @@ describe('validators', () => {
     test('handles extra fields gracefully', () => {
       const msg = {
         type: 'handshake',
-        version: '3.0',
+        version: '1',
         platform: 'darwin',
         extraField: 'should be ignored'
       }

@@ -188,7 +188,7 @@ export const handleFileStart = (message: LanTransferFileStartMessage, context: F
 
 /**
  * Handle file_chunk message (JSON mode - for backward compatibility)
- * v3: Streaming mode, no ACK sent
+ * v1: Streaming mode, no ACK sent
  */
 export const handleFileChunk = (message: LanTransferFileChunkMessage, context: FileTransferContext): void => {
   if (context.getStatus() !== LanTransferServerStatus.RECEIVING_FILE) {
@@ -274,7 +274,7 @@ const scheduleFlushPendingChunks = (transfer: InternalFileTransfer, context: Fil
 
 /**
  * Handle binary file chunk (from binary frame parser)
- * v3: Streaming mode with memory buffering to reduce UI blocking
+ * v1: Streaming mode with memory buffering to reduce UI blocking
  */
 export const handleBinaryFileChunk = (
   transferId: string,
@@ -373,7 +373,7 @@ export const handleFileEnd = (message: LanTransferFileEndMessage, context: FileT
     currentTransfer.fileHandle = null
   }
 
-  // v3: No hash verification - TCP provides checksum, move directly to final location
+  // v1: No hash verification - TCP provides checksum, move directly to final location
   currentTransfer.status = FileTransferStatus.COMPLETING
   context.updateState({ fileTransfer: context.getTransferProgress() })
 

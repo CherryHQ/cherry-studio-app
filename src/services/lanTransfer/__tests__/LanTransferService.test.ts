@@ -34,7 +34,7 @@ const buildFrame = (transferId: string, chunkIndex: number, data: Buffer, type =
 const createService = () => {
   const service: any = new (lanTransferService as any).constructor()
 
-  // v3: Stub side-effectful pieces (no sendChunkAck in v3 streaming mode)
+  // v1: Stub side-effectful pieces (no sendChunkAck in v1 streaming mode)
   service.handleJsonMessage = jest.fn()
 
   // Provide a minimal transfer context
@@ -68,7 +68,7 @@ const createService = () => {
   return { service, fileHandle }
 }
 
-describe('LanTransferService binary protocol (v3)', () => {
+describe('LanTransferService binary protocol (v1)', () => {
   test('handles a complete binary frame', () => {
     const { service, fileHandle } = createService()
     const data = Buffer.from([1, 2, 3, 4])
@@ -77,7 +77,7 @@ describe('LanTransferService binary protocol (v3)', () => {
     service.handleSocketData(frame)
 
     expect(fileHandle.writeBytes).toHaveBeenCalledWith(new Uint8Array(data))
-    // v3: No ACK sent in streaming mode
+    // v1: No ACK sent in streaming mode
     expect(service.currentTransfer.receivedChunks.has(0)).toBe(true)
     expect(service.currentTransfer.bytesReceived).toBe(data.length)
   })
@@ -115,7 +115,7 @@ describe('LanTransferService binary protocol (v3)', () => {
     expect(service.handleJsonMessage).toHaveBeenCalledWith('{"type":"ping"}')
   })
 
-  test('handles duplicate chunk without rewriting (v3 streaming mode)', () => {
+  test('handles duplicate chunk without rewriting (v1 streaming mode)', () => {
     const { service, fileHandle } = createService()
     const data = Buffer.from([1, 1, 1, 1])
 
@@ -158,7 +158,7 @@ describe('LanTransferService JSON message handling', () => {
     const handshake = {
       type: 'handshake',
       deviceName: 'Test Device',
-      version: '3',
+      version: '1',
       platform: 'darwin'
     }
     const json = Buffer.from(JSON.stringify(handshake) + '\n')
@@ -269,7 +269,7 @@ describe('LanTransferService JSON message handling', () => {
     const handshake = {
       type: 'handshake',
       deviceName: '我的MacBook Pro',
-      version: '3',
+      version: '1',
       platform: 'darwin'
     }
     const json = Buffer.from(JSON.stringify(handshake) + '\n')
@@ -286,7 +286,7 @@ describe('LanTransferService JSON message handling', () => {
     const handshake = {
       type: 'handshake',
       deviceName: 'Device "Pro" with\\backslash',
-      version: '3',
+      version: '1',
       platform: 'darwin'
     }
     const json = Buffer.from(JSON.stringify(handshake) + '\n')
@@ -303,7 +303,7 @@ describe('LanTransferService JSON message handling', () => {
     const handshake = {
       type: 'handshake',
       deviceName: 'Test Device',
-      version: '3',
+      version: '1',
       platform: 'darwin'
     }
     const fullJson = JSON.stringify(handshake) + '\n'

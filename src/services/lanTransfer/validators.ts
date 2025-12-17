@@ -70,7 +70,7 @@ export const isValidFileStartMessage = (
 
 /**
  * Validates file_chunk message (JSON mode only)
- * v3: Binary frame mode doesn't use this validator
+ * v1: Binary frame mode doesn't use this validator
  */
 export const isValidFileChunkMessage = (
   msg: unknown
