@@ -247,6 +247,7 @@
     "expo-sqlite": "16.0.8",
     "node-forge": "^1.3.2",
     "glob": "^10.5.0",
-    "jws": "^4.0.1"
+    "jws": "^4.0.1",
+    "react-server-dom-webpack": "^19.2.3"
   }
 }
