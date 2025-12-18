@@ -1,5 +1,9 @@
 import { Buffer } from 'buffer'
 
+import { loggerService } from '@/services/LoggerService'
+
+const logger = loggerService.withContext('BinaryParser')
+
 // Binary frame constants
 const MAGIC_BYTE_1 = 0x43 // 'C'
 const MAGIC_BYTE_2 = 0x53 // 'S'
@@ -59,7 +63,10 @@ export const parseBinaryFrame = (buffer: Buffer): BinaryParserResult => {
 
   // Verify magic bytes
   if (buffer[0] !== MAGIC_BYTE_1 || buffer[1] !== MAGIC_BYTE_2) {
-    // Invalid magic, skip 1 byte
+    logger.warn('Invalid magic bytes in binary frame', {
+      expected: `0x${MAGIC_BYTE_1.toString(16)} 0x${MAGIC_BYTE_2.toString(16)}`,
+      received: `0x${buffer[0].toString(16)} 0x${buffer[1].toString(16)}`
+    })
     return { type: 'skip', consumedBytes: 1 }
   }
 
@@ -80,12 +87,21 @@ export const parseBinaryFrame = (buffer: Buffer): BinaryParserResult => {
 
   // Validate header length
   if (frameLen < headerLen) {
-    // Malformed frame, skip it
+    logger.warn('Malformed binary frame: frame too short for header', {
+      frameLen,
+      requiredHeaderLen: headerLen,
+      tidLen
+    })
     return { type: 'skip', consumedBytes: frameLen }
   }
 
   // Only handle file_chunk type
   if (type !== FRAME_TYPE_FILE_CHUNK) {
+    logger.warn('Unknown binary frame type', {
+      receivedType: type,
+      expectedType: FRAME_TYPE_FILE_CHUNK,
+      frameLen
+    })
     return { type: 'skip', consumedBytes: frameLen }
   }
 
@@ -99,6 +115,11 @@ export const parseBinaryFrame = (buffer: Buffer): BinaryParserResult => {
   const dataLen = frameLen - headerLen
 
   if (dataLen < 0) {
+    logger.warn('Malformed binary frame: negative data length', {
+      frameLen,
+      headerLen,
+      dataLen
+    })
     return { type: 'skip', consumedBytes: frameLen }
   }
 
@@ -159,5 +180,9 @@ export const parseNextMessage = (buffer: Buffer): BinaryParserResult => {
   }
 
   // Unknown data, skip 1 byte to try realignment
+  logger.warn('Unknown data format, attempting realignment', {
+    firstByte: `0x${buffer[0].toString(16)}`,
+    bufferLength: buffer.length
+  })
   return { type: 'skip', consumedBytes: 1 }
 }

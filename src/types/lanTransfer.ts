@@ -122,6 +122,13 @@ export interface LanTransferFileCompleteMessage {
   receivedBytes?: number
 }
 
+// Generic error message for protocol-level errors
+export interface LanTransferErrorMessage {
+  type: 'error'
+  error: string
+  errorCode?: string
+}
+
 export type LanTransferIncomingMessage =
   | LanTransferHandshakeMessage
   | LanTransferPingMessage
@@ -135,3 +142,4 @@ export type LanTransferOutgoingMessage =
   | LanTransferPongMessage
   | LanTransferFileStartAckMessage
   | LanTransferFileCompleteMessage
+  | LanTransferErrorMessage

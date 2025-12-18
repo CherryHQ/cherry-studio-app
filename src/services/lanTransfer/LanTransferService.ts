@@ -49,6 +49,9 @@ class LanTransferService {
   private pendingStateUpdate: Partial<LanTransferState> | null = null
   private stateUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null
 
+  // Cleanup tracking to prevent race conditions
+  private cleanupGeneration = 0
+
   private state: LanTransferState = {
     status: LanTransferServerStatus.IDLE
   }
@@ -175,13 +178,25 @@ class LanTransferService {
       parsed = JSON.parse(rawMessage)
     } catch (error) {
       logger.error('Malformed LAN transfer message', error, {
-        rawMessage,
+        rawMessage: rawMessage.slice(0, 200), // Truncate for logging
         length: rawMessage.length
+      })
+      // Notify sender of parse error
+      this.sendJsonMessage({
+        type: 'error',
+        error: 'Invalid JSON message format',
+        errorCode: 'PARSE_ERROR'
       })
       return
     }
 
     if (!parsed || typeof parsed !== 'object') {
+      logger.warn('Invalid message format: not an object', { receivedType: typeof parsed })
+      this.sendJsonMessage({
+        type: 'error',
+        error: 'Invalid message format: expected object',
+        errorCode: 'INVALID_FORMAT'
+      })
       return
     }
 
@@ -231,6 +246,9 @@ class LanTransferService {
         }
         break
       default:
+        if (msgType) {
+          logger.warn('Unknown message type received', { messageType: msgType })
+        }
         break
     }
   }
@@ -326,6 +344,17 @@ class LanTransferService {
       receivedBytes: this.currentTransfer.bytesReceived
     })
 
+    // On failure, remove data listener to stop receiving further chunks
+    // This prevents wasted CPU/memory processing chunks that will be dropped
+    if (!success) {
+      this.removeSocketDataListener()
+      logger.info('Transfer failed, stopped receiving data', {
+        transferId: this.currentTransfer.transferId,
+        error,
+        errorCode
+      })
+    }
+
     this.updateState({
       status: LanTransferServerStatus.LISTENING,
       connectedClient: undefined,
@@ -350,50 +379,68 @@ class LanTransferService {
     const transferToCleanup = this.currentTransfer
     this.currentTransfer = null // Clear reference immediately to prevent duplicate cleanup
 
-    // Defer file I/O operations to avoid blocking UI
-    if (transferToCleanup) {
-      setImmediate(() => {
-        // Close file handle if open
-        if (transferToCleanup.fileHandle) {
-          try {
-            transferToCleanup.fileHandle.close()
-          } catch (error) {
-            logger.warn('Failed to close file handle', error, {
-              transferId: transferToCleanup.transferId,
-              tempFilePath: transferToCleanup.tempFilePath
-            })
-          }
-        }
+    if (!transferToCleanup) {
+      return
+    }
 
-        // Delete temp file if it exists
+    // Increment generation to invalidate any pending async cleanups
+    this.cleanupGeneration++
+    const currentGeneration = this.cleanupGeneration
+
+    // Close file handle synchronously - critical for preventing resource leaks
+    if (transferToCleanup.fileHandle) {
+      try {
+        transferToCleanup.fileHandle.close()
+      } catch (error) {
+        logger.warn('Failed to close file handle', error, {
+          transferId: transferToCleanup.transferId,
+          tempFilePath: transferToCleanup.tempFilePath
+        })
+      }
+    }
+
+    // Defer file deletion to avoid blocking UI, but check generation to prevent race
+    setImmediate(() => {
+      // Check if a new cleanup has started - if so, skip this stale cleanup
+      if (this.cleanupGeneration !== currentGeneration) {
+        logger.debug('Skipping stale file cleanup', {
+          transferId: transferToCleanup.transferId,
+          expectedGeneration: currentGeneration,
+          currentGeneration: this.cleanupGeneration
+        })
+        return
+      }
+
+      // Delete temp file if it exists
+      try {
+        const tempFile = new File(transferToCleanup.tempFilePath)
+        if (tempFile.exists) {
+          tempFile.delete()
+          logger.debug('Deleted temp file', { tempFilePath: transferToCleanup.tempFilePath })
+        }
+      } catch (error) {
+        logger.warn('Failed to delete temp file', error, {
+          transferId: transferToCleanup.transferId,
+          tempFilePath: transferToCleanup.tempFilePath
+        })
+      }
+
+      // Clean up target file on failure if provided
+      if (targetFilePath) {
         try {
-          const tempFile = new File(transferToCleanup.tempFilePath)
-          if (tempFile.exists) {
-            tempFile.delete()
+          const targetFile = new File(targetFilePath)
+          if (targetFile.exists) {
+            targetFile.delete()
+            logger.debug('Deleted target file on cleanup', { targetFilePath })
           }
         } catch (error) {
-          logger.warn('Failed to delete temp file', error, {
+          logger.warn('Failed to delete target file on cleanup', error, {
             transferId: transferToCleanup.transferId,
-            tempFilePath: transferToCleanup.tempFilePath
+            targetFilePath
           })
         }
-
-        // Clean up target file on failure if provided
-        if (targetFilePath) {
-          try {
-            const targetFile = new File(targetFilePath)
-            if (targetFile.exists) {
-              targetFile.delete()
-            }
-          } catch (error) {
-            logger.warn('Failed to delete target file on cleanup', error, {
-              transferId: transferToCleanup.transferId,
-              targetFilePath
-            })
-          }
-        }
-      })
-    }
+      }
+    })
   }
 
   // ==================== Timeout Management ====================
@@ -447,39 +494,43 @@ class LanTransferService {
       this.clearGlobalTimeout()
     }
 
-    // 先更新状态，让 UI 立即响应
+    // Save references before clearing
+    const socketToDestroy = this.clientSocket
+    const serverToClose = this.server
+
+    // Clear references immediately
+    this.clientSocket = null
+    this.server = null
+    this.binaryBuffer = Buffer.alloc(0)
+
+    // Destroy socket synchronously - this is fast and prevents race conditions
+    // Socket destruction must happen before state update to ensure clean state
+    if (socketToDestroy) {
+      try {
+        socketToDestroy.destroy()
+        logger.debug('Client socket destroyed')
+      } catch (error) {
+        logger.warn('Error destroying client socket', error)
+      }
+    }
+
+    // Close server synchronously - prevents accepting new connections during shutdown
+    if (serverToClose) {
+      try {
+        serverToClose.close()
+        logger.debug('TCP server closed')
+      } catch (error) {
+        logger.warn('Error closing TCP server', error)
+      }
+    }
+
+    // Update state after cleanup is complete
     this.updateState({
       status: nextStatus,
       port: undefined,
       connectedClient: undefined,
       fileTransfer: undefined,
       lastError: clearLastError ? undefined : (errorMessage ?? this.state.lastError)
-    })
-
-    // 保存引用，异步关闭
-    const socketToDestroy = this.clientSocket
-    const serverToClose = this.server
-    this.clientSocket = null
-    this.server = null
-    this.binaryBuffer = Buffer.alloc(0)
-
-    // 异步执行网络关闭操作，不阻塞 UI
-    setImmediate(() => {
-      if (socketToDestroy) {
-        try {
-          socketToDestroy.destroy()
-        } catch (error) {
-          logger.warn('Error destroying client socket', error)
-        }
-      }
-
-      if (serverToClose) {
-        try {
-          serverToClose.close()
-        } catch (error) {
-          logger.warn('Error closing TCP server', error)
-        }
-      }
     })
   }
 

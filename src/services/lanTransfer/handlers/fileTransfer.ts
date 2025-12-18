@@ -192,21 +192,36 @@ export const handleFileStart = (message: LanTransferFileStartMessage, context: F
  */
 export const handleFileChunk = (message: LanTransferFileChunkMessage, context: FileTransferContext): void => {
   if (context.getStatus() !== LanTransferServerStatus.RECEIVING_FILE) {
+    logger.debug('Ignoring file_chunk: not in RECEIVING_FILE state', {
+      transferId: message.transferId,
+      chunkIndex: message.chunkIndex
+    })
     return
   }
 
   const currentTransfer = context.getCurrentTransfer()
   if (!currentTransfer || currentTransfer.transferId !== message.transferId) {
+    logger.debug('Ignoring file_chunk: no active transfer or transfer ID mismatch', {
+      receivedTransferId: message.transferId,
+      activeTransferId: currentTransfer?.transferId
+    })
     return
   }
 
   // Only accept chunks while actively receiving
   if (currentTransfer.status !== FileTransferStatus.RECEIVING) {
+    logger.debug('Ignoring file_chunk: transfer not in RECEIVING status', {
+      transferId: message.transferId,
+      status: currentTransfer.status
+    })
     return
   }
 
   if (currentTransfer.receivedChunks.has(message.chunkIndex)) {
-    // Duplicate chunk, ignore silently
+    logger.debug('Duplicate chunk received (JSON mode), ignoring', {
+      transferId: message.transferId,
+      chunkIndex: message.chunkIndex
+    })
     return
   }
 
@@ -283,21 +298,39 @@ export const handleBinaryFileChunk = (
   context: FileTransferContext
 ): void => {
   if (context.getStatus() !== LanTransferServerStatus.RECEIVING_FILE) {
+    logger.debug('Ignoring binary chunk: not in RECEIVING_FILE state', {
+      transferId,
+      chunkIndex,
+      dataSize: data.length
+    })
     return
   }
 
   const currentTransfer = context.getCurrentTransfer()
   if (!currentTransfer || currentTransfer.transferId !== transferId) {
+    logger.debug('Ignoring binary chunk: no active transfer or transfer ID mismatch', {
+      receivedTransferId: transferId,
+      activeTransferId: currentTransfer?.transferId,
+      chunkIndex
+    })
     return
   }
 
   // Only accept chunks while actively receiving
   if (currentTransfer.status !== FileTransferStatus.RECEIVING) {
+    logger.debug('Ignoring binary chunk: transfer not in RECEIVING status', {
+      transferId,
+      status: currentTransfer.status,
+      chunkIndex
+    })
     return
   }
 
   if (currentTransfer.receivedChunks.has(chunkIndex)) {
-    // Duplicate chunk, ignore silently
+    logger.debug('Duplicate chunk received, ignoring', {
+      transferId,
+      chunkIndex
+    })
     return
   }
 
