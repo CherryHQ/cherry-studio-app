@@ -627,6 +627,7 @@
             "success_description": "恢復成功，祝您使用愉快！"
           },
           "steps": {
+            "clear_data": "清理現有資料",
             "receive_file": "接收檔案",
             "restore_messages": "恢復訊息",
             "restore_settings": "恢復設定"

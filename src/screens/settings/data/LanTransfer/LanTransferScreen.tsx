@@ -14,7 +14,7 @@ import { TriangleAlert } from '@/componentsV2/icons'
 import { LAN_TRANSFER_DOMAIN, LAN_TRANSFER_PROTOCOL_VERSION, LAN_TRANSFER_SERVICE_TYPE } from '@/constants/lanTransfer'
 import { useAppState } from '@/hooks/useAppState'
 import { useLanTransfer } from '@/hooks/useLanTransfer'
-import { useRestore } from '@/hooks/useRestore'
+import { LAN_RESTORE_STEPS_WITH_CLEAR, useRestore } from '@/hooks/useRestore'
 import { useCurrentTopic } from '@/hooks/useTopic'
 import { getDefaultAssistant } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
@@ -49,7 +49,8 @@ export default function LanTransferScreen() {
     clearCompletedFile
   } = useLanTransfer()
   const { isModalOpen, restoreSteps, overallStatus, startRestore, closeModal } = useRestore({
-    clearBeforeRestore: true
+    clearBeforeRestore: true,
+    stepConfigs: LAN_RESTORE_STEPS_WITH_CLEAR
   })
   const { t } = useTranslation()
 
@@ -181,7 +182,7 @@ export default function LanTransferScreen() {
 
     presentDialog('info', {
       title: t('settings.data.lan_transfer.backup_detected_title'),
-      content: t('settings.data.lan_transfer.backup_detected_body'),
+      content: `${t('settings.data.lan_transfer.backup_detected_body')}\n${t('settings.data.restore.confirm_warning')}`,
       confirmText: t('settings.data.lan_transfer.restore_confirm'),
       cancelText: t('settings.data.lan_transfer.restore_later'),
       showCancel: true,
@@ -285,7 +286,6 @@ export default function LanTransferScreen() {
               </Text>
             )}
           </YStack>
-
         </YStack>
       </Container>
 

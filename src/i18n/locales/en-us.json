@@ -627,6 +627,7 @@
             "success_description": "Restore Successful, Enjoy your time!"
           },
           "steps": {
+            "clear_data": "Clear existing data",
             "receive_file": "Receive file",
             "restore_messages": "Restore messages",
             "restore_settings": "Restore configuration"

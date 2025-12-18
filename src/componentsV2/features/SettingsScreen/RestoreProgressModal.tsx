@@ -1,14 +1,14 @@
+import { BlurView } from 'expo-blur'
 import { Button, cn, ErrorView, Spinner } from 'heroui-native'
 import { MotiView } from 'moti'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Modal, Pressable, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import { CircleCheck, TriangleAlert, XCircle } from '@/componentsV2/icons/LucideIcon'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
-import { useTheme } from '@/hooks/useTheme'
 import type { RestoreStepId, StepStatus } from '@/services/BackupService'
 
 export interface RestoreStep {
@@ -41,7 +41,6 @@ const getIconForStatus = (status: StepStatus) => {
 
 export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: RestoreProgressModalProps) {
   const { t } = useTranslation()
-  const { isDark } = useTheme()
   const isDone = overallStatus === 'success' || overallStatus === 'error'
   const title =
     overallStatus === 'success'
@@ -73,9 +72,9 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
         style={{
           flex: 1,
           justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: isDark ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.4)'
+          alignItems: 'center'
         }}>
+        <BlurView style={StyleSheet.absoluteFill} intensity={30} />
         {isDone && (
           <Pressable onPress={onClose} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
         )}

@@ -33,7 +33,7 @@ import { providerService } from './ProviderService'
 import { topicService } from './TopicService'
 const logger = loggerService.withContext('Backup Service')
 
-export type RestoreStepId = 'restore_settings' | 'restore_messages'
+export type RestoreStepId = 'clear_data' | 'receive_file' | 'restore_settings' | 'restore_messages'
 
 export type StepStatus = 'pending' | 'in_progress' | 'completed' | 'error'
 

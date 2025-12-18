@@ -42,14 +42,14 @@ export function ReceiveProgressModal({ isOpen, fileTransfer }: ReceiveProgressMo
           alignItems: 'center'
         }}>
         <BlurView style={StyleSheet.absoluteFill} intensity={30} />
-        <YStack className="bg-card w-5/6 gap-3 overflow-hidden rounded-2xl p-4">
-          <YStack className="items-center gap-2">
-            <Text className="text-xl font-bold">{t('settings.data.lan_transfer.receiving')}</Text>
+        <YStack className="bg-card w-3/4 gap-3 overflow-hidden rounded-2xl p-4">
+          <YStack className="items-center gap-3">
+            <Text className="text-2xl font-bold">{t('settings.data.lan_transfer.receiving')}</Text>
           </YStack>
 
           {fileTransfer && (
             <YStack className="gap-3">
-              <Text className="text-center text-base" numberOfLines={2}>
+              <Text className="text-foreground-secondary text-center text-lg" numberOfLines={2}>
                 {fileTransfer.fileName}
               </Text>
 
