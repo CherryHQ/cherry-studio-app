@@ -23,16 +23,27 @@ import {
   XStack,
   YStack
 } from '@/componentsV2'
+import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import { ModelTags } from '@/componentsV2/features/ModelTags'
 import { presentAddModelSheet } from '@/componentsV2/features/SettingsScreen/AddModelSheet'
 import { ModelIcon } from '@/componentsV2/icons'
-import { CircleCheck, HeartPulse, Minus, Plus, RefreshCw, Settings2, XCircle } from '@/componentsV2/icons/LucideIcon'
+import {
+  CircleCheck,
+  HeartPulse,
+  Minus,
+  Plus,
+  RefreshCw,
+  Settings2,
+  Trash2,
+  XCircle
+} from '@/componentsV2/icons/LucideIcon'
 import { useProvider } from '@/hooks/useProviders'
 import { useSearch } from '@/hooks/useSearch'
 import { useTheme } from '@/hooks/useTheme'
 import type { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
 import { loggerService } from '@/services/LoggerService'
 import { modelHealthService } from '@/services/ModelHealthService'
+import { providerService } from '@/services/ProviderService'
 import type { Model, ModelHealth } from '@/types/assistant'
 import type { ProvidersNavigationProps } from '@/types/naviagate'
 
@@ -85,6 +96,20 @@ export default function ProviderSettingsScreen() {
 
   const onApiService = () => {
     navigation.navigate('ApiServiceScreen', { providerId })
+  }
+
+  const onDeleteProvider = () => {
+    presentDialog('error', {
+      title: t('settings.provider.delete.title'),
+      content: t('settings.provider.delete.content'),
+      confirmText: t('common.delete'),
+      cancelText: t('common.cancel'),
+      showCancel: true,
+      onConfirm: async () => {
+        await providerService.deleteProvider(providerId)
+        navigation.goBack()
+      }
+    })
   }
 
   const handleHealthCheck = async () => {
@@ -237,6 +262,14 @@ export default function ProviderSettingsScreen() {
       <HeaderBar
         title={t(`provider.${provider.id}`, { defaultValue: provider.name })}
         rightButtons={[
+          ...(!provider.isSystem
+            ? [
+                {
+                  icon: <Trash2 size={24} className="text-red-600" />,
+                  onPress: onDeleteProvider
+                }
+              ]
+            : []),
           {
             icon: <Settings2 size={24} />,
             onPress: onManageModel
