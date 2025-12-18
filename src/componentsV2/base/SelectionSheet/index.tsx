@@ -8,6 +8,8 @@ import { Check } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useBottom } from '@/hooks/useBottom'
+import { useTheme } from '@/hooks/useTheme'
+import { isIOS26 } from '@/utils/device'
 
 import Text from '../Text'
 
@@ -57,6 +59,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
 }) => {
   const [isVisible, setIsVisible] = useState(false)
   const bottom = useBottom()
+  const { isDark } = useTheme()
 
   useEffect(() => {
     if (!isVisible) return
@@ -148,6 +151,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
       dismissible
       dimmed
       scrollable
+      backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
       onDidDismiss={() => setIsVisible(false)}
       onDidPresent={() => setIsVisible(true)}
       style={{ paddingBottom: bottom + 10 }}>

@@ -181,6 +181,10 @@
         "not_available": "AI 功能不可用",
         "update_failed": "AI 功能更新失败，请重试"
       },
+      "ai_feature": {
+        "not_available": "AI 功能不可用",
+        "update_failed": "AI 功能更新失败，请重试"
+      },
       "availableProviders": "可用提供商",
       "availableTools": "可用工具",
       "backup": {

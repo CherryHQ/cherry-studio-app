@@ -12,6 +12,7 @@ import YStack from '@/componentsV2/layout/YStack'
 import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
 import type { Citation } from '@/types/websearch'
+import { isIOS26 } from '@/utils/device'
 import { getWebsiteBrand } from '@/utils/websearch'
 
 const logger = loggerService.withContext('Citation Sheet')
@@ -136,6 +137,7 @@ export const CitationSheet: React.FC = () => {
       dismissible
       dimmed
       scrollable
+      backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
       header={header}
       onDidDismiss={() => setIsVisible(false)}
       onDidPresent={() => setIsVisible(true)}>

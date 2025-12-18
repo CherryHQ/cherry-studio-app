@@ -3,7 +3,7 @@ import { Button, cn } from 'heroui-native'
 import React, { type ReactNode } from 'react'
 import { Pressable, type StyleProp, type ViewStyle } from 'react-native'
 
-import { isIOS } from '@/utils/device'
+import { isIOS26 } from '@/utils/device'
 
 interface LiquidGlassButtonProps {
   onPress?: () => void
@@ -22,7 +22,7 @@ export const LiquidGlassButton = ({
   size,
   variant = 'tertiary'
 }: LiquidGlassButtonProps) => {
-  if (isIOS) {
+  if (isIOS26) {
     return (
       <GlassView
         isInteractive

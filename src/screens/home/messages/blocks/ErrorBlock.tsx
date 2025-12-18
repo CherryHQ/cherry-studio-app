@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text, XStack, YStack } from '@/componentsV2'
 import { Bug, Copy } from '@/componentsV2/icons/LucideIcon'
 import { usePreference } from '@/hooks/usePreference'
+import { useTheme } from '@/hooks/useTheme'
 import { getHttpMessageLabel } from '@/i18n/label'
 import type { SerializedAiSdkError, SerializedAiSdkErrorUnion, SerializedError } from '@/types/error'
 import {
@@ -36,6 +37,7 @@ import {
   isSerializedError
 } from '@/types/error'
 import type { ErrorMessageBlock, Message } from '@/types/message'
+import { isIOS26 } from '@/utils/device'
 import { formatAiSdkError, formatError, safeToString } from '@/utils/error'
 
 const HTTP_ERROR_CODES = [400, 401, 403, 404, 429, 500, 502, 503, 504]
@@ -485,6 +487,7 @@ const ErrorDetails: React.FC<{ error?: SerializedError; developerMode: boolean }
 
 export const ErrorDetailSheet: React.FC = () => {
   const { t } = useTranslation()
+  const { isDark } = useTheme()
   const insets = useSafeAreaInsets()
   const [developerMode, setDeveloperMode] = usePreference('app.developer_mode')
   const [isVisible, setIsVisible] = useState(false)
@@ -551,6 +554,7 @@ export const ErrorDetailSheet: React.FC = () => {
       dismissible
       dimmed
       scrollable
+      backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
       header={header}
       onDidDismiss={() => setIsVisible(false)}
       onDidPresent={() => setIsVisible(true)}>

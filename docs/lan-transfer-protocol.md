@@ -1,4 +1,3 @@
-
 # Cherry Studio 局域网传输协议规范
 
 > 版本: 1.0
@@ -93,17 +92,17 @@
 ```typescript
 // 发现的服务信息结构
 type LocalTransferPeer = {
-  id: string; // 唯一标识符
-  name: string; // 设备名称
-  host?: string; // 主机名
-  fqdn?: string; // 完全限定域名
-  port?: number; // TCP 端口
-  type?: string; // 服务类型
-  protocol?: "tcp" | "udp"; // 协议
-  addresses: string[]; // IP 地址列表
-  txt?: Record<string, string>; // TXT 记录
-  updatedAt: number; // 发现时间戳
-};
+  id: string // 唯一标识符
+  name: string // 设备名称
+  host?: string // 主机名
+  fqdn?: string // 完全限定域名
+  port?: number // TCP 端口
+  type?: string // 服务类型
+  protocol?: 'tcp' | 'udp' // 协议
+  addresses: string[] // IP 地址列表
+  txt?: Record<string, string> // TXT 记录
+  updatedAt: number // 发现时间戳
+}
 ```
 
 ### 2.4 IP 地址选择策略
@@ -112,7 +111,7 @@ type LocalTransferPeer = {
 
 ```typescript
 // 优先选择 IPv4 地址
-const preferredAddress = addresses.find((addr) => isIPv4(addr)) || addresses[0];
+const preferredAddress = addresses.find(addr => isIPv4(addr)) || addresses[0]
 ```
 
 ---
@@ -131,12 +130,12 @@ const preferredAddress = addresses.find((addr) => isIPv4(addr)) || addresses[0];
 
 ```typescript
 type LanTransferHandshakeMessage = {
-  type: "handshake";
-  deviceName: string; // 设备名称
-  version: string; // 协议版本，当前为 "1"
-  platform?: string; // 平台：'darwin' | 'win32' | 'linux'
-  appVersion?: string; // 应用版本
-};
+  type: 'handshake'
+  deviceName: string // 设备名称
+  version: string // 协议版本，当前为 "1"
+  platform?: string // 平台：'darwin' | 'win32' | 'linux'
+  appVersion?: string // 应用版本
+}
 ```
 
 **示例：**
@@ -168,7 +167,7 @@ v1 使用"控制 JSON + 二进制数据帧"的混合协议（流式传输模式�
 
 ```typescript
 function sendControlMessage(socket: Socket, message: object): void {
-  socket.write(`${JSON.stringify(message)}\n`);
+  socket.write(`${JSON.stringify(message)}\n`)
 }
 ```
 
@@ -207,17 +206,17 @@ function sendControlMessage(socket: Socket, message: object): void {
 
 ### 4.4 消息类型汇总（v1）
 
-| 类型             | 方向            | 编码     | 用途                    |
-| ---------------- | --------------- | -------- | ----------------------- |
-| `handshake`      | Client → Server | JSON+\n  | 握手请求（version=1）   |
-| `handshake_ack`  | Server → Client | JSON+\n  | 握手响应                |
-| `ping`           | Client → Server | JSON+\n  | 心跳请求                |
-| `pong`           | Server → Client | JSON+\n  | 心跳响应                |
-| `file_start`     | Client → Server | JSON+\n  | 开始文件传输            |
-| `file_start_ack` | Server → Client | JSON+\n  | 文件传输确认            |
+| 类型             | 方向            | 编码     | 用途                                          |
+| ---------------- | --------------- | -------- | --------------------------------------------- |
+| `handshake`      | Client → Server | JSON+\n  | 握手请求（version=1）                         |
+| `handshake_ack`  | Server → Client | JSON+\n  | 握手响应                                      |
+| `ping`           | Client → Server | JSON+\n  | 心跳请求                                      |
+| `pong`           | Server → Client | JSON+\n  | 心跳响应                                      |
+| `file_start`     | Client → Server | JSON+\n  | 开始文件传输                                  |
+| `file_start_ack` | Server → Client | JSON+\n  | 文件传输确认                                  |
 | `file_chunk`     | Client → Server | 二进制帧 | 文件数据块（无 Base64，流式无 per-chunk ACK） |
-| `file_end`       | Client → Server | JSON+\n  | 文件传输结束            |
-| `file_complete`  | Server → Client | JSON+\n  | 传输完成结果            |
+| `file_end`       | Client → Server | JSON+\n  | 文件传输结束                                  |
+| `file_complete`  | Server → Client | JSON+\n  | 传输完成结果                                  |
 
 ```
 {"type":"message_type",...其他字段...}\n
@@ -227,47 +226,47 @@ function sendControlMessage(socket: Socket, message: object): void {
 
 ```typescript
 function sendMessage(socket: Socket, message: object): void {
-  const payload = JSON.stringify(message);
-  socket.write(`${payload}\n`);
+  const payload = JSON.stringify(message)
+  socket.write(`${payload}\n`)
 }
 ```
 
 ### 4.4 消息接收与解析
 
 ```typescript
-let buffer = "";
+let buffer = ''
 
-socket.on("data", (chunk: Buffer) => {
-  buffer += chunk.toString("utf8");
+socket.on('data', (chunk: Buffer) => {
+  buffer += chunk.toString('utf8')
 
-  let newlineIndex = buffer.indexOf("\n");
+  let newlineIndex = buffer.indexOf('\n')
   while (newlineIndex !== -1) {
-    const line = buffer.slice(0, newlineIndex).trim();
-    buffer = buffer.slice(newlineIndex + 1);
+    const line = buffer.slice(0, newlineIndex).trim()
+    buffer = buffer.slice(newlineIndex + 1)
 
     if (line.length > 0) {
-      const message = JSON.parse(line);
-      handleMessage(message);
+      const message = JSON.parse(line)
+      handleMessage(message)
     }
 
-    newlineIndex = buffer.indexOf("\n");
+    newlineIndex = buffer.indexOf('\n')
   }
-});
+})
 ```
 
 ### 4.5 消息类型汇总
 
-| 类型             | 方向            | 用途         |
-| ---------------- | --------------- | ------------ |
-| `handshake`      | Client → Server | 握手请求     |
-| `handshake_ack`  | Server → Client | 握手响应     |
-| `ping`           | Client → Server | 心跳请求     |
-| `pong`           | Server → Client | 心跳响应     |
-| `file_start`     | Client → Server | 开始文件传输 |
-| `file_start_ack` | Server → Client | 文件传输确认 |
+| 类型             | 方向            | 用途                                 |
+| ---------------- | --------------- | ------------------------------------ |
+| `handshake`      | Client → Server | 握手请求                             |
+| `handshake_ack`  | Server → Client | 握手响应                             |
+| `ping`           | Client → Server | 心跳请求                             |
+| `pong`           | Server → Client | 心跳响应                             |
+| `file_start`     | Client → Server | 开始文件传输                         |
+| `file_start_ack` | Server → Client | 文件传输确认                         |
 | `file_chunk`     | Client → Server | 文件数据块（流式，无 per-chunk ACK） |
-| `file_end`       | Client → Server | 文件传输结束 |
-| `file_complete`  | Server → Client | 传输完成结果 |
+| `file_end`       | Client → Server | 文件传输结束                         |
+| `file_complete`  | Server → Client | 传输完成结果                         |
 
 ---
 
@@ -309,15 +308,15 @@ Client (Sender)                     Server (Receiver)
 
 ```typescript
 type LanTransferFileStartMessage = {
-  type: "file_start";
-  transferId: string; // UUID，唯一传输标识
-  fileName: string; // 文件名（含扩展名）
-  fileSize: number; // 文件总字节数
-  mimeType: string; // MIME 类型
-  checksum: string; // 整个文件的 SHA-256 哈希（hex）
-  totalChunks: number; // 总数据块数
-  chunkSize: number; // 每块大小（字节）
-};
+  type: 'file_start'
+  transferId: string // UUID，唯一传输标识
+  fileName: string // 文件名（含扩展名）
+  fileSize: number // 文件总字节数
+  mimeType: string // MIME 类型
+  checksum: string // 整个文件的 SHA-256 哈希（hex）
+  totalChunks: number // 总数据块数
+  chunkSize: number // 每块大小（字节）
+}
 ```
 
 **示例：**
@@ -341,11 +340,11 @@ type LanTransferFileStartMessage = {
 
 ```typescript
 type LanTransferFileStartAckMessage = {
-  type: "file_start_ack";
-  transferId: string; // 对应的传输 ID
-  accepted: boolean; // 是否接受传输
-  message?: string; // 拒绝原因
-};
+  type: 'file_start_ack'
+  transferId: string // 对应的传输 ID
+  accepted: boolean // 是否接受传输
+  message?: string // 拒绝原因
+}
 ```
 
 **接受示例：**
@@ -388,9 +387,9 @@ v1 采用流式传输，不发送 per-chunk ACK。本节类型仅保留作为向
 
 ```typescript
 type LanTransferFileEndMessage = {
-  type: "file_end";
-  transferId: string; // 传输 ID
-};
+  type: 'file_end'
+  transferId: string // 传输 ID
+}
 ```
 
 **示例：**
@@ -408,12 +407,12 @@ type LanTransferFileEndMessage = {
 
 ```typescript
 type LanTransferFileCompleteMessage = {
-  type: "file_complete";
-  transferId: string; // 传输 ID
-  success: boolean; // 是否成功
-  filePath?: string; // 保存路径（成功时）
-  error?: string; // 错误信息（失败时）
-};
+  type: 'file_complete'
+  transferId: string // 传输 ID
+  success: boolean // 是否成功
+  filePath?: string // 保存路径（成功时）
+  error?: string // 错误信息（失败时）
+}
 ```
 
 **成功示例：**
@@ -444,14 +443,14 @@ type LanTransferFileCompleteMessage = {
 
 ```typescript
 async function calculateFileChecksum(filePath: string): Promise<string> {
-  const hash = crypto.createHash("sha256");
-  const stream = fs.createReadStream(filePath);
+  const hash = crypto.createHash('sha256')
+  const stream = fs.createReadStream(filePath)
 
   for await (const chunk of stream) {
-    hash.update(chunk);
+    hash.update(chunk)
   }
 
-  return hash.digest("hex");
+  return hash.digest('hex')
 }
 ```
 
@@ -476,12 +475,12 @@ v1 默认 **不传输分块校验和**，依赖最终文件 checksum。若需要
 ### 5.5 数据块大小计算
 
 ```typescript
-const CHUNK_SIZE = 512 * 1024; // 512KB
+const CHUNK_SIZE = 512 * 1024 // 512KB
 
-const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
+const totalChunks = Math.ceil(fileSize / CHUNK_SIZE)
 
 // 最后一个块可能小于 CHUNK_SIZE
-const lastChunkSize = fileSize % CHUNK_SIZE || CHUNK_SIZE;
+const lastChunkSize = fileSize % CHUNK_SIZE || CHUNK_SIZE
 ```
 
 ---
@@ -496,9 +495,9 @@ const lastChunkSize = fileSize % CHUNK_SIZE || CHUNK_SIZE;
 
 ```typescript
 type LanTransferPingMessage = {
-  type: "ping";
-  payload?: string; // 可选载荷
-};
+  type: 'ping'
+  payload?: string // 可选载荷
+}
 ```
 
 ```json
@@ -514,10 +513,10 @@ type LanTransferPingMessage = {
 
 ```typescript
 type LanTransferPongMessage = {
-  type: "pong";
-  received: boolean; // 确认收到
-  payload?: string; // 回传 ping 的载荷
-};
+  type: 'pong'
+  received: boolean // 确认收到
+  payload?: string // 回传 ping 的载荷
+}
 ```
 
 ```json
@@ -540,22 +539,22 @@ type LanTransferPongMessage = {
 
 ### 7.1 超时配置
 
-| 操作       | 超时时间 | 说明                  |
-| ---------- | -------- | --------------------- |
-| TCP 连接   | 10 秒    | 连接建立超时          |
-| 握手等待   | 10 秒    | 等待 `handshake_ack`  |
-| 传输完成   | 60 秒    | 等待 `file_complete`  |
+| 操作     | 超时时间 | 说明                 |
+| -------- | -------- | -------------------- |
+| TCP 连接 | 10 秒    | 连接建立超时         |
+| 握手等待 | 10 秒    | 等待 `handshake_ack` |
+| 传输完成 | 60 秒    | 等待 `file_complete` |
 
 ### 7.2 错误场景处理
 
-| 场景            | Client 处理        | Server 处理            |
-| --------------- | ------------------ | ---------------------- |
-| TCP 连接失败    | 通知 UI，允许重试  | -                      |
-| 握手超时        | 断开连接，通知 UI  | 关闭 socket            |
-| 握手被拒绝      | 显示拒绝原因       | -                      |
-| 数据块处理失败  | 中止传输，清理状态 | 清理临时文件           |
-| 连接意外断开    | 清理状态，通知 UI  | 清理临时文件           |
-| 存储空间不足    | -                  | 发送 `accepted: false` |
+| 场景           | Client 处理        | Server 处理            |
+| -------------- | ------------------ | ---------------------- |
+| TCP 连接失败   | 通知 UI，允许重试  | -                      |
+| 握手超时       | 断开连接，通知 UI  | 关闭 socket            |
+| 握手被拒绝     | 显示拒绝原因       | -                      |
+| 数据块处理失败 | 中止传输，清理状态 | 清理临时文件           |
+| 连接意外断开   | 清理状态，通知 UI  | 清理临时文件           |
+| 存储空间不足   | -                  | 发送 `accepted: false` |
 
 ### 7.3 资源清理
 
@@ -565,12 +564,12 @@ type LanTransferPongMessage = {
 function cleanup(): void {
   // 1. 销毁文件读取流
   if (readStream) {
-    readStream.destroy();
+    readStream.destroy()
   }
   // 2. 清理传输状态
-  activeTransfer = undefined;
+  activeTransfer = undefined
   // 3. 关闭 socket（如需要）
-  socket?.destroy();
+  socket?.destroy()
 }
 ```
 
@@ -580,14 +579,14 @@ function cleanup(): void {
 function cleanup(): void {
   // 1. 关闭文件写入流
   if (writeStream) {
-    writeStream.end();
+    writeStream.end()
   }
   // 2. 删除未完成的临时文件
   if (tempFilePath) {
-    fs.unlinkSync(tempFilePath);
+    fs.unlinkSync(tempFilePath)
   }
   // 3. 清理传输状态
-  activeTransfer = undefined;
+  activeTransfer = undefined
 }
 ```
 
@@ -599,23 +598,23 @@ function cleanup(): void {
 
 ```typescript
 // 协议版本（v1 = 控制 JSON + 二进制 chunk + 流式传输）
-export const LAN_TRANSFER_PROTOCOL_VERSION = "1";
+export const LAN_TRANSFER_PROTOCOL_VERSION = '1'
 
 // 服务发现
-export const LAN_TRANSFER_SERVICE_TYPE = "cherrystudio";
-export const LAN_TRANSFER_SERVICE_FULL_NAME = "_cherrystudio._tcp";
+export const LAN_TRANSFER_SERVICE_TYPE = 'cherrystudio'
+export const LAN_TRANSFER_SERVICE_FULL_NAME = '_cherrystudio._tcp'
 
 // TCP 端口
-export const LAN_TRANSFER_TCP_PORT = 53317;
+export const LAN_TRANSFER_TCP_PORT = 53317
 
 // 文件传输（与二进制帧一致）
-export const LAN_TRANSFER_CHUNK_SIZE = 512 * 1024; // 512KB
-export const LAN_TRANSFER_GLOBAL_TIMEOUT_MS = 10 * 60 * 1000; // 10 分钟
+export const LAN_TRANSFER_CHUNK_SIZE = 512 * 1024 // 512KB
+export const LAN_TRANSFER_GLOBAL_TIMEOUT_MS = 10 * 60 * 1000 // 10 分钟
 
 // 超时设置
-export const LAN_TRANSFER_HANDSHAKE_TIMEOUT_MS = 10_000; // 10秒
-export const LAN_TRANSFER_CHUNK_TIMEOUT_MS = 30_000; // 30秒
-export const LAN_TRANSFER_COMPLETE_TIMEOUT_MS = 60_000; // 60秒
+export const LAN_TRANSFER_HANDSHAKE_TIMEOUT_MS = 10_000 // 10秒
+export const LAN_TRANSFER_CHUNK_TIMEOUT_MS = 30_000 // 30秒
+export const LAN_TRANSFER_COMPLETE_TIMEOUT_MS = 60_000 // 60秒
 ```
 
 ### 8.2 支持的文件类型
@@ -623,11 +622,8 @@ export const LAN_TRANSFER_COMPLETE_TIMEOUT_MS = 60_000; // 60秒
 当前仅支持 ZIP 文件：
 
 ```typescript
-export const LAN_TRANSFER_ALLOWED_EXTENSIONS = [".zip"];
-export const LAN_TRANSFER_ALLOWED_MIME_TYPES = [
-  "application/zip",
-  "application/x-zip-compressed",
-];
+export const LAN_TRANSFER_ALLOWED_EXTENSIONS = ['.zip']
+export const LAN_TRANSFER_ALLOWED_MIME_TYPES = ['application/zip', 'application/x-zip-compressed']
 ```
 
 ---
@@ -705,23 +701,19 @@ export const LAN_TRANSFER_ALLOWED_MIME_TYPES = [
 ### 10.1 必须实现的功能
 
 1. **mDNS 服务发布**
-
    - 发布 `_cherrystudio._tcp` 服务
    - 提供 TCP 端口号 `53317`
    - 可选：TXT 记录（版本、平台信息）
 
 2. **TCP 服务端**
-
    - 监听指定端口
    - 支持单连接或多连接
 
 3. **消息解析**
-
    - 控制消息：UTF-8 + `\n` JSON
    - 数据消息：二进制帧（Magic+TotalLen 分帧）
 
 4. **握手处理**
-
    - 验证 `handshake` 消息
    - 发送 `handshake_ack` 响应
    - 响应 `ping` 消息
@@ -746,32 +738,32 @@ export const LAN_TRANSFER_ALLOWED_MIME_TYPES = [
 ```typescript
 class FileReceiver {
   private transfer?: {
-    id: string;
-    fileName: string;
-    fileSize: number;
-    checksum: string;
-    totalChunks: number;
-    receivedChunks: number;
-    tempPath: string;
+    id: string
+    fileName: string
+    fileSize: number
+    checksum: string
+    totalChunks: number
+    receivedChunks: number
+    tempPath: string
     // v1: 边收边写文件，避免大文件 OOM
     // stream: FileSystem writable stream (平台相关封装)
-  };
+  }
 
   handleMessage(message: any) {
     switch (message.type) {
-      case "handshake":
-        this.handleHandshake(message);
-        break;
-      case "ping":
-        this.sendPong(message);
-        break;
-      case "file_start":
-        this.handleFileStart(message);
-        break;
+      case 'handshake':
+        this.handleHandshake(message)
+        break
+      case 'ping':
+        this.sendPong(message)
+        break
+      case 'file_start':
+        this.handleFileStart(message)
+        break
       // v1: file_chunk 为二进制帧，不再走 JSON 分支
-      case "file_end":
-        this.handleFileEnd(message);
-        break;
+      case 'file_end':
+        this.handleFileEnd(message)
+        break
     }
   }
 
@@ -786,7 +778,7 @@ class FileReceiver {
   handleBinaryFileChunk(transferId: string, chunkIndex: number, data: Buffer) {
     // 直接使用二进制数据，按 chunkSize/lastChunk 计算长度
     // 写入文件流并更新增量 SHA-256
-    this.transfer.receivedChunks++;
+    this.transfer.receivedChunks++
     // v1: 流式传输，不发送 per-chunk ACK
   }
 
@@ -808,84 +800,84 @@ class FileReceiver {
 ```typescript
 // 握手消息
 export interface LanTransferHandshakeMessage {
-  type: "handshake";
-  deviceName: string;
-  version: string;
-  platform?: string;
-  appVersion?: string;
+  type: 'handshake'
+  deviceName: string
+  version: string
+  platform?: string
+  appVersion?: string
 }
 
 export interface LanTransferHandshakeAckMessage {
-  type: "handshake_ack";
-  accepted: boolean;
-  message?: string;
+  type: 'handshake_ack'
+  accepted: boolean
+  message?: string
 }
 
 // 心跳消息
 export interface LanTransferPingMessage {
-  type: "ping";
-  payload?: string;
+  type: 'ping'
+  payload?: string
 }
 
 export interface LanTransferPongMessage {
-  type: "pong";
-  received: boolean;
-  payload?: string;
+  type: 'pong'
+  received: boolean
+  payload?: string
 }
 
 // 文件传输消息 (Client -> Server)
 export interface LanTransferFileStartMessage {
-  type: "file_start";
-  transferId: string;
-  fileName: string;
-  fileSize: number;
-  mimeType: string;
-  checksum: string;
-  totalChunks: number;
-  chunkSize: number;
+  type: 'file_start'
+  transferId: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  checksum: string
+  totalChunks: number
+  chunkSize: number
 }
 
 export interface LanTransferFileChunkMessage {
-  type: "file_chunk";
-  transferId: string;
-  chunkIndex: number;
-  data: string; // Base64 encoded (v1: 二进制帧模式下不使用)
+  type: 'file_chunk'
+  transferId: string
+  chunkIndex: number
+  data: string // Base64 encoded (v1: 二进制帧模式下不使用)
 }
 
 export interface LanTransferFileEndMessage {
-  type: "file_end";
-  transferId: string;
+  type: 'file_end'
+  transferId: string
 }
 
 // 文件传输响应消息 (Server -> Client)
 export interface LanTransferFileStartAckMessage {
-  type: "file_start_ack";
-  transferId: string;
-  accepted: boolean;
-  message?: string;
+  type: 'file_start_ack'
+  transferId: string
+  accepted: boolean
+  message?: string
 }
 
 // v1 流式不发送 per-chunk ACK，以下类型仅用于向后兼容参考
 export interface LanTransferFileChunkAckMessage {
-  type: "file_chunk_ack";
-  transferId: string;
-  chunkIndex: number;
-  received: boolean;
-  error?: string;
+  type: 'file_chunk_ack'
+  transferId: string
+  chunkIndex: number
+  received: boolean
+  error?: string
 }
 
 export interface LanTransferFileCompleteMessage {
-  type: "file_complete";
-  transferId: string;
-  success: boolean;
-  filePath?: string;
-  error?: string;
+  type: 'file_complete'
+  transferId: string
+  success: boolean
+  filePath?: string
+  error?: string
 }
 
 // 常量
-export const LAN_TRANSFER_TCP_PORT = 53317;
-export const LAN_TRANSFER_CHUNK_SIZE = 512 * 1024;
-export const LAN_TRANSFER_CHUNK_TIMEOUT_MS = 30_000;
+export const LAN_TRANSFER_TCP_PORT = 53317
+export const LAN_TRANSFER_CHUNK_SIZE = 512 * 1024
+export const LAN_TRANSFER_CHUNK_TIMEOUT_MS = 30_000
 ```
 
 ---

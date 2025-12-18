@@ -52,7 +52,7 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
       transition={{
         type: 'timing'
       }}>
-      <KeyboardAvoidingView className="flex-1">
+      <KeyboardAvoidingView className="h-full flex-1">
         <YStack className="flex-1 gap-4">
           <TextField className="gap-2">
             <TextField.Label className="text-foreground-secondary text-sm font-medium">
@@ -67,7 +67,7 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
             />
           </TextField>
 
-          <TextField className="h-4/5 gap-2">
+          <TextField className="flex-1 gap-2">
             <TextField.Label className="text-foreground-secondary text-sm font-medium">
               {t('common.prompt')}
             </TextField.Label>
@@ -83,7 +83,7 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
                 }}
               />
               <TextField.Input
-                className="flex-1 rounded-lg  px-3 py-3 text-sm"
+                className="flex-1 rounded-lg px-3 py-3 text-sm"
                 placeholder={t('common.prompt')}
                 multiline
                 numberOfLines={20}

@@ -9,8 +9,10 @@ import { Group, PressableRow, RestoreProgressModal, Text, XStack } from '@/compo
 import { Folder, Wifi } from '@/componentsV2/icons'
 import { useBottom } from '@/hooks/useBottom'
 import { DEFAULT_RESTORE_STEPS, useRestore } from '@/hooks/useRestore'
+import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
 import type { WelcomeNavigationProps } from '@/types/naviagate'
+import { isIOS26 } from '@/utils/device'
 
 const logger = loggerService.withContext('ImportDataSheet')
 
@@ -40,6 +42,7 @@ export const ImportDataSheet: React.FC = () => {
   const { handleStart } = sheetData
   const { t } = useTranslation()
   const bottom = useBottom()
+  const { isDark } = useTheme()
   const navigation = useNavigation<WelcomeNavigationProps>()
   const [isVisible, setIsVisible] = useState(false)
   const { isModalOpen, restoreSteps, overallStatus, startRestore, closeModal } = useRestore({
@@ -104,9 +107,10 @@ export const ImportDataSheet: React.FC = () => {
         grabber={Platform.OS === 'ios' ? true : false}
         dismissible
         dimmed
+        backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
         onDidDismiss={() => setIsVisible(false)}
         onDidPresent={() => setIsVisible(true)}>
-        <View className="gap-5 overflow-hidden bg-transparent p-4 pt-5" style={{ paddingBottom: bottom }}>
+        <View className="gap-5 overflow-hidden p-4 pt-5" style={{ paddingBottom: bottom }}>
           <Group className="bg-zinc-400/10">
             <PressableRow onPress={handleRestore}>
               <XStack className="items-center gap-3">

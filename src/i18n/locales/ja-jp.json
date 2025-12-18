@@ -181,6 +181,10 @@
         "not_available": "AI機能は利用できません。",
         "update_failed": "AI機能の更新に失敗しました。もう一度お試しください。"
       },
+      "ai_feature": {
+        "not_available": "AI機能は利用できません。",
+        "update_failed": "AI機能の更新に失敗しました。もう一度お試しください。"
+      },
       "availableProviders": "利用可能なプロバイダー",
       "availableTools": "利用可能なツール",
       "backup": {

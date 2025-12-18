@@ -12,6 +12,7 @@ import { useMcpTools } from '@/hooks/useMcp'
 import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
 import type { MCPServer } from '@/types/mcp'
+import { isIOS26 } from '@/utils/device'
 
 const logger = loggerService.withContext('McpServerItemSheet')
 
@@ -131,6 +132,7 @@ const McpServerItemSheet: React.FC = () => {
       dismissible
       dimmed
       scrollable
+      backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
       header={header}
       onDidDismiss={() => setIsVisible(false)}
       onDidPresent={() => setIsVisible(true)}>

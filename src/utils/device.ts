@@ -61,6 +61,8 @@ export const isAndroid = Platform.OS === 'android'
 
 export const isIOS = Platform.OS === 'ios'
 
+export const isIOS26 = Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) === 26
+
 export const benchmarkRatio = width / 375
 
 export const benchmarkHRatio = height / 852

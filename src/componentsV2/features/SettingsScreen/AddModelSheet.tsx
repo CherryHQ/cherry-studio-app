@@ -9,8 +9,10 @@ import Text from '@/componentsV2/base/Text'
 import TextField from '@/componentsV2/base/TextField'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
+import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
 import type { Model, Provider } from '@/types/assistant'
+import { isIOS26 } from '@/utils/device'
 import { getDefaultGroupName } from '@/utils/naming'
 
 const logger = loggerService.withContext('AddModelSheet')
@@ -36,6 +38,7 @@ export const dismissAddModelSheet = () => TrueSheet.dismiss(SHEET_NAME)
 
 export const AddModelSheet: React.FC = () => {
   const { t } = useTranslation()
+  const { isDark } = useTheme()
 
   const [provider, setProvider] = useState<Provider | undefined>(currentProvider)
   const [modelId, setModelId] = useState('')
@@ -117,6 +120,7 @@ export const AddModelSheet: React.FC = () => {
       grabber
       dismissible
       dimmed
+      backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
       header={header}
       onDidDismiss={() => {
         setIsVisible(false)

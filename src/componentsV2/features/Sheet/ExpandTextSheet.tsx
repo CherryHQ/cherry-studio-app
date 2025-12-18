@@ -10,6 +10,7 @@ import { X } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useTheme } from '@/hooks/useTheme'
+import { isIOS26 } from '@/utils/device'
 
 const SHEET_NAME = 'expand-text-sheet'
 
@@ -89,6 +90,7 @@ const ExpandTextSheet: React.FC = () => {
       grabber={Platform.OS === 'ios'}
       dismissible
       dimmed
+      backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
       header={header}
       keyboardMode="pan"
       onDidDismiss={handleDismiss}

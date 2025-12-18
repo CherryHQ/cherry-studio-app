@@ -181,6 +181,10 @@
         "not_available": "AI feature is not available.",
         "update_failed": "Failed to update AI feature. Please try again."
       },
+      "ai_feature": {
+        "not_available": "AI feature is not available.",
+        "update_failed": "Failed to update AI feature. Please try again."
+      },
       "availableProviders": "Available Providers",
       "availableTools": "Available Tools",
       "backup": {
