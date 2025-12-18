@@ -65,6 +65,10 @@ export default function LanTransferScreen() {
     service.zeroconf = new Zeroconf()
     service.zeroconf.on('error', error => {
       logger.error('Zeroconf error', error)
+      presentDialog('error', {
+        title: t('settings.data.lan_transfer.zeroconf_error'),
+        content: `${error}`
+      })
     })
 
     startServer()
@@ -105,7 +109,7 @@ export default function LanTransferScreen() {
         logger.info('[CLEANUP] Total cleanup took', { elapsed: Date.now() - cleanupStart })
       })
     }
-  }, [startServer, stopServer])
+  }, [startServer, stopServer, t])
 
   // Effect 2: 当端口可用时发布 mDNS
   useEffect(() => {
