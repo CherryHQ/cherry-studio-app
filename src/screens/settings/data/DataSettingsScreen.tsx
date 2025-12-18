@@ -7,7 +7,6 @@ import {
   Group,
   GroupTitle,
   HeaderBar,
-  presentDialog,
   PressableRow,
   RowRightArrow,
   SafeAreaContainer,
@@ -32,28 +31,6 @@ interface SettingGroupConfig {
 
 export default function DataSettingsScreen() {
   const { t } = useTranslation()
-  const navigation = useNavigation<NavigationProps>()
-
-  const handleLandrop = () => {
-    presentDialog('warning', {
-      title: t('settings.data.landrop.title'),
-      content: t('settings.data.landrop.confirm_warning'),
-      confirmText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      showCancel: true,
-      onConfirm: () => {
-        navigation.navigate('HomeScreen', {
-          screen: 'Home',
-          params: {
-            screen: 'DataSourcesSettings',
-            params: {
-              screen: 'LandropSettingsScreen'
-            }
-          }
-        })
-      }
-    })
-  }
 
   const settingsItems: SettingGroupConfig[] = [
     {
@@ -65,9 +42,9 @@ export default function DataSettingsScreen() {
           icon: <FolderSearch2 size={24} />
         },
         {
-          title: t('settings.data.landrop.title'),
+          title: t('settings.data.lan_transfer.title'),
           icon: <Wifi size={24} />,
-          onPress: handleLandrop
+          screen: 'LanTransferScreen'
         }
       ]
     }

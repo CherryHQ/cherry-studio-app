@@ -8,6 +8,7 @@ import TextField from '@/componentsV2/base/TextField'
 import { X } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
 import { useTheme } from '@/hooks/useTheme'
+import { isIOS26 } from '@/utils/device'
 
 const SHEET_NAME = 'text-selection-sheet'
 
@@ -101,10 +102,11 @@ const TextSelectionSheet: React.FC = () => {
       dismissible
       dimmed
       scrollable
+      backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
       header={header}
       onDidDismiss={() => setIsVisible(false)}
       onDidPresent={() => setIsVisible(true)}>
-      <View className="h-[70vh] flex-1 ">
+      <View className="h-[70vh] flex-1">
         <ScrollView
           contentContainerStyle={{
             flexGrow: 1,

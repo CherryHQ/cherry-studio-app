@@ -14,6 +14,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { checkApi } from '@/services/ApiService'
 import { loggerService } from '@/services/LoggerService'
 import type { ApiStatus, Model, Provider } from '@/types/assistant'
+import { isIOS26 } from '@/utils/device'
 
 const SHEET_NAME = 'provider-check-sheet'
 const logger = loggerService.withContext('ProviderCheckSheet')
@@ -132,6 +133,7 @@ const ProviderCheckSheet: React.FC = () => {
       grabber={Platform.OS === 'ios'}
       dismissible
       dimmed
+      backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
       header={header}
       onDidDismiss={handleDismiss}
       onDidPresent={() => setIsVisible(true)}>

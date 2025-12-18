@@ -5,7 +5,9 @@ import { BackHandler, View } from 'react-native'
 
 import YStack from '@/componentsV2/layout/YStack'
 import { useBottom } from '@/hooks/useBottom'
+import { useTheme } from '@/hooks/useTheme'
 import { useToast } from '@/hooks/useToast'
+import { isIOS26 } from '@/utils/device'
 
 import { presentWebSearchProviderSheet } from '../WebSearchProviderSheet'
 import { ExternalTools } from './ExternalTools'
@@ -25,6 +27,7 @@ export type { ToolSheetData } from './types'
 export const ToolSheet: React.FC = () => {
   const { t } = useTranslation()
   const bottom = useBottom()
+  const { isDark } = useTheme()
   const toast = useToast()
 
   const { sheetData, isVisible, handleDidDismiss, handleDidPresent } = useToolSheetData()
@@ -101,6 +104,7 @@ export const ToolSheet: React.FC = () => {
       grabber
       dismissible
       dimmed
+      backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
       onDidDismiss={handleDidDismiss}
       onDidPresent={handleDidPresent}
       style={{ paddingBottom: bottom + 10 }}>

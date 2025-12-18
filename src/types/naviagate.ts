@@ -74,8 +74,8 @@ export type AboutNavigationProps = StackNavigationProp<AboutStackParamList>
 // Legacy compatibility
 export type NavigationProps = RootNavigationProps
 
-type LandropRouteParamList = {
-  LandropSettingsScreen: { redirectToHome?: boolean } | undefined
+type LanTransferRouteParamList = {
+  LanTransferScreen: { redirectToHome?: boolean } | undefined
 }
 
-export type LandropSettingsRouteProp = RouteProp<LandropRouteParamList, 'LandropSettingsScreen'>
+export type LanTransferRouteProp = RouteProp<LanTransferRouteParamList, 'LanTransferScreen'>

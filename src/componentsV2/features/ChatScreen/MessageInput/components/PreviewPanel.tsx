@@ -3,8 +3,10 @@ import type { Dispatch, SetStateAction } from 'react'
 import React from 'react'
 import { View } from 'react-native'
 
+import { useTheme } from '@/hooks/useTheme'
 import type { Assistant } from '@/types/assistant'
 import type { FileMetadata } from '@/types/file'
+import { isIOS26 } from '@/utils/device'
 
 import { EditingPreview } from '../EditingPreview'
 import { FilePreview } from '../FilePreview'
@@ -34,13 +36,19 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
   onTextChange,
   onExpand
 }) => {
+  const { isDark } = useTheme()
   const hasToolPreview = getEnabledToolKeys(assistant).length > 0
   const hasPreviewContent = isEditing || hasToolPreview || files.length > 0
 
   return (
     <LiquidGlassView
-      className="bg-secondary rounded-3xl"
-      style={{ flex: 1, borderRadius: 20, paddingVertical: hasPreviewContent ? 8 : 0 }}>
+      className="rounded-3xl"
+      style={{
+        flex: 1,
+        borderRadius: 20,
+        paddingVertical: hasPreviewContent ? 8 : 0,
+        backgroundColor: isIOS26 ? undefined : isDark ? '#FFFFFF1A' : '#0000000D'
+      }}>
       <View className="px-2">
         {isEditing && <EditingPreview onCancel={onCancelEditing} />}
         <ToolPreview assistant={assistant} updateAssistant={updateAssistant} />

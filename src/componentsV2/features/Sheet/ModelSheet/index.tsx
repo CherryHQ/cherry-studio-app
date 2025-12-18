@@ -9,9 +9,10 @@ import YStack from '@/componentsV2/layout/YStack'
 import { isEmbeddingModel, isRerankModel } from '@/config/models'
 import { useBottom } from '@/hooks/useBottom'
 import { useAllProviders } from '@/hooks/useProviders'
+import { useTheme } from '@/hooks/useTheme'
 import type { Provider } from '@/types/assistant'
 import type { HomeNavigationProps } from '@/types/naviagate'
-import { isIOS } from '@/utils/device'
+import { isIOS26 } from '@/utils/device'
 import { getModelUniqId } from '@/utils/model'
 
 import { EmptyModelView } from '../../SettingsScreen/EmptyModelView'
@@ -31,6 +32,7 @@ const TAB_BAR_HEIGHT = 56
 const ModelSheet: React.FC = () => {
   const { t } = useTranslation()
   const bottom = useBottom()
+  const { isDark } = useTheme()
   const navigation = useNavigation<HomeNavigationProps>()
   const { height: windowHeight } = useWindowDimensions()
   const sheetContentHeight = windowHeight * 0.85
@@ -120,9 +122,10 @@ const ModelSheet: React.FC = () => {
       dimmed
       keyboardMode="pan"
       scrollable
+      backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
       onDidDismiss={handleDidDismiss}
       onDidPresent={handleDidPresent}>
-      <View className={isIOS ? undefined : 'bg-card'} style={{ height: sheetContentHeight, position: 'relative' }}>
+      <View style={{ height: sheetContentHeight, position: 'relative' }}>
         <SectionList
           style={{ flex: 1, paddingTop: HEADER_HEIGHT * 2 }}
           ref={listRef}

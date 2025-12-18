@@ -18,7 +18,7 @@ import { assistantService } from '@/services/AssistantService'
 import { topicService } from '@/services/TopicService'
 import type { Assistant } from '@/types/assistant'
 import { uuid } from '@/utils'
-import { isIOS } from '@/utils/device'
+import { isIOS, isIOS26 } from '@/utils/device'
 import { formateEmoji } from '@/utils/formats'
 
 import EmojiAvatar from './EmojiAvatar'
@@ -131,6 +131,7 @@ const AssistantItemSheet: React.FC = () => {
       cornerRadius={30}
       dismissible
       dimmed
+      backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
       grabber={Platform.OS === 'ios' ? true : false}
       onDidDismiss={() => setIsVisible(false)}
       onDidPresent={() => setIsVisible(true)}>
