@@ -36,6 +36,7 @@
     "collectCoverageFrom": [
       "src/**/*.{ts,tsx,js,jsx}",
       "!src/**/*.d.ts",
+      "!src/types/**",
       "!src/**/__tests__/**",
       "!**/node_modules/**",
       "!**/coverage/**"
