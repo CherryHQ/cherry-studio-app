@@ -1,12 +1,13 @@
 import { MotiView } from 'moti'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { View } from 'react-native'
+import { Keyboard, Pressable, StyleSheet, View } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 
 import TextField from '@/componentsV2/base/TextField'
 import { ExpandButton } from '@/componentsV2/features/ChatScreen/MessageInput/ExpandButton'
 import { presentExpandTextSheet } from '@/componentsV2/features/Sheet/ExpandTextSheet'
+import { Save } from '@/componentsV2/icons'
 import YStack from '@/componentsV2/layout/YStack'
 import type { Assistant } from '@/types/assistant'
 
@@ -38,6 +39,11 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
         prompt: formData.prompt
       })
     }
+  }
+
+  const handleSaveButtonPress = () => {
+    Keyboard.dismiss()
+    handleSave()
   }
 
   return (
@@ -72,6 +78,13 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
               {t('common.prompt')}
             </TextField.Label>
             <View className="relative flex-1">
+              <Pressable
+                className="active:opacity-50"
+                style={styles.saveButton}
+                onPress={handleSaveButtonPress}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Save size={18} className="text-foreground/50" />
+              </Pressable>
               <ExpandButton
                 style={{ top: 8, right: 8 }}
                 onPress={() => {
@@ -99,3 +112,13 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
     </MotiView>
   )
 }
+
+const styles = StyleSheet.create({
+  saveButton: {
+    position: 'absolute',
+    right: 36,
+    top: 8,
+    padding: 4,
+    zIndex: 10
+  }
+})
