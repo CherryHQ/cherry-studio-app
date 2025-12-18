@@ -23,6 +23,7 @@ interface PreviewPanelProps {
   text: string
   onTextChange: (text: string) => void
   onExpand: () => void
+  onPasteImages?: (uris: string[]) => void
 }
 
 export const PreviewPanel: React.FC<PreviewPanelProps> = ({
@@ -34,7 +35,8 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
   setFiles,
   text,
   onTextChange,
-  onExpand
+  onExpand,
+  onPasteImages
 }) => {
   const { isDark } = useTheme()
   const hasToolPreview = getEnabledToolKeys(assistant).length > 0
@@ -54,7 +56,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
         <ToolPreview assistant={assistant} updateAssistant={updateAssistant} />
         {files.length > 0 && <FilePreview files={files} setFiles={setFiles} />}
       </View>
-      <MessageTextField text={text} setText={onTextChange} onExpand={onExpand} />
+      <MessageTextField text={text} setText={onTextChange} onExpand={onExpand} onPasteImages={onPasteImages} />
     </LiquidGlassView>
   )
 }

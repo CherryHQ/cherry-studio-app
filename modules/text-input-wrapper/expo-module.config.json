@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["TextInputWrapperModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.textinputwrapper.TextInputWrapperModule"]
+  }
+}
