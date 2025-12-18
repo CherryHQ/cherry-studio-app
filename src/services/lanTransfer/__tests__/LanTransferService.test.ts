@@ -208,8 +208,10 @@ describe('LanTransferService JSON message handling', () => {
     // Should not throw
     expect(() => service.handleSocketData(malformedJson)).not.toThrow()
 
-    // No message sent for malformed JSON
-    expect(sentMessages.length).toBe(0)
+    // Error message sent to notify sender of parse error
+    expect(sentMessages.length).toBe(1)
+    expect(sentMessages[0].type).toBe('error')
+    expect(sentMessages[0].errorCode).toBe('PARSE_ERROR')
   })
 
   test('ignores unknown message type', () => {

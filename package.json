@@ -23,6 +23,7 @@
   },
   "jest": {
     "preset": "jest-expo",
+    "coverageProvider": "v8",
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.js"
     ],
