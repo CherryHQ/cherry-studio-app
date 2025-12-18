@@ -7,8 +7,6 @@ import { db } from '..'
 import { transformAssistantToDb, transformDbToAssistant } from '../mappers'
 import { assistants } from '../schema'
 import { buildExcludedSet } from '../utils/buildExcludedSet'
-import { deleteMessagesByAssistantId } from './messages.queries'
-import { deleteTopicsByAssistantId } from './topics.queries'
 
 const logger = loggerService.withContext('DataBase Assistants')
 
@@ -40,20 +38,14 @@ export async function upsertAssistants(assistantsToUpsert: Assistant[]) {
 
 /**
  * 根据 ID 删除指定助手
- * @description 级联删除助手及其关联的所有消息和话题
+ * @description 删除助手，关联的 topics、messages、message_blocks 会通过数据库级联删除自动清理
  * @param id - 助手的唯一标识符
  * @throws 当删除操作失败时抛出错误
  */
 export async function deleteAssistantById(id: string) {
   try {
-    await db.transaction(async tx => {
-      await deleteMessagesByAssistantId(id)
-      logger.verbose(`Deleted messages for assistant ${id}`)
-      await deleteTopicsByAssistantId(id)
-      logger.verbose(`Deleted topics for assistant ${id}`)
-      await tx.delete(assistants).where(eq(assistants.id, id))
-      logger.verbose(`Deleted assistant ${id}`)
-    })
+    await db.delete(assistants).where(eq(assistants.id, id))
+    logger.verbose(`Deleted assistant ${id}`)
   } catch (error) {
     logger.error(`Error deleting assistant with ID ${id}:`, error)
     throw error

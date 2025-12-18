@@ -9,7 +9,7 @@ export const topics = sqliteTable(
     id: text('id').notNull().unique().primaryKey(),
     assistant_id: text('assistant_id')
       .notNull()
-      .references(() => assistants.id),
+      .references(() => assistants.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     isLoading: integer('isLoading', { mode: 'boolean' }),
     ...createUpdateTimestamps
