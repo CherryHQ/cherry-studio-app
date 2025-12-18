@@ -185,7 +185,9 @@ export function useMcpServers() {
     try {
       setIsLoading(true)
       const allMcpServers = await mcpService.getAllMcpServers()
-      setMcpServers(allMcpServers)
+      // Filter to only show inMemory type servers (mobile supported)
+      const inMemoryServers = allMcpServers.filter(server => server.type === 'inMemory')
+      setMcpServers(inMemoryServers)
     } catch (error) {
       logger.error('Failed to load all MCP servers:', error as Error)
     } finally {
@@ -256,7 +258,9 @@ export function useActiveMcpServers() {
     try {
       setIsLoading(true)
       const activeServers = await mcpService.getActiveMcpServers()
-      setActiveMcpServers(activeServers)
+      // Filter to only show inMemory type servers (mobile supported)
+      const inMemoryActiveServers = activeServers.filter(server => server.type === 'inMemory')
+      setActiveMcpServers(inMemoryActiveServers)
     } catch (error) {
       logger.error('Failed to load active MCP servers:', error as Error)
     } finally {
