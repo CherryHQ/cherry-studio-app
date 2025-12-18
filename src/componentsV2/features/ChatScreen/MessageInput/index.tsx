@@ -88,7 +88,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
 
   return (
     <View
-      className="p-3"
+      className="px-3"
       style={{
         paddingBottom: Platform.OS === 'android' ? bottomPad + 8 : bottomPad
       }}>
