@@ -22,10 +22,6 @@ export interface StepConfig {
 
 // 预定义的步骤配置
 export const RESTORE_STEP_CONFIGS = {
-  RECEIVE_FILE: {
-    id: 'receive_file' as RestoreStepId,
-    titleKey: 'settings.data.restore.steps.receive_file'
-  },
   RESTORE_SETTINGS: {
     id: 'restore_settings' as RestoreStepId,
     titleKey: 'settings.data.restore.steps.restore_settings'
@@ -38,13 +34,6 @@ export const RESTORE_STEP_CONFIGS = {
 
 // 预定义的步骤组合
 export const DEFAULT_RESTORE_STEPS: StepConfig[] = [
-  RESTORE_STEP_CONFIGS.RESTORE_SETTINGS,
-  RESTORE_STEP_CONFIGS.RESTORE_MESSAGES
-]
-
-// LAN 传输步骤组合（包含文件接收）
-export const LAN_RESTORE_STEPS: StepConfig[] = [
-  RESTORE_STEP_CONFIGS.RECEIVE_FILE,
   RESTORE_STEP_CONFIGS.RESTORE_SETTINGS,
   RESTORE_STEP_CONFIGS.RESTORE_MESSAGES
 ]

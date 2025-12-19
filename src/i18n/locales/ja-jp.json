@@ -577,20 +577,6 @@
         "data_reset": {
           "error": "データのリセットに失敗しました。もう一度試してください。問題が解決しない場合は、技術サポートまでお問い合わせください。"
         },
-        "lan_transfer": {
-          "connected": "接続済み",
-          "device_name": "デバイス名",
-          "hint": "デスクトップ版 Cherry Studio でこのデバイスを選択してバックアップを送信してください",
-          "ip_address": "IPアドレス",
-          "no_connection_warning": "Cherry Studioクライアントで LAN 転送を開いてください",
-          "receiving": "ファイル受信中...",
-          "start_service": "受信を開始",
-          "stop_service": "サービスを停止",
-          "title": "LAN転送",
-          "waiting_connection": "デスクトップの接続を待っています...",
-          "warning_content": "既存のデータを削除し、デスクトップから復元します。重要なデータは必ずバックアップしてください。",
-          "warning_title": "注意"
-        },
         "log_location": "ログファイルの場所",
         "reset": "データリセット",
         "reset_success": "データリセットが成功しました！アプリケーションは初期状態に復元されました。",

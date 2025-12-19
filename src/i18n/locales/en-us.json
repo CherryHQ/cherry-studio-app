@@ -577,20 +577,6 @@
         "data_reset": {
           "error": "Data reset failed. Please try again or contact support if the problem persists."
         },
-        "lan_transfer": {
-          "connected": "Connected",
-          "device_name": "Device name",
-          "hint": "Select this device in Cherry Studio desktop to send the backup",
-          "ip_address": "IP address",
-          "no_connection_warning": "Please open LAN Transfer in Cherry Studio desktop client",
-          "receiving": "Receiving file...",
-          "start_service": "Start receiving",
-          "stop_service": "Stop service",
-          "title": "LAN Transfer",
-          "waiting_connection": "Waiting for desktop to connect...",
-          "warning_content": "This will clear existing data and restore from desktop. Make sure important data is backed up.",
-          "warning_title": "Heads up"
-        },
         "log_location": "Log file location",
         "reset": "Data Reset",
         "reset_success": "Data reset successful! The app has been restored to its initial state.",

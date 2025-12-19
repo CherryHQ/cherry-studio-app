@@ -577,20 +577,6 @@
         "data_reset": {
           "error": "数据重置失败。请重试，如果问题持续存在，请联系技术支持。"
         },
-        "lan_transfer": {
-          "connected": "已连接",
-          "device_name": "设备名称",
-          "hint": "请在桌面端 Cherry Studio 中选择此设备发送备份",
-          "ip_address": "IP 地址",
-          "no_connection_warning": "请在Cherry Studio客户端打开局域网传输",
-          "receiving": "正在接收文件...",
-          "start_service": "开始接收",
-          "stop_service": "停止服务",
-          "title": "局域网传输",
-          "waiting_connection": "等待桌面端连接...",
-          "warning_content": "此操作将清除现有数据并从桌面端恢复。请确保已备份重要数据。",
-          "warning_title": "注意"
-        },
         "log_location": "日志文件位置",
         "reset": "数据重置",
         "reset_success": "数据重置成功！应用已恢复到初始状态。",
