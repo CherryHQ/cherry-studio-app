@@ -1,7 +1,7 @@
 import React from 'react'
 
 import AssistantItemSheet from '@/componentsV2/features/Assistant/AssistantItemSheet'
-import { AddModelSheet } from '@/componentsV2/features/SettingsScreen/AddModelSheet'
+import { AddModelSheet } from '@/componentsV2/features/SettingsScreen/providers/AddModelSheet'
 import ExpandInputSheet from '@/componentsV2/features/Sheet/ExpandInputSheet'
 import ExpandTextSheet from '@/componentsV2/features/Sheet/ExpandTextSheet'
 import { McpServerSheet } from '@/componentsV2/features/Sheet/McpServerSheet'

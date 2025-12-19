@@ -25,8 +25,8 @@ import {
 } from '@/componentsV2'
 import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import { ModelTags } from '@/componentsV2/features/ModelTags'
-import { presentAddModelSheet } from '@/componentsV2/features/SettingsScreen/AddModelSheet'
-import { ProviderSelect } from '@/componentsV2/features/SettingsScreen/ProviderSelect'
+import { presentAddModelSheet } from '@/componentsV2/features/SettingsScreen/providers/AddModelSheet'
+import { ProviderSelect } from '@/componentsV2/features/SettingsScreen/providers/ProviderSelect'
 import { ModelIcon } from '@/componentsV2/icons'
 import {
   CircleCheck,

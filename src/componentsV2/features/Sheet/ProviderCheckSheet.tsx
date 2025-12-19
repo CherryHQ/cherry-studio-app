@@ -6,7 +6,7 @@ import { BackHandler, Platform, TouchableOpacity, View } from 'react-native'
 
 import { presentDialog } from '@/componentsV2/base/Dialog'
 import Text from '@/componentsV2/base/Text'
-import { ModelSelect } from '@/componentsV2/features/SettingsScreen/ModelSelect'
+import { ModelSelect } from '@/componentsV2/features/SettingsScreen/providers/ModelSelect'
 import { X } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'

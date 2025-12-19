@@ -15,7 +15,7 @@ import type { HomeNavigationProps } from '@/types/naviagate'
 import { isIOS26 } from '@/utils/device'
 import { getModelUniqId } from '@/utils/model'
 
-import { EmptyModelView } from '../../SettingsScreen/EmptyModelView'
+import { EmptyModelView } from '../../SettingsScreen/providers/EmptyModelView'
 import { useModelSelection } from './hooks/useModelSelection'
 import { dismissModelSheet, SHEET_NAME, useModelSheetData } from './hooks/useModelSheetData'
 import { useModelTabScrolling } from './hooks/useModelTabScrolling'

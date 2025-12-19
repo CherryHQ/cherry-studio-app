@@ -4,7 +4,7 @@ import React, { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Container, Group, HeaderBar, ListSkeleton, SafeAreaContainer, SearchInput } from '@/componentsV2'
-import { ProviderItem } from '@/componentsV2/features/SettingsScreen/ProviderItem'
+import { ProviderItem } from '@/componentsV2/features/SettingsScreen/providers/ProviderItem'
 import { Plus } from '@/componentsV2/icons'
 import { useAllProviders } from '@/hooks/useProviders'
 import { useSearch } from '@/hooks/useSearch'
