@@ -36,18 +36,11 @@ export default function ProviderListScreen() {
     navigation.navigate('AddProviderScreen', { mode: 'add' })
   }
 
-  const onEditProvider = useCallback(
-    (provider: Provider) => {
-      navigation.navigate('AddProviderScreen', { mode: 'edit', providerId: provider.id })
-    },
-    [navigation]
-  )
-
   const renderProviderItem = useCallback(
     ({ item }: { item: Provider }) => (
-      <ProviderItem provider={item} mode={item.enabled ? 'enabled' : 'checked'} onEdit={onEditProvider} />
+      <ProviderItem provider={item} mode={item.enabled ? 'enabled' : 'checked'} />
     ),
-    [onEditProvider]
+    []
   )
 
   return (

@@ -26,14 +26,15 @@ import {
 import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import { ModelTags } from '@/componentsV2/features/ModelTags'
 import { presentAddModelSheet } from '@/componentsV2/features/SettingsScreen/AddModelSheet'
+import { ProviderSelect } from '@/componentsV2/features/SettingsScreen/ProviderSelect'
 import { ModelIcon } from '@/componentsV2/icons'
 import {
   CircleCheck,
   HeartPulse,
+  ListCheck,
   Minus,
   Plus,
   RefreshCw,
-  Settings2,
   Trash2,
   XCircle
 } from '@/componentsV2/icons/LucideIcon'
@@ -44,7 +45,7 @@ import type { ProvidersStackParamList } from '@/navigators/settings/ProvidersSta
 import { loggerService } from '@/services/LoggerService'
 import { modelHealthService } from '@/services/ModelHealthService'
 import { providerService } from '@/services/ProviderService'
-import type { Model, ModelHealth } from '@/types/assistant'
+import type { Model, ModelHealth, ProviderType } from '@/types/assistant'
 import type { ProvidersNavigationProps } from '@/types/naviagate'
 
 const logger = loggerService.withContext('ProviderSettingsScreen')
@@ -166,6 +167,18 @@ export default function ProviderSettingsScreen() {
     }
   }
 
+  const handleProviderTypeChange = async (type: ProviderType) => {
+    if (provider) {
+      const updatedProvider = { ...provider, type }
+
+      try {
+        await updateProvider(updatedProvider)
+      } catch (error) {
+        logger.error('Failed to save provider:', error)
+      }
+    }
+  }
+
   const handleRemoveModel = useCallback(
     async (modelId: string) => {
       if (provider) {
@@ -271,12 +284,8 @@ export default function ProviderSettingsScreen() {
               ]
             : []),
           {
-            icon: <Settings2 size={24} />,
+            icon: <ListCheck size={24} />,
             onPress: onManageModel
-          },
-          {
-            icon: <Plus size={24} />,
-            onPress: onAddModel
           }
         ]}
       />
@@ -300,6 +309,14 @@ export default function ProviderSettingsScreen() {
                     <Text>{t('common.enabled')}</Text>
                     <Switch isSelected={provider.enabled} onSelectedChange={handleEnabledChange}></Switch>
                   </Row>
+                  <Row>
+                    <Text className="w-1/3">{t('settings.provider.add.type')}</Text>
+                    <ProviderSelect
+                      value={provider.type}
+                      onValueChange={handleProviderTypeChange}
+                      placeholder={t('settings.provider.add.type')}
+                    />
+                  </Row>
                   <PressableRow onPress={onApiService}>
                     <Text>{t('settings.provider.api_service')}</Text>
                     <XStack className="items-center justify-center">
@@ -318,13 +335,16 @@ export default function ProviderSettingsScreen() {
               <YStack className="flex-1 gap-2">
                 <XStack className="items-center justify-between pr-2.5">
                   <GroupTitle>{t('settings.models.title')}</GroupTitle>
-                  <IconButton
-                    icon={
-                      isCheckingHealth ? <RefreshCw size={14} className="animate-spin" /> : <HeartPulse size={14} />
-                    }
-                    onPress={handleHealthCheck}
-                    disabled={isCheckingHealth}
-                  />
+                  <XStack className="items-center gap-2">
+                    <IconButton
+                      icon={
+                        isCheckingHealth ? <RefreshCw size={18} className="animate-spin" /> : <HeartPulse size={18} />
+                      }
+                      onPress={handleHealthCheck}
+                      disabled={isCheckingHealth}
+                    />
+                    <IconButton icon={<Plus size={18} />} onPress={onAddModel} />
+                  </XStack>
                 </XStack>
                 <SearchInput
                   placeholder={t('settings.models.search')}

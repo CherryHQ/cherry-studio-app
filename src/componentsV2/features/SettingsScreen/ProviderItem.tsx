@@ -1,16 +1,12 @@
 import { useNavigation } from '@react-navigation/native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import type { SFSymbol } from 'sf-symbols-typescript'
+import { Pressable } from 'react-native'
 
-import ContextMenu from '@/componentsV2/base/ContextMenu'
-import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import Text from '@/componentsV2/base/Text'
-import { Edit3, ProviderIcon, Trash2 } from '@/componentsV2/icons'
+import { ProviderIcon } from '@/componentsV2/icons'
 import RowRightArrow from '@/componentsV2/layout/Row/RowRightArrow'
 import XStack from '@/componentsV2/layout/XStack'
-import { useToast } from '@/hooks/useToast'
-import { deleteProvider } from '@/services/ProviderService'
 import type { Provider } from '@/types/assistant'
 import type { ProvidersNavigationProps } from '@/types/naviagate'
 
@@ -20,77 +16,32 @@ interface ProviderItemProps {
   onEdit?: (provider: Provider) => void
 }
 
-export const ProviderItem: React.FC<ProviderItemProps> = ({ provider, mode = 'enabled', onEdit }) => {
+export const ProviderItem: React.FC<ProviderItemProps> = ({ provider, mode = 'enabled' }) => {
   const { t } = useTranslation()
   const navigation = useNavigation<ProvidersNavigationProps>()
-  const toast = useToast()
 
   // Determine display conditions and text based on mode
   const shouldShowStatus = mode === 'enabled' ? provider.enabled : provider.apiKey
   const statusText = mode === 'enabled' ? t('settings.provider.enabled') : t('settings.provider.added')
 
-  const handleEdit = () => {
-    onEdit?.(provider)
-  }
-
-  const handleDelete = () => {
-    presentDialog('error', {
-      title: t('settings.provider.delete.title'),
-      content: t('settings.provider.delete.content'),
-      confirmText: t('common.delete'),
-      cancelText: t('common.cancel'),
-      showCancel: true,
-      onConfirm: async () => {
-        try {
-          await deleteProvider(provider.id)
-          toast.show(t('settings.provider.provider_deleted'))
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : t('common.unknown_error')
-          toast.show(t('common.error_occurred') + '\n' + errorMessage)
-        }
-      }
-    })
-  }
-
   const handlePress = () => {
     navigation.navigate('ProviderSettingsScreen', { providerId: provider.id })
   }
 
-  const providerRow = (
-    <XStack className="items-center justify-between px-4 py-3">
-      <XStack className="items-center gap-2">
-        <ProviderIcon provider={provider} />
-        <Text className="text-foreground text-lg">{t(`provider.${provider.id}`, { defaultValue: provider.name })}</Text>
-      </XStack>
-      <XStack className="items-center gap-2.5">
-        {shouldShowStatus && (
-          <Text className="primary-badge rounded-lg border-[0.5px] px-2 py-0.5 text-sm">{statusText}</Text>
-        )}
-        <RowRightArrow />
-      </XStack>
-    </XStack>
-  )
-
-  const contextMenuList = [
-    {
-      title: t('common.edit'),
-      onSelect: handleEdit,
-      iOSIcon: 'pencil' as SFSymbol,
-      androidIcon: <Edit3 size={16} />
-    },
-    {
-      title: t('common.delete'),
-      onSelect: handleDelete,
-      destructive: true,
-      iOSIcon: 'trash' as SFSymbol,
-      androidIcon: <Trash2 size={16} color="red" />,
-      color: 'red'
-    }
-  ]
-
   return (
-    <ContextMenu list={contextMenuList} onPress={handlePress} disableContextMenu={provider.isSystem}>
-      {providerRow}
-    </ContextMenu>
+    <Pressable onPress={handlePress}>
+      <XStack className="items-center justify-between px-4 py-3">
+        <XStack className="items-center gap-2">
+          <ProviderIcon provider={provider} />
+          <Text className="text-foreground text-lg">{t(`provider.${provider.id}`, { defaultValue: provider.name })}</Text>
+        </XStack>
+        <XStack className="items-center gap-2.5">
+          {shouldShowStatus && (
+            <Text className="primary-badge rounded-lg border-[0.5px] px-2 py-0.5 text-sm">{statusText}</Text>
+          )}
+          <RowRightArrow />
+        </XStack>
+      </XStack>
+    </Pressable>
   )
 }

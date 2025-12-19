@@ -45,6 +45,7 @@ import {
   Info,
   Languages,
   Lightbulb,
+  ListCheck,
   Mail,
   Maximize2,
   Menu,
@@ -146,6 +147,7 @@ const ImageOffIcon = createIcon(ImageOff)
 const InfoIcon = createIcon(Info)
 const LanguagesIcon = createIcon(Languages)
 const LightbulbIcon = createIcon(Lightbulb)
+const ListCheckIcon = createIcon(ListCheck)
 const CircleUserRoundIcon = createIcon(CircleUserRound)
 const MailIcon = createIcon(Mail)
 const Maximize2Icon = createIcon(Maximize2)
@@ -229,6 +231,7 @@ export {
   InfoIcon as Info,
   LanguagesIcon as Languages,
   LightbulbIcon as Lightbulb,
+  ListCheckIcon as ListCheck,
   MailIcon as Mail,
   Maximize2Icon as Maximize2,
   MenuIcon as Menu,
