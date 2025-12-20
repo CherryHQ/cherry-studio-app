@@ -9,8 +9,10 @@ import {
   CirclePause,
   Copy,
   MoreHorizontal,
+  PenLine,
   RefreshCw,
   Share,
+  TextSelect,
   ThumbsUp,
   Trash2
 } from '@/componentsV2/icons/LucideIcon'
@@ -35,7 +37,9 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
     handleDeleteTranslation,
     handleTranslate,
     handleDelete,
-    handleShare
+    handleShare,
+    handleEdit,
+    handleSelectText
   } = useMessageActions({
     message,
     assistant
@@ -52,6 +56,18 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
   const formatTokens = (value?: number) => (typeof value === 'number' ? value.toLocaleString() : '--')
 
   const moreItems = [
+    {
+      id: 'select_text',
+      label: t('common.select_text'),
+      icon: <TextSelect size={18} />,
+      onSelect: handleSelectText
+    },
+    {
+      id: 'edit',
+      label: t('common.edit'),
+      icon: <PenLine size={18} />,
+      onSelect: handleEdit
+    },
     {
       id: 'translate',
       label: isTranslated ? t('common.delete_translation') : t('message.translate_message'),
