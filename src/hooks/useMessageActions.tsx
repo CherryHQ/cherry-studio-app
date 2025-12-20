@@ -15,6 +15,7 @@ import { setEditingMessage } from '@/store/runtime'
 import type { Assistant } from '@/types/assistant'
 import type { Message } from '@/types/message'
 import type { HomeNavigationProps } from '@/types/naviagate'
+import { markdownToPlainText } from '@/utils/markdown'
 import { filterMessages } from '@/utils/messageUtils/filters'
 import { findTranslationBlocks, getMainTextContent } from '@/utils/messageUtils/find'
 
@@ -118,7 +119,8 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
       if (playState === 'idle') {
         const filteredMessages = await filterMessages([message])
         const mainContent = await getMainTextContent(filteredMessages[0])
-        Speech.speak(mainContent, { onDone: () => setPlayState('idle') })
+        const speechContent = markdownToPlainText(mainContent)
+        Speech.speak(speechContent, { onDone: () => setPlayState('idle') })
         setPlayState('playing')
       } else if (playState === 'playing') {
         Speech.stop()
