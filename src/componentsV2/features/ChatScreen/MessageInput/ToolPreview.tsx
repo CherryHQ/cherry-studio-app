@@ -19,7 +19,10 @@ interface ToolPreviewProps {
   updateAssistant: (assistant: Assistant) => Promise<void>
 }
 
-const TOOL_DEFINITIONS: Record<ToolKey, { icon: React.ComponentType<{ size: number; className: string }>; labelKey: string }> = {
+const TOOL_DEFINITIONS: Record<
+  ToolKey,
+  { icon: React.ComponentType<{ size: number; className: string }>; labelKey: string }
+> = {
   enableGenerateImage: {
     icon: Palette,
     labelKey: 'common.generateImage'
@@ -39,10 +42,7 @@ export const getEnabledToolKeys = (assistant: Assistant): ToolKey[] => {
     enabledTools.push('enableGenerateImage')
   }
 
-  if (
-    (enableWebSearch ?? false) &&
-    (isWebSearchModel(model) || (!!settings?.toolUseMode && !!webSearchProviderId))
-  ) {
+  if ((enableWebSearch ?? false) && (isWebSearchModel(model) || (!!settings?.toolUseMode && !!webSearchProviderId))) {
     enabledTools.push('enableWebSearch')
   }
 

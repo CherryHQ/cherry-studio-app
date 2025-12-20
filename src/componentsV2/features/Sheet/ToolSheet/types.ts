@@ -41,9 +41,7 @@ export interface ToolSheetError {
 /**
  * Result type for async operations
  */
-export type ToolOperationResult<T = void> =
-  | { success: true; data?: T }
-  | { success: false; error: ToolSheetError }
+export type ToolOperationResult<T = void> = { success: true; data?: T } | { success: false; error: ToolSheetError }
 
 /**
  * AI Feature type union

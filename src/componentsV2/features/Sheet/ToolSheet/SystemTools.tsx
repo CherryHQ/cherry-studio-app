@@ -16,12 +16,7 @@ interface SystemToolsProps {
   loadingState?: FileHandlerLoadingState
 }
 
-export const SystemTools: React.FC<SystemToolsProps> = ({
-  onCameraPress,
-  onImagePress,
-  onFilePress,
-  loadingState
-}) => {
+export const SystemTools: React.FC<SystemToolsProps> = ({ onCameraPress, onImagePress, onFilePress, loadingState }) => {
   const { t } = useTranslation()
 
   const options: (SystemToolConfig & { loadingKey?: keyof FileHandlerLoadingState })[] = [

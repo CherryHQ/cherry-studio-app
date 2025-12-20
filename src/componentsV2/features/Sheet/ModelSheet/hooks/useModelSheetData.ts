@@ -1,7 +1,7 @@
 import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { useEffect, useState } from 'react'
 
-import type { ModelSheetData } from './types'
+import type { ModelSheetData } from '../types'
 
 export const SHEET_NAME = 'global-model-sheet'
 

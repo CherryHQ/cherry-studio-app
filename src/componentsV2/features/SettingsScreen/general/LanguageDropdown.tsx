@@ -10,7 +10,7 @@ import { useBuiltInAssistants } from '@/hooks/useAssistant'
 import { storage } from '@/utils'
 
 export function LanguageDropdown() {
-  const { t, i18n } = useTranslation()
+  const { i18n } = useTranslation()
   const [currentLanguage, setCurrentLanguage] = useState<string>(storage.getString('language') || defaultLanguage)
   const { resetBuiltInAssistants } = useBuiltInAssistants()
 

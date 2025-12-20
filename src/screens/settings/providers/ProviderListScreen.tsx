@@ -37,9 +37,7 @@ export default function ProviderListScreen() {
   }
 
   const renderProviderItem = useCallback(
-    ({ item }: { item: Provider }) => (
-      <ProviderItem provider={item} mode={item.enabled ? 'enabled' : 'checked'} />
-    ),
+    ({ item }: { item: Provider }) => <ProviderItem provider={item} mode={item.enabled ? 'enabled' : 'checked'} />,
     []
   )
 

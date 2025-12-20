@@ -487,13 +487,13 @@ export class PreferenceService {
         .values({
           key,
           value: newValue as any,
-          updatedAt: sql`(datetime('now'))`
+          updated_at: sql`(datetime('now'))`
         })
         .onConflictDoUpdate({
           target: preferenceTable.key,
           set: {
             value: newValue as any,
-            updatedAt: sql`(datetime('now'))`
+            updated_at: sql`(datetime('now'))`
           }
         })
 

@@ -1,7 +1,7 @@
 import MaskedView from '@react-native-masked-view/masked-view'
 import { BlurView } from 'expo-blur'
 import { LinearGradient } from 'expo-linear-gradient'
-import type { FC } from 'react'
+import React, { type FC } from 'react'
 import { Platform, StyleSheet, View } from 'react-native'
 
 import { useTheme } from '@/hooks/useTheme'

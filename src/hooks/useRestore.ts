@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useDispatch } from 'react-redux'
 
 import { presentDialog } from '@/componentsV2'
-import type { RestoreStep } from '@/componentsV2/features/SettingsScreen/RestoreProgressModal'
+import type { RestoreStep } from '@/componentsV2/features/SettingsScreen/data/RestoreProgressModal'
 import { databaseMaintenance } from '@/database/DatabaseMaintenance'
 import { resetAppInitializationState, runAppDataMigrations } from '@/services/AppInitializationService'
 import type { ProgressUpdate, RestoreStepId, StepStatus } from '@/services/BackupService'
