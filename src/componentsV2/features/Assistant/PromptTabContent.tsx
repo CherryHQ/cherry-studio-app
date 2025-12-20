@@ -1,7 +1,7 @@
 import { MotiView } from 'moti'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Keyboard, Pressable, StyleSheet, View } from 'react-native'
+import { Keyboard, Pressable, View } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 
 import TextField from '@/componentsV2/base/TextField'
@@ -74,51 +74,42 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
           </TextField>
 
           <TextField className="flex-1 gap-2">
-            <TextField.Label className="text-foreground-secondary text-sm font-medium">
-              {t('common.prompt')}
-            </TextField.Label>
-            <View className="relative flex-1">
-              <Pressable
-                className="active:opacity-50"
-                style={styles.saveButton}
-                onPress={handleSaveButtonPress}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Save size={18} className="text-foreground/50" />
-              </Pressable>
-              <ExpandButton
-                style={{ top: 8, right: 8 }}
-                onPress={() => {
-                  presentExpandTextSheet(
-                    formData.prompt,
-                    prompt => setFormData(prev => ({ ...prev, prompt })),
-                    t('common.prompt')
-                  )
-                }}
-              />
-              <TextField.Input
-                className="flex-1 rounded-lg px-3 py-3 text-sm"
-                placeholder={t('common.prompt')}
-                multiline
-                numberOfLines={20}
-                textAlignVertical="top"
-                value={formData.prompt}
-                onChangeText={prompt => setFormData(prev => ({ ...prev, prompt }))}
-                onEndEditing={handleSave}
-              />
+            <View className="flex-row items-center justify-between">
+              <TextField.Label className="text-foreground-secondary text-sm font-medium">
+                {t('common.prompt')}
+              </TextField.Label>
+              <View className="flex-row items-center gap-1">
+                <Pressable
+                  className="active:opacity-50 p-1"
+                  onPress={handleSaveButtonPress}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Save size={18} className="text-foreground/50" />
+                </Pressable>
+                <ExpandButton
+                  style={{ position: 'relative', top: 0, right: 0 }}
+                  onPress={() => {
+                    presentExpandTextSheet(
+                      formData.prompt,
+                      prompt => setFormData(prev => ({ ...prev, prompt })),
+                      t('common.prompt')
+                    )
+                  }}
+                />
+              </View>
             </View>
+            <TextField.Input
+              className="flex-1 rounded-lg px-3 py-3 text-sm"
+              placeholder={t('common.prompt')}
+              multiline
+              numberOfLines={20}
+              textAlignVertical="top"
+              value={formData.prompt}
+              onChangeText={prompt => setFormData(prev => ({ ...prev, prompt }))}
+              onEndEditing={handleSave}
+            />
           </TextField>
         </YStack>
       </KeyboardAvoidingView>
     </MotiView>
   )
 }
-
-const styles = StyleSheet.create({
-  saveButton: {
-    position: 'absolute',
-    right: 36,
-    top: 8,
-    padding: 4,
-    zIndex: 10
-  }
-})
