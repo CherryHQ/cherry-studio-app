@@ -7,28 +7,17 @@ import TextField from '@/componentsV2/base/TextField'
 import type { PasteEventPayload } from '@/modules/text-input-wrapper'
 import { TextInputWrapper } from '@/modules/text-input-wrapper'
 
-import { ExpandButton } from './ExpandButton'
+import { useMessageInput } from '../context/MessageInputContext'
+import { ExpandButton } from '../ExpandButton'
 
 const LINE_HEIGHT = 20
 const MAX_VISIBLE_LINES = 4
 const MAX_INPUT_HEIGHT = 96
 
-interface MessageTextFieldProps {
-  text: string
-  setText: (text: string) => void
-  onExpand: () => void
-  onPasteImages?: (uris: string[]) => void
-  actionButton?: React.ReactNode
-}
-
-export const MessageTextField: React.FC<MessageTextFieldProps> = ({
-  text,
-  setText,
-  onExpand,
-  onPasteImages,
-  actionButton
-}) => {
+export const MessageTextField: React.FC = () => {
   const { t } = useTranslation()
+  const { text, setText, handleExpand, handlePasteImages } = useMessageInput()
+
   const [showExpandButton, setShowExpandButton] = useState(false)
   const [inputHeight, setInputHeight] = useState<number | undefined>(undefined)
 
@@ -40,8 +29,8 @@ export const MessageTextField: React.FC<MessageTextFieldProps> = ({
   }
 
   const handlePaste = (payload: PasteEventPayload) => {
-    if (payload.type === 'images' && onPasteImages) {
-      onPasteImages(payload.uris)
+    if (payload.type === 'images') {
+      handlePasteImages(payload.uris)
     }
     // Text paste is handled automatically by TextInput
   }
@@ -74,46 +63,40 @@ export const MessageTextField: React.FC<MessageTextFieldProps> = ({
         </TextField>
       </View>
       {/* visible input */}
-      <View className="flex-row">
-        {/* Text input area */}
-        <View style={{ flex: 1 }}>
-          <TextInputWrapper onPaste={handlePaste}>
-            <TextField className="w-full">
-              <TextField.Input
-                className="text-foreground h-auto pr-0"
-                placeholder={t('inputs.placeholder')}
-                value={text}
-                onChangeText={setText}
-                multiline
-                numberOfLines={10}
-                selectionColor="#2563eb"
-                style={{
-                  height: computedInputHeight,
-                  maxHeight: MAX_INPUT_HEIGHT,
-                  minHeight: 36,
-                  fontSize: 20,
-                  lineHeight: 26,
-                  paddingVertical: 6
-                }}
-                colors={{
-                  blurBackground: 'transparent',
-                  focusBackground: 'transparent',
-                  blurBorder: 'transparent',
-                  focusBorder: 'transparent'
-                }}
-              />
-            </TextField>
-          </TextInputWrapper>
-        </View>
-
-        {/* Right side buttons column */}
-        {actionButton && (
-          <View className="items-end justify-between p-2">
-            <View>{showExpandButton && <ExpandButton onPress={onExpand} />}</View>
-            <View>{actionButton}</View>
-          </View>
-        )}
+      <View style={{ flex: 1 }}>
+        <TextInputWrapper onPaste={handlePaste}>
+          <TextField className="w-full">
+            <TextField.Input
+              className="text-foreground h-auto pr-0"
+              placeholder={t('inputs.placeholder')}
+              value={text}
+              onChangeText={setText}
+              multiline
+              numberOfLines={10}
+              selectionColor="#2563eb"
+              style={{
+                height: computedInputHeight,
+                maxHeight: MAX_INPUT_HEIGHT,
+                minHeight: 36,
+                fontSize: 20,
+                lineHeight: 26,
+                paddingVertical: 6
+              }}
+              colors={{
+                blurBackground: 'transparent',
+                focusBackground: 'transparent',
+                blurBorder: 'transparent',
+                focusBorder: 'transparent'
+              }}
+            />
+          </TextField>
+        </TextInputWrapper>
       </View>
+      {showExpandButton && (
+        <View className="absolute right-2 top-2">
+          <ExpandButton onPress={handleExpand} />
+        </View>
+      )}
     </>
   )
 }
