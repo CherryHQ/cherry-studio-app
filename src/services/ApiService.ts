@@ -189,11 +189,16 @@ export async function fetchTopicNaming(topicId: string, regenerate: boolean = fa
   const streamProcessorCallbacks = createStreamProcessor(callbacks)
   const quickAssistant = await assistantService.getAssistant('quick')
 
-  if (!quickAssistant?.defaultModel) {
+  if (!quickAssistant) {
     return
   }
 
-  const provider = await getAssistantProvider(quickAssistant)
+  const quickAssistantModel = quickAssistant.defaultModel || getDefaultModel()
+  const assistantForProvider = quickAssistant.model ? quickAssistant : { ...quickAssistant, model: quickAssistantModel }
+  const assistantForRequest = quickAssistant.defaultModel
+    ? assistantForProvider
+    : { ...assistantForProvider, defaultModel: quickAssistantModel }
+  const provider = await getAssistantProvider(assistantForProvider)
 
   // 总结上下文总是取最后5条消息
   const contextMessages = takeRight(messages, 5)
@@ -216,19 +221,19 @@ export async function fetchTopicNaming(topicId: string, regenerate: boolean = fa
 
   const conversation = JSON.stringify(structuredMessages)
 
-  const AI = new AiProviderNew(quickAssistant.defaultModel || getDefaultModel(), provider)
+  const AI = new AiProviderNew(quickAssistantModel, provider)
 
   // 使用 system + prompt 格式，而非多条消息格式
   const aiSdkParams = {
     system: quickAssistant.prompt,
     prompt: conversation
   }
-  const modelId = quickAssistant.defaultModel?.id || getDefaultModel().id
+  const modelId = quickAssistantModel.id
 
   const middlewareConfig: AiSdkMiddlewareConfig = {
     streamOutput: false,
     onChunk: streamProcessorCallbacks,
-    model: quickAssistant.defaultModel,
+    model: quickAssistantModel,
     provider: provider,
     enableReasoning: false,
     isPromptToolUse: false,
@@ -245,7 +250,7 @@ export async function fetchTopicNaming(topicId: string, regenerate: boolean = fa
       (
         await AI.completions(modelId, aiSdkParams, {
           ...middlewareConfig,
-          assistant: quickAssistant,
+          assistant: assistantForRequest,
           topicId,
           callType: 'summary'
         })

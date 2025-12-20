@@ -708,6 +708,12 @@ export async function fetchTranslateThunk(assistantMessageId: string, message: M
     throw new Error('Translate assistant not found')
   }
 
+  const translateAssistantModel = translateAssistant.defaultModel || getDefaultModel()
+  const assistantForProvider = translateAssistant.model ? translateAssistant : { ...translateAssistant, model: translateAssistantModel }
+  const assistantForRequest = translateAssistant.defaultModel
+    ? assistantForProvider
+    : { ...assistantForProvider, defaultModel: translateAssistantModel }
+
   const newBlock = createTranslationBlock(assistantMessageId, '', {
     status: MessageBlockStatus.STREAMING
   })
@@ -727,7 +733,7 @@ export async function fetchTranslateThunk(assistantMessageId: string, message: M
     topicId: message.topicId,
     assistantMsgId: assistantMessageId,
     saveUpdatesToDB,
-    assistant: translateAssistant,
+    assistant: assistantForRequest,
     startTime
   })
 
@@ -775,24 +781,20 @@ export async function fetchTranslateThunk(assistantMessageId: string, message: M
 
   const streamProcessorCallbacks = createStreamProcessor(callbacks)
 
-  if (!translateAssistant.defaultModel) {
-    throw new Error('Translate assistant model is not defined')
-  }
-
-  const provider = await getAssistantProvider(translateAssistant)
+  const provider = await getAssistantProvider(assistantForProvider)
   message = {
     ...message,
     role: 'user'
   }
-  const llmMessages = await convertMessagesToSdkMessages([message], translateAssistant.defaultModel)
+  const llmMessages = await convertMessagesToSdkMessages([message], translateAssistantModel)
 
-  const AI = new ModernAiProvider(translateAssistant.defaultModel || getDefaultModel(), provider)
-  const { params: aiSdkParams, modelId } = await buildStreamTextParams(llmMessages, translateAssistant, provider)
+  const AI = new ModernAiProvider(translateAssistantModel, provider)
+  const { params: aiSdkParams, modelId } = await buildStreamTextParams(llmMessages, assistantForRequest, provider)
 
   const middlewareConfig: AiSdkMiddlewareConfig = {
     streamOutput: true,
     onChunk: streamProcessorCallbacks,
-    model: translateAssistant.defaultModel,
+    model: translateAssistantModel,
     provider: provider,
     enableReasoning: false,
     isPromptToolUse: false,
@@ -810,7 +812,7 @@ export async function fetchTranslateThunk(assistantMessageId: string, message: M
       (
         await AI.completions(modelId, aiSdkParams, {
           ...middlewareConfig,
-          assistant: translateAssistant,
+          assistant: assistantForRequest,
           topicId: message.topicId,
           callType: 'chat',
           uiMessages: [message]
