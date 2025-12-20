@@ -1,4 +1,5 @@
-import React, { useCallback, useState } from 'react'
+import { AnimatePresence, MotiView } from 'moti'
+import React, { useCallback, useMemo, useState } from 'react'
 import { Platform, View } from 'react-native'
 import { Image } from 'react-native-compressor'
 
@@ -14,9 +15,11 @@ import { uuid } from '@/utils'
 import { presentExpandInputSheet } from '../../Sheet/ExpandInputSheet'
 import { AccessoryActionsBar } from './components/AccessoryActionsBar'
 import { PreviewPanel } from './components/PreviewPanel'
-import { PrimaryActionSwitcher } from './components/PrimaryActionSwitcher'
 import { useMessageInputLogic } from './hooks/useMessageInputLogic'
+import { PauseButton } from './PauseButton'
+import { SendButton } from './SendButton'
 import { ToolButton } from './ToolButton'
+import { VoiceButton } from './VoiceButton'
 
 const logger = loggerService.withContext('MessageInput')
 
@@ -86,6 +89,43 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
     [setFiles]
   )
 
+  const shouldShowVoice = isVoiceActive || !text
+
+  const actionButton = useMemo(() => {
+    return (
+      <AnimatePresence exitBeforeEnter>
+        {topic.isLoading ? (
+          <MotiView
+            key="pause-button"
+            from={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ type: 'timing', duration: 200 }}>
+            <PauseButton onPause={onPause} />
+          </MotiView>
+        ) : shouldShowVoice ? (
+          <MotiView
+            key="voice-button"
+            from={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ type: 'timing', duration: 200 }}>
+            <VoiceButton onTranscript={setText} onListeningChange={setIsVoiceActive} />
+          </MotiView>
+        ) : (
+          <MotiView
+            key="send-button"
+            from={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ type: 'timing', duration: 200 }}>
+            <SendButton onSend={sendMessage} />
+          </MotiView>
+        )}
+      </AnimatePresence>
+    )
+  }, [topic.isLoading, shouldShowVoice, onPause, setText, sendMessage])
+
   return (
     <View
       className="px-3"
@@ -115,15 +155,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ topic, assistant, up
               onTextChange={setText}
               onExpand={handleExpand}
               onPasteImages={handlePasteImages}
-            />
-            <PrimaryActionSwitcher
-              isTopicLoading={Boolean(topic.isLoading)}
-              isVoiceActive={isVoiceActive}
-              hasText={Boolean(text)}
-              onPause={onPause}
-              onSend={sendMessage}
-              onTranscript={setText}
-              onVoiceActiveChange={setIsVoiceActive}
+              actionButton={actionButton}
             />
           </XStack>
         </View>

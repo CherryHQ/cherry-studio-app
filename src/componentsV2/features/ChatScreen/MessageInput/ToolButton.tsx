@@ -35,7 +35,7 @@ export const ToolButton: React.FC<AddAssetsButtonProps> = ({
   }
 
   return (
-    <LiquidGlassButton size={38} onPress={handlePress}>
+    <LiquidGlassButton size={40} onPress={handlePress}>
       <Plus size={24} />
     </LiquidGlassButton>
   )
