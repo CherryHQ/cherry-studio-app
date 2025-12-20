@@ -55,15 +55,21 @@ export function useAllProviders() {
       setIsLoading(true)
       const allProviders = await providerService.getAllProviders()
 
-      // Sort by: 1. enabled first, 2. has API key second
+      // Sort by: 1. enabled first, 2. has API key second, 3. user-added before system
       const sortedProviders = allProviders.sort((a, b) => {
+        // 1. Enabled providers first
         if (a.enabled !== b.enabled) {
           return a.enabled ? -1 : 1
         }
+        // 2. Providers with API key second
         const aHasKey = Boolean(a.apiKey?.trim())
         const bHasKey = Boolean(b.apiKey?.trim())
         if (aHasKey !== bHasKey) {
           return aHasKey ? -1 : 1
+        }
+        // 3. User-added providers before system providers
+        if (a.isSystem !== b.isSystem) {
+          return a.isSystem ? 1 : -1
         }
         return 0
       })
