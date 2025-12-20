@@ -98,19 +98,17 @@ export default class ModernAiProvider {
       throw new Error('Model is required for completions. Please use constructor with model parameter.')
     }
 
-    // 确保配置存在
-    this.config = providerToAiSdkConfig(this.actualProvider, this.model)
-    this.applyCustomFetchToConfig()
-    if (SUPPORTED_IMAGE_ENDPOINT_LIST.includes(this.config.options.endpoint)) {
+    // 配置已在构造函数中初始化
+    if (SUPPORTED_IMAGE_ENDPOINT_LIST.includes(this.config!.options.endpoint)) {
       providerConfig.isImageGenerationEndpoint = true
     }
 
     // 准备特殊配置
-    await prepareSpecialProviderConfig(this.actualProvider, this.config)
+    await prepareSpecialProviderConfig(this.actualProvider, this.config!)
 
     // 提前创建本地 provider 实例
     if (!this.localProvider) {
-      this.localProvider = await createAiSdkProvider(this.config)
+      this.localProvider = await createAiSdkProvider(this.config!)
     }
 
     // 提前构建中间件
