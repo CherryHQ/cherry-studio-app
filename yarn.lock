@@ -7192,12 +7192,12 @@ __metadata:
     react-dom: "npm:19.1.0"
     react-i18next: "npm:^15.4.1"
     react-native: "npm:0.81.4"
+    react-native-awesome-gallery: "npm:^0.4.3"
     react-native-code-highlighter: "npm:^1.3.0"
     react-native-compressor: "npm:^1.13.0"
     react-native-edge-to-edge: "npm:^1.7.0"
     react-native-fast-squircle: "npm:^1.0.11"
     react-native-gesture-handler: "npm:~2.28.0"
-    react-native-image-viewing: "npm:^0.2.2"
     react-native-ios-context-menu: "npm:3.2.1"
     react-native-ios-utilities: "npm:5.2.0"
     react-native-keyboard-controller: "npm:1.19.6"
@@ -16264,6 +16264,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"react-native-awesome-gallery@npm:^0.4.3":
+  version: 0.4.3
+  resolution: "react-native-awesome-gallery@npm:0.4.3"
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+    react-native-gesture-handler: ^2.0.0
+    react-native-reanimated: ^3.2.0
+  checksum: 10c0/97af87d099f88bd6f616588d26eebf4a01a00eca8a9fc601a877afac135f6faa3211f13b6f60fc7c82514a5891d312ff0a60b70f861fa08550e247a67e744999
+  languageName: node
+  linkType: hard
+
 "react-native-code-highlighter@npm:^1.3.0":
   version: 1.3.0
   resolution: "react-native-code-highlighter@npm:1.3.0"
@@ -16334,16 +16346,6 @@ __metadata:
     react: "*"
     react-native: "*"
   checksum: 10c0/4240c8eedca69eb36b5d3e375b71867251cf8b87a755ba7066b3f73cfdbc80574042dbd4ff821041fd1539c4cd90dbf7ee34586f5a0ea6cc38052375b3169f2e
-  languageName: node
-  linkType: hard
-
-"react-native-image-viewing@npm:^0.2.2":
-  version: 0.2.2
-  resolution: "react-native-image-viewing@npm:0.2.2"
-  peerDependencies:
-    react: ">=16.11.0"
-    react-native: ">=0.61.3"
-  checksum: 10c0/b2a089b17e99008fa7f14a3a3a6776c343437742f1e48bc7a2639c429112e85448f288f81bb926c0d68c0ac1789faad89c2338be89f2dbb0b39d8192fb790eb2
   languageName: node
   linkType: hard
 

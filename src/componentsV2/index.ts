@@ -29,6 +29,7 @@ export { default as ContextMenu, ContextMenuListProps, ContextMenuProps } from '
 export { DialogManager, dismissDialog, presentDialog } from './base/Dialog'
 export { ExternalLink } from './base/ExternalLink'
 export { IconButton } from './base/IconButton'
+export { default as ImageGalleryViewer, type ImageGalleryViewerProps } from './base/ImageGalleryViewer'
 export { default as ImageViewerFooterComponent } from './base/ImageViewerFooterComponent'
 export { SearchInput } from './base/SearchInput'
 export {

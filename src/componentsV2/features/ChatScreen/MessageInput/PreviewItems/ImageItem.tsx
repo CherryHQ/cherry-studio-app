@@ -3,10 +3,9 @@ import { useState } from 'react'
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
-import ImageView from 'react-native-image-viewing'
 
 import Image from '@/componentsV2/base/Image'
-import ImageViewerFooterComponent from '@/componentsV2/base/ImageViewerFooterComponent'
+import ImageGalleryViewer from '@/componentsV2/base/ImageGalleryViewer'
 import { Download, ImageOff } from '@/componentsV2/icons'
 import { useToast } from '@/hooks/useToast'
 import { saveImageToGallery } from '@/services/ImageService'
@@ -86,16 +85,11 @@ const ImageItem: FC<ImageItemProps> = ({ file, allImages = [], onRemove, size, d
           }
         ]}
       />
-      <ImageView
-        images={imagesForViewer.map(f => ({ uri: f.path }))}
-        imageIndex={imageIndex >= 0 ? imageIndex : 0}
+      <ImageGalleryViewer
+        images={imagesForViewer.map(f => f.path)}
+        initialIndex={imageIndex >= 0 ? imageIndex : 0}
         visible={visible}
-        onRequestClose={() => setIsVisible(false)}
-        presentationStyle="fullScreen"
-        animationType="slide"
-        FooterComponent={({ imageIndex: idx }: any) => (
-          <ImageViewerFooterComponent uri={(imagesForViewer[idx] || file).path} onSaved={() => setIsVisible(false)} />
-        )}
+        onClose={() => setIsVisible(false)}
       />
     </>
   )
