@@ -80,16 +80,12 @@ const MessageContextMenu: FC<MessageItemProps> = ({ children, message, assistant
       androidIcon: <TextSelect size={16} />,
       onSelect: handleSelectText
     },
-    ...(message.role === 'user'
-      ? [
-          {
-            title: t('common.edit'),
-            iOSIcon: 'pencil',
-            androidIcon: <PenLine size={16} />,
-            onSelect: handleEdit
-          }
-        ]
-      : []),
+    {
+      title: t('common.edit'),
+      iOSIcon: 'pencil',
+      androidIcon: <PenLine size={16} />,
+      onSelect: handleEdit
+    },
     ...(message.role === 'assistant'
       ? [
           {

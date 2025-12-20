@@ -8,8 +8,9 @@ import Share from 'react-native-share'
 import { useDispatch } from 'react-redux'
 
 import { presentDialog } from '@/componentsV2'
+import { dismissTextEditSheet, presentTextEditSheet } from '@/componentsV2/features/Sheet/TextEditSheet'
 import { loggerService } from '@/services/LoggerService'
-import { deleteMessageById, fetchTranslateThunk, regenerateAssistantMessage } from '@/services/MessagesService'
+import { deleteMessageById, editAssistantMessage, fetchTranslateThunk, regenerateAssistantMessage } from '@/services/MessagesService'
 import { setEditingMessage } from '@/store/runtime'
 import type { Assistant } from '@/types/assistant'
 import type { Message } from '@/types/message'
@@ -243,12 +244,27 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
     }
   }
 
-  const handleEdit = () => {
-    if (message.role !== 'user') {
-      logger.warn('Cannot edit non-user messages')
+  const handleEdit = async () => {
+    if (message.role === 'system') {
+      logger.warn('Cannot edit system messages')
       return
     }
-    dispatch(setEditingMessage(message))
+
+    if (message.role === 'assistant') {
+      // Assistant messages: use sheet for editing
+      try {
+        const content = await getMainTextContent(message)
+        presentTextEditSheet(content, async (newContent: string) => {
+          await editAssistantMessage(message.id, newContent)
+          dismissTextEditSheet()
+        })
+      } catch (error) {
+        logger.error('Error opening edit sheet:', error)
+      }
+    } else {
+      // User messages: use existing input box editing
+      dispatch(setEditingMessage(message))
+    }
   }
 
   return {

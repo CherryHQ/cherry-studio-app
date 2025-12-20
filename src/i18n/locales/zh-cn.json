@@ -262,22 +262,7 @@
       "usage": "使用情况",
       "user_message_not_found": "无法找到原始用户消息",
       "value": "值",
-      "values": "值",
-      "permission": {
-        "camera_denied": "相机权限被拒绝，请在设置中启用",
-        "media_library_denied": "相册权限被拒绝，请在设置中启用"
-      },
-      "upload": {
-        "failed": "文件上传失败，请重试"
-      },
-      "ai_feature": {
-        "update_failed": "AI 功能更新失败，请重试",
-        "not_available": "AI 功能不可用"
-      },
-      "camera": {
-        "file_not_found": "照片文件未找到",
-        "failed": "拍照失败，请重试"
-      }
+      "values": "值"
     },
     "errors": {
       "cannotOpenLink": "无法打开链接: {{error}}",
@@ -417,6 +402,7 @@
       "delete_topic": "删除话题",
       "delete_topic_confirmation": "您确定要删除这个话题吗？",
       "delete_translation": "删除翻译",
+      "edit_reply": "编辑回复",
       "editing_message": "编辑",
       "marked_as_best_answer": "已标记为最佳回复",
       "searching": "正在搜索...",

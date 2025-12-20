@@ -262,22 +262,7 @@
       "usage": "Usage",
       "user_message_not_found": "Unable to locate the original user message",
       "value": "Value",
-      "values": "Values",
-      "permission": {
-        "camera_denied": "Camera permission denied. Please enable it in Settings.",
-        "media_library_denied": "Photo library permission denied. Please enable it in Settings."
-      },
-      "upload": {
-        "failed": "Failed to upload file. Please try again."
-      },
-      "ai_feature": {
-        "update_failed": "Failed to update AI feature. Please try again.",
-        "not_available": "AI feature is not available."
-      },
-      "camera": {
-        "file_not_found": "Photo file not found.",
-        "failed": "Failed to take photo. Please try again."
-      }
+      "values": "Values"
     },
     "errors": {
       "cannotOpenLink": "Cannot open link: {{error}}",
@@ -417,6 +402,7 @@
       "delete_topic": "Delete Topic",
       "delete_topic_confirmation": "Are you sure you want to delete this topic?",
       "delete_translation": "Remove Translation",
+      "edit_reply": "Edit Reply",
       "editing_message": "[to be translated]:编辑",
       "marked_as_best_answer": "Marked as best answer",
       "searching": "Searching...",

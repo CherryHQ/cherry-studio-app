@@ -337,6 +337,70 @@ export async function editUserMessageAndRegenerate(
   }
 }
 
+/**
+ * Edit an assistant message content without triggering regeneration.
+ * Updates only the MAIN_TEXT blocks, preserving other block types.
+ */
+export async function editAssistantMessage(assistantMessageId: string, newContent: string): Promise<void> {
+  try {
+    // 1. Get and validate assistant message
+    const assistantMessage = await messageDatabase.getMessageById(assistantMessageId)
+    if (!assistantMessage || assistantMessage.role !== 'assistant') {
+      logger.error(`[editAssistantMessage] Invalid assistant message: ${assistantMessageId}`)
+      throw new Error('Invalid assistant message')
+    }
+
+    // 2. Find all MAIN_TEXT blocks
+    const mainTextBlocks = await findMainTextBlocks(assistantMessage)
+
+    if (mainTextBlocks.length > 0) {
+      // Update the first MAIN_TEXT block with new content
+      const firstBlock = mainTextBlocks[0]
+      await messageBlockDatabase.updateOneBlock({
+        id: firstBlock.id,
+        changes: {
+          content: newContent,
+          status: MessageBlockStatus.SUCCESS,
+          updatedAt: Date.now()
+        }
+      })
+
+      // Remove additional MAIN_TEXT blocks if any
+      if (mainTextBlocks.length > 1) {
+        const additionalBlockIds = mainTextBlocks.slice(1).map(b => b.id)
+        await cleanupMultipleBlocks(additionalBlockIds)
+
+        // Update message blocks array to remove deleted blocks
+        const updatedBlockIds = assistantMessage.blocks.filter(id => !additionalBlockIds.includes(id))
+        await messageDatabase.updateMessageById(assistantMessageId, {
+          blocks: updatedBlockIds,
+          updatedAt: Date.now()
+        })
+      } else {
+        // Just update timestamp
+        await messageDatabase.updateMessageById(assistantMessageId, {
+          updatedAt: Date.now()
+        })
+      }
+    } else {
+      // No MAIN_TEXT block exists - create one
+      const newTextBlock = createMainTextBlock(assistantMessageId, newContent, {
+        status: MessageBlockStatus.SUCCESS
+      })
+      await messageBlockDatabase.upsertBlocks([newTextBlock])
+      await messageDatabase.updateMessageById(assistantMessageId, {
+        blocks: [...assistantMessage.blocks, newTextBlock.id],
+        updatedAt: Date.now()
+      })
+    }
+
+    logger.info(`Assistant message ${assistantMessageId} edited successfully`)
+  } catch (error) {
+    logger.error('Error in editAssistantMessage:', error)
+    throw error
+  }
+}
+
 const BLOCK_UPDATE_BATCH_INTERVAL = 180
 type BlockUpdatePayload = Partial<MessageBlock>
 
