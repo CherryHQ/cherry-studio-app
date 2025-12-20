@@ -37,7 +37,10 @@ export const AssistantSelection: React.FC<AssistantSelectionProps> = ({ assistan
             </Text>
             <ChevronRight className="text-foreground-secondary" size={20} />
           </XStack>
-          <Text className="text-[11px] text-zinc-400/60" ellipsizeMode="tail" numberOfLines={1}>
+          <Text
+            className="max-w-[40vw] text-center text-[11px] text-zinc-400/60"
+            ellipsizeMode="tail"
+            numberOfLines={1}>
             {topic.name}
           </Text>
         </YStack>
