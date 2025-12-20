@@ -10,6 +10,7 @@ import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import Text from '@/componentsV2/base/Text'
 import EmojiAvatar from '@/componentsV2/features/Assistant/EmojiAvatar'
 import { ExportOptionsContent } from '@/componentsV2/features/TopicItem/ExportOptionsContent'
+import { RenameTopicContent } from '@/componentsV2/features/TopicItem/RenameTopicContent'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useAssistant } from '@/hooks/useAssistant'
@@ -141,9 +142,10 @@ export const TopicItem: FC<TopicItemProps> = ({
   }
 
   const handleRename = () => {
+    tempNameRef.current = topic.name
     presentDialog('info', {
       title: t('topics.rename.title'),
-      content: topic.name,
+      content: <RenameTopicContent defaultValue={topic.name} nameRef={tempNameRef} />,
       confirmText: t('common.save'),
       cancelText: t('common.cancel'),
       showCancel: true,
