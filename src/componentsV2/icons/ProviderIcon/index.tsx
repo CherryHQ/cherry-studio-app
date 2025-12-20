@@ -4,7 +4,6 @@ import React, { useCallback, useState } from 'react'
 import type { ImageRequireSource } from 'react-native'
 
 import Image from '@/componentsV2/base/Image'
-import YStack from '@/componentsV2/layout/YStack'
 import { DEFAULT_ICONS_STORAGE } from '@/constants/storage'
 import { useTheme } from '@/hooks/useTheme'
 import type { Provider } from '@/types/assistant'
@@ -52,7 +51,7 @@ export const ProviderIcon: React.FC<ProviderIconProps> = ({ provider, size, clas
   const finalClassName = className ? `${sizeClass} ${className}` : sizeClass
 
   if (!iconUri) {
-    return <YStack className={finalClassName} style={size ? { width: size, height: size } : undefined} />
+    return null
   }
 
   return (
