@@ -33,7 +33,7 @@ export default function ProviderListScreen() {
   const providersList = filteredProviders.filter(p => p.id !== 'cherryai')
 
   const onAddProvider = () => {
-    navigation.navigate('AddProviderScreen', { mode: 'add' })
+    navigation.navigate('AddProviderScreen')
   }
 
   const renderProviderItem = useCallback(
