@@ -9,6 +9,7 @@ import { Container, HeaderBar, IconButton, Image, SafeAreaContainer, Text, XStac
 import { presentModelSheet } from '@/componentsV2/features/Sheet/ModelSheet'
 import { ChevronDown, Languages, MessageSquareMore, Rocket, Settings2 } from '@/componentsV2/icons/LucideIcon'
 import { useAssistant } from '@/hooks/useAssistant'
+import { useProvider } from '@/hooks/useProviders'
 import { useTheme } from '@/hooks/useTheme'
 import type { AssistantSettingsStackParamList } from '@/navigators/settings/AssistantSettingsStackNavigator'
 import type { Assistant, Model } from '@/types/assistant'
@@ -19,27 +20,32 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
   const { t } = useTranslation()
   const { isDark } = useTheme()
   const model = assistant?.defaultModel
+  const providerId = model?.provider ?? ''
+  const { provider } = useProvider(providerId)
+  const providerDisplayName = providerId
+    ? t(`provider.${providerId}`, { defaultValue: provider?.name ?? providerId })
+    : (provider?.name ?? providerId)
 
   return (
     <Button
       feedbackVariant="ripple"
       variant="ghost"
-      className="bg-card   w-full justify-between rounded-2xl px-3"
+      className="bg-card  w-full justify-between rounded-2xl px-3"
       onPress={onPress}>
-      <Button.Label>
-        <XStack className="flex-1 items-center gap-2 overflow-hidden">
+      <Button.Label className="min-w-0 flex-1">
+        <XStack className="min-w-0 flex-1 items-center gap-2 overflow-hidden">
           {model ? (
             <>
               <Image
                 className="h-[18px] w-[18px] rounded-full"
                 source={getModelOrProviderIcon(model.id, model.provider, isDark)}
               />
-              <Text numberOfLines={1} className="max-w-[60%] shrink-0 font-medium">
+              <Text numberOfLines={1} ellipsizeMode="tail" className="min-w-0 max-w-[55%] flex-1 font-medium">
                 {getBaseModelName(model.name)}
               </Text>
               <Text className="font-semibold opacity-45">|</Text>
-              <Text numberOfLines={1} className="shrink font-semibold opacity-45">
-                {t(`provider.${model.provider}`)}
+              <Text numberOfLines={1} ellipsizeMode="tail" className="min-w-0 flex-1 font-semibold opacity-45">
+                {providerDisplayName}
               </Text>
             </>
           ) : (
