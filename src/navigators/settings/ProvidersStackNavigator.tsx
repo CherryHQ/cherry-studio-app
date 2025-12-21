@@ -12,7 +12,7 @@ export type ProvidersStackParamList = {
   ProviderListScreen: undefined
   ManageModelsScreen: { providerId: string; providerName: string }
   ApiServiceScreen: { providerId: string }
-  AddProviderScreen: { mode: 'add' | 'edit'; providerId?: string } | undefined
+  AddProviderScreen: undefined
 }
 
 const Stack = createStackNavigator<ProvidersStackParamList>()

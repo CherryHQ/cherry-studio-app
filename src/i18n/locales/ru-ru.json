@@ -406,6 +406,7 @@
       "delete_topic": "Удалить тему",
       "delete_topic_confirmation": "Вы уверены, что хотите удалить эту тему?",
       "delete_translation": "Удалить перевод",
+      "edit_reply": "Редактировать ответ",
       "editing_message": "[to be translated]:编辑",
       "marked_as_best_answer": "Отмечено как лучший ответ",
       "searching": "Поиск...",

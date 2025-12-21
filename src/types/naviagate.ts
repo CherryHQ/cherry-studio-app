@@ -1,5 +1,5 @@
 import type { DrawerNavigationProp } from '@react-navigation/drawer'
-import type { NavigatorScreenParams, RouteProp } from '@react-navigation/native'
+import type { NavigatorScreenParams } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 
 import type { AssistantMarketStackParamList } from '@/navigators/AssistantMarketStackNavigator'
@@ -73,9 +73,3 @@ export type AboutNavigationProps = StackNavigationProp<AboutStackParamList>
 
 // Legacy compatibility
 export type NavigationProps = RootNavigationProps
-
-type LanTransferRouteParamList = {
-  LanTransferScreen: { redirectToHome?: boolean } | undefined
-}
-
-export type LanTransferRouteProp = RouteProp<LanTransferRouteParamList, 'LanTransferScreen'>

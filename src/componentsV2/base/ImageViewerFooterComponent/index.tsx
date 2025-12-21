@@ -53,10 +53,10 @@ const ImageViewerFooterComponent: React.FC<ImageViewerFooterComponentProps> = ({
   }
 
   return (
-    <View className="p-safe w-full items-center">
+    <View className="p-safe-offset-6 w-full items-center">
       <TouchableOpacity activeOpacity={0.8} onPress={handleSave} className="flex-row items-center gap-2">
-        <Download size={18} />
-        <Text className="text-lg">{t('button.save_image')}</Text>
+        <Download size={18} color="white" />
+        <Text className="text-lg text-white">{t('button.save_image')}</Text>
       </TouchableOpacity>
     </View>
   )

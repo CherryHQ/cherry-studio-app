@@ -6524,15 +6524,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react-native-zeroconf@npm:^0":
-  version: 0.13.1
-  resolution: "@types/react-native-zeroconf@npm:0.13.1"
-  dependencies:
-    "@types/node": "npm:*"
-  checksum: 10c0/3e04750e1b79c9dec81f409c0b52acf0ea1779910685006d51b1aab321c5546f03bb84230e9b5ffed4813e06458a09b724553ff373b6cb6003c0f1204a73f3ec
-  languageName: node
-  linkType: hard
-
 "@types/react-syntax-highlighter@npm:^15.5.13":
   version: 15.5.13
   resolution: "@types/react-syntax-highlighter@npm:15.5.13"
@@ -7116,7 +7107,6 @@ __metadata:
     "@types/lodash": "npm:^4.17.17"
     "@types/qrcode": "npm:^1.5.5"
     "@types/react": "npm:~19.1.10"
-    "@types/react-native-zeroconf": "npm:^0"
     "@types/react-syntax-highlighter": "npm:^15.5.13"
     "@types/react-test-renderer": "npm:~19.0.0"
     "@types/turndown": "npm:^5.0.5"
@@ -7202,12 +7192,12 @@ __metadata:
     react-dom: "npm:19.1.0"
     react-i18next: "npm:^15.4.1"
     react-native: "npm:0.81.4"
+    react-native-awesome-gallery: "npm:^0.4.3"
     react-native-code-highlighter: "npm:^1.3.0"
     react-native-compressor: "npm:^1.13.0"
     react-native-edge-to-edge: "npm:^1.7.0"
     react-native-fast-squircle: "npm:^1.0.11"
     react-native-gesture-handler: "npm:~2.28.0"
-    react-native-image-viewing: "npm:^0.2.2"
     react-native-ios-context-menu: "npm:3.2.1"
     react-native-ios-utilities: "npm:5.2.0"
     react-native-keyboard-controller: "npm:1.19.6"
@@ -7222,11 +7212,9 @@ __metadata:
     react-native-share: "npm:^12.2.0"
     react-native-sse: "npm:^1.2.1"
     react-native-svg: "npm:15.12.1"
-    react-native-tcp-socket: "npm:^6.3.0"
     react-native-web: "npm:^0.21.0"
     react-native-webview: "npm:13.15.0"
     react-native-worklets: "npm:^0.5.1"
-    react-native-zeroconf: "npm:^0.13.8"
     react-native-zip-archive: "npm:^7.0.2"
     react-redux: "npm:^9.2.0"
     react-syntax-highlighter: "npm:^15.6.1"
@@ -10298,24 +10286,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eventemitter3@npm:^4.0.7":
-  version: 4.0.7
-  resolution: "eventemitter3@npm:4.0.7"
-  checksum: 10c0/5f6d97cbcbac47be798e6355e3a7639a84ee1f7d9b199a07017f1d2f1e2fe236004d14fa5dfaeba661f94ea57805385e326236a6debbc7145c8877fbc0297c6b
-  languageName: node
-  linkType: hard
-
 "eventemitter3@npm:^5.0.1":
   version: 5.0.1
   resolution: "eventemitter3@npm:5.0.1"
   checksum: 10c0/4ba5c00c506e6c786b4d6262cfbce90ddc14c10d4667e5c83ae993c9de88aa856033994dd2b35b83e8dc1170e224e66a319fa80adc4c32adcd2379bbc75da814
-  languageName: node
-  linkType: hard
-
-"events@npm:^3.0.0":
-  version: 3.3.0
-  resolution: "events@npm:3.3.0"
-  checksum: 10c0/d6b6f2adbccbcda74ddbab52ed07db727ef52e31a61ed26db9feb7dc62af7fc8e060defa65e5f8af9449b86b52cc1a1f6a79f2eafcf4e62add2b7a1fa4a432f6
   languageName: node
   linkType: hard
 
@@ -16290,6 +16264,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"react-native-awesome-gallery@npm:^0.4.3":
+  version: 0.4.3
+  resolution: "react-native-awesome-gallery@npm:0.4.3"
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+    react-native-gesture-handler: ^2.0.0
+    react-native-reanimated: ^3.2.0
+  checksum: 10c0/97af87d099f88bd6f616588d26eebf4a01a00eca8a9fc601a877afac135f6faa3211f13b6f60fc7c82514a5891d312ff0a60b70f861fa08550e247a67e744999
+  languageName: node
+  linkType: hard
+
 "react-native-code-highlighter@npm:^1.3.0":
   version: 1.3.0
   resolution: "react-native-code-highlighter@npm:1.3.0"
@@ -16360,16 +16346,6 @@ __metadata:
     react: "*"
     react-native: "*"
   checksum: 10c0/4240c8eedca69eb36b5d3e375b71867251cf8b87a755ba7066b3f73cfdbc80574042dbd4ff821041fd1539c4cd90dbf7ee34586f5a0ea6cc38052375b3169f2e
-  languageName: node
-  linkType: hard
-
-"react-native-image-viewing@npm:^0.2.2":
-  version: 0.2.2
-  resolution: "react-native-image-viewing@npm:0.2.2"
-  peerDependencies:
-    react: ">=16.11.0"
-    react-native: ">=0.61.3"
-  checksum: 10c0/b2a089b17e99008fa7f14a3a3a6776c343437742f1e48bc7a2639c429112e85448f288f81bb926c0d68c0ac1789faad89c2338be89f2dbb0b39d8192fb790eb2
   languageName: node
   linkType: hard
 
@@ -16569,18 +16545,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-tcp-socket@npm:^6.3.0":
-  version: 6.3.0
-  resolution: "react-native-tcp-socket@npm:6.3.0"
-  dependencies:
-    buffer: "npm:^5.4.3"
-    eventemitter3: "npm:^4.0.7"
-  peerDependencies:
-    react-native: ">=0.60.0"
-  checksum: 10c0/b1d753b215888a6a3ff15ac55f9c3edfa9b6c6b455e7274135064a8797aef2fee7b653d388c36338a54de90ebda4508656d785e27aa82bcc122b0e8801f62919
-  languageName: node
-  linkType: hard
-
 "react-native-web@npm:^0.21.0":
   version: 0.21.1
   resolution: "react-native-web@npm:0.21.1"
@@ -16633,17 +16597,6 @@ __metadata:
     react: "*"
     react-native: "*"
   checksum: 10c0/9eb9e6dea9abaf889400a6618355ef59af3075f5004a4bec9e4cba6dcfd13d8b63de0d4b29d75c00a3dcf5ad422e1bdb71636c75b1a2ad1c43d8b512f198bdab
-  languageName: node
-  linkType: hard
-
-"react-native-zeroconf@npm:^0.13.8":
-  version: 0.13.8
-  resolution: "react-native-zeroconf@npm:0.13.8"
-  dependencies:
-    events: "npm:^3.0.0"
-  peerDependencies:
-    react-native: ">=0.60"
-  checksum: 10c0/bd765eed3cbbd23967a761ca2ae7af8a004b2f942ff0d87078fb11fb97f9eb734cedd968ee85c3fbdffc0ea0f11666166852308ae861e24ee355361430caa5d6
   languageName: node
   linkType: hard
 

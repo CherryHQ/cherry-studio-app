@@ -38,7 +38,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   }
 
   return (
-    <XStack className="h-[44px] items-center justify-between px-4">
+    <XStack className="relative h-[44px] items-center justify-between px-4">
       {/* Left area */}
       <XStack className="min-w-[40px] items-center">
         {leftButton ? (
@@ -54,11 +54,6 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         )}
       </XStack>
 
-      {/* Title */}
-      <XStack className="flex-1 items-center justify-center">
-        <Text className="text-center text-[18px] font-bold">{title}</Text>
-      </XStack>
-
       {/* Right area */}
       <XStack className="min-w-[40px] items-center justify-end">
         {buttonsToRender.length > 0 ? (
@@ -72,6 +67,11 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         ) : (
           <XStack className="w-[40px]" />
         )}
+      </XStack>
+
+      {/* Title - centered absolutely */}
+      <XStack className="absolute inset-y-0 left-4 right-4 items-center justify-center" pointerEvents="none">
+        <Text className="text-center text-[18px] font-bold">{title}</Text>
       </XStack>
     </XStack>
   )

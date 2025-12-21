@@ -10,7 +10,7 @@ interface SendButtonProps {
 export const SendButton: React.FC<SendButtonProps> = ({ onSend }) => {
   return (
     <IconButton
-      icon={<ArrowUp size={24} />}
+      icon={<ArrowUp size={22} />}
       onPress={onSend}
       style={{
         borderRadius: 99,

@@ -406,6 +406,7 @@
       "delete_topic": "删除话题",
       "delete_topic_confirmation": "您确定要删除这个话题吗？",
       "delete_translation": "删除翻译",
+      "edit_reply": "编辑回复",
       "editing_message": "编辑",
       "marked_as_best_answer": "已标记为最佳回复",
       "searching": "正在搜索...",

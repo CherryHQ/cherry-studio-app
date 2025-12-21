@@ -16,7 +16,8 @@ module.exports = function (api) {
         'module-resolver',
         {
           alias: {
-            '@db': './db'
+            '@db': './db',
+            '@/modules': './modules'
           }
         }
       ],

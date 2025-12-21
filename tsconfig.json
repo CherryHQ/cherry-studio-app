@@ -11,7 +11,8 @@
       "@db/*": ["../db/*"],
       "@db": ["../db/index"],
       "@database/*": ["./database/*"],
-      "@database": ["./database/index"]
+      "@database": ["./database/index"],
+      "@/modules/*": ["../modules/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "nativewind-env.d.ts"]

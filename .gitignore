@@ -49,9 +49,9 @@ yarn-error.*
 
 app-example
 
-# build
-android
-ios
+# build (root level only, not modules/)
+/android
+/ios
 *.ipa
 *.apk
 

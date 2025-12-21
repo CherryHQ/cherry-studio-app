@@ -152,25 +152,7 @@ export abstract class BaseApiClient<
 
   public getApiKey() {
     const keys = this.provider.apiKey.split(',').map(key => key.trim())
-    const keyName = `provider:${this.provider.id}:last_used_key`
-
-    if (keys.length === 1) {
-      return keys[0]
-    }
-
-    const lastUsedKey = storage.getString(keyName)
-
-    if (!lastUsedKey) {
-      storage.set(keyName, keys[0])
-      return keys[0]
-    }
-
-    const currentIndex = keys.indexOf(lastUsedKey)
-    const nextIndex = (currentIndex + 1) % keys.length
-    const nextKey = keys[nextIndex]
-    storage.set(keyName, nextKey)
-
-    return nextKey
+    return keys[0]
   }
 
   public defaultHeaders() {

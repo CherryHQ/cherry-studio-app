@@ -14,7 +14,7 @@ import {
   XStack,
   YStack
 } from '@/componentsV2'
-import { FolderSearch2, Wifi } from '@/componentsV2/icons/LucideIcon'
+import { FolderSearch2 } from '@/componentsV2/icons/LucideIcon'
 import type { NavigationProps } from '@/types/naviagate'
 
 interface SettingItemConfig {
@@ -40,11 +40,6 @@ export default function DataSettingsScreen() {
           title: t('settings.data.basic_title'),
           screen: 'BasicDataSettingsScreen',
           icon: <FolderSearch2 size={24} />
-        },
-        {
-          title: t('settings.data.lan_transfer.title'),
-          icon: <Wifi size={24} />,
-          screen: 'LanTransferScreen'
         }
       ]
     }

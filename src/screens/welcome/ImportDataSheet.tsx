@@ -1,17 +1,15 @@
 import { TrueSheet } from '@lodev09/react-native-true-sheet'
-import { useNavigation } from '@react-navigation/native'
 import * as DocumentPicker from 'expo-document-picker'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Platform, View } from 'react-native'
 
 import { Group, PressableRow, RestoreProgressModal, Text, XStack } from '@/componentsV2'
-import { Folder, Wifi } from '@/componentsV2/icons'
+import { Folder } from '@/componentsV2/icons'
 import { useBottom } from '@/hooks/useBottom'
 import { DEFAULT_RESTORE_STEPS, useRestore } from '@/hooks/useRestore'
 import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
-import type { WelcomeNavigationProps } from '@/types/naviagate'
 import { isIOS26 } from '@/utils/device'
 
 const logger = loggerService.withContext('ImportDataSheet')
@@ -43,7 +41,6 @@ export const ImportDataSheet: React.FC = () => {
   const { t } = useTranslation()
   const bottom = useBottom()
   const { isDark } = useTheme()
-  const navigation = useNavigation<WelcomeNavigationProps>()
   const [isVisible, setIsVisible] = useState(false)
   const { isModalOpen, restoreSteps, overallStatus, startRestore, closeModal } = useRestore({
     stepConfigs: DEFAULT_RESTORE_STEPS,
@@ -93,11 +90,6 @@ export const ImportDataSheet: React.FC = () => {
     handleStart()
   }
 
-  const handleLanTransfer = () => {
-    dismissImportDataSheet()
-    navigation.navigate('LanTransferScreen', { redirectToHome: true })
-  }
-
   return (
     <>
       <TrueSheet
@@ -116,12 +108,6 @@ export const ImportDataSheet: React.FC = () => {
               <XStack className="items-center gap-3">
                 <Folder size={24} />
                 <Text>{t('settings.data.restore.title')}</Text>
-              </XStack>
-            </PressableRow>
-            <PressableRow onPress={handleLanTransfer}>
-              <XStack className="items-center gap-3">
-                <Wifi size={24} />
-                <Text>{t('settings.data.lan_transfer.title')}</Text>
               </XStack>
             </PressableRow>
           </Group>

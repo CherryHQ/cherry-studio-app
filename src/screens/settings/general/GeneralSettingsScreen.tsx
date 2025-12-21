@@ -3,8 +3,8 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Container, Group, GroupTitle, HeaderBar, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
-import { LanguageDropdown } from '@/componentsV2/features/SettingsScreen/LanguageDropdown'
-import { ThemeDropdown } from '@/componentsV2/features/SettingsScreen/ThemeDropdown'
+import { LanguageDropdown } from '@/componentsV2/features/SettingsScreen/general/LanguageDropdown'
+import { ThemeDropdown } from '@/componentsV2/features/SettingsScreen/general/ThemeDropdown'
 import { usePreference } from '@/hooks/usePreference'
 
 export default function GeneralSettingsScreen() {

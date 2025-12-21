@@ -1,10 +1,9 @@
 import type { FC } from 'react'
-import React, { memo, useEffect, useState } from 'react'
+import React, { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ContextMenuListProps } from '@/componentsV2'
 import { ContextMenu } from '@/componentsV2'
-import { presentTextSelectionSheet } from '@/componentsV2/features/Sheet/TextSelectionSheet'
 import { TranslatedIcon, TranslationIcon } from '@/componentsV2/icons'
 import {
   AudioLines,
@@ -30,7 +29,6 @@ interface MessageItemProps {
 
 const MessageContextMenu: FC<MessageItemProps> = ({ children, message, assistant, isMultiModel = false }) => {
   const { t } = useTranslation()
-  const [messageContent, setMessageContent] = useState('')
 
   const {
     playState,
@@ -41,18 +39,12 @@ const MessageContextMenu: FC<MessageItemProps> = ({ children, message, assistant
     handlePlay,
     handleTranslate,
     handleDeleteTranslation,
-    getMessageContent,
     handleBestAnswer,
     isUseful,
     handleShare,
-    handleEdit
+    handleEdit,
+    handleSelectText
   } = useMessageActions({ message, assistant })
-
-  const handleSelectText = () => {
-    requestAnimationFrame(() => {
-      presentTextSelectionSheet(messageContent)
-    })
-  }
 
   const getAudioIcon = () => {
     switch (playState) {
@@ -62,10 +54,6 @@ const MessageContextMenu: FC<MessageItemProps> = ({ children, message, assistant
         return <AudioLines size={16} />
     }
   }
-
-  useEffect(() => {
-    getMessageContent().then(setMessageContent)
-  }, [message, getMessageContent])
 
   const contextMenuItems: ContextMenuListProps[] = [
     {
@@ -80,16 +68,12 @@ const MessageContextMenu: FC<MessageItemProps> = ({ children, message, assistant
       androidIcon: <TextSelect size={16} />,
       onSelect: handleSelectText
     },
-    ...(message.role === 'user'
-      ? [
-          {
-            title: t('common.edit'),
-            iOSIcon: 'pencil',
-            androidIcon: <PenLine size={16} />,
-            onSelect: handleEdit
-          }
-        ]
-      : []),
+    {
+      title: t('common.edit'),
+      iOSIcon: 'pencil',
+      androidIcon: <PenLine size={16} />,
+      onSelect: handleEdit
+    },
     ...(message.role === 'assistant'
       ? [
           {

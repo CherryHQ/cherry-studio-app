@@ -5,7 +5,7 @@ import { isEmpty, takeRight } from 'lodash'
 import LegacyAiProvider from '@/aiCore'
 import type { CompletionsParams } from '@/aiCore/legacy/middleware/schemas'
 import type { AiSdkMiddlewareConfig } from '@/aiCore/middleware/AiSdkMiddlewareBuilder'
-import { buildStreamTextParams, convertMessagesToSdkMessages } from '@/aiCore/prepareParams'
+import { buildStreamTextParams } from '@/aiCore/prepareParams'
 import { isDedicatedImageGenerationModel, isEmbeddingModel } from '@/config/models'
 import i18n from '@/i18n'
 import { loggerService } from '@/services/LoggerService'
@@ -15,7 +15,7 @@ import type { MCPServer } from '@/types/mcp'
 import type { SdkModel } from '@/types/sdk'
 import type { MCPTool } from '@/types/tool'
 import { isPromptToolUse, isSupportedToolUse } from '@/utils/mcpTool'
-import { filterMainTextMessages } from '@/utils/messageUtils/filters'
+import { findFileBlocks, getMainTextContent } from '@/utils/messageUtils/find'
 import { hasApiKey } from '@/utils/providerUtils'
 
 import AiProviderNew from '../aiCore/index_new'
@@ -189,27 +189,51 @@ export async function fetchTopicNaming(topicId: string, regenerate: boolean = fa
   const streamProcessorCallbacks = createStreamProcessor(callbacks)
   const quickAssistant = await assistantService.getAssistant('quick')
 
-  if (!quickAssistant?.defaultModel) {
+  if (!quickAssistant) {
     return
   }
 
-  const provider = await getAssistantProvider(quickAssistant)
+  const quickAssistantModel = quickAssistant.defaultModel || getDefaultModel()
+  const assistantForProvider = quickAssistant.model ? quickAssistant : { ...quickAssistant, model: quickAssistantModel }
+  const assistantForRequest = quickAssistant.defaultModel
+    ? assistantForProvider
+    : { ...assistantForProvider, defaultModel: quickAssistantModel }
+  const provider = await getAssistantProvider(assistantForProvider)
 
   // 总结上下文总是取最后5条消息
   const contextMessages = takeRight(messages, 5)
 
   // LLM对多条消息的总结有问题，用单条结构化的消息表示会话内容会更好
-  const mainTextMessages = await filterMainTextMessages(contextMessages)
+  // 构建结构化消息对象（只保留文本和文件名，不传完整文件内容）
+  const structuredMessages = await Promise.all(
+    contextMessages.map(async message => {
+      const mainText = await getMainTextContent(message)
+      const fileBlocks = await findFileBlocks(message)
+      const fileList = fileBlocks.map(block => block.file.origin_name)
 
-  const llmMessages = await convertMessagesToSdkMessages(mainTextMessages, quickAssistant.defaultModel)
+      return {
+        role: message.role,
+        mainText,
+        files: fileList.length > 0 ? fileList : undefined
+      }
+    })
+  )
 
-  const AI = new AiProviderNew(quickAssistant.defaultModel || getDefaultModel(), provider)
-  const { params: aiSdkParams, modelId } = await buildStreamTextParams(llmMessages, quickAssistant, provider)
+  const conversation = JSON.stringify(structuredMessages)
+
+  const AI = new AiProviderNew(quickAssistantModel, provider)
+
+  // 使用 system + prompt 格式，而非多条消息格式
+  const aiSdkParams = {
+    system: quickAssistant.prompt,
+    prompt: conversation
+  }
+  const modelId = quickAssistantModel.id
 
   const middlewareConfig: AiSdkMiddlewareConfig = {
     streamOutput: false,
     onChunk: streamProcessorCallbacks,
-    model: quickAssistant.defaultModel,
+    model: quickAssistantModel,
     provider: provider,
     enableReasoning: false,
     isPromptToolUse: false,
@@ -226,7 +250,7 @@ export async function fetchTopicNaming(topicId: string, regenerate: boolean = fa
       (
         await AI.completions(modelId, aiSdkParams, {
           ...middlewareConfig,
-          assistant: quickAssistant,
+          assistant: assistantForRequest,
           topicId,
           callType: 'summary'
         })

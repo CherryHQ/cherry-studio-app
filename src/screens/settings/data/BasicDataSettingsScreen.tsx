@@ -7,10 +7,11 @@ import * as IntentLauncher from 'expo-intent-launcher'
 import { delay } from 'lodash'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Platform } from 'react-native'
+import { InteractionManager, Platform } from 'react-native'
 
 import {
   Container,
+  dismissDialog,
   Group,
   GroupTitle,
   HeaderBar,
@@ -101,6 +102,8 @@ export default function BasicDataSettingsScreen() {
       cancelText: t('common.cancel'),
       showCancel: true,
       onConfirm: async () => {
+        dismissDialog()
+        await new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()))
         const result = await DocumentPicker.getDocumentAsync({ type: 'application/zip' })
         if (result.canceled) return
 

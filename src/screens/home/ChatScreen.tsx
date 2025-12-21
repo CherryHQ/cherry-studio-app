@@ -1,5 +1,6 @@
 import type { DrawerNavigationProp } from '@react-navigation/drawer'
 import { DrawerActions, useNavigation } from '@react-navigation/native'
+import type { StackNavigationProp } from '@react-navigation/stack'
 import React from 'react'
 import { ActivityIndicator, Platform, View } from 'react-native'
 import { PanGestureHandler, State } from 'react-native-gesture-handler'
@@ -14,14 +15,17 @@ import { useAssistant } from '@/hooks/useAssistant'
 import { useBottom } from '@/hooks/useBottom'
 import { usePreference } from '@/hooks/usePreference'
 import { useCurrentTopic } from '@/hooks/useTopic'
+import type { HomeStackParamList } from '@/navigators/HomeStackNavigator'
 
 import ChatContent from './ChatContent'
 
 KeyboardController.preload()
 
+type ChatScreenNavigationProp = DrawerNavigationProp<any> & StackNavigationProp<HomeStackParamList>
+
 const ChatScreen = () => {
   const insets = useSafeAreaInsets()
-  const navigation = useNavigation<DrawerNavigationProp<any>>()
+  const navigation = useNavigation<ChatScreenNavigationProp>()
   const [topicId] = usePreference('topic.current_id')
   const { currentTopic } = useCurrentTopic()
 
@@ -32,15 +36,26 @@ const ChatScreen = () => {
   const handleSwipeGesture = (event: any) => {
     const { translationX, velocityX, state } = event.nativeEvent
 
-    // 检测向右滑动
     if (state === State.END) {
-      // 全屏可侧滑触发：滑动距离大于20且速度大于100，或者滑动距离大于80
-      const hasGoodDistance = translationX > 20
-      const hasGoodVelocity = velocityX > 100
-      const hasExcellentDistance = translationX > 80
+      // 右滑 → 打开抽屉
+      if (translationX > 0) {
+        const hasGoodDistance = translationX > 20
+        const hasGoodVelocity = velocityX > 100
+        const hasExcellentDistance = translationX > 80
 
-      if ((hasGoodDistance && hasGoodVelocity) || hasExcellentDistance) {
-        navigation.dispatch(DrawerActions.openDrawer())
+        if ((hasGoodDistance && hasGoodVelocity) || hasExcellentDistance) {
+          navigation.dispatch(DrawerActions.openDrawer())
+        }
+      }
+      // 左滑 → 跳转到 TopicScreen
+      else if (translationX < 0) {
+        const hasGoodDistance = Math.abs(translationX) > 20
+        const hasGoodVelocity = Math.abs(velocityX) > 100
+        const hasExcellentDistance = Math.abs(translationX) > 80
+
+        if ((hasGoodDistance && hasGoodVelocity) || hasExcellentDistance) {
+          navigation.navigate('TopicScreen', { assistantId: assistant?.id })
+        }
       }
     }
   }

@@ -12,6 +12,7 @@ import { useSelector } from 'react-redux'
 
 import { YStack } from '@/componentsV2'
 import { LiquidGlassButton } from '@/componentsV2/base/LiquidGlassButton'
+import { GradientBlurEdge } from '@/componentsV2/features/ChatScreen/GradientBlurEdge'
 import { ArrowDown } from '@/componentsV2/icons'
 import { useInitialScrollToEnd } from '@/hooks/chat/useInitialScrollToEnd'
 import { useTopicBlocks } from '@/hooks/useMessageBlocks'
@@ -40,6 +41,7 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
   const groupedMessages = Object.entries(getGroupedMessages(messages))
   const legendListRef = useRef<LegendListRef>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
+  const [isAtBottom, setIsAtBottom] = useState(false)
 
   // Editing state
   const editingMessage = useSelector((state: RootState) => state.runtime.editingMessage)
@@ -118,7 +120,11 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
     const threshold = 100
+    const edgeThreshold = 10
+
+    // 检测是否在底部
     const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y
+    setIsAtBottom(distanceFromBottom <= edgeThreshold)
     setShowScrollButton(distanceFromBottom > threshold)
   }
 
@@ -136,6 +142,7 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
           flexGrow: 1
         }}
         onScroll={handleScroll}
+        scrollEventThrottle={16}
         recycleItems
         maintainScrollAtEnd
         maintainScrollAtEndThreshold={0.1}
@@ -143,6 +150,7 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
         keyboardDismissMode="on-drag"
         ListEmptyComponent={<WelcomeContent />}
       />
+      <GradientBlurEdge visible={!isAtBottom && groupedMessages.length > 0} />
       <AnimatedBlurView
         animatedProps={blurAnimatedProps}
         experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : 'none'}

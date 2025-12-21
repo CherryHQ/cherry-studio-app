@@ -337,6 +337,70 @@ export async function editUserMessageAndRegenerate(
   }
 }
 
+/**
+ * Edit an assistant message content without triggering regeneration.
+ * Updates only the MAIN_TEXT blocks, preserving other block types.
+ */
+export async function editAssistantMessage(assistantMessageId: string, newContent: string): Promise<void> {
+  try {
+    // 1. Get and validate assistant message
+    const assistantMessage = await messageDatabase.getMessageById(assistantMessageId)
+    if (!assistantMessage || assistantMessage.role !== 'assistant') {
+      logger.error(`[editAssistantMessage] Invalid assistant message: ${assistantMessageId}`)
+      throw new Error('Invalid assistant message')
+    }
+
+    // 2. Find all MAIN_TEXT blocks
+    const mainTextBlocks = await findMainTextBlocks(assistantMessage)
+
+    if (mainTextBlocks.length > 0) {
+      // Update the first MAIN_TEXT block with new content
+      const firstBlock = mainTextBlocks[0]
+      await messageBlockDatabase.updateOneBlock({
+        id: firstBlock.id,
+        changes: {
+          content: newContent,
+          status: MessageBlockStatus.SUCCESS,
+          updatedAt: Date.now()
+        }
+      })
+
+      // Remove additional MAIN_TEXT blocks if any
+      if (mainTextBlocks.length > 1) {
+        const additionalBlockIds = mainTextBlocks.slice(1).map(b => b.id)
+        await cleanupMultipleBlocks(additionalBlockIds)
+
+        // Update message blocks array to remove deleted blocks
+        const updatedBlockIds = assistantMessage.blocks.filter(id => !additionalBlockIds.includes(id))
+        await messageDatabase.updateMessageById(assistantMessageId, {
+          blocks: updatedBlockIds,
+          updatedAt: Date.now()
+        })
+      } else {
+        // Just update timestamp
+        await messageDatabase.updateMessageById(assistantMessageId, {
+          updatedAt: Date.now()
+        })
+      }
+    } else {
+      // No MAIN_TEXT block exists - create one
+      const newTextBlock = createMainTextBlock(assistantMessageId, newContent, {
+        status: MessageBlockStatus.SUCCESS
+      })
+      await messageBlockDatabase.upsertBlocks([newTextBlock])
+      await messageDatabase.updateMessageById(assistantMessageId, {
+        blocks: [...assistantMessage.blocks, newTextBlock.id],
+        updatedAt: Date.now()
+      })
+    }
+
+    logger.info(`Assistant message ${assistantMessageId} edited successfully`)
+  } catch (error) {
+    logger.error('Error in editAssistantMessage:', error)
+    throw error
+  }
+}
+
 const BLOCK_UPDATE_BATCH_INTERVAL = 180
 type BlockUpdatePayload = Partial<MessageBlock>
 
@@ -708,6 +772,12 @@ export async function fetchTranslateThunk(assistantMessageId: string, message: M
     throw new Error('Translate assistant not found')
   }
 
+  const translateAssistantModel = translateAssistant.defaultModel || getDefaultModel()
+  const assistantForProvider = translateAssistant.model ? translateAssistant : { ...translateAssistant, model: translateAssistantModel }
+  const assistantForRequest = translateAssistant.defaultModel
+    ? assistantForProvider
+    : { ...assistantForProvider, defaultModel: translateAssistantModel }
+
   const newBlock = createTranslationBlock(assistantMessageId, '', {
     status: MessageBlockStatus.STREAMING
   })
@@ -727,7 +797,7 @@ export async function fetchTranslateThunk(assistantMessageId: string, message: M
     topicId: message.topicId,
     assistantMsgId: assistantMessageId,
     saveUpdatesToDB,
-    assistant: translateAssistant,
+    assistant: assistantForRequest,
     startTime
   })
 
@@ -775,24 +845,20 @@ export async function fetchTranslateThunk(assistantMessageId: string, message: M
 
   const streamProcessorCallbacks = createStreamProcessor(callbacks)
 
-  if (!translateAssistant.defaultModel) {
-    throw new Error('Translate assistant model is not defined')
-  }
-
-  const provider = await getAssistantProvider(translateAssistant)
+  const provider = await getAssistantProvider(assistantForProvider)
   message = {
     ...message,
     role: 'user'
   }
-  const llmMessages = await convertMessagesToSdkMessages([message], translateAssistant.defaultModel)
+  const llmMessages = await convertMessagesToSdkMessages([message], translateAssistantModel)
 
-  const AI = new ModernAiProvider(translateAssistant.defaultModel || getDefaultModel(), provider)
-  const { params: aiSdkParams, modelId } = await buildStreamTextParams(llmMessages, translateAssistant, provider)
+  const AI = new ModernAiProvider(translateAssistantModel, provider)
+  const { params: aiSdkParams, modelId } = await buildStreamTextParams(llmMessages, assistantForRequest, provider)
 
   const middlewareConfig: AiSdkMiddlewareConfig = {
     streamOutput: true,
     onChunk: streamProcessorCallbacks,
-    model: translateAssistant.defaultModel,
+    model: translateAssistantModel,
     provider: provider,
     enableReasoning: false,
     isPromptToolUse: false,
@@ -810,7 +876,7 @@ export async function fetchTranslateThunk(assistantMessageId: string, message: M
       (
         await AI.completions(modelId, aiSdkParams, {
           ...middlewareConfig,
-          assistant: translateAssistant,
+          assistant: assistantForRequest,
           topicId: message.topicId,
           callType: 'chat',
           uiMessages: [message]

@@ -16,7 +16,11 @@ export const ExpandButton: React.FC<ExpandButtonProps> = ({ onPress, style }) =>
   }
 
   return (
-    <Pressable style={[styles.button, style]} onPress={handlePress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+    <Pressable
+      className="active:opacity-50"
+      style={[styles.button, style]}
+      onPress={handlePress}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
       <Maximize2 size={16} className="text-foreground/50" />
     </Pressable>
   )

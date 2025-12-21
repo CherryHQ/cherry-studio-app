@@ -4,7 +4,7 @@ import React, { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Container, Group, HeaderBar, ListSkeleton, SafeAreaContainer, SearchInput } from '@/componentsV2'
-import { ProviderItem } from '@/componentsV2/features/SettingsScreen/ProviderItem'
+import { ProviderItem } from '@/componentsV2/features/SettingsScreen/providers/ProviderItem'
 import { Plus } from '@/componentsV2/icons'
 import { useAllProviders } from '@/hooks/useProviders'
 import { useSearch } from '@/hooks/useSearch'
@@ -33,21 +33,12 @@ export default function ProviderListScreen() {
   const providersList = filteredProviders.filter(p => p.id !== 'cherryai')
 
   const onAddProvider = () => {
-    navigation.navigate('AddProviderScreen', { mode: 'add' })
+    navigation.navigate('AddProviderScreen')
   }
 
-  const onEditProvider = useCallback(
-    (provider: Provider) => {
-      navigation.navigate('AddProviderScreen', { mode: 'edit', providerId: provider.id })
-    },
-    [navigation]
-  )
-
   const renderProviderItem = useCallback(
-    ({ item }: { item: Provider }) => (
-      <ProviderItem provider={item} mode={item.enabled ? 'enabled' : 'checked'} onEdit={onEditProvider} />
-    ),
-    [onEditProvider]
+    ({ item }: { item: Provider }) => <ProviderItem provider={item} mode={item.enabled ? 'enabled' : 'checked'} />,
+    []
   )
 
   return (

@@ -8,12 +8,15 @@ import Share from 'react-native-share'
 import { useDispatch } from 'react-redux'
 
 import { presentDialog } from '@/componentsV2'
+import { dismissTextEditSheet, presentTextEditSheet } from '@/componentsV2/features/Sheet/TextEditSheet'
+import { presentTextSelectionSheet } from '@/componentsV2/features/Sheet/TextSelectionSheet'
 import { loggerService } from '@/services/LoggerService'
-import { deleteMessageById, fetchTranslateThunk, regenerateAssistantMessage } from '@/services/MessagesService'
+import { deleteMessageById, editAssistantMessage, fetchTranslateThunk, regenerateAssistantMessage } from '@/services/MessagesService'
 import { setEditingMessage } from '@/store/runtime'
 import type { Assistant } from '@/types/assistant'
 import type { Message } from '@/types/message'
 import type { HomeNavigationProps } from '@/types/naviagate'
+import { markdownToPlainText } from '@/utils/markdown'
 import { filterMessages } from '@/utils/messageUtils/filters'
 import { findTranslationBlocks, getMainTextContent } from '@/utils/messageUtils/find'
 
@@ -117,7 +120,8 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
       if (playState === 'idle') {
         const filteredMessages = await filterMessages([message])
         const mainContent = await getMainTextContent(filteredMessages[0])
-        Speech.speak(mainContent, { onDone: () => setPlayState('idle') })
+        const speechContent = markdownToPlainText(mainContent)
+        Speech.speak(speechContent, { onDone: () => setPlayState('idle') })
         setPlayState('playing')
       } else if (playState === 'playing') {
         Speech.stop()
@@ -243,12 +247,34 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
     }
   }
 
-  const handleEdit = () => {
-    if (message.role !== 'user') {
-      logger.warn('Cannot edit non-user messages')
+  const handleEdit = async () => {
+    if (message.role === 'system') {
+      logger.warn('Cannot edit system messages')
       return
     }
-    dispatch(setEditingMessage(message))
+
+    if (message.role === 'assistant') {
+      // Assistant messages: use sheet for editing
+      try {
+        const content = await getMainTextContent(message)
+        presentTextEditSheet(content, async (newContent: string) => {
+          await editAssistantMessage(message.id, newContent)
+          dismissTextEditSheet()
+        })
+      } catch (error) {
+        logger.error('Error opening edit sheet:', error)
+      }
+    } else {
+      // User messages: use existing input box editing
+      dispatch(setEditingMessage(message))
+    }
+  }
+
+  const handleSelectText = async () => {
+    const content = await getMessageContent()
+    requestAnimationFrame(() => {
+      presentTextSelectionSheet(content)
+    })
   }
 
   return {
@@ -265,6 +291,7 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
     handleBestAnswer,
     isUseful: message.useful,
     handleShare,
-    handleEdit
+    handleEdit,
+    handleSelectText
   }
 }
