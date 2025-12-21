@@ -7,9 +7,17 @@ import { useTranslation } from 'react-i18next'
 import { Platform } from 'react-native'
 import Zeroconf from 'react-native-zeroconf'
 
-import { Container, HeaderBar, presentDialog, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
+import {
+  Container,
+  HeaderBar,
+  presentDialog,
+  RestoreProgressModal,
+  SafeAreaContainer,
+  Text,
+  XStack,
+  YStack
+} from '@/componentsV2'
 import { ReceiveProgressModal } from '@/componentsV2/features/SettingsScreen/ReceiveProgressModal'
-import { RestoreProgressModal } from '@/componentsV2/features/SettingsScreen/RestoreProgressModal'
 import { TriangleAlert } from '@/componentsV2/icons'
 import { LAN_TRANSFER_DOMAIN, LAN_TRANSFER_PROTOCOL_VERSION, LAN_TRANSFER_SERVICE_TYPE } from '@/constants/lanTransfer'
 import { useAppState } from '@/hooks/useAppState'

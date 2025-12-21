@@ -2,7 +2,7 @@ import { BlurView } from 'expo-blur'
 import { MotiView } from 'moti'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Modal, StyleSheet, View } from 'react-native'
+import { Modal, Platform, StyleSheet, View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import XStack from '@/componentsV2/layout/XStack'
@@ -41,7 +41,12 @@ export function ReceiveProgressModal({ isOpen, fileTransfer }: ReceiveProgressMo
           justifyContent: 'center',
           alignItems: 'center'
         }}>
-        <BlurView style={StyleSheet.absoluteFill} intensity={30} />
+        {/* Android blur is experimental and may not affect content behind native Modal windows. */}
+        {Platform.OS === 'android' ? (
+          <View style={[StyleSheet.absoluteFill, styles.androidDim]} />
+        ) : (
+          <BlurView style={StyleSheet.absoluteFill} intensity={30} experimentalBlurMethod="dimezisBlurView" />
+        )}
         <YStack className="bg-card w-3/4 gap-3 overflow-hidden rounded-2xl p-4">
           <YStack className="items-center gap-3">
             <Text className="text-2xl font-bold">{t('settings.data.lan_transfer.receiving')}</Text>
@@ -76,3 +81,9 @@ export function ReceiveProgressModal({ isOpen, fileTransfer }: ReceiveProgressMo
     </Modal>
   )
 }
+
+const styles = StyleSheet.create({
+  androidDim: {
+    backgroundColor: 'rgba(0, 0, 0, 0.35)'
+  }
+})

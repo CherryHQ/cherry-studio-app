@@ -1,15 +1,17 @@
 import { TrueSheet } from '@lodev09/react-native-true-sheet'
+import { useNavigation } from '@react-navigation/native'
 import * as DocumentPicker from 'expo-document-picker'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Platform, View } from 'react-native'
 
 import { Group, PressableRow, RestoreProgressModal, Text, XStack } from '@/componentsV2'
-import { Folder } from '@/componentsV2/icons'
+import { Folder, Wifi } from '@/componentsV2/icons'
 import { useBottom } from '@/hooks/useBottom'
 import { DEFAULT_RESTORE_STEPS, useRestore } from '@/hooks/useRestore'
 import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
+import type { RootNavigationProps } from '@/types/naviagate'
 import { isIOS26 } from '@/utils/device'
 
 const logger = loggerService.withContext('ImportDataSheet')
@@ -39,6 +41,7 @@ export const ImportDataSheet: React.FC = () => {
   const [sheetData, setSheetData] = useState<ImportDataSheetData>(currentSheetData)
   const { handleStart } = sheetData
   const { t } = useTranslation()
+  const navigation = useNavigation<RootNavigationProps>()
   const bottom = useBottom()
   const { isDark } = useTheme()
   const [isVisible, setIsVisible] = useState(false)
@@ -85,6 +88,20 @@ export const ImportDataSheet: React.FC = () => {
     }
   }
 
+  const handleLanTransfer = () => {
+    dismissImportDataSheet()
+    navigation.navigate('HomeScreen', {
+      screen: 'Home',
+      params: {
+        screen: 'DataSourcesSettings',
+        params: {
+          screen: 'LanTransferScreen',
+          params: { redirectToHome: true }
+        }
+      }
+    })
+  }
+
   const handleCloseModal = () => {
     closeModal()
     handleStart()
@@ -94,7 +111,7 @@ export const ImportDataSheet: React.FC = () => {
     <>
       <TrueSheet
         name={SHEET_NAME}
-        detents={[0.19]}
+        detents={[0.28]}
         cornerRadius={30}
         grabber={Platform.OS === 'ios' ? true : false}
         dismissible
@@ -108,6 +125,12 @@ export const ImportDataSheet: React.FC = () => {
               <XStack className="items-center gap-3">
                 <Folder size={24} />
                 <Text>{t('settings.data.restore.title')}</Text>
+              </XStack>
+            </PressableRow>
+            <PressableRow onPress={handleLanTransfer}>
+              <XStack className="items-center gap-3">
+                <Wifi size={24} />
+                <Text>{t('settings.data.lan_transfer.title')}</Text>
               </XStack>
             </PressableRow>
           </Group>

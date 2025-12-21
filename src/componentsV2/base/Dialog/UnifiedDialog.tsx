@@ -2,7 +2,7 @@ import { BlurView } from 'expo-blur'
 import { Button, Dialog, Spinner } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { StyleSheet } from 'react-native'
+import { Platform } from 'react-native'
 
 import XStack from '@/componentsV2/layout/XStack'
 
@@ -36,7 +36,11 @@ export function UnifiedDialog({
     <Dialog isOpen={isOpen} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="bg-transparent" isCloseOnPress={!isLoading}>
-          <BlurView style={StyleSheet.absoluteFill} intensity={30} />
+          <BlurView
+            className="absolute inset-0"
+            intensity={30}
+            experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : 'none'}
+          />
         </Dialog.Overlay>
         <Dialog.Content>
           <Dialog.Title className="text-xl">{title}</Dialog.Title>
