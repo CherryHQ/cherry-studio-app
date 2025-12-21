@@ -26,3 +26,20 @@ export function hasObjectKey(obj: any, key: string): boolean {
 
 export const uuid = () => Crypto.randomUUID()
 export const storage = new MMKV()
+
+const LAN_TRANSFER_INSTANCE_ID_KEY = 'lan_transfer_instance_id'
+
+export const getLanTransferInstanceId = (): string => {
+  const existing = storage.getString(LAN_TRANSFER_INSTANCE_ID_KEY)
+  if (existing) return existing
+
+  const id = uuid()
+  storage.set(LAN_TRANSFER_INSTANCE_ID_KEY, id)
+  return id
+}
+
+export const getLanTransferServiceName = (modelName: string, port?: number): string => {
+  const shortId = getLanTransferInstanceId().replace(/-/g, '').slice(0, 8)
+  const portSuffix = port ? `-${port}` : ''
+  return `Cherry Studio (${modelName})${portSuffix}-${shortId}`
+}

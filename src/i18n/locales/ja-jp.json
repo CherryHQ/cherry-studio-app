@@ -181,6 +181,10 @@
         "not_available": "AI機能は利用できません。",
         "update_failed": "AI機能の更新に失敗しました。もう一度お試しください。"
       },
+      "ai_feature": {
+        "not_available": "AI機能は利用できません。",
+        "update_failed": "AI機能の更新に失敗しました。もう一度お試しください。"
+      },
       "availableProviders": "利用可能なプロバイダー",
       "availableTools": "利用可能なツール",
       "backup": {
@@ -563,6 +567,53 @@
         "data_reset": {
           "error": "データのリセットに失敗しました。もう一度試してください。問題が解決しない場合は、技術サポートまでお問い合わせください。"
         },
+        "lan_transfer": {
+          "app_version": "アプリバージョン",
+          "back_cancel_receive_body": "[to be translated]:返回将会取消当前正在接收的文件，是否继续？",
+          "back_cancel_receive_title": "[to be translated]:返回将取消接收",
+          "backup_detected_body": "バックアップファイルを検出しました。復元しますか？",
+          "backup_detected_title": "バックアップファイルを検出",
+          "cancel_receive": "受信をキャンセル",
+          "chunks": "チャンク",
+          "connected": "接続済み",
+          "device": "デバイス",
+          "device_name": "デバイス名",
+          "error": "エラー",
+          "eta": "残り時間",
+          "file_status": {
+            "cancelled": "[to be translated]:已取消",
+            "cancelling": "[to be translated]:正在取消...",
+            "complete": "[to be translated]:已完成",
+            "completing": "[to be translated]:完成中...",
+            "error": "[to be translated]:错误",
+            "idle": "[to be translated]:空闲",
+            "receiving": "[to be translated]:接收中",
+            "verifying": "[to be translated]:校验中..."
+          },
+          "file_transfer": "ファイル転送",
+          "hint": "デスクトップ版 Cherry Studio でこのデバイスを選択してバックアップを送信してください",
+          "info": "転送情報",
+          "ip_address": "IPアドレス",
+          "no_connection_warning": "Cherry Studioクライアントで LAN 転送を開いてください",
+          "port": "ポート",
+          "preparing": "準備中...",
+          "receiving": "ファイル受信中...",
+          "restore_confirm": "復元",
+          "restore_later": "後で",
+          "service": "サービス",
+          "start_service": "受信を開始",
+          "status": "ステータス",
+          "stop_service": "サービスを停止",
+          "title": "LAN転送",
+          "transfer_cancelled_body": "ファイル転送がキャンセルされました",
+          "transfer_cancelled_title": "転送がキャンセルされました",
+          "transfer_error": "転送エラー",
+          "unknown": "不明",
+          "waiting_connection": "デスクトップの接続を待っています...",
+          "warning_content": "既存のデータを削除し、デスクトップから復元します。重要なデータは必ずバックアップしてください。",
+          "warning_title": "注意",
+          "zeroconf_error": "Zeroconfエラー"
+        },
         "log_location": "ログファイルの場所",
         "reset": "データリセット",
         "reset_success": "データリセットが成功しました！アプリケーションは初期状態に復元されました。",
@@ -581,6 +632,7 @@
             "success_description": "復元が成功しました、お楽しみください！"
           },
           "steps": {
+            "clear_data": "既存データを削除",
             "receive_file": "ファイルを受信",
             "restore_messages": "復元メッセージ",
             "restore_settings": "設定を復元する"

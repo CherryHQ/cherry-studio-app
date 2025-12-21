@@ -181,6 +181,10 @@
         "not_available": "AI 功能不可用",
         "update_failed": "AI 功能更新失败，请重试"
       },
+      "ai_feature": {
+        "not_available": "AI 功能不可用",
+        "update_failed": "AI 功能更新失败，请重试"
+      },
       "availableProviders": "可用提供商",
       "availableTools": "可用工具",
       "backup": {
@@ -563,6 +567,53 @@
         "data_reset": {
           "error": "数据重置失败。请重试，如果问题持续存在，请联系技术支持。"
         },
+        "lan_transfer": {
+          "app_version": "应用版本",
+          "back_cancel_receive_body": "返回将会取消当前正在接收的文件，是否继续？",
+          "back_cancel_receive_title": "返回将取消接收",
+          "backup_detected_body": "检测到备份文件，是否进行恢复？",
+          "backup_detected_title": "检测到备份文件",
+          "cancel_receive": "取消接收",
+          "chunks": "分块",
+          "connected": "已连接",
+          "device": "设备",
+          "device_name": "设备名称",
+          "error": "错误",
+          "eta": "预计剩余",
+          "file_status": {
+            "cancelled": "已取消",
+            "cancelling": "正在取消...",
+            "complete": "已完成",
+            "completing": "完成中...",
+            "error": "错误",
+            "idle": "空闲",
+            "receiving": "接收中",
+            "verifying": "校验中..."
+          },
+          "file_transfer": "文件传输",
+          "hint": "请在桌面端 Cherry Studio 中选择此设备发送备份",
+          "info": "传输信息",
+          "ip_address": "IP 地址",
+          "no_connection_warning": "请在Cherry Studio客户端打开局域网传输",
+          "port": "端口",
+          "preparing": "准备中...",
+          "receiving": "正在接收文件...",
+          "restore_confirm": "恢复",
+          "restore_later": "稍后",
+          "service": "服务",
+          "start_service": "开始接收",
+          "status": "状态",
+          "stop_service": "停止服务",
+          "title": "局域网传输",
+          "transfer_cancelled_body": "文件发送已取消",
+          "transfer_cancelled_title": "传输已取消",
+          "transfer_error": "传输错误",
+          "unknown": "未知",
+          "waiting_connection": "等待桌面端连接...",
+          "warning_content": "此操作将清除现有数据并从桌面端恢复。请确保已备份重要数据。",
+          "warning_title": "注意",
+          "zeroconf_error": "服务发现错误"
+        },
         "log_location": "日志文件位置",
         "reset": "数据重置",
         "reset_success": "数据重置成功！应用已恢复到初始状态。",
@@ -581,6 +632,7 @@
             "success_description": "恢复成功，祝您使用愉快！"
           },
           "steps": {
+            "clear_data": "清理现有数据",
             "receive_file": "接收文件",
             "restore_messages": "恢复消息",
             "restore_settings": "恢复配置"

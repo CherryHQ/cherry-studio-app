@@ -181,6 +181,10 @@
         "not_available": "AI feature is not available.",
         "update_failed": "Failed to update AI feature. Please try again."
       },
+      "ai_feature": {
+        "not_available": "AI feature is not available.",
+        "update_failed": "Failed to update AI feature. Please try again."
+      },
       "availableProviders": "Available Providers",
       "availableTools": "Available Tools",
       "backup": {
@@ -563,6 +567,53 @@
         "data_reset": {
           "error": "Data reset failed. Please try again or contact support if the problem persists."
         },
+        "lan_transfer": {
+          "app_version": "App Version",
+          "back_cancel_receive_body": "Going back will cancel the current transfer. Continue?",
+          "back_cancel_receive_title": "Leave this page?",
+          "backup_detected_body": "A backup file is ready. Restore now?",
+          "backup_detected_title": "Backup file detected",
+          "cancel_receive": "Cancel Receive",
+          "chunks": "chunks",
+          "connected": "Connected",
+          "device": "Device",
+          "device_name": "Device name",
+          "error": "Error",
+          "eta": "ETA",
+          "file_status": {
+            "cancelled": "Cancelled",
+            "cancelling": "Cancelling...",
+            "complete": "Complete",
+            "completing": "Completing...",
+            "error": "Error",
+            "idle": "Idle",
+            "receiving": "Receiving",
+            "verifying": "Verifying..."
+          },
+          "file_transfer": "File Transfer",
+          "hint": "Select this device in Cherry Studio desktop to send the backup",
+          "info": "Transfer Info",
+          "ip_address": "IP address",
+          "no_connection_warning": "Please open LAN Transfer in Cherry Studio desktop client",
+          "port": "Port",
+          "preparing": "Preparing...",
+          "receiving": "Receiving file...",
+          "restore_confirm": "Restore",
+          "restore_later": "Later",
+          "service": "Service",
+          "start_service": "Start receiving",
+          "status": "Status",
+          "stop_service": "Stop service",
+          "title": "LAN Transfer",
+          "transfer_cancelled_body": "File transfer has been cancelled",
+          "transfer_cancelled_title": "Transfer Cancelled",
+          "transfer_error": "LAN Transfer Error",
+          "unknown": "Unknown",
+          "waiting_connection": "Waiting for desktop to connect...",
+          "warning_content": "This will clear existing data and restore from desktop. Make sure important data is backed up.",
+          "warning_title": "Heads up",
+          "zeroconf_error": "Zeroconf Error"
+        },
         "log_location": "Log file location",
         "reset": "Data Reset",
         "reset_success": "Data reset successful! The app has been restored to its initial state.",
@@ -581,6 +632,7 @@
             "success_description": "Restore Successful, Enjoy your time!"
           },
           "steps": {
+            "clear_data": "Clear existing data",
             "receive_file": "Receive file",
             "restore_messages": "Restore messages",
             "restore_settings": "Restore configuration"

@@ -22,6 +22,14 @@ export interface StepConfig {
 
 // 预定义的步骤配置
 export const RESTORE_STEP_CONFIGS = {
+  CLEAR_DATA: {
+    id: 'clear_data' as RestoreStepId,
+    titleKey: 'settings.data.restore.steps.clear_data'
+  },
+  RECEIVE_FILE: {
+    id: 'receive_file' as RestoreStepId,
+    titleKey: 'settings.data.restore.steps.receive_file'
+  },
   RESTORE_SETTINGS: {
     id: 'restore_settings' as RestoreStepId,
     titleKey: 'settings.data.restore.steps.restore_settings'
@@ -34,6 +42,20 @@ export const RESTORE_STEP_CONFIGS = {
 
 // 预定义的步骤组合
 export const DEFAULT_RESTORE_STEPS: StepConfig[] = [
+  RESTORE_STEP_CONFIGS.RESTORE_SETTINGS,
+  RESTORE_STEP_CONFIGS.RESTORE_MESSAGES
+]
+
+// LAN 传输步骤组合（包含文件接收）
+export const LAN_RESTORE_STEPS: StepConfig[] = [
+  RESTORE_STEP_CONFIGS.RECEIVE_FILE,
+  RESTORE_STEP_CONFIGS.RESTORE_SETTINGS,
+  RESTORE_STEP_CONFIGS.RESTORE_MESSAGES
+]
+
+// LAN 传输步骤组合（包含清理和文件接收）
+export const LAN_RESTORE_STEPS_WITH_CLEAR: StepConfig[] = [
+  RESTORE_STEP_CONFIGS.CLEAR_DATA,
   RESTORE_STEP_CONFIGS.RESTORE_SETTINGS,
   RESTORE_STEP_CONFIGS.RESTORE_MESSAGES
 ]
@@ -129,28 +151,8 @@ export function useRestore(options: UseRestoreOptions = {}) {
   ) => {
     if (!validateFile(file)) return
 
-    // 清除现有数据（如果启用）
-    // 流程：重置数据库 -> 运行 v1 seed -> 恢复备份数据 -> restore() 内部运行增量迁移
-    if (clearBeforeRestore) {
-      try {
-        logger.info('Clearing existing data before restore...')
-        await databaseMaintenance.resetDatabase()
-        resetAppInitializationState()
-        // 运行迁移以初始化系统数据（v1 seed）
-        // restore() 会在恢复后根据备份版本运行增量迁移
-        await runAppDataMigrations()
-        logger.info('Existing data cleared successfully')
-      } catch (error) {
-        logger.error('Failed to clear existing data:', error)
-        presentDialog('error', {
-          title: t('common.error'),
-          content: t('settings.data.restore.clear_error')
-        })
-        return
-      }
-    }
-
     // 重置状态并打开模态框（除非 skipModalSetup 为 true）
+    // 先显示 modal，然后在 setTimeout 中执行清理和恢复操作
     if (!skipModalSetup) {
       setRestoreSteps(createStepsFromConfig(stepConfigs, t))
       setOverallStatus('running')
@@ -160,6 +162,27 @@ export function useRestore(options: UseRestoreOptions = {}) {
     // Use setTimeout to ensure the modal renders before starting the restore process
     setTimeout(async () => {
       try {
+        // 清除现有数据（如果启用）
+        // 流程：重置数据库 -> 运行 v1 seed -> 恢复备份数据 -> restore() 内部运行增量迁移
+        if (clearBeforeRestore) {
+          try {
+            updateStepStatus('clear_data', 'in_progress')
+            logger.info('Clearing existing data before restore...')
+            await databaseMaintenance.resetDatabase()
+            resetAppInitializationState()
+            // 运行迁移以初始化系统数据（v1 seed）
+            // restore() 会在恢复后根据备份版本运行增量迁移
+            await runAppDataMigrations()
+            logger.info('Existing data cleared successfully')
+            updateStepStatus('clear_data', 'completed')
+          } catch (error) {
+            logger.error('Failed to clear existing data:', error)
+            updateStepStatus('clear_data', 'error', String(error))
+            setOverallStatus('error')
+            return
+          }
+        }
+
         const fileObject = createFileObject(file)
         await customRestoreFunction(fileObject, handleProgressUpdate, dispatch)
         setOverallStatus('success')

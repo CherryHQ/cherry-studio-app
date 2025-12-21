@@ -7,7 +7,7 @@ const appVersion = packageJson.version
 
 export default {
   expo: {
-    name: 'Cherry Studio Dev',
+    name: 'Cherry Studio',
     slug: 'cherry-studio',
     version: appVersion,
     // orientation: 'portrait', 锁定竖屏
@@ -25,7 +25,7 @@ export default {
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.cherry-ai.cherry-studio-app-dev',
+      bundleIdentifier: 'com.cherry-ai.cherry-studio-app',
       userInterfaceStyle: 'automatic',
       infoPlist: {
         LSApplicationQueriesSchemes: ['shortcuts'],

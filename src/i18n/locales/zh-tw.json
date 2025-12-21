@@ -181,6 +181,10 @@
         "not_available": "AI 功能不可用",
         "update_failed": "AI 功能更新失敗，請重試"
       },
+      "ai_feature": {
+        "not_available": "AI 功能不可用",
+        "update_failed": "AI 功能更新失敗，請重試"
+      },
       "availableProviders": "可用供應商",
       "availableTools": "可用工具",
       "backup": {
@@ -563,6 +567,53 @@
         "data_reset": {
           "error": "資料重設失敗。請重試，如果問題持續存在，請聯繫技術支援。"
         },
+        "lan_transfer": {
+          "app_version": "應用程式版本",
+          "back_cancel_receive_body": "[to be translated]:返回将会取消当前正在接收的文件，是否继续？",
+          "back_cancel_receive_title": "[to be translated]:返回将取消接收",
+          "backup_detected_body": "檢測到備份檔案，是否進行恢復？",
+          "backup_detected_title": "檢測到備份檔案",
+          "cancel_receive": "取消接收",
+          "chunks": "分塊",
+          "connected": "已連線",
+          "device": "裝置",
+          "device_name": "裝置名稱",
+          "error": "錯誤",
+          "eta": "預計剩餘",
+          "file_status": {
+            "cancelled": "[to be translated]:已取消",
+            "cancelling": "[to be translated]:正在取消...",
+            "complete": "[to be translated]:已完成",
+            "completing": "[to be translated]:完成中...",
+            "error": "[to be translated]:错误",
+            "idle": "[to be translated]:空闲",
+            "receiving": "[to be translated]:接收中",
+            "verifying": "[to be translated]:校验中..."
+          },
+          "file_transfer": "檔案傳輸",
+          "hint": "請在桌面端 Cherry Studio 中選擇此裝置傳送備份",
+          "info": "傳輸資訊",
+          "ip_address": "IP 位址",
+          "no_connection_warning": "請在Cherry Studio客戶端打開區域網傳輸",
+          "port": "連接埠",
+          "preparing": "準備中...",
+          "receiving": "正在接收檔案...",
+          "restore_confirm": "恢復",
+          "restore_later": "稍後",
+          "service": "服務",
+          "start_service": "開始接收",
+          "status": "狀態",
+          "stop_service": "停止服務",
+          "title": "區域網路傳輸",
+          "transfer_cancelled_body": "檔案傳送已取消",
+          "transfer_cancelled_title": "傳輸已取消",
+          "transfer_error": "傳輸錯誤",
+          "unknown": "未知",
+          "waiting_connection": "等待桌面端連線...",
+          "warning_content": "此操作將清除現有資料並從桌面端恢復。請先備份重要資料。",
+          "warning_title": "注意",
+          "zeroconf_error": "服務發現錯誤"
+        },
         "log_location": "記錄檔位置",
         "reset": "資料重置",
         "reset_success": "資料重置成功！應用程式已恢復至初始狀態。",
@@ -581,6 +632,7 @@
             "success_description": "恢復成功，祝您使用愉快！"
           },
           "steps": {
+            "clear_data": "清理現有資料",
             "receive_file": "接收檔案",
             "restore_messages": "恢復訊息",
             "restore_settings": "恢復設定"
