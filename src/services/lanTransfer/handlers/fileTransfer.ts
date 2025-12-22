@@ -426,4 +426,3 @@ export const handleFileEnd = (message: LanTransferFileEndMessage, context: FileT
     context.completeTransfer(false, 'Failed to move file', undefined, finalFile.uri, 'DISK_ERROR')
   }
 }
-

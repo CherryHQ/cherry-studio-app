@@ -350,7 +350,9 @@ describe('validators', () => {
     })
 
     test('validators handle prototype pollution attempts', () => {
-      const maliciousMsg = JSON.parse('{"type":"handshake","version":"3.0","platform":"darwin","__proto__":{"admin":true}}')
+      const maliciousMsg = JSON.parse(
+        '{"type":"handshake","version":"3.0","platform":"darwin","__proto__":{"admin":true}}'
+      )
       // Should still validate normally
       expect(isValidHandshakeMessage(maliciousMsg)).toBe(true)
     })

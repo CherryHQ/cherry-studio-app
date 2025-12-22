@@ -9,11 +9,7 @@ import type {
  * Generic message validator
  * Validates that the message has the correct type and required fields
  */
-const validateMessage = (
-  msg: unknown,
-  type: string,
-  requiredFields: string[]
-): boolean => {
+const validateMessage = (msg: unknown, type: string, requiredFields: string[]): boolean => {
   if (!msg || typeof msg !== 'object') return false
   const m = msg as Record<string, unknown>
   if (m.type !== type) return false
@@ -32,27 +28,25 @@ export const isValidHandshakeMessage = (
 /**
  * Validates ping message
  */
-export const isValidPingMessage = (
-  msg: unknown
-): msg is Extract<LanTransferIncomingMessage, { type: 'ping' }> => {
+export const isValidPingMessage = (msg: unknown): msg is Extract<LanTransferIncomingMessage, { type: 'ping' }> => {
   return validateMessage(msg, 'ping', [])
 }
 
 /**
  * Validates file_start message
  */
-export const isValidFileStartMessage = (
-  msg: unknown
-): msg is LanTransferFileStartMessage => {
-  if (!validateMessage(msg, 'file_start', [
-    'transferId',
-    'fileName',
-    'fileSize',
-    'mimeType',
-    'checksum',
-    'totalChunks',
-    'chunkSize'
-  ])) {
+export const isValidFileStartMessage = (msg: unknown): msg is LanTransferFileStartMessage => {
+  if (
+    !validateMessage(msg, 'file_start', [
+      'transferId',
+      'fileName',
+      'fileSize',
+      'mimeType',
+      'checksum',
+      'totalChunks',
+      'chunkSize'
+    ])
+  ) {
     return false
   }
 
@@ -72,27 +66,19 @@ export const isValidFileStartMessage = (
  * Validates file_chunk message (JSON mode only)
  * v1: Binary frame mode doesn't use this validator
  */
-export const isValidFileChunkMessage = (
-  msg: unknown
-): msg is LanTransferFileChunkMessage => {
+export const isValidFileChunkMessage = (msg: unknown): msg is LanTransferFileChunkMessage => {
   if (!validateMessage(msg, 'file_chunk', ['transferId', 'chunkIndex', 'data'])) {
     return false
   }
 
   const m = msg as Record<string, unknown>
-  return (
-    typeof m.transferId === 'string' &&
-    typeof m.chunkIndex === 'number' &&
-    typeof m.data === 'string'
-  )
+  return typeof m.transferId === 'string' && typeof m.chunkIndex === 'number' && typeof m.data === 'string'
 }
 
 /**
  * Validates file_end message
  */
-export const isValidFileEndMessage = (
-  msg: unknown
-): msg is LanTransferFileEndMessage => {
+export const isValidFileEndMessage = (msg: unknown): msg is LanTransferFileEndMessage => {
   if (!validateMessage(msg, 'file_end', ['transferId'])) {
     return false
   }
@@ -100,4 +86,3 @@ export const isValidFileEndMessage = (
   const m = msg as Record<string, unknown>
   return typeof m.transferId === 'string'
 }
-

@@ -30,9 +30,7 @@ function AssistantListItem({ assistant, onPress }: AssistantListItemProps) {
   const topicCount = useTopicCount(assistant.id)
 
   return (
-    <PressableRow
-      className="flex-row items-center justify-between rounded-xl p-0"
-      onPress={() => onPress(assistant)}>
+    <PressableRow className="flex-row items-center justify-between rounded-xl p-0" onPress={() => onPress(assistant)}>
       <XStack className="flex-1 items-center gap-3 pr-3">
         <EmojiAvatar
           emoji={assistant.emoji}

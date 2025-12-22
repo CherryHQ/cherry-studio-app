@@ -1,12 +1,6 @@
 import { Buffer } from 'buffer'
 
-import {
-  isBinaryFrame,
-  isJsonMessage,
-  parseBinaryFrame,
-  parseJsonMessage,
-  parseNextMessage
-} from '../binaryParser'
+import { isBinaryFrame, isJsonMessage, parseBinaryFrame, parseJsonMessage, parseNextMessage } from '../binaryParser'
 
 describe('binaryParser', () => {
   // ==================== Helper Functions ====================

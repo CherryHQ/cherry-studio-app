@@ -1,9 +1,5 @@
 import { LAN_TRANSFER_PROTOCOL_VERSION } from '@/constants/lanTransfer'
-import type {
-  LanTransferClientInfo,
-  LanTransferIncomingMessage,
-  LanTransferOutgoingMessage
-} from '@/types/lanTransfer'
+import type { LanTransferClientInfo, LanTransferIncomingMessage, LanTransferOutgoingMessage } from '@/types/lanTransfer'
 import { LanTransferServerStatus } from '@/types/lanTransfer'
 
 interface HandshakeContext {

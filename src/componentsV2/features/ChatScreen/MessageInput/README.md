@@ -9,11 +9,7 @@ A compound component for chat message input with support for text, voice, file a
 ```tsx
 import { MessageInput } from '@/componentsV2/features/ChatScreen/MessageInput'
 
-<MessageInput
-  topic={topic}
-  assistant={assistant}
-  updateAssistant={updateAssistant}
-/>
+;<MessageInput topic={topic} assistant={assistant} updateAssistant={updateAssistant} />
 ```
 
 ### Custom Layout
@@ -58,17 +54,17 @@ MessageInput/
 
 ## Components
 
-| Component | Description |
-|-----------|-------------|
-| `MessageInput` | Root component, provides Context |
-| `MessageInput.Main` | Main row with ToolButton + InputArea |
-| `MessageInput.ToolButton` | Opens tool sheet for attachments |
-| `MessageInput.InputArea` | Glass container with previews + input |
-| `MessageInput.Previews` | Shows editing/tool/file previews |
-| `MessageInput.InputRow` | Horizontal layout for TextField + Actions |
-| `MessageInput.TextField` | Multiline text input with expand support |
-| `MessageInput.Actions` | Animated Send/Voice/Pause buttons |
-| `MessageInput.AccessoryBar` | Think, Mention, MCP buttons |
+| Component                   | Description                               |
+| --------------------------- | ----------------------------------------- |
+| `MessageInput`              | Root component, provides Context          |
+| `MessageInput.Main`         | Main row with ToolButton + InputArea      |
+| `MessageInput.ToolButton`   | Opens tool sheet for attachments          |
+| `MessageInput.InputArea`    | Glass container with previews + input     |
+| `MessageInput.Previews`     | Shows editing/tool/file previews          |
+| `MessageInput.InputRow`     | Horizontal layout for TextField + Actions |
+| `MessageInput.TextField`    | Multiline text input with expand support  |
+| `MessageInput.Actions`      | Animated Send/Voice/Pause buttons         |
+| `MessageInput.AccessoryBar` | Think, Mention, MCP buttons               |
 
 ## Context API
 
@@ -137,7 +133,7 @@ import { NewFeature } from './components/NewFeature'
 
 export const MessageInput = Object.assign(Root, {
   // ... existing components
-  NewFeature,
+  NewFeature
 })
 ```
 
@@ -171,7 +167,7 @@ const [newField, setNewField] = useState('')
 const contextValue: MessageInputContextValue = {
   // ... existing values
   newField,
-  setNewField,
+  setNewField
 }
 ```
 

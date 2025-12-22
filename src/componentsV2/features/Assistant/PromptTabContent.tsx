@@ -80,7 +80,7 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
               </TextField.Label>
               <View className="flex-row items-center gap-1">
                 <Pressable
-                  className="active:opacity-50 p-1"
+                  className="p-1 active:opacity-50"
                   onPress={handleSaveButtonPress}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Save size={18} className="text-foreground/50" />

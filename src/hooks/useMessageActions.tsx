@@ -11,7 +11,12 @@ import { presentDialog } from '@/componentsV2'
 import { dismissTextEditSheet, presentTextEditSheet } from '@/componentsV2/features/Sheet/TextEditSheet'
 import { presentTextSelectionSheet } from '@/componentsV2/features/Sheet/TextSelectionSheet'
 import { loggerService } from '@/services/LoggerService'
-import { deleteMessageById, editAssistantMessage, fetchTranslateThunk, regenerateAssistantMessage } from '@/services/MessagesService'
+import {
+  deleteMessageById,
+  editAssistantMessage,
+  fetchTranslateThunk,
+  regenerateAssistantMessage
+} from '@/services/MessagesService'
 import { setEditingMessage } from '@/store/runtime'
 import type { Assistant } from '@/types/assistant'
 import type { Message } from '@/types/message'

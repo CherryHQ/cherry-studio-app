@@ -46,7 +46,6 @@ export default function DataSettingsScreen() {
           icon: <Wifi size={24} />,
           screen: 'LanTransferScreen'
         }
-        
       ]
     }
     // {

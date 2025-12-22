@@ -773,7 +773,9 @@ export async function fetchTranslateThunk(assistantMessageId: string, message: M
   }
 
   const translateAssistantModel = translateAssistant.defaultModel || getDefaultModel()
-  const assistantForProvider = translateAssistant.model ? translateAssistant : { ...translateAssistant, model: translateAssistantModel }
+  const assistantForProvider = translateAssistant.model
+    ? translateAssistant
+    : { ...translateAssistant, model: translateAssistantModel }
   const assistantForRequest = translateAssistant.defaultModel
     ? assistantForProvider
     : { ...assistantForProvider, defaultModel: translateAssistantModel }
