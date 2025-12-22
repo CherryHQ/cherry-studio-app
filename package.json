@@ -1,7 +1,7 @@
 {
   "name": "Cherry Studio",
   "main": "index.js",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "scripts": {
     "start": "npx expo start",
     "prebuild": "expo prebuild",
