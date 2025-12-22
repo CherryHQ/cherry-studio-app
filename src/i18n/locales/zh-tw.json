@@ -70,6 +70,10 @@
         "label": "助手",
         "mine": "我的助手",
         "recent": "最近的助手"
+      },
+      "topics": {
+        "count_one": "1 個話題",
+        "count_other": "{{count}} 個話題"
       }
     },
     "button": {

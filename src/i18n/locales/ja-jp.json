@@ -70,6 +70,10 @@
         "label": "アシスタント",
         "mine": "私のアシスタント",
         "recent": "最近のアシスタント"
+      },
+      "topics": {
+        "count_one": "1 つのトピック",
+        "count_other": "{{count}} つのトピック"
       }
     },
     "button": {

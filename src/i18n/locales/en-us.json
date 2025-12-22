@@ -70,6 +70,10 @@
         "label": "Assistants",
         "mine": "My assistant",
         "recent": "Recent Assistants"
+      },
+      "topics": {
+        "count_one": "1 topic",
+        "count_other": "{{count}} topics"
       }
     },
     "button": {

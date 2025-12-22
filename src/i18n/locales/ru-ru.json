@@ -70,6 +70,10 @@
         "label": "Ассистенты",
         "mine": "Мой помощник",
         "recent": "Последние ассистенты"
+      },
+      "topics": {
+        "count_one": "1 тема",
+        "count_other": "{{count}} тем"
       }
     },
     "button": {

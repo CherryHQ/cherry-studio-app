@@ -1,5 +1,4 @@
 import { FlashList } from '@shopify/flash-list'
-import { isEmpty } from 'lodash'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator } from 'react-native'
@@ -10,6 +9,7 @@ import PressableRow from '@/componentsV2/layout/PressableRow'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useTheme } from '@/hooks/useTheme'
+import { useTopicCount } from '@/hooks/useTopicCount'
 import type { Assistant } from '@/types/assistant'
 
 interface AssistantListProps {
@@ -18,9 +18,44 @@ interface AssistantListProps {
   onAssistantPress: (assistant: Assistant) => void
 }
 
-export function AssistantList({ assistants, isLoading = false, onAssistantPress }: AssistantListProps) {
+interface AssistantListItemProps {
+  assistant: Assistant
+  onPress: (assistant: Assistant) => void
+}
+
+// Assistant list item component to properly use hooks
+function AssistantListItem({ assistant, onPress }: AssistantListItemProps) {
   const { t } = useTranslation()
   const { isDark } = useTheme()
+  const topicCount = useTopicCount(assistant.id)
+
+  return (
+    <PressableRow
+      className="flex-row items-center justify-between rounded-xl p-0"
+      onPress={() => onPress(assistant)}>
+      <XStack className="flex-1 items-center gap-3 pr-3">
+        <EmojiAvatar
+          emoji={assistant.emoji}
+          size={46}
+          borderRadius={18}
+          borderWidth={3}
+          borderColor={isDark ? '#333333' : '#f7f7f7'}
+        />
+        <YStack className="flex-1 gap-0.5">
+          <Text className="font-bold" numberOfLines={1} ellipsizeMode="tail">
+            {assistant.name}
+          </Text>
+          <Text ellipsizeMode="tail" numberOfLines={1} className="text-foreground-secondary text-xs">
+            {t('assistants.topics.count', { count: topicCount })}
+          </Text>
+        </YStack>
+      </XStack>
+    </PressableRow>
+  )
+}
+
+export function AssistantList({ assistants, isLoading = false, onAssistantPress }: AssistantListProps) {
+  const { t } = useTranslation()
 
   if (isLoading) {
     return (
@@ -34,31 +69,7 @@ export function AssistantList({ assistants, isLoading = false, onAssistantPress 
     <YStack className="flex-1 px-5">
       <FlashList
         data={assistants}
-        renderItem={({ item }) => (
-          <PressableRow
-            className="flex-row items-center justify-between rounded-xl p-0"
-            onPress={() => onAssistantPress(item)}>
-            <XStack className="flex-1 items-center gap-3 pr-3">
-              <EmojiAvatar
-                emoji={item.emoji}
-                size={46}
-                borderRadius={18}
-                borderWidth={3}
-                borderColor={isDark ? '#333333' : '#f7f7f7'}
-              />
-              <YStack className="flex-1 gap-0.5">
-                <Text className="font-bold" numberOfLines={1} ellipsizeMode="tail">
-                  {item.name}
-                </Text>
-                {!isEmpty(item.prompt) && (
-                  <Text ellipsizeMode="tail" numberOfLines={1} className="text-foreground-secondary text-xs">
-                    {item.prompt}
-                  </Text>
-                )}
-              </YStack>
-            </XStack>
-          </PressableRow>
-        )}
+        renderItem={({ item }) => <AssistantListItem assistant={item} onPress={onAssistantPress} />}
         keyExtractor={item => item.id}
         ItemSeparatorComponent={() => <YStack className="h-4" />}
         showsVerticalScrollIndicator={false}

@@ -89,9 +89,12 @@ const AssistantItemSheet: React.FC = () => {
 
     let newAssistant: Assistant
 
-    if (assistant.type === 'external') {
+    // 如果是从 AssistantScreen 来的（source: 'external'），说明是已有的助手，直接使用
+    // 如果是从市场来的内置助手（source: 'builtIn'），才需要创建副本
+    if (source === 'external' || assistant.type === 'external') {
       newAssistant = assistant
     } else {
+      // 只有从市场首次添加的内置助手才需要创建副本
       newAssistant = {
         ...assistant,
         id: uuid(),
@@ -103,6 +106,7 @@ const AssistantItemSheet: React.FC = () => {
     const topic = await topicService.createTopic(newAssistant)
     await switchTopic(topic.id)
     await onChatNavigation(topic.id)
+
     dismissAssistantItemSheet()
   }
 

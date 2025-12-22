@@ -1,5 +1,4 @@
 import { useNavigation } from '@react-navigation/native'
-import { isEmpty } from 'lodash'
 import type { FC } from 'react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
@@ -14,6 +13,7 @@ import YStack from '@/componentsV2/layout/YStack'
 import { useTheme } from '@/hooks/useTheme'
 import { useToast } from '@/hooks/useToast'
 import { getCurrentTopicId } from '@/hooks/useTopic'
+import { useTopicCount } from '@/hooks/useTopicCount'
 import { assistantService } from '@/services/AssistantService'
 import { loggerService } from '@/services/LoggerService'
 import { topicService } from '@/services/TopicService'
@@ -45,6 +45,7 @@ const AssistantItem: FC<AssistantItemProps> = ({
   const navigation = useNavigation<DrawerNavigationProps>()
   const toast = useToast()
   const { isDark } = useTheme()
+  const topicCount = useTopicCount(assistant.id)
 
   const isDefaultAssistant = assistant.id === 'default'
   const canBeSelected = !isDefaultAssistant && assistant.type !== 'system'
@@ -126,11 +127,9 @@ const AssistantItem: FC<AssistantItemProps> = ({
             <Text className="text-sm font-bold" numberOfLines={1} ellipsizeMode="tail">
               {assistant.name}
             </Text>
-            {!isEmpty(assistant.prompt) && (
-              <Text ellipsizeMode="tail" numberOfLines={1} className="text-foreground-secondary  text-xs">
-                {assistant.prompt}
-              </Text>
-            )}
+            <Text ellipsizeMode="tail" numberOfLines={1} className="text-foreground-secondary text-xs">
+              {t('assistants.topics.count', { count: topicCount })}
+            </Text>
           </YStack>
         </XStack>
       </View>
