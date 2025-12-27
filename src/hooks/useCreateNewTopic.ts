@@ -1,5 +1,3 @@
-import { messageDatabase } from '@database'
-
 import { useCurrentTopic } from '@/hooks/useTopic'
 import { assistantService } from '@/services/AssistantService'
 import { topicService } from '@/services/TopicService'
@@ -14,26 +12,10 @@ export function useCreateNewTopic() {
       await assistantService.updateAssistant(assistant.id, { model: assistant.defaultModel })
     }
 
-    // Check if the newest topic has messages
-    const newestTopic = await topicService.getNewestTopic()
-    const hasMessages = await messageDatabase.getHasMessagesWithTopicId(newestTopic?.id ?? '')
-
-    let topicId: string
-
-    if (hasMessages || !newestTopic) {
-      // Create new topic
-      const newTopic = await topicService.createTopic(assistant)
-      topicId = newTopic.id
-    } else {
-      // Reuse the newest topic (update assistant if different)
-      if (newestTopic.assistantId !== assistant.id) {
-        await topicService.updateTopic(newestTopic.id, { assistantId: assistant.id })
-      }
-      topicId = newestTopic.id
-    }
-
-    await switchTopic(topicId)
-    return topicId
+    // Create new topic directly
+    const newTopic = await topicService.createTopic(assistant)
+    await switchTopic(newTopic.id)
+    return newTopic.id
   }
 
   return { createNewTopic }

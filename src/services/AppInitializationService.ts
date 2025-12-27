@@ -1,4 +1,4 @@
-import { assistantDatabase, mcpDatabase, messageDatabase, providerDatabase, websearchProviderDatabase } from '@database'
+import { assistantDatabase, mcpDatabase, providerDatabase, websearchProviderDatabase } from '@database'
 import { db } from '@db'
 import { seedDatabase } from '@db/seeding'
 import * as Localization from 'expo-localization'
@@ -119,34 +119,6 @@ export function resetAppInitializationState(): void {
   logger.info('App initialization state reset')
 }
 
-/**
- * Ensure there is a blank topic on app restart
- * - If current topic is empty (no messages), keep using it
- * - If current topic has messages or doesn't exist, create a new blank topic
- */
-async function ensureBlankTopic(): Promise<void> {
-  const currentTopic = await topicService.getCurrentTopicAsync()
-
-  if (currentTopic) {
-    const hasMessages = await messageDatabase.getHasMessagesWithTopicId(currentTopic.id)
-    if (!hasMessages) {
-      logger.info('Current topic is empty, keeping it as the active topic')
-      return
-    }
-    logger.info('Current topic has messages, creating a new blank topic')
-  } else {
-    logger.info('No current topic found, creating a new blank topic')
-  }
-
-  // Create a new blank topic and switch to it
-  const defaultAssistant = await assistantService.getAssistant('default')
-  if (defaultAssistant) {
-    const newTopic = await topicService.createTopic(defaultAssistant)
-    await topicService.switchToTopic(newTopic.id)
-    logger.info(`Created and switched to new blank topic: ${newTopic.id}`)
-  }
-}
-
 export async function runAppDataMigrations(): Promise<void> {
   const currentVersion = await preferenceService.get('app.initialization_version')
 
@@ -155,9 +127,6 @@ export async function runAppDataMigrations(): Promise<void> {
 
     // Initialize ProviderService cache (loads default provider)
     await providerService.initialize()
-
-    // Ensure there is a blank topic on app restart
-    await ensureBlankTopic()
 
     return
   }
@@ -187,9 +156,6 @@ export async function runAppDataMigrations(): Promise<void> {
 
   // Initialize ProviderService cache (loads default provider)
   await providerService.initialize()
-
-  // Ensure there is a blank topic on app restart
-  await ensureBlankTopic()
 }
 
 export function getAppDataVersion(): number {

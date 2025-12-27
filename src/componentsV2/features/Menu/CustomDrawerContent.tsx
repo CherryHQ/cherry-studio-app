@@ -1,4 +1,3 @@
-import { messageDatabase } from '@database'
 import type { DrawerContentComponentProps } from '@react-navigation/drawer'
 import { Divider } from 'heroui-native'
 import React from 'react'
@@ -66,12 +65,9 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
       const latestTopic = assistantTopics[0]
 
       if (latestTopic) {
-        const hasMessages = await messageDatabase.getHasMessagesWithTopicId(latestTopic.id)
-        if (!hasMessages) {
-          await switchTopic(latestTopic.id)
-          handleNavigateChatScreen(latestTopic.id)
-          return
-        }
+        await switchTopic(latestTopic.id)
+        handleNavigateChatScreen(latestTopic.id)
+        return
       }
 
       const newTopic = await topicService.createTopic(assistant)
