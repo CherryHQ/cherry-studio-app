@@ -42,15 +42,13 @@ export default function AssistantScreen() {
 
   const { assistants, isLoading } = useAssistants()
 
-  const {
-    searchText,
-    setSearchText,
-    filteredItems: filteredAssistants
-  } = useSearch(
+  const { searchText, setSearchText, filteredItems } = useSearch(
     assistants,
     useCallback((assistant: Assistant) => [assistant.name, assistant.description || ''], []),
     { delay: 100 }
   )
+  // Filter out translate and quick assistants
+  const filteredAssistants = filteredItems.filter(assistant => assistant.id !== 'translate' && assistant.id !== 'quick')
 
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [selectedAssistantIds, setSelectedAssistantIds] = useState<string[]>([])

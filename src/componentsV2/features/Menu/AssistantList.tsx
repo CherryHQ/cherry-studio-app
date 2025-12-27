@@ -55,6 +55,11 @@ function AssistantListItem({ assistant, onPress }: AssistantListItemProps) {
 export function AssistantList({ assistants, isLoading = false, onAssistantPress }: AssistantListProps) {
   const { t } = useTranslation()
 
+  // Filter out translate and quick assistants
+  const filteredAssistants = assistants.filter(
+    assistant => assistant.id !== 'translate' && assistant.id !== 'quick'
+  )
+
   if (isLoading) {
     return (
       <YStack className="min-h-[200px] flex-1 items-center justify-center px-5 pb-5">
@@ -66,7 +71,7 @@ export function AssistantList({ assistants, isLoading = false, onAssistantPress 
   return (
     <YStack className="flex-1 px-5">
       <FlashList
-        data={assistants}
+        data={filteredAssistants}
         renderItem={({ item }) => <AssistantListItem assistant={item} onPress={onAssistantPress} />}
         keyExtractor={item => item.id}
         ItemSeparatorComponent={() => <YStack className="h-4" />}
