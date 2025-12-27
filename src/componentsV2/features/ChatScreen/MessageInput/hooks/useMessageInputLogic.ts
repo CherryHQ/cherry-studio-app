@@ -98,13 +98,16 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
   }, [providers, mentions, isLoading])
 
   const sendMessage = async () => {
-    if (isEmpty(text.trim())) {
-      return
-    }
-
+    const trimmedText = text.trim()
+    const hasText = !isEmpty(trimmedText)
     const currentText = text
     const currentFiles = files
     const currentEditingMessage = editingMessage
+    const hasFiles = currentFiles.length > 0
+
+    if (!hasText && !hasFiles) {
+      return
+    }
 
     setText('')
     setFiles([])
@@ -116,7 +119,13 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
       await topicService.updateTopic(topic.id, { isLoading: true })
 
       try {
-        await editUserMessageAndRegenerate(currentEditingMessage.id, currentText, currentFiles, assistant, topic.id)
+        await editUserMessageAndRegenerate(
+          currentEditingMessage.id,
+          hasText ? currentText : '',
+          currentFiles,
+          assistant,
+          topic.id
+        )
       } catch (error) {
         logger.error('Error editing message:', error)
       }
@@ -127,7 +136,11 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
     await topicService.updateTopic(topic.id, { isLoading: true })
 
     try {
-      const baseUserMessage: MessageInputBaseParams = { assistant, topic, content: currentText }
+      const baseUserMessage: MessageInputBaseParams = { assistant, topic }
+
+      if (hasText) {
+        baseUserMessage.content = currentText
+      }
 
       if (currentFiles.length > 0) {
         baseUserMessage.files = currentFiles

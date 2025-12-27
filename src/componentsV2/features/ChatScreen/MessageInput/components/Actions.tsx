@@ -7,9 +7,10 @@ import { SendButton } from '../SendButton'
 import { VoiceButton } from '../VoiceButton'
 
 export const Actions: React.FC = () => {
-  const { isLoading, isVoiceActive, text, onPause, sendMessage, setText, setIsVoiceActive } = useMessageInput()
-
-  const shouldShowVoice = isVoiceActive || !text
+  const { isLoading, isVoiceActive, text, files, onPause, sendMessage, setText, setIsVoiceActive } = useMessageInput()
+  const hasText = text.trim().length > 0
+  const hasFiles = files.length > 0
+  const shouldShowVoice = isVoiceActive || (!hasText && !hasFiles)
 
   return (
     <AnimatePresence exitBeforeEnter>

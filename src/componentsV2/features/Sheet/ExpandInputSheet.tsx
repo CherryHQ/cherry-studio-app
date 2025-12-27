@@ -19,15 +19,24 @@ const SHEET_NAME = 'expand-input-sheet'
 
 // Global state
 let currentText = ''
+let currentHasFiles = false
 let onTextChangeCallback: ((text: string) => void) | null = null
 let onSendCallback: (() => void) | null = null
 let updateLocalTextCallback: ((text: string) => void) | null = null
+let updateLocalHasFilesCallback: ((hasFiles: boolean) => void) | null = null
 
-export const presentExpandInputSheet = (text: string, onChange: (text: string) => void, onSend: () => void) => {
+export const presentExpandInputSheet = (
+  text: string,
+  onChange: (text: string) => void,
+  onSend: () => void,
+  hasFiles = false
+) => {
   currentText = text
+  currentHasFiles = hasFiles
   onTextChangeCallback = onChange
   onSendCallback = onSend
   updateLocalTextCallback?.(text)
+  updateLocalHasFilesCallback?.(hasFiles)
   return TrueSheet.present(SHEET_NAME)
 }
 
@@ -39,12 +48,15 @@ const ExpandInputSheet: React.FC = () => {
   const insets = useSafeAreaInsets()
   const [isVisible, setIsVisible] = useState(false)
   const [localText, setLocalText] = useState(currentText)
+  const [localHasFiles, setLocalHasFiles] = useState(currentHasFiles)
   const [isVoiceActive, setIsVoiceActive] = useState(false)
 
   useEffect(() => {
     updateLocalTextCallback = setLocalText
+    updateLocalHasFilesCallback = setLocalHasFiles
     return () => {
       updateLocalTextCallback = null
+      updateLocalHasFilesCallback = null
     }
   }, [])
 
@@ -132,7 +144,7 @@ const ExpandInputSheet: React.FC = () => {
             </TextField>
             <XStack className="items-center justify-end">
               <AnimatePresence exitBeforeEnter>
-                {isVoiceActive || !localText ? (
+                {isVoiceActive || (!localText.trim() && !localHasFiles) ? (
                   <MotiView
                     key="voice-button"
                     from={{ opacity: 0, scale: 0.5 }}

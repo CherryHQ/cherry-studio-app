@@ -42,8 +42,8 @@ export const Root: React.FC<RootProps> = ({ topic, assistant, updateAssistant, c
   const [isVoiceActive, setIsVoiceActive] = useState(false)
 
   const handleExpand = useCallback(() => {
-    presentExpandInputSheet(text, setText, sendMessage)
-  }, [sendMessage, setText, text])
+    presentExpandInputSheet(text, setText, sendMessage, files.length > 0)
+  }, [files.length, sendMessage, setText, text])
 
   const handlePasteImages = useCallback(
     async (uris: string[]) => {
