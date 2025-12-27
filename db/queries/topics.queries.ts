@@ -97,13 +97,13 @@ export async function getTopicById(topicId: string): Promise<Topic | undefined> 
 
 /**
  * 获取所有主题
- * @description 返回所有主题并按更新时间降序排序
- * @returns 返回所有主题的数组，按更新时间从新到旧排序
+ * @description 返回所有主题并按创建时间降序排序
+ * @returns 返回所有主题的数组，按创建时间从新到旧排序
  * @throws 当查询操作失败时抛出错误
  */
 export async function getTopics(): Promise<Topic[]> {
   try {
-    const results = await db.select().from(topics).orderBy(desc(topics.updated_at))
+    const results = await db.select().from(topics).orderBy(desc(topics.created_at))
 
     if (results.length === 0) {
       return []
@@ -118,9 +118,9 @@ export async function getTopics(): Promise<Topic[]> {
 
 /**
  * 根据助手 ID 获取该助手的所有主题
- * @description 返回指定助手的所有主题并按更新时间降序排序
+ * @description 返回指定助手的所有主题并按创建时间降序排序
  * @param assistantId - 助手的唯一标识符
- * @returns 返回该助手的所有主题数组，按更新时间从新到旧排序
+ * @returns 返回该助手的所有主题数组，按创建时间从新到旧排序
  * @throws 当查询操作失败时抛出错误
  */
 export async function getTopicsByAssistantId(assistantId: string): Promise<Topic[]> {
@@ -129,7 +129,7 @@ export async function getTopicsByAssistantId(assistantId: string): Promise<Topic
       .select()
       .from(topics)
       .where(eq(topics.assistant_id, assistantId))
-      .orderBy(desc(topics.updated_at))
+      .orderBy(desc(topics.created_at))
 
     if (results.length === 0) {
       return []

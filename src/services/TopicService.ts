@@ -682,7 +682,9 @@ export class TopicService {
 
     if (isCacheValid) {
       logger.verbose('Returning cached topics, cache size:', this.allTopicsCache.size)
-      return Array.from(this.allTopicsCache.values())
+      return Array.from(this.allTopicsCache.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
     }
 
     // If already loading, wait for ongoing load
@@ -709,7 +711,9 @@ export class TopicService {
    * ```
    */
   public getAllTopicsCached(): Topic[] {
-    return Array.from(this.allTopicsCache.values())
+    return Array.from(this.allTopicsCache.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
   }
 
   /**
