@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { Modal, Platform, TouchableOpacity, View } from 'react-native'
+import { Modal, Platform, Pressable, View } from 'react-native'
 import Gallery, { type GalleryRef } from 'react-native-awesome-gallery'
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -76,12 +76,12 @@ const ImageGalleryViewer: React.FC<ImageGalleryViewerProps> = ({ images, initial
             exiting={FadeOut.duration(200)}
             className="absolute left-4 z-10"
             style={[{ top: insets.top + 16 }, androidElevation]}>
-            <TouchableOpacity
+            <Pressable
               onPress={onClose}
-              activeOpacity={0.7}
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <X size={28} color="white" />
-            </TouchableOpacity>
+            </Pressable>
           </Animated.View>
         )}
 

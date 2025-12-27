@@ -1,7 +1,7 @@
 import type { FC, ReactNode } from 'react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { TouchableOpacity, useWindowDimensions, View } from 'react-native'
+import { Pressable, useWindowDimensions, View } from 'react-native'
 
 import ContextMenu from '@/componentsV2/base/ContextMenu'
 import { Share, X } from '@/componentsV2/icons'
@@ -87,11 +87,15 @@ const BaseItem: FC<BaseItemProps> = ({
           : renderContent({ width: itemWidth, hasError })}
       </ContextMenu>
       {onRemove && (
-        <TouchableOpacity onPress={handleRemove} hitSlop={5} className="absolute right-1 top-1 rounded-full">
-          <View className="message-input-container rounded-full p-0.5">
-            <X size={14} className="primary-text" />
+        <Pressable
+          onPress={handleRemove}
+          hitSlop={5}
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          className="absolute right-1 top-1 rounded-full">
+          <View className="rounded-full bg-zinc-700 p-0.5">
+            <X size={14} className="white" />
           </View>
-        </TouchableOpacity>
+        </Pressable>
       )}
     </View>
   )

@@ -1,6 +1,6 @@
 import React from 'react'
 import type { StyleProp, ViewStyle } from 'react-native'
-import { TouchableOpacity } from 'react-native'
+import { Pressable } from 'react-native'
 
 interface IconButtonProps {
   onPress?: () => void
@@ -11,8 +11,12 @@ interface IconButtonProps {
 
 export const IconButton = ({ onPress, icon, style, disabled }: IconButtonProps) => {
   return (
-    <TouchableOpacity onPress={onPress} hitSlop={10} style={style} disabled={disabled}>
+    <Pressable
+      onPress={onPress}
+      hitSlop={10}
+      style={({ pressed }) => [style, { opacity: pressed ? 0.7 : 1 }]}
+      disabled={disabled}>
       {icon}
-    </TouchableOpacity>
+    </Pressable>
   )
 }

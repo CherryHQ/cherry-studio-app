@@ -3,7 +3,7 @@ import * as Clipboard from 'expo-clipboard'
 import { Button } from 'heroui-native'
 import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, Platform, ScrollView, TouchableOpacity, View } from 'react-native'
+import { BackHandler, Platform, Pressable, ScrollView, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Text, XStack, YStack } from '@/componentsV2'
@@ -137,14 +137,17 @@ const MessageErrorInfo: React.FC<{ block: ErrorMessageBlock; message: Message; o
   }
 
   return (
-    <TouchableOpacity className="rounded-lg  border border-red-600/20 bg-red-600/10 p-2" onPress={onShowDetail}>
+    <Pressable
+      className="rounded-lg  border border-red-600/20 bg-red-600/10 p-2"
+      style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+      onPress={onShowDetail}>
       <XStack className="w-full items-center justify-between gap-2">
         <Text className="flex-1 text-red-600" numberOfLines={1}>
           {getAlertDescription()}
         </Text>
         <Text className="text-sm text-red-600">{t('common.detail')}</Text>
       </XStack>
-    </TouchableOpacity>
+    </Pressable>
   )
 }
 

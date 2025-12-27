@@ -1,6 +1,6 @@
 import { cn } from 'heroui-native'
 import React from 'react'
-import { TouchableOpacity } from 'react-native'
+import { Pressable } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import { ModelTags } from '@/componentsV2/features/ModelTags'
@@ -18,8 +18,8 @@ interface ModelListItemProps {
 
 export const ModelListItem: React.FC<ModelListItemProps> = ({ item, isSelected, onToggle }) => {
   return (
-    <TouchableOpacity
-      activeOpacity={0.7}
+    <Pressable
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
       onPress={() => onToggle(item.value)}
       className={`justify-between rounded-lg border px-2 ${
         isSelected ? 'primary-container' : 'border-transparent bg-transparent'
@@ -38,6 +38,6 @@ export const ModelListItem: React.FC<ModelListItemProps> = ({ item, isSelected, 
           <ModelTags model={item.model} size={11} />
         </YStack>
       </XStack>
-    </TouchableOpacity>
+    </Pressable>
   )
 }

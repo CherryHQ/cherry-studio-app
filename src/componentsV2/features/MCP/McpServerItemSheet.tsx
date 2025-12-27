@@ -2,7 +2,7 @@ import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { Accordion, Divider, Switch } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, ScrollView, TouchableOpacity, View } from 'react-native'
+import { BackHandler, Pressable, ScrollView, View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import { X } from '@/componentsV2/icons/LucideIcon'
@@ -104,19 +104,20 @@ const McpServerItemSheet: React.FC = () => {
       <XStack className="w-full items-center justify-center pt-5">
         <Text className="text-2xl">{selectedMcp?.name}</Text>
       </XStack>
-      <TouchableOpacity
-        style={{
+      <Pressable
+        style={({ pressed }) => ({
           position: 'absolute',
           top: 16,
           right: 16,
           padding: 4,
           backgroundColor: isDark ? '#333333' : '#dddddd',
-          borderRadius: 16
-        }}
+          borderRadius: 16,
+          opacity: pressed ? 0.7 : 1
+        })}
         onPress={dismissMcpServerItemSheet}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <X className="h-4 w-4" />
-      </TouchableOpacity>
+      </Pressable>
       <XStack className="w-full items-center justify-center">
         <Text className="text-lg">{selectedMcp?.description}</Text>
       </XStack>

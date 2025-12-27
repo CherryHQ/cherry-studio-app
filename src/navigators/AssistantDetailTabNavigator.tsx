@@ -2,7 +2,7 @@ import { createMaterialTopTabNavigator } from '@react-navigation/material-top-ta
 import { cn } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { TouchableOpacity, View } from 'react-native'
+import { Pressable, View } from 'react-native'
 
 import { Text } from '@/componentsV2'
 import ModelTabScreen from '@/screens/assistant/tabs/ModelTabScreen'
@@ -50,9 +50,10 @@ function CustomTabBar({ state, navigation }: any) {
         }
 
         return (
-          <TouchableOpacity
+          <Pressable
             key={route.key}
             onPress={onPress}
+            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
             className={cn(
               'flex-1 items-center justify-center rounded-xl px-5 py-3',
               isFocused && 'secondary-container border-[0.5px]'
@@ -60,7 +61,7 @@ function CustomTabBar({ state, navigation }: any) {
             <Text className={cn('text-xs font-bold', isFocused && 'primary-text')}>
               {tabLabels[route.name as keyof typeof tabLabels]}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         )
       })}
     </View>

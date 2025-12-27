@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native'
 import React from 'react'
-import { TouchableOpacity } from 'react-native'
+import { Pressable } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import XStack from '@/componentsV2/layout/XStack'
@@ -42,13 +42,13 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
       {/* Left area */}
       <XStack className="min-w-[40px] items-center">
         {leftButton ? (
-          <TouchableOpacity hitSlop={10} onPress={leftButton.onPress}>
+          <Pressable hitSlop={10} onPress={leftButton.onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
             {leftButton.icon}
-          </TouchableOpacity>
+          </Pressable>
         ) : showBackButton ? (
-          <TouchableOpacity hitSlop={10} onPress={handleBack}>
+          <Pressable hitSlop={10} onPress={handleBack} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
             <ArrowLeft size={24} />
-          </TouchableOpacity>
+          </Pressable>
         ) : (
           <XStack className="w-[40px]" />
         )}
@@ -59,9 +59,9 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         {buttonsToRender.length > 0 ? (
           <XStack className="gap-3">
             {buttonsToRender.map((button, index) => (
-              <TouchableOpacity key={index} hitSlop={10} onPress={button.onPress}>
+              <Pressable key={index} hitSlop={10} onPress={button.onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
                 {button.icon}
-              </TouchableOpacity>
+              </Pressable>
             ))}
           </XStack>
         ) : (

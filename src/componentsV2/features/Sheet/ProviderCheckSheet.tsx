@@ -2,7 +2,7 @@ import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { Button, Spinner } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, Platform, TouchableOpacity, View } from 'react-native'
+import { BackHandler, Platform, Pressable, View } from 'react-native'
 
 import { presentDialog } from '@/componentsV2/base/Dialog'
 import Text from '@/componentsV2/base/Text'
@@ -112,16 +112,17 @@ const ProviderCheckSheet: React.FC = () => {
   const header = (
     <XStack className="border-foreground/10 items-center justify-between border-b px-4 pb-4 pt-5">
       <Text className="text-foreground text-xl font-bold">{t('settings.provider.api_check.title')}</Text>
-      <TouchableOpacity
-        style={{
+      <Pressable
+        style={({ pressed }) => ({
           padding: 4,
           backgroundColor: isDark ? '#333333' : '#dddddd',
-          borderRadius: 16
-        }}
+          borderRadius: 16,
+          opacity: pressed ? 0.7 : 1
+        })}
         onPress={dismissProviderCheckSheet}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <X size={16} />
-      </TouchableOpacity>
+      </Pressable>
     </XStack>
   )
 

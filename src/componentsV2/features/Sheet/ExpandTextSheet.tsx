@@ -1,7 +1,7 @@
 import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, Keyboard, Platform, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native'
+import { BackHandler, Keyboard, Platform, Pressable, TouchableWithoutFeedback, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import Text from '@/componentsV2/base/Text'
@@ -69,16 +69,17 @@ const ExpandTextSheet: React.FC = () => {
   const header = (
     <XStack className="border-foreground/10 items-center justify-between border-b px-4 pb-4 pt-5">
       <Text className="text-foreground text-base font-bold">{currentTitle || t('common.edit')}</Text>
-      <TouchableOpacity
-        style={{
+      <Pressable
+        style={({ pressed }) => ({
           padding: 4,
           backgroundColor: isDark ? '#333333' : '#dddddd',
-          borderRadius: 16
-        }}
+          borderRadius: 16,
+          opacity: pressed ? 0.7 : 1
+        })}
         onPress={dismissExpandTextSheet}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <X size={16} />
-      </TouchableOpacity>
+      </Pressable>
     </XStack>
   )
 

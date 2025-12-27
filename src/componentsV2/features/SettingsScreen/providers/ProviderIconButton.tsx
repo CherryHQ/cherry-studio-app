@@ -2,7 +2,7 @@ import * as ImagePicker from 'expo-image-picker'
 import { LinearGradient } from 'expo-linear-gradient'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { TouchableOpacity } from 'react-native'
+import { Pressable } from 'react-native'
 
 import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import Image from '@/componentsV2/base/Image'
@@ -108,10 +108,10 @@ export function ProviderIconButton({ providerId, iconUri, onImageSelected }: Pro
 
   return (
     <YStack className="relative">
-      <TouchableOpacity
+      <Pressable
         onPress={handleUploadIcon}
         className="primary-border h-[120px] w-[120px] overflow-hidden rounded-full border-[5px]"
-        style={{ justifyContent: 'center', alignItems: 'center' }}>
+        style={({ pressed }) => ({ justifyContent: 'center', alignItems: 'center', opacity: pressed ? 0.7 : 1 })}>
         {image ? (
           <Image source={{ uri: image }} className="h-[120px] w-[120px]" />
         ) : (
@@ -119,7 +119,7 @@ export function ProviderIconButton({ providerId, iconUri, onImageSelected }: Pro
             <DefaultProviderIcon />
           </YStack>
         )}
-      </TouchableOpacity>
+      </Pressable>
 
       <YStack className="absolute bottom-0 right-0 z-10 h-10 w-10 rounded-full">
         <LinearGradient

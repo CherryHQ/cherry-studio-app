@@ -3,7 +3,7 @@ import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import * as ExpoLinking from 'expo-linking'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, Platform, TouchableOpacity, View } from 'react-native'
+import { BackHandler, Platform, Pressable, View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import { FallbackFavicon, X } from '@/componentsV2/icons'
@@ -61,11 +61,11 @@ const Footer = ({ url, title }: { url: string; title: string }) => (
 
 const CitationCard = ({ citation, onPress }: { citation: Citation; onPress: (url: string) => void }) => (
   <YStack className="gap-2 py-2.5">
-    <TouchableOpacity className="gap-2" activeOpacity={0.7} onPress={() => onPress(citation.url)}>
+    <Pressable className="gap-2" style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })} onPress={() => onPress(citation.url)}>
       <CitationTitle number={citation.number} title={citation.title || ''} />
       <Content content={citation.content || ''} />
       <Footer url={citation.url} title={citation.title || ''} />
-    </TouchableOpacity>
+    </Pressable>
   </YStack>
 )
 
@@ -115,16 +115,17 @@ export const CitationSheet: React.FC = () => {
   const header = (
     <XStack className="border-foreground/10 items-center justify-between border-b px-4 pb-4 pt-5">
       <Text className="text-foreground text-lg font-bold">{t('common.source')}</Text>
-      <TouchableOpacity
-        style={{
+      <Pressable
+        style={({ pressed }) => ({
           padding: 4,
           backgroundColor: isDark ? '#333333' : '#dddddd',
-          borderRadius: 16
-        }}
+          borderRadius: 16,
+          opacity: pressed ? 0.7 : 1
+        })}
         onPress={dismissCitationSheet}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <X size={16} />
-      </TouchableOpacity>
+      </Pressable>
     </XStack>
   )
 

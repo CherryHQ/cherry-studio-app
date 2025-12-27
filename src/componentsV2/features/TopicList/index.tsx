@@ -1,7 +1,7 @@
 import { FlashList } from '@shopify/flash-list'
 import React, { useCallback, useEffect, useMemo, useState } from 'react' // 引入 hooks
 import { useTranslation } from 'react-i18next'
-import { TouchableOpacity } from 'react-native'
+import { Pressable } from 'react-native'
 
 import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import Text from '@/componentsV2/base/Text'
@@ -211,15 +211,14 @@ export function TopicList({
       case 'header': {
         const isCollapsed = collapsedGroups[item.groupKey]
         return (
-          <TouchableOpacity
+          <Pressable
             onPress={() => toggleGroupCollapse(item.groupKey)}
-            activeOpacity={0.7}
-            style={{ paddingTop: index !== 0 ? 20 : 0 }}>
+            style={({ pressed }) => ({ paddingTop: index !== 0 ? 20 : 0, opacity: pressed ? 0.7 : 1 })}>
             <XStack className="items-center gap-2">
               {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
               <Text className="text-foreground font-bold">{item.title}</Text>
             </XStack>
-          </TouchableOpacity>
+          </Pressable>
         )
       }
       case 'topic':

@@ -2,7 +2,7 @@ import * as ImagePicker from 'expo-image-picker'
 import { Card } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { TouchableOpacity } from 'react-native'
+import { Pressable } from 'react-native'
 
 import {
   Container,
@@ -58,7 +58,7 @@ export default function PersonalScreen() {
         <Card className="bg-card rounded-2xl p-4">
           <YStack className="gap-6">
             <XStack className="mt-2 items-center justify-center">
-              <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.8}>
+              <Pressable onPress={handleAvatarPress} style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
                 <XStack className="relative">
                   <Image
                     className="h-24 w-24 rounded-full"
@@ -68,7 +68,7 @@ export default function PersonalScreen() {
                     <Camera className="text-white" size={14} />
                   </XStack>
                 </XStack>
-              </TouchableOpacity>
+              </Pressable>
             </XStack>
 
             <XStack className="items-center justify-between gap-2 rounded-2xl py-0 pl-3.5">

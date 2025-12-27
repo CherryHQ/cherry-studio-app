@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Keyboard, TouchableOpacity } from 'react-native'
+import { Keyboard, Pressable } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import { ModelIcon } from '@/componentsV2/icons'
@@ -89,8 +89,11 @@ export const MentionButton: React.FC<MentionButtonProps> = ({ mentions, setMenti
   }
 
   return (
-    <TouchableOpacity style={{ maxWidth: BUTTON_STYLES.maxWidth }} onPress={handlePress} hitSlop={5}>
+    <Pressable
+      style={({ pressed }) => ({ maxWidth: BUTTON_STYLES.maxWidth, opacity: pressed ? 0.7 : 1 })}
+      onPress={handlePress}
+      hitSlop={5}>
       {renderButtonContent()}
-    </TouchableOpacity>
+    </Pressable>
   )
 }

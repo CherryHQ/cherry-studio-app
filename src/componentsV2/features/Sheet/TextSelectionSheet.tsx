@@ -1,7 +1,7 @@
 import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, Platform, ScrollView, TouchableOpacity, View } from 'react-native'
+import { BackHandler, Platform, Pressable, ScrollView, View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import TextField from '@/componentsV2/base/TextField'
@@ -80,16 +80,17 @@ const TextSelectionSheet: React.FC = () => {
   const header = (
     <XStack className="border-foreground/10 items-center justify-between border-b px-4 pb-4 pt-5">
       <Text className="text-foreground text-base font-bold">{t('common.select_text')}</Text>
-      <TouchableOpacity
-        style={{
+      <Pressable
+        style={({ pressed }) => ({
           padding: 4,
           backgroundColor: isDark ? '#333333' : '#dddddd',
-          borderRadius: 16
-        }}
+          borderRadius: 16,
+          opacity: pressed ? 0.7 : 1
+        })}
         onPress={dismissTextSelectionSheet}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <X size={16} />
-      </TouchableOpacity>
+      </Pressable>
     </XStack>
   )
 

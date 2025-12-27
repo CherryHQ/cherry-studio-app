@@ -1,5 +1,5 @@
 import React from 'react'
-import { TouchableOpacity } from 'react-native'
+import { Pressable, View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import { ProviderIcon } from '@/componentsV2/icons'
@@ -17,9 +17,7 @@ interface ModelSectionHeaderProps {
 
 export const ModelSectionHeader: React.FC<ModelSectionHeaderProps> = ({ section, isFirstSection, onSettingsPress }) => {
   return (
-    <TouchableOpacity
-      disabled
-      activeOpacity={1}
+    <View
       style={{
         marginTop: isFirstSection ? 0 : 12,
         flexDirection: 'row',
@@ -34,10 +32,10 @@ export const ModelSectionHeader: React.FC<ModelSectionHeaderProps> = ({ section,
         <Text className="text-zinc-400/400 text-xl font-bold ">{section.title.toUpperCase()}</Text>
       </XStack>
       {section.provider.id !== 'cherryai' && (
-        <TouchableOpacity onPress={() => onSettingsPress(section.provider)}>
+        <Pressable onPress={() => onSettingsPress(section.provider)} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
           <Settings className="text-zinc-600/80" size={16} />
-        </TouchableOpacity>
+        </Pressable>
       )}
-    </TouchableOpacity>
+    </View>
   )
 }

@@ -2,7 +2,7 @@ import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { useNavigation } from '@react-navigation/native'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { TouchableOpacity } from 'react-native'
+import { Pressable } from 'react-native'
 
 import type { SelectionSheetItem } from '@/componentsV2/base/SelectionSheet'
 import SelectionSheet from '@/componentsV2/base/SelectionSheet'
@@ -104,17 +104,17 @@ export const McpServerSheet: React.FC = () => {
   })
 
   const warningContent = !assistant.settings?.toolUseMode ? (
-    <TouchableOpacity onPress={handleNavigateToToolTab} activeOpacity={0.7}>
+    <Pressable onPress={handleNavigateToToolTab} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
       <XStack className="w-full items-center gap-2.5 rounded-lg bg-orange-400/10 px-3.5 py-3">
         <TriangleAlert size={20} className="text-orange-400 " />
         <Text className="flex-1 text-sm text-orange-400">{t('assistants.settings.tooluse.empty')}</Text>
         <ChevronRight size={20} className="text-orange-400" />
       </XStack>
-    </TouchableOpacity>
+    </Pressable>
   ) : null
 
   const emptyContent = (
-    <TouchableOpacity onPress={handleNavigateToMcpMarket} activeOpacity={0.7}>
+    <Pressable onPress={handleNavigateToMcpMarket} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
       <XStack className="w-full items-center gap-2.5 rounded-lg bg-zinc-400/10 px-3.5 py-3">
         <Text className="text-foreground flex-1 text-base">{t('settings.websearch.empty.label')}</Text>
         <XStack className="items-center gap-1.5">
@@ -122,7 +122,7 @@ export const McpServerSheet: React.FC = () => {
           <RowRightArrow />
         </XStack>
       </XStack>
-    </TouchableOpacity>
+    </Pressable>
   )
 
   return (

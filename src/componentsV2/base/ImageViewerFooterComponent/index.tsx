@@ -1,7 +1,7 @@
 import { File, Paths } from 'expo-file-system'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { TouchableOpacity, View } from 'react-native'
+import { Pressable, View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import { Download } from '@/componentsV2/icons/LucideIcon'
@@ -54,10 +54,10 @@ const ImageViewerFooterComponent: React.FC<ImageViewerFooterComponentProps> = ({
 
   return (
     <View className="p-safe-offset-6 w-full items-center">
-      <TouchableOpacity activeOpacity={0.8} onPress={handleSave} className="flex-row items-center gap-2">
+      <Pressable style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })} onPress={handleSave} className="flex-row items-center gap-2">
         <Download size={18} color="white" />
         <Text className="text-lg text-white">{t('button.save_image')}</Text>
-      </TouchableOpacity>
+      </Pressable>
     </View>
   )
 }

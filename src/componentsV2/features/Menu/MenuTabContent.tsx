@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { TouchableOpacity } from 'react-native'
+import { Pressable } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import XStack from '@/componentsV2/layout/XStack'
@@ -22,9 +22,12 @@ export function MenuTabContent({ title, onSeeAllPress, children }: MenuTabConten
           <XStack className="items-center gap-2 py-2.5">
             <Text className="text-foreground">{title}</Text>
           </XStack>
-          <TouchableOpacity onPress={onSeeAllPress} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Pressable
+            onPress={onSeeAllPress}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
             <Text className="text-blue-500">{t('menu.see_all')}</Text>
-          </TouchableOpacity>
+          </Pressable>
         </XStack>
       </YStack>
       {children}

@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { TouchableOpacity, View } from 'react-native'
+import { Pressable, View } from 'react-native'
 
 import { Text, YStack } from '@/componentsV2'
 import { presentCitationSheet } from '@/componentsV2/features/Sheet/CitationSheet'
@@ -38,8 +38,9 @@ const CitationsList: React.FC<CitationsListProps> = ({ citations }) => {
 
   return (
     <YStack className="my-1.5">
-      <TouchableOpacity
+      <Pressable
         className="secondary-container h-7 flex-row items-center gap-2 self-start rounded-lg border px-2"
+        style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
         onPress={handlePress}>
         <View className="flex-row items-center">
           {previewItems.map((c, i) => (
@@ -47,7 +48,7 @@ const CitationsList: React.FC<CitationsListProps> = ({ citations }) => {
           ))}
         </View>
         <Text className="primary-text text-[10px]">{t('chat.citation', { count })}</Text>
-      </TouchableOpacity>
+      </Pressable>
     </YStack>
   )
 }

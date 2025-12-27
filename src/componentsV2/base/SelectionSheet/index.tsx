@@ -1,8 +1,8 @@
 import { LegendList } from '@legendapp/list'
 import { TrueSheet } from '@lodev09/react-native-true-sheet'
-import { cn } from 'heroui-native'
+import { Button, cn } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
-import { BackHandler, Platform, TouchableOpacity, View } from 'react-native'
+import { BackHandler, Platform, View } from 'react-native'
 
 import { Check } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
@@ -110,7 +110,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
         item.description
       )
     return (
-      <TouchableOpacity onPress={() => handleSelect(item)} activeOpacity={0.5}>
+      <Button onPress={() => handleSelect(item)} variant="ghost" className="h-auto min-h-0 rounded-xl p-0">
         <XStack
           className={cn(
             `items-center gap-2.5 rounded-lg border px-3.5 py-3 ${
@@ -125,7 +125,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
           </XStack>
           {item.isSelected && <Check size={20} className="primary-text" />}
         </XStack>
-      </TouchableOpacity>
+      </Button>
     )
   }
 

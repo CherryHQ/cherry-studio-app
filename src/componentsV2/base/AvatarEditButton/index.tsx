@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient'
 import React from 'react'
-import { TouchableOpacity } from 'react-native'
+import { Pressable } from 'react-native'
 import type { EmojiType } from 'rn-emoji-keyboard'
 import EmojiPicker from 'rn-emoji-keyboard'
 
@@ -41,19 +41,20 @@ export function AvatarEditButton({
 
   return (
     <YStack className="relative">
-      <TouchableOpacity
+      <Pressable
         onPress={() => setIsOpen(prev => !prev)}
         className="primary-border overflow-hidden rounded-full border-[5px]"
-        style={{
+        style={({ pressed }) => ({
           width: size,
           height: size,
           justifyContent: 'center',
           alignItems: 'center',
+          opacity: pressed ? 0.8 : 1,
           ...(!isEmoji && {
             paddingTop: 12,
             paddingLeft: 19
           })
-        }}>
+        })}>
         {isEmoji ? (
           <Text style={{ fontSize: size * 0.5, lineHeight: size * 0.65 }} className="text-foreground">
             {content}
@@ -61,7 +62,7 @@ export function AvatarEditButton({
         ) : (
           content
         )}
-      </TouchableOpacity>
+      </Pressable>
 
       <YStack
         className="primary-background absolute bottom-0 right-0 z-10 rounded-full"
