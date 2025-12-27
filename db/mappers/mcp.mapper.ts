@@ -25,7 +25,7 @@ export function transformDbToMcp(dbRecord: any): MCPServer {
 export function transformMcpToDb(mcpServer: MCPServer): any {
   return {
     id: mcpServer.id,
-    name: mcpServer.name,
+    name: mcpServer.name || mcpServer.id,
     type: mcpServer.type || 'stdio',
     description: mcpServer.description || null,
     is_active: mcpServer.isActive ? 1 : 0,
