@@ -27,7 +27,7 @@ import type { ProviderSection, SelectOption } from './types'
 
 export { dismissModelSheet, presentModelSheet } from './hooks/useModelSheetData'
 
-const TAB_BAR_HEIGHT = 56
+const LIST_BOTTOM_PADDING = 100
 
 const ModelSheet: React.FC = () => {
   const { t } = useTranslation()
@@ -152,7 +152,7 @@ const ModelSheet: React.FC = () => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             paddingHorizontal: 20,
-            paddingBottom: bottom + TAB_BAR_HEIGHT + 20
+            paddingBottom: bottom + LIST_BOTTOM_PADDING
           }}
         />
         <ModelListHeader
