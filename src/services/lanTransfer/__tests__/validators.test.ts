@@ -144,37 +144,37 @@ describe('validators', () => {
     })
 
     test('returns false when transferId is missing', () => {
-      const { transferId, ...msg } = validFileStart
+      const { transferId: _transferId, ...msg } = validFileStart
       expect(isValidFileStartMessage(msg)).toBe(false)
     })
 
     test('returns false when fileName is missing', () => {
-      const { fileName, ...msg } = validFileStart
+      const { fileName: _fileName, ...msg } = validFileStart
       expect(isValidFileStartMessage(msg)).toBe(false)
     })
 
     test('returns false when fileSize is missing', () => {
-      const { fileSize, ...msg } = validFileStart
+      const { fileSize: _fileSize, ...msg } = validFileStart
       expect(isValidFileStartMessage(msg)).toBe(false)
     })
 
     test('returns false when mimeType is missing', () => {
-      const { mimeType, ...msg } = validFileStart
+      const { mimeType: _mimeType, ...msg } = validFileStart
       expect(isValidFileStartMessage(msg)).toBe(false)
     })
 
     test('returns false when checksum is missing', () => {
-      const { checksum, ...msg } = validFileStart
+      const { checksum: _checksum, ...msg } = validFileStart
       expect(isValidFileStartMessage(msg)).toBe(false)
     })
 
     test('returns false when totalChunks is missing', () => {
-      const { totalChunks, ...msg } = validFileStart
+      const { totalChunks: _totalChunks, ...msg } = validFileStart
       expect(isValidFileStartMessage(msg)).toBe(false)
     })
 
     test('returns false when chunkSize is missing', () => {
-      const { chunkSize, ...msg } = validFileStart
+      const { chunkSize: _chunkSize, ...msg } = validFileStart
       expect(isValidFileStartMessage(msg)).toBe(false)
     })
 
@@ -247,17 +247,17 @@ describe('validators', () => {
     })
 
     test('returns false when transferId is missing', () => {
-      const { transferId, ...msg } = validFileChunk
+      const { transferId: _transferId, ...msg } = validFileChunk
       expect(isValidFileChunkMessage(msg)).toBe(false)
     })
 
     test('returns false when chunkIndex is missing', () => {
-      const { chunkIndex, ...msg } = validFileChunk
+      const { chunkIndex: _chunkIndex, ...msg } = validFileChunk
       expect(isValidFileChunkMessage(msg)).toBe(false)
     })
 
     test('returns false when data is missing', () => {
-      const { data, ...msg } = validFileChunk
+      const { data: _data, ...msg } = validFileChunk
       expect(isValidFileChunkMessage(msg)).toBe(false)
     })
 

@@ -40,13 +40,6 @@ const resetStorage = () => {
   jest.clearAllMocks()
 }
 
-// Helper to set a UUID value for the next uuid() call
-const setNextUuid = (value: string) => {
-  // We need to mock uuid function behavior
-  const utilsMock = jest.requireMock('@/utils')
-  utilsMock.uuid = jest.fn(() => value)
-}
-
 describe('MobileOAuthProvider', () => {
   beforeEach(() => {
     resetStorage()

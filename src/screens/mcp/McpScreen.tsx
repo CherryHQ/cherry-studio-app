@@ -26,7 +26,7 @@ export default function McpScreen() {
   const { t } = useTranslation()
   const navigation = useNavigation<DrawerNavigationProps & McpNavigationProps>()
   const toast = useToast()
-  const { mcpServers, isLoading, loadError, updateMcpServers } = useMcpServers()
+  const { mcpServers, isLoading, updateMcpServers } = useMcpServers()
   const {
     searchText,
     setSearchText,
