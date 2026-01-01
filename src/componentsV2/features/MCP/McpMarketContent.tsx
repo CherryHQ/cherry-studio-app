@@ -10,11 +10,17 @@ import { McpItemCard } from './McpItemCard'
 
 interface McpMarketContentProps {
   mcps: MCPServer[]
-  updateMcpServers: (mcps: MCPServer[]) => Promise<void>
   handleMcpServerItemPress: (mcp: MCPServer) => void
+  mode?: 'add' | 'toggle'
+  onToggle?: (mcp: MCPServer, isActive: boolean) => void
 }
 
-export const McpMarketContent: FC<McpMarketContentProps> = ({ mcps, updateMcpServers, handleMcpServerItemPress }) => {
+export const McpMarketContent: FC<McpMarketContentProps> = ({
+  mcps,
+  handleMcpServerItemPress,
+  mode = 'toggle',
+  onToggle
+}) => {
   const insets = useSafeAreaInsets()
 
   return (
@@ -22,11 +28,7 @@ export const McpMarketContent: FC<McpMarketContentProps> = ({ mcps, updateMcpSer
       <LegendList
         data={mcps}
         renderItem={({ item }) => (
-          <McpItemCard
-            mcp={item}
-            updateMcpServers={updateMcpServers}
-            handleMcpServerItemPress={handleMcpServerItemPress}
-          />
+          <McpItemCard mcp={item} handleMcpServerItemPress={handleMcpServerItemPress} mode={mode} onToggle={onToggle} />
         )}
         keyExtractor={item => item.id}
         showsVerticalScrollIndicator={false}

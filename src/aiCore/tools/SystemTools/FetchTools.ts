@@ -2,7 +2,7 @@ import { tool } from 'ai'
 import { z } from 'zod'
 
 const RequestPayloadSchema = z.object({
-  url: z.url()
+  url: z.string().url()
 })
 
 type RequestPayload = z.infer<typeof RequestPayloadSchema>

@@ -61,7 +61,10 @@ const Footer = ({ url, title }: { url: string; title: string }) => (
 
 const CitationCard = ({ citation, onPress }: { citation: Citation; onPress: (url: string) => void }) => (
   <YStack className="gap-2 py-2.5">
-    <Pressable className="gap-2" style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })} onPress={() => onPress(citation.url)}>
+    <Pressable
+      className="gap-2"
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+      onPress={() => onPress(citation.url)}>
       <CitationTitle number={citation.number} title={citation.title || ''} />
       <Content content={citation.content || ''} />
       <Footer url={citation.url} title={citation.title || ''} />

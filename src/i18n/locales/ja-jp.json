@@ -120,6 +120,7 @@
       "welcome": "私はあなたのAIプロダクション・アシスタントです。アシスタントの作成、モデルの管理などができます。"
     },
     "common": {
+      "add": "追加",
       "added": "追加済み",
       "camera": "カメラ",
       "cancel": "キャンセル",
@@ -129,6 +130,7 @@
       "clear_all": "すべてクリア",
       "close": "閉じる",
       "confirm": "確認",
+      "content_too_long": "コンテンツが長すぎて表示できません",
       "copied": "コピーしました",
       "copy": "テキストをコピー",
       "delete": "削除",
@@ -153,12 +155,14 @@
       "ok": "OK",
       "older": "年上",
       "others": "他の人",
+      "parameters": "パラメータ",
       "photo": "写真",
       "play": "再生",
       "preset": "プリセット",
       "prompt": "プロンプト",
       "regenerate": "再生成",
       "rename": "名前を変更",
+      "result": "結果",
       "save": "保存",
       "saved": "保存しました",
       "search_placeholder": "検索...",
@@ -172,6 +176,8 @@
       "today": "今日",
       "tool": "ツール",
       "translate": "翻訳",
+      "type": "タイプ",
+      "url": "URL",
       "visit": "訪問",
       "websearch": "ウェブ検索",
       "welcome": {
@@ -181,10 +187,6 @@
       "yesterday": "昨日"
     },
     "error": {
-      "ai_feature": {
-        "not_available": "AI機能は利用できません。",
-        "update_failed": "AI機能の更新に失敗しました。もう一度お試しください。"
-      },
       "ai_feature": {
         "not_available": "AI機能は利用できません。",
         "update_failed": "AI機能の更新に失敗しました。もう一度お試しください。"
@@ -357,6 +359,19 @@
       "placeholder": "メッセージを送信..."
     },
     "mcp": {
+      "auth": {
+        "auth_required_content": "MCP サーバー「{{name}}」は OAuth 認証が必要です。今すぐ接続しますか？",
+        "auth_required_title": "認証が必要です",
+        "connect": "接続",
+        "connected": "接続済み",
+        "disconnect": "切断",
+        "headers": "カスタムヘッダー",
+        "invalid_json": "無効なJSON",
+        "invalid_json_content": "有効なJSON形式で入力してください。",
+        "oauth": "OAuth",
+        "oauth_failed": "OAuth認証に失敗しました",
+        "title": "認証"
+      },
       "builtin": {
         "calendar": {
           "description": "取得、オペレーティングシステムのカレンダー"
@@ -375,20 +390,31 @@
         }
       },
       "market": {
+        "add": {
+          "success": "{{mcp_name}} を追加しました"
+        },
         "title": "MCP市場"
       },
       "server": {
+        "add": "MCP サーバーを追加",
+        "delete": {
+          "content": "この MCP サーバーを削除してもよろしいですか？この操作は元に戻せません。",
+          "title": "サーバーを削除"
+        },
+        "description_placeholder": "MCP サーバーの説明を入力...",
         "empty": {
           "add": "MCPサーバーを追加する",
           "label": "MCPサーバーがありません..."
         },
+        "new": "新しい MCP サーバー",
         "selected": "選択された{{num}}個のMCPサーバー",
-        "title": "MCPサーバー"
+        "title": "MCPサーバー",
+        "update_failed": "{{name}} の更新に失敗しました"
       },
       "type": {
         "inMemory": "内蔵",
         "sse": "サーバー送信イベント",
-        "streamableHttp": "ストリーミングHTTP"
+        "streamableHttp": "StreamableHTTP"
       }
     },
     "menu": {

@@ -23,7 +23,15 @@ const TextFieldInput = forwardRef<TextInput, TextFieldInputProps>(({ className, 
     input: cn('text-[14px] py-0', classNames?.input)
   }
 
-  return <HeroUITextField.Input ref={ref} className={cn('h-8', className)} classNames={mergedClassNames} {...props} />
+  return (
+    <HeroUITextField.Input
+      ref={ref}
+      className={cn('h-8', className)}
+      classNames={mergedClassNames}
+      selectionColor="#2563eb"
+      {...props}
+    />
+  )
 })
 
 TextFieldInput.displayName = 'TextFieldInput'

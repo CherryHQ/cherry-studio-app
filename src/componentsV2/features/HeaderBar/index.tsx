@@ -38,11 +38,14 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   }
 
   return (
-    <XStack className="relative h-[44px] items-center justify-between px-4">
+    <XStack className="relative h-11 items-center justify-between px-4">
       {/* Left area */}
       <XStack className="min-w-[40px] items-center">
         {leftButton ? (
-          <Pressable hitSlop={10} onPress={leftButton.onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+          <Pressable
+            hitSlop={10}
+            onPress={leftButton.onPress}
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
             {leftButton.icon}
           </Pressable>
         ) : showBackButton ? (
@@ -59,7 +62,11 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         {buttonsToRender.length > 0 ? (
           <XStack className="gap-3">
             {buttonsToRender.map((button, index) => (
-              <Pressable key={index} hitSlop={10} onPress={button.onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+              <Pressable
+                key={index}
+                hitSlop={10}
+                onPress={button.onPress}
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
                 {button.icon}
               </Pressable>
             ))}

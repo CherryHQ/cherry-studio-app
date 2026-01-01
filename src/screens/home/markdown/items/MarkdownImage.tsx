@@ -19,7 +19,10 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({ uri, alt }) => {
 
   return (
     <View className="aspect-square w-1/3">
-      <Pressable style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })} onPress={() => !imageError && setVisible(true)} disabled={imageError}>
+      <Pressable
+        style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+        onPress={() => !imageError && setVisible(true)}
+        disabled={imageError}>
         {imageError ? (
           <View
             className="bg-gray-5 rounded-2.5 items-center justify-center"

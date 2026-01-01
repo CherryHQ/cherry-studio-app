@@ -56,9 +56,7 @@ export function AssistantList({ assistants, isLoading = false, onAssistantPress 
   const { t } = useTranslation()
 
   // Filter out translate and quick assistants
-  const filteredAssistants = assistants.filter(
-    assistant => assistant.id !== 'translate' && assistant.id !== 'quick'
-  )
+  const filteredAssistants = assistants.filter(assistant => assistant.id !== 'translate' && assistant.id !== 'quick')
 
   if (isLoading) {
     return (
