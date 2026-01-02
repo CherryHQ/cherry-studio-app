@@ -27,8 +27,6 @@ import type { ProviderSection, SelectOption } from './types'
 
 export { dismissModelSheet, presentModelSheet } from './hooks/useModelSheetData'
 
-const TAB_BAR_HEIGHT = 56
-
 const ModelSheet: React.FC = () => {
   const { t } = useTranslation()
   const bottom = useBottom()
@@ -167,7 +165,7 @@ const ModelSheet: React.FC = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingHorizontal: 20,
-          paddingBottom: bottom
+          paddingBottom: Math.max(bottom, sheetContentHeight - 150)
         }}
       />
     </TrueSheet>
