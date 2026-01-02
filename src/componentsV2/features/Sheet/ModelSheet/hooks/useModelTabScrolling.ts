@@ -13,11 +13,11 @@ export function useModelTabScrolling({ sections, isVisible }: UseModelTabScrolli
   const listRef = useRef<SectionListType<ModelOption, ProviderSection>>(null)
   const isScrollingByTab = useRef(false)
 
-  // Build provider label -> section index mapping
+  // Build provider id -> section index mapping
   const sectionIndices = useMemo(() => {
     const indices: Record<string, number> = {}
     sections.forEach((section, index) => {
-      indices[section.title] = index
+      indices[section.provider.id] = index
     })
     return indices
   }, [sections])
@@ -43,19 +43,20 @@ export function useModelTabScrolling({ sections, isVisible }: UseModelTabScrolli
       const firstViewable = viewableItems[0]
       if (firstViewable?.section) {
         const section = firstViewable.section as ProviderSection
-        if (section.title && section.title !== activeProvider) {
-          setActiveProvider(section.title)
+        const providerId = section.provider.id
+        if (providerId && providerId !== activeProvider) {
+          setActiveProvider(providerId)
         }
       }
     }
   ).current
 
   // Click Tab to scroll to corresponding Provider
-  const handleProviderChange = (providerLabel: string) => {
-    setActiveProvider(providerLabel)
+  const handleProviderChange = (providerId: string) => {
+    setActiveProvider(providerId)
     isScrollingByTab.current = true
 
-    const sectionIndex = sectionIndices[providerLabel]
+    const sectionIndex = sectionIndices[providerId]
     if (listRef.current && sectionIndex !== undefined) {
       listRef.current.scrollToLocation({
         sectionIndex,

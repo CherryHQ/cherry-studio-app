@@ -8,6 +8,7 @@ export interface ModelOption {
 }
 
 export interface ProviderSection {
+  key: string
   title: string
   provider: Provider
   data: ModelOption[]

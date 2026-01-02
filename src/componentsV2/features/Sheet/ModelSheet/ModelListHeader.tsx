@@ -34,12 +34,7 @@ export const ModelListHeader: React.FC<ModelListHeaderProps> = ({
     <View
       className="bg-card"
       style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 10,
-        paddingHorizontal: 20,
+        paddingHorizontal: 10,
         height: HEADER_HEIGHT
       }}>
       <YStack className="h-20 gap-4">

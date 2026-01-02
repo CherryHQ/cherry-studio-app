@@ -11,26 +11,48 @@ const defaultModelSheetData: ModelSheetData = {
   multiple: false
 }
 
-let currentSheetData: ModelSheetData = defaultModelSheetData
-let updateSheetDataCallback: ((data: ModelSheetData) => void) | null = null
+type SheetDataListener = (data: ModelSheetData) => void
 
+// Module-level state with multi-subscriber support
+let sheetData: ModelSheetData = defaultModelSheetData
+const listeners = new Set<SheetDataListener>()
+
+/**
+ * Notify all subscribers of state change.
+ */
+const notifyListeners = () => {
+  listeners.forEach(fn => fn(sheetData))
+}
+
+/**
+ * Present the model sheet with data.
+ * API compatible with existing usage.
+ */
 export const presentModelSheet = (data: ModelSheetData) => {
-  currentSheetData = data
-  updateSheetDataCallback?.(data)
+  sheetData = data
+  notifyListeners()
   return TrueSheet.present(SHEET_NAME)
 }
 
+/**
+ * Dismiss the model sheet.
+ */
 export const dismissModelSheet = () => TrueSheet.dismiss(SHEET_NAME)
 
+/**
+ * Hook to access model sheet data.
+ * Supports multiple subscribers.
+ */
 export function useModelSheetData() {
-  const [sheetData, setSheetData] = useState<ModelSheetData>(currentSheetData)
+  const [localSheetData, setLocalSheetData] = useState(sheetData)
   const [isVisible, setIsVisible] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Subscribe to data changes
   useEffect(() => {
-    updateSheetDataCallback = setSheetData
+    listeners.add(setLocalSheetData)
     return () => {
-      updateSheetDataCallback = null
+      listeners.delete(setLocalSheetData)
     }
   }, [])
 
@@ -44,7 +66,7 @@ export function useModelSheetData() {
   }
 
   return {
-    sheetData,
+    sheetData: localSheetData,
     isVisible,
     searchQuery,
     setSearchQuery,

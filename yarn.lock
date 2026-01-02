@@ -3793,20 +3793,26 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lodev09/react-native-true-sheet@npm:^3.0.0-beta.12":
-  version: 3.0.0-beta.12
-  resolution: "@lodev09/react-native-true-sheet@npm:3.0.0-beta.12"
+"@lodev09/react-native-true-sheet@npm:^3.6.11":
+  version: 3.6.11
+  resolution: "@lodev09/react-native-true-sheet@npm:3.6.11"
   peerDependencies:
+    "@gorhom/bottom-sheet": ">=5"
+    "@react-navigation/native": ">=7"
     react: "*"
     react-native: "*"
-    react-native-reanimated: ">=4.0.0"
+    react-native-reanimated: ">=4"
     react-native-worklets: "*"
   peerDependenciesMeta:
+    "@gorhom/bottom-sheet":
+      optional: true
+    "@react-navigation/native":
+      optional: true
     react-native-reanimated:
       optional: true
     react-native-worklets:
       optional: true
-  checksum: 10c0/8cb51900969481909bca7d1293f22419f735925934357abefa239088e8f22e6f8763b9ac88248316f681a2c93cf4b7d01157eb21d816f1a55aa6392112f921ba
+  checksum: 10c0/9ffbe8d0e25bbc6c693b665951a771b05a55f7ebdfd7eb46589f546395b3053722c2a380d724fa3d70c78b7c13812026f3409a06dddd361cbeb735bdf81a60e0
   languageName: node
   linkType: hard
 
@@ -7134,7 +7140,7 @@ __metadata:
     "@google/genai": "npm:^1.17.0"
     "@gorhom/bottom-sheet": "npm:^5.2.6"
     "@legendapp/list": "npm:^2.0.15"
-    "@lodev09/react-native-true-sheet": "npm:^3.0.0-beta.12"
+    "@lodev09/react-native-true-sheet": "npm:^3.6.11"
     "@mistralai/mistralai": "npm:^1.7.4"
     "@modelcontextprotocol/sdk": "npm:^1.13.2"
     "@mozilla/readability": "npm:^0.6.0"
