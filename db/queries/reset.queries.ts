@@ -4,6 +4,7 @@ import { db } from '..'
 import {
   assistants,
   files,
+  mcp,
   messageBlocks,
   messages,
   preferenceTable,
@@ -54,6 +55,9 @@ export async function clearAllTables(): Promise<void> {
 
       await tx.delete(preferenceTable)
       logger.info('Cleared preference table')
+
+      await tx.delete(mcp)
+      logger.info('Cleared mcp table')
     })
 
     logger.info('Successfully cleared all database tables')

@@ -1,4 +1,4 @@
-import { assistantDatabase, mcpDatabase, providerDatabase, websearchProviderDatabase } from '@database'
+import { assistantDatabase, mcpDatabase, providerDatabase, topicDatabase, websearchProviderDatabase } from '@database'
 import { db } from '@db'
 import { seedDatabase } from '@db/seeding'
 import * as Localization from 'expo-localization'
@@ -9,8 +9,9 @@ import { SYSTEM_PROVIDERS, SYSTEM_PROVIDERS_CONFIG } from '@/config/providers'
 import { getWebSearchProviders } from '@/config/websearchProviders'
 import { storage } from '@/utils'
 
-import { assistantService } from './AssistantService'
+import { assistantService, getDefaultAssistant } from './AssistantService'
 import { loggerService } from './LoggerService'
+import { mcpService } from './McpService'
 import { preferenceService } from './PreferenceService'
 import { providerService } from './ProviderService'
 import { topicService } from './TopicService'
@@ -116,7 +117,37 @@ export function resetAppInitializationState(): void {
   assistantService.clearCache()
   providerService.clearCache()
   topicService.resetState()
+  mcpService.invalidateCache()
   logger.info('App initialization state reset')
+}
+
+async function ensureCurrentTopic(): Promise<void> {
+  const currentTopicId = await preferenceService.get('topic.current_id')
+
+  // If current topic is set and valid, nothing to do
+  if (currentTopicId) {
+    const topic = await topicDatabase.getTopicById(currentTopicId)
+    if (topic) {
+      return
+    }
+    logger.warn(`Current topic ${currentTopicId} not found, selecting new topic`)
+  }
+
+  // Try to get newest existing topic
+  const newestTopic = await topicDatabase.getNewestTopic()
+  if (newestTopic) {
+    await preferenceService.set('topic.current_id', newestTopic.id)
+    logger.info(`Set current topic to newest: ${newestTopic.id}`)
+    return
+  }
+
+  // No topics exist - create one with default assistant
+  const defaultAssistant = await getDefaultAssistant()
+  if (defaultAssistant) {
+    const newTopic = await topicService.createTopic(defaultAssistant)
+    await preferenceService.set('topic.current_id', newTopic.id)
+    logger.info(`Created new topic: ${newTopic.id}`)
+  }
 }
 
 export async function runAppDataMigrations(): Promise<void> {
@@ -127,6 +158,9 @@ export async function runAppDataMigrations(): Promise<void> {
 
     // Initialize ProviderService cache (loads default provider)
     await providerService.initialize()
+
+    // Ensure a valid current topic exists
+    await ensureCurrentTopic()
 
     return
   }
@@ -156,6 +190,9 @@ export async function runAppDataMigrations(): Promise<void> {
 
   // Initialize ProviderService cache (loads default provider)
   await providerService.initialize()
+
+  // Ensure a valid current topic exists
+  await ensureCurrentTopic()
 }
 
 export function getAppDataVersion(): number {
