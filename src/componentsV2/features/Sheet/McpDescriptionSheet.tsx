@@ -92,7 +92,6 @@ export const McpDescriptionSheet: React.FC = () => {
       dimmed
       backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
       header={header}
-      keyboardMode="pan"
       onDidDismiss={handleDismiss}
       onDidPresent={() => setIsVisible(true)}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
