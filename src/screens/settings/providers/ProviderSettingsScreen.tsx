@@ -278,7 +278,7 @@ export default function ProviderSettingsScreen() {
           ...(!provider.isSystem
             ? [
                 {
-                  icon: <Trash2 size={24} className="text-red-600" />,
+                  icon: <Trash2 size={24} />,
                   onPress: onDeleteProvider
                 }
               ]

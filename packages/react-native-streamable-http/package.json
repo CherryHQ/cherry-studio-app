@@ -1,0 +1,39 @@
+{
+  "name": "@cherrystudio/react-native-streamable-http",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Model Context Protocol StreamableHTTP polyfill for React Native",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erodactyl/react-native-streamable-http.git"
+  },
+  "keywords": [
+    "MCP",
+    "React Native",
+    "StreamableHTTP"
+  ],
+  "author": "Erik Davtyan",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/erodactyl/react-native-streamable-http/issues"
+  },
+  "homepage": "https://github.com/erodactyl/react-native-streamable-http#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}

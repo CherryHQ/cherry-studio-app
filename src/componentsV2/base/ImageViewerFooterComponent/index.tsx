@@ -54,7 +54,10 @@ const ImageViewerFooterComponent: React.FC<ImageViewerFooterComponentProps> = ({
 
   return (
     <View className="p-safe-offset-6 w-full items-center">
-      <Pressable style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })} onPress={handleSave} className="flex-row items-center gap-2">
+      <Pressable
+        style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+        onPress={handleSave}
+        className="flex-row items-center gap-2">
         <Download size={18} color="white" />
         <Text className="text-lg text-white">{t('button.save_image')}</Text>
       </Pressable>

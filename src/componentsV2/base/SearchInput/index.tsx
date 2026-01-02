@@ -12,7 +12,7 @@ interface SearchInputProps {
 
 export const SearchInput = ({ placeholder, onChangeText, value }: SearchInputProps) => {
   return (
-    <TextField className="bg-secondary rounded-3xl">
+    <TextField className="bg-secondary rounded-xl">
       <TextField.Input
         placeholder={placeholder}
         onChangeText={onChangeText}

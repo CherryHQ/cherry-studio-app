@@ -8,7 +8,6 @@ A compound component for chat message input with support for text, voice, file a
 
 ```tsx
 import { MessageInput } from '@/componentsV2/features/ChatScreen/MessageInput'
-
 ;<MessageInput topic={topic} assistant={assistant} updateAssistant={updateAssistant} />
 ```
 

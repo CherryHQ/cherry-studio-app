@@ -1,15 +1,20 @@
 import React from 'react'
 
 import AssistantItemSheet from '@/componentsV2/features/Assistant/AssistantItemSheet'
+import McpServerItemSheet from '@/componentsV2/features/MCP/McpServerItemSheet'
 import { AddModelSheet } from '@/componentsV2/features/SettingsScreen/providers/AddModelSheet'
 import ExpandInputSheet from '@/componentsV2/features/Sheet/ExpandInputSheet'
 import ExpandTextSheet from '@/componentsV2/features/Sheet/ExpandTextSheet'
+import { HeadersEditSheet } from '@/componentsV2/features/Sheet/HeadersEditSheet'
+import { McpDescriptionSheet } from '@/componentsV2/features/Sheet/McpDescriptionSheet'
 import { McpServerSheet } from '@/componentsV2/features/Sheet/McpServerSheet'
+import { McpToolSheet } from '@/componentsV2/features/Sheet/McpToolSheet'
 import ModelSheet from '@/componentsV2/features/Sheet/ModelSheet'
 import ProviderCheckSheet from '@/componentsV2/features/Sheet/ProviderCheckSheet'
 import { ReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
 import TextEditSheet from '@/componentsV2/features/Sheet/TextEditSheet'
 import TextSelectionSheet from '@/componentsV2/features/Sheet/TextSelectionSheet'
+import { ToolCallDetailSheet } from '@/componentsV2/features/Sheet/ToolCallDetailSheet'
 import { ToolSheet } from '@/componentsV2/features/Sheet/ToolSheet'
 import { WebSearchProviderSheet } from '@/componentsV2/features/Sheet/WebSearchProviderSheet'
 import { ErrorDetailSheet } from '@/screens/home/messages/blocks/ErrorBlock'
@@ -29,6 +34,7 @@ const SheetManager: React.FC = () => {
   return (
     <>
       <AssistantItemSheet />
+      <McpServerItemSheet />
       <TextEditSheet />
       <TextSelectionSheet />
       <ModelSheet />
@@ -42,6 +48,10 @@ const SheetManager: React.FC = () => {
       <ExpandInputSheet />
       <ExpandTextSheet />
       <ProviderCheckSheet />
+      <HeadersEditSheet />
+      <McpDescriptionSheet />
+      <McpToolSheet />
+      <ToolCallDetailSheet />
     </>
   )
 }

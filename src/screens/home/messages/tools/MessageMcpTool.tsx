@@ -1,9 +1,10 @@
-import { Accordion, Spinner } from 'heroui-native'
-import React from 'react'
-import { View } from 'react-native'
+import { Spinner } from 'heroui-native'
+import React, { useCallback } from 'react'
+import { Pressable } from 'react-native'
 
 import { Text, XStack } from '@/componentsV2'
-import { Wrench, XCircle } from '@/componentsV2/icons'
+import { presentToolCallDetailSheet } from '@/componentsV2/features/Sheet/ToolCallDetailSheet'
+import { ChevronDown, CircleCheck, XCircle } from '@/componentsV2/icons'
 import type { ToolMessageBlock } from '@/types/message'
 
 interface Props {
@@ -13,31 +14,31 @@ interface Props {
 export default function MessageMcpTool({ block }: Props) {
   const toolResponse = block.metadata?.rawMcpToolResponse
 
-  const { tool, status, response } = toolResponse!
-  const isPending = status === 'pending'
+  const { tool, status, response, arguments: args } = toolResponse!
+  const isPending = status === 'pending' || status === 'invoking'
   const isDone = status === 'done'
   const isError = status === 'error'
 
+  const handlePress = useCallback(() => {
+    presentToolCallDetailSheet({
+      tool,
+      arguments: args,
+      status,
+      response
+    })
+  }, [tool, args, status, response])
+
   return (
-    <View>
-      <Accordion selectionMode="single" variant="default" className="rounded-md">
-        <Accordion.Item value="1">
-          <Accordion.Trigger className="bg-card py-2">
-            <XStack className="flex-1 items-center gap-2">
-              {isPending && <Spinner size="sm" />}
-              {isDone && <Wrench size={16} />}
-              {isError && <XCircle size={16} className="text-red-600" />}
-              <Text>{tool.name}</Text>
-            </XStack>
-            <Accordion.Indicator />
-          </Accordion.Trigger>
-          <Accordion.Content className="bg-card">
-            <View>
-              <Text>{JSON.stringify(response, null, 2)}</Text>
-            </View>
-          </Accordion.Content>
-        </Accordion.Item>
-      </Accordion>
-    </View>
+    <Pressable onPress={handlePress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+      <XStack className="bg-card items-center justify-between rounded-xl p-2">
+        <XStack className="items-center justify-center gap-2">
+          {isPending && <Spinner size="sm" />}
+          {isDone && <CircleCheck size={16} className="text-green-600" />}
+          {isError && <XCircle size={16} className="text-red-600" />}
+          <Text className="font-medium">{tool.name}</Text>
+        </XStack>
+        <ChevronDown />
+      </XStack>
+    </Pressable>
   )
 }

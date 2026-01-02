@@ -1,3 +1,25 @@
+// Mock MMKV storage for tests
+const mockStorageData = new Map()
+global.__mockStorageData = mockStorageData // Expose for test manipulation
+
+// Generate mock UUIDs
+let uuidCounter = 0
+const generateMockUuid = () => `mock-uuid-${++uuidCounter}`
+
+jest.mock('./src/utils', () => {
+  return {
+    ...jest.requireActual('./src/utils'),
+    uuid: () => generateMockUuid(),
+    storage: {
+      getString: jest.fn((key) => global.__mockStorageData?.get(key)),
+      set: jest.fn((key, value) => global.__mockStorageData?.set(key, value)),
+      delete: jest.fn((key) => global.__mockStorageData?.delete(key)),
+      contains: jest.fn((key) => global.__mockStorageData?.has(key)),
+      getAllKeys: jest.fn(() => Array.from(global.__mockStorageData?.keys() || []))
+    }
+  }
+})
+
 // Mock LoggerService to avoid file system access in tests
 jest.mock('./src/services/LoggerService', () => ({
   loggerService: {

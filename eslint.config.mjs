@@ -8,6 +8,7 @@ const ignores = [
   'node_modules/**',
   '.yarn/**',
   'packages/*/node_modules/**',
+  'packages/*/dist/**',
   'dist/**',
   'build/**',
   '.expo/**',
@@ -131,6 +132,23 @@ export default defineConfig([
         afterAll: 'readonly',
         test: 'readonly'
       }
+    }
+  },
+  // Packages have their own dependencies and TypeScript config
+  {
+    files: ['packages/*/src/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: {
+        RequestInit: 'readonly',
+        XMLHttpRequest: 'readonly',
+        Headers: 'readonly',
+        AbortController: 'readonly',
+        TextDecoder: 'readonly',
+        Response: 'readonly'
+      }
+    },
+    rules: {
+      'import/no-unresolved': 'off'
     }
   },
   { ignores }

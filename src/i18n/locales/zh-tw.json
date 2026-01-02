@@ -120,6 +120,7 @@
       "welcome": "我是您的生產力 AI 助手。您可以建立助理、管理模型等。"
     },
     "common": {
+      "add": "新增",
       "added": "已添加",
       "camera": "相機",
       "cancel": "取消",
@@ -129,6 +130,7 @@
       "clear_all": "清除全部",
       "close": "關閉",
       "confirm": "確認",
+      "content_too_long": "內容過長無法展示",
       "copied": "已複製",
       "copy": "複製文本",
       "delete": "刪除",
@@ -149,16 +151,18 @@
       "login": "登入",
       "manage": "管理",
       "model": "模型",
-      "name": "姓名",
+      "name": "名稱",
       "ok": "確定",
       "older": "較舊",
       "others": "其他人",
+      "parameters": "參數",
       "photo": "相片",
       "play": "播放",
       "preset": "預設",
       "prompt": "提示詞",
       "regenerate": "重新生成",
       "rename": "重新命名",
+      "result": "結果",
       "save": "儲存",
       "saved": "保存",
       "search_placeholder": "搜尋...",
@@ -172,6 +176,8 @@
       "today": "今天",
       "tool": "工具",
       "translate": "翻譯",
+      "type": "類型",
+      "url": "URL",
       "visit": "訪問",
       "websearch": "網路搜尋",
       "welcome": {
@@ -181,10 +187,6 @@
       "yesterday": "昨天"
     },
     "error": {
-      "ai_feature": {
-        "not_available": "AI 功能不可用",
-        "update_failed": "AI 功能更新失敗，請重試"
-      },
       "ai_feature": {
         "not_available": "AI 功能不可用",
         "update_failed": "AI 功能更新失敗，請重試"
@@ -357,6 +359,19 @@
       "placeholder": "傳送訊息..."
     },
     "mcp": {
+      "auth": {
+        "auth_required_content": "MCP 伺服器「{{name}}」需要 OAuth 認證，是否現在連接？",
+        "auth_required_title": "需要認證",
+        "connect": "連接",
+        "connected": "已連接",
+        "disconnect": "斷開",
+        "headers": "自訂請求標頭",
+        "invalid_json": "JSON格式錯誤",
+        "invalid_json_content": "請輸入有效的JSON格式。",
+        "oauth": "OAuth",
+        "oauth_failed": "OAuth 認證失敗",
+        "title": "認證"
+      },
       "builtin": {
         "calendar": {
           "description": "取得、作業系統日曆"
@@ -375,20 +390,31 @@
         }
       },
       "market": {
+        "add": {
+          "success": "已添加 {{mcp_name}}"
+        },
         "title": "MCP市場"
       },
       "server": {
+        "add": "新增 MCP 伺服器",
+        "delete": {
+          "content": "確定要刪除此 MCP 伺服器嗎？此操作無法撤銷。",
+          "title": "刪除伺服器"
+        },
+        "description_placeholder": "輸入 MCP 伺服器的描述...",
         "empty": {
           "add": "前往新增MCP伺服器",
           "label": "暫無MCP伺服器..."
         },
+        "new": "新 MCP 伺服器",
         "selected": "已選擇{{num}}個MCP伺服器",
-        "title": "MCP伺服器"
+        "title": "MCP伺服器",
+        "update_failed": "更新 {{name}} 失敗"
       },
       "type": {
         "inMemory": "內建",
         "sse": "伺服器傳送事件",
-        "streamableHttp": "串流式 HTTP"
+        "streamableHttp": "StreamableHTTP"
       }
     },
     "menu": {

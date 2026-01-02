@@ -11,6 +11,8 @@ import type {
 
 import { isFunctionCallingModel, isVisionModel } from '@/config/models'
 import { loggerService } from '@/services/LoggerService'
+import { mcpClientService } from '@/services/mcp/McpClientService'
+import { mcpService } from '@/services/McpService'
 import type { Assistant, Model } from '@/types/assistant'
 import type { MCPToolCompleteChunk, MCPToolInProgressChunk, MCPToolPendingChunk } from '@/types/chunk'
 import { ChunkType } from '@/types/chunk'
@@ -115,62 +117,49 @@ export async function callBuiltInTool(toolResponse: MCPToolResponse): Promise<MC
 }
 
 export async function callMCPTool(
-  _toolResponse: MCPToolResponse,
+  toolResponse: MCPToolResponse,
   _topicId?: string,
   _modelName?: string
 ): Promise<MCPCallToolResponse> {
-  throw new Error('Not implemented')
-  // logger.info(`Calling Tool: ${toolResponse.tool.serverName} ${toolResponse.tool.name}`, toolResponse.tool)
+  const { tool, arguments: args } = toolResponse
 
-  // try {
-  //   const server = getMcpServerByTool(toolResponse.tool)
+  logger.info(`Calling Tool: ${tool.serverName} ${tool.name}`, tool)
 
-  //   if (!server) {
-  //     throw new Error(`Server not found: ${toolResponse.tool.serverName}`)
-  //   }
+  // Built-in tools - execute locally
+  if (tool.isBuiltIn) {
+    const result = await callBuiltInTool(toolResponse)
+    if (result) {
+      return result
+    }
+    // If callBuiltInTool returns undefined, fall through to MCP call
+  }
 
-  //   const resp = await window.api.mcp.callTool(
-  //     {
-  //       server,
-  //       name: toolResponse.tool.name,
-  //       args: toolResponse.arguments,
-  //       callId: toolResponse.id
-  //     },
-  //     topicId ? currentSpan(topicId, modelName)?.spanContext() : undefined
-  //   )
+  // External MCP server - call via McpClientService
+  const server = await mcpService.getMcpServer(tool.serverId)
+  if (!server) {
+    logger.error(`Server not found: ${tool.serverId}`)
+    return {
+      isError: true,
+      content: [{ type: 'text', text: `Server ${tool.serverId} not found` }]
+    }
+  }
 
-  //   if (toolResponse.tool.serverName === BuiltinMCPServerNames.mcpAutoInstall) {
-  //     if (resp.data) {
-  //       const mcpServer: MCPServer = {
-  //         id: `f${nanoid()}`,
-  //         name: resp.data.name,
-  //         description: resp.data.description,
-  //         baseUrl: resp.data.baseUrl,
-  //         command: resp.data.command,
-  //         args: resp.data.args,
-  //         env: resp.data.env,
-  //         registryUrl: '',
-  //         isActive: false,
-  //         provider: 'CherryAI'
-  //       }
-  //       store.dispatch(addMCPServer(mcpServer))
-  //     }
-  //   }
-
-  //   logger.info(`Tool called: ${toolResponse.tool.serverName} ${toolResponse.tool.name}`, resp)
-  //   return resp
-  // } catch (e) {
-  //   logger.error(`Error calling Tool: ${toolResponse.tool.serverName} ${toolResponse.tool.name}`, e as Error)
-  //   return Promise.resolve({
-  //     isError: true,
-  //     content: [
-  //       {
-  //         type: 'text',
-  //         text: `Error calling tool ${toolResponse.tool.name}: ${e instanceof Error ? e.stack || e.message || 'No error details available' : JSON.stringify(e)}`
-  //       }
-  //     ]
-  //   })
-  // }
+  try {
+    const resp = await mcpClientService.callTool(server, tool.name, args || {})
+    logger.info(`Tool called: ${tool.serverName} ${tool.name}`, resp)
+    return resp
+  } catch (error) {
+    logger.error(`Error calling Tool: ${tool.serverName} ${tool.name}`, error as Error)
+    return {
+      isError: true,
+      content: [
+        {
+          type: 'text',
+          text: `Error calling tool ${tool.name}: ${error instanceof Error ? error.stack || error.message || 'No error details available' : JSON.stringify(error)}`
+        }
+      ]
+    }
+  }
 }
 
 export function mcpToolsToAnthropicTools(mcpTools: MCPTool[]): ToolUnion[] {
@@ -313,10 +302,10 @@ export function filterMCPTools(
   return mcpTools
 }
 
-export function getMcpServerByTool(_tool: MCPTool) {
-  throw new Error('Function not implemented.')
-  // const servers = store.getState().mcp.servers
-  // return servers.find(s => s.id === tool.serverId)
+export function getMcpServerByTool(tool: MCPTool): MCPServer | undefined {
+  // Use McpService to get server from cache
+  const server = mcpService.getMcpServerCached(tool.serverId)
+  return server ?? undefined
 }
 
 export function isToolAutoApproved(tool: MCPTool, server?: MCPServer): boolean {

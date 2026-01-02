@@ -48,3 +48,56 @@ export const safeJsonParse = (jsonString: string | null, defaultValue: any = und
     return defaultValue
   }
 }
+
+/**
+ * 格式化数据为 JSON 字符串，用于显示
+ * @param data 要格式化的数据
+ * @returns 格式化后的 JSON 字符串
+ */
+export function formatJson(data: any): string {
+  try {
+    return JSON.stringify(data, null, 2) ?? '{}'
+  } catch {
+    return '{}'
+  }
+}
+
+export interface TruncatedJson {
+  text: string
+  isTruncated: boolean
+  fullText: string
+}
+
+/**
+ * 格式化并截断 JSON 数据，用于大数据显示优化
+ * @param data 要格式化的数据
+ * @param maxLines 最大显示行数，默认 50
+ * @param maxChars 最大显示字符数，默认 2000
+ * @returns 截断结果，包含显示文本、是否截断、完整文本
+ */
+export function truncateFormattedJson(data: any, maxLines = 50, maxChars = 2000): TruncatedJson {
+  const fullText = formatJson(data)
+
+  if (fullText.length <= maxChars) {
+    const lines = fullText.split('\n')
+    if (lines.length <= maxLines) {
+      return { text: fullText, isTruncated: false, fullText }
+    }
+  }
+
+  const lines = fullText.split('\n')
+  let truncatedText: string
+
+  if (lines.length > maxLines) {
+    truncatedText = lines.slice(0, maxLines).join('\n')
+  } else {
+    truncatedText = fullText.slice(0, maxChars)
+  }
+
+  // 确保不超过字符限制
+  if (truncatedText.length > maxChars) {
+    truncatedText = truncatedText.slice(0, maxChars)
+  }
+
+  return { text: truncatedText, isTruncated: true, fullText }
+}

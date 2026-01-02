@@ -32,7 +32,9 @@ export const ModelSectionHeader: React.FC<ModelSectionHeaderProps> = ({ section,
         <Text className="text-zinc-400/400 text-xl font-bold ">{section.title.toUpperCase()}</Text>
       </XStack>
       {section.provider.id !== 'cherryai' && (
-        <Pressable onPress={() => onSettingsPress(section.provider)} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+        <Pressable
+          onPress={() => onSettingsPress(section.provider)}
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
           <Settings className="text-zinc-600/80" size={16} />
         </Pressable>
       )}

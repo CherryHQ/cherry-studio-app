@@ -23,8 +23,11 @@ const SETTINGS_ROUTES = new Set([
   'ProvidersSettings',
   'DataSourcesSettings',
   'WebSearchSettings',
-  'AboutSettings'
+  'AboutSettings',
+  'StreamableHttpTest'
 ])
+
+const MCP_NESTED_ROUTES = new Set(['McpMarketScreen', 'McpDetailScreen'])
 
 const screenOptions: DrawerNavigationOptions = {
   drawerStyle: {
@@ -54,6 +57,21 @@ const getHomeScreenOptions = ({
   }
 }
 
+const getMcpScreenOptions = ({
+  route
+}: {
+  route: RouteProp<Record<string, object | undefined>, string>
+}): DrawerNavigationOptions => {
+  const focusedRouteName =
+    getFocusedRouteNameFromRoute(route) ?? (route.params as { screen?: string } | undefined)?.screen
+  const swipeEnabled = !MCP_NESTED_ROUTES.has(focusedRouteName ?? '')
+
+  return {
+    ...options,
+    swipeEnabled
+  }
+}
+
 export default function AppDrawerNavigator() {
   return (
     <Drawer.Navigator drawerContent={props => <CustomDrawerContent {...props} />} screenOptions={screenOptions}>
@@ -61,7 +79,7 @@ export default function AppDrawerNavigator() {
       <Drawer.Screen name="Home" options={getHomeScreenOptions} component={HomeStackNavigator} />
       <Drawer.Screen name="Assistant" options={options} component={AssistantStackNavigator} />
       <Drawer.Screen name="AssistantMarket" options={options} component={AssistantMarketStackNavigator} />
-      <Drawer.Screen name="Mcp" options={options} component={McpStackNavigator} />
+      <Drawer.Screen name="Mcp" options={getMcpScreenOptions} component={McpStackNavigator} />
 
       {/* Individual screens for backward compatibility */}
       {/*<Drawer.Screen name="ChatScreen" options={options} component={ChatScreen} />

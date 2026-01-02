@@ -43,8 +43,8 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
     props.navigation.navigate('AssistantMarket', { screen: 'AssistantMarketScreen' })
   }
 
-  const handleNavigateMcpMarketScreen = () => {
-    props.navigation.navigate('Mcp', { screen: 'McpMarketScreen' })
+  const handleNavigateMcpScreen = () => {
+    props.navigation.navigate('Mcp', { screen: 'McpScreen' })
   }
 
   const handleNavigateSettingsScreen = () => {
@@ -100,10 +100,10 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
 
           <PressableRow
             className="flex-row items-center justify-between rounded-lg px-2.5 py-2.5"
-            onPress={handleNavigateMcpMarketScreen}>
+            onPress={handleNavigateMcpScreen}>
             <XStack className="items-center justify-center gap-2.5">
               <MCPIcon size={24} />
-              <Text className="text-base">{t('mcp.market.title')}</Text>
+              <Text className="text-base">{t('mcp.server.title')}</Text>
             </XStack>
             <RowRightArrow />
           </PressableRow>

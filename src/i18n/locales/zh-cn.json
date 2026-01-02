@@ -120,6 +120,7 @@
       "welcome": "我是您的生产力 AI 助手。您可以创建助手、管理模型等。"
     },
     "common": {
+      "add": "添加",
       "added": "已添加",
       "camera": "相机",
       "cancel": "取消",
@@ -129,6 +130,7 @@
       "clear_all": "清除全部",
       "close": "关闭",
       "confirm": "确认",
+      "content_too_long": "内容过长无法展示",
       "copied": "已复制",
       "copy": "复制文本",
       "delete": "删除",
@@ -149,16 +151,18 @@
       "login": "登录",
       "manage": "管理",
       "model": "模型",
-      "name": "姓名",
+      "name": "名称",
       "ok": "确定",
       "older": "更早",
       "others": "其他",
+      "parameters": "参数",
       "photo": "照片",
       "play": "播放",
       "preset": "预设",
       "prompt": "提示词",
       "regenerate": "重新生成",
       "rename": "重命名",
+      "result": "结果",
       "save": "保存",
       "saved": "已保存",
       "search_placeholder": "搜索...",
@@ -172,6 +176,8 @@
       "today": "今天",
       "tool": "工具",
       "translate": "翻译",
+      "type": "类型",
+      "url": "URL",
       "visit": "访问",
       "websearch": "网络搜索",
       "welcome": {
@@ -181,10 +187,6 @@
       "yesterday": "昨天"
     },
     "error": {
-      "ai_feature": {
-        "not_available": "AI 功能不可用",
-        "update_failed": "AI 功能更新失败，请重试"
-      },
       "ai_feature": {
         "not_available": "AI 功能不可用",
         "update_failed": "AI 功能更新失败，请重试"
@@ -357,6 +359,19 @@
       "placeholder": "发送消息..."
     },
     "mcp": {
+      "auth": {
+        "auth_required_content": "MCP 服务器“{{name}}”需要 OAuth 认证，是否现在连接？",
+        "auth_required_title": "需要认证",
+        "connect": "连接",
+        "connected": "已连接",
+        "disconnect": "断开",
+        "headers": "自定义请求头",
+        "invalid_json": "JSON格式错误",
+        "invalid_json_content": "请输入有效的JSON格式。",
+        "oauth": "OAuth",
+        "oauth_failed": "OAuth 认证失败",
+        "title": "认证"
+      },
       "builtin": {
         "calendar": {
           "description": "获取系统日历，添加日程"
@@ -375,20 +390,31 @@
         }
       },
       "market": {
+        "add": {
+          "success": "已添加 {{mcp_name}}"
+        },
         "title": "MCP市场"
       },
       "server": {
+        "add": "添加 MCP 服务器",
+        "delete": {
+          "content": "确定要删除此 MCP 服务器吗？此操作无法撤销。",
+          "title": "删除服务器"
+        },
+        "description_placeholder": "输入 MCP 服务器的描述...",
         "empty": {
           "add": "前往添加MCP服务器",
           "label": "暂无MCP服务器..."
         },
+        "new": "新 MCP 服务器",
         "selected": "已选择{{num}}个MCP服务器",
-        "title": "MCP服务器"
+        "title": "MCP服务器",
+        "update_failed": "更新 {{name}} 失败"
       },
       "type": {
         "inMemory": "内置",
         "sse": "服务器发送事件",
-        "streamableHttp": "流式 HTTP"
+        "streamableHttp": "StreamableHTTP"
       }
     },
     "menu": {

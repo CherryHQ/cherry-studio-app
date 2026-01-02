@@ -120,6 +120,7 @@
       "welcome": "I'm your AI assistant for producers. You can create assistants, manage models, and more."
     },
     "common": {
+      "add": "Add",
       "added": " Added",
       "camera": "Camera",
       "cancel": "Cancel",
@@ -129,6 +130,7 @@
       "clear_all": "Clear All",
       "close": "Close",
       "confirm": "Confirm",
+      "content_too_long": "Content too long to display",
       "copied": "Copied",
       "copy": "Copy Text",
       "delete": "Delete",
@@ -153,12 +155,14 @@
       "ok": "OK",
       "older": "Older",
       "others": "Others",
+      "parameters": "Parameters",
       "photo": "Photo",
       "play": "Play",
       "preset": "Preset",
       "prompt": "Prompt",
       "regenerate": "Regenerate",
       "rename": "Rename",
+      "result": "Result",
       "save": "Save",
       "saved": "Saved",
       "search_placeholder": "Search...",
@@ -172,6 +176,8 @@
       "today": "Today",
       "tool": "Tool",
       "translate": "Translate",
+      "type": "Type",
+      "url": "URL",
       "visit": "Visit",
       "websearch": "Web Search",
       "welcome": {
@@ -181,10 +187,6 @@
       "yesterday": "Yesterday"
     },
     "error": {
-      "ai_feature": {
-        "not_available": "AI feature is not available.",
-        "update_failed": "Failed to update AI feature. Please try again."
-      },
       "ai_feature": {
         "not_available": "AI feature is not available.",
         "update_failed": "Failed to update AI feature. Please try again."
@@ -357,6 +359,19 @@
       "placeholder": "Send Message..."
     },
     "mcp": {
+      "auth": {
+        "auth_required_content": "The MCP server \"{{name}}\" requires OAuth authorization. Connect now?",
+        "auth_required_title": "Authentication required",
+        "connect": "Connect",
+        "connected": "Connected",
+        "disconnect": "Disconnect",
+        "headers": "Custom Headers",
+        "invalid_json": "Invalid JSON",
+        "invalid_json_content": "Please enter valid JSON format for headers.",
+        "oauth": "OAuth",
+        "oauth_failed": "OAuth authentication failed",
+        "title": "Authentication"
+      },
       "builtin": {
         "calendar": {
           "description": "Get, operating system calendar"
@@ -375,20 +390,31 @@
         }
       },
       "market": {
+        "add": {
+          "success": "Added {{mcp_name}}"
+        },
         "title": "MCP Market"
       },
       "server": {
+        "add": "Add MCP Server",
+        "delete": {
+          "content": "Are you sure you want to delete this MCP server? This action cannot be undone.",
+          "title": "Delete Server"
+        },
+        "description_placeholder": "Enter a description for this MCP server...",
         "empty": {
           "add": "Go to add MCP server",
           "label": "No MCP servers available..."
         },
+        "new": "New MCP Server",
         "selected": "{{num}} MCP servers selected",
-        "title": "MCP Server"
+        "title": "MCP Server",
+        "update_failed": "Failed to update {{name}}"
       },
       "type": {
         "inMemory": "built-in",
         "sse": "Server-Sent Events",
-        "streamableHttp": "Streaming HTTP"
+        "streamableHttp": "StreamableHTTP"
       }
     },
     "menu": {

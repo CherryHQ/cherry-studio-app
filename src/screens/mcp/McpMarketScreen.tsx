@@ -1,29 +1,18 @@
-import { DrawerActions, useNavigation } from '@react-navigation/native'
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { View } from 'react-native'
+import { InteractionManager } from 'react-native'
 
-import {
-  Container,
-  DrawerGestureWrapper,
-  HeaderBar,
-  ListSkeleton,
-  SafeAreaContainer,
-  SearchInput
-} from '@/componentsV2'
+import { Container, HeaderBar, ListSkeleton, SafeAreaContainer, SearchInput } from '@/componentsV2'
 import { McpMarketContent } from '@/componentsV2/features/MCP/McpMarketContent'
-import McpServerItemSheet, { presentMcpServerItemSheet } from '@/componentsV2/features/MCP/McpServerItemSheet'
-import { Menu } from '@/componentsV2/icons'
-import { useMcpServers } from '@/hooks/useMcp'
+import { presentMcpServerItemSheet } from '@/componentsV2/features/MCP/McpServerItemSheet'
+import { initBuiltinMcp } from '@/config/mcp'
 import { useSearch } from '@/hooks/useSearch'
-import { useSkeletonLoading } from '@/hooks/useSkeletonLoading'
 import type { MCPServer } from '@/types/mcp'
-import type { DrawerNavigationProps } from '@/types/naviagate'
 
 export function McpMarketScreen() {
   const { t } = useTranslation()
-  const navigation = useNavigation<DrawerNavigationProps>()
-  const { mcpServers, isLoading, updateMcpServers } = useMcpServers()
+  const [isReady, setIsReady] = useState(false)
+  const mcpServers = initBuiltinMcp()
   const {
     searchText,
     setSearchText,
@@ -33,46 +22,28 @@ export function McpMarketScreen() {
     useCallback((mcp: MCPServer) => [mcp.name || '', mcp.id || ''], [])
   )
 
-  const showSkeleton = useSkeletonLoading(isLoading)
-
-  const handleMenuPress = () => {
-    navigation.dispatch(DrawerActions.openDrawer())
-  }
+  useEffect(() => {
+    const interaction = InteractionManager.runAfterInteractions(() => {
+      setIsReady(true)
+    })
+    return () => interaction.cancel()
+  }, [])
 
   const handleMcpServerItemPress = (mcp: MCPServer) => {
-    presentMcpServerItemSheet(mcp, updateMcpServers)
+    presentMcpServerItemSheet(mcp, { mode: 'preview' })
   }
 
   return (
     <SafeAreaContainer className="pb-0">
-      <DrawerGestureWrapper>
-        <View collapsable={false} className="flex-1">
-          <HeaderBar
-            title={t('mcp.market.title')}
-            leftButton={{
-              icon: <Menu size={24} />,
-              onPress: handleMenuPress
-            }}
-          />
-          <Container className="gap-2.5 py-0">
-            <SearchInput
-              placeholder={t('assistants.market.search_placeholder')}
-              value={searchText}
-              onChangeText={setSearchText}
-            />
-            {showSkeleton ? (
-              <ListSkeleton variant="mcp" />
-            ) : (
-              <McpMarketContent
-                mcps={filteredMcps}
-                updateMcpServers={updateMcpServers}
-                handleMcpServerItemPress={handleMcpServerItemPress}
-              />
-            )}
-          </Container>
-          <McpServerItemSheet />
-        </View>
-      </DrawerGestureWrapper>
+      <HeaderBar title={t('mcp.market.title')} />
+      <Container className="gap-2.5 py-0">
+        <SearchInput placeholder={t('common.search_placeholder')} value={searchText} onChangeText={setSearchText} />
+        {isReady ? (
+          <McpMarketContent mcps={filteredMcps} handleMcpServerItemPress={handleMcpServerItemPress} mode="add" />
+        ) : (
+          <ListSkeleton variant="mcp" />
+        )}
+      </Container>
     </SafeAreaContainer>
   )
 }
