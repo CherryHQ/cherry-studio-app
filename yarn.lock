@@ -7289,7 +7289,7 @@ __metadata:
     react-native-zip-archive: "npm:^7.0.2"
     react-redux: "npm:^9.2.0"
     react-syntax-highlighter: "npm:^15.6.1"
-    react-test-renderer: "npm:~19.0.0"
+    react-test-renderer: "npm:19.1.0"
     redux-devtools-expo-dev-plugin: "npm:^2.0.0"
     redux-persist: "npm:^6.0.0"
     remark-stringify: "npm:^11.0.0"
@@ -16591,7 +16591,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-is@npm:^19.0.0, react-is@npm:^19.1.0":
+"react-is@npm:^19.1.0":
   version: 19.2.0
   resolution: "react-is@npm:19.2.0"
   checksum: 10c0/a63cb346aeced8ac0e671b0f9b33720d2906de02a066ca067075d871a5d4c64cdb328f495baf9b5842d5868c0d5edd1ce18465a7358b52f4b6aa983479c9bfa2
@@ -17161,18 +17161,6 @@ __metadata:
   peerDependencies:
     react: ^19.1.0
   checksum: 10c0/34ed4a37ba8b0beb96c048de6ff28574f018a18dd1042c24f8f46142d48eb5b27f82ff7c2823d082932fd3983c5a3529ab8cc8f15191d4306df0082f9f84678f
-  languageName: node
-  linkType: hard
-
-"react-test-renderer@npm:~19.0.0":
-  version: 19.0.0
-  resolution: "react-test-renderer@npm:19.0.0"
-  dependencies:
-    react-is: "npm:^19.0.0"
-    scheduler: "npm:^0.25.0"
-  peerDependencies:
-    react: ^19.0.0
-  checksum: 10c0/67c34dae4d3a60b9306d2b5cb6db436376ef20c651aaf092644298e3ffb92cd3c7b0da2017e7f1395bf2de8b42429874a5a63e8cc3c21febbab31b0309e41862
   languageName: node
   linkType: hard
 
