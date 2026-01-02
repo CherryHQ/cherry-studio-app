@@ -19,7 +19,7 @@ import { EmptyModelView } from '../../SettingsScreen/providers/EmptyModelView'
 import { useModelSelection } from './hooks/useModelSelection'
 import { dismissModelSheet, SHEET_NAME, useModelSheetData } from './hooks/useModelSheetData'
 import { useModelTabScrolling } from './hooks/useModelTabScrolling'
-import { HEADER_HEIGHT, ModelListHeader } from './ModelListHeader'
+import { ModelListHeader } from './ModelListHeader'
 import { ModelListItem } from './ModelListItem'
 import { ModelProviderTabBar } from './ModelProviderTabBar'
 import { ModelSectionHeader } from './ModelSectionHeader'
@@ -120,56 +120,56 @@ const ModelSheet: React.FC = () => {
       grabber={Platform.OS === 'ios' ? true : false}
       dismissible
       dimmed
-      keyboardMode="pan"
       scrollable
       backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
+      header={
+        <View>
+          <ModelListHeader
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            multiple={multiple}
+            isMultiSelectActive={isMultiSelectActive}
+            onToggleMultiSelect={toggleMultiSelectMode}
+            onClearAll={handleClearAll}
+          />
+          <ModelProviderTabBar
+            selectOptions={selectOptions}
+            activeProvider={activeProvider}
+            onProviderChange={handleProviderChange}
+            bottom={bottom}
+          />
+        </View>
+      }
       onDidDismiss={handleDidDismiss}
       onDidPresent={handleDidPresent}>
-      <View style={{ height: sheetContentHeight, position: 'relative' }}>
-        <SectionList
-          style={{ flex: 1, paddingTop: HEADER_HEIGHT * 2 }}
-          ref={listRef}
-          sections={sections}
-          extraData={{ selectedModels, isMultiSelectActive, searchQuery, activeProvider }}
-          nestedScrollEnabled={Platform.OS === 'android'}
-          viewabilityConfig={viewabilityConfig}
-          onViewableItemsChanged={onViewableItemsChanged}
-          keyExtractor={item => item.value}
-          SectionSeparatorComponent={() => <YStack className="h-2" />}
-          renderSectionHeader={({ section }) => (
-            <ModelSectionHeader
-              section={section}
-              isFirstSection={sections.indexOf(section) === 0}
-              onSettingsPress={navigateToProviderSettings}
-            />
-          )}
-          renderItem={({ item }) => (
-            <ModelListItem item={item} isSelected={selectedModels.includes(item.value)} onToggle={handleModelToggle} />
-          )}
-          ItemSeparatorComponent={() => <YStack className="h-2" />}
-          ListEmptyComponent={<EmptyModelView />}
-          stickySectionHeadersEnabled={false}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingHorizontal: 20,
-            paddingBottom: bottom + TAB_BAR_HEIGHT + 20
-          }}
-        />
-        <ModelListHeader
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          multiple={multiple}
-          isMultiSelectActive={isMultiSelectActive}
-          onToggleMultiSelect={toggleMultiSelectMode}
-          onClearAll={handleClearAll}
-        />
-        <ModelProviderTabBar
-          selectOptions={selectOptions}
-          activeProvider={activeProvider}
-          onProviderChange={handleProviderChange}
-          bottom={bottom}
-        />
-      </View>
+      <SectionList
+        ref={listRef}
+        sections={sections}
+        extraData={{ selectedModels, isMultiSelectActive, searchQuery, activeProvider }}
+        nestedScrollEnabled={Platform.OS === 'android'}
+        viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
+        keyExtractor={item => item.value}
+        SectionSeparatorComponent={() => <YStack className="h-2" />}
+        renderSectionHeader={({ section }) => (
+          <ModelSectionHeader
+            section={section}
+            isFirstSection={sections.indexOf(section) === 0}
+            onSettingsPress={navigateToProviderSettings}
+          />
+        )}
+        renderItem={({ item }) => (
+          <ModelListItem item={item} isSelected={selectedModels.includes(item.value)} onToggle={handleModelToggle} />
+        )}
+        ItemSeparatorComponent={() => <YStack className="h-2" />}
+        ListEmptyComponent={<EmptyModelView />}
+        stickySectionHeadersEnabled={false}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingBottom: bottom
+        }}
+      />
     </TrueSheet>
   )
 }
