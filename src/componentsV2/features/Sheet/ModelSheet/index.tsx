@@ -1,98 +1,78 @@
 import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { useNavigation } from '@react-navigation/native'
-import { sortBy } from 'lodash'
-import React, { useEffect, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
+import React, { useEffect } from 'react'
 import { BackHandler, Platform, SectionList, useWindowDimensions, View } from 'react-native'
 
 import YStack from '@/componentsV2/layout/YStack'
-import { isEmbeddingModel, isRerankModel } from '@/config/models'
 import { useBottom } from '@/hooks/useBottom'
-import { useAllProviders } from '@/hooks/useProviders'
 import { useTheme } from '@/hooks/useTheme'
 import type { Provider } from '@/types/assistant'
 import type { HomeNavigationProps } from '@/types/naviagate'
-import { isIOS26 } from '@/utils/device'
-import { getModelUniqId } from '@/utils/model'
 
 import { EmptyModelView } from '../../SettingsScreen/providers/EmptyModelView'
-import { useModelSelection } from './hooks/useModelSelection'
-import { dismissModelSheet, SHEET_NAME, useModelSheetData } from './hooks/useModelSheetData'
-import { useModelTabScrolling } from './hooks/useModelTabScrolling'
-import { ModelListHeader } from './ModelListHeader'
-import { ModelListItem } from './ModelListItem'
-import { ModelProviderTabBar } from './ModelProviderTabBar'
-import { ModelSectionHeader } from './ModelSectionHeader'
-import type { ProviderSection, SelectOption } from './types'
+import { ModelListHeader, ModelListItem, ModelProviderTabBar, ModelSectionHeader } from './components'
+import { getSheetPlatformConfig, LAYOUT } from './constants'
+import {
+  dismissModelSheet,
+  presentModelSheet,
+  SHEET_NAME,
+  useModelOptions,
+  useModelSelection,
+  useModelSheet,
+  useModelTabScrolling
+} from './hooks'
+import { defaultModelFilter } from './services/ModelFilterService'
 
-export { dismissModelSheet, presentModelSheet } from './hooks/useModelSheetData'
+export { dismissModelSheet, presentModelSheet }
 
+/**
+ * ModelSheet - A bottom sheet for selecting AI models
+ *
+ * Architecture following SOLID principles:
+ * - SRP: Each hook/service handles a single responsibility
+ * - OCP: Filter logic is extensible via filterFn
+ * - ISP: Types are split into focused interfaces
+ * - DIP: Presentation side effects are abstracted behind ISheetPresentationService
+ */
 const ModelSheet: React.FC = () => {
-  const { t } = useTranslation()
   const bottom = useBottom()
   const { isDark } = useTheme()
   const navigation = useNavigation<HomeNavigationProps>()
   const { height: windowHeight } = useWindowDimensions()
-  const sheetContentHeight = windowHeight * 0.85
+  const sheetContentHeight = windowHeight * LAYOUT.SHEET_DETENT
 
-  // Sheet data management
-  const { sheetData, isVisible, searchQuery, setSearchQuery, handleDidDismiss, handleDidPresent } = useModelSheetData()
-  const { mentions, setMentions, multiple = false } = sheetData
+  // Sheet state management (DIP: abstracted via service)
+  const { config, isVisible, searchQuery, setSearchQuery, handleDidDismiss, handleDidPresent } = useModelSheet()
 
-  // Build model options from providers
-  const { providers } = useAllProviders()
-  const selectOptions: SelectOption[] = providers
-    .filter(p => p.id === 'cherryai' || (p.models && p.models.length > 0 && p.enabled))
-    .map(p => ({
-      label: p.isSystem ? t(`provider.${p.id}`) : p.name,
-      title: p.name,
-      provider: p,
-      options: sortBy(p.models, 'name')
-        .filter(m => !isEmbeddingModel(m) && !isRerankModel(m))
-        .filter(m => {
-          if (!searchQuery) return true
-          const query = searchQuery.toLowerCase()
-          const modelId = getModelUniqId(m).toLowerCase()
-          const modelName = m.name.toLowerCase()
-          return modelId.includes(query) || modelName.includes(query)
-        })
-        .map(m => ({
-          label: m.name,
-          value: getModelUniqId(m),
-          model: m
-        }))
-    }))
-    .filter(group => group.options.length > 0)
+  // Extract config values with defaults
+  const mentions = config?.mentions ?? []
+  const setMentions = config?.setMentions ?? (async () => {})
+  const multiple = config?.multiple ?? false
+  const filterFn = config?.filterFn ?? defaultModelFilter
 
-  const allModelOptions = selectOptions.flatMap(group => group.options)
+  // Data transformation (SRP: separated from UI)
+  const { selectOptions, allModelOptions, sections } = useModelOptions({
+    searchQuery,
+    filterFn
+  })
 
-  // SectionList data structure
-  const sections: ProviderSection[] = useMemo(
-    () =>
-      selectOptions.map(group => ({
-        title: group.label,
-        provider: group.provider,
-        data: group.options
-      })),
-    [selectOptions]
-  )
-
-  // Model selection hook
+  // Selection logic (DIP: dismissModelSheet injected)
   const { selectedModels, isMultiSelectActive, handleModelToggle, handleClearAll, toggleMultiSelectMode } =
     useModelSelection({
       mentions,
       allModelOptions,
-      setMentions
+      setMentions,
+      onDismiss: dismissModelSheet
     })
 
-  // Tab scrolling hook
+  // Tab scrolling synchronization
   const { activeProvider, listRef, viewabilityConfig, onViewableItemsChanged, handleProviderChange } =
     useModelTabScrolling({
       sections,
       isVisible
     })
 
-  // Handle back button
+  // Handle Android back button
   useEffect(() => {
     if (!isVisible) return
 
@@ -110,16 +90,18 @@ const ModelSheet: React.FC = () => {
     navigation.navigate('ProvidersSettings', { screen: 'ProviderSettingsScreen', params: { providerId: provider.id } })
   }
 
+  // Platform-specific sheet config
+  const sheetPlatformConfig = getSheetPlatformConfig(isDark)
+
   return (
     <TrueSheet
       name={SHEET_NAME}
-      detents={[0.85]}
-      cornerRadius={30}
-      grabber={Platform.OS === 'ios' ? true : false}
+      detents={[LAYOUT.SHEET_DETENT]}
+      cornerRadius={LAYOUT.CORNER_RADIUS}
+      {...sheetPlatformConfig}
       dismissible
       dimmed
       scrollable
-      backgroundColor={isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff'}
       header={
         <View>
           <ModelListHeader
@@ -134,7 +116,6 @@ const ModelSheet: React.FC = () => {
             selectOptions={selectOptions}
             activeProvider={activeProvider}
             onProviderChange={handleProviderChange}
-            bottom={bottom}
           />
         </View>
       }
@@ -164,7 +145,7 @@ const ModelSheet: React.FC = () => {
         stickySectionHeadersEnabled={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          paddingHorizontal: 20,
+          paddingHorizontal: LAYOUT.HORIZONTAL_PADDING,
           paddingBottom: Math.max(bottom, sheetContentHeight - 150)
         }}
       />

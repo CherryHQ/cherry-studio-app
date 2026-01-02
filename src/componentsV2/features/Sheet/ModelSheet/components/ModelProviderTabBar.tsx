@@ -5,15 +5,14 @@ import { View } from 'react-native'
 import { ProviderIcon } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
 
-import type { SelectOption } from './types'
+import { LAYOUT } from '../constants'
+import type { SelectOption } from '../types'
 
 interface ModelProviderTabBarProps {
   selectOptions: SelectOption[]
   activeProvider: string
   onProviderChange: (provider: string) => void
-  bottom: number
 }
-export const TAB_BAR_HEIGHT = 48
 
 export const ModelProviderTabBar: React.FC<ModelProviderTabBarProps> = ({
   selectOptions,
@@ -25,7 +24,7 @@ export const ModelProviderTabBar: React.FC<ModelProviderTabBarProps> = ({
   }
 
   return (
-    <View className="bg-card  overflow-hidden" style={{ paddingHorizontal: 20, height: TAB_BAR_HEIGHT }}>
+    <View className="bg-card  overflow-hidden" style={{ paddingHorizontal: LAYOUT.HORIZONTAL_PADDING, height: LAYOUT.TAB_BAR_HEIGHT }}>
       <Tabs value={activeProvider} onValueChange={onProviderChange}>
         <Tabs.ScrollView>
           <Tabs.List aria-label="Provider tabs" className="bg-transparent px-0">

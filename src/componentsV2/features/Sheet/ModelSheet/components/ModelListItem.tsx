@@ -8,7 +8,7 @@ import { ModelIcon } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 
-import type { ModelOption } from './types'
+import type { ModelOption } from '../types'
 
 interface ModelListItemProps {
   item: ModelOption

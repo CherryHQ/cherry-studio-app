@@ -7,7 +7,8 @@ import { Settings } from '@/componentsV2/icons/LucideIcon'
 import XStack from '@/componentsV2/layout/XStack'
 import type { Provider } from '@/types/assistant'
 
-import type { ProviderSection } from './types'
+import { LAYOUT } from '../constants'
+import type { ProviderSection } from '../types'
 
 interface ModelSectionHeaderProps {
   section: ProviderSection
@@ -19,7 +20,7 @@ export const ModelSectionHeader: React.FC<ModelSectionHeaderProps> = ({ section,
   return (
     <View
       style={{
-        marginTop: isFirstSection ? 0 : 12,
+        marginTop: isFirstSection ? 0 : LAYOUT.SECTION_MARGIN_TOP,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center'
