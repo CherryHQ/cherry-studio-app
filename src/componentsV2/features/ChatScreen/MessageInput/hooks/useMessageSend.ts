@@ -136,8 +136,12 @@ export function useMessageSend(options: UseMessageSendOptions): UseMessageSendRe
       await pauseMessages()
     } catch (error) {
       logger.error('Error pause message:', error)
+      presentDialog('error', {
+        title: t('message.pause_failed.title'),
+        content: t('message.pause_failed.content')
+      })
     }
-  }, [pauseMessages])
+  }, [pauseMessages, t])
 
   return {
     sendMessage,

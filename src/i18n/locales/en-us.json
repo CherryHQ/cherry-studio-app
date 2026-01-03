@@ -443,6 +443,10 @@
       "edit_reply": "Edit Reply",
       "editing_message": "[to be translated]:编辑",
       "marked_as_best_answer": "Marked as best answer",
+      "pause_failed": {
+        "content": "Failed to pause. Please try again.",
+        "title": "Pause Failed"
+      },
       "searching": "Searching...",
       "send_failed": {
         "content": "Failed to send message. Please try again.",

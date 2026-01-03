@@ -443,6 +443,10 @@
       "edit_reply": "返信を編集",
       "editing_message": "[to be translated]:编辑",
       "marked_as_best_answer": "最適な回答として設定しました",
+      "pause_failed": {
+        "content": "[to be translated]:暂停失败，请重试",
+        "title": "[to be translated]:暂停失败"
+      },
       "searching": "検索中...",
       "send_failed": {
         "content": "[to be translated]:消息发送失败，请重试",

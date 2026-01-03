@@ -5,12 +5,14 @@ import { View } from 'react-native'
 import TextField from '@/componentsV2/base/TextField'
 import type { PasteEventPayload } from '@/modules/text-input-wrapper'
 import { TextInputWrapper } from '@/modules/text-input-wrapper'
+import { loggerService } from '@/services/LoggerService'
 
 import { ExpandButton } from '../buttons'
 import { useMessageInput } from '../context/MessageInputContext'
 import { useInputHeight } from '../hooks'
 import { TEXT_FIELD_CONFIG } from '../types'
 
+const logger = loggerService.withContext('MessageTextField')
 const { MAX_INPUT_HEIGHT } = TEXT_FIELD_CONFIG
 
 export const MessageTextField: React.FC = () => {
@@ -19,10 +21,14 @@ export const MessageTextField: React.FC = () => {
   const { inputHeight, showExpandButton, handleContentSizeChange } = useInputHeight()
 
   const handlePaste = (payload: PasteEventPayload) => {
-    if (payload.type === 'images') {
-      handlePasteImages(payload.uris)
+    try {
+      if (payload.type === 'images') {
+        handlePasteImages(payload.uris)
+      }
+      // Text paste is handled automatically by TextInput
+    } catch (error) {
+      logger.error('Error handling paste:', error)
     }
-    // Text paste is handled automatically by TextInput
   }
 
   return (

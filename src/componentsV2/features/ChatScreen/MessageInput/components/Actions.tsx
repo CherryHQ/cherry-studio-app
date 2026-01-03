@@ -1,5 +1,5 @@
 import { AnimatePresence, MotiView } from 'moti'
-import React, { useCallback } from 'react'
+import React from 'react'
 
 import { loggerService } from '@/services/LoggerService'
 
@@ -15,10 +15,13 @@ export const Actions: React.FC = () => {
   const shouldShowVoice = isVoiceActive || (!hasText && !hasFiles)
 
   // Pass text directly to bypass any stale closure issues
-  const handleSend = useCallback(() => {
+  // Note: React Compiler handles memoization automatically
+  const handleSend = () => {
     logger.info('Actions.handleSend called', { text, hasText, hasFiles })
-    sendMessage(text) // Pass text as overrideText to ensure latest value
-  }, [sendMessage, text, hasText, hasFiles])
+    sendMessage(text).catch(error => {
+      logger.error('Unhandled error in handleSend:', error)
+    })
+  }
 
   return (
     <AnimatePresence exitBeforeEnter>

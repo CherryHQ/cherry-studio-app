@@ -30,8 +30,10 @@ export function useInputHeight(): UseInputHeightReturn {
   }, [rawHeight])
 
   const handleContentSizeChange = useCallback((e: TextInputContentSizeChangeEvent) => {
-    const { height } = e.nativeEvent.contentSize
-    setRawHeight(height)
+    const height = e?.nativeEvent?.contentSize?.height
+    if (height > 0) {
+      setRawHeight(height)
+    }
   }, [])
 
   return {

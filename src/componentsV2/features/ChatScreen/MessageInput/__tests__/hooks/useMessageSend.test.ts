@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react-native'
 import { Keyboard } from 'react-native'
 
+import { presentDialog } from '@/componentsV2'
 import { useMessageEdit } from '@/hooks/useMessageEdit'
 import { useMessageOperations } from '@/hooks/useMessageOperation'
 import {
@@ -13,6 +14,10 @@ import { type Message, UserMessageStatus } from '@/types/message'
 
 import { createMockAssistant, createMockFile, createMockModel, createMockTopic } from '../../__mocks__/testData'
 import { useMessageSend } from '../../hooks/useMessageSend'
+
+jest.mock('@/componentsV2', () => ({
+  presentDialog: jest.fn()
+}))
 
 jest.mock('@/hooks/useMessageEdit', () => ({
   useMessageEdit: jest.fn()
@@ -40,6 +45,7 @@ jest.mock('react-native', () => ({
   }
 }))
 
+const mockPresentDialog = presentDialog as jest.MockedFunction<typeof presentDialog>
 const mockUseMessageEdit = useMessageEdit as jest.MockedFunction<typeof useMessageEdit>
 const mockUseMessageOperations = useMessageOperations as jest.MockedFunction<typeof useMessageOperations>
 const mockGetUserMessage = getUserMessage as jest.MockedFunction<typeof getUserMessage>
@@ -472,6 +478,149 @@ describe('useMessageSend', () => {
       const onPause2 = result.current.onPause
 
       expect(onPause1).toBe(onPause2)
+    })
+  })
+
+  describe('overrideText in editing mode', () => {
+    it('uses overrideText when provided in editing mode', async () => {
+      const clearEditingState = jest.fn()
+      mockUseMessageEdit.mockReturnValue({
+        editingMessage: createMockMessage({ id: 'msg-edit' }),
+        isEditing: true,
+        startEdit: jest.fn(),
+        cancelEdit: jest.fn(),
+        clearEditingState
+      })
+
+      const props = createDefaultProps({ text: 'Original text from props' })
+      const { result } = renderHook(() => useMessageSend(props))
+
+      await act(async () => {
+        await result.current.sendMessage('Override text from Actions')
+      })
+
+      expect(mockEditUserMessageAndRegenerate).toHaveBeenCalledWith(
+        'msg-edit',
+        'Override text from Actions',
+        [],
+        props.assistant,
+        props.topic.id
+      )
+    })
+
+    it('uses props text when overrideText is not provided in editing mode', async () => {
+      mockUseMessageEdit.mockReturnValue({
+        editingMessage: createMockMessage({ id: 'msg-edit' }),
+        isEditing: true,
+        startEdit: jest.fn(),
+        cancelEdit: jest.fn(),
+        clearEditingState: jest.fn()
+      })
+
+      const props = createDefaultProps({ text: 'Props text value' })
+      const { result } = renderHook(() => useMessageSend(props))
+
+      await act(async () => {
+        await result.current.sendMessage()
+      })
+
+      expect(mockEditUserMessageAndRegenerate).toHaveBeenCalledWith(
+        'msg-edit',
+        'Props text value',
+        [],
+        props.assistant,
+        props.topic.id
+      )
+    })
+  })
+
+  describe('error handling with restoreInputs and presentDialog', () => {
+    it('calls restoreInputs and presentDialog on send error', async () => {
+      mockServiceSendMessage.mockRejectedValue(new Error('Send failed'))
+      const restoreInputs = jest.fn()
+
+      const props = createDefaultProps({
+        text: 'Test message',
+        restoreInputs
+      })
+      const { result } = renderHook(() => useMessageSend(props))
+
+      await act(async () => {
+        await result.current.sendMessage()
+      })
+
+      expect(restoreInputs).toHaveBeenCalledWith('Test message', [])
+      expect(mockTopicService.updateTopic).toHaveBeenCalledWith(props.topic.id, { isLoading: false })
+      expect(mockPresentDialog).toHaveBeenCalledWith('error', {
+        title: 'message.send_failed.title',
+        content: 'message.send_failed.content'
+      })
+    })
+
+    it('calls restoreInputs and presentDialog on edit error', async () => {
+      mockUseMessageEdit.mockReturnValue({
+        editingMessage: createMockMessage({ id: 'msg-edit' }),
+        isEditing: true,
+        startEdit: jest.fn(),
+        cancelEdit: jest.fn(),
+        clearEditingState: jest.fn()
+      })
+      mockEditUserMessageAndRegenerate.mockRejectedValue(new Error('Edit failed'))
+      const restoreInputs = jest.fn()
+
+      const props = createDefaultProps({
+        text: 'Edited message',
+        restoreInputs
+      })
+      const { result } = renderHook(() => useMessageSend(props))
+
+      await act(async () => {
+        await result.current.sendMessage()
+      })
+
+      expect(restoreInputs).toHaveBeenCalledWith('Edited message', [])
+      expect(mockTopicService.updateTopic).toHaveBeenCalledWith(props.topic.id, { isLoading: false })
+      expect(mockPresentDialog).toHaveBeenCalledWith('error', {
+        title: 'message.edit_failed.title',
+        content: 'message.edit_failed.content'
+      })
+    })
+
+    it('restores files along with text on error', async () => {
+      mockServiceSendMessage.mockRejectedValue(new Error('Send failed'))
+      const restoreInputs = jest.fn()
+      const files = [createMockFile({ id: 'file-1' }), createMockFile({ id: 'file-2' })]
+
+      const props = createDefaultProps({
+        text: 'Message with files',
+        files,
+        restoreInputs
+      })
+      const { result } = renderHook(() => useMessageSend(props))
+
+      await act(async () => {
+        await result.current.sendMessage()
+      })
+
+      expect(restoreInputs).toHaveBeenCalledWith('Message with files', files)
+    })
+
+    it('calls presentDialog on pause error', async () => {
+      const pauseMessages = jest.fn().mockRejectedValue(new Error('Pause failed'))
+      mockUseMessageOperations.mockReturnValue({
+        pauseMessages
+      })
+
+      const { result } = renderHook(() => useMessageSend(createDefaultProps()))
+
+      await act(async () => {
+        await result.current.onPause()
+      })
+
+      expect(mockPresentDialog).toHaveBeenCalledWith('error', {
+        title: 'message.pause_failed.title',
+        content: 'message.pause_failed.content'
+      })
     })
   })
 })
