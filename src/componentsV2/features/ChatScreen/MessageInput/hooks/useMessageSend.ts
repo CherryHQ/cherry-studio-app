@@ -2,7 +2,7 @@ import { isEmpty } from 'lodash'
 import { useTranslation } from 'react-i18next'
 import { Keyboard } from 'react-native'
 
-import { presentDialog } from '@/componentsV2'
+import { presentDialog } from '@/componentsV2/base/Dialog'
 import { useMessageEdit } from '@/hooks/useMessageEdit'
 import { useMessageOperations } from '@/hooks/useMessageOperation'
 import { loggerService } from '@/services/LoggerService'

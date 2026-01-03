@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { presentDialog } from '@/componentsV2'
+import { presentDialog } from '@/componentsV2/base/Dialog'
 import type { FileMetadata } from '@/types/file'
 
 import { isLongText, processInputText } from '../services'
