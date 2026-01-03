@@ -1,14 +1,24 @@
 import { AnimatePresence, MotiView } from 'moti'
-import React from 'react'
+import React, { useCallback } from 'react'
+
+import { loggerService } from '@/services/LoggerService'
 
 import { PauseButton, SendButton, VoiceButton } from '../buttons'
 import { useMessageInput } from '../context/MessageInputContext'
+
+const logger = loggerService.withContext('Actions')
 
 export const Actions: React.FC = () => {
   const { isLoading, isVoiceActive, text, files, onPause, sendMessage, setText, setIsVoiceActive } = useMessageInput()
   const hasText = text.trim().length > 0
   const hasFiles = files.length > 0
   const shouldShowVoice = isVoiceActive || (!hasText && !hasFiles)
+
+  // Pass text directly to bypass any stale closure issues
+  const handleSend = useCallback(() => {
+    logger.info('Actions.handleSend called', { text, hasText, hasFiles })
+    sendMessage(text) // Pass text as overrideText to ensure latest value
+  }, [sendMessage, text, hasText, hasFiles])
 
   return (
     <AnimatePresence exitBeforeEnter>
@@ -37,7 +47,7 @@ export const Actions: React.FC = () => {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.5 }}
           transition={{ type: 'timing', duration: 200 }}>
-          <SendButton onSend={sendMessage} />
+          <SendButton onSend={handleSend} />
         </MotiView>
       )}
     </AnimatePresence>

@@ -54,9 +54,9 @@ export const Root: React.FC<RootProps> = ({ topic, assistant, updateAssistant, c
   const { sendMessage, onPause, isEditing, cancelEditing } = useMessageSend({
     topic,
     assistant,
-    getText: () => text,
-    getFiles: () => files,
-    getMentions: () => mentions,
+    text,
+    files,
+    mentions,
     clearInputs,
     onEditStart: handleEditStart,
     onEditCancel: handleEditCancel

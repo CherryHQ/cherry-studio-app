@@ -16,9 +16,9 @@ const logger = loggerService.withContext('useMessageSend')
 export interface UseMessageSendOptions {
   topic: Topic
   assistant: Assistant
-  getText: () => string
-  getFiles: () => FileMetadata[]
-  getMentions: () => Model[]
+  text: string
+  files: FileMetadata[]
+  mentions: Model[]
   clearInputs: () => void
   onEditStart?: (content: string) => void
   onEditCancel?: () => void
@@ -36,7 +36,7 @@ export interface UseMessageSendReturn {
  * Extracted from useMessageInputLogic lines 100-168
  */
 export function useMessageSend(options: UseMessageSendOptions): UseMessageSendReturn {
-  const { topic, assistant, getText, getFiles, getMentions, clearInputs, onEditStart, onEditCancel } = options
+  const { topic, assistant, text, files, mentions, clearInputs, onEditStart, onEditCancel } = options
 
   const { pauseMessages } = useMessageOperations(topic)
   const { editingMessage, isEditing, cancelEdit, clearEditingState } = useMessageEdit({
@@ -47,16 +47,21 @@ export function useMessageSend(options: UseMessageSendOptions): UseMessageSendRe
 
   const sendMessage = useCallback(
     async (overrideText?: string) => {
-      const textToSend = overrideText ?? getText()
+      logger.info('sendMessage called', { overrideText, text, filesCount: files.length })
+
+      const textToSend = overrideText ?? text
       const trimmedText = textToSend.trim()
       const hasText = !isEmpty(trimmedText)
       const currentText = textToSend
-      const currentFiles = getFiles()
-      const currentMentions = getMentions()
+      const currentFiles = files
+      const currentMentions = mentions
       const currentEditingMessage = editingMessage
       const hasFiles = currentFiles.length > 0
 
+      logger.info('sendMessage state', { textToSend, hasText, hasFiles })
+
       if (!hasText && !hasFiles) {
+        logger.info('sendMessage early return: no text or files')
         return
       }
 
@@ -107,7 +112,7 @@ export function useMessageSend(options: UseMessageSendOptions): UseMessageSendRe
         logger.error('Error sending message:', error)
       }
     },
-    [getText, getFiles, getMentions, editingMessage, clearInputs, clearEditingState, topic, assistant]
+    [text, files, mentions, editingMessage, clearInputs, clearEditingState, topic, assistant]
   )
 
   const onPause = useCallback(async () => {
