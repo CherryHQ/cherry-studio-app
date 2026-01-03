@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pressable } from 'react-native'
 
@@ -38,17 +38,14 @@ export const ToolPreview: React.FC<ToolPreviewProps> = ({ assistant, updateAssis
   const { t } = useTranslation()
 
   // Type-safe tool handling using service
-  const handleToggleTool = useCallback(
-    async (toolKey: AssistantToolKey) => {
-      const result = await toggleTool(toolKey, assistant, updateAssistant)
-      if (!result.success) {
-        logger.error(`Failed to toggle ${toolKey}`, result.error)
-      }
-    },
-    [assistant, updateAssistant]
-  )
+  const handleToggleTool = async (toolKey: AssistantToolKey) => {
+    const result = await toggleTool(toolKey, assistant, updateAssistant)
+    if (!result.success) {
+      logger.error(`Failed to toggle ${toolKey}`, result.error)
+    }
+  }
 
-  const enabledToolKeys = useMemo(() => getEnabledTools(assistant), [assistant])
+  const enabledToolKeys = getEnabledTools(assistant)
 
   if (enabledToolKeys.length === 0) {
     return null

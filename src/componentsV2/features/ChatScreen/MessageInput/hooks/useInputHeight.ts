@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { TextInputContentSizeChangeEvent } from 'react-native'
 
 import { TEXT_FIELD_CONFIG } from '../types'
@@ -18,23 +18,17 @@ export interface UseInputHeightReturn {
 export function useInputHeight(): UseInputHeightReturn {
   const [rawHeight, setRawHeight] = useState<number | undefined>(undefined)
 
-  const showExpandButton = useMemo(() => {
-    if (!rawHeight) return false
-    const lineCount = Math.ceil(rawHeight / LINE_HEIGHT)
-    return lineCount > MAX_VISIBLE_LINES
-  }, [rawHeight])
+  const lineCount = rawHeight ? Math.ceil(rawHeight / LINE_HEIGHT) : 0
+  const showExpandButton = rawHeight ? lineCount > MAX_VISIBLE_LINES : false
 
-  const inputHeight = useMemo(() => {
-    if (rawHeight === undefined) return undefined
-    return Math.min(rawHeight, MAX_INPUT_HEIGHT)
-  }, [rawHeight])
+  const inputHeight = rawHeight === undefined ? undefined : Math.min(rawHeight, MAX_INPUT_HEIGHT)
 
-  const handleContentSizeChange = useCallback((e: TextInputContentSizeChangeEvent) => {
+  const handleContentSizeChange = (e: TextInputContentSizeChangeEvent) => {
     const height = e?.nativeEvent?.contentSize?.height
     if (height > 0) {
       setRawHeight(height)
     }
-  }, [])
+  }
 
   return {
     inputHeight,

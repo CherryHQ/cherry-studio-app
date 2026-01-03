@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React from 'react'
 import { Platform, View } from 'react-native'
 
 import { isReasoningModel } from '@/config/models'
@@ -34,31 +34,25 @@ export const Root: React.FC<RootProps> = ({ topic, assistant, updateAssistant, c
     updateAssistant
   })
 
-  const clearInputs = useCallback(() => {
+  const clearInputs = () => {
     clearText()
     clearFiles()
-  }, [clearText, clearFiles])
+  }
 
-  const restoreInputs = useCallback(
-    (textToRestore: string, filesToRestore: FileMetadata[]) => {
-      setText(textToRestore)
-      setFiles(filesToRestore)
-    },
-    [setText, setFiles]
-  )
+  const restoreInputs = (textToRestore: string, filesToRestore: FileMetadata[]) => {
+    setText(textToRestore)
+    setFiles(filesToRestore)
+  }
 
-  const handleEditStart = useCallback(
-    (content: string) => {
-      setText(content)
-      clearFiles()
-    },
-    [setText, clearFiles]
-  )
+  const handleEditStart = (content: string) => {
+    setText(content)
+    clearFiles()
+  }
 
-  const handleEditCancel = useCallback(() => {
+  const handleEditCancel = () => {
     clearText()
     clearFiles()
-  }, [clearText, clearFiles])
+  }
 
   const { sendMessage, onPause, isEditing, cancelEditing } = useMessageSend({
     topic,
@@ -76,54 +70,31 @@ export const Root: React.FC<RootProps> = ({ topic, assistant, updateAssistant, c
 
   const isReasoning = isReasoningModel(assistant.model)
 
-  const handleExpand = useCallback(() => {
+  const handleExpand = () => {
     presentExpandInputSheet(text, setText, sendMessage, files.length > 0)
-  }, [files.length, sendMessage, setText, text])
+  }
 
-  // MEMOIZED context value (fixes previous issue)
-  const contextValue = useMemo<MessageInputContextValue>(
-    () => ({
-      topic,
-      assistant,
-      updateAssistant,
-      text,
-      setText,
-      files,
-      setFiles,
-      mentions,
-      setMentions,
-      isReasoning,
-      isEditing,
-      isLoading: Boolean(topic.isLoading),
-      sendMessage,
-      onPause,
-      cancelEditing,
-      handleExpand,
-      handlePasteImages,
-      isVoiceActive,
-      setIsVoiceActive
-    }),
-    [
-      topic,
-      assistant,
-      updateAssistant,
-      text,
-      setText,
-      files,
-      setFiles,
-      mentions,
-      setMentions,
-      isReasoning,
-      isEditing,
-      sendMessage,
-      onPause,
-      cancelEditing,
-      handleExpand,
-      handlePasteImages,
-      isVoiceActive,
-      setIsVoiceActive
-    ]
-  )
+  const contextValue: MessageInputContextValue = {
+    topic,
+    assistant,
+    updateAssistant,
+    text,
+    setText,
+    files,
+    setFiles,
+    mentions,
+    setMentions,
+    isReasoning,
+    isEditing,
+    isLoading: Boolean(topic.isLoading),
+    sendMessage,
+    onPause,
+    cancelEditing,
+    handleExpand,
+    handlePasteImages,
+    isVoiceActive,
+    setIsVoiceActive
+  }
 
   return (
     <MessageInputContext.Provider value={contextValue}>

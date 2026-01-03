@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { useAllProviders } from '@/hooks/useProviders'
 import type { Assistant, Model } from '@/types/assistant'
@@ -45,13 +45,10 @@ export function useMentions(options: UseMentionsOptions): UseMentionsReturn {
     }
   }, [providers, mentions, isLoading])
 
-  const handleMentionChange = useCallback(
-    async (models: Model[]) => {
-      setMentions(models)
-      await handleModelChange(models, assistant, updateAssistant)
-    },
-    [assistant, updateAssistant]
-  )
+  const handleMentionChange = async (models: Model[]) => {
+    setMentions(models)
+    await handleModelChange(models, assistant, updateAssistant)
+  }
 
   return {
     mentions,

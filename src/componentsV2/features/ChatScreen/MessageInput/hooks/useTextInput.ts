@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { presentDialog } from '@/componentsV2'
@@ -28,37 +28,34 @@ export function useTextInput(options: UseTextInputOptions = {}): UseTextInputRet
   const [text, setTextInternal] = useState('')
   const threshold = options.threshold ?? LONG_TEXT_THRESHOLD
 
-  const setText = useCallback(
-    async (newText: string) => {
-      // Check if text exceeds threshold
-      if (isLongText(newText, threshold)) {
-        const result = await processInputText(newText, {
-          threshold,
-          onConvertToFile: options.onFileCreated
-        })
+  const setText = async (newText: string) => {
+    // Check if text exceeds threshold
+    if (isLongText(newText, threshold)) {
+      const result = await processInputText(newText, {
+        threshold,
+        onConvertToFile: options.onFileCreated
+      })
 
-        if (result.success) {
-          setTextInternal(result.data?.processedText ?? '')
-          if (result.data?.convertedToFile) {
-            presentDialog('info', {
-              title: t('inputs.longTextConverted.title'),
-              content: t('inputs.longTextConverted.message', { length: newText.length })
-            })
-          }
-        } else {
-          // Fallback on error - keep the text
-          setTextInternal(newText)
+      if (result.success) {
+        setTextInternal(result.data?.processedText ?? '')
+        if (result.data?.convertedToFile) {
+          presentDialog('info', {
+            title: t('inputs.longTextConverted.title'),
+            content: t('inputs.longTextConverted.message', { length: newText.length })
+          })
         }
       } else {
+        // Fallback on error - keep the text
         setTextInternal(newText)
       }
-    },
-    [threshold, options.onFileCreated, t]
-  )
+    } else {
+      setTextInternal(newText)
+    }
+  }
 
-  const clearText = useCallback(() => {
+  const clearText = () => {
     setTextInternal('')
-  }, [])
+  }
 
   return {
     text,

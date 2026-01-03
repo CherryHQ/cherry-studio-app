@@ -441,7 +441,7 @@
         "title": "Edit Failed"
       },
       "edit_reply": "Edit Reply",
-      "editing_message": "[to be translated]:编辑",
+      "editing_message": "Editing",
       "marked_as_best_answer": "Marked as best answer",
       "pause_failed": {
         "content": "Failed to pause. Please try again.",

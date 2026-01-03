@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Keyboard, Pressable } from 'react-native'
 
@@ -35,22 +35,19 @@ export const MentionButton: React.FC<MentionButtonProps> = ({ mentions, setMenti
   const { t } = useTranslation()
 
   // Use service for model change logic
-  const onMentionChange = useCallback(
-    async (models: Model[]) => {
-      setMentions(models)
-      await handleModelChange(models, assistant, updateAssistant)
-    },
-    [setMentions, assistant, updateAssistant]
-  )
+  const onMentionChange = async (models: Model[]) => {
+    setMentions(models)
+    await handleModelChange(models, assistant, updateAssistant)
+  }
 
-  const handlePress = useCallback(() => {
+  const handlePress = () => {
     Keyboard.dismiss()
     presentModelSheet({
       mentions,
       setMentions: onMentionChange,
       multiple: true
     })
-  }, [mentions, onMentionChange])
+  }
 
   const renderEmptyState = () => <AtSign size={DISPLAY_CONSTANTS.ICON_SIZE} />
 

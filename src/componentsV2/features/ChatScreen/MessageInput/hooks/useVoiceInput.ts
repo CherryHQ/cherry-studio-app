@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 
 export interface UseVoiceInputReturn {
   isVoiceActive: boolean
@@ -13,9 +13,9 @@ export interface UseVoiceInputReturn {
 export function useVoiceInput(): UseVoiceInputReturn {
   const [isVoiceActive, setIsVoiceActive] = useState(false)
 
-  const toggleVoice = useCallback(() => {
+  const toggleVoice = () => {
     setIsVoiceActive(prev => !prev)
-  }, [])
+  }
 
   return {
     isVoiceActive,

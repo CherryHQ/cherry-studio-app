@@ -1,5 +1,4 @@
 import { isEmpty } from 'lodash'
-import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Keyboard } from 'react-native'
 
@@ -49,89 +48,86 @@ export function useMessageSend(options: UseMessageSendOptions): UseMessageSendRe
     onEditCancel
   })
 
-  const sendMessage = useCallback(
-    async (overrideText?: string) => {
-      logger.info('sendMessage called', { hasOverrideText: !!overrideText, textLength: text.length, filesCount: files.length })
+  const sendMessage = async (overrideText?: string) => {
+    logger.info('sendMessage called', { hasOverrideText: !!overrideText, textLength: text.length, filesCount: files.length })
 
-      const textToSend = overrideText ?? text
-      const trimmedText = textToSend.trim()
-      const hasText = !isEmpty(trimmedText)
-      const currentText = textToSend
-      const currentFiles = files
-      const currentMentions = mentions
-      const currentEditingMessage = editingMessage
-      const hasFiles = currentFiles.length > 0
+    const textToSend = overrideText ?? text
+    const trimmedText = textToSend.trim()
+    const hasText = !isEmpty(trimmedText)
+    const currentText = textToSend
+    const currentFiles = files
+    const currentMentions = mentions
+    const currentEditingMessage = editingMessage
+    const hasFiles = currentFiles.length > 0
 
-      logger.info('sendMessage state', { textLength: textToSend.length, hasText, hasFiles })
+    logger.info('sendMessage state', { textLength: textToSend.length, hasText, hasFiles })
 
-      if (!hasText && !hasFiles) {
-        logger.info('sendMessage early return: no text or files')
-        return
-      }
+    if (!hasText && !hasFiles) {
+      logger.info('sendMessage early return: no text or files')
+      return
+    }
 
-      clearInputs()
-      Keyboard.dismiss()
+    clearInputs()
+    Keyboard.dismiss()
 
-      // Handle editing mode
-      if (currentEditingMessage) {
-        clearEditingState()
-        await topicService.updateTopic(topic.id, { isLoading: true })
-
-        try {
-          await editUserMessageAndRegenerate(
-            currentEditingMessage.id,
-            hasText ? currentText : '',
-            currentFiles,
-            assistant,
-            topic.id
-          )
-        } catch (error) {
-          logger.error('Error editing message:', error)
-          await topicService.updateTopic(topic.id, { isLoading: false })
-          restoreInputs(currentText, currentFiles)
-          presentDialog('error', {
-            title: t('message.edit_failed.title'),
-            content: t('message.edit_failed.content')
-          })
-        }
-        return
-      }
-
-      // Normal send message flow
+    // Handle editing mode
+    if (currentEditingMessage) {
+      clearEditingState()
       await topicService.updateTopic(topic.id, { isLoading: true })
 
       try {
-        const baseUserMessage: MessageInputBaseParams = { assistant, topic }
-
-        if (hasText) {
-          baseUserMessage.content = currentText
-        }
-
-        if (currentFiles.length > 0) {
-          baseUserMessage.files = currentFiles
-        }
-
-        const { message, blocks } = getUserMessage(baseUserMessage)
-
-        if (currentMentions.length > 0) {
-          message.mentions = currentMentions
-        }
-
-        await _sendMessage(message, blocks, assistant, topic.id)
+        await editUserMessageAndRegenerate(
+          currentEditingMessage.id,
+          hasText ? currentText : '',
+          currentFiles,
+          assistant,
+          topic.id
+        )
       } catch (error) {
-        logger.error('Error sending message:', error)
+        logger.error('Error editing message:', error)
         await topicService.updateTopic(topic.id, { isLoading: false })
         restoreInputs(currentText, currentFiles)
         presentDialog('error', {
-          title: t('message.send_failed.title'),
-          content: t('message.send_failed.content')
+          title: t('message.edit_failed.title'),
+          content: t('message.edit_failed.content')
         })
       }
-    },
-    [text, files, mentions, editingMessage, clearInputs, restoreInputs, clearEditingState, topic, assistant, t]
-  )
+      return
+    }
 
-  const onPause = useCallback(async () => {
+    // Normal send message flow
+    await topicService.updateTopic(topic.id, { isLoading: true })
+
+    try {
+      const baseUserMessage: MessageInputBaseParams = { assistant, topic }
+
+      if (hasText) {
+        baseUserMessage.content = currentText
+      }
+
+      if (currentFiles.length > 0) {
+        baseUserMessage.files = currentFiles
+      }
+
+      const { message, blocks } = getUserMessage(baseUserMessage)
+
+      if (currentMentions.length > 0) {
+        message.mentions = currentMentions
+      }
+
+      await _sendMessage(message, blocks, assistant, topic.id)
+    } catch (error) {
+      logger.error('Error sending message:', error)
+      await topicService.updateTopic(topic.id, { isLoading: false })
+      restoreInputs(currentText, currentFiles)
+      presentDialog('error', {
+        title: t('message.send_failed.title'),
+        content: t('message.send_failed.content')
+      })
+    }
+  }
+
+  const onPause = async () => {
     try {
       await pauseMessages()
     } catch (error) {
@@ -141,7 +137,7 @@ export function useMessageSend(options: UseMessageSendOptions): UseMessageSendRe
         content: t('message.pause_failed.content')
       })
     }
-  }, [pauseMessages, t])
+  }
 
   return {
     sendMessage,

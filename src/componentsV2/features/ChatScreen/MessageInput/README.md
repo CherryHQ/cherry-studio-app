@@ -34,6 +34,7 @@ import { MessageInput } from '@/componentsV2/features/ChatScreen/MessageInput'
 ```
 MessageInput/
 ├── index.tsx                    # Main entry, exports compound component
+├── MessageInputContainer.tsx    # Container wrapper component
 ├── context/
 │   └── MessageInputContext.tsx  # Shared state via React Context
 ├── components/
@@ -47,8 +48,45 @@ MessageInput/
 │   ├── Actions.tsx              # Send/Voice/Pause buttons
 │   ├── AccessoryBar.tsx         # Bottom accessory buttons
 │   └── DefaultLayout.tsx        # Default component composition
-└── hooks/
-    └── useMessageInputLogic.ts  # Core business logic
+├── buttons/
+│   ├── ExpandButton.tsx         # Expand input to full screen
+│   ├── McpButton.tsx            # MCP tools toggle
+│   ├── MentionButton.tsx        # Model mention selector
+│   ├── PauseButton.tsx          # Pause streaming response
+│   ├── SendButton.tsx           # Send message button
+│   ├── ThinkButton.tsx          # Toggle reasoning mode
+│   ├── ToolButton.tsx           # Add tools/attachments
+│   └── VoiceButton.tsx          # Voice input toggle
+├── previews/
+│   ├── EditingPreview.tsx       # Editing mode indicator
+│   ├── FilePreview.tsx          # Attached files preview
+│   ├── ToolPreview.tsx          # Enabled tools preview
+│   └── items/
+│       ├── BaseItem.tsx         # Base preview item component
+│       ├── FileItem.tsx         # File preview item
+│       ├── ImageItem.tsx        # Image preview item
+│       └── PreviewItem.tsx      # Generic preview item
+├── hooks/
+│   ├── useFileAttachments.ts    # File attachment state management
+│   ├── useInputHeight.ts        # Dynamic input height calculation
+│   ├── useMentions.ts           # Model mentions handling
+│   ├── useMessageSend.ts        # Message send/edit operations
+│   ├── useTextInput.ts          # Text input with long text handling
+│   └── useVoiceInput.ts         # Voice input state
+├── services/
+│   ├── MentionValidationService.ts  # Validate model mentions
+│   ├── MessageInputService.ts       # Core input operations
+│   ├── TextProcessingService.ts     # Text processing utilities
+│   └── ToolAvailabilityService.ts   # Tool availability checks
+├── types/
+│   ├── actions.ts               # Action type definitions
+│   ├── config.ts                # Configuration constants
+│   ├── context.ts               # Context type definitions
+│   ├── state.ts                 # State type definitions
+│   └── index.ts                 # Type exports
+└── __tests__/
+    ├── hooks/                   # Hook unit tests
+    └── services/                # Service unit tests
 ```
 
 ## Components
@@ -64,6 +102,19 @@ MessageInput/
 | `MessageInput.TextField`    | Multiline text input with expand support  |
 | `MessageInput.Actions`      | Animated Send/Voice/Pause buttons         |
 | `MessageInput.AccessoryBar` | Think, Mention, MCP buttons               |
+
+## Buttons
+
+| Button          | Description                              |
+| --------------- | ---------------------------------------- |
+| `ExpandButton`  | Expands input to full screen sheet       |
+| `McpButton`     | Opens MCP server selection               |
+| `MentionButton` | Opens model mention selector             |
+| `PauseButton`   | Pauses streaming AI response             |
+| `SendButton`    | Sends the current message                |
+| `ThinkButton`   | Toggles reasoning/thinking mode          |
+| `ToolButton`    | Opens attachment/tool selection          |
+| `VoiceButton`   | Toggles voice input mode                 |
 
 ## Context API
 
@@ -107,6 +158,15 @@ const MyComponent = () => {
   return (/* ... */)
 }
 ```
+
+## Services
+
+| Service                    | Description                              |
+| -------------------------- | ---------------------------------------- |
+| `MentionValidationService` | Validates model mentions against providers |
+| `MessageInputService`      | Core message input operations            |
+| `TextProcessingService`    | Long text handling, file conversion      |
+| `ToolAvailabilityService`  | Checks tool availability for assistant   |
 
 ## Extending
 
@@ -179,3 +239,15 @@ const contextValue: MessageInputContextValue = {
 - **Edit Mode**: Edit and regenerate previous messages
 - **Animations**: Smooth transitions between Send/Voice/Pause buttons
 - **Glass Effect**: iOS 26+ liquid glass styling support
+
+## Testing
+
+Tests are located in `__tests__/` directory:
+
+- `hooks/` - Unit tests for all custom hooks
+- `services/` - Unit tests for all services
+
+Run tests with:
+```bash
+yarn test src/componentsV2/features/ChatScreen/MessageInput
+```

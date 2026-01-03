@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import { Image } from 'react-native-compressor'
 
 import { uploadFiles } from '@/services/FileService'
@@ -26,19 +26,19 @@ export interface UseFileAttachmentsReturn {
 export function useFileAttachments(): UseFileAttachmentsReturn {
   const [files, setFiles] = useState<FileMetadata[]>([])
 
-  const addFiles = useCallback((newFiles: FileMetadata[]) => {
+  const addFiles = (newFiles: FileMetadata[]) => {
     setFiles(prev => [...prev, ...newFiles])
-  }, [])
+  }
 
-  const removeFile = useCallback((fileId: string) => {
+  const removeFile = (fileId: string) => {
     setFiles(prev => prev.filter(f => f.id !== fileId))
-  }, [])
+  }
 
-  const clearFiles = useCallback(() => {
+  const clearFiles = () => {
     setFiles([])
-  }, [])
+  }
 
-  const handlePasteImages = useCallback(async (uris: string[]) => {
+  const handlePasteImages = async (uris: string[]) => {
     try {
       logger.info('Processing pasted images', { count: uris.length })
 
@@ -72,7 +72,7 @@ export function useFileAttachments(): UseFileAttachmentsReturn {
     } catch (err) {
       logger.error('Error processing pasted images', err)
     }
-  }, [])
+  }
 
   return {
     files,
