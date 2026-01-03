@@ -5,6 +5,10 @@ import { useTextInput } from '../../hooks/useTextInput'
 import { isLongText, processInputText } from '../../services/TextProcessingService'
 import { LONG_TEXT_THRESHOLD } from '../../types'
 
+jest.mock('@/componentsV2', () => ({
+  presentDialog: jest.fn()
+}))
+
 jest.mock('@/componentsV2/icons/LucideIcon', () => ({
   Globe: () => null,
   Palette: () => null

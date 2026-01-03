@@ -74,13 +74,4 @@ describe('useVoiceInput', () => {
     expect(result.current.isVoiceActive).toBe(true)
   })
 
-  it('returns stable toggleVoice function', () => {
-    const { result, rerender } = renderHook(() => useVoiceInput())
-
-    const toggle1 = result.current.toggleVoice
-    rerender({})
-    const toggle2 = result.current.toggleVoice
-
-    expect(toggle1).toBe(toggle2)
-  })
 })

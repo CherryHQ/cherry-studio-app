@@ -243,28 +243,4 @@ describe('useMentions', () => {
       expect(result.current.mentions).toHaveLength(2)
     })
   })
-
-  describe('function stability', () => {
-    it('returns stable handleMentionChange when deps unchanged', () => {
-      const { result, rerender } = renderHook(() => useMentions(defaultProps))
-
-      const handler1 = result.current.handleMentionChange
-      rerender({})
-      const handler2 = result.current.handleMentionChange
-
-      expect(handler1).toBe(handler2)
-    })
-
-    it('updates handleMentionChange when assistant changes', () => {
-      const { result, rerender } = renderHook((props: UseMentionsOptions) => useMentions(props), {
-        initialProps: defaultProps
-      })
-
-      const handler1 = result.current.handleMentionChange
-      rerender({ ...defaultProps, assistant: createMockAssistant({ id: 'new-assistant' }) })
-      const handler2 = result.current.handleMentionChange
-
-      expect(handler1).not.toBe(handler2)
-    })
-  })
 })

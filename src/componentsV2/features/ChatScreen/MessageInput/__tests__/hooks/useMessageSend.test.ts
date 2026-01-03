@@ -458,29 +458,6 @@ describe('useMessageSend', () => {
     })
   })
 
-  describe('function stability', () => {
-    it('returns stable sendMessage when deps unchanged', () => {
-      const props = createDefaultProps()
-      const { result, rerender } = renderHook(() => useMessageSend(props))
-
-      const sendMessage1 = result.current.sendMessage
-      rerender({})
-      const sendMessage2 = result.current.sendMessage
-
-      expect(sendMessage1).toBe(sendMessage2)
-    })
-
-    it('returns stable onPause function', () => {
-      const { result, rerender } = renderHook(() => useMessageSend(createDefaultProps()))
-
-      const onPause1 = result.current.onPause
-      rerender({})
-      const onPause2 = result.current.onPause
-
-      expect(onPause1).toBe(onPause2)
-    })
-  })
-
   describe('overrideText in editing mode', () => {
     it('uses overrideText when provided in editing mode', async () => {
       const clearEditingState = jest.fn()

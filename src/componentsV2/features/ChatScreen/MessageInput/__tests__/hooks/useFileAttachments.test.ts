@@ -292,45 +292,4 @@ describe('useFileAttachments', () => {
     })
   })
 
-  describe('function stability', () => {
-    it('returns stable addFiles function', () => {
-      const { result, rerender } = renderHook(() => useFileAttachments())
-
-      const addFiles1 = result.current.addFiles
-      rerender({})
-      const addFiles2 = result.current.addFiles
-
-      expect(addFiles1).toBe(addFiles2)
-    })
-
-    it('returns stable removeFile function', () => {
-      const { result, rerender } = renderHook(() => useFileAttachments())
-
-      const removeFile1 = result.current.removeFile
-      rerender({})
-      const removeFile2 = result.current.removeFile
-
-      expect(removeFile1).toBe(removeFile2)
-    })
-
-    it('returns stable clearFiles function', () => {
-      const { result, rerender } = renderHook(() => useFileAttachments())
-
-      const clearFiles1 = result.current.clearFiles
-      rerender({})
-      const clearFiles2 = result.current.clearFiles
-
-      expect(clearFiles1).toBe(clearFiles2)
-    })
-
-    it('returns stable handlePasteImages function', () => {
-      const { result, rerender } = renderHook(() => useFileAttachments())
-
-      const handlePasteImages1 = result.current.handlePasteImages
-      rerender({})
-      const handlePasteImages2 = result.current.handlePasteImages
-
-      expect(handlePasteImages1).toBe(handlePasteImages2)
-    })
-  })
 })

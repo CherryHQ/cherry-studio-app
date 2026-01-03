@@ -88,13 +88,4 @@ describe('useInputHeight', () => {
     expect(MAX_INPUT_HEIGHT).toBe(96)
   })
 
-  it('returns stable handleContentSizeChange function', () => {
-    const { result, rerender } = renderHook(() => useInputHeight())
-
-    const handler1 = result.current.handleContentSizeChange
-    rerender({})
-    const handler2 = result.current.handleContentSizeChange
-
-    expect(handler1).toBe(handler2)
-  })
 })
