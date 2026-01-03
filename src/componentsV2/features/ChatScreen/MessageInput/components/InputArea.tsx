@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { isIOS26 } from '@/utils/device'
 
 import { useMessageInput } from '../context/MessageInputContext'
-import { getEnabledToolKeys } from '../ToolPreview'
+import { getEnabledToolKeys } from '../previews'
 import { InputRow } from './InputRow'
 import { Previews } from './Previews'
 

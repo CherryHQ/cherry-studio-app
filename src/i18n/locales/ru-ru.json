@@ -436,10 +436,22 @@
       "delete_topic": "Удалить тему",
       "delete_topic_confirmation": "Вы уверены, что хотите удалить эту тему?",
       "delete_translation": "Удалить перевод",
+      "edit_failed": {
+        "content": "Не удалось отредактировать сообщение. Пожалуйста, попробуйте снова.",
+        "title": "Ошибка редактирования"
+      },
       "edit_reply": "Редактировать ответ",
-      "editing_message": "[to be translated]:编辑",
+      "editing_message": "Редактирование",
       "marked_as_best_answer": "Отмечено как лучший ответ",
+      "pause_failed": {
+        "content": "Не удалось приостановить. Пожалуйста, попробуйте снова.",
+        "title": "Ошибка приостановки"
+      },
       "searching": "Поиск...",
+      "send_failed": {
+        "content": "Не удалось отправить сообщение. Пожалуйста, попробуйте снова.",
+        "title": "Ошибка отправки"
+      },
       "share_message": "Поделиться новостью",
       "topic_deleted": "Тема удалена",
       "translate_message": "Перевести сообщение",
@@ -599,8 +611,8 @@
         },
         "lan_transfer": {
           "app_version": "Версия приложения",
-          "back_cancel_receive_body": "[to be translated]:返回将会取消当前正在接收的文件，是否继续？",
-          "back_cancel_receive_title": "[to be translated]:返回将取消接收",
+          "back_cancel_receive_body": "Возврат отменит текущий приём файла. Продолжить?",
+          "back_cancel_receive_title": "Покинуть эту страницу?",
           "backup_detected_body": "Обнаружен файл резервной копии. Восстановить?",
           "backup_detected_title": "Обнаружен файл резервной копии",
           "cancel_receive": "Отменить приём",
@@ -611,14 +623,14 @@
           "error": "Ошибка",
           "eta": "Осталось",
           "file_status": {
-            "cancelled": "[to be translated]:已取消",
-            "cancelling": "[to be translated]:正在取消...",
-            "complete": "[to be translated]:已完成",
-            "completing": "[to be translated]:完成中...",
-            "error": "[to be translated]:错误",
-            "idle": "[to be translated]:空闲",
-            "receiving": "[to be translated]:接收中",
-            "verifying": "[to be translated]:校验中..."
+            "cancelled": "Отменено",
+            "cancelling": "Отмена...",
+            "complete": "Завершено",
+            "completing": "Завершение...",
+            "error": "Ошибка",
+            "idle": "Ожидание",
+            "receiving": "Приём",
+            "verifying": "Проверка..."
           },
           "file_transfer": "Передача файла",
           "hint": "Выберите это устройство в Cherry Studio на десктопе, чтобы отправить резервную копию",

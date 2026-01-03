@@ -3,7 +3,7 @@ import { ScrollView } from 'react-native'
 
 import type { FileMetadata } from '@/types/file'
 
-import PreviewItem from './PreviewItems/PreviewItem'
+import { PreviewItem } from './items'
 
 interface FilePreviewProps {
   files: FileMetadata[]

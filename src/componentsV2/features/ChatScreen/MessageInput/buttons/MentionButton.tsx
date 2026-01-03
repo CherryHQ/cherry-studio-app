@@ -9,7 +9,8 @@ import XStack from '@/componentsV2/layout/XStack'
 import type { Assistant, Model } from '@/types/assistant'
 import { getBaseModelName } from '@/utils/naming'
 
-import { presentModelSheet } from '../../Sheet/ModelSheet'
+import { presentModelSheet } from '../../../Sheet/ModelSheet'
+import { handleModelChange } from '../services'
 
 interface MentionButtonProps {
   mentions: Model[]
@@ -33,33 +34,19 @@ const DISPLAY_CONSTANTS = {
 export const MentionButton: React.FC<MentionButtonProps> = ({ mentions, setMentions, assistant, updateAssistant }) => {
   const { t } = useTranslation()
 
+  // Use service for model change logic
+  const onMentionChange = async (models: Model[]) => {
+    setMentions(models)
+    await handleModelChange(models, assistant, updateAssistant)
+  }
+
   const handlePress = () => {
     Keyboard.dismiss()
     presentModelSheet({
       mentions,
-      setMentions: handleModelChange,
+      setMentions: onMentionChange,
       multiple: true
     })
-  }
-  /**
-   * @description Change Model Event
-   * 1. Assistant没有defaultModel时，选择模型后设定defaultModel和model，如果为多选，则设置第一个模型为defaultModel
-   * 2. Assistant有defaultModel时，选择模型后修改model，如果为多选，则设置第一个模型为model
-   * @param models
-   * @returns
-   */
-  const handleModelChange = async (models: Model[]) => {
-    setMentions(models)
-
-    let updatedAssistant: Assistant = assistant
-    if (assistant.defaultModel) {
-      updatedAssistant.model = models[0]
-    } else {
-      updatedAssistant.defaultModel = models[0]
-      updatedAssistant.model = models[0]
-    }
-
-    await updateAssistant(updatedAssistant)
   }
 
   const renderEmptyState = () => <AtSign size={DISPLAY_CONSTANTS.ICON_SIZE} />

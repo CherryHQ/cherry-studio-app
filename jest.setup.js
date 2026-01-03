@@ -11,10 +11,10 @@ jest.mock('./src/utils', () => {
     ...jest.requireActual('./src/utils'),
     uuid: () => generateMockUuid(),
     storage: {
-      getString: jest.fn((key) => global.__mockStorageData?.get(key)),
+      getString: jest.fn(key => global.__mockStorageData?.get(key)),
       set: jest.fn((key, value) => global.__mockStorageData?.set(key, value)),
-      delete: jest.fn((key) => global.__mockStorageData?.delete(key)),
-      contains: jest.fn((key) => global.__mockStorageData?.has(key)),
+      delete: jest.fn(key => global.__mockStorageData?.delete(key)),
+      contains: jest.fn(key => global.__mockStorageData?.has(key)),
       getAllKeys: jest.fn(() => Array.from(global.__mockStorageData?.keys() || []))
     }
   }

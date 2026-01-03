@@ -1,20 +1,15 @@
-import React, { useCallback, useState } from 'react'
+import React from 'react'
 import { Platform, View } from 'react-native'
-import { Image } from 'react-native-compressor'
 
+import { isReasoningModel } from '@/config/models'
 import { useBottom } from '@/hooks/useBottom'
-import { uploadFiles } from '@/services/FileService'
-import { loggerService } from '@/services/LoggerService'
 import type { Assistant, Topic } from '@/types/assistant'
-import { FileTypes } from '@/types/file'
-import { uuid } from '@/utils'
+import type { FileMetadata } from '@/types/file'
 
 import { presentExpandInputSheet } from '../../../Sheet/ExpandInputSheet'
 import { MessageInputContext, type MessageInputContextValue } from '../context/MessageInputContext'
-import { useMessageInputLogic } from '../hooks/useMessageInputLogic'
+import { useFileAttachments, useMentions, useMessageSend, useTextInput, useVoiceInput } from '../hooks'
 import { DefaultLayout } from './DefaultLayout'
-
-const logger = loggerService.withContext('MessageInput')
 
 interface RootProps {
   topic: Topic
@@ -25,64 +20,59 @@ interface RootProps {
 
 export const Root: React.FC<RootProps> = ({ topic, assistant, updateAssistant, children }) => {
   const bottomPad = useBottom()
-  const {
+
+  // Compose hooks
+  const { files, setFiles, addFiles, clearFiles, handlePasteImages } = useFileAttachments()
+
+  const { text, setText, clearText } = useTextInput({
+    onFileCreated: file => addFiles([file])
+  })
+
+  const { mentions, setMentions } = useMentions({
+    topicId: topic.id,
+    assistant,
+    updateAssistant
+  })
+
+  const clearInputs = () => {
+    clearText()
+    clearFiles()
+  }
+
+  const restoreInputs = (textToRestore: string, filesToRestore: FileMetadata[]) => {
+    setText(textToRestore)
+    setFiles(filesToRestore)
+  }
+
+  const handleEditStart = (content: string) => {
+    setText(content)
+    clearFiles()
+  }
+
+  const handleEditCancel = () => {
+    clearText()
+    clearFiles()
+  }
+
+  const { sendMessage, onPause, isEditing, cancelEditing } = useMessageSend({
+    topic,
+    assistant,
     text,
-    setText,
     files,
-    setFiles,
     mentions,
-    setMentions,
-    isReasoning,
-    isEditing,
-    sendMessage,
-    onPause,
-    cancelEditing
-  } = useMessageInputLogic(topic, assistant)
+    clearInputs,
+    restoreInputs,
+    onEditStart: handleEditStart,
+    onEditCancel: handleEditCancel
+  })
 
-  const [isVoiceActive, setIsVoiceActive] = useState(false)
+  const { isVoiceActive, setIsVoiceActive } = useVoiceInput()
 
-  const handleExpand = useCallback(() => {
+  const isReasoning = isReasoningModel(assistant.model)
+
+  const handleExpand = () => {
     presentExpandInputSheet(text, setText, sendMessage, files.length > 0)
-  }, [files.length, sendMessage, setText, text])
-
-  const handlePasteImages = useCallback(
-    async (uris: string[]) => {
-      try {
-        logger.info('Processing pasted images', { count: uris.length })
-
-        const processedFiles = await Promise.all(
-          uris.map(async (uri, index) => {
-            const id = uuid()
-            const fileName = `pasted-image-${Date.now()}-${index}`
-            const ext = uri.toLowerCase().endsWith('.gif') ? 'gif' : 'jpg'
-
-            // Compress non-GIF images
-            const processedUri = ext === 'gif' ? uri : await Image.compress(uri)
-
-            return {
-              id,
-              name: `${fileName}.${ext}`,
-              origin_name: `${fileName}.${ext}`,
-              path: processedUri,
-              size: 0,
-              ext,
-              type: FileTypes.IMAGE,
-              created_at: Date.now(),
-              count: 1
-            }
-          })
-        )
-
-        const uploadedFiles = await uploadFiles(processedFiles)
-        setFiles(prev => [...prev, ...uploadedFiles])
-
-        logger.info('Pasted images processed successfully', { count: uploadedFiles.length })
-      } catch (err) {
-        logger.error('Error processing pasted images', err)
-      }
-    },
-    [setFiles]
-  )
+  }
 
   const contextValue: MessageInputContextValue = {
     topic,

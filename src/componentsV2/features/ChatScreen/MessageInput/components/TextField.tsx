@@ -1,45 +1,39 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
-import type { TextInputContentSizeChangeEvent } from 'react-native'
 import { View } from 'react-native'
 
 import TextField from '@/componentsV2/base/TextField'
 import type { PasteEventPayload } from '@/modules/text-input-wrapper'
 import { TextInputWrapper } from '@/modules/text-input-wrapper'
+import { loggerService } from '@/services/LoggerService'
 
+import { ExpandButton } from '../buttons'
 import { useMessageInput } from '../context/MessageInputContext'
-import { ExpandButton } from '../ExpandButton'
+import { useInputHeight } from '../hooks'
+import { TEXT_FIELD_CONFIG } from '../types'
 
-const LINE_HEIGHT = 20
-const MAX_VISIBLE_LINES = 4
-const MAX_INPUT_HEIGHT = 96
+const logger = loggerService.withContext('MessageTextField')
+const { MAX_INPUT_HEIGHT } = TEXT_FIELD_CONFIG
 
 export const MessageTextField: React.FC = () => {
   const { t } = useTranslation()
   const { text, setText, handleExpand, handlePasteImages } = useMessageInput()
-
-  const [showExpandButton, setShowExpandButton] = useState(false)
-  const [inputHeight, setInputHeight] = useState<number | undefined>(undefined)
-
-  const handleContentSizeChange = (e: TextInputContentSizeChangeEvent) => {
-    const { height } = e.nativeEvent.contentSize
-    const lineCount = Math.ceil(height / LINE_HEIGHT)
-    setShowExpandButton(lineCount > MAX_VISIBLE_LINES)
-    setInputHeight(height)
-  }
+  const { inputHeight, showExpandButton, handleContentSizeChange } = useInputHeight()
 
   const handlePaste = (payload: PasteEventPayload) => {
-    if (payload.type === 'images') {
-      handlePasteImages(payload.uris)
+    try {
+      if (payload.type === 'images') {
+        handlePasteImages(payload.uris)
+      }
+      // Text paste is handled automatically by TextInput
+    } catch (error) {
+      logger.error('Error handling paste:', error)
     }
-    // Text paste is handled automatically by TextInput
   }
-
-  const computedInputHeight = inputHeight === undefined ? undefined : Math.min(inputHeight, MAX_INPUT_HEIGHT)
 
   return (
     <>
-      {/* hidden measurement input */}
+      {/* Hidden measurement input - NO height constraints for accurate measurement */}
       <View style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} className="w-full">
         <TextField className="w-full">
           <TextField.Input
@@ -62,7 +56,8 @@ export const MessageTextField: React.FC = () => {
           />
         </TextField>
       </View>
-      {/* visible input */}
+
+      {/* Visible input - uses measured height from hidden input */}
       <View style={{ flex: 1 }}>
         <TextInputWrapper onPaste={handlePaste}>
           <TextField className="w-full">
@@ -75,7 +70,7 @@ export const MessageTextField: React.FC = () => {
               numberOfLines={10}
               selectionColor="#2563eb"
               style={{
-                height: computedInputHeight,
+                height: inputHeight,
                 maxHeight: MAX_INPUT_HEIGHT,
                 minHeight: 36,
                 fontSize: 20,
@@ -92,6 +87,7 @@ export const MessageTextField: React.FC = () => {
           </TextField>
         </TextInputWrapper>
       </View>
+
       {showExpandButton && (
         <View className="absolute right-2 top-2">
           <ExpandButton onPress={handleExpand} />

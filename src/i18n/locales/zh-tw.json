@@ -436,10 +436,22 @@
       "delete_topic": "刪除主題",
       "delete_topic_confirmation": "您確定要刪除這個主題嗎？",
       "delete_translation": "刪除翻譯",
+      "edit_failed": {
+        "content": "訊息編輯失敗，請重試",
+        "title": "編輯失敗"
+      },
       "edit_reply": "編輯回覆",
-      "editing_message": "[to be translated]:编辑",
+      "editing_message": "編輯中",
       "marked_as_best_answer": "已標記為最佳回答",
+      "pause_failed": {
+        "content": "暫停失敗，請重試",
+        "title": "暫停失敗"
+      },
       "searching": "搜尋中...",
+      "send_failed": {
+        "content": "訊息發送失敗，請重試",
+        "title": "發送失敗"
+      },
       "share_message": "分享訊息",
       "topic_deleted": "主題已刪除",
       "translate_message": "翻譯訊息",
@@ -599,8 +611,8 @@
         },
         "lan_transfer": {
           "app_version": "應用程式版本",
-          "back_cancel_receive_body": "[to be translated]:返回将会取消当前正在接收的文件，是否继续？",
-          "back_cancel_receive_title": "[to be translated]:返回将取消接收",
+          "back_cancel_receive_body": "返回將會取消當前正在接收的檔案，是否繼續？",
+          "back_cancel_receive_title": "離開此頁面？",
           "backup_detected_body": "檢測到備份檔案，是否進行恢復？",
           "backup_detected_title": "檢測到備份檔案",
           "cancel_receive": "取消接收",
@@ -611,14 +623,14 @@
           "error": "錯誤",
           "eta": "預計剩餘",
           "file_status": {
-            "cancelled": "[to be translated]:已取消",
-            "cancelling": "[to be translated]:正在取消...",
-            "complete": "[to be translated]:已完成",
-            "completing": "[to be translated]:完成中...",
-            "error": "[to be translated]:错误",
-            "idle": "[to be translated]:空闲",
-            "receiving": "[to be translated]:接收中",
-            "verifying": "[to be translated]:校验中..."
+            "cancelled": "已取消",
+            "cancelling": "正在取消...",
+            "complete": "已完成",
+            "completing": "完成中...",
+            "error": "錯誤",
+            "idle": "閒置",
+            "receiving": "接收中",
+            "verifying": "校驗中..."
           },
           "file_transfer": "檔案傳輸",
           "hint": "請在桌面端 Cherry Studio 中選擇此裝置傳送備份",

@@ -7,8 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import Text from '@/componentsV2/base/Text'
 import TextField from '@/componentsV2/base/TextField'
-import { SendButton } from '@/componentsV2/features/ChatScreen/MessageInput/SendButton'
-import { VoiceButton } from '@/componentsV2/features/ChatScreen/MessageInput/VoiceButton'
+import { SendButton, VoiceButton } from '@/componentsV2/features/ChatScreen/MessageInput/buttons'
 import { X } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
@@ -21,14 +20,14 @@ const SHEET_NAME = 'expand-input-sheet'
 let currentText = ''
 let currentHasFiles = false
 let onTextChangeCallback: ((text: string) => void) | null = null
-let onSendCallback: (() => void) | null = null
+let onSendCallback: ((text?: string) => void) | null = null
 let updateLocalTextCallback: ((text: string) => void) | null = null
 let updateLocalHasFilesCallback: ((hasFiles: boolean) => void) | null = null
 
 export const presentExpandInputSheet = (
   text: string,
   onChange: (text: string) => void,
-  onSend: () => void,
+  onSend: (text?: string) => void,
   hasFiles = false
 ) => {
   currentText = text
@@ -79,9 +78,11 @@ const ExpandInputSheet: React.FC = () => {
   }
 
   const handleSend = () => {
+    const textToSend = localText
     dismissExpandInputSheet()
     requestAnimationFrame(() => {
-      onSendCallback?.()
+      // Pass localText directly to bypass stale closure in sendMessage
+      onSendCallback?.(textToSend)
     })
   }
 

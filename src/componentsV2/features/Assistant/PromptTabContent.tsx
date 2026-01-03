@@ -5,7 +5,7 @@ import { Keyboard, Pressable, View } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 
 import TextField from '@/componentsV2/base/TextField'
-import { ExpandButton } from '@/componentsV2/features/ChatScreen/MessageInput/ExpandButton'
+import { ExpandButton } from '@/componentsV2/features/ChatScreen/MessageInput/buttons'
 import { presentExpandTextSheet } from '@/componentsV2/features/Sheet/ExpandTextSheet'
 import { Save } from '@/componentsV2/icons'
 import YStack from '@/componentsV2/layout/YStack'

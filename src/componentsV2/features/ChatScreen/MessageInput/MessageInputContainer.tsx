@@ -9,6 +9,10 @@ interface MessageInputContainerProps {
   topic: Topic
 }
 
+/**
+ * Convenience wrapper that fetches assistant data based on topic.assistantId
+ * and passes it to MessageInput
+ */
 export const MessageInputContainer: React.FC<MessageInputContainerProps> = ({ topic }) => {
   const { assistant, isLoading, updateAssistant } = useAssistant(topic.assistantId)
 

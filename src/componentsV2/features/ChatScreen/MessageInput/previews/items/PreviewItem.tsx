@@ -38,4 +38,4 @@ const PreviewItem: FC<PreviewItemProps> = ({ file, files, setFiles }) => {
   )
 }
 
-export default PreviewItem
+export { PreviewItem }

@@ -2,10 +2,8 @@ import React from 'react'
 
 import XStack from '@/componentsV2/layout/XStack'
 
+import { McpButton, MentionButton, ThinkButton } from '../buttons'
 import { useMessageInput } from '../context/MessageInputContext'
-import { McpButton } from '../McpButton'
-import { MentionButton } from '../MentionButton'
-import { ThinkButton } from '../ThinkButton'
 
 export const AccessoryBar: React.FC = () => {
   const { assistant, updateAssistant, isReasoning, mentions, setMentions } = useMessageInput()

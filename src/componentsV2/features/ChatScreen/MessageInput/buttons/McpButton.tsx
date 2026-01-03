@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React from 'react'
 import { Keyboard } from 'react-native'
 
 import { IconButton } from '@/componentsV2/base/IconButton'
@@ -8,7 +8,7 @@ import XStack from '@/componentsV2/layout/XStack'
 import { useActiveMcpServers } from '@/hooks/useMcp'
 import type { Assistant } from '@/types/assistant'
 
-import { presentMcpServerSheet } from '../../Sheet/McpServerSheet'
+import { presentMcpServerSheet } from '../../../Sheet/McpServerSheet'
 
 interface McpButtonProps {
   assistant: Assistant
@@ -27,10 +27,8 @@ export const McpButton: React.FC<McpButtonProps> = ({ assistant, updateAssistant
   }
 
   // Calculate active MCP count based on real-time active MCP servers
-  const activeMcpCount = useMemo(() => {
-    const assistantMcpIds = assistant.mcpServers?.map(mcp => mcp.id) ?? []
-    return activeMcpServers.filter(mcp => assistantMcpIds.includes(mcp.id)).length
-  }, [assistant.mcpServers, activeMcpServers])
+  const assistantMcpIds = assistant.mcpServers?.map(mcp => mcp.id) ?? []
+  const activeMcpCount = activeMcpServers.filter(mcp => assistantMcpIds.includes(mcp.id)).length
 
   const McpIconContent = () => {
     if (activeMcpCount > 0) {
