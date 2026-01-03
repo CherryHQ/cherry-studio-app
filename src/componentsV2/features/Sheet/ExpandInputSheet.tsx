@@ -21,14 +21,14 @@ const SHEET_NAME = 'expand-input-sheet'
 let currentText = ''
 let currentHasFiles = false
 let onTextChangeCallback: ((text: string) => void) | null = null
-let onSendCallback: (() => void) | null = null
+let onSendCallback: ((text?: string) => void) | null = null
 let updateLocalTextCallback: ((text: string) => void) | null = null
 let updateLocalHasFilesCallback: ((hasFiles: boolean) => void) | null = null
 
 export const presentExpandInputSheet = (
   text: string,
   onChange: (text: string) => void,
-  onSend: () => void,
+  onSend: (text?: string) => void,
   hasFiles = false
 ) => {
   currentText = text
@@ -79,9 +79,11 @@ const ExpandInputSheet: React.FC = () => {
   }
 
   const handleSend = () => {
+    const textToSend = localText
     dismissExpandInputSheet()
     requestAnimationFrame(() => {
-      onSendCallback?.()
+      // Pass localText directly to bypass stale closure in sendMessage
+      onSendCallback?.(textToSend)
     })
   }
 

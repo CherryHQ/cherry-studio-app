@@ -97,10 +97,11 @@ export const useMessageInputLogic = (topic: Topic, assistant: Assistant) => {
     }
   }, [providers, mentions, isLoading])
 
-  const sendMessage = async () => {
-    const trimmedText = text.trim()
+  const sendMessage = async (overrideText?: string) => {
+    const textToSend = overrideText ?? text
+    const trimmedText = textToSend.trim()
     const hasText = !isEmpty(trimmedText)
-    const currentText = text
+    const currentText = textToSend
     const currentFiles = files
     const currentEditingMessage = editingMessage
     const hasFiles = currentFiles.length > 0
