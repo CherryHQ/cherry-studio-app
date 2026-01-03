@@ -27,7 +27,31 @@ export const MessageTextField: React.FC = () => {
 
   return (
     <>
-      {/* Single input with direct content size tracking */}
+      {/* Hidden measurement input - NO height constraints for accurate measurement */}
+      <View style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} className="w-full">
+        <TextField className="w-full">
+          <TextField.Input
+            className="text-foreground h-auto pr-0"
+            value={text}
+            multiline
+            onContentSizeChange={handleContentSizeChange}
+            colors={{
+              blurBackground: 'transparent',
+              focusBackground: 'transparent',
+              blurBorder: 'transparent',
+              focusBorder: 'transparent'
+            }}
+            style={{
+              minHeight: 36,
+              fontSize: 20,
+              lineHeight: 26,
+              paddingVertical: 6
+            }}
+          />
+        </TextField>
+      </View>
+
+      {/* Visible input - uses measured height from hidden input */}
       <View style={{ flex: 1 }}>
         <TextInputWrapper onPaste={handlePaste}>
           <TextField className="w-full">
@@ -36,7 +60,6 @@ export const MessageTextField: React.FC = () => {
               placeholder={t('inputs.placeholder')}
               value={text}
               onChangeText={setText}
-              onContentSizeChange={handleContentSizeChange}
               multiline
               numberOfLines={10}
               selectionColor="#2563eb"
@@ -58,6 +81,7 @@ export const MessageTextField: React.FC = () => {
           </TextField>
         </TextInputWrapper>
       </View>
+
       {showExpandButton && (
         <View className="absolute right-2 top-2">
           <ExpandButton onPress={handleExpand} />
