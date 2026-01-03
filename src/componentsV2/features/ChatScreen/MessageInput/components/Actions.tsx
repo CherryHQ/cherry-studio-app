@@ -17,7 +17,7 @@ export const Actions: React.FC = () => {
   // Pass text directly to bypass any stale closure issues
   // Note: React Compiler handles memoization automatically
   const handleSend = () => {
-    logger.info('Actions.handleSend called', { text, hasText, hasFiles })
+    logger.info('Actions.handleSend called', { textLength: text.length, hasText, hasFiles })
     sendMessage(text).catch(error => {
       logger.error('Unhandled error in handleSend:', error)
     })

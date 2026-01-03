@@ -1,4 +1,4 @@
-import { ToolButton as MessageInputToolButton } from './buttons'
+import { ToolButton } from './buttons'
 import { AccessoryBar } from './components/AccessoryBar'
 import { Actions } from './components/Actions'
 import { InputArea } from './components/InputArea'
@@ -10,7 +10,7 @@ import { MessageTextField } from './components/TextField'
 
 export const MessageInput = Object.assign(Root, {
   Main,
-  ToolButton: MessageInputToolButton,
+  ToolButton,
   InputArea,
   Previews,
   InputRow,

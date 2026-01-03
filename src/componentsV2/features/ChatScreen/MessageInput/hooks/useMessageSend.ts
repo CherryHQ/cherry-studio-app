@@ -51,7 +51,7 @@ export function useMessageSend(options: UseMessageSendOptions): UseMessageSendRe
 
   const sendMessage = useCallback(
     async (overrideText?: string) => {
-      logger.info('sendMessage called', { overrideText, text, filesCount: files.length })
+      logger.info('sendMessage called', { hasOverrideText: !!overrideText, textLength: text.length, filesCount: files.length })
 
       const textToSend = overrideText ?? text
       const trimmedText = textToSend.trim()
@@ -62,7 +62,7 @@ export function useMessageSend(options: UseMessageSendOptions): UseMessageSendRe
       const currentEditingMessage = editingMessage
       const hasFiles = currentFiles.length > 0
 
-      logger.info('sendMessage state', { textToSend, hasText, hasFiles })
+      logger.info('sendMessage state', { textLength: textToSend.length, hasText, hasFiles })
 
       if (!hasText && !hasFiles) {
         logger.info('sendMessage early return: no text or files')
