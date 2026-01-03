@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Alert } from 'react-native'
 
+import { presentDialog } from '@/componentsV2'
 import type { FileMetadata } from '@/types/file'
 
 import { isLongText, processInputText } from '../services'
@@ -40,7 +40,10 @@ export function useTextInput(options: UseTextInputOptions = {}): UseTextInputRet
         if (result.success) {
           setTextInternal(result.data?.processedText ?? '')
           if (result.data?.convertedToFile) {
-            Alert.alert(t('inputs.longTextConverted.title'), t('inputs.longTextConverted.message', { length: newText.length }))
+            presentDialog('info', {
+              title: t('inputs.longTextConverted.title'),
+              content: t('inputs.longTextConverted.message', { length: newText.length })
+            })
           }
         } else {
           // Fallback on error - keep the text

@@ -1,7 +1,9 @@
 import { isEmpty } from 'lodash'
 import { useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Keyboard } from 'react-native'
 
+import { presentDialog } from '@/componentsV2'
 import { useMessageEdit } from '@/hooks/useMessageEdit'
 import { useMessageOperations } from '@/hooks/useMessageOperation'
 import { loggerService } from '@/services/LoggerService'
@@ -20,6 +22,7 @@ export interface UseMessageSendOptions {
   files: FileMetadata[]
   mentions: Model[]
   clearInputs: () => void
+  restoreInputs: (text: string, files: FileMetadata[]) => void
   onEditStart?: (content: string) => void
   onEditCancel?: () => void
 }
@@ -36,7 +39,8 @@ export interface UseMessageSendReturn {
  * Extracted from useMessageInputLogic lines 100-168
  */
 export function useMessageSend(options: UseMessageSendOptions): UseMessageSendReturn {
-  const { topic, assistant, text, files, mentions, clearInputs, onEditStart, onEditCancel } = options
+  const { topic, assistant, text, files, mentions, clearInputs, restoreInputs, onEditStart, onEditCancel } = options
+  const { t } = useTranslation()
 
   const { pauseMessages } = useMessageOperations(topic)
   const { editingMessage, isEditing, cancelEdit, clearEditingState } = useMessageEdit({
@@ -83,6 +87,12 @@ export function useMessageSend(options: UseMessageSendOptions): UseMessageSendRe
           )
         } catch (error) {
           logger.error('Error editing message:', error)
+          await topicService.updateTopic(topic.id, { isLoading: false })
+          restoreInputs(currentText, currentFiles)
+          presentDialog('error', {
+            title: t('message.edit_failed.title'),
+            content: t('message.edit_failed.content')
+          })
         }
         return
       }
@@ -110,9 +120,15 @@ export function useMessageSend(options: UseMessageSendOptions): UseMessageSendRe
         await _sendMessage(message, blocks, assistant, topic.id)
       } catch (error) {
         logger.error('Error sending message:', error)
+        await topicService.updateTopic(topic.id, { isLoading: false })
+        restoreInputs(currentText, currentFiles)
+        presentDialog('error', {
+          title: t('message.send_failed.title'),
+          content: t('message.send_failed.content')
+        })
       }
     },
-    [text, files, mentions, editingMessage, clearInputs, clearEditingState, topic, assistant]
+    [text, files, mentions, editingMessage, clearInputs, restoreInputs, clearEditingState, topic, assistant, t]
   )
 
   const onPause = useCallback(async () => {

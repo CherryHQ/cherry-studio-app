@@ -73,6 +73,10 @@ export async function toggleTool(
     return createSuccessResult()
   } catch (error) {
     logger.error(`Failed to toggle ${toolKey}`, error)
-    return createErrorResult('general', error instanceof Error ? error.message : 'Unknown error', 'error.tool.toggle_failed')
+    return createErrorResult(
+      'general',
+      error instanceof Error ? error.message : 'Unknown error',
+      'error.tool.toggle_failed'
+    )
   }
 }

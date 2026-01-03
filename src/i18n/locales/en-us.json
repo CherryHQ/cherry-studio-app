@@ -436,10 +436,18 @@
       "delete_topic": "Delete Topic",
       "delete_topic_confirmation": "Are you sure you want to delete this topic?",
       "delete_translation": "Remove Translation",
+      "edit_failed": {
+        "content": "Failed to edit message. Please try again.",
+        "title": "Edit Failed"
+      },
       "edit_reply": "Edit Reply",
       "editing_message": "[to be translated]:编辑",
       "marked_as_best_answer": "Marked as best answer",
       "searching": "Searching...",
+      "send_failed": {
+        "content": "Failed to send message. Please try again.",
+        "title": "Send Failed"
+      },
       "share_message": "Share news",
       "topic_deleted": "Topic deleted",
       "translate_message": "Translate Message",

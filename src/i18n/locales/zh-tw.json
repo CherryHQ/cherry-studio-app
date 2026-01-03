@@ -436,10 +436,18 @@
       "delete_topic": "刪除主題",
       "delete_topic_confirmation": "您確定要刪除這個主題嗎？",
       "delete_translation": "刪除翻譯",
+      "edit_failed": {
+        "content": "[to be translated]:消息编辑失败，请重试",
+        "title": "[to be translated]:编辑失败"
+      },
       "edit_reply": "編輯回覆",
       "editing_message": "[to be translated]:编辑",
       "marked_as_best_answer": "已標記為最佳回答",
       "searching": "搜尋中...",
+      "send_failed": {
+        "content": "[to be translated]:消息发送失败，请重试",
+        "title": "[to be translated]:发送失败"
+      },
       "share_message": "分享訊息",
       "topic_deleted": "主題已刪除",
       "translate_message": "翻譯訊息",

@@ -69,6 +69,7 @@ describe('useMessageSend', () => {
     files: [],
     mentions: [],
     clearInputs: jest.fn(),
+    restoreInputs: jest.fn(),
     onEditStart: jest.fn(),
     onEditCancel: jest.fn(),
     ...overrides
