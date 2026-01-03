@@ -27,11 +27,11 @@ jobs:
         with:
           node-version: 20.x
 
-      # Step 3: Enable Corepack for Yarn 4
-      - name: Enable Corepack
-        run: |
-          corepack enable
-          corepack prepare yarn@4.10.3 --activate
+      # Step 3: Install pnpm
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.2
 
       # Step 4: Setup Expo and EAS
       - name: Setup Expo and EAS
@@ -39,11 +39,11 @@ jobs:
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-          packager: npm
+          packager: pnpm
 
       # Step 5: Install dependencies
       - name: Install dependencies
-        run: yarn install --immutable
+        run: pnpm install --frozen-lockfile
 
       # Step 6: Get version tag
       - name: Get version tag

@@ -97,7 +97,7 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
 
           <XStack className="items-center justify-center">
             <Button
-              feedbackVariant="ripple"
+              pressableFeedbackVariant="ripple"
               size="sm"
               className={cn(
                 'w-40 items-center justify-center rounded-[30px] border text-base active:opacity-80',

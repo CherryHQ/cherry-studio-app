@@ -106,11 +106,21 @@ const TextEditSheet: React.FC = () => {
                 textAlignVertical="top"
                 autoFocus
                 selectionColor="#2563eb"
-                colors={{
-                  blurBackground: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-                  focusBackground: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
-                  blurBorder: 'transparent',
-                  focusBorder: 'transparent'
+                animation={{
+                  backgroundColor: {
+                    value: {
+                      blur: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                      focus: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                      error: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'
+                    }
+                  },
+                  borderColor: {
+                    value: {
+                      blur: 'transparent',
+                      focus: 'transparent',
+                      error: 'transparent'
+                    }
+                  }
                 }}
               />
             </TextField>
@@ -118,7 +128,7 @@ const TextEditSheet: React.FC = () => {
               <Button
                 size="sm"
                 className="primary-container rounded-xl border"
-                feedbackVariant="ripple"
+                pressableFeedbackVariant="ripple"
                 onPress={handleSave}>
                 <Button.Label className="primary-text">{t('common.save')}</Button.Label>
               </Button>

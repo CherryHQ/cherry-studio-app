@@ -51,7 +51,7 @@ export function ModelSelect({ provider, onSelectModel }: ModelSelectProps) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
-        <Button className="rounded-xl" feedbackVariant="ripple" variant="tertiary">
+        <Button className="rounded-xl" pressableFeedbackVariant="ripple" variant="tertiary">
           <Button.Label>{selectedModel ? selectedModel.id : t('settings.provider.api_check.tooltip')}</Button.Label>
           <ChevronDown />
         </Button>

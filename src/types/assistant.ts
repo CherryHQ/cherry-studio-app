@@ -71,6 +71,7 @@ export const EFFORT_RATIO: EffortRatio = {
   low: 0.05,
   medium: 0.5,
   high: 0.8,
+  xhigh: 0.9,
   auto: 2
 }
 export type AssistantSettings = {

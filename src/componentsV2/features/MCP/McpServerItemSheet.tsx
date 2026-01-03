@@ -233,7 +233,7 @@ const McpServerItemSheet: React.FC = () => {
           {mode === 'preview' && (
             <XStack className="shrink-0 items-center justify-center gap-4 px-6" style={{ paddingBottom: bottom }}>
               <Button
-                feedbackVariant="ripple"
+                pressableFeedbackVariant="ripple"
                 className=" primary-container flex-1 rounded-[30px] border px-5 py-2.5"
                 onPress={handleAddMcp}
                 isDisabled={isAdding}>

@@ -177,7 +177,7 @@ export const AddModelSheet: React.FC = () => {
             </YStack>
 
             <Button
-              feedbackVariant="ripple"
+              pressableFeedbackVariant="ripple"
               variant="tertiary"
               className="primary-container h-11 w-4/6 rounded-2xl"
               onPress={handleAddModel}

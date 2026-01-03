@@ -10,7 +10,7 @@ export {
   type TextFieldInputStartContentProps,
   type TextFieldLabelProps,
   type TextFieldRootProps,
-  useTextFieldContext
+  useTextField
 } from './base/TextField'
 
 // Layout components

@@ -26,43 +26,43 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install corepack
-        run: corepack enable && corepack prepare yarn@4.10.3 --activate
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.2
 
-      - name: Get yarn cache directory path
-        id: yarn-cache-dir-path
-        run: echo "dir=$(yarn config get cacheFolder)" >> $GITHUB_OUTPUT
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
-      - name: Cache yarn dependencies
+      - name: Cache pnpm dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            ${{ steps.yarn-cache-dir-path.outputs.dir }}
-            node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-yarn-
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install Dependencies
-        run: yarn install
+        run: pnpm install --frozen-lockfile
 
       - name: Build Workspace Packages
-        run: yarn workspaces foreach -At run build
+        run: pnpm -r run build
 
       - name: Lint Check
-        run: yarn lint
+        run: pnpm lint
 
       - name: Format Check
-        run: yarn format
+        run: pnpm format
 
       - name: Type Check
-        run: yarn typecheck
+        run: pnpm typecheck
 
       - name: i18n Sync
-        run: yarn sync:i18n
+        run: pnpm sync:i18n
 
       - name: i18n Check
-        run: yarn check:i18n
+        run: pnpm check:i18n
 
       - name: Test
-        run: yarn test:ci
+        run: pnpm test:ci

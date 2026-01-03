@@ -41,11 +41,21 @@ export const MessageTextField: React.FC = () => {
             value={text}
             multiline
             onContentSizeChange={handleContentSizeChange}
-            colors={{
-              blurBackground: 'transparent',
-              focusBackground: 'transparent',
-              blurBorder: 'transparent',
-              focusBorder: 'transparent'
+            animation={{
+              backgroundColor: {
+                value: {
+                  blur: 'transparent',
+                  focus: 'transparent',
+                  error: 'transparent'
+                }
+              },
+              borderColor: {
+                value: {
+                  blur: 'transparent',
+                  focus: 'transparent',
+                  error: 'transparent'
+                }
+              }
             }}
             style={{
               minHeight: 36,
@@ -77,11 +87,21 @@ export const MessageTextField: React.FC = () => {
                 lineHeight: 26,
                 paddingVertical: 6
               }}
-              colors={{
-                blurBackground: 'transparent',
-                focusBackground: 'transparent',
-                blurBorder: 'transparent',
-                focusBorder: 'transparent'
+              animation={{
+                backgroundColor: {
+                  value: {
+                    blur: 'transparent',
+                    focus: 'transparent',
+                    error: 'transparent'
+                  }
+                },
+                borderColor: {
+                  value: {
+                    blur: 'transparent',
+                    focus: 'transparent',
+                    error: 'transparent'
+                  }
+                }
               }}
             />
           </TextField>

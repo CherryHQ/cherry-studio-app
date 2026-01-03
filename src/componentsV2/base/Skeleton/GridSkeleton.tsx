@@ -14,7 +14,7 @@ export const GridSkeleton = ({ count = 6 }: GridSkeletonProps) => {
           key={item}
           isLoading
           isSkeletonOnly
-          animationType="shimmer"
+          variant="shimmer"
           className="bg-card w-[48%] items-center gap-2 rounded-2xl px-3.5 py-4"
           style={{ height: 230 }}>
           <SkeletonGroup.Item className="size-[90px] rounded-full" />

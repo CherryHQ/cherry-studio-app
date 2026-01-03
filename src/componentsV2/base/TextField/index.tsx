@@ -7,7 +7,7 @@ import type {
   TextFieldLabelProps,
   TextFieldRootProps
 } from 'heroui-native'
-import { cn, TextField as HeroUITextField, useTextFieldContext } from 'heroui-native'
+import { cn, TextField as HeroUITextField, useTextField } from 'heroui-native'
 import React, { forwardRef } from 'react'
 import type { TextInput, View } from 'react-native'
 
@@ -55,6 +55,6 @@ export type {
   TextFieldRootProps
 }
 
-export { useTextFieldContext }
+export { useTextField }
 
 export default TextField

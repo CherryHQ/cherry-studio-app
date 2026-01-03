@@ -105,7 +105,7 @@ export default function AddProviderScreen() {
               </YStack>
 
               <Button
-                feedbackVariant="ripple"
+                pressableFeedbackVariant="ripple"
                 variant="tertiary"
                 className="secondary-container h-11 w-4/6 rounded-2xl border"
                 isDisabled={!providerName.trim()}

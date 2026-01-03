@@ -172,9 +172,9 @@ jobs:
 
           5. **Run quality checks**:
              \`\`\`bash
-             yarn format
-             yarn lint --fix
-             yarn typecheck
+             pnpm format
+             pnpm lint --fix
+             pnpm typecheck
              \`\`\`
 
           6. **Update state file**:
@@ -193,8 +193,8 @@ jobs:
           - [ ] Transformed ALL @renderer imports to @/
           - [ ] Replaced ALL Node.js APIs with Expo equivalents
           - [ ] Removed ALL Electron APIs (ipcRenderer, etc)
-          - [ ] yarn lint passes
-          - [ ] yarn typecheck passes
+          - [ ] pnpm lint passes
+          - [ ] pnpm typecheck passes
           - [ ] .github/port-bot-state updated with latest commit
 
           **DON'T**:

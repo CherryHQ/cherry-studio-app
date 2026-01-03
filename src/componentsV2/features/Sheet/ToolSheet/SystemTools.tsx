@@ -51,7 +51,7 @@ export const SystemTools: React.FC<SystemToolsProps> = ({ onCameraPress, onImage
 
         return (
           <Button
-            feedbackVariant="ripple"
+            pressableFeedbackVariant="ripple"
             key={option.key}
             className="aspect-[1.618] flex-1 flex-col items-center justify-center gap-2 rounded-lg bg-zinc-400/20"
             onPress={option.onPress}

@@ -94,7 +94,7 @@ export default function ApiServiceScreen() {
         <YStack className="gap-2">
           <XStack className="items-center justify-between">
             <GroupTitle>{t('settings.provider.api_key.label')}</GroupTitle>
-            <Button feedbackVariant="ripple" size="sm" isIconOnly variant="ghost" onPress={handleProviderCheck}>
+            <Button pressableFeedbackVariant="ripple" size="sm" isIconOnly variant="ghost" onPress={handleProviderCheck}>
               <Button.Label>
                 {checkApiStatus === 'idle' && <ShieldCheck size={16} />}
                 {checkApiStatus === 'error' && <XCircle size={16} />}
@@ -114,7 +114,7 @@ export default function ApiServiceScreen() {
                 onChangeText={text => handleProviderConfigChange('apiKey', text)}>
                 <TextField.InputEndContent>
                   <Button
-                    feedbackVariant="ripple"
+                    pressableFeedbackVariant="ripple"
                     size="sm"
                     variant="ghost"
                     isIconOnly

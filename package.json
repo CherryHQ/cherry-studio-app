@@ -16,8 +16,8 @@
     "typecheck": "npx tsc --noEmit",
     "lint": "eslint . --fix",
     "format": "prettier --write .",
-    "check": "yarn typecheck &&yarn check:i18n && yarn lint && yarn format",
-    "eas-build-pre-install": "corepack enable && yarn set version 4",
+    "check": "pnpm typecheck && pnpm check:i18n && pnpm lint && pnpm format",
+    "eas-build-pre-install": "corepack enable && corepack prepare pnpm@10.26.2 --activate",
     "analyze:ios": "source-map-explorer 'dist/_expo/static/js/ios/*.js' 'dist/_expo/static/js/ios/*.js.map'",
     "analyze:android": "source-map-explorer 'dist/_expo/static/js/android/*.js' 'dist/_expo/static/js/android/*.js.map'"
   },
@@ -43,21 +43,16 @@
       "!**/coverage/**"
     ]
   },
-  "workspaces": {
-    "packages": [
-      "packages/*"
-    ]
-  },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^3.0.53",
     "@ai-sdk/anthropic": "^2.0.44",
     "@ai-sdk/cerebras": "^1.0.31",
     "@ai-sdk/gateway": "^2.0.9",
-    "@ai-sdk/google": "patch:@ai-sdk/google@npm%3A2.0.38#~/.yarn/patches/@ai-sdk-google-npm-2.0.38.patch",
+    "@ai-sdk/google": "2.0.38",
     "@ai-sdk/google-vertex": "^3.0.62",
     "@ai-sdk/huggingface": "^0.0.8",
     "@ai-sdk/mistral": "^2.0.23",
-    "@ai-sdk/openai": "patch:@ai-sdk/openai@npm%3A2.0.64#~/.yarn/patches/@ai-sdk-openai-npm-2.0.64-48f99f5bf3.patch",
+    "@ai-sdk/openai": "2.0.64",
     "@ai-sdk/perplexity": "^2.0.17",
     "@ai-sdk/xai": "^2.0.31",
     "@anthropic-ai/sdk": "^0.51.0",
@@ -88,7 +83,7 @@
     "@react-native-community/datetimepicker": "8.4.4",
     "@react-native-documents/viewer": "^1.0.3",
     "@react-native-masked-view/masked-view": "0.3.2",
-    "@react-native-menu/menu": "patch:@react-native-menu/menu@npm%3A1.2.2#~/.yarn/patches/@react-native-menu-menu-npm-1.2.2-2f9d419d7a.patch",
+    "@react-native-menu/menu": "1.2.2",
     "@react-native/js-polyfills": "^0.82.0",
     "@react-navigation/bottom-tabs": "^7.9.0",
     "@react-navigation/drawer": "^7.7.10",
@@ -148,7 +143,7 @@
     "expo-updates": "~29.0.12",
     "expo-web-browser": "~15.0.7",
     "fast-xml-parser": "^5.3.3",
-    "heroui-native": "^1.0.0-beta.4",
+    "heroui-native": "^1.0.0-beta.10",
     "i18next": "^24.2.2",
     "lodash": "^4.17.21",
     "lru-cache": "^11.2.4",
@@ -186,7 +181,7 @@
     "react-native-tcp-socket": "^6.3.0",
     "react-native-web": "^0.21.0",
     "react-native-webview": "13.15.0",
-    "react-native-worklets": "^0.5.1",
+    "react-native-worklets": "^0.7.1",
     "react-native-zeroconf": "^0.13.8",
     "react-native-zip-archive": "^7.0.2",
     "react-redux": "^9.2.0",
@@ -249,9 +244,21 @@
     "typescript": "~5.9.3"
   },
   "private": true,
-  "packageManager": "yarn@4.10.3",
-  "resolutions": {
-    "esbuild": "^0.25.4",
-    "expo-sqlite": "16.0.8"
+  "packageManager": "pnpm@10.26.2",
+  "pnpm": {
+    "overrides": {
+      "esbuild": "^0.25.4",
+      "expo-sqlite": "16.0.8"
+    },
+    "patchedDependencies": {
+      "@ai-sdk/google@2.0.38": "patches/@ai-sdk+google@2.0.38.patch",
+      "@ai-sdk/openai@2.0.64": "patches/@ai-sdk+openai@2.0.64.patch",
+      "@react-native-menu/menu@1.2.2": "patches/@react-native-menu+menu@1.2.2.patch"
+    },
+    "ignoredBuiltDependencies": [
+      "esbuild",
+      "protobufjs",
+      "unrs-resolver"
+    ]
   }
 }

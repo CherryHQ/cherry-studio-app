@@ -6,10 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Core Development
 
-- `yarn start` - Start Expo development server
-- `yarn android` - Run on Android device/emulator
-- `yarn ios` - Run on iOS device/simulator
-- `yarn prebuild` - Generate native code (required before first native run)
+- `pnpm start` - Start Expo development server
+- `pnpm android` - Run on Android device/emulator
+- `pnpm ios` - Run on iOS device/simulator
+- `pnpm prebuild` - Generate native code (required before first native run)
 
 ### Database
 
@@ -18,11 +18,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Code Quality
 
-- `yarn lint` - Run ESLint with auto-fix
-- `yarn format` - Run Prettier and ESLint formatting
-- `yarn test` - Run Jest tests with watch mode
-- `yarn check:i18n` - Validate internationalization files for missing translations
-- `yarn sync:i18n` - Sync translation keys across all language files
+- `pnpm lint` - Run ESLint with auto-fix
+- `pnpm format` - Run Prettier and ESLint formatting
+- `pnpm test` - Run Jest tests with watch mode
+- `pnpm check:i18n` - Validate internationalization files for missing translations
+- `pnpm sync:i18n` - Sync translation keys across all language files
 
 ## Architecture Overview
 
@@ -123,7 +123,7 @@ Jest with Expo preset configured. Place tests adjacent to source files with `.te
 
 ### Code Quality
 
-ESLint enforces import sorting, unused import removal, and React Compiler optimizations. Prettier handles formatting. Both run automatically with `yarn format`.
+ESLint enforces import sorting, unused import removal, and React Compiler optimizations. Prettier handles formatting. Both run automatically with `pnpm format`.
 
 ### React Compiler Optimization
 

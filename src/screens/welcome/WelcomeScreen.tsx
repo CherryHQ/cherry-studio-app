@@ -64,7 +64,7 @@ export default function WelcomeScreen() {
         <View className="bg-card h-1/4 w-full items-center justify-center">
           <YStack className="flex-1 items-center justify-center gap-5">
             <Button
-              feedbackVariant="ripple"
+              pressableFeedbackVariant="ripple"
               className="w-3/4 rounded-lg"
               variant="secondary"
               onPress={handleImportData}>
@@ -73,7 +73,7 @@ export default function WelcomeScreen() {
               </Button.Label>
             </Button>
 
-            <Button feedbackVariant="ripple" className="w-3/4 rounded-lg" variant="secondary" onPress={handleStart}>
+            <Button pressableFeedbackVariant="ripple" className="w-3/4 rounded-lg" variant="secondary" onPress={handleStart}>
               <Button.Label className="text-foreground w-full text-center text-lg">{t('common.start')}</Button.Label>
             </Button>
           </YStack>

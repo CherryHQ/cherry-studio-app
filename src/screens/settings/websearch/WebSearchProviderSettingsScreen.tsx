@@ -112,7 +112,7 @@ export default function WebSearchProviderSettingsScreen() {
           <YStack className="gap-2">
             <XStack className="items-center justify-between">
               <GroupTitle>{t('settings.websearch.api_key.label')}</GroupTitle>
-              <Button feedbackVariant="ripple" size="sm" isIconOnly variant="ghost" onPress={handleApiCheck}>
+              <Button pressableFeedbackVariant="ripple" size="sm" isIconOnly variant="ghost" onPress={handleApiCheck}>
                 <Button.Label>
                   <ShieldCheck size={16} className="text-blue-500" />
                 </Button.Label>
@@ -129,7 +129,7 @@ export default function WebSearchProviderSettingsScreen() {
                   onChangeText={text => handleProviderConfigChange('apiKey', text)}>
                   <TextField.InputEndContent>
                     <Button
-                      feedbackVariant="ripple"
+                      pressableFeedbackVariant="ripple"
                       size="sm"
                       variant="ghost"
                       isIconOnly

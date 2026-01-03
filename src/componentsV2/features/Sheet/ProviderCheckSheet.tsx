@@ -143,7 +143,7 @@ const ProviderCheckSheet: React.FC = () => {
           {provider && <ModelSelect provider={provider} onSelectModel={setSelectedModel} />}
           <Button
             className="secondary-container rounded-xl border"
-            feedbackVariant="ripple"
+            pressableFeedbackVariant="ripple"
             onPress={handleCheck}
             isDisabled={checkStatus === 'processing'}>
             <Button.Label className="primary-text">

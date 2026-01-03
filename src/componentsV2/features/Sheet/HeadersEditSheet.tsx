@@ -129,11 +129,21 @@ export const HeadersEditSheet: React.FC = () => {
                 autoCapitalize="none"
                 autoCorrect={false}
                 selectionColor="#2563eb"
-                colors={{
-                  blurBackground: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-                  focusBackground: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
-                  blurBorder: error ? '#ef4444' : 'transparent',
-                  focusBorder: error ? '#ef4444' : 'transparent'
+                animation={{
+                  backgroundColor: {
+                    value: {
+                      blur: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                      focus: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                      error: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'
+                    }
+                  },
+                  borderColor: {
+                    value: {
+                      blur: error ? '#ef4444' : 'transparent',
+                      focus: error ? '#ef4444' : 'transparent',
+                      error: '#ef4444'
+                    }
+                  }
                 }}
               />
             </TextField>
@@ -142,7 +152,7 @@ export const HeadersEditSheet: React.FC = () => {
               <Button
                 size="sm"
                 className="primary-container rounded-xl border"
-                feedbackVariant="ripple"
+                pressableFeedbackVariant="ripple"
                 onPress={handleSave}>
                 <Button.Label className="primary-text">{t('common.save')}</Button.Label>
               </Button>

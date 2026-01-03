@@ -19,11 +19,21 @@ export const SearchInput = ({ placeholder, onChangeText, value }: SearchInputPro
         value={value}
         className="h-10 w-full"
         selectionColor="#2563eb"
-        colors={{
-          blurBackground: 'transparent',
-          focusBackground: 'transparent',
-          blurBorder: 'transparent',
-          focusBorder: 'transparent'
+        animation={{
+          backgroundColor: {
+            value: {
+              blur: 'transparent',
+              focus: 'transparent',
+              error: 'transparent'
+            }
+          },
+          borderColor: {
+            value: {
+              blur: 'transparent',
+              focus: 'transparent',
+              error: 'transparent'
+            }
+          }
         }}
         style={{
           fontSize: 18

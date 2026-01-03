@@ -37,8 +37,14 @@ function SelectableText({ children }: SelectableTextProps) {
           multiline
           editable={false}
           value={String(children)}
-          colors={{
-            blurBackground: 'transparent'
+          animation={{
+            backgroundColor: {
+              value: {
+                blur: 'transparent',
+                focus: 'transparent',
+                error: 'transparent'
+              }
+            }
           }}
         />
       </TextField>

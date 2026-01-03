@@ -3,14 +3,9 @@
 # dependencies
 node_modules/
 
-# Yarn
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
+# pnpm
+.pnpm-store/
+pnpm-debug.log*
 
 # IDEA
 .idea

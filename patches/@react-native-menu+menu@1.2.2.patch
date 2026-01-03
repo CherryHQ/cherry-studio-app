@@ -5,7 +5,7 @@ index 17ed7c6491b60e87fe829fb3f8841424617b4cfb..95d583889e9e9658641d470ea93f344d
 @@ -25,6 +25,14 @@ class MenuView(private val mContext: ReactContext) : ReactViewGroup(mContext) {
    private var mGestureDetector: GestureDetector
    private var mHitSlopRect: Rect? = null
- 
+
 +  override var hitSlopRect: Rect?
 +    get() = super.hitSlopRect
 +    set(value) {
@@ -20,7 +20,7 @@ index 17ed7c6491b60e87fe829fb3f8841424617b4cfb..95d583889e9e9658641d470ea93f344d
 @@ -47,12 +55,6 @@ class MenuView(private val mContext: ReactContext) : ReactViewGroup(mContext) {
      prepareMenu()
    }
- 
+
 -  override fun setHitSlopRect(rect: Rect?) {
 -    super.setHitSlopRect(rect)
 -    mHitSlopRect = rect
@@ -54,4 +54,4 @@ index 0cd90f4741508a95a63198574228c244ad41afd8..1f60c6532f5979450bdebd73d69960f8
 -      )
      }
    }
- 
+

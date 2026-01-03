@@ -11,7 +11,7 @@ interface LiquidGlassButtonProps {
   size?: number
   className?: string
   style?: StyleProp<ViewStyle>
-  variant?: 'primary' | 'secondary' | 'tertiary' | 'ghost' | 'destructive' | 'destructive-soft'
+  variant?: 'primary' | 'secondary' | 'tertiary' | 'ghost' | 'danger' | 'danger-soft'
 }
 
 export const LiquidGlassButton = ({

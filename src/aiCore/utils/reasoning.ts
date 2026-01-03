@@ -524,6 +524,8 @@ export function getXAIReasoningParams(assistant: Assistant, model: Model): Pick<
     case 'low':
     case 'high':
       return { reasoningEffort }
+    case 'xhigh':
+      return { reasoningEffort: 'high' }
   }
 }
 
