@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { SectionList as SectionListType, ViewToken } from 'react-native'
 
+import { ANIMATION } from '../constants'
 import type { ModelOption, ProviderSection } from '../types'
 
 interface UseModelTabScrollingParams {
@@ -14,13 +15,10 @@ export function useModelTabScrolling({ sections, isVisible }: UseModelTabScrolli
   const isScrollingByTab = useRef(false)
 
   // Build provider label -> section index mapping
-  const sectionIndices = useMemo(() => {
-    const indices: Record<string, number> = {}
-    sections.forEach((section, index) => {
-      indices[section.title] = index
-    })
-    return indices
-  }, [sections])
+  const sectionIndices: Record<string, number> = {}
+  sections.forEach((section, index) => {
+    sectionIndices[section.title] = index
+  })
 
   // Reset activeProvider when sheet is dismissed
   useEffect(() => {
@@ -31,7 +29,7 @@ export function useModelTabScrolling({ sections, isVisible }: UseModelTabScrolli
 
   // Viewability config for onViewableItemsChanged
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50
+    itemVisiblePercentThreshold: ANIMATION.VIEWABILITY_THRESHOLD_PERCENT
   }).current
 
   // Handle viewable items change - more accurate than scroll position estimation
@@ -67,7 +65,7 @@ export function useModelTabScrolling({ sections, isVisible }: UseModelTabScrolli
     // Reset flag after scroll animation completes
     setTimeout(() => {
       isScrollingByTab.current = false
-    }, 500)
+    }, ANIMATION.TAB_SCROLL_TIMEOUT_MS)
   }
 
   return {

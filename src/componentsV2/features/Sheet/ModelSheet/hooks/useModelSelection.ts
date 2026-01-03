@@ -4,16 +4,25 @@ import { InteractionManager } from 'react-native'
 import type { Model } from '@/types/assistant'
 import { getModelUniqId } from '@/utils/model'
 
-import type { ModelOption } from '../types'
-import { dismissModelSheet } from './useModelSheetData'
+import type { ModelOption, Selection } from '../types'
 
 interface UseModelSelectionParams {
   mentions: Model[]
   allModelOptions: ModelOption[]
   setMentions: (mentions: Model[], isMultiSelectActive?: boolean) => Promise<void> | void
+  onDismiss: () => void // Dependency injection instead of direct import
 }
 
-export function useModelSelection({ mentions, allModelOptions, setMentions }: UseModelSelectionParams) {
+/**
+ * Hook for managing model selection state
+ * Supports both single-select and multi-select modes
+ */
+export function useModelSelection({
+  mentions,
+  allModelOptions,
+  setMentions,
+  onDismiss
+}: UseModelSelectionParams): Selection {
   const [selectedModels, setSelectedModels] = useState<string[]>(() => mentions.map(m => getModelUniqId(m)))
   const [isMultiSelectActive, setIsMultiSelectActive] = useState(false)
 
@@ -26,21 +35,21 @@ export function useModelSelection({ mentions, allModelOptions, setMentions }: Us
     let newSelection: string[]
 
     if (isMultiSelectActive) {
-      // Multi-select mode
+      // Multi-select mode: toggle selection
       if (!isSelected) {
         newSelection = [...selectedModels, modelValue]
       } else {
         newSelection = selectedModels.filter(id => id !== modelValue)
       }
     } else {
-      // Single-select mode
+      // Single-select mode: select and dismiss
       if (!isSelected) {
         newSelection = [modelValue]
       } else {
         newSelection = []
       }
-
-      dismissModelSheet()
+      // Use injected dependency instead of direct import
+      onDismiss()
     }
 
     setSelectedModels(newSelection)

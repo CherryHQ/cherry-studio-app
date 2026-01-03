@@ -9,7 +9,7 @@ import { BrushCleaning } from '@/componentsV2/icons/LucideIcon'
 import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 
-export const HEADER_HEIGHT = 60
+import { LAYOUT } from '../constants'
 
 interface ModelListHeaderProps {
   searchQuery: string
@@ -34,13 +34,8 @@ export const ModelListHeader: React.FC<ModelListHeaderProps> = ({
     <View
       className="bg-card"
       style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 10,
-        paddingHorizontal: 20,
-        height: HEADER_HEIGHT
+        paddingHorizontal: 10,
+        height: LAYOUT.HEADER_HEIGHT
       }}>
       <YStack className="h-20 gap-4">
         <XStack className="flex-1 items-center justify-center gap-[5px]">

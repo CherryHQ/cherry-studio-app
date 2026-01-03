@@ -3793,20 +3793,26 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lodev09/react-native-true-sheet@npm:^3.0.0-beta.12":
-  version: 3.0.0-beta.12
-  resolution: "@lodev09/react-native-true-sheet@npm:3.0.0-beta.12"
+"@lodev09/react-native-true-sheet@npm:^3.6.11":
+  version: 3.6.11
+  resolution: "@lodev09/react-native-true-sheet@npm:3.6.11"
   peerDependencies:
+    "@gorhom/bottom-sheet": ">=5"
+    "@react-navigation/native": ">=7"
     react: "*"
     react-native: "*"
-    react-native-reanimated: ">=4.0.0"
+    react-native-reanimated: ">=4"
     react-native-worklets: "*"
   peerDependenciesMeta:
+    "@gorhom/bottom-sheet":
+      optional: true
+    "@react-navigation/native":
+      optional: true
     react-native-reanimated:
       optional: true
     react-native-worklets:
       optional: true
-  checksum: 10c0/8cb51900969481909bca7d1293f22419f735925934357abefa239088e8f22e6f8763b9ac88248316f681a2c93cf4b7d01157eb21d816f1a55aa6392112f921ba
+  checksum: 10c0/9ffbe8d0e25bbc6c693b665951a771b05a55f7ebdfd7eb46589f546395b3053722c2a380d724fa3d70c78b7c13812026f3409a06dddd361cbeb735bdf81a60e0
   languageName: node
   linkType: hard
 
@@ -7134,7 +7140,7 @@ __metadata:
     "@google/genai": "npm:^1.17.0"
     "@gorhom/bottom-sheet": "npm:^5.2.6"
     "@legendapp/list": "npm:^2.0.15"
-    "@lodev09/react-native-true-sheet": "npm:^3.0.0-beta.12"
+    "@lodev09/react-native-true-sheet": "npm:^3.6.11"
     "@mistralai/mistralai": "npm:^1.7.4"
     "@modelcontextprotocol/sdk": "npm:^1.13.2"
     "@mozilla/readability": "npm:^0.6.0"
@@ -7283,7 +7289,7 @@ __metadata:
     react-native-zip-archive: "npm:^7.0.2"
     react-redux: "npm:^9.2.0"
     react-syntax-highlighter: "npm:^15.6.1"
-    react-test-renderer: "npm:~19.0.0"
+    react-test-renderer: "npm:19.1.0"
     redux-devtools-expo-dev-plugin: "npm:^2.0.0"
     redux-persist: "npm:^6.0.0"
     remark-stringify: "npm:^11.0.0"
@@ -16585,7 +16591,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-is@npm:^19.0.0, react-is@npm:^19.1.0":
+"react-is@npm:^19.1.0":
   version: 19.2.0
   resolution: "react-is@npm:19.2.0"
   checksum: 10c0/a63cb346aeced8ac0e671b0f9b33720d2906de02a066ca067075d871a5d4c64cdb328f495baf9b5842d5868c0d5edd1ce18465a7358b52f4b6aa983479c9bfa2
@@ -17155,18 +17161,6 @@ __metadata:
   peerDependencies:
     react: ^19.1.0
   checksum: 10c0/34ed4a37ba8b0beb96c048de6ff28574f018a18dd1042c24f8f46142d48eb5b27f82ff7c2823d082932fd3983c5a3529ab8cc8f15191d4306df0082f9f84678f
-  languageName: node
-  linkType: hard
-
-"react-test-renderer@npm:~19.0.0":
-  version: 19.0.0
-  resolution: "react-test-renderer@npm:19.0.0"
-  dependencies:
-    react-is: "npm:^19.0.0"
-    scheduler: "npm:^0.25.0"
-  peerDependencies:
-    react: ^19.0.0
-  checksum: 10c0/67c34dae4d3a60b9306d2b5cb6db436376ef20c651aaf092644298e3ffb92cd3c7b0da2017e7f1395bf2de8b42429874a5a63e8cc3c21febbab31b0309e41862
   languageName: node
   linkType: hard
 

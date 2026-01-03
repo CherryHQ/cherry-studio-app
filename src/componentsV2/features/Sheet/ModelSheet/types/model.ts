@@ -1,24 +1,26 @@
 import type { Model, Provider } from '@/types/assistant'
 
-// SectionList data types
+/**
+ * Represents a single model option in the selection list
+ */
 export interface ModelOption {
   label: string
   value: string
   model: Model
 }
 
+/**
+ * Represents a provider section in the SectionList
+ */
 export interface ProviderSection {
   title: string
   provider: Provider
   data: ModelOption[]
 }
 
-export interface ModelSheetData {
-  mentions: Model[]
-  setMentions: (mentions: Model[], isMultiSelectActive?: boolean) => Promise<void> | void
-  multiple?: boolean
-}
-
+/**
+ * Represents a grouped set of model options by provider
+ */
 export interface SelectOption {
   label: string
   title: string
