@@ -12,7 +12,7 @@ import {
 } from '@/componentsV2/icons'
 import type { Assistant } from '@/types/assistant'
 
-import { presentReasoningSheet } from '../../Sheet/ReasoningSheet'
+import { presentReasoningSheet } from '../../../Sheet/ReasoningSheet'
 
 interface ThinkButtonProps {
   assistant: Assistant

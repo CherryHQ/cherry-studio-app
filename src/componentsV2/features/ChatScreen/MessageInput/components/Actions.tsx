@@ -1,10 +1,8 @@
 import { AnimatePresence, MotiView } from 'moti'
 import React from 'react'
 
+import { PauseButton, SendButton, VoiceButton } from '../buttons'
 import { useMessageInput } from '../context/MessageInputContext'
-import { PauseButton } from '../PauseButton'
-import { SendButton } from '../SendButton'
-import { VoiceButton } from '../VoiceButton'
 
 export const Actions: React.FC = () => {
   const { isLoading, isVoiceActive, text, files, onPause, sendMessage, setText, setIsVoiceActive } = useMessageInput()

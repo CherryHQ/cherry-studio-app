@@ -8,7 +8,7 @@ import XStack from '@/componentsV2/layout/XStack'
 import { useActiveMcpServers } from '@/hooks/useMcp'
 import type { Assistant } from '@/types/assistant'
 
-import { presentMcpServerSheet } from '../../Sheet/McpServerSheet'
+import { presentMcpServerSheet } from '../../../Sheet/McpServerSheet'
 
 interface McpButtonProps {
   assistant: Assistant

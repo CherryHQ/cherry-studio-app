@@ -6,7 +6,7 @@ import { Plus } from '@/componentsV2/icons/LucideIcon'
 import type { Assistant, Model } from '@/types/assistant'
 import type { FileMetadata } from '@/types/file'
 
-import { presentToolSheet } from '../../Sheet/ToolSheet'
+import { presentToolSheet } from '../../../Sheet/ToolSheet'
 
 interface AddAssetsButtonProps {
   mentions: Model[]

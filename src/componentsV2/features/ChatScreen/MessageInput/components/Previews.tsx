@@ -2,9 +2,7 @@ import React from 'react'
 import { View } from 'react-native'
 
 import { useMessageInput } from '../context/MessageInputContext'
-import { EditingPreview } from '../EditingPreview'
-import { FilePreview } from '../FilePreview'
-import { getEnabledToolKeys, ToolPreview } from '../ToolPreview'
+import { EditingPreview, FilePreview, getEnabledToolKeys, ToolPreview } from '../previews'
 
 export const Previews: React.FC = () => {
   const { assistant, updateAssistant, isEditing, cancelEditing, files, setFiles } = useMessageInput()
