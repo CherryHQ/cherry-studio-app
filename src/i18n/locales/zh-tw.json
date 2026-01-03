@@ -1036,6 +1036,12 @@
         "recent": "最近的主題"
       }
     },
+    "update": {
+      "description": "有新版本可用，是否立即更新？",
+      "ignore": "不再提示",
+      "now": "立即更新",
+      "title": "發現新版本"
+    },
     "voice": {
       "error": "語音識別出錯",
       "not_available": "語音識別不可用",

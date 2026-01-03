@@ -21,6 +21,7 @@ import { Uniwind } from 'uniwind'
 
 import { DialogManager } from '@/componentsV2'
 import SheetManager from '@/componentsV2/features/Sheet/SheetManager'
+import { UpdatePrompt } from '@/componentsV2/features/UpdatePrompt'
 import { useTheme } from '@/hooks/useTheme'
 import { loggerService } from '@/services/LoggerService'
 import store, { persistor } from '@/store'
@@ -110,6 +111,7 @@ function ThemedApp() {
               <MainStackNavigator />
               <SheetManager />
               <DialogManager />
+              <UpdatePrompt />
             </ToastProvider>
           </DialogProvider>
         </NavigationContainer>

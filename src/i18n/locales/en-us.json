@@ -1036,6 +1036,12 @@
         "recent": "Recent Topics"
       }
     },
+    "update": {
+      "description": "A new version is available. Would you like to update now?",
+      "ignore": "Don't remind again",
+      "now": "Update Now",
+      "title": "Update Available"
+    },
     "voice": {
       "error": "Speech recognition error",
       "not_available": "Speech recognition is not available",
