@@ -77,3 +77,7 @@ TOP_ENTRY_IMPLEMENTATION.md
 plan/*
 # coverage
 coverage/
+# Local modules build artifacts
+modules/*/android/build/
+modules/*/ios/build/
+modules/*/.gradle/
