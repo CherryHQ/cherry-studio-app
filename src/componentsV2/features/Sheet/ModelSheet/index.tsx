@@ -27,12 +27,6 @@ export { dismissModelSheet, presentModelSheet }
 
 /**
  * ModelSheet - A bottom sheet for selecting AI models
- *
- * Architecture following SOLID principles:
- * - SRP: Each hook/service handles a single responsibility
- * - OCP: Filter logic is extensible via filterFn
- * - ISP: Types are split into focused interfaces
- * - DIP: Presentation side effects are abstracted behind ISheetPresentationService
  */
 const ModelSheet: React.FC = () => {
   const bottom = useBottom()
@@ -41,7 +35,7 @@ const ModelSheet: React.FC = () => {
   const { height: windowHeight } = useWindowDimensions()
   const sheetContentHeight = windowHeight * LAYOUT.SHEET_DETENT
 
-  // Sheet state management (DIP: abstracted via service)
+  // Sheet state management
   const { config, isVisible, searchQuery, setSearchQuery, handleDidDismiss, handleDidPresent } = useModelSheet()
 
   // Extract config values with defaults
@@ -50,13 +44,13 @@ const ModelSheet: React.FC = () => {
   const multiple = config?.multiple ?? false
   const filterFn = config?.filterFn ?? defaultModelFilter
 
-  // Data transformation (SRP: separated from UI)
+  // Data transformation
   const { selectOptions, allModelOptions, sections } = useModelOptions({
     searchQuery,
     filterFn
   })
 
-  // Selection logic (DIP: dismissModelSheet injected)
+  // Selection logic
   const { selectedModels, isMultiSelectActive, handleModelToggle, handleClearAll, toggleMultiSelectMode } =
     useModelSelection({
       mentions,
