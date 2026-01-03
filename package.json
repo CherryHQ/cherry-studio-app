@@ -73,7 +73,7 @@
     "@google/genai": "^1.17.0",
     "@gorhom/bottom-sheet": "^5.2.8",
     "@legendapp/list": "^2.0.19",
-    "@lodev09/react-native-true-sheet": "^3.6.11",
+    "@lodev09/react-native-true-sheet": "3.7.0-beta.5",
     "@mistralai/mistralai": "^1.7.4",
     "@modelcontextprotocol/sdk": "^1.13.2",
     "@openrouter/ai-sdk-provider": "^1.1.2",

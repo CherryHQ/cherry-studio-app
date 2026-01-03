@@ -3793,9 +3793,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lodev09/react-native-true-sheet@npm:^3.6.11":
-  version: 3.6.11
-  resolution: "@lodev09/react-native-true-sheet@npm:3.6.11"
+"@lodev09/react-native-true-sheet@npm:3.7.0-beta.5":
+  version: 3.7.0-beta.5
+  resolution: "@lodev09/react-native-true-sheet@npm:3.7.0-beta.5"
   peerDependencies:
     "@gorhom/bottom-sheet": ">=5"
     "@react-navigation/native": ">=7"
@@ -3812,7 +3812,7 @@ __metadata:
       optional: true
     react-native-worklets:
       optional: true
-  checksum: 10c0/9ffbe8d0e25bbc6c693b665951a771b05a55f7ebdfd7eb46589f546395b3053722c2a380d724fa3d70c78b7c13812026f3409a06dddd361cbeb735bdf81a60e0
+  checksum: 10c0/25aea0768f0f363589391bd8e14ca6d233d94b0955f69f3ce93b3a902591089c150f5e80b39ba8bde28b663cf0563fc00de55bb4e7992642c52c10215077d3eb
   languageName: node
   linkType: hard
 
@@ -7145,7 +7145,7 @@ __metadata:
     "@google/genai": "npm:^1.17.0"
     "@gorhom/bottom-sheet": "npm:^5.2.8"
     "@legendapp/list": "npm:^2.0.19"
-    "@lodev09/react-native-true-sheet": "npm:^3.6.11"
+    "@lodev09/react-native-true-sheet": "npm:3.7.0-beta.5"
     "@mistralai/mistralai": "npm:^1.7.4"
     "@modelcontextprotocol/sdk": "npm:^1.13.2"
     "@mozilla/readability": "npm:^0.6.0"

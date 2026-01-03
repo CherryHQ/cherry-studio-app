@@ -147,7 +147,7 @@ const SelectionSheet: React.FC<SelectionSheetProps> = ({
       name={name}
       detents={detents}
       cornerRadius={24}
-      grabber={Platform.OS === 'ios' ? true : false}
+      grabber={Platform.OS === 'ios'}
       dismissible
       dimmed
       scrollable
