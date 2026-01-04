@@ -1,10 +1,7 @@
 import type { MarkdownNode } from 'react-native-nitro-markdown'
 
 // Factory for creating MarkdownNode objects
-export const createMarkdownNode = (
-  type: MarkdownNode['type'],
-  overrides: Partial<MarkdownNode> = {}
-): MarkdownNode =>
+export const createMarkdownNode = (type: MarkdownNode['type'], overrides: Partial<MarkdownNode> = {}): MarkdownNode =>
   ({
     type,
     ...overrides
@@ -171,7 +168,11 @@ export const createSimpleDocument = (): MarkdownNode =>
 export const createRichDocument = (): MarkdownNode =>
   createDocumentNode([
     createHeadingNode(1, [createTextNode('Title')]),
-    createParagraphNode([createTextNode('This is '), createBoldNode([createTextNode('bold')]), createTextNode(' text.')]),
+    createParagraphNode([
+      createTextNode('This is '),
+      createBoldNode([createTextNode('bold')]),
+      createTextNode(' text.')
+    ]),
     createCodeBlockNode('const x = 1;', 'javascript')
   ])
 

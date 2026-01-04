@@ -8,7 +8,7 @@ interface MarkdownListItemProps {
 
 export function MarkdownListItem({ children }: MarkdownListItemProps) {
   return (
-    <View className="flex-row">
+    <View className="flex-row mb-1.5">
       <Text className="text-foreground mr-2">•</Text>
       <View className="flex-1">{children}</View>
     </View>

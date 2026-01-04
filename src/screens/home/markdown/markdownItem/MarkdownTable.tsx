@@ -7,5 +7,5 @@ interface MarkdownTableProps {
 }
 
 export function MarkdownTable({ children }: MarkdownTableProps) {
-  return <View className="my-4 rounded-md border border-border">{children}</View>
+  return <View className="border-border my-4 rounded-md border">{children}</View>
 }

@@ -7,5 +7,5 @@ interface MarkdownParagraphProps {
 }
 
 export function MarkdownParagraph({ children }: MarkdownParagraphProps) {
-  return <Text className="text-base text-foreground">{children}</Text>
+  return <Text className="text-foreground text-base leading-relaxed">{children}</Text>
 }

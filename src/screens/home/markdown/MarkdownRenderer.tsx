@@ -80,7 +80,7 @@ function NodeRenderer({ node }: NodeRendererProps) {
     const flushInlineGroup = () => {
       if (currentInlineGroup.length > 0) {
         elements.push(
-          <Text key={`inline-group-${elements.length}`} className="text-base text-foreground">
+          <Text key={`inline-group-${elements.length}`} className="text-foreground text-base">
             {currentInlineGroup.map((child, index) => (
               <NodeRenderer key={index} node={child} />
             ))}
@@ -110,14 +110,18 @@ function NodeRenderer({ node }: NodeRendererProps) {
     case 'paragraph':
       return (
         <MarkdownParagraph>
-          {node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}
+          {node.children?.map((child, index) => (
+            <NodeRenderer key={index} node={child} />
+          ))}
         </MarkdownParagraph>
       )
 
     case 'heading':
       return (
         <MarkdownHeading level={(node.level || 1) as 1 | 2 | 3 | 4 | 5 | 6}>
-          {node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}
+          {node.children?.map((child, index) => (
+            <NodeRenderer key={index} node={child} />
+          ))}
         </MarkdownHeading>
       )
 
@@ -131,15 +135,29 @@ function NodeRenderer({ node }: NodeRendererProps) {
       return <MarkdownLineBreak />
 
     case 'bold':
-      return <MarkdownBold>{node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}</MarkdownBold>
+      return (
+        <MarkdownBold>
+          {node.children?.map((child, index) => (
+            <NodeRenderer key={index} node={child} />
+          ))}
+        </MarkdownBold>
+      )
 
     case 'italic':
-      return <MarkdownItalic>{node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}</MarkdownItalic>
+      return (
+        <MarkdownItalic>
+          {node.children?.map((child, index) => (
+            <NodeRenderer key={index} node={child} />
+          ))}
+        </MarkdownItalic>
+      )
 
     case 'strikethrough':
       return (
         <MarkdownStrikethrough>
-          {node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}
+          {node.children?.map((child, index) => (
+            <NodeRenderer key={index} node={child} />
+          ))}
         </MarkdownStrikethrough>
       )
 
@@ -152,7 +170,9 @@ function NodeRenderer({ node }: NodeRendererProps) {
     case 'link':
       return (
         <MarkdownLink href={node.href}>
-          {node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}
+          {node.children?.map((child, index) => (
+            <NodeRenderer key={index} node={child} />
+          ))}
         </MarkdownLink>
       )
 

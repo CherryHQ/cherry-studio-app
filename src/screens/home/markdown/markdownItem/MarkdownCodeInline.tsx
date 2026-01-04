@@ -7,7 +7,7 @@ interface MarkdownCodeInlineProps {
 
 export function MarkdownCodeInline({ content }: MarkdownCodeInlineProps) {
   return (
-    <Text style={{ fontFamily: 'FiraCode' }} className="bg-neutral-200/40 text-md text-amber-500 dark:bg-neutral-800">
+    <Text style={{ fontFamily: 'FiraCode' }} className="text-md bg-neutral-200/40 text-amber-500 dark:bg-neutral-800">
       {content}
     </Text>
   )

@@ -79,7 +79,7 @@ describe('MarkdownHeading', () => {
   })
 
   it('applies text-foreground class for all levels', () => {
-    const levels: Array<1 | 2 | 3 | 4 | 5 | 6> = [1, 2, 3, 4, 5, 6]
+    const levels: (1 | 2 | 3 | 4 | 5 | 6)[] = [1, 2, 3, 4, 5, 6]
 
     levels.forEach(level => {
       const { toJSON } = render(<MarkdownHeading level={level}>Heading</MarkdownHeading>)

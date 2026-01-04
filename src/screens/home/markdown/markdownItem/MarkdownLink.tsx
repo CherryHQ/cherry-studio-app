@@ -15,7 +15,7 @@ export function MarkdownLink({ href, children }: MarkdownLinkProps) {
   }
 
   return (
-    <Text className="text-base text-primary underline" onPress={handlePress}>
+    <Text className="text-primary text-base underline" onPress={handlePress}>
       {children}
     </Text>
   )

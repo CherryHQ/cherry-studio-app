@@ -70,7 +70,7 @@ describe('MarkdownTaskListItem', () => {
     )
 
     const tree = toJSON()
-    const children = (tree as { children?: Array<{ props?: { className?: string } }> })?.children
+    const children = (tree as { children?: { props?: { className?: string } }[] })?.children
     const checkboxContainer = children?.[0]
     expect(checkboxContainer?.props?.className).toContain('mr-2')
   })
@@ -83,7 +83,7 @@ describe('MarkdownTaskListItem', () => {
     )
 
     const tree = toJSON()
-    const children = (tree as { children?: Array<{ props?: { className?: string } }> })?.children
+    const children = (tree as { children?: { props?: { className?: string } }[] })?.children
     const contentContainer = children?.[1]
     expect(contentContainer?.props?.className).toContain('flex-1')
   })

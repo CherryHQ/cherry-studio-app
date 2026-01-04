@@ -163,7 +163,7 @@ describe('Table Components', () => {
 
       const tree = toJSON()
       // Find the Text child
-      const children = (tree as { children?: Array<{ props?: { className?: string } }> })?.children
+      const children = (tree as { children?: { props?: { className?: string } }[] })?.children
       const textChild = children?.[0]
       expect(textChild?.props?.className).toContain('font-bold')
     })
@@ -176,7 +176,7 @@ describe('Table Components', () => {
       )
 
       const tree = toJSON()
-      const children = (tree as { children?: Array<{ props?: { className?: string } }> })?.children
+      const children = (tree as { children?: { props?: { className?: string } }[] })?.children
       const textChild = children?.[0]
       expect(textChild?.props?.className).not.toContain('font-bold')
     })
@@ -189,7 +189,7 @@ describe('Table Components', () => {
       )
 
       const tree = toJSON()
-      const children = (tree as { children?: Array<{ props?: { className?: string } }> })?.children
+      const children = (tree as { children?: { props?: { className?: string } }[] })?.children
       const textChild = children?.[0]
       expect(textChild?.props?.className).not.toContain('font-bold')
     })
@@ -215,7 +215,7 @@ describe('Table Components', () => {
       )
 
       const tree = toJSON()
-      const children = (tree as { children?: Array<{ props?: { className?: string } }> })?.children
+      const children = (tree as { children?: { props?: { className?: string } }[] })?.children
       const textChild = children?.[0]
       expect(textChild?.props?.className).toContain('text-foreground')
     })

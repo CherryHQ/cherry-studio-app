@@ -7,5 +7,5 @@ interface MarkdownTableRowProps {
 }
 
 export function MarkdownTableRow({ children }: MarkdownTableRowProps) {
-  return <View className="flex-row border-b border-border">{children}</View>
+  return <View className="border-border flex-row border-b">{children}</View>
 }

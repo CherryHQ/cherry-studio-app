@@ -1,3 +1,5 @@
+/* global jest */
+import type React from 'react'
 import type { MarkdownNode } from 'react-native-nitro-markdown'
 
 // react-native-nitro-markdown mock

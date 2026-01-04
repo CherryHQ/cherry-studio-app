@@ -60,7 +60,7 @@ describe('MarkdownListItem', () => {
 
     const tree = toJSON()
     // The bullet text should have text-foreground class
-    const children = (tree as { children?: Array<{ props?: { className?: string } }> })?.children
+    const children = (tree as { children?: { props?: { className?: string } }[] })?.children
     const bulletText = children?.[0]
     expect(bulletText?.props?.className).toContain('text-foreground')
   })
@@ -73,7 +73,7 @@ describe('MarkdownListItem', () => {
     )
 
     const tree = toJSON()
-    const children = (tree as { children?: Array<{ props?: { className?: string } }> })?.children
+    const children = (tree as { children?: { props?: { className?: string } }[] })?.children
     const bulletText = children?.[0]
     expect(bulletText?.props?.className).toContain('mr-2')
   })
@@ -86,7 +86,7 @@ describe('MarkdownListItem', () => {
     )
 
     const tree = toJSON()
-    const children = (tree as { children?: Array<{ props?: { className?: string } }> })?.children
+    const children = (tree as { children?: { props?: { className?: string } }[] })?.children
     const contentContainer = children?.[1]
     expect(contentContainer?.props?.className).toContain('flex-1')
   })
