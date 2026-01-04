@@ -254,7 +254,8 @@
     "patchedDependencies": {
       "@ai-sdk/google@2.0.38": "patches/@ai-sdk+google@2.0.38.patch",
       "@ai-sdk/openai@2.0.64": "patches/@ai-sdk+openai@2.0.64.patch",
-      "@react-native-menu/menu@1.2.2": "patches/@react-native-menu+menu@1.2.2.patch"
+      "@react-native-menu/menu@1.2.2": "patches/@react-native-menu+menu@1.2.2.patch",
+      "react-native-code-highlighter": "patches/react-native-code-highlighter.patch"
     },
     "ignoredBuiltDependencies": [
       "esbuild",

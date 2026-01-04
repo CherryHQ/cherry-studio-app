@@ -53,8 +53,7 @@ export function NitroCodeBlock({ content, language = 'text' }: NitroCodeBlockPro
         scrollViewProps={{
           contentContainerStyle: {
             backgroundColor: 'transparent'
-          },
-          showsHorizontalScrollIndicator: false
+          }
         }}
         textStyle={{
           fontSize: 14,
@@ -63,9 +62,7 @@ export function NitroCodeBlock({ content, language = 'text' }: NitroCodeBlockPro
         }}
         hljsStyle={isDark ? atomOneDark : atomOneLight}
         language={lang}
-        wrapLines={true}
-        wrapLongLines={true}
-        lineProps={{ style: { flexWrap: 'wrap' } }}>
+        horizontal={false}>
         {content}
       </CodeHighlighter>
     </View>
