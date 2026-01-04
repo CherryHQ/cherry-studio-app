@@ -37,7 +37,7 @@ export function NitroCodeBlock({ content, language = 'text' }: NitroCodeBlockPro
   }
 
   return (
-    <View className="border-border mt-2 gap-2 rounded-xl border bg-zinc-100 px-3 pb-3 pt-0 shadow">
+    <View className="border-border mt-2 gap-2 rounded-xl border bg-zinc-100 px-3 pb-3 pt-0 shadow dark:bg-zinc-900">
       <XStack className="border-border items-center justify-between border-b py-2">
         <XStack className="flex-1 items-center gap-2">
           {getCodeLanguageIcon(lang) && <Image source={getCodeLanguageIcon(lang)} className="h-5 w-5" />}
