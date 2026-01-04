@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
 import React from 'react'
-import { Text } from 'react-native'
+
+import { SelectableText } from './SelectableText'
 
 interface MarkdownParagraphProps {
   children: ReactNode
 }
 
 export function MarkdownParagraph({ children }: MarkdownParagraphProps) {
-  return <Text className="text-foreground text-base leading-relaxed">{children}</Text>
+  return <SelectableText className="text-foreground text-base leading-relaxed">{children}</SelectableText>
 }

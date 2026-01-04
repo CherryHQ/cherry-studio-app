@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react'
-import { Text } from 'react-native'
 import type { MarkdownNode } from 'react-native-nitro-markdown'
 import { parseMarkdownWithOptions } from 'react-native-nitro-markdown'
 
@@ -30,6 +29,7 @@ import {
   MarkdownTaskListItem,
   MarkdownText
 } from './markdownItem'
+import { SelectableText } from './markdownItem/SelectableText'
 
 interface MarkdownRendererProps {
   content: string
@@ -80,11 +80,11 @@ function NodeRenderer({ node }: NodeRendererProps) {
     const flushInlineGroup = () => {
       if (currentInlineGroup.length > 0) {
         elements.push(
-          <Text key={`inline-group-${elements.length}`} className="text-foreground text-base">
+          <SelectableText key={`inline-group-${elements.length}`} className="text-foreground text-base">
             {currentInlineGroup.map((child, index) => (
               <NodeRenderer key={index} node={child} />
             ))}
-          </Text>
+          </SelectableText>
         )
         currentInlineGroup = []
       }
@@ -248,7 +248,7 @@ function NodeRenderer({ node }: NodeRendererProps) {
         return <>{renderChildren()}</>
       }
       if (node.content) {
-        return <Text>{node.content}</Text>
+        return <SelectableText>{node.content}</SelectableText>
       }
       return null
   }

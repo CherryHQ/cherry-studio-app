@@ -17,7 +17,7 @@ import {
   XStack,
   YStack
 } from '@/componentsV2'
-import { Cloud, FileText, Globe, HardDrive, Info, Package, Settings2 } from '@/componentsV2/icons/LucideIcon'
+import { Cloud, FileText, Globe, HardDrive, Info, Package, Settings2, TextSelect } from '@/componentsV2/icons/LucideIcon'
 import { useSettings } from '@/hooks/useSettings'
 import { useSwipeGesture } from '@/hooks/useSwipeGesture'
 import type { HomeNavigationProps } from '@/types/naviagate'
@@ -109,6 +109,12 @@ export default function SettingsScreen() {
           screen: 'MarkdownTestSettings',
           specificScreen: 'MarkdownTestScreen',
           icon: <FileText size={24} />
+        },
+        {
+          title: 'UITextView Test',
+          screen: 'MarkdownTestSettings',
+          specificScreen: 'UITextViewTestScreen',
+          icon: <TextSelect size={24} />
         }
       ]
     }

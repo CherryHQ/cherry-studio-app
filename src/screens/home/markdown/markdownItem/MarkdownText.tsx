@@ -1,10 +1,14 @@
 import React from 'react'
-import { Text } from 'react-native'
+import { UITextView } from 'react-native-uitextview'
+import { withUniwind } from 'uniwind'
+
+const StyledUITextView = withUniwind(UITextView)
 
 interface MarkdownTextProps {
   content: string
+  className?: string
 }
 
-export function MarkdownText({ content }: MarkdownTextProps) {
-  return <Text>{content}</Text>
+export function MarkdownText({ content, className }: MarkdownTextProps) {
+  return <StyledUITextView className={className}>{content}</StyledUITextView>
 }
