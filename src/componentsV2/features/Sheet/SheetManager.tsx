@@ -14,6 +14,7 @@ import ProviderCheckSheet from '@/componentsV2/features/Sheet/ProviderCheckSheet
 import { ReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
 import TextEditSheet from '@/componentsV2/features/Sheet/TextEditSheet'
 import TextSelectionSheet from '@/componentsV2/features/Sheet/TextSelectionSheet'
+import { ThinkingDetailSheet } from '@/componentsV2/features/Sheet/ThinkingDetailSheet'
 import { ToolCallDetailSheet } from '@/componentsV2/features/Sheet/ToolCallDetailSheet'
 import { ToolSheet } from '@/componentsV2/features/Sheet/ToolSheet'
 import { WebSearchProviderSheet } from '@/componentsV2/features/Sheet/WebSearchProviderSheet'
@@ -52,6 +53,7 @@ const SheetManager: React.FC = () => {
       <McpDescriptionSheet />
       <McpToolSheet />
       <ToolCallDetailSheet />
+      <ThinkingDetailSheet />
     </>
   )
 }

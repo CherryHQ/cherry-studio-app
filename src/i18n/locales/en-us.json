@@ -108,6 +108,7 @@
         "name": "Default"
       },
       "think": "Thinking for {{seconds}} seconds",
+      "think_done": "Thought deeply for {{seconds}} seconds",
       "think_expand": "Tap to read my mind",
       "title": "Welcome to Cherry Studio!",
       "topics": {

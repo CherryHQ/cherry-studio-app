@@ -108,6 +108,7 @@
         "name": "預設"
       },
       "think": "思考中，{{seconds}}秒",
+      "think_done": "已深度思考 {{seconds}} 秒",
       "think_expand": "點擊讀懂我的心",
       "title": "歡迎使用 Cherry Studio!",
       "topics": {

@@ -108,6 +108,7 @@
         "name": "デフォルト"
       },
       "think": "{{seconds}}秒考え中",
+      "think_done": "{{seconds}}秒深く考えました",
       "think_expand": "タップして私の心を読む",
       "title": "Cherry Studio へようこそ！",
       "topics": {

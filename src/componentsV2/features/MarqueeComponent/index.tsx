@@ -12,10 +12,9 @@ import { MessageBlockStatus } from '@/types/message'
 
 interface MarqueeComponentProps {
   block: ThinkingMessageBlock
-  expanded: boolean
 }
 
-const MarqueeComponent: React.FC<MarqueeComponentProps> = ({ block, expanded }) => {
+const MarqueeComponent: React.FC<MarqueeComponentProps> = ({ block }) => {
   const { t } = useTranslation()
   const [messages, setMessages] = useState<string[]>([])
   const queueRef = useRef<string>('')
@@ -109,10 +108,9 @@ const MarqueeComponent: React.FC<MarqueeComponentProps> = ({ block, expanded }) 
 
   const lineHeight = 16
   const containerHeight = useMemo(() => {
-    if (!isStreaming && !expanded) return 40
-    if (expanded) return lineHeight
+    if (!isStreaming) return 40
     return Math.min(64, Math.max(messages.length + 1, 2) * lineHeight)
-  }, [expanded, isStreaming, messages.length])
+  }, [isStreaming, messages.length])
 
   return (
     <MotiView
@@ -125,7 +123,7 @@ const MarqueeComponent: React.FC<MarqueeComponentProps> = ({ block, expanded }) 
       }}>
       <XStack className="h-full w-full items-center justify-center">
         <AnimatePresence>
-          {isStreaming && !expanded && (
+          {isStreaming && (
             <MotiView
               key="spinner"
               from={{ width: 0, height: 0, opacity: 0, marginRight: 0 }}
@@ -139,22 +137,12 @@ const MarqueeComponent: React.FC<MarqueeComponentProps> = ({ block, expanded }) 
         <YStack className="h-full flex-1 gap-1">
           <XStack className="h-7 items-center justify-between">
             <Text className="text-foreground z-10 text-base font-bold">
-              {t('chat.think', { seconds: displaySeconds })}
+              {t(isStreaming ? 'chat.think' : 'chat.think_done', { seconds: displaySeconds })}
             </Text>
-            <MotiView
-              animate={{
-                rotate: expanded ? '90deg' : '0deg'
-              }}
-              transition={{
-                type: 'timing',
-                duration: 150
-              }}
-              style={{ zIndex: 2 }}>
-              <ChevronsRight size={20} className="text-foreground" />
-            </MotiView>
+            <ChevronsRight size={20} className="text-foreground" style={{ zIndex: 2 }} />
           </XStack>
           <AnimatePresence>
-            {!isStreaming && !expanded && (
+            {!isStreaming && (
               <MotiView
                 key="tips"
                 animate={{ opacity: 1 }}
@@ -168,7 +156,7 @@ const MarqueeComponent: React.FC<MarqueeComponentProps> = ({ block, expanded }) 
                 <Text className="text-foreground-secondary text-xs opacity-50">{t('chat.think_expand')}</Text>
               </MotiView>
             )}
-            {isStreaming && !expanded && messages.length > 0 && (
+            {isStreaming && messages.length > 0 && (
               <MotiView
                 style={{ position: 'absolute', inset: 0 }}
                 key="content"

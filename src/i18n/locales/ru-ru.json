@@ -108,6 +108,7 @@
         "name": "По умолчанию"
       },
       "think": "Думаю {{seconds}} секунд",
+      "think_done": "Глубоко думал {{seconds}} секунд",
       "think_expand": "Нажмите, чтобы прочитать мои мысли",
       "title": "Добро пожаловать в Cherry Studio!",
       "topics": {
