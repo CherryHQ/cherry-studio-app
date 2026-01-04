@@ -80,7 +80,7 @@ function NodeRenderer({ node }: NodeRendererProps) {
     const flushInlineGroup = () => {
       if (currentInlineGroup.length > 0) {
         elements.push(
-          <Text key={`inline-group-${elements.length}`} className="text-foreground">
+          <Text key={`inline-group-${elements.length}`} className="text-base text-foreground">
             {currentInlineGroup.map((child, index) => (
               <NodeRenderer key={index} node={child} />
             ))}

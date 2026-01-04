@@ -57,8 +57,8 @@ export function NitroCodeBlock({ content, language = 'text' }: NitroCodeBlockPro
           showsHorizontalScrollIndicator: false
         }}
         textStyle={{
-          fontSize: 12,
-          fontFamily: 'JetbrainMono',
+          fontSize: 14,
+          fontFamily: 'FiraCode',
           userSelect: 'none'
         }}
         hljsStyle={isDark ? atomOneDark : atomOneLight}

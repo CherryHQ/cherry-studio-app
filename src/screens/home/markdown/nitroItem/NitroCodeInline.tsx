@@ -6,5 +6,9 @@ interface NitroCodeInlineProps {
 }
 
 export function NitroCodeInline({ content }: NitroCodeInlineProps) {
-  return <Text className="bg-neutral-200/40 font-mono text-sm text-amber-500 dark:bg-neutral-800">{content}</Text>
+  return (
+    <Text style={{ fontFamily: 'FiraCode' }} className="bg-neutral-200/40 text-md text-amber-500 dark:bg-neutral-800">
+      {content}
+    </Text>
+  )
 }

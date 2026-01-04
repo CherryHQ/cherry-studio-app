@@ -103,7 +103,7 @@ export default {
       [
         'expo-font',
         {
-          fonts: ['./src/assets/fonts/JetBrainsMono-Regular.ttf']
+          fonts: ['./src/assets/fonts/FiraCode-Regular.ttf']
         }
       ],
       'expo-web-browser',

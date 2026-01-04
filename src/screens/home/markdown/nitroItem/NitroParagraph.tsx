@@ -7,5 +7,5 @@ interface NitroParagraphProps {
 }
 
 export function NitroParagraph({ children }: NitroParagraphProps) {
-  return <Text className="text-foreground">{children}</Text>
+  return <Text className="text-base text-foreground">{children}</Text>
 }
