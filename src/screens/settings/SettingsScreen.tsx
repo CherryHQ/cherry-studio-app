@@ -17,7 +17,7 @@ import {
   XStack,
   YStack
 } from '@/componentsV2'
-import { Cloud, Globe, HardDrive, Info, Package, Settings2 } from '@/componentsV2/icons/LucideIcon'
+import { Cloud, FileText, Globe, HardDrive, Info, Package, Settings2 } from '@/componentsV2/icons/LucideIcon'
 import { useSettings } from '@/hooks/useSettings'
 import { useSwipeGesture } from '@/hooks/useSwipeGesture'
 import type { HomeNavigationProps } from '@/types/naviagate'
@@ -98,6 +98,17 @@ export default function SettingsScreen() {
           screen: 'AboutSettings',
           specificScreen: 'AboutScreen',
           icon: <Info size={24} />
+        }
+      ]
+    },
+    {
+      title: 'Development',
+      items: [
+        {
+          title: 'Markdown Test',
+          screen: 'MarkdownTestSettings',
+          specificScreen: 'MarkdownTestScreen',
+          icon: <FileText size={24} />
         }
       ]
     }

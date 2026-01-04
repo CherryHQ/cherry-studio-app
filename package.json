@@ -170,6 +170,8 @@
     "react-native-marked": "^7.0.2",
     "react-native-mathjax-svg": "^0.9.9",
     "react-native-mmkv": "^3.3.0",
+    "react-native-nitro-markdown": "^0.1.2",
+    "react-native-nitro-modules": "^0.32.0",
     "react-native-pager-view": "6.9.1",
     "react-native-qrcode-styled": "^0.3.3",
     "react-native-reanimated": "^4.1.0",

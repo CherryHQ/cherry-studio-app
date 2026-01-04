@@ -90,14 +90,14 @@ importers:
         specifier: ^1.17.0
         version: 1.34.0(@modelcontextprotocol/sdk@1.25.1(hono@4.11.3)(zod@3.25.76))
       '@gorhom/bottom-sheet':
-        specifier: ^5.2.6
+        specifier: ^5.2.8
         version: 5.2.8(@types/react@19.1.17)(react-native-gesture-handler@2.28.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.1(@babel/core@7.28.5)(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       '@legendapp/list':
-        specifier: ^2.0.15
+        specifier: ^2.0.19
         version: 2.0.19(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       '@lodev09/react-native-true-sheet':
-        specifier: ^3.6.11
-        version: 3.6.11(6dd36cff8a345faf6f3dd6cf09b01ec7)
+        specifier: 3.7.0-beta.5
+        version: 3.7.0-beta.5(6dd36cff8a345faf6f3dd6cf09b01ec7)
       '@mistralai/mistralai':
         specifier: ^1.7.4
         version: 1.11.0
@@ -147,28 +147,28 @@ importers:
         specifier: ^0.82.0
         version: 0.82.1
       '@react-navigation/bottom-tabs':
-        specifier: ^7.0.0
+        specifier: ^7.9.0
         version: 7.9.0(@react-native-masked-view/masked-view@0.3.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(@react-navigation/native@7.1.26(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.6.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-screens@4.16.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       '@react-navigation/drawer':
-        specifier: ^7.3.12
+        specifier: ^7.7.10
         version: 7.7.10(@react-native-masked-view/masked-view@0.3.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(@react-navigation/native@7.1.26(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-gesture-handler@2.28.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.1(@babel/core@7.28.5)(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.6.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-screens@4.16.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       '@react-navigation/material-top-tabs':
-        specifier: ^7.3.7
+        specifier: ^7.4.11
         version: 7.4.11(@react-native-masked-view/masked-view@0.3.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(@react-navigation/native@7.1.26(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-pager-view@6.9.1(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.6.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       '@react-navigation/native':
-        specifier: ^7.0.0
+        specifier: ^7.1.26
         version: 7.1.26(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       '@react-navigation/native-stack':
-        specifier: ^7.3.13
+        specifier: ^7.9.0
         version: 7.9.0(@react-native-masked-view/masked-view@0.3.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(@react-navigation/native@7.1.26(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.6.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-screens@4.16.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       '@react-navigation/stack':
-        specifier: ^7.3.2
+        specifier: ^7.6.13
         version: 7.6.13(@react-native-masked-view/masked-view@0.3.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(@react-navigation/native@7.1.26(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-gesture-handler@2.28.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.6.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-screens@4.16.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       '@reduxjs/toolkit':
-        specifier: ^2.5.1
+        specifier: ^2.11.2
         version: 2.11.2(react-redux@9.2.0(@types/react@19.1.17)(react@19.1.0)(redux@5.0.1))(react@19.1.0)
       '@shopify/flash-list':
-        specifier: ^2.1.0
+        specifier: ^2.2.0
         version: 2.2.0(@babel/runtime@7.28.4)(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       '@shopify/react-native-skia':
         specifier: 2.2.12
@@ -177,7 +177,7 @@ importers:
         specifier: ^1.0.2
         version: 1.0.2
       '@types/lodash':
-        specifier: ^4.17.17
+        specifier: ^4.17.21
         version: 4.17.21
       '@ungap/structured-clone':
         specifier: ^1.3.0
@@ -204,14 +204,14 @@ importers:
         specifier: ^3.1.2
         version: 3.1.2
       dayjs:
-        specifier: ^1.11.13
+        specifier: ^1.11.19
         version: 1.11.19
       dompurify:
-        specifier: ^3.2.6
+        specifier: ^3.3.1
         version: 3.3.1
       drizzle-orm:
-        specifier: ^0.43.1
-        version: 0.43.1(@opentelemetry/api@1.9.0)(expo-sqlite@16.0.8(expo@54.0.30(@babel/core@7.28.5)(react-native-webview@13.15.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))
+        specifier: ^0.45.1
+        version: 0.45.1(@opentelemetry/api@1.9.0)(expo-sqlite@16.0.8(expo@54.0.30(@babel/core@7.28.5)(react-native-webview@13.15.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))
       expo:
         specifier: ^54.0.13
         version: 54.0.30(@babel/core@7.28.5)(react-native-webview@13.15.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -318,7 +318,7 @@ importers:
         specifier: ~15.0.7
         version: 15.0.10(expo@54.0.30(@babel/core@7.28.5)(react-native-webview@13.15.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))
       fast-xml-parser:
-        specifier: ^5.2.5
+        specifier: ^5.3.3
         version: 5.3.3
       heroui-native:
         specifier: ^1.0.0-beta.10
@@ -326,26 +326,23 @@ importers:
       i18next:
         specifier: ^24.2.2
         version: 24.2.3(typescript@5.9.3)
-      jsonstream:
-        specifier: ^1.0.3
-        version: 1.0.3
       lodash:
         specifier: ^4.17.21
         version: 4.17.21
       lru-cache:
-        specifier: ^11.1.0
+        specifier: ^11.2.4
         version: 11.2.4
       lucide-react-native:
-        specifier: ^0.544.0
-        version: 0.544.0(react-native-svg@15.12.1(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+        specifier: ^0.562.0
+        version: 0.562.0(react-native-svg@15.12.1(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       markdown-it-math:
         specifier: ^5.2.1
-        version: 5.2.1(temml@0.11.11)
+        version: 5.2.1(temml@0.13.1)
       moti:
         specifier: ^0.30.0
         version: 0.30.0(react-dom@19.1.0(react@19.1.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.1(@babel/core@7.28.5)(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react@19.1.0)
       notion-helper:
-        specifier: ^1.3.22
+        specifier: ^1.3.29
         version: 1.3.29
       openai:
         specifier: ^5.12.2
@@ -404,6 +401,12 @@ importers:
       react-native-mmkv:
         specifier: ^3.3.0
         version: 3.3.3(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      react-native-nitro-markdown:
+        specifier: ^0.1.2
+        version: 0.1.2(react-native-nitro-modules@0.32.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      react-native-nitro-modules:
+        specifier: ^0.32.0
+        version: 0.32.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       react-native-pager-view:
         specifier: 6.9.1
         version: 6.9.1(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -468,7 +471,7 @@ importers:
         specifier: ^1.7.0
         version: 1.7.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       socket.io-client:
-        specifier: ^4.8.1
+        specifier: ^4.8.3
         version: 4.8.3
       tailwind-merge:
         specifier: ^3.3.1
@@ -477,10 +480,10 @@ importers:
         specifier: ^3.1.0
         version: 3.2.2(tailwind-merge@3.4.0)(tailwindcss@4.1.18)
       temml:
-        specifier: ^0.11.9
-        version: 0.11.11
+        specifier: ^0.13.1
+        version: 0.13.1
       tokenx:
-        specifier: ^1.0.1
+        specifier: ^1.2.1
         version: 1.2.1
       turndown:
         specifier: 7.2.2
@@ -489,7 +492,7 @@ importers:
         specifier: ^1.0.5
         version: 1.2.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(tailwindcss@4.1.18)
       use-latest-callback:
-        specifier: ^0.3.2
+        specifier: ^0.3.3
         version: 0.3.3(react@19.1.0)
       vitest:
         specifier: ^3.2.4
@@ -523,10 +526,10 @@ importers:
         specifier: ^3
         version: 3.11.6
       '@types/jest':
-        specifier: ^29.5.12
+        specifier: ^29.5.14
         version: 29.5.14
       '@types/qrcode':
-        specifier: ^1.5.5
+        specifier: ^1.5.6
         version: 1.5.6
       '@types/react':
         specifier: ~19.1.10
@@ -541,13 +544,13 @@ importers:
         specifier: ~19.0.0
         version: 19.0.0
       '@types/turndown':
-        specifier: ^5.0.5
+        specifier: ^5.0.6
         version: 5.0.6
       '@types/ungap__structured-clone':
         specifier: ^1
         version: 1.2.0
       baseline-browser-mapping:
-        specifier: ^2.9.7
+        specifier: ^2.9.11
         version: 2.9.11
       chalk:
         specifier: ^5.6.2
@@ -556,10 +559,10 @@ importers:
         specifier: ^3.12.0
         version: 3.12.0
       dotenv-cli:
-        specifier: ^7.4.2
-        version: 7.4.4
+        specifier: ^11.0.0
+        version: 11.0.0
       drizzle-kit:
-        specifier: ^0.31.1
+        specifier: ^0.31.8
         version: 0.31.8
       eslint:
         specifier: ^9.39.0
@@ -577,7 +580,7 @@ importers:
         specifier: ^12.1.1
         version: 12.1.1(eslint@9.39.2(jiti@2.6.1))
       eslint-plugin-unused-imports:
-        specifier: ^4.2.0
+        specifier: ^4.3.0
         version: 4.3.0(@typescript-eslint/eslint-plugin@8.51.0(@typescript-eslint/parser@8.51.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.2(jiti@2.6.1))
       expo-atlas:
         specifier: ^0.4.0
@@ -595,7 +598,7 @@ importers:
         specifier: ^8.5.6
         version: 8.5.6
       prettier:
-        specifier: ^3.6.2
+        specifier: ^3.7.4
         version: 3.7.4
       prettier-plugin-tailwindcss:
         specifier: ^0.5.11
@@ -610,7 +613,7 @@ importers:
         specifier: ^4.1.16
         version: 4.1.18
       tsx:
-        specifier: ^4.20.3
+        specifier: ^4.21.0
         version: 4.21.0
       typescript:
         specifier: ~5.9.3
@@ -2073,8 +2076,8 @@ packages:
       react: '*'
       react-native: '*'
 
-  '@lodev09/react-native-true-sheet@3.6.11':
-    resolution: {integrity: sha512-Je7zXgKrLUUnIjj+fXASiOg4PDXUPeD510awlZU5vkDXDhfLZ4gMqeYE/I93nZPI5AC3qQXFQ4Zek3JnhzwgIw==}
+  '@lodev09/react-native-true-sheet@3.7.0-beta.5':
+    resolution: {integrity: sha512-PSWvdYtjcLUDyNsRvvzd+Aly46HH/qLIaq58kSmZLsWVcddtEq65cyS8HdPQ7uJMGryMBfbFf/vIj62YMJqPZA==}
     peerDependencies:
       '@gorhom/bottom-sheet': '>=5'
       '@react-navigation/native': '>=7'
@@ -4425,16 +4428,16 @@ packages:
   domutils@3.2.2:
     resolution: {integrity: sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==}
 
-  dotenv-cli@7.4.4:
-    resolution: {integrity: sha512-XkBYCG0tPIes+YZr4SpfFv76SQrV/LeCE8CI7JSEMi3VR9MvTihCGTOtbIexD6i2mXF+6px7trb1imVCXSNMDw==}
+  dotenv-cli@11.0.0:
+    resolution: {integrity: sha512-r5pA8idbk7GFWuHEU7trSTflWcdBpQEK+Aw17UrSHjS6CReuhrrPcyC3zcQBPQvhArRHnBo/h6eLH1fkCvNlww==}
     hasBin: true
-
-  dotenv-expand@10.0.0:
-    resolution: {integrity: sha512-GopVGCpVS1UKH75VKHGuQFqS1Gusej0z4FyQkPdwjil2gNIv+LNsqBlboOzpJFZKVT95GkCyWJbBSdFEFUWI2A==}
-    engines: {node: '>=12'}
 
   dotenv-expand@11.0.7:
     resolution: {integrity: sha512-zIHwmZPRshsCdpMDyVsqGmgyP0yT8GAgXUnkdAoJisxvf33k7yO6OuoKmcTGuXPWSsm8Oh88nZicRLA9Y0rUeA==}
+    engines: {node: '>=12'}
+
+  dotenv-expand@12.0.3:
+    resolution: {integrity: sha512-uc47g4b+4k/M/SeaW1y4OApx+mtLWl92l5LMPP0GNXctZqELk+YGgOPIIC5elYmUH4OuoK3JLhuRUYegeySiFA==}
     engines: {node: '>=12'}
 
   dotenv@16.4.7:
@@ -4445,12 +4448,16 @@ packages:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
     engines: {node: '>=12'}
 
+  dotenv@17.2.3:
+    resolution: {integrity: sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==}
+    engines: {node: '>=12'}
+
   drizzle-kit@0.31.8:
     resolution: {integrity: sha512-O9EC/miwdnRDY10qRxM8P3Pg8hXe3LyU4ZipReKOgTwn4OqANmftj8XJz1UPUAS6NMHf0E2htjsbQujUTkncCg==}
     hasBin: true
 
-  drizzle-orm@0.43.1:
-    resolution: {integrity: sha512-dUcDaZtE/zN4RV/xqGrVSMpnEczxd5cIaoDeor7Zst9wOe/HzC/7eAaulywWGYXdDEc9oBPMjayVEDg0ziTLJA==}
+  drizzle-orm@0.45.1:
+    resolution: {integrity: sha512-Te0FOdKIistGNPMq2jscdqngBRfBpC8uMFVwqjf6gtTVJHIQ/dosgV/CLBU2N4ZJBsXL5savCba9b0YJskKdcA==}
     peerDependencies:
       '@aws-sdk/client-rds-data': '>=3'
       '@cloudflare/workers-types': '>=4'
@@ -4466,6 +4473,7 @@ packages:
       '@types/better-sqlite3': '*'
       '@types/pg': '*'
       '@types/sql.js': '*'
+      '@upstash/redis': '>=1.34.7'
       '@vercel/postgres': '>=0.8.0'
       '@xata.io/client': '*'
       better-sqlite3: '>=7'
@@ -4508,6 +4516,8 @@ packages:
       '@types/pg':
         optional: true
       '@types/sql.js':
+        optional: true
+      '@upstash/redis':
         optional: true
       '@vercel/postgres':
         optional: true
@@ -6134,15 +6144,6 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
-  jsonparse@1.0.0:
-    resolution: {integrity: sha512-X8/pl4Q98FceotM1YzNYRcdRpYKgKB6nOKW9oNZk4qssFGfSxA6tUyPgEYsZA+MAQ8nR6nBZwE2GKpeeOIeN3A==}
-    engines: {'0': node >= 0.2.0}
-
-  jsonstream@1.0.3:
-    resolution: {integrity: sha512-yMDWHPGzQRwdiXy6itGgemEviwAoDp5i78y7rdzUa9RVe01vLJku+byVtqxwwSvp1y9LYHWYd+8MkYvbeilCug==}
-    deprecated: use JSONStream instead
-    hasBin: true
-
   jsx-ast-utils@3.3.5:
     resolution: {integrity: sha512-ZZow9HBI5O6EPgSJLUb8n2NKgmVWTwCvHGwFuJlMjvLFqlGG6pjirPhtdsseaLZjSibD8eegzmYpUZwoIlj2cQ==}
     engines: {node: '>=4.0'}
@@ -6312,8 +6313,8 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
-  lucide-react-native@0.544.0:
-    resolution: {integrity: sha512-ylN6TfmVmZVAd82CmTWyKnYv8e5WQLvaaabOHIB5z3OMA2Vg/jtMW5ORDoR2J7Hr8LMSys1v2b2Fr1GVxr3XQA==}
+  lucide-react-native@0.562.0:
+    resolution: {integrity: sha512-ZF2ok8SzyUaiCIrLGqYh/6SPs+huVzbZOCv0i411L4+oP3tJgQvvKePiVgWCioa7HsT2xaJZSrdd92cuB2/+ew==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-native: '*'
@@ -7280,6 +7281,19 @@ packages:
       react: '*'
       react-native: '*'
 
+  react-native-nitro-markdown@0.1.2:
+    resolution: {integrity: sha512-y2DLiXWS0XYA9kR7BnI9dwOOkxu7rSwFyXBksZK7FO2d5OmGL9m5Ovv6TfLVyK4QjCwJIxkrSko/3Afry68fJw==}
+    peerDependencies:
+      react: '*'
+      react-native: '>=0.75.0'
+      react-native-nitro-modules: '>=0.31.0'
+
+  react-native-nitro-modules@0.32.0:
+    resolution: {integrity: sha512-nLDsmi/H9/cLcYxArYxcTDL641JiWnAH3u2LmsFETgyqSEHvukswDTdmX6AHBRIAwXu/iUDppZyjsaRpTG6WMg==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
+
   react-native-pager-view@6.9.1:
     resolution: {integrity: sha512-uUT0MMMbNtoSbxe9pRvdJJKEi9snjuJ3fXlZhG8F2vVMOBJVt/AFtqMPUHu9yMflmqOr08PewKzj9EPl/Yj+Gw==}
     peerDependencies:
@@ -8046,8 +8060,8 @@ packages:
     resolution: {integrity: sha512-7NyxrTE4Anh8km8iEy7o0QYPs+0JKBTj5ZaqHg6B39erLg0qYXN3BijtShwbsNSvQ+LN75+KV+C4QR/f6Gwnpg==}
     engines: {node: '>=18'}
 
-  temml@0.11.11:
-    resolution: {integrity: sha512-Z/Ihgwad+ges0ez6+KmKWZ3o4BYbP6aZ/cU94cVtN+DwxwqxjHgcF4Z6cb9jLkKN+aU7uni165HsIxLHs5/TqA==}
+  temml@0.13.1:
+    resolution: {integrity: sha512-/fL1utq8QUD9YpcLeZHPRnp9Cbzbexq5hZl5uSBhf8mNYiKkcS4eYbLidDB+/nF8C+RHAcBQbKw2bKoS83mz1Q==}
     engines: {node: '>=18.13.0'}
 
   temp-dir@2.0.0:
@@ -8080,9 +8094,6 @@ packages:
 
   throat@5.0.0:
     resolution: {integrity: sha512-fcwX4mndzpLQKBS1DVYhGAcYaYt7vsHNIvQV+WXMvnow5cgjPphq5CaayLaGsjRdSCKZFNGt7/GYAuXaNOiYCA==}
-
-  through@2.3.8:
-    resolution: {integrity: sha512-w89qg7PI8wAdvX60bMDP+bFoD5Dvhm9oLheFp5O4a2QF0cSBGsBX4qZmadPMvVqlLJBBci+WqGGOAPvcDeNSVg==}
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
@@ -10949,7 +10960,7 @@ snapshots:
       react-native: 0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
       use-sync-external-store: 1.6.0(react@19.1.0)
 
-  '@lodev09/react-native-true-sheet@3.6.11(6dd36cff8a345faf6f3dd6cf09b01ec7)':
+  '@lodev09/react-native-true-sheet@3.7.0-beta.5(6dd36cff8a345faf6f3dd6cf09b01ec7)':
     dependencies:
       react: 19.1.0
       react-native: 0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
@@ -13539,22 +13550,26 @@ snapshots:
       domelementtype: 2.3.0
       domhandler: 5.0.3
 
-  dotenv-cli@7.4.4:
+  dotenv-cli@11.0.0:
     dependencies:
       cross-spawn: 7.0.6
-      dotenv: 16.6.1
-      dotenv-expand: 10.0.0
+      dotenv: 17.2.3
+      dotenv-expand: 12.0.3
       minimist: 1.2.8
-
-  dotenv-expand@10.0.0: {}
 
   dotenv-expand@11.0.7:
     dependencies:
-      dotenv: 16.4.7
+      dotenv: 16.6.1
+
+  dotenv-expand@12.0.3:
+    dependencies:
+      dotenv: 16.6.1
 
   dotenv@16.4.7: {}
 
   dotenv@16.6.1: {}
+
+  dotenv@17.2.3: {}
 
   drizzle-kit@0.31.8:
     dependencies:
@@ -13565,7 +13580,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.43.1(@opentelemetry/api@1.9.0)(expo-sqlite@16.0.8(expo@54.0.30(@babel/core@7.28.5)(react-native-webview@13.15.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)):
+  drizzle-orm@0.45.1(@opentelemetry/api@1.9.0)(expo-sqlite@16.0.8(expo@54.0.30(@babel/core@7.28.5)(react-native-webview@13.15.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)):
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       expo-sqlite: 16.0.8(expo@54.0.30(@babel/core@7.28.5)(react-native-webview@13.15.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -15677,13 +15692,6 @@ snapshots:
 
   json5@2.2.3: {}
 
-  jsonparse@1.0.0: {}
-
-  jsonstream@1.0.3:
-    dependencies:
-      jsonparse: 1.0.0
-      through: 2.3.8
-
   jsx-ast-utils@3.3.5:
     dependencies:
       array-includes: 3.1.9
@@ -15831,7 +15839,7 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
-  lucide-react-native@0.544.0(react-native-svg@15.12.1(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
+  lucide-react-native@0.562.0(react-native-svg@15.12.1(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
     dependencies:
       react: 19.1.0
       react-native: 0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
@@ -15849,9 +15857,9 @@ snapshots:
     dependencies:
       tmpl: 1.0.5
 
-  markdown-it-math@5.2.1(temml@0.11.11):
+  markdown-it-math@5.2.1(temml@0.13.1):
     optionalDependencies:
-      temml: 0.11.11
+      temml: 0.13.1
 
   markdown-table@2.0.0:
     dependencies:
@@ -16894,6 +16902,17 @@ snapshots:
       react: 19.1.0
       react-native: 0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
 
+  react-native-nitro-markdown@0.1.2(react-native-nitro-modules@0.32.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
+    dependencies:
+      react: 19.1.0
+      react-native: 0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
+      react-native-nitro-modules: 0.32.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+
+  react-native-nitro-modules@0.32.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
+    dependencies:
+      react: 19.1.0
+      react-native: 0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
+
   react-native-pager-view@6.9.1(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
     dependencies:
       react: 19.1.0
@@ -17811,7 +17830,7 @@ snapshots:
       minizlib: 3.1.0
       yallist: 5.0.0
 
-  temml@0.11.11: {}
+  temml@0.13.1: {}
 
   temp-dir@2.0.0: {}
 
@@ -17847,8 +17866,6 @@ snapshots:
       any-promise: 1.3.0
 
   throat@5.0.0: {}
-
-  through@2.3.8: {}
 
   tinybench@2.9.0: {}
 
