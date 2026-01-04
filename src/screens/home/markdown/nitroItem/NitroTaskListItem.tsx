@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import React from 'react'
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
+
+import { Square, SquareCheck } from '@/componentsV2/icons/LucideIcon'
 
 interface NitroTaskListItemProps {
   checked?: boolean
@@ -9,8 +11,14 @@ interface NitroTaskListItemProps {
 
 export function NitroTaskListItem({ checked, children }: NitroTaskListItemProps) {
   return (
-    <View className="flex-row">
-      <Text className="text-foreground mr-2">{checked ? '☑' : '☐'}</Text>
+    <View className="flex-row items-start">
+      <View className="mr-2">
+        {checked ? (
+          <SquareCheck size={18} className="text-foreground" />
+        ) : (
+          <Square size={18} className="text-foreground" />
+        )}
+      </View>
       <View className="flex-1">{children}</View>
     </View>
   )
