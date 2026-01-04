@@ -163,6 +163,41 @@ export const createMarkdownStyles = (isDark: boolean) => {
     },
     image: {
       borderRadius: 10
+    },
+    // Text styles
+    bold: {
+      fontWeight: 'bold' as const
+    },
+    italic: {
+      fontStyle: 'italic' as const
+    },
+    strikethrough: {
+      textDecorationLine: 'line-through' as const
+    },
+    // List styles
+    list: {
+      marginVertical: 8
+    },
+    // Math styles
+    math_inline: {
+      backgroundColor: currentColors.codeBg,
+      color: currentColors.code,
+      paddingHorizontal: 4,
+      paddingVertical: 2,
+      borderRadius: 3,
+      fontFamily: 'monospace',
+      fontSize: 16 * 0.9
+    },
+    math_block: {
+      backgroundColor: currentColors.codeBlockBg,
+      padding: 16,
+      borderRadius: 5,
+      marginVertical: 16,
+      alignItems: 'center' as const
+    },
+    // Table styles
+    table_row: {
+      flexDirection: 'row' as const
     }
   })
 }

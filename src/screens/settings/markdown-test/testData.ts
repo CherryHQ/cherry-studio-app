@@ -1,193 +1,139 @@
 // Complex markdown test data for benchmarking
-export const COMPLEX_MARKDOWN = `# 🚀 Nitro Markdown
-
-Welcome to the **high-performance** markdown parser powered by \`md4c\` and **Nitro Modules**.
-
-## Features Showcase
-
-This parser supports *all* the features you'd expect:
-
-- **Bold text** with double asterisks
-- *Italic text* with single asterisks
-- ~~Strikethrough text~~ (GFM)
-- \`Inline code\` snippets
-- [Links](https://github.com)
-- ![Landscape](https://picsum.photos/300/200 "Random image from Picsum")
-
-## Some Lists / Tasks
-
-**Quick actions:**
-
-- [ ] Reply to Sarah's email about the \`Series A\` discussion
-- [ ] Update your notes on the *TechCrunch* meeting
-- [x] Review the [shared document](https://docs.example.com/pitch) before Thursday
-
-**List:**
-
-- Reply to Sarah's email about the \`Series A\` discussion
-- Update your notes on the *TechCrunch* meeting
-- Review the [shared document](https://docs.example.com/pitch) before Thursday
-
-#### Images
-- ![Landscape](https://picsum.photos/300/200 "Random image from Picsum")
-- ![City](https://picsum.photos/seed/markdown/300/150 "City skyline")
+export const COMPLEX_MARKDOWN = `# h1 Heading
+## h2 Heading
+## ~~_h2 Heading with Emphasis_~~
+### h3 Heading
+#### h4 Heading
+##### h5 Heading
+###### h6 Heading
 
 
-## Advanced GFM Features
-
-### Task Lists
-- [x] Implement md4c parser
-- [x] Create Nitro bindings
-- [x] Build AST converter
-- [ ] Add syntax highlighting
-- [ ] Implement caching
-
-### Tables with Complex Content
-| Feature | Description | Status | Performance |
-|:--------|:------------|:-------|:------------|
-| JSI Binding | Direct JS ↔️ C++ communication | ✅ | Microseconds |
-| Native Threading | Background processing | ✅ | Optimized |
-| Zero-Copy | No data duplication | ✅ | Memory efficient |
-| Math Support | LaTeX expressions | ✅ | Full featured |
-| GFM Tables | Advanced table rendering | ✅ | Complete spec |
-
-## LaTeX Mathematics
-
-### Inline Math
-- Simple: $E = mc^2$
-- Complex: $\\frac{d}{dx}[x^n] = nx^{n-1}$
-- Greek letters: $\\alpha + \\beta = \\gamma$
-- Subscripts: $x_1, x_2, \\dots, x_n$
-- Superscripts: $x^2, y^{n+1}, e^{\\pi i}$
-
-### Block Math (Display Mode)
-The quadratic formula:
-
-$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$
-
-Pythagorean theorem:
-
-$a^2 + b^2 = c^2$
-
-Matrix operations:
-
-$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix} \\times \\begin{pmatrix} x \\\\ y \\end{pmatrix} = \\begin{pmatrix} ax + by \\\\ cx + dy \\end{pmatrix}$
-
-## Code Blocks with Syntax Highlighting
-
-### TypeScript
-\`\`\`typescript
-import { parseMarkdown, parseMarkdownWithOptions } from 'react-native-nitro-markdown';
-
-interface ParserOptions {
-  gfm?: boolean;
-  math?: boolean;
-}
-
-const parseWithGFM = (text: string): MarkdownNode => {
-  return parseMarkdownWithOptions(text, {
-    gfm: true,
-    math: true
-  });
-};
-\`\`\`
-
-### C++ (Native Implementation)
-\`\`\`cpp
-#include "MD4CParser.hpp"
-
-std::shared_ptr<MarkdownNode> parseMarkdown(
-    const std::string& text,
-    const ParserOptions& options
-) {
-    MD4CParser parser;
-    return parser.parse(text, options);
-}
-\`\`\`
-
-### Complex Nested Structures
-
-#### Deeply Nested Lists
-1. First level ordered item
-   - Second level unordered
-   - Another second level
-     1. Third level ordered
-     2. Another third level
-        - Fourth level unordered
-        - More fourth level items
-   - Back to second level
-2. Second first level item
-   1. Nested ordered in second item
-   2. Another nested ordered
-
-#### Blockquotes Within Lists
-1. First item with blockquote:
-   > This is a blockquote inside a list item
-   >
-   > It can span multiple lines
-   > And contain **formatting**
-
-2. Second item
-   - Nested bullet with blockquote:
-     > Another blockquote
-     > With multiple paragraphs
-     >
-     > And even more content
-
-## Horizontal Rules and Separators
-
-Content above first rule
-
----
-
-Content between rules
-
-***
-
-More content between rules
+## Horizontal Rules
 
 ___
 
-Content below rules
+---
 
-## Unicode and International Content
+***
 
-### Multiple Languages
-- English: Hello world! 🌍
-- Español: ¡Hola mundo! 🌎
-- Français: Bonjour le monde! 🌍
-- Deutsch: Hallo Welt! 🌍
-- 中文: 你好世界！ 🌏
-- 日本語: こんにちは世界！ 🌸
-- العربية: مرحبا بالعالم! 🌙
+## Emphasis
 
-### Special Characters and Symbols
-- Mathematical: ∫ ∑ ∏ √ ∞ ≠ ≈ ≤ ≥
-- Arrows: ← → ↑ ↓ ↔ ↕ ⇄ ⇅
-- Currency: $ € ¥ £ ₽ ₿ ¢ ₩ ₦ ₫
-- Legal: © ® ™ § ¶ † ‡
-- Fractions: ½ ⅓ ¼ ¾ ⅛ ⅜ ⅝ ⅞
+**This is bold text**
 
-## Performance Test Patterns
+__This is bold text__
 
-### Repeated Patterns
-**Bold text** repeated for *performance testing* with \`code blocks\` and [links](url) to ensure the parser handles repetition efficiently without memory leaks or performance degradation.
+*This is italic text*
 
-### Large Content Sections
-This section contains intentionally large blocks of content to test how well the parser scales with document size. The content includes various markdown elements mixed together in realistic patterns that would appear in actual documentation or blog posts.
+_This is italic text_
 
-By including diverse content types - headings, paragraphs, lists, tables, code blocks, math expressions, and international text - we create a comprehensive test that exercises all aspects of the markdown parsing engine.
+~~Strikethrough~~
 
-The goal is to ensure that performance remains consistent regardless of content complexity or document length, providing users with reliable and fast markdown processing capabilities.
 
-### Stress Testing Elements
-- Multiple consecutive code blocks
-- Tables with many columns and rows
-- Deeply nested list structures
-- Complex mathematical expressions
-- Mixed inline formatting combinations
-- Large blocks of plain text
-- Unicode characters from multiple languages
-- Special symbols and emoji combinations
+## Blockquotes
 
-This comprehensive test suite validates that the parser maintains high performance and accuracy across all supported markdown features and edge cases.`
+
+> Blockquotes can also be nested...
+>> ...by using additional greater-than signs right next to each other...
+> > > ...or with spaces between arrows.
+
+
+## Lists
+
+Unordered
+
++ Create a list by starting a line with \`+\`, \`-\`, or \`*\`
++ Sub-lists are made by indenting 2 spaces:
+  - Marker character change forces new list start:
+    * Ac tristique libero volutpat at
+    + Facilisis in pretium nisl aliquet
+    - Nulla volutpat aliquam velit
++ Very easy!
+
+Ordered
+
+1. Lorem ipsum dolor sit amet
+2. Consectetur adipiscing elit
+3. Integer molestie lorem at massa
+
+
+1. You can use sequential numbers...
+1. ...or keep all the numbers as \`1.\`
+
+Start numbering with offset:
+
+57. foo
+1. bar
+
+
+## Code
+
+Inline \`code\`
+
+Indented code
+
+    // Some comments
+    line 1 of code
+    line 2 of code
+    line 3 of code
+
+
+Block code "fences"
+
+\`\`\`
+Sample text here...
+\`\`\`
+
+Syntax highlighting
+
+\`\`\` js
+var foo = function (bar) {
+  return bar++;
+};
+
+console.log(foo(5));
+\`\`\`
+
+## Tables
+
+| Option | Description |
+| ------ | ----------- |
+| data   | path to data files to supply the data that will be passed into templates. |
+| engine | engine to be used for processing templates. Handlebars is the default. |
+| ext    | extension to be used for dest files. |
+
+Right aligned columns
+
+| Option | Description |
+| ------:| -----------:|
+| data   | path to data files to supply the data that will be passed into templates. |
+| engine | engine to be used for processing templates. Handlebars is the default. |
+| ext    | extension to be used for dest files. |
+
+
+## Links
+
+[link text](http://dev.nodeca.com)
+
+[link with title](http://nodeca.github.io/pica/demo/ "title text!")
+
+Autoconverted link https://github.com/nodeca/pica (enable linkify to see)
+
+
+## Images
+
+![svg](https://www.svgrepo.com/show/513268/beer.svg)
+![Minion](https://octodex.github.com/images/minion.png)
+![Stormtroopocat](https://octodex.github.com/images/stormtroopocat.jpg "The Stormtroopocat")
+
+Like links, Images also have a footnote style syntax
+
+![Alt text][id]
+
+With a reference later in the document defining the URL location:
+
+[id]: https://octodex.github.com/images/dojocat.jpg  "The Dojocat"
+
+[![SVG Repo](https://www.svgrepo.com/show/513268/beer.svg "SVG Repo")](https://www.svgrepo.com)
+
+$ latex code $\n\n\` other code\`
+`

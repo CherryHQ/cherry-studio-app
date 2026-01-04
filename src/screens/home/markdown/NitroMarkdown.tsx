@@ -1,177 +1,144 @@
 import React, { useMemo } from 'react'
-import { Image, Linking, Text, View } from 'react-native'
+import { Text } from 'react-native'
 import type { MarkdownNode } from 'react-native-nitro-markdown'
 import { parseMarkdownWithOptions } from 'react-native-nitro-markdown'
 
-import { useTheme } from '@/hooks/useTheme'
-
-import { createMarkdownStyles, markdownColors } from './MarkdownStyles'
+import {
+  NitroBlockquote,
+  NitroBold,
+  NitroCodeBlock,
+  NitroCodeInline,
+  NitroDocument,
+  NitroHeading,
+  NitroHorizontalRule,
+  NitroImage,
+  NitroItalic,
+  NitroLineBreak,
+  NitroLink,
+  NitroList,
+  NitroListItem,
+  NitroMathBlock,
+  NitroMathInline,
+  NitroParagraph,
+  NitroSoftBreak,
+  NitroStrikethrough,
+  NitroTable,
+  NitroTableBody,
+  NitroTableCell,
+  NitroTableHead,
+  NitroTableRow,
+  NitroTaskListItem,
+  NitroText
+} from './nitroItem'
 
 interface NitroMarkdownProps {
   content: string
 }
 
 export function NitroMarkdown({ content }: NitroMarkdownProps) {
-  const { isDark } = useTheme()
-  const styles = useMemo(() => createMarkdownStyles(isDark), [isDark])
-  const colors = isDark ? markdownColors.dark : markdownColors.light
-
   const ast = useMemo(() => {
     return parseMarkdownWithOptions(content, { gfm: true, math: true })
   }, [content])
 
-  return <NodeRenderer node={ast} styles={styles} colors={colors} />
+  return <NodeRenderer node={ast} />
 }
 
 interface NodeRendererProps {
   node: MarkdownNode
-  styles: ReturnType<typeof createMarkdownStyles>
-  colors: typeof markdownColors.light
 }
 
-function NodeRenderer({ node, styles, colors }: NodeRendererProps) {
+function NodeRenderer({ node }: NodeRendererProps) {
   const renderChildren = () => {
     if (!node.children) return null
-    return node.children.map((child, index) => (
-      <NodeRenderer key={index} node={child} styles={styles} colors={colors} />
-    ))
+    return node.children.map((child, index) => <NodeRenderer key={index} node={child} />)
   }
 
   switch (node.type) {
     case 'document':
-      return <View>{renderChildren()}</View>
+      return <NitroDocument>{renderChildren()}</NitroDocument>
 
     case 'paragraph':
-      return <Text style={styles.paragraph}>{renderChildren()}</Text>
+      return <NitroParagraph>{renderChildren()}</NitroParagraph>
 
-    case 'heading': {
-      const headingStyle = {
-        1: styles.heading1,
-        2: styles.heading2,
-        3: styles.heading3,
-        4: styles.heading4,
-        5: styles.heading5,
-        6: styles.heading6
-      }[node.level || 1]
-      return <Text style={headingStyle}>{renderChildren()}</Text>
-    }
+    case 'heading':
+      return <NitroHeading level={(node.level || 1) as 1 | 2 | 3 | 4 | 5 | 6}>{renderChildren()}</NitroHeading>
 
     case 'text':
-      return <Text style={styles.body}>{node.content}</Text>
+      return <NitroText content={node.content || ''} />
 
     case 'soft_break':
-      return <Text>{'\n'}</Text>
+      return <NitroSoftBreak />
 
     case 'line_break':
-      return <Text>{'\n'}</Text>
+      return <NitroLineBreak />
 
     case 'bold':
-      return <Text style={[styles.body, { fontWeight: 'bold' }]}>{renderChildren()}</Text>
+      return <NitroBold>{renderChildren()}</NitroBold>
 
     case 'italic':
-      return <Text style={[styles.body, { fontStyle: 'italic' }]}>{renderChildren()}</Text>
+      return <NitroItalic>{renderChildren()}</NitroItalic>
 
     case 'strikethrough':
-      return <Text style={[styles.body, { textDecorationLine: 'line-through' }]}>{renderChildren()}</Text>
+      return <NitroStrikethrough>{renderChildren()}</NitroStrikethrough>
 
     case 'code_inline':
-      return <Text style={styles.code_inline}>{node.content}</Text>
+      return <NitroCodeInline content={node.content || ''} />
 
     case 'code_block':
-      return (
-        <View style={styles.code_block}>
-          <Text style={[styles.body, { fontFamily: 'monospace' }]}>{node.content}</Text>
-        </View>
-      )
+      return <NitroCodeBlock content={node.content || ''} language={node.language} />
 
     case 'link':
-      return (
-        <Text
-          style={styles.link}
-          onPress={() => {
-            if (node.href) {
-              Linking.openURL(node.href)
-            }
-          }}>
-          {renderChildren()}
-        </Text>
-      )
+      return <NitroLink href={node.href}>{renderChildren()}</NitroLink>
 
     case 'image':
-      return (
-        <Image source={{ uri: node.href }} style={[styles.image, { width: 200, height: 150 }]} resizeMode="cover" />
-      )
+      return <NitroImage src={node.href} alt={node.title} />
 
     case 'list':
-      return <View style={{ marginVertical: 8 }}>{renderChildren()}</View>
+      return <NitroList ordered={node.ordered}>{renderChildren()}</NitroList>
 
     case 'list_item':
-      return (
-        <View style={styles.list_item}>
-          <Text style={styles.bullet_list_icon}>•</Text>
-          <View style={{ flex: 1 }}>{renderChildren()}</View>
-        </View>
-      )
+      return <NitroListItem>{renderChildren()}</NitroListItem>
 
     case 'task_list_item':
-      return (
-        <View style={styles.list_item}>
-          <Text style={styles.bullet_list_icon}>{node.checked ? '☑' : '☐'}</Text>
-          <View style={{ flex: 1 }}>{renderChildren()}</View>
-        </View>
-      )
+      return <NitroTaskListItem checked={node.checked}>{renderChildren()}</NitroTaskListItem>
 
     case 'blockquote':
-      return <View style={styles.blockquote}>{renderChildren()}</View>
+      return <NitroBlockquote>{renderChildren()}</NitroBlockquote>
 
     case 'horizontal_rule':
-      return <View style={styles.hr} />
+      return <NitroHorizontalRule />
 
     case 'table':
-      return <View style={styles.table}>{renderChildren()}</View>
+      return <NitroTable>{renderChildren()}</NitroTable>
 
     case 'table_head':
-      return <View>{renderChildren()}</View>
+      return <NitroTableHead>{renderChildren()}</NitroTableHead>
 
     case 'table_body':
-      return <View>{renderChildren()}</View>
+      return <NitroTableBody>{renderChildren()}</NitroTableBody>
 
     case 'table_row':
-      return <View style={{ flexDirection: 'row' }}>{renderChildren()}</View>
+      return <NitroTableRow>{renderChildren()}</NitroTableRow>
 
-    case 'table_cell': {
-      const cellStyle = node.isHeader ? styles.th : styles.td
-      return (
-        <View style={cellStyle}>
-          <Text style={styles.body}>{renderChildren()}</Text>
-        </View>
-      )
-    }
+    case 'table_cell':
+      return <NitroTableCell isHeader={node.isHeader}>{renderChildren()}</NitroTableCell>
 
     case 'math_inline':
-      // For now, just display raw LaTeX
-      return <Text style={[styles.code_inline, { color: colors.code }]}>{node.content}</Text>
+      return <NitroMathInline content={node.content || ''} />
 
     case 'math_block':
-      // For now, just display raw LaTeX in a block
-      return (
-        <View style={[styles.code_block, { alignItems: 'center', paddingVertical: 16 }]}>
-          <Text style={[styles.body, { fontFamily: 'monospace' }]}>{node.content}</Text>
-        </View>
-      )
+      return <NitroMathBlock content={node.content || ''} />
 
     case 'html_block':
     case 'html_inline':
-      // Skip HTML for now
       return null
 
     default:
-      // Fallback for unknown types
       if (node.children) {
         return <>{renderChildren()}</>
       }
       if (node.content) {
-        return <Text style={styles.body}>{node.content}</Text>
+        return <Text>{node.content}</Text>
       }
       return null
   }
