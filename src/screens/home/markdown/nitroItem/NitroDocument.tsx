@@ -7,5 +7,5 @@ interface NitroDocumentProps {
 }
 
 export function NitroDocument({ children }: NitroDocumentProps) {
-  return <View className="flex-1">{children}</View>
+  return <View>{children}</View>
 }
