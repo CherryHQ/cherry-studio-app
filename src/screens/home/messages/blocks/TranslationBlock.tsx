@@ -8,7 +8,7 @@ import { Languages } from '@/componentsV2/icons/LucideIcon'
 import type { TranslationMessageBlock } from '@/types/message'
 import { escapeBrackets, removeSvgEmptyLines } from '@/utils/formats'
 
-import { NitroMarkdown } from '../../markdown/NitroMarkdown'
+import { MarkdownRenderer } from '../../markdown/MarkdownRenderer'
 
 interface Props {
   block: TranslationMessageBlock
@@ -26,7 +26,7 @@ const TranslationBlock: FC<Props> = ({ block }) => {
         <Languages size={16} className="text-gray-700" />
         <Divider className="flex-1 bg-zinc-400/40" thickness={1} />
       </XStack>
-      <NitroMarkdown content={getContent()} />
+      <MarkdownRenderer content={getContent()} />
     </View>
   )
 }

@@ -1,11 +1,11 @@
 import React from 'react'
 import { Text } from 'react-native'
 
-interface NitroCodeInlineProps {
+interface MarkdownCodeInlineProps {
   content: string
 }
 
-export function NitroCodeInline({ content }: NitroCodeInlineProps) {
+export function MarkdownCodeInline({ content }: MarkdownCodeInlineProps) {
   return (
     <Text style={{ fontFamily: 'FiraCode' }} className="bg-neutral-200/40 text-md text-amber-500 dark:bg-neutral-800">
       {content}

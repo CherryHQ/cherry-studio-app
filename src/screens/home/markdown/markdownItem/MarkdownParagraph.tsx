@@ -2,10 +2,10 @@ import type { ReactNode } from 'react'
 import React from 'react'
 import { Text } from 'react-native'
 
-interface NitroParagraphProps {
+interface MarkdownParagraphProps {
   children: ReactNode
 }
 
-export function NitroParagraph({ children }: NitroParagraphProps) {
+export function MarkdownParagraph({ children }: MarkdownParagraphProps) {
   return <Text className="text-base text-foreground">{children}</Text>
 }

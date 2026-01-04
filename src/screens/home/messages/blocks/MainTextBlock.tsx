@@ -6,7 +6,7 @@ import { View } from 'react-native'
 import type { MainTextMessageBlock } from '@/types/message'
 import { escapeBrackets, removeSvgEmptyLines } from '@/utils/formats'
 
-import { NitroMarkdown } from '../../markdown/NitroMarkdown'
+import { MarkdownRenderer } from '../../markdown/MarkdownRenderer'
 
 interface Props {
   block: MainTextMessageBlock
@@ -26,7 +26,7 @@ const MainTextBlock: React.FC<Props> = ({ block }) => {
 
   return (
     <View>
-      <NitroMarkdown content={getContent()} />
+      <MarkdownRenderer content={getContent()} />
     </View>
   )
 }

@@ -2,10 +2,10 @@ import type { ReactNode } from 'react'
 import React from 'react'
 import { View } from 'react-native'
 
-interface NitroTableRowProps {
+interface MarkdownTableRowProps {
   children: ReactNode
 }
 
-export function NitroTableRow({ children }: NitroTableRowProps) {
+export function MarkdownTableRow({ children }: MarkdownTableRowProps) {
   return <View className="flex-row border-b border-border">{children}</View>
 }

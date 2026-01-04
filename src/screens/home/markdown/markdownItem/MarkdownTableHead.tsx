@@ -2,10 +2,10 @@ import type { ReactNode } from 'react'
 import React from 'react'
 import { View } from 'react-native'
 
-interface NitroTableHeadProps {
+interface MarkdownTableHeadProps {
   children: ReactNode
 }
 
-export function NitroTableHead({ children }: NitroTableHeadProps) {
+export function MarkdownTableHead({ children }: MarkdownTableHeadProps) {
   return <View className="bg-muted">{children}</View>
 }

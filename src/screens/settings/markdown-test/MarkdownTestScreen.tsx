@@ -2,7 +2,7 @@ import React from 'react'
 import { ScrollView } from 'react-native'
 
 import { Container, HeaderBar, SafeAreaContainer } from '@/componentsV2'
-import { NitroMarkdown } from '@/screens/home/markdown/NitroMarkdown'
+import { MarkdownRenderer } from '@/screens/home/markdown/MarkdownRenderer'
 
 import { COMPLEX_MARKDOWN } from './testData'
 
@@ -12,7 +12,7 @@ export default function MarkdownTestScreen() {
       <HeaderBar title="Markdown Test" showBackButton />
       <ScrollView className="flex-1">
         <Container>
-          <NitroMarkdown content={COMPLEX_MARKDOWN} />
+          <MarkdownRenderer content={COMPLEX_MARKDOWN} />
         </Container>
       </ScrollView>
     </SafeAreaContainer>

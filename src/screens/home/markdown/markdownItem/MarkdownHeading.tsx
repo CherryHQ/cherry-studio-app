@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import React from 'react'
 import { Text } from 'react-native'
 
-interface NitroHeadingProps {
+interface MarkdownHeadingProps {
   level: 1 | 2 | 3 | 4 | 5 | 6
   children: ReactNode
 }
@@ -16,6 +16,6 @@ const headingClasses: Record<1 | 2 | 3 | 4 | 5 | 6, string> = {
   6: 'text-foreground text-base font-bold'
 }
 
-export function NitroHeading({ level, children }: NitroHeadingProps) {
+export function MarkdownHeading({ level, children }: MarkdownHeadingProps) {
   return <Text className={headingClasses[level]}>{children}</Text>
 }

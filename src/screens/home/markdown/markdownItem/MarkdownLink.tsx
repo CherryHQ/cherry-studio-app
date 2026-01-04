@@ -2,12 +2,12 @@ import type { ReactNode } from 'react'
 import React from 'react'
 import { Linking, Text } from 'react-native'
 
-interface NitroLinkProps {
+interface MarkdownLinkProps {
   href?: string
   children: ReactNode
 }
 
-export function NitroLink({ href, children }: NitroLinkProps) {
+export function MarkdownLink({ href, children }: MarkdownLinkProps) {
   const handlePress = () => {
     if (href) {
       Linking.openURL(href)

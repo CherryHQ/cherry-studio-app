@@ -4,12 +4,12 @@ import { Pressable, useWindowDimensions, View } from 'react-native'
 import { Image, ImageGalleryViewer } from '@/componentsV2'
 import { ImageOff } from '@/componentsV2/icons/LucideIcon'
 
-interface NitroImageProps {
+interface MarkdownImageProps {
   src?: string
   alt?: string
 }
 
-export function NitroImage({ src, alt }: NitroImageProps) {
+export function MarkdownImage({ src, alt }: MarkdownImageProps) {
   const [visible, setVisible] = React.useState(false)
   const [imageError, setImageError] = React.useState(false)
   const { width: screenWidth } = useWindowDimensions()

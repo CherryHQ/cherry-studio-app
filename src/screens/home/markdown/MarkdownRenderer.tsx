@@ -4,38 +4,38 @@ import type { MarkdownNode } from 'react-native-nitro-markdown'
 import { parseMarkdownWithOptions } from 'react-native-nitro-markdown'
 
 import {
-  NitroBlockquote,
-  NitroBold,
-  NitroCodeBlock,
-  NitroCodeInline,
-  NitroDocument,
-  NitroHeading,
-  NitroHorizontalRule,
-  NitroImage,
-  NitroItalic,
-  NitroLineBreak,
-  NitroLink,
-  NitroList,
-  NitroListItem,
-  NitroMathBlock,
-  NitroMathInline,
-  NitroParagraph,
-  NitroSoftBreak,
-  NitroStrikethrough,
-  NitroTable,
-  NitroTableBody,
-  NitroTableCell,
-  NitroTableHead,
-  NitroTableRow,
-  NitroTaskListItem,
-  NitroText
-} from './nitroItem'
+  MarkdownBlockquote,
+  MarkdownBold,
+  MarkdownCodeBlock,
+  MarkdownCodeInline,
+  MarkdownDocument,
+  MarkdownHeading,
+  MarkdownHorizontalRule,
+  MarkdownImage,
+  MarkdownItalic,
+  MarkdownLineBreak,
+  MarkdownLink,
+  MarkdownList,
+  MarkdownListItem,
+  MarkdownMathBlock,
+  MarkdownMathInline,
+  MarkdownParagraph,
+  MarkdownSoftBreak,
+  MarkdownStrikethrough,
+  MarkdownTable,
+  MarkdownTableBody,
+  MarkdownTableCell,
+  MarkdownTableHead,
+  MarkdownTableRow,
+  MarkdownTaskListItem,
+  MarkdownText
+} from './markdownItem'
 
-interface NitroMarkdownProps {
+interface MarkdownRendererProps {
   content: string
 }
 
-export function NitroMarkdown({ content }: NitroMarkdownProps) {
+export function MarkdownRenderer({ content }: MarkdownRendererProps) {
   const ast = useMemo(() => {
     return parseMarkdownWithOptions(content, { gfm: true, math: true })
   }, [content])
@@ -105,95 +105,95 @@ function NodeRenderer({ node }: NodeRendererProps) {
 
   switch (node.type) {
     case 'document':
-      return <NitroDocument>{renderChildren()}</NitroDocument>
+      return <MarkdownDocument>{renderChildren()}</MarkdownDocument>
 
     case 'paragraph':
       return (
-        <NitroParagraph>
+        <MarkdownParagraph>
           {node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}
-        </NitroParagraph>
+        </MarkdownParagraph>
       )
 
     case 'heading':
       return (
-        <NitroHeading level={(node.level || 1) as 1 | 2 | 3 | 4 | 5 | 6}>
+        <MarkdownHeading level={(node.level || 1) as 1 | 2 | 3 | 4 | 5 | 6}>
           {node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}
-        </NitroHeading>
+        </MarkdownHeading>
       )
 
     case 'text':
-      return <NitroText content={node.content || ''} />
+      return <MarkdownText content={node.content || ''} />
 
     case 'soft_break':
-      return <NitroSoftBreak />
+      return <MarkdownSoftBreak />
 
     case 'line_break':
-      return <NitroLineBreak />
+      return <MarkdownLineBreak />
 
     case 'bold':
-      return <NitroBold>{node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}</NitroBold>
+      return <MarkdownBold>{node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}</MarkdownBold>
 
     case 'italic':
-      return <NitroItalic>{node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}</NitroItalic>
+      return <MarkdownItalic>{node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}</MarkdownItalic>
 
     case 'strikethrough':
       return (
-        <NitroStrikethrough>
+        <MarkdownStrikethrough>
           {node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}
-        </NitroStrikethrough>
+        </MarkdownStrikethrough>
       )
 
     case 'code_inline':
-      return <NitroCodeInline content={node.content || ''} />
+      return <MarkdownCodeInline content={node.content || ''} />
 
     case 'code_block':
-      return <NitroCodeBlock content={getTextContent(node)} language={node.language} />
+      return <MarkdownCodeBlock content={getTextContent(node)} language={node.language} />
 
     case 'link':
       return (
-        <NitroLink href={node.href}>
+        <MarkdownLink href={node.href}>
           {node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}
-        </NitroLink>
+        </MarkdownLink>
       )
 
     case 'image':
-      return <NitroImage src={node.href} alt={node.title} />
+      return <MarkdownImage src={node.href} alt={node.title} />
 
     case 'list':
-      return <NitroList ordered={node.ordered}>{renderChildren()}</NitroList>
+      return <MarkdownList ordered={node.ordered}>{renderChildren()}</MarkdownList>
 
     case 'list_item':
-      return <NitroListItem>{renderChildren()}</NitroListItem>
+      return <MarkdownListItem>{renderChildren()}</MarkdownListItem>
 
     case 'task_list_item':
-      return <NitroTaskListItem checked={node.checked}>{renderChildren()}</NitroTaskListItem>
+      return <MarkdownTaskListItem checked={node.checked}>{renderChildren()}</MarkdownTaskListItem>
 
     case 'blockquote':
-      return <NitroBlockquote>{renderChildren()}</NitroBlockquote>
+      return <MarkdownBlockquote>{renderChildren()}</MarkdownBlockquote>
 
     case 'horizontal_rule':
-      return <NitroHorizontalRule />
+      return <MarkdownHorizontalRule />
 
     case 'table':
-      return <NitroTable>{renderChildren()}</NitroTable>
+      return <MarkdownTable>{renderChildren()}</MarkdownTable>
 
     case 'table_head':
-      return <NitroTableHead>{renderChildren()}</NitroTableHead>
+      return <MarkdownTableHead>{renderChildren()}</MarkdownTableHead>
 
     case 'table_body':
-      return <NitroTableBody>{renderChildren()}</NitroTableBody>
+      return <MarkdownTableBody>{renderChildren()}</MarkdownTableBody>
 
     case 'table_row':
-      return <NitroTableRow>{renderChildren()}</NitroTableRow>
+      return <MarkdownTableRow>{renderChildren()}</MarkdownTableRow>
 
     case 'table_cell':
-      return <NitroTableCell isHeader={node.isHeader}>{renderChildren()}</NitroTableCell>
+      return <MarkdownTableCell isHeader={node.isHeader}>{renderChildren()}</MarkdownTableCell>
 
     case 'math_inline':
-      return <NitroMathInline content={getTextContent(node)} />
+      return <MarkdownMathInline content={getTextContent(node)} />
 
     case 'math_block':
-      return <NitroMathBlock content={getTextContent(node)} />
+      return <MarkdownMathBlock content={getTextContent(node)} />
 
     case 'html_block':
     case 'html_inline':

@@ -2,11 +2,11 @@ import type { ReactNode } from 'react'
 import React from 'react'
 import { Text, View } from 'react-native'
 
-interface NitroListItemProps {
+interface MarkdownListItemProps {
   children: ReactNode
 }
 
-export function NitroListItem({ children }: NitroListItemProps) {
+export function MarkdownListItem({ children }: MarkdownListItemProps) {
   return (
     <View className="flex-row">
       <Text className="text-foreground mr-2">•</Text>

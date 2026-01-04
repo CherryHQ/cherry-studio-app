@@ -13,7 +13,7 @@ import { MessageBlockStatus, MessageBlockType } from '@/types/message'
 import { isIOS26 } from '@/utils/device'
 import { escapeBrackets, removeSvgEmptyLines } from '@/utils/formats'
 
-import { NitroMarkdown } from '../../../screens/home/markdown/NitroMarkdown'
+import { MarkdownRenderer } from '../../../screens/home/markdown/MarkdownRenderer'
 
 const SHEET_NAME = 'thinking-detail-sheet'
 
@@ -117,7 +117,7 @@ export const ThinkingDetailSheet: React.FC = () => {
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}
           nestedScrollEnabled={Platform.OS === 'android'}
           showsVerticalScrollIndicator={false}>
-          <NitroMarkdown content={getContent()} />
+          <MarkdownRenderer content={getContent()} />
         </ScrollView>
       </View>
     </TrueSheet>

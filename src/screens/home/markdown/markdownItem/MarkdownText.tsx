@@ -1,10 +1,10 @@
 import React from 'react'
 import { Text } from 'react-native'
 
-interface NitroTextProps {
+interface MarkdownTextProps {
   content: string
 }
 
-export function NitroText({ content }: NitroTextProps) {
+export function MarkdownText({ content }: MarkdownTextProps) {
   return <Text>{content}</Text>
 }

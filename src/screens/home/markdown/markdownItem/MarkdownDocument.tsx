@@ -2,10 +2,10 @@ import type { ReactNode } from 'react'
 import React from 'react'
 import { View } from 'react-native'
 
-interface NitroDocumentProps {
+interface MarkdownDocumentProps {
   children: ReactNode
 }
 
-export function NitroDocument({ children }: NitroDocumentProps) {
+export function MarkdownDocument({ children }: MarkdownDocumentProps) {
   return <View>{children}</View>
 }

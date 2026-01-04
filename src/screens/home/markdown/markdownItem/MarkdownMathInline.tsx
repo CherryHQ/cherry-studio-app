@@ -10,11 +10,11 @@ const StyledMathJax = withUniwind(MathJax, {
   }
 })
 
-interface NitroMathInlineProps {
+interface MarkdownMathInlineProps {
   content: string
 }
 
-export function NitroMathInline({ content }: NitroMathInlineProps) {
+export function MarkdownMathInline({ content }: MarkdownMathInlineProps) {
   // 清理 LaTeX 内容，移除首尾的 $ 符号
   const mathContent = content.replace(/^\$+|\$+$/g, '').trim()
 

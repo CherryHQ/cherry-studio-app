@@ -4,12 +4,12 @@ import { View } from 'react-native'
 
 import { Square, SquareCheck } from '@/componentsV2/icons/LucideIcon'
 
-interface NitroTaskListItemProps {
+interface MarkdownTaskListItemProps {
   checked?: boolean
   children: ReactNode
 }
 
-export function NitroTaskListItem({ checked, children }: NitroTaskListItemProps) {
+export function MarkdownTaskListItem({ checked, children }: MarkdownTaskListItemProps) {
   return (
     <View className="flex-row items-start">
       <View className="mr-2">

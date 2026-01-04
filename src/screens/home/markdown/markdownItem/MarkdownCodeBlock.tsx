@@ -12,12 +12,12 @@ import { setHtmlPreviewContent } from '@/store/runtime'
 import type { HomeNavigationProps } from '@/types/naviagate'
 import { getCodeLanguageIcon } from '@/utils/icons/codeLanguage'
 
-interface NitroCodeBlockProps {
+interface MarkdownCodeBlockProps {
   content: string
   language?: string
 }
 
-export function NitroCodeBlock({ content, language = 'text' }: NitroCodeBlockProps) {
+export function MarkdownCodeBlock({ content, language = 'text' }: MarkdownCodeBlockProps) {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
   const lang = language || 'text'
