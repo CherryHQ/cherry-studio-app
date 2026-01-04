@@ -15,6 +15,16 @@ describe('MarkdownListItem', () => {
     expect(screen.getByText('•')).toBeTruthy()
   })
 
+  it('renders custom marker', () => {
+    render(
+      <MarkdownListItem marker="2.">
+        <Text>Item content</Text>
+      </MarkdownListItem>
+    )
+
+    expect(screen.getByText('2.')).toBeTruthy()
+  })
+
   it('renders children in flex container', () => {
     render(
       <MarkdownListItem>
@@ -63,6 +73,19 @@ describe('MarkdownListItem', () => {
     const children = (tree as { children?: { props?: { className?: string } }[] })?.children
     const bulletText = children?.[0]
     expect(bulletText?.props?.className).toContain('text-foreground')
+  })
+
+  it('applies text-base to bullet', () => {
+    const { toJSON } = render(
+      <MarkdownListItem>
+        <Text>Item</Text>
+      </MarkdownListItem>
+    )
+
+    const tree = toJSON()
+    const children = (tree as { children?: { props?: { className?: string } }[] })?.children
+    const bulletText = children?.[0]
+    expect(bulletText?.props?.className).toContain('text-base')
   })
 
   it('applies mr-2 to bullet for spacing', () => {

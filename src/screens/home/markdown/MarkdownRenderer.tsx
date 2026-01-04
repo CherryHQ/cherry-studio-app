@@ -71,8 +71,8 @@ function isInline(type: MarkdownNode['type']): boolean {
 }
 
 function NodeRenderer({ node }: NodeRendererProps) {
-  const renderChildren = () => {
-    if (!node.children) return null
+  const renderChildren = (targetNode: MarkdownNode = node) => {
+    if (!targetNode.children) return null
 
     const elements: React.ReactNode[] = []
     let currentInlineGroup: MarkdownNode[] = []
@@ -90,7 +90,7 @@ function NodeRenderer({ node }: NodeRendererProps) {
       }
     }
 
-    node.children.forEach((child, index) => {
+    targetNode.children.forEach((child, index) => {
       if (isInline(child.type)) {
         currentInlineGroup.push(child)
       } else {
@@ -177,10 +177,34 @@ function NodeRenderer({ node }: NodeRendererProps) {
       )
 
     case 'image':
-      return <MarkdownImage src={node.href} alt={node.title} />
+      return <MarkdownImage src={node.href} alt={node.alt || node.title} />
 
-    case 'list':
-      return <MarkdownList ordered={node.ordered}>{renderChildren()}</MarkdownList>
+    case 'list': {
+      const ordered = node.ordered ?? false
+      const start = node.start ?? 1
+      return (
+        <MarkdownList ordered={ordered}>
+          {node.children?.map((child, index) => {
+            if (child.type === 'list_item') {
+              const marker = ordered ? `${start + index}.` : '•'
+              return (
+                <MarkdownListItem key={`list-item-${index}`} marker={marker}>
+                  {renderChildren(child)}
+                </MarkdownListItem>
+              )
+            }
+            if (child.type === 'task_list_item') {
+              return (
+                <MarkdownTaskListItem key={`task-list-item-${index}`} checked={child.checked}>
+                  {renderChildren(child)}
+                </MarkdownTaskListItem>
+              )
+            }
+            return <NodeRenderer key={`list-child-${index}`} node={child} />
+          })}
+        </MarkdownList>
+      )
+    }
 
     case 'list_item':
       return <MarkdownListItem>{renderChildren()}</MarkdownListItem>

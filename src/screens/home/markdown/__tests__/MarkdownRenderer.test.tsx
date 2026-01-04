@@ -7,11 +7,13 @@ import { parseMarkdownWithOptions } from 'react-native-nitro-markdown'
 import {
   createBoldNode,
   createCodeBlockNode,
+  createMarkdownNode,
   createDocumentNode,
   createHeadingNode,
   createHorizontalRuleNode,
   createItalicNode,
   createLineBreakNode,
+  createListItemNode,
   createParagraphNode,
   createSoftBreakNode,
   createStrikethroughNode,
@@ -114,6 +116,25 @@ describe('MarkdownRenderer', () => {
       render(<MarkdownRenderer content="# Heading 1" />)
 
       expect(screen.getByText('Heading 1')).toBeTruthy()
+    })
+
+    it('renders ordered list markers with start offset', () => {
+      ;(parseMarkdownWithOptions as jest.Mock).mockReturnValueOnce(
+        createDocumentNode([
+          createMarkdownNode('list', {
+            ordered: true,
+            start: 3,
+            children: [createListItemNode([createTextNode('First')]), createListItemNode([createTextNode('Second')])]
+          })
+        ])
+      )
+
+      render(<MarkdownRenderer content="3. First\n4. Second" />)
+
+      expect(screen.getByText('3.')).toBeTruthy()
+      expect(screen.getByText('4.')).toBeTruthy()
+      expect(screen.getByText('First')).toBeTruthy()
+      expect(screen.getByText('Second')).toBeTruthy()
     })
 
     it('renders code blocks', () => {

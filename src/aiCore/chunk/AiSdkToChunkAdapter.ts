@@ -207,7 +207,7 @@ export class AiSdkToChunkAdapter {
         }
         // 从插件 metadata 中提取思考时间
         const thinking_millsec = (chunk.providerMetadata?.metadata as any)?.thinking_millsec
-        if (thinking_millsec) {
+        if (typeof thinking_millsec === 'number') {
           final.thinkingMillsec = thinking_millsec
         }
         this.onChunk({

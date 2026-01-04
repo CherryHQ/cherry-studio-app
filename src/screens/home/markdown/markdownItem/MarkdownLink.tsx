@@ -8,9 +8,15 @@ interface MarkdownLinkProps {
 }
 
 export function MarkdownLink({ href, children }: MarkdownLinkProps) {
-  const handlePress = () => {
-    if (href) {
-      Linking.openURL(href)
+  const handlePress = async () => {
+    if (!href) return
+    try {
+      const canOpen = await Linking.canOpenURL(href)
+      if (canOpen) {
+        await Linking.openURL(href)
+      }
+    } catch {
+      return
     }
   }
 

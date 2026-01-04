@@ -4,12 +4,13 @@ import { Text, View } from 'react-native'
 
 interface MarkdownListItemProps {
   children: ReactNode
+  marker?: string
 }
 
-export function MarkdownListItem({ children }: MarkdownListItemProps) {
+export function MarkdownListItem({ children, marker = '•' }: MarkdownListItemProps) {
   return (
-    <View className="flex-row mb-1.5">
-      <Text className="text-foreground mr-2">•</Text>
+    <View className="flex-row items-start mb-1.5">
+      <Text className="text-foreground mr-2 text-base">{marker}</Text>
       <View className="flex-1">{children}</View>
     </View>
   )
