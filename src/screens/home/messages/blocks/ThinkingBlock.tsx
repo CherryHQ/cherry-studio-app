@@ -5,8 +5,9 @@ import { Pressable, StyleSheet, View } from 'react-native'
 import { MarqueeComponent } from '@/componentsV2'
 import { useTheme } from '@/hooks/useTheme'
 import type { ThinkingMessageBlock } from '@/types/message'
+import { escapeBrackets, removeSvgEmptyLines } from '@/utils/formats'
 
-import ReactNativeMarkdown from '../../markdown/ReactNativeMarkdown'
+import { NitroMarkdown } from '../../markdown/NitroMarkdown'
 
 interface Props {
   block: ThinkingMessageBlock
@@ -18,6 +19,10 @@ const ThinkingBlock: React.FC<Props> = ({ block }) => {
 
   const toggleExpanded = () => {
     setExpanded(!expanded)
+  }
+
+  const getContent = () => {
+    return removeSvgEmptyLines(escapeBrackets(block.content))
   }
 
   const gradientColors = isDark
@@ -38,7 +43,7 @@ const ThinkingBlock: React.FC<Props> = ({ block }) => {
         </Pressable>
         {expanded && (
           <View style={styles.contentContainer}>
-            <ReactNativeMarkdown block={block} />
+            <NitroMarkdown content={getContent()} />
           </View>
         )}
       </LinearGradient>
