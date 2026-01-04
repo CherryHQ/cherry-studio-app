@@ -15,7 +15,7 @@ export function NitroLink({ href, children }: NitroLinkProps) {
   }
 
   return (
-    <Text className="text-primary" onPress={handlePress}>
+    <Text className="text-primary underline" onPress={handlePress}>
       {children}
     </Text>
   )

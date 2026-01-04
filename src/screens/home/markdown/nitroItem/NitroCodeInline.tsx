@@ -6,5 +6,5 @@ interface NitroCodeInlineProps {
 }
 
 export function NitroCodeInline({ content }: NitroCodeInlineProps) {
-  return <Text className="text-foreground font-mono">{content}</Text>
+  return <Text className="bg-neutral-200/40 font-mono text-sm text-amber-500">{content}</Text>
 }

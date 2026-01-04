@@ -6,5 +6,5 @@ interface NitroTextProps {
 }
 
 export function NitroText({ content }: NitroTextProps) {
-  return <Text className="text-foreground">{content}</Text>
+  return <Text>{content}</Text>
 }

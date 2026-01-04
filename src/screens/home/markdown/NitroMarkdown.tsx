@@ -47,10 +47,60 @@ interface NodeRendererProps {
   node: MarkdownNode
 }
 
+function getTextContent(node: MarkdownNode): string {
+  if (node.content) return node.content
+  if (!node.children) return ''
+  return node.children.map(getTextContent).join('')
+}
+
+const INLINE_TYPES = new Set([
+  'text',
+  'bold',
+  'italic',
+  'strikethrough',
+  'link',
+  'code_inline',
+  'html_inline',
+  'math_inline',
+  'soft_break',
+  'line_break'
+])
+
+function isInline(type: MarkdownNode['type']): boolean {
+  return INLINE_TYPES.has(type)
+}
+
 function NodeRenderer({ node }: NodeRendererProps) {
   const renderChildren = () => {
     if (!node.children) return null
-    return node.children.map((child, index) => <NodeRenderer key={index} node={child} />)
+
+    const elements: React.ReactNode[] = []
+    let currentInlineGroup: MarkdownNode[] = []
+
+    const flushInlineGroup = () => {
+      if (currentInlineGroup.length > 0) {
+        elements.push(
+          <Text key={`inline-group-${elements.length}`} className="text-foreground">
+            {currentInlineGroup.map((child, index) => (
+              <NodeRenderer key={index} node={child} />
+            ))}
+          </Text>
+        )
+        currentInlineGroup = []
+      }
+    }
+
+    node.children.forEach((child, index) => {
+      if (isInline(child.type)) {
+        currentInlineGroup.push(child)
+      } else {
+        flushInlineGroup()
+        elements.push(<NodeRenderer key={`block-${index}`} node={child} />)
+      }
+    })
+
+    flushInlineGroup()
+    return elements
   }
 
   switch (node.type) {
@@ -58,10 +108,18 @@ function NodeRenderer({ node }: NodeRendererProps) {
       return <NitroDocument>{renderChildren()}</NitroDocument>
 
     case 'paragraph':
-      return <NitroParagraph>{renderChildren()}</NitroParagraph>
+      return (
+        <NitroParagraph>
+          {node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}
+        </NitroParagraph>
+      )
 
     case 'heading':
-      return <NitroHeading level={(node.level || 1) as 1 | 2 | 3 | 4 | 5 | 6}>{renderChildren()}</NitroHeading>
+      return (
+        <NitroHeading level={(node.level || 1) as 1 | 2 | 3 | 4 | 5 | 6}>
+          {node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}
+        </NitroHeading>
+      )
 
     case 'text':
       return <NitroText content={node.content || ''} />
@@ -73,22 +131,30 @@ function NodeRenderer({ node }: NodeRendererProps) {
       return <NitroLineBreak />
 
     case 'bold':
-      return <NitroBold>{renderChildren()}</NitroBold>
+      return <NitroBold>{node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}</NitroBold>
 
     case 'italic':
-      return <NitroItalic>{renderChildren()}</NitroItalic>
+      return <NitroItalic>{node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}</NitroItalic>
 
     case 'strikethrough':
-      return <NitroStrikethrough>{renderChildren()}</NitroStrikethrough>
+      return (
+        <NitroStrikethrough>
+          {node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}
+        </NitroStrikethrough>
+      )
 
     case 'code_inline':
       return <NitroCodeInline content={node.content || ''} />
 
     case 'code_block':
-      return <NitroCodeBlock content={node.content || ''} language={node.language} />
+      return <NitroCodeBlock content={getTextContent(node)} language={node.language} />
 
     case 'link':
-      return <NitroLink href={node.href}>{renderChildren()}</NitroLink>
+      return (
+        <NitroLink href={node.href}>
+          {node.children?.map((child, index) => <NodeRenderer key={index} node={child} />)}
+        </NitroLink>
+      )
 
     case 'image':
       return <NitroImage src={node.href} alt={node.title} />
@@ -124,10 +190,10 @@ function NodeRenderer({ node }: NodeRendererProps) {
       return <NitroTableCell isHeader={node.isHeader}>{renderChildren()}</NitroTableCell>
 
     case 'math_inline':
-      return <NitroMathInline content={node.content || ''} />
+      return <NitroMathInline content={getTextContent(node)} />
 
     case 'math_block':
-      return <NitroMathBlock content={node.content || ''} />
+      return <NitroMathBlock content={getTextContent(node)} />
 
     case 'html_block':
     case 'html_inline':
