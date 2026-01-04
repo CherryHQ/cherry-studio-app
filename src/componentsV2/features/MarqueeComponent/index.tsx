@@ -23,6 +23,44 @@ const MarqueeComponent: React.FC<MarqueeComponentProps> = ({ block, expanded }) 
 
   const isStreaming = block.status === MessageBlockStatus.STREAMING
 
+  // 思考计时状态（毫秒）
+  const [displayMillsec, setDisplayMillsec] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // 处理计时器启动/停止（只依赖 isStreaming）
+  useEffect(() => {
+    if (isStreaming) {
+      // 思考开始时重置为 0
+      setDisplayMillsec(0)
+      // 每 100ms 增加显示时间
+      timerRef.current = setInterval(() => {
+        setDisplayMillsec(prev => prev + 100)
+      }, 100)
+    } else {
+      // 停止计时
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    }
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [isStreaming])
+
+  // 思考完成后显示最终时长
+  useEffect(() => {
+    if (!isStreaming && block.thinking_millsec) {
+      setDisplayMillsec(block.thinking_millsec)
+    }
+  }, [isStreaming, block.thinking_millsec])
+
+  // 转换为秒并保留一位小数
+  const displaySeconds = (displayMillsec / 1000).toFixed(1)
+
   const animationFrameIdRef = useRef<number | null>(null)
   const clearAnimationFrame = useCallback(() => {
     if (animationFrameIdRef.current) {
@@ -101,7 +139,7 @@ const MarqueeComponent: React.FC<MarqueeComponentProps> = ({ block, expanded }) 
         <YStack className="h-full flex-1 gap-1">
           <XStack className="h-7 items-center justify-between">
             <Text className="text-foreground z-10 text-base font-bold">
-              {t('chat.think', { seconds: Math.floor((block.thinking_millsec || 0) / 1000) })}
+              {t('chat.think', { seconds: displaySeconds })}
             </Text>
             <MotiView
               animate={{

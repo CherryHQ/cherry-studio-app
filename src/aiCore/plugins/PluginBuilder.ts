@@ -5,6 +5,7 @@ import { loggerService } from '@/services/LoggerService'
 import type { Assistant } from '@/types/assistant'
 
 import type { AiSdkMiddlewareConfig } from '../middleware/AiSdkMiddlewareBuilder'
+import reasoningTimePlugin from './reasoningTimePlugin'
 import { searchOrchestrationPlugin } from './searchOrchestrationPlugin'
 
 const logger = loggerService.withContext('PluginBuilder')
@@ -27,9 +28,9 @@ export function buildPlugins(
   }
 
   // 3. 推理模型时添加推理插件
-  // if (middlewareConfig.enableReasoning) {
-  //   plugins.push(reasoningTimePlugin)
-  // }
+  if (middlewareConfig.enableReasoning) {
+    plugins.push(reasoningTimePlugin)
+  }
 
   // 4. 启用Prompt工具调用时添加工具插件
   if (middlewareConfig.isPromptToolUse) {
