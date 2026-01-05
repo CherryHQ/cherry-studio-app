@@ -9,7 +9,7 @@ interface MarkdownListItemProps {
 
 export function MarkdownListItem({ children, marker = '•' }: MarkdownListItemProps) {
   return (
-    <View className="flex-row items-start mb-1.5">
+    <View className="mb-1.5 flex-row items-start">
       <Text className="text-foreground mr-2 text-base">{marker}</Text>
       <View className="flex-1">{children}</View>
     </View>

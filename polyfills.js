@@ -64,7 +64,10 @@ if (typeof globalThis.TextDecoder === 'undefined') {
   class SimpleTextDecoder {
     decode(input) {
       if (!input) return ''
-      const bytes = input instanceof ArrayBuffer ? new Uint8Array(input) : new Uint8Array(input.buffer, input.byteOffset, input.byteLength)
+      const bytes =
+        input instanceof ArrayBuffer
+          ? new Uint8Array(input)
+          : new Uint8Array(input.buffer, input.byteOffset, input.byteLength)
       let binary = ''
       for (let i = 0; i < bytes.length; i++) {
         binary += String.fromCharCode(bytes[i])

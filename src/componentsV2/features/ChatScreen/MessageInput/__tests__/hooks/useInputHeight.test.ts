@@ -87,5 +87,4 @@ describe('useInputHeight', () => {
     expect(MAX_VISIBLE_LINES).toBe(4)
     expect(MAX_INPUT_HEIGHT).toBe(96)
   })
-
 })

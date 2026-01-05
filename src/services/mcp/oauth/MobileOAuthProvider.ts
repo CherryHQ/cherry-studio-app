@@ -104,7 +104,7 @@ async function discoverOAuthMetadata(serverUrl: string): Promise<OAuthMetadata> 
   const parseResult = OAuthMetadataSchema.safeParse(rawMetadata)
 
   if (!parseResult.success) {
-    const errors = parseResult.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ')
+    const errors = parseResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
     logger.error(`Invalid OAuth metadata from server: ${errors}`)
     throw new Error(`Invalid OAuth metadata: ${errors}`)
   }
@@ -138,7 +138,7 @@ async function registerOAuthClient(
   const parseResult = OAuthClientInfoSchema.safeParse(rawClientInfo)
 
   if (!parseResult.success) {
-    const errors = parseResult.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ')
+    const errors = parseResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
     logger.error(`Invalid client registration response: ${errors}`)
     throw new Error(`Invalid client registration response: ${errors}`)
   }
@@ -208,7 +208,7 @@ async function exchangeCodeForTokens(
   const parseResult = OAuthTokensSchema.safeParse(rawTokens)
 
   if (!parseResult.success) {
-    const errors = parseResult.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ')
+    const errors = parseResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
     logger.error(`Invalid token response: ${errors}`)
     throw new Error(`Invalid token response: ${errors}`)
   }

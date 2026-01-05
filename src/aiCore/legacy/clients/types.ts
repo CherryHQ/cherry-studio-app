@@ -50,16 +50,18 @@ export interface OpenAIStreamListener extends RawStreamListener<OpenAISdkRawChun
 /**
  * OpenAI Response 专用的流监听器
  */
-export interface OpenAIResponseStreamListener<TChunk extends OpenAIResponseSdkRawChunk = OpenAIResponseSdkRawChunk>
-  extends RawStreamListener<TChunk> {
+export interface OpenAIResponseStreamListener<
+  TChunk extends OpenAIResponseSdkRawChunk = OpenAIResponseSdkRawChunk
+> extends RawStreamListener<TChunk> {
   onMessage?: (response: OpenAIResponseSdkRawOutput) => void
 }
 
 /**
  * Anthropic 专用的流监听器
  */
-export interface AnthropicStreamListener<TChunk extends AnthropicSdkRawChunk = AnthropicSdkRawChunk>
-  extends RawStreamListener<TChunk> {
+export interface AnthropicStreamListener<
+  TChunk extends AnthropicSdkRawChunk = AnthropicSdkRawChunk
+> extends RawStreamListener<TChunk> {
   onContentBlock?: (contentBlock: Anthropic.Messages.ContentBlock) => void
   onMessage?: (message: Anthropic.Messages.Message) => void
 }

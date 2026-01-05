@@ -584,17 +584,17 @@ Transport 重试原始请求（带 Authorization header）
 
 ### 修改文件
 
-| 文件                                   | 修改内容                                  | 优先级 |
-| -------------------------------------- | ----------------------------------------- | ------ |
-| `src/utils/mcpTool.ts`                 | `callMCPTool` + `getMcpServerByTool` 实现 | P0     |
-| `src/services/McpService.ts`           | `getMcpTools` 动态获取                    | P0     |
-| `src/services/mcp/McpClientService.ts` | 添加 authProvider 到传输层                | P1     |
+| 文件                                   | 修改内容                                                | 优先级 |
+| -------------------------------------- | ------------------------------------------------------- | ------ |
+| `src/utils/mcpTool.ts`                 | `callMCPTool` + `getMcpServerByTool` 实现               | P0     |
+| `src/services/McpService.ts`           | `getMcpTools` 动态获取                                  | P0     |
+| `src/services/mcp/McpClientService.ts` | 添加 authProvider 到传输层                              | P1     |
 | `package.json`                         | 指向 Fork 的 @cherrystudio/react-native-streamable-http | P1     |
 
 ### 外部仓库
 
-| 仓库                                  | 修改内容               | 优先级 |
-| ------------------------------------- | ---------------------- | ------ |
+| 仓库                                                | 修改内容               | 优先级 |
+| --------------------------------------------------- | ---------------------- | ------ |
 | `@cherrystudio/react-native-streamable-http` (Fork) | 添加 authProvider 支持 | P1     |
 
 ---

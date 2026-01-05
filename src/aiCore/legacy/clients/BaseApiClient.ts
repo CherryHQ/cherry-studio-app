@@ -60,8 +60,7 @@ export abstract class BaseApiClient<
   TMessageParam extends SdkMessageParam = SdkMessageParam,
   TToolCall extends SdkToolCall = SdkToolCall,
   TSdkSpecificTool extends SdkTool = SdkTool
-> implements ApiClient<TSdkInstance, TSdkParams, TRawOutput, TRawChunk, TMessageParam, TToolCall, TSdkSpecificTool>
-{
+> implements ApiClient<TSdkInstance, TSdkParams, TRawOutput, TRawChunk, TMessageParam, TToolCall, TSdkSpecificTool> {
   public provider: Provider
   protected host: string
   protected apiKey: string

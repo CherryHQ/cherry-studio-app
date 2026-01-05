@@ -73,7 +73,11 @@ export default function WelcomeScreen() {
               </Button.Label>
             </Button>
 
-            <Button pressableFeedbackVariant="ripple" className="w-3/4 rounded-lg" variant="secondary" onPress={handleStart}>
+            <Button
+              pressableFeedbackVariant="ripple"
+              className="w-3/4 rounded-lg"
+              variant="secondary"
+              onPress={handleStart}>
               <Button.Label className="text-foreground w-full text-center text-lg">{t('common.start')}</Button.Label>
             </Button>
           </YStack>

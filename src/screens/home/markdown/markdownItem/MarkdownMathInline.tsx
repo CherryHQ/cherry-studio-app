@@ -27,16 +27,16 @@ export function MarkdownMathInline({ content }: MarkdownMathInlineProps) {
   const { t } = useTranslation()
   const toast = useToast()
 
-  if (!mathContent) return null
-
   const handleCopyContent = useCallback(async () => {
     try {
       await Clipboard.setStringAsync(mathContent)
       toast.show(t('common.copied'))
-    } catch (error) {
+    } catch {
       toast.show(t('common.error_occurred'), { color: 'red', duration: 2500 })
     }
   }, [mathContent, t, toast])
+
+  if (!mathContent) return null
 
   const contextMenuItems: ContextMenuListProps[] = [
     {

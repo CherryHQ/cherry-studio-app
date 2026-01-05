@@ -73,5 +73,4 @@ describe('useVoiceInput', () => {
     })
     expect(result.current.isVoiceActive).toBe(true)
   })
-
 })

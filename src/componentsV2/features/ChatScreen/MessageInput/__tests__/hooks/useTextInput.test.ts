@@ -89,7 +89,7 @@ describe('useTextInput', () => {
 
     // After setting long text, the isLongText would be checked
     mockIsLongText.mockReturnValue(true)
-    const { result: result2 } = renderHook(() => useTextInput())
+    renderHook(() => useTextInput())
     expect(mockIsLongText).toHaveBeenCalled()
   })
 
