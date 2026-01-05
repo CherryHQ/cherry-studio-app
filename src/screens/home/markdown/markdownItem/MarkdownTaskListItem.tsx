@@ -12,7 +12,7 @@ interface MarkdownTaskListItemProps {
 export function MarkdownTaskListItem({ checked, children }: MarkdownTaskListItemProps) {
   return (
     <View className="flex-row items-start">
-      <View className="mr-2 items-center justify-center">
+      <View className="mr-2 mt-1 items-center justify-center">
         {checked ? (
           <SquareCheck size={22} className="text-foreground" />
         ) : (

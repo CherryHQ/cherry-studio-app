@@ -14,6 +14,8 @@ import {
   createLineBreakNode,
   createListItemNode,
   createMarkdownNode,
+  createMathBlockNode,
+  createMathInlineNode,
   createParagraphNode,
   createSoftBreakNode,
   createStrikethroughNode,
@@ -181,6 +183,32 @@ describe('MarkdownRenderer', () => {
 
       expect(screen.getByText('Line 1')).toBeTruthy()
       expect(screen.getByText('Line 2')).toBeTruthy()
+    })
+
+    it('renders inline math without wrapping in text', () => {
+      ;(parseMarkdownWithOptions as jest.Mock).mockReturnValueOnce(
+        createDocumentNode([
+          createParagraphNode([createTextNode('Inline '), createMathInlineNode('$x^2$'), createTextNode(' math')])
+        ])
+      )
+
+      render(<MarkdownRenderer content="Inline $x^2$ math" />)
+
+      expect(screen.getByText('Inline ')).toBeTruthy()
+      expect(screen.getByText(' math')).toBeTruthy()
+      expect(screen.getByTestId('mathjax')).toBeTruthy()
+    })
+
+    it('renders block math inside paragraph content', () => {
+      ;(parseMarkdownWithOptions as jest.Mock).mockReturnValueOnce(
+        createDocumentNode([createParagraphNode([createMathBlockNode('$$x^2$$')])])
+      )
+
+      render(<MarkdownRenderer content="$$x^2$$" />)
+
+      const mathjax = screen.getByTestId('mathjax')
+      expect(mathjax).toBeTruthy()
+      expect(mathjax.props['data-fontsize']).toBe(20)
     })
 
     it('handles empty content', () => {

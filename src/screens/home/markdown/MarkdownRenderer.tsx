@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import type { StyleProp, TextStyle } from 'react-native'
+import { View } from 'react-native'
 import type { MarkdownNode } from 'react-native-nitro-markdown'
 import { parseMarkdownWithOptions } from 'react-native-nitro-markdown'
 
@@ -76,22 +77,87 @@ function isInline(type: MarkdownNode['type']): boolean {
   return INLINE_TYPES.has(type)
 }
 
+function containsMath(node: MarkdownNode): boolean {
+  if (node.type === 'math_inline' || node.type === 'math_block') return true
+  if (!node.children) return false
+  return node.children.some(containsMath)
+}
+
 const BASE_TEXT_CLASSNAME = 'text-foreground text-base'
 
-const mergeClassName = (...classNames: Array<string | undefined>) => {
+const mergeClassName = (...classNames: (string | undefined)[]) => {
   const merged = classNames.filter(Boolean).join(' ')
   return merged.length ? merged : undefined
 }
 
-const mergeTextStyle = (
-  base?: StyleProp<TextStyle>,
-  next?: StyleProp<TextStyle>
-): StyleProp<TextStyle> | undefined => {
+const mergeTextStyle = (base?: StyleProp<TextStyle>, next?: StyleProp<TextStyle>): StyleProp<TextStyle> | undefined => {
   if (base && next) return [base, next]
   return base ?? next
 }
 
 function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
+  const renderInlineGroup = (
+    inlineNodes: MarkdownNode[],
+    groupKey: string | undefined,
+    inlineTextClassName: string | undefined,
+    inlineTextStyle: StyleProp<TextStyle> | undefined
+  ) => {
+    if (inlineNodes.length === 0) return null
+
+    const groupClassName = mergeClassName(BASE_TEXT_CLASSNAME, inlineTextClassName)
+    const hasMath = inlineNodes.some(containsMath)
+
+    if (!hasMath) {
+      return (
+        <SelectableText key={groupKey} className={groupClassName} style={inlineTextStyle}>
+          {inlineNodes.map((child, index) => (
+            <NodeRenderer key={index} node={child} textClassName={groupClassName} textStyle={inlineTextStyle} />
+          ))}
+        </SelectableText>
+      )
+    }
+
+    const segments: React.ReactNode[] = []
+    let textRun: MarkdownNode[] = []
+
+    const flushTextRun = () => {
+      if (textRun.length === 0) return
+      const runKey = `text-run-${segments.length}`
+      segments.push(
+        <SelectableText key={runKey} className={groupClassName} style={inlineTextStyle}>
+          {textRun.map((child, index) => (
+            <NodeRenderer key={index} node={child} textClassName={groupClassName} textStyle={inlineTextStyle} />
+          ))}
+        </SelectableText>
+      )
+      textRun = []
+    }
+
+    inlineNodes.forEach((child, index) => {
+      if (containsMath(child)) {
+        flushTextRun()
+        segments.push(
+          <NodeRenderer
+            key={`math-node-${index}`}
+            node={child}
+            textClassName={groupClassName}
+            textStyle={inlineTextStyle}
+          />
+        )
+        return
+      }
+      textRun.push(child)
+    })
+
+    flushTextRun()
+
+    return (
+      <View key={groupKey} className="flex-row flex-wrap items-center">
+        {segments}
+      </View>
+    )
+  }
+
   const renderChildren = (
     targetNode: MarkdownNode = node,
     inlineTextClassName: string | undefined = textClassName,
@@ -104,19 +170,15 @@ function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
 
     const flushInlineGroup = () => {
       if (currentInlineGroup.length > 0) {
-        const groupClassName = mergeClassName(BASE_TEXT_CLASSNAME, inlineTextClassName)
-        elements.push(
-          <SelectableText key={`inline-group-${elements.length}`} className={groupClassName} style={inlineTextStyle}>
-            {currentInlineGroup.map((child, index) => (
-              <NodeRenderer
-                key={index}
-                node={child}
-                textClassName={groupClassName}
-                textStyle={inlineTextStyle}
-              />
-            ))}
-          </SelectableText>
+        const groupElement = renderInlineGroup(
+          currentInlineGroup,
+          `inline-group-${elements.length}`,
+          inlineTextClassName,
+          inlineTextStyle
         )
+        if (groupElement) {
+          elements.push(groupElement)
+        }
         currentInlineGroup = []
       }
     }
@@ -140,15 +202,13 @@ function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
 
     case 'paragraph': {
       const paragraphTextClassName = mergeClassName(BASE_TEXT_CLASSNAME, textClassName)
+      if (containsMath(node)) {
+        return <View>{renderChildren(node, textClassName, textStyle)}</View>
+      }
       return (
-        <MarkdownParagraph className={textClassName}>
+        <MarkdownParagraph className={textClassName} style={textStyle}>
           {node.children?.map((child, index) => (
-            <NodeRenderer
-              key={index}
-              node={child}
-              textClassName={paragraphTextClassName}
-              textStyle={textStyle}
-            />
+            <NodeRenderer key={index} node={child} textClassName={paragraphTextClassName} textStyle={textStyle} />
           ))}
         </MarkdownParagraph>
       )
@@ -157,15 +217,13 @@ function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
     case 'heading': {
       const level = (node.level || 1) as 1 | 2 | 3 | 4 | 5 | 6
       const headingTextClassName = mergeClassName(headingClasses[level], textClassName)
+      if (containsMath(node)) {
+        return <View>{renderChildren(node, headingTextClassName, textStyle)}</View>
+      }
       return (
         <MarkdownHeading level={level}>
           {node.children?.map((child, index) => (
-            <NodeRenderer
-              key={index}
-              node={child}
-              textClassName={headingTextClassName}
-              textStyle={textStyle}
-            />
+            <NodeRenderer key={index} node={child} textClassName={headingTextClassName} textStyle={textStyle} />
           ))}
         </MarkdownHeading>
       )
@@ -183,6 +241,9 @@ function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
     case 'bold': {
       const boldClassName = mergeClassName(textClassName, 'font-bold')
       const boldStyle = mergeTextStyle(textStyle, { fontWeight: 'bold' })
+      if (node.children && containsMath(node)) {
+        return renderInlineGroup(node.children, undefined, boldClassName, boldStyle)
+      }
       return (
         <MarkdownBold className={boldClassName} style={boldStyle}>
           {node.children?.map((child, index) => (
@@ -195,6 +256,9 @@ function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
     case 'italic': {
       const italicClassName = mergeClassName(textClassName, 'italic')
       const italicStyle = mergeTextStyle(textStyle, { fontStyle: 'italic' })
+      if (node.children && containsMath(node)) {
+        return renderInlineGroup(node.children, undefined, italicClassName, italicStyle)
+      }
       return (
         <MarkdownItalic className={italicClassName} style={italicStyle}>
           {node.children?.map((child, index) => (
@@ -207,6 +271,9 @@ function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
     case 'strikethrough': {
       const strikeClassName = mergeClassName(textClassName, 'line-through')
       const strikeStyle = mergeTextStyle(textStyle, { textDecorationLine: 'line-through' })
+      if (node.children && containsMath(node)) {
+        return renderInlineGroup(node.children, undefined, strikeClassName, strikeStyle)
+      }
       return (
         <MarkdownStrikethrough className={strikeClassName} style={strikeStyle}>
           {node.children?.map((child, index) => (
