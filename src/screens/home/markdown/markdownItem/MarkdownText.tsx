@@ -12,7 +12,6 @@ interface MarkdownTextProps {
 }
 
 export function MarkdownText({ content, className, style }: MarkdownTextProps) {
-  console.log('MarkdownText', content, className, style)
   return (
     <StyledUITextView className={className} style={style}>
       {content}

@@ -18,7 +18,7 @@ const { MAX_INPUT_HEIGHT, MIN_INPUT_HEIGHT } = TEXT_FIELD_CONFIG
 export const MessageTextField: React.FC = () => {
   const { t } = useTranslation()
   const { text, setText, handleExpand, handlePasteImages } = useMessageInput()
-  const { inputHeight, showExpandButton, handleContentSizeChange } = useInputHeight()
+  const { showExpandButton, handleContentSizeChange } = useInputHeight()
 
   const handlePaste = (payload: PasteEventPayload) => {
     try {

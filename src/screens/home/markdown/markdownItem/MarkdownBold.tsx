@@ -11,7 +11,6 @@ interface MarkdownBoldProps {
 }
 
 export function MarkdownBold({ children, className, style }: MarkdownBoldProps) {
-  console.log('MarkdownBold', children)
   const mergedClassName = ['text-foreground', 'font-bold', className].filter(Boolean).join(' ')
   return (
     <StyledUITextView className={mergedClassName} style={style}>

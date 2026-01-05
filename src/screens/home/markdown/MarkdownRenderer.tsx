@@ -43,8 +43,6 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
     return parseMarkdownWithOptions(content, { gfm: true, math: true })
   }, [content])
 
-  console.log('ast', ast)
-
   return <NodeRenderer node={ast} />
 }
 

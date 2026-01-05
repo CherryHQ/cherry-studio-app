@@ -2,7 +2,11 @@ import type { ReactNode } from 'react'
 import React from 'react'
 import { Linking } from 'react-native'
 
+import { loggerService } from '@/services/LoggerService'
+
 import { StyledUITextView } from './MarkdownText'
+
+const logger = loggerService.withContext('MarkdownLink')
 
 interface MarkdownLinkProps {
   href?: string
@@ -17,8 +21,8 @@ export function MarkdownLink({ href, children }: MarkdownLinkProps) {
       if (canOpen) {
         await Linking.openURL(href)
       }
-    } catch {
-      return
+    } catch (error) {
+      logger.warn('Failed to open URL', { href, error })
     }
   }
 
