@@ -63,15 +63,16 @@ This parser supports *all* the features you'd expect:
 ### Block Math (Display Mode)
 The quadratic formula:
 
-$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$
+$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$
 
 Pythagorean theorem:
 
-$a^2 + b^2 = c^2$
+$$a^2 + b^2 = c^2$$
 
 Matrix operations:
 
-$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix} \\times \\begin{pmatrix} x \\\\ y \\end{pmatrix} = \\begin{pmatrix} ax + by \\\\ cx + dy \\end{pmatrix}$
+$$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix} \\times \\begin{pmatrix} x \\\\ y \\end{pmatrix} = \\begin{pmatrix} ax + by \\\\ cx + dy \\end{pmatrix}$$
+
 
 ## Code Blocks with Syntax Highlighting
 
