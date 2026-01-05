@@ -1,16 +1,20 @@
 import type { ReactNode } from 'react'
 import React from 'react'
+import type { StyleProp, TextStyle } from 'react-native'
 
-import { StyledUITextView } from './MarkdownText'
+import { SelectableText } from './SelectableText'
 
 interface MarkdownParagraphProps {
   children: ReactNode
+  className?: string
+  style?: StyleProp<TextStyle>
 }
 
-export function MarkdownParagraph({ children }: MarkdownParagraphProps) {
+export function MarkdownParagraph({ children, className, style }: MarkdownParagraphProps) {
+  const mergedClassName = ['text-foreground text-base', className].filter(Boolean).join(' ')
   return (
-    <StyledUITextView uiTextView selectable>
+    <SelectableText className={mergedClassName} style={style}>
       {children}
-    </StyledUITextView>
+    </SelectableText>
   )
 }

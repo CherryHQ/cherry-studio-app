@@ -8,7 +8,7 @@ interface MarkdownHeadingProps {
   children: ReactNode
 }
 
-const headingClasses: Record<1 | 2 | 3 | 4 | 5 | 6, string> = {
+export const headingClasses: Record<1 | 2 | 3 | 4 | 5 | 6, string> = {
   1: 'text-foreground text-3xl font-bold',
   2: 'text-foreground text-2xl font-bold',
   3: 'text-foreground text-xl font-bold',

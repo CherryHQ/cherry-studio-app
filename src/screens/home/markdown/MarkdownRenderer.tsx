@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react'
+import type { StyleProp, TextStyle } from 'react-native'
 import type { MarkdownNode } from 'react-native-nitro-markdown'
 import { parseMarkdownWithOptions } from 'react-native-nitro-markdown'
 
@@ -29,6 +30,7 @@ import {
   MarkdownTaskListItem,
   MarkdownText
 } from './markdownItem'
+import { headingClasses } from './markdownItem/MarkdownHeading'
 import { SelectableText } from './markdownItem/SelectableText'
 
 interface MarkdownRendererProps {
@@ -47,6 +49,8 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
 
 interface NodeRendererProps {
   node: MarkdownNode
+  textClassName?: string
+  textStyle?: StyleProp<TextStyle>
 }
 
 function getTextContent(node: MarkdownNode): string {
@@ -72,8 +76,27 @@ function isInline(type: MarkdownNode['type']): boolean {
   return INLINE_TYPES.has(type)
 }
 
-function NodeRenderer({ node }: NodeRendererProps) {
-  const renderChildren = (targetNode: MarkdownNode = node) => {
+const BASE_TEXT_CLASSNAME = 'text-foreground text-base'
+
+const mergeClassName = (...classNames: Array<string | undefined>) => {
+  const merged = classNames.filter(Boolean).join(' ')
+  return merged.length ? merged : undefined
+}
+
+const mergeTextStyle = (
+  base?: StyleProp<TextStyle>,
+  next?: StyleProp<TextStyle>
+): StyleProp<TextStyle> | undefined => {
+  if (base && next) return [base, next]
+  return base ?? next
+}
+
+function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
+  const renderChildren = (
+    targetNode: MarkdownNode = node,
+    inlineTextClassName: string | undefined = textClassName,
+    inlineTextStyle: StyleProp<TextStyle> | undefined = textStyle
+  ) => {
     if (!targetNode.children) return null
 
     const elements: React.ReactNode[] = []
@@ -81,10 +104,16 @@ function NodeRenderer({ node }: NodeRendererProps) {
 
     const flushInlineGroup = () => {
       if (currentInlineGroup.length > 0) {
+        const groupClassName = mergeClassName(BASE_TEXT_CLASSNAME, inlineTextClassName)
         elements.push(
-          <SelectableText key={`inline-group-${elements.length}`} className="text-foreground text-base">
+          <SelectableText key={`inline-group-${elements.length}`} className={groupClassName} style={inlineTextStyle}>
             {currentInlineGroup.map((child, index) => (
-              <NodeRenderer key={index} node={child} />
+              <NodeRenderer
+                key={index}
+                node={child}
+                textClassName={groupClassName}
+                textStyle={inlineTextStyle}
+              />
             ))}
           </SelectableText>
         )
@@ -109,26 +138,41 @@ function NodeRenderer({ node }: NodeRendererProps) {
     case 'document':
       return <MarkdownDocument>{renderChildren()}</MarkdownDocument>
 
-    case 'paragraph':
+    case 'paragraph': {
+      const paragraphTextClassName = mergeClassName(BASE_TEXT_CLASSNAME, textClassName)
       return (
-        <MarkdownParagraph>
+        <MarkdownParagraph className={textClassName}>
           {node.children?.map((child, index) => (
-            <NodeRenderer key={index} node={child} />
+            <NodeRenderer
+              key={index}
+              node={child}
+              textClassName={paragraphTextClassName}
+              textStyle={textStyle}
+            />
           ))}
         </MarkdownParagraph>
       )
+    }
 
-    case 'heading':
+    case 'heading': {
+      const level = (node.level || 1) as 1 | 2 | 3 | 4 | 5 | 6
+      const headingTextClassName = mergeClassName(headingClasses[level], textClassName)
       return (
-        <MarkdownHeading level={(node.level || 1) as 1 | 2 | 3 | 4 | 5 | 6}>
+        <MarkdownHeading level={level}>
           {node.children?.map((child, index) => (
-            <NodeRenderer key={index} node={child} />
+            <NodeRenderer
+              key={index}
+              node={child}
+              textClassName={headingTextClassName}
+              textStyle={textStyle}
+            />
           ))}
         </MarkdownHeading>
       )
+    }
 
     case 'text':
-      return <MarkdownText content={node.content || ''} />
+      return <MarkdownText content={node.content || ''} className={textClassName} style={textStyle} />
 
     case 'soft_break':
       return <MarkdownSoftBreak />
@@ -136,32 +180,41 @@ function NodeRenderer({ node }: NodeRendererProps) {
     case 'line_break':
       return <MarkdownLineBreak />
 
-    case 'bold':
+    case 'bold': {
+      const boldClassName = mergeClassName(textClassName, 'font-bold')
+      const boldStyle = mergeTextStyle(textStyle, { fontWeight: 'bold' })
       return (
-        <MarkdownBold>
+        <MarkdownBold className={boldClassName} style={boldStyle}>
           {node.children?.map((child, index) => (
-            <NodeRenderer key={index} node={child} />
+            <NodeRenderer key={index} node={child} textClassName={boldClassName} textStyle={boldStyle} />
           ))}
         </MarkdownBold>
       )
+    }
 
-    case 'italic':
+    case 'italic': {
+      const italicClassName = mergeClassName(textClassName, 'italic')
+      const italicStyle = mergeTextStyle(textStyle, { fontStyle: 'italic' })
       return (
-        <MarkdownItalic>
+        <MarkdownItalic className={italicClassName} style={italicStyle}>
           {node.children?.map((child, index) => (
-            <NodeRenderer key={index} node={child} />
+            <NodeRenderer key={index} node={child} textClassName={italicClassName} textStyle={italicStyle} />
           ))}
         </MarkdownItalic>
       )
+    }
 
-    case 'strikethrough':
+    case 'strikethrough': {
+      const strikeClassName = mergeClassName(textClassName, 'line-through')
+      const strikeStyle = mergeTextStyle(textStyle, { textDecorationLine: 'line-through' })
       return (
-        <MarkdownStrikethrough>
+        <MarkdownStrikethrough className={strikeClassName} style={strikeStyle}>
           {node.children?.map((child, index) => (
-            <NodeRenderer key={index} node={child} />
+            <NodeRenderer key={index} node={child} textClassName={strikeClassName} textStyle={strikeStyle} />
           ))}
         </MarkdownStrikethrough>
       )
+    }
 
     case 'code_inline':
       return <MarkdownCodeInline content={node.content || ''} />
@@ -169,14 +222,16 @@ function NodeRenderer({ node }: NodeRendererProps) {
     case 'code_block':
       return <MarkdownCodeBlock content={getTextContent(node)} language={node.language} />
 
-    case 'link':
+    case 'link': {
+      const linkClassName = mergeClassName(textClassName, 'text-primary', 'underline', 'text-base')
       return (
         <MarkdownLink href={node.href}>
           {node.children?.map((child, index) => (
-            <NodeRenderer key={index} node={child} />
+            <NodeRenderer key={index} node={child} textClassName={linkClassName} textStyle={textStyle} />
           ))}
         </MarkdownLink>
       )
+    }
 
     case 'image':
       return <MarkdownImage src={node.href} alt={node.alt || node.title} />
