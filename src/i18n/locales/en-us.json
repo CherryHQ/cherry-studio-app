@@ -134,6 +134,7 @@
       "content_too_long": "Content too long to display",
       "copied": "Copied",
       "copy": "Copy Text",
+      "copy_latex": "Copy as LaTeX",
       "delete": "Delete",
       "delete_translation": "Delete Translation",
       "description": "Description",

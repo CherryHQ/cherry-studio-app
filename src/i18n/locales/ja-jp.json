@@ -134,6 +134,7 @@
       "content_too_long": "コンテンツが長すぎて表示できません",
       "copied": "コピーしました",
       "copy": "テキストをコピー",
+      "copy_latex": "LaTeXとしてコピー",
       "delete": "削除",
       "delete_translation": "翻訳を削除",
       "description": "説明",

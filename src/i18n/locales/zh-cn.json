@@ -134,6 +134,7 @@
       "content_too_long": "内容过长无法展示",
       "copied": "已复制",
       "copy": "复制文本",
+      "copy_latex": "复制为 LaTeX",
       "delete": "删除",
       "delete_translation": "删除翻译",
       "description": "描述",

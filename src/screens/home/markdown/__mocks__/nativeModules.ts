@@ -53,6 +53,19 @@ jest.mock('expo-clipboard', () => ({
   hasStringAsync: jest.fn().mockResolvedValue(false)
 }))
 
+// react-i18next mock
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key
+  })
+}))
+
+// useToast mock
+const mockToastShow = jest.fn()
+jest.mock('@/hooks/useToast', () => ({
+  useToast: () => ({ show: mockToastShow })
+}))
+
 // React Navigation mock
 const mockNavigate = jest.fn()
 const mockGoBack = jest.fn()
@@ -101,6 +114,7 @@ jest.mock('@/componentsV2', () => {
   const React = require('react')
   const { View, Text, Pressable, Image: RNImage } = require('react-native')
   return {
+    ContextMenu: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
     IconButton: ({ icon, onPress, testID }: { icon: React.ReactNode; onPress: () => void; testID?: string }) =>
       React.createElement(Pressable, { onPress, testID: testID || 'icon-button' }, icon),
     Image: (props: React.ComponentProps<typeof RNImage>) => React.createElement(RNImage, { testID: 'image', ...props }),
@@ -125,4 +139,4 @@ jest.mock('@/utils/icons/codeLanguage', () => ({
 }))
 
 // Export mocks for assertions
-export { mockDispatch, mockGoBack, mockNavigate, mockSetStringAsync }
+export { mockDispatch, mockGoBack, mockNavigate, mockSetStringAsync, mockToastShow }
