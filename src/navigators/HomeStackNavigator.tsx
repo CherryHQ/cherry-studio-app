@@ -12,7 +12,6 @@ import AboutStackNavigator from './settings/AboutStackNavigator'
 import AssistantSettingsStackNavigator from './settings/AssistantSettingsStackNavigator'
 import DataSourcesStackNavigator from './settings/DataSourcesStackNavigator'
 import GeneralSettingsStackNavigator from './settings/GeneralSettingsStackNavigator'
-import MarkdownTestStackNavigator from './settings/MarkdownTestStackNavigator'
 import ProvidersStackNavigator from './settings/ProvidersStackNavigator'
 import WebSearchStackNavigator from './settings/WebSearchStackNavigator'
 
@@ -28,7 +27,6 @@ export type HomeStackParamList = {
   DataSourcesSettings: { screen?: string; params?: any } | undefined
   WebSearchSettings: { screen?: string; params?: any } | undefined
   AboutSettings: { screen?: string; params?: any } | undefined
-  MarkdownTestSettings: { screen?: string; params?: any } | undefined
 }
 
 const Stack = createStackNavigator<HomeStackParamList>()
@@ -52,7 +50,6 @@ export default function HomeStackNavigator() {
       <Stack.Screen name="DataSourcesSettings" component={DataSourcesStackNavigator} />
       <Stack.Screen name="WebSearchSettings" component={WebSearchStackNavigator} />
       <Stack.Screen name="AboutSettings" component={AboutStackNavigator} />
-      <Stack.Screen name="MarkdownTestSettings" component={MarkdownTestStackNavigator} />
     </Stack.Navigator>
   )
 }
