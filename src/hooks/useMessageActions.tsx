@@ -9,7 +9,6 @@ import { useDispatch } from 'react-redux'
 
 import { presentDialog } from '@/componentsV2'
 import { dismissTextEditSheet, presentTextEditSheet } from '@/componentsV2/features/Sheet/TextEditSheet'
-import { presentTextSelectionSheet } from '@/componentsV2/features/Sheet/TextSelectionSheet'
 import { loggerService } from '@/services/LoggerService'
 import {
   deleteMessageById,
@@ -275,13 +274,6 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
     }
   }
 
-  const handleSelectText = async () => {
-    const content = await getMessageContent()
-    requestAnimationFrame(() => {
-      presentTextSelectionSheet(content)
-    })
-  }
-
   return {
     playState,
     isTranslating,
@@ -296,7 +288,6 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
     handleBestAnswer,
     isUseful: message.useful,
     handleShare,
-    handleEdit,
-    handleSelectText
+    handleEdit
   }
 }

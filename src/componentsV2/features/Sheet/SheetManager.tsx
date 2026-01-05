@@ -13,7 +13,6 @@ import ModelSheet from '@/componentsV2/features/Sheet/ModelSheet'
 import ProviderCheckSheet from '@/componentsV2/features/Sheet/ProviderCheckSheet'
 import { ReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
 import TextEditSheet from '@/componentsV2/features/Sheet/TextEditSheet'
-import TextSelectionSheet from '@/componentsV2/features/Sheet/TextSelectionSheet'
 import { ThinkingDetailSheet } from '@/componentsV2/features/Sheet/ThinkingDetailSheet'
 import { ToolCallDetailSheet } from '@/componentsV2/features/Sheet/ToolCallDetailSheet'
 import { ToolSheet } from '@/componentsV2/features/Sheet/ToolSheet'
@@ -37,7 +36,6 @@ const SheetManager: React.FC = () => {
       <AssistantItemSheet />
       <McpServerItemSheet />
       <TextEditSheet />
-      <TextSelectionSheet />
       <ModelSheet />
       <ReasoningSheet />
       <AddModelSheet />
