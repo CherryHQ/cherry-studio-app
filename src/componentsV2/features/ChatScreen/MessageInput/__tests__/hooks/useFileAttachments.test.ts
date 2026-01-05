@@ -291,5 +291,4 @@ describe('useFileAttachments', () => {
       expect(result.current.files).toEqual([])
     })
   })
-
 })

@@ -33,7 +33,7 @@ export function UpdatePrompt() {
             </Button>
             <Button
               variant="ghost"
-              className="h-8 items-center justify-center rounded-xl border border-primary/30 bg-primary/15"
+              className="border-primary/30 bg-primary/15 h-8 items-center justify-center rounded-xl border"
               onPress={downloadAndApply}
               isIconOnly={isUpdating}>
               {isUpdating ? (

@@ -105,16 +105,16 @@ MessageInput/
 
 ## Buttons
 
-| Button          | Description                              |
-| --------------- | ---------------------------------------- |
-| `ExpandButton`  | Expands input to full screen sheet       |
-| `McpButton`     | Opens MCP server selection               |
-| `MentionButton` | Opens model mention selector             |
-| `PauseButton`   | Pauses streaming AI response             |
-| `SendButton`    | Sends the current message                |
-| `ThinkButton`   | Toggles reasoning/thinking mode          |
-| `ToolButton`    | Opens attachment/tool selection          |
-| `VoiceButton`   | Toggles voice input mode                 |
+| Button          | Description                        |
+| --------------- | ---------------------------------- |
+| `ExpandButton`  | Expands input to full screen sheet |
+| `McpButton`     | Opens MCP server selection         |
+| `MentionButton` | Opens model mention selector       |
+| `PauseButton`   | Pauses streaming AI response       |
+| `SendButton`    | Sends the current message          |
+| `ThinkButton`   | Toggles reasoning/thinking mode    |
+| `ToolButton`    | Opens attachment/tool selection    |
+| `VoiceButton`   | Toggles voice input mode           |
 
 ## Context API
 
@@ -161,12 +161,12 @@ const MyComponent = () => {
 
 ## Services
 
-| Service                    | Description                              |
-| -------------------------- | ---------------------------------------- |
+| Service                    | Description                                |
+| -------------------------- | ------------------------------------------ |
 | `MentionValidationService` | Validates model mentions against providers |
-| `MessageInputService`      | Core message input operations            |
-| `TextProcessingService`    | Long text handling, file conversion      |
-| `ToolAvailabilityService`  | Checks tool availability for assistant   |
+| `MessageInputService`      | Core message input operations              |
+| `TextProcessingService`    | Long text handling, file conversion        |
+| `ToolAvailabilityService`  | Checks tool availability for assistant     |
 
 ## Extending
 
@@ -248,6 +248,7 @@ Tests are located in `__tests__/` directory:
 - `services/` - Unit tests for all services
 
 Run tests with:
+
 ```bash
 yarn test src/componentsV2/features/ChatScreen/MessageInput
 ```

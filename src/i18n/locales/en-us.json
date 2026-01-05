@@ -108,6 +108,7 @@
         "name": "Default"
       },
       "think": "Thinking for {{seconds}} seconds",
+      "think_done": "Thought deeply for {{seconds}} seconds",
       "think_expand": "Tap to read my mind",
       "title": "Welcome to Cherry Studio!",
       "topics": {
@@ -133,6 +134,7 @@
       "content_too_long": "Content too long to display",
       "copied": "Copied",
       "copy": "Copy Text",
+      "copy_latex": "Copy as LaTeX",
       "delete": "Delete",
       "delete_translation": "Delete Translation",
       "description": "Description",
@@ -168,7 +170,6 @@
       "search_placeholder": "Search...",
       "see_all": "See All",
       "select_all": "Select All",
-      "select_text": "Select Text",
       "source": "Source",
       "start": "Get Started with Cherry Studio 🎉",
       "stop": "Stop",

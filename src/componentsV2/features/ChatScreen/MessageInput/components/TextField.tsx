@@ -13,12 +13,12 @@ import { useInputHeight } from '../hooks'
 import { TEXT_FIELD_CONFIG } from '../types'
 
 const logger = loggerService.withContext('MessageTextField')
-const { MAX_INPUT_HEIGHT } = TEXT_FIELD_CONFIG
+const { MAX_INPUT_HEIGHT, MIN_INPUT_HEIGHT } = TEXT_FIELD_CONFIG
 
 export const MessageTextField: React.FC = () => {
   const { t } = useTranslation()
   const { text, setText, handleExpand, handlePasteImages } = useMessageInput()
-  const { inputHeight, showExpandButton, handleContentSizeChange } = useInputHeight()
+  const { showExpandButton, handleContentSizeChange } = useInputHeight()
 
   const handlePaste = (payload: PasteEventPayload) => {
     try {
@@ -33,41 +33,6 @@ export const MessageTextField: React.FC = () => {
 
   return (
     <>
-      {/* Hidden measurement input - NO height constraints for accurate measurement */}
-      <View style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} className="w-full">
-        <TextField className="w-full">
-          <TextField.Input
-            className="text-foreground h-auto pr-0"
-            value={text}
-            multiline
-            onContentSizeChange={handleContentSizeChange}
-            animation={{
-              backgroundColor: {
-                value: {
-                  blur: 'transparent',
-                  focus: 'transparent',
-                  error: 'transparent'
-                }
-              },
-              borderColor: {
-                value: {
-                  blur: 'transparent',
-                  focus: 'transparent',
-                  error: 'transparent'
-                }
-              }
-            }}
-            style={{
-              minHeight: 36,
-              fontSize: 20,
-              lineHeight: 26,
-              paddingVertical: 6
-            }}
-          />
-        </TextField>
-      </View>
-
-      {/* Visible input - uses measured height from hidden input */}
       <View style={{ flex: 1 }}>
         <TextInputWrapper onPaste={handlePaste}>
           <TextField className="w-full">
@@ -76,16 +41,17 @@ export const MessageTextField: React.FC = () => {
               placeholder={t('inputs.placeholder')}
               value={text}
               onChangeText={setText}
+              onContentSizeChange={handleContentSizeChange}
               multiline
               numberOfLines={10}
               selectionColor="#2563eb"
               style={{
-                height: inputHeight,
                 maxHeight: MAX_INPUT_HEIGHT,
-                minHeight: 36,
+                minHeight: MIN_INPUT_HEIGHT,
                 fontSize: 20,
                 lineHeight: 26,
-                paddingVertical: 6
+                paddingVertical: 8,
+                textAlignVertical: 'center'
               }}
               animation={{
                 backgroundColor: {

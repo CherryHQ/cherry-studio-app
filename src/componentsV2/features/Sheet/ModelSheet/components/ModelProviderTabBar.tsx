@@ -24,7 +24,9 @@ export const ModelProviderTabBar: React.FC<ModelProviderTabBarProps> = ({
   }
 
   return (
-    <View className="bg-card  overflow-hidden" style={{ paddingHorizontal: LAYOUT.HORIZONTAL_PADDING, height: LAYOUT.TAB_BAR_HEIGHT }}>
+    <View
+      className="bg-card  overflow-hidden"
+      style={{ paddingHorizontal: LAYOUT.HORIZONTAL_PADDING, height: LAYOUT.TAB_BAR_HEIGHT }}>
       <Tabs value={activeProvider} onValueChange={onProviderChange}>
         <Tabs.ScrollView>
           <Tabs.List aria-label="Provider tabs" className="bg-transparent px-0">

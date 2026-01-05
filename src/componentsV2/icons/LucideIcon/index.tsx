@@ -73,6 +73,7 @@ import {
   ShieldCheck,
   Sparkles,
   Square,
+  SquareCheck,
   SquareFunction,
   Store,
   TextSelect,
@@ -162,6 +163,7 @@ const PenLineIcon = createIcon(PenLine)
 const PlusIcon = createIcon(Plus)
 const RadioIcon = createIcon(Radio)
 const SquareIcon = createIcon(Square)
+const SquareCheckIcon = createIcon(SquareCheck)
 const SquareFunctionIcon = createIcon(SquareFunction)
 const RefreshCwIcon = createIcon(RefreshCw)
 const Repeat2Icon = createIcon(Repeat2)
@@ -259,6 +261,7 @@ export {
   ShieldCheckIcon as ShieldCheck,
   SparklesIcon as Sparkles,
   SquareIcon as Square,
+  SquareCheckIcon as SquareCheck,
   SquareFunctionIcon as SquareFunction,
   StoreIcon as Store,
   TextSelectIcon as TextSelect,

@@ -28,7 +28,7 @@
       "<rootDir>/jest.setup.js"
     ],
     "transformIgnorePatterns": [
-      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg)"
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|uniwind|heroui-native)"
     ],
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/src/$1"
@@ -167,9 +167,10 @@
     "react-native-ios-context-menu": "3.2.1",
     "react-native-ios-utilities": "5.2.0",
     "react-native-keyboard-controller": "1.19.6",
-    "react-native-marked": "^7.0.2",
     "react-native-mathjax-svg": "^0.9.9",
     "react-native-mmkv": "^3.3.0",
+    "react-native-nitro-markdown": "^0.1.2",
+    "react-native-nitro-modules": "^0.32.0",
     "react-native-pager-view": "6.9.1",
     "react-native-qrcode-styled": "^0.3.3",
     "react-native-reanimated": "^4.1.0",
@@ -179,6 +180,7 @@
     "react-native-sse": "^1.2.1",
     "react-native-svg": "15.12.1",
     "react-native-tcp-socket": "^6.3.0",
+    "react-native-uitextview": "^2.1.1",
     "react-native-web": "^0.21.0",
     "react-native-webview": "13.15.0",
     "react-native-worklets": "^0.7.1",
@@ -253,7 +255,8 @@
     "patchedDependencies": {
       "@ai-sdk/google@2.0.38": "patches/@ai-sdk+google@2.0.38.patch",
       "@ai-sdk/openai@2.0.64": "patches/@ai-sdk+openai@2.0.64.patch",
-      "@react-native-menu/menu@1.2.2": "patches/@react-native-menu+menu@1.2.2.patch"
+      "@react-native-menu/menu@1.2.2": "patches/@react-native-menu+menu@1.2.2.patch",
+      "react-native-code-highlighter": "patches/react-native-code-highlighter.patch"
     },
     "ignoredBuiltDependencies": [
       "esbuild",

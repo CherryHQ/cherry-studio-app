@@ -41,7 +41,7 @@ const logger = loggerService.withContext('AppInitialization')
 function DatabaseInitializer({ children }: { children: React.ReactNode }) {
   const { success, error } = useMigrations(db, migrations)
   const [loaded] = useFonts({
-    JetbrainMono: require('./assets/fonts/JetBrainsMono-Regular.ttf')
+    FiraCode: require('./assets/fonts/FiraCode-Regular.ttf')
   })
 
   useDrizzleStudio(expoDb)

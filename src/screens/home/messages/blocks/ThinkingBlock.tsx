@@ -1,12 +1,11 @@
 import { LinearGradient } from 'expo-linear-gradient'
-import React, { useState } from 'react'
+import React from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 
 import { MarqueeComponent } from '@/componentsV2'
+import { presentThinkingDetailSheet } from '@/componentsV2/features/Sheet/ThinkingDetailSheet'
 import { useTheme } from '@/hooks/useTheme'
 import type { ThinkingMessageBlock } from '@/types/message'
-
-import ReactNativeMarkdown from '../../markdown/ReactNativeMarkdown'
 
 interface Props {
   block: ThinkingMessageBlock
@@ -14,10 +13,9 @@ interface Props {
 
 const ThinkingBlock: React.FC<Props> = ({ block }) => {
   const { isDark } = useTheme()
-  const [expanded, setExpanded] = useState(false)
 
-  const toggleExpanded = () => {
-    setExpanded(!expanded)
+  const handlePress = () => {
+    presentThinkingDetailSheet({ block })
   }
 
   const gradientColors = isDark
@@ -33,14 +31,9 @@ const ThinkingBlock: React.FC<Props> = ({ block }) => {
         locations={[0, 0.61, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}>
-        <Pressable onPress={toggleExpanded} style={styles.headerPressable}>
-          <MarqueeComponent block={block} expanded={expanded} />
+        <Pressable onPress={handlePress} style={styles.headerPressable}>
+          <MarqueeComponent block={block} />
         </Pressable>
-        {expanded && (
-          <View style={styles.contentContainer}>
-            <ReactNativeMarkdown block={block} />
-          </View>
-        )}
       </LinearGradient>
     </View>
   )
@@ -59,11 +52,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 10
-  },
-  contentContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8
   }
 })
 

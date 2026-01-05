@@ -5,7 +5,16 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Platform, Pressable, ScrollView } from 'react-native'
 
-import { Group, GroupTitle, HeaderBar, presentDialog, Row, SafeAreaContainer, SearchInput, TextField } from '@/componentsV2'
+import {
+  Group,
+  GroupTitle,
+  HeaderBar,
+  presentDialog,
+  Row,
+  SafeAreaContainer,
+  SearchInput,
+  TextField
+} from '@/componentsV2'
 import { ListSkeleton } from '@/componentsV2/base/Skeleton/ListSkeleton'
 import Text from '@/componentsV2/base/Text'
 import { presentHeadersEditSheet } from '@/componentsV2/features/Sheet/HeadersEditSheet'
@@ -344,10 +353,7 @@ export default function McpDetailScreen() {
                           <Text numberOfLines={1} className="mr-3 flex-1">
                             {tool.name}
                           </Text>
-                          <Switch
-                            isSelected={isEnabled}
-                            onSelectedChange={() => handleToolToggle(tool.name)}
-                          />
+                          <Switch isSelected={isEnabled} onSelectedChange={() => handleToolToggle(tool.name)} />
                         </Row>
                       </Pressable>
                     )

@@ -4,17 +4,18 @@ import { Pressable, useWindowDimensions, View } from 'react-native'
 import { Image, ImageGalleryViewer } from '@/componentsV2'
 import { ImageOff } from '@/componentsV2/icons/LucideIcon'
 
-export interface MarkdownImageProps {
-  uri: string
+interface MarkdownImageProps {
+  src?: string
   alt?: string
 }
 
-const MarkdownImage: React.FC<MarkdownImageProps> = ({ uri, alt }) => {
+export function MarkdownImage({ src, alt }: MarkdownImageProps) {
   const [visible, setVisible] = React.useState(false)
   const [imageError, setImageError] = React.useState(false)
   const { width: screenWidth } = useWindowDimensions()
 
-  // Default size similar to ImageItem: ~30% of screen width
+  if (!src) return null
+
   const imageWidth = (screenWidth - 24) * 0.3
 
   return (
@@ -31,7 +32,7 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({ uri, alt }) => {
           </View>
         ) : (
           <Image
-            source={{ uri }}
+            source={{ uri: src }}
             className="rounded-sm"
             style={{ width: imageWidth, height: imageWidth }}
             onError={() => setImageError(true)}
@@ -40,9 +41,7 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({ uri, alt }) => {
         )}
       </Pressable>
 
-      <ImageGalleryViewer images={[uri]} initialIndex={0} visible={visible} onClose={() => setVisible(false)} />
+      <ImageGalleryViewer images={[src]} initialIndex={0} visible={visible} onClose={() => setVisible(false)} />
     </View>
   )
 }
-
-export default MarkdownImage

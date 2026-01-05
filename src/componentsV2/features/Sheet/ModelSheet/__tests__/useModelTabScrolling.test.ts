@@ -66,12 +66,12 @@ describe('useModelTabScrolling', () => {
   })
 
   it('resets activeProvider when sheet is dismissed', () => {
-    const { result, rerender } = renderHook<
-      ReturnType<typeof useModelTabScrolling>,
-      { isVisible: boolean }
-    >(({ isVisible }) => useModelTabScrolling({ sections, isVisible }), {
-      initialProps: { isVisible: true }
-    })
+    const { result, rerender } = renderHook<ReturnType<typeof useModelTabScrolling>, { isVisible: boolean }>(
+      ({ isVisible }) => useModelTabScrolling({ sections, isVisible }),
+      {
+        initialProps: { isVisible: true }
+      }
+    )
 
     act(() => {
       result.current.handleProviderChange('Provider B')

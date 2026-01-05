@@ -40,9 +40,7 @@ export function useModelOptions({
           model: m
         }))
 
-      const visibleOptions = allOptions.filter(option =>
-        matchesSearchQuery(option.model, option.value, searchQuery)
-      )
+      const visibleOptions = allOptions.filter(option => matchesSearchQuery(option.model, option.value, searchQuery))
 
       return {
         label: p.isSystem ? t(`provider.${p.id}`) : p.name,

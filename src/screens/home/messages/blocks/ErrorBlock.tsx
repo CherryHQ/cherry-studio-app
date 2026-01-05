@@ -541,7 +541,12 @@ export const ErrorDetailSheet: React.FC = () => {
         <Button pressableFeedbackVariant="ripple" variant="ghost" isIconOnly onPress={toggleDeveloperMode}>
           <Bug size={20} className={developerMode ? 'primary-text' : undefined} />
         </Button>
-        <Button pressableFeedbackVariant="ripple" variant="ghost" isIconOnly onPress={copyErrorDetails} isDisabled={!error}>
+        <Button
+          pressableFeedbackVariant="ripple"
+          variant="ghost"
+          isIconOnly
+          onPress={copyErrorDetails}
+          isDisabled={!error}>
           <Copy size={20} />
         </Button>
       </XStack>

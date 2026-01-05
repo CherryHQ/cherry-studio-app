@@ -21,7 +21,7 @@ const MessageGroup: FC<MessageGroupProps> = ({ assistant, item, messageBlocks })
   const [key, messagesInGroup] = item
 
   const renderUserMessage = () => {
-    return <MessageItem message={messagesInGroup[0]} assistant={assistant} messageBlocks={messageBlocks} />
+    return <MessageItem message={messagesInGroup[0]} messageBlocks={messageBlocks} />
   }
 
   const renderAssistantMessages = () => {
@@ -31,7 +31,7 @@ const MessageGroup: FC<MessageGroupProps> = ({ assistant, item, messageBlocks })
           <View className="px-4">
             <MessageHeader message={messagesInGroup[0]} />
           </View>
-          <MessageItem message={messagesInGroup[0]} assistant={assistant} messageBlocks={messageBlocks} />
+          <MessageItem message={messagesInGroup[0]} messageBlocks={messageBlocks} />
           {/* 输出过程中不显示footer */}
           {messagesInGroup[0].status !== AssistantMessageStatus.PROCESSING && (
             <MessageFooter assistant={assistant} message={messagesInGroup[0]} />

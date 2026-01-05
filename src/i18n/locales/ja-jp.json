@@ -108,6 +108,7 @@
         "name": "デフォルト"
       },
       "think": "{{seconds}}秒考え中",
+      "think_done": "{{seconds}}秒深く考えました",
       "think_expand": "タップして私の心を読む",
       "title": "Cherry Studio へようこそ！",
       "topics": {
@@ -133,6 +134,7 @@
       "content_too_long": "コンテンツが長すぎて表示できません",
       "copied": "コピーしました",
       "copy": "テキストをコピー",
+      "copy_latex": "LaTeXとしてコピー",
       "delete": "削除",
       "delete_translation": "翻訳を削除",
       "description": "説明",
@@ -168,7 +170,6 @@
       "search_placeholder": "検索...",
       "see_all": "すべて表示",
       "select_all": "すべて選択",
-      "select_text": "テキストを選択",
       "source": "ソース",
       "start": "Cherry Studioアプリを使ってみましょう 🎉",
       "stop": "停止",

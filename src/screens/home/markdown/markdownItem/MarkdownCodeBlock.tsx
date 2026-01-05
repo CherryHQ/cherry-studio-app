@@ -1,7 +1,7 @@
 import { useNavigation } from '@react-navigation/native'
+import * as Clipboard from 'expo-clipboard'
 import React from 'react'
-import type { TextStyle, ViewStyle } from 'react-native'
-import { View } from 'react-native'
+import { useColorScheme, View } from 'react-native'
 import CodeHighlighter from 'react-native-code-highlighter'
 import { atomOneDark, atomOneLight } from 'react-syntax-highlighter/dist/esm/styles/hljs'
 
@@ -12,49 +12,40 @@ import { setHtmlPreviewContent } from '@/store/runtime'
 import type { HomeNavigationProps } from '@/types/naviagate'
 import { getCodeLanguageIcon } from '@/utils/icons/codeLanguage'
 
-import { markdownColors } from '../MarkdownStyles'
-
-interface MarkdownCodeProps {
-  text: string
+interface MarkdownCodeBlockProps {
+  content: string
   language?: string
-  isDark: boolean
-  onCopy: (content: string) => void
-  containerStyle?: ViewStyle
-  textStyle?: TextStyle
 }
 
-export const MarkdownCode: React.FC<MarkdownCodeProps> = ({
-  text,
-  language = 'text',
-  isDark,
-  onCopy,
-  containerStyle,
-  textStyle
-}) => {
-  const currentColors = isDark ? markdownColors.dark : markdownColors.light
+export function MarkdownCodeBlock({ content, language = 'text' }: MarkdownCodeBlockProps) {
+  const colorScheme = useColorScheme()
+  const isDark = colorScheme === 'dark'
   const lang = language || 'text'
   const navigation = useNavigation<HomeNavigationProps>()
   const dispatch = useAppDispatch()
 
-  const handlePreview = () => {
-    const sizeInBytes = new Blob([text]).size
+  const isHtml = lang.toLowerCase() === 'html'
 
-    dispatch(setHtmlPreviewContent({ content: text, sizeBytes: sizeInBytes }))
+  const handleCopy = () => {
+    Clipboard.setStringAsync(content)
+  }
+
+  const handlePreview = () => {
+    const sizeInBytes = new Blob([content]).size
+    dispatch(setHtmlPreviewContent({ content, sizeBytes: sizeInBytes }))
     navigation.navigate('HtmlPreviewScreen')
   }
 
-  const isHtml = lang.toLowerCase() === 'html'
-
   return (
-    <View className="rounded-3 mt-2 gap-2 px-3 pb-3 pt-0" style={containerStyle}>
-      <XStack className="items-center justify-between border-b py-2" style={{ borderColor: currentColors.codeBorder }}>
+    <View className="border-border mt-2 gap-2 rounded-xl border bg-zinc-100 px-3 pb-3 pt-0 shadow dark:bg-zinc-900">
+      <XStack className="border-border items-center justify-between border-b py-2">
         <XStack className="flex-1 items-center gap-2">
           {getCodeLanguageIcon(lang) && <Image source={getCodeLanguageIcon(lang)} className="h-5 w-5" />}
           <Text className="text-base">{lang.toUpperCase()}</Text>
         </XStack>
         <XStack className="gap-2">
           {isHtml && <IconButton icon={<Eye size={16} />} onPress={handlePreview} />}
-          <IconButton icon={<Copy size={16} />} onPress={() => onCopy(text)} />
+          <IconButton icon={<Copy size={16} />} onPress={handleCopy} />
         </XStack>
       </XStack>
       <CodeHighlighter
@@ -62,24 +53,18 @@ export const MarkdownCode: React.FC<MarkdownCodeProps> = ({
         scrollViewProps={{
           contentContainerStyle: {
             backgroundColor: 'transparent'
-          },
-          showsHorizontalScrollIndicator: false
+          }
         }}
         textStyle={{
-          ...textStyle,
-          fontSize: 12,
-          fontFamily: 'JetbrainMono',
+          fontSize: 14,
+          fontFamily: 'FiraCode',
           userSelect: 'none'
         }}
         hljsStyle={isDark ? atomOneDark : atomOneLight}
         language={lang}
-        wrapLines={true}
-        wrapLongLines={true}
-        lineProps={{ style: { flexWrap: 'wrap' } }}>
-        {text}
+        horizontal={false}>
+        {content}
       </CodeHighlighter>
     </View>
   )
 }
-
-export default MarkdownCode

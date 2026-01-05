@@ -108,6 +108,7 @@
         "name": "默认"
       },
       "think": "正在思考 {{seconds}} 秒",
+      "think_done": "已深度思考 {{seconds}} 秒",
       "think_expand": "点击看穿我的心思",
       "title": "欢迎使用 Cherry Studio!",
       "topics": {
@@ -133,6 +134,7 @@
       "content_too_long": "内容过长无法展示",
       "copied": "已复制",
       "copy": "复制文本",
+      "copy_latex": "复制为 LaTeX",
       "delete": "删除",
       "delete_translation": "删除翻译",
       "description": "描述",
@@ -168,7 +170,6 @@
       "search_placeholder": "搜索...",
       "see_all": "查看全部",
       "select_all": "全选",
-      "select_text": "选择文本",
       "source": "来源",
       "start": "开始使用Cherry Studio App 🎉",
       "stop": "停止",

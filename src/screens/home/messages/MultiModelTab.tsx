@@ -67,7 +67,7 @@ const MultiModelTab: FC<MultiModelTabProps> = ({ assistant, messages, messageBlo
               transition={{
                 type: 'timing'
               }}>
-              <MessageItem message={message} assistant={assistant} isMultiModel={true} messageBlocks={messageBlocks} />
+              <MessageItem message={message} messageBlocks={messageBlocks} />
               {/* 输出过程中不显示footer */}
               {message.status !== AssistantMessageStatus.PROCESSING && (
                 <MessageFooter assistant={assistant} message={message} isMultiModel={true} />

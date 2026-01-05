@@ -2,21 +2,17 @@ import React from 'react'
 import { View } from 'react-native'
 
 import { YStack } from '@/componentsV2'
-import type { Assistant } from '@/types/assistant'
 import type { Message, MessageBlock } from '@/types/message'
 import { MessageBlockType } from '@/types/message'
 
 import MessageBlockRenderer from './blocks'
-import MessageContextMenu from './MessageContextMenu'
 
 interface Props {
   message: Message
-  assistant?: Assistant
-  isMultiModel?: boolean
   blocks: MessageBlock[]
 }
 
-const MessageContent: React.FC<Props> = ({ message, assistant, isMultiModel = false, blocks = [] }) => {
+const MessageContent: React.FC<Props> = ({ message, blocks = [] }) => {
   const isUser = message.role === 'user'
 
   const mediaBlocks = blocks.filter(
@@ -33,30 +29,26 @@ const MessageContent: React.FC<Props> = ({ message, assistant, isMultiModel = fa
         {mediaBlocks.length > 0 && <MessageBlockRenderer blocks={mediaBlocks} message={message} />}
         {mediaBlocks.length > 0 && <View className="h-2" />}
         <View className="flex-row justify-end">
-          <MessageContextMenu message={message} assistant={assistant}>
-            {contentBlocks.length > 0 && (
-              <YStack className="secondary-container rounded-l-xl rounded-br-sm rounded-tr-xl border px-5 py-2">
-                <MessageBlockRenderer blocks={contentBlocks} message={message} />
-              </YStack>
-            )}
-          </MessageContextMenu>
+          {contentBlocks.length > 0 && (
+            <YStack className="secondary-container rounded-l-xl rounded-br-sm rounded-tr-xl border px-5 py-2">
+              <MessageBlockRenderer blocks={contentBlocks} message={message} />
+            </YStack>
+          )}
         </View>
       </View>
     )
 
   return (
     <View className="flex-1">
-      <MessageContextMenu message={message} assistant={assistant} isMultiModel={isMultiModel}>
-        <View className="w-full max-w-full flex-1 rounded-2xl px-3.5">
-          {mediaBlocks.length > 0 && <MessageBlockRenderer blocks={mediaBlocks} message={message} />}
-          {contentBlocks.length > 0 && (
-            <YStack
-              className={`w-full  max-w-full rounded-2xl bg-transparent px-0 ${mediaBlocks.length > 0 ? 'mt-2' : ''}`}>
-              <MessageBlockRenderer blocks={contentBlocks} message={message} />
-            </YStack>
-          )}
-        </View>
-      </MessageContextMenu>
+      <View className="w-full max-w-full flex-1 rounded-2xl px-3.5">
+        {mediaBlocks.length > 0 && <MessageBlockRenderer blocks={mediaBlocks} message={message} />}
+        {contentBlocks.length > 0 && (
+          <YStack
+            className={`w-full  max-w-full rounded-2xl bg-transparent px-0 ${mediaBlocks.length > 0 ? 'mt-2' : ''}`}>
+            <MessageBlockRenderer blocks={contentBlocks} message={message} />
+          </YStack>
+        )}
+      </View>
     </View>
   )
 }

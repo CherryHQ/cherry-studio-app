@@ -85,7 +85,8 @@ export class AiSdkToChunkAdapter {
       text: '',
       reasoningContent: '',
       webSearchResults: [],
-      reasoningId: ''
+      reasoningId: '',
+      thinkingMillsec: 0
     }
     this.resetTimingState()
     this.responseStartTimestamp = Date.now()
@@ -134,7 +135,13 @@ export class AiSdkToChunkAdapter {
    */
   private convertAndEmitChunk(
     chunk: TextStreamPart<any>,
-    final: { text: string; reasoningContent: string; webSearchResults: AISDKWebSearchResult[]; reasoningId: string }
+    final: {
+      text: string
+      reasoningContent: string
+      webSearchResults: AISDKWebSearchResult[]
+      reasoningId: string
+      thinkingMillsec: number
+    }
   ) {
     logger.silly(`AI SDK chunk type: ${chunk.type}`, chunk)
     switch (chunk.type) {
@@ -199,22 +206,31 @@ export class AiSdkToChunkAdapter {
         })
         // }
         break
-      case 'reasoning-delta':
+      case 'reasoning-delta': {
         final.reasoningContent += chunk.text || ''
         if (chunk.text) {
           this.markFirstTokenIfNeeded()
         }
+        // 从插件 metadata 中提取思考时间
+        const thinking_millsec = (chunk.providerMetadata?.metadata as any)?.thinking_millsec
+        if (typeof thinking_millsec === 'number') {
+          final.thinkingMillsec = thinking_millsec
+        }
         this.onChunk({
           type: ChunkType.THINKING_DELTA,
-          text: final.reasoningContent || ''
+          text: final.reasoningContent || '',
+          thinking_millsec
         })
         break
+      }
       case 'reasoning-end':
         this.onChunk({
           type: ChunkType.THINKING_COMPLETE,
-          text: final.reasoningContent || ''
+          text: final.reasoningContent || '',
+          thinking_millsec: final.thinkingMillsec
         })
         final.reasoningContent = ''
+        final.thinkingMillsec = 0
         break
 
       // === 工具调用相关事件（原始 AI SDK 事件，如果没有被中间件处理） ===

@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react-native'
 import { Keyboard } from 'react-native'
 
-import { presentDialog } from '@/componentsV2'
+import { presentDialog } from '@/componentsV2/base/Dialog'
 import { useMessageEdit } from '@/hooks/useMessageEdit'
 import { useMessageOperations } from '@/hooks/useMessageOperation'
 import {
@@ -15,7 +15,7 @@ import { type Message, UserMessageStatus } from '@/types/message'
 import { createMockAssistant, createMockFile, createMockModel, createMockTopic } from '../../__mocks__/testData'
 import { useMessageSend } from '../../hooks/useMessageSend'
 
-jest.mock('@/componentsV2', () => ({
+jest.mock('@/componentsV2/base/Dialog', () => ({
   presentDialog: jest.fn()
 }))
 

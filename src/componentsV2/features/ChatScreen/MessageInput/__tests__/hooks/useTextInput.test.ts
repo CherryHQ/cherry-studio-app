@@ -5,7 +5,7 @@ import { useTextInput } from '../../hooks/useTextInput'
 import { isLongText, processInputText } from '../../services/TextProcessingService'
 import { LONG_TEXT_THRESHOLD } from '../../types'
 
-jest.mock('@/componentsV2', () => ({
+jest.mock('@/componentsV2/base/Dialog', () => ({
   presentDialog: jest.fn()
 }))
 
@@ -89,7 +89,7 @@ describe('useTextInput', () => {
 
     // After setting long text, the isLongText would be checked
     mockIsLongText.mockReturnValue(true)
-    const { result: result2 } = renderHook(() => useTextInput())
+    renderHook(() => useTextInput())
     expect(mockIsLongText).toHaveBeenCalled()
   })
 

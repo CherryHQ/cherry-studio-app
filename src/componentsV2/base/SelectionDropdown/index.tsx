@@ -1,5 +1,8 @@
 import React from 'react'
+import type { SFSymbol } from 'sf-symbols-typescript'
 import * as DropdownMenu from 'zeego/dropdown-menu'
+
+import { isIOS } from '@/utils/device'
 
 export interface SelectionDropdownItem {
   id?: string
@@ -7,6 +10,7 @@ export interface SelectionDropdownItem {
   label: React.ReactNode | string
   description?: React.ReactNode | string
   icon?: React.ReactNode | ((isSelected: boolean) => React.ReactNode)
+  iOSIcon?: SFSymbol | string
   isSelected?: boolean
   onSelect?: () => void
   destructive?: boolean
@@ -40,7 +44,8 @@ const SelectionDropdown: React.FC<SelectionDropdownProps> = ({ items, children, 
               key={itemKey}
               value={item.isSelected ? 'on' : 'off'}
               onValueChange={() => item.onSelect?.()}>
-              {iconElement && <DropdownMenu.ItemIcon>{iconElement}</DropdownMenu.ItemIcon>}
+              {isIOS && item.iOSIcon && <DropdownMenu.ItemIcon ios={{ name: item.iOSIcon }} />}
+              {!isIOS && iconElement && <DropdownMenu.ItemIcon>{iconElement}</DropdownMenu.ItemIcon>}
               <DropdownMenu.ItemTitle>{item.label}</DropdownMenu.ItemTitle>
             </DropdownMenu.CheckboxItem>
           )

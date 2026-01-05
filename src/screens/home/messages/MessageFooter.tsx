@@ -12,7 +12,6 @@ import {
   PenLine,
   RefreshCw,
   Share,
-  TextSelect,
   ThumbsUp,
   Trash2
 } from '@/componentsV2/icons/LucideIcon'
@@ -38,8 +37,7 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
     handleTranslate,
     handleDelete,
     handleShare,
-    handleEdit,
-    handleSelectText
+    handleEdit
   } = useMessageActions({
     message,
     assistant
@@ -57,27 +55,24 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
 
   const moreItems = [
     {
-      id: 'select_text',
-      label: t('common.select_text'),
-      icon: <TextSelect size={18} />,
-      onSelect: handleSelectText
-    },
-    {
       id: 'edit',
       label: t('common.edit'),
       icon: <PenLine size={18} />,
+      iOSIcon: 'pencil',
       onSelect: handleEdit
     },
     {
       id: 'translate',
       label: isTranslated ? t('common.delete_translation') : t('message.translate_message'),
       icon: isTranslated ? <TranslatedIcon size={18} /> : <TranslationIcon size={18} />,
+      iOSIcon: 'translate',
       onSelect: isTranslated ? handleDeleteTranslation : handleTranslate
     },
     {
       id: 'delete',
       label: t('message.delete_message'),
       icon: <Trash2 size={18} />,
+      iOSIcon: 'trash',
       destructive: true,
       onSelect: handleDelete
     }

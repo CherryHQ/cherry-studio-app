@@ -49,7 +49,11 @@ export function useMessageSend(options: UseMessageSendOptions): UseMessageSendRe
   })
 
   const sendMessage = async (overrideText?: string) => {
-    logger.info('sendMessage called', { hasOverrideText: !!overrideText, textLength: text.length, filesCount: files.length })
+    logger.info('sendMessage called', {
+      hasOverrideText: !!overrideText,
+      textLength: text.length,
+      filesCount: files.length
+    })
 
     const textToSend = overrideText ?? text
     const trimmedText = textToSend.trim()
