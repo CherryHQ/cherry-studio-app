@@ -83,7 +83,7 @@ describe('useInputHeight', () => {
 
   it('uses correct config values', () => {
     // Verify config values are as expected
-    expect(LINE_HEIGHT).toBe(20)
+    expect(LINE_HEIGHT).toBe(26)
     expect(MAX_VISIBLE_LINES).toBe(4)
     expect(MAX_INPUT_HEIGHT).toBe(96)
   })
