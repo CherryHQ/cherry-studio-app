@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import React from 'react'
-import { Linking, Text } from 'react-native'
+import { Linking } from 'react-native'
+
+import { StyledUITextView } from './MarkdownText'
 
 interface MarkdownLinkProps {
   href?: string
@@ -21,8 +23,8 @@ export function MarkdownLink({ href, children }: MarkdownLinkProps) {
   }
 
   return (
-    <Text className="text-primary text-base underline" onPress={handlePress}>
+    <StyledUITextView className="text-primary text-base underline" onPress={handlePress}>
       {children}
-    </Text>
+    </StyledUITextView>
   )
 }

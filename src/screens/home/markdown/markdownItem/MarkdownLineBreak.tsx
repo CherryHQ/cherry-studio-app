@@ -1,6 +1,7 @@
 import React from 'react'
-import { Text } from 'react-native'
+
+import { StyledUITextView } from './MarkdownText'
 
 export function MarkdownLineBreak() {
-  return <Text>{'\n'}</Text>
+  return <StyledUITextView>{'\n'}</StyledUITextView>
 }
