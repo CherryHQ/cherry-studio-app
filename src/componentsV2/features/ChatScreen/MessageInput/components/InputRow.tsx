@@ -10,7 +10,7 @@ interface InputRowProps {
 
 export const InputRow: React.FC<InputRowProps> = ({ children }) => {
   return (
-    <View className="flex-row">
+    <View className="flex-row items-center">
       {children ?? (
         <>
           <MessageTextField />

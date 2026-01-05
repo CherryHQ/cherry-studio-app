@@ -45,10 +45,10 @@ export interface ToolConfig {
  * TextField configuration constants
  */
 export const TEXT_FIELD_CONFIG = {
-  LINE_HEIGHT: 20,
+  LINE_HEIGHT: 26,
   MAX_VISIBLE_LINES: 4,
   MAX_INPUT_HEIGHT: 96,
-  MIN_INPUT_HEIGHT: 36
+  MIN_INPUT_HEIGHT: 34
 } as const
 
 /**
