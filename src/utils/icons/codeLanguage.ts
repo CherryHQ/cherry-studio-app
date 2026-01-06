@@ -11,7 +11,12 @@ const CODE_LANGUAGE_ICONS = {
   go: require('@/assets/images/codeLanguageIcons/Go.png'),
   java: require('@/assets/images/codeLanguageIcons/Java.png'),
   rust: require('@/assets/images/codeLanguageIcons/Rust.png'),
-  python: require('@/assets/images/codeLanguageIcons/Python.png')
+  python: require('@/assets/images/codeLanguageIcons/Python.png'),
+  markdown: require('@/assets/images/codeLanguageIcons/Markdown.png'),
+  html: require('@/assets/images/codeLanguageIcons/Html.png'),
+  kotlin: require('@/assets/images/codeLanguageIcons/Kotlin.png'),
+  zig: require('@/assets/images/codeLanguageIcons/Zig.png'),
+  matlab: require('@/assets/images/codeLanguageIcons/Matlab.png')
 }
 
 export function getCodeLanguageIcon(language: string): any {
