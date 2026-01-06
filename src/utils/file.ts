@@ -32,6 +32,21 @@ export function removeSpecialCharactersForFileName(str: string): string {
     .trim()
 }
 
+export function getFileExtension(fileName: string): string {
+  const lastDotIndex = fileName.lastIndexOf('.')
+  if (lastDotIndex <= 0 || lastDotIndex === fileName.length - 1) {
+    return ''
+  }
+  return fileName.slice(lastDotIndex).toLowerCase()
+}
+
+export function normalizeExtension(ext: string): string {
+  if (!ext) {
+    return ''
+  }
+  return ext.startsWith('.') ? ext.toLowerCase() : `.${ext.toLowerCase()}`
+}
+
 export function getFileTypeMap(): Map<string, FileTypes> {
   const fileTypeMap = new Map<string, FileTypes>()
   imageExts.forEach(ext => fileTypeMap.set(ext, FileTypes.IMAGE))
@@ -43,7 +58,7 @@ export function getFileTypeMap(): Map<string, FileTypes> {
 }
 
 export function getFileType(ext: string): FileTypes {
-  ext = `.${ext.toLowerCase()}`
+  ext = normalizeExtension(ext)
   const fileTypeMap = getFileTypeMap()
   return fileTypeMap.get(ext) || FileTypes.OTHER
 }

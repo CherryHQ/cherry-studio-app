@@ -39,7 +39,7 @@ export const createMockFile = (overrides: Partial<FileMetadata> = {}): FileMetad
   origin_name: 'test.txt',
   path: '/path/to/file',
   size: 100,
-  ext: 'txt',
+  ext: '.txt',
   type: 'text' as any,
   created_at: Date.now(),
   count: 1,

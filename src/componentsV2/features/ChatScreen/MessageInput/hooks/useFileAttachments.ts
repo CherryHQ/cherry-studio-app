@@ -46,15 +46,15 @@ export function useFileAttachments(): UseFileAttachmentsReturn {
         uris.map(async (uri, index) => {
           const id = uuid()
           const fileName = `pasted-image-${Date.now()}-${index}`
-          const ext = uri.toLowerCase().endsWith('.gif') ? 'gif' : 'jpg'
+          const ext = uri.toLowerCase().endsWith('.gif') ? '.gif' : '.jpg'
 
           // Compress non-GIF images
-          const processedUri = ext === 'gif' ? uri : await Image.compress(uri)
+          const processedUri = ext === '.gif' ? uri : await Image.compress(uri)
 
           return {
             id,
-            name: `${fileName}.${ext}`,
-            origin_name: `${fileName}.${ext}`,
+            name: `${fileName}${ext}`,
+            origin_name: `${fileName}${ext}`,
             path: processedUri,
             size: 0,
             ext,

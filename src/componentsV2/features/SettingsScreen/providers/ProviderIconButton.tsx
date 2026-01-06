@@ -10,7 +10,7 @@ import { DefaultProviderIcon, PenLine } from '@/componentsV2/icons'
 import YStack from '@/componentsV2/layout/YStack'
 import { loggerService } from '@/services/LoggerService'
 import type { FileMetadata } from '@/types/file'
-import { getFileType } from '@/utils/file'
+import { getFileExtension, getFileType } from '@/utils/file'
 
 const logger = loggerService.withContext('ProviderIconButton')
 
@@ -29,7 +29,7 @@ const createFileFromImageAsset = (
   asset: ImagePicker.ImagePickerAsset,
   providerId: string
 ): Omit<FileMetadata, 'md5'> => {
-  const ext = asset.fileName?.split('.').pop() || 'png'
+  const ext = getFileExtension(asset.fileName || '') || '.png'
 
   return {
     id: providerId,
@@ -46,9 +46,10 @@ const createFileFromImageAsset = (
 
 // Helper function to validate image
 const validateImage = (asset: ImagePicker.ImagePickerAsset): string | null => {
-  const ext = asset.fileName?.split('.').pop()?.toLowerCase()
+  const ext = getFileExtension(asset.fileName || '')
+  const extWithoutDot = ext ? ext.slice(1) : ''
 
-  if (ext && !ALLOWED_FORMATS.includes(ext)) {
+  if (extWithoutDot && !ALLOWED_FORMATS.includes(extWithoutDot)) {
     return 'Invalid image format. Please use PNG, JPG, or JPEG.'
   }
 

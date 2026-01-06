@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["PdfTextExtractorModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.pdftextextractor.PdfTextExtractorModule"]
+  }
+}
