@@ -21,7 +21,14 @@ const MessageGroup: FC<MessageGroupProps> = ({ assistant, item, messageBlocks })
   const [key, messagesInGroup] = item
 
   const renderUserMessage = () => {
-    return <MessageItem message={messagesInGroup[0]} messageBlocks={messageBlocks} />
+    return (
+      <View className="gap-2">
+        <MessageItem message={messagesInGroup[0]} messageBlocks={messageBlocks} />
+        <View className="items-end">
+          <MessageFooter assistant={assistant} message={messagesInGroup[0]} />
+        </View>
+      </View>
+    )
   }
 
   const renderAssistantMessages = () => {

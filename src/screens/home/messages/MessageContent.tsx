@@ -30,7 +30,7 @@ const MessageContent: React.FC<Props> = ({ message, blocks = [] }) => {
         {mediaBlocks.length > 0 && <View className="h-2" />}
         <View className="flex-row justify-end">
           {contentBlocks.length > 0 && (
-            <YStack className="secondary-container rounded-l-xl rounded-br-sm rounded-tr-xl border px-5 py-2">
+            <YStack className="secondary-container rounded-l-xl rounded-br-sm rounded-tr-xl border px-5 pb-2 pt-1">
               <MessageBlockRenderer blocks={contentBlocks} message={message} />
             </YStack>
           )}

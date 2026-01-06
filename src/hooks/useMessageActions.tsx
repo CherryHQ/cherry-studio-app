@@ -84,10 +84,6 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
           try {
             await deleteMessageById(message.id)
 
-            if (message.askId) {
-              await deleteMessageById(message.askId)
-            }
-
             logger.info('Message deleted successfully:', message.id)
             resolve()
           } catch (error) {
