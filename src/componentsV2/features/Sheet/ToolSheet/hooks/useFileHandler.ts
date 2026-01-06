@@ -128,7 +128,7 @@ export function useFileHandler({ files, setFiles, onSuccess }: UseFileHandlerPro
     try {
       const result = await DocumentPicker.getDocumentAsync({
         multiple: true,
-        type: ['text/*', 'application/pdf']
+        type: ['text/*', 'application/pdf', 'application/octet-stream']
       })
 
       if (result.canceled) {
