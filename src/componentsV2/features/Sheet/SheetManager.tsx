@@ -4,12 +4,12 @@ import AssistantItemSheet from '@/componentsV2/features/Assistant/AssistantItemS
 import McpServerItemSheet from '@/componentsV2/features/MCP/McpServerItemSheet'
 import { AddModelSheet } from '@/componentsV2/features/SettingsScreen/providers/AddModelSheet'
 import ExpandInputSheet from '@/componentsV2/features/Sheet/ExpandInputSheet'
-import ExpandTextSheet from '@/componentsV2/features/Sheet/ExpandTextSheet'
 import { HeadersEditSheet } from '@/componentsV2/features/Sheet/HeadersEditSheet'
 import { McpDescriptionSheet } from '@/componentsV2/features/Sheet/McpDescriptionSheet'
 import { McpServerSheet } from '@/componentsV2/features/Sheet/McpServerSheet'
 import { McpToolSheet } from '@/componentsV2/features/Sheet/McpToolSheet'
 import ModelSheet from '@/componentsV2/features/Sheet/ModelSheet'
+import PromptDetailSheet from '@/componentsV2/features/Sheet/PromptDetailSheet'
 import ProviderCheckSheet from '@/componentsV2/features/Sheet/ProviderCheckSheet'
 import { ReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
 import TextEditSheet from '@/componentsV2/features/Sheet/TextEditSheet'
@@ -45,7 +45,7 @@ const SheetManager: React.FC = () => {
       <WebSearchProviderSheet />
       <ImportDataSheet />
       <ExpandInputSheet />
-      <ExpandTextSheet />
+      <PromptDetailSheet />
       <ProviderCheckSheet />
       <HeadersEditSheet />
       <McpDescriptionSheet />
