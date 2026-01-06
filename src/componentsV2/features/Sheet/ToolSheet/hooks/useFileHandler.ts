@@ -9,7 +9,7 @@ import { loggerService } from '@/services/LoggerService'
 import type { FileMetadata } from '@/types/file'
 import { FileTypes } from '@/types/file'
 import { uuid } from '@/utils'
-import { getFileType } from '@/utils/file'
+import { getFileExtension, getFileType } from '@/utils/file'
 
 import type { FileHandlerLoadingState, ToolOperationResult, ToolSheetError } from '../types'
 
@@ -77,7 +77,15 @@ export function useFileHandler({ files, setFiles, onSuccess }: UseFileHandlerPro
       const _files: Omit<FileMetadata, 'md5'>[] = await Promise.all(
         result.assets.map(async asset => {
           const id = uuid()
-          const compressedUri = await Image.compress(asset.uri)
+          // 压缩图片，如果失败则使用原始 URI
+          let compressedUri: string
+          try {
+            compressedUri = await Image.compress(asset.uri)
+          } catch (compressError) {
+            logger.warn(`Failed to compress image ${asset.fileName}, using original`, compressError)
+            compressedUri = asset.uri
+          }
+          const ext = getFileExtension(asset.fileName || '') || '.jpg'
 
           return {
             id: id,
@@ -85,8 +93,8 @@ export function useFileHandler({ files, setFiles, onSuccess }: UseFileHandlerPro
             origin_name: asset.fileName || id,
             path: compressedUri,
             size: asset.fileSize || 0,
-            ext: asset.fileName?.split('.').pop() || 'jpg',
-            type: getFileType(asset.fileName?.split('.').pop() || 'jpg'),
+            ext,
+            type: getFileType(ext),
             mime_type: asset.mimeType || '',
             created_at: Date.now(),
             count: 1
@@ -118,21 +126,25 @@ export function useFileHandler({ files, setFiles, onSuccess }: UseFileHandlerPro
     setError(null)
 
     try {
-      const result = await DocumentPicker.getDocumentAsync({ multiple: true, type: ['text/plain'] })
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: true,
+        type: ['text/*', 'application/pdf', 'application/octet-stream']
+      })
 
       if (result.canceled) {
         return { success: true }
       }
 
       const _files: Omit<FileMetadata, 'md5'>[] = result.assets.map(asset => {
+        const ext = getFileExtension(asset.name)
         return {
           id: uuid(),
           name: asset.name,
           origin_name: asset.name,
           path: asset.uri,
           size: asset.size || 0,
-          ext: asset.name.split('.').pop() || '',
-          type: getFileType(asset.name.split('.').pop() || ''),
+          ext,
+          type: getFileType(ext),
           mime_type: asset.mimeType || '',
           created_at: Date.now(),
           count: 1
@@ -175,7 +187,15 @@ export function useFileHandler({ files, setFiles, onSuccess }: UseFileHandlerPro
 
       const id = uuid()
       const fileName = photoUri.split('/').pop() || `${id}.jpg`
-      const compressedUri = await Image.compress(photoUri)
+      const ext = getFileExtension(fileName) || '.jpg'
+      // 压缩图片，如果失败则使用原始 URI
+      let compressedUri: string
+      try {
+        compressedUri = await Image.compress(photoUri)
+      } catch (compressError) {
+        logger.warn(`Failed to compress camera photo, using original`, compressError)
+        compressedUri = photoUri
+      }
 
       const _file: Omit<FileMetadata, 'md5'> = {
         id: id,
@@ -183,7 +203,7 @@ export function useFileHandler({ files, setFiles, onSuccess }: UseFileHandlerPro
         origin_name: fileName,
         path: compressedUri,
         size: file.size,
-        ext: 'jpg',
+        ext,
         type: FileTypes.IMAGE,
         created_at: Date.now(),
         count: 1

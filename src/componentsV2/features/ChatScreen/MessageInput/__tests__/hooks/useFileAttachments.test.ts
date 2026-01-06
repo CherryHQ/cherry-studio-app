@@ -240,7 +240,7 @@ describe('useFileAttachments', () => {
         expect.arrayContaining([
           expect.objectContaining({
             type: FileTypes.IMAGE,
-            ext: 'jpg'
+            ext: '.jpg'
           })
         ])
       )
@@ -258,7 +258,7 @@ describe('useFileAttachments', () => {
       expect(mockUploadFiles).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({
-            ext: 'gif'
+            ext: '.gif'
           })
         ])
       )

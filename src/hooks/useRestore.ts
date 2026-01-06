@@ -11,7 +11,7 @@ import { restore } from '@/services/BackupService'
 import { loggerService } from '@/services/LoggerService'
 import type { FileMetadata } from '@/types/file'
 import { uuid } from '@/utils'
-import { getFileType } from '@/utils/file'
+import { getFileExtension, getFileType } from '@/utils/file'
 const logger = loggerService.withContext('useRestore')
 
 // 定义步骤配置类型
@@ -107,17 +107,21 @@ export function useRestore(options: UseRestoreOptions = {}) {
     size?: number
     mimeType?: string
     type?: string
-  }): Omit<FileMetadata, 'md5'> => ({
-    id: uuid(),
-    name: file.name,
-    origin_name: file.name,
-    path: file.uri,
-    size: file.size || 0,
-    ext: file.name.split('.').pop() || '',
-    type: getFileType(file.name.split('.').pop() || ''),
-    created_at: Date.now(),
-    count: 1
-  })
+  }): Omit<FileMetadata, 'md5'> => {
+    const ext = getFileExtension(file.name)
+
+    return {
+      id: uuid(),
+      name: file.name,
+      origin_name: file.name,
+      path: file.uri,
+      size: file.size || 0,
+      ext,
+      type: getFileType(ext),
+      created_at: Date.now(),
+      count: 1
+    }
+  }
 
   const handleProgressUpdate = (update: ProgressUpdate) => {
     logger.info('handleProgressUpdate called:', update.step, update.status)

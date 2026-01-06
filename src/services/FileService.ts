@@ -9,6 +9,7 @@ import { loggerService } from '@/services/LoggerService'
 import type { FileMetadata } from '@/types/file'
 import { FileTypes } from '@/types/file'
 import { uuid } from '@/utils'
+import { normalizeExtension } from '@/utils/file'
 
 export interface ShareFileResult {
   success: boolean
@@ -117,7 +118,8 @@ export async function uploadFiles(
       const sourceUri = file.path
       const sourceFile = new File(sourceUri)
       // ios upload image will be .JPG
-      const destinationUri = `${storageDir.uri}${file.id}.${file.ext.toLowerCase()}`
+      const normalizedExt = normalizeExtension(file.ext)
+      const destinationUri = `${storageDir.uri}${file.id}${normalizedExt}`
       const destinationFile = new File(destinationUri)
 
       if (destinationFile.exists) {
@@ -132,9 +134,9 @@ export async function uploadFiles(
       const finalFile: FileMetadata = {
         ...file,
         path: destinationUri,
-        size: sourceFile.size
+        size: sourceFile.size,
+        ext: normalizedExt
       }
-      console.log('finalFile', finalFile)
       fileDatabase.upsertFiles([finalFile])
       return finalFile
     } catch (error) {

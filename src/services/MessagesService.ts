@@ -155,7 +155,11 @@ export async function sendMessage(
   }
 }
 
-export async function regenerateAssistantMessage(assistantMessage: Message, assistant: Assistant) {
+export async function regenerateAssistantMessage(
+  assistantMessage: Message,
+  assistant: Assistant,
+  options?: { skipLoadingStateManagement?: boolean }
+) {
   const topicId = assistantMessage.topicId
 
   try {
@@ -221,7 +225,58 @@ export async function regenerateAssistantMessage(assistantMessage: Message, assi
     await fetchAndProcessAssistantResponseImpl(topicId, assistantConfigForRegen, resetAssistantMsg)
   } catch (error) {
     logger.error('Error in regenerateAssistantMessage:', error)
+    throw error // Re-throw to allow caller to handle
   } finally {
+    // Only manage loading state if not skipped (for batch operations)
+    if (!options?.skipLoadingStateManagement) {
+      await finishTopicLoading(topicId)
+    }
+  }
+}
+
+/**
+ * Regenerate all assistant responses linked to a user message.
+ * This finds all assistant messages with askId matching the user message id
+ * and regenerates each of them.
+ */
+export async function regenerateResponsesForUserMessage(userMessage: Message, assistant: Assistant) {
+  const topicId = userMessage.topicId
+
+  try {
+    // Find all assistant messages linked to this user message
+    const allMessages = await messageDatabase.getMessagesByTopicId(topicId)
+    const linkedAssistantMessages = allMessages.filter(m => m.role === 'assistant' && m.askId === userMessage.id)
+
+    if (linkedAssistantMessages.length === 0) {
+      logger.warn(`No linked assistant messages found for user message ${userMessage.id}`)
+      return
+    }
+
+    // Regenerate all linked assistant messages in parallel
+    // Use skipLoadingStateManagement to prevent race condition where first completion
+    // sets loading=false while others are still running
+    const results = await Promise.allSettled(
+      linkedAssistantMessages.map(assistantMsg =>
+        regenerateAssistantMessage(assistantMsg, assistant, { skipLoadingStateManagement: true })
+      )
+    )
+
+    // Check for failures and log them
+    const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+    if (failures.length > 0) {
+      logger.error(`${failures.length}/${results.length} regenerations failed:`, {
+        errors: failures.map(f => f.reason)
+      })
+      // Throw error if all regenerations failed
+      if (failures.length === results.length) {
+        throw new Error(`All ${failures.length} regeneration(s) failed`)
+      }
+    }
+  } catch (error) {
+    logger.error('Error in regenerateResponsesForUserMessage:', error)
+    throw error // Propagate error to caller
+  } finally {
+    // Always reset loading state when all regenerations complete (success or failure)
     await finishTopicLoading(topicId)
   }
 }

@@ -14,7 +14,8 @@ import {
   deleteMessageById,
   editAssistantMessage,
   fetchTranslateThunk,
-  regenerateAssistantMessage
+  regenerateAssistantMessage,
+  regenerateResponsesForUserMessage
 } from '@/services/MessagesService'
 import { setEditingMessage } from '@/store/runtime'
 import type { Assistant } from '@/types/assistant'
@@ -109,7 +110,13 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
     }
 
     try {
-      await regenerateAssistantMessage(message, assistant)
+      if (message.role === 'user') {
+        // For user messages: regenerate all linked assistant responses
+        await regenerateResponsesForUserMessage(message, assistant)
+      } else {
+        // For assistant messages: regenerate this specific response
+        await regenerateAssistantMessage(message, assistant)
+      }
     } catch (error) {
       logger.error('Error regenerating message:', error)
     }
