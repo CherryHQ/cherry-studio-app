@@ -16,14 +16,14 @@
 ## 🛠️ 技术栈
 
 - **框架**: Expo React Native
-- **包管理器**: Yarn
+- **包管理器**: Pnpm
 - **UI**: Tamagui
 - **路由**: React Navigation
 - **状态管理**: Redux Toolkit
 
 ## 🚀 开发
 
-> 相关开发文档在docs中
+> 相关开发文档在 docs 文件夹中
 
 1. **克隆仓库**
 
@@ -40,7 +40,7 @@
 3. **安装依赖**
 
    ```bash
-     yarn install
+    pnpm install
    ```
 
 4. **生成数据库**
@@ -48,68 +48,83 @@
 ```bash
 npx drizzle-kit generate
 ```
+5. **构建 MCP Streamable Http**
+```bash
+cd packages/react-native-streamable-http
+npm install
+npm run build
+```
+6. **启动应用程序**
 
-5. **启动应用**
-
-ios:
+iOS:
 
 ```bash
 npx expo prebuild -p ios
 
-cd ios 添加自签证书
+cd ios # 添加自签证书
 
 npx expo run:ios -d
 ```
 
-android:
+Android:
 
 ```bash
 npx expo prebuild -p android
 
-cd android # 配置 Android SDK 路径到 local.properties
+cd android # 在 local.properties 中添加 Android SDK 路径
 
 npx expo run:android -d
 ```
 
-### Android SDK 配置
+### Android SDK 设置
 
-#### Windows 用户：
-
-在 `local.properties` 添加：
+#### Windows 用户:
 
 ```
-sdk.dir=C:\\Users\\您的用户名\\AppData\\Local\\Android\\sdk
+sdk.dir=C:\\Users\\UserName\\AppData\\Local\\Android\\sdk
 ```
 
-或者（新版本 Android Studio 适用）：
+或 (适用于较新版本的 Android Studio / IntelliJ IDEA):
 
 ```
-sdk.dir=C\:\\Users\\您的用户名\\AppData\\Local\\Android\\sdk
+sdk.dir=C\:\\Users\\USERNAME\\AppData\\Local\\Android\\sdk
 ```
 
-注意将 `您的用户名` 替换为你的实际电脑用户名，且确保文件夹名称为 sdk 或 Sdk。
+其中 USERNAME 是您的电脑用户名。同时，请确保文件夹名为 sdk 或 Sdk。
 
-#### Mac 用户：
+示例:
 
 ```
-sdk.dir = /Users/用户名/Library/Android/sdk
+sdk.dir=C:\\Users\\USERNAME\\AppData\\Local\\Android\\sdk
 ```
 
-请将 `用户名` 替换为你的 macOS 用户名。
+或:
 
-你也可以通过环境变量设置：
+```
+sdk.dir=C\:\\Users\\USERNAME\\AppData\\Local\\Android\\Sdk
+```
+
+#### Mac 用户:
+
+```
+sdk.dir = /Users/USERNAME/Library/Android/sdk
+```
+
+其中 USERNAME 是您的 OSX 用户名。
+
+您也可以在路径中使用环境变量，例如:
 
 ```bash
 export ANDROID_HOME=/Users/$(whoami)/Library/Android/sdk
 export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/tools"
 ```
 
-#### Linux (Ubuntu) 用户：
+#### Linux (Ubuntu) 用户:
 
 ```
-sdk.dir = /home/用户名/Android/Sdk
+sdk.dir = /home/USERNAME/Android/Sdk
 ```
 
-将 `用户名` 替换为你的 Linux 用户名。
+其中 USERNAME 是您的 Linux 用户名。
 
-> 请使用真机或者模拟器开发，不要使用Expo Go
+> 请使用实体设备或模拟器进行开发，请勿使用 Expo Go
