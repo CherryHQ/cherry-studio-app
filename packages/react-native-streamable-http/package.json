@@ -30,7 +30,7 @@
   },
   "homepage": "https://github.com/erodactyl/react-native-streamable-http#readme",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.18.0"
+    "@modelcontextprotocol/sdk": "^1.25.2"
   },
   "devDependencies": {
     "tsx": "^4.20.5",
