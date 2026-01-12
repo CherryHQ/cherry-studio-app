@@ -22,7 +22,7 @@ import type {
   WebSearchToolResultBlockParam,
   WebSearchToolResultError
 } from '@anthropic-ai/sdk/resources/messages'
-import { MessageStream } from '@anthropic-ai/sdk/resources/messages/messages'
+import { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream'
 import { File, Paths } from 'expo-file-system'
 import { t } from 'i18next'
 

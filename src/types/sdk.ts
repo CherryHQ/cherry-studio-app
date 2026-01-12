@@ -7,7 +7,7 @@ import type {
   ToolUnion,
   ToolUseBlock
 } from '@anthropic-ai/sdk/resources'
-import type { MessageStream } from '@anthropic-ai/sdk/resources/messages/messages'
+import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream'
 // import AnthropicVertex from '@anthropic-ai/vertex-sdk'
 import type { BedrockClient } from '@aws-sdk/client-bedrock'
 import type { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
