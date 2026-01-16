@@ -16,7 +16,7 @@ English | [中文](./README-zh.md)
 ## 🛠️ Tech Stack
 
 - **Framework**: Expo React Native
-- **Package Manager**: Yarn
+- **Package Manager**: Pnpm
 - **UI**: Tamagui
 - **Routing**: React Navigation
 - **State Management**: Redux Toolkit
@@ -40,7 +40,7 @@ English | [中文](./README-zh.md)
 3. **Install dependencies**
 
    ```bash
-     yarn install
+    pnpm install
    ```
 
 4. **Generate database**
@@ -48,8 +48,13 @@ English | [中文](./README-zh.md)
 ```bash
 npx drizzle-kit generate
 ```
-
-5. **Start the application**
+5. **Build the MCP Streamable Http**
+```bash
+cd packages/react-native-streamable-http
+npm install
+npm run build
+```
+6. **Start the application**
 
 iOS:
 
