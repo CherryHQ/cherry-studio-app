@@ -167,14 +167,17 @@ export abstract class OpenAIBaseClient<
           ...this.defaultHeaders(),
           ...this.provider.extra_headers,
           ...(this.provider.id === 'copilot' ? { 'editor-version': 'vscode/1.97.2' } : {}),
-          ...(this.provider.id === 'copilot' ? { 'copilot-vision-request': 'true' } : {})
+          ...(this.provider.id === 'copilot' ? { 'copilot-vision-request': 'true' } : {}),
+          ...(this.provider.id === 'openrouter' ? {
+            'X-Title': 'Cherry Studio',
+            'HTTP-Referer': 'https://cherry-ai.com',
+          } : {})
         }
       }) as TSdkInstance
     }
 
     return this.sdkInstance
   }
-
   override getTemperature(assistant: Assistant, model: Model): number | undefined {
     if (assistant.settings?.reasoning_effort && isClaudeReasoningModel(model)) {
       return undefined
