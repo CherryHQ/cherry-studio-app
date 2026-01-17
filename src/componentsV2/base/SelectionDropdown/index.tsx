@@ -54,7 +54,7 @@ const SelectionDropdown: React.FC<SelectionDropdownProps> = ({
       <Select.Portal>
         <Select.Overlay closeOnPress={shouldDismissMenuOnSelect} />
         <Select.Content
-          style={{ width: '50%' }}
+          style={{ width: '35%' }}
           width="trigger"
           presentation="popover"
           placement="bottom"
