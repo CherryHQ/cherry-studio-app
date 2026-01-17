@@ -1,19 +1,11 @@
-import React from 'react'
-import type { SFSymbol } from 'sf-symbols-typescript'
-import * as DropdownMenu from 'zeego/dropdown-menu'
-
-import { isIOS } from '@/utils/device'
+import { Select } from 'heroui-native';
+import React, { useState } from 'react'
 
 export interface SelectionDropdownItem {
   id?: string
   key?: string
   label: React.ReactNode | string
-  description?: React.ReactNode | string
-  icon?: React.ReactNode | ((isSelected: boolean) => React.ReactNode)
-  iOSIcon?: SFSymbol | string
-  isSelected?: boolean
   onSelect?: () => void
-  destructive?: boolean
   [x: string]: any
 }
 
@@ -21,37 +13,71 @@ export interface SelectionDropdownProps {
   items: SelectionDropdownItem[]
   children: React.ReactNode
   shouldDismissMenuOnSelect?: boolean
+  value?: string
+  onValueChange?: (value: string) => void
 }
 
-/**
- * 用于显示下拉选择菜单的组件
- * 使用 Zeego dropdown menu 实现，支持原生体验
- */
-const SelectionDropdown: React.FC<SelectionDropdownProps> = ({ items, children, shouldDismissMenuOnSelect = true }) => {
+const SelectionDropdown: React.FC<SelectionDropdownProps> = ({
+  items,
+  children,
+  shouldDismissMenuOnSelect = true,
+  value: externalValue,
+
+  onValueChange
+}) => {
+  const [, setInternalValue] = useState('')
+  const isControlled = externalValue !== undefined
+  const handleValueChange = (selectedItem: any) => {
+    const newValue = selectedItem?.value || selectedItem
+    if (!isControlled) {
+      setInternalValue(newValue)
+    }
+    onValueChange?.(newValue)
+    const foundItem = items.find(item =>
+      item.id === newValue || item.key === newValue
+    )
+
+    if (foundItem) {
+      foundItem.onSelect?.()
+    } else {
+      console.warn('Cannot find item, use default value:', newValue)
+    }
+  }
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger>{children}</DropdownMenu.Trigger>
+    <Select
+      onValueChange={handleValueChange}
+    >
+      <Select.Trigger asChild>
+        {children}
+      </Select.Trigger>
 
-      <DropdownMenu.Content>
-        {items.map((item, index) => {
-          const itemKey = item.key?.toString() || item.id?.toString() || index.toString()
-          const iconElement = typeof item.icon === 'function' ? item.icon(item.isSelected ?? false) : item.icon
+      <Select.Portal>
+        <Select.Overlay closeOnPress={shouldDismissMenuOnSelect} />
+        <Select.Content
+          style={{ width: '50%' }}
+          width="trigger"
+          presentation="popover"
+          placement="bottom"
+          align="center"
 
-          return (
-            <DropdownMenu.CheckboxItem
-              destructive={item.destructive}
-              shouldDismissMenuOnSelect={shouldDismissMenuOnSelect}
-              key={itemKey}
-              value={item.isSelected ? 'on' : 'off'}
-              onValueChange={() => item.onSelect?.()}>
-              {isIOS && item.iOSIcon && <DropdownMenu.ItemIcon ios={{ name: item.iOSIcon }} />}
-              {!isIOS && iconElement && <DropdownMenu.ItemIcon>{iconElement}</DropdownMenu.ItemIcon>}
-              <DropdownMenu.ItemTitle>{item.label}</DropdownMenu.ItemTitle>
-            </DropdownMenu.CheckboxItem>
-          )
-        })}
-      </DropdownMenu.Content>
-    </DropdownMenu.Root>
+        >
+          {items.map((item, index) => {
+            const itemValue = item.id || item.key || String(index)
+            const itemLabel = typeof item.label === 'string'
+              ? item.label
+              : `Unknown Label${index + 1}`
+
+            return (
+              <Select.Item
+                key={itemValue}
+                value={itemValue}
+                label={itemLabel}
+              />
+            )
+          })}
+        </Select.Content>
+      </Select.Portal>
+    </Select>
   )
 }
 
