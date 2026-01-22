@@ -15,6 +15,8 @@ export interface SelectionDropdownProps {
   shouldDismissMenuOnSelect?: boolean
   value?: string
   onValueChange?: (value: string) => void
+  presentation
+  usePortal?: boolean
 }
 
 const SelectionDropdown: React.FC<SelectionDropdownProps> = ({
@@ -22,7 +24,8 @@ const SelectionDropdown: React.FC<SelectionDropdownProps> = ({
   children,
   shouldDismissMenuOnSelect = true,
   value: externalValue,
-
+  presentation = 'popover',
+  usePortal = true,
   onValueChange
 }) => {
   const [, setInternalValue] = useState('')
@@ -51,32 +54,59 @@ const SelectionDropdown: React.FC<SelectionDropdownProps> = ({
         {children}
       </Select.Trigger>
 
-      <Select.Portal>
-        <Select.Overlay closeOnPress={shouldDismissMenuOnSelect} />
-        <Select.Content
-          style={{ width: '35%' }}
-          width="trigger"
-          presentation="popover"
-          placement="bottom"
-          align="center"
+      {usePortal ? (
+        <Select.Portal>
+          <Select.Overlay closeOnPress={shouldDismissMenuOnSelect} />
+          <Select.Content
+            style={{ width: '40%' }}
+            width="trigger"
+            presentation={presentation}
+            placement="bottom"
+            align="center"
+          >
+            {items.map((item, index) => {
+              const itemValue = item.id || item.key || String(index)
+              const itemLabel = typeof item.label === 'string'
+                ? item.label
+                : `Unknown Label${index + 1}`
 
-        >
-          {items.map((item, index) => {
-            const itemValue = item.id || item.key || String(index)
-            const itemLabel = typeof item.label === 'string'
-              ? item.label
-              : `Unknown Label${index + 1}`
+              return (
+                <Select.Item
+                  key={itemValue}
+                  value={itemValue}
+                  label={itemLabel}
+                />
+              )
+            })}
+          </Select.Content>
+        </Select.Portal>
+      ) : (
+        <>
+          <Select.Overlay closeOnPress={shouldDismissMenuOnSelect} />
+          <Select.Content
+            style={{ width: '40%' }}
+            width="trigger"
+            presentation={presentation}
+            placement="bottom"
+            align="center"
+          >
+            {items.map((item, index) => {
+              const itemValue = item.id || item.key || String(index)
+              const itemLabel = typeof item.label === 'string'
+                ? item.label
+                : `Unknown Label${index + 1}`
 
-            return (
-              <Select.Item
-                key={itemValue}
-                value={itemValue}
-                label={itemLabel}
-              />
-            )
-          })}
-        </Select.Content>
-      </Select.Portal>
+              return (
+                <Select.Item
+                  key={itemValue}
+                  value={itemValue}
+                  label={itemLabel}
+                />
+              )
+            })}
+          </Select.Content>
+        </>
+      )}
     </Select>
   )
 }
