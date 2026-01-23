@@ -15,16 +15,14 @@ export interface SelectionDropdownProps {
   shouldDismissMenuOnSelect?: boolean
   value?: string
   onValueChange?: (value: string) => void
-  presentation
   usePortal?: boolean
 }
 
 const SelectionDropdown: React.FC<SelectionDropdownProps> = ({
   items,
-  children,
-  shouldDismissMenuOnSelect = true,
+children,  
+shouldDismissMenuOnSelect = true,
   value: externalValue,
-  presentation = 'popover',
   usePortal = true,
   onValueChange
 }) => {
@@ -60,7 +58,6 @@ const SelectionDropdown: React.FC<SelectionDropdownProps> = ({
           <Select.Content
             style={{ width: '40%' }}
             width="trigger"
-            presentation={presentation}
             placement="bottom"
             align="center"
           >
@@ -84,10 +81,8 @@ const SelectionDropdown: React.FC<SelectionDropdownProps> = ({
         <>
           <Select.Overlay closeOnPress={shouldDismissMenuOnSelect} />
           <Select.Content
-            style={{ width: '40%' }}
+            className='className="w-[40%]"'
             width="trigger"
-            presentation={presentation}
-            placement="bottom"
             align="center"
           >
             {items.map((item, index) => {
