@@ -41,8 +41,7 @@ export function ModelSelect({ provider, onSelectModel }: ModelSelectProps) {
     <SelectionDropdown
       items={selectOptions}
       value={selectedModel ? getModelUniqId(selectedModel) : ''}
-      onValueChange={handleValueChange}
-      presentation="popover">
+      onValueChange={handleValueChange}>
       <Button className="rounded-xl" pressableFeedbackVariant="ripple" variant="tertiary">
         <Button.Label>{selectedModel ? selectedModel.id : t('settings.provider.api_check.tooltip')}</Button.Label>
         <ChevronDown />
