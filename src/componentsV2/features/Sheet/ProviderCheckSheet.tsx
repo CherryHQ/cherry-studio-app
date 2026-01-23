@@ -1,4 +1,4 @@
-import { BottomSheet, Button, Spinner  } from 'heroui-native'
+import { BottomSheet, Button, Spinner } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Pressable, View } from 'react-native'
@@ -40,7 +40,6 @@ const ProviderCheckSheet: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<Model | undefined>()
   const [checkStatus, setCheckStatus] = useState<ApiStatus>('idle')
 
-  
   useEffect(() => {
     updateProviderCallback = setProvider
     setIsOpenCallback = setIsOpen

@@ -1,5 +1,6 @@
-import { Select } from 'heroui-native';
-import React, { useState } from 'react'
+import { Select } from 'heroui-native'
+import type { FC } from 'react'
+import React from 'react'
 
 export interface SelectionDropdownItem {
   id?: string
@@ -18,88 +19,49 @@ export interface SelectionDropdownProps {
   usePortal?: boolean
 }
 
-const SelectionDropdown: React.FC<SelectionDropdownProps> = ({
+const SelectionDropdown: FC<SelectionDropdownProps> = ({
   items,
-children,  
-shouldDismissMenuOnSelect = true,
-  value: externalValue,
+  children,
+  shouldDismissMenuOnSelect = true,
   usePortal = true,
   onValueChange
 }) => {
-  const [, setInternalValue] = useState('')
-  const isControlled = externalValue !== undefined
   const handleValueChange = (selectedItem: any) => {
     const newValue = selectedItem?.value || selectedItem
-    if (!isControlled) {
-      setInternalValue(newValue)
-    }
     onValueChange?.(newValue)
-    const foundItem = items.find(item =>
-      item.id === newValue || item.key === newValue
-    )
 
+    const foundItem = items.find(item => item.id === newValue || item.key === newValue)
     if (foundItem) {
       foundItem.onSelect?.()
-    } else {
-      console.warn('Cannot find item, use default value:', newValue)
     }
   }
+
+  const renderItems = () =>
+    items.map((item, index) => {
+      const itemValue = item.id || item.key || String(index)
+      const itemLabel = typeof item.label === 'string' ? item.label : `Item ${index + 1}`
+      return <Select.Item key={itemValue} value={itemValue} label={itemLabel} />
+    })
+
+  const contentProps = {
+    width: 'trigger' as const,
+    placement: 'bottom' as const,
+    align: 'center' as const
+  }
+
   return (
-    <Select
-      onValueChange={handleValueChange}
-    >
-      <Select.Trigger asChild>
-        {children}
-      </Select.Trigger>
+    <Select onValueChange={handleValueChange}>
+      <Select.Trigger asChild>{children}</Select.Trigger>
 
       {usePortal ? (
         <Select.Portal>
           <Select.Overlay closeOnPress={shouldDismissMenuOnSelect} />
-          <Select.Content
-            style={{ width: '40%' }}
-            width="trigger"
-            placement="bottom"
-            align="center"
-          >
-            {items.map((item, index) => {
-              const itemValue = item.id || item.key || String(index)
-              const itemLabel = typeof item.label === 'string'
-                ? item.label
-                : `Unknown Label${index + 1}`
-
-              return (
-                <Select.Item
-                  key={itemValue}
-                  value={itemValue}
-                  label={itemLabel}
-                />
-              )
-            })}
-          </Select.Content>
+          <Select.Content {...contentProps}>{renderItems()}</Select.Content>
         </Select.Portal>
       ) : (
         <>
           <Select.Overlay closeOnPress={shouldDismissMenuOnSelect} />
-          <Select.Content
-            className='className="w-[40%]"'
-            width="trigger"
-            align="center"
-          >
-            {items.map((item, index) => {
-              const itemValue = item.id || item.key || String(index)
-              const itemLabel = typeof item.label === 'string'
-                ? item.label
-                : `Unknown Label${index + 1}`
-
-              return (
-                <Select.Item
-                  key={itemValue}
-                  value={itemValue}
-                  label={itemLabel}
-                />
-              )
-            })}
-          </Select.Content>
+          <Select.Content {...contentProps}>{renderItems()}</Select.Content>
         </>
       )}
     </Select>

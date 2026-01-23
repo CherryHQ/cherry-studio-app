@@ -48,12 +48,15 @@
 ```bash
 npx drizzle-kit generate
 ```
+
 5. **构建 MCP Streamable Http**
+
 ```bash
 cd packages/react-native-streamable-http
 npm install
 npm run build
 ```
+
 6. **启动应用程序**
 
 iOS:

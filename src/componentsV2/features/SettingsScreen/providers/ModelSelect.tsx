@@ -9,8 +9,6 @@ import { isEmbeddingModel } from '@/config/models'
 import type { Model, Provider } from '@/types/assistant'
 import { getModelUniqId } from '@/utils/model'
 
-
-
 interface ModelSelectProps {
   provider: Provider
   onSelectModel: (model: Model | undefined) => void
