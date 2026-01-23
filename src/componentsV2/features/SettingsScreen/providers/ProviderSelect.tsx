@@ -62,7 +62,7 @@ export function ProviderSelect({ value, onValueChange, placeholder, className }:
       <Pressable className={className}>
         <Button
           pressableFeedbackVariant="ripple"
-          className="h-8 justify-between rounded-lg"
+          className="min-w-35 h-8 justify-between rounded-lg"
           variant="tertiary"
           size="sm"
           pointerEvents="none">

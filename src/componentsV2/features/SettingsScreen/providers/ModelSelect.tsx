@@ -2,8 +2,8 @@ import { Button } from 'heroui-native'
 import { sortBy } from 'lodash'
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import * as DropdownMenu from 'zeego/dropdown-menu'
 
+import SelectionDropdown from '@/componentsV2/base/SelectionDropdown'
 import { ChevronDown } from '@/componentsV2/icons'
 import { isEmbeddingModel } from '@/config/models'
 import type { Model, Provider } from '@/types/assistant'
@@ -20,54 +20,27 @@ export function ModelSelect({ provider, onSelectModel }: ModelSelectProps) {
 
   const selectOptions = !provider.models?.length
     ? []
-    : [
-        {
-          label: provider.isSystem ? t(`provider.${provider.id}`) : provider.name,
-          title: provider.name,
-          options: sortBy(provider.models, 'name')
-            .filter(model => !isEmbeddingModel(model))
-            .map(model => ({
-              label: model.name,
-              value: getModelUniqId(model),
-              model
-            }))
-        }
-      ]
+    : sortBy(provider.models, 'name')
+        .filter(model => !isEmbeddingModel(model))
+        .map(model => ({
+          id: getModelUniqId(model),
+          label: model.name,
+          model
+        }))
 
   const handleValueChange = (value: string) => {
-    if (!value) {
-      setSelectedModel(undefined)
-      onSelectModel(undefined)
-      return
-    }
-
-    const allOptions = selectOptions.flatMap(group => group.options)
-    const foundOption = allOptions.find(opt => opt.value === value)
+    const foundOption = selectOptions.find(opt => opt.id === value)
     const model = foundOption?.model
     setSelectedModel(model)
     onSelectModel(model)
   }
 
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger>
-        <Button className="rounded-xl" pressableFeedbackVariant="ripple" variant="tertiary">
-          <Button.Label>{selectedModel ? selectedModel.id : t('settings.provider.api_check.tooltip')}</Button.Label>
-          <ChevronDown />
-        </Button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Content>
-        {selectOptions.map(group => (
-          <DropdownMenu.Group key={group.label}>
-            <DropdownMenu.Label>{t(`${group.label}`)}</DropdownMenu.Label>
-            {group.options.map(option => (
-              <DropdownMenu.Item key={option.value} onSelect={() => handleValueChange(option.value)}>
-                {option.label}
-              </DropdownMenu.Item>
-            ))}
-          </DropdownMenu.Group>
-        ))}
-      </DropdownMenu.Content>
-    </DropdownMenu.Root>
+    <SelectionDropdown items={selectOptions} onValueChange={handleValueChange}>
+      <Button className="rounded-xl" pressableFeedbackVariant="ripple" variant="tertiary">
+        <Button.Label>{selectedModel ? selectedModel.id : t('settings.provider.api_check.tooltip')}</Button.Label>
+        <ChevronDown />
+      </Button>
+    </SelectionDropdown>
   )
 }
