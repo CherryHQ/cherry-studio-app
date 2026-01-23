@@ -1,13 +1,12 @@
 import '@/i18n'
 import 'react-native-reanimated'
 
-import { DATABASE_NAME, db, expoDb } from '@db'
+import { db, expoDb } from '@db'
 import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native'
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator'
 import { useDrizzleStudio } from 'expo-drizzle-studio-plugin'
 import { useFonts } from 'expo-font'
 import * as SplashScreen from 'expo-splash-screen'
-import { SQLiteProvider } from 'expo-sqlite'
 import { HeroUINativeProvider } from 'heroui-native'
 import React, { Suspense, useEffect } from 'react'
 import { ActivityIndicator } from 'react-native'
@@ -138,11 +137,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <Suspense fallback={<ActivityIndicator size="large" />}>
-          <SQLiteProvider databaseName={DATABASE_NAME} options={{ enableChangeListener: true }} useSuspense>
-            <AppWithRedux />
-          </SQLiteProvider>
-        </Suspense>
+        <AppWithRedux />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   )
