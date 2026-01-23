@@ -1,6 +1,7 @@
 import { Select } from 'heroui-native'
 import type { FC } from 'react'
 import React from 'react'
+import type { SFSymbol } from 'sf-symbols-typescript'
 
 interface SelectOption {
   value: string
@@ -11,6 +12,10 @@ export interface SelectionDropdownItem {
   id?: string
   key?: string
   label: React.ReactNode | string
+  icon?: React.ReactNode
+  iOSIcon?: SFSymbol | string
+  isSelected?: boolean
+  destructive?: boolean
   onSelect?: () => void
 }
 
