@@ -373,6 +373,12 @@
         "oauth_failed": "OAuth 认证失败",
         "title": "认证"
       },
+      "errors": {
+        "list_tools_failed": "无法从 MCP 服务器获取工具列表，请检查服务器连接。",
+        "url_empty": "MCP 服务器 URL 不能为空",
+        "validation_failed": "验证 MCP 服务器失败，请检查配置",
+        "enable_failed": "启用失败"
+      },
       "builtin": {
         "calendar": {
           "description": "获取系统日历，添加日程"

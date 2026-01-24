@@ -27,6 +27,7 @@ import { useMcpOAuth, useMcpServer, useMcpTools } from '@/hooks/useMcp'
 import { useSearch } from '@/hooks/useSearch'
 import { useToast } from '@/hooks/useToast'
 import type { McpStackParamList } from '@/navigators/McpStackNavigator'
+import { mcpClientService } from '@/services/mcp/McpClientService'
 import { loggerService } from '@/services/LoggerService'
 
 const logger = loggerService.withContext('McpDetailScreen')
@@ -62,6 +63,7 @@ export default function McpDetailScreen() {
   const [localDescription, setLocalDescription] = useState<string>('')
   const [localUrl, setLocalUrl] = useState<string>('')
   const [localHeaders, setLocalHeaders] = useState<Record<string, string>>({})
+  const [isValidating, setIsValidating] = useState<boolean>(false)
 
   // OAuth hook for HTTP type servers
   // Use localUrl since it's always current (synced with mcpServer.baseUrl and updated by user edits)
@@ -81,10 +83,57 @@ export default function McpDetailScreen() {
   const handleActiveChange = async (checked: boolean) => {
     if (!mcpServer) return
 
+    // If disabling, directly update
+    if (!checked) {
+      try {
+        await updateMcpServer({ isActive: false })
+      } catch (error) {
+        logger.error('Failed to update MCP server active state', error as Error)
+      }
+      return
+    }
+
+    // If enabling, perform validation first
+    setIsValidating(true)
     try {
-      await updateMcpServer({ isActive: checked })
+      // Check 1: URL should not be empty for HTTP type servers
+      if (mcpServer.type === 'streamableHttp' || mcpServer.type === 'sse') {
+        if (!mcpServer.baseUrl || mcpServer.baseUrl.trim() === '') {
+          presentDialog('error', {
+            title: t('mcp.errors.enable_failed'),
+            content: t('mcp.errors.url_empty'),
+            confirmText: t('common.ok')
+          })
+          setIsValidating(false)
+          return
+        }
+
+        // Check 2: Test if tools can be fetched
+        try {
+          const tools = await mcpClientService.listTools(mcpServer)
+          // Empty tools is acceptable - no need to handle
+          logger.info(`MCP server ${mcpServer.name} validation passed, fetched ${tools.length} tools`)
+        } catch (error) {
+          // Check 3: Handle other unknown errors
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          logger.error(`Failed to validate MCP server ${mcpServer.name}:`, error as Error)
+
+          presentDialog('error', {
+            title: t('mcp.errors.enable_failed'),
+            content: errorMessage || t('mcp.errors.validation_failed'),
+            confirmText: t('common.ok')
+          })
+          setIsValidating(false)
+          return
+        }
+      }
+
+      // All checks passed, enable the server
+      await updateMcpServer({ isActive: true })
     } catch (error) {
       logger.error('Failed to update MCP server active state', error as Error)
+    } finally {
+      setIsValidating(false)
     }
   }
 
@@ -233,8 +282,15 @@ export default function McpDetailScreen() {
               <GroupTitle>{t('common.manage')}</GroupTitle>
               <Group>
                 <Row>
-                  <Text>{t('common.enabled')}</Text>
-                  <Switch isSelected={mcpServer?.isActive ?? false} onSelectedChange={handleActiveChange} />
+                  <XStack className="items-center gap-2">
+                    <Text>{t('common.enabled')}</Text>
+                    {isValidating && <Spinner size="sm" />}
+                  </XStack>
+                  <Switch
+                    isSelected={mcpServer?.isActive ?? false}
+                    onSelectedChange={handleActiveChange}
+                    isDisabled={isValidating}
+                  />
                 </Row>
                 <Row>
                   <Text>{t('common.name')}</Text>

@@ -13,13 +13,15 @@ interface McpMarketContentProps {
   handleMcpServerItemPress: (mcp: MCPServer) => void
   mode?: 'add' | 'toggle'
   onToggle?: (mcp: MCPServer, isActive: boolean) => void
+  validatingServerId?: string | null
 }
 
 export const McpMarketContent: FC<McpMarketContentProps> = ({
   mcps,
   handleMcpServerItemPress,
   mode = 'toggle',
-  onToggle
+  onToggle,
+  validatingServerId
 }) => {
   const insets = useSafeAreaInsets()
 

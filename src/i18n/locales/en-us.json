@@ -373,6 +373,12 @@
         "oauth_failed": "OAuth authentication failed",
         "title": "Authentication"
       },
+      "errors": {
+        "list_tools_failed": "Cannot get tools list from MCP server, please check the server connection.",
+        "url_empty": "MCP server URL cannot be empty",
+        "validation_failed": "Failed to validate MCP server, please check the configuration",
+        "enable_failed": "Enable failed"
+      },
       "builtin": {
         "calendar": {
           "description": "Get, operating system calendar"
