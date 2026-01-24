@@ -629,6 +629,17 @@ export const SYSTEM_PROVIDERS_CONFIG: Record<SystemProviderId, SystemProvider> =
     models: SYSTEM_MODELS.cerebras,
     isSystem: true,
     enabled: false
+  },
+  n1n: {
+    id: 'n1n',
+    name: 'n1n.ai',
+    type: 'openai',
+    apiKey: '',
+    apiHost: 'https://api.n1n.ai/v1',
+    anthropicApiHost: 'https://api.n1n.ai/v1',
+    models: SYSTEM_MODELS.n1n,
+    isSystem: true,
+    enabled: false
   }
 } as const
 
@@ -800,10 +811,21 @@ export const PROVIDER_URLS: Record<SystemProviderId, ProviderUrls> = {
       url: 'https://api.perplexity.ai/'
     },
     websites: {
-      official: 'https://perplexity.ai/',
+      official: 'https://www.perplexity.ai/',
       apiKey: 'https://www.perplexity.ai/settings/api',
-      docs: 'https://docs.perplexity.ai/home',
-      models: 'https://docs.perplexity.ai/guides/model-cards'
+      docs: 'https://docs.perplexity.ai/',
+      models: 'https://docs.perplexity.ai/docs/model-cards'
+    }
+  },
+  n1n: {
+    api: {
+      url: 'https://api.n1n.ai/v1'
+    },
+    websites: {
+      official: 'https://n1n.ai',
+      apiKey: 'https://n1n.ai',
+      docs: 'https://docs.n1n.ai',
+      models: 'https://docs.n1n.ai/llm-api-quickstart'
     }
   },
   infini: {
