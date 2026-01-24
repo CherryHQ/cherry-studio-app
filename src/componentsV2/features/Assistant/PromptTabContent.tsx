@@ -1,6 +1,7 @@
 import { MotiView } from 'moti'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Pressable } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 
 import TextField from '@/componentsV2/base/TextField'
@@ -69,7 +70,8 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
             <TextField.Label className="text-foreground-secondary text-sm font-medium">
               {t('common.prompt')}
             </TextField.Label>
-            <TextField.Input
+            <Pressable
+              className="flex-1"
               onPress={() => {
                 presentPromptDetailSheet(
                   formData.prompt,
@@ -81,15 +83,18 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
                     }
                   }
                 )
-              }}
-              editable={false}
-              className="flex-1 rounded-lg px-3 py-3 text-sm"
-              placeholder={t('common.prompt')}
-              multiline
-              numberOfLines={20}
-              textAlignVertical="top"
-              value={formData.prompt}
-            />
+              }}>
+              <TextField.Input
+                editable={false}
+                pointerEvents="none"
+                className="flex-1 rounded-lg px-3 py-3 text-sm"
+                placeholder={t('common.prompt')}
+                multiline
+                numberOfLines={20}
+                textAlignVertical="top"
+                value={formData.prompt}
+              />
+            </Pressable>
           </TextField>
         </YStack>
       </KeyboardAvoidingView>

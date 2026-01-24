@@ -602,18 +602,12 @@ export class AssistantService {
   }
 
   /**
-   * Perform optimistic assistant update with rollback on failure
+   * Perform assistant update with database-first approach
+   *
+   * Sequence: Database Transaction → Cache Update → Notify Subscribers
+   * This prevents race conditions with dual database connections
    */
   private async performAssistantUpdate(assistantId: string, updates: Partial<Omit<Assistant, 'id'>>): Promise<void> {
-    // Save old data for rollback
-    const oldSystemAssistant = this.systemAssistantsCache.get(assistantId)
-      ? { ...this.systemAssistantsCache.get(assistantId)! }
-      : null
-    const oldLRUAssistant = this.assistantCache.get(assistantId) ? { ...this.assistantCache.get(assistantId)! } : null
-    const oldAllAssistant = this.allAssistantsCache.get(assistantId)
-      ? { ...this.allAssistantsCache.get(assistantId)! }
-      : null
-
     try {
       // Fetch current assistant data
       let currentAssistantData: Assistant
@@ -639,44 +633,21 @@ export class AssistantService {
         id: assistantId
       }
 
-      // Optimistic update: update all caches
-      this.updateAssistantInCache(assistantId, updatedAssistant)
-
-      // Notify subscribers (UI updates immediately)
-      this.notifyAssistantSubscribers(assistantId)
-
-      // Persist to database
+      // Persist to database FIRST (before any cache updates or notifications)
       await assistantDatabase.upsertAssistants([updatedAssistant])
 
-      // Notify other subscribers
+      // Update caches after successful database operation
+      this.updateAssistantInCache(assistantId, updatedAssistant)
+
+      // Notify subscribers after database and cache are in sync
+      this.notifyAssistantSubscribers(assistantId)
       this.notifyGlobalSubscribers()
       this.notifyAllAssistantsSubscribers()
 
       logger.debug(`Assistant updated successfully: ${assistantId}`)
     } catch (error) {
-      // Rollback on failure
-      logger.error('Failed to update assistant, rolling back:', error as Error)
-
-      if (oldSystemAssistant) {
-        this.systemAssistantsCache.set(assistantId, oldSystemAssistant)
-      } else {
-        this.systemAssistantsCache.delete(assistantId)
-      }
-
-      if (oldLRUAssistant) {
-        this.assistantCache.set(assistantId, oldLRUAssistant)
-      } else {
-        this.assistantCache.delete(assistantId)
-      }
-
-      if (oldAllAssistant) {
-        this.allAssistantsCache.set(assistantId, oldAllAssistant)
-      } else {
-        this.allAssistantsCache.delete(assistantId)
-      }
-
-      this.notifyAssistantSubscribers(assistantId)
-
+      // No rollback needed since we didn't update caches before transaction
+      logger.error('Failed to update assistant:', error as Error)
       throw error
     }
   }
