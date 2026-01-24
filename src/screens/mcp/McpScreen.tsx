@@ -8,6 +8,7 @@ import {
   DrawerGestureWrapper,
   HeaderBar,
   ListSkeleton,
+  presentDialog,
   SafeAreaContainer,
   SearchInput
 } from '@/componentsV2'
@@ -17,6 +18,7 @@ import { useMcpServers } from '@/hooks/useMcp'
 import { useSearch } from '@/hooks/useSearch'
 import { useSkeletonLoading } from '@/hooks/useSkeletonLoading'
 import { useToast } from '@/hooks/useToast'
+import { mcpClientService } from '@/services/mcp/McpClientService'
 import { mcpService } from '@/services/McpService'
 import type { MCPServer } from '@/types/mcp'
 import type { DrawerNavigationProps, McpNavigationProps } from '@/types/naviagate'
@@ -51,6 +53,23 @@ export default function McpScreen() {
   }
 
   const handleToggle = async (mcp: MCPServer, isActive: boolean) => {
+    if (isActive) {
+      try {
+        const connectivityResult = await mcpClientService.checkConnectivity(mcp)
+        if (!connectivityResult.connected) {
+          presentDialog('error', {
+            title: t('mcp.server.update_failed', { name: mcp.name }),
+            content: connectivityResult.error || t('common.error_occurred'),
+            confirmText: t('common.ok')
+          })
+          return
+        }
+      } catch {
+        toast.show(t('mcp.server.update_failed', { name: mcp.name }), { color: 'red', duration: 3000 })
+        return
+      }
+    }
+
     const result = await updateMcpServers([{ ...mcp, isActive }])
     if (result.totalFailed > 0) {
       const failedServer = result.failed[0]
