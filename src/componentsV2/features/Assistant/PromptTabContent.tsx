@@ -86,6 +86,7 @@ export function PromptTabContent({ assistant, updateAssistant }: PromptTabConten
               }}>
               <TextField.Input
                 editable={false}
+                pointerEvents="none"
                 className="flex-1 rounded-lg px-3 py-3 text-sm"
                 placeholder={t('common.prompt')}
                 multiline
