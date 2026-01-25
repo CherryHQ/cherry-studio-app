@@ -1,6 +1,6 @@
 import type { RouteProp } from '@react-navigation/native'
 import { useNavigation, useRoute } from '@react-navigation/native'
-import { Button, Spinner, Switch } from 'heroui-native'
+import { Button, Spinner, Switch, useToast } from 'heroui-native'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Platform, Pressable, ScrollView } from 'react-native'
@@ -25,7 +25,6 @@ import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useMcpOAuth, useMcpServer, useMcpTools } from '@/hooks/useMcp'
 import { useSearch } from '@/hooks/useSearch'
-import { useToast } from '@/hooks/useToast'
 import type { McpStackParamList } from '@/navigators/McpStackNavigator'
 import { loggerService } from '@/services/LoggerService'
 import { mcpClientService } from '@/services/mcp/McpClientService'
@@ -38,7 +37,7 @@ export default function McpDetailScreen() {
   const { t } = useTranslation()
   const navigation = useNavigation()
   const route = useRoute<McpDetailRouteProp>()
-  const toast = useToast()
+  const { toast } = useToast()
   const { mcpId } = route.params ?? {}
 
   const { mcpServer, isLoading, updateMcpServer, deleteMcpServer } = useMcpServer(mcpId ?? '')
@@ -83,7 +82,6 @@ export default function McpDetailScreen() {
   const handleActiveChange = async (checked: boolean) => {
     if (!mcpServer) return
 
-    // If disabling, directly update
     if (!checked) {
       try {
         await updateMcpServer({ isActive: false })
@@ -93,7 +91,6 @@ export default function McpDetailScreen() {
       return
     }
 
-    // If enabling, perform validation first
     setIsValidating(true)
     try {
       const connectivityResult = await mcpClientService.checkConnectivity(mcpServer)
@@ -107,7 +104,6 @@ export default function McpDetailScreen() {
         return
       }
 
-      // All checks passed, enable the server
       await updateMcpServer({ isActive: true })
     } catch (error) {
       logger.error('Failed to update MCP server active state', error as Error)
@@ -222,7 +218,10 @@ export default function McpDetailScreen() {
       if (!result.success) {
         // Show error to user
         const errorMessage = result.error || t('mcp.auth.oauth_failed')
-        toast.show(errorMessage, { color: 'red', duration: 3000 })
+        toast.show({
+          variant: 'danger',
+          label: errorMessage
+        })
         logger.warn(`OAuth failed:`, { errorCode: result.errorCode, error: result.error })
       }
     }
