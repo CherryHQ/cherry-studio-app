@@ -373,6 +373,9 @@
         "oauth_failed": "OAuth認証に失敗しました",
         "title": "認証"
       },
+      "errors": {
+        "list_tools_failed": "MCP サーバーからツールリストを取得できません。サーバー接続を確認してください。"
+      },
       "builtin": {
         "calendar": {
           "description": "取得、オペレーティングシステムのカレンダー"

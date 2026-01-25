@@ -240,7 +240,13 @@ class McpClientService {
       return tools
     } catch (error) {
       this.maybePromptAuth(server, error)
+
       logger.error(`Failed to list tools for server ${server.name}:`, error as Error)
+      presentDialog('error', {
+        title: i18n.t('common.error_occurred'),
+        content: i18n.t('mcp.errors.list_tools_failed'),
+        confirmText: i18n.t('common.ok')
+      })
       throw error
     }
   }
