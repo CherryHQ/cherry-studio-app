@@ -15,6 +15,7 @@ import { LiquidGlassButton } from '@/componentsV2/base/LiquidGlassButton'
 import { GradientBlurEdge } from '@/componentsV2/features/ChatScreen/GradientBlurEdge'
 import { ArrowDown } from '@/componentsV2/icons'
 import { useInitialScrollToEnd } from '@/hooks/chat/useInitialScrollToEnd'
+import { usePreference } from '@/hooks/usePreference'
 import { useTopicBlocks } from '@/hooks/useMessageBlocks'
 import { useMessages } from '@/hooks/useMessages'
 import { useTheme } from '@/hooks/useTheme'
@@ -38,6 +39,7 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
   const { messages } = useMessages(topic.id)
   const { messageBlocks } = useTopicBlocks(topic.id)
   const { isDark } = useTheme()
+  const [autoScroll] = usePreference('chat.auto_scroll')
   const groupedMessages = Object.entries(getGroupedMessages(messages))
   const legendListRef = useRef<LegendListRef>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
@@ -144,7 +146,7 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
         onScroll={handleScroll}
         scrollEventThrottle={16}
         recycleItems
-        maintainScrollAtEnd
+        maintainScrollAtEnd={autoScroll}
         maintainScrollAtEndThreshold={0.1}
         keyboardShouldPersistTaps="never"
         keyboardDismissMode="on-drag"

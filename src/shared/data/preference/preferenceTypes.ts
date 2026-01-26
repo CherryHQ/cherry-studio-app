@@ -30,6 +30,9 @@ export interface PreferenceSchemas {
     'websearch.override_search_service': boolean
     'websearch.content_limit': number | undefined
 
+    // Chat Configuration
+    'chat.auto_scroll': boolean
+
     // App State
     'app.initialization_version': number
     'app.dismissed_update_version': string

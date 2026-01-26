@@ -687,6 +687,10 @@
       },
       "dataAndSecurity": "資料與安全性",
       "general": {
+        "auto_scroll": {
+          "description": "接收串流輸出時自動滾動到底部",
+          "title": "自動滾動訊息"
+        },
         "developer_mode": {
           "title": "開發者模式"
         },
