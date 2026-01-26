@@ -687,6 +687,10 @@
       },
       "dataAndSecurity": "データ & セキュリティ",
       "general": {
+        "auto_scroll": {
+          "description": "ストリーミング出力受信時に自動で最下部にスクロール",
+          "title": "メッセージ自動スクロール"
+        },
         "developer_mode": {
           "title": "開発者モード"
         },

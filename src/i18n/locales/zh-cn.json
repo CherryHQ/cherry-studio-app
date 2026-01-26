@@ -687,6 +687,10 @@
       },
       "dataAndSecurity": "数据与安全",
       "general": {
+        "auto_scroll": {
+          "description": "接收流式输出时自动滚动到底部",
+          "title": "自动滚动消息"
+        },
         "developer_mode": {
           "title": "开发者模式"
         },
