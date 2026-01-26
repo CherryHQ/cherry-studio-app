@@ -22,7 +22,7 @@ export interface UseMessageSendOptions {
   mentions: Model[]
   clearInputs: () => void
   restoreInputs: (text: string, files: FileMetadata[]) => void
-  onEditStart?: (content: string) => void
+  onEditStart?: (content: string, files?: FileMetadata[]) => void
   onEditCancel?: () => void
 }
 

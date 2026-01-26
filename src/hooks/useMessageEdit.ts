@@ -3,12 +3,13 @@ import { useDispatch, useSelector } from 'react-redux'
 
 import type { RootState } from '@/store'
 import { setEditingMessage } from '@/store/runtime'
+import type { FileMetadata } from '@/types/file'
 import type { Message } from '@/types/message'
-import { getMainTextContent } from '@/utils/messageUtils/find'
+import { getFileContent, getMainTextContent } from '@/utils/messageUtils/find'
 
 interface UseEditMessageOptions {
   topicId: string
-  onEditStart?: (content: string) => void
+  onEditStart?: (content: string, files?: FileMetadata[]) => void
   onEditCancel?: () => void
 }
 
@@ -26,7 +27,8 @@ export const useMessageEdit = (options: UseEditMessageOptions) => {
       if (editingMessage && editingMessage.id !== prevEditingMessageId.current) {
         prevEditingMessageId.current = editingMessage.id
         const content = await getMainTextContent(editingMessage)
-        onEditStart?.(content)
+        const files = await getFileContent(editingMessage)
+        onEditStart?.(content, files)
       } else if (!editingMessage && prevEditingMessageId.current) {
         prevEditingMessageId.current = null
       }
