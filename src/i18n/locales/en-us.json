@@ -878,38 +878,6 @@
       "proxy": {
         "title": "Proxy Address"
       },
-      "speechToText": {
-        "title": "Speech to Text",
-        "provider": {
-          "label": "Provider",
-          "default": "Default",
-          "bailian": "Bailian",
-          "api": {
-            "title": "API Service Providers"
-          }
-        },
-        "api_key": {
-          "get": "Get API Key",
-          "label": "API Key",
-          "placeholder": "Enter API Key"
-        },
-        "check_success": "Check Success",
-        "check_success_message": "The API is working properly",
-        "check_fail": "Check Fail",
-        "check_error": "Check Error",
-        "api_key": {
-          "error_title": "API Key Not Configured",
-          "error_not_configured": "Please configure the API key in settings before using speech recognition"
-        },
-        "permission": {
-          "error_title": "Permission Denied",
-          "error_denied": "Please grant microphone permission in system settings to use speech recognition"
-        },
-        "provider": {
-          "error_title": "Speech Recognition Service Unavailable",
-          "error_not_available": "Speech recognition service is currently unavailable. Please try again later or contact support"
-        }
-      },
       "siyuan": {
         "api_url": "Siyuan Note API URL",
         "api_url_placeholder": "e.g.: http://127.0.0.1:6806",
@@ -931,6 +899,33 @@
           "label": "Siyuan Note Token"
         },
         "token_placeholder": "Please enter Siyuan Note Token"
+      },
+      "speechToText": {
+        "api_key": {
+          "error_not_configured": "Please configure the API key in settings before using speech recognition",
+          "error_title": "API Key Not Configured",
+          "get": "Get API Key",
+          "label": "API Key",
+          "placeholder": "Enter API Key"
+        },
+        "check_error": "Check Error",
+        "check_fail": "Check Fail",
+        "check_success": "Check Success",
+        "check_success_message": "The API is working properly",
+        "permission": {
+          "error_denied": "Please grant microphone permission in system settings to use speech recognition",
+          "error_title": "Permission Denied"
+        },
+        "provider": {
+          "api": {
+            "title": "API Providers"
+          },
+          "bailian": "Alibaba Cloud Bailian",
+          "default": "Default",
+          "error_not_available": "Speech recognition service is currently unavailable. Please try again later or contact support",
+          "error_title": "Speech Recognition Service Unavailable"
+        },
+        "title": "Speech to Text"
       },
       "theme": {
         "window": {

@@ -3,11 +3,11 @@ import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-spe
 import { useRef, useState } from 'react'
 import { Platform } from 'react-native'
 
+import { getSpeechToTextProviders } from '@/config/speechToTextProviders'
+import { usePreference } from '@/hooks/usePreference'
 import i18n from '@/i18n'
 import { DashScopeSpeechService } from '@/services/DashScopeSpeechService'
 import { loggerService } from '@/services/LoggerService'
-import { usePreference } from '@/hooks/usePreference'
-import { getSpeechToTextProviders } from '@/config/speechToTextProviders'
 
 const logger = loggerService.withContext('SpeechRecognition')
 

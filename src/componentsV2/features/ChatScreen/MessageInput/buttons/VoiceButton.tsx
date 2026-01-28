@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, Platform } from 'react-native'
+import { ActivityIndicator } from 'react-native'
 
 import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import { IconButton } from '@/componentsV2/base/IconButton'
@@ -100,4 +100,3 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscript, onListen
     />
   )
 }
-
