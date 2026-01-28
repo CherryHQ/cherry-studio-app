@@ -878,6 +878,38 @@
       "proxy": {
         "title": "プロキシ アドレス"
       },
+      "speechToText": {
+        "title": "音声認識",
+        "provider": {
+          "label": "プロバイダー",
+          "default": "デフォルト",
+          "bailian": "百煉",
+          "api": {
+            "title": "API サービスプロバイダー"
+          }
+        },
+        "api_key": {
+          "get": "API キーを取得",
+          "label": "API キー",
+          "placeholder": "API キーを入力してください"
+        },
+        "check_success": "チェック成功",
+        "check_success_message": "APIは正常に動作しています",
+        "check_fail": "チェック失敗",
+        "check_error": "チェックエラー",
+        "api_key": {
+          "error_title": "APIキーが設定されていません",
+          "error_not_configured": "音声認識機能を使用するには、設定でAPIキーを設定してください"
+        },
+        "permission": {
+          "error_title": "権限が拒否されました",
+          "error_denied": "音声認識を使用するには、システム設定でマイク権限を許可してください"
+        },
+        "provider": {
+          "error_title": "音声認識サービスが利用できません",
+          "error_not_available": "音声認識サービスは現在利用できません。後でもう一度試すか、サポートにお問い合わせください"
+        }
+      },
       "siyuan": {
         "api_url": "思源ノートAPI URL",
         "api_url_placeholder": "例：http://127.0.0.1:6806",

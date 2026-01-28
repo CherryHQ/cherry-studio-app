@@ -878,6 +878,38 @@
       "proxy": {
         "title": "代理地址"
       },
+      "speechToText": {
+        "title": "語音轉文字",
+        "provider": {
+          "label": "提供商",
+          "default": "預設",
+          "bailian": "百煉",
+          "api": {
+            "title": "API 服務提供商"
+          }
+        },
+        "api_key": {
+          "get": "獲取 API 密鑰",
+          "label": "API 密鑰",
+          "placeholder": "請輸入 API 密鑰"
+        },
+        "check_success": "檢查成功",
+        "check_success_message": "API 運作正常",
+        "check_fail": "檢查失敗",
+        "check_error": "檢查錯誤",
+        "api_key": {
+          "error_title": "API 密鑰未配置",
+          "error_not_configured": "請先在設定中配置 API 密鑰才能使用語音識別功能"
+        },
+        "permission": {
+          "error_title": "權限被拒絕",
+          "error_denied": "請在系統設定中授予麥克風權限才能使用語音識別功能"
+        },
+        "provider": {
+          "error_title": "語音識別服務不可用",
+          "error_not_available": "語音識別服務當前不可用，請稍後再試或聯繫技術支援"
+        }
+      },
       "siyuan": {
         "api_url": "思源筆記 API URL",
         "api_url_placeholder": "例如：http://127.0.0.1:6806",

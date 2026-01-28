@@ -4,11 +4,12 @@
  * This file defines all user preferences and their default values.
  * Preferences are stored in the SQLite database and can be synchronized across devices.
  *
- * Total preference items: 10
+ * Total preference items: 11
  * - User configuration: 3
  * - UI configuration: 1
  * - Topic state: 1
  * - Web search configuration: 4
+ * - Speech to text configuration: 1
  * - App state: 2
  */
 
@@ -62,7 +63,16 @@ export const DefaultPreferences: PreferenceSchemas = {
     // undefined means no limit
     'websearch.content_limit': 2000,
 
-    // Current version of the app data initialization
+    // === Speech to Text Configuration ===
+    // Current speech to text provider
+    // Options: 'default' (system), 'bailian' (API), etc.
+    'speechToTextProvider': 'default',
+
+    // Speech to text providers configuration
+    // Stores API keys for each provider
+    'speechToTextProviders': {},
+
+    // Current version of app data initialization
     // Used to run incremental initialization migrations when new data is added
     'app.initialization_version': 0,
 
@@ -91,6 +101,8 @@ export const PreferenceDescriptions: Record<keyof PreferenceSchemas['default'], 
   'websearch.max_results': 'Maximum number of search results (1-20)',
   'websearch.override_search_service': 'Use custom search service configuration',
   'websearch.content_limit': 'Content length limit for search results (characters)',
+  'speechToTextProvider': 'Current speech to text provider',
+  'speechToTextProviders': 'Speech to text providers configuration',
   'app.initialization_version': 'Current version of app data initialization migrations',
   'app.dismissed_update_version': 'Version number that user chose to skip updating',
   'app.developer_mode': 'Enable developer mode for advanced features'

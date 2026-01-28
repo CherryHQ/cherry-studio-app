@@ -10,6 +10,7 @@ import type { AboutStackParamList } from '@/navigators/settings/AboutStackNaviga
 import type { DataSourcesStackParamList } from '@/navigators/settings/DataSourcesStackNavigator'
 import type { GeneralSettingsStackParamList } from '@/navigators/settings/GeneralSettingsStackNavigator'
 import type { ProvidersStackParamList } from '@/navigators/settings/ProvidersStackNavigator'
+import type { SpeechToTextSettingsStackParamList } from '@/navigators/settings/SpeechToTextSettingsStackNavigator'
 import type { WebSearchStackParamList } from '@/navigators/settings/WebSearchStackNavigator'
 import type { SettingsStackParamList } from '@/navigators/SettingsStackNavigator'
 import type { WelcomeStackParamList } from '@/navigators/WelcomeStackNavigator'
@@ -34,6 +35,7 @@ export type AppDrawerParamList = {
     | { screen: 'DataSourcesSettings'; params?: any }
     | { screen: 'WebSearchSettings'; params?: any }
     | { screen: 'AboutSettings'; params?: any }
+    | { screen: 'SpeechToTextSettings'; params?: any }
     | undefined
   Assistant:
     | { screen: 'AssistantScreen' }
@@ -73,6 +75,7 @@ export type ProvidersNavigationProps = StackNavigationProp<ProvidersStackParamLi
 export type DataSourcesNavigationProps = StackNavigationProp<DataSourcesStackParamList>
 export type WebSearchNavigationProps = StackNavigationProp<WebSearchStackParamList>
 export type AboutNavigationProps = StackNavigationProp<AboutStackParamList>
+export type SpeechToTextNavigationProps = StackNavigationProp<SpeechToTextSettingsStackParamList>
 
 // Legacy compatibility
 export type NavigationProps = RootNavigationProps
