@@ -13,10 +13,10 @@ export const InputRow: React.FC<InputRowProps> = ({ children }) => {
     <View className="flex-row items-center">
       {children ?? (
         <>
-          <MessageTextField />
-          <View className="items-end justify-end p-2">
+          <View className="p-2">
             <Actions />
           </View>
+          <MessageTextField />
         </>
       )}
     </View>

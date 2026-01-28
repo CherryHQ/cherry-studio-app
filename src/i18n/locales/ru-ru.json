@@ -900,6 +900,33 @@
         },
         "token_placeholder": "Пожалуйста, введите токен Siyuan Note"
       },
+      "speechToText": {
+        "api_key": {
+          "error_not_configured": "Пожалуйста, настройте API ключ в настройках перед использованием распознавания речи",
+          "error_title": "API ключ не настроен",
+          "get": "Получить API ключ",
+          "label": "API ключ",
+          "placeholder": "Введите API ключ"
+        },
+        "check_error": "Ошибка проверки",
+        "check_fail": "Ошибка проверки",
+        "check_success": "Проверка успешна",
+        "check_success_message": "API работает правильно",
+        "permission": {
+          "error_denied": "Пожалуйста, предоставьте разрешение на микрофон в системных настройках для использования распознавания речи",
+          "error_title": "Доступ запрещен"
+        },
+        "provider": {
+          "api": {
+            "title": "API провайдеры"
+          },
+          "bailian": "Alibaba Cloud Bailian",
+          "default": "По умолчанию",
+          "error_not_available": "Сервис распознавания речи сейчас недоступен. Попробуйте позже или обратитесь в поддержку",
+          "error_title": "Сервис распознавания речи недоступен"
+        },
+        "title": "Речь в текст"
+      },
       "theme": {
         "window": {
           "style": {

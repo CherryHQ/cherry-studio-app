@@ -16,10 +16,10 @@ export const Main: React.FC<MainProps> = ({ children }) => {
       <XStack className="items-end gap-2">
         {children ?? (
           <>
+            <InputArea />
             <View className="h-[42px] items-center justify-center">
               <MessageInputToolButton />
             </View>
-            <InputArea />
           </>
         )}
       </XStack>

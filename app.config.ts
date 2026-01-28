@@ -44,7 +44,7 @@ export default {
       package: 'com.cherry_ai.cherry_studio_app',
       userInterfaceStyle: 'automatic',
       predictiveBackGestureEnabled: false,
-      permissions: ['android.permission.ACCESS_WIFI_STATE', 'android.permission.CHANGE_WIFI_MULTICAST_STATE']
+      permissions: ['android.permission.ACCESS_WIFI_STATE', 'android.permission.CHANGE_WIFI_MULTICAST_STATE', 'android.permission.RECORD_AUDIO']
     },
     plugins: [
       [
@@ -124,7 +124,7 @@ export default {
         'expo-camera',
         {
           cameraPermission: 'Allow Cherry Studio App to access your camera',
-          // microphonePermission: 'Allow Cherry Studio App to access your microphone',
+          microphonePermission: 'Allow Cherry Studio App to access your microphone for camera recording.',
           recordAudioAndroid: true
         }
       ],
@@ -141,6 +141,12 @@ export default {
         {
           calendarPermission: 'Allow Cherry Studio App to access your calendar.',
           remindersPermission: 'Allow Cherry Studio App to access your reminders.'
+        }
+      ],
+      [
+        'expo-audio',
+        {
+          microphonePermission: 'Allow Cherry Studio App to access your microphone for voice input and recording.'
         }
       ],
       ['react-native-compressor'],
