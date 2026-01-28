@@ -1,4 +1,9 @@
-import { Audio } from 'expo-av'
+import {
+  AudioQuality,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from 'expo-audio'
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition'
 import { useRef, useState } from 'react'
 import { Platform } from 'react-native'
@@ -8,6 +13,8 @@ import { usePreference } from '@/hooks/usePreference'
 import i18n from '@/i18n'
 import { DashScopeSpeechService } from '@/services/DashScopeSpeechService'
 import { loggerService } from '@/services/LoggerService'
+
+
 
 const logger = loggerService.withContext('SpeechRecognition')
 
@@ -69,7 +76,30 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
   const [providersConfig] = usePreference('speechToTextProviders' as any)
 
   // Audio recording ref for API providers
-  const recordingRef = useRef<Audio.Recording | null>(null)
+  const audioRecorder = useAudioRecorder({
+    extension: '.m4a',
+    sampleRate: 44100,
+    numberOfChannels: 1,
+    bitRate: 128000,
+    android: {
+      extension: '.m4a',
+      outputFormat: 'mpeg4',
+      audioEncoder: 'aac',
+      sampleRate: 44100
+    },
+    ios: {
+      extension: '.m4a',
+      outputFormat: 'aac',
+      audioQuality: AudioQuality.HIGH,
+      sampleRate: 44100
+    },
+    web: {
+      mimeType: 'audio/mp4',
+      bitsPerSecond: 128000
+    }
+  })
+
+  const recorderState = useAudioRecorderState(audioRecorder)
   const statusRef = useRef(status)
 
   // Update status ref when status changes
@@ -162,43 +192,25 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
         // Skip permission check and audio mode setup, try to create recording directly
         logger.info('Setting audio mode and creating recording...')
         try {
-          await Audio.setAudioModeAsync({
-            allowsRecordingIOS: true,
-            playsInSilentModeIOS: true
+          await setAudioModeAsync({
+            playsInSilentMode: true,
+            allowsRecording: true
           })
         } catch (e) {
           logger.warn('Failed to set audio mode:', e)
         }
 
-        // Create and start recording with WAV format (supported by DashScope)
+        // Create and start recording with M4A format (supported by DashScope)
         logger.info('Creating recording...')
-        const recordingConfig = {
-          android: {
-            extension: '.m4a',
-            outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-            audioEncoder: Audio.AndroidAudioEncoder.AAC,
-            sampleRate: 44100,
-            numberOfChannels: 1,
-            bitRate: 128000
-          },
-          ios: {
-            extension: '.m4a',
-            outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-            audioQuality: Audio.IOSAudioQuality.HIGH,
-            sampleRate: 44100,
-            numberOfChannels: 1,
-            bitRate: 128000
-          },
-          web: {
-            mimeType: 'audio/mp4',
-            bitsPerSecond: 128000
-          }
+        try {
+          await audioRecorder.prepareToRecordAsync()
+          await audioRecorder.record()
+          setStatus('listening')
+          logger.info('Started audio recording for API provider')
+        } catch (e) {
+          logger.error('Failed to start recording:', e)
+          throw e
         }
-
-        const { recording } = await Audio.Recording.createAsync(recordingConfig)
-        recordingRef.current = recording
-        setStatus('listening')
-        logger.info('Started audio recording for API provider')
         clearTimeout(timeoutId)
         return true
       }
@@ -276,17 +288,17 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
       const provider = providers.find(p => p.id === currentProviderId) || providers[0]
 
       // Handle API providers
-      if (provider?.type === 'api' && recordingRef.current) {
+      if (provider?.type === 'api') {
         setStatus('processing')
 
         try {
           // Stop recording
-          await recordingRef.current.stopAndUnloadAsync()
-          const uri = recordingRef.current.getURI()
-          recordingRef.current = null
+          await audioRecorder.stop()
+          // URL is available in recorderState after stopping
+          const url = recorderState.url
 
-          if (!uri) {
-            throw new Error('Failed to get recording URI')
+          if (!url) {
+            throw new Error('Failed to get recording URL')
           }
 
           logger.info('Recording stopped, processing audio with API provider')
@@ -302,7 +314,7 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
 
           if (provider.id === 'bailian') {
             const service = new DashScopeSpeechService(providerWithKey)
-            result = await service.recognizeFromFile(uri, { language: getRecognitionLocale().split('-')[0] })
+            result = await service.recognizeFromFile(url, { language: getRecognitionLocale().split('-')[0] })
           } else {
             throw new Error(`Unsupported API provider: ${provider.id}`)
           }
@@ -346,9 +358,8 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
       const provider = providers.find(p => p.id === currentProviderId) || providers[0]
 
       // Handle API providers
-      if (provider?.type === 'api' && recordingRef.current) {
-        await recordingRef.current.stopAndUnloadAsync()
-        recordingRef.current = null
+      if (provider?.type === 'api' && recorderState.isRecording) {
+        await audioRecorder.stop()
       }
 
       // Handle system default provider

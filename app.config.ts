@@ -144,7 +144,7 @@ export default {
         }
       ],
       [
-        'expo-av',
+        'expo-audio',
         {
           microphonePermission: 'Allow Cherry Studio App to access your microphone for voice input and recording.'
         }
