@@ -4,18 +4,21 @@ import { useTranslation } from 'react-i18next'
 
 import { Container, Group, GroupTitle, HeaderBar, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
 import { LanguageDropdown } from '@/componentsV2/features/SettingsScreen/general/LanguageDropdown'
+import { TabletSidebarPositionDropdown } from '@/componentsV2/features/SettingsScreen/general/TabletSidebarPositionDropdown'
 import { ThemeDropdown } from '@/componentsV2/features/SettingsScreen/general/ThemeDropdown'
 import { usePreference } from '@/hooks/usePreference'
+import { useResponsive } from '@/hooks/useResponsive'
 
 export default function GeneralSettingsScreen() {
   const { t } = useTranslation()
+  const { isTablet } = useResponsive()
   const [developerMode, setDeveloperMode] = usePreference('app.developer_mode')
 
   return (
     <SafeAreaContainer className="flex-1">
       <HeaderBar title={t('settings.general.title')} />
-      <Container>
-        <YStack className="flex-1 gap-6">
+      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>
+        <YStack className="gap-6">
           {/* Display settings */}
           <YStack className="gap-2">
             <GroupTitle>{t('settings.general.display.title')}</GroupTitle>
@@ -49,7 +52,7 @@ export default function GeneralSettingsScreen() {
             </Group>
           </YStack>
         </YStack>
-      </Container>
+      </ScrollView>
     </SafeAreaContainer>
   )
 }

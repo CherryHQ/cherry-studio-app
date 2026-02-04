@@ -1,11 +1,10 @@
 import { useNavigation } from '@react-navigation/native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { View } from 'react-native'
+import { ScrollView, View } from 'react-native'
 import { GestureDetector } from 'react-native-gesture-handler'
 
 import {
-  Container,
   Group,
   GroupTitle,
   HeaderBar,
@@ -109,8 +108,8 @@ export default function SettingsScreen() {
         <View collapsable={false} className="flex-1">
           <HeaderBar title={t('settings.title')} />
 
-          <Container>
-            <YStack className="flex-1 gap-6">
+          <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>
+            <YStack className="gap-6">
               {settingsItems.map((group, index) => (
                 <SettingGroup key={index} title={group.title}>
                   {group.items.map((item, index) => (
@@ -125,7 +124,7 @@ export default function SettingsScreen() {
                 </SettingGroup>
               ))}
             </YStack>
-          </Container>
+          </ScrollView>
         </View>
       </GestureDetector>
     </SafeAreaContainer>
