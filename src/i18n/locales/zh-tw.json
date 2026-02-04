@@ -700,6 +700,12 @@
           "anonymous": "匿名回報錯誤和統計",
           "title": "隱私設定"
         },
+        "tablet_sidebar": {
+          "title": "平板導航欄",
+          "position": "導航欄位置",
+          "left": "左側",
+          "right": "右側"
+        },
         "theme": {
           "auto": "自動",
           "dark": "深色",

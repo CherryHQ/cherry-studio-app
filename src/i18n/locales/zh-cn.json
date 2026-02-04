@@ -700,6 +700,12 @@
           "anonymous": "匿名报告错误和统计",
           "title": "隐私设置"
         },
+        "tablet_sidebar": {
+          "title": "平板导航栏",
+          "position": "导航栏位置",
+          "left": "左侧",
+          "right": "右侧"
+        },
         "theme": {
           "auto": "自动",
           "dark": "深色",
