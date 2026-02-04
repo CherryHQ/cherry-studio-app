@@ -3,9 +3,9 @@ import type { StackNavigationProp } from '@react-navigation/stack'
 import { Button } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator } from 'react-native'
+import { ActivityIndicator, ScrollView } from 'react-native'
 
-import { Container, HeaderBar, IconButton, Image, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
+import { HeaderBar, IconButton, Image, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
 import { presentModelSheet } from '@/componentsV2/features/Sheet/ModelSheet'
 import { ChevronDown, Languages, MessageSquareMore, Rocket, Settings2 } from '@/componentsV2/icons/LucideIcon'
 import { useAssistant } from '@/hooks/useAssistant'
@@ -37,7 +37,7 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
           {model ? (
             <>
               <Image
-                className="h-[18px] w-[18px] rounded-full"
+                className="h-4.5 w-4.5 rounded-full"
                 source={getModelOrProviderIcon(model.id, model.provider, isDark)}
               />
               <Text numberOfLines={1} ellipsizeMode="tail" className="min-w-0 max-w-[55%] flex-1 font-medium">
@@ -160,7 +160,7 @@ export default function AssistantSettingsScreen() {
   return (
     <SafeAreaContainer>
       <HeaderBar title={t('settings.assistant.title')} />
-      <Container>
+      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>
         {assistantItems.map(item => (
           <AssistantSettingItem
             key={item.id}
@@ -172,7 +172,7 @@ export default function AssistantSettingsScreen() {
             icon={item.icon}
           />
         ))}
-      </Container>
+      </ScrollView>
     </SafeAreaContainer>
   )
 }

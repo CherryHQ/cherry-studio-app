@@ -5,7 +5,6 @@ import { ScrollView, View } from 'react-native'
 import { GestureDetector } from 'react-native-gesture-handler'
 
 import {
-  Container,
   Group,
   GroupTitle,
   HeaderBar,
@@ -109,25 +108,23 @@ export default function SettingsScreen() {
         <View collapsable={false} className="flex-1">
           <HeaderBar title={t('settings.title')} />
 
-          <Container>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <YStack className="gap-6">
-                {settingsItems.map((group, index) => (
-                  <SettingGroup key={index} title={group.title}>
-                    {group.items.map((item, index) => (
-                      <SettingItem
-                        key={index}
-                        title={item.title}
-                        screen={item.screen}
-                        icon={item.icon}
-                        specificScreen={item.specificScreen}
-                      />
-                    ))}
-                  </SettingGroup>
-                ))}
-              </YStack>
-            </ScrollView>
-          </Container>
+          <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>
+            <YStack className="gap-6">
+              {settingsItems.map((group, index) => (
+                <SettingGroup key={index} title={group.title}>
+                  {group.items.map((item, index) => (
+                    <SettingItem
+                      key={index}
+                      title={item.title}
+                      screen={item.screen}
+                      icon={item.icon}
+                      specificScreen={item.specificScreen}
+                    />
+                  ))}
+                </SettingGroup>
+              ))}
+            </YStack>
+          </ScrollView>
         </View>
       </GestureDetector>
     </SafeAreaContainer>
