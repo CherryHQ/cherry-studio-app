@@ -1,5 +1,4 @@
-import type { DrawerNavigationProp } from '@react-navigation/drawer'
-import { DrawerActions, useNavigation } from '@react-navigation/native'
+import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import React from 'react'
 import { ActivityIndicator, Platform, View } from 'react-native'
@@ -13,6 +12,7 @@ import { MessageInputContainer } from '@/componentsV2/features/ChatScreen/Messag
 import { CitationSheet } from '@/componentsV2/features/Sheet/CitationSheet'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useBottom } from '@/hooks/useBottom'
+import { useDrawer } from '@/hooks/useDrawer'
 import { usePreference } from '@/hooks/usePreference'
 import { useCurrentTopic } from '@/hooks/useTopic'
 import type { HomeStackParamList } from '@/navigators/HomeStackNavigator'
@@ -21,11 +21,12 @@ import ChatContent from './ChatContent'
 
 KeyboardController.preload()
 
-type ChatScreenNavigationProp = DrawerNavigationProp<any> & StackNavigationProp<HomeStackParamList>
+type ChatScreenNavigationProp = StackNavigationProp<HomeStackParamList>
 
 const ChatScreen = () => {
   const insets = useSafeAreaInsets()
   const navigation = useNavigation<ChatScreenNavigationProp>()
+  const { openDrawer } = useDrawer()
   const [topicId] = usePreference('topic.current_id')
   const { currentTopic } = useCurrentTopic()
 
@@ -44,7 +45,7 @@ const ChatScreen = () => {
         const hasExcellentDistance = translationX > 80
 
         if ((hasGoodDistance && hasGoodVelocity) || hasExcellentDistance) {
-          navigation.dispatch(DrawerActions.openDrawer())
+          openDrawer()
         }
       }
       // 左滑 → 跳转到 TopicScreen

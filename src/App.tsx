@@ -8,7 +8,7 @@ import { useDrizzleStudio } from 'expo-drizzle-studio-plugin'
 import { useFonts } from 'expo-font'
 import * as SplashScreen from 'expo-splash-screen'
 import { HeroUINativeProvider } from 'heroui-native'
-import React, { Suspense, useEffect } from 'react'
+import React, { useEffect } from 'react'
 import { ActivityIndicator } from 'react-native'
 import { SystemBars } from 'react-native-edge-to-edge'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -30,6 +30,7 @@ import { ShortcutCallbackManager } from './aiCore/tools/SystemTools/ShortcutCall
 import { DialogProvider } from './hooks/useDialog'
 import { ToastProvider } from './hooks/useToast'
 import MainStackNavigator from './navigators/MainStackNavigator'
+import { navigationRef } from './navigators/navigationRef'
 import { runAppDataMigrations } from './services/AppInitializationService'
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -103,7 +104,7 @@ function ThemedApp() {
   return (
     <HeroUINativeProvider>
       <KeyboardProvider>
-        <NavigationContainer theme={isDark ? DarkTheme : DefaultTheme}>
+        <NavigationContainer ref={navigationRef} theme={isDark ? DarkTheme : DefaultTheme}>
           <SystemBars style={isDark ? 'light' : 'dark'} />
           <DialogProvider>
             <ToastProvider>
