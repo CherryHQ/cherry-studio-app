@@ -1,8 +1,9 @@
 import { Switch } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { ScrollView } from 'react-native'
 
-import { Container, Group, GroupTitle, HeaderBar, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
+import { Group, GroupTitle, HeaderBar, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
 import { LanguageDropdown } from '@/componentsV2/features/SettingsScreen/general/LanguageDropdown'
 import { TabletSidebarPositionDropdown } from '@/componentsV2/features/SettingsScreen/general/TabletSidebarPositionDropdown'
 import { ThemeDropdown } from '@/componentsV2/features/SettingsScreen/general/ThemeDropdown'
@@ -40,6 +41,19 @@ export default function GeneralSettingsScreen() {
               </XStack>
             </Group>
           </YStack>
+
+          {/* Tablet sidebar position - only visible on tablet devices */}
+          {isTablet && (
+            <YStack className="gap-2">
+              <GroupTitle>{t('settings.general.tablet_sidebar.title')}</GroupTitle>
+              <Group>
+                <XStack className="items-center justify-between p-4">
+                  <Text className="text-lg">{t('settings.general.tablet_sidebar.position')}</Text>
+                  <TabletSidebarPositionDropdown />
+                </XStack>
+              </Group>
+            </YStack>
+          )}
 
           {/* Developer settings */}
           <YStack className="gap-2">
