@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import type { ScaledSize } from 'react-native'
 import { Dimensions, useWindowDimensions } from 'react-native'
 
@@ -54,21 +54,20 @@ const getOrientation = (width: number, height: number): Orientation => {
 export function useResponsive(): ResponsiveInfo {
   const { width, height } = useWindowDimensions()
 
-  return useMemo(() => {
-    const deviceType = getDeviceType(width, height)
-    const orientation = getOrientation(width, height)
+  // Direct computation - useMemo not needed for cheap calculations
+  const deviceType = getDeviceType(width, height)
+  const orientation = getOrientation(width, height)
 
-    return {
-      deviceType,
-      orientation,
-      isTablet: deviceType === 'tablet',
-      isPhone: deviceType === 'phone',
-      isPortrait: orientation === 'portrait',
-      isLandscape: orientation === 'landscape',
-      width,
-      height
-    }
-  }, [width, height])
+  return {
+    deviceType,
+    orientation,
+    isTablet: deviceType === 'tablet',
+    isPhone: deviceType === 'phone',
+    isPortrait: orientation === 'portrait',
+    isLandscape: orientation === 'landscape',
+    width,
+    height
+  }
 }
 
 /**
