@@ -4,7 +4,7 @@
 
 🍒 Cherry Studio App —— Cherry Studio 的官方移动版本，将强大的 LLMs(AI 大语言模型) 交互带到您的 iOS 和 Android 设备。
 
-🌟 **支持项目:** [赞助](https://github.com/CherryHQ/cherry-studio/blob/main/docs/sponsor.md) | 给仓库点个 Star!
+🌟 **支持项目:** [赞助](https://github.com/CherryHQ/cherry-studio/blob/main/docs/zh/guides/sponsor.md) | 给仓库点个 Star!
 
 ## ✨ 主要特性
 
