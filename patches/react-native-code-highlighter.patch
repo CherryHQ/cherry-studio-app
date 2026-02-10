@@ -1,63 +1,5 @@
-diff --git a/dist/commonjs/lib/CodeHighlighter.js b/dist/commonjs/lib/CodeHighlighter.js
-index 0dfea90d15fb0dba4e9cfba1747205e48bb41dad..c3939f59522148cf78b28eb1f527d11b0901973e 100644
---- a/dist/commonjs/lib/CodeHighlighter.js
-+++ b/dist/commonjs/lib/CodeHighlighter.js
-@@ -17,6 +17,7 @@ const CodeHighlighter = ({
-   textStyle,
-   hljsStyle,
-   scrollViewProps,
-+  horizontal = true,
-   containerStyle,
-   ...rest
- }) => {
-@@ -47,7 +48,7 @@ const CodeHighlighter = ({
-     } = props;
-     return /*#__PURE__*/(0, _jsxRuntime.jsx)(_reactNative.ScrollView, {
-       ...scrollViewProps,
--      horizontal: true,
-+      horizontal: horizontal,
-       contentContainerStyle: [stylesheet.hljs, scrollViewProps?.contentContainerStyle, containerStyle],
-       children: /*#__PURE__*/(0, _jsxRuntime.jsx)(_reactNative.View, {
-         onStartShouldSetResponder: () => true,
-diff --git a/dist/module/lib/CodeHighlighter.js b/dist/module/lib/CodeHighlighter.js
-index 8eb424c842caf1229f068b4c723834e63148cf80..44ea78416c489edb966c21b267c9429e4ace2737 100644
---- a/dist/module/lib/CodeHighlighter.js
-+++ b/dist/module/lib/CodeHighlighter.js
-@@ -11,6 +11,7 @@ export const CodeHighlighter = ({
-   textStyle,
-   hljsStyle,
-   scrollViewProps,
-+  horizontal = true,
-   containerStyle,
-   ...rest
- }) => {
-@@ -41,7 +42,7 @@ export const CodeHighlighter = ({
-     } = props;
-     return /*#__PURE__*/_jsx(ScrollView, {
-       ...scrollViewProps,
--      horizontal: true,
-+      horizontal: horizontal,
-       contentContainerStyle: [stylesheet.hljs, scrollViewProps?.contentContainerStyle, containerStyle],
-       children: /*#__PURE__*/_jsx(View, {
-         onStartShouldSetResponder: () => true,
-diff --git a/dist/typescript/lib/CodeHighlighter.d.ts b/dist/typescript/lib/CodeHighlighter.d.ts
-index 9f0116e726f603f7dbdbf2dfd743ca6877e2a5e0..e30a2f9f4caf7651cdcbad07720441bc018ee4e0 100644
---- a/dist/typescript/lib/CodeHighlighter.d.ts
-+++ b/dist/typescript/lib/CodeHighlighter.d.ts
-@@ -6,6 +6,11 @@ export interface CodeHighlighterProps extends SyntaxHighlighterProps {
-     hljsStyle: ReactStyle;
-     textStyle?: StyleProp<TextStyle>;
-     scrollViewProps?: ScrollViewProps;
-+    /**
-+     * Enable horizontal scrolling for long lines. Set to false to wrap text.
-+     * @default true
-+     */
-+    horizontal?: boolean;
-     /**
-      * @deprecated Use scrollViewProps.contentContainerStyle instead
-      */
 diff --git a/src/lib/CodeHighlighter.tsx b/src/lib/CodeHighlighter.tsx
-index c5fb4175f84136636dcfa8a45b3ee881b33beabc..63987cf4e95b412d3ef8fa752ded2cd5f3aa119f 100644
+index c5fb4175f84136636dcfa8a45b3ee881b33beabc..e7fd6ee74f01028715a920e7d261700bb20f2066 100644
 --- a/src/lib/CodeHighlighter.tsx
 +++ b/src/lib/CodeHighlighter.tsx
 @@ -23,6 +23,11 @@ export interface CodeHighlighterProps extends SyntaxHighlighterProps {
@@ -80,12 +22,93 @@ index c5fb4175f84136636dcfa8a45b3ee881b33beabc..63987cf4e95b412d3ef8fa752ded2cd5
  	containerStyle,
  	...rest
  }) => {
-@@ -77,7 +83,7 @@ export const CodeHighlighter: FunctionComponent<CodeHighlighterProps> = ({
+@@ -73,21 +79,68 @@ export const CodeHighlighter: FunctionComponent<CodeHighlighterProps> = ({
+ 		}, []);
+ 
+ 	const renderer = (props: rendererProps) => {
+-		const { rows } = props;
++	const { rows } = props;
++	const lineNumbers = rest.lineNumbers;
++	const codeLines = rows.map((row, rowIndex) => {
  		return (
- 			<ScrollView
- 				{...scrollViewProps}
+-			<ScrollView
+-				{...scrollViewProps}
 -				horizontal
-+				horizontal={horizontal}
- 				contentContainerStyle={[
- 					stylesheet.hljs,
- 					scrollViewProps?.contentContainerStyle,
+-				contentContainerStyle={[
+-					stylesheet.hljs,
+-					scrollViewProps?.contentContainerStyle,
+-					containerStyle,
+-				]}
+-			>
+-				<View onStartShouldSetResponder={() => true}>{renderNode(rows)}</View>
+-			</ScrollView>
++			<View key={`line-container-${rowIndex}`} style={{ flexDirection: 'row' }}>
++				{/* 行号 - 仅当 showLineNumbers 为 true 时显示 */}
++				{lineNumbers && (
++					<View style={{
++						
++						paddingRight: 10,
++						backgroundColor: '#f5f5f5',
++						borderRightWidth: 1,
++						borderRightColor: '#ddd',
++						width: 40,
++						alignItems: 'center',
++						justifyContent: 'center',
++					}}>
++						<Text style={{
++							color: '#666',
++							fontSize: 14,
++							fontWeight: '400',
++							includeFontPadding: false,
++						}}>
++							{rowIndex + 1}
++						</Text>
++					</View>
++				)}
++
++				{/* 代码内容 */}
++				<View style={{ flex: 1, paddingLeft: lineNumbers ? 10 : 0 }}>
++					<Text style={[
++						textStyle,
++						{
++							color: stylesheet.hljs?.color,
++							lineHeight: 20,
++							includeFontPadding: false,
++						}
++					]}>
++						{row.value ? trimNewlines(String(row.value)) : ''}
++						{row.children && renderNode(row.children, `row_${rowIndex}`)}
++					</Text>
++				</View>
++			</View>
+ 		);
+-	};
++	});
++	
++	return (
++		<ScrollView
++			{...scrollViewProps}
++			horizontal={horizontal}
++			contentContainerStyle={[
++				stylesheet.hljs,
++				scrollViewProps?.contentContainerStyle,
++				containerStyle,
++			]}
++		>
++			<View>
++				{codeLines}
++			</View>
++		</ScrollView>
++	);
++};
+ 
+ 	return (
+ 		<SyntaxHighlighter
+@@ -97,6 +150,7 @@ export const CodeHighlighter: FunctionComponent<CodeHighlighterProps> = ({
+ 			PreTag={View}
+ 			style={{}}
+ 			testID="react-native-code-highlighter"
++	
+ 		>
+ 			{children}
+ 		</SyntaxHighlighter>
