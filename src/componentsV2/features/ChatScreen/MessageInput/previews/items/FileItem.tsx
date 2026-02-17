@@ -4,7 +4,7 @@ import React from 'react'
 import { View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
-import YStack from '@/componentsV2/layout/YStack'
+import { TxtIcon } from '@/componentsV2/icons'
 import { loggerService } from '@/services/LoggerService'
 import type { FileMetadata } from '@/types/file'
 import { formatFileSize } from '@/utils/file'
@@ -27,6 +27,11 @@ const FileItem: FC<FileItemProps> = ({ file, onRemove, size, disabledContextMenu
     })
   }
 
+  // 处理文件名和扩展名
+  const fileNameParts = file.name.split('.')
+  const fileName = fileNameParts.slice(0, -1).join('.') || file.name // 处理没有扩展名的情况
+  const fileExtension = fileNameParts.length > 1 ? fileNameParts.pop()?.toLocaleUpperCase() : ''
+
   return (
     <BaseItem
       file={file}
@@ -34,17 +39,22 @@ const FileItem: FC<FileItemProps> = ({ file, onRemove, size, disabledContextMenu
       onPress={handlePreview}
       size={size}
       disabledContextMenu={disabledContextMenu}
-      renderContent={({ width }) => (
-        <View className="items-center justify-center rounded-2xl bg-zinc-400/20" style={{ width, height: width }}>
-          <YStack className="h-full w-full items-center justify-between gap-1 p-1">
-            <Text className="w-full  text-start text-xl" numberOfLines={2} ellipsizeMode="middle">
-              {file.name.split('.')[1].toLocaleUpperCase()}
-            </Text>
-            <Text className="text-foreground-secondary text-md">{formatFileSize(file.size)}</Text>
-            <Text className="text-center text-xl" numberOfLines={1} ellipsizeMode="middle">
-              {file.name.split('.')[0]}
-            </Text>
-          </YStack>
+      renderContent={({ width: height }) => (
+        <View
+          className="items-center justify-center rounded-2xl bg-zinc-400/20"
+          style={{ width: height * 2.5, height: height }}>
+          <View className="h-full w-full flex-row items-center gap-3 p-3">
+            <TxtIcon size={32} className="text-blue-500" />
+            <View className="flex-1">
+              <Text className="w-full text-start text-base font-medium" numberOfLines={1} ellipsizeMode="middle">
+                {fileName}
+              </Text>
+              <Text className="text-foreground-secondary text-sm">
+                {formatFileSize(file.size)}
+                {fileExtension && ` • ${fileExtension}`}
+              </Text>
+            </View>
+          </View>
         </View>
       )}
     />
