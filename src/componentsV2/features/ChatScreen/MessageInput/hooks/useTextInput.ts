@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { presentDialog } from '@/componentsV2/base/Dialog'
@@ -28,25 +28,38 @@ export function useTextInput(options: UseTextInputOptions = {}): UseTextInputRet
   const [text, setTextInternal] = useState('')
   const threshold = options.threshold ?? LONG_TEXT_THRESHOLD
 
+  // Track processing state to prevent duplicate file creation
+  const processingTextRef = useRef<string | null>(null)
+
   const setText = async (newText: string) => {
+    // Prevent duplicate processing of the same text
+    if (processingTextRef.current === newText) {
+      return
+    }
+
     // Check if text exceeds threshold
     if (isLongText(newText, threshold)) {
-      const result = await processInputText(newText, {
-        threshold,
-        onConvertToFile: options.onFileCreated
-      })
+      processingTextRef.current = newText
+      try {
+        const result = await processInputText(newText, {
+          threshold,
+          onConvertToFile: options.onFileCreated
+        })
 
-      if (result.success) {
-        setTextInternal(result.data?.processedText ?? '')
-        if (result.data?.convertedToFile) {
-          presentDialog('info', {
-            title: t('inputs.longTextConverted.title'),
-            content: t('inputs.longTextConverted.message', { length: newText.length })
-          })
+        if (result.success) {
+          setTextInternal(result.data?.processedText ?? '')
+          if (result.data?.convertedToFile) {
+            presentDialog('info', {
+              title: t('inputs.longTextConverted.title'),
+              content: t('inputs.longTextConverted.message', { length: newText.length })
+            })
+          }
+        } else {
+          // Fallback on error - keep the text
+          setTextInternal(newText)
         }
-      } else {
-        // Fallback on error - keep the text
-        setTextInternal(newText)
+      } finally {
+        processingTextRef.current = null
       }
     } else {
       setTextInternal(newText)
