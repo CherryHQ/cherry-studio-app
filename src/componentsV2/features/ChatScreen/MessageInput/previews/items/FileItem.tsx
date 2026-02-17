@@ -38,7 +38,7 @@ const FileItem: FC<FileItemProps> = ({ file, onRemove, size, disabledContextMenu
         <View className="items-center justify-center rounded-2xl bg-zinc-400/20" style={{ width, height: width }}>
           <YStack className="h-full w-full items-center justify-between gap-1 p-1">
             <Text className="w-full  text-start text-xl" numberOfLines={2} ellipsizeMode="middle">
-              {file.name.split('.')[1].toLocaleUpperCase()}
+              {file.name?.split('.')[1]?.toLocaleUpperCase() || ''}
             </Text>
             <Text className="text-foreground-secondary text-md">{formatFileSize(file.size)}</Text>
             <Text className="text-center text-xl" numberOfLines={1} ellipsizeMode="middle">
