@@ -7,5 +7,5 @@ interface MarkdownBlockquoteProps {
 }
 
 export function MarkdownBlockquote({ children }: MarkdownBlockquoteProps) {
-  return <View className="border-muted border-l-4 pl-4">{children}</View>
+  return <View className="border-muted mb-2 border-l-4 pl-4">{children}</View>
 }

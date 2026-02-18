@@ -288,7 +288,8 @@ function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
       return <MarkdownCodeBlock content={getTextContent(node)} language={node.language} />
 
     case 'link': {
-      const linkClassName = mergeClassName(textClassName, 'text-primary', 'underline', 'text-base')
+      // text-blue-500 ??
+      const linkClassName = mergeClassName(textClassName, 'text-blue-600', 'text-base')
       return (
         <MarkdownLink href={node.href}>
           {node.children?.map((child, index) => (
@@ -353,7 +354,11 @@ function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
       return <MarkdownTableRow>{renderChildren()}</MarkdownTableRow>
 
     case 'table_cell':
-      return <MarkdownTableCell isHeader={node.isHeader}>{renderChildren()}</MarkdownTableCell>
+      return (
+        <MarkdownTableCell isHeader={node.isHeader} align={node.align as 'left' | 'center' | 'right' | undefined}>
+          {renderChildren()}
+        </MarkdownTableCell>
+      )
 
     case 'math_inline':
       return <MarkdownMathInline content={getTextContent(node)} />
