@@ -354,11 +354,7 @@ function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
       return <MarkdownTableRow>{renderChildren()}</MarkdownTableRow>
 
     case 'table_cell':
-      return (
-        <MarkdownTableCell isHeader={node.isHeader} align={node.align as 'left' | 'center' | 'right' | undefined}>
-          {renderChildren()}
-        </MarkdownTableCell>
-      )
+      return <MarkdownTableCell isHeader={node.isHeader}>{renderChildren()}</MarkdownTableCell>
 
     case 'math_inline':
       return <MarkdownMathInline content={getTextContent(node)} />
