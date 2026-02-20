@@ -38,6 +38,7 @@
         "max_tokens_value": "最大令牌限制",
         "reasoning": {
           "auto": "自動",
+          "default": "預設",
           "high": "高",
           "label": "推理努力",
           "low": "低",

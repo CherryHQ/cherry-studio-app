@@ -38,11 +38,12 @@
         "max_tokens_value": "Max Tokens Limits",
         "reasoning": {
           "auto": "Auto",
+          "default": "Default",
           "high": "High",
           "label": "Reasoning Effort",
           "low": "Low",
           "medium": "Medium",
-          "minimal": "Weinian",
+          "minimal": "Minimal",
           "none": "None",
           "off": "Off"
         },

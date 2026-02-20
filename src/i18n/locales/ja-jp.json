@@ -38,6 +38,7 @@
         "max_tokens_value": "最大トークン制限",
         "reasoning": {
           "auto": "オート",
+          "default": "デフォルト",
           "high": "ハイ",
           "label": "推論努力",
           "low": "ロウ",
