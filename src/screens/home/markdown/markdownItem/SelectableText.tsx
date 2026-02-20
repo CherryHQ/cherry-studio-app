@@ -15,7 +15,7 @@ export function SelectableText({ children, ...props }: SelectableTextProps) {
     <StyledUITextView
       selectable
       uiTextView
-      selectionColor={Platform.OS === 'android' ? '#51d869' : undefined}
+      selectionColor={Platform.OS === 'android' ? '#99e2c5' : undefined}
       {...props}>
       {children}
     </StyledUITextView>

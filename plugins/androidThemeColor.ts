@@ -12,7 +12,7 @@ export default function androidThemeColorPlugin(config) {
       )
       if (!hasColorControlActivated) {
         appTheme.item.push({
-          _: '#2E7D32',
+          _: '#02b86b',
           $: { name: 'colorControlActivated' }
         })
       }
