@@ -1,4 +1,4 @@
-import { useNavigationState } from '@react-navigation/native'
+import { CommonActions, useNavigationState } from '@react-navigation/native'
 import { Divider } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
@@ -87,10 +87,14 @@ export function TabletSidebar() {
   }, [currentRoute])
 
   const handleNavigateSettingsScreen = () => {
-    navigationRef.current?.navigate('Home', {
-      screen: 'ProvidersSettings',
-      params: { screen: 'ProviderListScreen' }
-    })
+    if (isInSettings) {
+      navigationRef.current?.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Home' }] }))
+    } else {
+      navigationRef.current?.navigate('Home', {
+        screen: 'ProvidersSettings',
+        params: { screen: 'ProviderListScreen' }
+      })
+    }
   }
 
   const handleNavigatePersonalScreen = () => {

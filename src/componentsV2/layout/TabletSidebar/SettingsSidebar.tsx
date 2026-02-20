@@ -106,7 +106,7 @@ export function SettingsSidebar() {
               return (
                 <PressableRow
                   key={itemIdx}
-                  className={`rounded-lg px-2.5 py-2.5 ${active ? 'bg-gray-200 dark:bg-gray-800' : ''}`}
+                  className={`rounded-lg px-2.5 py-2.5 ${active ? 'rounded-full border border-gray-300 bg-gray-200 dark:bg-gray-400' : ''}`}
                   onPress={() => handlePress(item.screen, item.specificScreen)}>
                   <XStack className="items-center justify-between">
                     <XStack className="items-center gap-2.5">
