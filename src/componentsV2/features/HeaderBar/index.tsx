@@ -1,4 +1,4 @@
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useNavigationState } from '@react-navigation/native'
 import React from 'react'
 import { Pressable } from 'react-native'
 
@@ -7,6 +7,24 @@ import XStack from '@/componentsV2/layout/XStack'
 import { useResponsive } from '@/hooks/useResponsive'
 
 import { ArrowLeft } from '../../icons/LucideIcon'
+
+// 这几个界面不显示返回按钮
+const SETTINGS_MAIN_SCREENS = new Set([
+  'ProviderListScreen',
+  'AssistantSettingsScreen',
+  'WebSearchSettingsScreen',
+  'GeneralSettingsScreen',
+  'DataSettingsScreen',
+  'AboutScreen'
+])
+
+function getCurrentRouteName(state: any): string | undefined {
+  let route = state.routes[state.index] as any
+  while (route.state?.routes) {
+    route = route.state.routes[route.state.index ?? 0] as any
+  }
+  return route?.name as string | undefined
+}
 
 export interface HeaderBarButton {
   icon: React.ReactNode
@@ -33,9 +51,10 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   const buttonsToRender = rightButtons || (rightButton ? [rightButton] : [])
   const navigation = useNavigation<any>()
   const { isTablet, isLandscape } = useResponsive()
+  const currentRoute = useNavigationState(getCurrentRouteName)
 
-  // 平板横屏模式下隐藏返回按钮
-  const shouldShowBackButton = showBackButton && !(isTablet && isLandscape)
+  const isSettingsMainScreen = SETTINGS_MAIN_SCREENS.has(currentRoute ?? '')
+  const shouldShowBackButton = showBackButton && !(isTablet && isLandscape && isSettingsMainScreen)
 
   const handleBack = () => {
     if (onBackPress) return onBackPress()
