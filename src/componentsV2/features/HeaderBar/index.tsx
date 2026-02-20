@@ -4,6 +4,7 @@ import { Pressable } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
 import XStack from '@/componentsV2/layout/XStack'
+import { useResponsive } from '@/hooks/useResponsive'
 
 import { ArrowLeft } from '../../icons/LucideIcon'
 
@@ -31,6 +32,10 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
 }) => {
   const buttonsToRender = rightButtons || (rightButton ? [rightButton] : [])
   const navigation = useNavigation<any>()
+  const { isTablet, isLandscape } = useResponsive()
+
+  // 平板横屏模式下隐藏返回按钮
+  const shouldShowBackButton = showBackButton && !(isTablet && isLandscape)
 
   const handleBack = () => {
     if (onBackPress) return onBackPress()
@@ -48,7 +53,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
             {leftButton.icon}
           </Pressable>
-        ) : showBackButton ? (
+        ) : shouldShowBackButton ? (
           <Pressable hitSlop={10} onPress={handleBack} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
             <ArrowLeft size={24} />
           </Pressable>
