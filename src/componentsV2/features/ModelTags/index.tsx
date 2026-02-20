@@ -118,7 +118,7 @@ const TagBadge: React.FC<TagBadgeProps> = ({ icon, label, size, backgroundClassN
       style={{
         borderRadius,
         paddingHorizontal,
-        paddingVertical: 2
+        paddingVertical: 3
       }}>
       {icon}
       {label ? (
