@@ -36,6 +36,7 @@
         "context": "語境",
         "max_tokens": "啟用最大令牌限制",
         "max_tokens_value": "最大令牌限制",
+        "max_tokens_warning": "設定單次互動所用的最大Token數，會影響返回結果的長度。要根據模型上下文限制來設定，否則會報錯。",
         "reasoning": {
           "auto": "自動",
           "high": "高",
