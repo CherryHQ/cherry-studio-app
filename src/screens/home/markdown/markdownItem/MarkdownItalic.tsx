@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import React from 'react'
 import type { StyleProp, TextStyle } from 'react-native'
 
-import { StyledUITextView } from './MarkdownText'
+import { StyledText } from './MarkdownText'
 
 interface MarkdownItalicProps {
   children: ReactNode
@@ -13,8 +13,8 @@ interface MarkdownItalicProps {
 export function MarkdownItalic({ children, className, style }: MarkdownItalicProps) {
   const mergedClassName = ['text-foreground', 'italic', className].filter(Boolean).join(' ')
   return (
-    <StyledUITextView className={mergedClassName} style={style}>
+    <StyledText className={mergedClassName} style={style}>
       {children}
-    </StyledUITextView>
+    </StyledText>
   )
 }

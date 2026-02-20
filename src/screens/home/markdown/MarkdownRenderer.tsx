@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import type { StyleProp, TextStyle } from 'react-native'
-import { View } from 'react-native'
+import { Text, View } from 'react-native'
 import type { MarkdownNode } from 'react-native-nitro-markdown'
 import { parseMarkdownWithOptions } from 'react-native-nitro-markdown'
 
@@ -81,6 +81,21 @@ function containsMath(node: MarkdownNode): boolean {
   return node.children.some(containsMath)
 }
 
+// 这些块类型不能嵌套在 Text 中，需要独立渲染
+const BLOCK_TYPES = new Set([
+  'code_block',
+  'math_block',
+  'list',
+  'blockquote',
+  'table',
+  'image',
+  'horizontal_rule'
+])
+
+function isBlockType(type: MarkdownNode['type']): boolean {
+  return BLOCK_TYPES.has(type)
+}
+
 const BASE_TEXT_CLASSNAME = 'text-foreground text-base'
 
 const mergeClassName = (...classNames: (string | undefined)[]) => {
@@ -107,11 +122,11 @@ function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
 
     if (!hasMath) {
       return (
-        <SelectableText key={groupKey} className={groupClassName} style={inlineTextStyle}>
+        <Text key={groupKey} className={groupClassName} style={inlineTextStyle}>
           {inlineNodes.map((child, index) => (
             <NodeRenderer key={index} node={child} textClassName={groupClassName} textStyle={inlineTextStyle} />
           ))}
-        </SelectableText>
+        </Text>
       )
     }
 
@@ -122,11 +137,11 @@ function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
       if (textRun.length === 0) return
       const runKey = `text-run-${segments.length}`
       segments.push(
-        <SelectableText key={runKey} className={groupClassName} style={inlineTextStyle}>
+        <Text key={runKey} className={groupClassName} style={inlineTextStyle}>
           {textRun.map((child, index) => (
             <NodeRenderer key={index} node={child} textClassName={groupClassName} textStyle={inlineTextStyle} />
           ))}
-        </SelectableText>
+        </Text>
       )
       textRun = []
     }
@@ -195,8 +210,42 @@ function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
   }
 
   switch (node.type) {
-    case 'document':
-      return <MarkdownDocument>{renderChildren()}</MarkdownDocument>
+    case 'document': {
+      if (!node.children) return null
+
+      const elements: React.ReactNode[] = []
+      let textGroup: MarkdownNode[] = []
+
+      const flushTextGroup = () => {
+        if (textGroup.length === 0) return
+        elements.push(
+          <SelectableText key={`text-group-${elements.length}`} className="text-foreground text-base">
+            {textGroup.map((child, index) => (
+              <NodeRenderer key={index} node={child} />
+            ))}
+          </SelectableText>
+        )
+        textGroup = []
+      }
+
+      node.children.forEach((child, index) => {
+        // 检查是否包含 math（即使是 paragraph/heading，如果包含 math 也要独立渲染）
+        if (isBlockType(child.type) || containsMath(child)) {
+          flushTextGroup()
+          elements.push(<NodeRenderer key={`block-${index}`} node={child} />)
+        } else if (child.type === 'paragraph' || child.type === 'heading') {
+          textGroup.push(child)
+        } else {
+          // 其他类型直接渲染
+          flushTextGroup()
+          elements.push(<NodeRenderer key={`other-${index}`} node={child} />)
+        }
+      })
+
+      flushTextGroup()
+
+      return <MarkdownDocument>{elements}</MarkdownDocument>
+    }
 
     case 'paragraph': {
       const paragraphTextClassName = mergeClassName(BASE_TEXT_CLASSNAME, textClassName)
@@ -370,7 +419,7 @@ function NodeRenderer({ node, textClassName, textStyle }: NodeRendererProps) {
         return <>{renderChildren()}</>
       }
       if (node.content) {
-        return <SelectableText>{node.content}</SelectableText>
+        return <Text>{node.content}</Text>
       }
       return null
   }

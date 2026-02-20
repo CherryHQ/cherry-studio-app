@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import React from 'react'
-
-import { SelectableText } from './SelectableText'
+import { Text } from 'react-native'
 
 interface MarkdownHeadingProps {
   level: 1 | 2 | 3 | 4 | 5 | 6
@@ -18,5 +17,10 @@ export const headingClasses: Record<1 | 2 | 3 | 4 | 5 | 6, string> = {
 }
 
 export function MarkdownHeading({ level, children }: MarkdownHeadingProps) {
-  return <SelectableText className={headingClasses[level]}>{children}</SelectableText>
+  return (
+    <Text className={headingClasses[level]}>
+      {children}
+      {'\n'}
+    </Text>
+  )
 }
