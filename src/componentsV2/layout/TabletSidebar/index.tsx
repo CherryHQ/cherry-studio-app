@@ -20,7 +20,7 @@ import { navigationRef } from '@/navigators/navigationRef'
 import { DefaultSidebar } from './DefaultSidebar'
 import { SettingsSidebar } from './SettingsSidebar'
 
-const SIDEBAR_WIDTH = 320
+const SIDEBAR_WIDTH = 280
 
 // 设置路由集合（包含所有设置相关的路由和子路由）
 export const SETTINGS_ROUTES = new Set([

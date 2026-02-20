@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse'
   },
   sidebarContainer: {
-    width: 320,
+    width: 280,
     height: '100%'
   },
   sidebarLeft: {
