@@ -1,0 +1,574 @@
+diff --git a/build/src/start/platforms/android/HDCServer.js b/build/src/start/platforms/android/HDCServer.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e3e05dda61ec302a224b244a6ade54e739d640b7
+--- /dev/null
++++ b/build/src/start/platforms/android/HDCServer.js
+@@ -0,0 +1,380 @@
++"use strict";
++Object.defineProperty(exports, "__esModule", {
++    value: true
++});
++Object.defineProperty(exports, "HDCServer", {
++    enumerable: true,
++    get: function() {
++        return HDCServer;
++    }
++});
++function _spawnasync() {
++    const data = /*#__PURE__*/ _interop_require_default(require("@expo/spawn-async"));
++    _spawnasync = function() {
++        return data;
++    };
++    return data;
++}
++function _child_process() {
++    const data = require("child_process");
++    _child_process = function() {
++        return data;
++    };
++    return data;
++}
++function _fs() {
++    const data = /*#__PURE__*/ _interop_require_default(require("fs"));
++    _fs = function() {
++        return data;
++    };
++    return data;
++}
++const _log = require("../../../log");
++const _errors = require("../../../utils/errors");
++function _interop_require_default(obj) {
++    return obj && obj.__esModule ? obj : {
++        default: obj
++    };
++}
++const debug = require('debug')('expo:start:platforms:android:hdcServer');
++
++/**
++ * HDCServer provides the same interface as ADBServer but uses
++ * Huawei's HDC (HarmonyOS Device Connector) tool under the hood.
++ * This enables Expo to work with HarmonyOS NEXT devices that only
++ * expose HDC, not ADB.
++ *
++ * Command translation (ADB -> HDC):
++ *   adb devices -l           -> hdc list targets
++ *   adb -s <id> shell ...    -> hdc -t <id> shell ...
++ *   adb -s <id> install ...  -> hdc -t <id> install ...
++ *   adb -s <id> reverse ...  -> hdc -t <id> fport ...
++ *   adb start-server         -> hdc start (or no-op)
++ *   adb kill-server          -> hdc kill (or no-op)
++ */
++class HDCServer {
++    /** Detect if HDC is available on this system. */
++    static detectHdcPath() {
++        if (HDCServer._cachedPath !== undefined) {
++            return HDCServer._cachedPath;
++        }
++        const candidates = [];
++        // HiSuite bundled hdc
++        const hiSuitePath = process.platform === 'win32'
++            ? 'C:\\Program Files (x86)\\HiSuite\\hwtools\\hdc.exe'
++            : null;
++        if (hiSuitePath) candidates.push(hiSuitePath);
++
++        // OHOS SDK hdc
++        const ohosHome = process.env.OHOS_SDK_HOME || process.env.HOS_SDK_HOME;
++        if (ohosHome) {
++            const _path = require("path");
++            candidates.push(_path.join(ohosHome, 'toolchains', 'hdc.exe'));
++            candidates.push(_path.join(ohosHome, 'toolchains', 'hdc'));
++        }
++
++        // DevEco Studio bundled hdc
++        if (process.platform === 'win32') {
++            const localAppData = process.env.LOCALAPPDATA || '';
++            if (localAppData) {
++                const _path = require("path");
++                candidates.push(_path.join(localAppData, 'Huawei', 'Sdk', 'toolchains', 'hdc.exe'));
++            }
++        }
++
++        for (const candidate of candidates) {
++            if (_fs().default.existsSync(candidate)) {
++                debug('Found HDC at: ' + candidate);
++                HDCServer._cachedPath = candidate;
++                return candidate;
++            }
++        }
++
++        // Try global hdc
++        try {
++            (0, _child_process().execFileSync)(process.platform === 'win32' ? 'where' : 'which', ['hdc'], { stdio: 'pipe' });
++            debug('Found HDC in PATH');
++            HDCServer._cachedPath = 'hdc';
++            return 'hdc';
++        } catch {
++            // not found
++        }
++
++        HDCServer._cachedPath = null;
++        return null;
++    }
++
++    /** Returns the path to the HDC executable. */
++    getHdcExecutablePath() {
++        const path = HDCServer.detectHdcPath();
++        if (!path) {
++            throw new _errors.CommandError('HDC_NOT_FOUND', 'Could not find HDC (HarmonyOS Device Connector). Install HiSuite or HarmonyOS SDK.');
++        }
++        return path;
++    }
++
++    /** Start the HDC server (lightweight - HDC manages its own daemon). */
++    async startAsync() {
++        if (this.isRunning) {
++            return false;
++        }
++        // HDC auto-starts its daemon, but we can explicitly start it
++        try {
++            const hdc = this.getHdcExecutablePath();
++            await (0, _spawnasync().default)(hdc, ['start'], { timeout: 5000 });
++        } catch {
++            // Ignore - HDC may already be running or may not support 'start'
++        }
++        this.isRunning = true;
++        return true;
++    }
++
++    /** Stop the HDC server. */
++    async stopAsync() {
++        if (!this.isRunning) {
++            return false;
++        }
++        try {
++            const hdc = this.getHdcExecutablePath();
++            await (0, _spawnasync().default)(hdc, ['kill'], { timeout: 5000 });
++        } catch {
++            // Ignore errors
++        }
++        this.isRunning = false;
++        return true;
++    }
++
++    /**
++     * Translate ADB-style args to HDC args and execute.
++     * This is the core translation layer that allows the rest of the
++     * Expo codebase to use ADB-style commands while we run HDC.
++     */
++    _translateArgs(adbArgs) {
++        const args = [...adbArgs];
++        const hdcArgs = [];
++
++        let i = 0;
++        while (i < args.length) {
++            const arg = args[i];
++
++            // -s <device_id> -> -t <device_id>
++            if (arg === '-s') {
++                hdcArgs.push('-t');
++                i++;
++                if (i < args.length) {
++                    hdcArgs.push(args[i]);
++                }
++                i++;
++                continue;
++            }
++
++            // devices -l -> list targets
++            if (arg === 'devices') {
++                hdcArgs.push('list', 'targets');
++                // skip -l if present
++                if (i + 1 < args.length && args[i + 1] === '-l') {
++                    i++;
++                }
++                i++;
++                continue;
++            }
++
++            // start-server -> start (or skip)
++            if (arg === 'start-server') {
++                hdcArgs.push('start');
++                i++;
++                continue;
++            }
++
++            // kill-server -> kill
++            if (arg === 'kill-server') {
++                hdcArgs.push('kill');
++                i++;
++                continue;
++            }
++
++            // reverse tcp:X tcp:X -> fport tcp:X tcp:X
++            if (arg === 'reverse') {
++                i++;
++                if (i < args.length && args[i] === '--remove') {
++                    // reverse --remove tcp:X -> fport rm tcp:X tcp:X
++                    hdcArgs.push('fport', 'rm');
++                    i++;
++                    if (i < args.length) {
++                        const port = args[i];
++                        hdcArgs.push(port, port); // fport rm needs both src and dst
++                    }
++                    i++;
++                } else {
++                    // reverse tcp:X tcp:X -> fport tcp:X tcp:X
++                    hdcArgs.push('fport');
++                    while (i < args.length) {
++                        hdcArgs.push(args[i]);
++                        i++;
++                    }
++                }
++                continue;
++            }
++
++            // install -r -d --user <N> <path> -> install <path>
++            if (arg === 'install') {
++                hdcArgs.push('install');
++                i++;
++                // Skip ADB-specific install flags: -r, -d, --user, <user_id>
++                while (i < args.length) {
++                    if (args[i] === '-r' || args[i] === '-d' || args[i] === '-t') {
++                        i++;
++                        continue;
++                    }
++                    if (args[i] === '--user') {
++                        i += 2; // skip --user and user number
++                        continue;
++                    }
++                    // This should be the file path
++                    hdcArgs.push(args[i]);
++                    i++;
++                }
++                continue;
++            }
++
++            // uninstall --user <N> <pkg> -> uninstall <pkg>
++            if (arg === 'uninstall') {
++                hdcArgs.push('uninstall');
++                i++;
++                while (i < args.length) {
++                    if (args[i] === '--user') {
++                        i += 2; // skip --user and user number
++                        continue;
++                    }
++                    hdcArgs.push(args[i]);
++                    i++;
++                }
++                continue;
++            }
++
++            // shell commands - pass through mostly as-is
++            // but translate getprop -> param get
++            if (arg === 'shell') {
++                hdcArgs.push('shell');
++                i++;
++                // Check if next command is getprop
++                if (i < args.length && args[i] === 'getprop') {
++                    hdcArgs.push('param', 'get');
++                    i++; // skip 'getprop'
++                    // pass remaining args (property names)
++                    while (i < args.length) {
++                        hdcArgs.push(args[i]);
++                        i++;
++                    }
++                } else {
++                    // pass remaining shell args as-is
++                    while (i < args.length) {
++                        hdcArgs.push(args[i]);
++                        i++;
++                    }
++                }
++                continue;
++            }
++
++            // emu commands - skip (not applicable to HDC)
++            if (arg === 'emu') {
++                // Return empty result
++                return { args: [], skip: true };
++            }
++
++            // Default: pass through
++            hdcArgs.push(arg);
++            i++;
++        }
++
++        return { args: hdcArgs, skip: false };
++    }
++
++    /**
++     * Format the output of `hdc list targets` to look like `adb devices -l`.
++     * HDC output: one device ID per line
++     * ADB output: "List of devices attached\n<id>\tdevice\n"
++     */
++    _formatDeviceListOutput(hdcOutput) {
++        const _os = require('os');
++        const lines = hdcOutput.trim().split(/\r?\n/).filter(Boolean);
++        let output = 'List of devices attached' + _os.EOL;
++        for (const line of lines) {
++            const deviceId = line.trim();
++            if (deviceId && deviceId !== '[Empty]') {
++                // Use spaces (not tabs) to match real ADB output format
++                // ADB format: "<serial>           device usb:<port> product:<p> model:<m> device:<d>"
++                output += `${deviceId}           device usb:HDC model:HarmonyOS_Device` + _os.EOL;
++            }
++        }
++        return output;
++    }
++
++    /** Execute an HDC command, translating from ADB-style args. */
++    async runAsync(adbArgs) {
++        const hdc = this.getHdcExecutablePath();
++        await this.startAsync();
++
++        const { args: hdcArgs, skip } = this._translateArgs(adbArgs);
++
++        if (skip) {
++            return '';
++        }
++
++        debug('[HDC] ' + [hdc, ...hdcArgs].join(' '));
++
++        try {
++            const result = await (0, _spawnasync().default)(hdc, hdcArgs, { timeout: 30000 });
++            let output = result.output.join('\n');
++
++            // If this was a device list command, format the output
++            if (hdcArgs.includes('list') && hdcArgs.includes('targets')) {
++                output = this._formatDeviceListOutput(result.stdout || output);
++            }
++
++            return output;
++        } catch (error) {
++            if (error.signal === 'SIGINT') {
++                throw new _errors.AbortCommandError();
++            }
++            let errorMessage = (error.stderr || error.stdout || error.message).trim();
++            error.message = errorMessage;
++            throw error;
++        }
++    }
++
++    /** Get HDC file output (synchronous). */
++    async getFileOutputAsync(adbArgs) {
++        const hdc = this.getHdcExecutablePath();
++        await this.startAsync();
++
++        const { args: hdcArgs, skip } = this._translateArgs(adbArgs);
++
++        if (skip) {
++            return '';
++        }
++
++        try {
++            const results = (0, _child_process().execFileSync)(hdc, hdcArgs, {
++                encoding: 'latin1',
++                stdio: 'pipe',
++                timeout: 30000
++            });
++            debug('[HDC] File output:\n', results);
++            return results;
++        } catch (error) {
++            let errorMessage = (error.stderr || error.stdout || error.message).trim();
++            error.message = errorMessage;
++            throw error;
++        }
++    }
++
++    constructor() {
++        this.isRunning = false;
++    }
++}
++
++// Static cache for detected HDC path
++HDCServer._cachedPath = undefined;
++
++//# sourceMappingURL=HDCServer.js.map
+diff --git a/build/src/start/platforms/android/adb.js b/build/src/start/platforms/android/adb.js
+index 608e5b02733951e04f336efda798e263d73cc9ba..a28fa99c06c4778b7ebe2bba870727c1cbc43f95 100644
+--- a/build/src/start/platforms/android/adb.js
++++ b/build/src/start/platforms/android/adb.js
+@@ -15,6 +15,12 @@ _export(exports, {
+     adbArgs: function() {
+         return adbArgs;
+     },
++    isHdcMode: function() {
++        return isHdcMode;
++    },
++    setServerMode: function() {
++        return setServerMode;
++    },
+     getAdbNameForDeviceIdAsync: function() {
+         return getAdbNameForDeviceIdAsync;
+     },
+@@ -79,6 +85,7 @@ function _os() {
+     return data;
+ }
+ const _ADBServer = require("./ADBServer");
++const _HDCServer = require("./HDCServer");
+ const _log = /*#__PURE__*/ _interop_require_wildcard(require("../../../log"));
+ const _env = require("../../../utils/env");
+ const _errors = require("../../../utils/errors");
+@@ -154,8 +161,55 @@ const PROP_CPU_ABI_LIST_NAME = 'ro.product.cpu.abilist';
+ // http://developer.android.com/ndk/guides/abis.html
+ const PROP_BOOT_ANIMATION_STATE = 'init.svc.bootanim';
+ let _server;
++let _serverMode = null; // 'adb' | 'hdc' | null (auto-detect)
++
++/**
++ * Force HDC mode. Call before any ADB operation.
++ * Set to 'hdc' to force HDC, 'adb' to force ADB, or null to auto-detect.
++ */
++function setServerMode(mode) {
++    _serverMode = mode;
++    _server = null; // reset cached server
++}
++
++/** Check if we are currently using HDC mode */
++function isHdcMode() {
++    return _server instanceof _HDCServer.HDCServer;
++}
++
+ function getServer() {
+-    _server ??= new _ADBServer.ADBServer();
++    if (_server) return _server;
++
++    // Explicit mode via env var or setServerMode()
++    const mode = _serverMode || process.env.EXPO_USE_HDC;
++    if (mode === 'hdc' || mode === '1') {
++        _server = new _HDCServer.HDCServer();
++        debug('Using HDC server (explicit mode)');
++        return _server;
++    }
++    if (mode === 'adb') {
++        _server = new _ADBServer.ADBServer();
++        debug('Using ADB server (explicit mode)');
++        return _server;
++    }
++
++    // Auto-detect: prefer ADB if Android SDK is available, fallback to HDC
++    try {
++        const adb = new _ADBServer.ADBServer();
++        adb.getAdbExecutablePath(); // will throw if not found
++        _server = adb;
++        debug('Using ADB server (auto-detected)');
++    } catch {
++        const hdcPath = _HDCServer.HDCServer.detectHdcPath();
++        if (hdcPath) {
++            _server = new _HDCServer.HDCServer();
++            debug('Using HDC server (ADB not available, HDC found)');
++        } else {
++            // Default to ADB, let it fail with the normal error message
++            _server = new _ADBServer.ADBServer();
++            debug('Using ADB server (fallback, no HDC found either)');
++        }
++    }
+     return _server;
+ }
+ function logUnauthorized(device) {
+@@ -221,10 +275,48 @@ function adbArgs(pid, ...options) {
+     return args.concat(options);
+ }
+ async function getAttachedDevicesAsync() {
+-    const output = await getServer().runAsync([
+-        'devices',
+-        '-l'
+-    ]);
++    let output;
++    try {
++        output = await getServer().runAsync([
++            'devices',
++            '-l'
++        ]);
++    } catch (e) {
++        // If ADB fails entirely, try HDC fallback
++        if (!isHdcMode()) {
++            const hdcPath = _HDCServer.HDCServer.detectHdcPath();
++            if (hdcPath) {
++                debug('ADB failed, falling back to HDC for device detection');
++                _server = new _HDCServer.HDCServer();
++                output = await _server.runAsync(['devices', '-l']);
++            } else {
++                throw e;
++            }
++        } else {
++            throw e;
++        }
++    }
++
++    // If ADB returned no devices, try HDC fallback
++    if (!isHdcMode()) {
++        const lines = output.trim().split(/\r?\n/).filter(Boolean);
++        const deviceLines = lines.slice(1).filter(l => l.trim().length > 0);
++        if (deviceLines.length === 0) {
++            const hdcPath = _HDCServer.HDCServer.detectHdcPath();
++            if (hdcPath) {
++                debug('ADB found no devices, trying HDC fallback');
++                _server = new _HDCServer.HDCServer();
++                try {
++                    output = await _server.runAsync(['devices', '-l']);
++                } catch (hdcError) {
++                    debug('HDC fallback also failed: ' + hdcError.message);
++                    // Restore ADB server and return empty
++                    _server = new _ADBServer.ADBServer();
++                }
++            }
++        }
++    }
++
+     const splitItems = output.trim().replace(/\n$/, '').split(_os().default.EOL)// Filter ADB trace logs from the output, e.g.
+     // adb D 03-06 15:25:53 63677 4018815 adb_client.cpp:393] adb_query: host:devices-l
+     // 03-04 12:29:44.557 16415 16415 D adb     : commandline.cpp:1646 Using server socket: tcp:172.27.192.1:5037
+diff --git a/build/src/start/platforms/android/adbReverse.js b/build/src/start/platforms/android/adbReverse.js
+index c67082b7555c7fe95179e7295fd02f6bbf0d27a5..ed2d18170ceca4859085189fcf58b3f76917bb72 100644
+--- a/build/src/start/platforms/android/adbReverse.js
++++ b/build/src/start/platforms/android/adbReverse.js
+@@ -67,10 +67,23 @@ function _interop_require_wildcard(obj, nodeInterop) {
+ const debug = require('debug')('expo:start:platforms:android:adbReverse');
+ let removeExitHook = null;
+ function hasAdbReverseAsync() {
++    // If HDC mode is active, port forwarding is always available via hdc fport
++    if ((0, _adb.isHdcMode)()) {
++        debug('HDC mode active, port forwarding available via hdc fport');
++        return true;
++    }
+     try {
+         return !!(0, _AndroidSdk.assertSdkRoot)();
+     } catch (error) {
+-        debug('Failed to resolve the Android SDK path, skipping ADB: %s', error.message);
++        debug('Failed to resolve the Android SDK path, checking HDC fallback: %s', error.message);
++        // Check if HDC is available as fallback
++        try {
++            const { HDCServer } = require('./HDCServer');
++            if (HDCServer.detectHdcPath()) {
++                debug('HDC available as fallback for port forwarding');
++                return true;
++            }
++        } catch {}
+         return false;
+     }
+ }
+diff --git a/build/src/start/platforms/android/getDevices.js b/build/src/start/platforms/android/getDevices.js
+index 20463f500ba561281d7c66bc816c1de5cd8eaa90..b0d1ad84a86b88154a73c92e8a649e88541e1475 100644
+--- a/build/src/start/platforms/android/getDevices.js
++++ b/build/src/start/platforms/android/getDevices.js
+@@ -13,6 +13,19 @@ const _emulator = require("./emulator");
+ const _errors = require("../../../utils/errors");
+ async function getDevicesAsync() {
+     const bootedDevices = await (0, _adb.getAttachedDevicesAsync)();
++
++    // In HDC mode, skip AVD/emulator listing (not applicable to HarmonyOS)
++    if ((0, _adb.isHdcMode)()) {
++        if (!bootedDevices.length) {
++            throw new _errors.CommandError([
++                `No HarmonyOS device found via HDC.`,
++                `Make sure your device is connected via USB and USB debugging is enabled.`,
++                `You can verify with: hdc list targets`
++            ].join('\n'));
++        }
++        return bootedDevices;
++    }
++
+     const data = await (0, _emulator.listAvdsAsync)();
+     const connectedNames = bootedDevices.map(({ name })=>name);
+     const offlineEmulators = data.filter(({ name })=>!connectedNames.includes(name)).map(({ name, type })=>{
