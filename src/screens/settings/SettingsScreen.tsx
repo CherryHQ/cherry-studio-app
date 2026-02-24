@@ -1,4 +1,5 @@
 import { useNavigation } from '@react-navigation/native'
+import { Mic } from 'lucide-react-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { ScrollView, View } from 'react-native'
@@ -70,6 +71,12 @@ export default function SettingsScreen() {
           screen: 'WebSearchSettings',
           specificScreen: 'WebSearchSettingsScreen',
           icon: <Globe size={24} />
+        },
+        {
+          title: t('settings.speechToText.title'),
+          screen: 'SpeechToTextSettings',
+          specificScreen: 'SpeechToTextSettingScreen',
+          icon: <Mic size={24} />
         }
       ]
     },

@@ -900,6 +900,33 @@
         },
         "token_placeholder": "请输入思源笔记 Token"
       },
+      "speechToText": {
+        "api_key": {
+          "error_not_configured": "请先在设置中配置 API 密钥才能使用语音识别功能",
+          "error_title": "API 密钥未配置",
+          "get": "获取 API 密钥",
+          "label": "API 密钥",
+          "placeholder": "请输入 API 密钥"
+        },
+        "check_error": "检查错误",
+        "check_fail": "检查失败",
+        "check_success": "检查成功 🎉",
+        "check_success_message": "API 连接正常",
+        "permission": {
+          "error_denied": "请在系统设置中授予麦克风权限才能使用语音识别功能",
+          "error_title": "权限被拒绝"
+        },
+        "provider": {
+          "api": {
+            "title": "API 提供商"
+          },
+          "bailian": "阿里云百炼",
+          "default": "默认",
+          "error_not_available": "语音识别服务当前不可用，请稍后再试或联系技术支持",
+          "error_title": "语音识别服务不可用"
+        },
+        "title": "语音转文字"
+      },
       "theme": {
         "window": {
           "style": {

@@ -30,6 +30,10 @@ export interface PreferenceSchemas {
     'websearch.override_search_service': boolean
     'websearch.content_limit': number | undefined
 
+    // Speech to Text Configuration
+    'speechToTextProvider': string
+    'speechToTextProviders': Record<string, { apiKey: string }>
+
     // App State
     'app.initialization_version': number
     'app.dismissed_update_version': string

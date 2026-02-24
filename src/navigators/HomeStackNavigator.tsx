@@ -13,6 +13,7 @@ import AssistantSettingsStackNavigator from './settings/AssistantSettingsStackNa
 import DataSourcesStackNavigator from './settings/DataSourcesStackNavigator'
 import GeneralSettingsStackNavigator from './settings/GeneralSettingsStackNavigator'
 import ProvidersStackNavigator from './settings/ProvidersStackNavigator'
+import SpeechToTextSettingsStackNavigator from './settings/SpeechToTextSettingsStackNavigator'
 import WebSearchStackNavigator from './settings/WebSearchStackNavigator'
 
 export type HomeStackParamList = {
@@ -27,6 +28,7 @@ export type HomeStackParamList = {
   DataSourcesSettings: { screen?: string; params?: any } | undefined
   WebSearchSettings: { screen?: string; params?: any } | undefined
   AboutSettings: { screen?: string; params?: any } | undefined
+  SpeechToTextSettings: { screen?: string; params?: any } | undefined
 }
 
 const Stack = createStackNavigator<HomeStackParamList>()
@@ -50,6 +52,7 @@ export default function HomeStackNavigator() {
       <Stack.Screen name="DataSourcesSettings" component={DataSourcesStackNavigator} />
       <Stack.Screen name="WebSearchSettings" component={WebSearchStackNavigator} />
       <Stack.Screen name="AboutSettings" component={AboutStackNavigator} />
+      <Stack.Screen name="SpeechToTextSettings" component={SpeechToTextSettingsStackNavigator} />
     </Stack.Navigator>
   )
 }

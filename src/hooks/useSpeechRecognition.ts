@@ -1,9 +1,20 @@
+import {
+  AudioQuality,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from 'expo-audio'
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition'
 import { useRef, useState } from 'react'
 import { Platform } from 'react-native'
 
+import { getSpeechToTextProviders } from '@/config/speechToTextProviders'
+import { usePreference } from '@/hooks/usePreference'
 import i18n from '@/i18n'
+import { DashScopeSpeechService } from '@/services/DashScopeSpeechService'
 import { loggerService } from '@/services/LoggerService'
+
+
 
 const logger = loggerService.withContext('SpeechRecognition')
 
@@ -60,6 +71,40 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
   const [transcript, setTranscript] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  // Get current speech-to-text provider preference
+  const [currentProviderId] = usePreference('speechToTextProvider' as any)
+  const [providersConfig] = usePreference('speechToTextProviders' as any)
+
+  // Audio recording ref for API providers
+  const audioRecorder = useAudioRecorder({
+    extension: '.m4a',
+    sampleRate: 44100,
+    numberOfChannels: 1,
+    bitRate: 128000,
+    android: {
+      extension: '.m4a',
+      outputFormat: 'mpeg4',
+      audioEncoder: 'aac',
+      sampleRate: 44100
+    },
+    ios: {
+      extension: '.m4a',
+      outputFormat: 'aac',
+      audioQuality: AudioQuality.HIGH,
+      sampleRate: 44100
+    },
+    web: {
+      mimeType: 'audio/mp4',
+      bitsPerSecond: 128000
+    }
+  })
+
+  const recorderState = useAudioRecorderState(audioRecorder)
+  const statusRef = useRef(status)
+
+  // Update status ref when status changes
+  statusRef.current = status
+
   // Listen for recognition results
   useSpeechRecognitionEvent('result', event => {
     const result = event.results[0]
@@ -101,27 +146,102 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
   const startListening = async () => {
     // Set status immediately to prevent race conditions
     setStatus('processing')
+    logger.info('Starting speech recognition, current provider:', currentProviderId)
+
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (statusRef.current === 'processing') {
+        logger.error('Speech recognition timed out after 10 seconds')
+        setStatus('idle')
+        onErrorRef.current?.('Speech recognition initialization timed out. Please try again.')
+      }
+    }, 10000)
 
     try {
-      // Check if recognition is available
+      const providers = getSpeechToTextProviders()
+      const provider = providers.find(p => p.id === currentProviderId) || providers[0]
+
+      logger.info('Found provider:', provider?.id, 'Type:', provider?.type)
+
+      if (!provider) {
+        const errorMsg = 'No speech-to-text provider configured'
+        logger.warn(errorMsg)
+        setError(errorMsg)
+        onErrorRef.current?.(errorMsg)
+        setStatus('idle')
+        clearTimeout(timeoutId)
+        return false
+      }
+
+      // Handle API providers
+      if (provider.type === 'api') {
+        logger.info('Using API provider:', provider.id)
+        const apiKey = providersConfig?.[provider.id]?.apiKey
+        logger.info('API key configured:', !!apiKey)
+
+        if (!apiKey) {
+          const errorMsg = 'API key not configured for this provider'
+          logger.warn(errorMsg)
+          setError(errorMsg)
+          onErrorRef.current?.(errorMsg)
+          setStatus('idle')
+          clearTimeout(timeoutId)
+          return false
+        }
+
+        // Skip permission check and audio mode setup, try to create recording directly
+        logger.info('Setting audio mode and creating recording...')
+        try {
+          await setAudioModeAsync({
+            playsInSilentMode: true,
+            allowsRecording: true
+          })
+        } catch (e) {
+          logger.warn('Failed to set audio mode:', e)
+        }
+
+        // Create and start recording with M4A format (supported by DashScope)
+        logger.info('Creating recording...')
+        try {
+          await audioRecorder.prepareToRecordAsync()
+          await audioRecorder.record()
+          setStatus('listening')
+          logger.info('Started audio recording for API provider')
+        } catch (e) {
+          logger.error('Failed to start recording:', e)
+          throw e
+        }
+        clearTimeout(timeoutId)
+        return true
+      }
+
+      // Handle system default provider
+      logger.info('Using system default provider')
       const isAvailable = await ExpoSpeechRecognitionModule.isRecognitionAvailable()
+      logger.info('Speech recognition available:', isAvailable)
+
       if (!isAvailable) {
         const errorMsg = 'Speech recognition is not available on this device'
         logger.warn(errorMsg)
         setError(errorMsg)
         onErrorRef.current?.(errorMsg)
         setStatus('idle')
+        clearTimeout(timeoutId)
         return false
       }
 
       // Request permissions
+      logger.info('Requesting speech recognition permission...')
       const permissionResult = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
+      logger.info('Speech recognition permission granted:', permissionResult.granted)
+
       if (!permissionResult.granted) {
         const errorMsg = 'Speech recognition permission denied'
         logger.info(errorMsg)
         setError(errorMsg)
         onErrorRef.current?.(errorMsg)
         setStatus('idle')
+        clearTimeout(timeoutId)
         return false
       }
 
@@ -130,6 +250,7 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
       setError(null)
 
       // Start recognition with configuration
+      logger.info('Starting speech recognition with locale:', getRecognitionLocale())
       ExpoSpeechRecognitionModule.start({
         lang: getRecognitionLocale(),
         interimResults: true,
@@ -146,20 +267,72 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
         })
       })
 
+      clearTimeout(timeoutId)
       return true
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error starting speech recognition'
       logger.error('Failed to start speech recognition:', err instanceof Error ? err : new Error(String(err)))
+      logger.error('Error details:', JSON.stringify(err))
       setError(errorMsg)
       setStatus('idle')
       onErrorRef.current?.(errorMsg)
+      clearTimeout(timeoutId)
       return false
     }
   }
 
   // Stop speech recognition
-  const stopListening = () => {
+  const stopListening = async () => {
     try {
+      const providers = getSpeechToTextProviders()
+      const provider = providers.find(p => p.id === currentProviderId) || providers[0]
+
+      // Handle API providers
+      if (provider?.type === 'api') {
+        setStatus('processing')
+
+        try {
+          // Stop recording
+          await audioRecorder.stop()
+          // URL is available in recorderState after stopping
+          const url = recorderState.url
+
+          if (!url) {
+            throw new Error('Failed to get recording URL')
+          }
+
+          logger.info('Recording stopped, processing audio with API provider')
+
+          // Get provider config and create service
+          const apiKey = providersConfig?.[provider.id]?.apiKey
+          if (!apiKey) {
+            throw new Error('API key not configured')
+          }
+
+          const providerWithKey = { ...provider, apiKey }
+          let result = ''
+
+          if (provider.id === 'bailian') {
+            const service = new DashScopeSpeechService(providerWithKey)
+            result = await service.recognizeFromFile(url, { language: getRecognitionLocale().split('-')[0] })
+          } else {
+            throw new Error(`Unsupported API provider: ${provider.id}`)
+          }
+
+          setTranscript(result)
+          onTranscriptRef.current?.(result, true)
+          setStatus('idle')
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : 'Failed to process audio'
+          logger.error('Failed to process audio with API provider:', err instanceof Error ? err : new Error(String(err)))
+          setError(errorMsg)
+          onErrorRef.current?.(errorMsg)
+          setStatus('idle')
+        }
+        return
+      }
+
+      // Handle system default provider
       ExpoSpeechRecognitionModule.stop()
       setStatus('processing') // Processing final results
     } catch (err) {
@@ -179,8 +352,17 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
   }
 
   // Abort speech recognition (cancel without processing)
-  const abortListening = () => {
+  const abortListening = async () => {
     try {
+      const providers = getSpeechToTextProviders()
+      const provider = providers.find(p => p.id === currentProviderId) || providers[0]
+
+      // Handle API providers
+      if (provider?.type === 'api' && recorderState.isRecording) {
+        await audioRecorder.stop()
+      }
+
+      // Handle system default provider
       ExpoSpeechRecognitionModule.abort()
       setStatus('idle')
       setTranscript('')

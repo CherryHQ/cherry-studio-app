@@ -28,9 +28,24 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscript, onListen
       const isNoSpeechError = errorMessage.toLowerCase().includes('no speech')
       if (isNoSpeechError) return
 
+      let title = t('common.error_occurred')
+      let content = errorMessage
+
+      // Customize error messages based on error type
+      if (errorMessage.includes('API key not configured') || errorMessage.includes('apiKey')) {
+        title = t('settings.speechToText.api_key.error_title')
+        content = t('settings.speechToText.api_key.error_not_configured')
+      } else if (errorMessage.includes('permission denied') || errorMessage.includes('permission')) {
+        title = t('settings.speechToText.permission.error_title')
+        content = t('settings.speechToText.permission.error_denied')
+      } else if (errorMessage.includes('not available') || errorMessage.includes('not configured')) {
+        title = t('settings.speechToText.provider.error_title')
+        content = t('settings.speechToText.provider.error_not_available')
+      }
+
       presentDialog('error', {
-        title: t('common.error_occurred'),
-        content: errorMessage
+        title,
+        content
       })
     }
   })
