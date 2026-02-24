@@ -38,6 +38,7 @@
         "max_tokens_value": "最大token限制",
         "reasoning": {
           "auto": "默认",
+          "default": "默认",
           "high": "沉思",
           "label": "思考深度",
           "low": "浮想",
