@@ -59,7 +59,9 @@ export function useTextInput(options: UseTextInputOptions = {}): UseTextInputRet
           setTextInternal(newText)
         }
       } finally {
-        processingTextRef.current = null
+          if (processingTextRef.current === newText) {
+            processingTextRef.current = null
+          }
       }
     } else {
       setTextInternal(newText)
