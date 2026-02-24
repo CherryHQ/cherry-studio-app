@@ -44,9 +44,9 @@ export const Root: React.FC<RootProps> = ({ topic, assistant, updateAssistant, c
     setFiles(filesToRestore)
   }
 
-  const handleEditStart = (content: string) => {
+  const handleEditStart = (content: string, files: FileMetadata[] = []) => {
     setText(content)
-    clearFiles()
+    setFiles(files)
   }
 
   const handleEditCancel = () => {
