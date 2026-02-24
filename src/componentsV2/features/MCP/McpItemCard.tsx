@@ -41,7 +41,7 @@ export const McpItemCard: FC<McpItemCardProps> = ({ mcp, handleMcpServerItemPres
 
     try {
       if (!onToggle) return
-      await onToggle(mcp, value) // ？？
+      await onToggle(mcp, value)
     } catch (error) {
       console.error('Toggle failed:', error)
     } finally {
