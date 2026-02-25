@@ -143,7 +143,7 @@
     "expo-system-ui": "~6.0.7",
     "expo-updates": "~29.0.12",
     "expo-web-browser": "~15.0.7",
-    "fast-xml-parser": "^5.3.3",
+    "fast-xml-parser": "^5.3.5",
     "heroui-native": "^1.0.0-beta.10",
     "i18next": "^24.2.2",
     "lodash": "^4.17.21",
@@ -203,7 +203,7 @@
     "uniwind": "^1.0.5",
     "use-latest-callback": "^0.3.3",
     "vitest": "^3.2.4",
-    "webdav": "^5.8.0",
+    "webdav": "^5.9.0",
     "zeego": "^3.0.6",
     "zod": "^3.25.76"
   },
@@ -251,7 +251,9 @@
   "pnpm": {
     "overrides": {
       "esbuild": "^0.25.4",
-      "expo-sqlite": "16.0.8"
+      "expo-sqlite": "16.0.8",
+      "fast-xml-parser": "^5.3.5",
+      "tar": "^7.5.4"
     },
     "patchedDependencies": {
       "@ai-sdk/google@2.0.38": "patches/@ai-sdk+google@2.0.38.patch",
