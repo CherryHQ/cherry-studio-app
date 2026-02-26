@@ -46,7 +46,7 @@ export default function GeneralSettingsScreen() {
               <XStack className="items-center justify-between p-4">
                 <YStack className="flex-1 pr-4">
                   <Text className="text-lg">{t('settings.general.auto_scroll.title')}</Text>
-                  <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  <Text className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     {t('settings.general.auto_scroll.description')}
                   </Text>
                 </YStack>

@@ -430,7 +430,7 @@ export class MobileOAuthProvider implements OAuthClientProvider {
   /**
    * Invalidate stored credentials
    */
-  invalidateCredentials(scope: 'all' | 'client' | 'tokens' | 'verifier' | 'state'): void {
+  invalidateCredentials(scope: 'all' | 'client' | 'tokens' | 'verifier' | 'discovery' | 'state'): void {
     switch (scope) {
       case 'all':
         storage.delete(this.tokensKey)
@@ -450,6 +450,10 @@ export class MobileOAuthProvider implements OAuthClientProvider {
       case 'verifier':
         storage.delete(this.verifierKey)
         logger.info('Invalidated PKCE code verifier')
+        break
+      case 'discovery':
+        // Discovery state cache is not persisted yet; this scope is a no-op for now.
+        logger.info('Invalidated OAuth discovery state')
         break
       case 'state':
         storage.delete(this.stateKey)
