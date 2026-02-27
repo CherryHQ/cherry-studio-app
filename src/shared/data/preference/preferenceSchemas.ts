@@ -4,11 +4,12 @@
  * This file defines all user preferences and their default values.
  * Preferences are stored in the SQLite database and can be synchronized across devices.
  *
- * Total preference items: 10
+ * Total preference items: 11
  * - User configuration: 3
  * - UI configuration: 1
  * - Topic state: 1
  * - Web search configuration: 4
+ * - Chat configuration: 1
  * - App state: 2
  */
 
@@ -62,6 +63,12 @@ export const DefaultPreferences: PreferenceSchemas = {
     // undefined means no limit
     'websearch.content_limit': 2000,
 
+    // === Chat Configuration ===
+    // Whether to automatically scroll to the bottom when receiving streamed responses
+    // When enabled, the chat view will scroll to show new content as it arrives
+    // When disabled, users can scroll freely without being forced to the bottom
+    'chat.auto_scroll': true,
+
     // Current version of the app data initialization
     // Used to run incremental initialization migrations when new data is added
     'app.initialization_version': 0,
@@ -91,6 +98,7 @@ export const PreferenceDescriptions: Record<keyof PreferenceSchemas['default'], 
   'websearch.max_results': 'Maximum number of search results (1-20)',
   'websearch.override_search_service': 'Use custom search service configuration',
   'websearch.content_limit': 'Content length limit for search results (characters)',
+  'chat.auto_scroll': 'Automatically scroll to bottom when receiving streamed responses',
   'app.initialization_version': 'Current version of app data initialization migrations',
   'app.dismissed_update_version': 'Version number that user chose to skip updating',
   'app.developer_mode': 'Enable developer mode for advanced features'

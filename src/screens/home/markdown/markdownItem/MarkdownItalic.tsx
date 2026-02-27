@@ -11,7 +11,7 @@ interface MarkdownItalicProps {
 }
 
 export function MarkdownItalic({ children, className, style }: MarkdownItalicProps) {
-  const mergedClassName = ['text-foreground', 'italic', className].filter(Boolean).join(' ')
+  const mergedClassName = ['text-foreground', 'italic', 'my-3', className].filter(Boolean).join(' ')
   return (
     <StyledText className={mergedClassName} style={style}>
       {children}
