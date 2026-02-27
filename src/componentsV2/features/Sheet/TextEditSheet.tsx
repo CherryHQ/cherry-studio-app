@@ -2,7 +2,15 @@ import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { Button } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BackHandler, Keyboard, Platform, Pressable, TouchableWithoutFeedback, View } from 'react-native'
+import {
+  BackHandler,
+  Keyboard,
+  Platform,
+  Pressable,
+  TouchableWithoutFeedback,
+  useWindowDimensions,
+  View
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import Text from '@/componentsV2/base/Text'
@@ -33,6 +41,7 @@ const TextEditSheet: React.FC = () => {
   const { t } = useTranslation()
   const { isDark } = useTheme()
   const insets = useSafeAreaInsets()
+  const { height: screenHeight } = useWindowDimensions()
   const [isVisible, setIsVisible] = useState(false)
   const [content, setContent] = useState(currentContent)
 
@@ -94,7 +103,7 @@ const TextEditSheet: React.FC = () => {
       onDidDismiss={handleDismiss}
       onDidPresent={() => setIsVisible(true)}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View className="h-72" style={{ paddingBottom: insets.bottom + 10 }}>
+        <View style={{ height: screenHeight * 0.85 - 60, paddingBottom: insets.bottom + 10 }}>
           <YStack className="flex-1 gap-4 px-4 pb-4">
             <TextField className="flex-1 rounded-2xl">
               <TextField.Input

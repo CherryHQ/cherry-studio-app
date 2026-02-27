@@ -1,5 +1,6 @@
 export * from './ArrowIcon'
 export * from './AssetsIcon'
+export * from './CodeIcon'
 export * from './DefaultProviderIcon'
 export * from './EditIcon'
 export { default as FallbackFavicon } from './FallbackFavicon'

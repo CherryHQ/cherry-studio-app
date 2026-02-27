@@ -106,6 +106,7 @@ const ModelSheet: React.FC = () => {
             onToggleMultiSelect={toggleMultiSelectMode}
             onClearAll={handleClearAll}
           />
+          <View className="my-1" />
           <ModelProviderTabBar
             selectOptions={selectOptions}
             activeProvider={activeProvider}

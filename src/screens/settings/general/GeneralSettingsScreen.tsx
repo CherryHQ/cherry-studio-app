@@ -14,6 +14,7 @@ export default function GeneralSettingsScreen() {
   const { t } = useTranslation()
   const { isTablet } = useResponsive()
   const [developerMode, setDeveloperMode] = usePreference('app.developer_mode')
+  const [autoScroll, setAutoScroll] = usePreference('chat.auto_scroll')
 
   return (
     <SafeAreaContainer className="flex-1">
@@ -54,6 +55,21 @@ export default function GeneralSettingsScreen() {
               </Group>
             </YStack>
           )}
+          {/* Chat settings */}
+          <YStack className="gap-2">
+            <GroupTitle>{t('settings.general.auto_scroll.title')}</GroupTitle>
+            <Group>
+              <XStack className="items-center justify-between p-4">
+                <YStack className="flex-1 pr-4">
+                  <Text className="text-lg">{t('settings.general.auto_scroll.title')}</Text>
+                  <Text className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t('settings.general.auto_scroll.description')}
+                  </Text>
+                </YStack>
+                <Switch isSelected={autoScroll} onSelectedChange={setAutoScroll} />
+              </XStack>
+            </Group>
+          </YStack>
 
           {/* Developer settings */}
           <YStack className="gap-2">

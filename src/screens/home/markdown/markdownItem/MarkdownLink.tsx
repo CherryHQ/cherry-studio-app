@@ -27,7 +27,7 @@ export function MarkdownLink({ href, children }: MarkdownLinkProps) {
   }
 
   return (
-    <StyledUITextView className="text-primary text-base underline" onPress={handlePress}>
+    <StyledUITextView className="blue-500 text-base" onPress={handlePress}>
       {children}
     </StyledUITextView>
   )

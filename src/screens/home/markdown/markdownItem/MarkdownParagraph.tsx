@@ -11,7 +11,7 @@ interface MarkdownParagraphProps {
 }
 
 export function MarkdownParagraph({ children, className, style }: MarkdownParagraphProps) {
-  const mergedClassName = ['text-foreground text-base', className].filter(Boolean).join(' ')
+  const mergedClassName = ['text-foreground text-base', 'my-3', className].filter(Boolean).join(' ')
   return (
     <SelectableText className={mergedClassName} style={style}>
       {children}

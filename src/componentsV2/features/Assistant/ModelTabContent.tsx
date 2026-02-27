@@ -3,6 +3,7 @@ import { MotiView } from 'moti'
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import Text from '@/componentsV2/base/Text'
 import TextField from '@/componentsV2/base/TextField'
 import { presentReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
@@ -191,7 +192,20 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
           <Text>{t('assistants.settings.max_tokens')}</Text>
           <Switch
             isSelected={settings.enableMaxTokens ?? false}
-            onSelectedChange={checked => handleSettingsChange('enableMaxTokens', checked)}></Switch>
+            onSelectedChange={checked => {
+              if (checked) {
+                presentDialog('warning', {
+                  title: t('assistants.settings.max_tokens'),
+                  content: t('assistants.settings.max_tokens_warning'),
+                  showCancel: true,
+                  confirmText: t('common.confirm'),
+                  cancelText: t('common.cancel'),
+                  onConfirm: () => handleSettingsChange('enableMaxTokens', true)
+                })
+              } else {
+                handleSettingsChange('enableMaxTokens', false)
+              }
+            }}></Switch>
         </Row>
         {settings.enableMaxTokens && (
           <Row>
