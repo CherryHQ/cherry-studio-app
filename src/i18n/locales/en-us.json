@@ -36,6 +36,7 @@
         "context": "Context",
         "max_tokens": "Enable Max Tokens Limit",
         "max_tokens_value": "Max Tokens Limits",
+        "max_tokens_warning": "Sets the maximum number of tokens for a single interaction, which affects the length of the returned result. Set according to the model's context limit, otherwise an error will occur.",
         "reasoning": {
           "auto": "Auto",
           "default": "Default",

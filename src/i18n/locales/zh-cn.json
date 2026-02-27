@@ -36,6 +36,7 @@
         "context": "上下文",
         "max_tokens": "启用最大token限制",
         "max_tokens_value": "最大token限制",
+        "max_tokens_warning": "设置单次交互所用的最大Token数，会影响返回结果的长度。要根据模型上下文限制来设置，否则会报错。",
         "reasoning": {
           "auto": "默认",
           "default": "默认",
