@@ -374,6 +374,9 @@
         "oauth_failed": "OAuth 認證失敗",
         "title": "認證"
       },
+      "errors": {
+        "list_tools_failed": "無法從 MCP 伺服器取得工具列表，請檢查伺服器連接。"
+      },
       "builtin": {
         "calendar": {
           "description": "取得、作業系統日曆"

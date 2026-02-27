@@ -1,11 +1,12 @@
-import { Button, Switch } from 'heroui-native'
+import { Button, Spinner, Switch } from 'heroui-native'
 import type { FC } from 'react'
-import React from 'react'
+import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import Text from '@/componentsV2/base/Text'
 import { Plus } from '@/componentsV2/icons/LucideIcon'
 import PressableRow from '@/componentsV2/layout/PressableRow'
+import XStack from '@/componentsV2/layout/XStack'
 import YStack from '@/componentsV2/layout/YStack'
 import { useToast } from '@/hooks/useToast'
 import { mcpService } from '@/services/McpService'
@@ -21,6 +22,7 @@ interface McpItemCardProps {
 export const McpItemCard: FC<McpItemCardProps> = ({ mcp, handleMcpServerItemPress, mode = 'toggle', onToggle }) => {
   const { t } = useTranslation()
   const toast = useToast()
+  const [isValidating, setIsValidating] = useState(false)
 
   const handlePress = () => {
     handleMcpServerItemPress(mcp)
@@ -34,8 +36,17 @@ export const McpItemCard: FC<McpItemCardProps> = ({ mcp, handleMcpServerItemPres
     toast.show(t('mcp.market.add.success', { mcp_name: mcp.name }))
   }
 
-  const handleSwitchChange = (value: boolean) => {
-    onToggle?.(mcp, value)
+  const handleSwitchChange = async (value: boolean) => {
+    setIsValidating(true)
+
+    try {
+      if (!onToggle) return
+      await onToggle(mcp, value)
+    } catch (error) {
+      console.error('Toggle failed:', error)
+    } finally {
+      setIsValidating(false)
+    }
   }
 
   return (
@@ -43,7 +54,10 @@ export const McpItemCard: FC<McpItemCardProps> = ({ mcp, handleMcpServerItemPres
       onPress={handlePress}
       className="bg-card items-center justify-between gap-2 rounded-2xl px-2.5 py-2.5">
       <YStack className="h-full flex-1 gap-2">
-        <Text className="text-lg">{mcp.name}</Text>
+        <XStack className="items-center gap-2">
+          <Text className="text-lg">{mcp.name}</Text>
+          {isValidating && <Spinner size="sm" />}
+        </XStack>
         <Text className="text-foreground-secondary text-sm" numberOfLines={1} ellipsizeMode="tail">
           {mcp.description}
         </Text>
@@ -56,7 +70,7 @@ export const McpItemCard: FC<McpItemCardProps> = ({ mcp, handleMcpServerItemPres
             </Button.Label>
           </Button>
         ) : (
-          <Switch isSelected={mcp.isActive} onSelectedChange={handleSwitchChange} />
+          <Switch isSelected={mcp.isActive} onSelectedChange={handleSwitchChange} isDisabled={isValidating} />
         )}
         <Text className="primary-badge rounded-lg border-[0.5px] px-2 py-0.5 text-sm">{t(`mcp.type.${mcp.type}`)}</Text>
       </YStack>
