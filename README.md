@@ -4,7 +4,7 @@ English | [中文](./README-zh.md)
 
 🍒 Cherry Studio App —— The official mobile version of Cherry Studio, bringing powerful LLMs (Large Language Models) interaction to your iOS and Android devices.
 
-🌟 **Support the Project:** [Sponsor](https://github.com/CherryHQ/cherry-studio/blob/main/docs/sponsor.md) | Give the repo a Star!
+🌟 **Support the Project:** [Sponsor](https://github.com/CherryHQ/cherry-studio/blob/main/docs/zh/guides/sponsor.md) | Give the repo a Star!
 
 ## ✨ Key Features
 

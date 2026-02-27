@@ -38,6 +38,7 @@
         "max_tokens_value": "最大token限制",
         "reasoning": {
           "auto": "默认",
+          "default": "默认",
           "high": "沉思",
           "label": "思考深度",
           "low": "浮想",
@@ -687,6 +688,10 @@
       },
       "dataAndSecurity": "数据与安全",
       "general": {
+        "auto_scroll": {
+          "description": "接收流式输出时自动滚动到底部",
+          "title": "自动滚动消息"
+        },
         "developer_mode": {
           "title": "开发者模式"
         },

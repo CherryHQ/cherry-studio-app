@@ -21,16 +21,16 @@ export const ModelListItem: React.FC<ModelListItemProps> = ({ item, isSelected, 
     <Pressable
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
       onPress={() => onToggle(item.value)}
-      className={`justify-between rounded-lg border px-2 ${
-        isSelected ? 'primary-container' : 'border-transparent bg-transparent'
+      className={`justify-between rounded-lg border px-2 py-1 ${
+        isSelected ? 'primary-container rounded' : 'border-transparent bg-transparent'
       }`}>
       <XStack className="w-full items-center gap-2 py-1">
         <XStack className="items-center justify-center">
-          <ModelIcon model={item.model} size={24} />
+          <ModelIcon model={item.model} size={22} />
         </XStack>
         <YStack className="flex-1 gap-1">
           <Text
-            className={cn('text-sm leading-none', isSelected ? 'primary-text' : 'text-foreground')}
+            className={cn('pb-1 text-sm leading-none', isSelected ? 'primary-text' : 'text-foreground')}
             numberOfLines={1}
             ellipsizeMode="tail">
             {item.label}

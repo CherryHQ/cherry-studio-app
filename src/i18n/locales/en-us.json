@@ -38,11 +38,12 @@
         "max_tokens_value": "Max Tokens Limits",
         "reasoning": {
           "auto": "Auto",
+          "default": "Default",
           "high": "High",
           "label": "Reasoning Effort",
           "low": "Low",
           "medium": "Medium",
-          "minimal": "Weinian",
+          "minimal": "Minimal",
           "none": "None",
           "off": "Off"
         },
@@ -687,6 +688,10 @@
       },
       "dataAndSecurity": "Data & Security",
       "general": {
+        "auto_scroll": {
+          "description": "Automatically scroll to the bottom when receiving streamed responses",
+          "title": "Auto-scroll Messages"
+        },
         "developer_mode": {
           "title": "Developer Mode"
         },
