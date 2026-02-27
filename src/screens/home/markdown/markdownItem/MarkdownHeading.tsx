@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import React from 'react'
-import { View } from 'react-native'
+import { View, Text } from 'react-native'
 
 import { SelectableText } from './SelectableText'
 
@@ -21,7 +21,7 @@ export const headingClasses: Record<1 | 2 | 3 | 4 | 5 | 6, string> = {
 export function MarkdownHeading({ level, children }: MarkdownHeadingProps) {
   return (
     <>
-      <SelectableText className={headingClasses[level]}>{children}</SelectableText>
+      <Text className={headingClasses[level]}>{children}</Text>
       {[1, 2].includes(level) && <View className="my-3 h-px bg-[#e6e6e6]" />}
     </>
   )

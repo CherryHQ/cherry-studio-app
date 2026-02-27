@@ -1,9 +1,9 @@
 import React from 'react'
 import type { StyleProp, TextStyle } from 'react-native'
-import { UITextView } from 'react-native-uitextview'
+import { Text } from 'react-native'
 import { withUniwind } from 'uniwind'
 
-export const StyledUITextView = withUniwind(UITextView)
+export const StyledText = withUniwind(Text)
 
 interface MarkdownTextProps {
   content: string
@@ -13,8 +13,8 @@ interface MarkdownTextProps {
 
 export function MarkdownText({ content, className, style }: MarkdownTextProps) {
   return (
-    <StyledUITextView className={className} style={style}>
+    <StyledText className={className} style={style}>
       {content}
-    </StyledUITextView>
+    </StyledText>
   )
 }

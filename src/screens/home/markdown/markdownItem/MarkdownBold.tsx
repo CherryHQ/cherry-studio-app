@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import React from 'react'
 import type { StyleProp, TextStyle } from 'react-native'
 
-import { StyledUITextView } from './MarkdownText'
+import { StyledText } from './MarkdownText'
 
 interface MarkdownBoldProps {
   children: ReactNode
@@ -13,8 +13,8 @@ interface MarkdownBoldProps {
 export function MarkdownBold({ children, className, style }: MarkdownBoldProps) {
   const mergedClassName = ['text-foreground', 'font-bold', 'my-3', className].filter(Boolean).join(' ')
   return (
-    <StyledUITextView className={mergedClassName} style={style}>
+    <StyledText className={mergedClassName} style={style}>
       {children}
-    </StyledUITextView>
+    </StyledText>
   )
 }

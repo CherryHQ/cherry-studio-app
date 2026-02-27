@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
 import React from 'react'
-import { Linking } from 'react-native'
+import { Linking, Text } from 'react-native'
 
 import { loggerService } from '@/services/LoggerService'
 
-import { StyledUITextView } from './MarkdownText'
+import { StyledText } from './MarkdownText'
 
 const logger = loggerService.withContext('MarkdownLink')
 
@@ -27,8 +27,8 @@ export function MarkdownLink({ href, children }: MarkdownLinkProps) {
   }
 
   return (
-    <StyledUITextView className="blue-500 text-base" onPress={handlePress}>
+    <StyledText className="blue-500 text-base" onPress={handlePress}>
       {children}
-    </StyledUITextView>
+    </StyledText>
   )
 }

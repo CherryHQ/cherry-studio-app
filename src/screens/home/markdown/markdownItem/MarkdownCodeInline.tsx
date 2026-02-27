@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { StyledUITextView } from './MarkdownText'
+import { StyledText } from './MarkdownText'
 
 interface MarkdownCodeInlineProps {
   content: string
@@ -8,8 +8,8 @@ interface MarkdownCodeInlineProps {
 
 export function MarkdownCodeInline({ content }: MarkdownCodeInlineProps) {
   return (
-    <StyledUITextView style={{ fontFamily: 'FiraCode' }} className="text-md bg-neutral-200/40  dark:bg-neutral-800">
+    <StyledText style={{ fontFamily: 'FiraCode' }} className="text-md bg-neutral-200/40  dark:bg-neutral-800">
       {content}
-    </StyledUITextView>
+    </StyledText>
   )
 }

@@ -1,7 +1,7 @@
 import React from 'react'
 
-import { StyledUITextView } from './MarkdownText'
+import { StyledText } from './MarkdownText'
 
 export function MarkdownSoftBreak() {
-  return <StyledUITextView>{'\n'}</StyledUITextView>
+  return <StyledText>{'\n'}</StyledText>
 }

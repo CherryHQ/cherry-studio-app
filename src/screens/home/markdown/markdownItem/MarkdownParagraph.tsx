@@ -1,20 +1,19 @@
 import type { ReactNode } from 'react'
 import React from 'react'
-import type { StyleProp, TextStyle } from 'react-native'
-
-import { SelectableText } from './SelectableText'
+import { Text } from 'react-native'
 
 interface MarkdownParagraphProps {
   children: ReactNode
   className?: string
-  style?: StyleProp<TextStyle>
+  style
 }
 
 export function MarkdownParagraph({ children, className, style }: MarkdownParagraphProps) {
   const mergedClassName = ['text-foreground text-base', 'my-3', className].filter(Boolean).join(' ')
   return (
-    <SelectableText className={mergedClassName} style={style}>
+    <Text className={mergedClassName} style={style}>
       {children}
-    </SelectableText>
+      {'\n'}
+    </Text>
   )
 }
