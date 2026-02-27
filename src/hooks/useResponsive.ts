@@ -53,6 +53,8 @@ const getOrientation = (width: number, height: number): Orientation => {
  */
 export function useResponsive(): ResponsiveInfo {
   const { width, height } = useWindowDimensions()
+
+  // Direct computation - useMemo not needed for cheap calculations
   const deviceType = getDeviceType(width, height)
   const orientation = getOrientation(width, height)
 

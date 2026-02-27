@@ -1,4 +1,4 @@
-import { DrawerActions, useNavigation } from '@react-navigation/native'
+import { useNavigation } from '@react-navigation/native'
 import React, { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
@@ -15,6 +15,7 @@ import { presentAssistantItemSheet } from '@/componentsV2/features/Assistant/Ass
 import AssistantsTabContent from '@/componentsV2/features/Assistant/AssistantsTabContent'
 import { Menu } from '@/componentsV2/icons'
 import { useBuiltInAssistants } from '@/hooks/useAssistant'
+import { useDrawer } from '@/hooks/useDrawer'
 import { useSearch } from '@/hooks/useSearch'
 import { useSkeletonLoading } from '@/hooks/useSkeletonLoading'
 import type { Assistant } from '@/types/assistant'
@@ -23,6 +24,7 @@ import type { DrawerNavigationProps } from '@/types/naviagate'
 export default function AssistantMarketScreen() {
   const { t } = useTranslation()
   const navigation = useNavigation<DrawerNavigationProps>()
+  const { openDrawer, isDrawerAlwaysVisible } = useDrawer()
 
   const { assistants: builtInAssistants } = useBuiltInAssistants()
   const {
@@ -38,7 +40,7 @@ export default function AssistantMarketScreen() {
   const showSkeleton = useSkeletonLoading(isLoading)
 
   const handleMenuPress = () => {
-    navigation.dispatch(DrawerActions.openDrawer())
+    openDrawer()
   }
 
   const onChatNavigation = async (topicId: string) => {
@@ -59,10 +61,10 @@ export default function AssistantMarketScreen() {
         <View collapsable={false} className="flex-1">
           <HeaderBar
             title={t('assistants.market.title')}
-            leftButton={{
+            leftButton={!isDrawerAlwaysVisible ? {
               icon: <Menu size={24} />,
               onPress: handleMenuPress
-            }}
+            } : undefined}
           />
           <Container className="gap-2.5 py-0">
             <SearchInput

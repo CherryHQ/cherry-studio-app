@@ -706,6 +706,12 @@
           "anonymous": "Anonymous report errors and statistics",
           "title": "Privacy Settings"
         },
+        "tablet_sidebar": {
+          "title": "Tablet Sidebar",
+          "position": "Sidebar Position",
+          "left": "Left",
+          "right": "Right"
+        },
         "theme": {
           "auto": "Auto",
           "dark": "Dark",

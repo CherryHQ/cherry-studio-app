@@ -1,8 +1,8 @@
-import type { DrawerNavigationProp } from '@react-navigation/drawer'
-import { DrawerActions, useNavigation } from '@react-navigation/native'
 import type { PropsWithChildren } from 'react'
 import React from 'react'
 import { PanGestureHandler, State } from 'react-native-gesture-handler'
+
+import { useDrawer } from '@/hooks/useDrawer'
 
 interface DrawerGestureWrapperProps extends PropsWithChildren {
   enabled?: boolean
@@ -11,12 +11,13 @@ interface DrawerGestureWrapperProps extends PropsWithChildren {
 /**
  * Common wrapper component for handling drawer opening gesture
  * Swipe right from anywhere on the screen to open the drawer
+ * In tablet landscape mode, the drawer is always visible so gestures are ignored
  */
 export const DrawerGestureWrapper = ({ children, enabled = true }: DrawerGestureWrapperProps) => {
-  const navigation = useNavigation<DrawerNavigationProp<any>>()
+  const { openDrawer, isDrawerAlwaysVisible } = useDrawer()
 
   const handleSwipeGesture = (event: any) => {
-    if (!enabled) return
+    if (!enabled || isDrawerAlwaysVisible) return
 
     const { translationX, velocityX, state } = event.nativeEvent
 
@@ -28,12 +29,12 @@ export const DrawerGestureWrapper = ({ children, enabled = true }: DrawerGesture
       const hasExcellentDistance = translationX > 80
 
       if ((hasGoodDistance && hasGoodVelocity) || hasExcellentDistance) {
-        navigation.dispatch(DrawerActions.openDrawer())
+        openDrawer()
       }
     }
   }
 
-  if (!enabled) {
+  if (!enabled || isDrawerAlwaysVisible) {
     return <>{children}</>
   }
 
