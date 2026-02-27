@@ -47,6 +47,7 @@ export default {
       permissions: ['android.permission.ACCESS_WIFI_STATE', 'android.permission.CHANGE_WIFI_MULTICAST_STATE']
     },
     plugins: [
+      './plugins/androidThemeColor',
       [
         'expo-build-properties',
         {

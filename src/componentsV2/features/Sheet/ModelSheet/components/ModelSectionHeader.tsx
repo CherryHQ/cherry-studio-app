@@ -2,7 +2,6 @@ import React from 'react'
 import { Pressable, View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
-import { ProviderIcon } from '@/componentsV2/icons'
 import { Settings } from '@/componentsV2/icons/LucideIcon'
 import XStack from '@/componentsV2/layout/XStack'
 import type { Provider } from '@/types/assistant'
@@ -27,10 +26,7 @@ export const ModelSectionHeader: React.FC<ModelSectionHeaderProps> = ({ section,
       }}
       className="px-2 py-1">
       <XStack className="items-center justify-start gap-3 px-0">
-        <XStack className="items-center justify-center">
-          <ProviderIcon provider={section.provider} size={24} />
-        </XStack>
-        <Text className="text-zinc-400/400 text-xl font-bold ">{section.title.toUpperCase()}</Text>
+        <Text className="text-zinc-400/400 text-sm font-bold ">{section.title.toUpperCase()}</Text>
       </XStack>
       {section.provider.id !== 'cherryai' && (
         <Pressable

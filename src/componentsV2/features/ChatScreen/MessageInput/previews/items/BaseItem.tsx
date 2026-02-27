@@ -92,13 +92,13 @@ const BaseItem: FC<BaseItemProps> = ({
           hitSlop={5}
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           className="absolute right-1 top-1 rounded-full">
-          <View className="rounded-full bg-zinc-700 p-0.5">
-            <X size={14} className="white" />
+          <View className="rounded-full bg-zinc-700/60 p-0.5 dark:bg-white/60">
+            <X size={14} className="text-white dark:text-black" />
           </View>
         </Pressable>
       )}
     </View>
   )
 }
-
+// TODO深色模式
 export default BaseItem
