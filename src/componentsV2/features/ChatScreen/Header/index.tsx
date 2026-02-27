@@ -10,6 +10,7 @@ import { useAssistant } from '@/hooks/useAssistant'
 import type { Topic } from '@/types/assistant'
 
 import { AssistantSelection } from './AssistantSelection'
+import { CodeSettingButton } from './CodeSettingsButton'
 import { HistoryTopicButton } from './HistoryTopicButton'
 import { NewTopicButton } from './NewTopicButton'
 
@@ -37,6 +38,7 @@ export const ChatScreenHeader = ({ topic }: HeaderBarProps) => {
       <XStack className="min-w-10 items-center justify-end gap-4">
         <NewTopicButton assistant={assistant} />
         <HistoryTopicButton assistant={assistant} />
+        <CodeSettingButton />
       </XStack>
       <XStack className="absolute inset-y-0 left-3.5 right-3.5 items-center justify-center">
         <AssistantSelection assistant={assistant} topic={topic} />

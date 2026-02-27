@@ -37,5 +37,8 @@ export interface PreferenceSchemas {
     'app.initialization_version': number
     'app.dismissed_update_version': string
     'app.developer_mode': boolean
+
+    // Code Display Configuration
+    'code.show_line_numbers': boolean
   }
 }
