@@ -8,10 +8,9 @@ interface MarkdownTableCellProps {
   isHeader?: boolean
   children: ReactNode
 }
-
 export function MarkdownTableCell({ isHeader, children }: MarkdownTableCellProps) {
   return (
-    <View className="flex-1 p-2">
+    <View className="min-w-25 p-2">
       <SelectableText className={isHeader ? 'text-foreground font-bold' : 'text-foreground'}>{children}</SelectableText>
     </View>
   )
