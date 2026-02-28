@@ -13,13 +13,24 @@ interface PreviewIconProps {
   total: number
 }
 
-const PreviewIcon: React.FC<PreviewIconProps> = ({ citation, index, total }) => (
-  <View
-    className="flex h-3.5 w-3.5 items-center justify-center overflow-hidden rounded-full border border-transparent bg-transparent"
-    style={[{ zIndex: total - index, marginLeft: index === 0 ? 0 : -2 }]}>
-    <FallbackFavicon hostname={new URL(citation.url).hostname} alt={citation.title || ''} />
-  </View>
-)
+const PreviewIcon: React.FC<PreviewIconProps> = ({ citation, index, total }) => {
+  let hostname: string | undefined
+  try {
+    if (typeof citation.url === 'string') {
+      hostname = new URL(citation.url).hostname
+    }
+  } catch {
+    hostname = citation.hostname
+  }
+
+  return (
+    <View
+      className="flex h-3.5 w-3.5 items-center justify-center overflow-hidden rounded-full border border-transparent bg-transparent"
+      style={[{ zIndex: total - index, marginLeft: index === 0 ? 0 : -2 }]}>
+      <FallbackFavicon hostname={hostname || ''} alt={citation.title || ''} />
+    </View>
+  )
+}
 
 interface CitationsListProps {
   citations: Citation[]

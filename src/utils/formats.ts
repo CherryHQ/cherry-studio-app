@@ -163,13 +163,18 @@ export const formatCitationsFromBlock = (block: CitationMessageBlock | undefined
 
       case WebSearchSource.GROK:
       case WebSearchSource.OPENROUTER:
+        console.log('test:', block.response.results)
         formattedCitations =
-          (block.response.results as any[])?.map((url, index) => {
+          (block.response.results as any[])?.map((result, index) => {
+            const url = typeof result === 'string' ? result : result.url
+            const title = typeof result === 'string' ? undefined : result.title
+
             try {
-              const hostname = new URL(url).hostname
+              const hostname = url ? new URL(url).hostname : undefined
               return {
                 number: index + 1,
-                url,
+                url: url,
+                title,
                 hostname,
                 showFavicon: true,
                 type: 'websearch'
@@ -177,7 +182,8 @@ export const formatCitationsFromBlock = (block: CitationMessageBlock | undefined
             } catch {
               return {
                 number: index + 1,
-                url,
+                url: url,
+                title,
                 hostname: url,
                 showFavicon: true,
                 type: 'websearch'
