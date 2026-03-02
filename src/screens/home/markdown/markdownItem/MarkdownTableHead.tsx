@@ -7,5 +7,5 @@ interface MarkdownTableHeadProps {
 }
 
 export function MarkdownTableHead({ children }: MarkdownTableHeadProps) {
-  return <View className="bg-muted">{children}</View>
+  return <View className="bg-muted min-w-25">{children}</View>
 }
