@@ -344,7 +344,8 @@ export const SystemProviderIds = {
   longcat: 'longcat',
   huggingface: 'huggingface',
   'ai-gateway': 'ai-gateway',
-  cerebras: 'cerebras'
+  cerebras: 'cerebras',
+  n1n: 'n1n'
 } as const
 export type SystemProviderId = keyof typeof SystemProviderIds
 
