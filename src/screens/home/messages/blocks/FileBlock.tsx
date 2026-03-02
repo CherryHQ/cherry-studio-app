@@ -8,7 +8,7 @@ interface Props {
 }
 
 const FileBlock: React.FC<Props> = ({ block }) => {
-  return <FileItem file={block.file} />
+  return <FileItem file={block.file} size={70} />
 }
 
 export default memo(FileBlock)
