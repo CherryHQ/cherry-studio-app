@@ -80,7 +80,11 @@ export const DefaultPreferences: PreferenceSchemas = {
 
     // Developer mode toggle
     // When enabled, shows advanced features for development
-    'app.developer_mode': false
+    'app.developer_mode': false,
+
+    // === Code Display Configuration ===
+    // Whether to show line numbers in code blocks
+    'code.show_line_numbers': true
   }
 }
 
@@ -101,5 +105,6 @@ export const PreferenceDescriptions: Record<keyof PreferenceSchemas['default'], 
   'chat.auto_scroll': 'Automatically scroll to bottom when receiving streamed responses',
   'app.initialization_version': 'Current version of app data initialization migrations',
   'app.dismissed_update_version': 'Version number that user chose to skip updating',
-  'app.developer_mode': 'Enable developer mode for advanced features'
+  'app.developer_mode': 'Enable developer mode for advanced features',
+  'code.show_line_numbers': 'Whether to show line numbers in code blocks'
 }

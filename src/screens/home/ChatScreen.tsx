@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { SafeAreaContainer, YStack } from '@/componentsV2'
 import { ChatScreenHeader } from '@/componentsV2/features/ChatScreen/Header'
+import CodeSettingsSheet from '@/componentsV2/features/ChatScreen/Header/CodeSettingsSheet'
 import { MessageInputContainer } from '@/componentsV2/features/ChatScreen/MessageInput/MessageInputContainer'
 import { CitationSheet } from '@/componentsV2/features/Sheet/CitationSheet'
 import { useAssistant } from '@/hooks/useAssistant'
@@ -100,6 +101,7 @@ const ChatScreen = () => {
           </YStack>
         </KeyboardAvoidingView>
       </PanGestureHandler>
+      <CodeSettingsSheet />
       <CitationSheet />
     </SafeAreaContainer>
   )

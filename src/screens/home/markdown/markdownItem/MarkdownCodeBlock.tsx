@@ -7,6 +7,7 @@ import { atomOneDark, atomOneLight } from 'react-syntax-highlighter/dist/esm/sty
 
 import { IconButton, Image, Text, XStack } from '@/componentsV2'
 import { Copy, Eye } from '@/componentsV2/icons/LucideIcon'
+import { usePreference } from '@/hooks/usePreference'
 import { useAppDispatch } from '@/store'
 import { setHtmlPreviewContent } from '@/store/runtime'
 import type { HomeNavigationProps } from '@/types/naviagate'
@@ -23,6 +24,7 @@ export function MarkdownCodeBlock({ content, language = 'text' }: MarkdownCodeBl
   const lang = language || 'text'
   const navigation = useNavigation<HomeNavigationProps>()
   const dispatch = useAppDispatch()
+  const [showLineNumbers] = usePreference('code.show_line_numbers')
 
   const isHtml = lang.toLowerCase() === 'html'
 
@@ -62,7 +64,8 @@ export function MarkdownCodeBlock({ content, language = 'text' }: MarkdownCodeBl
         }}
         hljsStyle={isDark ? atomOneDark : atomOneLight}
         language={lang}
-        horizontal={false}>
+        horizontal={false}
+        lineNumbers={showLineNumbers}>
         {content}
       </CodeHighlighter>
     </View>
