@@ -1,9 +1,8 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { View } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 
-import { Container, HeaderBar, SafeAreaContainer, YStack } from '@/componentsV2'
+import { HeaderBar, SafeAreaContainer, YStack } from '@/componentsV2'
 
 import GeneralSettings from './GeneralSettings'
 import ProviderSettings from './ProviderSettings'
@@ -13,17 +12,13 @@ export default function WebSearchSettingsScreen() {
 
   return (
     <SafeAreaContainer className="flex-1">
-      <KeyboardAwareScrollView scrollEnabled={false} bottomOffset={40} className="flex-1">
-        <HeaderBar title={t('settings.websearch.title')} />
-        <View className="flex-1">
-          <Container>
-            <YStack className="flex-1 gap-6">
-              <ProviderSettings />
+      <HeaderBar title={t('settings.websearch.title')} />
+      <KeyboardAwareScrollView bottomOffset={40} className="flex-1" contentContainerStyle={{ padding: 16 }}>
+        <YStack className="gap-6">
+          <ProviderSettings />
 
-              <GeneralSettings />
-            </YStack>
-          </Container>
-        </View>
+          <GeneralSettings />
+        </YStack>
       </KeyboardAwareScrollView>
     </SafeAreaContainer>
   )

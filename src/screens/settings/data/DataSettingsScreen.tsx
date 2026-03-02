@@ -1,9 +1,9 @@
 import { useNavigation } from '@react-navigation/native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { ScrollView } from 'react-native'
 
 import {
-  Container,
   Group,
   GroupTitle,
   HeaderBar,
@@ -99,19 +99,17 @@ export default function DataSettingsScreen() {
     <SafeAreaContainer>
       <HeaderBar title={t('settings.data.title')} />
 
-      <YStack className="flex-1">
-        <Container>
-          <YStack className="flex-1 gap-6">
-            {settingsItems.map(group => (
-              <GroupContainer key={group.title} title={group.title}>
-                {group.items.map(item => (
-                  <SettingItem key={item.title} {...item} />
-                ))}
-              </GroupContainer>
-            ))}
-          </YStack>
-        </Container>
-      </YStack>
+      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>
+        <YStack className="gap-6">
+          {settingsItems.map(group => (
+            <GroupContainer key={group.title} title={group.title}>
+              {group.items.map(item => (
+                <SettingItem key={item.title} {...item} />
+              ))}
+            </GroupContainer>
+          ))}
+        </YStack>
+      </ScrollView>
     </SafeAreaContainer>
   )
 }

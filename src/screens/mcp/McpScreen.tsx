@@ -1,4 +1,4 @@
-import { DrawerActions, useNavigation } from '@react-navigation/native'
+import { useNavigation } from '@react-navigation/native'
 import React, { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
@@ -13,18 +13,20 @@ import {
 } from '@/componentsV2'
 import { McpMarketContent } from '@/componentsV2/features/MCP/McpMarketContent'
 import { Menu, Plus, Store } from '@/componentsV2/icons/LucideIcon'
+import { useDrawer } from '@/hooks/useDrawer'
 import { useMcpServers } from '@/hooks/useMcp'
 import { useSearch } from '@/hooks/useSearch'
 import { useSkeletonLoading } from '@/hooks/useSkeletonLoading'
 import { useToast } from '@/hooks/useToast'
 import { mcpService } from '@/services/McpService'
 import type { MCPServer } from '@/types/mcp'
-import type { DrawerNavigationProps, McpNavigationProps } from '@/types/naviagate'
+import type { McpNavigationProps } from '@/types/naviagate'
 import { uuid } from '@/utils'
 
 export default function McpScreen() {
   const { t } = useTranslation()
-  const navigation = useNavigation<DrawerNavigationProps & McpNavigationProps>()
+  const navigation = useNavigation<McpNavigationProps>()
+  const { openDrawer, isDrawerAlwaysVisible } = useDrawer()
   const toast = useToast()
   const { mcpServers, isLoading, updateMcpServers } = useMcpServers()
   const {
@@ -39,7 +41,7 @@ export default function McpScreen() {
   const showSkeleton = useSkeletonLoading(isLoading)
 
   const handleMenuPress = () => {
-    navigation.dispatch(DrawerActions.openDrawer())
+    openDrawer()
   }
 
   const handleNavigateToMarket = () => {
@@ -78,10 +80,10 @@ export default function McpScreen() {
         <View collapsable={false} className="flex-1">
           <HeaderBar
             title={t('mcp.server.title')}
-            leftButton={{
+            leftButton={!isDrawerAlwaysVisible ? {
               icon: <Menu size={24} />,
               onPress: handleMenuPress
-            }}
+            } : undefined}
             rightButtons={[
               {
                 icon: <Plus size={24} />,

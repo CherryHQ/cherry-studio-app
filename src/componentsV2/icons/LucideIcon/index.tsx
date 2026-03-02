@@ -56,6 +56,8 @@ import {
   MoreHorizontal,
   Package,
   Palette,
+  PanelLeft,
+  PanelRight,
   PenLine,
   Plus,
   Radio,
@@ -159,6 +161,8 @@ const MicIcon = createIcon(Mic)
 const MinusIcon = createIcon(Minus)
 const MoreHorizontalIcon = createIcon(MoreHorizontal)
 const PackageIcon = createIcon(Package)
+const PanelLeftIcon = createIcon(PanelLeft)
+const PanelRightIcon = createIcon(PanelRight)
 const PenLineIcon = createIcon(PenLine)
 const PlusIcon = createIcon(Plus)
 const RadioIcon = createIcon(Radio)
@@ -244,6 +248,8 @@ export {
   MoreHorizontalIcon as MoreHorizontal,
   PackageIcon as Package,
   PaletteIcon as Palette,
+  PanelLeftIcon as PanelLeft,
+  PanelRightIcon as PanelRight,
   PenLineIcon as PenLine,
   PlusIcon as Plus,
   RadioIcon as Radio,

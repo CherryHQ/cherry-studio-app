@@ -706,6 +706,12 @@
           "anonymous": "エラーと統計を匿名で報告",
           "title": "プライバシー設定"
         },
+        "tablet_sidebar": {
+          "title": "タブレットサイドバー",
+          "position": "サイドバー位置",
+          "left": "左",
+          "right": "右"
+        },
         "theme": {
           "auto": "自動",
           "dark": "ダーク",

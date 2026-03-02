@@ -1,4 +1,4 @@
-import { DrawerActions, useNavigation } from '@react-navigation/native'
+import { useNavigation } from '@react-navigation/native'
 import { FlashList } from '@shopify/flash-list'
 import { SymbolView } from 'expo-symbols'
 import React, { useCallback, useState } from 'react'
@@ -22,6 +22,7 @@ import AssistantItem from '@/componentsV2/features/Assistant/AssistantItem'
 import { presentAssistantItemSheet } from '@/componentsV2/features/Assistant/AssistantItemSheet'
 import { Menu, Plus, Trash2 } from '@/componentsV2/icons/LucideIcon'
 import { useAssistants } from '@/hooks/useAssistant'
+import { useDrawer } from '@/hooks/useDrawer'
 import { useSearch } from '@/hooks/useSearch'
 import { useSkeletonLoading } from '@/hooks/useSkeletonLoading'
 import { useToast } from '@/hooks/useToast'
@@ -38,6 +39,7 @@ const logger = loggerService.withContext('AssistantScreen')
 export default function AssistantScreen() {
   const { t } = useTranslation()
   const navigation = useNavigation<DrawerNavigationProps>()
+  const { openDrawer, isDrawerAlwaysVisible } = useDrawer()
   const toast = useToast()
 
   const { assistants, isLoading } = useAssistants()
@@ -81,7 +83,7 @@ export default function AssistantScreen() {
   }
 
   const handleMenuPress = () => {
-    navigation.dispatch(DrawerActions.openDrawer())
+    openDrawer()
   }
 
   const handleEnterMultiSelectMode = useCallback((assistantId: string) => {
@@ -184,10 +186,10 @@ export default function AssistantScreen() {
           ) : (
             <HeaderBar
               title={t('assistants.title.mine')}
-              leftButton={{
+              leftButton={!isDrawerAlwaysVisible ? {
                 icon: <Menu size={24} />,
                 onPress: handleMenuPress
-              }}
+              } : undefined}
               rightButtons={[
                 {
                   icon: <Plus size={24} />,

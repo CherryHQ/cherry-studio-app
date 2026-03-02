@@ -7,6 +7,8 @@ export type PreferenceUpdateOptions = {
   optimistic: boolean
 }
 
+export type TabletSidebarPosition = 'left' | 'right'
+
 /**
  * Import PreferenceSchemas type from schemas file
  * This will be defined in preferenceSchemas.ts
@@ -20,6 +22,7 @@ export interface PreferenceSchemas {
 
     // UI Configuration
     'ui.theme_mode': ThemeMode
+    'ui.tablet_sidebar_position': TabletSidebarPosition
 
     // Topic State
     'topic.current_id': string

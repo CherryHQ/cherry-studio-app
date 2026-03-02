@@ -41,6 +41,11 @@ export const DefaultPreferences: PreferenceSchemas = {
     // - system: Follow system theme preference
     'ui.theme_mode': ThemeMode.system,
 
+    // Tablet sidebar position (only visible on tablet devices)
+    // - left: Sidebar on the left side
+    // - right: Sidebar on the right side
+    'ui.tablet_sidebar_position': 'left',
+
     // === Topic State ===
     // Currently active conversation topic ID
     // Empty string means no active topic
@@ -93,6 +98,7 @@ export const PreferenceDescriptions: Record<keyof PreferenceSchemas['default'], 
   'user.name': 'User display name',
   'user.id': 'Unique user identifier (UUID)',
   'ui.theme_mode': 'Application theme mode (light/dark/system)',
+  'ui.tablet_sidebar_position': 'Tablet sidebar position (left/right), only visible on tablet devices',
   'topic.current_id': 'Currently active conversation topic ID',
   'websearch.search_with_time': 'Add current date to search queries for recent results',
   'websearch.max_results': 'Maximum number of search results (1-20)',

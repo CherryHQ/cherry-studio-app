@@ -1,20 +1,10 @@
 import * as ExpoLinking from 'expo-linking'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { ScrollView } from 'react-native'
 import FastSquircleView from 'react-native-fast-squircle'
 
-import {
-  Container,
-  Group,
-  HeaderBar,
-  Image,
-  PressableRow,
-  Row,
-  SafeAreaContainer,
-  Text,
-  XStack,
-  YStack
-} from '@/componentsV2'
+import { Group, HeaderBar, Image, PressableRow, Row, SafeAreaContainer, Text, XStack, YStack } from '@/componentsV2'
 import { ArrowUpRight, Copyright, Github, Globe, Mail, Rss } from '@/componentsV2/icons/LucideIcon'
 import { loggerService } from '@/services/LoggerService'
 
@@ -42,8 +32,8 @@ export default function AboutScreen() {
           onPress: async () => await openLink('https://github.com/CherryHQ/cherry-studio-app')
         }}
       />
-      <Container>
-        <YStack className="flex-1 gap-6">
+      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>
+        <YStack className="gap-6">
           {/* Logo and Description */}
           <Group>
             <Row className="gap-4">
@@ -57,7 +47,7 @@ export default function AboutScreen() {
                 cornerSmoothing={0.6}>
                 <Image className="h-full w-full" source={require('@/assets/images/favicon.png')} />
               </FastSquircleView>
-              <YStack className="flex-1 gap-[5px] py-1">
+              <YStack className="gap-1.25 flex-1 py-1">
                 <Text className="text-[22px] font-bold">{t('common.cherry_studio')}</Text>
                 <Text className="text-foreground-secondary text-sm" numberOfLines={0}>
                   {t('common.cherry_studio_description')}
@@ -109,7 +99,7 @@ export default function AboutScreen() {
             </PressableRow>
           </Group>
         </YStack>
-      </Container>
+      </ScrollView>
     </SafeAreaContainer>
   )
 }

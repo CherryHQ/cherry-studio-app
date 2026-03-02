@@ -30,6 +30,7 @@ import { ShortcutCallbackManager } from './aiCore/tools/SystemTools/ShortcutCall
 import { DialogProvider } from './hooks/useDialog'
 import { ToastProvider } from './hooks/useToast'
 import MainStackNavigator from './navigators/MainStackNavigator'
+import { navigationRef, resetNavigationRef } from './navigators/navigationRef'
 import { runAppDataMigrations } from './services/AppInitializationService'
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -100,10 +101,17 @@ function ThemedApp() {
     Uniwind.setTheme(isDark ? 'dark' : 'light')
   }, [isDark])
 
+  // Cleanup navigation ref on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      resetNavigationRef()
+    }
+  }, [])
+
   return (
     <HeroUINativeProvider>
       <KeyboardProvider>
-        <NavigationContainer theme={isDark ? DarkTheme : DefaultTheme}>
+        <NavigationContainer ref={navigationRef} theme={isDark ? DarkTheme : DefaultTheme}>
           <SystemBars style={isDark ? 'light' : 'dark'} />
           <DialogProvider>
             <ToastProvider>

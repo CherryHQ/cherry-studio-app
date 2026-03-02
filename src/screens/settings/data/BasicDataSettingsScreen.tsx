@@ -7,10 +7,9 @@ import * as IntentLauncher from 'expo-intent-launcher'
 import { delay } from 'lodash'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { InteractionManager, Platform } from 'react-native'
+import { InteractionManager, Platform, ScrollView } from 'react-native'
 
 import {
-  Container,
   dismissDialog,
   Group,
   GroupTitle,
@@ -270,8 +269,8 @@ export default function BasicDataSettingsScreen() {
     <SafeAreaContainer>
       <HeaderBar title={t('settings.data.basic_title')} />
 
-      <Container>
-        <YStack className="flex-1 gap-6">
+      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16 }}>
+        <YStack className="gap-6">
           {settingsItems.map(group => (
             <GroupContainer key={group.title} title={group.title}>
               {group.items.map(item => (
@@ -280,7 +279,7 @@ export default function BasicDataSettingsScreen() {
             </GroupContainer>
           ))}
         </YStack>
-      </Container>
+      </ScrollView>
 
       <RestoreProgressModal
         isOpen={isModalOpen}
