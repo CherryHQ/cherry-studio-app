@@ -9,6 +9,7 @@ import {
   AudioLines,
   CirclePause,
   Copy,
+  Image as ImageIcon,
   MoreHorizontal,
   PenLine,
   RefreshCw,
@@ -53,9 +54,19 @@ interface MessageFooterProps {
   assistant: Assistant
   message: Message
   isMultiModel?: boolean
+  messageRef?: React.RefObject<View | null>
+  onCaptureStart?: () => void
+  onCaptureEnd?: () => void
 }
 
-const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFooterProps) => {
+const MessageFooter = ({
+  message,
+  assistant,
+  isMultiModel = false,
+  messageRef,
+  onCaptureStart,
+  onCaptureEnd
+}: MessageFooterProps) => {
   const {
     isTranslated,
     playState,
@@ -67,10 +78,15 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
     handleTranslate,
     handleDelete,
     handleShare,
-    handleEdit
+    handleEdit,
+    handleShareAsImage,
+    handleExportMarkdown
   } = useMessageActions({
     message,
-    assistant
+    assistant,
+    messageRef,
+    onCaptureStart,
+    onCaptureEnd
   })
 
   const { t } = useTranslation()
@@ -132,6 +148,31 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
     })
   }
 
+  // 构建分享菜单项
+  const shareItems: SelectionDropdownItem[] = [
+    {
+      id: 'shareText',
+      label: t('message.share_text'),
+      icon: <Share size={18} />,
+      iOSIcon: 'square.and.arrow.up',
+      onSelect: handleShare
+    },
+    {
+      id: 'shareImage',
+      label: t('message.share_as_image'),
+      icon: <ImageIcon size={18} />,
+      iOSIcon: 'photo',
+      onSelect: handleShareAsImage
+    },
+    {
+      id: 'exportMarkdown',
+      label: t('message.export_markdown'),
+      icon: <Copy size={18} />,
+      iOSIcon: 'doc.text',
+      onSelect: handleExportMarkdown
+    }
+  ]
+
   const hasMoreItems = moreItems.length > 0
 
   return (
@@ -165,7 +206,11 @@ const MessageFooter = ({ message, assistant, isMultiModel = false }: MessageFoot
             />
           )}
           {hasButton('share', 'primary') && (
-            <IconButton icon={<Share size={18} className="text-foreground-secondary" />} onPress={handleShare} />
+            <SelectionDropdown items={shareItems}>
+              <Pressable>
+                <Share size={18} className="text-foreground-secondary" />
+              </Pressable>
+            </SelectionDropdown>
           )}
           {hasMoreItems && (
             <SelectionDropdown items={moreItems}>

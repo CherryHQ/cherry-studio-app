@@ -456,6 +456,10 @@
         "title": "Ошибка отправки"
       },
       "share_message": "Поделиться новостью",
+      "share_text": "Поделиться текстом",
+      "share_as_image": "Поделиться как изображение",
+      "copy_as_image": "Копировать как изображение",
+      "export_markdown": "Экспорт в Markdown",
       "topic_deleted": "Тема удалена",
       "translate_message": "Перевести сообщение",
       "unmarked_as_best_answer": "Снята отметка лучшего ответа",

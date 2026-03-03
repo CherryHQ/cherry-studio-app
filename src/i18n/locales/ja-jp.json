@@ -456,6 +456,10 @@
         "title": "送信に失敗しました"
       },
       "share_message": "メッセージを共有",
+      "share_text": "テキストを共有",
+      "share_as_image": "画像として共有",
+      "copy_as_image": "画像としてコピー",
+      "export_markdown": "Markdownをエクスポート",
       "topic_deleted": "トピックが削除されました",
       "translate_message": "メッセージを翻訳",
       "unmarked_as_best_answer": "最適な回答の設定を解除しました",

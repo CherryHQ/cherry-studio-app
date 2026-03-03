@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import React from 'react'
+import React, { useRef, useState } from 'react'
 import { View } from 'react-native'
 
 import type { Assistant } from '@/types/assistant'
@@ -19,13 +19,24 @@ interface MessageGroupProps {
 
 const MessageGroup: FC<MessageGroupProps> = ({ assistant, item, messageBlocks }) => {
   const [key, messagesInGroup] = item
+  const userMessageRef = useRef<View>(null)
+  const assistantMessageRef = useRef<View>(null)
+  const [excludeThinking, setExcludeThinking] = useState(false)
 
   const renderUserMessage = () => {
     return (
       <View className="gap-2">
-        <MessageItem message={messagesInGroup[0]} messageBlocks={messageBlocks} />
+        <View ref={userMessageRef} collapsable={false}>
+          <MessageItem message={messagesInGroup[0]} messageBlocks={messageBlocks} excludeThinking={excludeThinking} />
+        </View>
         <View className="items-end">
-          <MessageFooter assistant={assistant} message={messagesInGroup[0]} />
+          <MessageFooter
+            assistant={assistant}
+            message={messagesInGroup[0]}
+            messageRef={userMessageRef}
+            onCaptureStart={() => setExcludeThinking(true)}
+            onCaptureEnd={() => setExcludeThinking(false)}
+          />
         </View>
       </View>
     )
@@ -38,10 +49,18 @@ const MessageGroup: FC<MessageGroupProps> = ({ assistant, item, messageBlocks })
           <View className="px-4">
             <MessageHeader message={messagesInGroup[0]} />
           </View>
-          <MessageItem message={messagesInGroup[0]} messageBlocks={messageBlocks} />
+          <View ref={assistantMessageRef} collapsable={false}>
+            <MessageItem message={messagesInGroup[0]} messageBlocks={messageBlocks} excludeThinking={excludeThinking} />
+          </View>
           {/* 输出过程中不显示footer */}
           {messagesInGroup[0].status !== AssistantMessageStatus.PROCESSING && (
-            <MessageFooter assistant={assistant} message={messagesInGroup[0]} />
+            <MessageFooter
+              assistant={assistant}
+              message={messagesInGroup[0]}
+              messageRef={assistantMessageRef}
+              onCaptureStart={() => setExcludeThinking(true)}
+              onCaptureEnd={() => setExcludeThinking(false)}
+            />
           )}
         </View>
       )

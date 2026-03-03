@@ -456,6 +456,10 @@
         "title": "發送失敗"
       },
       "share_message": "分享訊息",
+      "share_text": "分享文字",
+      "share_as_image": "分享為圖片",
+      "copy_as_image": "複製為圖片",
+      "export_markdown": "匯出 Markdown",
       "topic_deleted": "主題已刪除",
       "translate_message": "翻譯訊息",
       "unmarked_as_best_answer": "已取消最佳回答標記",
