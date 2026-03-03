@@ -28,8 +28,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const centeredViewClassName = 'justify-center items-center'
   const containerClassName = isDark
-    ? 'absolute max-w-[80%] px-4 py-3.5 rounded-lg gap-2.5 justify-center items-center bg-[#333333] shadow-lg'
-    : 'absolute max-w-[80%] px-4 py-3.5 rounded-lg gap-2.5 justify-center items-center bg-[#19191c] shadow-lg'
+    ? 'absolute max-w-[80%] px-5 py-2.5 rounded-lg gap-2.5 justify-center items-center bg-[#333333] shadow-lg'
+    : 'absolute max-w-[80%] px-5 py-2.5 rounded-lg gap-2.5 justify-center items-center bg-[#19191c] shadow-lg'
 
   const show = (content: React.ReactNode | string, newOptions?: ToastOptions) => {
     const key = uuid()
@@ -63,7 +63,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <View className={cn('absolute inset-0', centeredViewClassName)}>
+      <View className={cn('absolute inset-0 rounded-lg', centeredViewClassName)}>
         <AnimatePresence>
           {toasts.map(toast => (
             <MotiView
@@ -76,7 +76,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               {toast.icon && toast.icon}
 
               {typeof toast?.content === 'string' ? (
-                <Text className={cn('text-base', toast.color || 'primary-text')}>{toast.content}</Text>
+                <Text className={cn('text-base', toast.color || 'text-white')}>{toast.content}</Text>
               ) : (
                 toast?.content
               )}
