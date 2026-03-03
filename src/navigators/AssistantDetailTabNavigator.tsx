@@ -33,7 +33,7 @@ function CustomTabBar({ state, navigation }: any) {
   }
 
   return (
-    <View className="mx-[5px] my-1 flex-row gap-[5px] rounded-2xl border border-neutral-300/20 bg-transparent px-1 py-1">
+    <View className="mx-1.25 gap-1.25 my-1 flex-row rounded-2xl border border-neutral-300/20 bg-white px-1 py-1">
       {state.routes.map((route: any, index: number) => {
         const isFocused = state.index === index
 

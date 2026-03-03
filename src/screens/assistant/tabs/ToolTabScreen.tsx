@@ -27,7 +27,7 @@ export default function ToolTabScreen() {
 
   return (
     <KeyboardAwareScrollView
-      className="flex-1"
+      className="flex-1 bg-gray-50"
       contentContainerStyle={{ flexGrow: 1 }}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}

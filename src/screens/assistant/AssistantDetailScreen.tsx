@@ -5,24 +5,12 @@ import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, View } from 'react-native'
 import { GestureDetector } from 'react-native-gesture-handler'
 
-import {
-  AvatarEditButton,
-  Container,
-  DrawerGestureWrapper,
-  HeaderBar,
-  SafeAreaContainer,
-  Text,
-  XStack
-} from '@/componentsV2'
-import { DefaultProviderIcon } from '@/componentsV2/icons'
-import { ArrowLeftRight, PenLine } from '@/componentsV2/icons/LucideIcon'
+import { Container, DrawerGestureWrapper, HeaderBar, SafeAreaContainer, Text } from '@/componentsV2'
 import { useAssistant } from '@/hooks/useAssistant'
 import { useSwipeGesture } from '@/hooks/useSwipeGesture'
 import { useCurrentTopic } from '@/hooks/useTopic'
 import AssistantDetailTabNavigator from '@/navigators/AssistantDetailTabNavigator'
-import { loggerService } from '@/services/LoggerService'
 import type { AssistantDetailScreenParams, DrawerNavigationProps } from '@/types/naviagate'
-const logger = loggerService.withContext('AssistantDetailScreen')
 
 type AssistantDetailRouteProp = RouteProp<
   { AssistantDetailScreen: AssistantDetailScreenParams },
@@ -35,7 +23,7 @@ export default function AssistantDetailScreen() {
   const route = useRoute<AssistantDetailRouteProp>()
   const navigation = useNavigation<DrawerNavigationProps>()
   const { assistantId, returnTo, topicId, tab } = route.params
-  const { assistant, isLoading, updateAssistant } = useAssistant(assistantId)
+  const { assistant, isLoading } = useAssistant(assistantId)
   const panGesture = useSwipeGesture()
   const { currentTopicId } = useCurrentTopic()
 
@@ -56,16 +44,6 @@ export default function AssistantDetailScreen() {
     }
     navigation.goBack()
   }, [currentTopicId, navigation, returnTo, topicId])
-
-  const updateAvatar = async (avatar: string) => {
-    if (!assistant) return
-
-    try {
-      await updateAssistant({ ...assistant, emoji: avatar })
-    } catch (error) {
-      logger.error('Failed to update avatar', error)
-    }
-  }
 
   if (isLoading) {
     return (
@@ -101,15 +79,6 @@ export default function AssistantDetailScreen() {
           />
           <View className="flex-1">
             <Container>
-              <XStack className="items-center justify-center pb-5">
-                <AvatarEditButton
-                  content={assistant?.emoji || <DefaultProviderIcon />}
-                  editIcon={assistant?.emoji ? <ArrowLeftRight size={24} /> : <PenLine size={24} />}
-                  onEditPress={() => {}}
-                  updateAvatar={updateAvatar}
-                />
-              </XStack>
-
               {/* Material Top Tabs Navigator */}
               <View className="flex-1">
                 <AssistantDetailTabNavigator assistant={assistant} initialTab={tab} />
