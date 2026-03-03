@@ -456,6 +456,10 @@
         "title": "发送失败"
       },
       "share_message": "分享消息",
+      "share_text": "分享文本",
+      "share_as_image": "分享为图片",
+      "copy_as_image": "复制为图片",
+      "export_markdown": "导出 Markdown",
       "topic_deleted": "话题已删除",
       "translate_message": "翻译消息",
       "unmarked_as_best_answer": "已取消最佳回复标记",

@@ -1,10 +1,16 @@
 import { messageBlockDatabase, messageDatabase } from '@database'
 import { useNavigation } from '@react-navigation/native'
 import * as Clipboard from 'expo-clipboard'
+import * as FileSystem from 'expo-file-system/legacy'
+import * as MediaLibrary from 'expo-media-library'
 import * as Speech from 'expo-speech'
+import type React from 'react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { View } from 'react-native'
+import { Platform } from 'react-native'
 import Share from 'react-native-share'
+import { captureRef } from 'react-native-view-shot'
 import { useDispatch } from 'react-redux'
 
 import { presentDialog } from '@/componentsV2'
@@ -21,6 +27,7 @@ import { setEditingMessage } from '@/store/runtime'
 import type { Assistant } from '@/types/assistant'
 import type { Message } from '@/types/message'
 import type { HomeNavigationProps } from '@/types/naviagate'
+import { exportMessageAsMarkdown, getTitleFromContent } from '@/utils/export'
 import { markdownToPlainText } from '@/utils/markdown'
 import { filterMessages } from '@/utils/messageUtils/filters'
 import { findTranslationBlocks, getMainTextContent } from '@/utils/messageUtils/find'
@@ -34,9 +41,18 @@ type PlayState = 'idle' | 'playing'
 interface UseMessageActionsProps {
   message: Message
   assistant?: Assistant
+  messageRef?: React.RefObject<View | null>
+  onCaptureStart?: () => void
+  onCaptureEnd?: () => void
 }
 
-export const useMessageActions = ({ message, assistant }: UseMessageActionsProps) => {
+export const useMessageActions = ({
+  message,
+  assistant,
+  messageRef,
+  onCaptureStart,
+  onCaptureEnd
+}: UseMessageActionsProps) => {
   const { t } = useTranslation()
   const dispatch = useDispatch()
   const [playState, setPlayState] = useState<PlayState>('idle')
@@ -277,6 +293,104 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
     }
   }
 
+  /**
+   * Capture message view as image
+   * @returns uri of captured image, or null if capture failed
+   */
+  const captureMessageAsImage = async (): Promise<string | null> => {
+    if (!messageRef?.current) {
+      logger.warn('Message ref not available')
+      return null
+    }
+
+    try {
+      onCaptureStart?.()
+      await new Promise(resolve => setTimeout(resolve, 100))
+      const uri = await captureRef(messageRef.current, {
+        format: 'png',
+        quality: 1,
+        result: 'tmpfile'
+      })
+      onCaptureEnd?.()
+      return uri
+    } catch (error) {
+      onCaptureEnd?.()
+      logger.error('Error capturing message as image:', error)
+      return null
+    }
+  }
+
+  const handleShareAsImage = async () => {
+    const uri = await captureMessageAsImage()
+    if (!uri) {
+      toast.show(t('common.error_occurred'))
+      return
+    }
+
+    try {
+      await Share.open({
+        title: 'Cherry Studio',
+        url: Platform.OS === 'android' ? `file://${uri}` : uri,
+        failOnCancel: false
+      })
+    } catch (error) {
+      logger.error('Error sharing message as image:', error)
+    } finally {
+      try {
+        await FileSystem.deleteAsync(uri, { idempotent: true })
+      } catch (error) {
+        logger.error('Cleanup errors:', error)
+      }
+    }
+  }
+
+  const handleCopyAsImage = async () => {
+    const { status } = await MediaLibrary.requestPermissionsAsync()
+    if (status !== 'granted') {
+      toast.show(t('common.permission_denied'))
+      return
+    }
+
+    const uri = await captureMessageAsImage()
+    if (!uri) {
+      toast.show(t('common.error_occurred'))
+      return
+    }
+
+    try {
+      await MediaLibrary.saveToLibraryAsync(uri)
+      toast.show(t('common.copied'))
+    } catch (error) {
+      logger.error('Error copying message as image:', error)
+      toast.show(t('common.error_occurred'))
+    } finally {
+      try {
+        await FileSystem.deleteAsync(uri, { idempotent: true })
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  }
+
+  const handleExportMarkdown = async () => {
+    try {
+      // Get message content for title
+      const content = await getMainTextContent(message)
+      const title = getTitleFromContent(content)
+      const result = await exportMessageAsMarkdown(message, title, {
+        includeReasoning: false,
+        excludeCitations: false
+      })
+
+      if (!result.success && result.message !== 'cancelled') {
+        toast.show(t('common.error_occurred'))
+      }
+    } catch (error) {
+      logger.error('Error exporting message as markdown:', error)
+      toast.show(t('common.error_occurred'))
+    }
+  }
+
   return {
     playState,
     isTranslating,
@@ -291,6 +405,9 @@ export const useMessageActions = ({ message, assistant }: UseMessageActionsProps
     handleBestAnswer,
     isUseful: message.useful,
     handleShare,
-    handleEdit
+    handleEdit,
+    handleShareAsImage,
+    handleCopyAsImage,
+    handleExportMarkdown
   }
 }

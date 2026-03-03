@@ -10,17 +10,22 @@ import MessageBlockRenderer from './blocks'
 interface Props {
   message: Message
   blocks: MessageBlock[]
+  excludeThinking?: boolean
 }
 
-const MessageContent: React.FC<Props> = ({ message, blocks = [] }) => {
+const MessageContent: React.FC<Props> = ({ message, blocks = [], excludeThinking = false }) => {
   const isUser = message.role === 'user'
 
   const mediaBlocks = blocks.filter(
     block => block.type === MessageBlockType.IMAGE || block.type === MessageBlockType.FILE
   )
-  const contentBlocks = blocks.filter(
-    block => block.type !== MessageBlockType.IMAGE && block.type !== MessageBlockType.FILE
-  )
+  const contentBlocks = blocks.filter(block => {
+    const isMedia = block.type === MessageBlockType.IMAGE || block.type === MessageBlockType.FILE
+    const isThinking = block.type === MessageBlockType.THINKING
+    if (isMedia) return false
+    if (excludeThinking && isThinking) return false
+    return true
+  })
 
   if (isUser)
     return (

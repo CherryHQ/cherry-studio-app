@@ -456,6 +456,10 @@
         "title": "Send Failed"
       },
       "share_message": "Share news",
+      "share_text": "Share Text",
+      "share_as_image": "Share as Image",
+      "copy_as_image": "Copy as Image",
+      "export_markdown": "Export Markdown",
       "topic_deleted": "Topic deleted",
       "translate_message": "Translate Message",
       "unmarked_as_best_answer": "Unmarked as best answer",
