@@ -22,12 +22,16 @@ export const InputArea: React.FC<InputAreaProps> = ({ children }) => {
 
   return (
     <LiquidGlassView
-      className="rounded-3xl"
+      className={
+        isIOS26
+          ? 'rounded-3xl'
+          : 'rounded-3xl border border-gray-200 shadow-lg shadow-gray-200  backdrop-blur-lg transition-shadow dark:border-white/20 dark:shadow-white/10'
+      }
       style={{
         flex: 1,
         borderRadius: 20,
         paddingVertical: hasPreviewContent ? 8 : 0,
-        backgroundColor: isIOS26 ? undefined : isDark ? '#FFFFFF1A' : '#0000000D'
+        backgroundColor: isIOS26 ? undefined : isDark ? '#FFFFFF30' : '#00000000'
       }}>
       {children ?? (
         <>
