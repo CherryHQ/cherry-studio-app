@@ -142,7 +142,7 @@ const AssistantItemSheet: React.FC = () => {
       {!assistant ? null : (
         <YStack className={cn('relative gap-5', isIOS ? 'h-[85vh]' : 'h-full')}>
           {/* Background blur emoji */}
-          <XStack className="absolute left-0 right-0 top-0 h-[200px] w-full flex-wrap overflow-hidden rounded-[30px]">
+          <XStack className="h-50 absolute left-0 right-0 top-0 w-full flex-wrap overflow-hidden rounded-[30px]">
             {Array.from({ length: 70 }).map((_, index) => (
               <View key={index} className="w-[9.99%] scale-150 items-center justify-center">
                 <Text className="text-[20px]" style={{ opacity: emojiOpacity }}>

@@ -113,7 +113,7 @@ export const ThinkingDetailSheet: React.FC = () => {
       onDidPresent={() => setIsVisible(true)}>
       <View style={{ paddingBottom: insets.bottom + 10 }}>
         <ScrollView
-          className="max-h-[500px]"
+          className="max-h-125"
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}
           nestedScrollEnabled={Platform.OS === 'android'}
           showsVerticalScrollIndicator={false}>
