@@ -56,7 +56,6 @@ const SelectionDropdown: FC<SelectionDropdownProps> = ({
           {items.map((item, index) => {
             const itemKey = item.id || item.key || String(index)
 
-            // 如果需要显示选中状态，使用 CheckboxItem
             if (item.isSelected !== undefined) {
               return (
                 <CheckboxItem
