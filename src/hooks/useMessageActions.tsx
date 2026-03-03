@@ -2,7 +2,6 @@ import { messageBlockDatabase, messageDatabase } from '@database'
 import { useNavigation } from '@react-navigation/native'
 import * as Clipboard from 'expo-clipboard'
 import * as FileSystem from 'expo-file-system/legacy'
-import * as MediaLibrary from 'expo-media-library'
 import * as Speech from 'expo-speech'
 import type React from 'react'
 import { useEffect, useState } from 'react'
@@ -344,34 +343,6 @@ export const useMessageActions = ({
     }
   }
 
-  const handleCopyAsImage = async () => {
-    const { status } = await MediaLibrary.requestPermissionsAsync()
-    if (status !== 'granted') {
-      toast.show(t('common.permission_denied'))
-      return
-    }
-
-    const uri = await captureMessageAsImage()
-    if (!uri) {
-      toast.show(t('common.error_occurred'))
-      return
-    }
-
-    try {
-      await MediaLibrary.saveToLibraryAsync(uri)
-      toast.show(t('common.copied'))
-    } catch (error) {
-      logger.error('Error copying message as image:', error)
-      toast.show(t('common.error_occurred'))
-    } finally {
-      try {
-        await FileSystem.deleteAsync(uri, { idempotent: true })
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
-  }
-
   const handleExportMarkdown = async () => {
     try {
       // Get message content for title
@@ -407,7 +378,6 @@ export const useMessageActions = ({
     handleShare,
     handleEdit,
     handleShareAsImage,
-    handleCopyAsImage,
     handleExportMarkdown
   }
 }

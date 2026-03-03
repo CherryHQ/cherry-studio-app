@@ -80,7 +80,6 @@ const MessageFooter = ({
     handleShare,
     handleEdit,
     handleShareAsImage,
-    handleCopyAsImage,
     handleExportMarkdown
   } = useMessageActions({
     message,
@@ -164,13 +163,6 @@ const MessageFooter = ({
       icon: <ImageIcon size={18} />,
       iOSIcon: 'photo',
       onSelect: handleShareAsImage
-    },
-    {
-      id: 'copyImage',
-      label: t('message.copy_as_image'),
-      icon: <ImageIcon size={18} />,
-      iOSIcon: 'photo.on.rectangle',
-      onSelect: handleCopyAsImage
     },
     {
       id: 'exportMarkdown',
