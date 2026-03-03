@@ -4,7 +4,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { View } from 'react-native'
 
 import Text from '@/componentsV2/base/Text'
-import { useTheme } from '@/hooks/useTheme'
 import { uuid } from '@/utils'
 
 export type ToastOptions = {
@@ -23,13 +22,9 @@ const ToastContext = createContext<ToastContextValue>(undefined)
 const DEFAULT_DURATION = 1500
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const { isDark } = useTheme()
   const [toasts, setToasts] = useState<ToastOptions[]>([])
 
   const centeredViewClassName = 'justify-center items-center'
-  const containerClassName = isDark
-    ? 'absolute max-w-[80%] px-5 py-2.5 rounded-lg gap-2.5 justify-center items-center bg-[#333333] shadow-lg'
-    : 'absolute max-w-[80%] px-5 py-2.5 rounded-lg gap-2.5 justify-center items-center bg-[#19191c] shadow-lg'
 
   const show = (content: React.ReactNode | string, newOptions?: ToastOptions) => {
     const key = uuid()
@@ -72,7 +67,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ type: 'timing', duration: 200 }}
-              className={containerClassName}>
+              className="absolute max-w-[80%] items-center justify-center gap-2.5 rounded-lg bg-gray-800 px-5 py-2.5 shadow-lg">
               {toast.icon && toast.icon}
 
               {typeof toast?.content === 'string' ? (
