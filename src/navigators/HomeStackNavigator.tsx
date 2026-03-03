@@ -1,4 +1,4 @@
-import { createStackNavigator, TransitionPresets } from '@react-navigation/stack'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import React from 'react'
 
 import AssistantDetailScreen from '@/screens/assistant/AssistantDetailScreen'
@@ -29,15 +29,15 @@ export type HomeStackParamList = {
   AboutSettings: { screen?: string; params?: any } | undefined
 }
 
-const Stack = createStackNavigator<HomeStackParamList>()
+const Stack = createNativeStackNavigator<HomeStackParamList>()
 
 export default function HomeStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        gestureResponseDistance: 9999,
-        ...TransitionPresets.SlideFromRightIOS
+        animation: 'ios_from_right',
+        gestureEnabled: true
       }}>
       <Stack.Screen name="ChatScreen" component={ChatScreen} />
       <Stack.Screen name="TopicScreen" component={TopicScreen} />

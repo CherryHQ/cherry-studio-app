@@ -1,4 +1,4 @@
-import { createStackNavigator, TransitionPresets } from '@react-navigation/stack'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import React from 'react'
 
 import AddProviderScreen from '@/screens/settings/providers/AddProviderScreen'
@@ -15,15 +15,15 @@ export type ProvidersStackParamList = {
   AddProviderScreen: undefined
 }
 
-const Stack = createStackNavigator<ProvidersStackParamList>()
+const Stack = createNativeStackNavigator<ProvidersStackParamList>()
 
 export default function ProvidersStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        gestureResponseDistance: 9999,
-        ...TransitionPresets.SlideFromRightIOS
+        animation: 'ios_from_right',
+        gestureEnabled: true
       }}>
       <Stack.Screen name="ProviderSettingsScreen" component={ProviderSettingsScreen} />
       <Stack.Screen name="ProviderListScreen" component={ProviderListScreen} />
