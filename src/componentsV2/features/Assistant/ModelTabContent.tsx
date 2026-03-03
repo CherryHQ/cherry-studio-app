@@ -7,7 +7,15 @@ import { presentDialog } from '@/componentsV2/base/Dialog/useDialogManager'
 import Text from '@/componentsV2/base/Text'
 import TextField from '@/componentsV2/base/TextField'
 import { presentReasoningSheet } from '@/componentsV2/features/Sheet/ReasoningSheet'
-import { ChevronRight } from '@/componentsV2/icons/LucideIcon'
+import {
+  ChevronRight,
+  Maximize2,
+  MessageSquareMore,
+  Settings2,
+  Sparkles,
+  SquareFunction,
+  Wifi
+} from '@/componentsV2/icons/LucideIcon'
 import Group from '@/componentsV2/layout/Group'
 import Row from '@/componentsV2/layout/Row'
 import XStack from '@/componentsV2/layout/XStack'
@@ -119,8 +127,11 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
       </Button>
       <Group>
         <Row>
-          <Text>{t('assistants.settings.temperature')}</Text>
-          <TextField className="min-w-[60px]">
+          <XStack className="items-center gap-2">
+            <Settings2 size={16} />
+            <Text>{t('assistants.settings.temperature')}</Text>
+          </XStack>
+          <TextField className="min-w-15">
             <TextField.Input
               className="rounded-xl"
               value={temperatureInput}
@@ -139,7 +150,10 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
           </TextField>
         </Row>
         <Row>
-          <Text>{t('assistants.settings.unlimited_context')}</Text>
+          <XStack className="items-center gap-2">
+            <Maximize2 size={16} />
+            <Text>{t('assistants.settings.unlimited_context')}</Text>
+          </XStack>
           <Switch
             isSelected={(settings.contextCount ?? DEFAULT_CONTEXTCOUNT) < MAX_CONTEXT_COUNT}
             onSelectedChange={checked => {
@@ -156,8 +170,11 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
         </Row>
         {(settings.contextCount ?? DEFAULT_CONTEXTCOUNT) < MAX_CONTEXT_COUNT && (
           <Row>
-            <Text>{t('assistants.settings.context')}</Text>
-            <TextField className="min-w-[60px]">
+            <XStack className="items-center gap-2">
+              <MessageSquareMore size={16} />
+              <Text>{t('assistants.settings.context')}</Text>
+            </XStack>
+            <TextField className="min-w-15">
               <TextField.Input
                 className="rounded-xl"
                 value={contextInput}
@@ -179,17 +196,20 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
             </TextField>
           </Row>
         )}
-      </Group>
-
-      <Group>
         <Row>
-          <Text>{t('assistants.settings.stream_output')}</Text>
+          <XStack className="items-center gap-2">
+            <Wifi size={16} />
+            <Text>{t('assistants.settings.stream_output')}</Text>
+          </XStack>
           <Switch
             isSelected={settings.streamOutput ?? true}
             onSelectedChange={checked => handleSettingsChange('streamOutput', checked)}></Switch>
         </Row>
         <Row>
-          <Text>{t('assistants.settings.max_tokens')}</Text>
+          <XStack className="items-center gap-2">
+            <SquareFunction size={16} />
+            <Text>{t('assistants.settings.max_tokens')}</Text>
+          </XStack>
           <Switch
             isSelected={settings.enableMaxTokens ?? false}
             onSelectedChange={checked => {
@@ -209,7 +229,10 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
         </Row>
         {settings.enableMaxTokens && (
           <Row>
-            <Text>{t('assistants.settings.max_tokens_value')}</Text>
+            <XStack className="items-center gap-2">
+              <SquareFunction size={16} />
+              <Text>{t('assistants.settings.max_tokens_value')}</Text>
+            </XStack>
             <TextField className="min-w-24">
               <TextField.Input
                 className="rounded-xl"
@@ -237,7 +260,8 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
             className="justify-between rounded-xl border-0 bg-transparent py-3 pl-4 pr-5"
             onPress={handleReasoningPress}>
             <Button.Label className="flex-1 flex-row items-center justify-between">
-              <XStack>
+              <XStack className="items-center gap-2">
+                <Sparkles size={16} />
                 <Text className="flex-1">{t('assistants.settings.reasoning.label')}</Text>
 
                 <YStack className="justify-end">

@@ -105,7 +105,7 @@ const PromptDetailSheet: React.FC = () => {
       onDidDismiss={handleDismiss}
       onDidPresent={() => setIsVisible(true)}>
       <View className="h-64" style={{ paddingBottom: insets.bottom + 10 }}>
-        <YStack className="flex-1 gap-4 px-4 pb-4">
+        <YStack className="mt-2 flex-1 gap-4 px-4 pb-4">
           <TextField className="flex-1 rounded-2xl">
             <TextField.Input
               className="h-64 flex-1 border-none p-4 text-base"
