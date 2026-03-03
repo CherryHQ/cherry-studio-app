@@ -28,6 +28,7 @@ import { useSearch } from '@/hooks/useSearch'
 import { useToast } from '@/hooks/useToast'
 import type { McpStackParamList } from '@/navigators/McpStackNavigator'
 import { loggerService } from '@/services/LoggerService'
+import { mcpClientService } from '@/services/mcp/McpClientService'
 
 const logger = loggerService.withContext('McpDetailScreen')
 
@@ -62,6 +63,7 @@ export default function McpDetailScreen() {
   const [localDescription, setLocalDescription] = useState<string>('')
   const [localUrl, setLocalUrl] = useState<string>('')
   const [localHeaders, setLocalHeaders] = useState<Record<string, string>>({})
+  const [isValidating, setIsValidating] = useState<boolean>(false)
 
   // OAuth hook for HTTP type servers
   // Use localUrl since it's always current (synced with mcpServer.baseUrl and updated by user edits)
@@ -81,10 +83,33 @@ export default function McpDetailScreen() {
   const handleActiveChange = async (checked: boolean) => {
     if (!mcpServer) return
 
+    if (!checked) {
+      try {
+        await updateMcpServer({ isActive: false })
+      } catch (error) {
+        logger.error('Failed to update MCP server active state', error as Error)
+      }
+      return
+    }
+
+    setIsValidating(true)
     try {
-      await updateMcpServer({ isActive: checked })
+      const connectivityResult = await mcpClientService.checkConnectivity(mcpServer)
+
+      if (!connectivityResult.connected) {
+        presentDialog('error', {
+          title: t('mcp.server.update_failed', { name: mcpServer.name }),
+          content: connectivityResult.error || t('common.error_occurred'),
+          confirmText: t('common.ok')
+        })
+        return
+      }
+
+      await updateMcpServer({ isActive: true })
     } catch (error) {
       logger.error('Failed to update MCP server active state', error as Error)
+    } finally {
+      setIsValidating(false)
     }
   }
 
@@ -194,7 +219,7 @@ export default function McpDetailScreen() {
       if (!result.success) {
         // Show error to user
         const errorMessage = result.error || t('mcp.auth.oauth_failed')
-        toast.show(errorMessage, { color: 'red', duration: 3000 })
+        toast.show(errorMessage)
         logger.warn(`OAuth failed:`, { errorCode: result.errorCode, error: result.error })
       }
     }
@@ -233,8 +258,15 @@ export default function McpDetailScreen() {
               <GroupTitle>{t('common.manage')}</GroupTitle>
               <Group>
                 <Row>
-                  <Text>{t('common.enabled')}</Text>
-                  <Switch isSelected={mcpServer?.isActive ?? false} onSelectedChange={handleActiveChange} />
+                  <XStack className="items-center gap-2">
+                    <Text>{t('common.enabled')}</Text>
+                    {isValidating && <Spinner size="sm" />}
+                  </XStack>
+                  <Switch
+                    isSelected={mcpServer?.isActive ?? false}
+                    onSelectedChange={handleActiveChange}
+                    isDisabled={isValidating}
+                  />
                 </Row>
                 <Row>
                   <Text>{t('common.name')}</Text>
