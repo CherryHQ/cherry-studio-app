@@ -1,4 +1,4 @@
-import { createStackNavigator, TransitionPresets } from '@react-navigation/stack'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import React from 'react'
 
 import McpDetailScreen from '@/screens/mcp/McpDetailScreen'
@@ -11,15 +11,15 @@ export type McpStackParamList = {
   McpDetailScreen: { mcpId?: string }
 }
 
-const Stack = createStackNavigator<McpStackParamList>()
+const Stack = createNativeStackNavigator<McpStackParamList>()
 
 export default function McpStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        gestureResponseDistance: 9999,
-        ...TransitionPresets.SlideFromRightIOS
+        animation: 'ios_from_right',
+        gestureEnabled: true
       }}>
       <Stack.Screen name="McpScreen" component={McpScreen} />
       <Stack.Screen name="McpMarketScreen" component={McpMarketScreen} />

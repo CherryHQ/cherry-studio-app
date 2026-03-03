@@ -1,4 +1,4 @@
-import { createStackNavigator, TransitionPresets } from '@react-navigation/stack'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import React from 'react'
 
 import BasicDataSettingsScreen from '@/screens/settings/data/BasicDataSettingsScreen'
@@ -11,15 +11,15 @@ export type DataSourcesStackParamList = {
   LanTransferScreen: { redirectToHome?: boolean } | undefined
 }
 
-const Stack = createStackNavigator<DataSourcesStackParamList>()
+const Stack = createNativeStackNavigator<DataSourcesStackParamList>()
 
 export default function DataSourcesStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        gestureResponseDistance: 9999,
-        ...TransitionPresets.SlideFromRightIOS
+        animation: 'ios_from_right',
+        gestureEnabled: true
       }}>
       <Stack.Screen name="DataSettingsScreen" component={DataSettingsScreen} />
       <Stack.Screen name="BasicDataSettingsScreen" component={BasicDataSettingsScreen} />
