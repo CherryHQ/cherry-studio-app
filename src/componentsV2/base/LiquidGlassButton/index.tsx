@@ -53,7 +53,10 @@ export const LiquidGlassButton = ({
   return (
     <Button
       onPress={onPress}
-      className={cn('bg-secondary h-10 w-10 items-center justify-center rounded-full', className)}
+      className={cn(
+        'h-10.5 w-10.5 items-center justify-center rounded-full border border-gray-200 bg-white/20 shadow-xl backdrop-blur-lg dark:border-white/20',
+        className
+      )}
       variant={variant}
       style={style}>
       {children}
