@@ -250,5 +250,5 @@ Tests are located in `__tests__/` directory:
 Run tests with:
 
 ```bash
-yarn test src/componentsV2/features/ChatScreen/MessageInput
+pnpm test src/componentsV2/features/ChatScreen/MessageInput
 ```

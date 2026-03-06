@@ -119,7 +119,7 @@ export function getUserMessage({
  * @param userMessage 已创建的用户消息
  * @param userMessageBlocks 用户消息关联的消息块
  * @param assistant 助手对象
- * @param topicId 主题ID
+ * @param topicId 话题ID
  * @param dispatch Redux dispatch 函数
  */
 export async function sendMessage(
