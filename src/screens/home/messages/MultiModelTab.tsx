@@ -14,6 +14,14 @@ import MessageItem from './Message'
 import MessageFooter from './MessageFooter'
 import MessageHeader from './MessageHeader'
 
+const isStreamingStatus = (status: AssistantMessageStatus) => {
+  return (
+    status === AssistantMessageStatus.PENDING ||
+    status === AssistantMessageStatus.PROCESSING ||
+    status === AssistantMessageStatus.SEARCHING
+  )
+}
+
 interface MultiModelTabProps {
   assistant: Assistant
   messages: GroupedMessage[]
@@ -69,7 +77,7 @@ const MultiModelTab: FC<MultiModelTabProps> = ({ assistant, messages, messageBlo
               }}>
               <MessageItem message={message} messageBlocks={messageBlocks} />
               {/* 输出过程中不显示footer */}
-              {message.status !== AssistantMessageStatus.PROCESSING && (
+              {!isStreamingStatus(message.status as AssistantMessageStatus) && (
                 <MessageFooter assistant={assistant} message={message} isMultiModel={true} />
               )}
             </MotiView>
