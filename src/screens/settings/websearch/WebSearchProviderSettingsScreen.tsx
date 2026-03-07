@@ -121,25 +121,25 @@ export default function WebSearchProviderSettingsScreen() {
 
             <XStack className="relative gap-2">
               <TextField className="flex-1">
+                <TextField.InputEndContent>
+                  <Button
+                    feedbackVariant="scale-ripple"
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    onPress={toggleApiKeyVisibility}>
+                    <Button.Label>
+                      {showApiKey ? <EyeOff className="text-white" size={16} /> : <Eye size={16} />}
+                    </Button.Label>
+                  </Button>
+                </TextField.InputEndContent>
                 <TextField.Input
                   className="h-12 pr-0"
                   value={provider?.apiKey || ''}
                   secureTextEntry={!showApiKey}
                   placeholder={t('settings.websearch.api_key.placeholder')}
-                  onChangeText={text => handleProviderConfigChange('apiKey', text)}>
-                  <TextField.InputEndContent>
-                    <Button
-                      feedbackVariant="scale-ripple"
-                      size="sm"
-                      variant="ghost"
-                      isIconOnly
-                      onPress={toggleApiKeyVisibility}>
-                      <Button.Label>
-                        {showApiKey ? <EyeOff className="text-white" size={16} /> : <Eye size={16} />}
-                      </Button.Label>
-                    </Button>
-                  </TextField.InputEndContent>
-                </TextField.Input>
+                  onChangeText={text => handleProviderConfigChange('apiKey', text)}
+                />
               </TextField>
             </XStack>
 
