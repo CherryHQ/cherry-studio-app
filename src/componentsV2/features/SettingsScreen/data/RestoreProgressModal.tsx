@@ -1,5 +1,5 @@
 import { BlurView } from 'expo-blur'
-import { Button, cn, ErrorView, Spinner } from 'heroui-native'
+import { Button, cn, Spinner } from 'heroui-native'
 import { MotiView } from 'moti'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
@@ -86,18 +86,16 @@ export function RestoreProgressModal({ isOpen, steps, overallStatus, onClose }: 
 
           <YStack className="items-center justify-center gap-3">
             {steps.map(step => (
-              <ErrorView key={step.id} isInvalid={true}>
-                <View className="flex-row items-center gap-2">
-                  {getIconForStatus(step.status)}
-                  <Text className="text-lg">{step.title}</Text>
-                </View>
-              </ErrorView>
+              <View key={step.id} className="flex-row items-center gap-2">
+                {getIconForStatus(step.status)}
+                <Text className="text-lg">{step.title}</Text>
+              </View>
             ))}
           </YStack>
 
           <XStack className="items-center justify-center">
             <Button
-              pressableFeedbackVariant="ripple"
+              feedbackVariant="scale-ripple"
               size="sm"
               className={cn(
                 'w-40 items-center justify-center rounded-[30px] border text-base active:opacity-80',

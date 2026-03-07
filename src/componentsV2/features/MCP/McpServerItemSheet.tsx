@@ -1,5 +1,5 @@
 import { TrueSheet } from '@lodev09/react-native-true-sheet'
-import { Accordion, Button, cn, Divider, Spinner, Switch } from 'heroui-native'
+import { Accordion, Button, cn, Separator, Spinner, Switch } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Pressable, ScrollView, View } from 'react-native'
@@ -172,7 +172,7 @@ const McpServerItemSheet: React.FC = () => {
             <XStack className="w-full items-center justify-center px-4">
               <Text className="text-foreground-secondary text-center text-base">{selectedMcp.description}</Text>
             </XStack>
-            <Divider />
+            <Separator />
           </YStack>
 
           {/* Scrollable Content */}
@@ -233,7 +233,7 @@ const McpServerItemSheet: React.FC = () => {
           {mode === 'preview' && (
             <XStack className="shrink-0 items-center justify-center gap-4 px-6" style={{ paddingBottom: bottom }}>
               <Button
-                pressableFeedbackVariant="ripple"
+                feedbackVariant="scale-ripple"
                 className=" primary-container flex-1 rounded-[30px] border px-5 py-2.5"
                 onPress={handleAddMcp}
                 isDisabled={isAdding}>

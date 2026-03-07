@@ -1,4 +1,4 @@
-import { Divider } from 'heroui-native'
+import { Separator } from 'heroui-native'
 import type { FC } from 'react'
 import React from 'react'
 import { View } from 'react-native'
@@ -22,9 +22,9 @@ const TranslationBlock: FC<Props> = ({ block }) => {
   return (
     <View>
       <XStack className="items-center justify-center gap-2.5">
-        <Divider className="flex-1 bg-zinc-400/40" thickness={1} />
+        <Separator className="flex-1 bg-zinc-400/40" thickness={1} />
         <Languages size={16} className="text-gray-700" />
-        <Divider className="flex-1 bg-zinc-400/40" thickness={1} />
+        <Separator className="flex-1 bg-zinc-400/40" thickness={1} />
       </XStack>
       <MarkdownRenderer content={getContent()} />
     </View>

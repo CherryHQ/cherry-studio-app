@@ -92,7 +92,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
         type: 'timing'
       }}>
       <Button
-        pressableFeedbackVariant="ripple"
+        feedbackVariant="scale-ripple"
         variant="tertiary"
         className="bg-card justify-between rounded-xl border-0"
         onPress={handleModelPress}>
@@ -232,7 +232,7 @@ export function ModelTabContent({ assistant, updateAssistant }: ModelTabContentP
 
         {isReasoningModel(model[0]) && (
           <Button
-            pressableFeedbackVariant="ripple"
+            feedbackVariant="scale-ripple"
             variant="tertiary"
             className="justify-between rounded-xl border-0 bg-transparent py-3 pl-4 pr-5"
             onPress={handleReasoningPress}>

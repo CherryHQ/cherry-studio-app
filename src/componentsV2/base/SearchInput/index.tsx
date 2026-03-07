@@ -1,8 +1,7 @@
+import { InputGroup } from 'heroui-native'
 import React from 'react'
 
 import { Search } from '@/componentsV2/icons'
-
-import TextField from '../TextField'
 
 interface SearchInputProps {
   placeholder: string
@@ -12,37 +11,21 @@ interface SearchInputProps {
 
 export const SearchInput = ({ placeholder, onChangeText, value }: SearchInputProps) => {
   return (
-    <TextField className="bg-secondary rounded-xl">
-      <TextField.Input
+    <InputGroup className="bg-secondary rounded-xl">
+      <InputGroup.Prefix>
+        <Search size={20} className="text-foreground-secondary" />
+      </InputGroup.Prefix>
+      <InputGroup.Input
         placeholder={placeholder}
         onChangeText={onChangeText}
         value={value}
-        className="h-10 w-full"
+        className="border-transparent bg-transparent py-1.5 focus:border-transparent"
         selectionColor="#2563eb"
-        animation={{
-          backgroundColor: {
-            value: {
-              blur: 'transparent',
-              focus: 'transparent',
-              error: 'transparent'
-            }
-          },
-          borderColor: {
-            value: {
-              blur: 'transparent',
-              focus: 'transparent',
-              error: 'transparent'
-            }
-          }
-        }}
         style={{
-          fontSize: 18
-        }}>
-        <TextField.InputStartContent>
-          <Search size={20} className="text-foreground-secondary" />
-        </TextField.InputStartContent>
-      </TextField.Input>
-    </TextField>
+          fontSize: 16
+        }}
+      />
+    </InputGroup>
   )
 }
 

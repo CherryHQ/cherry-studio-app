@@ -118,13 +118,13 @@ const ProviderCheckSheet: React.FC = () => {
   }
 
   return (
-    <BottomSheet isOpen={isOpen} onOpenChange={handleOpenChange} isDismissKeyboardOnClose={true}>
+    <BottomSheet isOpen={isOpen} onOpenChange={handleOpenChange}>
       <BottomSheet.Portal>
         <BottomSheet.Overlay isCloseOnPress={true} />
         <BottomSheet.Content style={{ backgroundColor: isIOS26 ? undefined : isDark ? '#19191c' : '#ffffff' }}>
           <XStack className="border-foreground/10 items-center justify-between px-4 pb-4 pt-5">
             <Text className="text-foreground text-xl font-bold">{t('settings.provider.api_check.title')}</Text>
-            <BottomSheet.Close asChild>
+            <BottomSheet.Close>
               <Pressable
                 style={({ pressed }) => ({
                   padding: 4,
@@ -143,7 +143,7 @@ const ProviderCheckSheet: React.FC = () => {
               {provider && <ModelSelect provider={provider} onSelectModel={setSelectedModel} />}
               <Button
                 className="secondary-container rounded-xl border"
-                pressableFeedbackVariant="ripple"
+                feedbackVariant="scale-ripple"
                 onPress={handleCheck}
                 isDisabled={checkStatus === 'processing'}>
                 <Button.Label className="primary-text">

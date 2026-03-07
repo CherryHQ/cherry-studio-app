@@ -158,7 +158,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
             <XStack className="gap-5 p-5 pt-0">
               {showCancel && (
                 <Button
-                  pressableFeedbackVariant="ripple"
+                  feedbackVariant="scale-ripple"
                   variant="tertiary"
                   className={cn(
                     'h-[42px] flex-1 rounded-[30px] border border-zinc-400/20 bg-transparent active:opacity-80',
@@ -174,7 +174,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                 </Button>
               )}
               <Button
-                pressableFeedbackVariant="ripple"
+                feedbackVariant="scale-ripple"
                 className={cn(
                   'h-[42px] flex-1 rounded-[30px] border',
                   confirmButtonClassName,

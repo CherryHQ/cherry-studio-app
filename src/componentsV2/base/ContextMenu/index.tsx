@@ -31,7 +31,7 @@ export interface ContextMenuProps {
 
 const ContextMenu: FC<ContextMenuProps> = ({
   children,
-  onPress = () => {},
+  onPress = () => { },
   list,
   disableContextMenu = false,
   borderRadius = 0,
@@ -44,7 +44,7 @@ const ContextMenu: FC<ContextMenuProps> = ({
     const TriggerContent = withHighLight ? (
       <Pressable
         onPress={onPress}
-        onLongPress={() => {}}
+        onLongPress={() => { }}
         unstable_pressDelay={50}
         delayLongPress={350}
         // FIXME: 这里失效了
@@ -73,7 +73,7 @@ const ContextMenu: FC<ContextMenuProps> = ({
           {list.map(item => (
             <Item key={item.title} onSelect={item.onSelect} destructive={item.destructive}>
               <ItemTitle>{item.title}</ItemTitle>
-              {item.iOSIcon && <ItemIcon ios={{ name: item.iOSIcon }} />}
+              {item.iOSIcon && <ItemIcon ios={{ name: item.iOSIcon as SFSymbol }} />}
             </Item>
           ))}
         </Content>
