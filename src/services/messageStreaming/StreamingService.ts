@@ -28,10 +28,10 @@ const logger = loggerService.withContext('StreamingService')
 // Task TTL for auto-cleanup (prevents memory leaks from crashed processes)
 const TASK_TTL = 5 * 60 * 1000 // 5 minutes
 
-// Cache key generators
-const getTaskKey = (messageId: string) => `streaming.task.${messageId}` as const
-const getBlockKey = (blockId: string) => `streaming.block.${blockId}` as const
-const getMessageKey = (messageId: string) => `streaming.message.${messageId}` as const
+// Cache key generators - using 'message.streaming.' prefix for consistency
+const getTaskKey = (messageId: string) => `message.streaming.task.${messageId}` as const
+const getBlockKey = (blockId: string) => `message.streaming.block.${blockId}` as const
+const getMessageKey = (messageId: string) => `message.streaming.content.${messageId}` as const
 
 /**
  * Streaming task data structure (stored in cache)
@@ -348,7 +348,7 @@ class StreamingService {
    */
   getStats(): { taskCount: number; blockMappings: number; cacheSize: number } {
     return {
-      taskCount: cacheService.getKeysByPrefix('streaming.task.').length,
+      taskCount: cacheService.getKeysByPrefix('message.streaming.task.').length,
       blockMappings: this.blockToMessageMap.size,
       cacheSize: cacheService.size
     }
