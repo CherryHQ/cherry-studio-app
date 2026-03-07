@@ -34,6 +34,9 @@ class CacheService {
   // Internal cache storage
   private cache = new Map<string, CacheEntry>()
 
+  // Listeners for subscription mechanism
+  private listeners = new Map<string, Set<() => void>>()
+
   // GC timer and interval
   private gcInterval: ReturnType<typeof setInterval> | null = null
   private readonly GC_INTERVAL_MS = 60 * 1000 // 1 minute
@@ -103,6 +106,9 @@ class CacheService {
     }
 
     this.cache.set(key, entry)
+    
+    // Notify listeners
+    this.notifyListeners(key)
   }
 
   /**
@@ -131,7 +137,11 @@ class CacheService {
    * @returns True if the entry existed and was deleted
    */
   delete(key: string): boolean {
-    return this.cache.delete(key)
+    const deleted = this.cache.delete(key)
+    if (deleted) {
+      this.notifyListeners(key)
+    }
+    return deleted
   }
 
   /**
@@ -140,6 +150,40 @@ class CacheService {
   clear(): void {
     this.cache.clear()
     logger.debug('Cache cleared')
+  }
+
+  // ============ Subscription Mechanism ============
+
+  /**
+   * Subscribe to changes for a specific cache key
+   *
+   * @param key - Cache key to subscribe to
+   * @param callback - Callback function to invoke when the key changes
+   * @returns Unsubscribe function
+   */
+  subscribe(key: string, callback: () => void): () => void {
+    if (!this.listeners.has(key)) {
+      this.listeners.set(key, new Set())
+    }
+    this.listeners.get(key)!.add(callback)
+
+    return () => {
+      this.listeners.get(key)?.delete(callback)
+    }
+  }
+
+  /**
+   * Notify all listeners for a specific key
+   */
+  protected notifyListeners(key: string): void {
+    this.listeners.get(key)?.forEach(cb => cb())
+  }
+
+  /**
+   * Get the number of listeners for a specific key (for debugging)
+   */
+  getListenerCount(key: string): number {
+    return this.listeners.get(key)?.size || 0
   }
 
   /**

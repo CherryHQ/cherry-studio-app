@@ -68,6 +68,9 @@ class StreamingService {
   // This is a lightweight index that doesn't need TTL (cleared when task ends)
   private blockToMessageMap = new Map<string, string>()
 
+  // Listeners for message state changes
+  private messageListeners = new Map<string, Set<() => void>>()
+
   // ============ Task Lifecycle ============
 
   /**
@@ -103,6 +106,9 @@ class StreamingService {
     cacheService.set(getMessageKey(messageId), message, TASK_TTL)
 
     logger.debug('Started streaming task', { topicId, messageId })
+    
+    // Notify listeners
+    this.notifyMessageListeners(messageId)
   }
 
   /**
@@ -185,6 +191,9 @@ class StreamingService {
     cacheService.delete(getTaskKey(messageId))
 
     logger.debug('Ended streaming task', { messageId, topicId: task.topicId })
+    
+    // Notify listeners
+    this.notifyMessageListeners(messageId)
   }
 
   // ============ Block Operations ============
@@ -224,6 +233,9 @@ class StreamingService {
     cacheService.set(getBlockKey(block.id), block, TASK_TTL)
 
     logger.debug('Added block to task', { messageId, blockId: block.id, blockType: block.type })
+    
+    // Notify listeners
+    this.notifyMessageListeners(messageId)
   }
 
   /**
@@ -263,6 +275,9 @@ class StreamingService {
     // Update caches
     cacheService.set(getTaskKey(messageId), newTask, TASK_TTL)
     cacheService.set(getBlockKey(blockId), updatedBlock, TASK_TTL)
+
+    // Notify listeners
+    this.notifyMessageListeners(messageId)
   }
 
   /**
@@ -297,6 +312,9 @@ class StreamingService {
     // Update caches with TTL refresh
     cacheService.set(getTaskKey(messageId), newTask, TASK_TTL)
     cacheService.set(getMessageKey(messageId), newMessage, TASK_TTL)
+    
+    // Notify listeners
+    this.notifyMessageListeners(messageId)
   }
 
   /**
@@ -352,6 +370,33 @@ class StreamingService {
       blockMappings: this.blockToMessageMap.size,
       cacheSize: cacheService.size
     }
+  }
+
+  // ============ Subscription Mechanism ============
+
+  /**
+   * Subscribe to message state changes
+   *
+   * @param messageId - Message ID to subscribe to
+   * @param callback - Callback function to invoke when the message state changes
+   * @returns Unsubscribe function
+   */
+  subscribeToMessage(messageId: string, callback: () => void): () => void {
+    if (!this.messageListeners.has(messageId)) {
+      this.messageListeners.set(messageId, new Set())
+    }
+    this.messageListeners.get(messageId)!.add(callback)
+
+    return () => {
+      this.messageListeners.get(messageId)?.delete(callback)
+    }
+  }
+
+  /**
+   * Notify all listeners for a specific message
+   */
+  private notifyMessageListeners(messageId: string): void {
+    this.messageListeners.get(messageId)?.forEach(cb => cb())
   }
 }
 

@@ -3,13 +3,15 @@ import { transformDbToMessage } from '@db/mappers'
 import { messageBlocks as messageBlocksSchema, messages as messagesSchema } from '@db/schema'
 import { eq } from 'drizzle-orm'
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef,useState } from 'react'
 
+import { cacheService } from '@/services/CacheService'
+import { streamingService } from '@/services/messageStreaming/StreamingService'
 import type { Message } from '@/types/message'
 
-export const useMessages = (topicId: string) => {
-  const startTime = performance.now()
+const getMessageKey = (messageId: string) => `message.streaming.content.${messageId}` as const
 
+export const useMessages = (topicId: string) => {
   // Query 1: 获取所有 messages
   const messagesQuery = db
     .select()
@@ -32,6 +34,42 @@ export const useMessages = (topicId: string) => {
   const { data: rawBlocks } = useLiveQuery(blocksQuery, [topicId])
 
   const [processedMessages, setProcessedMessages] = useState<Message[]>([])
+  const unsubscribersRef = useRef<(() => void)[]>([])
+
+  // Subscribe to streaming message changes via CacheService
+  useEffect(() => {
+    if (!rawMessages) return
+
+    // Cleanup previous subscriptions
+    unsubscribersRef.current.forEach(unsub => unsub())
+    unsubscribersRef.current = []
+
+    // Subscribe to each message's streaming state
+    rawMessages.forEach(msg => {
+      const messageKey = getMessageKey(msg.id)
+      
+      // Subscribe to cache changes
+      const unsubCache = cacheService.subscribe(messageKey, () => {
+        // Force re-process messages when cache changes
+        setProcessedMessages(prev => {
+          // Trigger a re-render by creating a new array
+          return [...prev]
+        })
+      })
+      
+      // Subscribe to streaming service notifications
+      const unsubStreaming = streamingService.subscribeToMessage(msg.id, () => {
+        setProcessedMessages(prev => [...prev])
+      })
+      
+      unsubscribersRef.current.push(unsubCache, unsubStreaming)
+    })
+
+    return () => {
+      unsubscribersRef.current.forEach(unsub => unsub())
+      unsubscribersRef.current = []
+    }
+  }, [rawMessages])
 
   useEffect(() => {
     if (!rawMessages || !rawBlocks) {
@@ -57,8 +95,23 @@ export const useMessages = (topicId: string) => {
       return message
     })
 
-    setProcessedMessages(messages)
-  }, [rawMessages, rawBlocks, topicId, startTime])
+    // Merge streaming messages
+    const streamingMessages: Message[] = []
+    messages.forEach(msg => {
+      if (streamingService.isStreaming(msg.id)) {
+        const streamingMessage = streamingService.getMessage(msg.id)
+        if (streamingMessage) {
+          streamingMessages.push(streamingMessage)
+        } else {
+          streamingMessages.push(msg)
+        }
+      } else {
+        streamingMessages.push(msg)
+      }
+    })
+
+    setProcessedMessages(streamingMessages)
+  }, [rawMessages, rawBlocks, topicId])
 
   return { messages: processedMessages }
 }

@@ -1,9 +1,10 @@
 import type { FC } from 'react'
-import React, { memo, useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { View } from 'react-native'
 
 import { XStack } from '@/componentsV2'
 import { loggerService } from '@/services/LoggerService'
+import { streamingService } from '@/services/messageStreaming/StreamingService'
 import type { CitationMessageBlock, MainTextMessageBlock, Message, MessageBlock } from '@/types/message'
 import { MessageBlockStatus, MessageBlockType } from '@/types/message'
 
@@ -19,18 +20,11 @@ import TranslationBlock from './TranslationBlock'
 const logger = loggerService.withContext('Message Blocks Index')
 
 interface MessageBlockRendererProps {
-  blocks: MessageBlock[] // 可以接收块ID数组或MessageBlock数组
+  blocks: MessageBlock[]
   messageStatus?: Message['status']
   message: Message
 }
 
-/**
- * Pre-processes message blocks for rendering.
- * 1. Separates citation blocks to be rendered at the end.
- * 2. Groups consecutive media blocks (IMAGE, FILE) together.
- * @param blocks The source message blocks.
- * @returns An object containing content blocks (with media grouped) and citation blocks.
- */
 const prepareBlocksForRender = (blocks: MessageBlock[]) => {
   const citationBlocks: CitationMessageBlock[] = []
   const otherBlocks: MessageBlock[] = []
@@ -62,7 +56,76 @@ const prepareBlocksForRender = (blocks: MessageBlock[]) => {
 }
 
 const MessageBlockRenderer: FC<MessageBlockRendererProps> = ({ blocks, message }) => {
-  const { contentBlocks, citationBlocks } = useMemo(() => prepareBlocksForRender(blocks), [blocks])
+  const [streamingBlocks, setStreamingBlocks] = useState<MessageBlock[]>([])
+
+  useEffect(() => {
+    const updateStreamingBlocks = () => {
+      const isStreamingNow = streamingService.isStreaming(message.id)
+      
+      if (isStreamingNow) {
+        const cachedBlocks = streamingService.getAllBlocks(message.id)
+        setStreamingBlocks(cachedBlocks)
+      } else {
+        setStreamingBlocks([])
+      }
+    }
+
+    updateStreamingBlocks()
+
+    const unsubscribeStreaming = streamingService.subscribeToMessage(message.id, updateStreamingBlocks)
+
+    return () => {
+      unsubscribeStreaming()
+    }
+  }, [message.id])
+
+  const isStreaming = streamingBlocks.length > 0
+  const renderBlocks = isStreaming ? streamingBlocks : blocks
+
+  const { contentBlocks, citationBlocks } = useMemo(() => prepareBlocksForRender(renderBlocks), [renderBlocks])
+
+  const renderBlockComponent = (block: MessageBlock): React.ReactNode => {
+    let blockComponent: React.ReactNode = null
+
+    switch (block.type) {
+      case MessageBlockType.UNKNOWN:
+        if (block.status === MessageBlockStatus.PROCESSING) {
+          blockComponent = <PlaceholderBlock key={block.id} block={block} />
+        }
+        break
+      case MessageBlockType.MAIN_TEXT:
+      case MessageBlockType.CODE: {
+        const mainTextBlock = block as MainTextMessageBlock
+        const citationBlockId = mainTextBlock.citationReferences?.[0]?.citationBlockId
+        blockComponent = <MainTextBlock key={block.id} block={mainTextBlock} citationBlockId={citationBlockId} />
+        break
+      }
+      case MessageBlockType.IMAGE:
+        blockComponent = <ImageBlock key={block.id} block={block} />
+        break
+      case MessageBlockType.FILE:
+        blockComponent = <FileBlock key={block.id} block={block} />
+        break
+      case MessageBlockType.THINKING:
+        blockComponent = <ThinkingBlock key={block.id} block={block} />
+        break
+      case MessageBlockType.TRANSLATION:
+        blockComponent = <TranslationBlock key={block.id} block={block} />
+        break
+      case MessageBlockType.TOOL:
+        blockComponent = <ToolBlock key={block.id} block={block} />
+        break
+      case MessageBlockType.ERROR:
+        blockComponent = <ErrorBlock key={block.id} block={block} message={message} />
+        break
+      default:
+        logger.warn('Unsupported block type in MessageBlockRenderer:', (block as any).type, block)
+        break
+    }
+
+    return <View key={block.type === MessageBlockType.UNKNOWN ? 'placeholder' : block.id}>{blockComponent}</View>
+  }
+
   return (
     <View className="gap-2">
       {contentBlocks.map(blockOrGroup => {
@@ -86,48 +149,7 @@ const MessageBlockRenderer: FC<MessageBlockRendererProps> = ({ blocks, message }
           )
         }
 
-        const block = blockOrGroup
-        let blockComponent: React.ReactNode = null
-
-        switch (block.type) {
-          case MessageBlockType.UNKNOWN:
-            if (block.status === MessageBlockStatus.PROCESSING) {
-              blockComponent = <PlaceholderBlock key={block.id} block={block} />
-            }
-
-            break
-          case MessageBlockType.MAIN_TEXT:
-          case MessageBlockType.CODE: {
-            const mainTextBlock = block as MainTextMessageBlock
-            const citationBlockId = mainTextBlock.citationReferences?.[0]?.citationBlockId
-            blockComponent = <MainTextBlock key={block.id} block={mainTextBlock} citationBlockId={citationBlockId} />
-            break
-          }
-
-          case MessageBlockType.IMAGE:
-            blockComponent = <ImageBlock key={block.id} block={block} />
-            break
-          case MessageBlockType.FILE:
-            blockComponent = <FileBlock key={block.id} block={block} />
-            break
-          case MessageBlockType.THINKING:
-            blockComponent = <ThinkingBlock key={block.id} block={block} />
-            break
-          case MessageBlockType.TRANSLATION:
-            blockComponent = <TranslationBlock key={block.id} block={block} />
-            break
-          case MessageBlockType.TOOL:
-            blockComponent = <ToolBlock key={block.id} block={block} />
-            break
-          case MessageBlockType.ERROR:
-            blockComponent = <ErrorBlock key={block.id} block={block} message={message} />
-            break
-          default:
-            logger.warn('Unsupported block type in MessageBlockRenderer:', (block as any).type, block)
-            break
-        }
-
-        return <View key={block.type === MessageBlockType.UNKNOWN ? 'placeholder' : block.id}>{blockComponent}</View>
+        return renderBlockComponent(blockOrGroup)
       })}
       {citationBlocks.map(block => (
         <CitationBlock key={block.id} block={block} />
@@ -136,4 +158,4 @@ const MessageBlockRenderer: FC<MessageBlockRendererProps> = ({ blocks, message }
   )
 }
 
-export default memo(MessageBlockRenderer)
+export default MessageBlockRenderer
