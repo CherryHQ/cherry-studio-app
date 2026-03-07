@@ -4,7 +4,7 @@ import { BlurView } from 'expo-blur'
 import { SymbolView } from 'expo-symbols'
 import { MotiView } from 'moti'
 import type { FC } from 'react'
-import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { Platform, StyleSheet, View } from 'react-native'
 import Animated, { useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated'
@@ -38,7 +38,12 @@ interface MessagesProps {
 const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
   const { messages } = useMessages(topic.id)
   const { messageBlocks } = useTopicBlocks(topic.id)
-  console.log('Messages component - messages count:', messages.length, 'messageBlocks keys:', Object.keys(messageBlocks))
+  console.log(
+    'Messages component - messages count:',
+    messages.length,
+    'messageBlocks keys:',
+    Object.keys(messageBlocks)
+  )
   const { isDark } = useTheme()
   const [autoScroll] = usePreference('chat.auto_scroll')
 
@@ -95,27 +100,30 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
     }
   }, [hasMessages, listLayoutReady])
 
-  const renderMessageGroup = useCallback(({ item }: { item: [string, GroupedMessage[]] }) => {
-    console.log('renderMessageGroup called for key:', item[0])
-    return (
-      <MotiView
-        from={{
-          opacity: 0,
-          translateY: 10
-        }}
-        animate={{
-          opacity: 1,
-          translateY: 0
-        }}
-        transition={{
-          type: 'timing',
-          duration: 300,
-          delay: 100
-        }}>
-        <MessageGroup assistant={assistant} item={item} messageBlocks={messageBlocks} />
-      </MotiView>
-    )
-  }, [assistant, messageBlocks])
+  const renderMessageGroup = useCallback(
+    ({ item }: { item: [string, GroupedMessage[]] }) => {
+      console.log('renderMessageGroup called for key:', item[0])
+      return (
+        <MotiView
+          from={{
+            opacity: 0,
+            translateY: 10
+          }}
+          animate={{
+            opacity: 1,
+            translateY: 0
+          }}
+          transition={{
+            type: 'timing',
+            duration: 300,
+            delay: 100
+          }}>
+          <MessageGroup assistant={assistant} item={item} messageBlocks={messageBlocks} />
+        </MotiView>
+      )
+    },
+    [assistant, messageBlocks]
+  )
 
   const scrollToBottom = useCallback(() => {
     if (legendListRef.current && groupedMessages.length > 0) {
