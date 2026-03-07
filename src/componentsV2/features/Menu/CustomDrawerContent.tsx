@@ -1,5 +1,5 @@
 import type { DrawerContentComponentProps } from '@react-navigation/drawer'
-import { Divider } from 'heroui-native'
+import { Separator } from 'heroui-native'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
@@ -108,7 +108,7 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
             <RowRightArrow />
           </PressableRow>
           <YStack className="px-2.5">
-            <Divider />
+            <Separator />
           </YStack>
         </YStack>
 
@@ -122,7 +122,7 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
       </YStack>
 
       <YStack className="px-5 pb-2.5">
-        <Divider />
+        <Separator />
       </YStack>
 
       <XStack className="items-center justify-between">

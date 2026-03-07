@@ -137,7 +137,7 @@ const TextEditSheet: React.FC = () => {
               <Button
                 size="sm"
                 className="primary-container rounded-xl border"
-                pressableFeedbackVariant="ripple"
+                feedbackVariant="scale-ripple"
                 onPress={handleSave}>
                 <Button.Label className="primary-text">{t('common.save')}</Button.Label>
               </Button>

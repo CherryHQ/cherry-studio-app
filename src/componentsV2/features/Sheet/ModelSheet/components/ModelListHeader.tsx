@@ -48,7 +48,7 @@ export const ModelListHeader: React.FC<ModelListHeaderProps> = ({
           </YStack>
           {multiple && (
             <Button
-              pressableFeedbackVariant="ripple"
+              feedbackVariant="scale-ripple"
               size="sm"
               className={`h-10 rounded-xl ${
                 isMultiSelectActive ? 'primary-container border' : 'bg-secondary border border-transparent'
@@ -62,7 +62,7 @@ export const ModelListHeader: React.FC<ModelListHeaderProps> = ({
           {multiple && isMultiSelectActive && (
             <Button
               size="sm"
-              pressableFeedbackVariant="ripple"
+              feedbackVariant="scale-ripple"
               className="bg-secondary h-10 rounded-full"
               isIconOnly
               onPress={onClearAll}>

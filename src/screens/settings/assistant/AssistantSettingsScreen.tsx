@@ -28,7 +28,7 @@ function ModelPicker({ assistant, onPress }: { assistant: Assistant; onPress: ()
 
   return (
     <Button
-      pressableFeedbackVariant="ripple"
+      feedbackVariant="scale-ripple"
       variant="ghost"
       className="bg-card  w-full justify-between rounded-2xl px-3"
       onPress={onPress}>

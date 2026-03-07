@@ -61,7 +61,7 @@ export function ProviderSelect({ value, onValueChange, placeholder, className }:
     <SelectionDropdown items={dropdownItems}>
       <Pressable className={className}>
         <Button
-          pressableFeedbackVariant="ripple"
+          feedbackVariant="scale-ripple"
           className="min-w-35 h-8 justify-between rounded-lg"
           variant="tertiary"
           size="sm"

@@ -1,6 +1,6 @@
 import { TrueSheet } from '@lodev09/react-native-true-sheet'
 import { BlurView } from 'expo-blur'
-import { Button, cn, Divider } from 'heroui-native'
+import { Button, cn, Separator } from 'heroui-native'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackHandler, Platform, Pressable, ScrollView, View } from 'react-native'
@@ -210,7 +210,7 @@ const AssistantItemSheet: React.FC = () => {
               )}
             </YStack>
 
-            <Divider />
+            <Separator />
 
             <ScrollView
               style={{ flex: 1 }}
@@ -239,21 +239,21 @@ const AssistantItemSheet: React.FC = () => {
           {/* Footer positioned absolutely at the bottom */}
           <XStack className="shrink-0 items-center justify-between gap-4 px-6" style={{ paddingBottom: bottom }}>
             {source === 'builtIn' && (
-              <Button pressableFeedbackVariant="ripple" variant="ghost" isIconOnly onPress={handleAddAssistant}>
+              <Button feedbackVariant="scale-ripple" variant="ghost" isIconOnly onPress={handleAddAssistant}>
                 <Button.Label>
                   <UnionPlusIcon size={30} />
                 </Button.Label>
               </Button>
             )}
             {source === 'external' && (
-              <Button pressableFeedbackVariant="ripple" variant="ghost" isIconOnly onPress={handleEditAssistant}>
+              <Button feedbackVariant="scale-ripple" variant="ghost" isIconOnly onPress={handleEditAssistant}>
                 <Button.Label>
                   <Settings2 size={30} />
                 </Button.Label>
               </Button>
             )}
             <Button
-              pressableFeedbackVariant="ripple"
+              feedbackVariant="scale-ripple"
               className="primary-container flex-1 rounded-[30px] px-5 py-2.5"
               onPress={actionButton?.onPress || handleChatPress}>
               <Button.Label>

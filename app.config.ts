@@ -54,7 +54,7 @@ export default {
           ios: { deploymentTarget: '15.5' },
           android: {
             buildToolsVersion: '35.0.0',
-            compileSdkVersion: 35,
+            compileSdkVersion: 36,
             targetSdkVersion: 35,
             minSdkVersion: 24,
             gradleVersion: '8.13',

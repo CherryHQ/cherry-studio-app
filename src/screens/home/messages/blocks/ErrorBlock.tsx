@@ -538,11 +538,11 @@ export const ErrorDetailSheet: React.FC = () => {
     <XStack className="items-center justify-between px-5 pb-4 pt-5">
       <Text className="text-foreground text-xl font-semibold">{t('error.detail')}</Text>
       <XStack className="gap-1">
-        <Button pressableFeedbackVariant="ripple" variant="ghost" isIconOnly onPress={toggleDeveloperMode}>
+        <Button feedbackVariant="scale-ripple" variant="ghost" isIconOnly onPress={toggleDeveloperMode}>
           <Bug size={20} className={developerMode ? 'primary-text' : undefined} />
         </Button>
         <Button
-          pressableFeedbackVariant="ripple"
+          feedbackVariant="scale-ripple"
           variant="ghost"
           isIconOnly
           onPress={copyErrorDetails}

@@ -61,7 +61,7 @@ const SelectionDropdown: FC<SelectionDropdownProps> = ({
       <Select.Trigger asChild>{children}</Select.Trigger>
       <Select.Portal>
         <Select.Overlay closeOnPress={shouldDismissMenuOnSelect} />
-        <Select.Content width="trigger" placement="bottom" align="center" style={{ width: '40%' }}>
+        <Select.Content presentation="popover" width="content-fit" placement="bottom" align="center">
           {renderItems()}
         </Select.Content>
       </Select.Portal>
