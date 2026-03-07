@@ -73,7 +73,7 @@ const ContextMenu: FC<ContextMenuProps> = ({
           {list.map(item => (
             <Item key={item.title} onSelect={item.onSelect} destructive={item.destructive}>
               <ItemTitle>{item.title}</ItemTitle>
-              {item.iOSIcon && <ItemIcon ios={{ name: item.iOSIcon }} />}
+              {item.iOSIcon && <ItemIcon ios={{ name: item.iOSIcon as SFSymbol }} />}
             </Item>
           ))}
         </Content>

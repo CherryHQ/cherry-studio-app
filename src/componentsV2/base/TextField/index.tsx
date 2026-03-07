@@ -1,57 +1,56 @@
 import type {
-  TextFieldDescriptionProps,
-  TextFieldErrorMessageProps,
-  TextFieldInputEndContentProps,
-  TextFieldInputProps,
-  TextFieldInputStartContentProps,
-  TextFieldLabelProps,
+  DescriptionProps,
+  FieldErrorRootProps,
+  InputGroupPrefixProps,
+  InputGroupSuffixProps,
+  InputProps,
+  LabelProps,
   TextFieldRootProps
 } from 'heroui-native'
-import { cn, TextField as HeroUITextField, useTextField } from 'heroui-native'
+import { cn, Description, FieldError, Input as HeroUIInput, InputGroup, Label, useTextField } from 'heroui-native'
 import React, { forwardRef } from 'react'
 import type { TextInput, View } from 'react-native'
 
+type AnimationRoot<TConfig extends Record<string, any> = Record<string, any>> =
+  | boolean
+  | 'disabled'
+  | 'disable-all'
+  | (TConfig & { state?: 'disabled' | 'disable-all' | boolean })
+
+export interface TextFieldInputProps extends InputProps {
+  animation?: AnimationRoot<{
+    backgroundColor?: { value?: Record<string, string> }
+    borderColor?: { value?: Record<string, string> }
+  }>
+}
+
 const TextFieldRoot = forwardRef<View, TextFieldRootProps>(({ className, ...props }, ref) => {
-  return <HeroUITextField ref={ref} className={cn(className)} {...props} />
+  return <InputGroup ref={ref} className={cn('gap-1', className)} {...props} />
 })
 
 TextFieldRoot.displayName = 'TextField'
 
-const TextFieldInput = forwardRef<TextInput, TextFieldInputProps>(({ className, classNames, ...props }, ref) => {
-  const mergedClassNames = {
-    ...(classNames ? { ...classNames } : {}),
-    input: cn('text-[14px] py-0', classNames?.input)
-  }
-
-  return (
-    <HeroUITextField.Input
-      ref={ref}
-      className={cn('h-8', className)}
-      classNames={mergedClassNames}
-      selectionColor="#2563eb"
-      {...props}
-    />
-  )
+const TextFieldInput = forwardRef<TextInput, TextFieldInputProps>(({ className, ...props }, ref) => {
+  return <HeroUIInput ref={ref} className={cn('h-8', className)} selectionColor="#2563eb" {...props} />
 })
 
 TextFieldInput.displayName = 'TextFieldInput'
 
 const TextField = Object.assign(TextFieldRoot, {
-  Label: HeroUITextField.Label,
+  Label: Label,
   Input: TextFieldInput,
-  InputStartContent: HeroUITextField.InputStartContent,
-  InputEndContent: HeroUITextField.InputEndContent,
-  Description: HeroUITextField.Description,
-  ErrorMessage: HeroUITextField.ErrorMessage
+  InputStartContent: InputGroup.Prefix,
+  InputEndContent: InputGroup.Suffix,
+  Description: Description,
+  ErrorMessage: FieldError
 })
 
 export type {
-  TextFieldDescriptionProps,
-  TextFieldErrorMessageProps,
-  TextFieldInputEndContentProps,
-  TextFieldInputProps,
-  TextFieldInputStartContentProps,
-  TextFieldLabelProps,
+  DescriptionProps as TextFieldDescriptionProps,
+  FieldErrorRootProps as TextFieldErrorMessageProps,
+  InputGroupSuffixProps as TextFieldInputEndContentProps,
+  InputGroupPrefixProps as TextFieldInputStartContentProps,
+  LabelProps as TextFieldLabelProps,
   TextFieldRootProps
 }
 
