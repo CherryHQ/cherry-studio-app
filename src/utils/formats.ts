@@ -163,7 +163,6 @@ export const formatCitationsFromBlock = (block: CitationMessageBlock | undefined
 
       case WebSearchSource.GROK:
       case WebSearchSource.OPENROUTER:
-        console.log('test:', block.response.results)
         formattedCitations =
           (block.response.results as any[])?.map((result, index) => {
             const url = typeof result === 'string' ? result : result.url
