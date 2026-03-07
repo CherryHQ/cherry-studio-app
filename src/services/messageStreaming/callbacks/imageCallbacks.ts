@@ -1,4 +1,3 @@
-import { writeBase64File } from '@/services/FileService'
 import { loggerService } from '@/services/LoggerService'
 import type { ImageMessageBlock } from '@/types/message'
 import { MessageBlockStatus, MessageBlockType } from '@/types/message'
@@ -6,7 +5,7 @@ import { createImageBlock } from '@/utils/messageUtils/create'
 
 import type { BlockManager } from '../BlockManager'
 
-const logger = loggerService.withContext('createImageCallbacks')
+const logger = loggerService.withContext('ImageCallbacks')
 
 interface ImageCallbacksDependencies {
   blockManager: BlockManager
@@ -39,7 +38,6 @@ export const createImageCallbacks = (deps: ImageCallbacksDependencies) => {
 
     onImageDelta: (imageData: any) => {
       const imageUrl = imageData.images?.[0] || 'placeholder_image_url'
-
       if (imageBlockId) {
         const changes: Partial<ImageMessageBlock> = {
           url: imageUrl,
@@ -49,7 +47,7 @@ export const createImageCallbacks = (deps: ImageCallbacksDependencies) => {
         blockManager.smartBlockUpdate(imageBlockId, changes, MessageBlockType.IMAGE, true)
       }
     },
-    // 将生成的图片处理成file类型，加快读取速度
+
     onImageGenerated: async (imageData: any) => {
       if (imageBlockId) {
         if (!imageData) {
@@ -58,26 +56,41 @@ export const createImageCallbacks = (deps: ImageCallbacksDependencies) => {
           }
           blockManager.smartBlockUpdate(imageBlockId, changes, MessageBlockType.IMAGE)
         } else {
-          const imageFile = await writeBase64File(imageData.images?.[0])
+          const imageUrl = imageData.images?.[0] || 'placeholder_image_url'
           const changes: Partial<ImageMessageBlock> = {
-            file: imageFile,
+            url: imageUrl,
+            metadata: { generateImageResponse: imageData },
             status: MessageBlockStatus.SUCCESS
           }
           blockManager.smartBlockUpdate(imageBlockId, changes, MessageBlockType.IMAGE, true)
         }
-
         imageBlockId = null
       } else {
         if (imageData) {
-          const imageFile = await writeBase64File(imageData.images?.[0])
           const imageBlock = createImageBlock(assistantMsgId, {
-            file: imageFile,
-            status: MessageBlockStatus.SUCCESS
+            status: MessageBlockStatus.SUCCESS,
+            url: imageData.images?.[0] || 'placeholder_image_url',
+            metadata: { generateImageResponse: imageData }
           })
           await blockManager.handleBlockTransition(imageBlock, MessageBlockType.IMAGE)
         } else {
           logger.error('[onImageGenerated] Last block was not an Image block or ID is missing.')
         }
+      }
+    },
+
+    onImageSearched: async (content: string, metadata: Record<string, any>) => {
+      if (!imageBlockId) {
+        const imageBlock = createImageBlock(assistantMsgId, {
+          status: MessageBlockStatus.SUCCESS,
+          metadata: {
+            generateImageResponse: {
+              type: 'base64',
+              images: [`data:${metadata.mime};base64,${content}`]
+            }
+          }
+        })
+        await blockManager.handleBlockTransition(imageBlock, MessageBlockType.IMAGE)
       }
     }
   }

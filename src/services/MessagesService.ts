@@ -26,7 +26,7 @@ import { getTopicQueue } from '@/utils/queue'
 
 import { fetchTopicNaming } from './ApiService'
 import { assistantService, getDefaultModel } from './AssistantService'
-import { BlockManager, createCallbacks } from './messageStreaming'
+import { BlockManager, createCallbacks, streamingService } from './messageStreaming'
 import { transformMessagesAndFetch } from './OrchestrationService'
 import { getAssistantProvider } from './ProviderService'
 import type { StreamProcessorCallbacks } from './StreamProcessingService'
@@ -456,137 +456,6 @@ export async function editAssistantMessage(assistantMessageId: string, newConten
   }
 }
 
-const BLOCK_UPDATE_BATCH_INTERVAL = 180
-type BlockUpdatePayload = Partial<MessageBlock>
-
-const pendingBlockUpdates = new Map<string, BlockUpdatePayload>()
-let blockFlushTimer: ReturnType<typeof setTimeout> | null = null
-let blockFlushInFlight: Promise<void> | null = null
-
-const mergeBlockUpdates = (
-  existing: BlockUpdatePayload | undefined,
-  incoming: BlockUpdatePayload
-): BlockUpdatePayload => {
-  if (!existing) {
-    return { ...incoming } as BlockUpdatePayload
-  }
-
-  return { ...existing, ...incoming } as BlockUpdatePayload
-}
-
-const waitForCurrentBlockFlush = async () => {
-  if (!blockFlushInFlight) return
-
-  try {
-    await blockFlushInFlight
-  } catch (error) {
-    console.error('[BlockBatch] Pending flush failed:', error)
-  }
-}
-
-const flushPendingBlockUpdates = async (ids?: string[]): Promise<void> => {
-  const targetIds = ids?.length ? ids : Array.from(pendingBlockUpdates.keys())
-
-  if (targetIds.length === 0) {
-    return
-  }
-
-  const updates: { id: string; changes: BlockUpdatePayload }[] = []
-
-  for (const id of targetIds) {
-    const payload = pendingBlockUpdates.get(id)
-
-    if (!payload) {
-      continue
-    }
-
-    updates.push({ id, changes: payload })
-    pendingBlockUpdates.delete(id)
-  }
-
-  if (updates.length === 0) {
-    return
-  }
-
-  try {
-    for (const { id, changes } of updates) {
-      await messageBlockDatabase.updateOneBlock({ id, changes })
-    }
-  } catch (error) {
-    for (const { id, changes } of updates) {
-      const existing = pendingBlockUpdates.get(id)
-      pendingBlockUpdates.set(id, mergeBlockUpdates(existing, changes))
-    }
-
-    console.error('[BlockBatch] Failed to persist block updates:', error)
-    throw error
-  }
-}
-
-const executeBlockFlush = async (ids?: string[]) => {
-  await waitForCurrentBlockFlush()
-
-  const flushPromise = flushPendingBlockUpdates(ids)
-  blockFlushInFlight = flushPromise
-
-  try {
-    await flushPromise
-  } finally {
-    if (blockFlushInFlight === flushPromise) {
-      blockFlushInFlight = null
-    }
-  }
-}
-
-const scheduleBlockFlush = () => {
-  if (blockFlushTimer) {
-    return
-  }
-
-  blockFlushTimer = setTimeout(() => {
-    blockFlushTimer = null
-    void executeBlockFlush()
-  }, BLOCK_UPDATE_BATCH_INTERVAL)
-}
-
-const flushSpecificBlocks = async (ids: string[]) => {
-  if (!ids.length) {
-    return
-  }
-
-  const hasPending = ids.some(id => pendingBlockUpdates.has(id))
-
-  if (!hasPending) {
-    await waitForCurrentBlockFlush()
-    return
-  }
-
-  await executeBlockFlush(ids)
-}
-
-/**
- * 更新单个消息块，使用批量缓冲策略。
- */
-export const throttledBlockUpdate = async (id: string, blockUpdate: BlockUpdatePayload) => {
-  const merged = mergeBlockUpdates(pendingBlockUpdates.get(id), blockUpdate)
-  pendingBlockUpdates.set(id, merged)
-  scheduleBlockFlush()
-}
-
-/**
- * 取消单个块的批量更新，并等待当前写操作完成。
- */
-export const cancelThrottledBlockUpdate = async (id: string) => {
-  pendingBlockUpdates.delete(id)
-
-  if (pendingBlockUpdates.size === 0 && blockFlushTimer) {
-    clearTimeout(blockFlushTimer)
-    blockFlushTimer = null
-  }
-
-  await waitForCurrentBlockFlush()
-}
-
 export const saveUpdatesToDB = async (
   messageId: string,
   topicId: string,
@@ -601,7 +470,7 @@ export const saveUpdatesToDB = async (
     }
     await updateExistingMessageAndBlocksInDB(messageDataToSave, blocksToUpdate)
   } catch (error) {
-    console.error(`[DB Save Updates] Failed for message ${messageId}:`, error)
+    logger.error(`[DB Save Updates] Failed for message ${messageId}:`, error)
   }
 }
 
@@ -613,25 +482,7 @@ const updateExistingMessageAndBlocksInDB = async (
     await messageDatabase.updateMessageById(updatedMessage.id, updatedMessage)
     await messageBlockDatabase.upsertBlocks(updatedBlocks)
   } catch (error) {
-    console.error(`[updateExistingMsg] Failed to update message ${updatedMessage.id}:`, error)
-  }
-}
-
-// 新增: 辅助函数，用于获取并保存单个更新后的 Block 到数据库
-export const saveUpdatedBlockToDB = async (blockId: string | null, messageId: string, topicId: string) => {
-  if (!blockId) {
-    console.warn('[DB Save Single Block] Received null/undefined blockId. Skipping save.')
-    return
-  }
-
-  await flushSpecificBlocks([blockId])
-
-  const blockToSave = await messageBlockDatabase.getBlockById(blockId)
-
-  if (blockToSave) {
-    await saveUpdatesToDB(messageId, topicId, {}, [blockToSave]) // Pass messageId, topicId, empty message updates, and the block
-  } else {
-    console.warn(`[DB Save Single Block] Block ${blockId} not found in state. Cannot save.`)
+    logger.error(`[updateExistingMsg] Failed to update message ${updatedMessage.id}:`, error)
   }
 }
 
@@ -655,16 +506,24 @@ export async function fetchAndProcessAssistantResponseImpl(
   assistantMessage: Message
 ) {
   const assistantMsgId = assistantMessage.id
-  const startTime = Date.now()
   let callbacks: StreamProcessorCallbacks = {}
 
   try {
     await topicService.updateTopic(topicId, { isLoading: true })
 
-    // 创建 BlockManager 实例
+    // Start streaming task (two-phase persistence: memory first, DB on finalize)
+    streamingService.startTask(topicId, assistantMsgId, assistantMessage)
+
+    // Create throttled update functions (simplified for mobile - direct updates without actual throttling)
+    const throttledBlockUpdate = (id: string, changes: any) => {
+      streamingService.updateBlock(id, changes)
+    }
+    const cancelThrottledBlockUpdate = (_id: string) => {
+      // No-op for mobile - no throttling needed with two-phase persistence
+    }
+
+    // Create BlockManager
     const blockManager = new BlockManager({
-      saveUpdatedBlockToDB,
-      saveUpdatesToDB,
       assistantMsgId,
       topicId,
       throttledBlockUpdate,
@@ -691,13 +550,11 @@ export async function fetchAndProcessAssistantResponseImpl(
       messagesForContext = contextSlice.filter(m => m && !m.status?.includes('ing'))
     }
 
-    callbacks = await createCallbacks({
+    callbacks = createCallbacks({
       blockManager,
       topicId,
       assistantMsgId,
-      saveUpdatesToDB,
-      assistant,
-      startTime
+      assistant
     })
     const streamProcessorCallbacks = createStreamProcessor(callbacks)
 
@@ -819,7 +676,6 @@ export async function deleteMessageById(messageId: string): Promise<void> {
 }
 
 export async function fetchTranslateThunk(assistantMessageId: string, message: Message) {
-  const startTime = Date.now()
   let callbacks: StreamProcessorCallbacks = {}
   const translateAssistant = await assistantService.getAssistant('translate')
 
@@ -839,23 +695,39 @@ export async function fetchTranslateThunk(assistantMessageId: string, message: M
     status: MessageBlockStatus.STREAMING
   })
 
-  // 创建 BlockManager 实例
+  // Start streaming task (two-phase persistence)
+  const translateMessage: Message = {
+    id: assistantMessageId,
+    topicId: message.topicId,
+    role: 'assistant',
+    assistantId: translateAssistant.id,
+    status: AssistantMessageStatus.PENDING,
+    blocks: [],
+    createdAt: Date.now()
+  }
+  streamingService.startTask(message.topicId, assistantMessageId, translateMessage)
+
+  // Create throttled update functions (simplified for mobile)
+  const throttledBlockUpdate = (id: string, changes: any) => {
+    streamingService.updateBlock(id, changes)
+  }
+  const cancelThrottledBlockUpdate = (_id: string) => {
+    // No-op for mobile
+  }
+
+  // Create BlockManager
   const blockManager = new BlockManager({
-    saveUpdatedBlockToDB,
-    saveUpdatesToDB,
     assistantMsgId: assistantMessageId,
     topicId: message.topicId,
     throttledBlockUpdate,
     cancelThrottledBlockUpdate
   })
 
-  callbacks = await createCallbacks({
+  callbacks = createCallbacks({
     blockManager,
     topicId: message.topicId,
     assistantMsgId: assistantMessageId,
-    saveUpdatesToDB,
-    assistant: assistantForRequest,
-    startTime
+    assistant: assistantForRequest
   })
 
   callbacks.onTextStart = async () => {
