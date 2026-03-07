@@ -143,7 +143,6 @@ export class AiSdkToChunkAdapter {
       thinkingMillsec: number
     }
   ) {
-    logger.silly(`AI SDK chunk type: ${chunk.type}`, chunk)
     switch (chunk.type) {
       // === 文本相关事件 ===
       case 'text-start':

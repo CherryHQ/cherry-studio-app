@@ -8,6 +8,7 @@ import Text from '@/componentsV2/base/Text'
 import { X } from '@/componentsV2/icons'
 import XStack from '@/componentsV2/layout/XStack'
 import { useTheme } from '@/hooks/useTheme'
+import { streamingService } from '@/services/messageStreaming/StreamingService'
 import type { ThinkingMessageBlock } from '@/types/message'
 import { MessageBlockStatus, MessageBlockType } from '@/types/message'
 import { isIOS26 } from '@/utils/device'
@@ -33,7 +34,6 @@ const defaultData: ThinkingDetailData = {
   }
 }
 
-// Global state
 let currentData: ThinkingDetailData = defaultData
 let updateDataCallback: ((data: ThinkingDetailData) => void) | null = null
 
@@ -58,6 +58,19 @@ export const ThinkingDetailSheet: React.FC = () => {
       updateDataCallback = null
     }
   }, [])
+
+  useEffect(() => {
+    if (!isVisible || !data.block.id) return
+
+    const unsubscribe = streamingService.subscribeToMessage(data.block.messageId, () => {
+      const updatedBlock = streamingService.getBlock(data.block.id)
+      if (updatedBlock && updatedBlock.type === MessageBlockType.THINKING) {
+        setData({ block: updatedBlock as ThinkingMessageBlock })
+      }
+    })
+
+    return unsubscribe
+  }, [isVisible, data.block.id, data.block.messageId])
 
   useEffect(() => {
     if (!isVisible) return

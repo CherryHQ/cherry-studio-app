@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import React, { memo } from 'react'
+import React from 'react'
 
 import type { Message, MessageBlock } from '@/types/message'
 
@@ -15,4 +15,4 @@ const MessageItem: FC<MessageItemProps> = ({ message, messageBlocks }) => {
   return <MessageContent message={message} blocks={blocks} />
 }
 
-export default memo(MessageItem)
+export default MessageItem

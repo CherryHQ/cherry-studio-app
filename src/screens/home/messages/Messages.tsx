@@ -4,7 +4,7 @@ import { BlurView } from 'expo-blur'
 import { SymbolView } from 'expo-symbols'
 import { MotiView } from 'moti'
 import type { FC } from 'react'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { Platform, StyleSheet, View } from 'react-native'
 import Animated, { useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated'
@@ -38,9 +38,21 @@ interface MessagesProps {
 const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
   const { messages } = useMessages(topic.id)
   const { messageBlocks } = useTopicBlocks(topic.id)
+  console.log(
+    'Messages component - messages count:',
+    messages.length,
+    'messageBlocks keys:',
+    Object.keys(messageBlocks)
+  )
   const { isDark } = useTheme()
   const [autoScroll] = usePreference('chat.auto_scroll')
-  const groupedMessages = Object.entries(getGroupedMessages(messages))
+
+  // Use useMemo with proper dependencies to ensure re-computation
+  const groupedMessages = useMemo(() => {
+    console.log('Recomputing groupedMessages, messages count:', messages.length)
+    return Object.entries(getGroupedMessages(messages))
+  }, [messages])
+
   const legendListRef = useRef<LegendListRef>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
   const [isAtBottom, setIsAtBottom] = useState(false)
@@ -88,26 +100,30 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
     }
   }, [hasMessages, listLayoutReady])
 
-  const renderMessageGroup = ({ item }: { item: [string, GroupedMessage[]] }) => {
-    return (
-      <MotiView
-        from={{
-          opacity: 0,
-          translateY: 10
-        }}
-        animate={{
-          opacity: 1,
-          translateY: 0
-        }}
-        transition={{
-          type: 'timing',
-          duration: 300,
-          delay: 100
-        }}>
-        <MessageGroup assistant={assistant} item={item} messageBlocks={messageBlocks} />
-      </MotiView>
-    )
-  }
+  const renderMessageGroup = useCallback(
+    ({ item }: { item: [string, GroupedMessage[]] }) => {
+      console.log('renderMessageGroup called for key:', item[0])
+      return (
+        <MotiView
+          from={{
+            opacity: 0,
+            translateY: 10
+          }}
+          animate={{
+            opacity: 1,
+            translateY: 0
+          }}
+          transition={{
+            type: 'timing',
+            duration: 300,
+            delay: 100
+          }}>
+          <MessageGroup assistant={assistant} item={item} messageBlocks={messageBlocks} />
+        </MotiView>
+      )
+    },
+    [assistant, messageBlocks]
+  )
 
   const scrollToBottom = useCallback(() => {
     if (legendListRef.current && groupedMessages.length > 0) {
@@ -136,7 +152,7 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
         ref={legendListRef}
         showsVerticalScrollIndicator={false}
         data={groupedMessages}
-        extraData={assistant}
+        extraData={{ assistant, messageBlocks }}
         renderItem={renderMessageGroup}
         keyExtractor={([key, group]) => `${key}-${group[0]?.id}`}
         ItemSeparatorComponent={() => <YStack className="h-5" />}
@@ -145,7 +161,7 @@ const Messages: FC<MessagesProps> = ({ assistant, topic }) => {
         }}
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        recycleItems
+        recycleItems={false}
         maintainScrollAtEnd={autoScroll}
         maintainScrollAtEndThreshold={0.1}
         keyboardShouldPersistTaps="never"

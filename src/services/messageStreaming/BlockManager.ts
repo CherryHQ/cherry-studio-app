@@ -1,38 +1,58 @@
-import { messageBlockDatabase, messageDatabase } from '@database'
+/**
+ * @fileoverview BlockManager - Manages block operations during message streaming
+ *
+ * This module handles the lifecycle and state management of message blocks
+ * during the streaming process. It provides methods for:
+ * - Smart block updates with throttling support
+ * - Block type transitions
+ * - Active block tracking
+ *
+ * ARCHITECTURE NOTE:
+ * BlockManager now uses StreamingService for state management instead of Redux dispatch.
+ * This is part of the v2 data refactoring to use CacheService + Data API.
+ *
+ * Key changes from original design:
+ * - dispatch/getState replaced with streamingService methods
+ * - DB saves removed during streaming (handled by finalize)
+ * - Throttling logic preserved, but internal calls changed
+ */
 
+import { loggerService } from '@/services/LoggerService'
 import type { MessageBlock } from '@/types/message'
-import { AssistantMessageStatus, MessageBlockStatus, MessageBlockType } from '@/types/message'
+import { MessageBlockType } from '@/types/message'
 
-import { loggerService } from '../LoggerService'
+import { streamingService } from './StreamingService'
 
-const logger = loggerService.withContext('Block Manager')
+const logger = loggerService.withContext('BlockManager')
 
+/**
+ * Information about the currently active block during streaming
+ */
 interface ActiveBlockInfo {
   id: string
   type: MessageBlockType
 }
 
+/**
+ * Dependencies required by BlockManager
+ *
+ * NOTE: Simplified from original design - removed dispatch, getState, and DB save functions
+ * since StreamingService now handles state management and persistence.
+ */
 interface BlockManagerDependencies {
-  saveUpdatedBlockToDB: (blockId: string | null, messageId: string, topicId: string) => Promise<void>
-  saveUpdatesToDB: (
-    messageId: string,
-    topicId: string,
-    messageUpdates: Partial<any>,
-    blocksToUpdate: MessageBlock[]
-  ) => Promise<void>
-  assistantMsgId: string
   topicId: string
-  // 节流器管理从外部传入
-  throttledBlockUpdate: (id: string, blockUpdate: Partial<MessageBlock>) => Promise<void>
-  cancelThrottledBlockUpdate: (id: string) => Promise<void>
+  assistantMsgId: string
+  // Throttling is still controlled externally by messageThunk.ts
+  throttledBlockUpdate: (id: string, blockUpdate: any) => void
+  cancelThrottledBlockUpdate: (id: string) => void
 }
 
 export class BlockManager {
   private deps: BlockManagerDependencies
 
-  // 简化后的状态管理
+  // Simplified state management
   private _activeBlockInfo: ActiveBlockInfo | null = null
-  private _lastBlockType: MessageBlockType | null = null // 保留用于错误处理
+  private _lastBlockType: MessageBlockType | null = null // Preserved for error handling
 
   constructor(dependencies: BlockManagerDependencies) {
     this.deps = dependencies
@@ -65,75 +85,74 @@ export class BlockManager {
   }
 
   /**
-   * 智能更新策略：根据块类型连续性自动判断使用节流还是立即更新
+   * Smart update strategy: automatically decides between throttled and immediate updates
+   * based on block type continuity.
+   *
+   * Behavior:
+   * - If block type changes: cancel previous throttle, immediately update via streamingService
+   * - If block completes: cancel throttle, immediately update via streamingService
+   * - Otherwise: use throttled update (throttler calls streamingService internally)
+   *
+   * NOTE: DB saves are removed - persistence happens during finalize()
    */
-  async smartBlockUpdate(
+  smartBlockUpdate(
     blockId: string,
     changes: Partial<MessageBlock>,
     blockType: MessageBlockType,
     isComplete: boolean = false
   ) {
     const isBlockTypeChanged = this._lastBlockType !== null && this._lastBlockType !== blockType
-
     if (isBlockTypeChanged || isComplete) {
-      // 如果块类型改变，则取消上一个块的节流更新
+      // Cancel throttled update for previous block if type changed
       if (isBlockTypeChanged && this._activeBlockInfo) {
-        await this.deps.cancelThrottledBlockUpdate(this._activeBlockInfo.id)
+        this.deps.cancelThrottledBlockUpdate(this._activeBlockInfo.id)
       }
-
-      // 如果当前块完成，则取消当前块的节流更新
+      // Cancel throttled update for current block if complete
       if (isComplete) {
-        await this.deps.cancelThrottledBlockUpdate(blockId)
-        this._activeBlockInfo = null // 块完成时清空activeBlockInfo
+        this.deps.cancelThrottledBlockUpdate(blockId)
+        this._activeBlockInfo = null // Clear activeBlockInfo when block completes
       } else {
-        this._activeBlockInfo = { id: blockId, type: blockType } // 更新活跃块信息
+        this._activeBlockInfo = { id: blockId, type: blockType } // Update active block info
       }
 
-      await messageBlockDatabase.updateOneBlock({ id: blockId, changes })
-      this.deps.saveUpdatedBlockToDB(blockId, this.deps.assistantMsgId, this.deps.topicId)
+      // Immediate update via StreamingService (replaces dispatch + DB save)
+      streamingService.updateBlock(blockId, changes)
       this._lastBlockType = blockType
     } else {
-      this._activeBlockInfo = { id: blockId, type: blockType } // 更新活跃块信息
-      await this.deps.throttledBlockUpdate(blockId, changes)
+      this._activeBlockInfo = { id: blockId, type: blockType } // Update active block info
+      // Throttled update (throttler internally calls streamingService.updateBlock)
+      this.deps.throttledBlockUpdate(blockId, changes)
     }
   }
 
   /**
-   * 处理块转换
+   * Handle block transitions (new block creation during streaming)
+   *
+   * This method:
+   * 1. Updates active block tracking state
+   * 2. Adds new block to StreamingService (which also updates message.blocks references)
+   *
+   * NOTE: DB saves are removed - persistence happens during finalize()
    */
   async handleBlockTransition(newBlock: MessageBlock, newBlockType: MessageBlockType) {
-    logger.info('handleBlockTransition', newBlock, newBlockType)
+    logger.debug('handleBlockTransition', { newBlock, newBlockType })
     this._lastBlockType = newBlockType
-    this._activeBlockInfo = { id: newBlock.id, type: newBlockType } // 设置新的活跃块信息
+    this._activeBlockInfo = { id: newBlock.id, type: newBlockType } // Set new active block info
 
-    await messageBlockDatabase.upsertBlocks(newBlock)
-    // change message status
-    const toBeUpdatedMessage = await messageDatabase.getMessageById(newBlock.messageId)
+    // Add new block to StreamingService (also updates message.blocks references internally)
+    streamingService.addBlock(this.deps.assistantMsgId, newBlock)
 
-    if (!toBeUpdatedMessage) {
-      logger.error(`[upsertBlockReference] Message ${newBlock.messageId} not found.`)
-      return
-    }
+    // TEMPORARY: The blockInstruction field was used for UI coordination.
+    // TODO: Evaluate if this is still needed with StreamingService approach
+    // For now, we update it in the message
+    streamingService.updateMessage(this.deps.assistantMsgId, {
+      blockInstruction: { id: newBlock.id }
+    } as any) // Using 'as any' since blockInstruction may not be in Message type
 
-    // Update Message Status based on Block Status
-    if (newBlock.status === MessageBlockStatus.ERROR) {
-      toBeUpdatedMessage.status = AssistantMessageStatus.ERROR
-    } else if (
-      newBlock.status === MessageBlockStatus.SUCCESS &&
-      toBeUpdatedMessage.status !== AssistantMessageStatus.PROCESSING &&
-      toBeUpdatedMessage.status !== AssistantMessageStatus.SUCCESS &&
-      toBeUpdatedMessage.status !== AssistantMessageStatus.ERROR
-    ) {
-      toBeUpdatedMessage.status = AssistantMessageStatus.SUCCESS
-    } else if (newBlock.status === MessageBlockStatus.PROCESSING || newBlock.status === MessageBlockStatus.STREAMING) {
-      toBeUpdatedMessage.status = AssistantMessageStatus.PROCESSING
-    }
-
-    const updatedMessage = await messageDatabase.upsertMessages(toBeUpdatedMessage)
-
-    if (!updatedMessage) {
-      logger.error(`[handleBlockTransition] Failed to update message ${toBeUpdatedMessage.id} in state.`)
-      return
-    }
+    logger.debug('Block transition completed', {
+      messageId: this.deps.assistantMsgId,
+      blockId: newBlock.id,
+      blockType: newBlockType
+    })
   }
 }

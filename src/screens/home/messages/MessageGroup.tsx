@@ -11,6 +11,14 @@ import MessageFooter from './MessageFooter'
 import MessageHeader from './MessageHeader'
 import MultiModelTab from './MultiModelTab'
 
+const isStreamingStatus = (status: AssistantMessageStatus) => {
+  return (
+    status === AssistantMessageStatus.PENDING ||
+    status === AssistantMessageStatus.PROCESSING ||
+    status === AssistantMessageStatus.SEARCHING
+  )
+}
+
 interface MessageGroupProps {
   assistant: Assistant
   item: [string, GroupedMessage[]]
@@ -40,7 +48,7 @@ const MessageGroup: FC<MessageGroupProps> = ({ assistant, item, messageBlocks })
           </View>
           <MessageItem message={messagesInGroup[0]} messageBlocks={messageBlocks} />
           {/* 输出过程中不显示footer */}
-          {messagesInGroup[0].status !== AssistantMessageStatus.PROCESSING && (
+          {!isStreamingStatus(messagesInGroup[0].status as AssistantMessageStatus) && (
             <MessageFooter assistant={assistant} message={messagesInGroup[0]} />
           )}
         </View>
@@ -49,7 +57,6 @@ const MessageGroup: FC<MessageGroupProps> = ({ assistant, item, messageBlocks })
 
     return (
       <View className="gap-2">
-        {/*<MessageHeader assistant={assistant} message={messagesInGroup[0]} />*/}
         <MultiModelTab assistant={assistant} messages={messagesInGroup} messageBlocks={messageBlocks} />
       </View>
     )

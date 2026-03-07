@@ -1,3 +1,19 @@
+/**
+ * @fileoverview Callbacks factory for streaming message processing
+ *
+ * This module creates and composes all callback handlers used during
+ * message streaming. Each callback type handles specific aspects:
+ * - Base: session lifecycle, error handling, completion
+ * - Text: main text block processing
+ * - Thinking: thinking/reasoning block processing
+ * - Tool: tool call/result processing
+ * - Image: image generation processing
+ * - Citation: web search/knowledge citations
+ *
+ * ARCHITECTURE NOTE:
+ * These callbacks use StreamingService for state management.
+ */
+
 import type { Assistant } from '@/types/assistant'
 
 import type { BlockManager } from '../BlockManager'
@@ -8,34 +24,34 @@ import { createTextCallbacks } from './textCallbacks'
 import { createThinkingCallbacks } from './thinkingCallbacks'
 import { createToolCallbacks } from './toolCallbacks'
 
+/**
+ * Dependencies required for creating all callbacks
+ *
+ * NOTE: Simplified design - StreamingService handles state management and persistence.
+ */
 interface CallbacksDependencies {
   blockManager: BlockManager
   topicId: string
   assistantMsgId: string
-  saveUpdatesToDB: any
   assistant: Assistant
-  startTime: number
-  onNotify?: (message: string) => void
 }
 
-export const createCallbacks = async (deps: CallbacksDependencies) => {
-  const { blockManager, topicId, assistantMsgId, saveUpdatesToDB, assistant, startTime, onNotify } = deps
+export const createCallbacks = (deps: CallbacksDependencies) => {
+  const { blockManager, topicId, assistantMsgId, assistant } = deps
 
-  // 创建基础回调
-  const baseCallbacks = await createBaseCallbacks({
-    blockManager,
-    topicId,
-    assistantMsgId,
-    saveUpdatesToDB,
-    assistant,
-    startTime,
-    onNotify
-  })
-
-  // 创建各类回调
+  // Create thinkingCallbacks first to pass getCurrentThinkingInfo to baseCallbacks
   const thinkingCallbacks = createThinkingCallbacks({
     blockManager,
     assistantMsgId
+  })
+
+  // Create base callbacks (lifecycle, error, complete)
+  const baseCallbacks = createBaseCallbacks({
+    blockManager,
+    topicId,
+    assistantMsgId,
+    assistant,
+    getCurrentThinkingInfo: thinkingCallbacks.getCurrentThinkingInfo
   })
 
   const toolCallbacks = createToolCallbacks({
@@ -53,14 +69,15 @@ export const createCallbacks = async (deps: CallbacksDependencies) => {
     assistantMsgId
   })
 
-  // 创建textCallbacks时传入citationCallbacks的getCitationBlockId方法
+  // Create textCallbacks with citation and tool citation handlers
   const textCallbacks = createTextCallbacks({
     blockManager,
     assistantMsgId,
-    getCitationBlockId: citationCallbacks.getCitationBlockId
+    getCitationBlockId: citationCallbacks.getCitationBlockId,
+    getCitationBlockIdFromTool: toolCallbacks.getCitationBlockId
   })
 
-  // 组合所有回调
+  // Compose all callbacks
   return {
     ...baseCallbacks,
     ...textCallbacks,
@@ -68,10 +85,8 @@ export const createCallbacks = async (deps: CallbacksDependencies) => {
     ...toolCallbacks,
     ...imageCallbacks,
     ...citationCallbacks,
-    // 清理资源的方法
     cleanup: () => {
-      // 清理由 messageThunk 中的节流函数管理，这里不需要特别处理
-      // 如果需要，可以调用 blockManager 的相关清理方法
+      // Cleanup is managed by messageThunk throttle functions
     }
   }
 }

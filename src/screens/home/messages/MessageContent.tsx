@@ -53,4 +53,4 @@ const MessageContent: React.FC<Props> = ({ message, blocks = [] }) => {
   )
 }
 
-export default React.memo(MessageContent)
+export default MessageContent
