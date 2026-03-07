@@ -106,7 +106,7 @@ const ModelSheet: React.FC = () => {
             onToggleMultiSelect={toggleMultiSelectMode}
             onClearAll={handleClearAll}
           />
-          <View className="my-1" />
+          <View className="bg-[#15151c] py-1" />
           <ModelProviderTabBar
             selectOptions={selectOptions}
             activeProvider={activeProvider}
@@ -118,6 +118,7 @@ const ModelSheet: React.FC = () => {
       onDidPresent={handleDidPresent}>
       <SectionList
         ref={listRef}
+        className="bg-[#15151c]"
         sections={sections}
         extraData={{ selectedModels, isMultiSelectActive, searchQuery, activeProvider }}
         nestedScrollEnabled={Platform.OS === 'android'}
