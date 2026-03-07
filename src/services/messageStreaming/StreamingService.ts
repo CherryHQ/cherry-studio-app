@@ -106,7 +106,7 @@ class StreamingService {
     cacheService.set(getMessageKey(messageId), message, TASK_TTL)
 
     logger.debug('Started streaming task', { topicId, messageId })
-    
+
     // Notify listeners
     this.notifyMessageListeners(messageId)
   }
@@ -132,7 +132,6 @@ class StreamingService {
     try {
       const blocks = Object.values(task.blocks)
 
-      // Ensure all blocks have final status
       const finalizedBlocks: MessageBlock[] = blocks.map(block => {
         if (block.status === MessageBlockStatus.STREAMING || block.status === MessageBlockStatus.PROCESSING) {
           return {
@@ -143,7 +142,6 @@ class StreamingService {
         return block
       })
 
-      // Prepare message updates
       const messageUpdates: Partial<Message> = {
         status,
         blocks: task.message.blocks,
@@ -152,17 +150,20 @@ class StreamingService {
         ...(task.message.metrics && { metrics: task.message.metrics })
       }
 
-      // Persist to SQLite
       if (finalizedBlocks.length > 0) {
         await messageBlockDatabase.upsertBlocks(finalizedBlocks)
       }
       await messageDatabase.updateMessageById(messageId, messageUpdates)
 
-      this.endTask(messageId)
+      // Delay cleanup to allow useLiveQuery to pick up the new data first
+      // This prevents a brief blank screen during the transition
+      setTimeout(() => {
+        this.endTask(messageId)
+      }, 100)
+
       logger.debug('Finalized streaming task', { messageId, status, blockCount: finalizedBlocks.length })
     } catch (error) {
       logger.error('finalize failed:', error as Error)
-      // Don't end task on error - TTL will auto-clean
       throw error
     }
   }
@@ -191,7 +192,7 @@ class StreamingService {
     cacheService.delete(getTaskKey(messageId))
 
     logger.debug('Ended streaming task', { messageId, topicId: task.topicId })
-    
+
     // Notify listeners
     this.notifyMessageListeners(messageId)
   }
@@ -233,7 +234,7 @@ class StreamingService {
     cacheService.set(getBlockKey(block.id), block, TASK_TTL)
 
     logger.debug('Added block to task', { messageId, blockId: block.id, blockType: block.type })
-    
+
     // Notify listeners
     this.notifyMessageListeners(messageId)
   }
@@ -312,7 +313,7 @@ class StreamingService {
     // Update caches with TTL refresh
     cacheService.set(getTaskKey(messageId), newTask, TASK_TTL)
     cacheService.set(getMessageKey(messageId), newMessage, TASK_TTL)
-    
+
     // Notify listeners
     this.notifyMessageListeners(messageId)
   }
