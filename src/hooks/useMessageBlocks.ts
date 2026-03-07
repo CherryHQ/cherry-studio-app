@@ -10,11 +10,10 @@ import { streamingService } from '@/services/messageStreaming/StreamingService'
 import type { MessageBlock } from '@/types/message'
 
 const logger = loggerService.withContext('useTopicBlocks')
-const getBlockKey = (blockId: string) => `message.streaming.block.${blockId}` as const
 
 /**
  * Topic 级别的 blocks 监听器（推荐使用）
- * 
+ *
  * 合并数据库 blocks 和流式中的 blocks（来自 Cache）
  */
 export const useTopicBlocks = (topicId: string) => {
@@ -57,7 +56,10 @@ export const useTopicBlocks = (topicId: string) => {
     // Subscribe to each message's streaming state
     rawMessages.forEach(({ id: messageId }) => {
       const unsubStreaming = streamingService.subscribeToMessage(messageId, () => {
-        logger.debug('Streaming notification received', { messageId, isStreaming: streamingService.isStreaming(messageId) })
+        logger.debug('Streaming notification received', {
+          messageId,
+          isStreaming: streamingService.isStreaming(messageId)
+        })
         setUpdateTrigger(prev => prev + 1)
       })
 
