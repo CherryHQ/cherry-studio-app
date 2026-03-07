@@ -37,7 +37,7 @@ export const MessageTextField: React.FC = () => {
         <TextInputWrapper onPaste={handlePaste}>
           <TextField className="w-full">
             <TextField.Input
-              className="text-foreground h-auto pr-0"
+              className="text-foreground h-auto border-0 border-transparent bg-transparent pr-0 focus:border-transparent"
               placeholder={t('inputs.placeholder')}
               value={text}
               onChangeText={setText}
@@ -48,26 +48,10 @@ export const MessageTextField: React.FC = () => {
               style={{
                 maxHeight: MAX_INPUT_HEIGHT,
                 minHeight: MIN_INPUT_HEIGHT,
-                fontSize: 20,
+                fontSize: 16,
                 lineHeight: 26,
                 paddingVertical: 8,
                 textAlignVertical: 'center'
-              }}
-              animation={{
-                backgroundColor: {
-                  value: {
-                    blur: 'transparent',
-                    focus: 'transparent',
-                    error: 'transparent'
-                  }
-                },
-                borderColor: {
-                  value: {
-                    blur: 'transparent',
-                    focus: 'transparent',
-                    error: 'transparent'
-                  }
-                }
               }}
             />
           </TextField>
