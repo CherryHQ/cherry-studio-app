@@ -23,6 +23,7 @@ import { loggerService } from '@/services/LoggerService'
 import type { ConnectivityResult, MCPCallToolResponse, MCPServer, OAuthTriggerResult } from '@/types/mcp'
 import type { MCPTool } from '@/types/tool'
 
+import packageJson from '../../../package.json'
 import { createMobileOAuthProvider, performOAuthFlow } from './oauth'
 
 const logger = loggerService.withContext('McpClientService')
@@ -502,12 +503,12 @@ class McpClientService {
       // Clean up client entry
       this.clients.delete(server.id)
     }
-
+    const appVersion = packageJson.version
     // Create and connect client
     const client = new Client(
       {
         name: 'cherry-studio-app',
-        version: '0.1.5' // TODO: Get from package.json
+        version: appVersion
       },
       {
         capabilities: {}
