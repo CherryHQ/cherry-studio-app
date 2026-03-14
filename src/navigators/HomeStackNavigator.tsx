@@ -37,12 +37,21 @@ export default function HomeStackNavigator() {
       screenOptions={{
         headerShown: false,
         animation: 'ios_from_right',
-        gestureEnabled: true
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true
       }}>
       <Stack.Screen name="ChatScreen" component={ChatScreen} />
       <Stack.Screen name="TopicScreen" component={TopicScreen} />
-      <Stack.Screen name="AssistantDetailScreen" component={AssistantDetailScreen} />
-      <Stack.Screen name="SettingsScreen" component={SettingsScreen} />
+      <Stack.Screen
+        name="AssistantDetailScreen"
+        component={AssistantDetailScreen}
+        options={{ gestureEnabled: false, fullScreenGestureEnabled: false }}
+      />
+      <Stack.Screen
+        name="SettingsScreen"
+        component={SettingsScreen}
+        options={{ gestureEnabled: false, fullScreenGestureEnabled: false }}
+      />
       <Stack.Screen name="HtmlPreviewScreen" component={HtmlPreviewScreen} />
       <Stack.Screen name="GeneralSettings" component={GeneralSettingsStackNavigator} />
       <Stack.Screen name="AssistantSettings" component={AssistantSettingsStackNavigator} />

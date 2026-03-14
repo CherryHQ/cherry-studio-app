@@ -17,7 +17,8 @@ export default function WebSearchStackNavigator() {
       screenOptions={{
         headerShown: false,
         animation: 'ios_from_right',
-        gestureEnabled: true
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true
       }}>
       <Stack.Screen name="WebSearchSettingsScreen" component={WebSearchSettingsScreen} />
       <Stack.Screen name="WebSearchProviderSettingsScreen" component={WebSearchProviderSettingsScreen} />

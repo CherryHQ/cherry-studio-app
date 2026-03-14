@@ -15,7 +15,8 @@ export default function GeneralSettingsStackNavigator() {
       screenOptions={{
         headerShown: false,
         animation: 'ios_from_right',
-        gestureEnabled: true
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true
       }}>
       <Stack.Screen name="GeneralSettingsScreen" component={GeneralSettingsScreen} />
     </Stack.Navigator>

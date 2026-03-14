@@ -17,7 +17,8 @@ export default function AboutStackNavigator() {
       screenOptions={{
         headerShown: false,
         animation: 'ios_from_right',
-        gestureEnabled: true
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true
       }}>
       <Stack.Screen name="PersonalScreen" component={PersonalScreen} />
       <Stack.Screen name="AboutScreen" component={AboutScreen} />

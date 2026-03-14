@@ -19,7 +19,8 @@ export default function DataSourcesStackNavigator() {
       screenOptions={{
         headerShown: false,
         animation: 'ios_from_right',
-        gestureEnabled: true
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true
       }}>
       <Stack.Screen name="DataSettingsScreen" component={DataSettingsScreen} />
       <Stack.Screen name="BasicDataSettingsScreen" component={BasicDataSettingsScreen} />

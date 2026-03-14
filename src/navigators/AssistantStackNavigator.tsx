@@ -18,10 +18,15 @@ export default function AssistantStackNavigator() {
       screenOptions={{
         headerShown: false,
         animation: 'ios_from_right',
-        gestureEnabled: true
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true
       }}>
       <Stack.Screen name="AssistantScreen" component={AssistantScreen} />
-      <Stack.Screen name="AssistantDetailScreen" component={AssistantDetailScreen} />
+      <Stack.Screen
+        name="AssistantDetailScreen"
+        component={AssistantDetailScreen}
+        options={{ gestureEnabled: false, fullScreenGestureEnabled: false }}
+      />
     </Stack.Navigator>
   )
 }

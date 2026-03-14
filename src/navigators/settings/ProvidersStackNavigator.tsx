@@ -23,7 +23,8 @@ export default function ProvidersStackNavigator() {
       screenOptions={{
         headerShown: false,
         animation: 'ios_from_right',
-        gestureEnabled: true
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true
       }}>
       <Stack.Screen name="ProviderSettingsScreen" component={ProviderSettingsScreen} />
       <Stack.Screen name="ProviderListScreen" component={ProviderListScreen} />

@@ -15,7 +15,8 @@ export default function AssistantMarketStackNavigator() {
       screenOptions={{
         headerShown: false,
         animation: 'ios_from_right',
-        gestureEnabled: true
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true
       }}>
       <Stack.Screen name="AssistantMarketScreen" component={AssistantMarketScreen} />
     </Stack.Navigator>

@@ -19,7 +19,8 @@ export default function McpStackNavigator() {
       screenOptions={{
         headerShown: false,
         animation: 'ios_from_right',
-        gestureEnabled: true
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true
       }}>
       <Stack.Screen name="McpScreen" component={McpScreen} />
       <Stack.Screen name="McpMarketScreen" component={McpMarketScreen} />
