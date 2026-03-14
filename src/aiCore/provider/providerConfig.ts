@@ -70,7 +70,7 @@ function formatProviderApiHost(provider: Provider): Provider {
   const formatted = { ...provider }
 
   if (formatted.type === 'gemini') {
-    formatted.apiHost = formatApiHost(formatted.apiHost, 'v1beta')
+    formatted.apiHost = formatApiHost(formatted.apiHost, true, 'v1beta')
   } else {
     formatted.apiHost = formatApiHost(formatted.apiHost)
   }

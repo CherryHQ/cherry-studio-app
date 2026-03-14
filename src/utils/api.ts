@@ -1,24 +1,95 @@
-/**
- * 格式化 API 主机地址。
- *
- * 根据传入的 host 判断是否需要在其末尾加 `/v1/`。
- * - 不加：host 以 `/` 结尾，或以 `volces.com/api/v3` 结尾。
- * - 要加：其余情况。
- *
- * @param {string} host - 需要格式化的 API 主机地址。
- * @param {string} apiVersion - 需要添加的 API 版本。
- * @returns {string} 格式化后的 API 主机地址。
- */
-export function formatApiHost(host: string, apiVersion: string = 'v1'): string {
-  const forceUseOriginalHost = () => {
-    if (host.endsWith('/')) {
-      return true
-    }
+import { trim } from 'lodash'
 
-    return host.endsWith('volces.com/api/v3')
+/**
+ * Matches a version segment in a path that starts with `/v<number>` and optionally
+ * continues with `alpha` or `beta`. The segment may be followed by `/` or the end
+ * of the string (useful for cases like `/v3alpha/resources`).
+ */
+const VERSION_REGEX_PATTERN = '\\/v\\d+(?:alpha|beta)?(?=\\/|$)'
+
+/**
+ * Checks whether the path of the host contains a version-like string (e.g., /v1, /v2beta, etc.).
+ *
+ * @param host - The host or path string to check
+ * @returns Returns true if the path contains a version string, otherwise false
+ */
+export function hasAPIVersion(host?: string): boolean {
+  if (!host) return false
+
+  const regex = new RegExp(VERSION_REGEX_PATTERN, 'i')
+
+  try {
+    const url = new URL(host)
+    return regex.test(url.pathname)
+  } catch {
+    // If it cannot be parsed as a complete URL, treat it as a path directly for detection
+    return regex.test(host)
+  }
+}
+
+/**
+ * Removes the trailing slash from a URL string if it exists.
+ *
+ * @template T - The string type to preserve type safety
+ * @param {T} url - The URL string to process
+ * @returns {T} The URL string without a trailing slash
+ *
+ * @example
+ * ```ts
+ * withoutTrailingSlash('https://example.com/') // 'https://example.com'
+ * withoutTrailingSlash('https://example.com')  // 'https://example.com'
+ * ```
+ */
+export function withoutTrailingSlash<T extends string>(url: T): T {
+  return url.replace(/\/$/, '') as T
+}
+
+/**
+ * Removes the trailing '#' from a URL string if it exists.
+ *
+ * @template T - The string type to preserve type safety
+ * @param {T} url - The URL string to process
+ * @returns {T} The URL string without a trailing '#'
+ *
+ * @example
+ * ```ts
+ * withoutTrailingSharp('https://example.com#') // 'https://example.com'
+ * withoutTrailingSharp('https://example.com')  // 'https://example.com'
+ * ```
+ */
+export function withoutTrailingSharp<T extends string>(url: T): T {
+  return url.replace(/#$/, '') as T
+}
+
+/**
+ * Formats an API host URL by normalizing it and optionally appending an API version.
+ *
+ * @param host - The API host URL to format. Leading/trailing whitespace will be trimmed and trailing slashes removed.
+ * @param supportApiVersion - Whether the API version is supported. Defaults to `true`.
+ * @param apiVersion - The API version to append if needed. Defaults to `'v1'`.
+ *
+ * @returns The formatted API host URL. If the host is empty after normalization, returns an empty string.
+ *          If the host ends with '#', API version is not supported, or the host already contains a version, returns the normalized host with trailing '#' removed.
+ *          Otherwise, returns the host with the API version appended.
+ *
+ * @example
+ * formatApiHost('https://api.example.com/') // Returns 'https://api.example.com/v1'
+ * formatApiHost('https://api.example.com#') // Returns 'https://api.example.com'
+ * formatApiHost('https://api.example.com/v2', true, 'v1') // Returns 'https://api.example.com/v2'
+ */
+export function formatApiHost(host?: string, supportApiVersion: boolean = true, apiVersion: string = 'v1'): string {
+  const normalizedHost = withoutTrailingSlash(trim(host))
+  if (!normalizedHost) {
+    return ''
   }
 
-  return forceUseOriginalHost() ? host : `${host}/${apiVersion}/`
+  const shouldAppendApiVersion = !(normalizedHost.endsWith('#') || !supportApiVersion || hasAPIVersion(normalizedHost))
+
+  if (shouldAppendApiVersion) {
+    return `${normalizedHost}/${apiVersion}`
+  } else {
+    return withoutTrailingSharp(normalizedHost)
+  }
 }
 
 /**
