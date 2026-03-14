@@ -26,7 +26,6 @@ const FileItem: FC<FileItemProps> = ({ file, onRemove, size, disabledContextMenu
       logger.error('Handle Preview Error', error)
     })
   }
-
   return (
     <BaseItem
       file={file}
