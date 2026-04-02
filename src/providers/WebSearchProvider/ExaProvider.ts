@@ -6,6 +6,7 @@ import type { WebSearchProvider, WebSearchProviderResponse, WebSearchState } fro
 import BaseWebSearchProvider from './BaseWebSearchProvider'
 const logger = loggerService.withContext('ExaProvider')
 
+/** Exa - the fastest and most accurate web search API for AI */
 export default class ExaProvider extends BaseWebSearchProvider {
   constructor(provider: WebSearchProvider) {
     super(provider)
