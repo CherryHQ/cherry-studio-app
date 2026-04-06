@@ -1,24 +1,35 @@
+const VERSION_SEGMENT_RE = /^v\d+(?:[a-z]+\d*)?$/i
+
+function hasVersionSegment(host: string, apiVersion: string): boolean {
+  try {
+    const segments = new URL(host).pathname.split('/').filter(Boolean)
+    return segments.some(segment => segment === apiVersion || VERSION_SEGMENT_RE.test(segment))
+  } catch {
+    return host.includes(`/${apiVersion}`) || VERSION_SEGMENT_RE.test(host.split('/').filter(Boolean).at(-1) ?? '')
+  }
+}
+
 /**
  * 格式化 API 主机地址。
  *
- * 根据传入的 host 判断是否需要在其末尾加 `/v1/`。
- * - 不加：host 以 `/` 结尾，或以 `volces.com/api/v3` 结尾。
- * - 要加：其余情况。
+ * - host 以 `/` 结尾 → 原样返回
+ * - 路径中已包含版本段（如 `v1`、`v4`、`v1beta`）→ 只补尾部 `/`
+ * - 其余情况 → 追加 `/${apiVersion}/`
  *
  * @param {string} host - 需要格式化的 API 主机地址。
- * @param {string} apiVersion - 需要添加的 API 版本。
+ * @param {string} apiVersion - 需要追加的 API 版本，默认 `v1`。
  * @returns {string} 格式化后的 API 主机地址。
  */
 export function formatApiHost(host: string, apiVersion: string = 'v1'): string {
-  const forceUseOriginalHost = () => {
-    if (host.endsWith('/')) {
-      return true
-    }
-
-    return host.endsWith('volces.com/api/v3')
+  if (!host || host.endsWith('/')) {
+    return host
   }
 
-  return forceUseOriginalHost() ? host : `${host}/${apiVersion}/`
+  if (hasVersionSegment(host, apiVersion)) {
+    return `${host}/`
+  }
+
+  return `${host}/${apiVersion}/`
 }
 
 /**
