@@ -79,7 +79,7 @@ const ChatScreen = () => {
       <PanGestureHandler
         onGestureEvent={handleSwipeGesture}
         onHandlerStateChange={handleSwipeGesture}
-        activeOffsetX={[-10, 10]}
+        activeOffsetX={Platform.OS === 'android' ? [-50, 50] : [-10, 10]}
         failOffsetY={[-20, 20]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
