@@ -1,6 +1,6 @@
 # 🍒 Welcome to Cherry Studio App
 
-English | [中文](./README-zh.md)
+English | [中文](./README-zh.md) | [فارسی](./readme.fa.md)
 
 🍒 Cherry Studio App —— The official mobile version of Cherry Studio, bringing powerful LLMs (Large Language Models) interaction to your iOS and Android devices.
 
