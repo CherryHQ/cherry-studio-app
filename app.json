@@ -28,10 +28,17 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#FFFFFF",
+          "dark": {
+            "backgroundColor": "#000000"
+          },
           "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
+            "image": "./assets/icon.png",
+            "imageWidth": 76,
+            "dark": {
+              "image": "./assets/icon.png",
+              "backgroundColor": "#000000"
+            }
           }
         }
       ],
@@ -53,7 +60,9 @@
           "photosPermission": "Allow Cherry Studio to preview photos for chat messages.",
           "savePhotosPermission": "Allow Cherry Studio to save photos.",
           "preventAutomaticLimitedAccessAlert": true,
-          "granularPermissions": ["photo"]
+          "granularPermissions": [
+            "photo"
+          ]
         }
       ],
       "expo-web-browser",
