@@ -6,7 +6,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
 
 import { DrawerRoot } from '@/components/drawer';
-import { NavigationThemeProvider } from '@/components/navigation/NavigationThemeProvider';
+import { NavigationThemeProvider } from '@/components/navigation';
 import { DatabaseProvider, InitialDataGate, QueryProvider } from '@/data';
 import { bootstrapAppRuntime } from '@/data/bootstrap/appRuntime';
 

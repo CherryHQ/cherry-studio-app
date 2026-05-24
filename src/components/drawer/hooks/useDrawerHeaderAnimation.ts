@@ -8,7 +8,7 @@ import {
   withTiming,
 } from 'react-native-reanimated';
 
-import { drawerFadeTimingConfig, drawerSpringConfig } from '@/components/drawer/drawerAnimation';
+import { drawerFadeTimingConfig, drawerSpringConfig } from '../utils/drawerAnimation';
 
 const closeButtonSize = 44;
 const headerHorizontalPadding = 16;

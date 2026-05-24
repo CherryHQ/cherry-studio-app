@@ -6,7 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDrawerActions } from '@/components/drawer';
-import { HeaderIconButton } from '@/components/headers/HeaderIconButton';
+
+import { HeaderIconButton } from '../components/HeaderIconButton';
 
 const headerContentHeight = 44;
 

@@ -1,7 +1,8 @@
 import { Stack } from 'expo-router';
 import { useThemeColor } from 'heroui-native/hooks';
-import { DrawerProvider } from '@/components/drawer/DrawerProvider';
 import { isIOS, isLiquidGlassAvailable } from '@/config/constants';
+
+import { DrawerProvider } from './context/DrawerProvider';
 
 export function DrawerRoot() {
   const [backgroundColor, foregroundColor] = useThemeColor(['background', 'foreground']);

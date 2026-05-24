@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { HeaderIconButton } from '@/components/headers/HeaderIconButton';
+import { HeaderIconButton } from '../components/HeaderIconButton';
 import type { HeaderToolbarAction } from './BackHeader.types';
 
 export type BackHeaderProps = {

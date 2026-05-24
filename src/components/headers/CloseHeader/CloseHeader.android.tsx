@@ -3,7 +3,7 @@ import { XIcon } from 'lucide-uniwind';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { HeaderIconButton } from '@/components/headers/HeaderIconButton';
+import { HeaderIconButton } from '../components/HeaderIconButton';
 
 export type CloseHeaderProps = {
   title?: string;

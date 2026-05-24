@@ -3,8 +3,8 @@ import { useThemeColor } from 'heroui-native/hooks';
 import { useEffect } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
-import { DrawerContent } from '@/components/drawer/DrawerContent';
-import { useDrawerNavigationBridge } from '@/components/drawer/DrawerProvider';
+import { DrawerContent } from './components/DrawerContent';
+import { useDrawerNavigationBridge } from './context/DrawerProvider';
 
 const drawerActivationOffset = 8;
 const drawerSwipeMinDistance = 60;
