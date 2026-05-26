@@ -1055,7 +1055,13 @@
       "permission_denied": "Microphone permission denied",
       "permission_denied_message": "Please allow Cherry Studio to access your microphone in Settings",
       "start": "Start voice input",
-      "stop": "Stop voice input"
+      "stop": "Stop voice input",
+      "service_not_available": "Speech recognition requires a system speech service. No compatible service (such as Google Play Services) is installed or available on this device.",
+      "no_speech": "No speech detected. Please try again.",
+      "audio_capture": "Microphone access failed. Please check your microphone permissions.",
+      "network_error": "Network error. Please check your connection and try again.",
+      "language_not_supported": "Speech recognition is not supported in the current language.",
+      "permission_not_allowed": "Microphone permission was denied. Please allow microphone access in system settings."
     }
   }
 }

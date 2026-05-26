@@ -2,6 +2,7 @@ import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-spe
 import { useRef, useState } from 'react'
 import { Platform } from 'react-native'
 
+import { useTranslation } from 'react-i18next'
 import i18n from '@/i18n'
 import { loggerService } from '@/services/LoggerService'
 
@@ -45,7 +46,38 @@ const supportsLanguageDetection = (): boolean => {
   return false
 }
 
+/**
+ * Map speech recognition error codes to i18n keys
+ */
+const getErrorI18nKey = (error: string): string => {
+  if (error === 'service-not-allowed') {
+    return 'service_not_available'
+  }
+  if (error === 'no-speech') {
+    return 'no_speech'
+  }
+  if (error === 'audio-capture') {
+    return 'audio_capture'
+  }
+  if (
+    error === 'network' ||
+    error === 'network-timeout' ||
+    error === 'server' ||
+    error === 'server-disconnected'
+  ) {
+    return 'network_error'
+  }
+  if (error === 'language-not-supported') {
+    return 'language_not_supported'
+  }
+  if (error === 'not-allowed') {
+    return 'permission_not_allowed'
+  }
+  return 'error'
+}
+
 export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) => {
+  const { t } = useTranslation()
   const { onTranscript, onError } = options
 
   // Use refs for callbacks to prevent stale closures in event listeners
@@ -91,10 +123,17 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
 
   // Listen for errors
   useSpeechRecognitionEvent('error', event => {
-    logger.error('Speech recognition error:', new Error(event.message), { code: event.error })
-    setError(event.message)
+    const i18nKey = getErrorI18nKey(event.error)
+    const detailedMessage = t(`voice.${i18nKey}`)
+    logger.error('Speech recognition error:', new Error(event.message), {
+      code: event.error,
+      message: event.message,
+      i18nKey,
+      detailedMessage
+    })
+    setError(detailedMessage)
     setStatus('idle')
-    onErrorRef.current?.(event.message)
+    onErrorRef.current?.(detailedMessage)
   })
 
   // Start speech recognition
@@ -106,7 +145,7 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
       // Check if recognition is available
       const isAvailable = await ExpoSpeechRecognitionModule.isRecognitionAvailable()
       if (!isAvailable) {
-        const errorMsg = 'Speech recognition is not available on this device'
+        const errorMsg = t('voice.not_available')
         logger.warn(errorMsg)
         setError(errorMsg)
         onErrorRef.current?.(errorMsg)
@@ -117,7 +156,7 @@ export const useSpeechRecognition = (options: UseSpeechRecognitionOptions = {}) 
       // Request permissions
       const permissionResult = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
       if (!permissionResult.granted) {
-        const errorMsg = 'Speech recognition permission denied'
+        const errorMsg = t('voice.permission_denied_message')
         logger.info(errorMsg)
         setError(errorMsg)
         onErrorRef.current?.(errorMsg)

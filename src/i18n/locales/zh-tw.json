@@ -1055,7 +1055,13 @@
       "permission_denied": "麥克風權限被拒絕",
       "permission_denied_message": "請在設定中允許 Cherry Studio 存取麥克風",
       "start": "開始語音輸入",
-      "stop": "停止語音輸入"
+      "stop": "停止語音輸入",
+      "service_not_available": "語音識別需要使用系統語音服務，當前系統中未安裝或無法使用相容的語音服務（如 Google 服務框架）。",
+      "no_speech": "未偵測到語音，請重試。",
+      "audio_capture": "麥克風存取失敗，請檢查麥克風權限。",
+      "network_error": "網路錯誤，請檢查網路連線後重試。",
+      "language_not_supported": "當前語言不支援語音識別。",
+      "permission_not_allowed": "麥克風權限被拒絕，請在系統設定中允許存取麥克風。"
     }
   }
 }
