@@ -1055,7 +1055,13 @@
       "permission_denied": "麦克风权限被拒绝",
       "permission_denied_message": "请在设置中允许 Cherry Studio 访问麦克风",
       "start": "开始语音输入",
-      "stop": "停止语音输入"
+      "stop": "停止语音输入",
+      "service_not_available": "语音识别需要使用系统语音服务，当前系统中未安装或无法使用兼容的语音服务（如 Google 服务框架）。",
+      "no_speech": "未检测到语音，请重试。",
+      "audio_capture": "麦克风访问失败，请检查麦克风权限。",
+      "network_error": "网络错误，请检查网络连接后重试。",
+      "language_not_supported": "当前语言不支持语音识别。",
+      "permission_not_allowed": "麦克风权限被拒绝，请在系统设置中允许访问麦克风。"
     }
   }
 }
