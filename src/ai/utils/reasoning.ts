@@ -46,6 +46,10 @@ export function getXAIReasoningParams(assistant: Assistant, model: Model) {
   return getReasoningEffort(assistant, model, { id: 'xai' } as Provider);
 }
 
-export function getThinkingBudget(maxTokens: number, _reasoningEffort: string | undefined, _modelId: string) {
+export function getThinkingBudget(
+  maxTokens: number,
+  _reasoningEffort: string | undefined,
+  _modelId: string,
+) {
   return Math.floor(maxTokens * 0.8);
 }

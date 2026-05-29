@@ -49,7 +49,10 @@ function formatBaseURL(baseURL: string, provider: Provider, endpointType?: Endpo
   const appendApiVersion = !isWithTrailingSharp(baseURL);
 
   // Endpoint-driven formatting
-  if (endpointType === ENDPOINT_TYPE.OLLAMA_CHAT || endpointType === ENDPOINT_TYPE.OLLAMA_GENERATE) {
+  if (
+    endpointType === ENDPOINT_TYPE.OLLAMA_CHAT ||
+    endpointType === ENDPOINT_TYPE.OLLAMA_GENERATE
+  ) {
     return formatOllamaApiHost(baseURL);
   }
   if (endpointType === ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT) {
@@ -61,8 +64,18 @@ function formatBaseURL(baseURL: string, provider: Provider, endpointType?: Endpo
   if (isGeminiProvider(provider)) return formatApiHost(baseURL, appendApiVersion, 'v1beta');
 
   // Providers that don't append API version
-  const noVersionProviders = ['github', 'cherryai', 'perplexity', 'newapi', 'new-api', 'azure-openai'];
-  if (noVersionProviders.includes(provider.id) || noVersionProviders.includes(provider.presetProviderId ?? '')) {
+  const noVersionProviders = [
+    'github',
+    'cherryai',
+    'perplexity',
+    'newapi',
+    'new-api',
+    'azure-openai',
+  ];
+  if (
+    noVersionProviders.includes(provider.id) ||
+    noVersionProviders.includes(provider.presetProviderId ?? '')
+  ) {
     return formatApiHost(baseURL, false);
   }
 
@@ -84,7 +97,9 @@ export async function providerToAiSdkConfig(
 ): Promise<ProviderConfig> {
   const { endpointType, baseUrl } = resolveEffectiveEndpoint(provider, model);
 
-  const aiSdkProviderId = appProviderIdMap[resolveAiSdkProviderId(provider, endpointType)] as StringKeys<AppProviderSettingsMap>;
+  const aiSdkProviderId = appProviderIdMap[
+    resolveAiSdkProviderId(provider, endpointType)
+  ] as StringKeys<AppProviderSettingsMap>;
 
   const formattedBaseUrl = formatBaseURL(baseUrl, provider, endpointType);
   const { baseURL, endpoint } = routeToEndpoint(formattedBaseUrl);
@@ -138,7 +153,9 @@ function formatAzureBaseURL(baseURL: string, forAnthropic: boolean): string {
 
 async function buildAzureConfig(
   ctx: BuilderContext,
-): Promise<ProviderConfig<'azure'> | ProviderConfig<'azure-anthropic'> | ProviderConfig<'azure-responses'>> {
+): Promise<
+  ProviderConfig<'azure'> | ProviderConfig<'azure-anthropic'> | ProviderConfig<'azure-responses'>
+> {
   const authConfig = await ctx.runtime.getAuthConfig(ctx.actualProvider.id);
   const apiVersion =
     authConfig?.type === 'iam-azure'

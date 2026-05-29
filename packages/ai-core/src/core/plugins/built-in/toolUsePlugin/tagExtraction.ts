@@ -7,48 +7,48 @@
 export function getPotentialStartIndex(text: string, searchedText: string): number | null {
   // Return null immediately if searchedText is empty.
   if (searchedText.length === 0) {
-    return null
+    return null;
   }
 
   // Check if the searchedText exists as a direct substring of text.
-  const directIndex = text.indexOf(searchedText)
+  const directIndex = text.indexOf(searchedText);
   if (directIndex !== -1) {
-    return directIndex
+    return directIndex;
   }
 
   // Otherwise, look for the largest suffix of "text" that matches
   // a prefix of "searchedText". We go from the end of text inward.
   for (let i = text.length - 1; i >= 0; i--) {
-    const suffix = text.substring(i)
+    const suffix = text.substring(i);
     if (searchedText.startsWith(suffix)) {
-      return i
+      return i;
     }
   }
 
-  return null
+  return null;
 }
 
 export interface TagConfig {
-  openingTag: string
-  closingTag: string
-  separator?: string
+  openingTag: string;
+  closingTag: string;
+  separator?: string;
 }
 
 export interface TagExtractionState {
-  textBuffer: string
-  isInsideTag: boolean
-  isFirstTag: boolean
-  isFirstText: boolean
-  afterSwitch: boolean
-  accumulatedTagContent: string
-  hasTagContent: boolean
+  textBuffer: string;
+  isInsideTag: boolean;
+  isFirstTag: boolean;
+  isFirstText: boolean;
+  afterSwitch: boolean;
+  accumulatedTagContent: string;
+  hasTagContent: boolean;
 }
 
 export interface TagExtractionResult {
-  content: string
-  isTagContent: boolean
-  complete: boolean
-  tagContentExtracted?: string
+  content: string;
+  isTagContent: boolean;
+  complete: boolean;
+  tagContentExtracted?: string;
 }
 
 /**
@@ -56,11 +56,11 @@ export interface TagExtractionResult {
  * 可以处理各种形式的标签对，如 <think>...</think>, <tool_use>...</tool_use> 等
  */
 export class TagExtractor {
-  private config: TagConfig
-  private state: TagExtractionState
+  private config: TagConfig;
+  private state: TagExtractionState;
 
   constructor(config: TagConfig) {
-    this.config = config
+    this.config = config;
     this.state = {
       textBuffer: '',
       isInsideTag: false,
@@ -68,60 +68,60 @@ export class TagExtractor {
       isFirstText: true,
       afterSwitch: false,
       accumulatedTagContent: '',
-      hasTagContent: false
-    }
+      hasTagContent: false,
+    };
   }
 
   /**
    * 处理文本块，返回处理结果
    */
   processText(newText: string): TagExtractionResult[] {
-    this.state.textBuffer += newText
-    const results: TagExtractionResult[] = []
+    this.state.textBuffer += newText;
+    const results: TagExtractionResult[] = [];
 
     // 处理标签提取逻辑
     while (true) {
-      const nextTag = this.state.isInsideTag ? this.config.closingTag : this.config.openingTag
-      const startIndex = getPotentialStartIndex(this.state.textBuffer, nextTag)
+      const nextTag = this.state.isInsideTag ? this.config.closingTag : this.config.openingTag;
+      const startIndex = getPotentialStartIndex(this.state.textBuffer, nextTag);
 
       if (startIndex == null) {
-        const content = this.state.textBuffer
+        const content = this.state.textBuffer;
         if (content.length > 0) {
           results.push({
             content: this.addPrefix(content),
             isTagContent: this.state.isInsideTag,
-            complete: false
-          })
+            complete: false,
+          });
 
           if (this.state.isInsideTag) {
-            this.state.accumulatedTagContent += this.addPrefix(content)
-            this.state.hasTagContent = true
+            this.state.accumulatedTagContent += this.addPrefix(content);
+            this.state.hasTagContent = true;
           }
         }
-        this.state.textBuffer = ''
-        break
+        this.state.textBuffer = '';
+        break;
       }
 
       // 处理标签前的内容
-      const contentBeforeTag = this.state.textBuffer.slice(0, startIndex)
+      const contentBeforeTag = this.state.textBuffer.slice(0, startIndex);
       if (contentBeforeTag.length > 0) {
         results.push({
           content: this.addPrefix(contentBeforeTag),
           isTagContent: this.state.isInsideTag,
-          complete: false
-        })
+          complete: false,
+        });
 
         if (this.state.isInsideTag) {
-          this.state.accumulatedTagContent += this.addPrefix(contentBeforeTag)
-          this.state.hasTagContent = true
+          this.state.accumulatedTagContent += this.addPrefix(contentBeforeTag);
+          this.state.hasTagContent = true;
         }
       }
 
-      const foundFullMatch = startIndex + nextTag.length <= this.state.textBuffer.length
+      const foundFullMatch = startIndex + nextTag.length <= this.state.textBuffer.length;
 
       if (foundFullMatch) {
         // 如果找到完整的标签
-        this.state.textBuffer = this.state.textBuffer.slice(startIndex + nextTag.length)
+        this.state.textBuffer = this.state.textBuffer.slice(startIndex + nextTag.length);
 
         // 如果刚刚结束一个标签内容，生成完整的标签内容结果
         if (this.state.isInsideTag && this.state.hasTagContent) {
@@ -129,27 +129,27 @@ export class TagExtractor {
             content: '',
             isTagContent: false,
             complete: true,
-            tagContentExtracted: this.state.accumulatedTagContent
-          })
-          this.state.accumulatedTagContent = ''
-          this.state.hasTagContent = false
+            tagContentExtracted: this.state.accumulatedTagContent,
+          });
+          this.state.accumulatedTagContent = '';
+          this.state.hasTagContent = false;
         }
 
-        this.state.isInsideTag = !this.state.isInsideTag
-        this.state.afterSwitch = true
+        this.state.isInsideTag = !this.state.isInsideTag;
+        this.state.afterSwitch = true;
 
         if (this.state.isInsideTag) {
-          this.state.isFirstTag = false
+          this.state.isFirstTag = false;
         } else {
-          this.state.isFirstText = false
+          this.state.isFirstText = false;
         }
       } else {
-        this.state.textBuffer = this.state.textBuffer.slice(startIndex)
-        break
+        this.state.textBuffer = this.state.textBuffer.slice(startIndex);
+        break;
       }
     }
 
-    return results
+    return results;
   }
 
   /**
@@ -161,22 +161,23 @@ export class TagExtractor {
         content: '',
         isTagContent: false,
         complete: true,
-        tagContentExtracted: this.state.accumulatedTagContent
-      }
-      this.state.accumulatedTagContent = ''
-      this.state.hasTagContent = false
-      return result
+        tagContentExtracted: this.state.accumulatedTagContent,
+      };
+      this.state.accumulatedTagContent = '';
+      this.state.hasTagContent = false;
+      return result;
     }
-    return null
+    return null;
   }
 
   private addPrefix(text: string): string {
     const needsPrefix =
-      this.state.afterSwitch && (this.state.isInsideTag ? !this.state.isFirstTag : !this.state.isFirstText)
+      this.state.afterSwitch &&
+      (this.state.isInsideTag ? !this.state.isFirstTag : !this.state.isFirstText);
 
-    const prefix = needsPrefix && this.config.separator ? this.config.separator : ''
-    this.state.afterSwitch = false
-    return prefix + text
+    const prefix = needsPrefix && this.config.separator ? this.config.separator : '';
+    this.state.afterSwitch = false;
+    return prefix + text;
   }
 
   /**
@@ -190,7 +191,7 @@ export class TagExtractor {
       isFirstText: true,
       afterSwitch: false,
       accumulatedTagContent: '',
-      hasTagContent: false
-    }
+      hasTagContent: false,
+    };
   }
 }

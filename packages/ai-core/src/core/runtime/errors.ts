@@ -10,14 +10,14 @@ export class ImageGenerationError extends Error {
     message: string,
     public providerId?: string,
     public modelId?: string,
-    public cause?: Error
+    public cause?: Error,
   ) {
-    super(message)
-    this.name = 'ImageGenerationError'
+    super(message);
+    this.name = 'ImageGenerationError';
 
     // Maintain proper stack trace (for V8 engines)
     if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, ImageGenerationError)
+      Error.captureStackTrace(this, ImageGenerationError);
     }
   }
 }
@@ -31,8 +31,8 @@ export class ImageModelResolutionError extends ImageGenerationError {
       `Failed to resolve image model: ${modelId}${providerId ? ` for provider: ${providerId}` : ''}`,
       providerId,
       modelId,
-      cause
-    )
-    this.name = 'ImageModelResolutionError'
+      cause,
+    );
+    this.name = 'ImageModelResolutionError';
   }
 }

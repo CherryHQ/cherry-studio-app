@@ -38,8 +38,13 @@ export function getTimeout(_model: Model): number {
 }
 
 /** For Claude thinking-token models (pre-4.6) the AI SDK adds the budget on top, so subtract. */
-export function getMaxTokens(assistant: Assistant, _model: Model, _provider: Provider): number | undefined {
-  const enableMaxTokens = assistant.settings?.enableMaxTokens ?? DEFAULT_ASSISTANT_SETTINGS.enableMaxTokens;
+export function getMaxTokens(
+  assistant: Assistant,
+  _model: Model,
+  _provider: Provider,
+): number | undefined {
+  const enableMaxTokens =
+    assistant.settings?.enableMaxTokens ?? DEFAULT_ASSISTANT_SETTINGS.enableMaxTokens;
   const maxTokens = assistant.settings?.maxTokens ?? DEFAULT_ASSISTANT_SETTINGS.maxTokens;
 
   if (!enableMaxTokens || maxTokens === undefined) return undefined;

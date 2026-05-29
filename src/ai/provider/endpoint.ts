@@ -57,7 +57,9 @@ export function resolveAiSdkProviderId(
   provider: Provider,
   endpointType: EndpointType | undefined,
 ): AppProviderId {
-  const adapterFamily = endpointType ? provider.endpointConfigs?.[endpointType]?.adapterFamily : undefined;
+  const adapterFamily = endpointType
+    ? provider.endpointConfigs?.[endpointType]?.adapterFamily
+    : undefined;
   if (adapterFamily && adapterFamily in appProviderIdMap) {
     return resolveProviderVariant(appProviderIdMap[adapterFamily], endpointType);
   }

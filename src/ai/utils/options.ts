@@ -6,7 +6,11 @@ import type { Provider } from '@/data/types/provider';
 
 import { getAiSdkProviderId } from '../provider/factory';
 import type { ProviderCapabilities } from '../types';
-import { getAnthropicReasoningParams, getGeminiReasoningParams, getReasoningEffort } from './reasoning';
+import {
+  getAnthropicReasoningParams,
+  getGeminiReasoningParams,
+  getReasoningEffort,
+} from './reasoning';
 
 const AI_SDK_PARAMS = new Set([
   'temperature',
@@ -40,7 +44,10 @@ export function buildCapabilityProviderOptions(
   assistant: Assistant,
   model: Model,
   actualProvider: Provider,
-  capabilities: Pick<ProviderCapabilities, 'enableReasoning' | 'enableWebSearch' | 'enableGenerateImage'>,
+  capabilities: Pick<
+    ProviderCapabilities,
+    'enableReasoning' | 'enableWebSearch' | 'enableGenerateImage'
+  >,
 ): Record<string, Record<string, JSONValue>> {
   const rawProviderId = getAiSdkProviderId(actualProvider);
   const { enableReasoning } = capabilities;
@@ -52,12 +59,17 @@ export function buildCapabilityProviderOptions(
   switch (rawProviderId) {
     case 'anthropic':
     case 'azure-anthropic':
-      return { anthropic: getAnthropicReasoningParams(assistant, model) as Record<string, JSONValue> };
+      return {
+        anthropic: getAnthropicReasoningParams(assistant, model) as Record<string, JSONValue>,
+      };
     case 'google':
       return { google: getGeminiReasoningParams(assistant, model) as Record<string, JSONValue> };
     default:
       return {
-        [rawProviderId]: getReasoningEffort(assistant, model, actualProvider) as Record<string, JSONValue>,
+        [rawProviderId]: getReasoningEffort(assistant, model, actualProvider) as Record<
+          string,
+          JSONValue
+        >,
       };
   }
 }

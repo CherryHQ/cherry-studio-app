@@ -4,18 +4,18 @@
  * 负责工具的执行、结果格式化和相关事件发送
  * 从 promptToolUsePlugin.ts 中提取出来以降低复杂度
  */
-import type { ToolSet, TypedToolError } from 'ai'
+import type { ToolSet, TypedToolError } from 'ai';
 
-import type { ToolUseResult } from './type'
+import type { ToolUseResult } from './type';
 
 /**
  * 工具执行结果
  */
 export interface ExecutedResult {
-  toolCallId: string
-  toolName: string
-  result: unknown
-  isError?: boolean
+  toolCallId: string;
+  toolName: string;
+  result: unknown;
+  isError?: boolean;
 }
 
 /**
@@ -23,7 +23,7 @@ export interface ExecutedResult {
  * Generic type parameter allows for type-safe chunk enqueuing
  */
 export interface StreamController<TChunk = unknown> {
-  enqueue(chunk: TChunk): void
+  enqueue(chunk: TChunk): void;
 }
 
 /**
@@ -36,14 +36,14 @@ export class ToolExecutor {
   async executeTools(
     toolUses: ToolUseResult[],
     tools: ToolSet,
-    controller: StreamController
+    controller: StreamController,
   ): Promise<ExecutedResult[]> {
-    const executedResults: ExecutedResult[] = []
+    const executedResults: ExecutedResult[] = [];
     for (const toolUse of toolUses) {
       try {
-        const tool = tools[toolUse.toolName]
+        const tool = tools[toolUse.toolName];
         if (!tool || typeof tool.execute !== 'function') {
-          throw new Error(`Tool "${toolUse.toolName}" has no execute method`)
+          throw new Error(`Tool "${toolUse.toolName}" has no execute method`);
         }
 
         // 发送 tool-call 事件
@@ -51,14 +51,14 @@ export class ToolExecutor {
           type: 'tool-call',
           toolCallId: toolUse.id,
           toolName: toolUse.toolName,
-          input: toolUse.arguments
-        })
+          input: toolUse.arguments,
+        });
 
         const result = await tool.execute(toolUse.arguments, {
           toolCallId: toolUse.id,
           messages: [],
-          abortSignal: new AbortController().signal
-        })
+          abortSignal: new AbortController().signal,
+        });
 
         // 发送 tool-result 事件
         controller.enqueue({
@@ -66,25 +66,25 @@ export class ToolExecutor {
           toolCallId: toolUse.id,
           toolName: toolUse.toolName,
           input: toolUse.arguments,
-          output: result
-        })
+          output: result,
+        });
 
         executedResults.push({
           toolCallId: toolUse.id,
           toolName: toolUse.toolName,
           result,
-          isError: false
-        })
+          isError: false,
+        });
       } catch (error) {
-        console.error(`[MCP Prompt Stream] Tool execution failed: ${toolUse.toolName}`, error)
+        console.error(`[MCP Prompt Stream] Tool execution failed: ${toolUse.toolName}`, error);
 
         // 处理错误情况
-        const errorResult = this.handleToolError(toolUse, error, controller)
-        executedResults.push(errorResult)
+        const errorResult = this.handleToolError(toolUse, error, controller);
+        executedResults.push(errorResult);
       }
     }
 
-    return executedResults
+    return executedResults;
   }
 
   /**
@@ -94,13 +94,13 @@ export class ToolExecutor {
     return executedResults
       .map((tr) => {
         if (!tr.isError) {
-          return `<tool_use_result>\n  <name>${tr.toolName}</name>\n  <result>${JSON.stringify(tr.result)}</result>\n</tool_use_result>`
+          return `<tool_use_result>\n  <name>${tr.toolName}</name>\n  <result>${JSON.stringify(tr.result)}</result>\n</tool_use_result>`;
         } else {
-          const error = tr.result || 'Unknown error'
-          return `<tool_use_result>\n  <name>${tr.toolName}</name>\n  <error>${error}</error>\n</tool_use_result>`
+          const error = tr.result || 'Unknown error';
+          return `<tool_use_result>\n  <name>${tr.toolName}</name>\n  <error>${error}</error>\n</tool_use_result>`;
         }
       })
-      .join('\n\n')
+      .join('\n\n');
   }
 
   /**
@@ -121,7 +121,7 @@ export class ToolExecutor {
   private handleToolError<T extends ToolSet>(
     toolUse: ToolUseResult,
     error: unknown,
-    controller: StreamController
+    controller: StreamController,
   ): ExecutedResult {
     // 使用 AI SDK 标准错误格式
     const toolError: TypedToolError<T> = {
@@ -129,10 +129,10 @@ export class ToolExecutor {
       toolCallId: toolUse.id,
       toolName: toolUse.toolName,
       input: toolUse.arguments,
-      error
-    }
+      error,
+    };
 
-    controller.enqueue(toolError)
+    controller.enqueue(toolError);
 
     // 发送标准错误事件
     // controller.enqueue({
@@ -146,7 +146,7 @@ export class ToolExecutor {
       toolCallId: toolUse.id,
       toolName: toolUse.toolName,
       result: error,
-      isError: true
-    }
+      isError: true,
+    };
   }
 }

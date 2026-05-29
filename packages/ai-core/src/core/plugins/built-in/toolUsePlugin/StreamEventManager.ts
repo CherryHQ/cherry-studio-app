@@ -4,18 +4,23 @@
  * 负责处理 AI SDK 流事件的发送和管理
  * 从 promptToolUsePlugin.ts 中提取出来以降低复杂度
  */
-import type { SharedV3ProviderMetadata } from '@ai-sdk/provider'
-import type { EmbeddingModelUsage, ImageModelUsage, LanguageModelUsage, ModelMessage } from 'ai'
+import type { SharedV3ProviderMetadata } from '@ai-sdk/provider';
+import type { EmbeddingModelUsage, ImageModelUsage, LanguageModelUsage, ModelMessage } from 'ai';
 
-import type { AiSdkUsage } from '../../../providers/types'
-import type { AiRequestContext, StreamTextParams, StreamTextResult } from '../../types'
-import type { StreamController } from './ToolExecutor'
+import type { AiSdkUsage } from '../../../providers/types';
+import type { AiRequestContext, StreamTextParams, StreamTextResult } from '../../types';
+import type { StreamController } from './ToolExecutor';
 
 /**
  * 类型守卫：检查对象是否是有效的流结果（包含 ReadableStream 类型的 fullStream）
  */
 function hasFullStream(obj: unknown): obj is StreamTextResult & { fullStream: ReadableStream } {
-  return typeof obj === 'object' && obj !== null && 'fullStream' in obj && obj.fullStream instanceof ReadableStream
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    'fullStream' in obj &&
+    obj.fullStream instanceof ReadableStream
+  );
 }
 
 /**
@@ -27,7 +32,7 @@ function isLanguageModelUsage(usage: unknown): usage is LanguageModelUsage {
     typeof usage === 'object' &&
     usage !== null &&
     ('totalTokens' in usage || 'inputTokens' in usage || 'outputTokens' in usage)
-  )
+  );
 }
 
 /**
@@ -43,7 +48,7 @@ function isImageModelUsage(usage: unknown): usage is ImageModelUsage {
     'outputTokens' in usage &&
     !('inputTokenDetails' in usage) &&
     !('outputTokenDetails' in usage)
-  )
+  );
 }
 
 /**
@@ -58,7 +63,7 @@ function isEmbeddingModelUsage(usage: unknown): usage is EmbeddingModelUsage {
     // 确保只有 tokens 字段（没有 inputTokens, outputTokens 等）
     !('inputTokens' in usage) &&
     !('outputTokens' in usage)
-  )
+  );
 }
 
 /**
@@ -72,8 +77,8 @@ export class StreamEventManager {
     controller.enqueue({
       type: 'start-step',
       request: {},
-      warnings: []
-    })
+      warnings: [],
+    });
   }
 
   /**
@@ -82,16 +87,16 @@ export class StreamEventManager {
   sendStepFinishEvent(
     controller: StreamController,
     chunk: {
-      usage?: Partial<AiSdkUsage>
-      response?: { id: string; [key: string]: unknown }
-      providerMetadata?: SharedV3ProviderMetadata
+      usage?: Partial<AiSdkUsage>;
+      response?: { id: string; [key: string]: unknown };
+      providerMetadata?: SharedV3ProviderMetadata;
     },
     context: AiRequestContext,
-    finishReason: string = 'stop'
+    finishReason: string = 'stop',
   ): void {
     // 累加当前步骤的 usage
     if (chunk.usage && context.accumulatedUsage) {
-      this.accumulateUsage(context.accumulatedUsage, chunk.usage)
+      this.accumulateUsage(context.accumulatedUsage, chunk.usage);
     }
 
     controller.enqueue({
@@ -99,8 +104,8 @@ export class StreamEventManager {
       finishReason,
       response: chunk.response,
       usage: chunk.usage,
-      providerMetadata: chunk.providerMetadata
-    })
+      providerMetadata: chunk.providerMetadata,
+    });
   }
 
   /**
@@ -109,18 +114,18 @@ export class StreamEventManager {
   async handleRecursiveCall<TParams extends StreamTextParams>(
     controller: StreamController,
     recursiveParams: Partial<TParams>,
-    context: AiRequestContext<TParams, StreamTextResult>
+    context: AiRequestContext<TParams, StreamTextResult>,
   ): Promise<void> {
     // try {
     // 重置工具执行状态，准备处理新的步骤
-    context.hasExecutedToolsInCurrentStep = false
+    context.hasExecutedToolsInCurrentStep = false;
 
-    const recursiveResult = await context.recursiveCall(recursiveParams)
+    const recursiveResult = await context.recursiveCall(recursiveParams);
 
     if (hasFullStream(recursiveResult)) {
-      await this.pipeRecursiveStream(controller, recursiveResult.fullStream)
+      await this.pipeRecursiveStream(controller, recursiveResult.fullStream);
     } else {
-      console.warn('[MCP Prompt] No fullstream found in recursive result:', recursiveResult)
+      console.warn('[MCP Prompt] No fullstream found in recursive result:', recursiveResult);
     }
     // } catch (error) {
     //   this.handleRecursiveCallError(controller, error, stepId)
@@ -130,26 +135,29 @@ export class StreamEventManager {
   /**
    * 将递归流的数据传递到当前流
    */
-  private async pipeRecursiveStream(controller: StreamController, recursiveStream: ReadableStream): Promise<void> {
-    const reader = recursiveStream.getReader()
+  private async pipeRecursiveStream(
+    controller: StreamController,
+    recursiveStream: ReadableStream,
+  ): Promise<void> {
+    const reader = recursiveStream.getReader();
     try {
       while (true) {
-        const { done, value } = await reader.read()
+        const { done, value } = await reader.read();
         if (done) {
-          break
+          break;
         }
         if (value.type === 'start') {
-          continue
+          continue;
         }
 
         if (value.type === 'finish') {
-          break
+          break;
         }
 
-        controller.enqueue(value)
+        controller.enqueue(value);
       }
     } finally {
-      reader.releaseLock()
+      reader.releaseLock();
     }
   }
 
@@ -160,9 +168,9 @@ export class StreamEventManager {
     context: AiRequestContext<TParams, StreamTextResult>,
     textBuffer: string,
     toolResultsText: string,
-    tools: Record<string, unknown>
+    tools: Record<string, unknown>,
   ): Partial<TParams> {
-    const params = context.originalParams
+    const params = context.originalParams;
 
     // 构建新的对话消息
     const newMessages: ModelMessage[] = [
@@ -171,18 +179,18 @@ export class StreamEventManager {
       ...(textBuffer ? [{ role: 'assistant' as const, content: textBuffer }] : []),
       {
         role: 'user',
-        content: toolResultsText
-      }
-    ]
+        content: toolResultsText,
+      },
+    ];
 
     // 递归调用，继续对话，重新传递 tools
     const recursiveParams = {
       ...params,
       messages: newMessages,
-      tools: tools
-    } as Partial<TParams>
+      tools: tools,
+    } as Partial<TParams>;
 
-    return recursiveParams
+    return recursiveParams;
   }
 
   /**
@@ -194,12 +202,12 @@ export class StreamEventManager {
    * - EmbeddingModelUsage: tokens
    */
   accumulateUsage(target: Partial<AiSdkUsage>, source: Partial<AiSdkUsage>): void {
-    if (!target || !source) return
+    if (!target || !source) return;
 
     if (isLanguageModelUsage(target) && isLanguageModelUsage(source)) {
-      target.totalTokens = (target.totalTokens || 0) + (source.totalTokens || 0)
-      target.inputTokens = (target.inputTokens || 0) + (source.inputTokens || 0)
-      target.outputTokens = (target.outputTokens || 0) + (source.outputTokens || 0)
+      target.totalTokens = (target.totalTokens || 0) + (source.totalTokens || 0);
+      target.inputTokens = (target.inputTokens || 0) + (source.inputTokens || 0);
+      target.outputTokens = (target.outputTokens || 0) + (source.outputTokens || 0);
 
       // Accumulate inputTokenDetails (cacheReadTokens, cacheWriteTokens, noCacheTokens)
       if (source.inputTokenDetails) {
@@ -207,45 +215,52 @@ export class StreamEventManager {
           target.inputTokenDetails = {
             noCacheTokens: undefined,
             cacheReadTokens: undefined,
-            cacheWriteTokens: undefined
-          }
+            cacheWriteTokens: undefined,
+          };
         }
         target.inputTokenDetails.cacheReadTokens =
-          (target.inputTokenDetails.cacheReadTokens || 0) + (source.inputTokenDetails.cacheReadTokens || 0)
+          (target.inputTokenDetails.cacheReadTokens || 0) +
+          (source.inputTokenDetails.cacheReadTokens || 0);
         target.inputTokenDetails.cacheWriteTokens =
-          (target.inputTokenDetails.cacheWriteTokens || 0) + (source.inputTokenDetails.cacheWriteTokens || 0)
+          (target.inputTokenDetails.cacheWriteTokens || 0) +
+          (source.inputTokenDetails.cacheWriteTokens || 0);
         target.inputTokenDetails.noCacheTokens =
-          (target.inputTokenDetails.noCacheTokens || 0) + (source.inputTokenDetails.noCacheTokens || 0)
+          (target.inputTokenDetails.noCacheTokens || 0) +
+          (source.inputTokenDetails.noCacheTokens || 0);
       }
 
       // Accumulate outputTokenDetails (reasoningTokens, textTokens)
       if (source.outputTokenDetails) {
         if (!target.outputTokenDetails) {
-          target.outputTokenDetails = { textTokens: undefined, reasoningTokens: undefined }
+          target.outputTokenDetails = { textTokens: undefined, reasoningTokens: undefined };
         }
         target.outputTokenDetails.reasoningTokens =
-          (target.outputTokenDetails.reasoningTokens || 0) + (source.outputTokenDetails.reasoningTokens || 0)
+          (target.outputTokenDetails.reasoningTokens || 0) +
+          (source.outputTokenDetails.reasoningTokens || 0);
         target.outputTokenDetails.textTokens =
-          (target.outputTokenDetails.textTokens || 0) + (source.outputTokenDetails.textTokens || 0)
+          (target.outputTokenDetails.textTokens || 0) + (source.outputTokenDetails.textTokens || 0);
       }
-      return
+      return;
     }
     if (isImageModelUsage(target) && isImageModelUsage(source)) {
-      target.totalTokens = (target.totalTokens || 0) + (source.totalTokens || 0)
-      target.inputTokens = (target.inputTokens || 0) + (source.inputTokens || 0)
-      target.outputTokens = (target.outputTokens || 0) + (source.outputTokens || 0)
-      return
+      target.totalTokens = (target.totalTokens || 0) + (source.totalTokens || 0);
+      target.inputTokens = (target.inputTokens || 0) + (source.inputTokens || 0);
+      target.outputTokens = (target.outputTokens || 0) + (source.outputTokens || 0);
+      return;
     }
 
     if (isEmbeddingModelUsage(target) && isEmbeddingModelUsage(source)) {
-      target.tokens = (target.tokens || 0) + (source.tokens || 0)
-      return
+      target.tokens = (target.tokens || 0) + (source.tokens || 0);
+      return;
     }
 
     // ⚠️ 未知类型或类型不匹配，不进行累加
-    console.warn('[StreamEventManager] Unable to accumulate usage - type mismatch or unknown type', {
-      target,
-      source
-    })
+    console.warn(
+      '[StreamEventManager] Unable to accumulate usage - type mismatch or unknown type',
+      {
+        target,
+        source,
+      },
+    );
   }
 }

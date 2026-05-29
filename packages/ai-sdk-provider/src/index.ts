@@ -1,1 +1,1 @@
-export * from './cherryin-provider'
+export * from './cherryin-provider';

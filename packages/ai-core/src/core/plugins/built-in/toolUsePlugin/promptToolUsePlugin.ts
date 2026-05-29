@@ -3,14 +3,14 @@
  * 为不支持原生 Function Call 的模型提供 prompt 方式的工具调用
  * 内置默认逻辑，支持自定义覆盖
  */
-import type { TextStreamPart, ToolSet } from 'ai'
+import type { TextStreamPart, ToolSet } from 'ai';
 
-import { definePlugin } from '../../index'
-import type { AiPlugin, StreamTextParams, StreamTextResult } from '../../types'
-import { StreamEventManager } from './StreamEventManager'
-import { type TagConfig, TagExtractor } from './tagExtraction'
-import { ToolExecutor } from './ToolExecutor'
-import type { PromptToolUseConfig, ToolUseResult } from './type'
+import { definePlugin } from '../../index';
+import type { AiPlugin, StreamTextParams, StreamTextResult } from '../../types';
+import { StreamEventManager } from './StreamEventManager';
+import { type TagConfig, TagExtractor } from './tagExtraction';
+import { ToolExecutor } from './ToolExecutor';
+import type { PromptToolUseConfig, ToolUseResult } from './type';
 
 /**
  * 工具使用标签配置
@@ -18,8 +18,8 @@ import type { PromptToolUseConfig, ToolUseResult } from './type'
 const TOOL_USE_TAG_CONFIG: TagConfig = {
   openingTag: '<tool_use>',
   closingTag: '</tool_use>',
-  separator: '\n'
-}
+  separator: '\n',
+};
 
 export const DEFAULT_SYSTEM_PROMPT = `In this environment you have access to a set of tools you can use to answer the user's question. \
 You can use one or more tools per message, and will receive the result of that tool use in the user's response. You use tools step-by-step to accomplish a given task, with each tool use informed by the result of the previous tool use.
@@ -78,7 +78,7 @@ Respond in the language of the user's query, unless the user instructions specif
 
 # User Instructions
 {{ USER_SYSTEM_PROMPT }}
-`
+`;
 
 /**
  * 默认工具使用示例（提取自 Cherry Studio）
@@ -153,17 +153,17 @@ User: <tool_use_result>
   <result>26 million (2019)</result>
 </tool_use_result>
 
-A: The population of Shanghai is 26 million, while Guangzhou has a population of 15 million. Therefore, Shanghai has the highest population.`
+A: The population of Shanghai is 26 million, while Guangzhou has a population of 15 million. Therefore, Shanghai has the highest population.`;
 
 /**
  * 构建可用工具部分（提取自 Cherry Studio）
  */
 function buildAvailableTools(tools: ToolSet): string | null {
-  const availableTools = Object.keys(tools)
-  if (availableTools.length === 0) return null
+  const availableTools = Object.keys(tools);
+  if (availableTools.length === 0) return null;
   const result = availableTools
     .map((toolName: string) => {
-      const tool = tools[toolName]
+      const tool = tools[toolName];
       return `
 <tool>
   <name>${toolName}</name>
@@ -172,26 +172,30 @@ function buildAvailableTools(tools: ToolSet): string | null {
     ${tool.inputSchema ? JSON.stringify(tool.inputSchema) : ''}
   </arguments>
 </tool>
-`
+`;
     })
-    .join('\n')
+    .join('\n');
   return `<tools>
 ${result}
-</tools>`
+</tools>`;
 }
 
 /**
  * 默认的系统提示符构建函数（提取自 Cherry Studio）
  */
-function defaultBuildSystemPrompt(userSystemPrompt: string, tools: ToolSet, mcpMode?: string): string {
-  const availableTools = buildAvailableTools(tools)
-  if (availableTools === null) return userSystemPrompt
+function defaultBuildSystemPrompt(
+  userSystemPrompt: string,
+  tools: ToolSet,
+  mcpMode?: string,
+): string {
+  const availableTools = buildAvailableTools(tools);
+  if (availableTools === null) return userSystemPrompt;
 
   if (mcpMode == 'auto') {
     return DEFAULT_SYSTEM_PROMPT.replace('{{ TOOLS_INFO }}', '').replace(
       '{{ USER_SYSTEM_PROMPT }}',
-      userSystemPrompt || ''
-    )
+      userSystemPrompt || '',
+    );
   }
   const toolsInfo = `
 ## Tool Use Examples
@@ -201,71 +205,74 @@ function defaultBuildSystemPrompt(userSystemPrompt: string, tools: ToolSet, mcpM
 Above example were using notional tools that might not exist for you. You only have access to these tools:
 {{ AVAILABLE_TOOLS }}`
     .replace('{{ TOOL_USE_EXAMPLES }}', DEFAULT_TOOL_USE_EXAMPLES)
-    .replace('{{ AVAILABLE_TOOLS }}', availableTools)
+    .replace('{{ AVAILABLE_TOOLS }}', availableTools);
 
   const fullPrompt = DEFAULT_SYSTEM_PROMPT.replace('{{ TOOLS_INFO }}', toolsInfo).replace(
     '{{ USER_SYSTEM_PROMPT }}',
-    userSystemPrompt || ''
-  )
+    userSystemPrompt || '',
+  );
 
-  return fullPrompt
+  return fullPrompt;
 }
 
 /**
  * 默认工具解析函数（提取自 Cherry Studio）
  * 解析 XML 格式的工具调用
  */
-function defaultParseToolUse(content: string, tools: ToolSet): { results: ToolUseResult[]; content: string } {
+function defaultParseToolUse(
+  content: string,
+  tools: ToolSet,
+): { results: ToolUseResult[]; content: string } {
   if (!content || !tools || Object.keys(tools).length === 0) {
-    return { results: [], content: content }
+    return { results: [], content: content };
   }
 
   // 支持两种格式：
   // 1. 完整的 <tool_use></tool_use> 标签包围的内容
   // 2. 只有内部内容（从 TagExtractor 提取出来的）
 
-  let contentToProcess = content
+  let contentToProcess = content;
   // 如果内容不包含 <tool_use> 标签，说明是从 TagExtractor 提取的内部内容，需要包装
   if (!content.includes('<tool_use>')) {
-    contentToProcess = `<tool_use>\n${content}\n</tool_use>`
+    contentToProcess = `<tool_use>\n${content}\n</tool_use>`;
   }
 
   const toolUsePattern =
-    /<tool_use>([\s\S]*?)<name>([\s\S]*?)<\/name>([\s\S]*?)<arguments>([\s\S]*?)<\/arguments>([\s\S]*?)<\/tool_use>/g
-  const results: ToolUseResult[] = []
-  let match
-  let idx = 0
+    /<tool_use>([\s\S]*?)<name>([\s\S]*?)<\/name>([\s\S]*?)<arguments>([\s\S]*?)<\/arguments>([\s\S]*?)<\/tool_use>/g;
+  const results: ToolUseResult[] = [];
+  let match;
+  let idx = 0;
 
   // Find all tool use blocks
   while ((match = toolUsePattern.exec(contentToProcess)) !== null) {
-    const fullMatch = match[0]
-    let toolName = match[2].trim()
+    const fullMatch = match[0];
+    let toolName = match[2].trim();
     switch (toolName.toLowerCase()) {
       case 'search':
-        toolName = 'mcp__CherryHub__search'
-        break
+        toolName = 'mcp__CherryHub__search';
+        break;
       case 'exec':
-        toolName = 'mcp__CherryHub__exec'
-        break
+        toolName = 'mcp__CherryHub__exec';
+        break;
       default:
-        break
+        break;
     }
-    const toolArgs = match[4].trim()
+    const toolArgs = match[4].trim();
 
     // Try to parse the arguments as JSON
-    let parsedArgs
+    let parsedArgs;
     try {
-      parsedArgs = JSON.parse(toolArgs)
+      parsedArgs = JSON.parse(toolArgs);
     } catch (error) {
       // If parsing fails, use the string as is
-      parsedArgs = toolArgs
+      parsedArgs = toolArgs;
     }
 
     // Find the corresponding tool
-    const tool = tools[toolName]
+    const tool = tools[toolName];
     if (!tool) {
-      console.warn(`Tool "${toolName}" not found in available tools`)
-      continue
+      console.warn(`Tool "${toolName}" not found in available tools`);
+      continue;
     }
 
     // Add to results array
@@ -273,79 +280,79 @@ function defaultParseToolUse(content: string, tools: ToolSet): { results: ToolUs
       id: `${toolName}-${idx++}`, // Unique ID for each tool use
       toolName: toolName,
       arguments: parsedArgs,
-      status: 'pending'
-    })
-    contentToProcess = contentToProcess.replace(fullMatch, '')
+      status: 'pending',
+    });
+    contentToProcess = contentToProcess.replace(fullMatch, '');
   }
-  return { results, content: contentToProcess }
+  return { results, content: contentToProcess };
 }
 
 export const createPromptToolUsePlugin = (
-  config: PromptToolUseConfig = {}
+  config: PromptToolUseConfig = {},
 ): AiPlugin<StreamTextParams, StreamTextResult> => {
   const {
     enabled = true,
     buildSystemPrompt = defaultBuildSystemPrompt,
     parseToolUse = defaultParseToolUse,
-    mcpMode
-  } = config
+    mcpMode,
+  } = config;
 
   return definePlugin<StreamTextParams, StreamTextResult>({
     name: 'built-in:prompt-tool-use',
     transformParams: (params, context) => {
       if (!enabled || !params.tools || typeof params.tools !== 'object') {
-        return params
+        return params;
       }
 
       // 分离 provider 和其他类型的工具
-      const providerDefinedTools: ToolSet = {}
-      const promptTools: ToolSet = {}
+      const providerDefinedTools: ToolSet = {};
+      const promptTools: ToolSet = {};
 
       for (const [toolName, tool] of Object.entries(params.tools)) {
         if (tool.type === 'provider') {
           // provider 类型的工具保留在 tools 参数中
-          providerDefinedTools[toolName] = tool
+          providerDefinedTools[toolName] = tool;
         } else {
           // 其他工具转换为 prompt 模式
-          promptTools[toolName] = tool
+          promptTools[toolName] = tool;
         }
       }
 
       // 只有当有非 provider 工具时才保存到 context
       if (Object.keys(promptTools).length > 0) {
-        context.mcpTools = promptTools
+        context.mcpTools = promptTools;
       }
 
       // 递归调用时，不重新构建 system prompt，避免重复追加工具定义
       if (context.isRecursiveCall) {
         const transformedParams = {
           ...params,
-          tools: Object.keys(providerDefinedTools).length > 0 ? providerDefinedTools : undefined
-        }
-        context.originalParams = transformedParams
-        return transformedParams
+          tools: Object.keys(providerDefinedTools).length > 0 ? providerDefinedTools : undefined,
+        };
+        context.originalParams = transformedParams;
+        return transformedParams;
       }
 
       // 构建系统提示符（只包含非 provider 工具）
-      const userSystemPrompt = typeof params.system === 'string' ? params.system : ''
-      const systemPrompt = buildSystemPrompt(userSystemPrompt, promptTools, mcpMode)
+      const userSystemPrompt = typeof params.system === 'string' ? params.system : '';
+      const systemPrompt = buildSystemPrompt(userSystemPrompt, promptTools, mcpMode);
 
       // 保留 provide tools，移除其他 tools
       const transformedParams = {
         ...params,
         ...(systemPrompt ? { system: systemPrompt } : {}),
-        tools: Object.keys(providerDefinedTools).length > 0 ? providerDefinedTools : undefined
-      }
-      context.originalParams = transformedParams
-      return transformedParams
+        tools: Object.keys(providerDefinedTools).length > 0 ? providerDefinedTools : undefined,
+      };
+      context.originalParams = transformedParams;
+      return transformedParams;
     },
     transformStream: (_, context) => () => {
-      let textBuffer = ''
+      let textBuffer = '';
       // let stepId = ''
 
       // 如果没有需要 prompt 模式处理的工具，直接返回原始流
       if (!context.mcpTools) {
-        return new TransformStream()
+        return new TransformStream();
       }
 
       // 初始化 usage 累加器和工具执行状态
@@ -355,133 +362,137 @@ export const createPromptToolUsePlugin = (
           outputTokens: 0,
           totalTokens: 0,
           reasoningTokens: 0,
-          cachedInputTokens: 0
-        }
+          cachedInputTokens: 0,
+        };
       }
       if (context.hasExecutedToolsInCurrentStep === undefined) {
-        context.hasExecutedToolsInCurrentStep = false
+        context.hasExecutedToolsInCurrentStep = false;
       }
 
       // 创建工具执行器、流事件管理器和标签提取器
-      const toolExecutor = new ToolExecutor()
-      const streamEventManager = new StreamEventManager()
-      const tagExtractor = new TagExtractor(TOOL_USE_TAG_CONFIG)
+      const toolExecutor = new ToolExecutor();
+      const streamEventManager = new StreamEventManager();
+      const tagExtractor = new TagExtractor(TOOL_USE_TAG_CONFIG);
 
       // 用于hold text-start事件，直到确认有非工具标签内容
-      let pendingTextStart: TextStreamPart<TOOLS> | null = null
-      let hasStartedText = false
+      let pendingTextStart: TextStreamPart<TOOLS> | null = null;
+      let hasStartedText = false;
 
-      type TOOLS = NonNullable<typeof context.mcpTools>
+      type TOOLS = NonNullable<typeof context.mcpTools>;
       return new TransformStream<TextStreamPart<TOOLS>, TextStreamPart<TOOLS>>({
         async transform(
           chunk: TextStreamPart<TOOLS>,
-          controller: TransformStreamDefaultController<TextStreamPart<TOOLS>>
+          controller: TransformStreamDefaultController<TextStreamPart<TOOLS>>,
         ) {
           // Hold住text-start事件，直到确认有非工具标签内容
           if ((chunk as any).type === 'text-start') {
-            pendingTextStart = chunk
-            return
+            pendingTextStart = chunk;
+            return;
           }
 
           // text-delta阶段：收集文本内容并过滤工具标签
           if (chunk.type === 'text-delta') {
-            textBuffer += chunk.text || ''
+            textBuffer += chunk.text || '';
             // stepId = chunk.id || ''
 
             // 使用TagExtractor过滤工具标签，只传递非标签内容到UI层
-            const extractionResults = tagExtractor.processText(chunk.text || '')
+            const extractionResults = tagExtractor.processText(chunk.text || '');
 
             for (const result of extractionResults) {
               // 只传递非标签内容到UI层
               if (!result.isTagContent && result.content) {
                 // 如果还没有发送text-start且有pending的text-start，先发送它
                 if (!hasStartedText && pendingTextStart) {
-                  controller.enqueue(pendingTextStart)
-                  hasStartedText = true
-                  pendingTextStart = null
+                  controller.enqueue(pendingTextStart);
+                  hasStartedText = true;
+                  pendingTextStart = null;
                 }
 
                 const filteredChunk = {
                   ...chunk,
-                  text: result.content
-                }
-                controller.enqueue(filteredChunk)
+                  text: result.content,
+                };
+                controller.enqueue(filteredChunk);
               }
             }
-            return
+            return;
           }
 
           if (chunk.type === 'text-end') {
             // 只有当已经发送了text-start时才发送text-end
             if (hasStartedText) {
-              controller.enqueue(chunk)
+              controller.enqueue(chunk);
             }
-            return
+            return;
           }
 
           if (chunk.type === 'finish-step') {
             // 统一在finish-step阶段检查并执行工具调用
-            const tools = context.mcpTools
+            const tools = context.mcpTools;
             if (tools && Object.keys(tools).length > 0 && !context.hasExecutedToolsInCurrentStep) {
               // 解析完整的textBuffer来检测工具调用
-              const { results: parsedTools } = parseToolUse(textBuffer, tools)
-              const validToolUses = parsedTools.filter((t) => t.status === 'pending')
+              const { results: parsedTools } = parseToolUse(textBuffer, tools);
+              const validToolUses = parsedTools.filter((t) => t.status === 'pending');
 
               if (validToolUses.length > 0) {
-                context.hasExecutedToolsInCurrentStep = true
+                context.hasExecutedToolsInCurrentStep = true;
 
                 // 执行工具调用（不需要手动发送 start-step，外部流已经处理）
-                const executedResults = await toolExecutor.executeTools(validToolUses, tools, controller)
+                const executedResults = await toolExecutor.executeTools(
+                  validToolUses,
+                  tools,
+                  controller,
+                );
 
                 // 发送步骤完成事件，使用 tool-calls 作为 finishReason
-                streamEventManager.sendStepFinishEvent(controller, chunk, context, 'tool-calls')
+                streamEventManager.sendStepFinishEvent(controller, chunk, context, 'tool-calls');
 
                 // 处理递归调用
-                const toolResultsText = toolExecutor.formatToolResults(executedResults)
+                const toolResultsText = toolExecutor.formatToolResults(executedResults);
                 const recursiveParams = streamEventManager.buildRecursiveParams(
                   context,
                   textBuffer,
                   toolResultsText,
-                  tools
-                )
+                  tools,
+                );
 
-                await streamEventManager.handleRecursiveCall(controller, recursiveParams, context)
-                return
+                await streamEventManager.handleRecursiveCall(controller, recursiveParams, context);
+                return;
               }
             }
 
             // 如果没有执行工具调用，累加 usage 后透传 finish-step 事件
             if (chunk.usage && context.accumulatedUsage) {
-              streamEventManager.accumulateUsage(context.accumulatedUsage, chunk.usage)
+              streamEventManager.accumulateUsage(context.accumulatedUsage, chunk.usage);
             }
-            controller.enqueue(chunk)
+            controller.enqueue(chunk);
 
             // 清理状态
-            textBuffer = ''
-            return
+            textBuffer = '';
+            return;
           }
 
           // 处理 finish 类型，使用累加后的 totalUsage
           if (chunk.type === 'finish') {
             controller.enqueue({
               ...chunk,
-              totalUsage: context.accumulatedUsage
-            })
-            return
+              totalUsage: context.accumulatedUsage,
+            });
+            return;
           }
 
           // 对于其他类型的事件，直接传递（不包括text-start，已在上面处理）
           if ((chunk as any).type !== 'text-start') {
-            controller.enqueue(chunk)
+            controller.enqueue(chunk);
           }
         },
 
         flush() {
           // 清理pending状态
-          pendingTextStart = null
-          hasStartedText = false
-        }
-      })
-    }
-  })
-}
+          pendingTextStart = null;
+          hasStartedText = false;
+        },
+      });
+    },
+  });
+};

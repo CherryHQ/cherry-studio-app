@@ -1,1 +1,1 @@
-export type PlainObject = Record<string, any>
+export type PlainObject = Record<string, any>;

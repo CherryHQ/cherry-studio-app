@@ -3,11 +3,16 @@
  * 管理所有 Provider Extensions 的注册、查询和实例化
  */
 
-import type { ProviderV3 } from '@ai-sdk/provider'
+import type { ProviderV3 } from '@ai-sdk/provider';
 
-import type { CoreProviderSettingsMap, RegisteredProviderId, ToolCapability, ToolFactory } from '../index'
-import { type ProviderExtension } from './ProviderExtension'
-import { ProviderCreationError } from './utils'
+import type {
+  CoreProviderSettingsMap,
+  RegisteredProviderId,
+  ToolCapability,
+  ToolFactory,
+} from '../index';
+import { type ProviderExtension } from './ProviderExtension';
+import { ProviderCreationError } from './utils';
 
 /**
  * Provider Extension 注册表
@@ -40,47 +45,49 @@ import { ProviderCreationError } from './utils'
  */
 export class ExtensionRegistry {
   /** Extension 存储: name -> Extension */
-  private extensions: Map<string, ProviderExtension<any, any, any>> = new Map()
+  private extensions: Map<string, ProviderExtension<any, any, any>> = new Map();
 
   /** 别名映射: alias -> name */
-  private aliasMap: Map<string, string> = new Map()
+  private aliasMap: Map<string, string> = new Map();
 
   /**
    * 注册单个 Extension
    * 支持链式调用
    */
   register(extension: ProviderExtension<any, any, any>): this {
-    const { name, aliases, variants } = extension.config
+    const { name, aliases, variants } = extension.config;
 
     // Idempotent: skip if already registered (supports HMR / re-import)
     if (this.extensions.has(name)) {
-      return this
+      return this;
     }
 
-    this.extensions.set(name, extension)
+    this.extensions.set(name, extension);
 
     if (aliases) {
       for (const alias of aliases) {
         if (this.aliasMap.has(alias)) {
-          throw new Error(`Provider alias "${alias}" is already registered for "${this.aliasMap.get(alias)}"`)
+          throw new Error(
+            `Provider alias "${alias}" is already registered for "${this.aliasMap.get(alias)}"`,
+          );
         }
-        this.aliasMap.set(alias, name)
+        this.aliasMap.set(alias, name);
       }
     }
 
     if (variants) {
       for (const variant of variants) {
-        const variantId = `${name}-${variant.suffix}`
+        const variantId = `${name}-${variant.suffix}`;
         if (this.aliasMap.has(variantId)) {
           throw new Error(
-            `Provider variant ID "${variantId}" is already registered for "${this.aliasMap.get(variantId)}"`
-          )
+            `Provider variant ID "${variantId}" is already registered for "${this.aliasMap.get(variantId)}"`,
+          );
         }
-        this.aliasMap.set(variantId, name)
+        this.aliasMap.set(variantId, name);
       }
     }
 
-    return this
+    return this;
   }
 
   /**
@@ -89,36 +96,36 @@ export class ExtensionRegistry {
    */
   registerAll(extensions: readonly ProviderExtension<any, any, any>[]): this {
     for (const ext of extensions) {
-      this.register(ext)
+      this.register(ext);
     }
-    return this
+    return this;
   }
 
   /**
    * 取消注册 Extension
    */
   unregister(name: string): boolean {
-    const extension = this.extensions.get(name)
+    const extension = this.extensions.get(name);
     if (!extension) {
-      return false
+      return false;
     }
 
-    extension.clearCache()
-    this.extensions.delete(name)
+    extension.clearCache();
+    this.extensions.delete(name);
 
     if (extension.config.aliases) {
       for (const alias of extension.config.aliases) {
-        this.aliasMap.delete(alias)
+        this.aliasMap.delete(alias);
       }
     }
 
     if (extension.config.variants) {
       for (const variant of extension.config.variants) {
-        this.aliasMap.delete(`${name}-${variant.suffix}`)
+        this.aliasMap.delete(`${name}-${variant.suffix}`);
       }
     }
 
-    return true
+    return true;
   }
 
   /**
@@ -126,15 +133,15 @@ export class ExtensionRegistry {
    */
   get(id: string): ProviderExtension<any, any, any> | undefined {
     if (this.extensions.has(id)) {
-      return this.extensions.get(id)
+      return this.extensions.get(id);
     }
 
-    const realName = this.aliasMap.get(id)
+    const realName = this.aliasMap.get(id);
     if (realName) {
-      return this.extensions.get(realName)
+      return this.extensions.get(realName);
     }
 
-    return undefined
+    return undefined;
   }
 
   /**
@@ -154,21 +161,21 @@ export class ExtensionRegistry {
    * ```
    */
   getTyped<T extends RegisteredProviderId>(id: T): ProviderExtension<any, any, any> | undefined {
-    return this.get(id)
+    return this.get(id);
   }
 
   /**
    * 检查 Extension 是否已注册
    */
   has(id: string): boolean {
-    return this.extensions.has(id) || this.aliasMap.has(id)
+    return this.extensions.has(id) || this.aliasMap.has(id);
   }
 
   /**
    * 获取所有已注册的 Extension
    */
   getAll(): ProviderExtension<any, any, any>[] {
-    return Array.from(this.extensions.values())
+    return Array.from(this.extensions.values());
   }
 
   /**
@@ -176,16 +183,16 @@ export class ExtensionRegistry {
    * 返回类型安全的 RegisteredProviderId 数组，自动去重
    */
   getAllProviderIds(): RegisteredProviderId[] {
-    const ids = new Set<string>()
+    const ids = new Set<string>();
 
     for (const extension of this.extensions.values()) {
       for (const id of extension.getProviderIds()) {
-        ids.add(id)
+        ids.add(id);
       }
     }
 
     // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
-    return Array.from(ids) as RegisteredProviderId[]
+    return Array.from(ids) as RegisteredProviderId[];
   }
 
   /**
@@ -208,29 +215,29 @@ export class ExtensionRegistry {
   resolveProviderIdWithMode(baseId: string, mode?: string): string | null {
     // 如果没有 mode，直接返回解析后的 ID
     if (!mode) {
-      const extension = this.get(baseId)
-      return extension ? extension.config.name : null
+      const extension = this.get(baseId);
+      return extension ? extension.config.name : null;
     }
 
     // 获取 extension（支持别名）
-    const extension = this.get(baseId)
+    const extension = this.get(baseId);
     if (!extension) {
-      return null
+      return null;
     }
 
     // 检查是否有对应的变体
     if (!extension.config.variants) {
-      return null
+      return null;
     }
 
     // 查找匹配的变体
-    const variant = extension.config.variants.find((v: { suffix: string }) => v.suffix === mode)
+    const variant = extension.config.variants.find((v: { suffix: string }) => v.suffix === mode);
     if (!variant) {
-      return null
+      return null;
     }
 
     // 返回变体 ID: ${name}-${suffix}
-    return `${extension.config.name}-${variant.suffix}`
+    return `${extension.config.name}-${variant.suffix}`;
   }
 
   /**
@@ -250,38 +257,40 @@ export class ExtensionRegistry {
    * parseProviderId('unknown')            // → null
    * ```
    */
-  parseProviderId(providerId: string): { baseId: RegisteredProviderId; mode?: string; isVariant: boolean } | null {
+  parseProviderId(
+    providerId: string,
+  ): { baseId: RegisteredProviderId; mode?: string; isVariant: boolean } | null {
     // 先遍历所有 extensions，查找匹配的变体（优先于别名检查）
     for (const ext of this.extensions.values()) {
       if (!ext.config.variants) {
-        continue
+        continue;
       }
 
       // 检查每个变体
       for (const variant of ext.config.variants) {
-        const variantId = `${ext.config.name}-${variant.suffix}`
+        const variantId = `${ext.config.name}-${variant.suffix}`;
         if (variantId === providerId) {
           return {
             baseId: ext.config.name as RegisteredProviderId,
             mode: variant.suffix,
-            isVariant: true
-          }
+            isVariant: true,
+          };
         }
       }
     }
 
     // 再检查是否是已注册的 extension（直接或通过别名）
-    const extension = this.get(providerId)
+    const extension = this.get(providerId);
     if (extension) {
       // 是基础 ID 或别名，不是变体
       return {
         baseId: extension.config.name as RegisteredProviderId,
-        isVariant: false
-      }
+        isVariant: false,
+      };
     }
 
     // 无法解析
-    return null
+    return null;
   }
 
   /**
@@ -299,8 +308,8 @@ export class ExtensionRegistry {
    * ```
    */
   isVariant(id: string): boolean {
-    const parsed = this.parseProviderId(id)
-    return parsed?.isVariant ?? false
+    const parsed = this.parseProviderId(id);
+    return parsed?.isVariant ?? false;
   }
 
   /**
@@ -323,8 +332,8 @@ export class ExtensionRegistry {
    * ```
    */
   getBaseProviderId(id: string): RegisteredProviderId | null {
-    const parsed = this.parseProviderId(id)
-    return parsed?.baseId ?? null
+    const parsed = this.parseProviderId(id);
+    return parsed?.baseId ?? null;
   }
 
   /**
@@ -342,25 +351,27 @@ export class ExtensionRegistry {
    * ```
    */
   getVariantMode(variantId: string): string | null {
-    const parsed = this.parseProviderId(variantId)
-    return parsed?.mode ?? null
+    const parsed = this.parseProviderId(variantId);
+    return parsed?.mode ?? null;
   }
 
   /** 获取 variant 的 resolveModel 函数（类型安全在 extension 声明处保证） */
-  getModelResolver(providerId: string): ((provider: ProviderV3, modelId: string) => any) | undefined {
-    const parsed = this.parseProviderId(providerId)
-    if (!parsed) return undefined
+  getModelResolver(
+    providerId: string,
+  ): ((provider: ProviderV3, modelId: string) => any) | undefined {
+    const parsed = this.parseProviderId(providerId);
+    if (!parsed) return undefined;
 
-    const extension = this.get(parsed.baseId)
-    if (!extension) return undefined
+    const extension = this.get(parsed.baseId);
+    if (!extension) return undefined;
 
     // Variant resolveModel（类型安全，在 extension 声明处校验）
     if (parsed.isVariant && parsed.mode) {
-      const variant = extension.getVariant(parsed.mode)
-      if (variant?.resolveModel) return variant.resolveModel
+      const variant = extension.getVariant(parsed.mode);
+      if (variant?.resolveModel) return variant.resolveModel;
     }
 
-    return undefined
+    return undefined;
   }
 
   /**
@@ -379,33 +390,35 @@ export class ExtensionRegistry {
    * ```
    */
   getVariants(baseId: string): string[] {
-    const extension = this.get(baseId)
+    const extension = this.get(baseId);
     if (!extension?.config.variants) {
-      return []
+      return [];
     }
 
-    return extension.config.variants.map((v: { suffix: string }) => `${extension.config.name}-${v.suffix}`)
+    return extension.config.variants.map(
+      (v: { suffix: string }) => `${extension.config.name}-${v.suffix}`,
+    );
   }
 
   /** 获取指定 provider 的工具工厂（变体优先，回退到 base） */
   getToolFactory(providerId: string, capability: ToolCapability): ToolFactory | undefined {
-    const parsed = this.parseProviderId(providerId)
-    if (!parsed) return undefined
+    const parsed = this.parseProviderId(providerId);
+    if (!parsed) return undefined;
 
-    const { baseId, mode, isVariant } = parsed
-    const extension = this.get(baseId)
-    if (!extension) return undefined
+    const { baseId, mode, isVariant } = parsed;
+    const extension = this.get(baseId);
+    if (!extension) return undefined;
 
     // For variants, check variant-level toolFactories first
     if (isVariant && mode) {
-      const variant = extension.getVariant(mode)
+      const variant = extension.getVariant(mode);
       if (variant?.toolFactories?.[capability]) {
-        return variant.toolFactories[capability]
+        return variant.toolFactories[capability];
       }
     }
 
     // Fall back to base extension's toolFactories
-    return extension.config.toolFactories?.[capability]
+    return extension.config.toolFactories?.[capability];
   }
 
   /**
@@ -417,39 +430,39 @@ export class ExtensionRegistry {
   async resolveToolCapability(
     providerId: string,
     capability: ToolCapability,
-    modelProvider?: string
+    modelProvider?: string,
   ): Promise<{ factory: ToolFactory; provider: ProviderV3 } | undefined> {
     // 1. Direct: provider 自己有 toolFactories
-    const directFactory = this.getToolFactory(providerId, capability)
+    const directFactory = this.getToolFactory(providerId, capability);
     if (directFactory) {
-      const provider = await this.getToolProvider(providerId)
-      if (provider) return { factory: directFactory, provider }
+      const provider = await this.getToolProvider(providerId);
+      if (provider) return { factory: directFactory, provider };
     }
 
     // 2. Aggregator fallback: 从 model.provider 段解析真实 provider
     //    e.g., "aihubmix.google" → try "google" → found via google extension
     //    e.g., "cherryin.gemini" → try "gemini" → found via alias → google extension
     if (typeof modelProvider === 'string') {
-      const segments = modelProvider.split('.')
+      const segments = modelProvider.split('.');
       for (let i = segments.length - 1; i >= 0; i--) {
-        const factory = this.getToolFactory(segments[i], capability)
+        const factory = this.getToolFactory(segments[i], capability);
         if (factory) {
-          const provider = await this.getToolProvider(segments[i])
-          if (provider) return { factory, provider }
+          const provider = await this.getToolProvider(segments[i]);
+          if (provider) return { factory, provider };
         }
       }
     }
 
-    return undefined
+    return undefined;
   }
 
   /** Get provider for .tools extraction (cached or dummy instance) */
   private async getToolProvider(providerId: string): Promise<ProviderV3 | undefined> {
-    const parsed = this.parseProviderId(providerId)
-    if (!parsed) return undefined
+    const parsed = this.parseProviderId(providerId);
+    if (!parsed) return undefined;
 
-    const extension = this.get(parsed.baseId)
-    if (!extension) return undefined
+    const extension = this.get(parsed.baseId);
+    if (!extension) return undefined;
 
     try {
       // For variants, create the variant-transformed provider so that
@@ -457,10 +470,10 @@ export class ExtensionRegistry {
       // for azure-anthropic instead of AzureOpenAIProvider).
       return await extension.createProvider(
         extension.getCachedProvider() ? undefined : { apiKey: '_tool_descriptor' },
-        parsed.isVariant ? parsed.mode : undefined
-      )
+        parsed.isVariant ? parsed.mode : undefined,
+      );
     } catch {
-      return undefined
+      return undefined;
     }
   }
 
@@ -468,8 +481,8 @@ export class ExtensionRegistry {
    * 清空所有注册
    */
   clear(): void {
-    this.extensions.clear()
-    this.aliasMap.clear()
+    this.extensions.clear();
+    this.aliasMap.clear();
   }
 
   /**
@@ -483,29 +496,32 @@ export class ExtensionRegistry {
    * @param settings - Provider 配置
    * @returns Provider 实例
    */
-  async createProvider<T extends RegisteredProviderId>(id: T, settings: CoreProviderSettingsMap[T]): Promise<ProviderV3>
-  async createProvider(id: string, settings?: unknown): Promise<ProviderV3>
+  async createProvider<T extends RegisteredProviderId>(
+    id: T,
+    settings: CoreProviderSettingsMap[T],
+  ): Promise<ProviderV3>;
+  async createProvider(id: string, settings?: unknown): Promise<ProviderV3>;
   async createProvider(id: string, settings?: unknown): Promise<ProviderV3> {
-    const parsed = this.parseProviderId(id)
+    const parsed = this.parseProviderId(id);
     if (!parsed) {
-      throw new Error(`Provider extension "${id}" not found. Did you forget to register it?`)
+      throw new Error(`Provider extension "${id}" not found. Did you forget to register it?`);
     }
 
-    const { baseId, mode: variantSuffix } = parsed
+    const { baseId, mode: variantSuffix } = parsed;
 
-    const extension = this.get(baseId)
+    const extension = this.get(baseId);
     if (!extension) {
-      throw new Error(`Provider extension "${baseId}" not found. Did you forget to register it?`)
+      throw new Error(`Provider extension "${baseId}" not found. Did you forget to register it?`);
     }
 
     try {
-      return await extension.createProvider(settings, variantSuffix)
+      return await extension.createProvider(settings, variantSuffix);
     } catch (error) {
       throw new ProviderCreationError(
         `Failed to create provider "${id}"`,
         id,
-        error instanceof Error ? error : new Error(String(error))
-      )
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
   }
 }
@@ -514,4 +530,4 @@ export class ExtensionRegistry {
  * 全局 Extension Registry 实例
  * 单例模式，确保整个应用只有一个注册表
  */
-export const extensionRegistry = new ExtensionRegistry()
+export const extensionRegistry = new ExtensionRegistry();

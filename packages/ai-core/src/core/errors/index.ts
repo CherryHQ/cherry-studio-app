@@ -12,13 +12,13 @@ export class AiCoreError extends Error {
     public readonly code: string,
     message: string,
     public readonly context?: Record<string, unknown>,
-    public readonly cause?: Error
+    public readonly cause?: Error,
   ) {
-    super(message)
-    this.name = 'AiCoreError'
+    super(message);
+    this.name = 'AiCoreError';
 
     if (cause) {
-      this.stack = `${this.stack}\nCaused by: ${cause.stack}`
+      this.stack = `${this.stack}\nCaused by: ${cause.stack}`;
     }
   }
 
@@ -31,10 +31,10 @@ export class AiCoreError extends Error {
       cause: this.cause
         ? {
             name: this.cause.name,
-            message: this.cause.message
+            message: this.cause.message,
           }
-        : undefined
-    }
+        : undefined,
+    };
   }
 }
 
@@ -44,12 +44,16 @@ export class AiCoreError extends Error {
  */
 export class RecursiveDepthError extends AiCoreError {
   constructor(requestId: string, currentDepth: number, maxDepth: number) {
-    super('RECURSIVE_DEPTH_EXCEEDED', `Maximum recursive depth (${maxDepth}) exceeded at depth ${currentDepth}`, {
-      requestId,
-      currentDepth,
-      maxDepth
-    })
-    this.name = 'RecursiveDepthError'
+    super(
+      'RECURSIVE_DEPTH_EXCEEDED',
+      `Maximum recursive depth (${maxDepth}) exceeded at depth ${currentDepth}`,
+      {
+        requestId,
+        currentDepth,
+        maxDepth,
+      },
+    );
+    this.name = 'RecursiveDepthError';
   }
 }
 
@@ -59,8 +63,13 @@ export class RecursiveDepthError extends AiCoreError {
  */
 export class ModelResolutionError extends AiCoreError {
   constructor(modelId: string, providerId: string, cause?: Error) {
-    super('MODEL_RESOLUTION_FAILED', `Failed to resolve model: ${modelId}`, { modelId, providerId }, cause)
-    this.name = 'ModelResolutionError'
+    super(
+      'MODEL_RESOLUTION_FAILED',
+      `Failed to resolve model: ${modelId}`,
+      { modelId, providerId },
+      cause,
+    );
+    this.name = 'ModelResolutionError';
   }
 }
 
@@ -73,9 +82,9 @@ export class ParameterValidationError extends AiCoreError {
     super('PARAMETER_VALIDATION_FAILED', `Invalid parameter '${paramName}': ${reason}`, {
       paramName,
       reason,
-      value
-    })
-    this.name = 'ParameterValidationError'
+      value,
+    });
+    this.name = 'ParameterValidationError';
   }
 }
 
@@ -90,11 +99,11 @@ export class PluginExecutionError extends AiCoreError {
       `Plugin '${pluginName}' failed in hook '${hookName}'`,
       {
         pluginName,
-        hookName
+        hookName,
       },
-      cause
-    )
-    this.name = 'PluginExecutionError'
+      cause,
+    );
+    this.name = 'PluginExecutionError';
   }
 }
 
@@ -106,9 +115,9 @@ export class ProviderConfigError extends AiCoreError {
   constructor(providerId: string, reason: string) {
     super('PROVIDER_CONFIG_ERROR', `Provider '${providerId}' configuration error: ${reason}`, {
       providerId,
-      reason
-    })
-    this.name = 'ProviderConfigError'
+      reason,
+    });
+    this.name = 'ProviderConfigError';
   }
 }
 
@@ -118,7 +127,12 @@ export class ProviderConfigError extends AiCoreError {
  */
 export class TemplateLoadError extends AiCoreError {
   constructor(templateName: string, cause?: Error) {
-    super('TEMPLATE_LOAD_FAILED', `Failed to load template: ${templateName}`, { templateName }, cause)
-    this.name = 'TemplateLoadError'
+    super(
+      'TEMPLATE_LOAD_FAILED',
+      `Failed to load template: ${templateName}`,
+      { templateName },
+      cause,
+    );
+    this.name = 'TemplateLoadError';
   }
 }

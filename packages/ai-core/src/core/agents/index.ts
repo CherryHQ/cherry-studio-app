@@ -1,2 +1,2 @@
-export type { CreateAgentOptions } from './createAgent'
-export { createAgent } from './createAgent'
+export type { CreateAgentOptions } from './createAgent';
+export { createAgent } from './createAgent';

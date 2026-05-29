@@ -61,9 +61,7 @@
           "photosPermission": "Allow Cherry Studio to preview photos for chat messages.",
           "savePhotosPermission": "Allow Cherry Studio to save photos.",
           "preventAutomaticLimitedAccessAlert": true,
-          "granularPermissions": [
-            "photo"
-          ]
+          "granularPermissions": ["photo"]
         }
       ],
       "expo-web-browser",

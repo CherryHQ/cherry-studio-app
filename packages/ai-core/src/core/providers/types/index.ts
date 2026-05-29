@@ -1,4 +1,4 @@
-import type { ProviderV2, ProviderV3 } from '@ai-sdk/provider'
+import type { ProviderV2, ProviderV3 } from '@ai-sdk/provider';
 import type {
   EmbeddingModel,
   EmbeddingModelUsage,
@@ -7,12 +7,12 @@ import type {
   LanguageModel,
   LanguageModelUsage,
   SpeechModel,
-  TranscriptionModel
-} from 'ai'
+  TranscriptionModel,
+} from 'ai';
 
-import type { coreExtensions } from '../core/initialization'
-import type { ProviderExtension } from '../core/ProviderExtension'
-import type { ToolFactoryMap } from './toolFactory'
+import type { coreExtensions } from '../core/initialization';
+import type { ProviderExtension } from '../core/ProviderExtension';
+import type { ToolFactoryMap } from './toolFactory';
 
 // ============================================================================
 // Type Utilities
@@ -22,13 +22,13 @@ import type { ToolFactoryMap } from './toolFactory'
  * 提取对象类型中的字符串键
  * @example StringKeys<{ foo: 1, 0: 2 }> = 'foo'
  */
-export type StringKeys<T> = Extract<keyof T, string>
+export type StringKeys<T> = Extract<keyof T, string>;
 
 /** 从 coreExtensions 自动提取的 Provider ID literal union */
-export type RegisteredProviderId = StringKeys<CoreProviderSettingsMap>
+export type RegisteredProviderId = StringKeys<CoreProviderSettingsMap>;
 
 /** 允许已注册 ID（有自动补全）和任意字符串（动态 provider） */
-export type ProviderId = RegisteredProviderId | (string & {})
+export type ProviderId = RegisteredProviderId | (string & {});
 
 // 错误类型
 export class ProviderError extends Error {
@@ -36,38 +36,43 @@ export class ProviderError extends Error {
     message: string,
     public providerId: string,
     public code?: string,
-    public cause?: Error
+    public cause?: Error,
   ) {
-    super(message)
-    this.name = 'ProviderError'
+    super(message);
+    this.name = 'ProviderError';
   }
 }
 
-export type AiSdkModel = LanguageModel | ImageModel | EmbeddingModel | TranscriptionModel | SpeechModel
-export type AiSdkProvider = ProviderV2 | ProviderV3
-export type AiSdkUsage = LanguageModelUsage | ImageModelUsage | EmbeddingModelUsage
+export type AiSdkModel =
+  | LanguageModel
+  | ImageModel
+  | EmbeddingModel
+  | TranscriptionModel
+  | SpeechModel;
+export type AiSdkProvider = ProviderV2 | ProviderV3;
+export type AiSdkUsage = LanguageModelUsage | ImageModelUsage | EmbeddingModelUsage;
 
-export type AiSdkModelType = 'text' | 'image' | 'embedding' | 'transcription' | 'speech'
+export type AiSdkModelType = 'text' | 'image' | 'embedding' | 'transcription' | 'speech';
 
 const METHOD_MAP = {
   text: 'languageModel',
   image: 'imageModel',
   embedding: 'embeddingModel',
   transcription: 'transcriptionModel',
-  speech: 'speechModel'
-} as const satisfies Record<AiSdkModelType, keyof ProviderV3>
+  speech: 'speechModel',
+} as const satisfies Record<AiSdkModelType, keyof ProviderV3>;
 
 type AiSdkModelReturnMap = {
-  text: LanguageModel
-  image: ImageModel
-  embedding: EmbeddingModel
-  transcription: TranscriptionModel
-  speech: SpeechModel
-}
+  text: LanguageModel;
+  image: ImageModel;
+  embedding: EmbeddingModel;
+  transcription: TranscriptionModel;
+  speech: SpeechModel;
+};
 
-export type AiSdkMethodName<T extends AiSdkModelType> = (typeof METHOD_MAP)[T]
+export type AiSdkMethodName<T extends AiSdkModelType> = (typeof METHOD_MAP)[T];
 
-export type AiSdkModelReturn<T extends AiSdkModelType> = AiSdkModelReturnMap[T]
+export type AiSdkModelReturn<T extends AiSdkModelType> = AiSdkModelReturnMap[T];
 
 // ============================================================================
 // Provider Extension 类型定义
@@ -85,18 +90,18 @@ export type AiSdkModelReturn<T extends AiSdkModelType> = AiSdkModelReturnMap[T]
 export interface ProviderVariant<
   TSettings = any,
   TProvider extends ProviderV3 = ProviderV3,
-  TOutput extends ProviderV3 = TProvider
+  TOutput extends ProviderV3 = TProvider,
 > {
-  suffix: string
-  name: string
+  suffix: string;
+  name: string;
 
   /** 类型安全的模型解析：provider.responses(modelId) / provider.chat(modelId) */
-  resolveModel?: (provider: TOutput, modelId: string) => LanguageModel
+  resolveModel?: (provider: TOutput, modelId: string) => LanguageModel;
 
   /** 替换整个 provider（如 azure-anthropic），简单方法切换用 resolveModel */
-  transform?: (baseProvider: TProvider, settings?: TSettings) => TOutput
+  transform?: (baseProvider: TProvider, settings?: TSettings) => TOutput;
 
-  toolFactories?: ToolFactoryMap<TOutput>
+  toolFactories?: ToolFactoryMap<TOutput>;
 }
 
 // ============================================================================
@@ -126,12 +131,14 @@ export type ExtractProviderIds<TConfig> = TConfig extends { name: infer TName }
               : never
             : never)
     : never
-  : never
+  : never;
 
 /**
  * Extract Provider IDs from a ProviderExtension instance
  */
-export type ExtractExtensionIds<T> = T extends { config: infer TConfig } ? ExtractProviderIds<TConfig> : never
+export type ExtractExtensionIds<T> = T extends { config: infer TConfig }
+  ? ExtractProviderIds<TConfig>
+  : never;
 
 /**
  * Extract Settings type from a ProviderExtension instance
@@ -142,14 +149,16 @@ export type ExtractExtensionIds<T> = T extends { config: infer TConfig } ? Extra
  * // => OpenAIProviderSettings
  * ```
  */
-export type ExtractExtensionSettings<T> = T extends ProviderExtension<infer TSettings, any, any> ? TSettings : never
+export type ExtractExtensionSettings<T> =
+  T extends ProviderExtension<infer TSettings, any, any> ? TSettings : never;
 
 /**
  * Map all Provider IDs from an Extension to its Settings type
  */
-export type ExtensionToSettingsMap<T> = T extends ProviderExtension<infer TSettings, any, infer TConfig>
-  ? { [K in ExtractProviderIds<TConfig>]: TSettings }
-  : never
+export type ExtensionToSettingsMap<T> =
+  T extends ProviderExtension<infer TSettings, any, infer TConfig>
+    ? { [K in ExtractProviderIds<TConfig>]: TSettings }
+    : never;
 
 // ============================================================================
 // Provider Settings Map - Auto-extracted from Extensions
@@ -158,32 +167,40 @@ export type ExtensionToSettingsMap<T> = T extends ProviderExtension<infer TSetti
 /**
  * Core Provider Settings Map
  */
-export type CoreProviderSettingsMap = UnionToIntersection<ExtensionToSettingsMap<(typeof coreExtensions)[number]>>
+export type CoreProviderSettingsMap = UnionToIntersection<
+  ExtensionToSettingsMap<(typeof coreExtensions)[number]>
+>;
 
 // 辅助类型：提取所有变体 ID
 type ExtractVariantIds<TConfig, TName extends string> = TConfig extends {
-  variants: readonly { suffix: infer TSuffix extends string }[]
+  variants: readonly { suffix: infer TSuffix extends string }[];
 }
   ? `${TName}-${TSuffix}`
-  : never
+  : never;
 
-export type ExtensionConfigToIdResolutionMap<TConfig> = TConfig extends { name: infer TName extends string }
+export type ExtensionConfigToIdResolutionMap<TConfig> = TConfig extends {
+  name: infer TName extends string;
+}
   ? {
       readonly [K in
         | TName
         | (TConfig extends { aliases: readonly (infer TAlias extends string)[] } ? TAlias : never)
         | ExtractVariantIds<TConfig, TName>]: K extends ExtractVariantIds<TConfig, TName>
         ? K // 变体 → 自身
-        : TName // 基础名和别名 → TName
+        : TName; // 基础名和别名 → TName
     }
-  : never
+  : never;
 
 /**
  * Provider IDs Map Type with Literal Type Inference
  */
-export type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) extends (x: infer I) => void ? I : never
+export type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) extends (
+  x: infer I,
+) => void
+  ? I
+  : never;
 
-export type { ToolCapability, ToolFactory, ToolFactoryMap, ToolFactoryPatch } from './toolFactory'
+export type { ToolCapability, ToolFactory, ToolFactoryMap, ToolFactoryPatch } from './toolFactory';
 
 // ============================================================================
 // Tool Config Type Extraction (from extension declarations via as const)
@@ -191,25 +208,25 @@ export type { ToolCapability, ToolFactory, ToolFactoryMap, ToolFactoryPatch } fr
 
 /** Extract a capability's config type from an extension's toolFactories */
 export type ExtractToolConfig<TExt, K extends string> = TExt extends {
-  config: { toolFactories?: { [P in K]?: (provider: any) => (config: infer C) => any } }
+  config: { toolFactories?: { [P in K]?: (provider: any) => (config: infer C) => any } };
 }
   ? C
-  : never
+  : never;
 
 /** Extract config from variant-level toolFactories (e.g., openai-chat) */
 type ExtractVariantToolConfig<TExt, K extends string> = TExt extends {
   config: {
-    name: infer TName extends string
-    variants?: readonly (infer V)[]
-  }
+    name: infer TName extends string;
+    variants?: readonly (infer V)[];
+  };
 }
   ? V extends {
-      suffix: infer TSuffix extends string
-      toolFactories?: { [P in K]?: (provider: any) => (config: infer C) => any }
+      suffix: infer TSuffix extends string;
+      toolFactories?: { [P in K]?: (provider: any) => (config: infer C) => any };
     }
     ? { id: `${TName}-${TSuffix}`; config: C }
     : never
-  : never
+  : never;
 
 /** Extract { [providerId]: ConfigType } map from all extensions for a capability */
 export type ExtractToolConfigMap<TExtUnion, K extends string> = UnionToIntersection<
@@ -224,11 +241,17 @@ export type ExtractToolConfigMap<TExtUnion, K extends string> = UnionToIntersect
   | (TExtUnion extends any
       ? ExtractVariantToolConfig<TExtUnion, K> extends never
         ? never
-        : ExtractVariantToolConfig<TExtUnion, K> extends { id: infer TId extends string; config: infer C }
+        : ExtractVariantToolConfig<TExtUnion, K> extends {
+              id: infer TId extends string;
+              config: infer C;
+            }
           ? { [P in TId]?: C }
           : never
       : never)
->
+>;
 
 /** Auto-extracted from coreExtensions' toolFactories.webSearch declarations */
-export type WebSearchToolConfigMap = ExtractToolConfigMap<(typeof coreExtensions)[number], 'webSearch'>
+export type WebSearchToolConfigMap = ExtractToolConfigMap<
+  (typeof coreExtensions)[number],
+  'webSearch'
+>;

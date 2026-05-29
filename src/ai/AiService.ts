@@ -61,7 +61,9 @@ export class AiService {
   async streamText(request: AiStreamRequest): Promise<ReadableStream<UIMessageChunk>> {
     const signal = request.requestOptions?.signal;
     if (!signal) {
-      throw new Error('streamText requires requestOptions.signal — no AbortController was attached by the caller');
+      throw new Error(
+        'streamText requires requestOptions.signal — no AbortController was attached by the caller',
+      );
     }
 
     const { sdkConfig, system, options } = await this.buildAgentParamsFor(request);
@@ -97,13 +99,18 @@ export class AiService {
     });
 
     // prompt and messages are mutually exclusive in AI SDK; preserve that.
-    return agent.generate(request.prompt ? { prompt: request.prompt } : { messages: request.messages ?? [] }, signal);
+    return agent.generate(
+      request.prompt ? { prompt: request.prompt } : { messages: request.messages ?? [] },
+      signal,
+    );
   }
 
   // ── Model listing ──
 
   async listModels(_request: ListModelsRequest): Promise<Partial<Model>[]> {
-    throw new Error('AiService.listModels is not implemented in the first mobile AI migration slice');
+    throw new Error(
+      'AiService.listModels is not implemented in the first mobile AI migration slice',
+    );
   }
 
   // ── API validation ──
@@ -147,8 +154,12 @@ export class AiService {
     });
     const capabilities = assistant ? resolveCapabilities(model, assistant) : undefined;
     const providerOptions =
-      assistant && capabilities ? buildCapabilityProviderOptions(assistant, model, provider, capabilities) : {};
-    const standardParams = assistant ? this.getAssistantStandardParams(assistant, model, provider) : {};
+      assistant && capabilities
+        ? buildCapabilityProviderOptions(assistant, model, provider, capabilities)
+        : {};
+    const standardParams = assistant
+      ? this.getAssistantStandardParams(assistant, model, provider)
+      : {};
     const customParams = assistant ? getCustomParameters(assistant) : {};
     const split = extractAiSdkStandardParams(customParams);
     const mergedProviderOptions = mergeCustomProviderParameters(
@@ -170,7 +181,9 @@ export class AiService {
         maxRetries: request.requestOptions?.maxRetries ?? 0,
         timeout: request.requestOptions?.timeout ?? getTimeout(model),
         ...(request.requestOptions?.headers && { headers: request.requestOptions.headers }),
-        ...(Object.keys(mergedProviderOptions).length > 0 && { providerOptions: mergedProviderOptions }),
+        ...(Object.keys(mergedProviderOptions).length > 0 && {
+          providerOptions: mergedProviderOptions,
+        }),
         ...standardParams,
         ...split.standardParams,
       },
@@ -208,8 +221,10 @@ export class AiService {
       providerId = parsed.providerId;
       modelId = parsed.modelId;
     }
-    if (!providerId) throw new Error('Cannot resolve providerId: not in request and assistant has no model');
-    if (!modelId) throw new Error('Cannot resolve modelId: not in request and assistant has no model');
+    if (!providerId)
+      throw new Error('Cannot resolve providerId: not in request and assistant has no model');
+    if (!modelId)
+      throw new Error('Cannot resolve modelId: not in request and assistant has no model');
 
     const provider = await this.services.provider.getByProviderId(providerId);
     const model = await this.services.model.getById(`${providerId}::${modelId}`);
@@ -222,8 +237,12 @@ export class AiService {
 }
 
 function resolveCapabilities(model: Model, assistant: Assistant) {
-  const enableReasoning = Boolean(model.reasoning && assistant.settings?.reasoning_effort !== undefined);
-  const enableWebSearch = Boolean(assistant.settings?.enableWebSearch && model.capabilities.includes('web-search'));
+  const enableReasoning = Boolean(
+    model.reasoning && assistant.settings?.reasoning_effort !== undefined,
+  );
+  const enableWebSearch = Boolean(
+    assistant.settings?.enableWebSearch && model.capabilities.includes('web-search'),
+  );
   const enableGenerateImage = model.capabilities.includes('image-generation');
 
   return {

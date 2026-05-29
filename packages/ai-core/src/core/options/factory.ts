@@ -1,21 +1,21 @@
-import type { TypedProviderOptions } from './types'
+import type { TypedProviderOptions } from './types';
 
-type PlainObject = Record<string, any>
+type PlainObject = Record<string, any>;
 
 const isPlainObject = (value: unknown): value is PlainObject => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
 
 function deepMergeObjects<T extends PlainObject>(target: T, source: PlainObject): T {
-  const result: PlainObject = { ...target }
+  const result: PlainObject = { ...target };
   Object.entries(source).forEach(([key, value]) => {
     if (isPlainObject(value) && isPlainObject(result[key])) {
-      result[key] = deepMergeObjects(result[key], value)
+      result[key] = deepMergeObjects(result[key], value);
     } else {
-      result[key] = value
+      result[key] = value;
     }
-  })
-  return result as T
+  });
+  return result as T;
 }
 
 /**
@@ -42,21 +42,26 @@ function deepMergeObjects<T extends PlainObject>(target: T, source: PlainObject)
  * @param optionsMap Objects containing options for multiple providers
  * @returns Fully merged TypedProviderOptions
  */
-export function mergeProviderOptions(...optionsMap: Partial<TypedProviderOptions>[]): TypedProviderOptions {
+export function mergeProviderOptions(
+  ...optionsMap: Partial<TypedProviderOptions>[]
+): TypedProviderOptions {
   return optionsMap.reduce<TypedProviderOptions>((acc, options) => {
     if (!options) {
-      return acc
+      return acc;
     }
     Object.entries(options).forEach(([providerId, providerOptions]) => {
       if (!providerOptions) {
-        return
+        return;
       }
       if (acc[providerId]) {
-        acc[providerId] = deepMergeObjects(acc[providerId] as PlainObject, providerOptions as PlainObject)
+        acc[providerId] = deepMergeObjects(
+          acc[providerId] as PlainObject,
+          providerOptions as PlainObject,
+        );
       } else {
-        acc[providerId] = providerOptions as any
+        acc[providerId] = providerOptions as any;
       }
-    })
-    return acc
-  }, {} as TypedProviderOptions)
+    });
+    return acc;
+  }, {} as TypedProviderOptions);
 }

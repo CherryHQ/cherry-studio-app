@@ -2,21 +2,21 @@
  * 运行时执行器
  * 专注于插件化的AI调用处理
  */
-import type { ImageModelV3, LanguageModelV3, ProviderV3 } from '@ai-sdk/provider'
-import type { LanguageModel } from 'ai'
+import type { ImageModelV3, LanguageModelV3, ProviderV3 } from '@ai-sdk/provider';
+import type { LanguageModel } from 'ai';
 import {
   createProviderRegistry,
   embedMany as _embedMany,
   generateImage as _generateImage,
   generateText as _generateText,
-  streamText as _streamText
-} from 'ai'
+  streamText as _streamText,
+} from 'ai';
 
-import { isV3Model } from '../models/utils'
-import { type AiPlugin, definePlugin } from '../plugins'
-import type { CoreProviderSettingsMap, StringKeys } from '../providers/types'
-import { ImageGenerationError, ImageModelResolutionError } from './errors'
-import { PluginEngine } from './pluginEngine'
+import { isV3Model } from '../models/utils';
+import { type AiPlugin, definePlugin } from '../plugins';
+import type { CoreProviderSettingsMap, StringKeys } from '../providers/types';
+import { ImageGenerationError, ImageModelResolutionError } from './errors';
+import { PluginEngine } from './pluginEngine';
 import type {
   EmbedManyParams,
   EmbedManyResult,
@@ -24,32 +24,32 @@ import type {
   generateImageResult,
   generateTextParams,
   RuntimeConfig,
-  streamTextParams
-} from './types'
+  streamTextParams,
+} from './types';
 
 export class RuntimeExecutor<
   TSettingsMap extends Record<string, any> = CoreProviderSettingsMap,
-  T extends StringKeys<TSettingsMap> = StringKeys<TSettingsMap>
+  T extends StringKeys<TSettingsMap> = StringKeys<TSettingsMap>,
 > {
-  public pluginEngine: PluginEngine<T>
-  private config: RuntimeConfig<TSettingsMap, T>
-  private registry: ReturnType<typeof createProviderRegistry>
+  public pluginEngine: PluginEngine<T>;
+  private config: RuntimeConfig<TSettingsMap, T>;
+  private registry: ReturnType<typeof createProviderRegistry>;
 
   constructor(config: RuntimeConfig<TSettingsMap, T>) {
-    this.config = config
+    this.config = config;
     // 创建插件客户端
-    this.pluginEngine = new PluginEngine(config.providerId, config.plugins || [])
+    this.pluginEngine = new PluginEngine(config.providerId, config.plugins || []);
 
     // Some v3 providers (e.g., @openrouter/ai-sdk-provider) expose textEmbeddingModel
     // but not embeddingModel. Patch for AI SDK registry compatibility.
-    const provider = config.provider
+    const provider = config.provider;
     if (!provider.embeddingModel && provider.textEmbeddingModel) {
-      provider.embeddingModel = (modelId: string) => provider.textEmbeddingModel!(modelId)
+      provider.embeddingModel = (modelId: string) => provider.textEmbeddingModel!(modelId);
     }
 
     this.registry = createProviderRegistry({
-      [config.providerId]: provider
-    })
+      [config.providerId]: provider,
+    });
   }
 
   createResolveModelPlugin() {
@@ -59,9 +59,9 @@ export class RuntimeExecutor<
 
       resolveModel: async (modelId: string) => {
         // 仅负责解析 modelId → model 对象，middleware 由 pluginEngine 统一应用
-        return await this.resolveModel(modelId)
-      }
-    })
+        return await this.resolveModel(modelId);
+      },
+    });
   }
 
   private createResolveImageModelPlugin() {
@@ -70,9 +70,9 @@ export class RuntimeExecutor<
       enforce: 'post',
 
       resolveModel: async (modelId: string) => {
-        return await this.resolveImageModel(modelId)
-      }
-    })
+        return await this.resolveImageModel(modelId);
+      },
+    });
   }
 
   createConfigureContextPlugin() {
@@ -81,8 +81,8 @@ export class RuntimeExecutor<
       configureContext: async () => {
         // Placeholder for future context configuration
         // Previously set executor and baseProvider, now handled by registry
-      }
-    })
+      },
+    });
   }
 
   // === 高阶重载：直接使用模型 ===
@@ -91,13 +91,16 @@ export class RuntimeExecutor<
    * 流式文本生成
    */
   async streamText(params: streamTextParams): Promise<ReturnType<typeof _streamText>> {
-    const { model } = params
+    const { model } = params;
 
     // 根据 model 类型决定插件配置
     if (typeof model === 'string') {
-      this.pluginEngine.usePlugins([this.createResolveModelPlugin(), this.createConfigureContextPlugin()])
+      this.pluginEngine.usePlugins([
+        this.createResolveModelPlugin(),
+        this.createConfigureContextPlugin(),
+      ]);
     } else {
-      this.pluginEngine.usePlugins([this.createConfigureContextPlugin()])
+      this.pluginEngine.usePlugins([this.createConfigureContextPlugin()]);
     }
 
     return this.pluginEngine.executeStreamWithPlugins(
@@ -105,15 +108,16 @@ export class RuntimeExecutor<
       params,
       (resolvedModel, transformedParams, streamTransforms) => {
         const experimental_transform =
-          params?.experimental_transform ?? (streamTransforms.length > 0 ? streamTransforms : undefined)
+          params?.experimental_transform ??
+          (streamTransforms.length > 0 ? streamTransforms : undefined);
 
         return _streamText({
           ...transformedParams,
           model: resolvedModel,
-          experimental_transform
-        })
-      }
-    )
+          experimental_transform,
+        });
+      },
+    );
   }
 
   // === 其他方法的重载 ===
@@ -122,20 +126,24 @@ export class RuntimeExecutor<
    * 生成文本
    */
   async generateText(params: generateTextParams): Promise<ReturnType<typeof _generateText>> {
-    const { model } = params
+    const { model } = params;
 
     // 根据 model 类型决定插件配置
     if (typeof model === 'string') {
-      this.pluginEngine.usePlugins([this.createResolveModelPlugin(), this.createConfigureContextPlugin()])
+      this.pluginEngine.usePlugins([
+        this.createResolveModelPlugin(),
+        this.createConfigureContextPlugin(),
+      ]);
     } else {
-      this.pluginEngine.usePlugins([this.createConfigureContextPlugin()])
+      this.pluginEngine.usePlugins([this.createConfigureContextPlugin()]);
     }
 
-    return this.pluginEngine.executeWithPlugins<Parameters<typeof _generateText>[0], ReturnType<typeof _generateText>>(
-      'generateText',
-      params,
-      (resolvedModel, transformedParams) => _generateText({ ...transformedParams, model: resolvedModel })
-    )
+    return this.pluginEngine.executeWithPlugins<
+      Parameters<typeof _generateText>[0],
+      ReturnType<typeof _generateText>
+    >('generateText', params, (resolvedModel, transformedParams) =>
+      _generateText({ ...transformedParams, model: resolvedModel }),
+    );
   }
 
   /**
@@ -143,29 +151,35 @@ export class RuntimeExecutor<
    */
   async generateImage(params: generateImageParams): Promise<generateImageResult> {
     try {
-      const { model } = params
+      const { model } = params;
 
       // 根据 model 类型决定插件配置
       if (typeof model === 'string') {
-        this.pluginEngine.usePlugins([this.createResolveImageModelPlugin(), this.createConfigureContextPlugin()])
+        this.pluginEngine.usePlugins([
+          this.createResolveImageModelPlugin(),
+          this.createConfigureContextPlugin(),
+        ]);
       } else {
-        this.pluginEngine.usePlugins([this.createConfigureContextPlugin()])
+        this.pluginEngine.usePlugins([this.createConfigureContextPlugin()]);
       }
 
-      return this.pluginEngine.executeImageWithPlugins('generateImage', params, (resolvedModel, transformedParams) =>
-        _generateImage({ ...transformedParams, model: resolvedModel })
-      )
+      return this.pluginEngine.executeImageWithPlugins(
+        'generateImage',
+        params,
+        (resolvedModel, transformedParams) =>
+          _generateImage({ ...transformedParams, model: resolvedModel }),
+      );
     } catch (error) {
       if (error instanceof Error) {
-        const modelId = typeof params.model === 'string' ? params.model : params.model.modelId
+        const modelId = typeof params.model === 'string' ? params.model : params.model.modelId;
         throw new ImageGenerationError(
           `Failed to generate image: ${error.message}`,
           this.config.providerId,
           modelId,
-          error
-        )
+          error,
+        );
       }
-      throw error
+      throw error;
     }
   }
 
@@ -173,18 +187,20 @@ export class RuntimeExecutor<
    * 批量嵌入文本
    */
   async embedMany(params: EmbedManyParams): Promise<EmbedManyResult> {
-    const { model: modelOrId, ...options } = params
+    const { model: modelOrId, ...options } = params;
 
     // 解析 embedding 模型
     const embeddingModel =
       typeof modelOrId === 'string'
-        ? this.registry.embeddingModel(`${this.config.providerId}:${modelOrId}` as `${string}:${string}`)
-        : modelOrId
+        ? this.registry.embeddingModel(
+            `${this.config.providerId}:${modelOrId}` as `${string}:${string}`,
+          )
+        : modelOrId;
 
     return _embedMany({
       model: embeddingModel,
-      ...options
-    })
+      ...options,
+    });
   }
 
   // === 辅助方法 ===
@@ -199,17 +215,19 @@ export class RuntimeExecutor<
   private async resolveModel(modelOrId: LanguageModel): Promise<LanguageModelV3> {
     if (typeof modelOrId === 'string') {
       if (this.config.modelResolver) {
-        return this.config.modelResolver(modelOrId)
+        return this.config.modelResolver(modelOrId);
       }
-      return this.registry.languageModel(`${this.config.providerId}:${modelOrId}` as `${string}:${string}`)
+      return this.registry.languageModel(
+        `${this.config.providerId}:${modelOrId}` as `${string}:${string}`,
+      );
     } else {
       if (!isV3Model(modelOrId)) {
         throw new Error(
           `Model must be V3. Provider "${this.config.providerId}" returned a V2 model. ` +
-            'All providers should be wrapped with wrapProvider to return V3 models.'
-        )
+            'All providers should be wrapped with wrapProvider to return V3 models.',
+        );
       }
-      return modelOrId
+      return modelOrId;
     }
   }
 
@@ -219,16 +237,18 @@ export class RuntimeExecutor<
   private async resolveImageModel(modelOrId: ImageModelV3 | string): Promise<ImageModelV3> {
     try {
       if (typeof modelOrId === 'string') {
-        return this.registry.imageModel(`${this.config.providerId}:${modelOrId}` as `${string}:${string}`)
+        return this.registry.imageModel(
+          `${this.config.providerId}:${modelOrId}` as `${string}:${string}`,
+        );
       } else {
-        return modelOrId
+        return modelOrId;
       }
     } catch (error) {
       throw new ImageModelResolutionError(
         typeof modelOrId === 'string' ? modelOrId : modelOrId.modelId,
         this.config.providerId,
-        error instanceof Error ? error : undefined
-      )
+        error instanceof Error ? error : undefined,
+      );
     }
   }
 
@@ -239,21 +259,21 @@ export class RuntimeExecutor<
    */
   static create<
     TSettingsMap extends Record<string, any> = CoreProviderSettingsMap,
-    T extends StringKeys<TSettingsMap> = StringKeys<TSettingsMap>
+    T extends StringKeys<TSettingsMap> = StringKeys<TSettingsMap>,
   >(
     providerId: T,
     provider: ProviderV3,
     options: TSettingsMap[T],
     plugins?: AiPlugin[],
-    modelResolver?: (modelId: string) => any
+    modelResolver?: (modelId: string) => any,
   ): RuntimeExecutor<TSettingsMap, T> {
     return new RuntimeExecutor<TSettingsMap, T>({
       providerId,
       provider,
       providerSettings: options,
       plugins,
-      modelResolver
-    })
+      modelResolver,
+    });
   }
 
   /**
@@ -263,13 +283,13 @@ export class RuntimeExecutor<
   static createOpenAICompatible(
     provider: ProviderV3, // ✅ Accept provider instance
     options: CoreProviderSettingsMap['openai-compatible'],
-    plugins: AiPlugin[] = []
+    plugins: AiPlugin[] = [],
   ): RuntimeExecutor<CoreProviderSettingsMap, 'openai-compatible'> {
     return new RuntimeExecutor<CoreProviderSettingsMap, 'openai-compatible'>({
       providerId: 'openai-compatible',
       provider, // ✅ Pass provider to config
       providerSettings: options,
-      plugins
-    })
+      plugins,
+    });
   }
 }

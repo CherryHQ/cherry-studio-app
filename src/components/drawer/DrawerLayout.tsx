@@ -125,9 +125,7 @@ function DrawerControllerBridge({
     setDrawerOpen(getDrawerOpenState(state));
   }, [setDrawerOpen, state]);
 
-  return (
-    <DrawerScreenMotion backgroundColor={backgroundColor}>{children}</DrawerScreenMotion>
-  );
+  return <DrawerScreenMotion backgroundColor={backgroundColor}>{children}</DrawerScreenMotion>;
 }
 
 export function DrawerLayout() {
