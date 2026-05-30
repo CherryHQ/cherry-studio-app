@@ -1,7 +1,7 @@
 import { loggerService } from "@logger";
 import { Buffer } from "buffer";
 import * as Crypto from "expo-crypto";
-import { AppState, type AppStateStatus, Linking } from "react-native";
+import { Linking } from "react-native";
 import * as z from "zod";
 import { CHERRYIN_CONFIG } from "@/config/constants";
 import type { ProviderService } from "@/data/services/ProviderService";
@@ -126,7 +126,6 @@ export class CherryInOauthService {
   private refreshAccessTokenPromise: Promise<TokenRefreshResult> | null = null;
   private cleanupInterval: NodeJS.Timeout | null = null;
   private deepLinkSubscription: { remove: () => void } | null = null;
-  private appStateSubscription: { remove: () => void } | null = null;
   private listenersAttached = false;
   public isActivated = false;
 
@@ -172,11 +171,6 @@ export class CherryInOauthService {
     if (this.deepLinkSubscription) {
       this.deepLinkSubscription.remove();
       this.deepLinkSubscription = null;
-    }
-
-    if (this.appStateSubscription) {
-      this.appStateSubscription.remove();
-      this.appStateSubscription = null;
     }
 
     this.listenersAttached = false;
@@ -244,16 +238,6 @@ export class CherryInOauthService {
         this.handleDeepLink({ url });
       }
     });
-
-    // Monitor app state for foreground transitions
-    this.appStateSubscription = AppState.addEventListener(
-      "change",
-      (nextAppState: AppStateStatus) => {
-        if (nextAppState === "active") {
-          logger.debug("App returned to foreground");
-        }
-      },
-    );
   }
 
   private handleDeepLink = (event: { url: string }): void => {
@@ -322,8 +306,17 @@ export class CherryInOauthService {
       codeVerifier,
     );
     // Convert hex string to Uint8Array
+    // SHA256 produces 64 hex characters (32 bytes), always even length
+    const hexPairs = hash.match(/.{2}/g);
+    if (!hexPairs) {
+      throw new CherryInOauthServiceError(
+        "Failed to generate code challenge: invalid hash format",
+        undefined,
+        "CodeChallengeError",
+      );
+    }
     const hashBytes = new Uint8Array(
-      hash.match(/.{2}/g)!.map((byte) => parseInt(byte, 16)),
+      hexPairs.map((byte) => parseInt(byte, 16)),
     );
     return this.base64UrlEncode(hashBytes);
   }
