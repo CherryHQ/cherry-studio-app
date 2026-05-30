@@ -13,7 +13,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F65D5D"
       },
       "package": "com.cherry_ai.cherry_studio_app",
       "predictiveBackGestureEnabled": false
