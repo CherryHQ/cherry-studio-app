@@ -32,11 +32,11 @@
     "e2e:maestro:check": "for f in .maestro/flows/*.yaml; do maestro check-syntax \"$f\" || exit 1; done"
   },
   "dependencies": {
-    "@babel/runtime": "^7.29.2",
     "@ai-sdk/gateway": "^3.0.121",
     "@ai-sdk/google": "^3.0.64",
-    "@ai-sdk/provider": "3.0.10",
     "@ai-sdk/openai": "^3.0.53",
+    "@ai-sdk/provider": "3.0.10",
+    "@babel/runtime": "^7.29.2",
     "@cherrystudio/ai-core": "workspace:*",
     "@cherrystudio/ai-sdk-provider": "workspace:*",
     "@cherrystudio/provider-registry": "workspace:*",
@@ -48,6 +48,7 @@
     "ai": "^6.0.143",
     "drizzle-orm": "^0.45.2",
     "expo": "~56.0.3",
+    "expo-auth-session": "~56.0.13",
     "expo-build-properties": "~56.0.13",
     "expo-clipboard": "^56.0.3",
     "expo-constants": "~56.0.14",

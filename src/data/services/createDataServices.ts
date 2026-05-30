@@ -1,5 +1,6 @@
 import { AiService } from '@/ai/AiService';
 import type { DbService } from '@/data/db/DbService';
+import { CherryInOauthService } from '@/services/CherryInOauthService';
 
 import { AssistantService } from './AssistantService';
 import { GroupService } from './GroupService';
@@ -26,6 +27,7 @@ export function createDataServices(dbService: DbService) {
   const topic = new TopicService(dbService, pin);
   const message = new MessageService(dbService, topic);
   const ai = new AiService({ assistant, model, provider });
+  const oauth = new CherryInOauthService(provider);
 
   return {
     ai,
@@ -33,6 +35,7 @@ export function createDataServices(dbService: DbService) {
     group,
     message,
     model,
+    oauth,
     pin,
     preference,
     prompt,
