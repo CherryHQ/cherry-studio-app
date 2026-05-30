@@ -130,9 +130,22 @@ export class CherryInOauthService {
   /**
    * Refresh access token using refresh token.
    * Returns the new access token, or null if refresh is not possible.
+   * Includes in-flight deduplication to prevent concurrent refresh requests.
    */
   async refreshAccessToken(apiHost: string): Promise<string | null> {
-    const result = await this.doRefreshAccessTokenInternal(apiHost);
+    // Check if there's already an in-flight refresh request
+    if (this.refreshAccessTokenPromise) {
+      logger.debug('Joining in-flight CherryIN OAuth token refresh');
+      const result = await this.refreshAccessTokenPromise;
+      return result.accessToken;
+    }
+
+    // Create new refresh promise with deduplication
+    this.refreshAccessTokenPromise = this.doRefreshAccessTokenInternal(apiHost).finally(() => {
+      this.refreshAccessTokenPromise = null;
+    });
+
+    const result = await this.refreshAccessTokenPromise;
     return result.accessToken;
   }
 
@@ -429,17 +442,19 @@ export class CherryInOauthService {
 
     if (response.status === 401) {
       logger.info('Got 401, attempting token refresh');
-      const refreshResult = await this.refreshAccessTokenWithDedup(apiHost);
-      if (refreshResult.accessToken) {
-        response = await makeRequest(refreshResult.accessToken);
+      const newToken = await this.refreshAccessToken(apiHost);
+      if (newToken) {
+        response = await makeRequest(newToken);
       } else {
         try {
           await this.clearOAuthSession();
         } catch (clearError) {
           logger.error('Failed to clear OAuth session after refresh failure', clearError as Error);
         }
+        // Check if we attempted refresh but failed
+        const hasRefreshToken = !!(await this.getRefreshToken());
         throw new CherryInOauthServiceError(
-          refreshResult.attempted
+          hasRefreshToken
             ? 'OAuth session expired: failed to refresh access token'
             : 'OAuth session expired: no refresh token available',
           undefined,
@@ -449,22 +464,6 @@ export class CherryInOauthService {
     }
 
     return response;
-  };
-
-  /**
-   * Refresh with in-flight deduplication.
-   */
-  private refreshAccessTokenWithDedup = async (apiHost: string): Promise<TokenRefreshResult> => {
-    if (this.refreshAccessTokenPromise) {
-      logger.debug('Joining in-flight CherryIN OAuth token refresh');
-      return this.refreshAccessTokenPromise;
-    }
-
-    this.refreshAccessTokenPromise = this.doRefreshAccessTokenInternal(apiHost).finally(() => {
-      this.refreshAccessTokenPromise = null;
-    });
-
-    return this.refreshAccessTokenPromise;
   };
 
   private async getProfile(apiHost: string): Promise<CherryINProfile | null> {
@@ -532,7 +531,4 @@ export class CherryInOauthService {
   }
 }
 
-export const cherryInOauthService = new CherryInOauthService(
-  // ProviderService will be injected at runtime
-  null as unknown as ProviderService,
-);
+

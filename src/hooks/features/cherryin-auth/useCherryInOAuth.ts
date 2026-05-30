@@ -1,9 +1,13 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import * as AuthSession from 'expo-auth-session';
 import { CHERRYIN_CONFIG } from '@/config/constants';
-import { cherryInOauthService } from '@/services/CherryInOauthService';
+import { CherryInOauthService } from '@/services/CherryInOauthService';
+import { useDataServices } from '@/data/runtime';
 
 const { makeRedirectUri, useAuthRequest, ResponseType } = AuthSession;
+
+// Singleton instance managed within the hook module
+let oauthServiceInstance: CherryInOauthService | null = null;
 
 export interface UseCherryInOAuthOptions {
   oauthServer?: string;
@@ -13,6 +17,15 @@ export interface UseCherryInOAuthOptions {
 export function useCherryInOAuth(options: UseCherryInOAuthOptions = {}) {
   const oauthServer = options.oauthServer ?? 'https://open.cherryin.ai';
   const apiHost = options.apiHost ?? oauthServer;
+  const { provider } = useDataServices();
+
+  // Get or create OAuth service singleton
+  const oauth = useMemo(() => {
+    if (!oauthServiceInstance) {
+      oauthServiceInstance = new CherryInOauthService(provider);
+    }
+    return oauthServiceInstance;
+  }, [provider]);
 
   const redirectUri = makeRedirectUri({
     scheme: 'cherrystudio',
@@ -48,14 +61,14 @@ export function useCherryInOAuth(options: UseCherryInOAuthOptions = {}) {
       throw new Error('PKCE code verifier is missing');
     }
 
-    return cherryInOauthService.completeOAuth({
+    return oauth.completeOAuth({
       oauthServer,
       apiHost,
       code: result.params.code,
       codeVerifier: request.codeVerifier,
       redirectUri,
     });
-  }, [request, promptAsync, oauthServer, apiHost, redirectUri]);
+  }, [request, promptAsync, oauth, oauthServer, apiHost, redirectUri]);
 
   return {
     signIn,
