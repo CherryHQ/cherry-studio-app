@@ -1,7 +1,7 @@
 import type { DbService } from '../../DbService';
 import type { DatabaseSeeder } from '../types';
 
-jest.mock('@/core/logger/loggerService', () => ({
+jest.mock('@logger', () => ({
   loggerService: {
     withContext: () => ({
       debug: jest.fn(),

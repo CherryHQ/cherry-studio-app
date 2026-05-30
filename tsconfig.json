@@ -23,7 +23,8 @@
       "lucide-uniwind/*": ["./packages/lucide-uniwind/src/*"],
       "@src/*": ["./src/*"],
       "@/*": ["./src/*"],
-      "@/assets/*": ["./assets/*"]
+      "@/assets/*": ["./assets/*"],
+      "@logger": ["./src/core/logger/loggerService.ts"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
