@@ -1,6 +1,6 @@
 import { loggerService } from "@logger";
 import { Buffer } from "buffer";
-import { createHash, randomBytes } from "crypto";
+import * as Crypto from "expo-crypto";
 import { AppState, type AppStateStatus, Linking } from "react-native";
 import * as z from "zod";
 import { CHERRYIN_CONFIG } from "@/config/constants";
@@ -127,8 +127,8 @@ export class CherryInOauthService {
   private cleanupInterval: NodeJS.Timeout | null = null;
   private deepLinkSubscription: { remove: () => void } | null = null;
   private appStateSubscription: { remove: () => void } | null = null;
-  private isActivated = false;
   private listenersAttached = false;
+  public isActivated = false;
 
   /** Must be called before any OAuth operations. */
   setProviderService(providerService: ProviderService): void {
@@ -295,19 +295,19 @@ export class CherryInOauthService {
   /**
    * Generate a cryptographically random string for PKCE code_verifier
    */
-  private generateRandomString(length: number): string {
+  private async generateRandomString(length: number): Promise<string> {
     const charset =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-    const bytes = randomBytes(length);
+    const bytes = await Crypto.getRandomBytesAsync(length);
     return Array.from(bytes, (byte) => charset[byte % charset.length]).join("");
   }
 
   /**
-   * Base64URL encode a buffer (no padding, URL-safe characters)
+   * Base64URL encode a Uint8Array (no padding, URL-safe characters)
    */
-  private base64UrlEncode(buffer: Buffer): string {
-    return buffer
-      .toString("base64")
+  private base64UrlEncode(buffer: Uint8Array): string {
+    const base64 = Buffer.from(buffer).toString("base64");
+    return base64
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
       .replace(/=+$/, "");
@@ -316,9 +316,16 @@ export class CherryInOauthService {
   /**
    * Generate PKCE code_challenge from code_verifier using S256 method
    */
-  private generateCodeChallenge(codeVerifier: string): string {
-    const hash = createHash("sha256").update(codeVerifier).digest();
-    return this.base64UrlEncode(hash);
+  private async generateCodeChallenge(codeVerifier: string): Promise<string> {
+    const hash = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      codeVerifier,
+    );
+    // Convert hex string to Uint8Array
+    const hashBytes = new Uint8Array(
+      hash.match(/.{2}/g)!.map((byte) => parseInt(byte, 16)),
+    );
+    return this.base64UrlEncode(hashBytes);
   }
 
   /**
@@ -341,9 +348,9 @@ export class CherryInOauthService {
     }
 
     // Generate PKCE parameters
-    const codeVerifier = this.generateRandomString(64);
-    const codeChallenge = this.generateCodeChallenge(codeVerifier);
-    const state = this.generateRandomString(32);
+    const codeVerifier = await this.generateRandomString(64);
+    const codeChallenge = await this.generateCodeChallenge(codeVerifier);
+    const state = await this.generateRandomString(32);
 
     const flow: PendingOauthFlow = {
       codeVerifier,
@@ -466,10 +473,10 @@ export class CherryInOauthService {
         error instanceof CherryInOauthServiceError
           ? error
           : new CherryInOauthServiceError(
-              message,
-              error,
-              "TokenExchangeFailed",
-            ),
+            message,
+            error,
+            "TokenExchangeFailed",
+          ),
       );
     } finally {
       this.deactivateIfIdle();
