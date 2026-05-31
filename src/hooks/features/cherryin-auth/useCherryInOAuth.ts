@@ -6,9 +6,6 @@ import { useDataServices } from '@/data/runtime';
 
 const { makeRedirectUri, useAuthRequest, ResponseType } = AuthSession;
 
-// Singleton instance managed within the hook module
-let oauthServiceInstance: CherryInOauthService | null = null;
-
 export interface UseCherryInOAuthOptions {
   oauthServer?: string;
   apiHost?: string;
@@ -19,20 +16,14 @@ export function useCherryInOAuth(options: UseCherryInOAuthOptions = {}) {
   const apiHost = options.apiHost ?? oauthServer;
   const { provider } = useDataServices();
 
-  // Get or create OAuth service singleton
-  const oauth = useMemo(() => {
-    if (!oauthServiceInstance) {
-      oauthServiceInstance = new CherryInOauthService(provider);
-    }
-    return oauthServiceInstance;
-  }, [provider]);
+  const oauth = useMemo(() => new CherryInOauthService(provider), [provider]);
 
   const redirectUri = makeRedirectUri({
     scheme: 'cherrystudio',
     path: 'oauth/callback',
   });
 
-  const [request, , promptAsync] = useAuthRequest(
+  const [request, response, promptAsync] = useAuthRequest(
     {
       clientId: CHERRYIN_CONFIG.CLIENT_ID,
       redirectUri,
@@ -73,5 +64,6 @@ export function useCherryInOAuth(options: UseCherryInOAuthOptions = {}) {
   return {
     signIn,
     isReady: !!request,
+    response,
   };
 }
