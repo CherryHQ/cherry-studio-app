@@ -13,7 +13,6 @@ import { bootstrapAppRuntime } from '@/data/bootstrap/appRuntime';
 const RootGestureView = withUniwind(GestureHandlerRootView);
 
 export default function RootLayout() {
-
   return (
     <RootGestureView className="flex-1">
       <KeyboardProvider>

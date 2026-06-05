@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import * as AuthSession from 'expo-auth-session';
+import { useToast } from 'heroui-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert } from 'react-native';
-
 import { CHERRYIN_CONFIG } from '@/config/constants';
 import { queryKeys } from '@/data/api';
 import { useDataMutation, useDataQuery } from '@/data/hooks';
 import { useDataServices } from '@/data/runtime';
 import { CherryInOauthService } from '@/services/CherryInOauthService';
-import { useToast } from 'heroui-native';
+
 const { makeRedirectUri, useAuthRequest, ResponseType } = AuthSession;
+
 const CHERRYIN_OAUTH_SERVER = 'https://open.cherryin.ai';
 
 export interface UseCherryInOAuthOptions {

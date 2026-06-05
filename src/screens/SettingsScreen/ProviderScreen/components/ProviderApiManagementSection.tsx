@@ -59,9 +59,7 @@ export function ProviderApiManagementSection({
             onSelectedChange={onEnabledChange}
           />
         </View>
-        {isCherryIn && provider?.id ? (
-          <CherryInOAuth providerId={provider.id} />
-        ) : null}
+        {isCherryIn && provider?.id ? <CherryInOAuth providerId={provider.id} /> : null}
         {showBaseUrl ? (
           <ProviderApiServiceEndpointField baseUrl={baseUrl} onManagePress={onBaseUrlManagePress} />
         ) : null}

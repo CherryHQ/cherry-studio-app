@@ -589,27 +589,21 @@ describe('CherryInOauthService', () => {
         };
       });
 
-      // Start two concurrent requests
       const promise1 = service.getBalance('https://open.cherryin.ai');
       const promise2 = service.getBalance('https://open.cherryin.ai');
 
-      // Give both requests time to hit 401 and queue for refresh
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // Release the refresh
-      releaseRefresh!();
+      if (typeof releaseRefresh === 'function') {
+        releaseRefresh();
+      }
 
-      // Both requests should complete successfully
       await expect(promise1).resolves.toBeDefined();
       await expect(promise2).resolves.toBeDefined();
 
-      // Verify that deduplication worked (should be 1 or 2 depending on timing)
-      // In practice, we expect 1, but due to test timing, it might be 2
       const finalRefreshCalls = fetchMock.mock.calls.filter((call) =>
         String(call[0]).endsWith('/oauth2/token'),
       );
-      // The key assertion: if deduplication works, we should see at most 2 calls
-      // (ideally 1, but timing in tests can cause 2)
       expect(finalRefreshCalls.length).toBeLessThanOrEqual(2);
     });
 

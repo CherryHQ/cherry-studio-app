@@ -295,7 +295,6 @@ export class CherryInOauthService {
     }
   }
 
-
   /**
    * Exchange authorization code for access/refresh tokens.
    */
@@ -456,7 +455,6 @@ export class CherryInOauthService {
     }
   }
 
-
   private authenticatedFetch = async (
     apiHost: string,
     endpoint: string,
@@ -529,7 +527,6 @@ export class CherryInOauthService {
     }
   }
 
-
   private validateApiHost(apiHost: string): void {
     if (!CHERRYIN_CONFIG.ALLOWED_HOSTS.includes(apiHost)) {
       throw new CherryInOauthServiceError(
@@ -544,10 +541,7 @@ export class CherryInOauthService {
     if (typeof value === 'string') {
       return value
         .replace(/Bearer\s+\S+/gi, 'Bearer <redacted>')
-        .replace(
-          /\b(refresh_token|access_token|code|client_secret)=([^&\s]+)/gi,
-          '$1=<redacted>',
-        )
+        .replace(/\b(refresh_token|access_token|code|client_secret)=([^&\s]+)/gi, '$1=<redacted>')
         .replace(/[\w-]*token["']?\s*:\s*["'][^"']+["']/gi, (match) =>
           match.replace(/:\s*["'][^"']+["']/, ': "<redacted>"'),
         );
@@ -571,5 +565,3 @@ export class CherryInOauthService {
     return value;
   }
 }
-
-
