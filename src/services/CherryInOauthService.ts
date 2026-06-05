@@ -1,4 +1,5 @@
 import { loggerService } from '@logger';
+import { randomUUID } from 'expo-crypto';
 import * as z from 'zod';
 import { CHERRYIN_CONFIG } from '@/config/constants';
 import type { ProviderService } from '@/data/services/ProviderService';
@@ -151,7 +152,7 @@ export class CherryInOauthService {
       .filter(Boolean);
 
     return keys.map((key) => ({
-      id: `oauth-${crypto.randomUUID()}`,
+      id: `oauth-${randomUUID()}`,
       isEnabled: true,
       key,
       label: 'OAuth' as const,
