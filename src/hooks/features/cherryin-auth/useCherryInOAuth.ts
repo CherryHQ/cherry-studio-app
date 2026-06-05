@@ -1,29 +1,69 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as AuthSession from 'expo-auth-session';
+import { useTranslation } from 'react-i18next';
+import { Alert } from 'react-native';
+
 import { CHERRYIN_CONFIG } from '@/config/constants';
-import { CherryInOauthService } from '@/services/CherryInOauthService';
+import { queryKeys } from '@/data/api';
+import { useDataMutation, useDataQuery } from '@/data/hooks';
 import { useDataServices } from '@/data/runtime';
+import { CherryInOauthService } from '@/services/CherryInOauthService';
 
 const { makeRedirectUri, useAuthRequest, ResponseType } = AuthSession;
+const CHERRYIN_OAUTH_SERVER = 'https://open.cherryin.ai';
 
 export interface UseCherryInOAuthOptions {
-  oauthServer?: string;
-  apiHost?: string;
+  providerId: string;
+  requestConfirm: (options: { title: string; message: string; onConfirm: () => void }) => void;
+  onOAuthComplete?: () => void;
 }
 
-export function useCherryInOAuth(options: UseCherryInOAuthOptions = {}) {
-  const oauthServer = options.oauthServer ?? 'https://open.cherryin.ai';
-  const apiHost = options.apiHost ?? oauthServer;
-  const { provider } = useDataServices();
+export function useCherryInOAuth(options: UseCherryInOAuthOptions) {
+  const { providerId, requestConfirm, onOAuthComplete } = options;
+  const { t } = useTranslation();
+  const { provider: providerService } = useDataServices();
 
-  const oauth = useMemo(() => new CherryInOauthService(provider), [provider]);
+  const oauth = CherryInOauthService.getInstance(providerService);
 
-  const redirectUri = makeRedirectUri({
-    scheme: 'cherrystudio',
-    path: 'oauth/callback',
+  // Provider & auth config queries
+
+  const providerQuery = useDataQuery({
+    enabled: Boolean(providerId),
+    queryFn: (services) => services.provider.getByProviderId(providerId),
+    queryKey: queryKeys.providers.detail(providerId),
+    retry: false,
+  });
+  const provider = providerQuery.data;
+
+  const authConfigQuery = useDataQuery({
+    enabled: Boolean(providerId),
+    queryFn: (services) => services.provider.getAuthConfig(providerId),
+    queryKey: queryKeys.providers.authConfig(providerId),
+    retry: false,
+  });
+  const hasOAuthToken =
+    authConfigQuery.data?.type === 'oauth' && Boolean(authConfigQuery.data.accessToken);
+
+  // Mutations
+
+  const replaceApiKeysMutation = useDataMutation({
+    invalidateQueries: [
+      queryKeys.providers.detail(providerId),
+      queryKeys.providers.list(),
+      queryKeys.providers.apiKeys(providerId),
+      queryKeys.providers.authConfig(providerId),
+    ],
+    mutationFn: (
+      services,
+      apiKeys: { id: string; key: string; isEnabled: boolean; label?: string }[],
+    ) => services.provider.replaceApiKeys(providerId, apiKeys),
   });
 
-  const [request, response, promptAsync] = useAuthRequest(
+  // Sign-in (expo-auth-session)
+
+  const redirectUri = makeRedirectUri({ scheme: 'cherrystudio', path: 'oauth/callback' });
+
+  const [request, , promptAsync] = useAuthRequest(
     {
       clientId: CHERRYIN_CONFIG.CLIENT_ID,
       redirectUri,
@@ -32,38 +72,129 @@ export function useCherryInOAuth(options: UseCherryInOAuthOptions = {}) {
       usePKCE: true,
     },
     {
-      authorizationEndpoint: `${oauthServer}/oauth2/auth`,
-      tokenEndpoint: `${oauthServer}/oauth2/token`,
+      authorizationEndpoint: `${CHERRYIN_OAUTH_SERVER}/oauth2/auth`,
+      tokenEndpoint: `${CHERRYIN_OAUTH_SERVER}/oauth2/token`,
     },
   );
 
-  const signIn = useCallback(async (): Promise<string> => {
+  const isReady = !!request;
+
+  // Balance state
+
+  const [balance, setBalance] = useState<number | null>(null);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const hasAutoFetchedRef = useRef(false);
+
+  // Actions
+
+  const fetchData = useCallback(async () => {
+    setIsLoadingData(true);
+    try {
+      const result = await oauth.getBalance(CHERRYIN_OAUTH_SERVER);
+      setBalance(result.balance);
+    } catch (error) {
+      console.error('[CherryIN] fetchData failed:', error);
+      setBalance(null);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [oauth]);
+
+  const handleLogout = useCallback(() => {
+    requestConfirm({
+      title: t('settings.provider.oauth.cherryIn.logout'),
+      message: t('settings.provider.oauth.cherryIn.logout_confirm'),
+      onConfirm: async () => {
+        setIsLoggingOut(true);
+        try {
+          await oauth.logout(CHERRYIN_OAUTH_SERVER);
+          setBalance(null);
+
+          const remainingKeys = oauth.getNonOAuthApiKeys(provider);
+          await replaceApiKeysMutation.mutateAsync(remainingKeys);
+          await authConfigQuery.refetch();
+        } catch {
+          Alert.alert(t('settings.provider.oauth.cherryIn.logout_warning'));
+        } finally {
+          setIsLoggingOut(false);
+        }
+      },
+    });
+  }, [provider, replaceApiKeysMutation, authConfigQuery, oauth, t, requestConfirm]);
+
+  const handleOAuthLogin = useCallback(async () => {
     if (!request) {
       throw new Error('OAuth request is not ready');
     }
 
-    const result = await promptAsync();
+    setIsLoggingIn(true);
+    try {
+      const result = await promptAsync();
 
-    if (result.type !== 'success') {
-      throw new Error(result.type === 'cancel' ? 'User cancelled' : 'OAuth failed');
+      if (result.type !== 'success') {
+        throw new Error(result.type === 'cancel' ? 'User cancelled' : 'OAuth failed');
+      }
+
+      if (!request.codeVerifier) {
+        throw new Error('PKCE code verifier is missing');
+      }
+
+      // Exchange code → tokens → API keys
+      const apiKeys = await oauth.completeOAuth({
+        oauthServer: CHERRYIN_OAUTH_SERVER,
+        apiHost: CHERRYIN_OAUTH_SERVER,
+        code: result.params.code,
+        codeVerifier: request.codeVerifier,
+        redirectUri,
+      });
+
+      // Save API keys + enable provider
+      await oauth.saveOAuthResult(providerId, apiKeys);
+      await authConfigQuery.refetch();
+      await fetchData();
+
+      onOAuthComplete?.();
+    } finally {
+      setIsLoggingIn(false);
     }
+  }, [
+    request,
+    promptAsync,
+    oauth,
+    redirectUri,
+    providerId,
+    authConfigQuery,
+    fetchData,
+    onOAuthComplete,
+  ]);
 
-    if (!request.codeVerifier) {
-      throw new Error('PKCE code verifier is missing');
+  // Auto-fetch balance on first login detection
+
+  useEffect(() => {
+    if (hasOAuthToken && !hasAutoFetchedRef.current) {
+      hasAutoFetchedRef.current = true;
+      fetchData();
     }
-
-    return oauth.completeOAuth({
-      oauthServer,
-      apiHost,
-      code: result.params.code,
-      codeVerifier: request.codeVerifier,
-      redirectUri,
-    });
-  }, [request, promptAsync, oauth, oauthServer, apiHost, redirectUri]);
+  }, [hasOAuthToken, fetchData]);
 
   return {
-    signIn,
-    isReady: !!request,
-    response,
+    // Data
+    provider,
+    hasOAuthToken,
+    balance,
+    authConfigQuery,
+    providerQuery,
+    // Loading states
+    isReady,
+    isLoadingData,
+    isLoggingOut,
+    isLoggingIn,
+    // Actions
+    handleOAuthLogin,
+    handleLogout,
+    fetchData,
   };
 }

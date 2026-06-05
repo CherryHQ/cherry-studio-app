@@ -31,6 +31,9 @@ describe('CherryInOauthService', () => {
   beforeEach(() => {
     jest.useRealTimers();
 
+    // Reset singleton between tests
+    (CherryInOauthService as unknown as { instance: CherryInOauthService | null }).instance = null;
+
     // Create a fresh fetch mock for each test
     fetchMock = jest.fn();
     global.fetch = fetchMock;
@@ -41,7 +44,7 @@ describe('CherryInOauthService', () => {
       update: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<ProviderService>;
 
-    service = new CherryInOauthService(mockProviderService);
+    service = CherryInOauthService.getInstance(mockProviderService);
   });
 
   describe('validateApiHost', () => {

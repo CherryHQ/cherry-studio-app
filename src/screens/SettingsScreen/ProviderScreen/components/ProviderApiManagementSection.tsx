@@ -7,6 +7,9 @@ import {
   ProviderApiServiceEndpointField,
 } from '@/screens/SettingsScreen/ProviderScreen/apiService';
 import type { Provider } from '@/data/types/provider';
+import { CherryInOAuth } from './CherryInOAuth';
+
+const CHERRYIN_PROVIDER_ID = 'cherryin';
 
 type ProviderApiManagementSectionProps = {
   apiKeysInput?: string;
@@ -39,6 +42,9 @@ export function ProviderApiManagementSection({
 }: ProviderApiManagementSectionProps) {
   const { t } = useTranslation();
 
+  // CherryIN supports OAuth login — show the OAuth card whenever it's CherryIN
+  const isCherryIn = provider?.id === CHERRYIN_PROVIDER_ID;
+
   return (
     <View className="gap-3">
       <View className="gap-3">
@@ -53,6 +59,9 @@ export function ProviderApiManagementSection({
             onSelectedChange={onEnabledChange}
           />
         </View>
+        {isCherryIn && provider?.id ? (
+          <CherryInOAuth providerId={provider.id} />
+        ) : null}
         {showBaseUrl ? (
           <ProviderApiServiceEndpointField baseUrl={baseUrl} onManagePress={onBaseUrlManagePress} />
         ) : null}

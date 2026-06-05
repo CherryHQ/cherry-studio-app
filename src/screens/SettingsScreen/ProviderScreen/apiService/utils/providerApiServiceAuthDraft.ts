@@ -124,7 +124,7 @@ export function buildAuthConfigFromDraft(
 }
 
 export function shouldShowApiKeys(authType: AuthConfig['type']): boolean {
-  return authType === 'api-key' || authType === 'api-key-aws';
+  return authType === 'api-key' || authType === 'api-key-aws' || authType === 'oauth';
 }
 
 export function needsAuthConfigSave(authType: AuthConfig['type']): boolean {

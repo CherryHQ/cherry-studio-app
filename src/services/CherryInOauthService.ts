@@ -2,7 +2,7 @@ import { loggerService } from '@logger';
 import * as z from 'zod';
 import { CHERRYIN_CONFIG } from '@/config/constants';
 import type { ProviderService } from '@/data/services/ProviderService';
-import type { AuthConfig } from '@/data/types/provider';
+import type { ApiKeyEntry, AuthConfig, Provider } from '@/data/types/provider';
 
 const logger = loggerService.withContext('CherryInOauthService');
 const CHERRYIN_PROVIDER_ID = 'cherryin';
@@ -95,9 +95,17 @@ class CherryInOauthServiceError extends Error {
 }
 
 export class CherryInOauthService {
+  private static instance: CherryInOauthService | null = null;
   private refreshAccessTokenPromise: Promise<TokenRefreshResult> | null = null;
 
-  constructor(private readonly providerService: ProviderService) { }
+  private constructor(private readonly providerService: ProviderService) {}
+
+  static getInstance(providerService: ProviderService): CherryInOauthService {
+    if (!CherryInOauthService.instance) {
+      CherryInOauthService.instance = new CherryInOauthService(providerService);
+    }
+    return CherryInOauthService.instance;
+  }
   /**
    * Complete OAuth flow (code + verifier → API keys).
    * Used when the OAuth callback is handled externally and all params
@@ -125,6 +133,39 @@ export class CherryInOauthService {
     const apiKeys = await this.fetchCherryInApiKeys(apiHost, accessToken);
     await this.saveOAuthConfig(accessToken, refreshToken);
     return apiKeys;
+  }
+
+  /**
+   * Parse a comma-separated API keys string into structured entries.
+   */
+  parseApiKeys(apiKeysString: string): ApiKeyEntry[] {
+    const keys = apiKeysString
+      .split(',')
+      .map((key) => key.trim())
+      .filter(Boolean);
+
+    return keys.map((key, index) => ({
+      id: `oauth-${Date.now()}-${index}`,
+      isEnabled: true,
+      key,
+      label: 'OAuth' as const,
+    }));
+  }
+
+  /**
+   * Filter out OAuth-labelled API keys from a provider.
+   */
+  getNonOAuthApiKeys(provider: Provider | undefined): ApiKeyEntry[] {
+    return (provider?.apiKeys?.filter((k) => k.label !== 'OAuth') ?? []) as ApiKeyEntry[];
+  }
+
+  /**
+   * Complete OAuth login persistence: save API keys + enable the provider.
+   */
+  async saveOAuthResult(providerId: string, apiKeysString: string): Promise<void> {
+    const apiKeyEntries = this.parseApiKeys(apiKeysString);
+    await this.providerService.replaceApiKeys(providerId, apiKeyEntries);
+    await this.providerService.update(providerId, { isEnabled: true });
   }
 
   /**
