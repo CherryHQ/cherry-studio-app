@@ -12,6 +12,13 @@ const { makeRedirectUri, useAuthRequest, ResponseType } = AuthSession;
 
 const CHERRYIN_OAUTH_SERVER = 'https://open.cherryin.ai';
 
+export class UserCancelledError extends Error {
+  constructor() {
+    super('User cancelled');
+    this.name = 'UserCancelledError';
+  }
+}
+
 export interface UseCherryInOAuthOptions {
   providerId: string;
   requestConfirm: (options: { title: string; message: string; onConfirm: () => void }) => void;
@@ -113,13 +120,18 @@ export function useCherryInOAuth(options: UseCherryInOAuthOptions) {
           await oauth.logout(CHERRYIN_OAUTH_SERVER);
           setBalance(null);
 
+          if (!provider) {
+            throw new Error('Provider not loaded');
+          }
           const remainingKeys = oauth.getNonOAuthApiKeys(provider);
           await replaceApiKeysMutation.mutateAsync(remainingKeys);
           await authConfigQuery.refetch();
-        } catch {
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error';
           toast.show({
             variant: 'warning',
             label: t('settings.provider.oauth.cherryIn.logout_warning'),
+            description: message,
           });
         } finally {
           setIsLoggingOut(false);
@@ -138,7 +150,7 @@ export function useCherryInOAuth(options: UseCherryInOAuthOptions) {
       const result = await promptAsync();
 
       if (result.type !== 'success') {
-        throw new Error(result.type === 'cancel' ? 'User cancelled' : 'OAuth failed');
+        throw result.type === 'cancel' ? new UserCancelledError() : new Error('OAuth failed');
       }
 
       if (!request.codeVerifier) {

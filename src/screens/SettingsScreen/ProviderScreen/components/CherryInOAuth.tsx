@@ -5,7 +5,10 @@ import { Fragment, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Image, Linking, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
-import { useCherryInOAuth } from '@/hooks/features/cherryin-auth/useCherryInOAuth';
+import {
+  UserCancelledError,
+  useCherryInOAuth,
+} from '@/hooks/features/cherryin-auth/useCherryInOAuth';
 import { useSettingsConfirmDialog } from '../../hooks/useSettingsConfirmDialog';
 
 const CHERRYIN_TOPUP_URL = 'https://open.cherryin.ai/console/topup';
@@ -49,14 +52,15 @@ export function CherryInOAuth({ providerId, onOAuthComplete }: CherryInOAuthProp
     try {
       await handleOAuthLogin();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'OAuth failed';
-      if (message !== 'User cancelled') {
-        toast.show({
-          label: t('settings.provider.oauth.cherryIn.error'),
-          description: message,
-          variant: 'danger',
-        });
+      if (error instanceof UserCancelledError) {
+        return;
       }
+      const message = error instanceof Error ? error.message : 'OAuth failed';
+      toast.show({
+        label: t('settings.provider.oauth.cherryIn.error'),
+        description: message,
+        variant: 'danger',
+      });
     }
   }, [handleOAuthLogin, t, toast]);
 
@@ -172,7 +176,8 @@ export function CherryInOAuth({ providerId, onOAuthComplete }: CherryInOAuthProp
         </View>
         <Card.Footer className="mt-2">
           <Text
-            className="text-xs text-default-400"
+            accessibilityRole="link"
+            className="text-xs text-default-400 underline"
             onPress={() => Linking.openURL('https://open.cherryin.ai')}
           >
             {t('settings.provider.oauth.cherryIn.service_attribution')}

@@ -7,6 +7,9 @@ import type { ApiKeyEntry, AuthConfig, Provider } from '@/data/types/provider';
 const logger = loggerService.withContext('CherryInOauthService');
 const CHERRYIN_PROVIDER_ID = 'cherryin';
 
+/** Conversion factor from quota units to balance/spend (1 unit = 500000 quota) */
+const QUOTA_TO_BALANCE_DIVISOR = 500000;
+
 // Zod schemas for API response validation
 const TokenResponseSchema = z.object({
   access_token: z.string(),
@@ -98,11 +101,14 @@ export class CherryInOauthService {
   private static instance: CherryInOauthService | null = null;
   private refreshAccessTokenPromise: Promise<TokenRefreshResult> | null = null;
 
-  private constructor(private readonly providerService: ProviderService) {}
+  private constructor(private providerService: ProviderService) { }
 
   static getInstance(providerService: ProviderService): CherryInOauthService {
     if (!CherryInOauthService.instance) {
       CherryInOauthService.instance = new CherryInOauthService(providerService);
+    } else {
+      // Update providerService if a new instance is provided
+      CherryInOauthService.instance.providerService = providerService;
     }
     return CherryInOauthService.instance;
   }
@@ -144,8 +150,8 @@ export class CherryInOauthService {
       .map((key) => key.trim())
       .filter(Boolean);
 
-    return keys.map((key, index) => ({
-      id: `oauth-${Date.now()}-${index}`,
+    return keys.map((key) => ({
+      id: `oauth-${crypto.randomUUID()}`,
       isEnabled: true,
       key,
       label: 'OAuth' as const,
@@ -272,8 +278,8 @@ export class CherryInOauthService {
 
       const { quota, used_quota: usedQuota } = parsed.data;
       const profile = await this.getProfile(apiHost);
-      const balance = quota / 500000;
-      const monthlySpend = usedQuota / 500000;
+      const balance = quota / QUOTA_TO_BALANCE_DIVISOR;
+      const monthlySpend = usedQuota / QUOTA_TO_BALANCE_DIVISOR;
       logger.info('Balance fetched successfully', { balance, usedQuota, monthlySpend });
       return { balance, profile, monthlyUsageTokens: null, monthlySpend };
     } catch (error) {
@@ -485,15 +491,14 @@ export class CherryInOauthService {
       if (newToken) {
         response = await makeRequest(newToken);
       } else {
+        const hadRefreshToken = !!(await this.getRefreshToken());
         try {
           await this.clearOAuthSession();
         } catch (clearError) {
           logger.error('Failed to clear OAuth session after refresh failure', clearError as Error);
         }
-        // Check if we attempted refresh but failed
-        const hasRefreshToken = !!(await this.getRefreshToken());
         throw new CherryInOauthServiceError(
-          hasRefreshToken
+          hadRefreshToken
             ? 'OAuth session expired: failed to refresh access token'
             : 'OAuth session expired: no refresh token available',
           undefined,
