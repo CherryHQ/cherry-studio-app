@@ -8,7 +8,7 @@ import { queryKeys } from '@/data/api';
 import { useDataMutation, useDataQuery } from '@/data/hooks';
 import { useDataServices } from '@/data/runtime';
 import { CherryInOauthService } from '@/services/CherryInOauthService';
-
+import { useToast } from 'heroui-native';
 const { makeRedirectUri, useAuthRequest, ResponseType } = AuthSession;
 const CHERRYIN_OAUTH_SERVER = 'https://open.cherryin.ai';
 
@@ -22,7 +22,7 @@ export function useCherryInOAuth(options: UseCherryInOAuthOptions) {
   const { providerId, requestConfirm, onOAuthComplete } = options;
   const { t } = useTranslation();
   const { provider: providerService } = useDataServices();
-
+  const { toast } = useToast();
   const oauth = CherryInOauthService.getInstance(providerService);
 
   // Provider & auth config queries
@@ -117,13 +117,16 @@ export function useCherryInOAuth(options: UseCherryInOAuthOptions) {
           await replaceApiKeysMutation.mutateAsync(remainingKeys);
           await authConfigQuery.refetch();
         } catch {
-          Alert.alert(t('settings.provider.oauth.cherryIn.logout_warning'));
+          toast.show({
+            variant: 'warning',
+            label: t('settings.provider.oauth.cherryIn.logout_warning'),
+          });
         } finally {
           setIsLoggingOut(false);
         }
       },
     });
-  }, [provider, replaceApiKeysMutation, authConfigQuery, oauth, t, requestConfirm]);
+  }, [requestConfirm, t, oauth, provider, replaceApiKeysMutation, authConfigQuery, toast]);
 
   const handleOAuthLogin = useCallback(async () => {
     if (!request) {

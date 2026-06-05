@@ -139,7 +139,7 @@
   "settings.provider.oauth.cherryIn.tagline": "Sign in to get your API keys automatically",
   "settings.provider.oauth.cherryIn.login_button": "Sign in with CherryIN",
   "settings.provider.oauth.cherryIn.logged_in": "Logged in",
-  "settings.provider.oauth.cherryIn.service_attribution": "This service is provided by",
+  "settings.provider.oauth.cherryIn.service_attribution": "This service is provided by open.cherryin.ai",
   "settings.provider.oauth.cherryIn.logout": "Logout",
   "settings.provider.oauth.cherryIn.logout_confirm": "Are you sure you want to log out from CherryIN? Your API keys will be removed.",
   "settings.provider.oauth.cherryIn.logout_success": "Successfully logged out",

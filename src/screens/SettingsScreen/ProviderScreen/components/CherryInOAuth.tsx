@@ -1,5 +1,5 @@
 import { resolveProviderIcon } from "@cherrystudio/ui/icons-png/providers";
-import { Button, Spinner, Card } from "heroui-native";
+import { Button, Spinner, Card, useToast } from "heroui-native";
 import { LogInIcon, LogOutIcon, WalletIcon } from "lucide-uniwind";
 import { Fragment, useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -31,6 +31,7 @@ export function CherryInOAuth({
   const { confirmDialog, requestConfirm } = useSettingsConfirmDialog();
   const iconTheme = theme === "dark" ? "dark" : "light";
   const providerIcon = resolveProviderIcon("cherryin");
+  const { toast } = useToast();
 
   const {
     provider,
@@ -53,10 +54,14 @@ export function CherryInOAuth({
     } catch (error) {
       const message = error instanceof Error ? error.message : "OAuth failed";
       if (message !== "User cancelled") {
-        Alert.alert(t("settings.provider.oauth.cherryIn.error"), message);
+        toast.show({
+          label: t("settings.provider.oauth.cherryIn.error"),
+          description: message,
+          variant: "danger",
+        });
       }
     }
-  }, [handleOAuthLogin, t]);
+  }, [handleOAuthLogin, t, toast]);
 
   const handleTopup = useCallback(() => {
     Linking.openURL(CHERRYIN_TOPUP_URL);
@@ -164,7 +169,9 @@ export function CherryInOAuth({
                   <View className="flex flex-row items-center gap-1.5">
                     <WalletIcon size={15} color="white" />
                     <Button.Label>
-                      <Text className="text-sm">充值</Text>
+                      <Text className="text-sm">
+                        {t("settings.provider.oauth.cherryIn.topup")}
+                      </Text>
                     </Button.Label>
                   </View>
                 </Button>
@@ -184,15 +191,11 @@ export function CherryInOAuth({
           </View>
         </View>
         <Card.Footer className="mt-2">
-          <Text className="text-xs text-default-400">
-            {t("settings.provider.oauth.cherryIn.service_attribution")}{" "}
-            <Text
-              className="py-1.5"
-              onPress={() => Linking.openURL("https://open.cherryin.ai")}
-            >
-              open.cherryin.ai
-            </Text>
-            提供
+          <Text
+            className="text-xs text-default-400"
+            onPress={() => Linking.openURL("https://open.cherryin.ai")}
+          >
+            {t("settings.provider.oauth.cherryIn.service_attribution")}
           </Text>
         </Card.Footer>
       </Card>
