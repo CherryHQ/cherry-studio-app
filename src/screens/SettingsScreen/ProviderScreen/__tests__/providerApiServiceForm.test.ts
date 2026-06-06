@@ -1,10 +1,14 @@
+import type { Provider } from '@/data/types/provider';
 import {
   apiKeyEntriesSignature,
   buildApiKeyEntriesFromInput,
+  buildApiKeysInputFromEntries,
   formatApiKeysInput,
+  normalizeApiKeyEntries,
   parseApiKeysInput,
 } from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceApiKeys';
 import { parseCredentialsDraft } from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceAuthDraft';
+import { createDraftSnapshot } from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceDraft';
 import {
   getProviderApiServiceApiKeysDirtyState,
   getProviderApiServiceEndpointDirtyState,
@@ -468,5 +472,66 @@ describe('provider API service form helpers', () => {
       client_email: 'test@example.com',
     });
     expect(() => parseCredentialsDraft('[]')).toThrow('credentials must be a JSON object');
+  });
+
+  it('does not overwrite dirty API key draft when server keys refetch', () => {
+    const provider = { id: 'p1', authType: 'api-key' } as unknown as Provider;
+    const initialApiKeys = [{ id: 'k1', isEnabled: true, key: 'sk-old' }];
+    const draft = createDraftSnapshot(provider, initialApiKeys, { type: 'api-key' });
+
+    // User modifies a key locally (dirty)
+    draft.apiKeyEntries[0].key = 'sk-local-edit';
+    draft.apiKeysInput = buildApiKeysInputFromEntries(draft.apiKeyEntries);
+
+    const serverApiKeys = [{ id: 'k2', isEnabled: true, key: 'sk-oauth' }];
+    const serverSignature = apiKeyEntriesSignature(normalizeApiKeyEntries(serverApiKeys));
+    const currentDraftSignature = apiKeyEntriesSignature(draft.apiKeyEntries);
+
+    expect(currentDraftSignature).not.toBe(draft.apiKeysBaselineSignature);
+
+    // Simulate the useEffect sync logic
+    const nextDraft =
+      currentDraftSignature !== draft.apiKeysBaselineSignature
+        ? draft
+        : {
+          ...draft,
+          apiKeyEntries: normalizeApiKeyEntries(serverApiKeys).map((entry) => ({ ...entry })),
+          apiKeysInput: buildApiKeysInputFromEntries(normalizeApiKeyEntries(serverApiKeys)),
+          apiKeysBaselineSignature: serverSignature,
+        };
+
+    expect(nextDraft.apiKeyEntries).toEqual([
+      { id: 'k1', isEnabled: true, key: 'sk-local-edit' },
+    ]);
+    expect(nextDraft.apiKeysInput).toBe('sk-local-edit');
+    expect(nextDraft.apiKeysBaselineSignature).toBe(draft.apiKeysBaselineSignature);
+  });
+
+  it('syncs server API keys when draft is not dirty', () => {
+    const provider = { id: 'p1', authType: 'api-key' } as unknown as Provider;
+    const initialApiKeys = [{ id: 'k1', isEnabled: true, key: 'sk-old' }];
+    const draft = createDraftSnapshot(provider, initialApiKeys, { type: 'api-key' });
+
+    const serverApiKeys = [{ id: 'k2', isEnabled: true, key: 'sk-oauth' }];
+    const serverSignature = apiKeyEntriesSignature(normalizeApiKeyEntries(serverApiKeys));
+    const currentDraftSignature = apiKeyEntriesSignature(draft.apiKeyEntries);
+
+    // Draft is not dirty
+    expect(currentDraftSignature).toBe(draft.apiKeysBaselineSignature);
+
+    // Simulate the useEffect sync logic
+    const nextDraft =
+      currentDraftSignature !== draft.apiKeysBaselineSignature
+        ? draft
+        : {
+          ...draft,
+          apiKeyEntries: normalizeApiKeyEntries(serverApiKeys).map((entry) => ({ ...entry })),
+          apiKeysInput: buildApiKeysInputFromEntries(normalizeApiKeyEntries(serverApiKeys)),
+          apiKeysBaselineSignature: serverSignature,
+        };
+
+    expect(nextDraft.apiKeyEntries).toEqual([{ id: 'k2', isEnabled: true, key: 'sk-oauth' }]);
+    expect(nextDraft.apiKeysInput).toBe('sk-oauth');
+    expect(nextDraft.apiKeysBaselineSignature).toBe(serverSignature);
   });
 });
