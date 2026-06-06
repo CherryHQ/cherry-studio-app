@@ -494,15 +494,13 @@ describe('provider API service form helpers', () => {
       currentDraftSignature !== draft.apiKeysBaselineSignature
         ? draft
         : {
-          ...draft,
-          apiKeyEntries: normalizeApiKeyEntries(serverApiKeys).map((entry) => ({ ...entry })),
-          apiKeysInput: buildApiKeysInputFromEntries(normalizeApiKeyEntries(serverApiKeys)),
-          apiKeysBaselineSignature: serverSignature,
-        };
+            ...draft,
+            apiKeyEntries: normalizeApiKeyEntries(serverApiKeys).map((entry) => ({ ...entry })),
+            apiKeysInput: buildApiKeysInputFromEntries(normalizeApiKeyEntries(serverApiKeys)),
+            apiKeysBaselineSignature: serverSignature,
+          };
 
-    expect(nextDraft.apiKeyEntries).toEqual([
-      { id: 'k1', isEnabled: true, key: 'sk-local-edit' },
-    ]);
+    expect(nextDraft.apiKeyEntries).toEqual([{ id: 'k1', isEnabled: true, key: 'sk-local-edit' }]);
     expect(nextDraft.apiKeysInput).toBe('sk-local-edit');
     expect(nextDraft.apiKeysBaselineSignature).toBe(draft.apiKeysBaselineSignature);
   });
@@ -524,11 +522,11 @@ describe('provider API service form helpers', () => {
       currentDraftSignature !== draft.apiKeysBaselineSignature
         ? draft
         : {
-          ...draft,
-          apiKeyEntries: normalizeApiKeyEntries(serverApiKeys).map((entry) => ({ ...entry })),
-          apiKeysInput: buildApiKeysInputFromEntries(normalizeApiKeyEntries(serverApiKeys)),
-          apiKeysBaselineSignature: serverSignature,
-        };
+            ...draft,
+            apiKeyEntries: normalizeApiKeyEntries(serverApiKeys).map((entry) => ({ ...entry })),
+            apiKeysInput: buildApiKeysInputFromEntries(normalizeApiKeyEntries(serverApiKeys)),
+            apiKeysBaselineSignature: serverSignature,
+          };
 
     expect(nextDraft.apiKeyEntries).toEqual([{ id: 'k2', isEnabled: true, key: 'sk-oauth' }]);
     expect(nextDraft.apiKeysInput).toBe('sk-oauth');
