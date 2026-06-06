@@ -4,9 +4,11 @@ import type { EndpointType } from '@/data/types/model';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/data/types/provider';
 
 import {
+  apiKeyEntriesSignature,
   buildApiKeyEntriesFromInput,
   buildApiKeysInputFromEntries,
   createEmptyApiKeyEntry,
+  normalizeApiKeyEntries,
 } from '../utils/providerApiServiceApiKeys';
 import type { AuthDraft } from '../utils/providerApiServiceAuthDraft';
 import {
@@ -86,6 +88,15 @@ export function useProviderApiServiceDraft({
       if (!current) {
         return createDraftSnapshot(provider, apiKeys, authConfig);
       }
+
+      // Check if draft has local modifications (dirty state)
+      const currentDraftSignature = apiKeyEntriesSignature(current.apiKeyEntries);
+      if (currentDraftSignature !== current.apiKeysBaselineSignature) {
+        // Draft is dirty, don't overwrite with server data
+        return current;
+      }
+
+      // Draft is not dirty, sync with server data
       return {
         ...current,
         ...createApiKeysDraftSlice(apiKeys),
@@ -102,12 +113,12 @@ export function useProviderApiServiceDraft({
       setProviderDraft(providerId, (current) =>
         current
           ? {
-            ...current,
-            baseUrlByEndpoint: {
-              ...current.baseUrlByEndpoint,
-              [endpoint]: value,
-            },
-          }
+              ...current,
+              baseUrlByEndpoint: {
+                ...current.baseUrlByEndpoint,
+                [endpoint]: value,
+              },
+            }
           : current,
       );
     },
@@ -123,13 +134,13 @@ export function useProviderApiServiceDraft({
       setProviderDraft(providerId, (current) =>
         current && canAddEndpointToDraft(current, endpoint)
           ? {
-            ...current,
-            baseUrlByEndpoint: {
-              ...current.baseUrlByEndpoint,
-              [endpoint]: current.baseUrlByEndpoint[endpoint] ?? '',
-            },
-            visibleEndpointTypes: [...current.visibleEndpointTypes, endpoint],
-          }
+              ...current,
+              baseUrlByEndpoint: {
+                ...current.baseUrlByEndpoint,
+                [endpoint]: current.baseUrlByEndpoint[endpoint] ?? '',
+              },
+              visibleEndpointTypes: [...current.visibleEndpointTypes, endpoint],
+            }
           : current,
       );
     },
@@ -168,12 +179,12 @@ export function useProviderApiServiceDraft({
       setProviderDraft(providerId, (current) =>
         current
           ? {
-            ...current,
-            authDraft: {
-              ...current.authDraft,
-              ...updates,
-            },
-          }
+              ...current,
+              authDraft: {
+                ...current.authDraft,
+                ...updates,
+              },
+            }
           : current,
       );
     },
@@ -189,10 +200,10 @@ export function useProviderApiServiceDraft({
       setProviderDraft(providerId, (current) =>
         current
           ? {
-            ...current,
-            apiKeyEntries: buildApiKeyEntriesFromInput(apiKeysInput, current.apiKeyEntries),
-            apiKeysInput,
-          }
+              ...current,
+              apiKeyEntries: buildApiKeyEntriesFromInput(apiKeysInput, current.apiKeyEntries),
+              apiKeysInput,
+            }
           : current,
       );
     },
@@ -292,8 +303,9 @@ export function useProviderApiServiceDraft({
     [providerId],
   );
 
-  const primaryBaseUrl =
-    draft && draft.primaryEndpoint ? getBaseUrlForEndpoint(draft, draft.primaryEndpoint) : '';
+  const primaryBaseUrl = draft?.primaryEndpoint
+    ? getBaseUrlForEndpoint(draft, draft.primaryEndpoint)
+    : '';
 
   const resetEndpointDraft = useCallback(() => {
     if (!providerId || !provider) {
@@ -370,9 +382,11 @@ function createEndpointDraftSlice(
 
 function createApiKeysDraftSlice(
   apiKeys: readonly ApiKeyEntry[],
-): Pick<DraftSnapshot, 'apiKeyEntries' | 'apiKeysInput'> {
+): Pick<DraftSnapshot, 'apiKeyEntries' | 'apiKeysInput' | 'apiKeysBaselineSignature'> {
+  const normalizedApiKeys = normalizeApiKeyEntries(apiKeys);
   return {
-    apiKeyEntries: apiKeys.map((entry) => ({ ...entry })),
-    apiKeysInput: buildApiKeysInputFromEntries(apiKeys),
+    apiKeyEntries: normalizedApiKeys.map((entry) => ({ ...entry })),
+    apiKeysInput: buildApiKeysInputFromEntries(normalizedApiKeys),
+    apiKeysBaselineSignature: apiKeyEntriesSignature(normalizedApiKeys),
   };
 }

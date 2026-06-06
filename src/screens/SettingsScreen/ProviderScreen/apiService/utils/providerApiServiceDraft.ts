@@ -1,7 +1,12 @@
 import type { EndpointType } from '@/data/types/model';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/data/types/provider';
 
-import { cloneApiKeyEntries, formatApiKeysInput } from './providerApiServiceApiKeys';
+import {
+  apiKeyEntriesSignature,
+  cloneApiKeyEntries,
+  formatApiKeysInput,
+  normalizeApiKeyEntries,
+} from './providerApiServiceApiKeys';
 import {
   type AuthDraft,
   createAuthDraft,
@@ -16,6 +21,7 @@ import {
 export type DraftSnapshot = {
   apiKeyEntries: ApiKeyEntry[];
   apiKeysInput: string;
+  apiKeysBaselineSignature: string;
   authDraft: AuthDraft;
   baseUrlByEndpoint: Partial<Record<EndpointType, string>>;
   primaryEndpoint: EndpointType;
@@ -40,9 +46,11 @@ export function createDraftSnapshot(
   apiKeys: readonly ApiKeyEntry[],
   authConfig: AuthConfig | null | undefined,
 ): DraftSnapshot {
+  const normalizedApiKeys = normalizeApiKeyEntries(apiKeys);
   return {
-    apiKeyEntries: cloneApiKeyEntries(apiKeys),
-    apiKeysInput: formatApiKeysInput(apiKeys),
+    apiKeyEntries: cloneApiKeyEntries(normalizedApiKeys),
+    apiKeysInput: formatApiKeysInput(normalizedApiKeys),
+    apiKeysBaselineSignature: apiKeyEntriesSignature(normalizedApiKeys),
     authDraft: createAuthDraft(getEffectiveAuthConfig(authConfig, provider)),
     baseUrlByEndpoint: createBaseUrlDraft(provider),
     primaryEndpoint: getPrimaryEndpoint(provider),
