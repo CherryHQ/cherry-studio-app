@@ -3,7 +3,7 @@ import { randomUUID } from 'expo-crypto';
 import * as z from 'zod';
 import { CHERRYIN_CONFIG } from '@/config/constants';
 import type { ProviderService } from '@/data/services/ProviderService';
-import type { ApiKeyEntry, AuthConfig, Provider } from '@/data/types/provider';
+import type { ApiKeyEntry, AuthConfig } from '@/data/types/provider';
 
 const logger = loggerService.withContext('CherryInOauthService');
 const CHERRYIN_PROVIDER_ID = 'cherryin';
@@ -102,7 +102,7 @@ export class CherryInOauthService {
   private static instance: CherryInOauthService | null = null;
   private refreshAccessTokenPromise: Promise<TokenRefreshResult> | null = null;
 
-  private constructor(private providerService: ProviderService) { }
+  private constructor(private providerService: ProviderService) {}
 
   static getInstance(providerService: ProviderService): CherryInOauthService {
     if (!CherryInOauthService.instance) {
@@ -131,6 +131,9 @@ export class CherryInOauthService {
     codeVerifier: string;
     redirectUri: string;
   }): Promise<string> {
+    this.validateApiHost(oauthServer);
+    this.validateApiHost(apiHost);
+
     const { accessToken, refreshToken } = await this.exchangeAuthorizationCode(
       oauthServer,
       code,
@@ -160,18 +163,21 @@ export class CherryInOauthService {
   }
 
   /**
-   * Filter out OAuth-labelled API keys from a provider.
+   * Get non-OAuth API keys from the provider's full key list.
    */
-  getNonOAuthApiKeys(provider: Provider | undefined): ApiKeyEntry[] {
-    return (provider?.apiKeys?.filter((k) => k.label !== 'OAuth') ?? []) as ApiKeyEntry[];
+  async getNonOAuthApiKeys(providerId: string): Promise<ApiKeyEntry[]> {
+    const { keys } = await this.providerService.listApiKeys(providerId);
+    return keys.filter((k) => k.label !== 'OAuth');
   }
 
   /**
-   * Complete OAuth login persistence: save API keys + enable the provider.
+   * Complete OAuth login persistence
    */
   async saveOAuthResult(providerId: string, apiKeysString: string): Promise<void> {
-    const apiKeyEntries = this.parseApiKeys(apiKeysString);
-    await this.providerService.replaceApiKeys(providerId, apiKeyEntries);
+    const { keys: existingKeys } = await this.providerService.listApiKeys(providerId);
+    const nonOAuthKeys = existingKeys.filter((k) => k.label !== 'OAuth');
+    const newOAuthKeys = this.parseApiKeys(apiKeysString);
+    await this.providerService.replaceApiKeys(providerId, [...nonOAuthKeys, ...newOAuthKeys]);
     await this.providerService.update(providerId, { isEnabled: true });
   }
 

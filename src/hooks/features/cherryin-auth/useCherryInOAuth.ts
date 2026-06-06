@@ -66,6 +66,19 @@ export function useCherryInOAuth(options: UseCherryInOAuthOptions) {
     ) => services.provider.replaceApiKeys(providerId, apiKeys),
   });
 
+  const saveOAuthResultMutation = useDataMutation({
+    invalidateQueries: [
+      queryKeys.providers.detail(providerId),
+      queryKeys.providers.list(),
+      queryKeys.providers.apiKeys(providerId),
+      queryKeys.providers.authConfig(providerId),
+    ],
+    mutationFn: (services, apiKeysString: string) => {
+      const oauthInstance = CherryInOauthService.getInstance(services.provider);
+      return oauthInstance.saveOAuthResult(providerId, apiKeysString);
+    },
+  });
+
   // Sign-in (expo-auth-session)
 
   const redirectUri = makeRedirectUri({ scheme: 'cherrystudio', path: 'oauth/callback' });
@@ -120,10 +133,7 @@ export function useCherryInOAuth(options: UseCherryInOAuthOptions) {
           await oauth.logout(CHERRYIN_OAUTH_SERVER);
           setBalance(null);
 
-          if (!provider) {
-            throw new Error('Provider not loaded');
-          }
-          const remainingKeys = oauth.getNonOAuthApiKeys(provider);
+          const remainingKeys = await oauth.getNonOAuthApiKeys(providerId);
           await replaceApiKeysMutation.mutateAsync(remainingKeys);
           await authConfigQuery.refetch();
         } catch (error) {
@@ -138,7 +148,7 @@ export function useCherryInOAuth(options: UseCherryInOAuthOptions) {
         }
       },
     });
-  }, [requestConfirm, t, oauth, provider, replaceApiKeysMutation, authConfigQuery, toast]);
+  }, [requestConfirm, t, oauth, providerId, replaceApiKeysMutation, authConfigQuery, toast]);
 
   const handleOAuthLogin = useCallback(async () => {
     if (!request) {
@@ -167,8 +177,7 @@ export function useCherryInOAuth(options: UseCherryInOAuthOptions) {
       });
 
       // Save API keys + enable provider
-      await oauth.saveOAuthResult(providerId, apiKeys);
-      await authConfigQuery.refetch();
+      await saveOAuthResultMutation.mutateAsync(apiKeys);
       await fetchData();
 
       onOAuthComplete?.();
@@ -180,8 +189,7 @@ export function useCherryInOAuth(options: UseCherryInOAuthOptions) {
     promptAsync,
     oauth,
     redirectUri,
-    providerId,
-    authConfigQuery,
+    saveOAuthResultMutation,
     fetchData,
     onOAuthComplete,
   ]);
