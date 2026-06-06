@@ -116,6 +116,7 @@ describe('provider API service form helpers', () => {
     const updates = buildProviderApiServiceEndpointUpdates({
       draft: {
         apiKeyEntries: [],
+        apiKeysBaselineSignature: '[]',
         apiKeysInput: '',
         authDraft: {
           accessKeyId: '',
@@ -152,6 +153,7 @@ describe('provider API service form helpers', () => {
       authConfig: { type: 'api-key' },
       draft: {
         apiKeyEntries: [],
+        apiKeysBaselineSignature: '[]',
         apiKeysInput: '',
         authDraft: {
           accessKeyId: '',
@@ -193,6 +195,9 @@ describe('provider API service form helpers', () => {
     const updates = buildProviderApiServiceEndpointUpdates({
       draft: {
         apiKeyEntries: [{ id: 'key-a', isEnabled: true, key: 'sk-a' }],
+        apiKeysBaselineSignature: apiKeyEntriesSignature([
+          { id: 'key-a', isEnabled: true, key: 'sk-a' },
+        ]),
         apiKeysInput: 'sk-a',
         authDraft: {
           accessKeyId: '',
@@ -238,6 +243,10 @@ describe('provider API service form helpers', () => {
           { id: 'key-a', isEnabled: false, key: 'sk-a' },
           { id: 'key-b', isEnabled: true, key: 'sk-b' },
         ],
+        apiKeysBaselineSignature: apiKeyEntriesSignature([
+          { id: 'key-a', isEnabled: false, key: 'sk-a' },
+          { id: 'key-b', isEnabled: true, key: 'sk-b' },
+        ]),
         apiKeysInput: 'sk-a,sk-b',
         authDraft: {
           accessKeyId: '',
@@ -294,6 +303,11 @@ describe('provider API service form helpers', () => {
           { id: 'key-empty', isEnabled: true, key: ' ' },
           { id: 'key-b', isEnabled: true, key: 'sk-b' },
         ],
+        apiKeysBaselineSignature: apiKeyEntriesSignature([
+          { id: 'key-a', isEnabled: false, key: ' sk-a ' },
+          { id: 'key-empty', isEnabled: true, key: ' ' },
+          { id: 'key-b', isEnabled: true, key: 'sk-b' },
+        ]),
         apiKeysInput: 'sk-a,sk-b',
         authDraft: {
           accessKeyId: '',
@@ -328,6 +342,9 @@ describe('provider API service form helpers', () => {
             { id: 'key-a', isEnabled: true, key: 'sk-a' },
             { id: 'key-empty', isEnabled: true, key: '' },
           ],
+          apiKeysBaselineSignature: apiKeyEntriesSignature([
+            { id: 'key-a', isEnabled: true, key: 'sk-a' },
+          ]),
           apiKeysInput: 'sk-a',
           authDraft: {
             accessKeyId: '',
@@ -356,6 +373,7 @@ describe('provider API service form helpers', () => {
       getProviderApiServiceEndpointDirtyState({
         draft: {
           apiKeyEntries: [],
+          apiKeysBaselineSignature: '[]',
           apiKeysInput: '',
           authDraft: {
             accessKeyId: '',
@@ -393,6 +411,7 @@ describe('provider API service form helpers', () => {
         authConfig: { type: 'api-key' },
         draft: {
           apiKeyEntries: [],
+          apiKeysBaselineSignature: '[]',
           apiKeysInput: '',
           authDraft: {
             accessKeyId: '',
