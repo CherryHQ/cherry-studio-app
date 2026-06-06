@@ -8,11 +8,14 @@ import {
   parseApiKeysInput,
 } from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceApiKeys';
 import { parseCredentialsDraft } from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceAuthDraft';
-import { createDraftSnapshot } from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceDraft';
 import {
   getProviderApiServiceApiKeysDirtyState,
   getProviderApiServiceEndpointDirtyState,
 } from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceDirtyState';
+import {
+  createDraftSnapshot,
+  type DraftSnapshot,
+} from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceDraft';
 import {
   buildAddableEndpointOptions,
   canEditProviderEndpoint,
@@ -26,6 +29,46 @@ import {
   buildProviderApiServiceSavePayload,
   ProviderApiServiceSaveError,
 } from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceSave';
+
+const DEFAULT_AUTH_DRAFT: DraftSnapshot['authDraft'] = {
+  accessKeyId: '',
+  apiVersion: '',
+  clientId: '',
+  credentials: '',
+  deploymentId: '',
+  location: '',
+  project: '',
+  region: '',
+  secretAccessKey: '',
+  type: 'api-key',
+};
+
+function createTestDraftSnapshot(overrides: Partial<DraftSnapshot> = {}): DraftSnapshot {
+  const {
+    apiKeyEntries = [],
+    apiKeysBaselineSignature,
+    apiKeysInput,
+    authDraft,
+    baseUrlByEndpoint,
+    primaryEndpoint,
+    visibleEndpointTypes,
+    ...rest
+  } = overrides;
+
+  return {
+    ...rest,
+    apiKeyEntries,
+    apiKeysBaselineSignature:
+      apiKeysBaselineSignature ?? apiKeyEntriesSignature(normalizeApiKeyEntries(apiKeyEntries)),
+    apiKeysInput: apiKeysInput ?? buildApiKeysInputFromEntries(apiKeyEntries),
+    authDraft: authDraft ?? { ...DEFAULT_AUTH_DRAFT },
+    baseUrlByEndpoint: baseUrlByEndpoint ?? {
+      'openai-chat-completions': 'https://chat.example.com',
+    },
+    primaryEndpoint: primaryEndpoint ?? 'openai-chat-completions',
+    visibleEndpointTypes: visibleEndpointTypes ?? ['openai-chat-completions'],
+  };
+}
 
 describe('provider API service form helpers', () => {
   it('parses comma and newline separated API keys', () => {
@@ -118,28 +161,11 @@ describe('provider API service form helpers', () => {
 
   it('allows clearing the primary endpoint base URL', () => {
     const updates = buildProviderApiServiceEndpointUpdates({
-      draft: {
-        apiKeyEntries: [],
-        apiKeysBaselineSignature: '[]',
-        apiKeysInput: '',
-        authDraft: {
-          accessKeyId: '',
-          apiVersion: '',
-          clientId: '',
-          credentials: '',
-          deploymentId: '',
-          location: '',
-          project: '',
-          region: '',
-          secretAccessKey: '',
-          type: 'api-key',
-        },
+      draft: createTestDraftSnapshot({
         baseUrlByEndpoint: {
           'openai-chat-completions': '',
         },
-        primaryEndpoint: 'openai-chat-completions',
-        visibleEndpointTypes: ['openai-chat-completions'],
-      },
+      }),
       provider: {
         authType: 'api-key',
         endpointConfigs: {
@@ -155,29 +181,13 @@ describe('provider API service form helpers', () => {
     const payload = buildProviderApiServiceSavePayload({
       apiKeys: [],
       authConfig: { type: 'api-key' },
-      draft: {
-        apiKeyEntries: [],
-        apiKeysBaselineSignature: '[]',
-        apiKeysInput: '',
-        authDraft: {
-          accessKeyId: '',
-          apiVersion: '',
-          clientId: '',
-          credentials: '',
-          deploymentId: '',
-          location: '',
-          project: '',
-          region: '',
-          secretAccessKey: '',
-          type: 'api-key',
-        },
+      draft: createTestDraftSnapshot({
         baseUrlByEndpoint: {
           'openai-chat-completions': 'https://chat.example.com',
           'openai-responses': 'https://responses.example.com',
         },
-        primaryEndpoint: 'openai-chat-completions',
         visibleEndpointTypes: ['openai-chat-completions', 'openai-responses'],
-      },
+      }),
       provider: {
         authType: 'api-key',
         defaultChatEndpoint: 'openai-chat-completions',
@@ -197,31 +207,14 @@ describe('provider API service form helpers', () => {
 
   it('builds endpoint-only updates for the endpoint settings screen', () => {
     const updates = buildProviderApiServiceEndpointUpdates({
-      draft: {
+      draft: createTestDraftSnapshot({
         apiKeyEntries: [{ id: 'key-a', isEnabled: true, key: 'sk-a' }],
-        apiKeysBaselineSignature: apiKeyEntriesSignature([
-          { id: 'key-a', isEnabled: true, key: 'sk-a' },
-        ]),
-        apiKeysInput: 'sk-a',
-        authDraft: {
-          accessKeyId: '',
-          apiVersion: '',
-          clientId: '',
-          credentials: '',
-          deploymentId: '',
-          location: '',
-          project: '',
-          region: '',
-          secretAccessKey: '',
-          type: 'api-key',
-        },
         baseUrlByEndpoint: {
           'openai-chat-completions': 'https://chat.example.com',
           'openai-responses': '',
         },
-        primaryEndpoint: 'openai-chat-completions',
         visibleEndpointTypes: ['openai-chat-completions', 'openai-responses'],
-      },
+      }),
       provider: {
         authType: 'api-key',
         endpointConfigs: {
@@ -242,34 +235,15 @@ describe('provider API service form helpers', () => {
     const payload = buildProviderApiServiceSavePayload({
       apiKeys: [{ id: 'key-a', isEnabled: true, key: 'sk-a' }],
       authConfig: { type: 'api-key' },
-      draft: {
+      draft: createTestDraftSnapshot({
         apiKeyEntries: [
           { id: 'key-a', isEnabled: false, key: 'sk-a' },
           { id: 'key-b', isEnabled: true, key: 'sk-b' },
         ],
-        apiKeysBaselineSignature: apiKeyEntriesSignature([
-          { id: 'key-a', isEnabled: false, key: 'sk-a' },
-          { id: 'key-b', isEnabled: true, key: 'sk-b' },
-        ]),
-        apiKeysInput: 'sk-a,sk-b',
-        authDraft: {
-          accessKeyId: '',
-          apiVersion: '',
-          clientId: '',
-          credentials: '',
-          deploymentId: '',
-          location: '',
-          project: '',
-          region: '',
-          secretAccessKey: '',
-          type: 'api-key',
-        },
         baseUrlByEndpoint: {
           'openai-chat-completions': 'https://chat.example.com',
         },
-        primaryEndpoint: 'openai-chat-completions',
-        visibleEndpointTypes: ['openai-chat-completions'],
-      },
+      }),
       provider: {
         authType: 'api-key',
         defaultChatEndpoint: 'openai-chat-completions',
@@ -301,36 +275,15 @@ describe('provider API service form helpers', () => {
 
   it('builds API key-only payload for the API key settings screen', () => {
     expect(
-      buildProviderApiServiceApiKeysPayload({
-        apiKeyEntries: [
-          { id: 'key-a', isEnabled: false, key: ' sk-a ' },
-          { id: 'key-empty', isEnabled: true, key: ' ' },
-          { id: 'key-b', isEnabled: true, key: 'sk-b' },
-        ],
-        apiKeysBaselineSignature: apiKeyEntriesSignature([
-          { id: 'key-a', isEnabled: false, key: ' sk-a ' },
-          { id: 'key-empty', isEnabled: true, key: ' ' },
-          { id: 'key-b', isEnabled: true, key: 'sk-b' },
-        ]),
-        apiKeysInput: 'sk-a,sk-b',
-        authDraft: {
-          accessKeyId: '',
-          apiVersion: '',
-          clientId: '',
-          credentials: '',
-          deploymentId: '',
-          location: '',
-          project: '',
-          region: '',
-          secretAccessKey: '',
-          type: 'api-key',
-        },
-        baseUrlByEndpoint: {
-          'openai-chat-completions': 'https://chat.example.com',
-        },
-        primaryEndpoint: 'openai-chat-completions',
-        visibleEndpointTypes: ['openai-chat-completions'],
-      }),
+      buildProviderApiServiceApiKeysPayload(
+        createTestDraftSnapshot({
+          apiKeyEntries: [
+            { id: 'key-a', isEnabled: false, key: ' sk-a ' },
+            { id: 'key-empty', isEnabled: true, key: ' ' },
+            { id: 'key-b', isEnabled: true, key: 'sk-b' },
+          ],
+        }),
+      ),
     ).toEqual([
       { id: 'key-a', isEnabled: false, key: 'sk-a' },
       { id: 'key-b', isEnabled: true, key: 'sk-b' },
@@ -341,7 +294,7 @@ describe('provider API service form helpers', () => {
     expect(
       getProviderApiServiceApiKeysDirtyState({
         apiKeys: [{ id: 'key-a', isEnabled: true, key: 'sk-a' }],
-        draft: {
+        draft: createTestDraftSnapshot({
           apiKeyEntries: [
             { id: 'key-a', isEnabled: true, key: 'sk-a' },
             { id: 'key-empty', isEnabled: true, key: '' },
@@ -349,25 +302,7 @@ describe('provider API service form helpers', () => {
           apiKeysBaselineSignature: apiKeyEntriesSignature([
             { id: 'key-a', isEnabled: true, key: 'sk-a' },
           ]),
-          apiKeysInput: 'sk-a',
-          authDraft: {
-            accessKeyId: '',
-            apiVersion: '',
-            clientId: '',
-            credentials: '',
-            deploymentId: '',
-            location: '',
-            project: '',
-            region: '',
-            secretAccessKey: '',
-            type: 'api-key',
-          },
-          baseUrlByEndpoint: {
-            'openai-chat-completions': 'https://chat.example.com',
-          },
-          primaryEndpoint: 'openai-chat-completions',
-          visibleEndpointTypes: ['openai-chat-completions'],
-        },
+        }),
       }),
     ).toBe(false);
   });
@@ -375,29 +310,13 @@ describe('provider API service form helpers', () => {
   it('ignores empty new endpoint rows in dirty state', () => {
     expect(
       getProviderApiServiceEndpointDirtyState({
-        draft: {
-          apiKeyEntries: [],
-          apiKeysBaselineSignature: '[]',
-          apiKeysInput: '',
-          authDraft: {
-            accessKeyId: '',
-            apiVersion: '',
-            clientId: '',
-            credentials: '',
-            deploymentId: '',
-            location: '',
-            project: '',
-            region: '',
-            secretAccessKey: '',
-            type: 'api-key',
-          },
+        draft: createTestDraftSnapshot({
           baseUrlByEndpoint: {
             'openai-chat-completions': 'https://chat.example.com',
             'openai-responses': '',
           },
-          primaryEndpoint: 'openai-chat-completions',
           visibleEndpointTypes: ['openai-chat-completions', 'openai-responses'],
-        },
+        }),
         provider: {
           authType: 'api-key',
           endpointConfigs: {
@@ -413,28 +332,11 @@ describe('provider API service form helpers', () => {
       buildProviderApiServiceSavePayload({
         apiKeys: [],
         authConfig: { type: 'api-key' },
-        draft: {
-          apiKeyEntries: [],
-          apiKeysBaselineSignature: '[]',
-          apiKeysInput: '',
-          authDraft: {
-            accessKeyId: '',
-            apiVersion: '',
-            clientId: '',
-            credentials: '',
-            deploymentId: '',
-            location: '',
-            project: '',
-            region: '',
-            secretAccessKey: '',
-            type: 'api-key',
-          },
+        draft: createTestDraftSnapshot({
           baseUrlByEndpoint: {
             'openai-chat-completions': 'not a url',
           },
-          primaryEndpoint: 'openai-chat-completions',
-          visibleEndpointTypes: ['openai-chat-completions'],
-        },
+        }),
         provider: { authType: 'api-key' } as never,
       }),
     ).toThrow(new ProviderApiServiceSaveError('invalid-base-url'));
