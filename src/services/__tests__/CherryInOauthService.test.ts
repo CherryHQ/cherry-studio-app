@@ -41,6 +41,8 @@ describe('CherryInOauthService', () => {
     // Create mock ProviderService
     mockProviderService = {
       getAuthConfig: jest.fn(),
+      listApiKeys: jest.fn().mockResolvedValue({ keys: [] }),
+      replaceApiKeys: jest.fn().mockResolvedValue(undefined),
       update: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<ProviderService>;
 
@@ -648,6 +650,121 @@ describe('CherryInOauthService', () => {
       await expect(service.getBalance('https://open.cherryin.ai')).rejects.toThrow(
         'Invalid response format from server',
       );
+    });
+  });
+
+  describe('completeOAuth host validation', () => {
+    it('should reject forged oauthServer (SSRF defense)', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: 'test-access' }),
+      });
+
+      await expect(
+        service.completeOAuth({
+          oauthServer: 'https://attacker.example.com',
+          apiHost: 'https://open.cherryin.ai',
+          code: 'auth-code',
+          codeVerifier: 'test-verifier',
+          redirectUri: 'cherrystudio://oauth/callback',
+        }),
+      ).rejects.toThrow(/Unauthorized API host/);
+    });
+
+    it('should reject forged apiHost (SSRF defense)', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: 'test-access' }),
+      });
+
+      await expect(
+        service.completeOAuth({
+          oauthServer: 'https://open.cherryin.ai',
+          apiHost: 'https://attacker.example.com',
+          code: 'auth-code',
+          codeVerifier: 'test-verifier',
+          redirectUri: 'cherrystudio://oauth/callback',
+        }),
+      ).rejects.toThrow(/Unauthorized API host/);
+    });
+  });
+
+  describe('saveOAuthResult', () => {
+    it('should merge new OAuth keys with existing non-OAuth keys', async () => {
+      mockProviderService.listApiKeys.mockResolvedValue({
+        keys: [{ id: 'manual-1', key: 'manual-key-1', isEnabled: true, label: 'Manual' }],
+      });
+
+      await service.saveOAuthResult('cherryin', 'oauth-key-1,oauth-key-2');
+
+      expect(mockProviderService.replaceApiKeys).toHaveBeenCalledWith('cherryin', [
+        { id: 'manual-1', key: 'manual-key-1', isEnabled: true, label: 'Manual' },
+        expect.objectContaining({ key: 'oauth-key-1', label: 'OAuth' }),
+        expect.objectContaining({ key: 'oauth-key-2', label: 'OAuth' }),
+      ]);
+      expect(mockProviderService.update).toHaveBeenCalledWith('cherryin', { isEnabled: true });
+    });
+
+    it('should deduplicate when OAuth returns a key that already exists as manual', async () => {
+      mockProviderService.listApiKeys.mockResolvedValue({
+        keys: [
+          { id: 'manual-1', key: 'duplicate-key', isEnabled: true, label: 'Manual' },
+          { id: 'oauth-old', key: 'old-oauth-key', isEnabled: true, label: 'OAuth' },
+        ],
+      });
+
+      await service.saveOAuthResult('cherryin', 'duplicate-key,new-oauth-key');
+
+      const replacedKeys = (mockProviderService.replaceApiKeys as jest.Mock).mock.calls[0][1];
+      expect(replacedKeys).toHaveLength(2);
+      expect(replacedKeys.map((k: { key: string }) => k.key)).toEqual([
+        'duplicate-key',
+        'new-oauth-key',
+      ]);
+      expect(
+        replacedKeys.every(
+          (k: { key: string; label: string }) => k.label !== 'OAuth' || k.key !== 'duplicate-key',
+        ),
+      ).toBe(true);
+    });
+
+    it('should handle empty existing keys', async () => {
+      mockProviderService.listApiKeys.mockResolvedValue({ keys: [] });
+
+      await service.saveOAuthResult('cherryin', 'oauth-key-1');
+
+      expect(mockProviderService.replaceApiKeys).toHaveBeenCalledWith('cherryin', [
+        expect.objectContaining({ key: 'oauth-key-1', label: 'OAuth' }),
+      ]);
+    });
+  });
+
+  describe('getNonOAuthApiKeys', () => {
+    it('should return only non-OAuth keys from the full key list', async () => {
+      mockProviderService.listApiKeys.mockResolvedValue({
+        keys: [
+          { id: 'manual-1', key: 'manual-key-1', isEnabled: true, label: 'Manual' },
+          { id: 'oauth-1', key: 'oauth-key-1', isEnabled: true, label: 'OAuth' },
+          { id: 'manual-2', key: 'manual-key-2', isEnabled: true },
+        ],
+      });
+
+      const result = await service.getNonOAuthApiKeys('cherryin');
+
+      expect(result).toHaveLength(2);
+      expect(result.map((k) => k.key)).toEqual(['manual-key-1', 'manual-key-2']);
+    });
+
+    it('should return empty array when all keys are OAuth', async () => {
+      mockProviderService.listApiKeys.mockResolvedValue({
+        keys: [{ id: 'oauth-1', key: 'oauth-key-1', isEnabled: true, label: 'OAuth' }],
+      });
+
+      const result = await service.getNonOAuthApiKeys('cherryin');
+
+      expect(result).toHaveLength(0);
     });
   });
 });

@@ -2,11 +2,11 @@ import { Switch } from 'heroui-native/switch';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import type { Provider } from '@/data/types/provider';
 import {
   ProviderApiServiceApiKeysField,
   ProviderApiServiceEndpointField,
 } from '@/screens/SettingsScreen/ProviderScreen/apiService';
-import type { Provider } from '@/data/types/provider';
 import { CherryInOAuth } from './CherryInOAuth';
 
 const CHERRYIN_PROVIDER_ID = 'cherryin';

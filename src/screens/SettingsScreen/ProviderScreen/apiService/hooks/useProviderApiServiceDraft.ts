@@ -82,10 +82,15 @@ export function useProviderApiServiceDraft({
       return;
     }
 
-    setProviderDraft(
-      provider.id,
-      (current) => current ?? createDraftSnapshot(provider, apiKeys, authConfig),
-    );
+    setProviderDraft(provider.id, (current) => {
+      if (!current) {
+        return createDraftSnapshot(provider, apiKeys, authConfig);
+      }
+      return {
+        ...current,
+        ...createApiKeysDraftSlice(apiKeys),
+      };
+    });
   }, [apiKeys, authConfig, provider]);
 
   const updateEndpointBaseUrl = useCallback(
@@ -97,12 +102,12 @@ export function useProviderApiServiceDraft({
       setProviderDraft(providerId, (current) =>
         current
           ? {
-              ...current,
-              baseUrlByEndpoint: {
-                ...current.baseUrlByEndpoint,
-                [endpoint]: value,
-              },
-            }
+            ...current,
+            baseUrlByEndpoint: {
+              ...current.baseUrlByEndpoint,
+              [endpoint]: value,
+            },
+          }
           : current,
       );
     },
@@ -118,13 +123,13 @@ export function useProviderApiServiceDraft({
       setProviderDraft(providerId, (current) =>
         current && canAddEndpointToDraft(current, endpoint)
           ? {
-              ...current,
-              baseUrlByEndpoint: {
-                ...current.baseUrlByEndpoint,
-                [endpoint]: current.baseUrlByEndpoint[endpoint] ?? '',
-              },
-              visibleEndpointTypes: [...current.visibleEndpointTypes, endpoint],
-            }
+            ...current,
+            baseUrlByEndpoint: {
+              ...current.baseUrlByEndpoint,
+              [endpoint]: current.baseUrlByEndpoint[endpoint] ?? '',
+            },
+            visibleEndpointTypes: [...current.visibleEndpointTypes, endpoint],
+          }
           : current,
       );
     },
@@ -163,12 +168,12 @@ export function useProviderApiServiceDraft({
       setProviderDraft(providerId, (current) =>
         current
           ? {
-              ...current,
-              authDraft: {
-                ...current.authDraft,
-                ...updates,
-              },
-            }
+            ...current,
+            authDraft: {
+              ...current.authDraft,
+              ...updates,
+            },
+          }
           : current,
       );
     },
@@ -184,10 +189,10 @@ export function useProviderApiServiceDraft({
       setProviderDraft(providerId, (current) =>
         current
           ? {
-              ...current,
-              apiKeyEntries: buildApiKeyEntriesFromInput(apiKeysInput, current.apiKeyEntries),
-              apiKeysInput,
-            }
+            ...current,
+            apiKeyEntries: buildApiKeyEntriesFromInput(apiKeysInput, current.apiKeyEntries),
+            apiKeysInput,
+          }
           : current,
       );
     },

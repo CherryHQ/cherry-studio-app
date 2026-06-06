@@ -177,7 +177,9 @@ export class CherryInOauthService {
     const { keys: existingKeys } = await this.providerService.listApiKeys(providerId);
     const nonOAuthKeys = existingKeys.filter((k) => k.label !== 'OAuth');
     const newOAuthKeys = this.parseApiKeys(apiKeysString);
-    await this.providerService.replaceApiKeys(providerId, [...nonOAuthKeys, ...newOAuthKeys]);
+    const existingKeySet = new Set(nonOAuthKeys.map((k) => k.key));
+    const dedupedOAuthKeys = newOAuthKeys.filter((k) => !existingKeySet.has(k.key));
+    await this.providerService.replaceApiKeys(providerId, [...nonOAuthKeys, ...dedupedOAuthKeys]);
     await this.providerService.update(providerId, { isEnabled: true });
   }
 
