@@ -1,9 +1,9 @@
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { Accordion } from 'heroui-native/accordion';
 import { SearchField } from 'heroui-native/search-field';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
@@ -25,6 +25,17 @@ export default function ProviderSettingsScreen() {
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
   const topInset = isLiquidGlassAvailable ? headerHeight : 0;
   const [searchText, setSearchText] = useState('');
+  const isNavigatingRef = useRef(false);
+  const hasFocusedOnceRef = useRef(false);
+
+  useFocusEffect(() => {
+    if (!hasFocusedOnceRef.current) {
+      hasFocusedOnceRef.current = true;
+      return;
+    }
+    isNavigatingRef.current = false;
+  });
+
   const providersQuery = useDataQuery({
     queryKey: queryKeys.providers.list(),
     queryFn: (services) => services.provider.list(),
@@ -40,11 +51,16 @@ export default function ProviderSettingsScreen() {
           imageSource: iconSource?.[iconTheme],
           isEnabled: provider.isEnabled,
           name: provider.name,
-          onPress: () =>
+          onPress: () => {
+            if (isNavigatingRef.current) {
+              return;
+            }
+            isNavigatingRef.current = true;
             router.push({
               pathname: '/settings/provider/[providerId]',
               params: { providerId: provider.id, providerName: provider.name },
-            }),
+            });
+          },
         };
       }),
     [iconTheme, providersQuery.data, router],
