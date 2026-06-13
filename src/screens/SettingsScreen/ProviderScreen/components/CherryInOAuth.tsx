@@ -145,7 +145,9 @@ export function CherryInOAuth({ providerId, onOAuthComplete }: CherryInOAuthProp
               <View className="flex flex-row gap-3">
                 <Button isDisabled={isLoadingData} onPress={fetchData} variant="tertiary" size="sm">
                   <Button.Label className="p-0">
-                    <Text className="text-sm text-foreground">{t('settings.provider.oauth.cherryIn.balance')}</Text>
+                    <Text className="text-sm text-foreground">
+                      {t('settings.provider.oauth.cherryIn.balance')}
+                    </Text>
                     <Text className="text-sm text-foreground">
                       {isLoadingData && balance === null ? '···' : formatCurrency(balance)}
                     </Text>
