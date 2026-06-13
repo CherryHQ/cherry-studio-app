@@ -141,12 +141,14 @@ export function CherryInOAuth({ providerId, onOAuthComplete }: CherryInOAuthProp
             )}
 
             <View className="ml-2 gap-1">
-              <Text className="font-semibold text-base">{provider.name}</Text>
+              <Text className="font-semibold text-base text-foreground">{provider.name}</Text>
               <View className="flex flex-row gap-3">
                 <Button isDisabled={isLoadingData} onPress={fetchData} variant="tertiary" size="sm">
                   <Button.Label className="p-0">
-                    <Text className="text-sm">{t('settings.provider.oauth.cherryIn.balance')}</Text>
-                    <Text className="text-sm">
+                    <Text className="text-sm text-foreground">
+                      {t('settings.provider.oauth.cherryIn.balance')}
+                    </Text>
+                    <Text className="text-sm text-foreground">
                       {isLoadingData && balance === null ? '···' : formatCurrency(balance)}
                     </Text>
                   </Button.Label>
@@ -177,7 +179,7 @@ export function CherryInOAuth({ providerId, onOAuthComplete }: CherryInOAuthProp
         <Card.Footer className="mt-2">
           <Text
             accessibilityRole="link"
-            className="text-xs text-default-400 underline"
+            className="text-xs text-foreground-muted underline"
             onPress={() => Linking.openURL('https://open.cherryin.ai')}
           >
             {t('settings.provider.oauth.cherryIn.service_attribution')}
