@@ -1,0 +1,7 @@
+{
+  "platforms": ["apple"],
+  "apple": {
+    "podspecPath": "ios/InlinePhotoPicker.podspec",
+    "modules": ["InlinePhotoPickerModule"]
+  }
+}

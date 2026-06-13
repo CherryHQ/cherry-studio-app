@@ -2,6 +2,7 @@ import type { DocumentPickerAsset } from 'expo-document-picker';
 import type { ImagePickerAsset } from 'expo-image-picker';
 
 import type { CherryMessagePart } from '@/data/types/message';
+import type { InlinePhotoPickerAsset } from '@/modules/inlinePhotoPicker';
 
 export type ChatInputAttachmentKind = 'file' | 'image';
 
@@ -11,11 +12,6 @@ export type ChatInputAttachmentDraft = {
   mediaType: string;
   name: string;
   size?: number;
-  uri: string;
-};
-
-type PhotoAttachmentInput = {
-  id: string;
   uri: string;
 };
 
@@ -69,16 +65,6 @@ export function removeChatInputAttachment(
   return attachments.filter((attachment) => attachment.id !== attachmentId);
 }
 
-export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ChatInputAttachmentDraft {
-  return {
-    id: getPhotoAttachmentId(photo.id),
-    kind: 'image',
-    mediaType: fallbackImageMediaType,
-    name: fallbackImageName,
-    uri: photo.uri,
-  };
-}
-
 export function createImagePickerAttachmentDraft(
   asset: ImagePickerAsset,
 ): ChatInputAttachmentDraft {
@@ -90,6 +76,21 @@ export function createImagePickerAttachmentDraft(
     kind: 'image',
     mediaType,
     name: asset.fileName ?? fallbackImageName,
+    size: asset.fileSize,
+    uri: asset.uri,
+  };
+}
+
+export function createInlinePhotoPickerAttachmentDraft(
+  asset: InlinePhotoPickerAsset,
+): ChatInputAttachmentDraft {
+  const mediaType = asset.mimeType ?? fallbackImageMediaType;
+
+  return {
+    id: getPhotoAttachmentId(asset.assetId),
+    kind: 'image',
+    mediaType,
+    name: asset.fileName || fallbackImageName,
     size: asset.fileSize,
     uri: asset.uri,
   };

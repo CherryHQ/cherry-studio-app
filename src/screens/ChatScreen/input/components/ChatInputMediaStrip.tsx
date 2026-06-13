@@ -1,5 +1,5 @@
 import { cn } from 'heroui-native/utils';
-import { CameraIcon, FileIcon, ImagesIcon, type PngIconProps, XIcon } from 'lucide-uniwind/png';
+import { CameraIcon, FileIcon, type PngIconProps, XIcon } from 'lucide-uniwind/png';
 import { type ComponentType, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type GestureResponderEvent, Pressable, ScrollView, Text, View } from 'react-native';
@@ -21,16 +21,6 @@ type MediaTileProps = {
   label: string;
   onPress: () => void;
 };
-
-type PhotoPreviewTileProps = {
-  accessibilityLabel: string;
-  isSelected?: boolean;
-  onPress: () => void;
-  selectionIndex?: number;
-  uri: string;
-};
-
-type ChatInputPhotoPreviewTileProps = Omit<PhotoPreviewTileProps, 'accessibilityLabel'>;
 
 type ChatInputAttachmentPreviewStripProps = {
   attachments: readonly ChatInputAttachmentDraft[];
@@ -68,38 +58,6 @@ export function ChatInputCameraTile({ onPress }: { onPress: () => void }) {
       accessibilityLabel={t('chat.media.camera')}
       icon={CameraIcon}
       label={t('chat.media.camera')}
-      onPress={onPress}
-    />
-  );
-}
-
-export function ChatInputPhotosTile({ onPress }: { onPress: () => void }) {
-  const { t } = useTranslation();
-
-  return (
-    <MediaTile
-      accessibilityLabel={t('chat.media.photos')}
-      icon={ImagesIcon}
-      label={t('chat.media.photos')}
-      onPress={onPress}
-    />
-  );
-}
-
-export function ChatInputPhotoPreviewTile({
-  isSelected,
-  onPress,
-  selectionIndex,
-  uri,
-}: ChatInputPhotoPreviewTileProps) {
-  const { t } = useTranslation();
-
-  return (
-    <PhotoPreviewTile
-      accessibilityLabel={t('chat.media.photoPreview')}
-      isSelected={isSelected}
-      selectionIndex={selectionIndex}
-      uri={uri}
       onPress={onPress}
     />
   );
@@ -150,32 +108,6 @@ function MediaTile({ accessibilityLabel, icon: Icon, label, onPress }: MediaTile
       <Icon className="size-7 text-foreground" strokeWidth={2} />
       <Text className="font-semibold text-base text-foreground">{label}</Text>
     </Pressable>
-  );
-}
-
-function PhotoPreviewTile({
-  accessibilityLabel,
-  isSelected,
-  onPress,
-  selectionIndex,
-  uri,
-}: PhotoPreviewTileProps) {
-  const isTileSelected = isSelected ?? selectionIndex !== undefined;
-
-  return (
-    <ImagePreviewTile
-      accessibilityLabel={accessibilityLabel}
-      badge={
-        selectionIndex === undefined ? (
-          <EmptySelectionBadge />
-        ) : (
-          <SelectionIndexBadge selectionIndex={selectionIndex} />
-        )
-      }
-      isSelected={isTileSelected}
-      onPress={onPress}
-      uri={uri}
-    />
   );
 }
 
@@ -290,27 +222,6 @@ function XBadge({ onPress }: { onPress?: () => void }) {
   return (
     <View className="absolute top-2 right-2 size-5 items-center justify-center rounded-full bg-white">
       <XIcon className="size-3.5 text-black" strokeWidth={2.5} />
-    </View>
-  );
-}
-
-function EmptySelectionBadge() {
-  return (
-    <View className="absolute top-2 right-2 size-5 rounded-full border-2 border-white bg-black/20" />
-  );
-}
-
-function SelectionIndexBadge({ selectionIndex }: { selectionIndex: number }) {
-  return (
-    <View className="absolute top-2 right-2 size-5 items-center justify-center rounded-full bg-white">
-      <Text
-        adjustsFontSizeToFit
-        className="font-semibold text-black text-xs"
-        minimumFontScale={0.7}
-        numberOfLines={1}
-      >
-        {selectionIndex}
-      </Text>
     </View>
   );
 }
