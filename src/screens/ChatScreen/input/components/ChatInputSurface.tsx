@@ -9,21 +9,17 @@ import { loggerService } from '@/core/logger/loggerService';
 import {
   chatInputBottomToolbarHeight,
   chatInputMinComposerHeight,
-  chatInputMinTextAreaHeight,
 } from '@/screens/ChatScreen/input/chatInputLayout';
 import { ChatInputAddButton } from '@/screens/ChatScreen/input/components/ChatInputAddButton';
 import { ChatInputAttachmentPreviewStrip } from '@/screens/ChatScreen/input/components/ChatInputMediaStrip';
 import { ChatInputPrimaryActionButton } from '@/screens/ChatScreen/input/components/ChatInputPrimaryActionButton';
 import { ChatInputTextArea } from '@/screens/ChatScreen/input/components/ChatInputTextArea';
 import { ChatInputToolbar } from '@/screens/ChatScreen/input/components/ChatInputToolbar';
-import { ChatInputVoiceErrorDialog } from '@/screens/ChatScreen/input/components/ChatInputVoiceErrorDialog';
-import { ChatInputVoiceRecordingSurface } from '@/screens/ChatScreen/input/components/ChatInputVoiceRecordingSurface';
 import {
   useChatInputActions,
   useChatInputMeta,
   useChatInputState,
 } from '@/screens/ChatScreen/input/context/ChatInputProvider';
-import { useChatInputVoiceInput } from '@/screens/ChatScreen/input/hooks/useChatInputVoiceInput';
 import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
 import { chatInputLayoutTransition } from '@/screens/ChatScreen/input/utils/chatInputMotion';
 
@@ -73,9 +69,6 @@ export function ChatInputSurface({
   const { inputRef } = useChatInputMeta();
   const { attachments, draft, isInputFocused, selectedTool, shouldShowReasoningEffortTag } =
     useChatInputState();
-  const voiceInput = useChatInputVoiceInput();
-  const isVoiceBusy =
-    voiceInput.status === 'requesting-permission' || voiceInput.status === 'transcribing';
   const handleAttachmentPreview = useCallback((attachment: ChatInputAttachmentDraft) => {
     void ExpoQuickLook.previewFile({
       editingMode: 'disabled',
@@ -130,59 +123,41 @@ export function ChatInputSurface({
   );
 
   return (
-    <>
-      <View className="flex-row items-end">
+    <View className="flex-row items-end">
+      <Animated.View className="flex-1" layout={chatInputLayoutTransition}>
         <Animated.View
-          className="flex-1"
+          className="relative overflow-hidden rounded-3xl bg-field ios:shadow-field android:shadow-sm"
           layout={chatInputLayoutTransition}
-          style={voiceInput.isVoiceActive ? { minHeight: chatInputMinTextAreaHeight } : undefined}
+          style={inputControlSurfaceStyle}
         >
-          {voiceInput.isVoiceActive ? (
-            <ChatInputVoiceRecordingSurface
-              isBusy={isVoiceBusy}
-              volumeSamples={voiceInput.volumeSamples}
-              onSendPress={voiceInput.stopAndCommit}
-              onStopPress={voiceInput.stopAndCommit}
-            />
-          ) : (
-            <Animated.View
-              className="relative overflow-hidden rounded-3xl bg-field ios:shadow-field android:shadow-sm"
-              layout={chatInputLayoutTransition}
-              style={inputControlSurfaceStyle}
-            >
-              <ChatInputToolbar
-                shouldShowReasoningEffortTag={shouldShowReasoningEffortTag}
-                selectedTool={selectedTool}
-                onReasoningEffortClear={clearReasoningEffort}
-                onToolClear={clearSelectedTool}
-              />
-              <ChatInputAttachmentPreviewStrip
-                attachments={attachments}
-                onAttachmentPreview={handleAttachmentPreview}
-                onAttachmentRemove={removeAttachment}
-              />
-              <ChatInputTextArea />
-              <View
-                className="flex-row items-center gap-2 px-3 pb-1.5 pr-11"
-                style={inputBottomToolbarStyle}
-              >
-                <ChatInputAddButton />
-                <ModelPickerPill label={modelLabel} onPress={handleModelPickerPress} />
-              </View>
-              <ChatInputPrimaryActionButton
-                isSendEnabled={isSendEnabled}
-                isStreaming={isStreaming}
-                isVoiceBusy={isVoiceBusy}
-                onSendPress={handleSendPress}
-                onStopPress={onStopPress}
-                onVoiceInputPress={voiceInput.start}
-              />
-            </Animated.View>
-          )}
+          <ChatInputToolbar
+            shouldShowReasoningEffortTag={shouldShowReasoningEffortTag}
+            selectedTool={selectedTool}
+            onReasoningEffortClear={clearReasoningEffort}
+            onToolClear={clearSelectedTool}
+          />
+          <ChatInputAttachmentPreviewStrip
+            attachments={attachments}
+            onAttachmentPreview={handleAttachmentPreview}
+            onAttachmentRemove={removeAttachment}
+          />
+          <ChatInputTextArea />
+          <View
+            className="flex-row items-center gap-2 px-3 pb-1.5 pr-11"
+            style={inputBottomToolbarStyle}
+          >
+            <ChatInputAddButton />
+            <ModelPickerPill label={modelLabel} onPress={handleModelPickerPress} />
+          </View>
+          <ChatInputPrimaryActionButton
+            isSendEnabled={isSendEnabled}
+            isStreaming={isStreaming}
+            onSendPress={handleSendPress}
+            onStopPress={onStopPress}
+          />
         </Animated.View>
-      </View>
-      <ChatInputVoiceErrorDialog error={voiceInput.error} onDismiss={voiceInput.clearError} />
-    </>
+      </Animated.View>
+    </View>
   );
 }
 

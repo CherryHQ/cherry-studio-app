@@ -2,6 +2,9 @@ module.exports = {
   preset: 'jest-expo',
   testEnvironment: 'node',
   moduleNameMapper: {
+    '^lucide-uniwind/png/generated/(.*)$':
+      '<rootDir>/packages/lucide-uniwind/src/png-icons/generated/$1',
+    '^lucide-uniwind/png$': '<rootDir>/packages/lucide-uniwind/src/png-icons/index.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],

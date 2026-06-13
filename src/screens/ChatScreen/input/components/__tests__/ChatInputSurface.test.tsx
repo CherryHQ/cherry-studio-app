@@ -98,18 +98,6 @@ jest.mock('lucide-uniwind', () => {
   );
 });
 
-jest.mock('../../hooks/useChatInputVoiceInput', () => ({
-  useChatInputVoiceInput: () => ({
-    clearError: jest.fn(),
-    error: null,
-    isVoiceActive: false,
-    start: jest.fn(),
-    status: 'idle',
-    stopAndCommit: jest.fn(),
-    volumeSamples: [],
-  }),
-}));
-
 jest.mock('@/screens/ChatScreen/input/hooks/useChatInputPhotoPicker', () => ({
   useChatInputPhotoPicker: () => ({
     addSelectedPhotoPreviews: jest.fn(),
@@ -124,10 +112,6 @@ jest.mock('@/screens/ChatScreen/input/hooks/useChatInputPhotoPicker', () => ({
     shouldShowPhotosTile: false,
     togglePhotoSelection: jest.fn(),
   }),
-}));
-
-jest.mock('../ChatInputVoiceErrorDialog', () => ({
-  ChatInputVoiceErrorDialog: () => null,
 }));
 
 describe('ChatInputSurface', () => {
@@ -186,6 +170,40 @@ describe('ChatInputSurface', () => {
       label: 'chat.input.sendFailed',
       variant: 'danger',
     });
+  });
+
+  test('does not render a primary action button when there is no sendable content', async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    expect(
+      renderer.root.findAllByProps({
+        accessibilityLabel: 'chat.input.action.sendMessage',
+      }),
+    ).toHaveLength(0);
+    expect(
+      renderer.root.findAllByProps({
+        accessibilityLabel: 'chat.input.action.stopGenerating',
+      }),
+    ).toHaveLength(0);
   });
 });
 

@@ -9,11 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/icon.png",
-      "bundleIdentifier": "com.cherry-ai.cherry-studio-app",
-      "infoPlist": {
-        "NSMicrophoneUsageDescription": "Allow Cherry Studio to use the microphone for voice input.",
-        "NSSpeechRecognitionUsageDescription": "Allow Cherry Studio to use speech recognition for voice input."
-      }
+      "bundleIdentifier": "com.cherry-ai.cherry-studio-app"
     },
     "android": {
       "adaptiveIcon": {
@@ -58,14 +54,6 @@
       "expo-document-picker",
       "expo-font",
       "expo-image",
-      [
-        "expo-speech-recognition",
-        {
-          "microphonePermission": "Allow Cherry Studio to use the microphone for voice input.",
-          "speechRecognitionPermission": "Allow Cherry Studio to use speech recognition for voice input.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
-        }
-      ],
       [
         "expo-image-picker",
         {
