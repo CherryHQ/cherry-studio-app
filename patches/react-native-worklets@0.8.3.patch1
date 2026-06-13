@@ -1,0 +1,211 @@
+diff --git a/bundleMode/index.js b/bundleMode/index.js
+index 3cdbd778034d908a2235b993518b0c4c9ad0851a..6cde4f86792a2c69e0d50cb8ed707b607fb0fab4 100644
+--- a/bundleMode/index.js
++++ b/bundleMode/index.js
+@@ -1,6 +1,7 @@
+ /* eslint-disable */
+ // @ts-nocheck
+ const path = require('path');
++const fs = require('fs');
+ 
+ let getDefaultConfig = () => ({});
+ try {
+@@ -9,11 +10,41 @@ try {
+   /* empty */
+ }
+ 
+-const workletsPackageParentDir = path.resolve(__dirname, '../..');
++const workletsPackageDir = path.resolve(__dirname, '..');
+ 
+ const defaults = getDefaultConfig(__dirname);
+ 
+-const workletsDirPath = path.join('react-native-worklets', '.worklets');
++const workletsDirPath = 'react-native-worklets/.worklets';
++
++function resolveRelativePathFromWorklets(context, moduleName) {
++  // Handle relative path imports from within .worklets files
++  // (e.g., "..\\src\\memory\\serializable" with backslashes)
++  if (!context.originModulePath?.includes('.worklets')) {
++    return null;
++  }
++
++  const normalizedModuleName = moduleName.replace(/\\/g, '/');
++  const resolvedPath = path.resolve(path.dirname(context.originModulePath), normalizedModuleName);
++
++  // Try to resolve with different extensions
++  const extensions = ['.ts', '.tsx', '.js', '.jsx', '.native.ts', '.native.js'];
++  for (const ext of extensions) {
++    const fullPath = resolvedPath + ext;
++    if (fs.existsSync(fullPath)) {
++      return { type: 'sourceFile', filePath: fullPath };
++    }
++  }
++
++  // Also try as directory with index file
++  for (const ext of extensions) {
++    const indexPath = path.join(resolvedPath, 'index' + ext);
++    if (fs.existsSync(indexPath)) {
++      return { type: 'sourceFile', filePath: indexPath };
++    }
++  }
++
++  return null;
++}
+ 
+ function bundleModeResolveRequest(
+   /** @type {any} */ context,
+@@ -21,9 +52,16 @@ function bundleModeResolveRequest(
+   /** @type {any} */ platform
+ ) {
+   if (moduleName.startsWith(workletsDirPath)) {
+-    const fullModuleName = path.join(workletsPackageParentDir, moduleName);
++    const fileName = moduleName.replace(workletsDirPath + '/', '');
++    const fullModuleName = path.join(workletsPackageDir, '.worklets', fileName);
+     return { type: 'sourceFile', filePath: fullModuleName };
+   }
++
++  const relativeResult = resolveRelativePathFromWorklets(context, moduleName);
++  if (relativeResult) {
++    return relativeResult;
++  }
++
+   return context.resolveRequest(context, moduleName, platform);
+ }
+ 
+@@ -46,9 +84,16 @@ const bundleModeMetroConfig = {
+       /** @type {any} */ platform
+     ) => {
+       if (moduleName.startsWith(workletsDirPath)) {
+-        const fullModuleName = path.join(workletsPackageParentDir, moduleName);
++        const fileName = moduleName.replace(workletsDirPath + '/', '');
++        const fullModuleName = path.join(workletsPackageDir, '.worklets', fileName);
+         return { type: 'sourceFile', filePath: fullModuleName };
+       }
++
++      const relativeResult = resolveRelativePathFromWorklets(context, moduleName);
++      if (relativeResult) {
++        return relativeResult;
++      }
++
+       return context.resolveRequest(context, moduleName, platform);
+     },
+   },
+@@ -62,9 +107,9 @@ function getBundleModeMetroConfig(config) {
+   config.serializer.getModulesRunBeforeMainModule = (
+     /** @type {string} dirname */ dirname
+   ) => [
+-    ...getEntryPoints(),
+-    ...(currentGetModulesRunBeforeMainModule?.(dirname) || []),
+-  ];
++      ...getEntryPoints(),
++      ...(currentGetModulesRunBeforeMainModule?.(dirname) || []),
++    ];
+ 
+   config.serializer.createModuleIdFactory = bundleModeCreateModuleIdFactory;
+ 
+diff --git a/plugin/index.js b/plugin/index.js
+index 1eb7f402550526bf9d150d950f2f83fc920f2bb5..d4bf9ed15b96e312ee209e9ab00beddcfb8c26f4 100644
+--- a/plugin/index.js
++++ b/plugin/index.js
+@@ -657,7 +657,7 @@ var require_closure = __commonJS({
+ var require_generate = __commonJS({
+   "lib/generate.js"(exports2) {
+     "use strict";
+-    var __importDefault = exports2 && exports2.__importDefault || function(mod) {
++    var __importDefault = exports2 && exports2.__importDefault || function (mod) {
+       return mod && mod.__esModule ? mod : { "default": mod };
+     };
+     Object.defineProperty(exports2, "__esModule", { value: true });
+@@ -674,7 +674,7 @@ var require_generate = __commonJS({
+       const filesDirPath = (0, path_1.resolve)((0, path_1.dirname)(require.resolve("react-native-worklets/package.json")), types_2.generatedWorkletsDir);
+       const relativeImports = Array.from(relativeBindingsToImport).filter((binding) => binding.path.isImportSpecifier() && binding.path.parentPath.isImportDeclaration()).map((binding) => {
+         const resolved = (0, path_1.resolve)((0, path_1.dirname)(state.file.opts.filename), binding.path.parentPath.node.source.value);
+-        const importPath = (0, path_1.relative)(filesDirPath, resolved);
++        const importPath = (0, path_1.relative)(filesDirPath, resolved).replace(/\\/g, '/');
+         return (0, types_12.importDeclaration)([(0, types_12.cloneNode)(binding.path.node, true)], (0, types_12.stringLiteral)(importPath));
+       });
+       const imports = [...libraryImports, ...relativeImports];
+@@ -699,7 +699,7 @@ var require_generate = __commonJS({
+ var require_transform = __commonJS({
+   "lib/transform.js"(exports2) {
+     "use strict";
+-    var __rest = exports2 && exports2.__rest || function(s, e) {
++    var __rest = exports2 && exports2.__rest || function (s, e) {
+       var t = {};
+       for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+         t[p] = s[p];
+@@ -728,34 +728,36 @@ var require_transform = __commonJS({
+ var require_workletStringCode = __commonJS({
+   "lib/workletStringCode.js"(exports2) {
+     "use strict";
+-    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
++    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function (o, m, k, k2) {
+       if (k2 === void 0) k2 = k;
+       var desc = Object.getOwnPropertyDescriptor(m, k);
+       if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+-        desc = { enumerable: true, get: function() {
+-          return m[k];
+-        } };
++        desc = {
++          enumerable: true, get: function () {
++            return m[k];
++          }
++        };
+       }
+       Object.defineProperty(o, k2, desc);
+-    }) : (function(o, m, k, k2) {
++    }) : (function (o, m, k, k2) {
+       if (k2 === void 0) k2 = k;
+       o[k2] = m[k];
+     }));
+-    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
++    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function (o, v) {
+       Object.defineProperty(o, "default", { enumerable: true, value: v });
+-    }) : function(o, v) {
++    }) : function (o, v) {
+       o["default"] = v;
+     });
+-    var __importStar = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+-      var ownKeys = function(o) {
+-        ownKeys = Object.getOwnPropertyNames || function(o2) {
++    var __importStar = exports2 && exports2.__importStar || /* @__PURE__ */ (function () {
++      var ownKeys = function (o) {
++        ownKeys = Object.getOwnPropertyNames || function (o2) {
+           var ar = [];
+           for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+           return ar;
+         };
+         return ownKeys(o);
+       };
+-      return function(mod) {
++      return function (mod) {
+         if (mod && mod.__esModule) return mod;
+         var result = {};
+         if (mod != null) {
+@@ -765,7 +767,7 @@ var require_workletStringCode = __commonJS({
+         return result;
+       };
+     })();
+-    var __importDefault = exports2 && exports2.__importDefault || function(mod) {
++    var __importDefault = exports2 && exports2.__importDefault || function (mod) {
+       return mod && mod.__esModule ? mod : { "default": mod };
+     };
+     Object.defineProperty(exports2, "__esModule", { value: true });
+@@ -903,7 +905,7 @@ var require_workletStringCode = __commonJS({
+ var require_workletFactory = __commonJS({
+   "lib/workletFactory.js"(exports2) {
+     "use strict";
+-    var __importDefault = exports2 && exports2.__importDefault || function(mod) {
++    var __importDefault = exports2 && exports2.__importDefault || function (mod) {
+       return mod && mod.__esModule ? mod : { "default": mod };
+     };
+     Object.defineProperty(exports2, "__esModule", { value: true });
+@@ -1366,7 +1368,7 @@ var require_bundleMode = __commonJS({
+ var require_class = __commonJS({
+   "lib/class.js"(exports2) {
+     "use strict";
+-    var __importDefault = exports2 && exports2.__importDefault || function(mod) {
++    var __importDefault = exports2 && exports2.__importDefault || function (mod) {
+       return mod && mod.__esModule ? mod : { "default": mod };
+     };
+     Object.defineProperty(exports2, "__esModule", { value: true });

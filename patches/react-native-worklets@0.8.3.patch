@@ -1,0 +1,115 @@
+diff --git a/bundleMode/index.js b/bundleMode/index.js
+index 3cdbd778034d908a2235b993518b0c4c9ad0851a..9312954e0fd572ff750a94acf76a91646bc368ee 100644
+--- a/bundleMode/index.js
++++ b/bundleMode/index.js
+@@ -1,6 +1,7 @@
+ /* eslint-disable */
+ // @ts-nocheck
+ const path = require('path');
++const fs = require('fs');
+ 
+ let getDefaultConfig = () => ({});
+ try {
+@@ -9,11 +10,42 @@ try {
+   /* empty */
+ }
+ 
+-const workletsPackageParentDir = path.resolve(__dirname, '../..');
++const workletsPackageDir = path.resolve(__dirname, '..');
+ 
+ const defaults = getDefaultConfig(__dirname);
+ 
+-const workletsDirPath = path.join('react-native-worklets', '.worklets');
++const workletsDirPath = 'react-native-worklets/.worklets';
++
++function resolveRelativePathFromWorklets(context, moduleName) {
++  // Handle relative path imports from within .worklets files
++  // (e.g., "..\\src\\memory\\serializable" with backslashes)
++  if (!context.originModulePath?.includes('.worklets')) {
++    return null;
++  }
++
++  const normalizedModuleName = moduleName.replace(/\\/g, '/');
++  const resolvedPath = path.resolve(path.dirname(context.originModulePath), normalizedModuleName);
++
++  // Try to resolve with different extensions
++  // NOTE: .native.* must come first so platform-specific files take priority
++  const extensions = ['.native.ts', '.native.js', '.native.tsx', '.ts', '.tsx', '.js', '.jsx'];
++  for (const ext of extensions) {
++    const fullPath = resolvedPath + ext;
++    if (fs.existsSync(fullPath)) {
++      return { type: 'sourceFile', filePath: fullPath };
++    }
++  }
++
++  // Also try as directory with index file
++  for (const ext of extensions) {
++    const indexPath = path.join(resolvedPath, 'index' + ext);
++    if (fs.existsSync(indexPath)) {
++      return { type: 'sourceFile', filePath: indexPath };
++    }
++  }
++
++  return null;
++}
+ 
+ function bundleModeResolveRequest(
+   /** @type {any} */ context,
+@@ -21,9 +53,16 @@ function bundleModeResolveRequest(
+   /** @type {any} */ platform
+ ) {
+   if (moduleName.startsWith(workletsDirPath)) {
+-    const fullModuleName = path.join(workletsPackageParentDir, moduleName);
++    const fileName = moduleName.replace(workletsDirPath + '/', '');
++    const fullModuleName = path.join(workletsPackageDir, '.worklets', fileName);
+     return { type: 'sourceFile', filePath: fullModuleName };
+   }
++
++  const relativeResult = resolveRelativePathFromWorklets(context, moduleName);
++  if (relativeResult) {
++    return relativeResult;
++  }
++
+   return context.resolveRequest(context, moduleName, platform);
+ }
+ 
+@@ -46,9 +85,16 @@ const bundleModeMetroConfig = {
+       /** @type {any} */ platform
+     ) => {
+       if (moduleName.startsWith(workletsDirPath)) {
+-        const fullModuleName = path.join(workletsPackageParentDir, moduleName);
++        const fileName = moduleName.replace(workletsDirPath + '/', '');
++        const fullModuleName = path.join(workletsPackageDir, '.worklets', fileName);
+         return { type: 'sourceFile', filePath: fullModuleName };
+       }
++
++      const relativeResult = resolveRelativePathFromWorklets(context, moduleName);
++      if (relativeResult) {
++        return relativeResult;
++      }
++
+       return context.resolveRequest(context, moduleName, platform);
+     },
+   },
+@@ -117,7 +163,7 @@ function bundleModeCreateModuleIdFactory() {
+     if (idFileMap.has(moduleName)) {
+       return idFileMap.get(moduleName);
+     }
+-    if (moduleName.includes(workletsDirPath)) {
++    if (moduleName.replace(/\\/g, '/').includes(workletsDirPath)) {
+       const base = path.basename(moduleName, '.js');
+       const id = Number(base);
+       idFileMap.set(moduleName, id);
+diff --git a/plugin/index.js b/plugin/index.js
+index 1eb7f402550526bf9d150d950f2f83fc920f2bb5..b25affad02021862bd08abfb796264b86e84e911 100644
+--- a/plugin/index.js
++++ b/plugin/index.js
+@@ -674,7 +674,7 @@ var require_generate = __commonJS({
+       const filesDirPath = (0, path_1.resolve)((0, path_1.dirname)(require.resolve("react-native-worklets/package.json")), types_2.generatedWorkletsDir);
+       const relativeImports = Array.from(relativeBindingsToImport).filter((binding) => binding.path.isImportSpecifier() && binding.path.parentPath.isImportDeclaration()).map((binding) => {
+         const resolved = (0, path_1.resolve)((0, path_1.dirname)(state.file.opts.filename), binding.path.parentPath.node.source.value);
+-        const importPath = (0, path_1.relative)(filesDirPath, resolved);
++        const importPath = (0, path_1.relative)(filesDirPath, resolved).replace(/\\/g, '/');
+         return (0, types_12.importDeclaration)([(0, types_12.cloneNode)(binding.path.node, true)], (0, types_12.stringLiteral)(importPath));
+       });
+       const imports = [...libraryImports, ...relativeImports];
