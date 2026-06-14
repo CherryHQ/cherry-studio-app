@@ -100,15 +100,17 @@ jest.mock('lucide-uniwind', () => {
 
 jest.mock('@/screens/ChatScreen/input/hooks/useChatInputPhotoPicker', () => ({
   useChatInputPhotoPicker: () => ({
-    actions: {
-      addInlinePhotoPickerAssets: jest.fn(),
-      launchCamera: jest.fn(),
-      resetInlinePhotoPickerSelection: jest.fn(),
-    },
-    state: {
-      inlinePhotoPickerResetKey: 0,
-      isInlinePhotoPickerDisabled: false,
-    },
+    addSelectedPhotoPreviews: jest.fn(),
+    clearSelectedPhotos: jest.fn(),
+    launchCamera: jest.fn(),
+    launchImageLibrary: jest.fn(),
+    photoAccess: null,
+    photoPreviews: [],
+    presentLimitedPhotoPermissionsPicker: jest.fn(),
+    selectedPhotoCount: 0,
+    selectedPhotoOrder: new Map(),
+    shouldShowPhotosTile: false,
+    togglePhotoSelection: jest.fn(),
   }),
 }));
 

@@ -2,18 +2,16 @@ import { BottomSheet, BottomSheetView } from '@expo/ui/community/bottom-sheet';
 import * as DocumentPicker from 'expo-document-picker';
 import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import type {
-  InlinePhotoPickerErrorEvent,
-  InlinePhotoPickerSelectionChangeEvent,
-} from '@/modules/inlinePhotoPicker';
-import { InlinePhotoPickerView } from '@/modules/inlinePhotoPicker';
 import { ChatInputActionList } from '@/screens/ChatScreen/input/components/ChatInputActionList';
 import { ChatInputActionSheetHeader } from '@/screens/ChatScreen/input/components/ChatInputActionSheetHeader';
 import {
   ChatInputCameraTile,
   ChatInputMediaStrip,
+  ChatInputPhotoPreviewTile,
+  ChatInputPhotosTile,
 } from '@/screens/ChatScreen/input/components/ChatInputMediaStrip';
 import { ChatInputReasoningSheetPage } from '@/screens/ChatScreen/input/components/ChatInputReasoningSheetPage';
+import { ChatInputSelectedPhotoBar } from '@/screens/ChatScreen/input/components/ChatInputSelectedPhotoBar';
 import {
   useChatInputActions,
   useChatInputMedia,
@@ -30,8 +28,21 @@ export function ChatInputActionSheet() {
   const { isActionSheetOpen, reasoningEffort, selectedToolId } = useChatInputState();
   const [sheetPage, setSheetPage] = useState<ChatInputActionSheetPage>('main');
   const { actions, state } = useChatInputMedia();
-  const { addInlinePhotoPickerAssets, launchCamera, resetInlinePhotoPickerSelection } = actions;
-  const { inlinePhotoPickerResetKey, isInlinePhotoPickerDisabled } = state;
+  const {
+    addSelectedPhotoPreviews,
+    clearSelectedPhotos,
+    launchCamera,
+    launchImageLibrary,
+    presentLimitedPhotoPermissionsPicker,
+    togglePhotoSelection,
+  } = actions;
+  const {
+    photoAccess,
+    photoPreviews,
+    selectedPhotoCount,
+    selectedPhotoOrder,
+    shouldShowPhotosTile,
+  } = state;
   const handleAddFilePress = useCallback(async () => {
     const result = await DocumentPicker.getDocumentAsync({
       copyToCacheDirectory: true,
@@ -48,7 +59,7 @@ export function ChatInputActionSheet() {
   }, [addAttachments, closeActionSheet]);
   const handleActionPress = useCallback(
     (actionId: ChatInputActionId) => {
-      resetInlinePhotoPickerSelection();
+      clearSelectedPhotos();
 
       if (actionId === 'add-file') {
         void handleAddFilePress();
@@ -58,7 +69,7 @@ export function ChatInputActionSheet() {
       selectAction(actionId);
       closeActionSheet();
     },
-    [closeActionSheet, handleAddFilePress, resetInlinePhotoPickerSelection, selectAction],
+    [clearSelectedPhotos, closeActionSheet, handleAddFilePress, selectAction],
   );
   const handleReasoningEffortChange = useCallback(
     (nextReasoningEffort: Parameters<typeof selectReasoningEffort>[0]) => {
@@ -68,32 +79,30 @@ export function ChatInputActionSheet() {
     [selectReasoningEffort],
   );
   const handleReasoningPress = useCallback(() => {
-    resetInlinePhotoPickerSelection();
+    clearSelectedPhotos();
     setSheetPage('reasoning');
-  }, [resetInlinePhotoPickerSelection]);
+  }, [clearSelectedPhotos]);
   const handleReasoningBack = useCallback(() => {
     setSheetPage('main');
   }, []);
-  const handleInlinePhotoPickerSelection = useCallback(
-    (event: InlinePhotoPickerSelectionChangeEvent) => {
-      addInlinePhotoPickerAssets(event.nativeEvent.assets);
-    },
-    [addInlinePhotoPickerAssets],
-  );
-  const handleInlinePhotoPickerError = useCallback((_event: InlinePhotoPickerErrorEvent) => {
-    // The native picker already keeps the sheet usable after an export failure.
-  }, []);
-
-  const handleClose = useCallback(() => {
-    if (!isActionSheetOpen) {
-      setSheetPage('main');
+  const handlePhotosPress = useCallback(() => {
+    if (photoAccess === 'limited') {
+      void presentLimitedPhotoPermissionsPicker();
       return;
     }
 
-    resetInlinePhotoPickerSelection();
+    void launchImageLibrary();
+  }, [launchImageLibrary, photoAccess, presentLimitedPhotoPermissionsPicker]);
+  const handleSelectedPhotosAdd = useCallback(() => {
+    addSelectedPhotoPreviews();
+    closeActionSheet();
+  }, [addSelectedPhotoPreviews, closeActionSheet]);
+
+  const handleClose = useCallback(() => {
+    clearSelectedPhotos();
     setSheetPage('main');
     closeActionSheet();
-  }, [closeActionSheet, isActionSheetOpen, resetInlinePhotoPickerSelection]);
+  }, [clearSelectedPhotos, closeActionSheet]);
 
   return (
     <BottomSheet enablePanDownToClose index={isActionSheetOpen ? 0 : -1} onClose={handleClose}>
@@ -101,20 +110,28 @@ export function ChatInputActionSheet() {
         {sheetPage === 'main' ? (
           <View className="gap-4 px-4 pt-2" style={styles.sheetContent}>
             <View className="gap-3">
-              <ChatInputActionSheetHeader />
+              <ChatInputActionSheetHeader
+                photoAccess={photoAccess}
+                onAllPhotosPress={launchImageLibrary}
+                onLimitedPhotoAccessPress={presentLimitedPhotoPermissionsPicker}
+              />
               <ChatInputMediaStrip>
                 <ChatInputCameraTile onPress={launchCamera} />
+                {shouldShowPhotosTile ? <ChatInputPhotosTile onPress={handlePhotosPress} /> : null}
+                {photoPreviews.map((photo) => {
+                  const selectionIndex = selectedPhotoOrder.get(photo.id);
+
+                  return (
+                    <ChatInputPhotoPreviewTile
+                      isSelected={selectionIndex !== undefined}
+                      key={photo.id}
+                      selectionIndex={selectionIndex}
+                      uri={photo.uri}
+                      onPress={() => togglePhotoSelection(photo.id)}
+                    />
+                  );
+                })}
               </ChatInputMediaStrip>
-              <View style={styles.inlinePhotoPickerFrame}>
-                <InlinePhotoPickerView
-                  disabled={isInlinePhotoPickerDisabled}
-                  resetKey={inlinePhotoPickerResetKey}
-                  selectionLimit={0}
-                  style={styles.inlinePhotoPicker}
-                  onError={handleInlinePhotoPickerError}
-                  onSelectionChange={handleInlinePhotoPickerSelection}
-                />
-              </View>
             </View>
             <View className="h-px bg-border" />
             <ChatInputActionList
@@ -131,6 +148,12 @@ export function ChatInputActionSheet() {
             onReasoningEffortChange={handleReasoningEffortChange}
           />
         )}
+        {sheetPage === 'main' ? (
+          <ChatInputSelectedPhotoBar
+            selectedPhotoCount={selectedPhotoCount}
+            onPress={handleSelectedPhotosAdd}
+          />
+        ) : null}
       </BottomSheetView>
     </BottomSheet>
   );
@@ -139,13 +162,6 @@ export function ChatInputActionSheet() {
 const styles = StyleSheet.create({
   sheetContent: {
     paddingBottom: 28,
-  },
-  inlinePhotoPicker: {
-    flex: 1,
-  },
-  inlinePhotoPickerFrame: {
-    height: 360,
-    overflow: 'hidden',
   },
   sheetViewport: {
     position: 'relative',

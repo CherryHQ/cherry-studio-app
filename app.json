@@ -62,12 +62,21 @@
           "microphonePermission": false
         }
       ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Cherry Studio to preview photos for chat messages.",
+          "savePhotosPermission": "Allow Cherry Studio to save photos.",
+          "preventAutomaticLimitedAccessAlert": true,
+          "granularPermissions": ["photo"]
+        }
+      ],
       "expo-web-browser",
       [
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "17.0"
+            "deploymentTarget": "16.4"
           }
         }
       ]

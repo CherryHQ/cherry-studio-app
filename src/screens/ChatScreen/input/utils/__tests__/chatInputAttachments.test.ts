@@ -3,7 +3,7 @@ import {
   type ChatInputAttachmentDraft,
   createChatInputMessageParts,
   createDocumentAttachmentDraft,
-  createInlinePhotoPickerAttachmentDraft,
+  createPhotoAttachmentDraft,
   getChatInputFileExtension,
   hasChatInputSendableContent,
   isChatInputImageFileName,
@@ -21,11 +21,7 @@ const fileAttachment: ChatInputAttachmentDraft = {
 
 describe('chat input attachments', () => {
   test('appends attachments while preserving existing items and dropping duplicates', () => {
-    const imageAttachment = createInlinePhotoPickerAttachmentDraft({
-      assetId: 'photo-a',
-      fileName: 'photo-a.jpg',
-      uri: 'file://photo-a.jpg',
-    });
+    const imageAttachment = createPhotoAttachmentDraft({ id: 'photo-a', uri: 'photo-a.jpg' });
 
     expect(
       appendChatInputAttachments([imageAttachment], [fileAttachment, imageAttachment]),
@@ -33,11 +29,7 @@ describe('chat input attachments', () => {
   });
 
   test('removes an attachment by id', () => {
-    const imageAttachment = createInlinePhotoPickerAttachmentDraft({
-      assetId: 'photo-a',
-      fileName: 'photo-a.jpg',
-      uri: 'file://photo-a.jpg',
-    });
+    const imageAttachment = createPhotoAttachmentDraft({ id: 'photo-a', uri: 'photo-a.jpg' });
 
     expect(
       removeChatInputAttachment([imageAttachment, fileAttachment], imageAttachment.id),
@@ -84,25 +76,6 @@ describe('chat input attachments', () => {
     ).toMatchObject({
       kind: 'file',
       mediaType: 'application/pdf',
-    });
-  });
-
-  test('creates inline photo picker attachments', () => {
-    expect(
-      createInlinePhotoPickerAttachmentDraft({
-        assetId: 'photo-a',
-        fileName: 'photo-a.heic',
-        fileSize: 1234,
-        mimeType: 'image/heic',
-        uri: 'file://photo-a.heic',
-      }),
-    ).toEqual({
-      id: 'photo:photo-a',
-      kind: 'image',
-      mediaType: 'image/heic',
-      name: 'photo-a.heic',
-      size: 1234,
-      uri: 'file://photo-a.heic',
     });
   });
 
