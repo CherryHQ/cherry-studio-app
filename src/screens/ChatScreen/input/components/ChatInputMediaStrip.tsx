@@ -86,6 +86,19 @@ export function ChatInputPhotosTile({ onPress }: { onPress: () => void }) {
   );
 }
 
+export function ChatInputFileTile({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+
+  return (
+    <MediaTile
+      accessibilityLabel={t('chat.media.file')}
+      icon={FileIcon}
+      label={t('chat.media.file')}
+      onPress={onPress}
+    />
+  );
+}
+
 export function ChatInputPhotoPreviewTile({
   isSelected,
   onPress,

@@ -2,6 +2,7 @@ import type { DocumentPickerAsset } from 'expo-document-picker';
 import type { ImagePickerAsset } from 'expo-image-picker';
 
 import type { CherryMessagePart } from '@/data/types/message';
+import type { InlinePhotoPickerAsset } from '@/modules/inlinePhotoPicker';
 
 export type ChatInputAttachmentKind = 'file' | 'image';
 
@@ -90,6 +91,19 @@ export function createImagePickerAttachmentDraft(
     kind: 'image',
     mediaType,
     name: asset.fileName ?? fallbackImageName,
+    size: asset.fileSize,
+    uri: asset.uri,
+  };
+}
+
+export function createInlinePhotoAttachmentDraft(
+  asset: InlinePhotoPickerAsset,
+): ChatInputAttachmentDraft {
+  return {
+    id: getPhotoAttachmentId(asset.assetId || asset.uri),
+    kind: 'image',
+    mediaType: asset.mimeType ?? fallbackImageMediaType,
+    name: asset.fileName || fallbackImageName,
     size: asset.fileSize,
     uri: asset.uri,
   };

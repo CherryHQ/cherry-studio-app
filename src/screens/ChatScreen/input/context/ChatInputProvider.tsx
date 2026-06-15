@@ -4,12 +4,11 @@ import {
   type RefObject,
   use,
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import { Keyboard, type TextInput } from 'react-native';
+import { type TextInput } from 'react-native';
 import { useChatInputPhotoPicker } from '@/screens/ChatScreen/input/hooks/useChatInputPhotoPicker';
 import {
   type ChatInputAction,
@@ -32,6 +31,7 @@ type ChatInputStateContextValue = {
   attachments: readonly ChatInputAttachmentDraft[];
   draft: string;
   isActionSheetOpen: boolean;
+  isComposerExpanded: boolean;
   isInputFocused: boolean;
   isReasoningEffortSelected: boolean;
   reasoningEffort: ChatInputReasoningEffort;
@@ -61,8 +61,6 @@ type ChatInputMetaContextValue = {
   inputRef: RefObject<TextInput | null>;
 };
 
-const chatInputFocusAfterActionDelay = 100;
-
 const ChatInputStateContext = createContext<ChatInputStateContextValue | null>(null);
 const ChatInputActionsContext = createContext<ChatInputActionsContextValue | null>(null);
 const ChatInputMediaContext = createContext<ChatInputMediaContextValue | null>(null);
@@ -70,8 +68,6 @@ const ChatInputMetaContext = createContext<ChatInputMetaContextValue | null>(nul
 
 export function ChatInputProvider({ children }: PropsWithChildren) {
   const inputRef = useRef<TextInput>(null);
-  const focusAfterActionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const shouldFocusAfterActionSheetCloseRef = useRef(false);
   const [draft, setDraft] = useState('');
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -90,51 +86,31 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
     isReasoningEffortSelected,
     reasoningEffort,
   );
-
-  useEffect(() => {
-    return () => {
-      if (focusAfterActionTimeoutRef.current) {
-        clearTimeout(focusAfterActionTimeoutRef.current);
-      }
-    };
-  }, []);
+  // Collapse to a centered pill only when nothing requires the full surface.
+  const isComposerExpanded =
+    isInputFocused ||
+    draft.trim() !== '' ||
+    attachments.length > 0 ||
+    Boolean(selectedTool) ||
+    shouldShowReasoningEffortTag;
 
   const openActionSheet = useCallback(() => {
-    inputRef.current?.blur();
-    Keyboard.dismiss();
-    setIsInputFocused(false);
+    // Don't blur/dismiss the keyboard: let iOS keep the input as first responder
+    // and auto-restore it when the sheet dismisses (immediate, no manual refocus).
     setIsActionSheetOpen(true);
   }, []);
 
   const closeActionSheet = useCallback(() => {
     setIsActionSheetOpen(false);
-
-    if (!shouldFocusAfterActionSheetCloseRef.current) {
-      return;
-    }
-
-    shouldFocusAfterActionSheetCloseRef.current = false;
-
-    if (focusAfterActionTimeoutRef.current) {
-      clearTimeout(focusAfterActionTimeoutRef.current);
-    }
-
-    // Native sheet close callbacks fire before the dismissal animation has released focus.
-    focusAfterActionTimeoutRef.current = setTimeout(() => {
-      inputRef.current?.focus();
-      focusAfterActionTimeoutRef.current = null;
-    }, chatInputFocusAfterActionDelay);
   }, []);
 
   const selectAction = useCallback((actionId: ChatInputActionId) => {
     setSelectedToolId((current) => toggleChatInputAction(current, actionId));
-    shouldFocusAfterActionSheetCloseRef.current = true;
   }, []);
 
   const selectReasoningEffort = useCallback((nextReasoningEffort: ChatInputReasoningEffort) => {
     setReasoningEffort(nextReasoningEffort);
     setIsReasoningEffortSelected(true);
-    shouldFocusAfterActionSheetCloseRef.current = true;
   }, []);
 
   const clearReasoningEffort = useCallback(() => {
@@ -159,6 +135,7 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
       attachments,
       draft,
       isActionSheetOpen,
+      isComposerExpanded,
       isInputFocused,
       isReasoningEffortSelected,
       reasoningEffort,
@@ -170,6 +147,7 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
       attachments,
       draft,
       isActionSheetOpen,
+      isComposerExpanded,
       isInputFocused,
       isReasoningEffortSelected,
       reasoningEffort,

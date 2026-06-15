@@ -75,22 +75,15 @@ export function ChatInputSurface({
     setInputFocused,
   } = useChatInputActions();
   const { inputRef } = useChatInputMeta();
-  const { attachments, draft, isInputFocused, selectedTool, shouldShowReasoningEffortTag } =
+  const { attachments, draft, isComposerExpanded, selectedTool, shouldShowReasoningEffortTag } =
     useChatInputState();
-  // Collapse to a centered pill whenever nothing requires the full surface.
-  const isExpanded =
-    isInputFocused ||
-    draft.trim() !== '' ||
-    attachments.length > 0 ||
-    Boolean(selectedTool) ||
-    shouldShowReasoningEffortTag;
   const expandProgress = useSharedValue(0);
   const contentHeight = useSharedValue(0);
   const availableWidth = useSharedValue(0);
 
   useEffect(() => {
-    expandProgress.value = withSpring(isExpanded ? 1 : 0, chatInputSpringConfig);
-  }, [isExpanded, expandProgress]);
+    expandProgress.value = withSpring(isComposerExpanded ? 1 : 0, chatInputSpringConfig);
+  }, [isComposerExpanded, expandProgress]);
 
   const surfaceAnimatedStyle = useAnimatedStyle(() => ({
     height: interpolate(
@@ -132,15 +125,6 @@ export function ChatInputSurface({
       logger.warn('Failed to preview attachment', error instanceof Error ? error : null);
     });
   }, []);
-  const handleModelPickerPress = useCallback(() => {
-    if (isInputFocused) {
-      void KeyboardController.dismiss();
-      inputRef.current?.blur();
-      setInputFocused(false);
-    }
-
-    onModelPickerPress();
-  }, [inputRef, isInputFocused, onModelPickerPress, setInputFocused]);
   const handleSendPress = useCallback(
     async (text: string) => {
       const draftSnapshot = draft;
@@ -202,7 +186,7 @@ export function ChatInputSurface({
               style={[inputBottomToolbarStyle, bottomToolbarAnimatedStyle]}
             >
               <ChatInputAddButton />
-              <ModelPickerPill label={modelLabel} onPress={handleModelPickerPress} />
+              <ModelPickerPill label={modelLabel} onPress={onModelPickerPress} />
             </Animated.View>
           </View>
           <ChatInputPrimaryActionButton

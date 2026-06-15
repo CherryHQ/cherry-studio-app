@@ -1,9 +1,10 @@
-import { useCallback, useRef } from 'react';
+import { type Ref, useCallback, useMemo, useRef } from 'react';
 import {
   getNextModelSelection,
   ModelPickerBottomSheet,
   type ModelPickerBottomSheetHandle,
   type ModelPickerModelItem,
+  type ModelPickerReasoningConfig,
   useModelSettingSelections,
   usePrefetchModelPickerData,
 } from '@/components/modelPicker';
@@ -14,8 +15,16 @@ import {
   type ChatInputSendPayload,
   ChatInputSurface,
 } from '@/screens/ChatScreen/input/components/ChatInputSurface';
-import { ChatInputProvider } from '@/screens/ChatScreen/input/context/ChatInputProvider';
+import {
+  ChatInputProvider,
+  useChatInputActions,
+  useChatInputState,
+} from '@/screens/ChatScreen/input/context/ChatInputProvider';
 import { createChatInputMessageParts } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+import {
+  type ChatInputReasoningEffort,
+  chatInputReasoningEffortOptions,
+} from '@/screens/ChatScreen/input/utils/chatInputReasoning';
 import { useChatRuntimeTopic } from '@/screens/ChatScreen/runtime';
 
 type ChatInputProps = {
@@ -67,11 +76,43 @@ export function ChatInput({ topicId }: ChatInputProps) {
         onStopPress={chatRuntime.abort}
       />
       <ChatInputActionSheet />
-      <ModelPickerBottomSheet
-        ref={modelPickerRef}
-        selectedModelId={selectedModelId}
+      <ChatInputModelPicker
         onSelect={handleModelSelect}
+        pickerRef={modelPickerRef}
+        selectedModelId={selectedModelId}
       />
     </ChatInputProvider>
+  );
+}
+
+// Bridges the chat-input reasoning state (only available inside ChatInputProvider)
+// into the otherwise-generic model picker as injected props.
+function ChatInputModelPicker({
+  onSelect,
+  pickerRef,
+  selectedModelId,
+}: {
+  onSelect: (item: ModelPickerModelItem) => void;
+  pickerRef: Ref<ModelPickerBottomSheetHandle>;
+  selectedModelId: string | null;
+}) {
+  const { reasoningEffort } = useChatInputState();
+  const { selectReasoningEffort } = useChatInputActions();
+  const reasoning = useMemo<ModelPickerReasoningConfig>(
+    () => ({
+      onChange: (value) => selectReasoningEffort(value as ChatInputReasoningEffort),
+      options: chatInputReasoningEffortOptions,
+      value: reasoningEffort,
+    }),
+    [reasoningEffort, selectReasoningEffort],
+  );
+
+  return (
+    <ModelPickerBottomSheet
+      onSelect={onSelect}
+      reasoning={reasoning}
+      ref={pickerRef}
+      selectedModelId={selectedModelId}
+    />
   );
 }

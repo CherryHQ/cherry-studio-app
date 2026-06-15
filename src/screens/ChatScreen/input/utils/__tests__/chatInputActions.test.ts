@@ -6,7 +6,7 @@ import {
 
 describe('chat input actions', () => {
   test('finds an action by id', () => {
-    expect(getChatInputAction('think')?.titleKey).toBe('chat.actions.think');
+    expect(getChatInputAction('create-image')?.titleKey).toBe('chat.actions.createImage');
   });
 
   test('returns undefined when no action is selected', () => {
@@ -14,14 +14,16 @@ describe('chat input actions', () => {
   });
 
   test('selects a different action', () => {
-    expect(toggleChatInputAction('think', 'web-search')).toBe('web-search');
+    expect(toggleChatInputAction('create-image', 'web-search')).toBe('web-search');
   });
 
   test('clears the action when the same action is selected again', () => {
-    expect(toggleChatInputAction('think', 'think')).toBeNull();
+    expect(toggleChatInputAction('web-search', 'web-search')).toBeNull();
   });
 
   test('selects an action when nothing is selected', () => {
-    expect(toggleChatInputAction(null, 'add-file' satisfies ChatInputActionId)).toBe('add-file');
+    expect(toggleChatInputAction(null, 'web-search' satisfies ChatInputActionId)).toBe(
+      'web-search',
+    );
   });
 });
