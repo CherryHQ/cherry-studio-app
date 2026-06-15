@@ -1,14 +1,23 @@
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useToast } from 'heroui-native/toast';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { type LayoutChangeEvent, Pressable, Text, View } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
-import Animated from 'react-native-reanimated';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { loggerService } from '@/core/logger/loggerService';
 import {
   chatInputBottomToolbarHeight,
-  chatInputMinComposerHeight,
+  chatInputCollapsedHeight,
+  chatInputCollapsedWidth,
+  chatInputCollapsedWidthRatio,
 } from '@/screens/ChatScreen/input/chatInputLayout';
 import { ChatInputAddButton } from '@/screens/ChatScreen/input/components/ChatInputAddButton';
 import { ChatInputAttachmentPreviewStrip } from '@/screens/ChatScreen/input/components/ChatInputMediaStrip';
@@ -21,11 +30,10 @@ import {
   useChatInputState,
 } from '@/screens/ChatScreen/input/context/ChatInputProvider';
 import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
-import { chatInputLayoutTransition } from '@/screens/ChatScreen/input/utils/chatInputMotion';
-
-const inputControlSurfaceStyle = {
-  minHeight: chatInputMinComposerHeight,
-};
+import {
+  chatInputMotionConfig,
+  chatInputSpringConfig,
+} from '@/screens/ChatScreen/input/utils/chatInputMotion';
 
 const inputBottomToolbarStyle = {
   minHeight: chatInputBottomToolbarHeight,
@@ -69,6 +77,53 @@ export function ChatInputSurface({
   const { inputRef } = useChatInputMeta();
   const { attachments, draft, isInputFocused, selectedTool, shouldShowReasoningEffortTag } =
     useChatInputState();
+  // Collapse to a centered pill whenever nothing requires the full surface.
+  const isExpanded =
+    isInputFocused ||
+    draft.trim() !== '' ||
+    attachments.length > 0 ||
+    Boolean(selectedTool) ||
+    shouldShowReasoningEffortTag;
+  const expandProgress = useSharedValue(0);
+  const contentHeight = useSharedValue(0);
+  const availableWidth = useSharedValue(0);
+
+  useEffect(() => {
+    expandProgress.value = withSpring(isExpanded ? 1 : 0, chatInputSpringConfig);
+  }, [isExpanded, expandProgress]);
+
+  const surfaceAnimatedStyle = useAnimatedStyle(() => ({
+    height: interpolate(
+      expandProgress.value,
+      [0, 1],
+      [chatInputCollapsedHeight, Math.max(contentHeight.value, chatInputCollapsedHeight)],
+      Extrapolation.CLAMP,
+    ),
+    width: interpolate(
+      expandProgress.value,
+      [0, 1],
+      [
+        Math.max(availableWidth.value * chatInputCollapsedWidthRatio, chatInputCollapsedWidth),
+        Math.max(availableWidth.value, chatInputCollapsedWidth),
+      ],
+      Extrapolation.CLAMP,
+    ),
+  }));
+  const bottomToolbarAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(expandProgress.value, [0.4, 1], [0, 1], Extrapolation.CLAMP),
+  }));
+  const handleWrapperLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      availableWidth.value = event.nativeEvent.layout.width;
+    },
+    [availableWidth],
+  );
+  const handleContentLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      contentHeight.value = withTiming(event.nativeEvent.layout.height, chatInputMotionConfig);
+    },
+    [contentHeight],
+  );
   const handleAttachmentPreview = useCallback((attachment: ChatInputAttachmentDraft) => {
     void ExpoQuickLook.previewFile({
       editingMode: 'disabled',
@@ -124,30 +179,31 @@ export function ChatInputSurface({
 
   return (
     <View className="flex-row items-end">
-      <Animated.View className="flex-1" layout={chatInputLayoutTransition}>
+      <View className="flex-1" onLayout={handleWrapperLayout}>
         <Animated.View
-          className="relative overflow-hidden rounded-3xl bg-field ios:shadow-field android:shadow-sm"
-          layout={chatInputLayoutTransition}
-          style={inputControlSurfaceStyle}
+          className="relative self-center overflow-hidden rounded-3xl bg-field ios:shadow-field android:shadow-sm"
+          style={surfaceAnimatedStyle}
         >
-          <ChatInputToolbar
-            shouldShowReasoningEffortTag={shouldShowReasoningEffortTag}
-            selectedTool={selectedTool}
-            onReasoningEffortClear={clearReasoningEffort}
-            onToolClear={clearSelectedTool}
-          />
-          <ChatInputAttachmentPreviewStrip
-            attachments={attachments}
-            onAttachmentPreview={handleAttachmentPreview}
-            onAttachmentRemove={removeAttachment}
-          />
-          <ChatInputTextArea />
-          <View
-            className="flex-row items-center gap-2 px-3 pb-1.5 pr-11"
-            style={inputBottomToolbarStyle}
-          >
-            <ChatInputAddButton />
-            <ModelPickerPill label={modelLabel} onPress={handleModelPickerPress} />
+          <View className="absolute inset-x-0 top-0" onLayout={handleContentLayout}>
+            <ChatInputToolbar
+              shouldShowReasoningEffortTag={shouldShowReasoningEffortTag}
+              selectedTool={selectedTool}
+              onReasoningEffortClear={clearReasoningEffort}
+              onToolClear={clearSelectedTool}
+            />
+            <ChatInputAttachmentPreviewStrip
+              attachments={attachments}
+              onAttachmentPreview={handleAttachmentPreview}
+              onAttachmentRemove={removeAttachment}
+            />
+            <ChatInputTextArea />
+            <Animated.View
+              className="flex-row items-center gap-2 px-3 pb-1.5 pr-11"
+              style={[inputBottomToolbarStyle, bottomToolbarAnimatedStyle]}
+            >
+              <ChatInputAddButton />
+              <ModelPickerPill label={modelLabel} onPress={handleModelPickerPress} />
+            </Animated.View>
           </View>
           <ChatInputPrimaryActionButton
             isSendEnabled={isSendEnabled}
@@ -156,7 +212,7 @@ export function ChatInputSurface({
             onStopPress={onStopPress}
           />
         </Animated.View>
-      </Animated.View>
+      </View>
     </View>
   );
 }

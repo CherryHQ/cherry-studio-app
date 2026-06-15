@@ -1,8 +1,10 @@
+import { cn } from 'heroui-native/utils';
 import { ArrowUpIcon, SquareIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Pressable } from 'react-native';
 import {
   useChatInputActions,
+  useChatInputMeta,
   useChatInputState,
 } from '@/screens/ChatScreen/input/context/ChatInputProvider';
 import { hasChatInputSendableContent } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
@@ -24,17 +26,17 @@ export function ChatInputPrimaryActionButton({
 }: ChatInputPrimaryActionButtonProps) {
   const { t } = useTranslation();
   const { setInputFocused } = useChatInputActions();
+  const { inputRef } = useChatInputMeta();
   const { attachments, draft } = useChatInputState();
   const trimmedDraft = draft.trim();
   const shouldShowSend = isSendEnabled && hasChatInputSendableContent(draft, attachments);
+  // Persistent button: stays mounted even with no sendable content; tapping it
+  // focuses the input to expand the composer.
+  const isPlaceholder = !isStreaming && !shouldShowSend;
   const Icon = isStreaming ? SquareIcon : ArrowUpIcon;
   const accessibilityLabel = isStreaming
     ? t('chat.input.action.stopGenerating')
     : t('chat.input.action.sendMessage');
-
-  if (!isStreaming && !shouldShowSend) {
-    return null;
-  }
 
   const handlePress = async () => {
     if (isStreaming) {
@@ -45,14 +47,20 @@ export function ChatInputPrimaryActionButton({
     if (shouldShowSend) {
       setInputFocused(false);
       await onSendPress(trimmedDraft);
+      return;
     }
+
+    inputRef.current?.focus();
   };
 
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      className="absolute right-1.5 bottom-1.5 items-center justify-center rounded-full bg-primary active:opacity-70 disabled:opacity-70"
+      className={cn(
+        'absolute right-1.5 bottom-1.5 items-center justify-center rounded-full bg-primary active:opacity-70',
+        isPlaceholder && 'opacity-40',
+      )}
       hitSlop={6}
       onPress={handlePress}
       style={{
