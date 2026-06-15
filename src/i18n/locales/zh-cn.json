@@ -45,7 +45,9 @@
   "common.discard": "放弃",
   "common.edit": "编辑",
   "common.more": "更多",
+  "common.delete": "删除",
   "common.remove": "移除",
+  "common.rename": "重命名",
   "common.save": "保存",
   "navigation.back": "返回",
   "navigation.backHome": "回到首页",
@@ -296,5 +298,9 @@
   "settings.websearch.provider.showApiKeys": "显示 API Keys",
   "settings.websearch.provider.zhipuKeyNotice": "智谱使用模型服务商 API Key。模型服务商设置页可用后，请在那里配置。",
   "settings.websearch.providerDescription.fetch": "内置 URL 获取服务商，用于从指定 URL 获取网页内容，适合补全搜索结果正文。",
+  "topic.deleteMessage": "该对话及其所有消息将被永久删除。",
+  "topic.deleteTitle": "删除对话",
+  "topic.renamePlaceholder": "输入名称",
+  "topic.renameTitle": "重命名对话",
   "topic.titleFallback": "聊天"
 }

@@ -12,6 +12,8 @@ import {
 } from 'react';
 import { Keyboard } from 'react-native';
 
+import { queryKeys } from '@/data/api';
+import { useDataMutation } from '@/data/hooks';
 import { useDataServices } from '@/data/runtime';
 import type { Topic } from '@/data/types/topic';
 import { useTopics } from '@/hooks/chat';
@@ -33,11 +35,13 @@ type DrawerTopicsContextValue = {
 type DrawerActionsContextValue = {
   closeDrawer: () => void;
   closeSearch: () => void;
+  deleteTopic: (topicId: string) => Promise<void>;
   loadMoreTopics: () => void;
   openDrawer: () => void;
   openSearch: () => void;
   openSettings: () => void;
   openTopic: (topicId: string) => void;
+  renameTopic: (topicId: string, name: string) => Promise<void>;
   setSearchText: (value: string) => void;
 };
 
@@ -136,6 +140,51 @@ export function DrawerProvider({ children }: PropsWithChildren) {
     [closeDrawer, closeSearch, pathname, queryClient, router, services, topicId],
   );
 
+  const renameTopicMutation = useDataMutation({
+    invalidateQueries: [['/topics']],
+    mutationFn: (dataServices, variables: { id: string; name: string }) =>
+      dataServices.topic.update(variables.id, {
+        isNameManuallyEdited: true,
+        name: variables.name,
+      }),
+    onSuccess: (_topic, variables) =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.topics.detail(variables.id) }),
+  });
+
+  const deleteTopicMutation = useDataMutation({
+    invalidateQueries: [['/topics']],
+    mutationFn: (dataServices, id: string) => dataServices.topic.delete(id),
+    onSuccess: (_result, id) => {
+      queryClient.removeQueries({ queryKey: queryKeys.topics.detail(id) });
+    },
+  });
+
+  const renameTopic = useCallback(
+    async (id: string, name: string) => {
+      const trimmedName = name.trim();
+
+      if (!trimmedName) {
+        return;
+      }
+
+      await renameTopicMutation.mutateAsync({ id, name: trimmedName });
+    },
+    [renameTopicMutation],
+  );
+
+  const deleteTopic = useCallback(
+    async (id: string) => {
+      await deleteTopicMutation.mutateAsync(id);
+
+      // The deleted topic's chat screen would be left pointing at a missing
+      // topic, so fall back to the empty chat state when removing the active one.
+      if (id === topicId) {
+        router.replace('/');
+      }
+    },
+    [deleteTopicMutation, router, topicId],
+  );
+
   const panelStateValue = useMemo(
     () => ({
       isOpen,
@@ -158,14 +207,26 @@ export function DrawerProvider({ children }: PropsWithChildren) {
     () => ({
       closeDrawer,
       closeSearch,
+      deleteTopic,
       loadMoreTopics: topicList.loadMore,
       openDrawer,
       openSearch,
       openSettings,
       openTopic,
+      renameTopic,
       setSearchText,
     }),
-    [closeDrawer, closeSearch, openDrawer, openSearch, openSettings, openTopic, topicList.loadMore],
+    [
+      closeDrawer,
+      closeSearch,
+      deleteTopic,
+      openDrawer,
+      openSearch,
+      openSettings,
+      openTopic,
+      renameTopic,
+      topicList.loadMore,
+    ],
   );
 
   const navigationBridgeValue = useMemo(

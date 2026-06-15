@@ -45,7 +45,9 @@
   "common.discard": "Discard",
   "common.edit": "Edit",
   "common.more": "More",
+  "common.delete": "Delete",
   "common.remove": "Remove",
+  "common.rename": "Rename",
   "common.save": "Save",
   "navigation.back": "Back",
   "navigation.backHome": "Back to home",
@@ -296,5 +298,9 @@
   "settings.websearch.provider.showApiKeys": "Show API keys",
   "settings.websearch.provider.zhipuKeyNotice": "Zhipu uses the model service API key. Configure it from Model service settings when that page is available.",
   "settings.websearch.providerDescription.fetch": "Built-in URL fetch provider. Fetches web page content from a URL to enrich search results.",
+  "topic.deleteMessage": "This chat and all its messages will be permanently deleted.",
+  "topic.deleteTitle": "Delete chat",
+  "topic.renamePlaceholder": "Enter a name",
+  "topic.renameTitle": "Rename chat",
   "topic.titleFallback": "Chat"
 }
