@@ -6,6 +6,7 @@ export type ModelPickerListItem =
       groupKind: ModelPickerGroup['groupKind'];
       isFirstGroup: boolean;
       key: string;
+      provider: ModelPickerGroup['provider'];
       title: string;
       type: 'groupHeader';
     }
@@ -33,6 +34,7 @@ export function buildModelPickerListItems(
       groupKind: group.groupKind,
       isFirstGroup: groupIndex === 0,
       key: `header:${group.key}`,
+      provider: group.provider,
       title: group.title,
       type: 'groupHeader',
     });

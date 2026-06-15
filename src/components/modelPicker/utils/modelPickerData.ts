@@ -274,13 +274,30 @@ function matchesModelPickerSelectedTags(
   return selectedTags.every((tag) => matchesModelPickerTag(model, tag));
 }
 
+// Capabilities for models that can't be used in chat, so they're excluded from the picker.
+const CHAT_UNSUPPORTED_CAPABILITIES = [
+  MODEL_CAPABILITY.AUDIO_RECOGNITION,
+  MODEL_CAPABILITY.EMBEDDING,
+  MODEL_CAPABILITY.RERANK,
+] as const;
+
+function isChatCapableModel(model: Model): boolean {
+  return !CHAT_UNSUPPORTED_CAPABILITIES.some((capability) =>
+    model.capabilities.includes(capability),
+  );
+}
+
 function getSelectableModelPickerModels(models: readonly Model[], providers: readonly Provider[]) {
   const enabledProviderIds = new Set(
     providers.filter((provider) => provider.isEnabled).map((provider) => provider.id),
   );
 
   return models.filter(
-    (model) => model.isEnabled && !model.isHidden && enabledProviderIds.has(model.providerId),
+    (model) =>
+      model.isEnabled &&
+      !model.isHidden &&
+      enabledProviderIds.has(model.providerId) &&
+      isChatCapableModel(model),
   );
 }
 

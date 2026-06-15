@@ -92,10 +92,22 @@ function normalizeCurrentColor(svg: string, color: string) {
   return svg.replace(/currentColor/g, color);
 }
 
-async function renderIcon(sourcePath: string, outputPath: string, foregroundColor: string) {
+async function renderIcon(
+  sourcePath: string,
+  outputPath: string,
+  foregroundColor: string,
+  options: { trim?: boolean } = {},
+) {
   const svg = normalizeCurrentColor(readFileSync(sourcePath, 'utf-8'), foregroundColor);
+  const pipeline = sharp(Buffer.from(svg), { density: 192 });
 
-  await sharp(Buffer.from(svg), { density: 192 })
+  // Crop the transparent safe-area baked into the source SVG so the logo fills
+  // the icon box instead of floating in whitespace (used for provider icons).
+  if (options.trim) {
+    pipeline.trim();
+  }
+
+  await pipeline
     .resize(imageSize, imageSize, {
       background: { alpha: 0, b: 0, g: 0, r: 0 },
       fit: 'contain',
@@ -205,6 +217,8 @@ async function generateGroup(group: IconGroup) {
     .filter((fileName) => fileName.endsWith('.svg'))
     .sort();
   const entries: IconEntry[] = [];
+  // Provider icons get their transparent safe-area cropped so logos fill the box.
+  const shouldTrim = group === 'providers';
 
   rmSync(join(outputRoot, group), { recursive: true, force: true });
   mkdirSync(lightAssetDir, { recursive: true });
@@ -219,13 +233,16 @@ async function generateGroup(group: IconGroup) {
     const hasDarkSource = Boolean(darkSourcePath && existsSync(darkSourcePath));
     const shouldRenderDark = hasDarkSource || hasCurrentColor;
 
-    await renderIcon(lightSourcePath, join(lightAssetDir, `${assetName}.png`), foregroundLight);
+    await renderIcon(lightSourcePath, join(lightAssetDir, `${assetName}.png`), foregroundLight, {
+      trim: shouldTrim,
+    });
 
     if (shouldRenderDark) {
       await renderIcon(
         hasDarkSource && darkSourcePath ? darkSourcePath : lightSourcePath,
         join(darkAssetDir, `${assetName}.png`),
         foregroundDark,
+        { trim: shouldTrim },
       );
     }
 

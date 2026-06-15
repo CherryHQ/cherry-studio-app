@@ -97,7 +97,7 @@
   "models.capability.rerank": "重排",
   "models.capability.videoRecognition": "视频",
   "models.capability.webSearch": "联网",
-  "models.filter.by_tag": "按标签筛选",
+  "models.filter.by_tag": "筛选",
   "models.pinned": "已置顶",
   "settings.options.language.enUS": "English",
   "settings.options.language.zhCN": "简体中文",

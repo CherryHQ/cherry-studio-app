@@ -97,7 +97,7 @@
   "models.capability.rerank": "Rerank",
   "models.capability.videoRecognition": "Video",
   "models.capability.webSearch": "Web search",
-  "models.filter.by_tag": "Filter by tag",
+  "models.filter.by_tag": "Filter",
   "models.pinned": "Pinned",
   "settings.options.language.enUS": "English",
   "settings.options.language.zhCN": "Simplified Chinese",

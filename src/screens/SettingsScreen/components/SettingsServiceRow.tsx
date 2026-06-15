@@ -32,7 +32,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
           {imageSource ? (
             <Image
               cachePolicy="memory-disk"
-              className="size-7"
+              className="size-5"
               contentFit="contain"
               recyclingKey={id}
               source={imageSource}
