@@ -109,6 +109,24 @@ export function createInlinePhotoAttachmentDraft(
   };
 }
 
+type CameraPhotoInput = {
+  filePath: string;
+};
+
+// VisionCamera's capturePhotoToFile() writes a JPEG to a unique temp path
+// WITHOUT a file:// scheme; the rest of the app expects a URI, so normalize it.
+export function createCameraAttachmentDraft(photo: CameraPhotoInput): ChatInputAttachmentDraft {
+  const uri = photo.filePath.startsWith('file://') ? photo.filePath : `file://${photo.filePath}`;
+
+  return {
+    id: getPhotoAttachmentId(uri),
+    kind: 'image',
+    mediaType: 'image/jpeg',
+    name: fallbackImageName,
+    uri,
+  };
+}
+
 export function createDocumentAttachmentDraft(
   asset: DocumentPickerAsset,
 ): ChatInputAttachmentDraft {

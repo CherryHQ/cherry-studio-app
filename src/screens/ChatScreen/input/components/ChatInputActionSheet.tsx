@@ -4,11 +4,14 @@ import { XIcon } from 'lucide-uniwind/png';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenStack, ScreenStackHeaderLeftView, ScreenStackItem } from 'react-native-screens';
+import type { PhotoFile } from 'react-native-vision-camera';
 import { loggerService } from '@/core/logger/loggerService';
 import { type InlinePhotoPickerAsset, InlinePhotoPickerView } from '@/modules/inlinePhotoPicker';
 import { ChatInputActionList } from '@/screens/ChatScreen/input/components/ChatInputActionList';
+import { ChatInputInlineCamera } from '@/screens/ChatScreen/input/components/ChatInputInlineCamera';
 import {
   ChatInputCameraTile,
   ChatInputFileTile,
@@ -22,9 +25,14 @@ import {
 } from '@/screens/ChatScreen/input/context/ChatInputProvider';
 import type { ChatInputActionId } from '@/screens/ChatScreen/input/utils/chatInputActions';
 import {
+  createCameraAttachmentDraft,
   createDocumentAttachmentDraft,
   createInlinePhotoAttachmentDraft,
 } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+import {
+  chatInputSubviewEntering,
+  chatInputSubviewExiting,
+} from '@/screens/ChatScreen/input/utils/chatInputMotion';
 
 // The sheet opens at 50% and stays there for both the action list and the inline
 // photo picker (the picker no longer auto-expands to 100%); 100% is kept as a
@@ -54,14 +62,16 @@ export function ChatInputActionSheet() {
   const { addAttachments, closeActionSheet, selectAction } = useChatInputActions();
   const { isActionSheetOpen, selectedToolId } = useChatInputState();
   const { actions } = useChatInputMedia();
-  const { launchCamera, launchImageLibrary } = actions;
+  const { launchImageLibrary } = actions;
   const [isInlinePickerOpen, setIsInlinePickerOpen] = useState(false);
+  const [isInlineCameraOpen, setIsInlineCameraOpen] = useState(false);
   // Latest selection from the native picker, captured so the native confirm
   // button can commit it without round-tripping each asset back down as a prop.
   const latestAssetsRef = useRef<InlinePhotoPickerAsset[]>([]);
 
   const handleClose = useCallback(() => {
     setIsInlinePickerOpen(false);
+    setIsInlineCameraOpen(false);
     latestAssetsRef.current = [];
     closeActionSheet();
   }, [closeActionSheet]);
@@ -86,11 +96,33 @@ export function ChatInputActionSheet() {
     },
     [closeActionSheet, selectAction],
   );
-  // Tapping the "图片" tile opens the inline picker sub-view and expands the
-  // detent to 100% instead of presenting the full-screen system picker.
+  // Tapping the "图片" tile: iOS shows the native inline photo picker in-sheet;
+  // Android has no such native module, so hand off to the system gallery via
+  // expo-image-picker instead.
   const handlePhotosPress = useCallback(() => {
+    if (Platform.OS !== 'ios') {
+      handleClose();
+      void launchImageLibrary();
+      return;
+    }
+
     setIsInlinePickerOpen(true);
+  }, [handleClose, launchImageLibrary]);
+  // Tapping the "相机" tile opens the inline VisionCamera sub-view in-sheet
+  // (mirrors the inline photo picker) instead of the full-screen system camera.
+  const handleCameraPress = useCallback(() => {
+    setIsInlineCameraOpen(true);
   }, []);
+  const handleCameraBack = useCallback(() => {
+    setIsInlineCameraOpen(false);
+  }, []);
+  const handleCameraCapture = useCallback(
+    (photo: PhotoFile) => {
+      addAttachments([createCameraAttachmentDraft({ filePath: photo.filePath })]);
+      handleClose();
+    },
+    [addAttachments, handleClose],
+  );
   const handleInlineBack = useCallback(() => {
     setIsInlinePickerOpen(false);
     latestAssetsRef.current = [];
@@ -128,33 +160,65 @@ export function ChatInputActionSheet() {
       snapPoints={SHEET_SNAP_POINTS}
     >
       <BottomSheetView style={styles.sheetViewport}>
-        {isInlinePickerOpen ? (
+        {isInlineCameraOpen ? (
+          // Wrapped in an Animated.View so the camera scales up from ~90% + fades
+          // in on open and reverses on back (`transformOrigin: 'top'` so it grows
+          // from the media-row buttons near the sheet top).
+          <Animated.View
+            entering={chatInputSubviewEntering}
+            exiting={chatInputSubviewExiting}
+            style={styles.subview}
+          >
+            <ChatInputInlineCamera
+              isActive={isInlineCameraOpen && isActionSheetOpen}
+              onBack={handleCameraBack}
+              onCapture={handleCameraCapture}
+              onError={(message) => {
+                logger.warn(`inline camera error: ${message}`);
+              }}
+              // The @expo/ui sheet hosts this inside a SwiftUI view that respects
+              // the bottom safe area, leaving a blank strip over the home
+              // indicator. A negative bottom margin pulls the preview down to fill
+              // it edge-to-edge; the floating control bar re-applies the inset as
+              // padding so its buttons stay above the home indicator.
+              style={{ marginBottom: -insets.bottom }}
+            />
+          </Animated.View>
+        ) : isInlinePickerOpen ? (
           // Rendered WITHOUT the ScreenStack wrapper: the inline picker needs the
           // full sheet area, and react-native-screens' Screen insets its content
           // by the safe area (which left top/bottom gaps). Its back/confirm
-          // controls are drawn natively, so no header is needed here.
-          <InlinePhotoPickerView
-            allPhotosLabel={t('chat.media.allPhotos')}
-            backAccessibilityLabel={t('common.back')}
-            confirmLabelTemplate={t('chat.media.addPhotosTemplate')}
-            onAllPhotosPress={handleAllPhotosPress}
-            onBackPress={handleInlineBack}
-            onConfirm={handleInlineConfirm}
-            onError={(event) => {
-              logger.warn(`inline picker error: ${event.nativeEvent.message}`);
-            }}
-            onSelectionChange={(event) => {
-              latestAssetsRef.current = event.nativeEvent.assets;
-            }}
-            selectionLimit={9}
-            // The @expo/ui sheet hosts this inside a SwiftUI view that respects
-            // the bottom safe area, leaving a blank strip over the home indicator.
-            // A negative bottom margin pulls the native picker down to fill it
-            // edge-to-edge. The negative top margin absorbs PHPicker's own ~10pt
-            // top content inset so the grid sits flush against the sheet top
-            // (the overflow is clipped by the sheet card's rounded mask).
-            style={[styles.inlinePicker, { marginBottom: -insets.bottom, marginTop: -16 }]}
-          />
+          // controls are drawn natively, so no header is needed here. The
+          // Animated.View gives it the same scale-up/fade as the camera.
+          <Animated.View
+            entering={chatInputSubviewEntering}
+            exiting={chatInputSubviewExiting}
+            style={styles.subview}
+          >
+            <InlinePhotoPickerView
+              allPhotosLabel={t('chat.media.allPhotos')}
+              backAccessibilityLabel={t('common.back')}
+              confirmLabelTemplate={t('chat.media.addPhotosTemplate')}
+              onAllPhotosPress={handleAllPhotosPress}
+              onBackPress={handleInlineBack}
+              onConfirm={handleInlineConfirm}
+              onError={(event) => {
+                logger.warn(`inline picker error: ${event.nativeEvent.message}`);
+              }}
+              onSelectionChange={(event) => {
+                latestAssetsRef.current = event.nativeEvent.assets;
+              }}
+              selectionLimit={9}
+              // The @expo/ui sheet hosts this inside a SwiftUI view that respects
+              // the bottom safe area, leaving a blank strip over the home
+              // indicator. A negative bottom margin pulls the native picker down
+              // to fill it edge-to-edge. The negative top margin absorbs
+              // PHPicker's own ~10pt top content inset so the grid sits flush
+              // against the sheet top (the overflow is clipped by the sheet card's
+              // rounded mask).
+              style={[styles.inlinePicker, { marginBottom: -insets.bottom, marginTop: -16 }]}
+            />
+          </Animated.View>
         ) : (
           <View style={styles.stackHost}>
             <ScreenStack style={styles.stack}>
@@ -203,7 +267,7 @@ export function ChatInputActionSheet() {
                   style={styles.scrollViewport}
                 >
                   <ChatInputMediaStrip>
-                    <ChatInputCameraTile onPress={launchCamera} />
+                    <ChatInputCameraTile onPress={handleCameraPress} />
                     <ChatInputPhotosTile onPress={handlePhotosPress} />
                     <ChatInputFileTile onPress={handleAddFilePress} />
                   </ChatInputMediaStrip>
@@ -249,5 +313,12 @@ const styles = StyleSheet.create({
   },
   stackHost: {
     flex: 1,
+  },
+  // Wrapper for the inline camera / photo picker. `transformOrigin: 'top'` makes
+  // the entering/exiting scale grow from the top of the sheet (where the media
+  // row buttons sit) instead of the center.
+  subview: {
+    flex: 1,
+    transformOrigin: 'top',
   },
 });
