@@ -1,6 +1,6 @@
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useToast } from 'heroui-native/toast';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, Pressable, Text, View } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
@@ -80,6 +80,8 @@ export function ChatInputSurface({
   const expandProgress = useSharedValue(0);
   const contentHeight = useSharedValue(0);
   const availableWidth = useSharedValue(0);
+  // 内容层固定成展开宽度，不随每帧宽度动画重排：否则原生 TextInput 逐帧重排重绘会导致展开掉帧。
+  const [contentWidth, setContentWidth] = useState<number | null>(null);
 
   useEffect(() => {
     expandProgress.value = withSpring(isComposerExpanded ? 1 : 0, chatInputSpringConfig);
@@ -107,7 +109,10 @@ export function ChatInputSurface({
   }));
   const handleWrapperLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      availableWidth.value = event.nativeEvent.layout.width;
+      const nextWidth = event.nativeEvent.layout.width;
+
+      availableWidth.value = nextWidth;
+      setContentWidth((current) => (current === nextWidth ? current : nextWidth));
     },
     [availableWidth],
   );
@@ -164,30 +169,35 @@ export function ChatInputSurface({
   return (
     <View className="flex-row items-end">
       <View className="flex-1" onLayout={handleWrapperLayout}>
-        <Animated.View
-          className="relative self-center overflow-hidden rounded-3xl bg-field ios:shadow-field android:shadow-sm"
-          style={surfaceAnimatedStyle}
-        >
-          <View className="absolute inset-x-0 top-0" onLayout={handleContentLayout}>
-            <ChatInputToolbar
-              shouldShowReasoningEffortTag={shouldShowReasoningEffortTag}
-              selectedTool={selectedTool}
-              onReasoningEffortClear={clearReasoningEffort}
-              onToolClear={clearSelectedTool}
-            />
-            <ChatInputAttachmentPreviewStrip
-              attachments={attachments}
-              onAttachmentPreview={handleAttachmentPreview}
-              onAttachmentRemove={removeAttachment}
-            />
-            <ChatInputTextArea />
-            <Animated.View
-              className="flex-row items-center gap-2 px-3 pb-1.5 pr-11"
-              style={[inputBottomToolbarStyle, bottomToolbarAnimatedStyle]}
+        <Animated.View className="relative self-center" style={surfaceAnimatedStyle}>
+          {/* 阴影层与裁剪层分开：阴影不压在 overflow-hidden 层上，避免逐帧离屏渲染算阴影 mask。 */}
+          <View className="absolute inset-0 rounded-3xl bg-field ios:shadow-field android:shadow-sm" />
+          <View className="absolute inset-0 overflow-hidden rounded-3xl">
+            <View
+              className="absolute top-0 left-0"
+              style={{ width: contentWidth ?? '100%' }}
+              onLayout={handleContentLayout}
             >
-              <ChatInputAddButton />
-              <ModelPickerPill label={modelLabel} onPress={onModelPickerPress} />
-            </Animated.View>
+              <ChatInputToolbar
+                shouldShowReasoningEffortTag={shouldShowReasoningEffortTag}
+                selectedTool={selectedTool}
+                onReasoningEffortClear={clearReasoningEffort}
+                onToolClear={clearSelectedTool}
+              />
+              <ChatInputAttachmentPreviewStrip
+                attachments={attachments}
+                onAttachmentPreview={handleAttachmentPreview}
+                onAttachmentRemove={removeAttachment}
+              />
+              <ChatInputTextArea />
+              <Animated.View
+                className="flex-row items-center gap-2 px-3 pb-1.5 pr-11"
+                style={[inputBottomToolbarStyle, bottomToolbarAnimatedStyle]}
+              >
+                <ChatInputAddButton />
+                <ModelPickerPill label={modelLabel} onPress={onModelPickerPress} />
+              </Animated.View>
+            </View>
           </View>
           <ChatInputPrimaryActionButton
             isSendEnabled={isSendEnabled}
