@@ -92,15 +92,14 @@ export function ChatMessageList({
     [anchorIndex, contentTopInset, hasAnchor],
   );
 
-  // 锚定期间只在追加新消息时滚到底（把用户消息送到顶部），不跟随流式文字逐帧粘底；
-  // 非锚定期间维持原有粘底行为。
+  // 锚定期间禁用 maintainScrollAtEnd：流式更新同一条消息时 legend-list 仍判为 dataChange
+  // （对象引用变、无 itemsAreEqual），保留 onDataChange 会逐帧滚到底=跟随。改由下方 effect 在
+  // 「新消息到达」时滚一次把消息钉顶，流式期间靠 maintainVisibleContentPosition 把消息稳在顶部。
   const maintainScrollAtEnd = useMemo(
-    () => ({
-      animated: hasAnchor,
-      on: hasAnchor
-        ? { dataChange: true, itemLayout: false, layout: false }
-        : { dataChange: true, itemLayout: true, layout: true },
-    }),
+    () =>
+      hasAnchor
+        ? undefined
+        : { animated: false, on: { dataChange: true, itemLayout: true, layout: true } },
     [hasAnchor],
   );
 
@@ -201,6 +200,22 @@ export function ChatMessageList({
     reportReady,
     viewportHeight,
   ]);
+
+  // 锚定期间：新消息到达（lastMessageId 变化=发送/新回合）时把用户消息滚到顶部。
+  // 流式更新的是同一条消息、id 不变，不会触发，因此回复期间不跟随滚动。
+  // 推到下一帧再滚：发送瞬间新消息尚未测高、anchoredEndSpace 的 end-space 还没算出，
+  // 直接 scrollToEnd 会基于旧 content size 滚动导致钉顶不到位，rAF 等布局完成后再滚更稳。
+  useEffect(() => {
+    if (!hasAnchor || !lastMessageId) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      void listRef.current?.scrollToEnd({ animated: true });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [hasAnchor, lastMessageId, listRef]);
 
   useEffect(() => {
     return () => {
