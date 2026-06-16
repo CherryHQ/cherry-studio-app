@@ -1,4 +1,4 @@
-import { KeyboardChatLegendList } from '@legendapp/list/keyboard-chat';
+import { KeyboardAwareLegendList } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { ScrollShadow } from 'heroui-native/scroll-shadow';
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -174,7 +174,7 @@ export function ChatMessageList({
       visibility="bottom"
       size={80}
     >
-      <KeyboardChatLegendList
+      <KeyboardAwareLegendList
         ref={listRef}
         automaticallyAdjustsScrollIndicatorInsets
         contentContainerStyle={contentContainerStyle}
@@ -188,10 +188,13 @@ export function ChatMessageList({
         keyboardLiftBehavior="whenAtEnd"
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={listHeader}
+        initialScrollAtEnd
         maintainScrollAtEnd={{
           animated: false,
           on: {
             dataChange: true,
+            itemLayout: true,
+            layout: true,
           },
         }}
         maintainScrollAtEndThreshold={0.12}
@@ -201,7 +204,7 @@ export function ChatMessageList({
         onScroll={handleScroll}
         onStartReached={handleStartReached}
         onStartReachedThreshold={0.15}
-        recycleItems
+        recycleItems={false}
         renderItem={renderMessageItem}
         scrollsToTop
         className="flex-1"

@@ -1,0 +1,7 @@
+{
+  "platforms": ["apple"],
+  "apple": {
+    "podspecPath": "ios/ContextMenu.podspec",
+    "modules": ["ContextMenuModule"]
+  }
+}
