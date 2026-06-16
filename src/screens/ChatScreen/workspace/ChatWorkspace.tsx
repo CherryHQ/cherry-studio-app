@@ -48,7 +48,7 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
     renderGateKey,
   });
   const contentTopInset = isIOS ? headerHeight : 0;
-  const { contentBottomInset, handleInputHeightChange, measuredInputHeight } =
+  const { contentBottomInset, handleInputHeightChange, inputHeightShared } =
     useFloatingChatInputLayout();
 
   return (
@@ -68,7 +68,8 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
       />
       <FloatingChatInput topicId={topicId} onHeightChange={handleInputHeightChange} />
       <ScrollToBottomButton
-        bottomInset={measuredInputHeight + SCROLL_BUTTON_GAP_ABOVE_INPUT}
+        gap={SCROLL_BUTTON_GAP_ABOVE_INPUT}
+        inputHeight={inputHeightShared}
         isAtBottom={isAtBottom}
         onPress={handleScrollToEnd}
       />
