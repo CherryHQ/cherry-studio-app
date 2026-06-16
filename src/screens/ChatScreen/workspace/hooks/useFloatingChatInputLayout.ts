@@ -21,5 +21,6 @@ export function useFloatingChatInputLayout() {
     contentBottomInset: inputHeight + chatInputMessageListGap,
     handleInputHeightChange,
     inputHeight,
+    measuredInputHeight,
   };
 }

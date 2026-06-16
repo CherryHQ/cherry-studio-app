@@ -8,6 +8,7 @@ import {
   type NativeSyntheticEvent,
   View,
 } from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
 
 import { LinearGradient } from '@/components/uniwind';
 import type { Message } from '@/data/types/message';
@@ -15,9 +16,16 @@ import type { Message } from '@/data/types/message';
 import { AssistantMessageItem, UserMessageItem } from '../../messageItem';
 import { getMessageListScrollSignal } from '../utils/messageListScrollSignals';
 
+// 用户气泡计入「锚点下方内容」的最大高度：超长用户消息超出部分会滚出顶部，而非把锚定区占满。
+const USER_ANCHOR_MAX_SIZE = 120;
+// 被锚定的用户消息距内容区顶部（顶部安全区/导航栏之下）的视觉间距。
+const ANCHOR_TOP_GAP = 12;
+
 type ChatMessageListProps = {
+  anchorIndex: number;
   contentBottomInset: number;
   contentTopInset: number;
+  isAtBottom: SharedValue<boolean>;
   listRef: RefObject<LegendListRef | null>;
   messages: readonly Message[];
   onLoadOlder: () => Promise<void>;
@@ -34,8 +42,10 @@ function renderMessageItem({ item }: LegendListRenderItemProps<Message>) {
 }
 
 export function ChatMessageList({
+  anchorIndex,
   contentBottomInset,
   contentTopInset,
+  isAtBottom,
   listRef,
   messages,
   onLoadOlder,
@@ -53,9 +63,13 @@ export function ChatMessageList({
   const handleStartReached = useCallback(() => {
     void onLoadOlder();
   }, [onLoadOlder]);
+  const hasAnchor = anchorIndex >= 0;
   const visibleHeightAboveInput = Math.max(0, viewportHeight - contentBottomInset);
+  // 锚定期间内容区始终视为「已撑满」，恒为浮动输入框预留底部空间。
   const bottomPadding =
-    viewportHeight > 0 && contentBaseHeight > visibleHeightAboveInput ? contentBottomInset : 0;
+    hasAnchor || (viewportHeight > 0 && contentBaseHeight > visibleHeightAboveInput)
+      ? contentBottomInset
+      : 0;
 
   const contentContainerStyle = useMemo(
     () => ({
@@ -64,6 +78,34 @@ export function ChatMessageList({
     }),
     [bottomPadding],
   );
+
+  // 把刚发送的用户消息锚定到内容区顶部，并在其下方补足空白，让助手回复流式生长其间。
+  const anchoredEndSpace = useMemo(
+    () =>
+      hasAnchor
+        ? {
+            anchorIndex,
+            anchorMaxSize: USER_ANCHOR_MAX_SIZE,
+            anchorOffset: contentTopInset + ANCHOR_TOP_GAP,
+          }
+        : undefined,
+    [anchorIndex, contentTopInset, hasAnchor],
+  );
+
+  // 锚定期间只在追加新消息时滚到底（把用户消息送到顶部），不跟随流式文字逐帧粘底；
+  // 非锚定期间维持原有粘底行为。
+  const maintainScrollAtEnd = useMemo(
+    () => ({
+      animated: hasAnchor,
+      on: hasAnchor
+        ? { dataChange: true, itemLayout: false, layout: false }
+        : { dataChange: true, itemLayout: true, layout: true },
+    }),
+    [hasAnchor],
+  );
+
+  // 把列表「是否精确在最底部」同步到共享值，驱动悬浮的「滚动到底部」按钮显隐。
+  const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -176,6 +218,7 @@ export function ChatMessageList({
     >
       <KeyboardAwareLegendList
         ref={listRef}
+        anchoredEndSpace={anchoredEndSpace}
         automaticallyAdjustsScrollIndicatorInsets
         contentContainerStyle={contentContainerStyle}
         contentInsetAdjustmentBehavior="never"
@@ -189,24 +232,18 @@ export function ChatMessageList({
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={listHeader}
         initialScrollAtEnd
-        maintainScrollAtEnd={{
-          animated: false,
-          on: {
-            dataChange: true,
-            itemLayout: true,
-            layout: true,
-          },
-        }}
+        maintainScrollAtEnd={maintainScrollAtEnd}
         maintainScrollAtEndThreshold={0.12}
         maintainVisibleContentPosition={{ data: true }}
         onContentSizeChange={handleContentSizeChange}
         onLayout={handleLayout}
         onScroll={handleScroll}
         onStartReached={handleStartReached}
-        onStartReachedThreshold={0.15}
+        onStartReachedThreshold={0.05}
         recycleItems={false}
         renderItem={renderMessageItem}
         scrollsToTop
+        sharedValues={sharedValues}
         className="flex-1"
       />
     </ScrollShadow>
