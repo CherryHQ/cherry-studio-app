@@ -39,12 +39,13 @@ export function useDrawerHeaderAnimation({
     };
   });
 
-  const searchFieldSlotStyle = useAnimatedStyle(() => {
-    const contentWidth = screenWidth - headerHorizontalPadding * 2;
-    const collapsedSearchX = contentWidth - closeButtonSize * 2 - headerItemGap;
-    const expandedSearchWidth = contentWidth - closeButtonSize - headerItemGap;
+  const contentWidth = screenWidth - headerHorizontalPadding * 2;
+  const collapsedSearchX = contentWidth - closeButtonSize * 2 - headerItemGap;
+  const expandedSearchWidth = contentWidth - closeButtonSize - headerItemGap;
+  const expandedCloseX = contentWidth - closeButtonSize;
 
-    return {
+  const searchFieldSlotStyle = useAnimatedStyle(
+    () => ({
       left: interpolate(searchProgress.value, [0, 1], [collapsedSearchX, 0], Extrapolation.CLAMP),
       opacity: interpolate(
         searchFadeProgress.value,
@@ -58,18 +59,17 @@ export function useDrawerHeaderAnimation({
         [closeButtonSize, expandedSearchWidth],
         Extrapolation.CLAMP,
       ),
-    };
-  }, [screenWidth]);
+    }),
+    [collapsedSearchX, expandedSearchWidth],
+  );
 
-  const closeButtonStyle = useAnimatedStyle(() => {
-    const contentWidth = screenWidth - headerHorizontalPadding * 2;
-    const expandedCloseX = contentWidth - closeButtonSize;
-
-    return {
+  const closeButtonStyle = useAnimatedStyle(
+    () => ({
       left: expandedCloseX,
       opacity: searchFadeProgress.value,
-    };
-  }, [screenWidth]);
+    }),
+    [expandedCloseX],
+  );
 
   const searchFieldIconStyle = useAnimatedStyle(() => {
     return {
@@ -86,6 +86,7 @@ export function useDrawerHeaderAnimation({
     closeButtonSize,
     closeButtonStyle,
     collapsedHeaderStyle,
+    expandedSearchWidth,
     searchFieldIconStyle,
     searchFieldSlotStyle,
   };

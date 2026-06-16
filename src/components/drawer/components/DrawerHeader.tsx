@@ -15,6 +15,7 @@ type DrawerHeaderProps = {
   closeButtonSize: number;
   closeButtonStyle: AnimatedStyle<ViewStyle>;
   collapsedHeaderStyle: AnimatedStyle<ViewStyle>;
+  expandedSearchWidth: number;
   inputRef: Ref<TextInput>;
   isSearchVisible: boolean;
   onClose: () => void;
@@ -29,6 +30,7 @@ export const DrawerHeader = memo(function DrawerHeader({
   closeButtonSize,
   closeButtonStyle,
   collapsedHeaderStyle,
+  expandedSearchWidth,
   inputRef,
   isSearchVisible,
   onClose,
@@ -60,6 +62,7 @@ export const DrawerHeader = memo(function DrawerHeader({
         <SearchFieldLayer
           accessibilityLabel={searchAccessibilityLabel}
           controlSize={closeButtonSize}
+          expandedSearchWidth={expandedSearchWidth}
           iconStyle={searchFieldIconStyle}
           inputRef={inputRef}
           isSearchVisible={isSearchVisible}
@@ -135,6 +138,7 @@ function CollapsedHeaderLayer({
 type SearchFieldLayerProps = {
   accessibilityLabel: string;
   controlSize: number;
+  expandedSearchWidth: number;
   iconStyle: AnimatedStyle<ViewStyle>;
   inputRef: Ref<TextInput>;
   isSearchVisible: boolean;
@@ -147,6 +151,7 @@ type SearchFieldLayerProps = {
 function SearchFieldLayer({
   accessibilityLabel,
   controlSize,
+  expandedSearchWidth,
   iconStyle,
   inputRef,
   isSearchVisible,
@@ -162,14 +167,18 @@ function SearchFieldLayer({
       style={[{ height: controlSize }, style]}
     >
       <View className="flex-1 overflow-hidden rounded-3xl">
-        <DrawerSearchField
-          editable={isSearchVisible}
-          height={controlSize}
-          inputRef={inputRef}
-          onChange={setSearchText}
-          searchIconStyle={iconStyle}
-          value={searchText}
-        />
+        {/* 内容固定成展开宽度，不随外层 width 动画重排：否则内部原生 TextInput 每帧重排重绘。
+            外层 width 变只裁剪这块已布局好的内容（同 ChatInputSurface 的修法）。 */}
+        <View style={{ width: expandedSearchWidth }}>
+          <DrawerSearchField
+            editable={isSearchVisible}
+            height={controlSize}
+            inputRef={inputRef}
+            onChange={setSearchText}
+            searchIconStyle={iconStyle}
+            value={searchText}
+          />
+        </View>
         <Pressable
           accessibilityLabel={accessibilityLabel}
           accessibilityRole="button"

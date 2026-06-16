@@ -19,6 +19,7 @@ export function DrawerContent() {
     closeButtonSize,
     closeButtonStyle,
     collapsedHeaderStyle,
+    expandedSearchWidth,
     searchFieldIconStyle,
     searchFieldSlotStyle,
   } = useDrawerHeaderAnimation({
@@ -59,6 +60,7 @@ export function DrawerContent() {
           closeButtonSize={closeButtonSize}
           closeButtonStyle={closeButtonStyle}
           collapsedHeaderStyle={collapsedHeaderStyle}
+          expandedSearchWidth={expandedSearchWidth}
           inputRef={inputRef}
           isSearchVisible={isSearchVisible}
           onClose={handleClose}
