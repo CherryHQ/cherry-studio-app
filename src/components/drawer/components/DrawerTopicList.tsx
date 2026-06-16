@@ -1,4 +1,4 @@
-import { MenuView, type MenuAction, type NativeActionEvent } from '@expo/ui/community/menu';
+import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { cn } from 'heroui-native/utils';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -11,6 +11,7 @@ import { useDrawerActions, useDrawerPanelState, useDrawerTopics } from '../conte
 import { drawerContentLayoutTransition, drawerFeatureAreaEntering } from '../utils/drawerAnimation';
 
 import { DrawerFeatureArea } from './DrawerFeatureArea';
+import { DrawerNewChatButton } from './DrawerNewChatButton';
 import { useDrawerTopicActionDialogs } from './DrawerTopicActionDialogs';
 
 type DrawerTopicRowProps = {
@@ -29,11 +30,14 @@ type DrawerTopicListExtraData = {
   showActiveBackground: boolean;
 };
 
-const topicItemHeight = 44;
+const topicItemHeight = 36;
 // Horizontal inset that keeps each row's rounded highlight clear of the drawer
 // edges (8pt per side); applied as the row's own padding so the row itself can
 // take an explicit full width (see DrawerTopicRow for why the width is needed).
 const rowHorizontalInset = 8;
+// Bottom padding that lets the last rows scroll clear of the floating new-chat
+// button instead of being permanently hidden behind it.
+const newChatButtonClearance = 80;
 
 export const DrawerTopicList = memo(function DrawerTopicList() {
   const { t } = useTranslation();
@@ -85,7 +89,7 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
   return (
     <View className="flex-1" onLayout={handleLayout}>
       <LegendList
-        contentContainerStyle={{ paddingTop: 2 }}
+        contentContainerStyle={{ paddingBottom: newChatButtonClearance, paddingTop: 2 }}
         data={topics}
         estimatedItemSize={topicItemHeight}
         extraData={listExtraData}
@@ -100,6 +104,9 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
               layout={drawerContentLayoutTransition}
             >
               <DrawerFeatureArea />
+              <Text className="px-5 pt-3 pb-1 font-medium text-foreground-secondary text-sm">
+                {t('navigation.recents')}
+              </Text>
             </Animated.View>
           )
         }
@@ -108,6 +115,7 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
         recycleItems
         renderItem={renderItem}
       />
+      {isSearchActive ? null : <DrawerNewChatButton />}
       {dialogs}
     </View>
   );
@@ -130,7 +138,12 @@ const DrawerTopicRow = memo(function DrawerTopicRow({
   const menuActions = useMemo<MenuAction[]>(
     () => [
       { id: 'rename', image: 'pencil', title: t('common.rename') },
-      { attributes: { destructive: true }, id: 'delete', image: 'trash', title: t('common.delete') },
+      {
+        attributes: { destructive: true },
+        id: 'delete',
+        image: 'trash',
+        title: t('common.delete'),
+      },
     ],
     [t],
   );
@@ -164,14 +177,14 @@ const DrawerTopicRow = memo(function DrawerTopicRow({
         <View
           className={cn(
             'flex-1 justify-center rounded-lg px-3',
-            isActive && showActiveBackground && 'bg-surface',
+            isActive && showActiveBackground && 'bg-surface-secondary',
           )}
           style={{ marginHorizontal: rowHorizontalInset }}
         >
           <Text
             className={cn(
-              'text-base',
-              isActive ? 'font-semibold text-foreground' : 'font-medium text-default-foreground',
+              'font-medium text-base',
+              isActive ? 'text-foreground' : 'text-default-foreground',
             )}
             numberOfLines={1}
           >

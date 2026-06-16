@@ -38,6 +38,7 @@ type DrawerActionsContextValue = {
   deleteTopic: (topicId: string) => Promise<void>;
   loadMoreTopics: () => void;
   openDrawer: () => void;
+  openNewTopic: () => void;
   openSearch: () => void;
   openSettings: () => void;
   openTopic: (topicId: string) => void;
@@ -118,6 +119,19 @@ export function DrawerProvider({ children }: PropsWithChildren) {
     Keyboard.dismiss();
     router.push('/settings');
   }, [router]);
+
+  const openNewTopic = useCallback(() => {
+    // A topic-less /topics route is the empty "new chat" state; clear the
+    // topicId in place when already there, otherwise navigate to it fresh.
+    if (pathname === '/topics') {
+      router.setParams({ topicId: undefined });
+    } else {
+      router.replace('/topics');
+    }
+
+    closeSearch();
+    closeDrawer();
+  }, [closeDrawer, closeSearch, pathname, router]);
 
   const openTopic = useCallback(
     (nextTopicId: string) => {
@@ -210,6 +224,7 @@ export function DrawerProvider({ children }: PropsWithChildren) {
       deleteTopic,
       loadMoreTopics: topicList.loadMore,
       openDrawer,
+      openNewTopic,
       openSearch,
       openSettings,
       openTopic,
@@ -221,6 +236,7 @@ export function DrawerProvider({ children }: PropsWithChildren) {
       closeSearch,
       deleteTopic,
       openDrawer,
+      openNewTopic,
       openSearch,
       openSettings,
       openTopic,
