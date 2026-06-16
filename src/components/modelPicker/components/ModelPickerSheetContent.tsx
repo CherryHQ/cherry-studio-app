@@ -1,15 +1,12 @@
-import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { useThemeColor } from 'heroui-native/hooks';
 import { cn } from 'heroui-native/utils';
-import { CheckIcon, PinIcon as NativePinIcon } from 'lucide-uniwind/png';
+import { CheckIcon } from 'lucide-uniwind/png';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useUniwind } from 'uniwind';
-import { Image } from '@/components/uniwind';
 import type { ModelPickerGroup, ModelPickerModelItem } from '../utils/modelPickerData';
 import type { ModelPickerListItem } from '../utils/modelPickerListItems';
+import { ModelPickerIcon } from './ModelPickerIcon';
 
 const modelPickerEstimatedItemSize = 48;
 
@@ -17,19 +14,16 @@ type ModelPickerSheetContentProps = {
   emptyText?: string;
   hasMoreItems?: boolean;
   isLoading?: boolean;
-  isPinActionDisabled?: boolean;
   isSearching: boolean;
   listItems: readonly ModelPickerListItem[];
   loadingText?: string;
   onEndReached?: () => void;
   onSelect: (item: ModelPickerModelItem) => void;
-  onTogglePin: (modelId: ModelPickerModelItem['modelId']) => Promise<void> | void;
   pinnedModelIds: readonly string[];
   selectedModelId: string | null;
 };
 
 type ModelPickerSheetContentExtraData = {
-  isPinActionDisabled: boolean;
   pinnedModelIdSet: ReadonlySet<string>;
   selectedModelId: string | null;
 };
@@ -38,23 +32,20 @@ export function ModelPickerSheetContent({
   emptyText,
   hasMoreItems = false,
   isLoading = false,
-  isPinActionDisabled = false,
   listItems,
   loadingText,
   onEndReached,
   onSelect,
-  onTogglePin,
   pinnedModelIds,
   selectedModelId,
 }: ModelPickerSheetContentProps) {
   const pinnedModelIdSet = useMemo(() => new Set(pinnedModelIds), [pinnedModelIds]);
   const listExtraData = useMemo<ModelPickerSheetContentExtraData>(
     () => ({
-      isPinActionDisabled,
       pinnedModelIdSet,
       selectedModelId,
     }),
-    [isPinActionDisabled, pinnedModelIdSet, selectedModelId],
+    [pinnedModelIdSet, selectedModelId],
   );
   const renderItem = useCallback(
     ({ extraData, item }: LegendListRenderItemProps<ModelPickerListItem>) => {
@@ -64,7 +55,6 @@ export function ModelPickerSheetContent({
             count={item.count}
             groupKind={item.groupKind}
             isFirstGroup={item.isFirstGroup}
-            provider={item.provider}
             title={item.title}
           />
         );
@@ -73,15 +63,13 @@ export function ModelPickerSheetContent({
       return (
         <ModelPickerRow
           isPinned={extraData.pinnedModelIdSet.has(item.item.modelId)}
-          isPinActionDisabled={extraData.isPinActionDisabled}
           isSelected={item.item.modelId === extraData.selectedModelId}
           item={item.item}
           onSelect={onSelect}
-          onTogglePin={onTogglePin}
         />
       );
     },
-    [onSelect, onTogglePin],
+    [onSelect],
   );
   const keyExtractor = useCallback((item: ModelPickerListItem) => item.key, []);
   const getItemType = useCallback((item: ModelPickerListItem) => item.type, []);
@@ -132,33 +120,18 @@ function ModelPickerGroupHeader({
   count,
   groupKind,
   isFirstGroup,
-  provider,
   title,
 }: {
   count: number;
   groupKind: ModelPickerGroup['groupKind'];
   isFirstGroup: boolean;
-  provider: ModelPickerGroup['provider'];
   title: string;
 }) {
   const { t } = useTranslation();
-  const { theme } = useUniwind();
-  const iconTheme = theme === 'dark' ? 'dark' : 'light';
-  const providerIconSource = provider
-    ? resolveProviderIcon(provider.presetProviderId ?? provider.id)
-    : undefined;
 
   return (
     <View className={cn('flex-row items-center gap-2 pb-1', !isFirstGroup && 'mt-3')}>
-      {providerIconSource ? (
-        <Image
-          cachePolicy="memory-disk"
-          contentFit="contain"
-          source={providerIconSource[iconTheme]}
-          style={styles.providerIcon}
-        />
-      ) : null}
-      <Text className="font-medium text-default-foreground text-lg">
+      <Text className="text-default-foreground text-lg">
         {groupKind === 'pinned' ? t(title) : title}
       </Text>
       {groupKind === 'pinned' ? (
@@ -170,32 +143,18 @@ function ModelPickerGroupHeader({
 
 const ModelPickerRow = memo(function ModelPickerRow({
   isPinned,
-  isPinActionDisabled,
   isSelected,
   item,
   onSelect,
-  onTogglePin,
 }: {
   isPinned: boolean;
-  isPinActionDisabled: boolean;
   isSelected: boolean;
   item: ModelPickerModelItem;
   onSelect: (item: ModelPickerModelItem) => void;
-  onTogglePin: (modelId: ModelPickerModelItem['modelId']) => Promise<void> | void;
 }) {
-  const { t } = useTranslation();
-  const defaultForegroundColor = useThemeColor('default-foreground');
-  const pinColor = defaultForegroundColor;
   const handleSelect = useCallback(() => {
     onSelect(item);
   }, [item, onSelect]);
-  const handleTogglePin = useCallback(
-    (event: { stopPropagation: () => void }) => {
-      event.stopPropagation();
-      void onTogglePin(item.modelId);
-    },
-    [item.modelId, onTogglePin],
-  );
 
   return (
     <Pressable
@@ -206,6 +165,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
       onPress={handleSelect}
     >
       <View className="min-w-0 flex-1 flex-row items-center gap-2">
+        <ModelPickerIcon item={item} size={24} />
         <Text className="min-w-0 shrink text-base text-foreground" numberOfLines={1}>
           {item.model.name}
         </Text>
@@ -215,19 +175,6 @@ const ModelPickerRow = memo(function ModelPickerRow({
           </Text>
         ) : null}
       </View>
-      <Pressable
-        accessibilityLabel={t(isPinned ? 'models.action.unpin' : 'models.action.pin')}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: isPinActionDisabled, selected: isPinned }}
-        className="size-8 items-center justify-center rounded-xl active:bg-surface-secondary active:opacity-70 disabled:opacity-40"
-        disabled={isPinActionDisabled}
-        hitSlop={6}
-        onPress={handleTogglePin}
-      >
-        <View className={isPinned ? 'rotate-45' : undefined}>
-          <NativePinIcon color={pinColor} height={16} strokeWidth={2} width={16} />
-        </View>
-      </Pressable>
       {isSelected ? <CheckIcon className="size-5 text-accent" strokeWidth={2.5} /> : null}
     </Pressable>
   );
@@ -241,9 +188,5 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     paddingHorizontal: 16,
     paddingTop: 12,
-  },
-  providerIcon: {
-    height: 20,
-    width: 20,
   },
 });

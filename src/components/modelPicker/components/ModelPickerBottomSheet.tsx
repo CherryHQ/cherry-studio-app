@@ -11,9 +11,8 @@ import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'reac
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenStack, ScreenStackHeaderLeftView, ScreenStackItem } from 'react-native-screens';
 import { useModelPickerData } from '../hooks/useModelPickerData';
-import { type ModelPickerModelItem, type ModelPickerTag } from '../utils/modelPickerData';
+import { type ModelPickerModelItem } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
-import { ModelPickerFilterTagBar } from './ModelPickerFilterTagBar';
 import {
   type ModelPickerReasoningConfig,
   ModelPickerReasoningPage,
@@ -60,7 +59,6 @@ export function ModelPickerBottomSheet({
   const { height: windowHeight } = useWindowDimensions();
   const sheetRef = useRef<BottomSheetMethods>(null);
   const [searchText, setSearchText] = useState('');
-  const [selectedTags, setSelectedTags] = useState<ModelPickerTag[]>([]);
   const [visibleListItemCount, setVisibleListItemCount] = useState(initialModelPickerListItemCount);
   const [activeSnapIndex, setActiveSnapIndex] = useState(defaultModelPickerSnapIndex);
   // The stack is the source of truth for what's mounted; pushing 'reasoning'
@@ -73,8 +71,7 @@ export function ModelPickerBottomSheet({
   // The native stack needs a concrete frame; derive it from the active snap point
   // (model picker uses fixed snapPoints, not dynamic content sizing).
   const sheetHeight = (windowHeight - insets.top - insets.bottom) * snapPointFraction;
-  const { availableTags, groups, isLoading, isPinActionDisabled, pinnedModelIds, togglePin } =
-    useModelPickerData({ searchText, selectedTags });
+  const { groups, isLoading, pinnedModelIds } = useModelPickerData({ searchText });
   const totalListItemCount = useMemo(
     () => groups.reduce((total, group) => total + 1 + group.items.length, 0),
     [groups],
@@ -110,25 +107,12 @@ export function ModelPickerBottomSheet({
     },
     [onSelect],
   );
-  const handleTogglePin = useCallback(
-    (modelId: ModelPickerModelItem['modelId']) => togglePin(modelId),
-    [togglePin],
-  );
   const handleSearchTextChange = useCallback((nextSearchText: string) => {
     setSearchText(nextSearchText);
     setVisibleListItemCount(initialModelPickerListItemCount);
   }, []);
-  const handleToggleTag = useCallback((tag: ModelPickerTag) => {
-    setVisibleListItemCount(initialModelPickerListItemCount);
-    setSelectedTags((current) =>
-      current.includes(tag)
-        ? current.filter((selectedTag) => selectedTag !== tag)
-        : [...current, tag],
-    );
-  }, []);
   const handleClose = useCallback(() => {
     setSearchText('');
-    setSelectedTags([]);
     setVisibleListItemCount(initialModelPickerListItemCount);
     setActiveSnapIndex(defaultModelPickerSnapIndex);
     setStack(['main']);
@@ -239,11 +223,6 @@ export function ModelPickerBottomSheet({
                       />
                     </SearchField.Group>
                   </SearchField>
-                  <ModelPickerFilterTagBar
-                    availableTags={availableTags}
-                    selectedTags={selectedTags}
-                    onToggleTag={handleToggleTag}
-                  />
                   {reasoning ? (
                     <ModelPickerReasoningRow
                       onPress={pushReasoning}
@@ -256,7 +235,6 @@ export function ModelPickerBottomSheet({
                   <ModelPickerSheetContent
                     emptyText={t('settings.provider.models.search.empty')}
                     isLoading={isLoading}
-                    isPinActionDisabled={isPinActionDisabled}
                     isSearching={isSearching}
                     hasMoreItems={hasMoreListItems}
                     listItems={listItems}
@@ -265,7 +243,6 @@ export function ModelPickerBottomSheet({
                     selectedModelId={selectedModelId}
                     onEndReached={handleListEndReached}
                     onSelect={handleSelect}
-                    onTogglePin={handleTogglePin}
                   />
                 </View>
               </View>

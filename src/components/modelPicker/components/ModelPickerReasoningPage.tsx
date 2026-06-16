@@ -34,11 +34,11 @@ export function ModelPickerReasoningRow({
   return (
     <Pressable
       accessibilityRole="button"
-      className="mt-3 min-h-12 flex-row items-center gap-3 active:opacity-70"
+      className="mt-3 min-h-12 flex-row items-center gap-2 active:opacity-70"
       onPress={onPress}
     >
-      <BrainIcon className="size-6 text-foreground" strokeWidth={2} />
-      <Text className="flex-1 font-semibold text-base text-foreground">
+      <BrainIcon className="size-6 text-foreground" />
+      <Text className="flex-1 text-base text-foreground">
         {t('chat.reasoning.title')}
       </Text>
       <View className="flex-row items-center gap-1">
@@ -81,7 +81,7 @@ export function ModelPickerReasoningPage({
           >
             <Text
               className={cn(
-                'flex-1 font-semibold text-base',
+                'flex-1 text-base',
                 isSelected ? 'text-accent' : 'text-foreground',
               )}
               numberOfLines={1}
