@@ -80,11 +80,19 @@ export function DrawerProvider({ children }: PropsWithChildren) {
   const drawerControllerRef = useRef<DrawerNavigationController | null>(null);
   const topicList = useTopics({ q: searchText });
 
+  // Prefetch the visible drawer topics' messages only after the drawer has been opened. A cold
+  // start into the current chat must not contend for the single SQLite connection with up to
+  // `drawerPrefetchTopicCount` non-current topic reads on the first-paint frame (ADR 0002: the
+  // startup gate does not load non-current history). Opening the drawer is the explicit signal
+  // that the user wants the topic list, so prefetch is deferred to that point.
   useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
     for (const topic of topicList.topics.slice(0, messageWindowPolicy.drawerPrefetchTopicCount)) {
       void prefetchTopicMessages(queryClient, services, topic.id);
     }
-  }, [queryClient, services, topicList.topics]);
+  }, [isOpen, queryClient, services, topicList.topics]);
 
   const registerDrawerController = useCallback((controller: DrawerNavigationController | null) => {
     drawerControllerRef.current = controller;
