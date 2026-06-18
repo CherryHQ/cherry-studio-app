@@ -1,21 +1,48 @@
 import { Stack, useRouter } from 'expo-router';
+import { cn } from 'heroui-native/utils';
 import { XIcon } from 'lucide-uniwind/png';
+import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Pressable, Text, View } from 'react-native';
 
 import { HeaderIconButton } from '../components/HeaderIconButton';
+import type { CloseHeaderAction, CloseHeaderProps } from './CloseHeader.types';
 
-export type CloseHeaderProps = {
-  title?: string;
-};
+function renderHeaderAction(action: CloseHeaderAction): ReactNode {
+  if (action.hidden) {
+    return null;
+  }
 
-export function CloseHeader({ title = '' }: CloseHeaderProps) {
+  return (
+    <Pressable
+      accessibilityLabel={action.accessibilityLabel ?? action.label}
+      accessibilityRole="button"
+      className={cn(
+        'min-h-9 items-center justify-center rounded-full bg-accent px-4 active:opacity-80',
+        action.disabled && 'opacity-50',
+      )}
+      disabled={action.disabled}
+      key={action.key}
+      onPress={action.onPress}
+    >
+      <Text className="font-semibold text-base text-white">{action.label}</Text>
+    </Pressable>
+  );
+}
+
+export function CloseHeader({ onClose, rightActions, title = '' }: CloseHeaderProps) {
   const { t } = useTranslation();
   const router = useRouter();
 
   const close = useCallback(() => {
+    if (onClose) {
+      onClose();
+      return;
+    }
+
     router.back();
-  }, [router]);
+  }, [onClose, router]);
 
   const options = useMemo(
     () => ({
@@ -25,9 +52,19 @@ export function CloseHeader({ title = '' }: CloseHeaderProps) {
           <XIcon className="size-6 text-foreground" strokeWidth={2} />
         </HeaderIconButton>
       ),
+      ...(rightActions && rightActions.length > 0
+        ? {
+            headerRight: () => (
+              <View className="flex-row items-center gap-2">
+                {rightActions.map((action) => renderHeaderAction(action))}
+              </View>
+            ),
+          }
+        : null),
+      headerTitleAlign: 'center' as const,
       title,
     }),
-    [close, t, title],
+    [close, rightActions, t, title],
   );
 
   return <Stack.Screen options={options} />;

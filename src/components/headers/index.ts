@@ -1,3 +1,3 @@
 export { BackHeader, type HeaderToolbarAction } from './BackHeader/BackHeader';
-export { CloseHeader } from './CloseHeader/CloseHeader';
+export { CloseHeader, type CloseHeaderAction } from './CloseHeader/CloseHeader';
 export { MainHeader } from './MainHeader/MainHeader';

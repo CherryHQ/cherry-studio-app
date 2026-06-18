@@ -38,6 +38,7 @@ type DrawerActionsContextValue = {
   deleteTopic: (topicId: string) => Promise<void>;
   loadMoreTopics: () => void;
   openDrawer: () => void;
+  openAssistants: () => void;
   openNewTopic: () => void;
   openSearch: () => void;
   openSettings: () => void;
@@ -122,6 +123,13 @@ export function DrawerProvider({ children }: PropsWithChildren) {
     drawerControllerRef.current?.closeDrawer();
     setIsOpen(false);
   }, []);
+
+  const openAssistants = useCallback(() => {
+    Keyboard.dismiss();
+    closeSearch();
+    closeDrawer();
+    router.push('/assistants');
+  }, [closeDrawer, closeSearch, router]);
 
   const openSettings = useCallback(() => {
     Keyboard.dismiss();
@@ -232,6 +240,7 @@ export function DrawerProvider({ children }: PropsWithChildren) {
       deleteTopic,
       loadMoreTopics: topicList.loadMore,
       openDrawer,
+      openAssistants,
       openNewTopic,
       openSearch,
       openSettings,
@@ -243,6 +252,7 @@ export function DrawerProvider({ children }: PropsWithChildren) {
       closeDrawer,
       closeSearch,
       deleteTopic,
+      openAssistants,
       openDrawer,
       openNewTopic,
       openSearch,

@@ -33,6 +33,7 @@ export function DrawerRoot() {
             sheetInitialDetentIndex: 0,
           }}
         />
+        <Stack.Screen name="assistants" options={{ headerShown: false }} />
       </Stack>
     </DrawerProvider>
   );

@@ -1,5 +1,6 @@
 import type { AiStreamRequest } from '@/ai/types/requests';
 import type { DataServices } from '@/data/services/createDataServices';
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
 import type { CherryMessagePart, CherryUIMessage, Message } from '@/data/types/message';
 import type { Model, UniqueModelId } from '@/data/types/model';
 
@@ -43,6 +44,7 @@ describe('ChatRuntime', () => {
     );
     expect(services.ai.streamText).toHaveBeenCalledWith(
       expect.objectContaining({
+        assistantId: 'assistant-1',
         chatId: 'topic-1',
         messageId: 'assistant-1',
         uniqueModelId: 'provider::model',
@@ -276,6 +278,65 @@ describe('ChatRuntime', () => {
       }),
     );
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  test('creates a new topic with an assistant and resolves the assistant model', async () => {
+    const services = createServices();
+    services.assistant.getById = jest.fn(async () =>
+      createAssistant('assistant-1', 'provider::assistant-model' as UniqueModelId),
+    );
+    services.model.getById = jest.fn(async (modelId: UniqueModelId) => createModel(modelId));
+    const runtime = createRuntime({ services });
+    const assistantChunk = createUiMessage('assistant-1', 'hello');
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
+
+    await runtime.sendNewTopicText({
+      assistantId: 'assistant-1',
+      text: 'hello assistant',
+    });
+
+    expect(services.topic.create).toHaveBeenCalledWith({
+      assistantId: 'assistant-1',
+      name: 'hello assistant',
+    });
+    expect(services.assistant.getById).toHaveBeenCalledWith('assistant-1');
+    expect(services.model.getById).toHaveBeenCalledWith('provider::assistant-model');
+    expect(services.ai.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assistantId: 'assistant-1',
+        uniqueModelId: 'provider::assistant-model',
+      }),
+    );
+  });
+
+  test('updates an existing topic assistant before sending when provided', async () => {
+    const services = createServices();
+    services.topic.getById = jest.fn(async () => createTopic({ assistantId: 'assistant-old' }));
+    services.topic.update = jest.fn(async () => createTopic({ assistantId: 'assistant-next' }));
+    const invalidateTopics = jest.fn(async () => undefined);
+    const invalidateTopicMessages = jest.fn(async () => undefined);
+    const runtime = createRuntime({ invalidateTopicMessages, invalidateTopics, services });
+    const assistantChunk = createUiMessage('assistant-1', 'hello');
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
+
+    await runtime.sendText({
+      assistantId: 'assistant-next',
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.topic.update).toHaveBeenCalledWith('topic-1', {
+      assistantId: 'assistant-next',
+    });
+    expect(invalidateTopics).toHaveBeenCalled();
+    expect(invalidateTopicMessages).toHaveBeenCalledWith('topic-1');
+    expect(services.ai.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assistantId: 'assistant-next',
+        uniqueModelId: 'provider::model',
+      }),
+    );
   });
 
   test('uses the first attachment name for file-only new topic titles', async () => {
@@ -596,11 +657,19 @@ function createServices() {
         name: 'first message from empty topic',
       })),
       getById: jest.fn(async () => createTopic()),
+      update: jest.fn(async () => createTopic()),
     },
   } as unknown as DataServices;
 }
 
-function createTopic() {
+function createTopic(patch: Partial<ReturnType<typeof createTopicBase>> = {}) {
+  return {
+    ...createTopicBase(),
+    ...patch,
+  };
+}
+
+function createTopicBase() {
   return {
     activeNodeId: 'active-node',
     assistantId: 'assistant-1',
@@ -649,16 +718,36 @@ function createMessage(id: string, role: Message['role']): Message {
   };
 }
 
-function createModel(): Model {
+function createAssistant(id: string, modelId: UniqueModelId | null): Assistant {
+  const now = '2026-05-15T00:00:00.000Z';
+
+  return {
+    createdAt: now,
+    description: '',
+    emoji: '🌟',
+    id,
+    knowledgeBaseIds: [],
+    mcpServerIds: [],
+    modelId,
+    modelName: modelId,
+    name: 'Assistant',
+    prompt: '',
+    settings: DEFAULT_ASSISTANT_SETTINGS,
+    tags: [],
+    updatedAt: now,
+  };
+}
+
+function createModel(id: UniqueModelId = 'provider::model' as UniqueModelId): Model {
   return {
     capabilities: [],
-    id: 'provider::model' as UniqueModelId,
+    id,
     isDeprecated: false,
     isEnabled: true,
     isHidden: false,
-    modelId: 'model',
+    modelId: id.split('::')[1] ?? 'model',
     name: 'Model',
-    providerId: 'provider',
+    providerId: id.split('::')[0] ?? 'provider',
     supportsStreaming: true,
   };
 }

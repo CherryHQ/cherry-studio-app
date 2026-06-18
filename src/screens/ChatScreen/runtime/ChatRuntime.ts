@@ -25,6 +25,7 @@ export type ChatRuntimeTopicSnapshot = {
 };
 
 export type ChatRuntimeSendTextInput = {
+  assistantId?: string | null;
   parts?: readonly CherryMessagePart[];
   selectedModelId?: UniqueModelId | null;
   text: string;
@@ -32,6 +33,7 @@ export type ChatRuntimeSendTextInput = {
 };
 
 export type ChatRuntimeSendNewTopicTextInput = {
+  assistantId?: string | null;
   parts?: readonly CherryMessagePart[];
   selectedModelId?: UniqueModelId | null;
   text: string;
@@ -167,12 +169,16 @@ export class ChatRuntime {
     let createdTopicId: string | undefined;
 
     try {
-      const model = await this.resolveModel(input.selectedModelId);
+      const model = await this.resolveModel(input.selectedModelId, {
+        assistantId: input.assistantId ?? undefined,
+      });
       throwIfAborted(abortController.signal);
 
-      const topic = await this.dependencies.services.topic.create({
+      const topicCreateDto = {
         name: createTopicName({ parts, text }),
-      });
+        ...(input.assistantId ? { assistantId: input.assistantId } : {}),
+      };
+      const topic = await this.dependencies.services.topic.create(topicCreateDto);
       createdTopicId = topic.id;
       throwIfAborted(abortController.signal);
 
@@ -392,7 +398,16 @@ export class ChatRuntime {
   }
 
   private async resolveTurnContext(input: ChatRuntimeSendTextInput) {
-    const topic = await this.dependencies.services.topic.getById(input.topicId);
+    let topic = await this.dependencies.services.topic.getById(input.topicId);
+
+    if (input.assistantId !== undefined && input.assistantId !== (topic.assistantId ?? null)) {
+      topic = await this.dependencies.services.topic.update(input.topicId, {
+        assistantId: input.assistantId,
+      });
+      await this.dependencies.invalidateTopics();
+      await this.dependencies.invalidateTopicMessages(input.topicId);
+    }
+
     const model = await this.resolveModel(input.selectedModelId, topic);
 
     return { model, topic };
@@ -414,7 +429,10 @@ export class ChatRuntime {
     }
   }
 
-  private async resolveModel(selectedModelId?: UniqueModelId | null, topic?: Topic) {
+  private async resolveModel(
+    selectedModelId?: UniqueModelId | null,
+    topic?: Pick<Topic, 'assistantId'>,
+  ) {
     const modelId = await this.resolveModelId(selectedModelId, topic);
     const model = await this.dependencies.services.model.getById(modelId);
 
@@ -425,7 +443,10 @@ export class ChatRuntime {
     return model;
   }
 
-  private async resolveModelId(selectedModelId?: UniqueModelId | null, topic?: Topic) {
+  private async resolveModelId(
+    selectedModelId?: UniqueModelId | null,
+    topic?: Pick<Topic, 'assistantId'>,
+  ) {
     if (selectedModelId) {
       return selectedModelId;
     }

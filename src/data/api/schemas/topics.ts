@@ -6,22 +6,25 @@ import { type Topic, TopicSchema } from '@/data/types/topic';
 import { type OrderEndpoints } from './_endpointHelpers';
 
 export const CreateTopicSchema = TopicSchema.pick({
-  assistantId: true,
   groupId: true,
   name: true,
 })
   .partial()
   .extend({
+    assistantId: z.string().nullable().optional(),
     sourceNodeId: z.string().optional(),
   });
 export type CreateTopicDto = z.infer<typeof CreateTopicSchema>;
 
 export const UpdateTopicSchema = TopicSchema.pick({
-  assistantId: true,
   groupId: true,
   isNameManuallyEdited: true,
   name: true,
-}).partial();
+})
+  .partial()
+  .extend({
+    assistantId: z.string().nullable().optional(),
+  });
 export type UpdateTopicDto = z.infer<typeof UpdateTopicSchema>;
 
 export const ListTopicsQuerySchema = z.strictObject({

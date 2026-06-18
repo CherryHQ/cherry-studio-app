@@ -140,6 +140,7 @@ describe('ChatInputSurface', () => {
             isSendEnabled
             isStreaming={false}
             modelLabel="Model"
+            onAssistantPickerPress={jest.fn()}
             onModelPickerPress={jest.fn()}
             onSendPress={onSendPress}
             onStopPress={jest.fn()}
@@ -182,6 +183,7 @@ describe('ChatInputSurface', () => {
             isSendEnabled
             isStreaming={false}
             modelLabel="Model"
+            onAssistantPickerPress={jest.fn()}
             onModelPickerPress={jest.fn()}
             onSendPress={jest.fn()}
             onStopPress={jest.fn()}

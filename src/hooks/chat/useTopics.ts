@@ -1,10 +1,13 @@
-import { type InfiniteData } from '@tanstack/react-query';
+import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { queryKeys } from '@/data/api';
+import type { UpdateTopicDto } from '@/data/api/schemas/topics';
 import { useDataInfiniteQuery, useDataQuery } from '@/data/hooks/useDataQuery';
+import { useDataServices } from '@/data/runtime';
 import type { CursorPaginationResponse } from '@/data/types/apiTypes';
 import type { Topic } from '@/data/types/topic';
 import { useHydrateTopicDetails } from './useHydrateTopicDetails';
+import { getMessagesQueryKey } from './utils/messageQueryOptions';
 
 type TopicsQueryKey = ReturnType<typeof queryKeys.topics.list>;
 type TopicDetailQueryKey = ReturnType<typeof queryKeys.topics.detail>;
@@ -75,4 +78,42 @@ export function useTopic(topicId: string | undefined) {
     queryFn: (services) => services.topic.getById(topicId ?? ''),
     queryKey: queryKeys.topics.detail(queryTopicId),
   });
+}
+
+export function useTopicMutations() {
+  const queryClient = useQueryClient();
+  const services = useDataServices();
+
+  const invalidateTopic = useCallback(
+    async (topicId: string) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.topics.all() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.topics.detail(topicId) }),
+        queryClient.invalidateQueries({ queryKey: getMessagesQueryKey(topicId) }),
+      ]);
+    },
+    [queryClient],
+  );
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateTopicDto }) => {
+      if (!id) {
+        throw new Error('updateTopic called with empty id');
+      }
+
+      return services.topic.update(id, patch);
+    },
+    onSuccess: (topic) => invalidateTopic(topic.id),
+  });
+
+  const updateTopic = useCallback(
+    (id: string, patch: UpdateTopicDto) => updateMutation.mutateAsync({ id, patch }),
+    [updateMutation],
+  );
+
+  return {
+    updateTopic,
+    isUpdating: updateMutation.isPending,
+    updateMutation,
+  };
 }

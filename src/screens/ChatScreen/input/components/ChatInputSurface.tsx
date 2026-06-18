@@ -42,9 +42,11 @@ const inputBottomToolbarStyle = {
 const logger = loggerService.withContext('ChatInputSurface');
 
 type ChatInputSurfaceProps = {
+  assistantLabel?: string;
   isSendEnabled: boolean;
   isStreaming: boolean;
   modelLabel?: string;
+  onAssistantPickerPress: () => void;
   onModelPickerPress: () => void;
   onSendPress: (payload: ChatInputSendPayload) => Promise<void>;
   onStopPress: () => void;
@@ -56,9 +58,11 @@ export type ChatInputSendPayload = {
 };
 
 export function ChatInputSurface({
+  assistantLabel,
   isSendEnabled,
   isStreaming,
   modelLabel,
+  onAssistantPickerPress,
   onModelPickerPress,
   onSendPress,
   onStopPress,
@@ -75,8 +79,14 @@ export function ChatInputSurface({
     setInputFocused,
   } = useChatInputActions();
   const { inputRef } = useChatInputMeta();
-  const { attachments, draft, isComposerExpanded, selectedTool, shouldShowReasoningEffortTag } =
-    useChatInputState();
+  const {
+    attachments,
+    draft,
+    isComposerExpanded,
+    isInputFocused,
+    selectedTool,
+    shouldShowReasoningEffortTag,
+  } = useChatInputState();
   const expandProgress = useSharedValue(0);
   const contentHeight = useSharedValue(0);
   const availableWidth = useSharedValue(0);
@@ -130,6 +140,24 @@ export function ChatInputSurface({
       logger.warn('Failed to preview attachment', error instanceof Error ? error : null);
     });
   }, []);
+  const handleModelPickerPress = useCallback(() => {
+    if (isInputFocused) {
+      void KeyboardController.dismiss();
+      inputRef.current?.blur();
+      setInputFocused(false);
+    }
+
+    onModelPickerPress();
+  }, [inputRef, isInputFocused, onModelPickerPress, setInputFocused]);
+  const handleAssistantPickerPress = useCallback(() => {
+    if (isInputFocused) {
+      void KeyboardController.dismiss();
+      inputRef.current?.blur();
+      setInputFocused(false);
+    }
+
+    onAssistantPickerPress();
+  }, [inputRef, isInputFocused, onAssistantPickerPress, setInputFocused]);
   const handleSendPress = useCallback(
     async (text: string) => {
       const draftSnapshot = draft;
@@ -195,7 +223,16 @@ export function ChatInputSurface({
                 style={[inputBottomToolbarStyle, bottomToolbarAnimatedStyle]}
               >
                 <ChatInputAddButton />
-                <ModelPickerPill label={modelLabel} onPress={onModelPickerPress} />
+                <ChatInputPill
+                  label={assistantLabel ?? t('chat.assistant.select')}
+                  maxWidthClassName="max-w-[42%]"
+                  onPress={handleAssistantPickerPress}
+                />
+                <ChatInputPill
+                  label={modelLabel ?? t('chat.model.select')}
+                  maxWidthClassName="max-w-[48%]"
+                  onPress={handleModelPickerPress}
+                />
               </Animated.View>
             </View>
           </View>
@@ -211,19 +248,24 @@ export function ChatInputSurface({
   );
 }
 
-function ModelPickerPill({ label, onPress }: { label?: string; onPress: () => void }) {
-  const { t } = useTranslation();
-  const resolvedLabel = label ?? t('chat.model.select');
-
+function ChatInputPill({
+  label,
+  maxWidthClassName,
+  onPress,
+}: {
+  label: string;
+  maxWidthClassName: string;
+  onPress: () => void;
+}) {
   return (
     <Pressable
-      accessibilityLabel={resolvedLabel}
+      accessibilityLabel={label}
       accessibilityRole="button"
-      className="h-8 max-w-[68%] justify-center rounded-full bg-surface-secondary px-3 active:bg-surface-tertiary active:opacity-70"
+      className={`h-8 justify-center rounded-full bg-surface-secondary px-3 active:bg-surface-tertiary active:opacity-70 ${maxWidthClassName}`}
       onPress={onPress}
     >
       <Text className="font-semibold text-foreground text-sm" numberOfLines={1}>
-        {resolvedLabel}
+        {label}
       </Text>
     </Pressable>
   );
