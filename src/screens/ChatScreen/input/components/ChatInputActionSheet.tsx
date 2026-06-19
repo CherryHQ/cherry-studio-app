@@ -229,7 +229,10 @@ export function ChatInputActionSheet() {
               >
                 <XIcon className="size-6 text-foreground" strokeWidth={2} />
               </Pressable>
-              <Text className="flex-1 text-center font-semibold text-foreground text-lg" numberOfLines={1}>
+              <Text
+                className="flex-1 text-center font-semibold text-foreground text-lg"
+                numberOfLines={1}
+              >
                 {t('chat.actionSheet.title')}
               </Text>
               <View className="size-8" />
