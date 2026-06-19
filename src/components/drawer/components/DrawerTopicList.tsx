@@ -3,7 +3,7 @@ import { cn } from 'heroui-native/utils';
 import { PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { Dimensions, Pressable, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import type { Topic } from '@/data/types/topic';
 
@@ -28,6 +28,7 @@ type DrawerTopicListExtraData = {
 
 const topicItemHeight = 44;
 const menuWidth = 176;
+const menuHeight = 96;
 
 export const DrawerTopicList = memo(function DrawerTopicList() {
   const { t } = useTranslation();
@@ -49,9 +50,11 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
   );
 
   const handleRowLongPress = useCallback((ref: React.RefObject<View | null>, topic: Topic) => {
-    ref.current?.measureInWindow((_x, y, width, _height) => {
+    ref.current?.measure((_fx, _fy, width, height, _px, py) => {
       const x = Math.min(width - menuWidth - 8, Math.max(8, width / 2 - menuWidth / 2));
-      setMenuPos({ x, y: y - 20 });
+      const below = py + height + menuHeight + 8 <= Dimensions.get('window').height;
+      const menuY = below ? py + height + 4 : py - menuHeight - 4;
+      setMenuPos({ x, y: menuY });
       setMenuTopic(topic);
       setMenuVisible(true);
     });
