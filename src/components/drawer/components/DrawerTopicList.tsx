@@ -1,7 +1,7 @@
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { cn } from 'heroui-native/utils';
 import { PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -11,6 +11,7 @@ import { useDrawerActions, useDrawerPanelState, useDrawerTopics } from '../conte
 import { drawerContentLayoutTransition, drawerFeatureAreaEntering } from '../utils/drawerAnimation';
 
 import { DrawerFeatureArea } from './DrawerFeatureArea';
+import { DrawerNewChatButton } from './DrawerNewChatButton';
 import { useDrawerTopicActionDialogs } from './DrawerTopicActionDialogs';
 
 type DrawerTopicRowProps = {
@@ -29,6 +30,7 @@ type DrawerTopicListExtraData = {
 const topicItemHeight = 44;
 const menuWidth = 176;
 const menuHeight = 96;
+const newChatButtonClearance = 80;
 
 export const DrawerTopicList = memo(function DrawerTopicList() {
   const { t } = useTranslation();
@@ -38,9 +40,17 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
   const { dialogs, requestDelete, requestRename } = useDrawerTopicActionDialogs();
 
   const containerRef = useRef<View>(null);
+  const isMountedRef = useRef(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const [menuTopic, setMenuTopic] = useState<Topic | null>(null);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const listExtraData = useMemo<DrawerTopicListExtraData>(
     () => ({
@@ -51,10 +61,14 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
   );
 
   const handleRowLongPress = useCallback((rowRef: React.RefObject<View | null>, topic: Topic) => {
-    rowRef.current?.measureInWindow((_rx, ry, rw, rh) => {
-      containerRef.current?.measureInWindow((_cx, cy, _cw, _ch) => {
+    rowRef.current?.measureInWindow((rx, ry, rw, rh) => {
+      containerRef.current?.measureInWindow((cx, cy, _cw, _ch) => {
+        if (!isMountedRef.current) {
+          return;
+        }
+        const localX = rx - cx;
         const localY = ry - cy;
-        const x = Math.min(rw - menuWidth - 8, Math.max(8, rw / 2 - menuWidth / 2));
+        const x = localX + Math.min(rw - menuWidth - 8, Math.max(8, rw / 2 - menuWidth / 2));
         const below = localY + rh + menuHeight + 8 <= _ch;
         const menuY = below ? localY + rh + 4 : localY - menuHeight - 4;
         setMenuPos({ x, y: menuY });
@@ -70,17 +84,19 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
   }, []);
 
   const handleRename = useCallback(() => {
-    if (menuTopic) {
-      requestRename(menuTopic);
-    }
+    const topic = menuTopic;
     closeMenu();
+    if (topic) {
+      requestRename(topic);
+    }
   }, [menuTopic, requestRename, closeMenu]);
 
   const handleDelete = useCallback(() => {
-    if (menuTopic) {
-      requestDelete(menuTopic);
-    }
+    const topic = menuTopic;
     closeMenu();
+    if (topic) {
+      requestDelete(topic);
+    }
   }, [menuTopic, requestDelete, closeMenu]);
 
   const renderItem = useCallback(
@@ -112,7 +128,7 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
   return (
     <View ref={containerRef} className="flex-1">
       <LegendList
-        contentContainerStyle={{ paddingTop: 2 }}
+        contentContainerStyle={{ paddingBottom: newChatButtonClearance, paddingTop: 2 }}
         data={topics}
         estimatedItemSize={topicItemHeight}
         extraData={listExtraData}
@@ -127,6 +143,9 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
               layout={drawerContentLayoutTransition}
             >
               <DrawerFeatureArea />
+              <Text className="px-5 pt-3 pb-1 font-medium text-foreground-secondary text-sm">
+                {t('navigation.recents')}
+              </Text>
             </Animated.View>
           )
         }
@@ -136,31 +155,35 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
         recycleItems
         renderItem={renderItem}
       />
+      {isSearchActive ? null : <DrawerNewChatButton />}
       {dialogs}
 
       {menuVisible && (
         <>
-          <Pressable className="absolute inset-0 z-40" onPress={closeMenu} />
+          <Pressable
+            accessibilityLabel={t('common.close')}
+            className="absolute inset-0 z-40"
+            onPress={closeMenu}
+          />
           <View
+            accessibilityRole="menu"
             className="absolute z-50 w-44 overflow-hidden rounded-xl bg-overlay shadow-lg"
             style={{ top: menuPos.y, left: menuPos.x }}
           >
             <Pressable
+              accessibilityRole="menuitem"
               className="flex-row items-center gap-3 px-4 py-3 active:opacity-60"
               onPress={handleRename}
             >
-              <View className="text-foreground">
-                <PencilIcon className="size-4" />
-              </View>
+              <PencilIcon className="size-4 text-foreground" />
               <Text className="text-sm text-foreground">{t('common.rename')}</Text>
             </Pressable>
             <Pressable
-              className="flex-row items-center gap-3 border-b border-border px-4 py-3 active:opacity-60"
+              accessibilityRole="menuitem"
+              className="flex-row items-center gap-3 px-4 py-3 active:opacity-60"
               onPress={handleDelete}
             >
-              <View className="text-danger">
-                <Trash2Icon className="size-4" />
-              </View>
+              <Trash2Icon className="size-4 text-danger" />
               <Text className="text-sm text-danger">{t('common.delete')}</Text>
             </Pressable>
           </View>
