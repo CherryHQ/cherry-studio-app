@@ -19,3 +19,22 @@ index 12721cb6f8965b71390eb79d207e029c5c61076f..1445ffc1a6a2dd6f482ce411c68cf5f6
  
  export const IS_WINDOW_AVAILABLE: boolean = isWindowAvailable();
  
+diff --git a/src/createAnimatedComponent/createAnimatedComponent.tsx b/src/createAnimatedComponent/createAnimatedComponent.tsx
+index f8fb0e72f59e93141cd22a37df9c8a70a6a35dc4..04f90c97c6ea96f787d6f776aee7c097c43ac496 100644
+--- a/src/createAnimatedComponent/createAnimatedComponent.tsx
++++ b/src/createAnimatedComponent/createAnimatedComponent.tsx
+@@ -81,6 +81,14 @@ export function createAnimatedComponent<
+   Component: TInstance,
+   options?: Options<InitialComponentProps>
+ ): AnimatedComponentType<Readonly<ComponentProps<TInstance>>, TInstance> {
++  if (!Component) {
++    const fallback = ((props: Record<string, unknown>) => null) as AnimatedComponentType<
++      Readonly<ComponentProps<TInstance>>,
++      TInstance
++    >;
++    (fallback as any).displayName = 'AnimatedComponent(Fallback)';
++    return fallback;
++  }
+   class AnimatedComponent extends AnimatedComponentImpl {
+     static displayName = `AnimatedComponent(${
+       Component.displayName || Component.name || 'Component'

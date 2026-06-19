@@ -1,9 +1,9 @@
-import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { cn } from 'heroui-native/utils';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import type { Topic } from '@/data/types/topic';
 
@@ -11,33 +11,23 @@ import { useDrawerActions, useDrawerPanelState, useDrawerTopics } from '../conte
 import { drawerContentLayoutTransition, drawerFeatureAreaEntering } from '../utils/drawerAnimation';
 
 import { DrawerFeatureArea } from './DrawerFeatureArea';
-import { DrawerNewChatButton } from './DrawerNewChatButton';
 import { useDrawerTopicActionDialogs } from './DrawerTopicActionDialogs';
 
 type DrawerTopicRowProps = {
   isActive: boolean;
-  onDelete: (topic: Topic) => void;
   onPress: (topicId: string) => void;
-  onRename: (topic: Topic) => void;
+  onLongPress: (ref: React.RefObject<View | null>, topic: Topic) => void;
   showActiveBackground: boolean;
   topic: Topic;
-  width: number;
 };
 
 type DrawerTopicListExtraData = {
   activeTopicId?: string;
-  rowWidth: number;
   showActiveBackground: boolean;
 };
 
-const topicItemHeight = 36;
-// Horizontal inset that keeps each row's rounded highlight clear of the drawer
-// edges (8pt per side); applied as the row's own padding so the row itself can
-// take an explicit full width (see DrawerTopicRow for why the width is needed).
-const rowHorizontalInset = 8;
-// Bottom padding that lets the last rows scroll clear of the floating new-chat
-// button instead of being permanently hidden behind it.
-const newChatButtonClearance = 80;
+const topicItemHeight = 44;
+const menuWidth = 176;
 
 export const DrawerTopicList = memo(function DrawerTopicList() {
   const { t } = useTranslation();
@@ -45,32 +35,58 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
   const { activeTopicId, isTopicListLoading, topics } = useDrawerTopics();
   const { loadMoreTopics, openTopic } = useDrawerActions();
   const { dialogs, requestDelete, requestRename } = useDrawerTopicActionDialogs();
-  const [rowWidth, setRowWidth] = useState(0);
-  const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    setRowWidth(event.nativeEvent.layout.width);
-  }, []);
+
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
+  const [menuTopic, setMenuTopic] = useState<Topic | null>(null);
+
   const listExtraData = useMemo<DrawerTopicListExtraData>(
     () => ({
       activeTopicId,
-      rowWidth,
       showActiveBackground: !isSearchActive,
     }),
-    [activeTopicId, isSearchActive, rowWidth],
+    [activeTopicId, isSearchActive],
   );
+
+  const handleRowLongPress = useCallback((ref: React.RefObject<View | null>, topic: Topic) => {
+    ref.current?.measureInWindow((_x, y, width, _height) => {
+      const x = Math.min(width - menuWidth - 8, Math.max(8, width / 2 - menuWidth / 2));
+      setMenuPos({ x, y: y - 20 });
+      setMenuTopic(topic);
+      setMenuVisible(true);
+    });
+  }, []);
+
+  const closeMenu = useCallback(() => {
+    setMenuVisible(false);
+    setMenuTopic(null);
+  }, []);
+
+  const handleRename = useCallback(() => {
+    if (menuTopic) {
+      requestRename(menuTopic);
+    }
+    closeMenu();
+  }, [menuTopic, requestRename, closeMenu]);
+
+  const handleDelete = useCallback(() => {
+    if (menuTopic) {
+      requestDelete(menuTopic);
+    }
+    closeMenu();
+  }, [menuTopic, requestDelete, closeMenu]);
 
   const renderItem = useCallback(
     ({ extraData, item }: LegendListRenderItemProps<Topic>) => (
       <DrawerTopicRow
         isActive={item.id === extraData.activeTopicId}
-        onDelete={requestDelete}
         onPress={openTopic}
-        onRename={requestRename}
+        onLongPress={handleRowLongPress}
         showActiveBackground={extraData.showActiveBackground}
         topic={item}
-        width={extraData.rowWidth}
       />
     ),
-    [openTopic, requestDelete, requestRename],
+    [openTopic, handleRowLongPress],
   );
 
   const listEmptyComponent = useCallback(
@@ -87,9 +103,9 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
   );
 
   return (
-    <View className="flex-1" onLayout={handleLayout}>
+    <View className="flex-1">
       <LegendList
-        contentContainerStyle={{ paddingBottom: newChatButtonClearance, paddingTop: 2 }}
+        contentContainerStyle={{ paddingTop: 2 }}
         data={topics}
         estimatedItemSize={topicItemHeight}
         extraData={listExtraData}
@@ -104,94 +120,89 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
               layout={drawerContentLayoutTransition}
             >
               <DrawerFeatureArea />
-              <Text className="px-5 pt-3 pb-1 font-medium text-foreground-secondary text-sm">
-                {t('navigation.recents')}
-              </Text>
             </Animated.View>
           )
         }
         onEndReached={loadMoreTopics}
         onEndReachedThreshold={0.7}
+        pointerEvents={menuVisible ? 'none' : undefined}
         recycleItems
         renderItem={renderItem}
       />
-      {isSearchActive ? null : <DrawerNewChatButton />}
       {dialogs}
+
+      {menuVisible && (
+        <>
+          <Pressable className="absolute inset-0 z-40" onPress={closeMenu} />
+          <View
+            className="absolute z-50 w-44 overflow-hidden rounded-xl bg-overlay shadow-lg"
+            style={{ top: menuPos.y, left: menuPos.x }}
+          >
+            <Pressable
+              className="flex-row items-center gap-3 px-4 py-3 active:opacity-60"
+              onPress={handleRename}
+            >
+              <View className="text-foreground">
+                <PencilIcon className="size-4" />
+              </View>
+              <Text className="text-sm text-foreground">{t('common.rename')}</Text>
+            </Pressable>
+            <Pressable
+              className="flex-row items-center gap-3 border-b border-border px-4 py-3 active:opacity-60"
+              onPress={handleDelete}
+            >
+              <View className="text-danger">
+                <Trash2Icon className="size-4" />
+              </View>
+              <Text className="text-sm text-danger">{t('common.delete')}</Text>
+            </Pressable>
+          </View>
+        </>
+      )}
     </View>
   );
 });
 
 const DrawerTopicRow = memo(function DrawerTopicRow({
   isActive,
-  onDelete,
   onPress,
-  onRename,
+  onLongPress,
   showActiveBackground,
   topic,
-  width,
 }: DrawerTopicRowProps) {
-  const { t } = useTranslation();
   const handlePress = useCallback(() => {
     onPress(topic.id);
   }, [onPress, topic.id]);
 
-  const menuActions = useMemo<MenuAction[]>(
-    () => [
-      { id: 'rename', image: 'pencil', title: t('common.rename') },
-      {
-        attributes: { destructive: true },
-        id: 'delete',
-        image: 'trash',
-        title: t('common.delete'),
-      },
-    ],
-    [t],
-  );
+  const rowRef = useRef<View>(null);
 
-  const handlePressAction = useCallback(
-    ({ nativeEvent }: NativeActionEvent) => {
-      if (nativeEvent.event === 'rename') {
-        onRename(topic);
-      } else if (nativeEvent.event === 'delete') {
-        onDelete(topic);
-      }
-    },
-    [onDelete, onRename, topic],
-  );
+  const handleLongPress = useCallback(() => {
+    onLongPress(rowRef, topic);
+  }, [onLongPress, topic]);
 
   return (
-    // MenuView (iOS) hosts the trigger in a SwiftUI `Host matchContents`, which
-    // sizes to the child's *intrinsic* width instead of stretching to the list
-    // row. The Pressable therefore needs an explicit width (the measured list
-    // width) so the row spans the drawer; the rounded highlight keeps its edge
-    // inset via the inner view's horizontal margin.
-    <MenuView actions={menuActions} onPressAction={handlePressAction} shouldOpenOnLongPress>
-      <Pressable
-        accessibilityLabel={topic.name}
-        accessibilityRole="button"
-        accessibilityState={{ selected: isActive }}
-        className="active:opacity-70"
-        onPress={handlePress}
-        style={{ height: topicItemHeight, width }}
+    <Pressable
+      ref={rowRef}
+      accessibilityLabel={topic.name}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isActive }}
+      className={cn(
+        'mx-2 justify-center rounded-lg px-3 active:opacity-70',
+        isActive && showActiveBackground && 'bg-surface',
+      )}
+      onLongPress={handleLongPress}
+      onPress={handlePress}
+      style={{ height: topicItemHeight }}
+    >
+      <Text
+        className={cn(
+          'text-base',
+          isActive ? 'font-semibold text-foreground' : 'font-medium text-default-foreground',
+        )}
+        numberOfLines={1}
       >
-        <View
-          className={cn(
-            'flex-1 justify-center rounded-lg px-3',
-            isActive && showActiveBackground && 'bg-surface-secondary',
-          )}
-          style={{ marginHorizontal: rowHorizontalInset }}
-        >
-          <Text
-            className={cn(
-              'font-medium text-base',
-              isActive ? 'text-foreground' : 'text-default-foreground',
-            )}
-            numberOfLines={1}
-          >
-            {topic.name}
-          </Text>
-        </View>
-      </Pressable>
-    </MenuView>
+        {topic.name}
+      </Text>
+    </Pressable>
   );
 });
