@@ -3,7 +3,7 @@ import { cn } from 'heroui-native/utils';
 import { PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dimensions, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import type { Topic } from '@/data/types/topic';
 
@@ -37,6 +37,7 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
   const { loadMoreTopics, openTopic } = useDrawerActions();
   const { dialogs, requestDelete, requestRename } = useDrawerTopicActionDialogs();
 
+  const containerRef = useRef<View>(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const [menuTopic, setMenuTopic] = useState<Topic | null>(null);
@@ -49,14 +50,17 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
     [activeTopicId, isSearchActive],
   );
 
-  const handleRowLongPress = useCallback((ref: React.RefObject<View | null>, topic: Topic) => {
-    ref.current?.measure((_fx, _fy, width, height, _px, py) => {
-      const x = Math.min(width - menuWidth - 8, Math.max(8, width / 2 - menuWidth / 2));
-      const below = py + height + menuHeight + 8 <= Dimensions.get('window').height;
-      const menuY = below ? py + height + 4 : py - menuHeight - 4;
-      setMenuPos({ x, y: menuY });
-      setMenuTopic(topic);
-      setMenuVisible(true);
+  const handleRowLongPress = useCallback((rowRef: React.RefObject<View | null>, topic: Topic) => {
+    rowRef.current?.measureInWindow((_rx, ry, rw, rh) => {
+      containerRef.current?.measureInWindow((_cx, cy, _cw, _ch) => {
+        const localY = ry - cy;
+        const x = Math.min(rw - menuWidth - 8, Math.max(8, rw / 2 - menuWidth / 2));
+        const below = localY + rh + menuHeight + 8 <= _ch;
+        const menuY = below ? localY + rh + 4 : localY - menuHeight - 4;
+        setMenuPos({ x, y: menuY });
+        setMenuTopic(topic);
+        setMenuVisible(true);
+      });
     });
   }, []);
 
@@ -106,7 +110,7 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
   );
 
   return (
-    <View className="flex-1">
+    <View ref={containerRef} className="flex-1">
       <LegendList
         contentContainerStyle={{ paddingTop: 2 }}
         data={topics}
