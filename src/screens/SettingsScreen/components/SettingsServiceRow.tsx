@@ -6,6 +6,9 @@ import { Pressable, Text, View } from 'react-native';
 import { Image } from '@/components/uniwind';
 
 export type SettingsServiceRowProps = {
+  avatarColor?: string;
+  avatarFgColor?: string;
+  avatarLetter?: string;
   id: string;
   imageSource?: ImageSource | number;
   isEnabled: boolean;
@@ -14,6 +17,9 @@ export type SettingsServiceRowProps = {
 };
 
 export const SettingsServiceRow = memo(function SettingsServiceRow({
+  avatarColor,
+  avatarFgColor,
+  avatarLetter,
   id,
   imageSource,
   isEnabled,
@@ -37,6 +43,18 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
               recyclingKey={id}
               source={imageSource}
             />
+          ) : avatarColor && avatarLetter ? (
+            <View
+              className="size-5 items-center justify-center rounded-full"
+              style={{ backgroundColor: avatarColor }}
+            >
+              <Text
+                className="text-[11px] font-bold leading-3"
+                style={{ color: avatarFgColor ?? '#FFFFFF' }}
+              >
+                {avatarLetter}
+              </Text>
+            </View>
           ) : null}
           <Text
             className={cn(

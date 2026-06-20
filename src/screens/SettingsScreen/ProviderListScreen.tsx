@@ -3,17 +3,23 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { Accordion } from 'heroui-native/accordion';
 import { SearchField } from 'heroui-native/search-field';
-import { useMemo, useRef, useState } from 'react';
+import { PlusIcon } from 'lucide-uniwind/png';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { BackHeader } from '@/components/headers';
+import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { isLiquidGlassAvailable } from '@/config/constants';
 import { queryKeys } from '@/data/api';
 import { useDataQuery } from '@/data/hooks';
 import { SettingsSection } from './components/SettingsSection';
 import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';
+import {
+  CreateCustomProviderSheet,
+  getProviderAvatarColor,
+  useCreateCustomProvider,
+} from './ProviderScreen/createCustomProvider';
 
 const providerListStaleTime = 1000 * 60 * 5;
 
@@ -28,6 +34,33 @@ export default function ProviderSettingsScreen() {
   const isNavigatingRef = useRef(false);
   const hasFocusedOnceRef = useRef(false);
 
+  const handleProviderCreated = useCallback(
+    (providerId: string, name: string) => {
+      router.push({
+        pathname: '/settings/provider/[providerId]',
+        params: { providerId, providerName: name },
+      });
+    },
+    [router],
+  );
+
+  const createProvider = useCreateCustomProvider({
+    onCreated: handleProviderCreated,
+  });
+
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('settings.provider.create_custom.add'),
+        androidIcon: PlusIcon,
+        icon: 'plus',
+        key: 'create-provider',
+        onPress: createProvider.openSheet,
+      },
+    ],
+    [createProvider.openSheet, t],
+  );
+
   useFocusEffect(() => {
     if (!hasFocusedOnceRef.current) {
       hasFocusedOnceRef.current = true;
@@ -41,12 +74,17 @@ export default function ProviderSettingsScreen() {
     queryFn: (services) => services.provider.list(),
     staleTime: providerListStaleTime,
   });
-  const providerItems = useMemo<SettingsServiceRowProps[]>(
+  const providerRows = useMemo<SettingsServiceRowProps[]>(
     () =>
       (providersQuery.data ?? []).map((provider) => {
         const iconSource = resolveProviderIcon(provider.presetProviderId ?? provider.id);
+        const hasBuiltinIcon = iconSource?.[iconTheme] != null;
+        const fallbackAvatar = !hasBuiltinIcon ? getProviderAvatarColor(provider.name) : undefined;
 
         return {
+          avatarColor: fallbackAvatar?.bg,
+          avatarFgColor: fallbackAvatar?.fg,
+          avatarLetter: fallbackAvatar ? provider.name.trim().charAt(0).toUpperCase() : undefined,
           id: provider.id,
           imageSource: iconSource?.[iconTheme],
           isEnabled: provider.isEnabled,
@@ -65,25 +103,26 @@ export default function ProviderSettingsScreen() {
       }),
     [iconTheme, providersQuery.data, router],
   );
-  const enabledProviderItems = useMemo(
-    () => providerItems.filter((item) => item.isEnabled),
-    [providerItems],
+  const enabledProviderRows = useMemo(
+    () => providerRows.filter((item) => item.isEnabled),
+    [providerRows],
   );
-  const disabledProviderItems = useMemo(
-    () => providerItems.filter((item) => !item.isEnabled),
-    [providerItems],
+  const disabledProviderRows = useMemo(
+    () => providerRows.filter((item) => !item.isEnabled),
+    [providerRows],
   );
+
   const filteredProviderItems = useMemo(() => {
     const query = searchText.trim().toLocaleLowerCase();
 
     return query
-      ? enabledProviderItems.filter((item) => item.name.toLocaleLowerCase().includes(query))
-      : enabledProviderItems;
-  }, [enabledProviderItems, searchText]);
+      ? enabledProviderRows.filter((item) => item.name.toLocaleLowerCase().includes(query))
+      : enabledProviderRows;
+  }, [enabledProviderRows, searchText]);
 
   return (
     <>
-      <BackHeader title={t('settings.pages.provider.title')} />
+      <BackHeader rightActions={rightActions} title={t('settings.pages.provider.title')} />
       <Pressable
         accessible={false}
         className="flex-1 gap-3 px-4"
@@ -134,11 +173,23 @@ export default function ProviderSettingsScreen() {
               ]}
             />
           )}
-          {searchText.trim() || disabledProviderItems.length === 0 ? null : (
-            <DisabledProvidersAccordion items={disabledProviderItems} />
+          {searchText.trim() || disabledProviderRows.length === 0 ? null : (
+            <DisabledProvidersAccordion items={disabledProviderRows} />
           )}
         </ScrollView>
       </Pressable>
+      <CreateCustomProviderSheet
+        canSubmit={createProvider.canSubmit}
+        endpointOptions={createProvider.endpointOptions}
+        isOpen={createProvider.isSheetOpen}
+        isSubmitting={createProvider.isSubmitting}
+        name={createProvider.name}
+        selectedEndpointType={createProvider.selectedEndpointType}
+        onClose={createProvider.closeSheet}
+        setName={createProvider.setName}
+        onSelectEndpointType={createProvider.setSelectedEndpointType}
+        onSubmit={createProvider.submit}
+      />
     </>
   );
 }
