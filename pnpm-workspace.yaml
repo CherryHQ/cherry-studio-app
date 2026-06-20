@@ -1,2 +1,17 @@
 packages:
   - packages/*
+
+overrides:
+  react-native-svg: 15.15.4
+
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - unrs-resolver
+
+patchedDependencies:
+  "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
+  metro@0.84.4: patches/metro@0.84.4.patch
+  metro-runtime@0.84.4: patches/metro-runtime@0.84.4.patch
+  react-native-worklets@0.8.3: patches/react-native-worklets@0.8.3.patch
+  react-native-reanimated@4.3.1: patches/react-native-reanimated@4.3.1.patch
