@@ -1,10 +1,11 @@
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { cn } from 'heroui-native/utils';
 import { PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
+import { PopupMenu, type PopupMenuItem } from '@/components/popupMenu';
 import type { Topic } from '@/data/types/topic';
 
 import { useDrawerActions, useDrawerPanelState, useDrawerTopics } from '../context/DrawerProvider';
@@ -28,8 +29,6 @@ type DrawerTopicListExtraData = {
 };
 
 const topicItemHeight = 44;
-const menuWidth = 176;
-const menuHeight = 96;
 const newChatButtonClearance = 80;
 
 export const DrawerTopicList = memo(function DrawerTopicList() {
@@ -40,17 +39,9 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
   const { dialogs, requestDelete, requestRename } = useDrawerTopicActionDialogs();
 
   const containerRef = useRef<View>(null);
-  const isMountedRef = useRef(false);
+  const menuAnchorRef = useRef<View | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
-  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const [menuTopic, setMenuTopic] = useState<Topic | null>(null);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
 
   const listExtraData = useMemo<DrawerTopicListExtraData>(
     () => ({
@@ -61,26 +52,15 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
   );
 
   const handleRowLongPress = useCallback((rowRef: React.RefObject<View | null>, topic: Topic) => {
-    rowRef.current?.measureInWindow((rx, ry, rw, rh) => {
-      containerRef.current?.measureInWindow((cx, cy, _cw, _ch) => {
-        if (!isMountedRef.current) {
-          return;
-        }
-        const localX = rx - cx;
-        const localY = ry - cy;
-        const x = localX + Math.min(rw - menuWidth - 8, Math.max(8, rw / 2 - menuWidth / 2));
-        const below = localY + rh + menuHeight + 8 <= _ch;
-        const menuY = below ? localY + rh + 4 : localY - menuHeight - 4;
-        setMenuPos({ x, y: menuY });
-        setMenuTopic(topic);
-        setMenuVisible(true);
-      });
-    });
+    menuAnchorRef.current = rowRef.current;
+    setMenuTopic(topic);
+    setMenuVisible(true);
   }, []);
 
   const closeMenu = useCallback(() => {
     setMenuVisible(false);
     setMenuTopic(null);
+    menuAnchorRef.current = null;
   }, []);
 
   const handleRename = useCallback(() => {
@@ -98,6 +78,25 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
       requestDelete(topic);
     }
   }, [menuTopic, requestDelete, closeMenu]);
+
+  const menuItems = useMemo<PopupMenuItem[]>(
+    () => [
+      {
+        id: 'rename',
+        icon: <PencilIcon className="size-4 text-foreground" />,
+        label: t('common.rename'),
+        onPress: handleRename,
+      },
+      {
+        id: 'delete',
+        icon: <Trash2Icon className="size-4 text-danger" />,
+        label: t('common.delete'),
+        destructive: true,
+        onPress: handleDelete,
+      },
+    ],
+    [t, handleRename, handleDelete],
+  );
 
   const renderItem = useCallback(
     ({ extraData, item }: LegendListRenderItemProps<Topic>) => (
@@ -151,44 +150,20 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
         }
         onEndReached={loadMoreTopics}
         onEndReachedThreshold={0.7}
-        pointerEvents={menuVisible ? 'none' : undefined}
         recycleItems
         renderItem={renderItem}
       />
       {isSearchActive ? null : <DrawerNewChatButton />}
       {dialogs}
 
-      {menuVisible && (
-        <>
-          <Pressable
-            accessibilityLabel={t('common.close')}
-            className="absolute inset-0 z-40"
-            onPress={closeMenu}
-          />
-          <View
-            accessibilityRole="menu"
-            className="absolute z-50 w-44 overflow-hidden rounded-xl bg-overlay shadow-lg"
-            style={{ top: menuPos.y, left: menuPos.x }}
-          >
-            <Pressable
-              accessibilityRole="menuitem"
-              className="flex-row items-center gap-3 px-4 py-3 active:opacity-60"
-              onPress={handleRename}
-            >
-              <PencilIcon className="size-4 text-foreground" />
-              <Text className="text-sm text-foreground">{t('common.rename')}</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="menuitem"
-              className="flex-row items-center gap-3 px-4 py-3 active:opacity-60"
-              onPress={handleDelete}
-            >
-              <Trash2Icon className="size-4 text-danger" />
-              <Text className="text-sm text-danger">{t('common.delete')}</Text>
-            </Pressable>
-          </View>
-        </>
-      )}
+      <PopupMenu
+        visible={menuVisible}
+        anchorRef={menuAnchorRef}
+        containerRef={containerRef}
+        items={menuItems}
+        onClose={closeMenu}
+        closeAccessibilityLabel={t('common.close')}
+      />
     </View>
   );
 });
