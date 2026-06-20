@@ -5,7 +5,7 @@ import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { PopupMenu, type PopupMenuItem } from '@/components/popupMenu';
+import { PopupMenu, type PopupMenuItem } from '@/components/PopupMenu';
 import type { Topic } from '@/data/types/topic';
 
 import { useDrawerActions, useDrawerPanelState, useDrawerTopics } from '../context/DrawerProvider';

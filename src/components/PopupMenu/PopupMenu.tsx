@@ -15,7 +15,7 @@ export const PopupMenu = memo(function PopupMenu({
   closeAccessibilityLabel,
 }: PopupMenuProps) {
   const isMountedRef = useRef(false);
-  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -25,7 +25,11 @@ export const PopupMenu = memo(function PopupMenu({
   }, []);
 
   useEffect(() => {
-    if (!visible || !anchorRef.current) return;
+    if (!visible) {
+      setMenuPos(null);
+      return;
+    }
+    if (!anchorRef.current) return;
 
     const computedMenuHeight = items.length * 48;
 
@@ -43,7 +47,7 @@ export const PopupMenu = memo(function PopupMenu({
     });
   }, [visible, anchorRef, containerRef, items.length]);
 
-  if (!visible) return null;
+  if (!visible || !menuPos) return null;
 
   return (
     <>
