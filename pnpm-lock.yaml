@@ -284,9 +284,6 @@ importers:
       '@biomejs/biome':
         specifier: ^2.4.15
         version: 2.4.15
-      '@testing-library/react-native':
-        specifier: ^14.0.0
-        version: 14.0.0(jest@29.7.0(@types/node@25.8.0))(react-native@0.85.3(@babel/core@7.29.0)(@react-native/jest-preset@0.85.3(@babel/core@7.29.0)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)(test-renderer@1.2.0(@types/react@19.2.14)(react@19.2.3))
       '@types/jest':
         specifier: ^29.5.14
         version: 29.5.14
@@ -10195,7 +10192,8 @@ snapshots:
     dependencies:
       '@jest/types': 29.6.3
 
-  '@jest/diff-sequences@30.4.0': {}
+  '@jest/diff-sequences@30.4.0':
+    optional: true
 
   '@jest/environment@29.7.0':
     dependencies:
@@ -10224,7 +10222,8 @@ snapshots:
       jest-mock: 29.7.0
       jest-util: 29.7.0
 
-  '@jest/get-type@30.1.0': {}
+  '@jest/get-type@30.1.0':
+    optional: true
 
   '@jest/globals@29.7.0':
     dependencies:
@@ -10271,6 +10270,7 @@ snapshots:
   '@jest/schemas@30.4.1':
     dependencies:
       '@sinclair/typebox': 0.34.49
+    optional: true
 
   '@jest/source-map@29.6.3':
     dependencies:
@@ -10798,9 +10798,7 @@ snapshots:
       metro-runtime: 0.84.4(patch_hash=7f83ec93fe717bebba70d6301eac128b36bbb0b46d5db476fb5c43bac9daea6a)
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -10991,7 +10989,8 @@ snapshots:
 
   '@sinclair/typebox@0.27.10': {}
 
-  '@sinclair/typebox@0.34.49': {}
+  '@sinclair/typebox@0.34.49':
+    optional: true
 
   '@sinonjs/commons@3.0.1':
     dependencies:
@@ -11102,6 +11101,7 @@ snapshots:
       test-renderer: 1.2.0(@types/react@19.2.14)(react@19.2.3)
     optionalDependencies:
       jest: 29.7.0(@types/node@25.8.0)
+    optional: true
 
   '@testing-library/user-event@14.6.1(@testing-library/dom@10.4.1)':
     dependencies:
@@ -11188,6 +11188,7 @@ snapshots:
   '@types/react-reconciler@0.33.0(@types/react@19.2.14)':
     dependencies:
       '@types/react': 19.2.14
+    optional: true
 
   '@types/react-test-renderer@19.1.0':
     dependencies:
@@ -13813,6 +13814,7 @@ snapshots:
       '@jest/get-type': 30.1.0
       chalk: 4.1.2
       pretty-format: 30.4.1
+    optional: true
 
   jest-docblock@29.7.0:
     dependencies:
@@ -13913,6 +13915,7 @@ snapshots:
       chalk: 4.1.2
       jest-diff: 30.4.1
       pretty-format: 30.4.1
+    optional: true
 
   jest-message-util@29.7.0:
     dependencies:
@@ -14977,7 +14980,8 @@ snapshots:
       '@jest/schemas': 30.4.1
       ansi-styles: 5.2.0
       react-is-18: react-is@18.3.1
-      react-is-19: react-is@19.2.6
+      react-is-19: react-is@19.2.7
+    optional: true
 
   proc-log@4.2.0: {}
 
@@ -15254,6 +15258,7 @@ snapshots:
     dependencies:
       react: 19.2.3
       scheduler: 0.27.0
+    optional: true
 
   react-refresh@0.14.2: {}
 
@@ -15963,6 +15968,7 @@ snapshots:
       react-reconciler: 0.33.0(react@19.2.3)
     transitivePeerDependencies:
       - '@types/react'
+    optional: true
 
   thenify-all@1.6.0:
     dependencies:
