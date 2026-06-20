@@ -1,5 +1,20 @@
-import { act, renderHook } from '@testing-library/react-native';
+import { createElement } from 'react';
+import { act, create } from 'react-test-renderer';
+
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import { useCreateCustomProvider } from '../useCreateCustomProvider';
+
+function renderHook<T>(useHook: () => T): { result: { current: T } } {
+  const result: { current: T } = { current: undefined as unknown as T };
+  const TestComponent = () => {
+    result.current = useHook();
+    return null;
+  };
+  act(() => {
+    create(createElement(TestComponent));
+  });
+  return { result };
+}
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -28,7 +43,6 @@ const mockServices = {
   provider: { create: jest.fn() },
 };
 const mockQueryClient = {
-  getQueryData: jest.fn(),
   invalidateQueries: jest.fn(),
 };
 const mockToastShow = jest.fn();
@@ -42,17 +56,17 @@ beforeEach(() => {
 
 describe('useCreateCustomProvider', () => {
   it('returns default state', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
+    const { result } = renderHook(() => useCreateCustomProvider());
 
     expect(result.current.isSheetOpen).toBe(false);
     expect(result.current.isSubmitting).toBe(false);
     expect(result.current.name).toBe('');
-    expect(result.current.selectedEndpointType).toBe('openai-chat-completions');
+    expect(result.current.selectedEndpointType).toBe(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS);
     expect(result.current.canSubmit).toBe(false);
   });
 
   it('canSubmit is false when name is empty', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
+    const { result } = renderHook(() => useCreateCustomProvider());
 
     act(() => result.current.setName(''));
 
@@ -60,7 +74,7 @@ describe('useCreateCustomProvider', () => {
   });
 
   it('canSubmit is true when name is non-empty and not submitting', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
+    const { result } = renderHook(() => useCreateCustomProvider());
 
     act(() => result.current.setName('My Provider'));
 
@@ -68,7 +82,7 @@ describe('useCreateCustomProvider', () => {
   });
 
   it('canSubmit is false when name is only whitespace', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
+    const { result } = renderHook(() => useCreateCustomProvider());
 
     act(() => result.current.setName('   '));
 
@@ -76,20 +90,30 @@ describe('useCreateCustomProvider', () => {
   });
 
   it('canSubmit is false while submitting', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
+    const { result } = renderHook(() => useCreateCustomProvider());
 
     act(() => result.current.setName('My Provider'));
 
-    mockQueryClient.getQueryData.mockReturnValue([]);
-    mockServices.provider.create.mockImplementation(() => new Promise(() => {}));
+    let resolveCreate!: (value: unknown) => void;
+    mockServices.provider.create.mockImplementation(
+      () =>
+        new Promise((r) => {
+          resolveCreate = r;
+        }),
+    );
 
-    await act(async () => result.current.submit());
-
+    const submitPromise = result.current.submit();
+    await act(async () => {});
     expect(result.current.canSubmit).toBe(false);
+
+    resolveCreate({ id: 'prov-123', name: 'My Provider' });
+    await act(async () => submitPromise);
+
+    expect(result.current.canSubmit).toBe(true);
   });
 
   it('openSheet opens the sheet and resets form', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
+    const { result } = renderHook(() => useCreateCustomProvider());
 
     act(() => result.current.setName('Old Name'));
     act(() => result.current.openSheet());
@@ -99,7 +123,7 @@ describe('useCreateCustomProvider', () => {
   });
 
   it('closeSheet closes the sheet', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
+    const { result } = renderHook(() => useCreateCustomProvider());
 
     act(() => result.current.openSheet());
     act(() => result.current.closeSheet());
@@ -108,88 +132,50 @@ describe('useCreateCustomProvider', () => {
   });
 
   it('closeSheet does not close while submitting', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
+    const { result } = renderHook(() => useCreateCustomProvider());
 
     act(() => result.current.openSheet());
 
-    mockQueryClient.getQueryData.mockReturnValue([]);
-    mockServices.provider.create.mockImplementation(() => new Promise(() => {}));
+    let resolveCreate!: (value: unknown) => void;
+    mockServices.provider.create.mockImplementation(
+      () =>
+        new Promise((r) => {
+          resolveCreate = r;
+        }),
+    );
 
     act(() => result.current.setName('My Provider'));
-    await act(async () => result.current.submit());
-    act(() => result.current.closeSheet());
+    const submitPromise = result.current.submit();
+    await act(async () => {});
 
+    act(() => result.current.closeSheet());
     expect(result.current.isSheetOpen).toBe(true);
+
+    resolveCreate({ id: 'prov-123', name: 'My Provider' });
+    await act(async () => submitPromise);
   });
 
   it('submit returns early when canSubmit is false', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
+    const { result } = renderHook(() => useCreateCustomProvider());
 
     await act(async () => result.current.submit());
 
     expect(mockServices.provider.create).not.toHaveBeenCalled();
-  });
-
-  it('submit shows error toast on duplicate name', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
-
-    act(() => result.current.setName('Existing Provider'));
-
-    mockQueryClient.getQueryData.mockReturnValue([{ name: 'Existing Provider' }]);
-
-    await act(async () => result.current.submit());
-
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'settings.provider.create_custom.duplicateName',
-      variant: 'danger',
-    });
-    expect(mockServices.provider.create).not.toHaveBeenCalled();
-  });
-
-  it('checks duplicate name case-insensitively', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
-
-    act(() => result.current.setName('existing provider'));
-
-    mockQueryClient.getQueryData.mockReturnValue([{ name: 'Existing Provider' }]);
-
-    await act(async () => result.current.submit());
-
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'settings.provider.create_custom.duplicateName',
-      variant: 'danger',
-    });
-  });
-
-  it('checks duplicate name with whitespace trimming', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
-
-    act(() => result.current.setName('  My Provider  '));
-
-    mockQueryClient.getQueryData.mockReturnValue([{ name: 'My Provider' }]);
-
-    await act(async () => result.current.submit());
-
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'settings.provider.create_custom.duplicateName',
-      variant: 'danger',
-    });
   });
 
   it('calls provider.create and invalidates queries on submit', async () => {
     const onCreated = jest.fn();
-    const { result } = await renderHook(() => useCreateCustomProvider({ onCreated }));
+    const { result } = renderHook(() => useCreateCustomProvider({ onCreated }));
 
     act(() => result.current.setName('My Provider'));
 
-    mockQueryClient.getQueryData.mockReturnValue([]);
     mockBuildPayload.mockReturnValue({ name: 'My Provider' });
     mockServices.provider.create.mockResolvedValue({ id: 'prov-123', name: 'My Provider' });
 
     await act(async () => result.current.submit());
 
     expect(mockBuildPayload).toHaveBeenCalledWith({
-      defaultChatEndpoint: 'openai-chat-completions',
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
       name: 'My Provider',
     });
     expect(mockServices.provider.create).toHaveBeenCalledWith({ name: 'My Provider' });
@@ -201,11 +187,10 @@ describe('useCreateCustomProvider', () => {
   });
 
   it('shows error toast when provider.create fails', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
+    const { result } = renderHook(() => useCreateCustomProvider());
 
     act(() => result.current.setName('My Provider'));
 
-    mockQueryClient.getQueryData.mockReturnValue([]);
     mockBuildPayload.mockReturnValue({ name: 'My Provider' });
     mockServices.provider.create.mockRejectedValue(new Error('DB error'));
 
@@ -219,11 +204,10 @@ describe('useCreateCustomProvider', () => {
   });
 
   it('resets submitting state after error', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
+    const { result } = renderHook(() => useCreateCustomProvider());
 
     act(() => result.current.setName('My Provider'));
 
-    mockQueryClient.getQueryData.mockReturnValue([]);
     mockBuildPayload.mockReturnValue({ name: 'My Provider' });
     mockServices.provider.create.mockRejectedValue(new Error('DB error'));
 
@@ -233,21 +217,33 @@ describe('useCreateCustomProvider', () => {
   });
 
   it('returns endpointOptions with type and labelKey', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
+    const { result } = renderHook(() => useCreateCustomProvider());
 
     expect(result.current.endpointOptions).toEqual([
-      { type: 'openai-chat-completions', labelKey: 'settings.provider.endpoint_type.openai_chat' },
-      { type: 'anthropic-messages', labelKey: 'settings.provider.endpoint_type.anthropic' },
-      { type: 'google-generate-content', labelKey: 'settings.provider.endpoint_type.gemini' },
-      { type: 'openai-responses', labelKey: 'settings.provider.endpoint_type.openai_responses' },
+      {
+        type: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        labelKey: 'settings.provider.endpoint_type.openai_chat',
+      },
+      {
+        type: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+        labelKey: 'settings.provider.endpoint_type.anthropic',
+      },
+      {
+        type: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+        labelKey: 'settings.provider.endpoint_type.gemini',
+      },
+      {
+        type: ENDPOINT_TYPE.OPENAI_RESPONSES,
+        labelKey: 'settings.provider.endpoint_type.openai_responses',
+      },
     ]);
   });
 
   it('allows selecting a different endpoint type', async () => {
-    const { result } = await renderHook(() => useCreateCustomProvider());
+    const { result } = renderHook(() => useCreateCustomProvider());
 
-    act(() => result.current.setSelectedEndpointType('anthropic-messages'));
+    act(() => result.current.setSelectedEndpointType(ENDPOINT_TYPE.ANTHROPIC_MESSAGES));
 
-    expect(result.current.selectedEndpointType).toBe('anthropic-messages');
+    expect(result.current.selectedEndpointType).toBe(ENDPOINT_TYPE.ANTHROPIC_MESSAGES);
   });
 });

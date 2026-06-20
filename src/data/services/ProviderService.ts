@@ -418,6 +418,19 @@ export class ProviderService {
     return this.replaceApiKeys(providerId, nextKeys);
   }
 
+  async delete(providerId: string): Promise<void> {
+    const [row] = await this.dbService.withWriteTx((tx) =>
+      tx
+        .delete(userProviderTable)
+        .where(eq(userProviderTable.providerId, providerId))
+        .returning({ providerId: userProviderTable.providerId }),
+    );
+
+    if (!row) {
+      throw DataApiErrorFactory.notFound('Provider', providerId);
+    }
+  }
+
   async batchUpsert(inputs: CreateProviderInput[]): Promise<void> {
     if (inputs.length === 0) {
       return;

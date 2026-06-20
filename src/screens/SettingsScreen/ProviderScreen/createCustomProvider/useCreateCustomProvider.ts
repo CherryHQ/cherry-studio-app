@@ -3,17 +3,27 @@ import { useToast } from 'heroui-native/toast';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ENDPOINT_TYPE, type EndpointType } from '@cherrystudio/provider-registry';
+
 import { queryKeys } from '@/data/api';
 import { useDataServices } from '@/data/runtime';
-import type { EndpointType } from '@/data/types/model';
 
 import { buildCreateCustomProviderPayload } from './createCustomProviderPayload';
 
 const SUBMITTABLE_ENDPOINT_TYPES: { type: EndpointType; labelKey: string }[] = [
-  { type: 'openai-chat-completions', labelKey: 'settings.provider.endpoint_type.openai_chat' },
-  { type: 'anthropic-messages', labelKey: 'settings.provider.endpoint_type.anthropic' },
-  { type: 'google-generate-content', labelKey: 'settings.provider.endpoint_type.gemini' },
-  { type: 'openai-responses', labelKey: 'settings.provider.endpoint_type.openai_responses' },
+  {
+    type: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    labelKey: 'settings.provider.endpoint_type.openai_chat',
+  },
+  { type: ENDPOINT_TYPE.ANTHROPIC_MESSAGES, labelKey: 'settings.provider.endpoint_type.anthropic' },
+  {
+    type: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+    labelKey: 'settings.provider.endpoint_type.gemini',
+  },
+  {
+    type: ENDPOINT_TYPE.OPENAI_RESPONSES,
+    labelKey: 'settings.provider.endpoint_type.openai_responses',
+  },
 ];
 
 type UseCreateCustomProviderOptions = {
@@ -26,8 +36,9 @@ export function useCreateCustomProvider({ onCreated }: UseCreateCustomProviderOp
   const services = useDataServices();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
-  const [selectedEndpointType, setSelectedEndpointType] =
-    useState<EndpointType>('openai-chat-completions');
+  const [selectedEndpointType, setSelectedEndpointType] = useState<EndpointType>(
+    ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
@@ -37,7 +48,7 @@ export function useCreateCustomProvider({ onCreated }: UseCreateCustomProviderOp
 
   const resetForm = useCallback(() => {
     setName('');
-    setSelectedEndpointType('openai-chat-completions');
+    setSelectedEndpointType(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS);
   }, []);
 
   const openSheet = useCallback(() => {
@@ -61,23 +72,6 @@ export function useCreateCustomProvider({ onCreated }: UseCreateCustomProviderOp
     setIsSubmitting(true);
 
     try {
-      const existingProviders = queryClient.getQueryData<{ name: string }[]>(
-        queryKeys.providers.list(),
-      );
-
-      if (
-        existingProviders?.some(
-          (p) => p.name.trim().toLowerCase() === trimmedName.toLowerCase(),
-        )
-      ) {
-        toast.show({
-          label: t('settings.provider.create_custom.duplicateName'),
-          variant: 'danger',
-        });
-        setIsSubmitting(false);
-        return;
-      }
-
       const payload = buildCreateCustomProviderPayload({
         defaultChatEndpoint: selectedEndpointType,
         name: trimmedName,
@@ -85,8 +79,8 @@ export function useCreateCustomProvider({ onCreated }: UseCreateCustomProviderOp
 
       const provider = await services.provider.create(payload);
       await queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() });
-      setIsSheetOpen(false);
       onCreated?.(provider.id, provider.name);
+      setIsSheetOpen(false);
     } catch {
       toast.show({
         label: t('settings.provider.create_custom.saveFailed'),
