@@ -36,9 +36,8 @@ import {
 // The sheet opens at 50% and stays there for both the action list and the inline
 // photo picker (the picker no longer auto-expands to 100%); 100% is kept as a
 // snap point only so the user can still drag it up. Fixed values (no dynamic
-// sizing) so the sheet doesn't resize from content measurement — that resize is
-// what makes the embedded native header jump. Module-level for a stable array
-// identity.
+// sizing) so the sheet doesn't reflow its contents as they measure. Module-level
+// for a stable array identity.
 const SHEET_SNAP_POINTS = ['50%', '100%'];
 
 // How long to let the sheet collapse before presenting the full-screen system
