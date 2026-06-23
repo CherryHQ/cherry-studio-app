@@ -1,6 +1,6 @@
 import { ENDPOINT_TYPE, MODEL_CAPABILITY, REASONING_EFFORT } from '@cherrystudio/provider-registry';
 
-import { extractReasoningFormatTypes, mergePresetModel } from '../providerRegistryService';
+import { extractReasoningFormatTypes, mergePresetModel } from '../ProviderRegistryService';
 
 describe('provider-registry-service', () => {
   test('extracts typed reasoning formats from endpoint configs', () => {

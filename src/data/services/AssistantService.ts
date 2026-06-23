@@ -8,12 +8,13 @@ import {
 } from '@/data/api/schemas/assistants';
 import type { DbService } from '@/data/db/DbService';
 import {
+  type AssistantRow,
   assistantKnowledgeBaseTable,
   assistantMcpServerTable,
   assistantTable,
   pinTable,
   userModelTable,
-} from '@/data/db/schema';
+} from '@/data/db/schemas';
 import type { PreferenceService } from '@/data/services/PreferenceService';
 import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/data/types/apiTypes';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
@@ -26,7 +27,6 @@ import type { TagService } from './TagService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 
-type AssistantRow = typeof assistantTable.$inferSelect;
 type AssistantRelationIds = Pick<Assistant, 'knowledgeBaseIds' | 'mcpServerIds'>;
 type TxLike = any;
 

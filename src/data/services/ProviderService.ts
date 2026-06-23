@@ -3,8 +3,8 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
 import type { DbService } from '@/data/db/DbService';
-import type { UserProviderInsert, UserProviderSelect } from '@/data/db/schema/userProvider';
-import { userProviderTable } from '@/data/db/schema/userProvider';
+import type { InsertUserProviderRow, UserProviderRow } from '@/data/db/schemas/userProvider';
+import { userProviderTable } from '@/data/db/schemas/userProvider';
 import { DataApiErrorFactory } from '@/data/types/apiTypes';
 import type { EndpointType } from '@/data/types/model';
 import type {
@@ -22,14 +22,14 @@ import {
   DEFAULT_PROVIDER_SETTINGS,
 } from '@/data/types/provider';
 
-import { providerRegistryService } from './providerRegistryService';
+import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
 
 export type CreateProviderInput = {
-  apiFeatures?: UserProviderInsert['apiFeatures'];
+  apiFeatures?: InsertUserProviderRow['apiFeatures'];
   apiKeys?: ApiKeyEntry[];
-  authConfig?: UserProviderInsert['authConfig'];
-  defaultChatEndpoint?: UserProviderInsert['defaultChatEndpoint'];
+  authConfig?: InsertUserProviderRow['authConfig'];
+  defaultChatEndpoint?: InsertUserProviderRow['defaultChatEndpoint'];
   endpointConfigs?: EndpointConfigs | null;
   isEnabled?: boolean;
   name: string;
@@ -38,11 +38,11 @@ export type CreateProviderInput = {
   providerSettings?: ProviderSettings | null;
 };
 
-type ProviderInputWithoutOrderKey = Omit<UserProviderInsert, 'orderKey'>;
+type ProviderInputWithoutOrderKey = Omit<InsertUserProviderRow, 'orderKey'>;
 export type UpdateProviderInput = {
   apiFeatures?: Partial<RuntimeApiFeatures> | null;
   authConfig?: AuthConfig | null;
-  defaultChatEndpoint?: UserProviderInsert['defaultChatEndpoint'] | null;
+  defaultChatEndpoint?: InsertUserProviderRow['defaultChatEndpoint'] | null;
   endpointConfigs?: EndpointConfigs | null;
   isEnabled?: boolean;
   name?: string;
@@ -88,9 +88,9 @@ function mergeCatalogEndpointConfigs(
 }
 
 function mergeCatalogApiFeatures(
-  existing: UserProviderInsert['apiFeatures'],
-  catalog: UserProviderInsert['apiFeatures'],
-): UserProviderInsert['apiFeatures'] {
+  existing: InsertUserProviderRow['apiFeatures'],
+  catalog: InsertUserProviderRow['apiFeatures'],
+): InsertUserProviderRow['apiFeatures'] {
   if (!existing && !catalog) {
     return null;
   }
@@ -98,7 +98,7 @@ function mergeCatalogApiFeatures(
   return {
     ...(catalog ?? {}),
     ...(existing ?? {}),
-  } as UserProviderInsert['apiFeatures'];
+  } as InsertUserProviderRow['apiFeatures'];
 }
 
 function withInferredAdapterFamilies(
@@ -162,7 +162,7 @@ function normalizeApiKeys(apiKeys: ApiKeyEntry[] | undefined): ApiKeyEntry[] {
   });
 }
 
-function rowToProvider(row: UserProviderSelect): Provider {
+function rowToProvider(row: UserProviderRow): Provider {
   const metadata = providerRegistryService.getProviderDisplayMetadata(
     row.providerId,
     row.presetProviderId ?? undefined,
@@ -243,7 +243,7 @@ export class ProviderService {
     return rowToProvider(row);
   }
 
-  async getRowByProviderId(providerId: string): Promise<UserProviderSelect | null> {
+  async getRowByProviderId(providerId: string): Promise<UserProviderRow | null> {
     const [row] = await this.db
       .select()
       .from(userProviderTable)
@@ -322,13 +322,13 @@ export class ProviderService {
       insertWithOrderKey(tx, userProviderTable, toInsert(input), {
         pkColumn: userProviderTable.providerId,
       }),
-    )) as UserProviderSelect;
+    )) as UserProviderRow;
 
     return rowToProvider(row);
   }
 
   async update(providerId: string, input: UpdateProviderInput): Promise<Provider> {
-    const updates: Partial<UserProviderInsert> = {};
+    const updates: Partial<InsertUserProviderRow> = {};
 
     if (input.apiFeatures !== undefined) {
       updates.apiFeatures = input.apiFeatures;

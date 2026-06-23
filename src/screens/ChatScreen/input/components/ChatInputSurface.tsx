@@ -12,7 +12,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { loggerService } from '@/core/logger/loggerService';
+import { loggerService } from '@/core/logger/LoggerService';
 import {
   chatInputBottomToolbarHeight,
   chatInputCollapsedHeight,

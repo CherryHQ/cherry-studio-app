@@ -13,7 +13,7 @@ import {
 } from 'drizzle-orm';
 import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
-import { loggerService } from '@/core/logger/loggerService';
+import { loggerService } from '@/core/logger/LoggerService';
 import type { OrderRequest } from '@/data/api/schemas/_endpointHelpers';
 import { DataApiErrorFactory } from '@/data/types/apiTypes';
 

@@ -22,5 +22,5 @@ export const promptTable = sqliteTable(
   (table) => [orderKeyIndex('prompt')(table)],
 );
 
-export type PromptInsert = typeof promptTable.$inferInsert;
-export type PromptSelect = typeof promptTable.$inferSelect;
+export type InsertPromptRow = typeof promptTable.$inferInsert;
+export type PromptRow = typeof promptTable.$inferSelect;

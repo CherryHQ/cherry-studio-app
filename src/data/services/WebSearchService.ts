@@ -1,4 +1,4 @@
-import { loggerService } from '@/core/logger/loggerService';
+import { loggerService } from '@/core/logger/LoggerService';
 import type { WebSearchCapability, WebSearchProvider } from '@/data/preference';
 import type { PreferenceService } from '@/data/services/PreferenceService';
 import type {

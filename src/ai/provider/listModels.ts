@@ -11,7 +11,7 @@ import type { Provider } from '@/data/types/provider';
 
 import { defaultHeaders, formatApiHost, getBaseUrl } from '../utils/provider';
 import {
-  AIHubMixModelsResponseSchema,
+  AiHubMixModelsResponseSchema,
   GeminiModelsResponseSchema,
   NewApiModelsResponseSchema,
   OpenAIModelsResponseSchema,
@@ -133,7 +133,7 @@ function isGeminiProvider(provider: Provider): boolean {
   );
 }
 
-function isAIGatewayProvider(provider: Provider): boolean {
+function isAiGatewayProvider(provider: Provider): boolean {
   return provider.id === 'gateway' || provider.presetProviderId === 'gateway';
 }
 
@@ -231,7 +231,7 @@ const aiHubMixFetcher: ModelFetcher = {
     const response = await getFromApi({
       url: 'https://aihubmix.com/api/v1/models',
       headers: await providerHeaders(provider, context),
-      responseSchema: AIHubMixModelsResponseSchema,
+      responseSchema: AiHubMixModelsResponseSchema,
       abortSignal: signal,
     });
     return dedup(response.data, (model) => model.model_id).map((model) =>
@@ -244,7 +244,7 @@ const aiHubMixFetcher: ModelFetcher = {
 };
 
 const gatewayFetcher: ModelFetcher = {
-  match: isAIGatewayProvider,
+  match: isAiGatewayProvider,
   fetch: async (provider, context, signal) => {
     const response = await getFromApi({
       url: 'https://ai-gateway.vercel.sh/v3/ai/config',

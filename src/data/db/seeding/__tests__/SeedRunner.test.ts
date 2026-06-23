@@ -10,7 +10,7 @@ jest.mock('@logger', () => ({
   },
 }));
 
-jest.mock('@/data/db/schema/appState', () => ({
+jest.mock('@/data/db/schemas/appState', () => ({
   appStateTable: {
     description: 'description',
     key: 'key',

@@ -8,7 +8,7 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenStack, ScreenStackHeaderLeftView, ScreenStackItem } from 'react-native-screens';
 import type { PhotoFile } from 'react-native-vision-camera';
-import { loggerService } from '@/core/logger/loggerService';
+import { loggerService } from '@/core/logger/LoggerService';
 import { type InlinePhotoPickerAsset, InlinePhotoPickerView } from '@/modules/inlinePhotoPicker';
 import { ChatInputActionList } from '@/screens/ChatScreen/input/components/ChatInputActionList';
 import { ChatInputInlineCamera } from '@/screens/ChatScreen/input/components/ChatInputInlineCamera';

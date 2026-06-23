@@ -141,5 +141,5 @@ export const MESSAGE_FTS_STATEMENTS: string[] = [
 // ORDER BY rank
 // `;
 
-export type MessageInsert = typeof messageTable.$inferInsert;
-export type MessageSelect = typeof messageTable.$inferSelect;
+export type InsertMessageRow = typeof messageTable.$inferInsert;
+export type MessageRow = typeof messageTable.$inferSelect;

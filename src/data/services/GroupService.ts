@@ -15,8 +15,8 @@
 import { asc, eq } from 'drizzle-orm';
 import type { OrderRequest } from '@/data/api/schemas/_endpointHelpers';
 import type { DbService } from '@/data/db/DbService';
-import { groupTable } from '@/data/db/schema';
-import type { GroupSelect } from '@/data/db/schema/group';
+import { groupTable } from '@/data/db/schemas';
+import type { GroupRow } from '@/data/db/schemas/group';
 import { DataApiErrorFactory } from '@/data/types/apiTypes';
 import type { EntityType } from '@/data/types/entityType';
 import type { CreateGroupDto, Group, UpdateGroupDto } from '@/data/types/group';
@@ -24,7 +24,7 @@ import type { CreateGroupDto, Group, UpdateGroupDto } from '@/data/types/group';
 import { applyScopedMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 
-function rowToGroup(row: GroupSelect): Group {
+function rowToGroup(row: GroupRow): Group {
   return {
     createdAt: timestampToISO(row.createdAt),
     entityType: row.entityType as EntityType,
@@ -82,7 +82,7 @@ export class GroupService {
           scope: eq(groupTable.entityType, dto.entityType),
         },
       ),
-    )) as GroupSelect;
+    )) as GroupRow;
 
     return rowToGroup(row);
   }

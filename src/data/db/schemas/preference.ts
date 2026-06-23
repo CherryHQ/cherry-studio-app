@@ -13,5 +13,5 @@ export const preferenceTable = sqliteTable(
   (table) => [primaryKey({ columns: [table.scope, table.key] })],
 );
 
-export type PreferenceInsert = typeof preferenceTable.$inferInsert;
-export type PreferenceSelect = typeof preferenceTable.$inferSelect;
+export type InsertPreferenceRow = typeof preferenceTable.$inferInsert;
+export type PreferenceRow = typeof preferenceTable.$inferSelect;

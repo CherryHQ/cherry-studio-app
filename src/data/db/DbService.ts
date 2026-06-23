@@ -5,7 +5,7 @@ import * as SQLite from 'expo-sqlite';
 
 import { customSqlStatements } from './customSql';
 import { migrations } from './migrations';
-import { type DatabaseSchema, schema } from './schema';
+import { type DatabaseSchema, schema } from './schemas';
 import { seedDatabase } from './seeding';
 
 const databaseName = 'cherry.db';

@@ -1,8 +1,8 @@
 import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 
 import type { DbService } from '@/data/db/DbService';
-import type { UserModelInsert, UserModelSelect } from '@/data/db/schema/userModel';
-import { userModelTable } from '@/data/db/schema/userModel';
+import type { InsertUserModelRow, UserModelRow } from '@/data/db/schemas/userModel';
+import { userModelTable } from '@/data/db/schemas/userModel';
 import { createUniqueModelId, type EndpointType, type Model } from '@/data/types/model';
 import type { EndpointConfigs } from '@/data/types/provider';
 
@@ -10,16 +10,16 @@ import {
   type ModelRegistryLookup,
   mergePresetModel,
   providerRegistryService,
-} from './providerRegistryService';
+} from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
 
 export type CreateModelInput = {
-  capabilities?: UserModelInsert['capabilities'];
+  capabilities?: InsertUserModelRow['capabilities'];
   contextWindow?: number | null;
   description?: string | null;
-  endpointTypes?: UserModelInsert['endpointTypes'];
+  endpointTypes?: InsertUserModelRow['endpointTypes'];
   group?: string | null;
-  inputModalities?: UserModelInsert['inputModalities'];
+  inputModalities?: InsertUserModelRow['inputModalities'];
   isDeprecated?: boolean;
   isEnabled?: boolean;
   isHidden?: boolean;
@@ -27,13 +27,13 @@ export type CreateModelInput = {
   maxOutputTokens?: number | null;
   modelId: string;
   name?: string | null;
-  outputModalities?: UserModelInsert['outputModalities'];
+  outputModalities?: InsertUserModelRow['outputModalities'];
   ownedBy?: string | null;
-  parameters?: UserModelInsert['parameters'];
+  parameters?: InsertUserModelRow['parameters'];
   presetModelId?: string | null;
-  pricing?: UserModelInsert['pricing'];
+  pricing?: InsertUserModelRow['pricing'];
   providerId: string;
-  reasoning?: UserModelInsert['reasoning'];
+  reasoning?: InsertUserModelRow['reasoning'];
   registryData?: ModelRegistryLookup;
   supportsStreaming?: boolean;
 };
@@ -48,9 +48,9 @@ export type ReconcileProviderModelsResult = {
   removedIds: string[];
 };
 
-type ModelInputWithoutOrderKey = Omit<UserModelInsert, 'orderKey'>;
+type ModelInputWithoutOrderKey = Omit<InsertUserModelRow, 'orderKey'>;
 
-function rowToModel(row: UserModelSelect): Model {
+function rowToModel(row: UserModelRow): Model {
   return {
     apiModelId: row.modelId,
     capabilities: row.capabilities,
@@ -217,7 +217,7 @@ export class ModelService {
         pkColumn: userModelTable.id,
         scope: eq(userModelTable.providerId, input.providerId),
       }),
-    )) as UserModelSelect;
+    )) as UserModelRow;
 
     return rowToModel(row);
   }
@@ -229,13 +229,13 @@ export class ModelService {
 
     const values = inputs.map(buildCreateValues);
     const rows = await this.dbService.withWriteTx(async (tx) => {
-      const result: UserModelSelect[] = [];
+      const result: UserModelRow[] = [];
       for (const providerId of new Set(values.map((value) => value.providerId))) {
         const scopedValues = values.filter((value) => value.providerId === providerId);
         const inserted = (await insertManyWithOrderKey(tx, userModelTable, scopedValues, {
           pkColumn: userModelTable.id,
           scope: eq(userModelTable.providerId, providerId),
-        })) as UserModelSelect[];
+        })) as UserModelRow[];
         result.push(...inserted);
       }
       return result;
@@ -277,7 +277,7 @@ export class ModelService {
           ? ((await insertManyWithOrderKey(tx, userModelTable, values, {
               pkColumn: userModelTable.id,
               scope: eq(userModelTable.providerId, providerId),
-            })) as UserModelSelect[])
+            })) as UserModelRow[])
           : [];
 
       if (toRemove.length > 0) {

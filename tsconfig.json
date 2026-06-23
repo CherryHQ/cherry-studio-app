@@ -24,7 +24,7 @@
       "@src/*": ["./src/*"],
       "@/*": ["./src/*"],
       "@/assets/*": ["./assets/*"],
-      "@logger": ["./src/core/logger/loggerService.ts"]
+      "@logger": ["./src/core/logger/LoggerService.ts"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
