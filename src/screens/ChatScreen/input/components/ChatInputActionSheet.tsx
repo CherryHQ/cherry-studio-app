@@ -3,10 +3,9 @@ import * as DocumentPicker from 'expo-document-picker';
 import { XIcon } from 'lucide-uniwind/png';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ScreenStack, ScreenStackHeaderLeftView, ScreenStackItem } from 'react-native-screens';
 import type { PhotoFile } from 'react-native-vision-camera';
 import { loggerService } from '@/core/logger/LoggerService';
 import { type InlinePhotoPickerAsset, InlinePhotoPickerView } from '@/modules/inlinePhotoPicker';
@@ -37,9 +36,8 @@ import {
 // The sheet opens at 50% and stays there for both the action list and the inline
 // photo picker (the picker no longer auto-expands to 100%); 100% is kept as a
 // snap point only so the user can still drag it up. Fixed values (no dynamic
-// sizing) so the sheet doesn't resize from content measurement — that resize is
-// what makes the embedded native header jump. Module-level for a stable array
-// identity.
+// sizing) so the sheet doesn't reflow its contents as they measure. Module-level
+// for a stable array identity.
 const SHEET_SNAP_POINTS = ['50%', '100%'];
 
 // How long to let the sheet collapse before presenting the full-screen system
@@ -51,10 +49,9 @@ const INLINE_COLLAPSE_DURATION_MS = 300;
 const logger = loggerService.withContext('ChatInputActionSheet');
 
 /**
- * The "+" action sheet. Its single screen rides a react-native-screens
- * `ScreenStack` purely so it gets a *native* header (the title plus an X close
- * button) over the sheet's own material. Screen + header backgrounds are
- * transparent so the material shows through as a single layer.
+ * The "+" action sheet. A plain header (title + X close) sits above the media
+ * strip and action list. The previous `ScreenStack` wrapper was removed because
+ * nesting it inside the bottom sheet crashes on Android on present.
  */
 export function ChatInputActionSheet() {
   const { t } = useTranslation();
@@ -185,11 +182,11 @@ export function ChatInputActionSheet() {
             />
           </Animated.View>
         ) : isInlinePickerOpen ? (
-          // Rendered WITHOUT the ScreenStack wrapper: the inline picker needs the
-          // full sheet area, and react-native-screens' Screen insets its content
-          // by the safe area (which left top/bottom gaps). Its back/confirm
-          // controls are drawn natively, so no header is needed here. The
-          // Animated.View gives it the same scale-up/fade as the camera.
+          // Rendered without the header wrapper: the inline picker needs the full
+          // sheet area, and react-native-screens' Screen would inset its content
+          // by the safe area (leaving top/bottom gaps). Its back/confirm controls
+          // are drawn natively, so no header is needed here. The Animated.View
+          // gives it the same scale-up/fade as the camera.
           <Animated.View
             entering={chatInputSubviewEntering}
             exiting={chatInputSubviewExiting}
@@ -221,64 +218,40 @@ export function ChatInputActionSheet() {
           </Animated.View>
         ) : (
           <View style={styles.stackHost}>
-            <ScreenStack style={styles.stack}>
-              <ScreenStackItem
-                contentStyle={styles.screen}
-                headerConfig={{
-                  backgroundColor: 'transparent',
-                  hideShadow: true,
-                  title: t('chat.actionSheet.title'),
-                  // The close button differs per platform: iOS exposes native
-                  // UIBarButtonItems (with SF Symbols), Android has no such API so
-                  // we draw it inside a cross-platform header subview instead.
-                  ...(Platform.OS === 'ios'
-                    ? {
-                        headerLeftBarButtonItems: [
-                          {
-                            accessibilityLabel: t('common.close'),
-                            icon: { name: 'xmark', type: 'sfSymbol' },
-                            onPress: handleClose,
-                            type: 'button',
-                          },
-                        ],
-                      }
-                    : {
-                        children: (
-                          <ScreenStackHeaderLeftView>
-                            <Pressable
-                              accessibilityLabel={t('common.close')}
-                              accessibilityRole="button"
-                              className="size-8 items-center justify-center rounded-full active:opacity-70"
-                              hitSlop={6}
-                              onPress={handleClose}
-                            >
-                              <XIcon className="size-6 text-foreground" strokeWidth={2} />
-                            </Pressable>
-                          </ScreenStackHeaderLeftView>
-                        ),
-                      }),
-                }}
-                screenId="main"
-                stackAnimation="default"
+            <View className="flex-row items-center px-4 pt-4 pb-2">
+              <Pressable
+                accessibilityLabel={t('common.close')}
+                accessibilityRole="button"
+                className="size-8 items-center justify-center rounded-full active:opacity-70"
+                hitSlop={6}
+                onPress={handleClose}
               >
-                <ScrollView
-                  contentContainerStyle={styles.scrollContent}
-                  showsVerticalScrollIndicator={false}
-                  style={styles.scrollViewport}
-                >
-                  <ChatInputMediaStrip>
-                    <ChatInputCameraTile onPress={handleCameraPress} />
-                    <ChatInputPhotosTile onPress={handlePhotosPress} />
-                    <ChatInputFileTile onPress={handleAddFilePress} />
-                  </ChatInputMediaStrip>
-                  <View className="h-px bg-border" />
-                  <ChatInputActionList
-                    selectedActionId={selectedToolId}
-                    onActionPress={handleActionPress}
-                  />
-                </ScrollView>
-              </ScreenStackItem>
-            </ScreenStack>
+                <XIcon className="size-6 text-foreground" strokeWidth={2} />
+              </Pressable>
+              <Text
+                className="flex-1 text-center font-semibold text-foreground text-lg"
+                numberOfLines={1}
+              >
+                {t('chat.actionSheet.title')}
+              </Text>
+              <View className="size-8" />
+            </View>
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              style={styles.scrollViewport}
+            >
+              <ChatInputMediaStrip>
+                <ChatInputCameraTile onPress={handleCameraPress} />
+                <ChatInputPhotosTile onPress={handlePhotosPress} />
+                <ChatInputFileTile onPress={handleAddFilePress} />
+              </ChatInputMediaStrip>
+              <View className="h-px bg-border" />
+              <ChatInputActionList
+                selectedActionId={selectedToolId}
+                onActionPress={handleActionPress}
+              />
+            </ScrollView>
           </View>
         )}
       </BottomSheetView>
@@ -300,15 +273,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
   },
-  // Transparent so the sheet's own material shows through instead of each
-  // screen painting its own systemBackground on top of it.
-  screen: {
-    backgroundColor: 'transparent',
-  },
   sheetViewport: {
-    flex: 1,
-  },
-  stack: {
     flex: 1,
   },
   stackHost: {
