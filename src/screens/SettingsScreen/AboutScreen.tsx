@@ -1,3 +1,4 @@
+import { PROVIDER_ICONS } from '@cherrystudio/ui/icons-png/providers';
 import Constants from 'expo-constants';
 import {
   CodeIcon,
@@ -10,11 +11,19 @@ import {
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Image, Linking, ScrollView, Text, View } from 'react-native';
+import { useUniwind } from 'uniwind';
 
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { SettingsSection } from './components/SettingsSection';
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'latest';
+const githubIcon = PROVIDER_ICONS.github;
+
+function GitHubIcon({ className }: { className?: string }) {
+  const { theme } = useUniwind();
+  const iconTheme = theme === 'dark' ? 'dark' : 'light';
+  return <Image className={className} source={githubIcon[iconTheme]} />;
+}
 
 const ABOUT_LINKS = {
   contact: 'https://docs.cherry-ai.com/contact-us/questions/',
@@ -36,8 +45,7 @@ export default function AboutSettingsScreen() {
     () => [
       {
         accessibilityLabel: t('settings.about.github.title'),
-        androidIcon: SquareArrowOutUpRightIcon,
-        icon: 'arrow.up.right.square',
+        androidIcon: GitHubIcon,
         key: 'github',
         onPress: () => openLink(ABOUT_LINKS.github),
       },
