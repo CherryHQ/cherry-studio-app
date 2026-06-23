@@ -15,9 +15,9 @@ import Animated, {
 import { loggerService } from '@/core/logger/LoggerService';
 import {
   chatInputBottomToolbarHeight,
-  chatInputCollapsedHeight,
-  chatInputCollapsedWidth,
-  chatInputCollapsedWidthRatio,
+  chatInputMinComposerHeight,
+  chatInputMinSurfaceWidth,
+  chatInputRestingWidthDelta,
 } from '@/screens/ChatScreen/input/chatInputLayout';
 import { ChatInputAddButton } from '@/screens/ChatScreen/input/components/ChatInputAddButton';
 import { ChatInputAttachmentPreviewStrip } from '@/screens/ChatScreen/input/components/ChatInputMediaStrip';
@@ -97,26 +97,22 @@ export function ChatInputSurface({
     expandProgress.value = withSpring(isComposerExpanded ? 1 : 0, chatInputSpringConfig);
   }, [isComposerExpanded, expandProgress]);
 
-  const surfaceAnimatedStyle = useAnimatedStyle(() => ({
-    height: interpolate(
-      expandProgress.value,
-      [0, 1],
-      [chatInputCollapsedHeight, Math.max(contentHeight.value, chatInputCollapsedHeight)],
-      Extrapolation.CLAMP,
-    ),
-    width: interpolate(
-      expandProgress.value,
-      [0, 1],
-      [
-        Math.max(availableWidth.value * chatInputCollapsedWidthRatio, chatInputCollapsedWidth),
-        Math.max(availableWidth.value, chatInputCollapsedWidth),
-      ],
-      Extrapolation.CLAMP,
-    ),
-  }));
-  const bottomToolbarAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(expandProgress.value, [0.4, 1], [0, 1], Extrapolation.CLAMP),
-  }));
+  const surfaceAnimatedStyle = useAnimatedStyle(() => {
+    const fullWidth = Math.max(availableWidth.value, chatInputMinSurfaceWidth);
+
+    return {
+      // Always the full composer height — only the width changes between the
+      // resting and focused states (the old collapsed pill clamped this to a
+      // single placeholder row).
+      height: Math.max(contentHeight.value, chatInputMinComposerHeight),
+      width: interpolate(
+        expandProgress.value,
+        [0, 1],
+        [Math.max(fullWidth - chatInputRestingWidthDelta, chatInputMinSurfaceWidth), fullWidth],
+        Extrapolation.CLAMP,
+      ),
+    };
+  });
   const handleWrapperLayout = useCallback(
     (event: LayoutChangeEvent) => {
       const nextWidth = event.nativeEvent.layout.width;
@@ -218,9 +214,12 @@ export function ChatInputSurface({
                 onAttachmentRemove={removeAttachment}
               />
               <ChatInputTextArea />
-              <Animated.View
-                className="flex-row items-center gap-2 px-3 pb-1.5 pr-11"
-                style={[inputBottomToolbarStyle, bottomToolbarAnimatedStyle]}
+              {/* pr-16 (not pr-11) clears the send button at the resting width:
+                  the button is pinned to the surface's right edge, so when the
+                  surface is inset it sits ~28px further into this row. */}
+              <View
+                className="flex-row items-center gap-2 px-3 pb-1.5 pr-16"
+                style={inputBottomToolbarStyle}
               >
                 <ChatInputAddButton />
                 <ChatInputPill
@@ -233,7 +232,7 @@ export function ChatInputSurface({
                   maxWidthClassName="max-w-[48%]"
                   onPress={handleModelPickerPress}
                 />
-              </Animated.View>
+              </View>
             </View>
           </View>
           <ChatInputPrimaryActionButton

@@ -1,19 +1,19 @@
-import { TextArea } from "heroui-native/text-area";
-import { cn } from "heroui-native/utils";
-import { useTranslation } from "react-i18next";
-import { StyleSheet } from "react-native";
+import { TextArea } from 'heroui-native/text-area';
+import { cn } from 'heroui-native/utils';
+import { useTranslation } from 'react-i18next';
+import { StyleSheet } from 'react-native';
 import {
   chatInputMaxTextAreaHeight,
   chatInputMinTextAreaHeight,
-} from "@/screens/ChatScreen/input/chatInputLayout";
+} from '@/screens/ChatScreen/input/chatInputLayout';
 import {
   useChatInputActions,
   useChatInputMeta,
   useChatInputState,
-} from "@/screens/ChatScreen/input/context/ChatInputProvider";
+} from '@/screens/ChatScreen/input/context/ChatInputProvider';
 
 const transparentInputSurfaceClassName =
-  "border-0 bg-transparent shadow-none ios:shadow-none android:shadow-none";
+  'border-0 bg-transparent shadow-none ios:shadow-none android:shadow-none';
 
 export function ChatInputTextArea() {
   const { t } = useTranslation();
@@ -26,11 +26,11 @@ export function ChatInputTextArea() {
       ref={inputRef}
       multiline
       className={cn(
-        "h-auto min-h-11 flex-1 rounded-3xl pr-12! pt-2! pb-4! text-base leading-5",
+        'h-auto min-h-11 flex-1 rounded-3xl pt-3! pr-12! pb-3! pl-3! text-base leading-5',
         transparentInputSurfaceClassName,
       )}
       numberOfLines={6}
-      placeholder={t("chat.inputPlaceholder")}
+      placeholder={t('chat.inputPlaceholder')}
       style={[
         styles.transparentInputSurface,
         {
@@ -49,10 +49,10 @@ export function ChatInputTextArea() {
 
 const styles = StyleSheet.create({
   transparentInputSurface: {
-    backgroundColor: "transparent",
-    borderColor: "transparent",
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
     borderWidth: 0,
-    boxShadow: "none",
+    boxShadow: 'none',
     elevation: 0,
   },
 });
