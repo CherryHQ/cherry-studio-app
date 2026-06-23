@@ -59,7 +59,13 @@ jest.mock('react-native-reanimated', () => {
     },
     Easing: {
       cubic: jest.fn(),
+      in: jest.fn((value) => value),
       out: jest.fn((value) => value),
+    },
+    Extrapolation: {
+      CLAMP: 'clamp',
+      EXTEND: 'extend',
+      IDENTITY: 'identity',
     },
     FadeIn: transition,
     FadeOut: transition,
@@ -67,6 +73,13 @@ jest.mock('react-native-reanimated', () => {
     ReduceMotion: {
       Never: 'never',
     },
+    // Static stand-ins: the surface only needs these to resolve to plain
+    // values/styles for render; this suite asserts behavior, not animation.
+    interpolate: (_value: number, _inputRange: number[], outputRange: number[]) => outputRange[0],
+    useAnimatedStyle: (factory: () => unknown) => factory(),
+    useSharedValue: (initialValue: unknown) => ({ value: initialValue }),
+    withSpring: (toValue: unknown) => toValue,
+    withTiming: (toValue: unknown) => toValue,
   };
 });
 
@@ -173,7 +186,8 @@ describe('ChatInputSurface', () => {
     });
   });
 
-  test('does not render a primary action button when there is no sendable content', async () => {
+  test('keeps a persistent placeholder action button that does not send without content', async () => {
+    const onSendPress = jest.fn();
     let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
@@ -185,7 +199,7 @@ describe('ChatInputSurface', () => {
             modelLabel="Model"
             onAssistantPickerPress={jest.fn()}
             onModelPickerPress={jest.fn()}
-            onSendPress={jest.fn()}
+            onSendPress={onSendPress}
             onStopPress={jest.fn()}
           />
         </ChatInputProvider>,
@@ -196,11 +210,19 @@ describe('ChatInputSurface', () => {
       throw new Error('ChatInputSurface test renderer was not created.');
     }
 
-    expect(
-      renderer.root.findAllByProps({
-        accessibilityLabel: 'chat.input.action.sendMessage',
-      }),
-    ).toHaveLength(0);
+    // The primary action button is persistent: with no sendable content it stays
+    // mounted as a placeholder that focuses the input instead of sending.
+    const actionButtons = renderer.root.findAllByProps({
+      accessibilityLabel: 'chat.input.action.sendMessage',
+    });
+    expect(actionButtons.length).toBeGreaterThan(0);
+
+    await act(async () => {
+      await actionButtons[0].props.onPress();
+    });
+
+    expect(onSendPress).not.toHaveBeenCalled();
+    // The stop button only appears while streaming.
     expect(
       renderer.root.findAllByProps({
         accessibilityLabel: 'chat.input.action.stopGenerating',
