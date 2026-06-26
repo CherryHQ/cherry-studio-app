@@ -1,11 +1,11 @@
 import { inArray, like, or } from 'drizzle-orm';
 
-import { messageTable, topicTable } from '@/data/db/schema';
+import { messageTable, topicTable } from '@/data/db/schemas';
 import {
   mockBenchmarkMessageIdPrefix,
   mockBenchmarkTopicIdPrefix,
   mockTopicMessages,
-} from '@/mock/chat';
+} from '@/mocks/chat';
 
 import { hashObject } from '../hashObject';
 import type { DatabaseSeeder } from '../types';

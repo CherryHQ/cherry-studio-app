@@ -2,7 +2,7 @@ import type { DbService } from '@/data/db/DbService';
 import type { PreferenceKeyType } from '@/data/preference';
 import { PreferenceService } from '@/data/services/PreferenceService';
 
-jest.mock('@/data/db/schema', () => ({
+jest.mock('@/data/db/schemas', () => ({
   preferenceTable: {
     key: 'key',
     scope: 'scope',

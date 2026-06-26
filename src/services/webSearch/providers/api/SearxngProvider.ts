@@ -1,4 +1,4 @@
-import { loggerService } from '@/core/logger/loggerService';
+import { loggerService } from '@/core/logger/LoggerService';
 import type { WebSearchExecutionConfig, WebSearchResponse } from '@/data/types/webSearch';
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { UrlSearchContext } from '../base/context';

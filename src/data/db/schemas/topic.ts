@@ -44,5 +44,5 @@ export const topicTable = sqliteTable(
   ],
 );
 
-export type TopicInsert = typeof topicTable.$inferInsert;
-export type TopicSelect = typeof topicTable.$inferSelect;
+export type InsertTopicRow = typeof topicTable.$inferInsert;
+export type TopicRow = typeof topicTable.$inferSelect;

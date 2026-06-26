@@ -1,8 +1,8 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 
 import type { DbService } from '@/data/db/DbService';
-import { entityTagTable, tagTable } from '@/data/db/schema';
-import type { TagSelect } from '@/data/db/schema/tagging';
+import { entityTagTable, tagTable } from '@/data/db/schemas';
+import type { TagRow } from '@/data/db/schemas/tagging';
 import { DataApiErrorFactory } from '@/data/types/apiTypes';
 import type { EntityType } from '@/data/types/entityType';
 import type { CreateTagDto, SyncEntityTagsDto, Tag, UpdateTagDto } from '@/data/types/tag';
@@ -11,7 +11,7 @@ import { timestampToISO } from './utils/rowMappers';
 
 type TxLike = any;
 
-function rowToTag(row: TagSelect): Tag {
+function rowToTag(row: TagRow): Tag {
   return {
     color: row.color ?? null,
     createdAt: timestampToISO(row.createdAt),

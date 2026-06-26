@@ -26,5 +26,5 @@ export const groupTable = sqliteTable(
   (table) => [scopedOrderKeyIndex('group', 'entityType')(table)],
 );
 
-export type GroupInsert = typeof groupTable.$inferInsert;
-export type GroupSelect = typeof groupTable.$inferSelect;
+export type InsertGroupRow = typeof groupTable.$inferInsert;
+export type GroupRow = typeof groupTable.$inferSelect;

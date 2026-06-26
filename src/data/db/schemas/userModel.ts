@@ -166,16 +166,14 @@ export const userModelTable = sqliteTable(
 );
 
 // Export table type
-export type UserModel = typeof userModelTable.$inferSelect;
-export type NewUserModel = typeof userModelTable.$inferInsert;
-export type UserModelInsert = typeof userModelTable.$inferInsert;
-export type UserModelSelect = typeof userModelTable.$inferSelect;
+export type InsertUserModelRow = typeof userModelTable.$inferInsert;
+export type UserModelRow = typeof userModelTable.$inferSelect;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Utility Functions
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** Check if this is a preset override or fully custom model */
-export function isPresetOverride(model: UserModel): boolean {
+export function isPresetOverride(model: UserModelRow): boolean {
   return model.presetModelId != null;
 }

@@ -19,14 +19,12 @@ import type {
 import type { UniqueModelId } from '@/data/types/model';
 
 import type { DbService } from '../db/DbService';
-import { messageTable, topicTable } from '../db/schema';
+import { type MessageRow, messageTable, topicTable } from '../db/schemas';
 import type { TopicService } from './TopicService';
 import { timestampToISO } from './utils/rowMappers';
 
 const previewLength = 50;
 const defaultLimit = 20;
-
-type MessageRow = typeof messageTable.$inferSelect;
 
 export type BranchMessagesParams = {
   cursor?: string;

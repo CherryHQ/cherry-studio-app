@@ -23,8 +23,8 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { OrderRequest } from '@/data/api/schemas/_endpointHelpers';
 import type { DbService } from '@/data/db/DbService';
-import { pinTable } from '@/data/db/schema';
-import type { PinSelect } from '@/data/db/schema/pin';
+import { pinTable } from '@/data/db/schemas';
+import type { PinRow } from '@/data/db/schemas/pin';
 import { DataApiErrorFactory } from '@/data/types/apiTypes';
 import type { EntityType } from '@/data/types/entityType';
 import type { CreatePinDto, Pin } from '@/data/types/pin';
@@ -34,7 +34,7 @@ import { timestampToISO } from './utils/rowMappers';
 
 type TxLike = any;
 
-function rowToPin(row: PinSelect): Pin {
+function rowToPin(row: PinRow): Pin {
   return {
     createdAt: timestampToISO(row.createdAt),
     entityId: row.entityId,
@@ -125,7 +125,7 @@ export class PinService {
             scope: eq(pinTable.entityType, dto.entityType),
           },
         );
-        return rowToPin(inserted as PinSelect);
+        return rowToPin(inserted as PinRow);
       } catch (error) {
         if (!isUniqueConstraintError(error)) {
           throw error;
