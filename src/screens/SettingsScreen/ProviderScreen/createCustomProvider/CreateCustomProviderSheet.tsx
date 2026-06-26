@@ -50,21 +50,13 @@ export function CreateCustomProviderSheet({
     (windowHeight - insets.top - insets.bottom) * (parseInt(SNAP_POINTS[0], 10) / 100);
 
   const handleClose = useCallback(() => {
-    if (isSubmitting) {
-      return;
-    }
-
     onClose();
-  }, [isSubmitting, onClose]);
+  }, [onClose]);
 
   const avatarLetter = name.trim().charAt(0).toUpperCase() || 'P';
   const { bg: avatarBgColor, fg: avatarFgColor } = name.trim()
     ? getProviderAvatarColor(name)
     : { bg: '#999', fg: '#fff' };
-
-  if (!isOpen) {
-    return null;
-  }
 
   return (
     <BottomSheet
