@@ -20,8 +20,9 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+const mockToastApi = { toast: { show: jest.fn() } };
 jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: jest.fn() } }),
+  useToast: () => mockToastApi,
 }));
 
 const mockUseDataServices = jest.fn();
@@ -45,13 +46,11 @@ const mockServices = {
 const mockQueryClient = {
   invalidateQueries: jest.fn(),
 };
-const mockToastShow = jest.fn();
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockUseDataServices.mockReturnValue(mockServices);
   mockUseQueryClient.mockReturnValue(mockQueryClient);
-  jest.requireMock('heroui-native/toast').useToast().toast.show = mockToastShow;
 });
 
 describe('useCreateCustomProvider', () => {
@@ -196,7 +195,7 @@ describe('useCreateCustomProvider', () => {
 
     await act(async () => result.current.submit());
 
-    expect(mockToastShow).toHaveBeenCalledWith({
+    expect(mockToastApi.toast.show).toHaveBeenCalledWith({
       label: 'settings.provider.create_custom.saveFailed',
       variant: 'danger',
     });
