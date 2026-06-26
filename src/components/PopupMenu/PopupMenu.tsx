@@ -1,10 +1,15 @@
 import { cn } from 'heroui-native/utils';
 import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import Animated, { FadeIn, ReduceMotion } from 'react-native-reanimated';
 
 import type { PopupMenuProps } from './types';
 
 const menuWidth = 176;
+const menuRowHeight = 44;
+const menuEntering = FadeIn.duration(160)
+  .withInitialValues({ opacity: 0 })
+  .reduceMotion(ReduceMotion.Never);
 
 export const PopupMenu = memo(function PopupMenu({
   visible,
@@ -31,7 +36,7 @@ export const PopupMenu = memo(function PopupMenu({
     }
     if (!anchorRef.current) return;
 
-    const computedMenuHeight = items.length * 48;
+    const computedMenuHeight = items.length * menuRowHeight;
 
     anchorRef.current.measureInWindow((rx, ry, rw, rh) => {
       containerRef.current?.measureInWindow((cx, cy, _cw, _ch) => {
@@ -53,11 +58,13 @@ export const PopupMenu = memo(function PopupMenu({
     <>
       <Pressable
         accessibilityLabel={closeAccessibilityLabel}
+        accessibilityRole="button"
         className="absolute inset-0 z-40"
         onPress={onClose}
       />
-      <View
+      <Animated.View
         accessibilityRole="menu"
+        entering={menuEntering}
         className="absolute z-50 overflow-hidden rounded-xl bg-overlay shadow-lg"
         style={{ top: menuPos.y, left: menuPos.x, width: menuWidth }}
       >
@@ -74,7 +81,7 @@ export const PopupMenu = memo(function PopupMenu({
             </Text>
           </Pressable>
         ))}
-      </View>
+      </Animated.View>
     </>
   );
 });
