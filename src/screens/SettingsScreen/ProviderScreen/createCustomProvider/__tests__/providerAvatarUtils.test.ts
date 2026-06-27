@@ -47,4 +47,25 @@ describe('getProviderAvatarColor', () => {
     expect(resultA.bg).toBe(resultA2.bg);
     expect(resultA.bg).not.toBe(resultB.bg);
   });
+
+  it('falls back to ? for empty string', () => {
+    const resultEmpty = getProviderAvatarColor('');
+    const resultFallback = getProviderAvatarColor('?');
+
+    expect(resultEmpty.bg).toBe(resultFallback.bg);
+  });
+
+  it('handles emoji first character', () => {
+    const result = getProviderAvatarColor('🤖 Robot');
+
+    expect(result.bg).toMatch(/^#[0-9a-fA-F]{6}$/);
+    expect(result.fg).toMatch(/^#[0-9a-fA-F]{6}$/);
+  });
+
+  it('handles CJK first character', () => {
+    const result = getProviderAvatarColor('中文测试');
+
+    expect(result.bg).toMatch(/^#[0-9a-fA-F]{6}$/);
+    expect(result.fg).toMatch(/^#[0-9a-fA-F]{6}$/);
+  });
 });

@@ -1,3 +1,7 @@
+jest.mock('expo-crypto', () => ({
+  randomUUID: jest.fn(() => 'test-uuid'),
+}));
+
 import type { Provider } from '@/data/types/provider';
 import {
   apiKeyEntriesSignature,

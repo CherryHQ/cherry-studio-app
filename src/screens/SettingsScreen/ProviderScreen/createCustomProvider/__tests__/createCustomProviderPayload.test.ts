@@ -73,6 +73,26 @@ describe('buildCreateCustomProviderPayload', () => {
     ).toThrow();
   });
 
+  it('rejects whitespace-only name', () => {
+    mockRandomUUID.mockReturnValue('uuid-ws');
+    expect(() =>
+      buildCreateCustomProviderPayload({
+        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        name: '   ',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects unknown endpoint type', () => {
+    mockRandomUUID.mockReturnValue('uuid-ep');
+    expect(() =>
+      buildCreateCustomProviderPayload({
+        defaultChatEndpoint: 'unknown-endpoint' as never,
+        name: 'Test',
+      }),
+    ).toThrow();
+  });
+
   it('accepts optional presetProviderId', () => {
     mockRandomUUID.mockReturnValue('uuid-789');
     const payload = buildCreateCustomProviderPayload({
