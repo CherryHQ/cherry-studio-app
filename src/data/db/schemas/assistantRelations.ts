@@ -43,7 +43,7 @@ export const assistantKnowledgeBaseTable = sqliteTable(
   (table) => [primaryKey({ columns: [table.assistantId, table.knowledgeBaseId] })],
 );
 
-export type AssistantKnowledgeBaseInsert = typeof assistantKnowledgeBaseTable.$inferInsert;
-export type AssistantKnowledgeBaseSelect = typeof assistantKnowledgeBaseTable.$inferSelect;
-export type AssistantMcpServerInsert = typeof assistantMcpServerTable.$inferInsert;
-export type AssistantMcpServerSelect = typeof assistantMcpServerTable.$inferSelect;
+export type InsertAssistantKnowledgeBaseRow = typeof assistantKnowledgeBaseTable.$inferInsert;
+export type AssistantKnowledgeBaseRow = typeof assistantKnowledgeBaseTable.$inferSelect;
+export type InsertAssistantMcpServerRow = typeof assistantMcpServerTable.$inferInsert;
+export type AssistantMcpServerRow = typeof assistantMcpServerTable.$inferSelect;

@@ -26,7 +26,7 @@ export function ChatInputTextArea() {
       ref={inputRef}
       multiline
       className={cn(
-        'h-auto min-h-11 flex-1 rounded-3xl pt-3! pr-12! pb-1! pl-3! text-base leading-5',
+        'h-auto min-h-11 flex-1 rounded-3xl pt-3! pr-12! pb-3! pl-3! text-base leading-5',
         transparentInputSurfaceClassName,
       )}
       numberOfLines={6}

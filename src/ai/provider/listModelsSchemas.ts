@@ -80,7 +80,7 @@ export const VercelGatewayModelsResponseSchema = z.object({
   ),
 });
 
-export const AIHubMixModelsResponseSchema = z.object({
+export const AiHubMixModelsResponseSchema = z.object({
   data: z.array(
     z.looseObject({
       model_id: z.string(),

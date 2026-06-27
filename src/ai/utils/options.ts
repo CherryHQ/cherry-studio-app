@@ -196,7 +196,7 @@ export function buildCapabilityProviderOptions(
     case 'newapi':
     case 'aihubmix':
     case SystemProviderIds.gateway:
-      providerSpecificOptions = buildAIGatewayOptions(
+      providerSpecificOptions = buildAiGatewayOptions(
         assistant,
         model,
         capabilities,
@@ -398,7 +398,7 @@ function buildGenericProviderOptions(
   return { [providerId]: providerOptions };
 }
 
-function buildAIGatewayOptions(
+function buildAiGatewayOptions(
   assistant: Assistant,
   model: Model,
   capabilities: Pick<

@@ -42,5 +42,5 @@ export const assistantTable = sqliteTable(
   ],
 );
 
-export type AssistantInsert = typeof assistantTable.$inferInsert;
-export type AssistantSelect = typeof assistantTable.$inferSelect;
+export type InsertAssistantRow = typeof assistantTable.$inferInsert;
+export type AssistantRow = typeof assistantTable.$inferSelect;

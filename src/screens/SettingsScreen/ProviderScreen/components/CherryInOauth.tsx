@@ -7,8 +7,8 @@ import { Image, Linking, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 import {
   UserCancelledError,
-  useCherryInOAuth,
-} from '@/hooks/features/cherryin-auth/useCherryInOAuth';
+  useCherryInOauth,
+} from '@/hooks/features/cherryInAuth/useCherryInOauth';
 import { useSettingsConfirmDialog } from '../../hooks/useSettingsConfirmDialog';
 
 const CHERRYIN_TOPUP_URL = 'https://open.cherryin.ai/console/topup';
@@ -20,12 +20,12 @@ function formatCurrency(value: number | null | undefined): string {
   return `$${value.toFixed(2)}`;
 }
 
-type CherryInOAuthProps = {
+type CherryInOauthProps = {
   providerId: string;
   onOAuthComplete?: () => void;
 };
 
-export function CherryInOAuth({ providerId, onOAuthComplete }: CherryInOAuthProps) {
+export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProps) {
   const { t } = useTranslation();
   const { theme } = useUniwind();
   const { confirmDialog, requestConfirm } = useSettingsConfirmDialog();
@@ -46,7 +46,7 @@ export function CherryInOAuth({ providerId, onOAuthComplete }: CherryInOAuthProp
     handleOAuthLogin,
     handleLogout,
     fetchData,
-  } = useCherryInOAuth({ providerId, requestConfirm, onOAuthComplete });
+  } = useCherryInOauth({ providerId, requestConfirm, onOAuthComplete });
 
   const onLoginPress = useCallback(async () => {
     try {

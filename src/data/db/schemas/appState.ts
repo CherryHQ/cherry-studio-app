@@ -9,5 +9,5 @@ export const appStateTable = sqliteTable('app_state', {
   ...createUpdateTimestamps,
 });
 
-export type AppStateInsert = typeof appStateTable.$inferInsert;
-export type AppStateSelect = typeof appStateTable.$inferSelect;
+export type InsertAppStateRow = typeof appStateTable.$inferInsert;
+export type AppStateRow = typeof appStateTable.$inferSelect;

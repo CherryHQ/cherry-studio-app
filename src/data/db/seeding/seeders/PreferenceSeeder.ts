@@ -1,4 +1,4 @@
-import { preferenceTable } from '@/data/db/schema';
+import { preferenceTable } from '@/data/db/schemas';
 import { DefaultPreferences } from '@/data/preference';
 
 import { hashObject } from '../hashObject';

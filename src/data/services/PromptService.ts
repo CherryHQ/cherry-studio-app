@@ -9,7 +9,7 @@
 import { and, asc, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
 import type { OrderRequest } from '@/data/api/schemas/_endpointHelpers';
 import type { DbService } from '@/data/db/DbService';
-import { promptTable } from '@/data/db/schema';
+import { type PromptRow, promptTable } from '@/data/db/schemas';
 import { DataApiErrorFactory } from '@/data/types/apiTypes';
 import type {
   CreatePromptDto,
@@ -21,7 +21,6 @@ import type {
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 
-type PromptRow = typeof promptTable.$inferSelect;
 type TxLike = any;
 
 function rowToPrompt(row: PromptRow): Prompt {

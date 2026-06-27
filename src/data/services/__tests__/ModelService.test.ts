@@ -1,8 +1,8 @@
 import type { DbService } from '@/data/db/DbService';
-import { userModelTable } from '@/data/db/schema/userModel';
+import { userModelTable } from '@/data/db/schemas/userModel';
 import { ModelService } from '../ModelService';
 
-jest.mock('@/data/db/schema/userModel', () => ({
+jest.mock('@/data/db/schemas/userModel', () => ({
   userModelTable: {
     id: 'id',
     providerId: 'providerId',

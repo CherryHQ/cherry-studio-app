@@ -7,10 +7,11 @@ internal provider or leaf components.
 ## Current Behavior Contract
 
 - The input starts with the localized `chat.inputPlaceholder` placeholder and an empty local draft.
-- Focusing the text area marks the input as focused and animates the Add button and text surface from
-  the merged resting state into separated controls.
-- Blurring the text area clears the focused state. If no tool is selected, the controls animate back
-  into the merged resting state.
+- The resting input shows the full composer (text area + Add/assistant/model row), just inset by a
+  small width delta. Focusing the text area marks the input as focused and springs the surface out to
+  full width.
+- Blurring the text area clears the focused state. If nothing else needs the full surface (no draft,
+  attachments, selected tool, or reasoning tag), the surface springs back to its inset resting width.
 - Pressing Add blurs the text area, dismisses the keyboard, clears the focused state, and opens the
   bottom action sheet.
 - The action sheet uses fixed snap points of `50%` and `70%`, supports pan-down close, and renders:

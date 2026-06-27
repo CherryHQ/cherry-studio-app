@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 
 import type { DbService } from '@/data/db/DbService';
-import { preferenceTable } from '@/data/db/schema';
+import { preferenceTable } from '@/data/db/schemas';
 import {
   DefaultPreferences,
   getDefaultValue,
