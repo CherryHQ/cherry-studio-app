@@ -42,6 +42,8 @@
   "chat.reasoning.minimal": "Minimal",
   "chat.reasoning.off": "Off",
   "chat.reasoning.title": "Reasoning effort",
+  "chat.reasoningStatus.thinking": "Thinking {{seconds}}s",
+  "chat.reasoningStatus.thought": "Thought for {{seconds}}s",
   "chat.tools.createImage": "Image",
   "chat.tools.think": "Think",
   "chat.tools.webSearch": "Search",

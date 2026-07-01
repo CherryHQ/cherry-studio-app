@@ -13,6 +13,7 @@ import { convertToModelMessages } from 'ai';
 import * as Crypto from 'expo-crypto';
 
 import type { AppProviderSettingsMap } from '../../types';
+import { withReasoningTimingMetadata } from './withReasoningTimingMetadata';
 
 type AppProviderKey = StringKeys<AppProviderSettingsMap>;
 
@@ -118,7 +119,9 @@ export class Agent<T extends AppProviderKey = AppProviderKey> {
         originalMessages: initialMessages,
         generateMessageId: () => params.messageId ?? Crypto.randomUUID(),
       });
-      const reader = uiStream.getReader();
+      // Must run before this stream is read so every consumer (live UI,
+      // persistence) sees the same computed startedAt/thinkingMs values.
+      const reader = withReasoningTimingMetadata(uiStream).getReader();
       try {
         while (true) {
           const { done, value } = await reader.read();

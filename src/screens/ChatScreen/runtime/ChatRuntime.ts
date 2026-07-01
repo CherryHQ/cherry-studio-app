@@ -12,6 +12,7 @@ import type {
 import type { Model, UniqueModelId } from '@/data/types/model';
 import { isUniqueModelId } from '@/data/types/model';
 import type { Topic } from '@/data/types/topic';
+import { type CherryReasoningMeta, readCherryMeta, withCherryMeta } from '@/data/types/uiParts';
 
 import { applyStreamingMessage } from './chatRuntimeMessages';
 
@@ -381,7 +382,7 @@ export class ChatRuntime {
       : appendErrorPart(latestParts as CherryMessagePart[], input.error);
 
     return await this.dependencies.services.message.update(assistantPlaceholder.id, {
-      data: { parts: dataParts as CherryMessagePart[] },
+      data: { parts: finalizeInterruptedReasoningParts(dataParts as CherryMessagePart[]) },
       status: input.wasAborted ? 'paused' : 'error',
     });
   }
@@ -391,8 +392,12 @@ export class ChatRuntime {
     latestAssistantMessage?: CherryUIMessage;
     status: 'paused' | 'success';
   }): Promise<Message> {
+    const parts = (input.latestAssistantMessage?.parts ?? []) as CherryMessagePart[];
+
     return await this.dependencies.services.message.update(input.assistantPlaceholder.id, {
-      data: { parts: (input.latestAssistantMessage?.parts ?? []) as CherryMessagePart[] },
+      data: {
+        parts: input.status === 'success' ? parts : finalizeInterruptedReasoningParts(parts),
+      },
       status: input.status,
     });
   }
@@ -530,6 +535,31 @@ function appendErrorPart(parts: readonly CherryMessagePart[], error: unknown): C
   }
 
   return [...parts, toErrorPart(error)] as CherryMessagePart[];
+}
+
+/**
+ * A reasoning part can still be `state: 'streaming'` when a turn ends early
+ * (abort, network error, app kill). Left as-is, ReasoningPart would treat it
+ * as perpetually thinking on every future render. Force it to `done` and
+ * backfill `thinkingMs` from `startedAt` when the stream never sent a
+ * `reasoning-end` to compute it.
+ */
+function finalizeInterruptedReasoningParts(parts: CherryMessagePart[]): CherryMessagePart[] {
+  return parts.map((part) => {
+    if (part.type !== 'reasoning' || part.state !== 'streaming') {
+      return part;
+    }
+
+    const cherry = readCherryMeta(part);
+    const startedAt = cherry?.startedAt;
+    const thinkingMs = cherry?.thinkingMs;
+    const patch: Partial<CherryReasoningMeta> =
+      typeof startedAt === 'number' && Number.isFinite(startedAt) && !Number.isFinite(thinkingMs)
+        ? { thinkingMs: Math.max(0, Date.now() - startedAt) }
+        : {};
+
+    return withCherryMeta({ ...part, state: 'done' }, patch);
+  });
 }
 
 function toModelSnapshot(model: Model): ModelSnapshot {

@@ -241,6 +241,49 @@ describe('ChatRuntime', () => {
     });
   });
 
+  test('finalizes a lingering streaming reasoning part when the stream fails after partial output', async () => {
+    const services = createServices();
+    const runtime = createRuntime({ services });
+    const partialChunk: CherryUIMessage = {
+      id: 'assistant-1',
+      parts: [
+        {
+          providerMetadata: { cherry: { startedAt: 1000 } },
+          state: 'streaming',
+          text: 'still thinking',
+          type: 'reasoning',
+        } as CherryMessagePart,
+      ],
+      role: 'assistant',
+    } as CherryUIMessage;
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterableWithFailure([partialChunk], new Error('stream failed')),
+    );
+    const dateSpy = jest.spyOn(Date, 'now').mockReturnValue(4500);
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
+      data: {
+        parts: [
+          expect.objectContaining({
+            providerMetadata: { cherry: { startedAt: 1000, thinkingMs: 3500 } },
+            state: 'done',
+            type: 'reasoning',
+          }),
+          expect.objectContaining({ type: 'data-error' }),
+        ],
+      },
+      status: 'error',
+    });
+
+    dateSpy.mockRestore();
+  });
+
   test('creates a topic before sending the first new-topic message', async () => {
     const services = createServices();
     const invalidateTopics = jest.fn(async () => undefined);

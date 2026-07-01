@@ -42,6 +42,8 @@
   "chat.reasoning.minimal": "最小",
   "chat.reasoning.off": "关闭",
   "chat.reasoning.title": "思考深度",
+  "chat.reasoningStatus.thinking": "思考中 {{seconds}} 秒",
+  "chat.reasoningStatus.thought": "已深度思考 {{seconds}} 秒",
   "chat.tools.createImage": "图片",
   "chat.tools.think": "思考",
   "chat.tools.webSearch": "搜索",

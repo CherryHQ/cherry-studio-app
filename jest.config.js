@@ -6,6 +6,7 @@ module.exports = {
       '<rootDir>/packages/lucide-uniwind/src/png-icons/generated/$1',
     '^lucide-uniwind/png$': '<rootDir>/packages/lucide-uniwind/src/png-icons/index.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^@logger$': '<rootDir>/src/core/logger/LoggerService.ts',
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   transformIgnorePatterns: [
