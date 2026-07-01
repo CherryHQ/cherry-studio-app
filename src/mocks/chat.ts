@@ -35,7 +35,7 @@ const benchmarkTopicSeeds = [
   // Listed last so it gets the largest topicIndex and therefore the newest
   // updatedAt — topics are sorted by updatedAt DESC, so this pins the curated
   // Showcase topic to the top of the list for quick styling review.
-  createBenchmarkTopicSeed('showcase', 4, 'b0'),
+  createBenchmarkTopicSeed('showcase', 4, 'b00'),
 ] satisfies readonly BenchmarkTopicSeed[];
 
 function createBenchmarkTopicSeed(
