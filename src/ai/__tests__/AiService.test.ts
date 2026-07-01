@@ -11,6 +11,7 @@ const mockAgentConstructor = jest.fn();
 jest.mock('@cherrystudio/ai-core', () => ({
   embedMany: jest.fn(async () => ({ embeddings: [[0.1]], usage: undefined })),
   generateImage: jest.fn(),
+  definePlugin: jest.fn((plugin) => plugin),
 }));
 
 jest.mock('@/integration/cherryAi', () => ({

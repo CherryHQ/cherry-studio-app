@@ -9,8 +9,13 @@ module.exports = {
     '^@logger$': '<rootDir>/src/core/logger/LoggerService.ts',
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  // tokenx ships ESM-only (.mjs, no CJS build); jest-expo's preset transform
+  // only matches `.[jt]sx?$`, so `.mjs` needs its own babel-jest entry.
+  transform: {
+    '\\.mjs$': 'babel-jest',
+  },
   transformIgnorePatterns: [
-    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base)))',
+    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|tokenx)))',
     '/node_modules/react-native-reanimated/plugin/',
   ],
 };

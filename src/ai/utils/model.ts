@@ -159,6 +159,11 @@ export const isSupportFlexServiceTierModel = (model: Model): boolean => {
 export const isSupportedThinkingTokenClaudeModel = (model: Model): boolean =>
   isAnthropicModel(model) && isSupportedThinkingTokenModel(model);
 
+export const isClaude4SeriesModel = (model: Model): boolean => {
+  const id = getLowerBaseModelName(getRawModelId(model), '/');
+  return /claude-(sonnet|opus|haiku)-4(?:[.-]\d+)?(?:[@\-:][\w\-:]+)?$/i.test(id);
+};
+
 export const isClaude46SeriesModel = (model: Model): boolean => {
   const id = getLowerBaseModelName(getRawModelId(model), '/');
   return /(?:anthropic\.)?claude-(?:opus|sonnet)-4[.-]6(?:[@\-:][\w\-:]+)?$/i.test(id);
@@ -167,6 +172,11 @@ export const isClaude46SeriesModel = (model: Model): boolean => {
 export const isClaude47SeriesModel = (model: Model): boolean => {
   const id = getLowerBaseModelName(getRawModelId(model), '/');
   return /(?:anthropic\.)?claude-opus-4[.-]7(?:[@\-:][\w\-:]+)?$/i.test(id);
+};
+
+export const isClaude45ReasoningModel = (model: Model): boolean => {
+  const id = getLowerBaseModelName(getRawModelId(model), '/');
+  return /claude-(sonnet|opus|haiku)-4(-|.)5(?:-[\w-]+)?$/i.test(id);
 };
 
 export const isHostedGemma4ThinkingModel = (model: Model): boolean => {

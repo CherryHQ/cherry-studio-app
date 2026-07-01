@@ -8,21 +8,11 @@ overrides:
   react-native-svg: 15.15.4
 
 patchedDependencies:
-  '@magrinj/expo-quick-look@0.3.1':
-    hash: 2b97fda8470c046179cf3e97282b6984fd1b926d2f54df9056a5cc455f073f2f
-    path: patches/@magrinj__expo-quick-look@0.3.1.patch
-  metro-runtime@0.84.4:
-    hash: 7f83ec93fe717bebba70d6301eac128b36bbb0b46d5db476fb5c43bac9daea6a
-    path: patches/metro-runtime@0.84.4.patch
-  metro@0.84.4:
-    hash: bc3c69aec12bccf391b5180caffd62a4043c81bcf5848949a4b50e79184be6f7
-    path: patches/metro@0.84.4.patch
-  react-native-reanimated@4.3.1:
-    hash: 25161b1e300e0b78c44cadff0624c7725ca0434c677cbca7ec7d845803abcc57
-    path: patches/react-native-reanimated@4.3.1.patch
-  react-native-worklets@0.8.3:
-    hash: b1ea7459a8a702297d804ca0ba8610d66c0cbff29aa673b59d5e49b86a806a90
-    path: patches/react-native-worklets@0.8.3.patch
+  '@magrinj/expo-quick-look@0.3.1': 2b97fda8470c046179cf3e97282b6984fd1b926d2f54df9056a5cc455f073f2f
+  metro-runtime@0.84.4: 7f83ec93fe717bebba70d6301eac128b36bbb0b46d5db476fb5c43bac9daea6a
+  metro@0.84.4: bc3c69aec12bccf391b5180caffd62a4043c81bcf5848949a4b50e79184be6f7
+  react-native-reanimated@4.3.1: 25161b1e300e0b78c44cadff0624c7725ca0434c677cbca7ec7d845803abcc57
+  react-native-worklets@0.8.3: b1ea7459a8a702297d804ca0ba8610d66c0cbff29aa673b59d5e49b86a806a90
 
 importers:
 
@@ -268,6 +258,9 @@ importers:
       tailwindcss:
         specifier: ^4.3.0
         version: 4.3.0
+      tokenx:
+        specifier: ^1.1.0
+        version: 1.3.0
       uniwind:
         specifier: ^1.6.4
         version: 1.6.5(react-native@0.85.3(@babel/core@7.29.0)(@react-native/jest-preset@0.85.3(@babel/core@7.29.0)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)(tailwindcss@4.3.0)
@@ -2535,18 +2528,10 @@ packages:
     cpu: [arm]
     os: [linux]
 
-  '@msgpackr-extract/msgpackr-extract-linux-x64@3.0.3':
-    resolution: {integrity: sha512-cvwNfbP07pKUfq1uH+S6KJ7dT9K8WOE4ZiAcsrSes+UY55E/0jLYc+vq+DO7jlmqRb5zAggExKm0H7O/CBaesg==}
-    cpu: [x64]
-    os: [linux]
-
   '@msgpackr-extract/msgpackr-extract-win32-x64@3.0.3':
     resolution: {integrity: sha512-x0fWaQtYp4E6sktbsdAqnehxDgEc/VwM7uLsRCYWaiGu0ykYdZPiS8zCWdnjHwyiumousxfBm4SO31eXqwEZhQ==}
     cpu: [x64]
     os: [win32]
-
-  '@napi-rs/wasm-runtime@0.2.12':
-    resolution: {integrity: sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==}
 
   '@napi-rs/wasm-runtime@1.1.4':
     resolution: {integrity: sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow==}
@@ -3617,11 +3602,6 @@ packages:
     cpu: [arm]
     os: [android]
 
-  '@unrs/resolver-binding-android-arm64@1.11.1':
-    resolution: {integrity: sha512-lCxkVtb4wp1v+EoN+HjIG9cIIzPkX5OtM03pQYkG+U5O/wL53LC4QbIeazgiKqluGeVEeBlZahHalCaBvU1a2g==}
-    cpu: [arm64]
-    os: [android]
-
   '@unrs/resolver-binding-darwin-arm64@1.11.1':
     resolution: {integrity: sha512-gPVA1UjRu1Y/IsB/dQEsp2V1pm44Of6+LWvbLc9SDk1c2KhhDRDBUkQCYVWe6f26uJb3fOK8saWMgtX8IrMk3g==}
     cpu: [arm64]
@@ -3677,28 +3657,11 @@ packages:
     os: [linux]
     libc: [musl]
 
-  '@unrs/resolver-binding-linux-s390x-gnu@1.11.1':
-    resolution: {integrity: sha512-kELo8ebBVtb9sA7rMe1Cph4QHreByhaZ2QEADd9NzIQsYNQpt9UkM9iqr2lhGr5afh885d/cB5QeTXSbZHTYPg==}
-    cpu: [s390x]
-    os: [linux]
-    libc: [glibc]
-
-  '@unrs/resolver-binding-linux-x64-gnu@1.11.1':
-    resolution: {integrity: sha512-C3ZAHugKgovV5YvAMsxhq0gtXuwESUKc5MhEtjBpLoHPLYM+iuwSj3lflFwK3DPm68660rZ7G8BMcwSro7hD5w==}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
   '@unrs/resolver-binding-linux-x64-musl@1.11.1':
     resolution: {integrity: sha512-rV0YSoyhK2nZ4vEswT/QwqzqQXw5I6CjoaYMOX0TqBlWhojUf8P94mvI7nuJTeaCkkds3QE4+zS8Ko+GdXuZtA==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
-
-  '@unrs/resolver-binding-wasm32-wasi@1.11.1':
-    resolution: {integrity: sha512-5u4RkfxJm+Ng7IWgkzi3qrFOvLvQYnPBmjmZQ8+szTK/b31fQCnleNl1GgEt7nIsZRIf5PLhPwT0WM+q45x/UQ==}
-    engines: {node: '>=14.0.0'}
-    cpu: [wasm32]
 
   '@unrs/resolver-binding-win32-arm64-msvc@1.11.1':
     resolution: {integrity: sha512-nRcz5Il4ln0kMhfL8S3hLkxI85BXs3o8EYoattsJNdsX4YUU89iOkVn7g0VHSRxFuVMdM4Q1jEpIId1Ihim/Uw==}
@@ -7614,6 +7577,9 @@ packages:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
     engines: {node: '>=0.6'}
 
+  tokenx@1.3.0:
+    resolution: {integrity: sha512-NLdXTEZkKiO0gZuLtMoZKjCXTREXeZZt8nnnNeyoXtNZAfG/GKGSbQtLU5STspc0rMSwcA+UJfWZkbNU01iKmQ==}
+
   toqr@0.1.1:
     resolution: {integrity: sha512-FWAPzCIHZHnrE/5/w9MPk0kK25hSQSH2IKhYh9PyjS3SG/+IEMvlwIHbhz+oF7xl54I+ueZlVnMjyzdSwLmAwA==}
 
@@ -8257,15 +8223,15 @@ snapshots:
 
   '@babel/core@7.29.0':
     dependencies:
-      '@babel/code-frame': 7.29.0
-      '@babel/generator': 7.29.1
-      '@babel/helper-compilation-targets': 7.28.6
-      '@babel/helper-module-transforms': 7.28.6(@babel/core@7.29.0)
+      '@babel/code-frame': 7.29.7
+      '@babel/generator': 7.29.7
+      '@babel/helper-compilation-targets': 7.29.7
+      '@babel/helper-module-transforms': 7.29.7(@babel/core@7.29.0)
       '@babel/helpers': 7.29.2
-      '@babel/parser': 7.29.3
-      '@babel/template': 7.28.6
-      '@babel/traverse': 7.29.0
-      '@babel/types': 7.29.0
+      '@babel/parser': 7.29.7
+      '@babel/template': 7.29.7
+      '@babel/traverse': 7.29.7
+      '@babel/types': 7.29.7
       '@jridgewell/remapping': 2.3.5
       convert-source-map: 2.0.0
       debug: 4.4.3
@@ -8521,8 +8487,8 @@ snapshots:
 
   '@babel/helpers@7.29.2':
     dependencies:
-      '@babel/template': 7.28.6
-      '@babel/types': 7.29.0
+      '@babel/template': 7.29.7
+      '@babel/types': 7.29.7
 
   '@babel/parser@7.29.3':
     dependencies:
@@ -9743,7 +9709,7 @@ snapshots:
 
   '@expo/json-file@10.2.0':
     dependencies:
-      '@babel/code-frame': 7.29.0
+      '@babel/code-frame': 7.29.7
       json5: 2.2.3
 
   '@expo/local-build-cache-provider@56.0.7(typescript@6.0.3)':
@@ -9878,9 +9844,9 @@ snapshots:
 
   '@expo/require-utils@56.1.2(typescript@6.0.3)':
     dependencies:
-      '@babel/code-frame': 7.29.0
+      '@babel/code-frame': 7.29.7
       '@babel/core': 7.29.0
-      '@babel/plugin-transform-modules-commonjs': 7.28.6(@babel/core@7.29.0)
+      '@babel/plugin-transform-modules-commonjs': 7.29.7(@babel/core@7.29.0)
     optionalDependencies:
       typescript: 6.0.3
     transitivePeerDependencies:
@@ -10294,17 +10260,7 @@ snapshots:
   '@msgpackr-extract/msgpackr-extract-linux-arm@3.0.3':
     optional: true
 
-  '@msgpackr-extract/msgpackr-extract-linux-x64@3.0.3':
-    optional: true
-
   '@msgpackr-extract/msgpackr-extract-win32-x64@3.0.3':
-    optional: true
-
-  '@napi-rs/wasm-runtime@0.2.12':
-    dependencies:
-      '@emnapi/core': 1.10.0
-      '@emnapi/runtime': 1.10.0
-      '@tybys/wasm-util': 0.10.2
     optional: true
 
   '@napi-rs/wasm-runtime@1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
@@ -10721,7 +10677,9 @@ snapshots:
       metro-runtime: 0.84.4(patch_hash=7f83ec93fe717bebba70d6301eac128b36bbb0b46d5db476fb5c43bac9daea6a)
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -11025,24 +10983,24 @@ snapshots:
 
   '@types/babel__core@7.20.5':
     dependencies:
-      '@babel/parser': 7.29.3
-      '@babel/types': 7.29.0
+      '@babel/parser': 7.29.7
+      '@babel/types': 7.29.7
       '@types/babel__generator': 7.27.0
       '@types/babel__template': 7.4.4
       '@types/babel__traverse': 7.28.0
 
   '@types/babel__generator@7.27.0':
     dependencies:
-      '@babel/types': 7.29.0
+      '@babel/types': 7.29.7
 
   '@types/babel__template@7.4.4':
     dependencies:
-      '@babel/parser': 7.29.3
-      '@babel/types': 7.29.0
+      '@babel/parser': 7.29.7
+      '@babel/types': 7.29.7
 
   '@types/babel__traverse@7.28.0':
     dependencies:
-      '@babel/types': 7.29.0
+      '@babel/types': 7.29.7
 
   '@types/chai@5.2.3':
     dependencies:
@@ -11206,9 +11164,6 @@ snapshots:
   '@unrs/resolver-binding-android-arm-eabi@1.11.1':
     optional: true
 
-  '@unrs/resolver-binding-android-arm64@1.11.1':
-    optional: true
-
   '@unrs/resolver-binding-darwin-arm64@1.11.1':
     optional: true
 
@@ -11239,18 +11194,7 @@ snapshots:
   '@unrs/resolver-binding-linux-riscv64-musl@1.11.1':
     optional: true
 
-  '@unrs/resolver-binding-linux-s390x-gnu@1.11.1':
-    optional: true
-
-  '@unrs/resolver-binding-linux-x64-gnu@1.11.1':
-    optional: true
-
   '@unrs/resolver-binding-linux-x64-musl@1.11.1':
-    optional: true
-
-  '@unrs/resolver-binding-wasm32-wasi@1.11.1':
-    dependencies:
-      '@napi-rs/wasm-runtime': 0.2.12
     optional: true
 
   '@unrs/resolver-binding-win32-arm64-msvc@1.11.1':
@@ -11537,7 +11481,7 @@ snapshots:
 
   babel-plugin-istanbul@6.1.1:
     dependencies:
-      '@babel/helper-plugin-utils': 7.28.6
+      '@babel/helper-plugin-utils': 7.29.7
       '@istanbuljs/load-nyc-config': 1.1.0
       '@istanbuljs/schema': 0.1.6
       istanbul-lib-instrument: 5.2.1
@@ -11547,8 +11491,8 @@ snapshots:
 
   babel-plugin-jest-hoist@29.6.3:
     dependencies:
-      '@babel/template': 7.28.6
-      '@babel/types': 7.29.0
+      '@babel/template': 7.29.7
+      '@babel/types': 7.29.7
       '@types/babel__core': 7.20.5
       '@types/babel__traverse': 7.28.0
 
@@ -13576,7 +13520,7 @@ snapshots:
   istanbul-lib-instrument@5.2.1:
     dependencies:
       '@babel/core': 7.29.0
-      '@babel/parser': 7.29.3
+      '@babel/parser': 7.29.7
       '@istanbuljs/schema': 0.1.6
       istanbul-lib-coverage: 3.2.2
       semver: 6.3.1
@@ -14398,7 +14342,7 @@ snapshots:
 
   metro-runtime@0.84.4(patch_hash=7f83ec93fe717bebba70d6301eac128b36bbb0b46d5db476fb5c43bac9daea6a):
     dependencies:
-      '@babel/runtime': 7.29.2
+      '@babel/runtime': 7.29.7
       flow-enums-runtime: 0.0.6
 
   metro-source-map@0.84.4:
@@ -14459,13 +14403,13 @@ snapshots:
 
   metro@0.84.4(patch_hash=bc3c69aec12bccf391b5180caffd62a4043c81bcf5848949a4b50e79184be6f7):
     dependencies:
-      '@babel/code-frame': 7.29.0
+      '@babel/code-frame': 7.29.7
       '@babel/core': 7.29.0
-      '@babel/generator': 7.29.1
-      '@babel/parser': 7.29.3
-      '@babel/template': 7.28.6
-      '@babel/traverse': 7.29.0
-      '@babel/types': 7.29.0
+      '@babel/generator': 7.29.7
+      '@babel/parser': 7.29.7
+      '@babel/template': 7.29.7
+      '@babel/traverse': 7.29.7
+      '@babel/types': 7.29.7
       accepts: 2.0.0
       ci-info: 2.0.0
       connect: 3.7.0
@@ -14554,7 +14498,6 @@ snapshots:
       '@msgpackr-extract/msgpackr-extract-darwin-x64': 3.0.3
       '@msgpackr-extract/msgpackr-extract-linux-arm': 3.0.3
       '@msgpackr-extract/msgpackr-extract-linux-arm64': 3.0.3
-      '@msgpackr-extract/msgpackr-extract-linux-x64': 3.0.3
       '@msgpackr-extract/msgpackr-extract-win32-x64': 3.0.3
     optional: true
 
@@ -15861,6 +15804,8 @@ snapshots:
 
   toidentifier@1.0.1: {}
 
+  tokenx@1.3.0: {}
+
   toqr@0.1.1: {}
 
   tough-cookie@2.5.0:
@@ -16032,7 +15977,6 @@ snapshots:
       napi-postinstall: 0.3.4
     optionalDependencies:
       '@unrs/resolver-binding-android-arm-eabi': 1.11.1
-      '@unrs/resolver-binding-android-arm64': 1.11.1
       '@unrs/resolver-binding-darwin-arm64': 1.11.1
       '@unrs/resolver-binding-darwin-x64': 1.11.1
       '@unrs/resolver-binding-freebsd-x64': 1.11.1
@@ -16043,10 +15987,7 @@ snapshots:
       '@unrs/resolver-binding-linux-ppc64-gnu': 1.11.1
       '@unrs/resolver-binding-linux-riscv64-gnu': 1.11.1
       '@unrs/resolver-binding-linux-riscv64-musl': 1.11.1
-      '@unrs/resolver-binding-linux-s390x-gnu': 1.11.1
-      '@unrs/resolver-binding-linux-x64-gnu': 1.11.1
       '@unrs/resolver-binding-linux-x64-musl': 1.11.1
-      '@unrs/resolver-binding-wasm32-wasi': 1.11.1
       '@unrs/resolver-binding-win32-arm64-msvc': 1.11.1
       '@unrs/resolver-binding-win32-ia32-msvc': 1.11.1
       '@unrs/resolver-binding-win32-x64-msvc': 1.11.1
