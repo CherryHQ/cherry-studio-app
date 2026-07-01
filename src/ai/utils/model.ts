@@ -10,6 +10,14 @@ export const isVisionModel = (model: Model): boolean =>
   model.capabilities.includes(MODEL_CAPABILITY.IMAGE_RECOGNITION) ||
   model.inputModalities?.includes(MODALITY.IMAGE) === true;
 
+export const isVideoModel = (model: Model): boolean =>
+  model.capabilities.includes(MODEL_CAPABILITY.VIDEO_RECOGNITION) ||
+  model.inputModalities?.includes(MODALITY.VIDEO) === true;
+
+export const isAudioModel = (model: Model): boolean =>
+  model.capabilities.includes(MODEL_CAPABILITY.AUDIO_RECOGNITION) ||
+  model.inputModalities?.includes(MODALITY.AUDIO) === true;
+
 export const isGenerateImageModel = (model: Model): boolean =>
   model.capabilities.includes(MODEL_CAPABILITY.IMAGE_GENERATION);
 
@@ -159,6 +167,11 @@ export const isSupportFlexServiceTierModel = (model: Model): boolean => {
 export const isSupportedThinkingTokenClaudeModel = (model: Model): boolean =>
   isAnthropicModel(model) && isSupportedThinkingTokenModel(model);
 
+export const isClaude4SeriesModel = (model: Model): boolean => {
+  const id = getLowerBaseModelName(getRawModelId(model), '/');
+  return /claude-(sonnet|opus|haiku)-4(?:[.-]\d+)?(?:[@\-:][\w\-:]+)?$/i.test(id);
+};
+
 export const isClaude46SeriesModel = (model: Model): boolean => {
   const id = getLowerBaseModelName(getRawModelId(model), '/');
   return /(?:anthropic\.)?claude-(?:opus|sonnet)-4[.-]6(?:[@\-:][\w\-:]+)?$/i.test(id);
@@ -167,6 +180,35 @@ export const isClaude46SeriesModel = (model: Model): boolean => {
 export const isClaude47SeriesModel = (model: Model): boolean => {
   const id = getLowerBaseModelName(getRawModelId(model), '/');
   return /(?:anthropic\.)?claude-opus-4[.-]7(?:[@\-:][\w\-:]+)?$/i.test(id);
+};
+
+export const isClaude45ReasoningModel = (model: Model): boolean => {
+  const id = getLowerBaseModelName(getRawModelId(model), '/');
+  return /claude-(sonnet|opus|haiku)-4(-|.)5(?:-[\w-]+)?$/i.test(id);
+};
+
+export const isClaudeReasoningModel = (model: Model): boolean =>
+  isAnthropicModel(model) && isReasoningModel(model);
+
+/** Whether temperature and top_p are mutually exclusive for this model (Claude 4.5 reasoning). */
+export const isTemperatureTopPMutuallyExclusiveModel = (model: Model): boolean => {
+  const id = getLowerBaseModelName(getRawModelId(model), '/');
+  return /claude-(sonnet|opus|haiku)-4(-|.)5(?:-[\w-]+)?$/i.test(id);
+};
+
+export const isSupportTemperatureModel = (model: Model): boolean =>
+  model.parameters?.temperature?.supported !== false;
+
+export const isSupportTopPModel = (model: Model): boolean =>
+  model.parameters?.topP?.supported !== false;
+
+export const isMaxTemperatureOneModel = (model: Model): boolean => {
+  const max = model.parameters?.temperature?.range?.max;
+  if (max !== undefined) return max <= 1;
+  const id = getLowerBaseModelName(getRawModelId(model));
+  return (
+    id.startsWith('claude') || id.includes('glm') || id.includes('kimi') || id.includes('moonshot')
+  );
 };
 
 export const isHostedGemma4ThinkingModel = (model: Model): boolean => {

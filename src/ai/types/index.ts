@@ -33,6 +33,8 @@ export interface ProviderCapabilities {
   enableGenerateImage: boolean;
   /** Whether provider-native URL context should be enabled. */
   enableUrlContext: boolean;
+  /** Whether the model should stream output (vs. a single simulated chunk). */
+  streamOutput: boolean;
 }
 
 /**

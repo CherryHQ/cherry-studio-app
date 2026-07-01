@@ -296,9 +296,18 @@ function createShowcaseMarkdownContent() {
 
 function createShowcaseDataParts(): CherryMessagePart[] {
   return [
+    // Two reasoning states for a quick visual diff of ReasoningPart: still
+    // thinking (ticks a local timer + PrismSweep runs) and finished with a
+    // real duration.
     {
+      state: 'streaming',
+      text: '这是「思考中」状态：正在权衡多种实现方案的利弊，评估每种方案对现有代码的影响范围……',
+      type: 'reasoning',
+    },
+    {
+      providerMetadata: { cherry: { thinkingMs: 8300 } },
       state: 'done',
-      text: '让我先梳理一下要演示的内容：\n\n1. 推理块（reasoning）\n2. 代码块、压缩块、错误块\n3. 翻译块与视频块',
+      text: '这是「已深度思考」状态：让我先梳理一下要演示的内容：\n\n1. 推理块（reasoning）\n2. 代码块、压缩块、错误块\n3. 翻译块与视频块',
       type: 'reasoning',
     },
     {

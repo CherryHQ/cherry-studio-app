@@ -1,8 +1,10 @@
+import { loggerService } from '@logger';
 import { Uniwind } from 'uniwind';
-
 import { ThemeMode } from '@/data/preference';
 import type { DataServices } from '@/data/services/createDataServices';
 import { initI18n } from '@/i18n';
+
+const logger = loggerService.withContext('bootstrapAppRuntime');
 
 const bootPreferenceKeys = {
   language: 'app.language',
@@ -14,6 +16,24 @@ export async function bootstrapAppRuntime(services: DataServices) {
 
   applyThemeModePreference(preferences.themeMode);
   await initI18n(preferences.language);
+  await reconcileStalePendingMessages(services);
+}
+
+/** Crash-orphaned assistant messages left `pending` from a previous run —
+ * cold start is the only reliable "no writer is streaming into this" signal,
+ * since the OS suspends rather than kills a backgrounded app. Best-effort:
+ * a failure here shouldn't block the rest of startup. */
+async function reconcileStalePendingMessages(services: DataServices) {
+  try {
+    const staleIds = await services.message.findPendingAssistantMessageIds();
+    if (staleIds.length === 0) return;
+    logger.info('Reconciling crash-orphaned pending assistant messages', {
+      count: staleIds.length,
+    });
+    await services.message.markMessagesError(staleIds);
+  } catch (error) {
+    logger.error('Failed to reconcile stale pending messages', error as Error);
+  }
 }
 
 export function applyThemeModePreference(themeMode: ThemeMode) {

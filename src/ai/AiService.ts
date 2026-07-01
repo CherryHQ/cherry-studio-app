@@ -1,7 +1,11 @@
+import type { AiPlugin } from '@cherrystudio/ai-core';
 import {
   embedMany as aiCoreEmbedMany,
   generateImage as aiCoreGenerateImage,
 } from '@cherrystudio/ai-core';
+import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
+import { providerToolPlugin } from '@cherrystudio/ai-core/built-in/plugins';
+import { extensionRegistry } from '@cherrystudio/ai-core/provider';
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 'ai';
 import type { AssistantService } from '@/data/services/AssistantService';
@@ -13,18 +17,39 @@ import type { Model, UniqueModelId } from '@/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 
+import { resolveMediaCapabilities } from './messages/messageCapabilities';
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { providerToAiSdkConfig } from './provider/config';
 import { listModels as listProviderModels } from './provider/listModels';
 import { Agent } from './runtime/aiSdk/Agent';
-import type { AppProviderSettingsMap } from './types';
+import { createAnthropicCachePlugin } from './runtime/aiSdk/plugins/anthropicCache';
+import { createGatewayUsageNormalizePlugin } from './runtime/aiSdk/plugins/gatewayUsageNormalize';
+import { createOpenrouterReasoningPlugin } from './runtime/aiSdk/plugins/openrouterReasoning';
+import {
+  createReasoningExtractionPlugin,
+  INLINE_REASONING_SDK_PROVIDER_IDS,
+} from './runtime/aiSdk/plugins/reasoningExtraction';
+import { createSimulateStreamingPlugin } from './runtime/aiSdk/plugins/simulateStreaming';
+import type { AppProviderId, AppProviderSettingsMap } from './types';
 import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/requests';
-import { getMaxTokens, getTemperature, getTimeout, getTopP } from './utils/modelParameters';
+import { addAnthropicHeaders } from './utils/anthropicHeaders';
+import { isAnthropicModel, isGeminiModel, isGrokModel, isOpenAIModel } from './utils/model';
+import {
+  filterStandardParams,
+  getMaxTokens,
+  getTemperature,
+  getTimeout,
+  getTopP,
+} from './utils/modelParameters';
 import {
   buildCapabilityProviderOptions,
   extractAiSdkStandardParams,
   mergeCustomProviderParameters,
 } from './utils/options';
+import { replacePromptVariables } from './utils/promptVariables';
+import { SystemProviderIds } from './utils/providerIds';
+import { getReasoningTagName } from './utils/reasoning';
+import { buildProviderBuiltinWebSearchConfig, type CherryWebSearchConfig } from './utils/websearch';
 
 // ── Request types ──────────────────────────────────────────────────
 
@@ -91,7 +116,7 @@ export class AiService {
       );
     }
 
-    const { sdkConfig, system, options } = await this.buildAgentParamsFor(request);
+    const { sdkConfig, model, system, plugins, options } = await this.buildAgentParamsFor(request);
     const preparedMessages = await resolveUIMessageFileUrls(request.messages ?? []);
 
     const agent = new Agent({
@@ -99,7 +124,8 @@ export class AiService {
       providerSettings: sdkConfig.providerSettings,
       modelId: sdkConfig.modelId,
       messageId: request.messageId,
-      plugins: [],
+      mediaCapabilities: resolveMediaCapabilities(model),
+      plugins,
       system,
       options,
     });
@@ -112,13 +138,13 @@ export class AiService {
   async generateText(request: AiGenerateRequest): Promise<AiGenerateResult> {
     const signal = request.requestOptions?.signal;
 
-    const { sdkConfig, system, options } = await this.buildAgentParamsFor(request);
+    const { sdkConfig, system, plugins, options } = await this.buildAgentParamsFor(request);
 
     const agent = new Agent({
       providerId: sdkConfig.providerId,
       providerSettings: sdkConfig.providerSettings,
       modelId: sdkConfig.modelId,
-      plugins: [],
+      plugins,
       system: request.system ?? system,
       options,
     });
@@ -245,7 +271,7 @@ export class AiService {
     request: AiBaseRequest & { apiKeyOverride?: string },
     signal: AbortSignal,
   ): Promise<unknown> {
-    const { sdkConfig, model, options } = await this.buildAgentParamsFor(request);
+    const { sdkConfig, model, plugins, options } = await this.buildAgentParamsFor(request);
 
     if (isEmbeddingModel(model)) {
       return aiCoreEmbedMany<AppProviderSettingsMap>(
@@ -266,7 +292,7 @@ export class AiService {
       providerId: sdkConfig.providerId,
       providerSettings: sdkConfig.providerSettings,
       modelId: sdkConfig.modelId,
-      plugins: [],
+      plugins,
       system: 'test',
       options,
     });
@@ -285,7 +311,15 @@ export class AiService {
         request.apiKeyOverride ?? this.services.provider.getRotatedApiKey(providerId),
       getAuthConfig: (providerId) => this.services.provider.getAuthConfig(providerId),
     });
-    const capabilities = assistant ? resolveCapabilities(model, assistant) : undefined;
+    const capabilities = assistant
+      ? resolveCapabilities(
+          model,
+          provider,
+          assistant,
+          sdkConfig.providerId,
+          this.services.preference,
+        )
+      : undefined;
     const providerOptions =
       assistant && capabilities
         ? buildCapabilityProviderOptions(assistant, model, provider, capabilities)
@@ -295,11 +329,33 @@ export class AiService {
       : {};
     const customParams = assistant ? getCustomParameters(assistant) : {};
     const split = extractAiSdkStandardParams(customParams);
+    const filteredStandardParams = filterStandardParams(split.standardParams, model);
     const mergedProviderOptions = mergeCustomProviderParameters(
       providerOptions,
       split.providerParams,
       sdkConfig.providerId,
     );
+    const anthropicBetaHeaders =
+      assistant && isAnthropicModel(model) ? addAnthropicHeaders(assistant, model, provider) : [];
+    const headers =
+      request.requestOptions?.headers || anthropicBetaHeaders.length > 0
+        ? {
+            ...request.requestOptions?.headers,
+            ...(anthropicBetaHeaders.length > 0 && {
+              'anthropic-beta': anthropicBetaHeaders.join(','),
+            }),
+          }
+        : undefined;
+    const plugins = buildAgentPlugins({
+      aiSdkProviderId: sdkConfig.providerId,
+      model,
+      provider,
+      streamOutput: capabilities?.streamOutput ?? true,
+      webSearchPluginConfig: capabilities?.webSearchPluginConfig,
+    });
+    const system = assistant?.prompt
+      ? await replacePromptVariables(assistant.prompt, model.name, this.services.preference)
+      : undefined;
 
     return {
       sdkConfig: {
@@ -309,16 +365,17 @@ export class AiService {
       provider,
       model,
       assistant,
-      system: assistant?.prompt,
+      system,
+      plugins,
       options: {
         maxRetries: request.requestOptions?.maxRetries ?? 0,
         timeout: request.requestOptions?.timeout ?? getTimeout(model),
-        ...(request.requestOptions?.headers && { headers: request.requestOptions.headers }),
+        ...(headers && { headers }),
         ...(Object.keys(mergedProviderOptions).length > 0 && {
           providerOptions: mergedProviderOptions,
         }),
         ...standardParams,
-        ...split.standardParams,
+        ...filteredStandardParams,
       },
     };
   }
@@ -402,7 +459,13 @@ export class AiService {
   }
 }
 
-function resolveCapabilities(model: Model, assistant: Assistant) {
+function resolveCapabilities(
+  model: Model,
+  provider: Provider,
+  assistant: Assistant,
+  aiSdkProviderId: string,
+  preference: PreferenceService,
+) {
   const enableReasoning = Boolean(
     model.reasoning && assistant.settings?.reasoning_effort !== undefined,
   );
@@ -411,12 +474,112 @@ function resolveCapabilities(model: Model, assistant: Assistant) {
   );
   const enableGenerateImage = model.capabilities.includes('image-generation');
 
+  const streamOutput = assistant.settings.streamOutput !== false;
+
+  const webSearchPluginConfig = enableWebSearch
+    ? resolveWebSearchPluginConfig(model, provider, aiSdkProviderId, preference)
+    : undefined;
+
   return {
     enableReasoning,
     enableWebSearch,
     enableUrlContext: false,
     enableGenerateImage,
+    streamOutput,
+    webSearchPluginConfig,
   };
+}
+
+/**
+ * Ported from desktop's `resolveCapabilities`'s inline web-search-config
+ * block (`runtime/aiSdk/params/capabilities.ts`) — provider-builtin search
+ * config, with an AI Gateway fallback that infers the underlying vendor
+ * from the model when the gateway provider itself isn't in the registry.
+ */
+function resolveWebSearchPluginConfig(
+  model: Model,
+  provider: Provider,
+  aiSdkProviderId: string,
+  preference: PreferenceService,
+): WebSearchPluginConfig | undefined {
+  const webSearchPreferences = preference.getMultipleRawCached([
+    'chat.web_search.max_results',
+    'chat.web_search.exclude_domains',
+  ]);
+  const webSearchConfig: CherryWebSearchConfig = {
+    maxResults: webSearchPreferences['chat.web_search.max_results'],
+    excludeDomains: webSearchPreferences['chat.web_search.exclude_domains'],
+  };
+
+  if (extensionRegistry.has(aiSdkProviderId)) {
+    return buildProviderBuiltinWebSearchConfig(aiSdkProviderId, webSearchConfig, model);
+  }
+
+  if (
+    provider.id === SystemProviderIds.gateway ||
+    provider.presetProviderId === SystemProviderIds.gateway
+  ) {
+    const gatewayProviderId = mapVertexAIGatewayModelToProviderId(model);
+    if (gatewayProviderId) {
+      return buildProviderBuiltinWebSearchConfig(gatewayProviderId, webSearchConfig, model);
+    }
+  }
+
+  return undefined;
+}
+
+function mapVertexAIGatewayModelToProviderId(model: Model): AppProviderId | undefined {
+  if (isAnthropicModel(model)) return 'anthropic';
+  if (isGeminiModel(model)) return 'google';
+  if (isGrokModel(model)) return 'xai';
+  if (isOpenAIModel(model)) return 'openai';
+  return undefined;
+}
+
+/**
+ * Ported from desktop's per-request `RequestFeature` registry
+ * (`runtime/aiSdk/params/collectFromFeatures.ts`), minus the registry
+ * itself — mobile has few enough conditions to just assemble them inline.
+ */
+function buildAgentPlugins(params: {
+  aiSdkProviderId: string;
+  model: Model;
+  provider: Provider;
+  streamOutput: boolean;
+  webSearchPluginConfig?: WebSearchPluginConfig;
+}): AiPlugin[] {
+  const { aiSdkProviderId, model, provider, streamOutput, webSearchPluginConfig } = params;
+  const plugins: AiPlugin[] = [];
+
+  if (
+    isAnthropicModel(model) &&
+    provider.settings.cacheControl?.enabled &&
+    provider.settings.cacheControl.tokenThreshold
+  ) {
+    plugins.push(createAnthropicCachePlugin(provider));
+  }
+
+  if (provider.id === SystemProviderIds.openrouter) {
+    plugins.push(createOpenrouterReasoningPlugin());
+  }
+
+  if (webSearchPluginConfig) {
+    plugins.push(providerToolPlugin('webSearch', webSearchPluginConfig));
+  }
+
+  if (!streamOutput) {
+    plugins.push(createSimulateStreamingPlugin());
+  }
+
+  if (aiSdkProviderId === SystemProviderIds.gateway) {
+    plugins.push(createGatewayUsageNormalizePlugin());
+  }
+
+  if (INLINE_REASONING_SDK_PROVIDER_IDS.has(aiSdkProviderId)) {
+    plugins.push(createReasoningExtractionPlugin({ tagName: getReasoningTagName(model.modelId) }));
+  }
+
+  return plugins;
 }
 
 function isEmbeddingModel(model: Model): boolean {

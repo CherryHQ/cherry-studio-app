@@ -838,6 +838,31 @@ export class MessageService {
 
     return result.map((row) => row.id);
   }
+
+  /** Assistant messages still `pending` with no in-memory writer — only true
+   * right after a cold start, when a crash left them without a terminal status. */
+  async findPendingAssistantMessageIds(): Promise<string[]> {
+    const rows = await this.db
+      .select({ id: messageTable.id })
+      .from(messageTable)
+      .where(
+        and(
+          eq(messageTable.role, 'assistant'),
+          eq(messageTable.status, 'pending'),
+          isNull(messageTable.deletedAt),
+        ),
+      );
+
+    return rows.map((row) => row.id);
+  }
+
+  async markMessagesError(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+
+    await this.dbService.withWriteTx((tx) =>
+      tx.update(messageTable).set({ status: 'error' }).where(inArray(messageTable.id, ids)),
+    );
+  }
 }
 
 export function rowToMessage(row: MessageRow): Message {
