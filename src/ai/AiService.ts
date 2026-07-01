@@ -34,7 +34,13 @@ import type { AppProviderId, AppProviderSettingsMap } from './types';
 import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/requests';
 import { addAnthropicHeaders } from './utils/anthropicHeaders';
 import { isAnthropicModel, isGeminiModel, isGrokModel, isOpenAIModel } from './utils/model';
-import { getMaxTokens, getTemperature, getTimeout, getTopP } from './utils/modelParameters';
+import {
+  filterStandardParams,
+  getMaxTokens,
+  getTemperature,
+  getTimeout,
+  getTopP,
+} from './utils/modelParameters';
 import {
   buildCapabilityProviderOptions,
   extractAiSdkStandardParams,
@@ -323,6 +329,7 @@ export class AiService {
       : {};
     const customParams = assistant ? getCustomParameters(assistant) : {};
     const split = extractAiSdkStandardParams(customParams);
+    const filteredStandardParams = filterStandardParams(split.standardParams, model);
     const mergedProviderOptions = mergeCustomProviderParameters(
       providerOptions,
       split.providerParams,
@@ -368,7 +375,7 @@ export class AiService {
           providerOptions: mergedProviderOptions,
         }),
         ...standardParams,
-        ...split.standardParams,
+        ...filteredStandardParams,
       },
     };
   }

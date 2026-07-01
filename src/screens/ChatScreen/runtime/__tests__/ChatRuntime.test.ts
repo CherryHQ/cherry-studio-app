@@ -651,6 +651,59 @@ describe('ChatRuntime', () => {
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
+  test('auto-names the topic from the conversation summary after the first exchange', async () => {
+    const services = createServices();
+    const preferences: Record<string, unknown> = {
+      'app.language': 'en-US',
+      'topic.naming.enabled': true,
+      'topic.naming.model_id': null,
+      'topic.naming_prompt': '',
+    };
+    services.preference.get = jest.fn(
+      async (key: string) => preferences[key],
+    ) as typeof services.preference.get;
+    services.ai.generateText = jest.fn(async () => ({ text: 'Generated Topic Title' }));
+    const invalidateTopics = jest.fn(async () => undefined);
+    const runtime = createRuntime({ invalidateTopics, services });
+    const assistantChunk = createUiMessage('assistant-1', 'hello');
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    await waitUntil(() => (services.topic.update as jest.Mock).mock.calls.length > 0);
+
+    expect(services.topic.update).toHaveBeenCalledWith('topic-1', {
+      isNameManuallyEdited: false,
+      name: 'Generated Topic Title',
+    });
+    expect(invalidateTopics).toHaveBeenCalled();
+  });
+
+  test('does not auto-name a topic that already has history', async () => {
+    const services = createServices();
+    services.message.getPathToNode = jest.fn(async () => [
+      createMessage('user-0', 'user'),
+      createMessage('assistant-0', 'assistant'),
+      createMessage('user-1', 'user'),
+    ]);
+    services.ai.generateText = jest.fn(async () => ({ text: 'Generated Topic Title' }));
+    const runtime = createRuntime({ services });
+    const assistantChunk = createUiMessage('assistant-1', 'hello');
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.ai.generateText).not.toHaveBeenCalled();
+  });
+
   test('does not open a new topic when aborted after topic creation', async () => {
     const services = createServices();
     const invalidateTopics = createDeferredInvalidation({ blockOnCall: 1 });

@@ -187,6 +187,30 @@ export const isClaude45ReasoningModel = (model: Model): boolean => {
   return /claude-(sonnet|opus|haiku)-4(-|.)5(?:-[\w-]+)?$/i.test(id);
 };
 
+export const isClaudeReasoningModel = (model: Model): boolean =>
+  isAnthropicModel(model) && isReasoningModel(model);
+
+/** Whether temperature and top_p are mutually exclusive for this model (Claude 4.5 reasoning). */
+export const isTemperatureTopPMutuallyExclusiveModel = (model: Model): boolean => {
+  const id = getLowerBaseModelName(getRawModelId(model), '/');
+  return /claude-(sonnet|opus|haiku)-4(-|.)5(?:-[\w-]+)?$/i.test(id);
+};
+
+export const isSupportTemperatureModel = (model: Model): boolean =>
+  model.parameters?.temperature?.supported !== false;
+
+export const isSupportTopPModel = (model: Model): boolean =>
+  model.parameters?.topP?.supported !== false;
+
+export const isMaxTemperatureOneModel = (model: Model): boolean => {
+  const max = model.parameters?.temperature?.range?.max;
+  if (max !== undefined) return max <= 1;
+  const id = getLowerBaseModelName(getRawModelId(model));
+  return (
+    id.startsWith('claude') || id.includes('glm') || id.includes('kimi') || id.includes('moonshot')
+  );
+};
+
 export const isHostedGemma4ThinkingModel = (model: Model): boolean => {
   if (model.providerId !== 'gemini') return false;
   const id = getLowerBaseModelName(getRawModelId(model), '/');

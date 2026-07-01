@@ -17,6 +17,7 @@ import { type CherryReasoningMeta, readCherryMeta, withCherryMeta } from '@/data
 
 import { applyStreamingMessage, statsFromMetadata } from './chatRuntimeMessages';
 import { normalizeAssistantMessageCitations } from './normalizeCitations';
+import { extractMainText, maybeRenameTopicFromConversationSummary } from './topicNaming';
 
 export type ChatRuntimeTopicStatus = 'aborting' | 'idle' | 'reserving' | 'streaming';
 
@@ -285,6 +286,7 @@ export class ChatRuntime {
       const history = await this.dependencies.services.message.getPathToNode(
         reservedTurn.userMessage.id,
       );
+      const isFirstExchange = history.length === 1;
       throwIfAborted(abortController.signal);
       const stream = await this.dependencies.services.ai.streamText({
         assistantId: topic.assistantId,
@@ -317,6 +319,16 @@ export class ChatRuntime {
         latestAssistantMessage,
         status: 'success',
       });
+
+      if (isFirstExchange) {
+        void this.autoNameTopicFromSummary({
+          assistantId: topic.assistantId,
+          assistantParts: (latestAssistantMessage?.parts ?? []) as CherryMessagePart[],
+          defaultModelId: model.id,
+          topicId,
+          userParts: parts,
+        });
+      }
     } catch (error) {
       terminalAssistantMessage = await this.persistFailedAssistantMessage({
         assistantPlaceholder,
@@ -357,6 +369,37 @@ export class ChatRuntime {
       await this.dependencies.services.message.delete(input.userMessageId, true, 'parent');
     } catch (error) {
       logger.warn('Failed to cancel reserved chat turn', toError(error));
+    }
+  }
+
+  /**
+   * Fire-and-forget: not awaited by the caller, so the naming LLM call
+   * never delays the turn's snapshot from reaching 'idle'.
+   */
+  private async autoNameTopicFromSummary(input: {
+    assistantId?: string;
+    assistantParts: readonly CherryMessagePart[];
+    defaultModelId: UniqueModelId;
+    topicId: string;
+    userParts: readonly CherryMessagePart[];
+  }): Promise<void> {
+    const userText = extractMainText(input.userParts);
+    const assistantText = extractMainText(input.assistantParts);
+    if (!userText || !assistantText) {
+      return;
+    }
+
+    const renamed = await maybeRenameTopicFromConversationSummary({
+      assistantId: input.assistantId,
+      assistantText,
+      defaultModelId: input.defaultModelId,
+      services: this.dependencies.services,
+      topicId: input.topicId,
+      userText,
+    });
+
+    if (renamed) {
+      await this.dependencies.invalidateTopics();
     }
   }
 
