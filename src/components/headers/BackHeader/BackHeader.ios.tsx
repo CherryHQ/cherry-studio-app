@@ -1,10 +1,8 @@
 import { Stack, useRouter } from 'expo-router';
-import { ChevronLeftIcon } from 'lucide-uniwind/png';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { HeaderIconButton } from '../components/HeaderIconButton';
 import type { HeaderToolbarAction } from './BackHeader.types';
 
 export type BackHeaderProps = {
@@ -13,22 +11,27 @@ export type BackHeaderProps = {
   title?: string;
 };
 
+// react-native-screens embeds JS-rendered `headerLeft`/`headerRight` views into the
+// native UINavigationBar via RNSScreenStackHeaderSubview. That bridging path exposes
+// duplicate/mis-sized accessibility nodes for the back button on iOS (VoiceOver/XCUITest
+// can report the header's full-screen container instead of the button's own frame), so
+// the back and right-action buttons render through the native Stack.Toolbar API instead,
+// matching CloseHeader's approach.
 function renderHeaderAction(action: HeaderToolbarAction): ReactNode {
-  if (action.hidden || !action.androidIcon) {
+  if (action.hidden) {
     return null;
   }
 
-  const Icon = action.androidIcon;
-
   return (
-    <HeaderIconButton
-      accessibilityLabel={action.accessibilityLabel ?? ''}
+    <Stack.Toolbar.Button
+      accessibilityLabel={action.accessibilityLabel}
       disabled={action.disabled}
+      icon={action.icon}
       key={action.key}
       onPress={action.onPress}
-    >
-      <Icon className="size-6 text-foreground" strokeWidth={2} />
-    </HeaderIconButton>
+      tintColor={action.tintColor}
+      variant={action.variant}
+    />
   );
 }
 
@@ -45,21 +48,23 @@ export function BackHeader({ onBack, rightActions, title = '' }: BackHeaderProps
     router.back();
   }, [onBack, router]);
 
-  const options = useMemo(
-    () => ({
-      headerBackVisible: false,
-      headerLeft: () => (
-        <HeaderIconButton accessibilityLabel={t('navigation.back')} onPress={goBack}>
-          <ChevronLeftIcon className="size-6 text-foreground" strokeWidth={2} />
-        </HeaderIconButton>
-      ),
-      ...(rightActions && rightActions.length > 0
-        ? { headerRight: () => rightActions.map((action) => renderHeaderAction(action)) }
-        : null),
-      title,
-    }),
-    [goBack, rightActions, t, title],
-  );
+  const options = useMemo(() => ({ headerBackVisible: false, title }), [title]);
 
-  return <Stack.Screen options={options} />;
+  return (
+    <>
+      <Stack.Screen options={options} />
+      <Stack.Toolbar placement="left">
+        <Stack.Toolbar.Button
+          accessibilityLabel={t('navigation.back')}
+          icon="chevron.backward"
+          onPress={goBack}
+        />
+      </Stack.Toolbar>
+      {rightActions && rightActions.length > 0 ? (
+        <Stack.Toolbar placement="right">
+          {rightActions.map((action) => renderHeaderAction(action))}
+        </Stack.Toolbar>
+      ) : null}
+    </>
+  );
 }
