@@ -173,7 +173,7 @@ export const ModelSnapshotSchema = z.strictObject({
 });
 export type ModelSnapshot = z.infer<typeof ModelSnapshotSchema>;
 
-export const MessageRoleSchema = z.enum(['user', 'assistant', 'system']);
+export const MessageRoleSchema = z.enum(['user', 'assistant', 'system', 'root']);
 export type MessageRole = z.infer<typeof MessageRoleSchema>;
 
 export const MessageStatusSchema = z.enum(['pending', 'success', 'error', 'paused']);
@@ -217,6 +217,7 @@ export interface SiblingsGroup {
 export interface TreeResponse {
   activeNodeId: string | null;
   nodes: TreeNode[];
+  rootId: null | string;
   siblingsGroups: SiblingsGroup[];
 }
 

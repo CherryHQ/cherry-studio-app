@@ -3,8 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDataServices } from '@/data/runtime';
+import type { UpdateProviderInput } from '@/data/services/ProviderService';
 import type { Model, UniqueModelId } from '@/data/types/model';
-import type { ApiKeyEntry } from '@/data/types/provider';
+import type { ApiKeyEntry, Provider } from '@/data/types/provider';
+import { enableProviderWhenModelsAvailable } from '../../utils/providerEnablement';
 import {
   checkProviderModelsHealth,
   createProviderModelHealthPendingStatuses,
@@ -17,6 +19,7 @@ const defaultApiKeySelectValue = '__default__';
 type UseProviderModelCheckOptions = {
   apiKeys: readonly ApiKeyEntry[] | undefined;
   models: readonly Model[];
+  provider: Provider | undefined;
   providerId: string;
 };
 
@@ -37,6 +40,7 @@ type ProviderModelCheckState = {
 export function useProviderModelCheck({
   apiKeys,
   models,
+  provider,
   providerId,
 }: UseProviderModelCheckOptions) {
   const { t } = useTranslation();
@@ -188,6 +192,12 @@ export function useProviderModelCheck({
         setCheckState((current) =>
           current.providerId === providerId ? { ...current, isSheetOpen: false } : current,
         );
+        await enableProviderWhenModelsAvailable(
+          provider,
+          (updates: UpdateProviderInput) => services.provider.update(providerId, updates),
+          models.length,
+          'connection_check',
+        );
         toast.show({
           label: t('settings.provider.models.checkSuccess'),
           variant: 'success',
@@ -214,7 +224,7 @@ export function useProviderModelCheck({
         );
       }
     }
-  }, [providerId, selectedApiKey, selectedModel, services.ai, t, toast]);
+  }, [models.length, provider, providerId, selectedApiKey, selectedModel, services.ai, services.provider, t, toast]);
 
   const updateSelectedModelId = useCallback((modelId: UniqueModelId) => {
     setSelectedModelId(modelId);

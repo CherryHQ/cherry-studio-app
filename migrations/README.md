@@ -7,7 +7,7 @@ database from the Expo SQLite storage.
 
 - Using `expo-sqlite` as the SQLite driver, and `drizzle` as the ORM and
   database migration tool.
-- Table schemas are defined in `src/data/db/schema`.
+- Table schemas are defined in `src/data/db/schemas`.
 - `migrations/sqlite-drizzle` contains auto-generated migration data. Please
   **DO NOT** modify it manually unless intentionally reconciling the mobile
   migration history.

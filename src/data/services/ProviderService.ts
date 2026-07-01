@@ -31,7 +31,6 @@ export type CreateProviderInput = {
   authConfig?: InsertUserProviderRow['authConfig'];
   defaultChatEndpoint?: InsertUserProviderRow['defaultChatEndpoint'];
   endpointConfigs?: EndpointConfigs | null;
-  isEnabled?: boolean;
   name: string;
   presetProviderId?: string | null;
   providerId: string;
@@ -199,7 +198,9 @@ function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
     authConfig: input.authConfig ?? null,
     defaultChatEndpoint: input.defaultChatEndpoint ?? null,
     endpointConfigs: withInferredAdapterFamilies(input.endpointConfigs),
-    isEnabled: input.isEnabled ?? true,
+    // New providers always start disabled — enableProviderWhenModelsAvailable flips this
+    // once a flow (connection check, model pull) confirms usable models exist.
+    isEnabled: false,
     name: input.name,
     presetProviderId: input.presetProviderId ?? null,
     providerId: input.providerId,
