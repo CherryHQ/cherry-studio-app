@@ -11,6 +11,8 @@
   "chat.actionSheet.title": "添加到聊天",
   "chat.default.name": "默认助手",
   "chat.default.topic.name": "默认话题",
+  "chat.errorPart.message": "未知错误",
+  "chat.errorPart.title": "错误",
   "chat.input.action.sendMessage": "发送消息",
   "chat.input.action.stopGenerating": "停止生成",
   "chat.input.sendFailed": "消息未发送，请重试。",

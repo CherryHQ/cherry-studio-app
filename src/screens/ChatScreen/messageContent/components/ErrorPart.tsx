@@ -1,4 +1,5 @@
 import { CircleAlertIcon } from 'lucide-uniwind/png';
+import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import type { CherryMessagePart } from '@/data/types/message';
@@ -8,20 +9,21 @@ type ErrorPartProps = {
 };
 
 export function ErrorPart({ part }: ErrorPartProps) {
-  const title = part.data.name ?? part.data.code ?? 'Error';
-  const message = part.data.message ?? 'Unknown error';
+  const { t } = useTranslation();
+  const title = part.data.name ?? part.data.code ?? t('chat.errorPart.title');
+  const message = part.data.message ?? t('chat.errorPart.message');
 
   return (
-    <View className="flex-row gap-2 rounded-lg border border-danger bg-danger-soft p-3">
-      <CircleAlertIcon className="mt-0.5 size-4 text-danger" strokeWidth={2} />
-      <View className="min-w-0 flex-1 gap-1">
-        <Text className="font-semibold text-danger text-sm" selectable>
+    <View className="gap-1.5 rounded-lg border border-danger bg-danger-soft p-3">
+      <View className="flex-row items-center gap-2">
+        <CircleAlertIcon className="size-4 text-danger" strokeWidth={2} />
+        <Text className="flex-1 font-semibold text-danger text-sm" selectable>
           {title}
         </Text>
-        <Text className="text-danger text-sm leading-5" selectable>
-          {message}
-        </Text>
       </View>
+      <Text className="text-danger text-sm leading-5" selectable>
+        {message}
+      </Text>
     </View>
   );
 }

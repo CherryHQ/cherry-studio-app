@@ -1,3 +1,6 @@
+import { LanguagesIcon } from 'lucide-uniwind/png';
+import { View } from 'react-native';
+
 import type { CherryMessagePart } from '@/data/types/message';
 
 import { PartMarkdown } from './PartMarkdown';
@@ -7,5 +10,14 @@ type TranslationPartProps = {
 };
 
 export function TranslationPart({ part }: TranslationPartProps) {
-  return <PartMarkdown markdown={part.data.content} />;
+  return (
+    <View className="gap-2">
+      <View className="flex-row items-center gap-3">
+        <View className="h-px flex-1 bg-border" />
+        <LanguagesIcon className="size-4 text-foreground-muted" strokeWidth={2} />
+        <View className="h-px flex-1 bg-border" />
+      </View>
+      <PartMarkdown markdown={part.data.content} />
+    </View>
+  );
 }
