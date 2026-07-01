@@ -1,3 +1,4 @@
+import type { DbService } from '@/data/db/DbService';
 import type { Message } from '@/data/types/message';
 import { MessageService } from '../MessageService';
 
@@ -35,6 +36,56 @@ describe('MessageService', () => {
 
     await expect(service.reserveAssistantTurn(input)).resolves.toBe(result);
     expect(createTurn).toHaveBeenCalledWith(input);
+  });
+
+  test('findPendingAssistantMessageIds returns the ids from the query result', async () => {
+    const rows = [{ id: 'a' }, { id: 'b' }];
+    const dbService = {
+      getDb: () => ({
+        select: () => ({
+          from: () => ({
+            where: () => Promise.resolve(rows),
+          }),
+        }),
+      }),
+    } as unknown as DbService;
+    const service = new MessageService(dbService, {} as never);
+
+    await expect(service.findPendingAssistantMessageIds()).resolves.toEqual(['a', 'b']);
+  });
+
+  test('markMessagesError updates the given ids to error status', async () => {
+    const updateCalls: Array<{ status: string }> = [];
+    const tx = {
+      update: () => ({
+        set: (values: { status: string }) => ({
+          where: () => {
+            updateCalls.push(values);
+            return Promise.resolve();
+          },
+        }),
+      }),
+    };
+    const withWriteTx = jest.fn(async (callback: (fakeTx: typeof tx) => Promise<unknown>) =>
+      callback(tx),
+    );
+    const dbService = { withWriteTx } as unknown as DbService;
+    const service = new MessageService(dbService, {} as never);
+
+    await service.markMessagesError(['a', 'b']);
+
+    expect(withWriteTx).toHaveBeenCalledTimes(1);
+    expect(updateCalls).toEqual([{ status: 'error' }]);
+  });
+
+  test('markMessagesError is a no-op for an empty id list', async () => {
+    const withWriteTx = jest.fn();
+    const dbService = { withWriteTx } as unknown as DbService;
+    const service = new MessageService(dbService, {} as never);
+
+    await service.markMessagesError([]);
+
+    expect(withWriteTx).not.toHaveBeenCalled();
   });
 });
 

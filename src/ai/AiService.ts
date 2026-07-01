@@ -3,6 +3,9 @@ import {
   embedMany as aiCoreEmbedMany,
   generateImage as aiCoreGenerateImage,
 } from '@cherrystudio/ai-core';
+import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
+import { providerToolPlugin } from '@cherrystudio/ai-core/built-in/plugins';
+import { extensionRegistry } from '@cherrystudio/ai-core/provider';
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 'ai';
 import type { AssistantService } from '@/data/services/AssistantService';
@@ -14,6 +17,7 @@ import type { Model, UniqueModelId } from '@/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 
+import { resolveMediaCapabilities } from './messages/messageCapabilities';
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { providerToAiSdkConfig } from './provider/config';
 import { listModels as listProviderModels } from './provider/listModels';
@@ -26,18 +30,20 @@ import {
   INLINE_REASONING_SDK_PROVIDER_IDS,
 } from './runtime/aiSdk/plugins/reasoningExtraction';
 import { createSimulateStreamingPlugin } from './runtime/aiSdk/plugins/simulateStreaming';
-import type { AppProviderSettingsMap } from './types';
+import type { AppProviderId, AppProviderSettingsMap } from './types';
 import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/requests';
 import { addAnthropicHeaders } from './utils/anthropicHeaders';
-import { isAnthropicModel } from './utils/model';
+import { isAnthropicModel, isGeminiModel, isGrokModel, isOpenAIModel } from './utils/model';
 import { getMaxTokens, getTemperature, getTimeout, getTopP } from './utils/modelParameters';
 import {
   buildCapabilityProviderOptions,
   extractAiSdkStandardParams,
   mergeCustomProviderParameters,
 } from './utils/options';
+import { replacePromptVariables } from './utils/promptVariables';
 import { SystemProviderIds } from './utils/providerIds';
 import { getReasoningTagName } from './utils/reasoning';
+import { buildProviderBuiltinWebSearchConfig, type CherryWebSearchConfig } from './utils/websearch';
 
 // ── Request types ──────────────────────────────────────────────────
 
@@ -104,7 +110,7 @@ export class AiService {
       );
     }
 
-    const { sdkConfig, system, plugins, options } = await this.buildAgentParamsFor(request);
+    const { sdkConfig, model, system, plugins, options } = await this.buildAgentParamsFor(request);
     const preparedMessages = await resolveUIMessageFileUrls(request.messages ?? []);
 
     const agent = new Agent({
@@ -112,6 +118,7 @@ export class AiService {
       providerSettings: sdkConfig.providerSettings,
       modelId: sdkConfig.modelId,
       messageId: request.messageId,
+      mediaCapabilities: resolveMediaCapabilities(model),
       plugins,
       system,
       options,
@@ -298,7 +305,15 @@ export class AiService {
         request.apiKeyOverride ?? this.services.provider.getRotatedApiKey(providerId),
       getAuthConfig: (providerId) => this.services.provider.getAuthConfig(providerId),
     });
-    const capabilities = assistant ? resolveCapabilities(model, assistant) : undefined;
+    const capabilities = assistant
+      ? resolveCapabilities(
+          model,
+          provider,
+          assistant,
+          sdkConfig.providerId,
+          this.services.preference,
+        )
+      : undefined;
     const providerOptions =
       assistant && capabilities
         ? buildCapabilityProviderOptions(assistant, model, provider, capabilities)
@@ -329,7 +344,11 @@ export class AiService {
       model,
       provider,
       streamOutput: capabilities?.streamOutput ?? true,
+      webSearchPluginConfig: capabilities?.webSearchPluginConfig,
     });
+    const system = assistant?.prompt
+      ? await replacePromptVariables(assistant.prompt, model.name, this.services.preference)
+      : undefined;
 
     return {
       sdkConfig: {
@@ -339,7 +358,7 @@ export class AiService {
       provider,
       model,
       assistant,
-      system: assistant?.prompt,
+      system,
       plugins,
       options: {
         maxRetries: request.requestOptions?.maxRetries ?? 0,
@@ -433,7 +452,13 @@ export class AiService {
   }
 }
 
-function resolveCapabilities(model: Model, assistant: Assistant) {
+function resolveCapabilities(
+  model: Model,
+  provider: Provider,
+  assistant: Assistant,
+  aiSdkProviderId: string,
+  preference: PreferenceService,
+) {
   const enableReasoning = Boolean(
     model.reasoning && assistant.settings?.reasoning_effort !== undefined,
   );
@@ -444,13 +469,64 @@ function resolveCapabilities(model: Model, assistant: Assistant) {
 
   const streamOutput = assistant.settings.streamOutput !== false;
 
+  const webSearchPluginConfig = enableWebSearch
+    ? resolveWebSearchPluginConfig(model, provider, aiSdkProviderId, preference)
+    : undefined;
+
   return {
     enableReasoning,
     enableWebSearch,
     enableUrlContext: false,
     enableGenerateImage,
     streamOutput,
+    webSearchPluginConfig,
   };
+}
+
+/**
+ * Ported from desktop's `resolveCapabilities`'s inline web-search-config
+ * block (`runtime/aiSdk/params/capabilities.ts`) — provider-builtin search
+ * config, with an AI Gateway fallback that infers the underlying vendor
+ * from the model when the gateway provider itself isn't in the registry.
+ */
+function resolveWebSearchPluginConfig(
+  model: Model,
+  provider: Provider,
+  aiSdkProviderId: string,
+  preference: PreferenceService,
+): WebSearchPluginConfig | undefined {
+  const webSearchPreferences = preference.getMultipleRawCached([
+    'chat.web_search.max_results',
+    'chat.web_search.exclude_domains',
+  ]);
+  const webSearchConfig: CherryWebSearchConfig = {
+    maxResults: webSearchPreferences['chat.web_search.max_results'],
+    excludeDomains: webSearchPreferences['chat.web_search.exclude_domains'],
+  };
+
+  if (extensionRegistry.has(aiSdkProviderId)) {
+    return buildProviderBuiltinWebSearchConfig(aiSdkProviderId, webSearchConfig, model);
+  }
+
+  if (
+    provider.id === SystemProviderIds.gateway ||
+    provider.presetProviderId === SystemProviderIds.gateway
+  ) {
+    const gatewayProviderId = mapVertexAIGatewayModelToProviderId(model);
+    if (gatewayProviderId) {
+      return buildProviderBuiltinWebSearchConfig(gatewayProviderId, webSearchConfig, model);
+    }
+  }
+
+  return undefined;
+}
+
+function mapVertexAIGatewayModelToProviderId(model: Model): AppProviderId | undefined {
+  if (isAnthropicModel(model)) return 'anthropic';
+  if (isGeminiModel(model)) return 'google';
+  if (isGrokModel(model)) return 'xai';
+  if (isOpenAIModel(model)) return 'openai';
+  return undefined;
 }
 
 /**
@@ -463,8 +539,9 @@ function buildAgentPlugins(params: {
   model: Model;
   provider: Provider;
   streamOutput: boolean;
+  webSearchPluginConfig?: WebSearchPluginConfig;
 }): AiPlugin[] {
-  const { aiSdkProviderId, model, provider, streamOutput } = params;
+  const { aiSdkProviderId, model, provider, streamOutput, webSearchPluginConfig } = params;
   const plugins: AiPlugin[] = [];
 
   if (
@@ -477,6 +554,10 @@ function buildAgentPlugins(params: {
 
   if (provider.id === SystemProviderIds.openrouter) {
     plugins.push(createOpenrouterReasoningPlugin());
+  }
+
+  if (webSearchPluginConfig) {
+    plugins.push(providerToolPlugin('webSearch', webSearchPluginConfig));
   }
 
   if (!streamOutput) {

@@ -2,7 +2,7 @@ import * as z from 'zod';
 
 import type { CherryMessagePart } from './message';
 
-type Serializable =
+export type Serializable =
   | null
   | boolean
   | number
@@ -10,7 +10,7 @@ type Serializable =
   | Serializable[]
   | { [key: string]: Serializable };
 
-type SerializedError = {
+export type SerializedError = {
   message: string | null;
   name: string | null;
   stack: string | null;

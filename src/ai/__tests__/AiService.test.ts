@@ -198,18 +198,86 @@ describe('AiService.checkModel', () => {
   });
 });
 
+describe('AiService web search plugin wiring', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('wires a provider-builtin web-search plugin into the agent when enabled', async () => {
+    const model = createModel('gpt-4o-mini', { capabilities: [MODEL_CAPABILITY.WEB_SEARCH] });
+    const assistant = createAssistant(model.id);
+    assistant.settings.enableWebSearch = true;
+    const services = createServices({
+      assistant,
+      model,
+      webSearchPreferences: {
+        'chat.web_search.max_results': 42,
+        'chat.web_search.exclude_domains': ['blocked.com'],
+      },
+    });
+    const service = new AiService(services);
+
+    await service.checkModel({ assistantId: assistant.id, timeout: 1000 });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+      }),
+    );
+  });
+
+  it('does not wire a web-search plugin when the assistant has web search disabled', async () => {
+    const model = createModel('gpt-4o-mini', { capabilities: [MODEL_CAPABILITY.WEB_SEARCH] });
+    const assistant = createAssistant(model.id);
+    const services = createServices({ assistant, model });
+    const service = new AiService(services);
+
+    await service.checkModel({ assistantId: assistant.id, timeout: 1000 });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.not.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+      }),
+    );
+  });
+
+  it('does not wire a web-search plugin when the model lacks web-search capability', async () => {
+    const model = createModel('gpt-4o-mini');
+    const assistant = createAssistant(model.id);
+    assistant.settings.enableWebSearch = true;
+    const services = createServices({ assistant, model });
+    const service = new AiService(services);
+
+    await service.checkModel({ assistantId: assistant.id, timeout: 1000 });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.not.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+      }),
+    );
+  });
+});
+
 function createServices({
   assistant,
   defaultModelId,
   model,
   models,
   provider = createProvider(),
+  webSearchPreferences = {
+    'chat.web_search.max_results': 5,
+    'chat.web_search.exclude_domains': [],
+  },
 }: {
   assistant?: Assistant;
   defaultModelId?: UniqueModelId | null;
   model?: Model;
   models?: Model[];
   provider?: Provider;
+  webSearchPreferences?: {
+    'chat.web_search.max_results': number;
+    'chat.web_search.exclude_domains': string[];
+  };
 }) {
   const modelList = models ?? (model ? [model] : []);
   const modelsById = new Map(modelList.map((item) => [item.id, item]));
@@ -223,6 +291,7 @@ function createServices({
     },
     preference: {
       get: jest.fn(async () => defaultModelId ?? null),
+      getMultipleRawCached: jest.fn(() => webSearchPreferences),
     },
     provider: {
       getAuthConfig: jest.fn(async () => null),

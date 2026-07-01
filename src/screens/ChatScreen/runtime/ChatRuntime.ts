@@ -1,6 +1,7 @@
 import { readUIMessageStream } from 'ai';
 
 import { toCherryUIMessage } from '@/ai/messages/messageConverter';
+import { serializeError } from '@/ai/utils/serializeError';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { DataServices } from '@/data/services/createDataServices';
 import type {
@@ -14,7 +15,8 @@ import { isUniqueModelId } from '@/data/types/model';
 import type { Topic } from '@/data/types/topic';
 import { type CherryReasoningMeta, readCherryMeta, withCherryMeta } from '@/data/types/uiParts';
 
-import { applyStreamingMessage } from './chatRuntimeMessages';
+import { applyStreamingMessage, statsFromMetadata } from './chatRuntimeMessages';
+import { normalizeAssistantMessageCitations } from './normalizeCitations';
 
 export type ChatRuntimeTopicStatus = 'aborting' | 'idle' | 'reserving' | 'streaming';
 
@@ -380,9 +382,11 @@ export class ChatRuntime {
     const dataParts = input.wasAborted
       ? latestParts
       : appendErrorPart(latestParts as CherryMessagePart[], input.error);
+    const stats = statsFromMetadata(input.latestAssistantMessage?.metadata);
 
     return await this.dependencies.services.message.update(assistantPlaceholder.id, {
       data: { parts: finalizeInterruptedReasoningParts(dataParts as CherryMessagePart[]) },
+      ...(stats && { stats }),
       status: input.wasAborted ? 'paused' : 'error',
     });
   }
@@ -392,12 +396,18 @@ export class ChatRuntime {
     latestAssistantMessage?: CherryUIMessage;
     status: 'paused' | 'success';
   }): Promise<Message> {
-    const parts = (input.latestAssistantMessage?.parts ?? []) as CherryMessagePart[];
+    const normalizedMessage =
+      input.status === 'success' && input.latestAssistantMessage
+        ? normalizeAssistantMessageCitations(input.latestAssistantMessage)
+        : input.latestAssistantMessage;
+    const parts = (normalizedMessage?.parts ?? []) as CherryMessagePart[];
+    const stats = statsFromMetadata(input.latestAssistantMessage?.metadata);
 
     return await this.dependencies.services.message.update(input.assistantPlaceholder.id, {
       data: {
         parts: input.status === 'success' ? parts : finalizeInterruptedReasoningParts(parts),
       },
+      ...(stats && { stats }),
       status: input.status,
     });
   }
@@ -517,15 +527,9 @@ function getTurnParts(input: {
 }
 
 function toErrorPart(error: unknown): CherryMessagePart {
-  const normalizedError = toError(error);
-
   return {
     type: 'data-error',
-    data: {
-      message: normalizedError.message,
-      name: normalizedError.name,
-      stack: normalizedError.stack ?? null,
-    },
+    data: serializeError(error),
   } as CherryMessagePart;
 }
 

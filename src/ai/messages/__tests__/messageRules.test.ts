@@ -66,6 +66,48 @@ describe('toModelMessages', () => {
       },
     ]);
   });
+
+  it('strips media the model cannot accept before converting (caps)', async () => {
+    const model = await toModelMessages(
+      [
+        ui('user', [
+          { type: 'text', text: 'look' },
+          { type: 'file', mediaType: 'image/png', url: 'data:application/octet-stream;base64,AA' },
+        ]),
+      ],
+      { image: false, video: true, audio: true },
+    );
+    expect(model).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'look' },
+          { type: 'text', text: expect.stringContaining('image attachment omitted') },
+        ],
+      },
+    ]);
+  });
+
+  it('defaults to accepting all media when no caps are given', async () => {
+    const model = await toModelMessages([
+      ui('user', [
+        { type: 'file', mediaType: 'image/png', url: 'data:application/octet-stream;base64,AA' },
+      ]),
+    ]);
+    expect(model).toEqual([
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'file',
+            mediaType: 'image/png',
+            data: 'data:application/octet-stream;base64,AA',
+            filename: undefined,
+          },
+        ],
+      },
+    ]);
+  });
 });
 
 describe('ensureNonEmptyAssistantContent', () => {

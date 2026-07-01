@@ -15,8 +15,10 @@ import type { StringKeys } from '@cherrystudio/ai-core/provider';
 import type { JSONValue, LanguageModelUsage, ModelMessage, UIMessage, UIMessageChunk } from 'ai';
 import * as Crypto from 'expo-crypto';
 
+import type { MediaCapabilities } from '../../messages/messageCapabilities';
 import { toModelMessages } from '../../messages/messageRules';
 import type { AppProviderSettingsMap } from '../../types';
+import { mergeUsage, toMessageMetadataPatch, ZERO_USAGE } from './usageMetadata';
 import { withReasoningTimingMetadata } from './withReasoningTimingMetadata';
 
 type AppProviderKey = StringKeys<AppProviderSettingsMap>;
@@ -41,6 +43,7 @@ export interface AgentParams<T extends AppProviderKey = AppProviderKey> {
   providerSettings: AppProviderSettingsMap[T];
   modelId: string;
   messageId?: string;
+  mediaCapabilities?: MediaCapabilities;
   plugins?: AiPlugin[];
   system?: string;
   options?: AgentOptions;
@@ -114,9 +117,18 @@ export class Agent<T extends AppProviderKey = AppProviderKey> {
 
     (async () => {
       const aiAgent = await this.buildAiSdkAgent();
+      let totalUsage = ZERO_USAGE;
       const result = await aiAgent.stream({
-        messages: await toModelMessages(initialMessages),
+        messages: await toModelMessages(initialMessages, params.mediaCapabilities),
         abortSignal: signal,
+        onStepFinish: async (step) => {
+          if (!step.usage) return;
+          totalUsage = mergeUsage(totalUsage, step.usage);
+          await writer.write({
+            type: 'message-metadata',
+            messageMetadata: toMessageMetadataPatch(totalUsage),
+          });
+        },
       });
 
       const uiStream = result.toUIMessageStream({

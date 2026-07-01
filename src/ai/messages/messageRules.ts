@@ -1,11 +1,12 @@
 /**
  * `UIMessage[]` → provider-ready `ModelMessage[]` for `Agent.stream`.
  *
- * Ported from desktop's `src/main/ai/messages/messageRules.ts`, minus its
- * media-capability stripping step (mobile has no such gating yet).
+ * Ported from desktop's `src/main/ai/messages/messageRules.ts`.
  */
 
 import { convertToModelMessages, type ModelMessage, type UIMessage } from 'ai';
+
+import { ALL_MEDIA, type MediaCapabilities, stripUnsupportedMedia } from './messageCapabilities';
 
 /** A string/array `content` → a flat parts array (`[]` for an empty string). */
 function contentToParts(content: unknown): unknown[] {
@@ -68,11 +69,15 @@ export function ensureNonEmptyAssistantContent(messages: ModelMessage[]): ModelM
  * The message-shaping pipeline `Agent.stream` runs on its conversion input
  * (`originalMessages` stays un-shaped upstream, so none of this leaks to the UI):
  *
- * convert, dropping incomplete tool calls that would otherwise dangle without a
- * result → merge adjacent same-role turns left by drops → placeholder any turn
- * that still converted to empty content. See #16195.
+ * strip media the model can't accept → convert, dropping incomplete tool calls that
+ * would otherwise dangle without a result → merge adjacent same-role turns left by
+ * drops → placeholder any turn that still converted to empty content. See #16195.
  */
-export async function toModelMessages(messages: UIMessage[]): Promise<ModelMessage[]> {
-  const model = await convertToModelMessages(messages, { ignoreIncompleteToolCalls: true });
+export async function toModelMessages(
+  messages: UIMessage[],
+  caps?: MediaCapabilities,
+): Promise<ModelMessage[]> {
+  const shaped = stripUnsupportedMedia(messages, caps ?? ALL_MEDIA);
+  const model = await convertToModelMessages(shaped, { ignoreIncompleteToolCalls: true });
   return ensureNonEmptyAssistantContent(coalesceConsecutiveSameRole(model));
 }

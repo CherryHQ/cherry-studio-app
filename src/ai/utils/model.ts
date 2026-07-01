@@ -10,6 +10,14 @@ export const isVisionModel = (model: Model): boolean =>
   model.capabilities.includes(MODEL_CAPABILITY.IMAGE_RECOGNITION) ||
   model.inputModalities?.includes(MODALITY.IMAGE) === true;
 
+export const isVideoModel = (model: Model): boolean =>
+  model.capabilities.includes(MODEL_CAPABILITY.VIDEO_RECOGNITION) ||
+  model.inputModalities?.includes(MODALITY.VIDEO) === true;
+
+export const isAudioModel = (model: Model): boolean =>
+  model.capabilities.includes(MODEL_CAPABILITY.AUDIO_RECOGNITION) ||
+  model.inputModalities?.includes(MODALITY.AUDIO) === true;
+
 export const isGenerateImageModel = (model: Model): boolean =>
   model.capabilities.includes(MODEL_CAPABILITY.IMAGE_GENERATION);
 

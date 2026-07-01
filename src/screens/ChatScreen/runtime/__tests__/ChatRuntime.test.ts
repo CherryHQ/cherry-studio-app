@@ -85,6 +85,82 @@ describe('ChatRuntime', () => {
     );
   });
 
+  test('persists token usage stats projected from the final assistant metadata', async () => {
+    const services = createServices();
+    const runtime = createRuntime({ services });
+    const assistantChunk = {
+      ...createUiMessage('assistant-1', 'hello'),
+      metadata: { totalTokens: 150, promptTokens: 100, completionTokens: 50 },
+    };
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
+      data: { parts: assistantChunk.parts },
+      stats: { totalTokens: 150, promptTokens: 100, completionTokens: 50 },
+      status: 'success',
+    });
+  });
+
+  test('normalizes source-url citations into text part references on successful persistence', async () => {
+    const services = createServices();
+    const runtime = createRuntime({ services });
+    const assistantChunk = {
+      id: 'assistant-1',
+      parts: [
+        { type: 'text', text: 'Cherry Studio ships on mobile[1]' },
+        {
+          type: 'source-url',
+          sourceId: 'citation-0',
+          url: 'https://source1.test',
+          title: 'Source 1',
+        },
+      ],
+      role: 'assistant',
+    } as CherryUIMessage;
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.update).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: {
+          parts: [
+            expect.objectContaining({
+              type: 'text',
+              providerMetadata: {
+                cherry: {
+                  references: [
+                    expect.objectContaining({
+                      category: 'citation',
+                      citationType: 'web',
+                      content: {
+                        source: 'ai-sdk',
+                        results: [{ number: 1, url: 'https://source1.test', title: 'Source 1' }],
+                      },
+                    }),
+                  ],
+                },
+              },
+            }),
+            assistantChunk.parts[1],
+          ],
+        },
+        status: 'success',
+      }),
+    );
+  });
+
   test('sends a file-only payload without requiring text', async () => {
     const services = createServices();
     const runtime = createRuntime({ services });
@@ -211,6 +287,38 @@ describe('ChatRuntime', () => {
       status: 'error',
     });
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  test('persists AI SDK error fields (e.g. statusCode) alongside message/name/stack', async () => {
+    const services = createServices();
+    const runtime = createRuntime({ services });
+    const apiError = Object.assign(new Error('rate limited'), {
+      statusCode: 429,
+      isRetryable: true,
+    });
+    mockReadUIMessageStream.mockReturnValue(failingAsyncIterable(apiError));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
+      data: {
+        parts: [
+          expect.objectContaining({
+            data: expect.objectContaining({
+              message: 'rate limited',
+              statusCode: 429,
+              isRetryable: true,
+            }),
+            type: 'data-error',
+          }),
+        ],
+      },
+      status: 'error',
+    });
   });
 
   test('appends an error part when streaming fails after partial output', async () => {
