@@ -179,7 +179,8 @@ describe('ChatInputSurface', () => {
       text: 'hello',
     });
     expect(getTextInputValue(renderer)).toBe(' hello ');
-    expect(findText(renderer, 'notes.pdf')).toBe(true);
+    expect(findText(renderer, 'notes')).toBe(true);
+    expect(findText(renderer, 'PDF')).toBe(true);
     expect(mockToastShow).toHaveBeenCalledWith({
       label: 'chat.input.sendFailed',
       variant: 'danger',
