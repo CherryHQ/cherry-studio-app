@@ -1,0 +1,26 @@
+diff --git a/dist/metro/index.cjs b/dist/metro/index.cjs
+index f320d077cfbdd7759d2de183e94b3bd848ead3f2..95764022a643af13954ee7a79c753e74043f3099 100644
+--- a/dist/metro/index.cjs
++++ b/dist/metro/index.cjs
+@@ -86,7 +86,7 @@ const nativeResolver = ({
+   }
+   const isInternal = cachedInternalBasePath !== "" && context.originModulePath.startsWith(cachedInternalBasePath);
+   const isFromNodeModules = context.originModulePath.includes(`${node_path.sep}node_modules${node_path.sep}`);
+-  const isFromReactNative = context.originModulePath.includes(`${node_path.sep}react-native${node_path.sep}`) || context.originModulePath.includes(`${node_path.sep}@react-native${node_path.sep}`);
++  const isFromReactNative = context.originModulePath.includes(`${node_path.sep}react-native${node_path.sep}`) || context.originModulePath.includes(`${node_path.sep}@react-native${node_path.sep}`) || context.originModulePath.includes(`${node_path.sep}react-native-worklets${node_path.sep}`);
+   const isReactNativeAnimated = context.originModulePath.includes(`${node_path.sep}Animated${node_path.sep}components${node_path.sep}`);
+   if (isInternal || resolution.type !== "sourceFile" || isFromReactNative && isFromNodeModules && !isReactNativeAnimated) {
+     return resolution;
+diff --git a/dist/metro/index.mjs b/dist/metro/index.mjs
+index 999ab2a76df0da112212936f24218767eb1da8da..951e9b3da8f1e3d4b99cf75cb566141be00f62df 100644
+--- a/dist/metro/index.mjs
++++ b/dist/metro/index.mjs
+@@ -78,7 +78,7 @@ const nativeResolver = ({
+   }
+   const isInternal = cachedInternalBasePath !== "" && context.originModulePath.startsWith(cachedInternalBasePath);
+   const isFromNodeModules = context.originModulePath.includes(`${sep}node_modules${sep}`);
+-  const isFromReactNative = context.originModulePath.includes(`${sep}react-native${sep}`) || context.originModulePath.includes(`${sep}@react-native${sep}`);
++  const isFromReactNative = context.originModulePath.includes(`${sep}react-native${sep}`) || context.originModulePath.includes(`${sep}@react-native${sep}`) || context.originModulePath.includes(`${sep}react-native-worklets${sep}`);
+   const isReactNativeAnimated = context.originModulePath.includes(`${sep}Animated${sep}components${sep}`);
+   if (isInternal || resolution.type !== "sourceFile" || isFromReactNative && isFromNodeModules && !isReactNativeAnimated) {
+     return resolution;
