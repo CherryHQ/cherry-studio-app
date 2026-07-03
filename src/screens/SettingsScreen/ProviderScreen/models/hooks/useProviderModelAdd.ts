@@ -31,7 +31,6 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
     createInitialProviderModelAddFormState(),
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [modelIdTouched, setModelIdTouched] = useState(false);
   const [endpointTypeTouched, setEndpointTypeTouched] = useState(false);
 
@@ -61,19 +60,6 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
     setModelIdTouched(false);
     setEndpointTypeTouched(false);
   }, []);
-
-  const openSheet = useCallback(() => {
-    resetForm();
-    setIsSheetOpen(true);
-  }, [resetForm]);
-
-  const closeSheet = useCallback(() => {
-    if (isSubmitting) {
-      return;
-    }
-
-    setIsSheetOpen(false);
-  }, [isSubmitting]);
 
   const updateFormField = useCallback(
     <TField extends keyof ProviderModelAddFormState>(
@@ -156,21 +142,21 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
 
   const submitAddModel = useCallback(async () => {
     if (isSubmitting) {
-      return;
+      return false;
     }
 
     if (!provider || !providerId) {
-      return;
+      return false;
     }
 
     if (!isModelIdValid) {
       setModelIdTouched(true);
-      return;
+      return false;
     }
 
     if (!isEndpointTypesValid) {
       setEndpointTypeTouched(true);
-      return;
+      return false;
     }
 
     setIsSubmitting(true);
@@ -193,7 +179,7 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
       }
 
       if (inputs.length === 0) {
-        return;
+        return false;
       }
 
       for (const input of inputs) {
@@ -205,12 +191,13 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
         variant: 'success',
       });
       resetForm();
-      setIsSheetOpen(false);
+      return true;
     } catch {
       toast.show({
         label: t('settings.provider.models.addFailed'),
         variant: 'danger',
       });
+      return false;
     } finally {
       setIsSubmitting(false);
     }
@@ -231,13 +218,11 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
 
   return {
     canSubmit,
-    closeSheet,
     endpointTypeError,
     formState,
-    isSheetOpen,
     isSubmitting,
     modelIdError,
-    openSheet,
+    resetForm,
     showEndpointTypes,
     submitAddModel,
     updateContextWindow,

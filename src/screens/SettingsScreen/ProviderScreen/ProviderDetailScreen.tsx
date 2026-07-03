@@ -14,14 +14,7 @@ import {
 import { ProviderApiManagementSection } from './components/ProviderApiManagementSection';
 import { ProviderModelList } from './components/ProviderModelList';
 import { useProviderDetailSettings } from './detail';
-import {
-  ProviderModelAddSheet,
-  ProviderModelCheckSheet,
-  ProviderModelPullSheet,
-  useProviderModelAdd,
-  useProviderModelCheck,
-  useProviderModelPull,
-} from './models';
+import { ProviderModelCheckSheet, useProviderModelCheck } from './models';
 
 export default function ProviderDetailSettingsScreen() {
   const { providerId, providerName } = useLocalSearchParams<{
@@ -33,35 +26,6 @@ export default function ProviderDetailSettingsScreen() {
   const [apiKeysVisible, setApiKeysVisible] = useState(false);
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
-  const {
-    applyPullPreview,
-    closeSheet: closePullSheet,
-    isApplying: isApplyingPull,
-    isBusy: isPullBusy,
-    isPreviewLoading: isPullPreviewLoading,
-    isSheetOpen: isPullSheetOpen,
-    openPullPreview,
-    preview: pullPreview,
-  } = useProviderModelPull({ provider, providerId: providerId ?? '' });
-  const {
-    canSubmit: canSubmitAddModel,
-    closeSheet: closeAddSheet,
-    endpointTypeError: addModelEndpointTypeError,
-    formState: addModelFormState,
-    isSheetOpen: isAddSheetOpen,
-    isSubmitting: isAddModelSubmitting,
-    modelIdError: addModelIdError,
-    openSheet: openAddSheet,
-    showEndpointTypes: showAddModelEndpointTypes,
-    submitAddModel,
-    updateContextWindow: updateAddModelContextWindow,
-    updateEndpointTypes: updateAddModelEndpointTypes,
-    updateGroup: updateAddModelGroup,
-    updateMaxInputTokens: updateAddModelMaxInputTokens,
-    updateMaxOutputTokens: updateAddModelMaxOutputTokens,
-    updateModelId: updateAddModelId,
-    updateName: updateAddModelName,
-  } = useProviderModelAdd({ provider, providerId: providerId ?? '' });
   const { apiKeys, apiKeysQuery, authConfig, authConfigQuery, replaceApiKeysMutation } =
     useProviderApiServiceQueries(providerId ?? '');
   const {
@@ -134,6 +98,32 @@ export default function ProviderDetailSettingsScreen() {
       pathname: '/settings/provider/[providerId]/api-key-settings',
     });
   };
+  const openModelAddSettings = () => {
+    if (!providerId) {
+      return;
+    }
+
+    router.push({
+      params: {
+        ...(provider?.name ? { providerName: provider.name } : {}),
+        providerId,
+      },
+      pathname: '/settings/provider/[providerId]/model-add',
+    });
+  };
+  const openModelPullSettings = () => {
+    if (!providerId) {
+      return;
+    }
+
+    router.push({
+      params: {
+        ...(provider?.name ? { providerName: provider.name } : {}),
+        providerId,
+      },
+      pathname: '/settings/provider/[providerId]/model-pull',
+    });
+  };
 
   if (!providerId || providerQuery.isError) {
     return <Redirect href="/settings/provider" />;
@@ -161,36 +151,18 @@ export default function ProviderDetailSettingsScreen() {
             />
           </View>
         }
-        isAddDisabled={!provider || isAddModelSubmitting}
-        isAddLoading={isAddModelSubmitting}
+        isAddDisabled={!provider}
+        isAddLoading={false}
         isLoading={modelsQuery.isPending}
         isCheckDisabled={models.length === 0}
         isCheckLoading={isModelChecking}
-        isPullDisabled={!provider || isPullBusy}
-        isPullLoading={isPullPreviewLoading}
+        isPullDisabled={!provider}
+        isPullLoading={false}
         models={models}
         provider={provider}
-        onAddPress={openAddSheet}
+        onAddPress={openModelAddSettings}
         onCheckPress={openCheckSheet}
-        onPullPress={openPullPreview}
-      />
-      <ProviderModelAddSheet
-        canSubmit={canSubmitAddModel}
-        endpointTypeError={addModelEndpointTypeError}
-        formState={addModelFormState}
-        isOpen={isAddSheetOpen}
-        isSubmitting={isAddModelSubmitting}
-        modelIdError={addModelIdError}
-        showEndpointTypes={showAddModelEndpointTypes}
-        onClose={closeAddSheet}
-        onContextWindowChange={updateAddModelContextWindow}
-        onEndpointTypesChange={updateAddModelEndpointTypes}
-        onGroupChange={updateAddModelGroup}
-        onMaxInputTokensChange={updateAddModelMaxInputTokens}
-        onMaxOutputTokensChange={updateAddModelMaxOutputTokens}
-        onModelIdChange={updateAddModelId}
-        onNameChange={updateAddModelName}
-        onSubmit={submitAddModel}
+        onPullPress={openModelPullSettings}
       />
       <ProviderModelCheckSheet
         apiKeyOptions={checkApiKeyOptions}
@@ -203,14 +175,6 @@ export default function ProviderDetailSettingsScreen() {
         onClose={closeCheckSheet}
         onModelChange={setSelectedCheckModelId}
         onStart={startModelCheck}
-      />
-      <ProviderModelPullSheet
-        isApplying={isApplyingPull}
-        isOpen={isPullSheetOpen}
-        preview={pullPreview}
-        provider={provider}
-        onApply={applyPullPreview}
-        onClose={closePullSheet}
       />
     </>
   );

@@ -25,6 +25,8 @@ type UseProviderModelPullOptions = {
   providerId: string;
 };
 
+export type ProviderModelPullLoadResult = 'empty' | 'error' | 'ready';
+
 export function useProviderModelPull({ provider, providerId }: UseProviderModelPullOptions) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -32,16 +34,10 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
   const queryClient = useQueryClient();
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [preview, setPreview] = useState<ProviderModelPullPreview | null>(null);
-
-  const closeSheet = useCallback(() => {
-    setIsSheetOpen(false);
-  }, []);
 
   const resetPreview = useCallback(() => {
     setPreview(null);
-    setIsSheetOpen(false);
   }, []);
 
   const refreshModelQueries = useCallback(async () => {
@@ -54,9 +50,9 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
     ]);
   }, [providerId, queryClient]);
 
-  const openPullPreview = useCallback(async () => {
+  const loadPullPreview = useCallback(async (): Promise<ProviderModelPullLoadResult> => {
     if (!provider || !providerId) {
-      return;
+      return 'error';
     }
 
     setIsPreviewLoading(true);
@@ -95,11 +91,11 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
           label: t('settings.provider.models.pullUpToDate'),
           variant: 'success',
         });
-        return;
+        return 'empty';
       }
 
       setPreview(nextPreview);
-      setIsSheetOpen(true);
+      return 'ready';
     } catch (error) {
       toast.show({
         label: t(
@@ -109,6 +105,7 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
         ),
         variant: 'danger',
       });
+      return 'error';
     } finally {
       setIsPreviewLoading(false);
     }
@@ -117,7 +114,7 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
   const applyPullPreview = useCallback(
     async (payload: ProviderModelPullApplyPayload) => {
       if (!provider) {
-        return;
+        return false;
       }
 
       setIsApplying(true);
@@ -142,26 +139,36 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
           variant: 'success',
         });
         resetPreview();
+        return true;
       } catch {
         toast.show({
           label: t('settings.provider.models.pullApplyFailed'),
           variant: 'danger',
         });
+        return false;
       } finally {
         setIsApplying(false);
       }
     },
-    [provider, providerId, refreshModelQueries, resetPreview, services.model, services.provider, t, toast],
+    [
+      provider,
+      providerId,
+      refreshModelQueries,
+      resetPreview,
+      services.model,
+      services.provider,
+      t,
+      toast,
+    ],
   );
 
   return {
     applyPullPreview,
-    closeSheet,
     isApplying,
     isBusy: isPreviewLoading || isApplying,
     isPreviewLoading,
-    isSheetOpen,
-    openPullPreview,
+    loadPullPreview,
     preview,
+    resetPreview,
   };
 }
