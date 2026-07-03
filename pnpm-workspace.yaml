@@ -10,6 +10,7 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
   core-js: true
+  '@j178/prek': true
 
 patchedDependencies:
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
