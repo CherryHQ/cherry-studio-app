@@ -91,10 +91,7 @@ export const messageTable = sqliteTable(
     // Structural role<->null coupling: the virtual root (role='root') is the only row with a
     // null parent, and every content row must have a parent. Makes "content always has a
     // parent" and "root <=> parentId IS NULL" DB invariants, not service-layer discipline.
-    check(
-      'message_root_parent_check',
-      sql`(${table.role} = 'root') = (${table.parentId} is null)`,
-    ),
+    check('message_root_parent_check', sql`(${table.role} = 'root') = (${table.parentId} is null)`),
   ],
 );
 

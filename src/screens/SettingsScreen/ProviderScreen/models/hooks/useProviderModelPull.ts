@@ -151,7 +151,16 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
         setIsApplying(false);
       }
     },
-    [provider, providerId, refreshModelQueries, resetPreview, services.model, services.provider, t, toast],
+    [
+      provider,
+      providerId,
+      refreshModelQueries,
+      resetPreview,
+      services.model,
+      services.provider,
+      t,
+      toast,
+    ],
   );
 
   return {

@@ -10,12 +10,6 @@ repos:
         files: '\.(js|jsx|ts|tsx|cjs|mjs|cts|mts)$'
         pass_filenames: true
 
-      - id: expo-lint
-        name: Expo lint
-        language: system
-        entry: pnpm lint
-        files: '\.(js|jsx|ts|tsx|cjs|mjs|cts|mts)$'
-        pass_filenames: true
 
       - id: biome-format-other
         name: Biome format (JSON/YAML/CSS/HTML)

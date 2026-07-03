@@ -38,9 +38,7 @@ export function ModelPickerReasoningRow({
       onPress={onPress}
     >
       <BrainIcon className="size-6 text-foreground" />
-      <Text className="flex-1 text-base text-foreground">
-        {t('chat.reasoning.title')}
-      </Text>
+      <Text className="flex-1 text-base text-foreground">{t('chat.reasoning.title')}</Text>
       <View className="flex-row items-center gap-1">
         <Text className="text-default-foreground text-base" numberOfLines={1}>
           {selectedOption ? t(selectedOption.labelKey) : null}
@@ -80,10 +78,7 @@ export function ModelPickerReasoningPage({
             onPress={() => onChange(option.value)}
           >
             <Text
-              className={cn(
-                'flex-1 text-base',
-                isSelected ? 'text-accent' : 'text-foreground',
-              )}
+              className={cn('flex-1 text-base', isSelected ? 'text-accent' : 'text-foreground')}
               numberOfLines={1}
             >
               {label}

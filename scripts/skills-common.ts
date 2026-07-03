@@ -1,53 +1,57 @@
-import * as fs from 'fs'
-import * as path from 'path'
+import * as fs from 'fs';
+import * as path from 'path';
 
-export const ROOT_DIR = path.join(__dirname, '..')
-export const AGENTS_SKILLS_DIR = path.join(ROOT_DIR, '.agents', 'skills')
-export const CLAUDE_SKILLS_DIR = path.join(ROOT_DIR, '.claude', 'skills')
-export const AGENTS_SKILLS_GITIGNORE = path.join(AGENTS_SKILLS_DIR, '.gitignore')
-export const CLAUDE_SKILLS_GITIGNORE = path.join(CLAUDE_SKILLS_DIR, '.gitignore')
-export const PUBLIC_SKILLS_FILE = path.join(AGENTS_SKILLS_DIR, 'public-skills.txt')
+export const ROOT_DIR = path.join(__dirname, '..');
+export const AGENTS_SKILLS_DIR = path.join(ROOT_DIR, '.agents', 'skills');
+export const CLAUDE_SKILLS_DIR = path.join(ROOT_DIR, '.claude', 'skills');
+export const AGENTS_SKILLS_GITIGNORE = path.join(AGENTS_SKILLS_DIR, '.gitignore');
+export const CLAUDE_SKILLS_GITIGNORE = path.join(CLAUDE_SKILLS_DIR, '.gitignore');
+export const PUBLIC_SKILLS_FILE = path.join(AGENTS_SKILLS_DIR, 'public-skills.txt');
 
-const SKILL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+const SKILL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function listSkillNames(): string[] {
-  const content = readFileSafe(PUBLIC_SKILLS_FILE)
+  const content = readFileSafe(PUBLIC_SKILLS_FILE);
   if (content === null) {
-    throw new Error('.agents/skills/public-skills.txt is missing')
+    throw new Error('.agents/skills/public-skills.txt is missing');
   }
 
-  const names: string[] = []
-  const seen = new Set<string>()
-  const lines = content.split('\n')
+  const names: string[] = [];
+  const seen = new Set<string>();
+  const lines = content.split('\n');
 
   for (const [index, rawLine] of lines.entries()) {
-    const trimmedLine = rawLine.trim()
+    const trimmedLine = rawLine.trim();
     if (trimmedLine === '' || trimmedLine.startsWith('#')) {
-      continue
+      continue;
     }
 
     if (trimmedLine.includes('#')) {
       throw new Error(
         `inline comments are not allowed at .agents/skills/public-skills.txt:${index + 1}; ` +
-          'put comments on the previous line'
-      )
+          'put comments on the previous line',
+      );
     }
 
-    const name = trimmedLine
+    const name = trimmedLine;
 
     if (!SKILL_NAME_PATTERN.test(name)) {
-      throw new Error(`invalid skill name '${name}' at .agents/skills/public-skills.txt:${index + 1}`)
+      throw new Error(
+        `invalid skill name '${name}' at .agents/skills/public-skills.txt:${index + 1}`,
+      );
     }
 
     if (seen.has(name)) {
-      throw new Error(`duplicate skill name '${name}' at .agents/skills/public-skills.txt:${index + 1}`)
+      throw new Error(
+        `duplicate skill name '${name}' at .agents/skills/public-skills.txt:${index + 1}`,
+      );
     }
 
-    seen.add(name)
-    names.push(name)
+    seen.add(name);
+    names.push(name);
   }
 
-  return names.sort((a, b) => a.localeCompare(b))
+  return names.sort((a, b) => a.localeCompare(b));
 }
 
 export function buildAgentsSkillsGitignore(skillNames: string[]): string {
@@ -57,15 +61,15 @@ export function buildAgentsSkillsGitignore(skillNames: string[]): string {
     '*',
     '!.gitignore',
     '!README*.md',
-    '!public-skills.txt'
-  ]
+    '!public-skills.txt',
+  ];
 
   for (const skillName of skillNames) {
-    lines.push(`!${skillName}/`)
-    lines.push(`!${skillName}/**`)
+    lines.push(`!${skillName}/`);
+    lines.push(`!${skillName}/**`);
   }
 
-  return `${lines.join('\n')}\n`
+  return `${lines.join('\n')}\n`;
 }
 
 export function buildClaudeSkillsGitignore(skillNames: string[]): string {
@@ -74,36 +78,36 @@ export function buildClaudeSkillsGitignore(skillNames: string[]): string {
     '# Do not edit manually.',
     '*',
     '!.gitignore',
-    '!README*.md'
-  ]
+    '!README*.md',
+  ];
 
   for (const skillName of skillNames) {
-    lines.push(`!${skillName}`)
+    lines.push(`!${skillName}`);
   }
 
-  return `${lines.join('\n')}\n`
+  return `${lines.join('\n')}\n`;
 }
 
 export function writeFileIfChanged(filePath: string, content: string): boolean {
-  let current = ''
+  let current = '';
   try {
-    current = fs.readFileSync(filePath, 'utf-8')
+    current = fs.readFileSync(filePath, 'utf-8');
   } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException
+    const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code !== 'ENOENT') {
-      throw error
+      throw error;
     }
   }
   if (current === content) {
-    return false
+    return false;
   }
-  fs.writeFileSync(filePath, content, 'utf-8')
-  return true
+  fs.writeFileSync(filePath, content, 'utf-8');
+  return true;
 }
 
 export function readFileSafe(filePath: string): string | null {
   if (!fs.existsSync(filePath)) {
-    return null
+    return null;
   }
-  return fs.readFileSync(filePath, 'utf-8')
+  return fs.readFileSync(filePath, 'utf-8');
 }
