@@ -4,7 +4,7 @@ import type { TagService } from '@/data/services/TagService';
 import type { Topic } from '@/data/types/topic';
 import { TopicService } from '../TopicService';
 
-jest.mock('@/data/db/schema', () => ({
+jest.mock('@/data/db/schemas', () => ({
   messageTable: {
     topicId: 'topicId',
   },

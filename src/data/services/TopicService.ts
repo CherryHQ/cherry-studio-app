@@ -23,7 +23,7 @@ import type {
 import { type CursorPaginationResponse, DataApiErrorFactory } from '@/data/types/apiTypes';
 import type { Topic } from '@/data/types/topic';
 import type { DbService } from '../db/DbService';
-import { messageTable, pinTable, topicTable } from '../db/schema';
+import { messageTable, pinTable, type TopicRow, topicTable } from '../db/schemas';
 import type { PinService } from './PinService';
 import type { TagService } from './TagService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
@@ -34,7 +34,6 @@ const maxLimit = 200;
 const firstPageCursor: TopicCursor = { orderKey: '', section: 'pin' };
 
 type DbOrTx = any;
-type TopicRow = typeof topicTable.$inferSelect;
 
 type TopicCursor =
   | { orderKey: string; section: 'pin' }

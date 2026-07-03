@@ -71,7 +71,5 @@ export const userProviderTable = sqliteTable(
 );
 
 // Export table type
-export type UserProvider = typeof userProviderTable.$inferSelect;
-export type NewUserProvider = typeof userProviderTable.$inferInsert;
-export type UserProviderInsert = typeof userProviderTable.$inferInsert;
-export type UserProviderSelect = typeof userProviderTable.$inferSelect;
+export type InsertUserProviderRow = typeof userProviderTable.$inferInsert;
+export type UserProviderRow = typeof userProviderTable.$inferSelect;

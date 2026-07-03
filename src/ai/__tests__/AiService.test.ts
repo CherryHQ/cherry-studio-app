@@ -13,7 +13,7 @@ jest.mock('@cherrystudio/ai-core', () => ({
   generateImage: jest.fn(),
 }));
 
-jest.mock('@/integration/cherryai', () => ({
+jest.mock('@/integration/cherryAi', () => ({
   generateSignature: jest.fn(() => ({})),
 }));
 

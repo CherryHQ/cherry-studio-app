@@ -19,13 +19,13 @@ export class UserCancelledError extends Error {
   }
 }
 
-export interface UseCherryInOAuthOptions {
+export interface UseCherryInOauthOptions {
   providerId: string;
   requestConfirm: (options: { title: string; message: string; onConfirm: () => void }) => void;
   onOAuthComplete?: () => void;
 }
 
-export function useCherryInOAuth(options: UseCherryInOAuthOptions) {
+export function useCherryInOauth(options: UseCherryInOauthOptions) {
   const { providerId, requestConfirm, onOAuthComplete } = options;
   const { t } = useTranslation();
   const { provider: providerService } = useDataServices();

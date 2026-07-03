@@ -1,7 +1,7 @@
 import { readUIMessageStream } from 'ai';
 
 import { toCherryUIMessage } from '@/ai/messages/messageConverter';
-import { loggerService } from '@/core/logger/loggerService';
+import { loggerService } from '@/core/logger/LoggerService';
 import type { DataServices } from '@/data/services/createDataServices';
 import type {
   CherryMessagePart,

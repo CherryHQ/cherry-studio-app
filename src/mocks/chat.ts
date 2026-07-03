@@ -303,14 +303,16 @@ function createShowcaseDataParts(): CherryMessagePart[] {
     },
     {
       data: {
-        content: 'def fib(n: int) -> int:\n    a, b = 0, 1\n    for _ in range(n):\n        a, b = b, a + b\n    return a',
+        content:
+          'def fib(n: int) -> int:\n    a, b = 0, 1\n    for _ in range(n):\n        a, b = b, a + b\n    return a',
         language: 'python',
       },
       type: 'data-code',
     },
     {
       data: {
-        compactedContent: '这是被折叠保存的、更长的原始上下文内容（compactedContent），通常不直接展示。',
+        compactedContent:
+          '这是被折叠保存的、更长的原始上下文内容（compactedContent），通常不直接展示。',
         content: '**对话已压缩**：上面较早的若干轮已被总结，以节省上下文窗口。',
       },
       type: 'data-compact',
@@ -320,13 +322,15 @@ function createShowcaseDataParts(): CherryMessagePart[] {
         code: 'ECONNREFUSED',
         message: '无法连接到模型服务：连接被拒绝（请检查 API 地址与网络）。',
         name: 'NetworkError',
-        stack: 'NetworkError: connect ECONNREFUSED 127.0.0.1:443\n    at TCPConnectWrap.afterConnect',
+        stack:
+          'NetworkError: connect ECONNREFUSED 127.0.0.1:443\n    at TCPConnectWrap.afterConnect',
       },
       type: 'data-error',
     },
     {
       data: {
-        content: 'This paragraph has been translated into English to demonstrate the translation block styling.',
+        content:
+          'This paragraph has been translated into English to demonstrate the translation block styling.',
         sourceLanguage: 'zh',
         targetLanguage: 'en',
       },
@@ -419,40 +423,41 @@ function createShowcaseToolParts(): CherryMessagePart[] {
 }
 
 function createShowcaseMessages(seed: BenchmarkTopicSeed, topicIndex: number): Message[] {
-  const showcaseMessages: { content: string; parts: CherryMessagePart[]; role: Message['role'] }[] = [
-    {
-      content: '你好，请展示一下各种消息内容和 Markdown 格式。这里附带一张图片。',
-      parts: [
-        {
-          state: 'done',
-          text: '你好，请展示一下各种消息内容和 Markdown 格式。这里附带一张图片。',
-          type: 'text',
-        },
-        {
-          filename: 'screenshot.png',
-          mediaType: 'image/png',
-          type: 'file',
-          url: 'https://placehold.co/200x120/png',
-        },
-      ],
-      role: 'user',
-    },
-    {
-      content: '这是一条覆盖全部 Markdown 语法的助手消息。',
-      parts: [{ state: 'done', text: createShowcaseMarkdownContent(), type: 'text' }],
-      role: 'assistant',
-    },
-    {
-      content: '接着演示推理、数据块和工具调用。',
-      parts: [{ state: 'done', text: '接着演示推理、数据块和工具调用。', type: 'text' }],
-      role: 'user',
-    },
-    {
-      content: '推理块、代码/压缩/错误/翻译/视频数据块，以及工具调用与来源引用的综合演示。',
-      parts: [...createShowcaseDataParts(), ...createShowcaseToolParts()],
-      role: 'assistant',
-    },
-  ];
+  const showcaseMessages: { content: string; parts: CherryMessagePart[]; role: Message['role'] }[] =
+    [
+      {
+        content: '你好，请展示一下各种消息内容和 Markdown 格式。这里附带一张图片。',
+        parts: [
+          {
+            state: 'done',
+            text: '你好，请展示一下各种消息内容和 Markdown 格式。这里附带一张图片。',
+            type: 'text',
+          },
+          {
+            filename: 'screenshot.png',
+            mediaType: 'image/png',
+            type: 'file',
+            url: 'https://placehold.co/200x120/png',
+          },
+        ],
+        role: 'user',
+      },
+      {
+        content: '这是一条覆盖全部 Markdown 语法的助手消息。',
+        parts: [{ state: 'done', text: createShowcaseMarkdownContent(), type: 'text' }],
+        role: 'assistant',
+      },
+      {
+        content: '接着演示推理、数据块和工具调用。',
+        parts: [{ state: 'done', text: '接着演示推理、数据块和工具调用。', type: 'text' }],
+        role: 'user',
+      },
+      {
+        content: '推理块、代码/压缩/错误/翻译/视频数据块，以及工具调用与来源引用的综合演示。',
+        parts: [...createShowcaseDataParts(), ...createShowcaseToolParts()],
+        role: 'assistant',
+      },
+    ];
 
   const messages: Message[] = [];
   let parentId: string | null = null;

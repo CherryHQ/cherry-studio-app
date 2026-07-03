@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { queryKeys } from '@/data/api';
 import { useDataServices } from '@/data/runtime';
-import { providerRegistryService } from '@/data/services/providerRegistryService';
+import { providerRegistryService } from '@/data/services/ProviderRegistryService';
 import type { Provider } from '@/data/types/provider';
 
 import {

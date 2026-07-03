@@ -1,8 +1,7 @@
 {
   "editor.formatOnSave": true,
   "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "explicit",
-    "source.organizeImports": "never"
+    "source.fixAll.eslint": "explicit"
   },
   "files.eol": "\n",
   "search.exclude": {
@@ -19,6 +18,5 @@
     "ios/Pods/boost/boost/predef/language",
     "ios/Pods/Headers/Private/RCT-Folly/folly/lang",
     "ios/Pods/Headers/Public/RCT-Folly/folly/lang"
-  ],
-  "oxc.enable": false
+  ]
 }

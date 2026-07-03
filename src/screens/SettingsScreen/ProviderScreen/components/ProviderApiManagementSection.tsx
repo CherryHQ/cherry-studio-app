@@ -7,7 +7,7 @@ import {
   ProviderApiServiceApiKeysField,
   ProviderApiServiceEndpointField,
 } from '@/screens/SettingsScreen/ProviderScreen/apiService';
-import { CherryInOAuth } from './CherryInOAuth';
+import { CherryInOauth } from './CherryInOauth';
 
 const CHERRYIN_PROVIDER_ID = 'cherryin';
 
@@ -59,7 +59,7 @@ export function ProviderApiManagementSection({
             onSelectedChange={onEnabledChange}
           />
         </View>
-        {isCherryIn && provider?.id ? <CherryInOAuth providerId={provider.id} /> : null}
+        {isCherryIn && provider?.id ? <CherryInOauth providerId={provider.id} /> : null}
         {showBaseUrl ? (
           <ProviderApiServiceEndpointField baseUrl={baseUrl} onManagePress={onBaseUrlManagePress} />
         ) : null}

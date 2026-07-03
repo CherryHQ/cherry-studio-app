@@ -2,7 +2,7 @@ import type { CreateModelInput } from '@/data/services/ModelService';
 import {
   type ModelRegistryLookup,
   mergePresetModel,
-} from '@/data/services/providerRegistryService';
+} from '@/data/services/ProviderRegistryService';
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/data/types/model';
 
 export type ProviderModelPullPreview = {

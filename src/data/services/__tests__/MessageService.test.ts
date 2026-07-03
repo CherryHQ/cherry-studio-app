@@ -1,7 +1,7 @@
 import type { Message } from '@/data/types/message';
 import { MessageService } from '../MessageService';
 
-jest.mock('@/data/db/schema', () => ({
+jest.mock('@/data/db/schemas', () => ({
   messageTable: {},
   topicTable: {},
 }));
