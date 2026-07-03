@@ -16,21 +16,21 @@ const RootGestureView = withUniwind(GestureHandlerRootView);
 export default function RootLayout() {
   return (
     <RootGestureView className="flex-1">
-      <BottomSheetProvider>
-        <KeyboardProvider>
-          <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false } }}>
-            <QueryProvider>
-              <DataProvider bootstrap={bootstrapAppRuntime}>
-                <InitialDataGate>
-                  <NavigationThemeProvider>
+      <KeyboardProvider>
+        <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false } }}>
+          <QueryProvider>
+            <DataProvider bootstrap={bootstrapAppRuntime}>
+              <InitialDataGate>
+                <NavigationThemeProvider>
+                  <BottomSheetProvider>
                     <DrawerRoot />
-                  </NavigationThemeProvider>
-                </InitialDataGate>
-              </DataProvider>
-            </QueryProvider>
-          </HeroUINativeProvider>
-        </KeyboardProvider>
-      </BottomSheetProvider>
+                  </BottomSheetProvider>
+                </NavigationThemeProvider>
+              </InitialDataGate>
+            </DataProvider>
+          </QueryProvider>
+        </HeroUINativeProvider>
+      </KeyboardProvider>
     </RootGestureView>
   );
 }

@@ -1,8 +1,5 @@
-import {
-  BottomSheet,
-  type BottomSheetMethods,
-  BottomSheetView,
-} from '@expo/ui/community/bottom-sheet';
+import { ModalBottomSheet, programmatic } from '@swmansion/react-native-bottom-sheet';
+import { GlassView } from 'expo-glass-effect';
 import { Button } from 'heroui-native/button';
 import { Input } from 'heroui-native/input';
 import { Spinner } from 'heroui-native/spinner';
@@ -25,6 +22,7 @@ import {
 } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { isLiquidGlassAvailable } from '@/config/constants';
 import type { EndpointType } from '@/data/types/model';
 
 import {
@@ -32,8 +30,10 @@ import {
   providerModelAddEndpointOptions,
 } from '../utils/providerModelAdd';
 
-const addSheetSnapPoints = ['85%'];
 const addSheetSnapPointFraction = 0.85;
+// Detent indices into `detents`: 0 closed, 1 open.
+const CLOSED_INDEX = 0;
+const OPEN_INDEX = 1;
 const advancedSettingsScrollTopPadding = 16;
 const defaultKeyboardBottomOffset = 24;
 const advancedSettingsKeyboardBottomOffset = 180;
@@ -80,12 +80,20 @@ export function ProviderModelAddSheet({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const sheetRef = useRef<BottomSheetMethods>(null);
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const advancedSettingsScrollYRef = useRef(0);
   const advancedFieldScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showMoreSettings, setShowMoreSettings] = useState(false);
+  // Adjusted during render (not an effect) from `isOpen`, per
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes.
+  const [sheetIndex, setSheetIndex] = useState(CLOSED_INDEX);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const sheetHeight = (windowHeight - insets.top - insets.bottom) * addSheetSnapPointFraction;
+
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    setSheetIndex(isOpen ? OPEN_INDEX : CLOSED_INDEX);
+  }
   const clearAdvancedFieldScrollTimer = useCallback(() => {
     if (!advancedFieldScrollTimeoutRef.current) {
       return;
@@ -151,16 +159,28 @@ export function ProviderModelAddSheet({
   }
 
   return (
-    <BottomSheet
-      enablePanDownToClose={!isSubmitting}
-      enableDynamicSizing={false}
-      handleComponent={null}
-      index={isOpen ? 0 : -1}
-      ref={sheetRef}
-      snapPoints={addSheetSnapPoints}
-      onClose={handleClose}
+    <ModalBottomSheet
+      detents={[isSubmitting ? programmatic(0) : 0, sheetHeight]}
+      index={sheetIndex}
+      nativeOverlay
+      onIndexChange={setSheetIndex}
+      onSettle={(nextIndex) => {
+        if (nextIndex === CLOSED_INDEX) {
+          handleClose();
+        }
+      }}
+      surface={
+        isLiquidGlassAvailable ? (
+          <GlassView
+            glassEffectStyle="regular"
+            style={[StyleSheet.absoluteFill, styles.surfaceGlass]}
+          />
+        ) : (
+          <View className="rounded-t-3xl bg-background" style={StyleSheet.absoluteFill} />
+        )
+      }
     >
-      <BottomSheetView style={styles.sheetContent}>
+      <View style={styles.sheetContent}>
         <View style={[styles.sheetViewport, { height: sheetHeight }]}>
           <View className="px-4 pb-3 pt-5">
             <Text className="font-semibold text-foreground text-lg" numberOfLines={1}>
@@ -307,8 +327,8 @@ export function ProviderModelAddSheet({
             </Button>
           </View>
         </View>
-      </BottomSheetView>
-    </BottomSheet>
+      </View>
+    </ModalBottomSheet>
   );
 }
 
@@ -467,5 +487,12 @@ const styles = StyleSheet.create({
   },
   sheetViewport: {
     width: '100%',
+  },
+  // Matches `rounded-t-3xl`'s --cs-radius-3xl (22px) — GlassView doesn't take
+  // className, so the radius is set directly to keep the same silhouette as
+  // the non-glass fallback.
+  surfaceGlass: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
   },
 });

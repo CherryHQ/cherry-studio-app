@@ -1,9 +1,6 @@
-import {
-  BottomSheet,
-  type BottomSheetMethods,
-  BottomSheetView,
-} from '@expo/ui/community/bottom-sheet';
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
+import { ModalBottomSheet } from '@swmansion/react-native-bottom-sheet';
+import { GlassView } from 'expo-glass-effect';
 import type { ImageSource } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useThemeColor } from 'heroui-native/hooks';
@@ -11,44 +8,59 @@ import { Input } from 'heroui-native/input';
 import { CameraIcon, PencilIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Keyboard,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Image } from '@/components/uniwind';
+import { isLiquidGlassAvailable } from '@/config/constants';
 import { usePreference } from '@/data/hooks';
 
 const avatarSource = require('@/assets/icon.png');
 const avatarSize = 72;
 const sheetAvatarSize = 104;
-const profileSheetSnapPoints = ['60%'];
+const profileSheetSnapPointFraction = 0.6;
+// Detent indices into `detents`: 0 closed, 1 open.
+const CLOSED_INDEX = 0;
+const OPEN_INDEX = 1;
 
 export function SettingsProfileHeader() {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetHeight = (windowHeight - insets.top - insets.bottom) * profileSheetSnapPointFraction;
   const [userName, setUserName] = usePreference('app.user.name');
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [sheetIndex, setSheetIndex] = useState(CLOSED_INDEX);
   const [draftName, setDraftName] = useState(userName);
   const [draftAvatarUri, setDraftAvatarUri] = useState<string | null>(null);
-  const sheetRef = useRef<BottomSheetMethods>(null);
 
   const openSheet = useCallback(() => {
     Keyboard.dismiss();
     setDraftName(userName);
     setDraftAvatarUri(null);
-    setIsSheetOpen(true);
+    setSheetIndex(OPEN_INDEX);
   }, [userName]);
 
   const closeSheet = useCallback(() => {
-    setIsSheetOpen(false);
+    setSheetIndex(CLOSED_INDEX);
   }, []);
 
   const cancelEdit = useCallback(() => {
     Keyboard.dismiss();
-    sheetRef.current?.close();
+    setSheetIndex(CLOSED_INDEX);
   }, []);
 
   const saveProfile = useCallback(() => {
     Keyboard.dismiss();
     void setUserName(draftName, { optimistic: true }).then(() => {
-      sheetRef.current?.close();
+      setSheetIndex(CLOSED_INDEX);
     });
   }, [draftName, setUserName]);
 
@@ -65,16 +77,28 @@ export function SettingsProfileHeader() {
           {userName}
         </Text>
       </Pressable>
-      <BottomSheet
-        enablePanDownToClose
-        enableDynamicSizing={false}
-        handleComponent={null}
-        index={isSheetOpen ? 0 : -1}
-        ref={sheetRef}
-        snapPoints={profileSheetSnapPoints}
-        onClose={closeSheet}
+      <ModalBottomSheet
+        detents={[0, sheetHeight]}
+        index={sheetIndex}
+        nativeOverlay
+        onIndexChange={setSheetIndex}
+        onSettle={(nextIndex) => {
+          if (nextIndex === CLOSED_INDEX) {
+            closeSheet();
+          }
+        }}
+        surface={
+          isLiquidGlassAvailable ? (
+            <GlassView
+              glassEffectStyle="regular"
+              style={[StyleSheet.absoluteFill, styles.surfaceGlass]}
+            />
+          ) : (
+            <View className="rounded-t-3xl bg-background" style={StyleSheet.absoluteFill} />
+          )
+        }
       >
-        <BottomSheetView style={styles.sheetViewport}>
+        <View style={[styles.sheetViewport, { height: sheetHeight }]}>
           <SettingsProfileEditor
             draftAvatarUri={draftAvatarUri}
             draftName={draftName}
@@ -83,8 +107,8 @@ export function SettingsProfileHeader() {
             onDraftNameChange={setDraftName}
             onSave={saveProfile}
           />
-        </BottomSheetView>
-      </BottomSheet>
+        </View>
+      </ModalBottomSheet>
     </>
   );
 }
@@ -375,6 +399,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheetViewport: {
-    flex: 1,
+    overflow: 'hidden',
+  },
+  // Matches `rounded-t-3xl`'s --cs-radius-3xl (22px) — GlassView doesn't take
+  // className, so the radius is set directly to keep the same silhouette as
+  // the non-glass fallback.
+  surfaceGlass: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
   },
 });

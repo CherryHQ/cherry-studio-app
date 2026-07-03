@@ -1,13 +1,10 @@
-import {
-  BottomSheet,
-  type BottomSheetMethods,
-  BottomSheetView,
-} from '@expo/ui/community/bottom-sheet';
 import { LegendList } from '@legendapp/list/react-native';
+import { ModalBottomSheet, programmatic } from '@swmansion/react-native-bottom-sheet';
+import { GlassView } from 'expo-glass-effect';
 import { Button } from 'heroui-native/button';
 import { Checkbox } from 'heroui-native/checkbox';
 import { cn } from 'heroui-native/utils';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   type LayoutChangeEvent,
@@ -25,6 +22,7 @@ import {
   getModelPickerTags,
   type ModelPickerTag,
 } from '@/components/modelPicker/utils/modelPickerData';
+import { isLiquidGlassAvailable } from '@/config/constants';
 import type { Model, UniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 
@@ -36,8 +34,10 @@ import {
   type ProviderModelPullSelection,
 } from '../utils/providerModelPullPreview';
 
-const pullSheetSnapPoints = ['85%'];
 const pullSheetSnapPointFraction = 0.85;
+// Detent indices into `detents`: 0 closed, 1 open.
+const CLOSED_INDEX = 0;
+const OPEN_INDEX = 1;
 const defaultHeaderHeight = 56;
 const defaultFooterHeight = 76;
 const sectionHeaderHeight = 30;
@@ -67,11 +67,14 @@ export function ProviderModelPullSheet({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const sheetRef = useRef<BottomSheetMethods>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
   const [footerHeight, setFooterHeight] = useState(0);
   const [selectionOverride, setSelectionOverride] =
     useState<ProviderModelPullSelectionOverride | null>(null);
+  // Adjusted during render (not an effect) from `isOpen`, per
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes.
+  const [sheetIndex, setSheetIndex] = useState(CLOSED_INDEX);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const previewKey = useMemo(() => getPreviewKey(preview), [preview]);
   const defaultSelection = useMemo(
     () =>
@@ -110,6 +113,11 @@ export function ProviderModelPullSheet({
     [addedCount, listHeight, missingCount],
   );
 
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    setSheetIndex(isOpen ? OPEN_INDEX : CLOSED_INDEX);
+  }
+
   const handleClose = useCallback(() => {
     setSelectionOverride(null);
     onClose();
@@ -135,7 +143,7 @@ export function ProviderModelPullSheet({
       return;
     }
 
-    sheetRef.current?.close();
+    setSheetIndex(CLOSED_INDEX);
     void onApply(payload);
   }, [onApply, preview, selectedAddedIds, selectedMissingIds]);
   const toggleAddedSelection = useCallback(
@@ -198,16 +206,28 @@ export function ProviderModelPullSheet({
   }
 
   return (
-    <BottomSheet
-      enablePanDownToClose={!isApplying}
-      enableDynamicSizing={false}
-      handleComponent={null}
-      index={isOpen ? 0 : -1}
-      ref={sheetRef}
-      snapPoints={pullSheetSnapPoints}
-      onClose={handleClose}
+    <ModalBottomSheet
+      detents={[isApplying ? programmatic(0) : 0, sheetHeight]}
+      index={sheetIndex}
+      nativeOverlay
+      onIndexChange={setSheetIndex}
+      onSettle={(nextIndex) => {
+        if (nextIndex === CLOSED_INDEX) {
+          handleClose();
+        }
+      }}
+      surface={
+        isLiquidGlassAvailable ? (
+          <GlassView
+            glassEffectStyle="regular"
+            style={[StyleSheet.absoluteFill, styles.surfaceGlass]}
+          />
+        ) : (
+          <View className="rounded-t-3xl bg-background" style={StyleSheet.absoluteFill} />
+        )
+      }
     >
-      <BottomSheetView style={styles.sheetContent}>
+      <View style={styles.sheetContent}>
         <View style={[styles.sheetViewport, { height: sheetHeight }]}>
           <View className="px-4 pb-3 pt-5" onLayout={handleHeaderLayout}>
             <Text className="font-semibold text-foreground text-lg" numberOfLines={1}>
@@ -281,8 +301,8 @@ export function ProviderModelPullSheet({
             </Button>
           </View>
         </View>
-      </BottomSheetView>
-    </BottomSheet>
+      </View>
+    </ModalBottomSheet>
   );
 }
 
@@ -568,7 +588,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listViewport: {
-    flex: 1,
     minHeight: 0,
     paddingBottom: 16,
     paddingHorizontal: 16,
@@ -583,7 +602,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheetViewport: {
-    flex: 1,
     overflow: 'hidden',
+  },
+  // Matches `rounded-t-3xl`'s --cs-radius-3xl (22px) — GlassView doesn't take
+  // className, so the radius is set directly to keep the same silhouette as
+  // the non-glass fallback.
+  surfaceGlass: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
   },
 });
