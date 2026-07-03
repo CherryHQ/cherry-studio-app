@@ -42,11 +42,9 @@ const inputBottomToolbarStyle = {
 const logger = loggerService.withContext('ChatInputSurface');
 
 type ChatInputSurfaceProps = {
-  assistantLabel?: string;
   isSendEnabled: boolean;
   isStreaming: boolean;
   modelLabel?: string;
-  onAssistantPickerPress: () => void;
   onModelPickerPress: () => void;
   onSendPress: (payload: ChatInputSendPayload) => Promise<void>;
   onStopPress: () => void;
@@ -58,11 +56,9 @@ export type ChatInputSendPayload = {
 };
 
 export function ChatInputSurface({
-  assistantLabel,
   isSendEnabled,
   isStreaming,
   modelLabel,
-  onAssistantPickerPress,
   onModelPickerPress,
   onSendPress,
   onStopPress,
@@ -145,15 +141,6 @@ export function ChatInputSurface({
 
     onModelPickerPress();
   }, [inputRef, isInputFocused, onModelPickerPress, setInputFocused]);
-  const handleAssistantPickerPress = useCallback(() => {
-    if (isInputFocused) {
-      void KeyboardController.dismiss();
-      inputRef.current?.blur();
-      setInputFocused(false);
-    }
-
-    onAssistantPickerPress();
-  }, [inputRef, isInputFocused, onAssistantPickerPress, setInputFocused]);
   const handleSendPress = useCallback(
     async (text: string) => {
       const draftSnapshot = draft;
@@ -222,11 +209,6 @@ export function ChatInputSurface({
                 style={inputBottomToolbarStyle}
               >
                 <ChatInputAddButton />
-                <ChatInputPill
-                  label={assistantLabel ?? t('chat.assistant.select')}
-                  maxWidthClassName="max-w-[42%]"
-                  onPress={handleAssistantPickerPress}
-                />
                 <ChatInputPill
                   label={modelLabel ?? t('chat.model.select')}
                   maxWidthClassName="max-w-[48%]"
