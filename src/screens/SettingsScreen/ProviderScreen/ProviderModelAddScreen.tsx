@@ -426,7 +426,7 @@ function EndpointTypeChip({
       style={isSelected ? { backgroundColor: `${selectedEndpointTypeColor}20` } : undefined}
     >
       <Text
-        className="font-medium text-sm"
+        className="font-medium text-default-foreground text-sm"
         numberOfLines={1}
         style={isSelected ? { color: selectedEndpointTypeColor } : undefined}
       >

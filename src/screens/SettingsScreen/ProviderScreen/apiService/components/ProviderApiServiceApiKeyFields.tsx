@@ -13,7 +13,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import type { ApiKeyEntry } from '@/data/types/provider';
 import { SettingsIconButton } from '@/screens/SettingsScreen/components/SettingsIconButton';
@@ -39,14 +39,23 @@ export function ProviderApiServiceApiKeysField({
       <Text className="font-medium text-default-foreground text-sm">
         {t('settings.provider.apiService.apiKeys')}
       </Text>
-      <View className="flex-row items-start gap-2">
-        <ApiKeysCommitInput
-          accessibilityLabel={t('settings.provider.apiService.apiKeys')}
-          onCommit={onApiKeysInputChange}
-          placeholder={t('settings.provider.apiService.apiKeysPlaceholder')}
-          secureTextEntry={!apiKeysVisible}
-          value={apiKeysInput}
-        />
+      <View className="flex-row items-center gap-2">
+        {apiKeysVisible ? (
+          <ApiKeysCommitInput
+            accessibilityLabel={t('settings.provider.apiService.apiKeys')}
+            onCommit={onApiKeysInputChange}
+            placeholder={t('settings.provider.apiService.apiKeysPlaceholder')}
+            secureTextEntry={false}
+            value={apiKeysInput}
+          />
+        ) : (
+          <ApiKeysMaskedPreview
+            accessibilityLabel={t('settings.provider.apiService.apiKeys')}
+            hasValue={apiKeysInput.trim().length > 0}
+            placeholder={t('settings.provider.apiService.apiKeysPlaceholder')}
+            onPress={onToggleVisible}
+          />
+        )}
         <SettingsIconButton
           accessibilityLabel={
             apiKeysVisible
@@ -133,6 +142,8 @@ function ApiKeysCommitInput({
       autoCapitalize="none"
       autoCorrect={false}
       className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base leading-5"
+      multiline={false}
+      numberOfLines={1}
       onBlur={handleCommitEvent}
       onChangeText={handleChangeText}
       onEndEditing={handleEndEditing}
@@ -144,6 +155,34 @@ function ApiKeysCommitInput({
       value={draftValue}
       variant="secondary"
     />
+  );
+}
+
+function ApiKeysMaskedPreview({
+  accessibilityLabel,
+  hasValue,
+  onPress,
+  placeholder,
+}: {
+  accessibilityLabel: string;
+  hasValue: boolean;
+  onPress: () => void;
+  placeholder: string;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      className="h-10 min-h-0 flex-1 justify-center overflow-hidden rounded-xl bg-settings-grouped-surface px-3 active:opacity-70"
+      onPress={onPress}
+    >
+      <Text
+        className={hasValue ? 'text-base text-foreground' : 'text-base text-default-foreground'}
+        numberOfLines={1}
+      >
+        {hasValue ? '••••••••••••••••••••••••••••••••' : placeholder}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -301,6 +340,8 @@ function ApiKeyInput({
       autoCorrect={false}
       className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base leading-5"
       isDisabled={isDisabled}
+      multiline={false}
+      numberOfLines={1}
       onBlur={handleCommitEvent}
       onChangeText={onChangeText}
       onEndEditing={handleEndEditing}
