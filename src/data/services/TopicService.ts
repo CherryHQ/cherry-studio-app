@@ -24,6 +24,7 @@ import { type CursorPaginationResponse, DataApiErrorFactory } from '@/data/types
 import type { Topic } from '@/data/types/topic';
 import type { DbService } from '../db/DbService';
 import { messageTable, pinTable, type TopicRow, topicTable } from '../db/schemas';
+import { createRootMessageTx } from './MessageService';
 import type { PinService } from './PinService';
 import type { TagService } from './TagService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
@@ -81,7 +82,7 @@ export class TopicService {
         }
       }
 
-      return insertWithOrderKey(
+      const topicRow = (await insertWithOrderKey(
         tx,
         topicTable,
         {
@@ -94,7 +95,11 @@ export class TopicService {
           pkColumn: topicTable.id,
           scope: topicScopePredicate(groupId),
         },
-      );
+      )) as TopicRow;
+
+      await createRootMessageTx(tx, topicRow.id);
+
+      return topicRow;
     })) as TopicRow;
 
     return rowToTopic(row);
@@ -173,13 +178,20 @@ export class TopicService {
       }
 
       const [message] = await tx
-        .select({ topicId: messageTable.topicId })
+        .select({ role: messageTable.role, topicId: messageTable.topicId })
         .from(messageTable)
         .where(and(eq(messageTable.id, nodeId), isNull(messageTable.deletedAt)))
         .limit(1);
 
       if (!message || message.topicId !== topicId) {
         throw DataApiErrorFactory.notFound('Message', nodeId);
+      }
+
+      if (message.role === 'root') {
+        throw DataApiErrorFactory.invalidOperation(
+          'set active node',
+          'the virtual root cannot be the active node',
+        );
       }
     }
 

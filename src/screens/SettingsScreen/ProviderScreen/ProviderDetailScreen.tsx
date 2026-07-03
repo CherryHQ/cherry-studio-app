@@ -78,6 +78,7 @@ export default function ProviderDetailSettingsScreen() {
   } = useProviderModelCheck({
     apiKeys,
     models,
+    provider,
     providerId: providerId ?? '',
   });
   const { draft, primaryBaseUrl, syncApiKeysDraft, updateApiKeysInput } =

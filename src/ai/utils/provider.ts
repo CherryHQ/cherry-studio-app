@@ -45,6 +45,10 @@ export function getExtraHeaders(provider: Provider): Record<string, string> {
   return provider.settings?.extraHeaders ?? {};
 }
 
+export function isAwsBedrockProvider(provider: Provider): boolean {
+  return provider.authType === 'iam-aws';
+}
+
 export function defaultAppHeaders(): Record<string, string> {
   return {
     'User-Agent': 'CherryStudioMobile/1.0',

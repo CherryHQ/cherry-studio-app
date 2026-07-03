@@ -67,6 +67,25 @@ export class MockChatSeeder implements DatabaseSeeder {
             target: topicTable.id,
           });
 
+        // Every topic needs its content-less virtual root before any content message can
+        // be inserted (message_root_parent_check requires role='root' <=> parentId IS NULL).
+        const rootId = `mock-root-${topic.id}`;
+        await tx
+          .insert(messageTable)
+          .values({
+            createdAt: parseTimestamp(topic.createdAt),
+            data: { parts: [] },
+            id: rootId,
+            parentId: null,
+            role: 'root',
+            status: 'success',
+            topicId: topic.id,
+            updatedAt: parseTimestamp(topic.createdAt),
+          })
+          .onConflictDoNothing({
+            target: messageTable.id,
+          });
+
         for (const message of messages) {
           await tx
             .insert(messageTable)
@@ -74,7 +93,7 @@ export class MockChatSeeder implements DatabaseSeeder {
               createdAt: parseTimestamp(message.createdAt),
               data: message.data,
               id: message.id,
-              parentId: message.parentId,
+              parentId: message.parentId ?? rootId,
               role: message.role,
               searchableText: message.searchableText,
               siblingsGroupId: message.siblingsGroupId,

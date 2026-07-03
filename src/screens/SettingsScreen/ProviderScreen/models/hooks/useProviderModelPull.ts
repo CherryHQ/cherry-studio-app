@@ -6,8 +6,10 @@ import { useTranslation } from 'react-i18next';
 import { queryKeys } from '@/data/api';
 import { useDataServices } from '@/data/runtime';
 import { providerRegistryService } from '@/data/services/ProviderRegistryService';
+import type { UpdateProviderInput } from '@/data/services/ProviderService';
 import type { Provider } from '@/data/types/provider';
 
+import { enableProviderWhenModelsAvailable } from '../../utils/providerEnablement';
 import {
   buildProviderModelPullPreview,
   type ProviderModelPullApplyPayload,
@@ -83,6 +85,12 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
 
       if (!hasChanges) {
         setPreview(null);
+        await enableProviderWhenModelsAvailable(
+          provider,
+          (updates: UpdateProviderInput) => services.provider.update(providerId, updates),
+          localModels.length,
+          'pull_reconcile_up_to_date',
+        );
         toast.show({
           label: t('settings.provider.models.pullUpToDate'),
           variant: 'success',
@@ -104,7 +112,7 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
     } finally {
       setIsPreviewLoading(false);
     }
-  }, [provider, providerId, services.ai, services.model, t, toast]);
+  }, [provider, providerId, services.ai, services.model, services.provider, t, toast]);
 
   const applyPullPreview = useCallback(
     async (payload: ProviderModelPullApplyPayload) => {
@@ -118,6 +126,13 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
           defaultChatEndpoint: provider.defaultChatEndpoint,
           endpointConfigs: provider.endpointConfigs,
         });
+        const remainingModels = await services.model.list({ providerId });
+        await enableProviderWhenModelsAvailable(
+          provider,
+          (updates: UpdateProviderInput) => services.provider.update(providerId, updates),
+          remainingModels.length,
+          'pull_reconcile_apply',
+        );
         await refreshModelQueries();
         toast.show({
           label: t('settings.provider.models.pullApplyResult', {
@@ -136,7 +151,7 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
         setIsApplying(false);
       }
     },
-    [provider, providerId, refreshModelQueries, resetPreview, services.model, t, toast],
+    [provider, providerId, refreshModelQueries, resetPreview, services.model, services.provider, t, toast],
   );
 
   return {

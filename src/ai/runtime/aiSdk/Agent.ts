@@ -4,15 +4,22 @@
  * Mobile first slice keeps the desktop filename while narrowing the behavior
  * to plain AI SDK generate/stream calls. Agent-session, MCP tools, pending
  * message steering, and hook observers are intentionally not ported here.
+ * `plugins` does accept the same `AiPlugin`s desktop's request-feature
+ * wiring uses (the pluginEngine is shared via `@cherrystudio/ai-core`) —
+ * callers assemble the array themselves; there is no feature registry here.
  */
 
+import type { AiPlugin } from '@cherrystudio/ai-core';
 import { createAgent } from '@cherrystudio/ai-core';
 import type { StringKeys } from '@cherrystudio/ai-core/provider';
 import type { JSONValue, LanguageModelUsage, ModelMessage, UIMessage, UIMessageChunk } from 'ai';
-import { convertToModelMessages } from 'ai';
 import * as Crypto from 'expo-crypto';
 
+import type { MediaCapabilities } from '../../messages/messageCapabilities';
+import { toModelMessages } from '../../messages/messageRules';
 import type { AppProviderSettingsMap } from '../../types';
+import { mergeUsage, toMessageMetadataPatch, ZERO_USAGE } from './usageMetadata';
+import { withReasoningTimingMetadata } from './withReasoningTimingMetadata';
 
 type AppProviderKey = StringKeys<AppProviderSettingsMap>;
 
@@ -36,7 +43,8 @@ export interface AgentParams<T extends AppProviderKey = AppProviderKey> {
   providerSettings: AppProviderSettingsMap[T];
   modelId: string;
   messageId?: string;
-  plugins?: [];
+  mediaCapabilities?: MediaCapabilities;
+  plugins?: AiPlugin[];
   system?: string;
   options?: AgentOptions;
 }
@@ -109,16 +117,27 @@ export class Agent<T extends AppProviderKey = AppProviderKey> {
 
     (async () => {
       const aiAgent = await this.buildAiSdkAgent();
+      let totalUsage = ZERO_USAGE;
       const result = await aiAgent.stream({
-        messages: await convertToModelMessages(initialMessages),
+        messages: await toModelMessages(initialMessages, params.mediaCapabilities),
         abortSignal: signal,
+        onStepFinish: async (step) => {
+          if (!step.usage) return;
+          totalUsage = mergeUsage(totalUsage, step.usage);
+          await writer.write({
+            type: 'message-metadata',
+            messageMetadata: toMessageMetadataPatch(totalUsage),
+          });
+        },
       });
 
       const uiStream = result.toUIMessageStream({
         originalMessages: initialMessages,
         generateMessageId: () => params.messageId ?? Crypto.randomUUID(),
       });
-      const reader = uiStream.getReader();
+      // Must run before this stream is read so every consumer (live UI,
+      // persistence) sees the same computed startedAt/thinkingMs values.
+      const reader = withReasoningTimingMetadata(uiStream).getReader();
       try {
         while (true) {
           const { done, value } = await reader.read();
