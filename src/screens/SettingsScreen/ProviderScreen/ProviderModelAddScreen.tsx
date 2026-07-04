@@ -1,19 +1,16 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Button } from 'heroui-native/button';
 import { Input } from 'heroui-native/input';
-import { Spinner } from 'heroui-native/spinner';
 import { cn } from 'heroui-native/utils';
-import { ChevronDownIcon, ChevronUpIcon } from 'lucide-uniwind/png';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronDownIcon, ChevronUpIcon, SaveIcon } from 'lucide-uniwind/png';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, type TextInputProps, View } from 'react-native';
 import {
   KeyboardAwareScrollView,
   type KeyboardAwareScrollViewRef,
 } from 'react-native-keyboard-controller';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BackHeader } from '@/components/headers';
+import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import type { EndpointType } from '@/data/types/model';
 import { useProviderDetailSettings } from './detail';
 import {
@@ -56,6 +53,19 @@ export default function ProviderModelAddScreen() {
       router.back();
     }
   }, [router, submitAddModel]);
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('common.save'),
+        androidIcon: SaveIcon,
+        disabled: isSubmitting || !canSubmit,
+        icon: 'square.and.arrow.down',
+        key: 'save-model',
+        onPress: () => void handleSubmit(),
+      },
+    ],
+    [canSubmit, handleSubmit, isSubmitting, t],
+  );
 
   if (!providerId || providerQuery.isError) {
     return <Redirect href="/settings/provider" />;
@@ -63,9 +73,8 @@ export default function ProviderModelAddScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.provider.models.addTitle')} />
+      <BackHeader rightActions={rightActions} title={t('settings.provider.models.addTitle')} />
       <ProviderModelAddForm
-        canSubmit={canSubmit}
         endpointTypeError={endpointTypeError}
         formState={formState}
         isSubmitting={isSubmitting}
@@ -78,14 +87,12 @@ export default function ProviderModelAddScreen() {
         onMaxOutputTokensChange={updateMaxOutputTokens}
         onModelIdChange={updateModelId}
         onNameChange={updateName}
-        onSubmit={handleSubmit}
       />
     </>
   );
 }
 
 function ProviderModelAddForm({
-  canSubmit,
   endpointTypeError,
   formState,
   isSubmitting,
@@ -97,10 +104,8 @@ function ProviderModelAddForm({
   onMaxOutputTokensChange,
   onModelIdChange,
   onNameChange,
-  onSubmit,
   showEndpointTypes,
 }: {
-  canSubmit: boolean;
   endpointTypeError?: string;
   formState: ProviderModelAddFormState;
   isSubmitting: boolean;
@@ -112,11 +117,9 @@ function ProviderModelAddForm({
   onMaxOutputTokensChange: (value: string) => void;
   onModelIdChange: (value: string) => void;
   onNameChange: (value: string) => void;
-  onSubmit: () => Promise<void> | void;
   showEndpointTypes: boolean;
 }) {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const advancedSettingsScrollYRef = useRef(0);
   const advancedFieldScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,11 +139,6 @@ function ProviderModelAddForm({
       y: advancedSettingsScrollYRef.current,
     });
   }, []);
-  const handleSubmit = useCallback(() => {
-    clearAdvancedFieldScrollTimer();
-    setShowMoreSettings(false);
-    void onSubmit();
-  }, [clearAdvancedFieldScrollTimer, onSubmit]);
   const handleAdvancedFieldFocus = useCallback<NonNullable<TextInputProps['onFocus']>>(() => {
     clearAdvancedFieldScrollTimer();
     scrollAdvancedSettingsIntoView();
@@ -293,25 +291,6 @@ function ProviderModelAddForm({
           </View>
         ) : null}
       </KeyboardAwareScrollView>
-
-      <View
-        className="border-border border-t px-4 pt-3"
-        style={{ paddingBottom: Math.max(insets.bottom, 12) }}
-      >
-        <Button
-          className="h-10 min-h-0 rounded-xl"
-          isDisabled={isSubmitting || !canSubmit}
-          variant="primary"
-          onPress={handleSubmit}
-        >
-          <View className="min-w-0 flex-row items-center justify-center gap-2">
-            {isSubmitting ? <Spinner size="sm" /> : null}
-            <Text className="font-medium text-sm text-white" numberOfLines={1}>
-              {t('settings.provider.models.addSubmit')}
-            </Text>
-          </View>
-        </Button>
-      </View>
     </View>
   );
 }
