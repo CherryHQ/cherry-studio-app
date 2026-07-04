@@ -116,22 +116,33 @@ export function isChatInputReasoningEffortAvailable(
 export function getChatInputReasoningEffortBarCount(value: ChatInputReasoningEffort) {
   switch (value) {
     case REASONING_EFFORT.MINIMAL:
-      return 1;
     case REASONING_EFFORT.LOW:
-      return 2;
+      return 1;
     case REASONING_EFFORT.MEDIUM:
-      return 3;
+      return 2;
     case REASONING_EFFORT.HIGH:
+    case CHAT_INPUT_DEFAULT_REASONING_EFFORT:
+      return 3;
+    case REASONING_EFFORT.MAX:
       return 4;
     case REASONING_EFFORT.AUTO:
-    case REASONING_EFFORT.MAX:
       return 5;
-    case CHAT_INPUT_DEFAULT_REASONING_EFFORT:
     case REASONING_EFFORT.NONE:
       return 0;
   }
 
   return 0;
+}
+
+export function getChatInputReasoningEffortMeterBarCount(
+  availableEfforts: readonly ChatInputReasoningEffort[],
+) {
+  const maxBarCount = normalizeChatInputReasoningEfforts(availableEfforts).reduce(
+    (currentMax, effort) => Math.max(currentMax, getChatInputReasoningEffortBarCount(effort)),
+    0,
+  );
+
+  return availableEfforts.length > 0 ? Math.max(1, maxBarCount) : 0;
 }
 
 export function isChatInputReasoningEffortOff(reasoningEffort: ChatInputReasoningEffort) {

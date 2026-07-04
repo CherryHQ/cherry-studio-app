@@ -43,6 +43,7 @@ import {
   type ChatInputReasoningEffort,
   chatInputReasoningEffortOptions,
   getChatInputReasoningEffortBarCount,
+  getChatInputReasoningEffortMeterBarCount,
   getChatInputReasoningEffortOption,
   getFallbackChatInputReasoningEffort,
   getNextChatInputReasoningEffort,
@@ -54,14 +55,12 @@ const inputBottomToolbarStyle = {
   minHeight: chatInputBottomToolbarHeight,
 };
 
-const reasoningMeterBarHeights = [6, 9, 12, 15, 18] as const;
+const reasoningMeterMinBarHeight = 6;
+const reasoningMeterMaxBarHeight = 18;
 const reasoningIconButtonWidth = 32;
 const reasoningMeterBarStaggerMs = 20;
-const reasoningMeterWidth = 28;
 const reasoningPillContentGap = 6;
 const reasoningPillHorizontalPadding = 12;
-const reasoningPillBaseWidth =
-  reasoningPillHorizontalPadding * 2 + reasoningMeterWidth + reasoningPillContentGap;
 const reasoningSlotTextFallbackCharWidth = 14;
 const reasoningSlotTextMinWidth = 8;
 const reasoningSlotTextTravelDistance = 20;
@@ -118,6 +117,7 @@ export function ChatInputSurface({
   } = useChatInputState();
   const shouldShowReasoningPill = reasoningEfforts.length > 0;
   const reasoningBarCount = getChatInputReasoningEffortBarCount(reasoningEffort);
+  const reasoningMeterBarCount = getChatInputReasoningEffortMeterBarCount(reasoningEfforts);
   const isReasoningOff = isChatInputReasoningEffortOff(reasoningEffort);
   const reasoningOption = getChatInputReasoningEffortOption(reasoningEffort);
   const reasoningLabel = reasoningOption ? t(reasoningOption.labelKey) : t('chat.reasoning.title');
@@ -293,6 +293,7 @@ export function ChatInputSurface({
                     isOff={isReasoningOff}
                     label={reasoningLabel}
                     labels={reasoningLabels}
+                    meterBarCount={reasoningMeterBarCount}
                     onPress={handleReasoningPress}
                   />
                 ) : null}
@@ -326,7 +327,7 @@ function ChatInputPill({
     <Pressable
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityRole="button"
-      className={`h-8 min-w-0 flex-row items-center justify-center gap-1.5 rounded-full bg-surface-secondary px-3 active:bg-surface-tertiary active:opacity-70 ${maxWidthClassName}`}
+      className={`h-8 min-w-0 flex-row items-center justify-center gap-1.5 rounded-lg bg-surface-secondary px-3 active:bg-surface-tertiary active:opacity-70 ${maxWidthClassName}`}
       onPress={onPress}
     >
       <Text className="font-semibold text-foreground text-sm" numberOfLines={1}>
@@ -342,6 +343,7 @@ function ChatInputReasoningPill({
   isOff,
   label,
   labels,
+  meterBarCount,
   onPress,
 }: {
   accessibilityLabel: string;
@@ -349,11 +351,14 @@ function ChatInputReasoningPill({
   isOff: boolean;
   label: string;
   labels: readonly string[];
+  meterBarCount: number;
   onPress: () => void;
 }) {
   const [measuredTextWidths, setMeasuredTextWidths] = useState<SlotTextWidthMap>({});
   const resolvedSlotTextWidth = isOff ? 0 : getResolvedSlotTextWidth(label, measuredTextWidths);
-  const pillWidth = useSharedValue(getReasoningPillWidth(isOff, resolvedSlotTextWidth));
+  const pillWidth = useSharedValue(
+    getReasoningPillWidth(isOff, resolvedSlotTextWidth, meterBarCount),
+  );
   const slotWidth = useSharedValue(resolvedSlotTextWidth);
   const pillWidthStyle = useAnimatedStyle(() => ({
     width: pillWidth.value,
@@ -365,17 +370,17 @@ function ChatInputReasoningPill({
   }, []);
 
   useEffect(() => {
-    const targetPillWidth = getReasoningPillWidth(isOff, resolvedSlotTextWidth);
+    const targetPillWidth = getReasoningPillWidth(isOff, resolvedSlotTextWidth, meterBarCount);
 
     cancelAnimation(pillWidth);
     cancelAnimation(slotWidth);
     pillWidth.value = withTiming(targetPillWidth, chatInputMotionConfig);
     slotWidth.value = withTiming(resolvedSlotTextWidth, chatInputMotionConfig);
-  }, [isOff, pillWidth, resolvedSlotTextWidth, slotWidth]);
+  }, [isOff, meterBarCount, pillWidth, resolvedSlotTextWidth, slotWidth]);
 
   return (
     <Animated.View
-      className={`h-8 shrink-0 overflow-hidden rounded-full ${isOff ? '' : 'bg-surface-secondary'}`}
+      className={`h-8 shrink-0 overflow-hidden rounded-lg ${isOff ? '' : 'bg-surface-secondary'}`}
       style={pillWidthStyle}
       testID="chat-input-reasoning-pill"
     >
@@ -387,7 +392,7 @@ function ChatInputReasoningPill({
         }`}
         onPress={onPress}
       >
-        <ChatInputReasoningMeter activeBarCount={activeBarCount} />
+        <ChatInputReasoningMeter activeBarCount={activeBarCount} barCount={meterBarCount} />
         {isOff ? null : (
           <ChatInputSlotText
             label={label}
@@ -401,8 +406,34 @@ function ChatInputReasoningPill({
   );
 }
 
-function getReasoningPillWidth(isOff: boolean, slotTextWidth: number) {
+function getReasoningPillWidth(isOff: boolean, slotTextWidth: number, meterBarCount: number) {
+  const reasoningPillBaseWidth =
+    reasoningPillHorizontalPadding * 2 +
+    getReasoningMeterWidth(meterBarCount) +
+    reasoningPillContentGap;
+
   return isOff ? reasoningIconButtonWidth : reasoningPillBaseWidth + slotTextWidth;
+}
+
+function getReasoningMeterWidth(barCount: number) {
+  return Math.max(12, 8 + barCount * 4);
+}
+
+function getReasoningMeterBarHeights(barCount: number) {
+  if (barCount <= 0) {
+    return [];
+  }
+
+  if (barCount === 1) {
+    return [reasoningMeterMaxBarHeight];
+  }
+
+  return Array.from({ length: barCount }, (_, index) =>
+    Math.round(
+      reasoningMeterMinBarHeight +
+        ((reasoningMeterMaxBarHeight - reasoningMeterMinBarHeight) * index) / (barCount - 1),
+    ),
+  );
 }
 
 function getFallbackSlotTextWidth(label: string) {
@@ -500,7 +531,7 @@ function ChatInputSlotText({
       <Animated.View className="h-5 overflow-hidden" style={slotWidthStyle}>
         {previousLabel ? (
           <Animated.Text
-            className="absolute inset-x-0 top-0 text-center font-semibold text-foreground text-sm leading-5"
+            className="absolute inset-x-0 top-0 text-center font-semibold text-accent text-sm leading-5"
             numberOfLines={1}
             style={previousTextStyle}
             testID="chat-input-reasoning-slot-previous-label"
@@ -509,7 +540,7 @@ function ChatInputSlotText({
           </Animated.Text>
         ) : null}
         <Animated.Text
-          className="absolute inset-x-0 top-0 text-center font-semibold text-foreground text-sm leading-5"
+          className="absolute inset-x-0 top-0 text-center font-semibold text-accent text-sm leading-5"
           numberOfLines={1}
           style={currentTextStyle}
           testID="chat-input-reasoning-slot-label"
@@ -521,15 +552,28 @@ function ChatInputSlotText({
   );
 }
 
-function ChatInputReasoningMeter({ activeBarCount }: { activeBarCount: number }) {
+function ChatInputReasoningMeter({
+  activeBarCount,
+  barCount,
+}: {
+  activeBarCount: number;
+  barCount: number;
+}) {
+  const barHeights = useMemo(() => getReasoningMeterBarHeights(barCount), [barCount]);
+
   return (
-    <View className="h-5 shrink-0 flex-row items-end justify-center gap-0.5" style={{ width: 28 }}>
-      {reasoningMeterBarHeights.map((height, index) => (
+    <View
+      className="h-5 shrink-0 flex-row items-end justify-center gap-0.5"
+      style={{ width: getReasoningMeterWidth(barCount) }}
+      testID="chat-input-reasoning-meter"
+    >
+      {barHeights.map((height, index) => (
         <ChatInputReasoningMeterBar
+          barCount={barCount}
           height={height}
           index={index}
           isActive={index < activeBarCount}
-          key={height}
+          key={`${barCount}-${height}`}
         />
       ))}
     </View>
@@ -537,10 +581,12 @@ function ChatInputReasoningMeter({ activeBarCount }: { activeBarCount: number })
 }
 
 function ChatInputReasoningMeterBar({
+  barCount,
   height,
   index,
   isActive,
 }: {
+  barCount: number;
   height: number;
   index: number;
   isActive: boolean;
@@ -551,10 +597,10 @@ function ChatInputReasoningMeterBar({
     cancelAnimation(activeProgress);
     const delayMs = isActive
       ? index * reasoningMeterBarStaggerMs
-      : (reasoningMeterBarHeights.length - index - 1) * reasoningMeterBarStaggerMs;
+      : (barCount - index - 1) * reasoningMeterBarStaggerMs;
 
     activeProgress.value = withDelay(delayMs, withTiming(isActive ? 1 : 0, chatInputMotionConfig));
-  }, [activeProgress, index, isActive]);
+  }, [activeProgress, barCount, index, isActive]);
 
   const activeBarStyle = useAnimatedStyle(() => ({
     opacity: activeProgress.value,
@@ -564,6 +610,7 @@ function ChatInputReasoningMeterBar({
     <View
       className="relative w-0.5 overflow-hidden rounded-full bg-default-foreground/30"
       style={{ height }}
+      testID="chat-input-reasoning-meter-bar"
     >
       <Animated.View className="absolute inset-0 rounded-full bg-accent" style={activeBarStyle} />
     </View>

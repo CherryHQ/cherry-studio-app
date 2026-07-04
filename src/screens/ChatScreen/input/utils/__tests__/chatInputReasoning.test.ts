@@ -4,6 +4,7 @@ import {
   CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   chatInputReasoningEffortOptions,
   getChatInputReasoningEffortBarCount,
+  getChatInputReasoningEffortMeterBarCount,
   getChatInputReasoningEffortOption,
   getChatInputReasoningEffortsForModel,
   getNextChatInputReasoningEffort,
@@ -107,14 +108,34 @@ describe('chat input reasoning', () => {
   });
 
   test('maps reasoning effort to active meter bars', () => {
-    expect(getChatInputReasoningEffortBarCount(CHAT_INPUT_DEFAULT_REASONING_EFFORT)).toBe(0);
+    expect(getChatInputReasoningEffortBarCount(CHAT_INPUT_DEFAULT_REASONING_EFFORT)).toBe(3);
     expect(getChatInputReasoningEffortBarCount('none')).toBe(0);
     expect(getChatInputReasoningEffortBarCount('minimal')).toBe(1);
-    expect(getChatInputReasoningEffortBarCount('low')).toBe(2);
-    expect(getChatInputReasoningEffortBarCount('medium')).toBe(3);
-    expect(getChatInputReasoningEffortBarCount('high')).toBe(4);
-    expect(getChatInputReasoningEffortBarCount('max')).toBe(5);
+    expect(getChatInputReasoningEffortBarCount('low')).toBe(1);
+    expect(getChatInputReasoningEffortBarCount('medium')).toBe(2);
+    expect(getChatInputReasoningEffortBarCount('high')).toBe(3);
+    expect(getChatInputReasoningEffortBarCount('max')).toBe(4);
     expect(getChatInputReasoningEffortBarCount('auto')).toBe(5);
+  });
+
+  test('sizes the reasoning meter to the highest supported effort', () => {
+    expect(
+      getChatInputReasoningEffortMeterBarCount([
+        CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+        REASONING_EFFORT.LOW,
+        REASONING_EFFORT.MEDIUM,
+        REASONING_EFFORT.HIGH,
+      ]),
+    ).toBe(3);
+    expect(
+      getChatInputReasoningEffortMeterBarCount([
+        CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+        REASONING_EFFORT.LOW,
+        REASONING_EFFORT.MEDIUM,
+        REASONING_EFFORT.HIGH,
+        REASONING_EFFORT.MAX,
+      ]),
+    ).toBe(4);
   });
 
   test('only treats concrete enabled reasoning efforts as active', () => {

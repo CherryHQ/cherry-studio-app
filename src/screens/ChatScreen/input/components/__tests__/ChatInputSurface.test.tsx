@@ -266,6 +266,7 @@ describe('ChatInputSurface', () => {
     }
 
     expect(getReasoningSlotLabel(renderer)).toBe('chat.reasoning.default');
+    expect(getReasoningSlotClassName(renderer)).toContain('text-accent');
 
     await pressReasoningButton(renderer);
 
@@ -332,6 +333,44 @@ describe('ChatInputSurface', () => {
     await pressReasoningButton(renderer);
 
     expect(getReasoningSlotLabel(renderer)).toBe('chat.reasoning.default');
+  });
+
+  test('renders meter bars for the selected model reasoning range', async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+            reasoningEfforts={[
+              CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+              REASONING_EFFORT.LOW,
+              REASONING_EFFORT.MEDIUM,
+              REASONING_EFFORT.HIGH,
+            ]}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    const meter = renderer.root.findByProps({
+      testID: 'chat-input-reasoning-meter',
+    });
+    const meterChildren = Array.isArray(meter.props.children)
+      ? meter.props.children
+      : [meter.props.children];
+
+    expect(meterChildren).toHaveLength(3);
   });
 
   test('does not render the off reasoning label in the bottom toolbar', async () => {
@@ -408,6 +447,14 @@ function getReasoningSlotLabel(renderer: ReactTestRenderer) {
   });
 
   return slotLabels[0]?.props.children ?? null;
+}
+
+function getReasoningSlotClassName(renderer: ReactTestRenderer) {
+  const slotLabels = renderer.root.findAllByProps({
+    testID: 'chat-input-reasoning-slot-label',
+  });
+
+  return slotLabels[0]?.props.className ?? '';
 }
 
 function findText(renderer: ReactTestRenderer, text: string) {
