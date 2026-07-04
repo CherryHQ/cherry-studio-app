@@ -98,6 +98,7 @@ function ApiKeysVisiblePreview({
       autoCorrect={false}
       className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base leading-5"
       editable={false}
+      lineBreakModeIOS="clip"
       multiline={false}
       numberOfLines={1}
       onPressIn={onPress}
@@ -303,6 +304,7 @@ function ApiKeyInput({
       autoCorrect={false}
       className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base leading-5"
       isDisabled={isDisabled}
+      lineBreakModeIOS="clip"
       multiline={false}
       numberOfLines={1}
       onBlur={handleCommitEvent}
