@@ -1,15 +1,17 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { BackHeader } from '@/components/headers';
+import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import {
   canEditProviderEndpoint,
   shouldShowApiKeys,
   useProviderApiServiceDraft,
   useProviderApiServiceQueries,
 } from '@/screens/SettingsScreen/ProviderScreen/apiService';
+import { openExternalUrl } from '@/utils/openExternalUrl';
 import { ProviderApiManagementSection } from './components/ProviderApiManagementSection';
 import { ProviderModelList } from './components/ProviderModelList';
 import { useProviderDetailSettings } from './detail';
@@ -65,6 +67,29 @@ export default function ProviderDetailSettingsScreen() {
   const canEditEndpoint = canEditProviderEndpoint(provider);
   const showApiKeys = draft ? shouldShowApiKeys(draft.authDraft.type) : false;
   const isApiDraftLoading = apiKeysQuery.isPending || authConfigQuery.isPending || !draft;
+  const officialWebsite = provider?.websites?.official;
+  const openOfficialWebsite = useCallback(() => {
+    if (!officialWebsite) {
+      return;
+    }
+
+    void openExternalUrl(officialWebsite);
+  }, [officialWebsite]);
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () =>
+      officialWebsite
+        ? [
+            {
+              accessibilityLabel: t('common.officialWebsite'),
+              androidIcon: SquareArrowOutUpRightIcon,
+              icon: 'arrow.up.right.square',
+              key: 'official-website',
+              onPress: openOfficialWebsite,
+            },
+          ]
+        : [],
+    [officialWebsite, openOfficialWebsite, t],
+  );
   const openEndpointSettings = () => {
     if (!providerId) {
       return;
@@ -129,7 +154,10 @@ export default function ProviderDetailSettingsScreen() {
 
   return (
     <>
-      <BackHeader title={providerName ?? t('settings.pages.provider.title')} />
+      <BackHeader
+        rightActions={rightActions}
+        title={providerName ?? t('settings.pages.provider.title')}
+      />
       <ProviderModelList
         header={
           <View>

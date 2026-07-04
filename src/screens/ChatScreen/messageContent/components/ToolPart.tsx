@@ -7,15 +7,21 @@ type ToolPartProps = {
 };
 
 export function ToolPart({ part }: ToolPartProps) {
-  const toolName = part.type === 'dynamic-tool' ? part.toolName : part.type.slice('tool-'.length);
-
   return (
     <PartPlaceholder
       description={getToolDescription(part)}
       icon="tool"
-      label={`Tool: ${toolName}`}
+      label={getToolLabel(part)}
     />
   );
+}
+
+function getToolLabel(part: ToolPartProps['part']) {
+  const title = part.title?.trim();
+  if (title) return title;
+
+  const toolName = part.type === 'dynamic-tool' ? part.toolName : part.type.slice('tool-'.length);
+  return `Tool: ${toolName}`;
 }
 
 function getToolDescription(part: ToolPartProps['part']) {

@@ -14,6 +14,11 @@ import { ToolPart } from './ToolPart';
 import { TranslationPart } from './TranslationPart';
 import { UnknownPart } from './UnknownPart';
 import { VideoPart } from './VideoPart';
+import {
+  isProviderWebSearchToolPart,
+  isWebSearchToolPart,
+  WebSearchToolPart,
+} from './WebSearchToolPart';
 
 type MessagePartProps = {
   part: CherryMessagePart;
@@ -23,7 +28,15 @@ type MessagePartProps = {
 export function MessagePart({ part, renderMode = 'markdown' }: MessagePartProps) {
   const partType = part.type;
 
-  if (isStaticToolPart(part)) {
+  if (isToolMessagePart(part)) {
+    if (isProviderWebSearchToolPart(part)) {
+      return null;
+    }
+
+    if (isWebSearchToolPart(part)) {
+      return <WebSearchToolPart part={part} />;
+    }
+
     return <ToolPart part={part} />;
   }
 
@@ -42,8 +55,6 @@ export function MessagePart({ part, renderMode = 'markdown' }: MessagePartProps)
       return <TranslationPart part={part} />;
     case 'data-video':
       return <VideoPart part={part} />;
-    case 'dynamic-tool':
-      return <ToolPart part={part} />;
     case 'file':
       return <FilePart part={part} />;
     case 'source-document':
@@ -57,8 +68,8 @@ export function MessagePart({ part, renderMode = 'markdown' }: MessagePartProps)
   }
 }
 
-function isStaticToolPart(
+function isToolMessagePart(
   part: CherryMessagePart,
-): part is Extract<CherryMessagePart, { type: `tool-${string}` }> {
-  return part.type.startsWith('tool-');
+): part is Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }> {
+  return part.type === 'dynamic-tool' || part.type.startsWith('tool-');
 }

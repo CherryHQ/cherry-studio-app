@@ -1,7 +1,9 @@
 import { Input } from 'heroui-native/input';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TextInputEndEditingEvent } from 'react-native';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { openExternalUrl } from '@/utils/openExternalUrl';
 
 type SettingTextInputProps = {
   accessibilityLabel: string;
@@ -94,7 +96,7 @@ type ExternalLinkRowProps = {
 
 export function ExternalTextLink({ label, url }: ExternalLinkRowProps) {
   const handlePress = useCallback(() => {
-    Linking.openURL(url).catch(() => undefined);
+    void openExternalUrl(url);
   }, [url]);
 
   return (

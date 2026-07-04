@@ -7,11 +7,5 @@ type SourceDocumentPartProps = {
 };
 
 export function SourceDocumentPart({ part }: SourceDocumentPartProps) {
-  return (
-    <PartPlaceholder
-      description={part.filename ?? part.mediaType}
-      icon="document"
-      label={part.title}
-    />
-  );
+  return <PartPlaceholder icon="document" label={part.title} />;
 }
