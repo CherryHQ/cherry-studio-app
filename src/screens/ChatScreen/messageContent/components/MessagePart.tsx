@@ -4,6 +4,7 @@ import { CodePart } from './CodePart';
 import { CompactPart } from './CompactPart';
 import { ErrorPart } from './ErrorPart';
 import { FilePart } from './FilePart';
+import { isMcpToolPart, McpToolPart } from './McpToolPart';
 import type { MessagePartRenderMode } from './MessageParts';
 import { isMetaToolSearchPart, MetaToolSearchPart } from './MetaToolSearchPart';
 import { ReasoningPart } from './ReasoningPart';
@@ -40,6 +41,10 @@ export function MessagePart({ part, renderMode = 'markdown' }: MessagePartProps)
 
     if (isMetaToolSearchPart(part)) {
       return <MetaToolSearchPart part={part} />;
+    }
+
+    if (isMcpToolPart(part)) {
+      return <McpToolPart part={part} />;
     }
 
     return <ToolPart part={part} />;
