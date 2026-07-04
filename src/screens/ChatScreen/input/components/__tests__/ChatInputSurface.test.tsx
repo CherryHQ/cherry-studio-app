@@ -1,9 +1,11 @@
+import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
 import { useEffect } from 'react';
 import { Text, TextInput, type ViewProps } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ChatInputProvider, useChatInputActions } from '../../context/ChatInputProvider';
 import type { ChatInputAttachmentDraft } from '../../utils/chatInputAttachments';
+import { CHAT_INPUT_DEFAULT_REASONING_EFFORT } from '../../utils/chatInputReasoning';
 import { ChatInputSurface } from '../ChatInputSurface';
 
 const mockToastShow = jest.fn();
@@ -253,6 +255,7 @@ describe('ChatInputSurface', () => {
             onModelPickerPress={jest.fn()}
             onSendPress={jest.fn()}
             onStopPress={jest.fn()}
+            reasoningEfforts={[CHAT_INPUT_DEFAULT_REASONING_EFFORT, REASONING_EFFORT.MINIMAL]}
           />
         </ChatInputProvider>,
       );
@@ -269,7 +272,7 @@ describe('ChatInputSurface', () => {
     expect(getReasoningSlotLabel(renderer)).toBe('chat.reasoning.minimal');
   });
 
-  test('does not render the off reasoning label in the bottom toolbar', async () => {
+  test('hides reasoning controls when no model reasoning options are available', async () => {
     let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
@@ -291,9 +294,70 @@ describe('ChatInputSurface', () => {
       throw new Error('ChatInputSurface test renderer was not created.');
     }
 
-    for (let pressCount = 0; pressCount < 7; pressCount += 1) {
-      await pressReasoningButton(renderer);
+    expect(
+      renderer.root.findAllByProps({
+        accessibilityLabel: 'chat.reasoning.title',
+      }),
+    ).toHaveLength(0);
+    expect(getReasoningSlotLabel(renderer)).toBeNull();
+  });
+
+  test('cycles only through model-supported reasoning efforts', async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+            reasoningEfforts={[CHAT_INPUT_DEFAULT_REASONING_EFFORT, REASONING_EFFORT.HIGH]}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
     }
+
+    await pressReasoningButton(renderer);
+
+    expect(getReasoningSlotLabel(renderer)).toBe('chat.reasoning.high');
+
+    await pressReasoningButton(renderer);
+
+    expect(getReasoningSlotLabel(renderer)).toBe('chat.reasoning.default');
+  });
+
+  test('does not render the off reasoning label in the bottom toolbar', async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+            reasoningEfforts={[CHAT_INPUT_DEFAULT_REASONING_EFFORT, REASONING_EFFORT.NONE]}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    await pressReasoningButton(renderer);
 
     const reasoningPill = renderer.root.findByProps({
       testID: 'chat-input-reasoning-pill',

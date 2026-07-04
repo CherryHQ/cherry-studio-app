@@ -39,10 +39,14 @@ import {
   chatInputSpringConfig,
 } from '@/screens/ChatScreen/input/utils/chatInputMotion';
 import {
+  CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+  type ChatInputReasoningEffort,
   chatInputReasoningEffortOptions,
   getChatInputReasoningEffortBarCount,
   getChatInputReasoningEffortOption,
+  getFallbackChatInputReasoningEffort,
   getNextChatInputReasoningEffort,
+  isChatInputReasoningEffortAvailable,
   isChatInputReasoningEffortOff,
 } from '@/screens/ChatScreen/input/utils/chatInputReasoning';
 
@@ -73,6 +77,7 @@ type ChatInputSurfaceProps = {
   onModelPickerPress: () => void;
   onSendPress: (payload: ChatInputSendPayload) => Promise<void>;
   onStopPress: () => void;
+  reasoningEfforts?: readonly ChatInputReasoningEffort[];
 };
 
 export type ChatInputSendPayload = {
@@ -87,11 +92,13 @@ export function ChatInputSurface({
   onModelPickerPress,
   onSendPress,
   onStopPress,
+  reasoningEfforts = [],
 }: ChatInputSurfaceProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const {
     clearAttachments,
+    clearReasoningEffort,
     clearSelectedTool,
     removeAttachment,
     selectReasoningEffort,
@@ -100,8 +107,16 @@ export function ChatInputSurface({
     setInputFocused,
   } = useChatInputActions();
   const { inputRef } = useChatInputMeta();
-  const { attachments, draft, isComposerExpanded, isInputFocused, reasoningEffort, selectedTool } =
-    useChatInputState();
+  const {
+    attachments,
+    draft,
+    isComposerExpanded,
+    isInputFocused,
+    isReasoningEffortSelected,
+    reasoningEffort,
+    selectedTool,
+  } = useChatInputState();
+  const shouldShowReasoningPill = reasoningEfforts.length > 0;
   const reasoningBarCount = getChatInputReasoningEffortBarCount(reasoningEffort);
   const isReasoningOff = isChatInputReasoningEffortOff(reasoningEffort);
   const reasoningOption = getChatInputReasoningEffortOption(reasoningEffort);
@@ -109,9 +124,12 @@ export function ChatInputSurface({
   const reasoningLabels = useMemo(
     () =>
       chatInputReasoningEffortOptions
-        .filter((option) => !isChatInputReasoningEffortOff(option.value))
+        .filter(
+          (option) =>
+            reasoningEfforts.includes(option.value) && !isChatInputReasoningEffortOff(option.value),
+        )
         .map((option) => t(option.labelKey)),
-    [t],
+    [reasoningEfforts, t],
   );
   const expandProgress = useSharedValue(0);
   const contentHeight = useSharedValue(0);
@@ -122,6 +140,26 @@ export function ChatInputSurface({
   useEffect(() => {
     expandProgress.value = withSpring(isComposerExpanded ? 1 : 0, chatInputSpringConfig);
   }, [isComposerExpanded, expandProgress]);
+
+  useEffect(() => {
+    if (!shouldShowReasoningPill) {
+      if (isReasoningEffortSelected || reasoningEffort !== CHAT_INPUT_DEFAULT_REASONING_EFFORT) {
+        clearReasoningEffort();
+      }
+      return;
+    }
+
+    if (!isChatInputReasoningEffortAvailable(reasoningEffort, reasoningEfforts)) {
+      selectReasoningEffort(getFallbackChatInputReasoningEffort(reasoningEfforts));
+    }
+  }, [
+    clearReasoningEffort,
+    isReasoningEffortSelected,
+    reasoningEffort,
+    reasoningEfforts,
+    selectReasoningEffort,
+    shouldShowReasoningPill,
+  ]);
 
   const surfaceAnimatedStyle = useAnimatedStyle(() => {
     const fullWidth = Math.max(availableWidth.value, chatInputMinSurfaceWidth);
@@ -174,8 +212,12 @@ export function ChatInputSurface({
     onModelPickerPress();
   }, [dismissInput, onModelPickerPress]);
   const handleReasoningPress = useCallback(() => {
-    selectReasoningEffort(getNextChatInputReasoningEffort(reasoningEffort));
-  }, [reasoningEffort, selectReasoningEffort]);
+    if (!shouldShowReasoningPill) {
+      return;
+    }
+
+    selectReasoningEffort(getNextChatInputReasoningEffort(reasoningEffort, reasoningEfforts));
+  }, [reasoningEffort, reasoningEfforts, selectReasoningEffort, shouldShowReasoningPill]);
   const handleSendPress = useCallback(
     async (text: string) => {
       const draftSnapshot = draft;
@@ -244,14 +286,16 @@ export function ChatInputSurface({
                   maxWidthClassName="max-w-[42%]"
                   onPress={handleModelPickerPress}
                 />
-                <ChatInputReasoningPill
-                  accessibilityLabel={t('chat.reasoning.title')}
-                  activeBarCount={reasoningBarCount}
-                  isOff={isReasoningOff}
-                  label={reasoningLabel}
-                  labels={reasoningLabels}
-                  onPress={handleReasoningPress}
-                />
+                {shouldShowReasoningPill ? (
+                  <ChatInputReasoningPill
+                    accessibilityLabel={t('chat.reasoning.title')}
+                    activeBarCount={reasoningBarCount}
+                    isOff={isReasoningOff}
+                    label={reasoningLabel}
+                    labels={reasoningLabels}
+                    onPress={handleReasoningPress}
+                  />
+                ) : null}
               </View>
             </View>
           </View>

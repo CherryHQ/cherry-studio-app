@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import {
   getNextModelSelection,
   ModelPickerBottomSheet,
@@ -16,6 +16,7 @@ import {
 } from '@/screens/ChatScreen/input/components/ChatInputSurface';
 import { ChatInputProvider } from '@/screens/ChatScreen/input/context/ChatInputProvider';
 import { createChatInputMessageParts } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+import { getChatInputReasoningEffortsForModel } from '@/screens/ChatScreen/input/utils/chatInputReasoning';
 import { useChatRuntimeTopic } from '@/screens/ChatScreen/runtime';
 
 type ChatInputProps = {
@@ -34,6 +35,10 @@ export function ChatInput({ topicId }: ChatInputProps) {
   const selectedAssistantId = topicId ? (topicQuery.data?.assistantId ?? null) : null;
   const { model: selectedModel } = useModelById(selectedModelId);
   const selectedModelLabel = selectedModel?.name;
+  const reasoningEfforts = useMemo(
+    () => (selectedModelId ? getChatInputReasoningEffortsForModel(selectedModel) : []),
+    [selectedModel, selectedModelId],
+  );
 
   const openModelPicker = useCallback(() => {
     modelPickerRef.current?.present();
@@ -69,6 +74,7 @@ export function ChatInput({ topicId }: ChatInputProps) {
         onModelPickerPress={openModelPicker}
         onSendPress={handleSendPress}
         onStopPress={chatRuntime.abort}
+        reasoningEfforts={reasoningEfforts}
       />
       <ChatInputActionSheet />
       <ModelPickerBottomSheet

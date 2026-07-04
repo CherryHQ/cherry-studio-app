@@ -1,8 +1,11 @@
+import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
+import type { Model, UniqueModelId } from '@/data/types/model';
 import {
   CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   chatInputReasoningEffortOptions,
   getChatInputReasoningEffortBarCount,
   getChatInputReasoningEffortOption,
+  getChatInputReasoningEffortsForModel,
   getNextChatInputReasoningEffort,
   isChatInputReasoningEffortActive,
   isChatInputReasoningEffortOff,
@@ -33,6 +36,74 @@ describe('chat input reasoning', () => {
     expect(getNextChatInputReasoningEffort('low')).toBe('medium');
     expect(getNextChatInputReasoningEffort('auto')).toBe('none');
     expect(getNextChatInputReasoningEffort('none')).toBe(CHAT_INPUT_DEFAULT_REASONING_EFFORT);
+  });
+
+  test('cycles reasoning effort through model-supported order', () => {
+    const supportedEfforts = [CHAT_INPUT_DEFAULT_REASONING_EFFORT, REASONING_EFFORT.HIGH] as const;
+
+    expect(
+      getNextChatInputReasoningEffort(CHAT_INPUT_DEFAULT_REASONING_EFFORT, supportedEfforts),
+    ).toBe(REASONING_EFFORT.HIGH);
+    expect(getNextChatInputReasoningEffort(REASONING_EFFORT.HIGH, supportedEfforts)).toBe(
+      CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+    );
+    expect(getNextChatInputReasoningEffort(REASONING_EFFORT.LOW, supportedEfforts)).toBe(
+      CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+    );
+  });
+
+  test('orders off before default for model-supported reasoning effort cycling', () => {
+    const supportedEfforts = [
+      CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+      REASONING_EFFORT.NONE,
+      REASONING_EFFORT.LOW,
+      REASONING_EFFORT.MEDIUM,
+      REASONING_EFFORT.HIGH,
+    ] as const;
+
+    expect(getNextChatInputReasoningEffort(REASONING_EFFORT.NONE, supportedEfforts)).toBe(
+      CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+    );
+    expect(
+      getNextChatInputReasoningEffort(CHAT_INPUT_DEFAULT_REASONING_EFFORT, supportedEfforts),
+    ).toBe(REASONING_EFFORT.LOW);
+    expect(getNextChatInputReasoningEffort(REASONING_EFFORT.LOW, supportedEfforts)).toBe(
+      REASONING_EFFORT.MEDIUM,
+    );
+  });
+
+  test('returns no reasoning efforts without a selected reasoning model', () => {
+    expect(getChatInputReasoningEffortsForModel(null)).toEqual([]);
+    expect(getChatInputReasoningEffortsForModel(createModel())).toEqual([]);
+  });
+
+  test('maps model-supported reasoning efforts into input options', () => {
+    const model = createModel({
+      reasoning: {
+        supportedEfforts: [REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
+        type: 'openai-chat',
+      },
+    });
+
+    expect(getChatInputReasoningEffortsForModel(model)).toEqual([
+      CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+      REASONING_EFFORT.LOW,
+      REASONING_EFFORT.HIGH,
+    ]);
+  });
+
+  test('normalizes xhigh model options to the mobile max effort', () => {
+    const model = createModel({
+      reasoning: {
+        supportedEfforts: ['xhigh' as typeof REASONING_EFFORT.MAX],
+        type: 'openai-chat',
+      },
+    });
+
+    expect(getChatInputReasoningEffortsForModel(model)).toEqual([
+      CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+      REASONING_EFFORT.MAX,
+    ]);
   });
 
   test('maps reasoning effort to active meter bars', () => {
@@ -69,3 +140,18 @@ describe('chat input reasoning', () => {
     expect(shouldShowChatInputReasoningEffortTag(true, 'high')).toBe(true);
   });
 });
+
+function createModel(patch: Partial<Model> = {}): Model {
+  return {
+    capabilities: [],
+    id: 'provider::model' as UniqueModelId,
+    isDeprecated: false,
+    isEnabled: true,
+    isHidden: false,
+    modelId: 'model',
+    name: 'Model',
+    providerId: 'provider',
+    supportsStreaming: true,
+    ...patch,
+  };
+}
