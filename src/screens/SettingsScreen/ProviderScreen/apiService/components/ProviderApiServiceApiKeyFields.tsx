@@ -285,7 +285,7 @@ function ApiKeyRow({
         />
       </View>
       <View className="flex-row items-center gap-2">
-        <View className="min-w-0 flex-1">
+        <View className="h-10 min-w-0 flex-1 overflow-hidden rounded-xl">
           <ApiKeyInput
             accessibilityLabel={t('settings.provider.apiService.apiKey')}
             isDisabled={!apiKey.isEnabled || isPending}
@@ -351,7 +351,7 @@ function ApiKeyInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 min-h-0 w-full rounded-xl px-3 py-0 text-base leading-5"
+      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base leading-5"
       isDisabled={isDisabled}
       multiline={false}
       numberOfLines={1}
@@ -361,7 +361,7 @@ function ApiKeyInput({
       onSubmitEditing={handleCommitEvent}
       placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
       returnKeyType="done"
-      scrollEnabled
+      scrollEnabled={false}
       style={providerApiServiceStyles.input}
       value={normalizeApiKeySingleLine(value)}
       variant="secondary"
