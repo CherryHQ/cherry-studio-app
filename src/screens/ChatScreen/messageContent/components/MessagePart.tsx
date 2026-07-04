@@ -4,16 +4,22 @@ import { CodePart } from './CodePart';
 import { CompactPart } from './CompactPart';
 import { ErrorPart } from './ErrorPart';
 import { FilePart } from './FilePart';
+import { isMcpToolPart, McpToolPart } from './McpToolPart';
 import type { MessagePartRenderMode } from './MessageParts';
+import { isMetaToolPart, MetaToolPart } from './MetaToolPart';
 import { ReasoningPart } from './ReasoningPart';
 import { SourceDocumentPart } from './SourceDocumentPart';
 import { SourceUrlPart } from './SourceUrlPart';
-import { StepStartPart } from './StepStartPart';
 import { TextPart } from './TextPart';
 import { ToolPart } from './ToolPart';
 import { TranslationPart } from './TranslationPart';
 import { UnknownPart } from './UnknownPart';
 import { VideoPart } from './VideoPart';
+import {
+  isProviderWebSearchToolPart,
+  isWebSearchToolPart,
+  WebSearchToolPart,
+} from './WebSearchToolPart';
 
 type MessagePartProps = {
   part: CherryMessagePart;
@@ -23,7 +29,23 @@ type MessagePartProps = {
 export function MessagePart({ part, renderMode = 'markdown' }: MessagePartProps) {
   const partType = part.type;
 
-  if (isStaticToolPart(part)) {
+  if (isToolMessagePart(part)) {
+    if (isProviderWebSearchToolPart(part)) {
+      return null;
+    }
+
+    if (isWebSearchToolPart(part)) {
+      return <WebSearchToolPart part={part} />;
+    }
+
+    if (isMetaToolPart(part)) {
+      return <MetaToolPart part={part} />;
+    }
+
+    if (isMcpToolPart(part)) {
+      return <McpToolPart part={part} />;
+    }
+
     return <ToolPart part={part} />;
   }
 
@@ -42,8 +64,6 @@ export function MessagePart({ part, renderMode = 'markdown' }: MessagePartProps)
       return <TranslationPart part={part} />;
     case 'data-video':
       return <VideoPart part={part} />;
-    case 'dynamic-tool':
-      return <ToolPart part={part} />;
     case 'file':
       return <FilePart part={part} />;
     case 'source-document':
@@ -51,14 +71,14 @@ export function MessagePart({ part, renderMode = 'markdown' }: MessagePartProps)
     case 'source-url':
       return <SourceUrlPart part={part} />;
     case 'step-start':
-      return <StepStartPart />;
+      return null;
     default:
       return <UnknownPart type={partType} />;
   }
 }
 
-function isStaticToolPart(
+function isToolMessagePart(
   part: CherryMessagePart,
-): part is Extract<CherryMessagePart, { type: `tool-${string}` }> {
-  return part.type.startsWith('tool-');
+): part is Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }> {
+  return part.type === 'dynamic-tool' || part.type.startsWith('tool-');
 }

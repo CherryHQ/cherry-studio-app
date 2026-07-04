@@ -1,5 +1,6 @@
 import '../styles/global.css';
 
+import { BottomSheetProvider } from '@swmansion/react-native-bottom-sheet';
 import { HeroUINativeProvider } from 'heroui-native/provider';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -21,7 +22,9 @@ export default function RootLayout() {
             <DataProvider bootstrap={bootstrapAppRuntime}>
               <InitialDataGate>
                 <NavigationThemeProvider>
-                  <DrawerRoot />
+                  <BottomSheetProvider>
+                    <DrawerRoot />
+                  </BottomSheetProvider>
                 </NavigationThemeProvider>
               </InitialDataGate>
             </DataProvider>

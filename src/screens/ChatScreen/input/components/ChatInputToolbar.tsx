@@ -1,4 +1,4 @@
-import { BrainIcon, XIcon } from 'lucide-uniwind/png';
+import { XIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text } from 'react-native';
 
@@ -9,10 +9,8 @@ import {
 import type { ChatInputAction } from '@/screens/ChatScreen/input/utils/chatInputActions';
 
 type ChatInputToolbarProps = {
-  onReasoningEffortClear: () => void;
   onToolClear: () => void;
   selectedTool?: ChatInputAction;
-  shouldShowReasoningEffortTag: boolean;
 };
 
 type SelectedToolTagProps = {
@@ -20,17 +18,8 @@ type SelectedToolTagProps = {
   tool: ChatInputAction;
 };
 
-type SelectedReasoningEffortTagProps = {
-  onClear: () => void;
-};
-
-export function ChatInputToolbar({
-  onReasoningEffortClear,
-  onToolClear,
-  selectedTool,
-  shouldShowReasoningEffortTag,
-}: ChatInputToolbarProps) {
-  const hasToolbarContent = selectedTool !== undefined || shouldShowReasoningEffortTag;
+export function ChatInputToolbar({ onToolClear, selectedTool }: ChatInputToolbarProps) {
+  const hasToolbarContent = selectedTool !== undefined;
   const toolbarClassName = hasToolbarContent
     ? 'flex-row flex-wrap gap-2 self-start p-2'
     : 'flex-row flex-wrap gap-2 self-start p-0';
@@ -40,9 +29,6 @@ export function ChatInputToolbar({
       className={toolbarClassName}
       pointerEvents={hasToolbarContent ? 'auto' : 'none'}
     >
-      {shouldShowReasoningEffortTag ? (
-        <SelectedReasoningEffortTag onClear={onReasoningEffortClear} />
-      ) : null}
       {selectedTool ? <SelectedToolTag tool={selectedTool} onClear={onToolClear} /> : null}
     </ChatInputAccessorySection>
   );
@@ -57,20 +43,6 @@ function SelectedToolTag({ onClear, tool }: SelectedToolTagProps) {
       <Icon className="size-5 text-accent" strokeWidth={2.25} />
       <Text className="font-semibold text-accent text-base" numberOfLines={1}>
         {t(tool.tagTitleKey)}
-      </Text>
-      <ClearTagButton onPress={onClear} />
-    </ChatInputAccessoryItem>
-  );
-}
-
-function SelectedReasoningEffortTag({ onClear }: SelectedReasoningEffortTagProps) {
-  const { t } = useTranslation();
-
-  return (
-    <ChatInputAccessoryItem className="flex-row items-center gap-2 rounded-full bg-accent/10 px-2 py-1">
-      <BrainIcon className="size-5 text-accent" strokeWidth={2.25} />
-      <Text className="font-semibold text-accent text-base" numberOfLines={1}>
-        {t('chat.tools.think')}
       </Text>
       <ClearTagButton onPress={onClear} />
     </ChatInputAccessoryItem>

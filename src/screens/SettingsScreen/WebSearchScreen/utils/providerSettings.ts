@@ -81,7 +81,7 @@ const WEB_SEARCH_PROVIDER_DETAIL_SECTIONS = {
   querit: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
   searxng: [{ type: 'capabilityApiHosts' }, { type: 'basicAuth' }],
   tavily: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
-  zhipu: [{ type: 'zhipuApiKeyShortcut' }, { type: 'capabilityApiHosts' }],
+  zhipu: [{ type: 'zhipuApiKeyShortcut' }],
 } as const satisfies Record<WebSearchProviderId, readonly WebSearchProviderDetailSection[]>;
 
 export function getWebSearchProviderPreset(providerId: WebSearchProviderId) {

@@ -1,32 +1,23 @@
-import type { BottomSheetMethods } from '@expo/ui/community/bottom-sheet';
-import { ChevronLeftIcon } from 'lucide-uniwind/png';
-import { type Ref, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { type Ref, useCallback, useImperativeHandle, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { SelectionBottomSheet, SelectionSheetSearchField } from '@/components/selectionSheet';
 import { useModelPickerData } from '../hooks/useModelPickerData';
 import { type ModelPickerModelItem } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
-import {
-  type ModelPickerReasoningConfig,
-  ModelPickerReasoningPage,
-  ModelPickerReasoningRow,
-} from './ModelPickerReasoningPage';
 import { ModelPickerSheetContent } from './ModelPickerSheetContent';
 
-const defaultModelPickerHeaderHeight = 96;
+const defaultModelPickerHeaderHeight = 64;
 const initialModelPickerListItemCount = 12;
 const modelPickerListItemBatchSize = 24;
-
-type ModelPickerScreen = 'main' | 'reasoning';
+// Detent indices for the underlying `SelectionBottomSheet`: 0 closed, 1 open.
+const CLOSED_INDEX = 0;
+const OPEN_INDEX = 1;
 
 type ModelPickerBottomSheetProps = {
   isOpen?: boolean;
   onClose?: () => void;
   onSelect: (item: ModelPickerModelItem) => void;
-  // Chat-only: when provided, a "reasoning effort" row is shown under the search
-  // field that swaps the sheet to a reasoning sub-screen. The settings screen omits it.
-  reasoning?: ModelPickerReasoningConfig;
   ref?: Ref<ModelPickerBottomSheetHandle>;
   selectedModelId: string | null;
 };
@@ -40,18 +31,24 @@ export function ModelPickerBottomSheet({
   isOpen,
   onClose,
   onSelect,
-  reasoning,
   ref,
   selectedModelId,
 }: ModelPickerBottomSheetProps) {
   const { t } = useTranslation();
-  const sheetRef = useRef<BottomSheetMethods>(null);
+  // `sheetIndex` is fed by two mutually-exclusive inputs, never both for the
+  // same caller: declarative callers pass `isOpen`/`onClose` (adjusted during
+  // render below); the imperative caller (chat input) never passes `isOpen`
+  // and drives it purely through the `present`/`dismiss` ref handle.
+  const [sheetIndex, setSheetIndex] = useState(CLOSED_INDEX);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [searchText, setSearchText] = useState('');
   const [headerHeight, setHeaderHeight] = useState(0);
-  // Local screen swap stands in for a native stack: nesting a ScreenStack inside
-  // the bottom sheet crashes on present, so reasoning is a plain conditional view.
-  const [screen, setScreen] = useState<ModelPickerScreen>('main');
   const [visibleListItemCount, setVisibleListItemCount] = useState(initialModelPickerListItemCount);
+
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    setSheetIndex(isOpen ? OPEN_INDEX : CLOSED_INDEX);
+  }
   const isSearching = searchText.trim().length > 0;
   const { groups, isLoading, pinnedModelIds } = useModelPickerData({ searchText });
   const totalListItemCount = useMemo(
@@ -67,7 +64,7 @@ export function ModelPickerBottomSheet({
   const handleSelect = useCallback(
     (item: ModelPickerModelItem) => {
       onSelect(item);
-      sheetRef.current?.close();
+      setSheetIndex(CLOSED_INDEX);
     },
     [onSelect],
   );
@@ -77,7 +74,6 @@ export function ModelPickerBottomSheet({
   }, []);
   const handleClose = useCallback(() => {
     setSearchText('');
-    setScreen('main');
     setVisibleListItemCount(initialModelPickerListItemCount);
     onClose?.();
   }, [onClose]);
@@ -94,54 +90,27 @@ export function ModelPickerBottomSheet({
       return Math.min(currentCount + modelPickerListItemBatchSize, totalListItemCount);
     });
   }, [totalListItemCount]);
-  const openReasoning = useCallback(() => setScreen('reasoning'), []);
-  const closeReasoning = useCallback(() => setScreen('main'), []);
-  const handleReasoningChange = useCallback(
-    (value: string) => {
-      reasoning?.onChange(value);
-      setScreen('main');
-    },
-    [reasoning],
-  );
 
   useImperativeHandle(
     ref,
     () => ({
-      dismiss: () => sheetRef.current?.dismiss(),
-      present: () => sheetRef.current?.present(),
+      dismiss: () => setSheetIndex(CLOSED_INDEX),
+      present: () => setSheetIndex(OPEN_INDEX),
     }),
     [],
   );
 
   return (
-    <SelectionBottomSheet bottomSheetRef={sheetRef} isOpen={isOpen} onClose={handleClose}>
-      {({ sheetHeight }) => {
-        if (reasoning && screen === 'reasoning') {
-          return (
-            <>
-              <View className="flex-row items-center gap-1 px-2 pt-3 pb-1">
-                <Pressable
-                  accessibilityLabel={t('navigation.back')}
-                  accessibilityRole="button"
-                  className="size-9 items-center justify-center rounded-full active:opacity-70"
-                  hitSlop={6}
-                  onPress={closeReasoning}
-                >
-                  <ChevronLeftIcon className="size-6 text-foreground" strokeWidth={2} />
-                </Pressable>
-                <Text className="font-semibold text-foreground text-lg">
-                  {t('chat.reasoning.title')}
-                </Text>
-              </View>
-              <ModelPickerReasoningPage
-                onChange={handleReasoningChange}
-                options={reasoning.options}
-                value={reasoning.value}
-              />
-            </>
-          );
+    <SelectionBottomSheet
+      index={sheetIndex}
+      onIndexChange={setSheetIndex}
+      onSettle={(nextIndex) => {
+        if (nextIndex === CLOSED_INDEX) {
+          handleClose();
         }
-
+      }}
+    >
+      {({ sheetHeight }) => {
         const modelListHeight = Math.max(
           sheetHeight - (headerHeight || defaultModelPickerHeaderHeight),
           120,
@@ -151,13 +120,6 @@ export function ModelPickerBottomSheet({
           <>
             <View className="px-4 pt-5" onLayout={handleHeaderLayout}>
               <SelectionSheetSearchField onChange={handleSearchTextChange} value={searchText} />
-              {reasoning ? (
-                <ModelPickerReasoningRow
-                  onPress={openReasoning}
-                  options={reasoning.options}
-                  value={reasoning.value}
-                />
-              ) : null}
             </View>
             <View style={[styles.modelListViewport, { height: modelListHeight }]}>
               <ModelPickerSheetContent
@@ -182,7 +144,6 @@ export function ModelPickerBottomSheet({
 
 const styles = StyleSheet.create({
   modelListViewport: {
-    flex: 1,
     minHeight: 0,
   },
 });

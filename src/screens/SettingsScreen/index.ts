@@ -12,6 +12,8 @@ export { default as DataScreen } from './DataScreen';
 export { useSettingPreferences } from './hooks/useSettingPreferences';
 export { useSettingsConfirmDialog } from './hooks/useSettingsConfirmDialog';
 export { useWebSearchProviderPreferences } from './hooks/useWebSearchProviderPreferences';
+export { default as ModelSelectionScreen } from './ModelSelectionScreen';
 export { default as ModelSettingsScreen } from './ModelSettingsScreen';
+export { default as ProfileSettingsScreen } from './ProfileSettingsScreen';
 export { default as ProviderListScreen } from './ProviderListScreen';
 export { default as SettingsScreen } from './SettingsScreen';

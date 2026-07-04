@@ -3,10 +3,6 @@ export {
   type ModelPickerBottomSheetHandle,
 } from './components/ModelPickerBottomSheet';
 export { ModelPickerIcon } from './components/ModelPickerIcon';
-export type {
-  ModelPickerReasoningConfig,
-  ModelPickerReasoningOption,
-} from './components/ModelPickerReasoningPage';
 export { ModelPickerSheetContent } from './components/ModelPickerSheetContent';
 export { useModelPickerData } from './hooks/useModelPickerData';
 export { useModelSettingSelections } from './hooks/useModelSettingSelections';
