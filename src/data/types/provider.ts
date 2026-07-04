@@ -60,6 +60,7 @@ export type AuthConfig =
     }
   | {
       accessToken?: string;
+      accountId?: string;
       clientId: string;
       expiresAt?: number;
       refreshToken?: string;
@@ -90,7 +91,6 @@ export type AuthConfig =
 export type ApiFeatures = {
   arrayContent?: boolean;
   developerRole?: boolean;
-  enableThinking?: boolean;
   serviceTier?: boolean;
   streamOptions?: boolean;
   verbosity?: boolean;
@@ -100,9 +100,8 @@ export type RuntimeApiFeatures = Required<ApiFeatures>;
 
 export const DEFAULT_API_FEATURES: RuntimeApiFeatures = {
   arrayContent: true,
-  developerRole: true,
-  enableThinking: false,
-  serviceTier: true,
+  developerRole: false,
+  serviceTier: false,
   streamOptions: true,
   verbosity: false,
 };
@@ -123,6 +122,10 @@ export type ProviderSettings = {
   oauthUsername?: string;
   rateLimit?: number;
   serviceTier?: string;
+  streamOptions?: {
+    includeUsage?: boolean;
+  };
+  summaryText?: 'auto' | 'concise' | 'detailed' | null;
   timeout?: number;
   verbosity?: string;
 };
@@ -151,15 +154,21 @@ export type ProviderWebsites = {
   official?: string;
 };
 
+export type ProviderModelListSource = 'api' | 'registry';
+
+export type ProviderAuthMethod = 'api-key' | 'oauth' | 'external-cli';
+
 export type Provider = {
   apiFeatures: RuntimeApiFeatures;
   apiKeys: RuntimeApiKey[];
+  authMethods?: ProviderAuthMethod[];
   authType: AuthType;
   defaultChatEndpoint?: EndpointType;
   description?: string;
   endpointConfigs?: EndpointConfigs;
   id: string;
   isEnabled: boolean;
+  modelListSource?: ProviderModelListSource;
   name: string;
   presetProviderId?: string;
   settings: ProviderSettings;

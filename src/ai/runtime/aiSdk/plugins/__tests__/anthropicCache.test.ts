@@ -16,7 +16,6 @@ function createProvider(cacheControl?: Provider['settings']['cacheControl']): Pr
     apiFeatures: {
       arrayContent: true,
       developerRole: true,
-      enableThinking: false,
       serviceTier: true,
       streamOptions: true,
       verbosity: false,

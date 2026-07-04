@@ -153,7 +153,6 @@ function provider(input: { id: string; presetProviderId?: string }): Provider {
     apiFeatures: {
       arrayContent: true,
       developerRole: true,
-      enableThinking: false,
       serviceTier: true,
       streamOptions: true,
       verbosity: false,

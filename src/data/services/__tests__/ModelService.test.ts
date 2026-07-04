@@ -1,6 +1,7 @@
 import type { DbService } from '@/data/db/DbService';
 import { userModelTable } from '@/data/db/schemas/userModel';
 import { ModelService } from '../ModelService';
+import { providerRegistryService } from '../ProviderRegistryService';
 
 jest.mock('@/data/db/schemas/userModel', () => ({
   userModelTable: {
@@ -77,6 +78,34 @@ describe('ModelService', () => {
         modelId: 'anthropic/claude-sonnet-4-5',
         ownedBy: 'custom',
         providerId: 'cherryin',
+      }),
+    ]);
+  });
+
+  test('creates standalone registry override models through synthesized presets', async () => {
+    const dbService = {
+      withWriteTx: jest.fn(async (callback) => callback({})),
+    } as unknown as DbService;
+    const service = new ModelService(dbService);
+    const registryData = providerRegistryService.lookupModel('302ai', 'chatgpt-4o-latest');
+
+    const result = await service.reconcileProviderModels('302ai', {
+      toAdd: [
+        {
+          modelId: 'chatgpt-4o-latest',
+          providerId: 'ignored-provider',
+          registryData,
+        },
+      ],
+    });
+
+    expect(result.added).toEqual([
+      expect.objectContaining({
+        id: '302ai::chatgpt-4o-latest',
+        modelId: 'chatgpt-4o-latest',
+        name: 'chatgpt-4o-latest',
+        presetModelId: 'chatgpt-4o-latest',
+        providerId: '302ai',
       }),
     ]);
   });

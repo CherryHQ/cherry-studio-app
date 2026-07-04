@@ -3,7 +3,13 @@ import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 import type { DbService } from '@/data/db/DbService';
 import type { InsertUserModelRow, UserModelRow } from '@/data/db/schemas/userModel';
 import { userModelTable } from '@/data/db/schemas/userModel';
-import { createUniqueModelId, type EndpointType, type Model } from '@/data/types/model';
+import {
+  createUniqueModelId,
+  MODEL_CAPABILITY,
+  type EndpointType,
+  type Model,
+  type ModelCapability,
+} from '@/data/types/model';
 import type { EndpointConfigs } from '@/data/types/provider';
 
 import {
@@ -77,6 +83,37 @@ function rowToModel(row: UserModelRow): Model {
     reasoning: row.reasoning ?? undefined,
     supportsStreaming: row.supportsStreaming,
   };
+}
+
+function resolveCapabilities(
+  presetCapabilities: readonly ModelCapability[] | undefined,
+  overrideCapabilities:
+    | { add?: ModelCapability[]; force?: ModelCapability[]; remove?: ModelCapability[] }
+    | undefined,
+  userCapabilities: readonly ModelCapability[],
+): ModelCapability[] {
+  if (overrideCapabilities?.force) {
+    return [...overrideCapabilities.force];
+  }
+
+  const capabilities = new Set<ModelCapability>(userCapabilities);
+  if (presetCapabilities?.includes(MODEL_CAPABILITY.IMAGE_GENERATION)) {
+    capabilities.add(MODEL_CAPABILITY.IMAGE_GENERATION);
+  }
+
+  if (overrideCapabilities?.add) {
+    for (const capability of overrideCapabilities.add) {
+      capabilities.add(capability);
+    }
+  }
+
+  if (overrideCapabilities?.remove) {
+    for (const capability of overrideCapabilities.remove) {
+      capabilities.delete(capability);
+    }
+  }
+
+  return [...capabilities];
 }
 
 function modelToInsert(model: Model): ModelInputWithoutOrderKey {
@@ -195,7 +232,39 @@ export class ModelService {
       .from(userModelTable)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(asc(userModelTable.providerId), asc(userModelTable.orderKey));
-    const models = rows.map(rowToModel);
+    let models = rows.map(rowToModel);
+
+    models = models.map((model) => {
+      const presetId = model.presetModelId ?? model.apiModelId;
+      if (!presetId) {
+        return model;
+      }
+
+      const { presetModel, registryOverride } = providerRegistryService.lookupModel(
+        model.providerId,
+        presetId,
+      );
+      const imageGeneration = registryOverride?.imageGeneration ?? presetModel?.imageGeneration;
+      const capabilities = resolveCapabilities(
+        presetModel?.capabilities,
+        registryOverride?.capabilities,
+        model.capabilities,
+      );
+      const updates: Partial<Model> = {};
+
+      if (imageGeneration) {
+        updates.imageGeneration = imageGeneration;
+      }
+
+      const capabilitiesChanged =
+        capabilities.length !== model.capabilities.length ||
+        capabilities.some((capability, index) => capability !== model.capabilities[index]);
+      if (capabilitiesChanged) {
+        updates.capabilities = capabilities;
+      }
+
+      return Object.keys(updates).length > 0 ? { ...model, ...updates } : model;
+    });
 
     return query.capability
       ? models.filter((model) => model.capabilities.includes(query.capability as never))
