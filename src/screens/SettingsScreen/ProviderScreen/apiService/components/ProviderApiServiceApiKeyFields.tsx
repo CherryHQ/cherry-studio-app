@@ -10,7 +10,7 @@ import {
   PlusIcon,
   Trash2Icon,
 } from 'lucide-uniwind/png';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
 import { Pressable, Text, View } from 'react-native';
@@ -19,16 +19,16 @@ import type { ApiKeyEntry } from '@/data/types/provider';
 import { SettingsIconButton } from '@/screens/SettingsScreen/components/SettingsIconButton';
 import { providerApiServiceStyles } from '../utils/providerApiServiceStyles';
 
+const apiKeyPreviewMaxLength = 21;
+
 export function ProviderApiServiceApiKeysField({
   apiKeysInput,
   apiKeysVisible,
-  onApiKeysInputChange,
   onManagePress,
   onToggleVisible,
 }: {
   apiKeysInput: string;
   apiKeysVisible: boolean;
-  onApiKeysInputChange: (value: string) => void;
   onManagePress: () => void;
   onToggleVisible: () => void;
 }) {
@@ -41,13 +41,14 @@ export function ProviderApiServiceApiKeysField({
       </Text>
       <View className="flex-row items-center gap-2">
         {apiKeysVisible ? (
-          <ApiKeysCommitInput
-            accessibilityLabel={t('settings.provider.apiService.apiKeys')}
-            onCommit={onApiKeysInputChange}
-            placeholder={t('settings.provider.apiService.apiKeysPlaceholder')}
-            secureTextEntry={false}
-            value={apiKeysInput}
-          />
+          <View className="h-10 min-w-0 flex-1 overflow-hidden rounded-xl">
+            <ApiKeysVisiblePreview
+              accessibilityLabel={t('settings.provider.apiService.apiKeys')}
+              onPress={onManagePress}
+              placeholder={t('settings.provider.apiService.apiKeysPlaceholder')}
+              value={apiKeysInput}
+            />
+          </View>
         ) : (
           <ApiKeysMaskedPreview
             accessibilityLabel={t('settings.provider.apiService.apiKeys')}
@@ -77,86 +78,34 @@ export function ProviderApiServiceApiKeysField({
   );
 }
 
-function ApiKeysCommitInput({
+function ApiKeysVisiblePreview({
   accessibilityLabel,
-  onCommit,
+  onPress,
   placeholder,
-  secureTextEntry,
   value,
 }: {
   accessibilityLabel: string;
-  onCommit: (value: string) => void;
+  onPress: () => void;
   placeholder: string;
-  secureTextEntry: boolean;
   value: string;
 }) {
-  const [draftValue, setDraftValue] = useState(value);
-  const draftValueRef = useRef(draftValue);
-  const onCommitRef = useRef(onCommit);
-  const valueRef = useRef(value);
-
-  useEffect(() => {
-    setDraftValue(value);
-    draftValueRef.current = value;
-    valueRef.current = value;
-  }, [value]);
-
-  useEffect(() => {
-    onCommitRef.current = onCommit;
-  }, [onCommit]);
-
-  const commitValue = useCallback((nextValue = draftValueRef.current) => {
-    if (nextValue !== valueRef.current) {
-      onCommitRef.current(nextValue);
-      valueRef.current = nextValue;
-    }
-  }, []);
-
-  useEffect(
-    () => () => {
-      commitValue();
-    },
-    [commitValue],
-  );
-
-  const handleChangeText = useCallback((nextValue: string) => {
-    const singleLineValue = normalizeApiKeySingleLine(nextValue);
-
-    draftValueRef.current = singleLineValue;
-    setDraftValue(singleLineValue);
-  }, []);
-
-  const handleEndEditing = useCallback(
-    (event: TextInputEndEditingEvent) => {
-      const singleLineValue = normalizeApiKeySingleLine(event.nativeEvent.text);
-
-      draftValueRef.current = singleLineValue;
-      commitValue(singleLineValue);
-    },
-    [commitValue],
-  );
-
-  const handleCommitEvent = useCallback(() => {
-    commitValue();
-  }, [commitValue]);
+  const previewValue = clipApiKeyPreviewValue(normalizeApiKeysInputSingleLine(value));
 
   return (
     <Input
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 min-h-0 min-w-0 flex-1 rounded-xl px-3 py-0 text-base leading-5"
+      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base leading-5"
+      editable={false}
       multiline={false}
       numberOfLines={1}
-      onBlur={handleCommitEvent}
-      onChangeText={handleChangeText}
-      onEndEditing={handleEndEditing}
-      onSubmitEditing={handleCommitEvent}
+      onPressIn={onPress}
       placeholder={placeholder}
       returnKeyType="done"
-      secureTextEntry={secureTextEntry}
+      scrollEnabled={false}
       style={providerApiServiceStyles.input}
-      value={draftValue}
+      value={previewValue}
       variant="secondary"
     />
   );
@@ -328,15 +277,18 @@ function ApiKeyInput({
   value: string;
 }) {
   const { t } = useTranslation();
+  const [isEditing, setIsEditing] = useState(false);
   const handleEndEditing = useCallback(
-    (event: TextInputEndEditingEvent) => {
-      onCommit(normalizeApiKeySingleLine(event.nativeEvent.text));
+    (_event: TextInputEndEditingEvent) => {
+      onCommit(normalizeApiKeySingleLine(value));
+      setIsEditing(false);
     },
-    [onCommit],
+    [onCommit, value],
   );
 
   const handleCommitEvent = useCallback(() => {
     onCommit(normalizeApiKeySingleLine(value));
+    setIsEditing(false);
   }, [onCommit, value]);
 
   const handleChangeText = useCallback(
@@ -345,6 +297,11 @@ function ApiKeyInput({
     },
     [onChangeText],
   );
+  const handleFocus = useCallback(() => {
+    setIsEditing(true);
+  }, []);
+  const normalizedValue = normalizeApiKeySingleLine(value);
+  const displayValue = isEditing ? normalizedValue : clipApiKeyPreviewValue(normalizedValue);
 
   return (
     <Input
@@ -358,17 +315,30 @@ function ApiKeyInput({
       onBlur={handleCommitEvent}
       onChangeText={handleChangeText}
       onEndEditing={handleEndEditing}
+      onFocus={handleFocus}
       onSubmitEditing={handleCommitEvent}
       placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
       returnKeyType="done"
       scrollEnabled={false}
       style={providerApiServiceStyles.input}
-      value={normalizeApiKeySingleLine(value)}
+      value={displayValue}
       variant="secondary"
     />
   );
 }
 
+function clipApiKeyPreviewValue(value: string): string {
+  if (value.length <= apiKeyPreviewMaxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, apiKeyPreviewMaxLength)}...`;
+}
+
 function normalizeApiKeySingleLine(value: string): string {
   return value.replaceAll(/[\r\n]+/g, '');
+}
+
+function normalizeApiKeysInputSingleLine(value: string): string {
+  return value.replaceAll(/[\r\n]+/g, ',');
 }

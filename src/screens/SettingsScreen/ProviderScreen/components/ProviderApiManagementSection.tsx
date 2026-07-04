@@ -16,7 +16,6 @@ type ProviderApiManagementSectionProps = {
   apiKeysVisible: boolean;
   baseUrl?: string;
   isUpdatingEnabled?: boolean;
-  onApiKeysInputChange: (value: string) => void;
   onApiKeysManagePress: () => void;
   onApiKeysVisibleToggle: () => void;
   onBaseUrlManagePress: () => void;
@@ -31,7 +30,6 @@ export function ProviderApiManagementSection({
   apiKeysVisible,
   baseUrl = '',
   isUpdatingEnabled,
-  onApiKeysInputChange,
   onApiKeysManagePress,
   onApiKeysVisibleToggle,
   onBaseUrlManagePress,
@@ -67,7 +65,6 @@ export function ProviderApiManagementSection({
           <ProviderApiServiceApiKeysField
             apiKeysInput={apiKeysInput}
             apiKeysVisible={apiKeysVisible}
-            onApiKeysInputChange={onApiKeysInputChange}
             onManagePress={onApiKeysManagePress}
             onToggleVisible={onApiKeysVisibleToggle}
           />

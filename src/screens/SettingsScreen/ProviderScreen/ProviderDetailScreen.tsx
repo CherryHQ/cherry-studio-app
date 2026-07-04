@@ -1,11 +1,10 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 
 import { BackHeader } from '@/components/headers';
 import {
-  buildApiKeyEntriesFromInput,
   canEditProviderEndpoint,
   shouldShowApiKeys,
   useProviderApiServiceDraft,
@@ -26,8 +25,9 @@ export default function ProviderDetailSettingsScreen() {
   const [apiKeysVisible, setApiKeysVisible] = useState(false);
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
-  const { apiKeys, apiKeysQuery, authConfig, authConfigQuery, replaceApiKeysMutation } =
-    useProviderApiServiceQueries(providerId ?? '');
+  const { apiKeys, apiKeysQuery, authConfig, authConfigQuery } = useProviderApiServiceQueries(
+    providerId ?? '',
+  );
   const {
     apiKeyOptions: checkApiKeyOptions,
     closeSheet: closeCheckSheet,
@@ -45,30 +45,11 @@ export default function ProviderDetailSettingsScreen() {
     provider,
     providerId: providerId ?? '',
   });
-  const { draft, primaryBaseUrl, syncApiKeysDraft, updateApiKeysInput } =
-    useProviderApiServiceDraft({
-      apiKeys,
-      authConfig,
-      provider,
-    });
-  const commitApiKeysInput = useCallback(
-    async (value: string) => {
-      if (!providerId || !draft) {
-        return;
-      }
-
-      const nextApiKeys = buildApiKeyEntriesFromInput(value, draft.apiKeyEntries);
-      updateApiKeysInput(value);
-
-      try {
-        await replaceApiKeysMutation.mutateAsync(nextApiKeys);
-        syncApiKeysDraft(providerId, nextApiKeys);
-      } catch {
-        Alert.alert(t('settings.provider.apiService.saveFailed'));
-      }
-    },
-    [draft, providerId, replaceApiKeysMutation, syncApiKeysDraft, t, updateApiKeysInput],
-  );
+  const { draft, primaryBaseUrl } = useProviderApiServiceDraft({
+    apiKeys,
+    authConfig,
+    provider,
+  });
   const canEditEndpoint = canEditProviderEndpoint(provider);
   const showApiKeys = draft ? shouldShowApiKeys(draft.authDraft.type) : false;
   const isApiDraftLoading = apiKeysQuery.isPending || authConfigQuery.isPending || !draft;
@@ -143,7 +124,6 @@ export default function ProviderDetailSettingsScreen() {
               provider={provider}
               showApiKeys={!isApiDraftLoading && showApiKeys}
               showBaseUrl={!isApiDraftLoading && canEditEndpoint}
-              onApiKeysInputChange={commitApiKeysInput}
               onApiKeysManagePress={openApiKeySettings}
               onApiKeysVisibleToggle={() => setApiKeysVisible((visible) => !visible)}
               onBaseUrlManagePress={openEndpointSettings}
