@@ -10,7 +10,7 @@ import {
   PlusIcon,
   Trash2Icon,
 } from 'lucide-uniwind/png';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInput, TextInputEndEditingEvent } from 'react-native';
 import { Pressable, Text, View } from 'react-native';
@@ -287,15 +287,10 @@ function ApiKeyInput({
     }
 
     setIsEditing(true);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
   }, [isDisabled]);
-
-  useEffect(() => {
-    if (!isEditing || isDisabled) {
-      return;
-    }
-
-    inputRef.current?.focus();
-  }, [isDisabled, isEditing]);
 
   const handleEndEditing = useCallback(
     (event: TextInputEndEditingEvent) => {
