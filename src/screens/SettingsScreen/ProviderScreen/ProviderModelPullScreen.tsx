@@ -6,6 +6,7 @@ import { cn } from 'heroui-native/utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackHeader } from '@/components/headers';
 import { ModelPickerIcon, type ModelPickerModelItem } from '@/components/modelPicker';
@@ -24,6 +25,7 @@ import {
   type ProviderModelPullPreview,
   type ProviderModelPullSelection,
 } from './models/utils/providerModelPullPreview';
+import { consumeProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
 
 type ProviderModelPullSelectionOverride = ProviderModelPullSelection & {
   previewKey: string;
@@ -33,10 +35,15 @@ export default function ProviderModelPullScreen() {
   const { providerId } = useLocalSearchParams<{ providerId?: string; providerName?: string }>();
   const { t } = useTranslation();
   const router = useRouter();
-  const loadStartedRef = useRef(false);
+  const initialPreviewRef = useRef<ProviderModelPullPreview | null>(null);
+  if (providerId && !initialPreviewRef.current) {
+    initialPreviewRef.current = consumeProviderModelPullPreview(providerId);
+  }
+  const loadStartedRef = useRef(Boolean(initialPreviewRef.current));
   const { provider, providerQuery } = useProviderDetailSettings(providerId ?? '');
   const { applyPullPreview, isApplying, isPreviewLoading, loadPullPreview, preview } =
     useProviderModelPull({
+      initialPreview: initialPreviewRef.current,
       provider,
       providerId: providerId ?? '',
     });
@@ -110,6 +117,7 @@ function ProviderModelPullPreviewPage({
   provider: Provider | undefined;
 }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [selectionOverride, setSelectionOverride] =
     useState<ProviderModelPullSelectionOverride | null>(null);
   const previewKey = useMemo(() => getPreviewKey(preview), [preview]);
@@ -238,7 +246,10 @@ function ProviderModelPullPreviewPage({
         ) : null}
       </ScrollView>
 
-      <View className="border-border border-t px-4 py-3">
+      <View
+        className="border-border border-t px-4 pt-3"
+        style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+      >
         <Button
           className="h-10 min-h-0 rounded-xl"
           isDisabled={isApplying || selectedTotal === 0}

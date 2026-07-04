@@ -21,20 +21,27 @@ import {
 } from '../utils/providerModelPullTimeout';
 
 type UseProviderModelPullOptions = {
+  initialPreview?: ProviderModelPullPreview | null;
+  onPreviewReady?: (preview: ProviderModelPullPreview) => void;
   provider: Provider | undefined;
   providerId: string;
 };
 
 export type ProviderModelPullLoadResult = 'empty' | 'error' | 'ready';
 
-export function useProviderModelPull({ provider, providerId }: UseProviderModelPullOptions) {
+export function useProviderModelPull({
+  initialPreview = null,
+  onPreviewReady,
+  provider,
+  providerId,
+}: UseProviderModelPullOptions) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const services = useDataServices();
   const queryClient = useQueryClient();
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
-  const [preview, setPreview] = useState<ProviderModelPullPreview | null>(null);
+  const [preview, setPreview] = useState<ProviderModelPullPreview | null>(initialPreview);
 
   const resetPreview = useCallback(() => {
     setPreview(null);
@@ -95,6 +102,7 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
       }
 
       setPreview(nextPreview);
+      onPreviewReady?.(nextPreview);
       return 'ready';
     } catch (error) {
       toast.show({
@@ -109,7 +117,16 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
     } finally {
       setIsPreviewLoading(false);
     }
-  }, [provider, providerId, services.ai, services.model, services.provider, t, toast]);
+  }, [
+    onPreviewReady,
+    provider,
+    providerId,
+    services.ai,
+    services.model,
+    services.provider,
+    t,
+    toast,
+  ]);
 
   const applyPullPreview = useCallback(
     async (payload: ProviderModelPullApplyPayload) => {

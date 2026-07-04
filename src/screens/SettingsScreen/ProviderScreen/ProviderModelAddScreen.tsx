@@ -11,6 +11,7 @@ import {
   KeyboardAwareScrollView,
   type KeyboardAwareScrollViewRef,
 } from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackHeader } from '@/components/headers';
 import type { EndpointType } from '@/data/types/model';
@@ -115,6 +116,7 @@ function ProviderModelAddForm({
   showEndpointTypes: boolean;
 }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const advancedSettingsScrollYRef = useRef(0);
   const advancedFieldScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -292,7 +294,10 @@ function ProviderModelAddForm({
         ) : null}
       </KeyboardAwareScrollView>
 
-      <View className="border-border border-t px-4 py-3">
+      <View
+        className="border-border border-t px-4 pt-3"
+        style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+      >
         <Button
           className="h-10 min-h-0 rounded-xl"
           isDisabled={isSubmitting || !canSubmit}

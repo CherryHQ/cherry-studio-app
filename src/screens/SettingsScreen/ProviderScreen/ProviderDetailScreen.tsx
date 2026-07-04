@@ -13,7 +13,8 @@ import {
 import { ProviderApiManagementSection } from './components/ProviderApiManagementSection';
 import { ProviderModelList } from './components/ProviderModelList';
 import { useProviderDetailSettings } from './detail';
-import { ProviderModelCheckSheet, useProviderModelCheck } from './models';
+import { ProviderModelCheckSheet, useProviderModelCheck, useProviderModelPull } from './models';
+import { stashProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
 
 export default function ProviderDetailSettingsScreen() {
   const { providerId, providerName } = useLocalSearchParams<{
@@ -42,6 +43,17 @@ export default function ProviderDetailSettingsScreen() {
   } = useProviderModelCheck({
     apiKeys,
     models,
+    provider,
+    providerId: providerId ?? '',
+  });
+  const { isPreviewLoading: isModelPullLoading, loadPullPreview } = useProviderModelPull({
+    onPreviewReady: (preview) => {
+      if (!providerId) {
+        return;
+      }
+
+      stashProviderModelPullPreview(providerId, preview);
+    },
     provider,
     providerId: providerId ?? '',
   });
@@ -92,8 +104,13 @@ export default function ProviderDetailSettingsScreen() {
       pathname: '/settings/provider/[providerId]/model-add',
     });
   };
-  const openModelPullSettings = () => {
+  const openModelPullSettings = async () => {
     if (!providerId) {
+      return;
+    }
+
+    const result = await loadPullPreview();
+    if (result !== 'ready') {
       return;
     }
 
@@ -136,13 +153,13 @@ export default function ProviderDetailSettingsScreen() {
         isLoading={modelsQuery.isPending}
         isCheckDisabled={models.length === 0}
         isCheckLoading={isModelChecking}
-        isPullDisabled={!provider}
-        isPullLoading={false}
+        isPullDisabled={!provider || isModelPullLoading}
+        isPullLoading={isModelPullLoading}
         models={models}
         provider={provider}
         onAddPress={openModelAddSettings}
         onCheckPress={openCheckSheet}
-        onPullPress={openModelPullSettings}
+        onPullPress={() => void openModelPullSettings()}
       />
       <ProviderModelCheckSheet
         apiKeyOptions={checkApiKeyOptions}
