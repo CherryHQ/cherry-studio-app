@@ -1,13 +1,15 @@
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import type { ImageSource } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 import { useThemeColor } from 'heroui-native/hooks';
 import { Input } from 'heroui-native/input';
+import { SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { BackHeader } from '@/components/headers';
+import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { usePreference } from '@/data/hooks';
 import { SettingsAvatarEditBadge, SettingsAvatarImage } from './components/SettingsAvatar';
 
@@ -17,6 +19,7 @@ type AvatarSourceValue = 'camera' | 'photos';
 
 export default function ProfileSettingsScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const borderColor = useThemeColor('border');
   const inputRef = useRef<TextInput>(null);
   const [userName, setUserName] = usePreference('app.user.name');
@@ -97,16 +100,32 @@ export default function ProfileSettingsScreen() {
     inputRef.current?.blur();
     Keyboard.dismiss();
   }, []);
+  const finishEditing = useCallback(() => {
+    blurInput();
+    router.back();
+  }, [blurInput, router]);
   const handleNameChange = useCallback(
     (nextName: string) => {
       void setUserName(nextName, { optimistic: true });
     },
     [setUserName],
   );
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('common.save'),
+        androidIcon: SaveIcon,
+        icon: 'checkmark',
+        key: 'finish-profile-edit',
+        onPress: finishEditing,
+      },
+    ],
+    [finishEditing, t],
+  );
 
   return (
     <>
-      <BackHeader title={t('settings.profile.edit')} />
+      <BackHeader rightActions={rightActions} title={t('settings.profile.edit')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
