@@ -120,14 +120,18 @@ function ApiKeysCommitInput({
   );
 
   const handleChangeText = useCallback((nextValue: string) => {
-    draftValueRef.current = nextValue;
-    setDraftValue(nextValue);
+    const singleLineValue = normalizeApiKeySingleLine(nextValue);
+
+    draftValueRef.current = singleLineValue;
+    setDraftValue(singleLineValue);
   }, []);
 
   const handleEndEditing = useCallback(
     (event: TextInputEndEditingEvent) => {
-      draftValueRef.current = event.nativeEvent.text;
-      commitValue(event.nativeEvent.text);
+      const singleLineValue = normalizeApiKeySingleLine(event.nativeEvent.text);
+
+      draftValueRef.current = singleLineValue;
+      commitValue(singleLineValue);
     },
     [commitValue],
   );
@@ -141,7 +145,7 @@ function ApiKeysCommitInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base leading-5"
+      className="h-10 min-h-0 min-w-0 flex-1 rounded-xl px-3 py-0 text-base leading-5"
       multiline={false}
       numberOfLines={1}
       onBlur={handleCommitEvent}
@@ -281,13 +285,15 @@ function ApiKeyRow({
         />
       </View>
       <View className="flex-row items-center gap-2">
-        <ApiKeyInput
-          accessibilityLabel={t('settings.provider.apiService.apiKey')}
-          isDisabled={!apiKey.isEnabled || isPending}
-          value={apiKey.key}
-          onChangeText={(key) => onKeyChange(apiKey.id, key)}
-          onCommit={(key) => onCommitKey(apiKey.id, key)}
-        />
+        <View className="min-w-0 flex-1">
+          <ApiKeyInput
+            accessibilityLabel={t('settings.provider.apiService.apiKey')}
+            isDisabled={!apiKey.isEnabled || isPending}
+            value={apiKey.key}
+            onChangeText={(key) => onKeyChange(apiKey.id, key)}
+            onCommit={(key) => onCommitKey(apiKey.id, key)}
+          />
+        </View>
         <SettingsIconButton
           accessibilityLabel={t('settings.provider.apiService.copyApiKey')}
           isDisabled={isPending}
@@ -324,33 +330,45 @@ function ApiKeyInput({
   const { t } = useTranslation();
   const handleEndEditing = useCallback(
     (event: TextInputEndEditingEvent) => {
-      onCommit(event.nativeEvent.text);
+      onCommit(normalizeApiKeySingleLine(event.nativeEvent.text));
     },
     [onCommit],
   );
 
   const handleCommitEvent = useCallback(() => {
-    onCommit(value);
+    onCommit(normalizeApiKeySingleLine(value));
   }, [onCommit, value]);
+
+  const handleChangeText = useCallback(
+    (nextValue: string) => {
+      onChangeText(normalizeApiKeySingleLine(nextValue));
+    },
+    [onChangeText],
+  );
 
   return (
     <Input
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base leading-5"
+      className="h-10 min-h-0 w-full rounded-xl px-3 py-0 text-base leading-5"
       isDisabled={isDisabled}
       multiline={false}
       numberOfLines={1}
       onBlur={handleCommitEvent}
-      onChangeText={onChangeText}
+      onChangeText={handleChangeText}
       onEndEditing={handleEndEditing}
       onSubmitEditing={handleCommitEvent}
       placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
       returnKeyType="done"
+      scrollEnabled
       style={providerApiServiceStyles.input}
-      value={value}
+      value={normalizeApiKeySingleLine(value)}
       variant="secondary"
     />
   );
+}
+
+function normalizeApiKeySingleLine(value: string): string {
+  return value.replaceAll(/[\r\n]+/g, '');
 }
