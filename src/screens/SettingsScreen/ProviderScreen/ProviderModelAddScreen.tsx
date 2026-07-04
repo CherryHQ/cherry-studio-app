@@ -20,7 +20,7 @@ import {
 } from './models';
 
 const advancedSettingsScrollTopPadding = 16;
-const defaultKeyboardBottomOffset = 24;
+const defaultKeyboardBottomOffset = 0;
 const advancedSettingsKeyboardBottomOffset = 180;
 const advancedSettingsKeyboardPadding = 220;
 const selectedEndpointTypeColor = '#00b96b';
