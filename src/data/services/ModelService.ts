@@ -1,9 +1,19 @@
 import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 
 import type { DbService } from '@/data/db/DbService';
-import type { InsertUserModelRow, UserModelRow } from '@/data/db/schemas/userModel';
+import type {
+  InsertUserModelRow,
+  RegistryEnrichableField,
+  UserModelRow,
+} from '@/data/db/schemas/userModel';
 import { userModelTable } from '@/data/db/schemas/userModel';
-import { createUniqueModelId, type EndpointType, type Model } from '@/data/types/model';
+import {
+  createUniqueModelId,
+  MODEL_CAPABILITY,
+  type EndpointType,
+  type Model,
+  type ModelCapability,
+} from '@/data/types/model';
 import type { EndpointConfigs } from '@/data/types/provider';
 
 import {
@@ -77,6 +87,122 @@ function rowToModel(row: UserModelRow): Model {
     reasoning: row.reasoning ?? undefined,
     supportsStreaming: row.supportsStreaming,
   };
+}
+
+function resolveCapabilities(
+  presetCapabilities: readonly ModelCapability[] | undefined,
+  overrideCapabilities:
+    | { add?: ModelCapability[]; force?: ModelCapability[]; remove?: ModelCapability[] }
+    | undefined,
+  userCapabilities: readonly ModelCapability[],
+): ModelCapability[] {
+  if (overrideCapabilities?.force) {
+    return [...overrideCapabilities.force];
+  }
+
+  const capabilities = new Set<ModelCapability>(userCapabilities);
+  if (presetCapabilities?.includes(MODEL_CAPABILITY.IMAGE_GENERATION)) {
+    capabilities.add(MODEL_CAPABILITY.IMAGE_GENERATION);
+  }
+
+  if (overrideCapabilities?.add) {
+    for (const capability of overrideCapabilities.add) {
+      capabilities.add(capability);
+    }
+  }
+
+  if (overrideCapabilities?.remove) {
+    for (const capability of overrideCapabilities.remove) {
+      capabilities.delete(capability);
+    }
+  }
+
+  return [...capabilities];
+}
+
+function hasUserOverride(
+  userOverrides: readonly RegistryEnrichableField[] | null | undefined,
+  field: RegistryEnrichableField,
+): boolean {
+  return userOverrides?.includes(field) ?? false;
+}
+
+function lookupRegistryDataForModel(model: Model): ModelRegistryLookup {
+  const apiModelId = model.apiModelId ?? model.modelId;
+  const byApiModelId = providerRegistryService.lookupModel(model.providerId, apiModelId);
+  if (byApiModelId.presetModel || byApiModelId.registryOverride || !model.presetModelId) {
+    return byApiModelId;
+  }
+
+  return providerRegistryService.lookupModel(model.providerId, model.presetModelId);
+}
+
+function enrichModelFromRegistry(row: UserModelRow): Model {
+  const model = rowToModel(row);
+  const registryData = lookupRegistryDataForModel(model);
+  if (!registryData.presetModel) {
+    return model;
+  }
+
+  const merged = mergePresetModel(
+    registryData.presetModel,
+    registryData.registryOverride,
+    model.providerId,
+    registryData.reasoningFormatTypes,
+    registryData.defaultChatEndpoint,
+  );
+  const updates: Partial<Model> = {};
+  const userOverrides = row.userOverrides;
+
+  if (!hasUserOverride(userOverrides, 'capabilities')) {
+    const capabilities = resolveCapabilities(
+      registryData.presetModel.capabilities,
+      registryData.registryOverride?.capabilities,
+      model.capabilities,
+    );
+    const capabilitiesChanged =
+      capabilities.length !== model.capabilities.length ||
+      capabilities.some((capability, index) => capability !== model.capabilities[index]);
+    if (capabilitiesChanged) {
+      updates.capabilities = capabilities;
+    }
+  }
+
+  if (merged.contextWindow !== undefined && !hasUserOverride(userOverrides, 'contextWindow')) {
+    updates.contextWindow = merged.contextWindow;
+  }
+  if (merged.endpointTypes !== undefined && !hasUserOverride(userOverrides, 'endpointTypes')) {
+    updates.endpointTypes = merged.endpointTypes;
+  }
+  if (merged.imageGeneration) {
+    updates.imageGeneration = merged.imageGeneration;
+  }
+  if (merged.inputModalities !== undefined && !hasUserOverride(userOverrides, 'inputModalities')) {
+    updates.inputModalities = merged.inputModalities;
+  }
+  if (merged.maxInputTokens !== undefined && !hasUserOverride(userOverrides, 'maxInputTokens')) {
+    updates.maxInputTokens = merged.maxInputTokens;
+  }
+  if (merged.maxOutputTokens !== undefined && !hasUserOverride(userOverrides, 'maxOutputTokens')) {
+    updates.maxOutputTokens = merged.maxOutputTokens;
+  }
+  if (merged.outputModalities !== undefined && !hasUserOverride(userOverrides, 'outputModalities')) {
+    updates.outputModalities = merged.outputModalities;
+  }
+  if (merged.parameters !== undefined && !hasUserOverride(userOverrides, 'parameters')) {
+    updates.parameters = merged.parameters;
+  }
+  if (merged.pricing !== undefined && !hasUserOverride(userOverrides, 'pricing')) {
+    updates.pricing = merged.pricing;
+  }
+  if (merged.reasoning !== undefined && !hasUserOverride(userOverrides, 'reasoning')) {
+    updates.reasoning = merged.reasoning;
+  }
+  if (merged.replaceWith) {
+    updates.replaceWith = merged.replaceWith;
+  }
+
+  return Object.keys(updates).length > 0 ? { ...model, ...updates } : model;
 }
 
 function modelToInsert(model: Model): ModelInputWithoutOrderKey {
@@ -195,7 +321,7 @@ export class ModelService {
       .from(userModelTable)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(asc(userModelTable.providerId), asc(userModelTable.orderKey));
-    const models = rows.map(rowToModel);
+    const models = rows.map(enrichModelFromRegistry);
 
     return query.capability
       ? models.filter((model) => model.capabilities.includes(query.capability as never))
@@ -208,7 +334,7 @@ export class ModelService {
       .from(userModelTable)
       .where(eq(userModelTable.id, id))
       .limit(1);
-    return row ? rowToModel(row) : null;
+    return row ? enrichModelFromRegistry(row) : null;
   }
 
   async create(input: CreateModelInput): Promise<Model> {

@@ -1,6 +1,11 @@
 import { ENDPOINT_TYPE, MODEL_CAPABILITY, REASONING_EFFORT } from '@cherrystudio/provider-registry';
 
-import { extractReasoningFormatTypes, mergePresetModel } from '../ProviderRegistryService';
+import {
+  extractReasoningFormatTypes,
+  mergePresetModel,
+  ProviderRegistryService,
+  providerRegistryService,
+} from '../ProviderRegistryService';
 
 describe('provider-registry-service', () => {
   test('extracts typed reasoning formats from endpoint configs', () => {
@@ -36,7 +41,9 @@ describe('provider-registry-service', () => {
         endpointTypes: [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
         limits: { maxInputTokens: 64000 },
         modelId: 'gpt-4o',
+        name: 'GPT-4o Override',
         providerId: 'openai',
+        replaceWith: 'gpt-4o-mini',
       },
       'openai',
       { [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: 'openai-chat' },
@@ -48,13 +55,59 @@ describe('provider-registry-service', () => {
       id: 'openai::gpt-4o',
       maxInputTokens: 64000,
       modelId: 'gpt-4o',
-      name: 'GPT-4o',
+      name: 'GPT-4o Override',
       presetModelId: 'gpt-4o',
       providerId: 'openai',
+      replaceWith: 'openai::gpt-4o-mini',
       reasoning: {
         supportedEfforts: [REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
         type: 'openai-chat',
       },
+    });
+  });
+
+  test('synthesizes standalone provider-model rows from desktop registry data', () => {
+    const registryData = providerRegistryService.lookupModel('302ai', 'chatgpt-4o-latest');
+
+    expect(registryData.presetModel).toMatchObject({
+      id: 'chatgpt-4o-latest',
+      name: 'chatgpt-4o-latest',
+    });
+    expect(registryData.registryOverride).toMatchObject({
+      apiModelId: 'chatgpt-4o-latest',
+      providerId: '302ai',
+    });
+  });
+
+  test('returns image-generation support from override or model metadata', () => {
+    expect(providerRegistryService.getImageGenerationSupport('aihubmix', 'ernie-irag-edit')).toBeDefined();
+    expect(providerRegistryService.getImageGenerationSupport('dashscope', 'qwen-image')).toBeDefined();
+  });
+
+  test('exposes provider model-list and auth metadata', () => {
+    const service = new ProviderRegistryService({
+      findProvider: (providerId: string) =>
+        providerId === 'login-provider'
+          ? {
+              authMethods: ['external-cli'],
+              defaultChatEndpoint: null,
+              id: 'login-provider',
+              metadata: { website: { official: 'https://example.com' } },
+              modelListSource: 'registry',
+              name: 'Login Provider',
+            }
+          : null,
+      getProviderModelsVersion: () => 'provider-models-version',
+      getProvidersVersion: () => 'providers-version',
+      invalidate: () => undefined,
+      loadProviders: () => [],
+    } as never);
+
+    expect(service.getProviderDisplayMetadata('login-provider')).toEqual({
+      authMethods: ['external-cli'],
+      description: undefined,
+      modelListSource: 'registry',
+      websites: { official: 'https://example.com' },
     });
   });
 });

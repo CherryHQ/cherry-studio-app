@@ -1,14 +1,48 @@
 import type {
+  CanonicalParamKey,
   Currency,
   EndpointType,
+  ImageGenerationMode,
+  ImageGenerationSupport,
+  ImageModeDef,
   Modality,
   ModelCapability,
   ReasoningEffort,
+  SupportSpec,
 } from '@cherrystudio/provider-registry';
-import { CURRENCY, objectValues, REASONING_EFFORT } from '@cherrystudio/provider-registry';
+import {
+  CANONICAL_PARAM_KEY,
+  CURRENCY,
+  ENDPOINT_TYPE,
+  MODALITY,
+  MODEL_CAPABILITY,
+  objectValues,
+  REASONING_EFFORT,
+} from '@cherrystudio/provider-registry';
 import * as z from 'zod';
 
-export type { Currency, EndpointType, Modality, ModelCapability, ReasoningEffort };
+export {
+  CANONICAL_PARAM_KEY,
+  CURRENCY,
+  ENDPOINT_TYPE,
+  MODALITY,
+  MODEL_CAPABILITY,
+  objectValues,
+  REASONING_EFFORT,
+};
+
+export type {
+  CanonicalParamKey,
+  Currency,
+  EndpointType,
+  ImageGenerationMode,
+  ImageGenerationSupport,
+  ImageModeDef,
+  Modality,
+  ModelCapability,
+  ReasoningEffort,
+  SupportSpec,
+};
 
 export const UNIQUE_MODEL_ID_SEPARATOR = '::';
 const RESERVED_UNIQUE_MODEL_ID_ROUTE_CHARS = ['?', '#'] as const;
@@ -168,5 +202,7 @@ export type Model = {
   pricing?: RuntimeModelPricing;
   providerId: string;
   reasoning?: ReasoningConfig;
+  imageGeneration?: ImageGenerationSupport;
+  replaceWith?: UniqueModelId;
   supportsStreaming: boolean;
 };

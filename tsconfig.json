@@ -6,7 +6,7 @@
     "paths": {
       "@cherrystudio/provider-registry": ["./packages/provider-registry/src/index.ts"],
       "@cherrystudio/provider-registry/mobile": [
-        "./packages/provider-registry/src/mobileLoader.ts"
+        "./packages/provider-registry/src/mobile-loader.ts"
       ],
       "@cherrystudio/provider-registry/*": ["./packages/provider-registry/src/*"],
       "@cherrystudio/ai-core": ["./packages/ai-core/src/index.ts"],
