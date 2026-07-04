@@ -10,9 +10,9 @@ import {
   PlusIcon,
   Trash2Icon,
 } from 'lucide-uniwind/png';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TextInput, TextInputEndEditingEvent } from 'react-native';
+import type { TextInputEndEditingEvent } from 'react-native';
 import { Pressable, Text, View } from 'react-native';
 
 import type { ApiKeyEntry } from '@/data/types/provider';
@@ -277,7 +277,6 @@ function ApiKeyInput({
   value: string;
 }) {
   const { t } = useTranslation();
-  const inputRef = useRef<TextInput>(null);
   const [isEditing, setIsEditing] = useState(false);
   const handleEndEditing = useCallback(
     (_event: TextInputEndEditingEvent) => {
@@ -303,32 +302,16 @@ function ApiKeyInput({
   }, []);
   const normalizedValue = normalizeApiKeySingleLine(value);
   const previewValue = clipApiKeyPreviewValue(normalizedValue);
-  const handlePreviewPress = useCallback(() => {
-    if (isDisabled) {
-      return;
-    }
 
-    setIsEditing(true);
-  }, [isDisabled]);
-
-  useEffect(() => {
-    if (!isEditing) {
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-  }, [isEditing]);
-
-  if (!isEditing) {
-    return (
-      <Pressable
-        accessibilityLabel={accessibilityLabel}
-        accessibilityRole="button"
-        className="h-10 max-h-10 min-h-0 w-full justify-center overflow-hidden rounded-xl bg-default px-3 active:opacity-70 disabled:opacity-disabled"
-        disabled={isDisabled}
-        onPress={handlePreviewPress}
+  return (
+    <View className="h-10 w-full overflow-hidden rounded-xl bg-default">
+      <View
+        className="absolute inset-0 justify-center px-3"
+        style={
+          isEditing
+            ? providerApiServiceStyles.apiKeyPreviewHidden
+            : providerApiServiceStyles.apiKeyPreviewVisible
+        }
       >
         <Text
           className={
@@ -338,32 +321,33 @@ function ApiKeyInput({
         >
           {previewValue || t('settings.provider.apiService.apiKeyPlaceholder')}
         </Text>
-      </Pressable>
-    );
-  }
-
-  return (
-    <Input
-      ref={inputRef}
-      accessibilityLabel={accessibilityLabel}
-      autoCapitalize="none"
-      autoCorrect={false}
-      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base leading-5"
-      isDisabled={isDisabled}
-      multiline={false}
-      numberOfLines={1}
-      onBlur={handleCommitEvent}
-      onChangeText={handleChangeText}
-      onEndEditing={handleEndEditing}
-      onFocus={handleFocus}
-      onSubmitEditing={handleCommitEvent}
-      placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
-      returnKeyType="done"
-      scrollEnabled={false}
-      style={providerApiServiceStyles.input}
-      value={normalizedValue}
-      variant="secondary"
-    />
+      </View>
+      <Input
+        accessibilityLabel={accessibilityLabel}
+        autoCapitalize="none"
+        autoCorrect={false}
+        className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base leading-5"
+        isDisabled={isDisabled}
+        multiline={false}
+        numberOfLines={1}
+        onBlur={handleCommitEvent}
+        onChangeText={handleChangeText}
+        onEndEditing={handleEndEditing}
+        onFocus={handleFocus}
+        onSubmitEditing={handleCommitEvent}
+        placeholder={isEditing ? t('settings.provider.apiService.apiKeyPlaceholder') : ''}
+        returnKeyType="done"
+        scrollEnabled={false}
+        style={[
+          providerApiServiceStyles.input,
+          isEditing
+            ? providerApiServiceStyles.apiKeyEditingInput
+            : providerApiServiceStyles.apiKeyPreviewInput,
+        ]}
+        value={normalizedValue}
+        variant="secondary"
+      />
+    </View>
   );
 }
 
