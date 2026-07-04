@@ -1,5 +1,7 @@
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useToast } from 'heroui-native/toast';
+import { BrainIcon, type PngIconProps } from 'lucide-uniwind/png';
+import type { ComponentType } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, Pressable, Text, View } from 'react-native';
@@ -34,6 +36,7 @@ import {
   chatInputMotionConfig,
   chatInputSpringConfig,
 } from '@/screens/ChatScreen/input/utils/chatInputMotion';
+import { getChatInputReasoningEffortOption } from '@/screens/ChatScreen/input/utils/chatInputReasoning';
 
 const inputBottomToolbarStyle = {
   minHeight: chatInputBottomToolbarHeight,
@@ -46,6 +49,7 @@ type ChatInputSurfaceProps = {
   isStreaming: boolean;
   modelLabel?: string;
   onModelPickerPress: () => void;
+  onReasoningPress: () => void;
   onSendPress: (payload: ChatInputSendPayload) => Promise<void>;
   onStopPress: () => void;
 };
@@ -60,6 +64,7 @@ export function ChatInputSurface({
   isStreaming,
   modelLabel,
   onModelPickerPress,
+  onReasoningPress,
   onSendPress,
   onStopPress,
 }: ChatInputSurfaceProps) {
@@ -67,7 +72,6 @@ export function ChatInputSurface({
   const { toast } = useToast();
   const {
     clearAttachments,
-    clearReasoningEffort,
     clearSelectedTool,
     removeAttachment,
     setAttachments,
@@ -75,14 +79,12 @@ export function ChatInputSurface({
     setInputFocused,
   } = useChatInputActions();
   const { inputRef } = useChatInputMeta();
-  const {
-    attachments,
-    draft,
-    isComposerExpanded,
-    isInputFocused,
-    selectedTool,
-    shouldShowReasoningEffortTag,
-  } = useChatInputState();
+  const { attachments, draft, isComposerExpanded, isInputFocused, reasoningEffort, selectedTool } =
+    useChatInputState();
+  const reasoningOption = getChatInputReasoningEffortOption(reasoningEffort);
+  const reasoningLabel = reasoningOption
+    ? `${t('chat.reasoning.title')} ${t(reasoningOption.labelKey)}`
+    : t('chat.reasoning.title');
   const expandProgress = useSharedValue(0);
   const contentHeight = useSharedValue(0);
   const availableWidth = useSharedValue(0);
@@ -132,15 +134,21 @@ export function ChatInputSurface({
       logger.warn('Failed to preview attachment', error instanceof Error ? error : null);
     });
   }, []);
-  const handleModelPickerPress = useCallback(() => {
+  const dismissInput = useCallback(() => {
     if (isInputFocused) {
       void KeyboardController.dismiss();
       inputRef.current?.blur();
       setInputFocused(false);
     }
-
+  }, [inputRef, isInputFocused, setInputFocused]);
+  const handleModelPickerPress = useCallback(() => {
+    dismissInput();
     onModelPickerPress();
-  }, [inputRef, isInputFocused, onModelPickerPress, setInputFocused]);
+  }, [dismissInput, onModelPickerPress]);
+  const handleReasoningPress = useCallback(() => {
+    dismissInput();
+    onReasoningPress();
+  }, [dismissInput, onReasoningPress]);
   const handleSendPress = useCallback(
     async (text: string) => {
       const draftSnapshot = draft;
@@ -189,12 +197,7 @@ export function ChatInputSurface({
               style={{ width: contentWidth ?? '100%' }}
               onLayout={handleContentLayout}
             >
-              <ChatInputToolbar
-                shouldShowReasoningEffortTag={shouldShowReasoningEffortTag}
-                selectedTool={selectedTool}
-                onReasoningEffortClear={clearReasoningEffort}
-                onToolClear={clearSelectedTool}
-              />
+              <ChatInputToolbar selectedTool={selectedTool} onToolClear={clearSelectedTool} />
               <ChatInputAttachmentPreviewStrip
                 attachments={attachments}
                 onAttachmentPreview={handleAttachmentPreview}
@@ -211,8 +214,15 @@ export function ChatInputSurface({
                 <ChatInputAddButton />
                 <ChatInputPill
                   label={modelLabel ?? t('chat.model.select')}
-                  maxWidthClassName="max-w-[48%]"
+                  maxWidthClassName="max-w-[42%]"
                   onPress={handleModelPickerPress}
+                />
+                <ChatInputPill
+                  accessibilityLabel={t('chat.reasoning.title')}
+                  icon={BrainIcon}
+                  label={reasoningLabel}
+                  maxWidthClassName="max-w-[40%]"
+                  onPress={handleReasoningPress}
                 />
               </View>
             </View>
@@ -230,21 +240,26 @@ export function ChatInputSurface({
 }
 
 function ChatInputPill({
+  accessibilityLabel,
+  icon: Icon,
   label,
   maxWidthClassName,
   onPress,
 }: {
+  accessibilityLabel?: string;
+  icon?: ComponentType<PngIconProps>;
   label: string;
   maxWidthClassName: string;
   onPress: () => void;
 }) {
   return (
     <Pressable
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityRole="button"
-      className={`h-8 justify-center rounded-full bg-surface-secondary px-3 active:bg-surface-tertiary active:opacity-70 ${maxWidthClassName}`}
+      className={`h-8 min-w-0 flex-row items-center justify-center gap-1.5 rounded-full bg-surface-secondary px-3 active:bg-surface-tertiary active:opacity-70 ${maxWidthClassName}`}
       onPress={onPress}
     >
+      {Icon ? <Icon className="size-4 shrink-0 text-foreground" strokeWidth={2} /> : null}
       <Text className="font-semibold text-foreground text-sm" numberOfLines={1}>
         {label}
       </Text>

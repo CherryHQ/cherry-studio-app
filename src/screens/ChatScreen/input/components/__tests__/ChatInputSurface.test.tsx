@@ -154,6 +154,7 @@ describe('ChatInputSurface', () => {
             isStreaming={false}
             modelLabel="Model"
             onModelPickerPress={jest.fn()}
+            onReasoningPress={jest.fn()}
             onSendPress={onSendPress}
             onStopPress={jest.fn()}
           />
@@ -198,6 +199,7 @@ describe('ChatInputSurface', () => {
             isStreaming={false}
             modelLabel="Model"
             onModelPickerPress={jest.fn()}
+            onReasoningPress={jest.fn()}
             onSendPress={onSendPress}
             onStopPress={jest.fn()}
           />
@@ -227,6 +229,41 @@ describe('ChatInputSurface', () => {
         accessibilityLabel: 'chat.input.action.stopGenerating',
       }),
     ).toHaveLength(0);
+  });
+
+  test('opens reasoning controls from the bottom toolbar', async () => {
+    const onReasoningPress = jest.fn();
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onReasoningPress={onReasoningPress}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    const reasoningButton = renderer.root.findByProps({
+      accessibilityLabel: 'chat.reasoning.title',
+    });
+
+    await act(async () => {
+      reasoningButton.props.onPress();
+    });
+
+    expect(onReasoningPress).toHaveBeenCalledTimes(1);
   });
 });
 

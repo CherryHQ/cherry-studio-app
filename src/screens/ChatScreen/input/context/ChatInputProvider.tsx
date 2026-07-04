@@ -37,7 +37,6 @@ type ChatInputStateContextValue = {
   reasoningEffort: ChatInputReasoningEffort;
   selectedTool?: ChatInputAction;
   selectedToolId: ChatInputActionId | null;
-  shouldShowReasoningEffortTag: boolean;
 };
 
 type ChatInputActionsContextValue = {
@@ -82,7 +81,7 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
   }, []);
   const media = useChatInputPhotoPicker(isActionSheetOpen, addAttachments);
   const selectedTool = useMemo(() => getChatInputAction(selectedToolId), [selectedToolId]);
-  const shouldShowReasoningEffortTag = shouldShowChatInputReasoningEffortTag(
+  const shouldExpandForReasoningEffort = shouldShowChatInputReasoningEffortTag(
     isReasoningEffortSelected,
     reasoningEffort,
   );
@@ -92,7 +91,7 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
     draft.trim() !== '' ||
     attachments.length > 0 ||
     Boolean(selectedTool) ||
-    shouldShowReasoningEffortTag;
+    shouldExpandForReasoningEffort;
 
   const openActionSheet = useCallback(() => {
     // Don't blur/dismiss the keyboard: let iOS keep the input as first responder
@@ -141,7 +140,6 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
       reasoningEffort,
       selectedTool,
       selectedToolId,
-      shouldShowReasoningEffortTag,
     }),
     [
       attachments,
@@ -153,7 +151,6 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
       reasoningEffort,
       selectedTool,
       selectedToolId,
-      shouldShowReasoningEffortTag,
     ],
   );
 

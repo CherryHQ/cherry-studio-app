@@ -1,30 +1,22 @@
-import { type Ref, useCallback, useMemo, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   getNextModelSelection,
   ModelPickerBottomSheet,
   type ModelPickerBottomSheetHandle,
   type ModelPickerModelItem,
-  type ModelPickerReasoningConfig,
   useModelSettingSelections,
   usePrefetchModelPickerData,
 } from '@/components/modelPicker';
 import { isUniqueModelId } from '@/data/types/model';
 import { useModelById, useTopic } from '@/hooks/chat';
 import { ChatInputActionSheet } from '@/screens/ChatScreen/input/components/ChatInputActionSheet';
+import { ChatInputReasoningSheet } from '@/screens/ChatScreen/input/components/ChatInputReasoningSheet';
 import {
   type ChatInputSendPayload,
   ChatInputSurface,
 } from '@/screens/ChatScreen/input/components/ChatInputSurface';
-import {
-  ChatInputProvider,
-  useChatInputActions,
-  useChatInputState,
-} from '@/screens/ChatScreen/input/context/ChatInputProvider';
+import { ChatInputProvider } from '@/screens/ChatScreen/input/context/ChatInputProvider';
 import { createChatInputMessageParts } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
-import {
-  type ChatInputReasoningEffort,
-  chatInputReasoningEffortOptions,
-} from '@/screens/ChatScreen/input/utils/chatInputReasoning';
 import { useChatRuntimeTopic } from '@/screens/ChatScreen/runtime';
 
 type ChatInputProps = {
@@ -35,6 +27,7 @@ export function ChatInput({ topicId }: ChatInputProps) {
   const modelSettings = useModelSettingSelections();
   usePrefetchModelPickerData();
   const modelPickerRef = useRef<ModelPickerBottomSheetHandle>(null);
+  const [isReasoningSheetOpen, setIsReasoningSheetOpen] = useState(false);
   const selectedModelId = isUniqueModelId(modelSettings.selections.default)
     ? modelSettings.selections.default
     : null;
@@ -46,6 +39,12 @@ export function ChatInput({ topicId }: ChatInputProps) {
 
   const openModelPicker = useCallback(() => {
     modelPickerRef.current?.present();
+  }, []);
+  const openReasoningSheet = useCallback(() => {
+    setIsReasoningSheetOpen(true);
+  }, []);
+  const closeReasoningSheet = useCallback(() => {
+    setIsReasoningSheetOpen(false);
   }, []);
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
@@ -76,47 +75,17 @@ export function ChatInput({ topicId }: ChatInputProps) {
         isStreaming={chatRuntime.isBusy}
         modelLabel={selectedModelLabel}
         onModelPickerPress={openModelPicker}
+        onReasoningPress={openReasoningSheet}
         onSendPress={handleSendPress}
         onStopPress={chatRuntime.abort}
       />
       <ChatInputActionSheet />
-      <ChatInputModelPicker
+      <ChatInputReasoningSheet isOpen={isReasoningSheetOpen} onClose={closeReasoningSheet} />
+      <ModelPickerBottomSheet
         onSelect={handleModelSelect}
-        pickerRef={modelPickerRef}
+        ref={modelPickerRef}
         selectedModelId={selectedModelId}
       />
     </ChatInputProvider>
-  );
-}
-
-// Bridges the chat-input reasoning state (only available inside ChatInputProvider)
-// into the otherwise-generic model picker as injected props.
-function ChatInputModelPicker({
-  onSelect,
-  pickerRef,
-  selectedModelId,
-}: {
-  onSelect: (item: ModelPickerModelItem) => void;
-  pickerRef: Ref<ModelPickerBottomSheetHandle>;
-  selectedModelId: string | null;
-}) {
-  const { reasoningEffort } = useChatInputState();
-  const { selectReasoningEffort } = useChatInputActions();
-  const reasoning = useMemo<ModelPickerReasoningConfig>(
-    () => ({
-      onChange: (value) => selectReasoningEffort(value as ChatInputReasoningEffort),
-      options: chatInputReasoningEffortOptions,
-      value: reasoningEffort,
-    }),
-    [reasoningEffort, selectReasoningEffort],
-  );
-
-  return (
-    <ModelPickerBottomSheet
-      onSelect={onSelect}
-      reasoning={reasoning}
-      ref={pickerRef}
-      selectedModelId={selectedModelId}
-    />
   );
 }
