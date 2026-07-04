@@ -5,6 +5,7 @@ import { CompactPart } from './CompactPart';
 import { ErrorPart } from './ErrorPart';
 import { FilePart } from './FilePart';
 import type { MessagePartRenderMode } from './MessageParts';
+import { isMetaToolSearchPart, MetaToolSearchPart } from './MetaToolSearchPart';
 import { ReasoningPart } from './ReasoningPart';
 import { SourceDocumentPart } from './SourceDocumentPart';
 import { SourceUrlPart } from './SourceUrlPart';
@@ -35,6 +36,10 @@ export function MessagePart({ part, renderMode = 'markdown' }: MessagePartProps)
 
     if (isWebSearchToolPart(part)) {
       return <WebSearchToolPart part={part} />;
+    }
+
+    if (isMetaToolSearchPart(part)) {
+      return <MetaToolSearchPart part={part} />;
     }
 
     return <ToolPart part={part} />;
