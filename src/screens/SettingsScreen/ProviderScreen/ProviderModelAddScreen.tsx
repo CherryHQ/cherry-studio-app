@@ -189,6 +189,7 @@ function ProviderModelAddForm({
         disableScrollOnKeyboardHide
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
+        mode="layout"
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
       >
