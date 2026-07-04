@@ -1,5 +1,6 @@
 import type { DbService } from '@/data/db/DbService';
 import { userModelTable } from '@/data/db/schemas/userModel';
+import { REASONING_EFFORT } from '@/data/types/model';
 import { ModelService } from '../ModelService';
 import { providerRegistryService } from '../ProviderRegistryService';
 
@@ -21,6 +22,59 @@ jest.mock('../utils/orderKey', () => ({
 }));
 
 describe('ModelService', () => {
+  test('enriches getById results with current registry reasoning metadata', async () => {
+    const row = {
+      capabilities: [],
+      contextWindow: null,
+      customEndpointUrl: null,
+      description: null,
+      endpointTypes: null,
+      group: null,
+      id: 'openai::gpt-5',
+      inputModalities: null,
+      isDeprecated: false,
+      isEnabled: true,
+      isHidden: false,
+      maxInputTokens: null,
+      maxOutputTokens: null,
+      modelId: 'gpt-5',
+      name: 'GPT-5',
+      outputModalities: null,
+      ownedBy: null,
+      parameters: null,
+      presetModelId: 'gpt-5',
+      pricing: null,
+      providerId: 'openai',
+      reasoning: null,
+      supportsStreaming: true,
+      userOverrides: null,
+    };
+    const db = {
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            limit: jest.fn(async () => [row]),
+          })),
+        })),
+      })),
+    };
+    const dbService = {
+      getDb: () => db,
+    } as unknown as DbService;
+    const service = new ModelService(dbService);
+
+    await expect(service.getById('openai::gpt-5')).resolves.toMatchObject({
+      reasoning: {
+        supportedEfforts: [
+          REASONING_EFFORT.MINIMAL,
+          REASONING_EFFORT.LOW,
+          REASONING_EFFORT.MEDIUM,
+          REASONING_EFFORT.HIGH,
+        ],
+      },
+    });
+  });
+
   test('reconciles provider models in one write transaction', async () => {
     const deletedWhereClauses: unknown[] = [];
     const tx = {
