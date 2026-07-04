@@ -59,7 +59,7 @@ export default function ProviderModelAddScreen() {
         accessibilityLabel: t('common.save'),
         androidIcon: SaveIcon,
         disabled: isSubmitting || !canSubmit,
-        icon: 'square.and.arrow.down',
+        icon: 'checkmark',
         key: 'save-model',
         onPress: () => void handleSubmit(),
       },
