@@ -10,7 +10,6 @@ import { isMetaToolPart, MetaToolPart } from './MetaToolPart';
 import { ReasoningPart } from './ReasoningPart';
 import { SourceDocumentPart } from './SourceDocumentPart';
 import { SourceUrlPart } from './SourceUrlPart';
-import { StepStartPart } from './StepStartPart';
 import { TextPart } from './TextPart';
 import { ToolPart } from './ToolPart';
 import { TranslationPart } from './TranslationPart';
@@ -72,7 +71,7 @@ export function MessagePart({ part, renderMode = 'markdown' }: MessagePartProps)
     case 'source-url':
       return <SourceUrlPart part={part} />;
     case 'step-start':
-      return <StepStartPart />;
+      return null;
     default:
       return <UnknownPart type={partType} />;
   }

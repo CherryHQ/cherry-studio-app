@@ -356,7 +356,6 @@ function createShowcaseDataParts(): CherryMessagePart[] {
 
 function createShowcaseToolParts(): CherryMessagePart[] {
   return [
-    { type: 'step-start' },
     {
       state: 'done',
       text: '工具组件 Showcase：Web Search、Meta Tool、MCP Tool、Generic Tool。',

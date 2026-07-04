@@ -3,13 +3,12 @@ import {
   FileIcon,
   FileTextIcon,
   SquareArrowOutUpRightIcon,
-  StepForwardIcon,
   VideoIcon,
   WrenchIcon,
 } from 'lucide-uniwind/png';
 import { Pressable, Text, View } from 'react-native';
 
-export type PartPlaceholderIcon = 'data' | 'document' | 'file' | 'link' | 'step' | 'tool' | 'video';
+export type PartPlaceholderIcon = 'data' | 'document' | 'file' | 'link' | 'tool' | 'video';
 
 type PartPlaceholderProps = {
   description?: string;
@@ -33,8 +32,6 @@ export function PartPlaceholder({ description, icon, label, onPress }: PartPlace
       <FileIcon className={iconClassName} strokeWidth={2} />
     ) : icon === 'link' ? (
       <SquareArrowOutUpRightIcon className={iconClassName} strokeWidth={2} />
-    ) : icon === 'step' ? (
-      <StepForwardIcon className={iconClassName} strokeWidth={2} />
     ) : icon === 'tool' ? (
       <WrenchIcon className={iconClassName} strokeWidth={2} />
     ) : (
