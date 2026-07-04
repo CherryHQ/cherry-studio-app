@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 import {
   getNextModelSelection,
   ModelPickerBottomSheet,
@@ -10,7 +10,6 @@ import {
 import { isUniqueModelId } from '@/data/types/model';
 import { useModelById, useTopic } from '@/hooks/chat';
 import { ChatInputActionSheet } from '@/screens/ChatScreen/input/components/ChatInputActionSheet';
-import { ChatInputReasoningSheet } from '@/screens/ChatScreen/input/components/ChatInputReasoningSheet';
 import {
   type ChatInputSendPayload,
   ChatInputSurface,
@@ -27,7 +26,6 @@ export function ChatInput({ topicId }: ChatInputProps) {
   const modelSettings = useModelSettingSelections();
   usePrefetchModelPickerData();
   const modelPickerRef = useRef<ModelPickerBottomSheetHandle>(null);
-  const [isReasoningSheetOpen, setIsReasoningSheetOpen] = useState(false);
   const selectedModelId = isUniqueModelId(modelSettings.selections.default)
     ? modelSettings.selections.default
     : null;
@@ -39,12 +37,6 @@ export function ChatInput({ topicId }: ChatInputProps) {
 
   const openModelPicker = useCallback(() => {
     modelPickerRef.current?.present();
-  }, []);
-  const openReasoningSheet = useCallback(() => {
-    setIsReasoningSheetOpen(true);
-  }, []);
-  const closeReasoningSheet = useCallback(() => {
-    setIsReasoningSheetOpen(false);
   }, []);
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
@@ -75,12 +67,10 @@ export function ChatInput({ topicId }: ChatInputProps) {
         isStreaming={chatRuntime.isBusy}
         modelLabel={selectedModelLabel}
         onModelPickerPress={openModelPicker}
-        onReasoningPress={openReasoningSheet}
         onSendPress={handleSendPress}
         onStopPress={chatRuntime.abort}
       />
       <ChatInputActionSheet />
-      <ChatInputReasoningSheet isOpen={isReasoningSheetOpen} onClose={closeReasoningSheet} />
       <ModelPickerBottomSheet
         onSelect={handleModelSelect}
         ref={modelPickerRef}

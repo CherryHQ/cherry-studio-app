@@ -1,16 +1,18 @@
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useToast } from 'heroui-native/toast';
-import { BrainIcon, type PngIconProps } from 'lucide-uniwind/png';
-import type { ComponentType } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, Pressable, Text, View } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
 import Animated, {
+  cancelAnimation,
   Extrapolation,
   interpolate,
+  runOnJS,
+  type SharedValue,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -36,11 +38,31 @@ import {
   chatInputMotionConfig,
   chatInputSpringConfig,
 } from '@/screens/ChatScreen/input/utils/chatInputMotion';
-import { getChatInputReasoningEffortOption } from '@/screens/ChatScreen/input/utils/chatInputReasoning';
+import {
+  chatInputReasoningEffortOptions,
+  getChatInputReasoningEffortBarCount,
+  getChatInputReasoningEffortOption,
+  getNextChatInputReasoningEffort,
+  isChatInputReasoningEffortOff,
+} from '@/screens/ChatScreen/input/utils/chatInputReasoning';
 
 const inputBottomToolbarStyle = {
   minHeight: chatInputBottomToolbarHeight,
 };
+
+const reasoningMeterBarHeights = [6, 9, 12, 15, 18] as const;
+const reasoningIconButtonWidth = 32;
+const reasoningMeterBarStaggerMs = 20;
+const reasoningMeterWidth = 28;
+const reasoningPillContentGap = 6;
+const reasoningPillHorizontalPadding = 12;
+const reasoningPillBaseWidth =
+  reasoningPillHorizontalPadding * 2 + reasoningMeterWidth + reasoningPillContentGap;
+const reasoningSlotTextFallbackCharWidth = 14;
+const reasoningSlotTextMinWidth = 8;
+const reasoningSlotTextTravelDistance = 20;
+
+type SlotTextWidthMap = Record<string, number>;
 
 const logger = loggerService.withContext('ChatInputSurface');
 
@@ -49,7 +71,6 @@ type ChatInputSurfaceProps = {
   isStreaming: boolean;
   modelLabel?: string;
   onModelPickerPress: () => void;
-  onReasoningPress: () => void;
   onSendPress: (payload: ChatInputSendPayload) => Promise<void>;
   onStopPress: () => void;
 };
@@ -64,7 +85,6 @@ export function ChatInputSurface({
   isStreaming,
   modelLabel,
   onModelPickerPress,
-  onReasoningPress,
   onSendPress,
   onStopPress,
 }: ChatInputSurfaceProps) {
@@ -74,6 +94,7 @@ export function ChatInputSurface({
     clearAttachments,
     clearSelectedTool,
     removeAttachment,
+    selectReasoningEffort,
     setAttachments,
     setDraft,
     setInputFocused,
@@ -81,10 +102,17 @@ export function ChatInputSurface({
   const { inputRef } = useChatInputMeta();
   const { attachments, draft, isComposerExpanded, isInputFocused, reasoningEffort, selectedTool } =
     useChatInputState();
+  const reasoningBarCount = getChatInputReasoningEffortBarCount(reasoningEffort);
+  const isReasoningOff = isChatInputReasoningEffortOff(reasoningEffort);
   const reasoningOption = getChatInputReasoningEffortOption(reasoningEffort);
-  const reasoningLabel = reasoningOption
-    ? `${t('chat.reasoning.title')} ${t(reasoningOption.labelKey)}`
-    : t('chat.reasoning.title');
+  const reasoningLabel = reasoningOption ? t(reasoningOption.labelKey) : t('chat.reasoning.title');
+  const reasoningLabels = useMemo(
+    () =>
+      chatInputReasoningEffortOptions
+        .filter((option) => !isChatInputReasoningEffortOff(option.value))
+        .map((option) => t(option.labelKey)),
+    [t],
+  );
   const expandProgress = useSharedValue(0);
   const contentHeight = useSharedValue(0);
   const availableWidth = useSharedValue(0);
@@ -146,9 +174,8 @@ export function ChatInputSurface({
     onModelPickerPress();
   }, [dismissInput, onModelPickerPress]);
   const handleReasoningPress = useCallback(() => {
-    dismissInput();
-    onReasoningPress();
-  }, [dismissInput, onReasoningPress]);
+    selectReasoningEffort(getNextChatInputReasoningEffort(reasoningEffort));
+  }, [reasoningEffort, selectReasoningEffort]);
   const handleSendPress = useCallback(
     async (text: string) => {
       const draftSnapshot = draft;
@@ -217,11 +244,12 @@ export function ChatInputSurface({
                   maxWidthClassName="max-w-[42%]"
                   onPress={handleModelPickerPress}
                 />
-                <ChatInputPill
+                <ChatInputReasoningPill
                   accessibilityLabel={t('chat.reasoning.title')}
-                  icon={BrainIcon}
+                  activeBarCount={reasoningBarCount}
+                  isOff={isReasoningOff}
                   label={reasoningLabel}
-                  maxWidthClassName="max-w-[40%]"
+                  labels={reasoningLabels}
                   onPress={handleReasoningPress}
                 />
               </View>
@@ -241,13 +269,11 @@ export function ChatInputSurface({
 
 function ChatInputPill({
   accessibilityLabel,
-  icon: Icon,
   label,
   maxWidthClassName,
   onPress,
 }: {
   accessibilityLabel?: string;
-  icon?: ComponentType<PngIconProps>;
   label: string;
   maxWidthClassName: string;
   onPress: () => void;
@@ -259,10 +285,243 @@ function ChatInputPill({
       className={`h-8 min-w-0 flex-row items-center justify-center gap-1.5 rounded-full bg-surface-secondary px-3 active:bg-surface-tertiary active:opacity-70 ${maxWidthClassName}`}
       onPress={onPress}
     >
-      {Icon ? <Icon className="size-4 shrink-0 text-foreground" strokeWidth={2} /> : null}
       <Text className="font-semibold text-foreground text-sm" numberOfLines={1}>
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+function ChatInputReasoningPill({
+  accessibilityLabel,
+  activeBarCount,
+  isOff,
+  label,
+  labels,
+  onPress,
+}: {
+  accessibilityLabel: string;
+  activeBarCount: number;
+  isOff: boolean;
+  label: string;
+  labels: readonly string[];
+  onPress: () => void;
+}) {
+  const [measuredTextWidths, setMeasuredTextWidths] = useState<SlotTextWidthMap>({});
+  const resolvedSlotTextWidth = isOff ? 0 : getResolvedSlotTextWidth(label, measuredTextWidths);
+  const pillWidth = useSharedValue(getReasoningPillWidth(isOff, resolvedSlotTextWidth));
+  const slotWidth = useSharedValue(resolvedSlotTextWidth);
+  const pillWidthStyle = useAnimatedStyle(() => ({
+    width: pillWidth.value,
+  }));
+  const handleMeasureLabelLayout = useCallback((measuredLabel: string, width: number) => {
+    setMeasuredTextWidths((current) =>
+      current[measuredLabel] === width ? current : { ...current, [measuredLabel]: width },
+    );
+  }, []);
+
+  useEffect(() => {
+    const targetPillWidth = getReasoningPillWidth(isOff, resolvedSlotTextWidth);
+
+    cancelAnimation(pillWidth);
+    cancelAnimation(slotWidth);
+    pillWidth.value = withTiming(targetPillWidth, chatInputMotionConfig);
+    slotWidth.value = withTiming(resolvedSlotTextWidth, chatInputMotionConfig);
+  }, [isOff, pillWidth, resolvedSlotTextWidth, slotWidth]);
+
+  return (
+    <Animated.View
+      className={`h-8 shrink-0 overflow-hidden rounded-full ${isOff ? '' : 'bg-surface-secondary'}`}
+      style={pillWidthStyle}
+      testID="chat-input-reasoning-pill"
+    >
+      <Pressable
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
+        className={`h-8 flex-1 flex-row items-center justify-center gap-1.5 ${
+          isOff ? 'px-0 active:opacity-70' : 'px-3 active:bg-surface-tertiary active:opacity-70'
+        }`}
+        onPress={onPress}
+      >
+        <ChatInputReasoningMeter activeBarCount={activeBarCount} />
+        {isOff ? null : (
+          <ChatInputSlotText
+            label={label}
+            labels={labels}
+            onLabelLayout={handleMeasureLabelLayout}
+            slotWidth={slotWidth}
+          />
+        )}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+function getReasoningPillWidth(isOff: boolean, slotTextWidth: number) {
+  return isOff ? reasoningIconButtonWidth : reasoningPillBaseWidth + slotTextWidth;
+}
+
+function getFallbackSlotTextWidth(label: string) {
+  const hasNonAscii = Array.from(label).some((character) => character.charCodeAt(0) > 255);
+  const fallbackCharWidth = hasNonAscii ? reasoningSlotTextFallbackCharWidth : 7.5;
+
+  return Math.max(label.length * fallbackCharWidth, reasoningSlotTextMinWidth);
+}
+
+function getResolvedSlotTextWidth(label: string, measuredTextWidths: SlotTextWidthMap) {
+  return Math.max(measuredTextWidths[label] ?? 0, getFallbackSlotTextWidth(label));
+}
+
+function ChatInputSlotText({
+  label,
+  labels,
+  onLabelLayout,
+  slotWidth,
+}: {
+  label: string;
+  labels: readonly string[];
+  onLabelLayout: (label: string, width: number) => void;
+  slotWidth: SharedValue<number>;
+}) {
+  const [currentLabel, setCurrentLabel] = useState(label);
+  const [previousLabel, setPreviousLabel] = useState<string | null>(null);
+  const slotProgress = useSharedValue(1);
+  const labelsToMeasure = useMemo(() => Array.from(new Set([label, ...labels])), [label, labels]);
+
+  useEffect(() => {
+    if (label === currentLabel) {
+      return;
+    }
+
+    cancelAnimation(slotProgress);
+    setPreviousLabel(currentLabel);
+    setCurrentLabel(label);
+    slotProgress.value = 0;
+    slotProgress.value = withTiming(1, chatInputMotionConfig, (isFinished) => {
+      if (isFinished) {
+        runOnJS(setPreviousLabel)(null);
+      }
+    });
+  }, [currentLabel, label, slotProgress]);
+
+  const previousTextStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(slotProgress.value, [0, 1], [1, 0], Extrapolation.CLAMP),
+    transform: [
+      {
+        translateY: interpolate(
+          slotProgress.value,
+          [0, 1],
+          [0, -reasoningSlotTextTravelDistance],
+          Extrapolation.CLAMP,
+        ),
+      },
+    ],
+  }));
+  const currentTextStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(slotProgress.value, [0, 1], [0, 1], Extrapolation.CLAMP),
+    transform: [
+      {
+        translateY: interpolate(
+          slotProgress.value,
+          [0, 1],
+          [reasoningSlotTextTravelDistance, 0],
+          Extrapolation.CLAMP,
+        ),
+      },
+    ],
+  }));
+  const slotWidthStyle = useAnimatedStyle(() => ({
+    width: slotWidth.value,
+  }));
+
+  return (
+    <View className="relative h-5 shrink-0">
+      <View
+        accessibilityElementsHidden
+        className="absolute top-0 left-0 opacity-0"
+        importantForAccessibility="no-hide-descendants"
+        pointerEvents="none"
+      >
+        {labelsToMeasure.map((labelToMeasure) => (
+          <Text
+            className="self-start font-semibold text-sm leading-5"
+            key={labelToMeasure}
+            numberOfLines={1}
+            onLayout={(event) => onLabelLayout(labelToMeasure, event.nativeEvent.layout.width)}
+          >
+            {labelToMeasure}
+          </Text>
+        ))}
+      </View>
+      <Animated.View className="h-5 overflow-hidden" style={slotWidthStyle}>
+        {previousLabel ? (
+          <Animated.Text
+            className="absolute inset-x-0 top-0 text-center font-semibold text-foreground text-sm leading-5"
+            numberOfLines={1}
+            style={previousTextStyle}
+            testID="chat-input-reasoning-slot-previous-label"
+          >
+            {previousLabel}
+          </Animated.Text>
+        ) : null}
+        <Animated.Text
+          className="absolute inset-x-0 top-0 text-center font-semibold text-foreground text-sm leading-5"
+          numberOfLines={1}
+          style={currentTextStyle}
+          testID="chat-input-reasoning-slot-label"
+        >
+          {currentLabel}
+        </Animated.Text>
+      </Animated.View>
+    </View>
+  );
+}
+
+function ChatInputReasoningMeter({ activeBarCount }: { activeBarCount: number }) {
+  return (
+    <View className="h-5 shrink-0 flex-row items-end justify-center gap-0.5" style={{ width: 28 }}>
+      {reasoningMeterBarHeights.map((height, index) => (
+        <ChatInputReasoningMeterBar
+          height={height}
+          index={index}
+          isActive={index < activeBarCount}
+          key={height}
+        />
+      ))}
+    </View>
+  );
+}
+
+function ChatInputReasoningMeterBar({
+  height,
+  index,
+  isActive,
+}: {
+  height: number;
+  index: number;
+  isActive: boolean;
+}) {
+  const activeProgress = useSharedValue(isActive ? 1 : 0);
+
+  useEffect(() => {
+    cancelAnimation(activeProgress);
+    const delayMs = isActive
+      ? index * reasoningMeterBarStaggerMs
+      : (reasoningMeterBarHeights.length - index - 1) * reasoningMeterBarStaggerMs;
+
+    activeProgress.value = withDelay(delayMs, withTiming(isActive ? 1 : 0, chatInputMotionConfig));
+  }, [activeProgress, index, isActive]);
+
+  const activeBarStyle = useAnimatedStyle(() => ({
+    opacity: activeProgress.value,
+  }));
+
+  return (
+    <View
+      className="relative w-0.5 overflow-hidden rounded-full bg-default-foreground/30"
+      style={{ height }}
+    >
+      <Animated.View className="absolute inset-0 rounded-full bg-accent" style={activeBarStyle} />
+    </View>
   );
 }

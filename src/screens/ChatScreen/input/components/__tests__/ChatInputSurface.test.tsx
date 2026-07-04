@@ -41,7 +41,7 @@ jest.mock('react-native-keyboard-controller', () => ({
 }));
 
 jest.mock('react-native-reanimated', () => {
-  const { View } = jest.requireActual('react-native');
+  const { Text, View } = jest.requireActual('react-native');
   type MockTransition = {
     duration: jest.Mock<MockTransition, [number]>;
     easing: jest.Mock<MockTransition, [unknown]>;
@@ -55,8 +55,10 @@ jest.mock('react-native-reanimated', () => {
   return {
     __esModule: true,
     default: {
+      Text,
       View,
     },
+    cancelAnimation: jest.fn(),
     Easing: {
       cubic: jest.fn(),
       in: jest.fn((value) => value),
@@ -76,10 +78,19 @@ jest.mock('react-native-reanimated', () => {
     // Static stand-ins: the surface only needs these to resolve to plain
     // values/styles for render; this suite asserts behavior, not animation.
     interpolate: (_value: number, _inputRange: number[], outputRange: number[]) => outputRange[0],
+    runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
     useAnimatedStyle: (factory: () => unknown) => factory(),
     useSharedValue: (initialValue: unknown) => ({ value: initialValue }),
+    withDelay: (_delayMs: number, animation: unknown) => animation,
     withSpring: (toValue: unknown) => toValue,
-    withTiming: (toValue: unknown) => toValue,
+    withTiming: (
+      toValue: unknown,
+      _config?: unknown,
+      callback?: (isFinished?: boolean) => void,
+    ) => {
+      callback?.(true);
+      return toValue;
+    },
   };
 });
 
@@ -154,7 +165,6 @@ describe('ChatInputSurface', () => {
             isStreaming={false}
             modelLabel="Model"
             onModelPickerPress={jest.fn()}
-            onReasoningPress={jest.fn()}
             onSendPress={onSendPress}
             onStopPress={jest.fn()}
           />
@@ -199,7 +209,6 @@ describe('ChatInputSurface', () => {
             isStreaming={false}
             modelLabel="Model"
             onModelPickerPress={jest.fn()}
-            onReasoningPress={jest.fn()}
             onSendPress={onSendPress}
             onStopPress={jest.fn()}
           />
@@ -231,8 +240,7 @@ describe('ChatInputSurface', () => {
     ).toHaveLength(0);
   });
 
-  test('opens reasoning controls from the bottom toolbar', async () => {
-    const onReasoningPress = jest.fn();
+  test('cycles reasoning effort from the bottom toolbar', async () => {
     let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
@@ -243,7 +251,6 @@ describe('ChatInputSurface', () => {
             isStreaming={false}
             modelLabel="Model"
             onModelPickerPress={jest.fn()}
-            onReasoningPress={onReasoningPress}
             onSendPress={jest.fn()}
             onStopPress={jest.fn()}
           />
@@ -255,15 +262,46 @@ describe('ChatInputSurface', () => {
       throw new Error('ChatInputSurface test renderer was not created.');
     }
 
-    const reasoningButton = renderer.root.findByProps({
-      accessibilityLabel: 'chat.reasoning.title',
-    });
+    expect(getReasoningSlotLabel(renderer)).toBe('chat.reasoning.default');
+
+    await pressReasoningButton(renderer);
+
+    expect(getReasoningSlotLabel(renderer)).toBe('chat.reasoning.minimal');
+  });
+
+  test('does not render the off reasoning label in the bottom toolbar', async () => {
+    let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
-      reasoningButton.props.onPress();
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
     });
 
-    expect(onReasoningPress).toHaveBeenCalledTimes(1);
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    for (let pressCount = 0; pressCount < 7; pressCount += 1) {
+      await pressReasoningButton(renderer);
+    }
+
+    const reasoningPill = renderer.root.findByProps({
+      testID: 'chat-input-reasoning-pill',
+    });
+
+    expect(findText(renderer, 'chat.reasoning.off')).toBe(false);
+    expect(getReasoningSlotLabel(renderer)).toBeNull();
+    expect(reasoningPill.props.className).not.toContain('bg-surface-secondary');
   });
 });
 
@@ -288,6 +326,24 @@ function getTextInputValue(renderer: ReactTestRenderer) {
   const textInput = renderer.root.findByType(TextInput);
 
   return textInput.props.value;
+}
+
+async function pressReasoningButton(renderer: ReactTestRenderer) {
+  const reasoningButton = renderer.root.findByProps({
+    accessibilityLabel: 'chat.reasoning.title',
+  });
+
+  await act(async () => {
+    reasoningButton.props.onPress();
+  });
+}
+
+function getReasoningSlotLabel(renderer: ReactTestRenderer) {
+  const slotLabels = renderer.root.findAllByProps({
+    testID: 'chat-input-reasoning-slot-label',
+  });
+
+  return slotLabels[0]?.props.children ?? null;
 }
 
 function findText(renderer: ReactTestRenderer, text: string) {
