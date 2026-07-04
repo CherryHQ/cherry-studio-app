@@ -10,9 +10,9 @@ import {
   PlusIcon,
   Trash2Icon,
 } from 'lucide-uniwind/png';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TextInput, TextInputEndEditingEvent } from 'react-native';
+import type { TextInputEndEditingEvent } from 'react-native';
 import { Pressable, Text, View } from 'react-native';
 
 import type { ApiKeyEntry } from '@/data/types/provider';
@@ -96,7 +96,7 @@ function ApiKeysVisiblePreview({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base leading-5"
+      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl py-0 pr-5 pl-3 text-base leading-5"
       editable={false}
       lineBreakModeIOS="clip"
       multiline={false}
@@ -278,20 +278,6 @@ function ApiKeyInput({
   value: string;
 }) {
   const { t } = useTranslation();
-  const inputRef = useRef<TextInput>(null);
-  const [isEditing, setIsEditing] = useState(false);
-
-  const beginEditing = useCallback(() => {
-    if (isDisabled) {
-      return;
-    }
-
-    setIsEditing(true);
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-  }, [isDisabled]);
-
   const handleEndEditing = useCallback(
     (event: TextInputEndEditingEvent) => {
       onCommit(normalizeApiKeySingleLine(event.nativeEvent.text));
@@ -299,8 +285,7 @@ function ApiKeyInput({
     [onCommit],
   );
 
-  const handleBlur = useCallback(() => {
-    setIsEditing(false);
+  const handleCommitEvent = useCallback(() => {
     onCommit(normalizeApiKeySingleLine(value));
   }, [onCommit, value]);
 
@@ -311,61 +296,28 @@ function ApiKeyInput({
     [onChangeText],
   );
   const normalizedValue = normalizeApiKeySingleLine(value);
-  const placeholder = t('settings.provider.apiService.apiKeyPlaceholder');
-  const inputVisibilityStyle = isEditing
-    ? providerApiServiceStyles.apiKeyLayerVisible
-    : providerApiServiceStyles.apiKeyLayerHidden;
-  const previewVisibilityStyle = isEditing
-    ? providerApiServiceStyles.apiKeyLayerHidden
-    : providerApiServiceStyles.apiKeyLayerVisible;
 
   return (
-    <View className="h-10 w-full overflow-hidden rounded-xl bg-default">
-      <Pressable
-        accessibilityLabel={accessibilityLabel}
-        accessibilityRole="button"
-        className="absolute inset-0 justify-center rounded-xl pr-5 pl-3"
-        disabled={isDisabled}
-        onPress={beginEditing}
-        pointerEvents={isEditing ? 'none' : 'auto'}
-        style={previewVisibilityStyle}
-      >
-        <Text
-          className={
-            normalizedValue ? 'text-base text-foreground' : 'text-base text-default-foreground'
-          }
-          ellipsizeMode="clip"
-          numberOfLines={1}
-        >
-          {normalizedValue || placeholder}
-        </Text>
-      </Pressable>
-      <Input
-        ref={inputRef}
-        accessibilityElementsHidden={!isEditing}
-        accessibilityLabel={accessibilityLabel}
-        autoCapitalize="none"
-        autoCorrect={false}
-        className="absolute inset-0 h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base leading-5"
-        importantForAccessibility={isEditing ? 'auto' : 'no-hide-descendants'}
-        isDisabled={isDisabled}
-        lineBreakModeIOS="clip"
-        multiline={false}
-        numberOfLines={1}
-        onBlur={handleBlur}
-        onChangeText={handleChangeText}
-        onEndEditing={handleEndEditing}
-        onFocus={() => setIsEditing(true)}
-        onSubmitEditing={handleBlur}
-        placeholder={placeholder}
-        pointerEvents={isEditing ? 'auto' : 'none'}
-        returnKeyType="done"
-        scrollEnabled={false}
-        style={[providerApiServiceStyles.input, inputVisibilityStyle]}
-        value={normalizedValue}
-        variant="secondary"
-      />
-    </View>
+    <Input
+      accessibilityLabel={accessibilityLabel}
+      autoCapitalize="none"
+      autoCorrect={false}
+      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl py-0 pr-5 pl-3 text-base leading-5"
+      isDisabled={isDisabled}
+      lineBreakModeIOS="clip"
+      multiline={false}
+      numberOfLines={1}
+      onBlur={handleCommitEvent}
+      onChangeText={handleChangeText}
+      onEndEditing={handleEndEditing}
+      onSubmitEditing={handleCommitEvent}
+      placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
+      returnKeyType="done"
+      scrollEnabled={false}
+      style={providerApiServiceStyles.input}
+      value={normalizedValue}
+      variant="secondary"
+    />
   );
 }
 

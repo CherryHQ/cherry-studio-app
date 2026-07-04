@@ -1,12 +1,6 @@
 import { StyleSheet } from 'react-native';
 
 export const providerApiServiceStyles = StyleSheet.create({
-  apiKeyLayerHidden: {
-    opacity: 0,
-  },
-  apiKeyLayerVisible: {
-    opacity: 1,
-  },
   input: {
     height: 40,
     includeFontPadding: false,
