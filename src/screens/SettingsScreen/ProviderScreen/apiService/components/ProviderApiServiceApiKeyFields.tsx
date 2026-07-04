@@ -10,10 +10,10 @@ import {
   PlusIcon,
   Trash2Icon,
 } from 'lucide-uniwind/png';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TextInputEndEditingEvent } from 'react-native';
-import { Pressable, Text, View } from 'react-native';
+import type { TextInput, TextInputEndEditingEvent } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { ApiKeyEntry } from '@/data/types/provider';
 import { SettingsIconButton } from '@/screens/SettingsScreen/components/SettingsIconButton';
@@ -278,18 +278,39 @@ function ApiKeyInput({
 }) {
   const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
-  const handleEndEditing = useCallback(
-    (_event: TextInputEndEditingEvent) => {
-      onCommit(normalizeApiKeySingleLine(value));
+  const inputRef = useRef<TextInput>(null);
+  const focusValueRef = useRef(normalizeApiKeySingleLine(value));
+
+  const commitEditingValue = useCallback(
+    (nextValue: string) => {
+      const normalizedValue = normalizeApiKeySingleLine(nextValue);
+
       setIsEditing(false);
+
+      if (normalizedValue === focusValueRef.current) {
+        return;
+      }
+
+      focusValueRef.current = normalizedValue;
+      onCommit(normalizedValue);
     },
-    [onCommit, value],
+    [onCommit],
   );
 
-  const handleCommitEvent = useCallback(() => {
-    onCommit(normalizeApiKeySingleLine(value));
+  const handleEndEditing = useCallback(
+    (event: TextInputEndEditingEvent) => {
+      commitEditingValue(event.nativeEvent.text);
+    },
+    [commitEditingValue],
+  );
+
+  const handleBlur = useCallback(() => {
     setIsEditing(false);
-  }, [onCommit, value]);
+  }, []);
+
+  const handleCommitEvent = useCallback(() => {
+    commitEditingValue(value);
+  }, [commitEditingValue, value]);
 
   const handleChangeText = useCallback(
     (nextValue: string) => {
@@ -298,8 +319,19 @@ function ApiKeyInput({
     [onChangeText],
   );
   const handleFocus = useCallback(() => {
+    focusValueRef.current = normalizeApiKeySingleLine(value);
     setIsEditing(true);
-  }, []);
+  }, [value]);
+  const handlePreviewPress = useCallback(() => {
+    if (isDisabled) {
+      return;
+    }
+
+    setIsEditing(true);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }, [isDisabled]);
   const normalizedValue = normalizeApiKeySingleLine(value);
   const previewValue = clipApiKeyPreviewValue(normalizedValue);
 
@@ -323,6 +355,7 @@ function ApiKeyInput({
         </Text>
       </View>
       <Input
+        ref={inputRef}
         accessibilityLabel={accessibilityLabel}
         autoCapitalize="none"
         autoCorrect={false}
@@ -330,7 +363,7 @@ function ApiKeyInput({
         isDisabled={isDisabled}
         multiline={false}
         numberOfLines={1}
-        onBlur={handleCommitEvent}
+        onBlur={handleBlur}
         onChangeText={handleChangeText}
         onEndEditing={handleEndEditing}
         onFocus={handleFocus}
@@ -346,6 +379,14 @@ function ApiKeyInput({
         ]}
         value={normalizedValue}
         variant="secondary"
+      />
+      <Pressable
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
+        disabled={isDisabled}
+        onPress={handlePreviewPress}
+        pointerEvents={isEditing ? 'none' : 'auto'}
+        style={StyleSheet.absoluteFill}
       />
     </View>
   );

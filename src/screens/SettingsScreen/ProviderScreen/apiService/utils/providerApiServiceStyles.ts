@@ -7,6 +7,7 @@ export const providerApiServiceStyles = StyleSheet.create({
   apiKeyPreviewInput: {
     backgroundColor: 'transparent',
     color: 'transparent',
+    opacity: 0,
   },
   apiKeyPreviewHidden: {
     opacity: 0,
