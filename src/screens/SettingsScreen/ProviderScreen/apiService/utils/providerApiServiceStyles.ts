@@ -1,12 +1,19 @@
 import { StyleSheet } from 'react-native';
 
 export const providerApiServiceStyles = StyleSheet.create({
-  dialogInput: {
-    includeFontPadding: false,
-    paddingBottom: 0,
-    paddingTop: 0,
-    textAlignVertical: 'center',
-    verticalAlign: 'middle',
+  apiKeyEditingInput: {
+    backgroundColor: 'transparent',
+  },
+  apiKeyPreviewInput: {
+    backgroundColor: 'transparent',
+    color: 'transparent',
+    opacity: 0,
+  },
+  apiKeyPreviewHidden: {
+    opacity: 0,
+  },
+  apiKeyPreviewVisible: {
+    opacity: 1,
   },
   input: {
     height: 40,

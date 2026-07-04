@@ -1,10 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { Button } from 'heroui-native/button';
-import { Dialog } from 'heroui-native/dialog';
 import { Input } from 'heroui-native/input';
-import { Label } from 'heroui-native/label';
 import { Switch } from 'heroui-native/switch';
-import { TextField } from 'heroui-native/text-field';
 import {
   CopyIcon,
   EyeIcon,
@@ -13,12 +10,12 @@ import {
   PlusIcon,
   Trash2Icon,
 } from 'lucide-uniwind/png';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import type { TextInput, TextInputEndEditingEvent } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { ApiKeyEntry } from '@/data/types/provider';
-import { SettingsDialogActionButton } from '@/screens/SettingsScreen/components/SettingsDialogActionButton';
 import { SettingsIconButton } from '@/screens/SettingsScreen/components/SettingsIconButton';
 import { providerApiServiceStyles } from '../utils/providerApiServiceStyles';
 
@@ -280,50 +277,73 @@ function ApiKeyInput({
   value: string;
 }) {
   const { t } = useTranslation();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [draftValue, setDraftValue] = useState('');
-  const normalizedValue = normalizeApiKeySingleLine(value);
-  const previewValue = clipApiKeyPreviewValue(normalizedValue);
-  const normalizedDraftValue = normalizeApiKeySingleLine(draftValue);
-  const isSaveDisabled = isDisabled || normalizedDraftValue === normalizedValue;
+  const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+  const focusValueRef = useRef(normalizeApiKeySingleLine(value));
 
-  const openDialog = useCallback(() => {
+  const commitEditingValue = useCallback(
+    (nextValue: string) => {
+      const normalizedValue = normalizeApiKeySingleLine(nextValue);
+
+      setIsEditing(false);
+
+      if (normalizedValue === focusValueRef.current) {
+        return;
+      }
+
+      focusValueRef.current = normalizedValue;
+      onCommit(normalizedValue);
+    },
+    [onCommit],
+  );
+
+  const handleEndEditing = useCallback(
+    (event: TextInputEndEditingEvent) => {
+      commitEditingValue(event.nativeEvent.text);
+    },
+    [commitEditingValue],
+  );
+
+  const handleBlur = useCallback(() => {
+    setIsEditing(false);
+  }, []);
+
+  const handleCommitEvent = useCallback(() => {
+    commitEditingValue(value);
+  }, [commitEditingValue, value]);
+
+  const handleChangeText = useCallback(
+    (nextValue: string) => {
+      onChangeText(normalizeApiKeySingleLine(nextValue));
+    },
+    [onChangeText],
+  );
+  const handleFocus = useCallback(() => {
+    focusValueRef.current = normalizeApiKeySingleLine(value);
+    setIsEditing(true);
+  }, [value]);
+  const handlePreviewPress = useCallback(() => {
     if (isDisabled) {
       return;
     }
 
-    setDraftValue(normalizedValue);
-    setIsDialogOpen(true);
-  }, [isDisabled, normalizedValue]);
-
-  const closeDialog = useCallback(() => {
-    setIsDialogOpen(false);
-    setDraftValue('');
-  }, []);
-
-  const handleDraftChange = useCallback((nextValue: string) => {
-    setDraftValue(normalizeApiKeySingleLine(nextValue));
-  }, []);
-
-  const saveDialog = useCallback(() => {
-    if (isSaveDisabled) {
-      return;
-    }
-
-    onChangeText(normalizedDraftValue);
-    onCommit(normalizedDraftValue);
-    closeDialog();
-  }, [closeDialog, isSaveDisabled, normalizedDraftValue, onChangeText, onCommit]);
+    setIsEditing(true);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }, [isDisabled]);
+  const normalizedValue = normalizeApiKeySingleLine(value);
+  const previewValue = clipApiKeyPreviewValue(normalizedValue);
 
   return (
-    <>
-      <Pressable
-        accessibilityLabel={accessibilityLabel}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: isDisabled }}
-        className="h-10 max-h-10 min-h-0 w-full justify-center overflow-hidden rounded-xl bg-default px-3 active:opacity-70 disabled:opacity-disabled"
-        disabled={isDisabled}
-        onPress={openDialog}
+    <View className="h-10 w-full overflow-hidden rounded-xl bg-default">
+      <View
+        className="absolute inset-0 justify-center px-3"
+        style={
+          isEditing
+            ? providerApiServiceStyles.apiKeyPreviewHidden
+            : providerApiServiceStyles.apiKeyPreviewVisible
+        }
       >
         <Text
           className={
@@ -333,50 +353,42 @@ function ApiKeyInput({
         >
           {previewValue || t('settings.provider.apiService.apiKeyPlaceholder')}
         </Text>
-      </Pressable>
-      <Dialog isOpen={isDialogOpen} onOpenChange={(isOpen) => !isOpen && closeDialog()}>
-        <Dialog.Portal unstable_accessibilityContainerViewIsModal>
-          <Dialog.Overlay isCloseOnPress />
-          <Dialog.Content className="gap-5 rounded-3xl bg-overlay p-5" isSwipeable={false}>
-            <Dialog.Title>{t('settings.provider.apiService.apiKey')}</Dialog.Title>
-            <TextField>
-              <Label>{t('settings.provider.apiService.apiKey')}</Label>
-              <Input
-                accessibilityLabel={accessibilityLabel}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoFocus
-                className="min-h-10 rounded-xl px-3 py-0 text-base leading-5"
-                multiline={false}
-                numberOfLines={1}
-                onChangeText={handleDraftChange}
-                onSubmitEditing={() => {
-                  if (!isSaveDisabled) {
-                    saveDialog();
-                  }
-                }}
-                placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
-                returnKeyType="done"
-                scrollEnabled={false}
-                selectTextOnFocus
-                style={providerApiServiceStyles.dialogInput}
-                value={draftValue}
-                variant="secondary"
-              />
-            </TextField>
-            <View className="flex-row justify-end gap-3">
-              <SettingsDialogActionButton label={t('common.cancel')} onPress={closeDialog} />
-              <SettingsDialogActionButton
-                isDisabled={isSaveDisabled}
-                isPrimary
-                label={t('common.save')}
-                onPress={saveDialog}
-              />
-            </View>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog>
-    </>
+      </View>
+      <Input
+        ref={inputRef}
+        accessibilityLabel={accessibilityLabel}
+        autoCapitalize="none"
+        autoCorrect={false}
+        className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base leading-5"
+        isDisabled={isDisabled}
+        multiline={false}
+        numberOfLines={1}
+        onBlur={handleBlur}
+        onChangeText={handleChangeText}
+        onEndEditing={handleEndEditing}
+        onFocus={handleFocus}
+        onSubmitEditing={handleCommitEvent}
+        placeholder={isEditing ? t('settings.provider.apiService.apiKeyPlaceholder') : ''}
+        returnKeyType="done"
+        scrollEnabled={false}
+        style={[
+          providerApiServiceStyles.input,
+          isEditing
+            ? providerApiServiceStyles.apiKeyEditingInput
+            : providerApiServiceStyles.apiKeyPreviewInput,
+        ]}
+        value={normalizedValue}
+        variant="secondary"
+      />
+      <Pressable
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
+        disabled={isDisabled}
+        onPress={handlePreviewPress}
+        pointerEvents={isEditing ? 'none' : 'auto'}
+        style={StyleSheet.absoluteFill}
+      />
+    </View>
   );
 }
 
