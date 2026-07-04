@@ -272,7 +272,7 @@ function createShowcaseMarkdownContent() {
     '',
     '```ts',
     'function greet(name: string): string {',
-    '  return `Hello, ${name}!`;',
+    '  return `Hello, $' + '{name}!`;',
     '}',
     '',
     'console.log(greet("Cherry"));',
@@ -359,7 +359,7 @@ function createShowcaseToolParts(): CherryMessagePart[] {
     { type: 'step-start' },
     {
       state: 'done',
-      text: '工具组件 Showcase：Web Search、Meta Tool、MCP Tool。',
+      text: '工具组件 Showcase：Web Search、Meta Tool、MCP Tool、Generic Tool。',
       type: 'text',
     },
     {
@@ -412,6 +412,64 @@ function createShowcaseToolParts(): CherryMessagePart[] {
       title: 'Meta Tool Search',
       toolCallId: 'showcase-tool-meta-search',
       toolName: 'tool_search',
+      type: 'dynamic-tool',
+    },
+    {
+      input: { name: 'browser.open_url' },
+      output: '/**\n * Open a URL in the in-app browser.\n * @param url Absolute URL to open.\n */',
+      toolMetadata: {
+        cherry: {
+          tool: { type: 'builtin' },
+          toolName: 'tool_inspect',
+        },
+      },
+      state: 'output-available',
+      title: 'Meta Tool Inspect',
+      toolCallId: 'showcase-tool-meta-inspect',
+      toolName: 'tool_inspect',
+      type: 'dynamic-tool',
+    },
+    {
+      input: {
+        name: 'browser.screenshot',
+        params: { fullPage: false },
+      },
+      output: {
+        format: 'png',
+        ok: true,
+        path: '/tmp/cherry-browser-screenshot.png',
+      },
+      toolMetadata: {
+        cherry: {
+          tool: { type: 'builtin' },
+          toolName: 'tool_invoke',
+        },
+      },
+      state: 'output-available',
+      title: 'Meta Tool Invoke',
+      toolCallId: 'showcase-tool-meta-invoke',
+      toolName: 'tool_invoke',
+      type: 'dynamic-tool',
+    },
+    {
+      input: {
+        code: 'const total = [1, 2, 3].reduce((sum, value) => sum + value, 0);\nreturn total;',
+      },
+      output: {
+        isError: false,
+        logs: ['total=6'],
+        result: 6,
+      },
+      toolMetadata: {
+        cherry: {
+          tool: { type: 'builtin' },
+          toolName: 'tool_exec',
+        },
+      },
+      state: 'output-available',
+      title: 'Meta Tool Exec',
+      toolCallId: 'showcase-tool-meta-exec',
+      toolName: 'tool_exec',
       type: 'dynamic-tool',
     },
     {

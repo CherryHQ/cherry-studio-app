@@ -6,7 +6,7 @@ import { ErrorPart } from './ErrorPart';
 import { FilePart } from './FilePart';
 import { isMcpToolPart, McpToolPart } from './McpToolPart';
 import type { MessagePartRenderMode } from './MessageParts';
-import { isMetaToolSearchPart, MetaToolSearchPart } from './MetaToolSearchPart';
+import { isMetaToolPart, MetaToolPart } from './MetaToolPart';
 import { ReasoningPart } from './ReasoningPart';
 import { SourceDocumentPart } from './SourceDocumentPart';
 import { SourceUrlPart } from './SourceUrlPart';
@@ -39,8 +39,8 @@ export function MessagePart({ part, renderMode = 'markdown' }: MessagePartProps)
       return <WebSearchToolPart part={part} />;
     }
 
-    if (isMetaToolSearchPart(part)) {
-      return <MetaToolSearchPart part={part} />;
+    if (isMetaToolPart(part)) {
+      return <MetaToolPart part={part} />;
     }
 
     if (isMcpToolPart(part)) {
