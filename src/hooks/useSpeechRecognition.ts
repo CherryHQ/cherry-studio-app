@@ -23,6 +23,7 @@ const getRecognitionLocale = (): string => {
   // Map i18n language tags to speech recognition locales
   const localeMap: Record<string, string> = {
     'en-US': 'en-US',
+    'fa-IR': 'fa-IR',
     'zh-Hans-CN': 'zh-CN',
     'zh-CN': 'zh-CN',
     'zh-Hans-TW': 'zh-TW',

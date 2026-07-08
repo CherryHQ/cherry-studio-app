@@ -1,0 +1,1061 @@
+{
+  "translation": {
+    "assistants": {
+      "market": {
+        "add": {
+          "success": "افزودن {{assistant_name}} با موفقیت انجام شد"
+        },
+        "button": {
+          "chat": "همین حالا چت کنید"
+        },
+        "groups": {
+          "all": "همه",
+          "business": "کسب‌وکار",
+          "career": "شغل",
+          "language": "زبان",
+          "tools": "ابزارها"
+        },
+        "my_assistant": "دستیارهای من",
+        "popular": "دستیارهای محبوب",
+        "search_placeholder": "جستجوی دستیارها...",
+        "title": "فروشگاه دستیار"
+      },
+      "multi_select": {
+        "action": "انتخاب چندگانه",
+        "delete_confirm_message": "این کار تمام موضوعات مرتبط با این دستیارها را نیز حذف می‌کند. این عمل قابل بازگشت نیست.",
+        "delete_confirm_title": "حذف {{count}} دستیار؟",
+        "delete_success": "{{count}} دستیار حذف شدند",
+        "selected_count": "{{count}} مورد انتخاب شد"
+      },
+      "name": "نام دستیار",
+      "save": "ذخیره دستیار",
+      "search": {
+        "no_results": "هیچ دستیاری یافت نشد"
+      },
+      "settings": {
+        "context": "زمینه",
+        "max_tokens": "فعال‌سازی محدودیت حداکثر توکن‌ها",
+        "max_tokens_value": "محدودیت حداکثر توکن‌ها",
+        "max_tokens_warning": "حداکثر تعداد توکن‌ها را برای یک تعامل واحد تنظیم می‌کند که بر طول نتیجه بازگشتی تأثیر می‌گذارد. آن را مطابق با محدودیت زمینه مدل تنظیم کنید، در غیر این صورت خطایی رخ می‌دهد.",
+        "reasoning": {
+          "auto": "خودکار",
+          "default": "پیش‌فرض",
+          "high": "بالا",
+          "label": "شدت استنتاج",
+          "low": "کم",
+          "medium": "متوسط",
+          "minimal": "حداقل",
+          "none": "هیچ",
+          "off": "خاموش"
+        },
+        "stream_output": "خروجی جاری",
+        "temperature": "دما",
+        "tooluse": {
+          "empty": "روش فراخوانی ابزار تنظیم نشده است",
+          "function": "فراخوانی تابع",
+          "prompt": "فراخوانی دستوری",
+          "title": "روش فراخوانی ابزار"
+        },
+        "top_p": "Top P",
+        "unlimited_context": "فعال‌سازی محدودیت حداکثر زمینه"
+      },
+      "sort": {
+        "alphabetical": "الفبایی",
+        "recent_add": "اخیراً افزوده شده",
+        "recent_use": "اخیراً استفاده شده",
+        "title": "مرتب‌سازی دستیارها"
+      },
+      "title": {
+        "change": "تعویض دستیار",
+        "create": "ایجاد دستیار",
+        "edit": "ویرایش دستیار",
+        "label": "دستیارها",
+        "mine": "دستیار من",
+        "recent": "دستیارهای اخیر"
+      },
+      "topics": {
+        "count_one": "۱ موضوع",
+        "count_other": "{{count}} موضوع"
+      }
+    },
+    "button": {
+      "add": "افزودن",
+      "best_answer": "بهترین پاسخ",
+      "checking": "در حال بررسی...",
+      "generate_topic_name": "تولید نام موضوع",
+      "image_generate": "تولید تصویر",
+      "manage": "مدیریت",
+      "multiple": "چندگانه",
+      "placeholder": "سؤالی را به صورت دوستانه بپرسید",
+      "recents": "اخیرها",
+      "rename_topic_name": "تغییر نام موضوع",
+      "save": "ذخیره",
+      "save_image": "ذخیره در گالری",
+      "select_model": "انتخاب مدل",
+      "share": "اشتراک‌گذاری",
+      "sort": "مرتب‌سازی",
+      "start_check_model": "بیا شروع کنیم",
+      "success": "موفقیت‌آمیز!",
+      "tag": "برچسب",
+      "web_search": "جستجوی آنلاین"
+    },
+    "chat": {
+      "assistant": {
+        "search": {
+          "placeholder": "جستجوی دستیارها"
+        }
+      },
+      "citation": "+ {{count}} منبع",
+      "default": {
+        "name": "پیش‌فرض"
+      },
+      "think": "در حال فکر کردن به مدت {{seconds}} ثانیه",
+      "think_done": "به مدت {{seconds}} ثانیه عمیقاً اندیشید",
+      "think_expand": "برای خواندن افکارم ضربه بزنید",
+      "title": "به استودیو گیلاس خوش آمدید!",
+      "topics": {
+        "list": "فهرست",
+        "search": {
+          "results": "نتایج"
+        },
+        "title": "موضوعات"
+      },
+      "welcome": "من دستیار هوش مصنوعی شما برای تولیدکنندگان هستم. می‌توانید دستیار ایجاد کنید، مدل‌ها را مدیریت کنید و موارد دیگر."
+    },
+    "common": {
+      "add": "افزودن",
+      "added": " افزوده شد",
+      "camera": "دوربین",
+      "cancel": "لغو",
+      "check": "بررسی",
+      "cherry_studio": "استودیو گیلاس",
+      "cherry_studio_description": "یک دستیار هوش مصنوعی قدرتمند برای تولیدکننده",
+      "clear_all": "پاک کردن همه",
+      "close": "بستن",
+      "confirm": "تأیید",
+      "content_too_long": "محتوا برای نمایش بیش از حد طولانی است",
+      "copied": "کپی شد",
+      "copy": "کپی متن",
+      "copy_latex": "کپی به صورت LaTeX",
+      "delete": "حذف",
+      "delete_translation": "حذف ترجمه",
+      "description": "توضیحات",
+      "detail": "جزئیات",
+      "edit": "ویرایش",
+      "enabled": "فعال",
+      "error_occurred": "خطایی رخ داد",
+      "file": "فایل",
+      "generateImage": "ایجاد یک تصویر",
+      "go_to_settings": "تنظیمات",
+      "import_from_cherry_studio": "وارد کردن از استودیو گیلاس",
+      "language": "زبان",
+      "last_month": "ماه گذشته",
+      "last_week": "هفته گذشته",
+      "loading": "در حال بارگذاری...",
+      "login": "ورود",
+      "manage": "مدیریت",
+      "model": "مدل",
+      "name": "نام",
+      "ok": "تأیید",
+      "older": "قدیمی‌تر",
+      "others": "سایر",
+      "parameters": "پارامترها",
+      "photo": "عکس",
+      "play": "پخش",
+      "preset": "از پیش تنظیم شده",
+      "prompt": "دستور",
+      "regenerate": "تولید مجدد",
+      "rename": "تغییر نام",
+      "result": "نتیجه",
+      "save": "ذخیره",
+      "saved": "ذخیره شد",
+      "search_placeholder": "جستجو...",
+      "see_all": "مشاهده همه",
+      "select_all": "انتخاب همه",
+      "source": "منبع",
+      "start": "شروع کار با استودیو گیلاس 🎉",
+      "stop": "توقف",
+      "this_week": "این هفته",
+      "today": "امروز",
+      "tool": "ابزار",
+      "translate": "ترجمه",
+      "type": "نوع",
+      "url": "نشانی اینترنتی",
+      "visit": "بازدید",
+      "websearch": "جستجوی وب",
+      "welcome": {
+        "message1": "به استودیو گیلاس خوش آمدید 🎉",
+        "message2": "شروع به ایجاد و لذت بردن کنید"
+      },
+      "yesterday": "دیروز"
+    },
+    "error": {
+      "ai_feature": {
+        "not_available": "ویژگی هوش مصنوعی در دسترس نیست.",
+        "update_failed": "به‌روزرسانی ویژگی هوش مصنوعی انجام نشد. لطفاً دوباره تلاش کنید."
+      },
+      "availableProviders": "ارائه‌دهندگان موجود",
+      "availableTools": "ابزارهای موجود",
+      "backup": {
+        "file_format": "خطای فرمت فایل پشتیبان",
+        "file_invalid": "فایل پشتیبان نامعتبر است. باید آن را از طریق استودیو گیلاس به یک دستگاه موبایل صادر کنید.",
+        "title": "پشتیبان‌گیری ناموفق بود"
+      },
+      "camera": {
+        "failed": "عکس گرفتن انجام نشد. لطفاً دوباره تلاش کنید.",
+        "file_not_found": "فایل عکس یافت نشد."
+      },
+      "cause": "علت",
+      "chat": {
+        "response": "خطایی رخ داد. اگر کلید API پیکربندی نشده است، لطفاً به تنظیمات > ارائه‌دهنده مدل بروید تا کلید را تنظیم کنید."
+      },
+      "content": "محتوا",
+      "data": "داده",
+      "detail": "جزئیات خطا",
+      "errors": "خطاها",
+      "finishReason": "دلیل پایان",
+      "functionality": "عملکرد",
+      "http": {
+        "400": "خطای درخواست، لطفاً بررسی کنید که پارامترهای درخواست صحیح هستند یا خیر. اگر تنظیمات مدل را تغییر داده‌اید، آن‌ها را به تنظیمات پیش‌فرض بازنشانی کنید.",
+        "401": "احراز هویت ناموفق بود، لطفاً بررسی کنید که کلید API صحیح است یا خیر.",
+        "403": "دسترسی مسدود شد. لطفاً پیام خطای خاص را برای جزئیات ترجمه کنید یا با ارائه‌دهنده خدمات تماس بگیرید تا دلیل محدودیت را جویا شوید.",
+        "404": "مدل وجود ندارد یا مسیر درخواست نادرست است",
+        "429": "نرخ درخواست از حد مجاز فراتر رفته است. لطفاً بعداً دوباره تلاش کنید.",
+        "500": "خطای سرور، لطفاً بعداً دوباره تلاش کنید",
+        "502": "خطای دروازه، لطفاً بعداً دوباره تلاش کنید",
+        "503": "سرویس در دسترس نیست، لطفاً بعداً دوباره تلاش کنید",
+        "504": "زمان انتظار دروازه به پایان رسید، لطفاً بعداً دوباره تلاش کنید."
+      },
+      "lastError": "آخرین خطا",
+      "maxEmbeddingsPerCall": "حداکثر جاسازه‌ها در هر فراخوانی",
+      "message": "پیام خطا",
+      "missing_user_message": "امکان تعویض پاسخ مدل وجود ندارد: پیام کاربر اصلی حذف شده است. لطفاً پیام جدیدی ارسال کنید تا از این مدل پاسخ دریافت کنید.",
+      "model": {
+        "exists": "مدل از قبل وجود دارد"
+      },
+      "modelId": "شناسه مدل",
+      "modelType": "نوع مدل",
+      "name": "نام خطا",
+      "no_api_key": "کلید API پیکربندی نشده است",
+      "originalError": "خطای اصلی",
+      "originalMessage": "پیام اصلی",
+      "parameter": "پارامتر",
+      "pause_placeholder": "قطع شد",
+      "permission": {
+        "camera_denied": "دسترسی به دوربین رد شد. لطفاً آن را در تنظیمات فعال کنید.",
+        "media_library_denied": "دسترسی به کتابخانه عکس رد شد. لطفاً آن را در تنظیمات فعال کنید."
+      },
+      "prompt": "دستور",
+      "provider": "ارائه‌دهنده",
+      "providerId": "شناسه ارائه‌دهنده",
+      "provider_disabled": "ارائه‌دهنده مدل فعال نیست",
+      "reason": "دلیل",
+      "render": {
+        "description": "بارگذاری محتوای پیام انجام نشد. لطفاً بررسی کنید که فرمت پیام صحیح است یا خیر.",
+        "title": "خطای رندر"
+      },
+      "requestBodyValues": "بدنه درخواست",
+      "requestUrl": "نشانی درخواست",
+      "response": "پاسخ",
+      "responseBody": "بدنه پاسخ",
+      "responseHeaders": "هدرهای پاسخ",
+      "responses": "پاسخ‌ها",
+      "role": "نقش",
+      "stack": "ردیابی پشته",
+      "statusCode": "کد وضعیت",
+      "statusText": "متن وضعیت",
+      "text": "متن",
+      "toolInput": "ورودی ابزار",
+      "toolName": "نام ابزار",
+      "translate_assistant_model_not_defined": "مدل دستیار ترجمه پیکربندی نشده است. لطفاً به تنظیمات > دستیار پیش‌فرض بروید تا مدل دستیار ترجمه را پیکربندی کنید",
+      "unknown": "خطای ناشناخته",
+      "upload": {
+        "failed": "بارگذاری فایل انجام نشد. لطفاً دوباره تلاش کنید."
+      },
+      "usage": "مصرف",
+      "user_message_not_found": "امکان یافتن پیام کاربر اصلی وجود ندارد",
+      "value": "مقدار",
+      "values": "مقادیر"
+    },
+    "errors": {
+      "cannotOpenLink": "امکان باز کردن پیوند وجود ندارد: {{error}}",
+      "cannotOpenLinkTitle": "امکان باز کردن پیوند وجود ندارد",
+      "deviceCannotHandleLink": "دستگاه شما نمی‌تواند این پیوند را مدیریت کند: {{href}}",
+      "error_title": "خطا",
+      "linkErrorTitle": "خطای باز کردن پیوند"
+    },
+    "export": {
+      "already_exporting": "در حال صادر کردن",
+      "failed": "صادر کردن ناموفق بود",
+      "image": "صادر کردن به صورت تصویر",
+      "joplin": "صادر کردن به Joplin",
+      "md": {
+        "label": "صادر کردن به صورت مارک‌داون",
+        "reason": "صادر کردن به صورت مارک‌داون (همراه با استنتاج)"
+      },
+      "notion": "صادر کردن به Notion",
+      "obsidian": "صادر کردن به Obsidian",
+      "obsidian_atributes": "پیکربندی ویژگی‌های یادداشت",
+      "obsidian_btn": "تأیید",
+      "obsidian_created": "زمان ایجاد",
+      "obsidian_created_placeholder": "لطفاً زمان ایجاد را انتخاب کنید",
+      "obsidian_export_failed": "صادر کردن ناموفق بود",
+      "obsidian_export_success": "صادر کردن موفقیت‌آمیز بود",
+      "obsidian_fetch_error": "دریافت گنجه‌های Obsidian انجام نشد",
+      "obsidian_fetch_folders_error": "دریافت ساختار پوشه انجام نشد",
+      "obsidian_loading": "در حال بارگذاری...",
+      "obsidian_no_vault_selected": "لطفاً ابتدا یک گنجه را انتخاب کنید",
+      "obsidian_no_vaults": "هیچ گنجه Obsidian یافت نشد",
+      "obsidian_operate": "روش عملیات",
+      "obsidian_operate_append": "الحاق",
+      "obsidian_operate_new_or_overwrite": "ایجاد جدید (در صورت وجود بازنویسی شود)",
+      "obsidian_operate_placeholder": "لطفاً روش عملیات را انتخاب کنید",
+      "obsidian_operate_prepend": "پیشوند",
+      "obsidian_path": "مسیر",
+      "obsidian_path_placeholder": "لطفاً مسیر را انتخاب کنید",
+      "obsidian_reasoning": "شامل زنجیره استنتاج باشد",
+      "obsidian_root_directory": "فهرست ریشه",
+      "obsidian_select_vault_first": "لطفاً ابتدا یک گنجه را انتخاب کنید",
+      "obsidian_source": "منبع",
+      "obsidian_source_placeholder": "لطفاً منبع را وارد کنید",
+      "obsidian_tags": "برچسب‌ها",
+      "obsidian_tags_placeholder": "لطفاً برچسب‌ها را وارد کنید، چندین برچسب را با کاما جدا کنید",
+      "obsidian_title": "عنوان",
+      "obsidian_title_placeholder": "لطفاً عنوان را وارد کنید",
+      "obsidian_title_required": "عنوان نمی‌تواند خالی باشد",
+      "obsidian_vault": "گنجه",
+      "obsidian_vault_placeholder": "لطفاً نام گنجه را انتخاب کنید",
+      "options": {
+        "include_reasoning": "شامل زنجیره استنتاج باشد",
+        "title": "گزینه‌های صادر کردن"
+      },
+      "siyuan": "صادر کردن به یادداشت Siyuan",
+      "success": "با موفقیت صادر شد",
+      "title": "صادر کردن پیام",
+      "title_naming_failed": "تولید عنوان ناموفق بود، از عنوان پیش‌فرض استفاده می‌شود",
+      "title_naming_success": "عنوان با موفقیت تولید شد",
+      "wait_for_title_naming": "در حال تولید عنوان...",
+      "word": "صادر کردن به صورت Word",
+      "yuque": "صادر کردن به Yuque"
+    },
+    "history": {
+      "search": {
+        "placeholder": "جستجوی موضوعات یا پیام‌ها...",
+        "topics": {
+          "empty": "هیچ موضوعی یافت نشد، برای جستجوی همه پیام‌ها Enter را فشار دهید"
+        }
+      },
+      "topics": {
+        "empty": " هیچ موضوعی یافت نشد"
+      }
+    },
+    "html_preview": {
+      "loading": "در حال بارگذاری HTML...",
+      "title": "پیش‌نمایش HTML"
+    },
+    "inputs": {
+      "longTextConverted": {
+        "message": "متن چسبانده شده ({{length}} کاراکتر) به طور خودکار به یک پیوست فایل تبدیل شد",
+        "title": "متن طولانی تبدیل شد"
+      },
+      "mentions": "@ {{number}} مدل",
+      "placeholder": "ارسال پیام..."
+    },
+    "mcp": {
+      "auth": {
+        "auth_required_content": "سرور MCP \"{{name}}\" نیاز به مجوز OAuth دارد. اکنون متصل شوید؟",
+        "auth_required_title": "نیاز به احراز هویت",
+        "connect": "اتصال",
+        "connected": "متصل شد",
+        "disconnect": "قطع اتصال",
+        "headers": "هدرهای سفارشی",
+        "invalid_json": "JSON نامعتبر",
+        "invalid_json_content": "لطفاً فرمت JSON معتبری برای هدرها وارد کنید.",
+        "oauth": "OAuth",
+        "oauth_failed": "احراز هویت OAuth ناموفق بود",
+        "title": "احراز هویت"
+      },
+      "builtin": {
+        "calendar": {
+          "description": "دریافت، سیستم‌عامل تقویم"
+        },
+        "fetch": {
+          "description": "دریافت محتوای وب از یک نشانی اینترنتی"
+        },
+        "reminder": {
+          "description": "دریافت، ایجاد، به‌روزرسانی و حذف یادآوری‌ها"
+        },
+        "shortcuts": {
+          "description": "اجرای میانبرهای iOS و دریافت نتایج"
+        },
+        "time": {
+          "description": "دریافت زمان فعلی"
+        }
+      },
+      "market": {
+        "add": {
+          "success": "{{mcp_name}} اضافه شد"
+        },
+        "title": "فروشگاه MCP"
+      },
+      "server": {
+        "add": "افزودن سرور MCP",
+        "delete": {
+          "content": "آیا مطمئن هستید که می‌خواهید این سرور MCP را حذف کنید؟ این عمل قابل بازگشت نیست.",
+          "title": "حذف سرور"
+        },
+        "description_placeholder": "توضیحاتی برای این سرور MCP وارد کنید...",
+        "empty": {
+          "add": "برو به افزودن سرور MCP",
+          "label": "هیچ سرور MCP در دسترس نیست..."
+        },
+        "new": "سرور MCP جدید",
+        "selected": "{{num}} سرور MCP انتخاب شدند",
+        "title": "سرور MCP",
+        "update_failed": "به‌روزرسانی {{name}} ناموفق بود"
+      },
+      "type": {
+        "inMemory": "داخلی",
+        "sse": "رویدادهای ارسالی سرور",
+        "streamableHttp": "StreamableHTTP"
+      }
+    },
+    "menu": {
+      "assistant": {
+        "recent": "دستیار اخیر",
+        "title": "دستیار"
+      },
+      "search_placeholder": "جستجو...",
+      "see_all": "مشاهده همه",
+      "topic": {
+        "recent": "موضوعات اخیر",
+        "title": "موضوع"
+      }
+    },
+    "message": {
+      "assistant_deleted": "دستیار حذف شد",
+      "delete_message": "حذف پیام",
+      "delete_message_confirmation": "آیا مطمئن هستید که می‌خواهید این پیام را حذف کنید؟",
+      "delete_topic": "حذف موضوع",
+      "delete_topic_confirmation": "آیا مطمئن هستید که می‌خواهید این موضوع را حذف کنید؟",
+      "delete_translation": "حذف ترجمه",
+      "edit_failed": {
+        "content": "ویرایش پیام انجام نشد. لطفاً دوباره تلاش کنید.",
+        "title": "ویرایش ناموفق بود"
+      },
+      "edit_reply": "ویرایش پاسخ",
+      "editing_message": "در حال ویرایش",
+      "marked_as_best_answer": "به عنوان بهترین پاسخ علامت‌گذاری شد",
+      "pause_failed": {
+        "content": "توقف انجام نشد. لطفاً دوباره تلاش کنید.",
+        "title": "توقف ناموفق بود"
+      },
+      "searching": "در حال جستجو...",
+      "send_failed": {
+        "content": "ارسال پیام انجام نشد. لطفاً دوباره تلاش کنید.",
+        "title": "ارسال ناموفق بود"
+      },
+      "share_message": "اشتراک‌گذاری خبر",
+      "topic_deleted": "موضوع حذف شد",
+      "translate_message": "ترجمه پیام",
+      "unmarked_as_best_answer": "علامت بهترین پاسخ برداشته شد",
+      "websearch": {
+        "fetch_complete": "{{count}} جستجو تکمیل شد..."
+      }
+    },
+    "models": {
+      "no_models": "هیچ مدلی در دسترس نیست",
+      "type": {
+        "all": "همه",
+        "embedding": "جاسازه",
+        "free": "رایگان",
+        "function_calling": "ابزار",
+        "reasoning": "استنتاج",
+        "rerank": "رتبه‌بندی مجدد",
+        "select": "انتخاب انواع مدل",
+        "text": "متن",
+        "vision": "بینایی",
+        "websearch": "جستجوی وب"
+      }
+    },
+    "profile": {
+      "avatar": "تصویر پروفایل کاربر",
+      "create": "برو به ایجاد",
+      "createFirstAgent": "برای ایجاد اولین عامل هوش مصنوعی کلیک کنید",
+      "editProfile": "ویرایش پروفایل",
+      "noContent": "هنوز محتوای {{type}} وجود ندارد"
+    },
+    "provider": {
+      "302ai": "302.AI",
+      "aihubmix": "AiHubMix",
+      "alayanew": "Alaya NeW",
+      "anthropic": "Anthropic",
+      "aws-bedrock": "AWS Bedrock",
+      "azure-openai": "Azure OpenAI",
+      "baichuan": "Baichuan",
+      "baidu-cloud": "Baidu Cloud",
+      "burncloud": "BurnCloud",
+      "cephalon": "Cephalon",
+      "cherryai": "CherryAI",
+      "cherryin": "CherryIN",
+      "copilot": "GitHub Copilot",
+      "dashscope": "Alibaba Cloud",
+      "deepseek": "DeepSeek",
+      "dmxapi": "DMXAPI",
+      "doubao": "Volcengine",
+      "fireworks": "Fireworks",
+      "gemini": "Gemini",
+      "gitee-ai": "Gitee AI",
+      "github": "GitHub Models",
+      "gpustack": "GPUStack",
+      "grok": "Grok",
+      "groq": "Groq",
+      "hunyuan": "Tencent Hunyuan",
+      "hyperbolic": "Hyperbolic",
+      "infini": "Infini",
+      "jina": "Jina",
+      "lanyun": "LANYUN",
+      "lmstudio": "LM Studio",
+      "minimax": "MiniMax",
+      "mistral": "Mistral",
+      "modelscope": "ModelScope",
+      "moonshot": "Moonshot",
+      "new-api": "New API",
+      "nvidia": "Nvidia",
+      "o3": "O3",
+      "ocoolai": "ocoolAI",
+      "ollama": "Ollama",
+      "openai": "OpenAI",
+      "openrouter": "OpenRouter",
+      "perplexity": "Perplexity",
+      "ph8": "PH8",
+      "poe": "Poe",
+      "ppio": "PPIO",
+      "qiniu": "Qiniu AI",
+      "qwenlm": "QwenLM",
+      "silicon": "SiliconFlow",
+      "stepfun": "StepFun",
+      "tencent-cloud-ti": "Tencent Cloud TI",
+      "together": "Together",
+      "tokenflux": "TokenFlux",
+      "vertexai": "Vertex AI",
+      "voyageai": "Voyage AI",
+      "xirang": "State Cloud Xirang",
+      "yi": "Yi",
+      "zhinao": "360AI",
+      "zhipu": "ZHIPU AI"
+    },
+    "settings": {
+      "about": {
+        "contact": {
+          "button": "ایمیل",
+          "title": "تماس"
+        },
+        "feedback": {
+          "button": "بازخورد",
+          "title": "بازخورد"
+        },
+        "header": "درباره و بازخورد",
+        "license": {
+          "button": "مجوز",
+          "title": "مجوز"
+        },
+        "releases": {
+          "button": "انتشارها",
+          "title": "یادداشت‌های انتشار"
+        },
+        "title": "درباره ما",
+        "website": {
+          "button": "وب‌سایت",
+          "title": "وب‌سایت رسمی"
+        }
+      },
+      "assistant": {
+        "default_assistant": {
+          "description": "دستیاری که هنگام ایجاد دستیار جدید استفاده می‌شود، اگر دستیار تنظیم نشده باشد، از این دستیار استفاده خواهد شد",
+          "name": "دستیار پیش‌فرض"
+        },
+        "empty": "هنوز دستیاری وجود ندارد...",
+        "quick_assistant": {
+          "description": "دستیاری که برای وظایف ساده مانند نام‌گذاری موضوع و استخراج کلمات کلیدی استفاده می‌شود",
+          "name": "دستیار سریع"
+        },
+        "show": {
+          "icon": "نمایش آیکون مدل"
+        },
+        "title": "دستیار پیش‌فرض",
+        "translate_assistant": {
+          "description": "دستیاری که برای سرویس ترجمه استفاده می‌شود",
+          "name": "دستیار ترجمه"
+        }
+      },
+      "data": {
+        "app_data": "داده‌های برنامه",
+        "app_data_location": "محل داده‌های برنامه",
+        "app_knowledge": {
+          "label": "فایل‌های پایگاه دانش",
+          "remove_all": "حذف فایل‌ها"
+        },
+        "app_logs": "گزارش‌های برنامه",
+        "backup": "پشتیبان‌گیری داده",
+        "basic_title": "تنظیمات پایه داده",
+        "clear_cache": {
+          "button": "پاک کردن حافظه پنهان ({{cacheSize}})",
+          "error": "پاک کردن حافظه پنهان انجام نشد. لطفاً دوباره تلاش کنید. اگر مشکل ادامه داشت، آن را در GitHub گزارش دهید.",
+          "title": "پاک کردن حافظه پنهان",
+          "warning": "پاک کردن حافظه پنهان تمام داده‌های کش‌شده از جمله فایل‌ها، تصاویر و پشتیبان‌ها را پاک می‌کند."
+        },
+        "cloud_backup": "تنظیمات پشتیبان‌گیری ابری",
+        "data": {
+          "title": "فهرست داده"
+        },
+        "data_reset": {
+          "error": "بازنشانی داده ناموفق بود. لطفاً دوباره تلاش کنید یا در صورت ادامه مشکل با پشتیبانی تماس بگیرید."
+        },
+        "lan_transfer": {
+          "app_version": "نسخه برنامه",
+          "back_cancel_receive_body": "بازگشت انتقال فعلی را لغو می‌کند. ادامه می‌دهید؟",
+          "back_cancel_receive_title": "ترک این صفحه؟",
+          "backup_detected_body": "یک فایل پشتیبان آماده است. اکنون بازیابی شود؟",
+          "backup_detected_title": "فایل پشتیبان شناسایی شد",
+          "cancel_receive": "لغو دریافت",
+          "chunks": "قطعات",
+          "connected": "متصل شد",
+          "device": "دستگاه",
+          "device_name": "نام دستگاه",
+          "error": "خطا",
+          "eta": "زمان تخمینی",
+          "file_status": {
+            "cancelled": "لغو شد",
+            "cancelling": "در حال لغو...",
+            "complete": "تکمیل شد",
+            "completing": "در حال تکمیل...",
+            "error": "خطا",
+            "idle": "بیکار",
+            "receiving": "در حال دریافت",
+            "verifying": "در حال تأیید..."
+          },
+          "file_transfer": "انتقال فایل",
+          "hint": "این دستگاه را در کلاینت دسکتاپ استودیو گیلاس برای ارسال پشتیبان انتخاب کنید",
+          "info": "اطلاعات انتقال",
+          "ip_address": "نشانی IP",
+          "no_connection_warning": "لطفاً انتقال شبکه محلی را در کلاینت دسکتاپ استودیو گیلاس باز کنید",
+          "port": "درگاه",
+          "preparing": "در حال آماده‌سازی...",
+          "receiving": "در حال دریافت فایل...",
+          "restore_confirm": "بازیابی",
+          "restore_later": "بعداً",
+          "service": "سرویس",
+          "start_service": "شروع دریافت",
+          "status": "وضعیت",
+          "stop_service": "توقف سرویس",
+          "title": "انتقال شبکه محلی",
+          "transfer_cancelled_body": "انتقال فایل لغو شد",
+          "transfer_cancelled_title": "انتقال لغو شد",
+          "transfer_error": "خطای انتقال شبکه محلی",
+          "unknown": "ناشناخته",
+          "waiting_connection": "در انتظار اتصال دسکتاپ...",
+          "warning_content": "این کار داده‌های موجود را پاک کرده و از دسکتاپ بازیابی می‌کند. مطمئن شوید داده‌های مهم پشتیبان‌گیری شده‌اند.",
+          "warning_title": "توجه",
+          "zeroconf_error": "خطای Zeroconf"
+        },
+        "log_location": "محل فایل گزارش",
+        "reset": "بازنشانی داده",
+        "reset_success": "بازنشانی داده با موفقیت انجام شد! برنامه به حالت اولیه بازگردانده شد.",
+        "reset_warning": "آیا مطمئن هستید که می‌خواهید همه داده‌ها را بازنشانی کنید؟ این کار تمام مکالمات، پیام‌ها و محتوای ایجاد شده توسط کاربر را حذف می‌کند. این عمل قابل بازگشت نیست.",
+        "restore": {
+          "clear_error": "پاک کردن داده‌های موجود انجام نشد. لطفاً دوباره تلاش کنید.",
+          "confirm_warning": "بازیابی از پشتیبان تمام داده‌های فعلی برنامه را بازنویسی می‌کند.",
+          "error": "خطای بازیابی",
+          "error_message": "خطایی در حین فرایند بازیابی رخ داد. لطفاً فایل را بررسی کرده و دوباره تلاش کنید.",
+          "progress": {
+            "error": "خطای بازیابی",
+            "error_description": "خطایی در حین فرایند بازیابی رخ داد. لطفاً فایل را بررسی کرده و دوباره تلاش کنید.",
+            "pending": "در حال بازیابی...",
+            "pending_description": "در حال بازیابی داده‌ها، لطفاً صبر کنید...",
+            "success": "بازیابی موفقیت‌آمیز بود",
+            "success_description": "بازیابی موفقیت‌آمیز بود، از وقت خود لذت ببرید!"
+          },
+          "steps": {
+            "clear_data": "پاک کردن داده‌های موجود",
+            "receive_file": "دریافت فایل",
+            "restore_messages": "بازیابی پیام‌ها",
+            "restore_settings": "بازیابی پیکربندی"
+          },
+          "title": "بازیابی داده"
+        },
+        "third_party": "اتصالات شخص ثالث",
+        "title": "تنظیمات داده"
+      },
+      "dataAndSecurity": "داده و امنیت",
+      "general": {
+        "auto_scroll": {
+          "description": "به طور خودکار به پایین اسکرول کنید هنگام دریافت پاسخ‌های جاری",
+          "title": "اسکرول خودکار پیام‌ها"
+        },
+        "developer_mode": {
+          "title": "حالت توسعه‌دهنده"
+        },
+        "display": {
+          "title": "تنظیمات نمایش"
+        },
+        "language": {
+          "title": "زبان"
+        },
+        "privacy": {
+          "anonymous": "گزارش ناشناس خطاها و آمار",
+          "title": "تنظیمات حریم خصوصی"
+        },
+        "theme": {
+          "auto": "خودکار",
+          "dark": "تاریک",
+          "light": "روشن",
+          "title": "تم"
+        },
+        "title": "تنظیمات عمومی"
+      },
+      "joplin": {
+        "check": {
+          "button": "بررسی",
+          "empty_token": "لطفاً توکن مجوز Joplin را وارد کنید",
+          "empty_url": "لطفاً نشانی سرویس کلیپر Joplin را وارد کنید",
+          "fail": "تأیید اتصال Joplin ناموفق بود",
+          "success": "تأیید اتصال Joplin موفقیت‌آمیز بود"
+        },
+        "export_reasoning": {
+          "help": "هنگام فعال بودن، محتوای صادر شده شامل زنجیره استنتاج (فرایند فکر) تولید شده توسط دستیار خواهد بود.",
+          "title": "شامل زنجیره استنتاج در صادرات باشد"
+        },
+        "help": "برای دریافت توکن مجوز Joplin اینجا کلیک کنید",
+        "title": "پیکربندی Joplin",
+        "token": "توکن مجوز Joplin",
+        "token_placeholder": "توکن مجوز Joplin",
+        "url": "نشانی سرویس وب کلیپر Joplin",
+        "url_placeholder": "http://127.0.0.1:41184/"
+      },
+      "mcp": {
+        "errors": {
+          "32000": "خطای سرور MCP",
+          "toolNotFound": "ابزار «{{name}}» یافت نشد"
+        }
+      },
+      "modelAndService": "مدل‌ها و خدمات هوش مصنوعی",
+      "models": {
+        "add": {
+          "model": {
+            "group": {
+              "label": "گروه مدل",
+              "placeholder": "اختیاری مثلاً OpenAI"
+            },
+            "id": {
+              "label": "شناسه مدل",
+              "placeholder": "ضروری مثلاً gpt-4o"
+            },
+            "label": "افزودن مدل",
+            "name": {
+              "label": "نام مدل",
+              "placeholder": "اختیاری مثلاً GPT-4o"
+            }
+          }
+        },
+        "default_model": "مدل پیش‌فرض",
+        "empty": {
+          "add_model": "بیا اولین مدل خود را اضافه کنیم",
+          "label": "هنوز مدلی وجود ندارد...",
+          "tooltip": "صفحه‌ای که به دنبال آن بودید خارج از دسترس ما است. از ناراحتی پیش آمده عذر می‌خواهیم."
+        },
+        "health_check": {
+          "checking": "در حال بررسی...",
+          "title": "بررسی سلامت مدل"
+        },
+        "search": "جستجوی مدل‌ها...",
+        "title": "مدل‌ها"
+      },
+      "notion": {
+        "api_key": "کلید API نوشن",
+        "api_key_placeholder": "کلید API نوشن را وارد کنید",
+        "check": {
+          "button": "بررسی",
+          "empty_api_key": "کلید API پیکربندی نشده است",
+          "empty_database_id": "شناسه پایگاه داده پیکربندی نشده است",
+          "error": "خطای اتصال، لطفاً پیکربندی شبکه و کلید API و شناسه پایگاه داده را بررسی کنید",
+          "fail": "اتصال ناموفق بود، لطفاً شبکه و کلید API و شناسه پایگاه داده را بررسی کنید",
+          "success": "اتصال موفقیت‌آمیز بود"
+        },
+        "database_id": "شناسه پایگاه داده نوشن",
+        "database_id_placeholder": "شناسه پایگاه داده نوشن را وارد کنید",
+        "export_reasoning": {
+          "help": "هنگام فعال بودن، محتوای صادر شده شامل زنجیره استنتاج (فرایند فکر) خواهد بود.",
+          "title": "شامل زنجیره استنتاج در صادرات باشد"
+        },
+        "help": "مستندات پیکربندی نوشن",
+        "page_name_key": "نام فیلد عنوان صفحه",
+        "page_name_key_placeholder": "نام فیلد عنوان صفحه را وارد کنید، پیش‌فرض Name است",
+        "title": "تنظیمات نوشن"
+      },
+      "nutstore": {
+        "backupPath": "مسیر ذخیره پشتیبان",
+        "backupStatus": "وضعیت پشتیبان",
+        "config": "پیکربندی Nutstore",
+        "from_nutstore": "بازیابی از Nutstore",
+        "login": "ورود با حساب Nutstore",
+        "logout": "خروج",
+        "nutstore": "Nutstore",
+        "title": "همگام‌سازی Nutstore",
+        "to_nutstore": "پشتیبان‌گیری در Nutstore",
+        "username": "نام کاربری Nutstore"
+      },
+      "obsidian": {
+        "default_vault": "گنجه پیش‌فرض Obsidian",
+        "default_vault_export_failed": "صادر کردن ناموفق بود",
+        "default_vault_fetch_error": "دریافت گنجه Obsidian انجام نشد",
+        "default_vault_loading": "در حال دریافت گنجه Obsidian...",
+        "default_vault_no_vaults": "هیچ گنجه Obsidian یافت نشد",
+        "default_vault_placeholder": "لطفاً گنجه پیش‌فرض Obsidian را انتخاب کنید",
+        "title": "پیکربندی Obsidian"
+      },
+      "personal": {
+        "name": "نام کاربری",
+        "namePlaceholder": "لطفاً نام کاربری خود را وارد کنید",
+        "title": "تنظیمات شخصی"
+      },
+      "provider": {
+        "add": {
+          "name": {
+            "label": "نام ارائه‌دهنده",
+            "placeholder": "ضروری مثلاً OpenAI"
+          },
+          "title": "افزودن ارائه‌دهنده",
+          "type": "نوع ارائه‌دهنده"
+        },
+        "added": "اضافه شد",
+        "api": {
+          "url": {
+            "preview": "پیش‌نمایش: {{url}}",
+            "reset": "بازنشانی",
+            "tip": "پایان با / نادیده گرفتن v1، پایان با # اجبار استفاده از نشانی ورودی"
+          }
+        },
+        "api_check": {
+          "confirm_message": "شروع بررسی API؟",
+          "title": "تشخیص",
+          "tooltip": "مدل مورد استفاده برای تشخیص را انتخاب کنید"
+        },
+        "api_host": {
+          "label": "میزبان API",
+          "placeholder": "لطفاً میزبان API را وارد کنید"
+        },
+        "api_key": {
+          "get": "دریافت کلید API",
+          "label": "کلید API",
+          "placeholder": "لطفاً کلید API را وارد کنید",
+          "tip": "کلیدهای متعدد با کاما جدا می‌شوند"
+        },
+        "api_service": "سرویس API",
+        "auth": {
+          "balance_recharge": "شارژ موجودی",
+          "free_bills": "قبوض رایگان",
+          "login": "ورود",
+          "title": "سرویس {{provider}}"
+        },
+        "check_failed": {
+          "api_key_empty": "کلید API نمی‌تواند خالی باشد",
+          "model_api_key_empty": "مدل و کلید API نمی‌توانند خالی باشند",
+          "model_empty": "مدل نمی‌تواند خالی باشد.",
+          "title": "بررسی مدل ناموفق بود"
+        },
+        "delete": {
+          "content": "آیا مطمئن هستید که می‌خواهید این ارائه‌دهنده را حذف کنید؟",
+          "title": "حذف ارائه‌دهنده"
+        },
+        "edit": {
+          "title": "ویرایش ارائه‌دهنده"
+        },
+        "enabled": "روشن",
+        "list": {
+          "title": "فهرست ارائه‌دهندگان"
+        },
+        "not_found": "ارائه‌دهنده یافت نشد",
+        "not_found_message": "خطایی در هدایت به صفحه ارائه‌دهنده رخ داد.",
+        "provider_deleted": "ارائه‌دهنده حذف شد",
+        "search": "جستجوی ارائه‌دهندگان...",
+        "title": "ارائه‌دهنده مدل"
+      },
+      "proxy": {
+        "title": "نشانی پروکسی"
+      },
+      "siyuan": {
+        "api_url": "نشانی API یادداشت Siyuan",
+        "api_url_placeholder": "مثال: http://127.0.0.1:6806",
+        "box_id": "شناسه جعبه یادداشت Siyuan",
+        "box_id_placeholder": "لطفاً شناسه جعبه یادداشت Siyuan را وارد کنید",
+        "check": {
+          "button": "بررسی",
+          "empty_config": "لطفاً نشانی API و توکن را پر کنید",
+          "error": "خطای اتصال، لطفاً اتصال شبکه را بررسی کنید",
+          "fail": "اتصال ناموفق بود، لطفاً نشانی API و توکن را بررسی کنید",
+          "success": "اتصال موفقیت‌آمیز بود",
+          "title": "بررسی اتصال"
+        },
+        "root_path": "مسیر ریشه یادداشت Siyuan",
+        "root_path_placeholder": "مثال: /CherryStudio",
+        "title": "پیکربندی یادداشت Siyuan",
+        "token": {
+          "help": "دریافت توکن یادداشت Siyuan",
+          "label": "توکن یادداشت Siyuan"
+        },
+        "token_placeholder": "لطفاً توکن یادداشت Siyuan را وارد کنید"
+      },
+      "theme": {
+        "window": {
+          "style": {
+            "opaque": "پنجره مات",
+            "title": "سبک پنجره",
+            "transparent": "پنجره شفاف"
+          }
+        }
+      },
+      "title": "تنظیمات",
+      "topic": {
+        "position": {
+          "label": "موقعیت موضوع",
+          "left": "چپ",
+          "right": "راست"
+        },
+        "show": {
+          "time": "نمایش زمان موضوع"
+        }
+      },
+      "tray": {
+        "title": "فعال‌سازی آیکون سینی سیستم"
+      },
+      "webdav": {
+        "backup": {
+          "auto_backup": "پشتیبان‌گیری خودکار",
+          "from_webdav": "بازیابی از WebDAV",
+          "max_backups": "حداکثر پشتیبان‌ها",
+          "slim_backup": "پشتیبان‌گیری فشرده",
+          "title": "تنظیمات پشتیبان‌گیری",
+          "to_webdav": "پشتیبان‌گیری در WebDAV",
+          "unlimited": "نامحدود"
+        },
+        "config": {
+          "apply": "اعمال",
+          "host": "میزبان WebDAV",
+          "host_placeholder": "http://localhost:8080",
+          "password": "گذرواژه WebDAV",
+          "password_hint": "باید حداقل ۸ کاراکتر باشد",
+          "password_placeholder": "گذرواژه WebDAV",
+          "path": "مسیر WebDAV",
+          "path_placeholder": "مسیر WebDAV",
+          "title": "پیکربندی WebDAV",
+          "user": "کاربر WebDAV",
+          "user_placeholder": "کاربر WebDAV"
+        },
+        "title": "WebDAV"
+      },
+      "websearch": {
+        "api_host": {
+          "label": "میزبان API",
+          "placeholder": "لطفاً میزبان API را وارد کنید"
+        },
+        "api_key": {
+          "get": "دریافت کلید API",
+          "label": "کلید API",
+          "placeholder": "لطفاً کلید API را وارد کنید"
+        },
+        "api_service": "سرویس API",
+        "blacklist": {
+          "title": "فهرست سیاه"
+        },
+        "blacklist_description": "نتایج از وب‌سایت‌های زیر در نتایج جستجو نمایش داده نمی‌شوند",
+        "blacklist_placeholder": "لطفاً از قالب زیر استفاده کنید (با خط جدید جدا شوند)\nتطبیق الگو: *://*.example.com/*\nعبارت باقاعده: /example\\.(net|org)/",
+        "builtin": "جستجوی وب داخلی",
+        "change_provider": "تعویض ارائه‌دهنده جستجوی وب",
+        "check_error": "خطای بررسی",
+        "check_fail": "بررسی ناموفق",
+        "check_success": "بررسی موفق",
+        "check_success_message": "API به درستی کار می‌کند",
+        "contentLengthLimit": "محدودیت طول محتوا",
+        "empty": {
+          "description": "برو به افزودن ارائه‌دهنده",
+          "label": "هنوز ارائه‌دهنده‌ای وجود ندارد..."
+        },
+        "overrideSearchService": "جایگزینی سرویس جستجو",
+        "provider": {
+          "api": {
+            "title": "ارائه‌دهندگان سرویس API"
+          },
+          "free": {
+            "title": "ارائه‌دهندگان خدمات رایگان"
+          },
+          "title": "ارائه‌دهنده جستجوی وب"
+        },
+        "providers": {
+          "bocha": "Bocha",
+          "builtin": "داخلی",
+          "exa": "Exa",
+          "local-baidu": "Baidu",
+          "local-bing": "Bing",
+          "local-google": "Google",
+          "searxng": "Searxng",
+          "tavily": "Tavily"
+        },
+        "searchCount": "تعداد جستجو",
+        "searchWithDates": "جستجو با تاریخ‌های included",
+        "selectPlaceholder": "لطفاً ارائه‌دهنده جستجوی وب را انتخاب کنید...",
+        "subscribe": {
+          "title": "اشتراک فهرست سیاه"
+        },
+        "title": "جستجوی وب"
+      },
+      "yuque": {
+        "check": {
+          "button": "بررسی",
+          "empty_repo_url": "لطفاً ابتدا نشانی پایگاه دانش را وارد کنید",
+          "empty_token": "لطفاً ابتدا توکن Yuque را وارد کنید",
+          "fail": "تأیید اتصال Yuque ناموفق بود",
+          "success": "تأیید اتصال Yuque موفقیت‌آمیز بود"
+        },
+        "help": "دریافت توکن Yuque",
+        "repo_url": "نشانی Yuque",
+        "repo_url_placeholder": "https://www.yuque.com/username/xxx",
+        "title": "پیکربندی Yuque",
+        "token": "توکن Yuque",
+        "token_placeholder": "لطفاً توکن Yuque را وارد کنید"
+      }
+    },
+    "topics": {
+      "multi_select": {
+        "action": "انتخاب چندگانه",
+        "delete_confirm_message": "این عمل قابل بازگشت نیست.",
+        "delete_confirm_title": "حذف {{count}} موضوع؟",
+        "delete_success": "{{count}} موضوع حذف شدند",
+        "selected_count": "{{count}} مورد انتخاب شد"
+      },
+      "new_topic": "موضوع جدید",
+      "rename": {
+        "title": "تغییر نام موضوع"
+      },
+      "select_assistant": "انتخاب دستیار جدید",
+      "title": {
+        "label": "موضوع",
+        "recent": "موضوعات اخیر"
+      }
+    },
+    "update": {
+      "description": "نسخه جدیدی در دسترس است. آیا می‌خواهید همین حالا به‌روزرسانی کنید؟",
+      "ignore": "دیگر یادآوری نشود",
+      "now": "همین حالا به‌روزرسانی کنید",
+      "title": "به‌روزرسانی در دسترس است"
+    },
+    "voice": {
+      "error": "خطای تشخیص گفتار",
+      "not_available": "تشخیص گفتار در دسترس نیست",
+      "permission_denied": "دسترسی به میکروفون رد شد",
+      "permission_denied_message": "لطفاً اجازه دسترسی استودیو گیلاس به میکروفون خود را در تنظیمات بدهید",
+      "start": "شروع ورودی صوتی",
+      "stop": "توقف ورودی صوتی"
+    }
+  }
+}
