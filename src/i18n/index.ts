@@ -7,6 +7,7 @@ import { defaultLanguage } from '@/config/languages'
 import { storage } from '@/utils'
 
 import enUS from './locales/en-us.json'
+import faIR from './locales/fa-ir.json'
 import jaJP from './locales/ja-jp.json'
 import ruRU from './locales/ru-ru.json'
 import zhCN from './locales/zh-cn.json'
@@ -14,6 +15,7 @@ import zhTW from './locales/zh-tw.json'
 
 const resources = {
   'en-US': enUS,
+  'fa-IR': faIR,
   'zh-Hans-CN': zhCN,
   'zh-Hans-TW': zhTW,
   'ja-JP': jaJP,

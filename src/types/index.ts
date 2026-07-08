@@ -4,7 +4,7 @@ import type { KnowledgeReference } from './knowledge'
 import type { MCPToolResponse } from './mcp'
 import type { MCPTool } from './tool'
 
-export type LanguageVarious = 'zh-Hans-CN' | 'zh-Hans-TW' | 'en-US' | 'ru-RU' | 'ja-JP'
+export type LanguageVarious = 'zh-Hans-CN' | 'zh-Hans-TW' | 'en-US' | 'ru-RU' | 'ja-JP' | 'fa-IR'
 // | 'ko-KR'
 // | 'es-ES'
 // | 'de-DE'

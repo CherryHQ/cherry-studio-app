@@ -4,6 +4,7 @@ export const languagesOptions: { value: LanguageVarious; label: string; flag: st
   { value: 'zh-Hans-CN', label: '中文', flag: '🇨🇳' },
   { value: 'zh-Hans-TW', label: '中文（繁体）', flag: '🇭🇰' },
   { value: 'en-US', label: 'English', flag: '🇺🇸' },
+  { value: 'fa-IR', label: 'فارسی', flag: '🇮🇷' },
   { value: 'ja-JP', label: '日本語', flag: '🇯🇵' },
   { value: 'ru-RU', label: 'Русский', flag: '🇷🇺' }
   // { value: 'ko-KR', label: 'Korean', flag: '🇰🇷' },
