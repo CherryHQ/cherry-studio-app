@@ -11,17 +11,15 @@ const { withAppBuildGradle } = require('expo/config-plugins')
  * 1. packagingOptions.jniLibs.pickFirsts — for duplicate libratex_ffi.so
  *    during mergeReleaseNativeLibs.
  *
- * 2. configurations.all { exclude group: 'io.github.erweixin', module: 'ratex-android' }
- *    — to prevent react-native-enriched-markdown from pulling the Maven AAR
- *    whose compiled Kotlin classes (io.ratex.DisplayItem$Companion etc.)
- *    duplicate the ones ratex-react-native compiles from source.
- *    ratex-react-native's build.gradle already provides all the Kotlin
- *    classes needed (DisplayList.kt, RaTeXView.kt, etc.), so the Maven AAR
- *    is redundant.
+ * 2. packagingOptions.resources.pickFirsts — for duplicate .dex files
+ *    during mergeDexRelease (DisplayItem$Companion etc.).
+ *    NOTE: AGP 9's resources.pickFirsts DOES work for .dex files in JARs/AARs
+ *    because dex files are treated as resources during packaging.
  *
- * Why a custom plugin instead of expo-build-properties:
- * - expo-build-properties' packagingOptions uses AGP 7 API which AGP 9 ignores
- * - expo-build-properties cannot exclude transitive Maven dependencies
+ * We do NOT exclude ratex-android entirely because the AAR may contain
+ * a different (compatible) build of libratex_ffi.so that the enriched-markdown
+ * library's native code expects. Excluding the entire AAR caused runtime
+ * crashes (missing native symbol / ABI mismatch).
  */
 function withRatexPackagingOptions(config) {
   return withAppBuildGradle(config, (modConfig) => {
@@ -44,15 +42,12 @@ android {
             pickFirsts.add('**/libc++_shared.so')
             pickFirsts.add('**/libfbjni.so')
         }
+        resources {
+            pickFirsts.add('**/io/ratex/DisplayItem*.dex')
+            pickFirsts.add('**/io/ratex/DisplayList*.dex')
+            pickFirsts.add('**/io/ratex/RaTeX*.dex')
+        }
     }
-}
-
-// Exclude ratex-android Maven AAR — ratex-react-native already provides
-// all the same Kotlin classes from source (DisplayList.kt etc.), so
-// letting both into the dex merge causes:
-//   > Type io.ratex.DisplayItem$Companion is defined multiple times
-configurations.all {
-    exclude group: 'io.github.erweixin', module: 'ratex-android'
 }
 `
 
