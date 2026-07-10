@@ -12,7 +12,15 @@
 import type { AiPlugin } from '@cherrystudio/ai-core';
 import { createAgent } from '@cherrystudio/ai-core';
 import type { StringKeys } from '@cherrystudio/ai-core/provider';
-import type { JSONValue, LanguageModelUsage, ModelMessage, UIMessage, UIMessageChunk } from 'ai';
+import type {
+  JSONValue,
+  LanguageModelUsage,
+  ModelMessage,
+  StopCondition,
+  ToolSet,
+  UIMessage,
+  UIMessageChunk,
+} from 'ai';
 import * as Crypto from 'expo-crypto';
 
 import type { MediaCapabilities } from '../../messages/messageCapabilities';
@@ -36,6 +44,7 @@ export interface AgentOptions {
   timeout?: number;
   headers?: Record<string, string | undefined>;
   providerOptions?: Record<string, Record<string, JSONValue>>;
+  stopWhen?: StopCondition<ToolSet> | StopCondition<ToolSet>[];
 }
 
 export interface AgentParams<T extends AppProviderKey = AppProviderKey> {
@@ -46,6 +55,7 @@ export interface AgentParams<T extends AppProviderKey = AppProviderKey> {
   mediaCapabilities?: MediaCapabilities;
   plugins?: AiPlugin[];
   system?: string;
+  tools?: ToolSet;
   options?: AgentOptions;
 }
 
@@ -55,12 +65,13 @@ export class Agent<T extends AppProviderKey = AppProviderKey> {
   private async buildAiSdkAgent() {
     const params = this.params;
     const opts = params.options ?? {};
-    return createAgent<AppProviderSettingsMap, T>({
+    return createAgent<AppProviderSettingsMap, T, ToolSet>({
       providerId: params.providerId,
       providerSettings: params.providerSettings,
       modelId: params.modelId,
       plugins: params.plugins,
       agentSettings: {
+        tools: params.tools,
         // System
         instructions: params.system,
         // CallSettings (model parameters)
@@ -77,6 +88,7 @@ export class Agent<T extends AppProviderKey = AppProviderKey> {
         headers: opts.headers,
         // Provider-specific
         providerOptions: opts.providerOptions,
+        stopWhen: opts.stopWhen,
       },
     });
   }

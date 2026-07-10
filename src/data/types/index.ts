@@ -9,5 +9,6 @@ export * from './prompt';
 export * from './provider';
 export * from './tag';
 export * from './topic';
+export * from './trace';
 export * from './uiParts';
 export * from './webSearch';

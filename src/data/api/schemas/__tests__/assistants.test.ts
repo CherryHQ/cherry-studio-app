@@ -17,4 +17,20 @@ describe('assistant api schemas', () => {
 
     expect(result.success).toBe(true);
   });
+
+  test('keeps unknown settings fields in partial update payloads', () => {
+    expect(
+      UpdateAssistantSchema.parse({
+        settings: {
+          futureDesktopSetting: { enabled: true },
+          toolUseMode: 'prompt',
+        },
+      }),
+    ).toEqual({
+      settings: {
+        futureDesktopSetting: { enabled: true },
+        toolUseMode: 'prompt',
+      },
+    });
+  });
 });

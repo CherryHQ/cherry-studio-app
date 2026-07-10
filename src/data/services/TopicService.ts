@@ -12,6 +12,7 @@ import {
   type SQL,
   sql,
 } from 'drizzle-orm';
+import * as Crypto from 'expo-crypto';
 
 import type { OrderRequest } from '@/data/api/schemas/_endpointHelpers';
 import type {
@@ -64,6 +65,29 @@ export class TopicService {
     }
 
     return rowToTopic(row);
+  }
+
+  async ensureTraceId(topicId: string): Promise<string> {
+    return await this.dbService.withWriteTx(async (tx) => {
+      const [row] = await tx
+        .select({ traceId: topicTable.traceId })
+        .from(topicTable)
+        .where(and(eq(topicTable.id, topicId), isNull(topicTable.deletedAt)))
+        .limit(1);
+
+      if (!row) {
+        throw DataApiErrorFactory.notFound('Topic', topicId);
+      }
+      if (row.traceId) {
+        return row.traceId;
+      }
+
+      const traceId = [...Crypto.getRandomBytes(16)]
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('');
+      await tx.update(topicTable).set({ traceId }).where(eq(topicTable.id, topicId));
+      return traceId;
+    });
   }
 
   async create(dto: CreateTopicDto): Promise<Topic> {
@@ -356,6 +380,7 @@ export function rowToTopic(row: TopicRow): Topic {
     isNameManuallyEdited: row.isNameManuallyEdited,
     name: row.name,
     orderKey: row.orderKey,
+    ...(row.traceId ? { traceId: row.traceId } : {}),
     updatedAt: timestampToISO(row.updatedAt),
   };
 }

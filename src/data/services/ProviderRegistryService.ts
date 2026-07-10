@@ -304,6 +304,10 @@ export class ProviderRegistryService {
     return this.loader.loadProviders();
   }
 
+  isRegistryProvider(providerId: string): boolean {
+    return this.loader.findProvider(providerId) !== null;
+  }
+
   getProviderDisplayMetadata(
     providerId: string,
     presetProviderId?: string,

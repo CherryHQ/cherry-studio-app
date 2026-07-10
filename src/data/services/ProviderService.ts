@@ -3,6 +3,7 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
 import type { DbService } from '@/data/db/DbService';
+import { userModelTable } from '@/data/db/schemas/userModel';
 import type { InsertUserProviderRow, UserProviderRow } from '@/data/db/schemas/userProvider';
 import { userProviderTable } from '@/data/db/schemas/userProvider';
 import { DataApiErrorFactory } from '@/data/types/apiTypes';
@@ -22,6 +23,7 @@ import {
   DEFAULT_PROVIDER_SETTINGS,
 } from '@/data/types/provider';
 
+import type { PinService } from './PinService';
 import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
 
@@ -47,6 +49,13 @@ export type UpdateProviderInput = {
   name?: string;
   providerSettings?: ProviderSettings | null;
 };
+
+export function canDeleteProvider(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean {
+  return (
+    provider.presetProviderId !== provider.id &&
+    !providerRegistryService.isRegistryProvider(provider.id)
+  );
+}
 
 function mergeCatalogEndpointConfigs(
   existing: EndpointConfigs | null | undefined,
@@ -213,7 +222,10 @@ function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
 export class ProviderService {
   private readonly lastUsedApiKeyIds = new Map<string, string>();
 
-  constructor(private readonly dbService: DbService) {}
+  constructor(
+    private readonly dbService: DbService,
+    private readonly pinService: PinService,
+  ) {}
 
   private get db() {
     return this.dbService.getDb();
@@ -353,17 +365,34 @@ export class ProviderService {
     if (input.name !== undefined) {
       updates.name = input.name;
     }
-    if (input.providerSettings !== undefined) {
-      updates.providerSettings = input.providerSettings;
-    }
+    const [row] = await this.dbService.withWriteTx(async (tx) => {
+      if (input.providerSettings !== undefined) {
+        if (input.providerSettings === null) {
+          updates.providerSettings = null;
+        } else {
+          const [current] = await tx
+            .select({ providerSettings: userProviderTable.providerSettings })
+            .from(userProviderTable)
+            .where(eq(userProviderTable.providerId, providerId))
+            .limit(1);
 
-    const [row] = await this.dbService.withWriteTx((tx) =>
-      tx
+          if (!current) {
+            throw DataApiErrorFactory.notFound('Provider', providerId);
+          }
+
+          updates.providerSettings = {
+            ...(current.providerSettings as Partial<ProviderSettings> | null),
+            ...input.providerSettings,
+          };
+        }
+      }
+
+      return tx
         .update(userProviderTable)
         .set(updates)
         .where(eq(userProviderTable.providerId, providerId))
-        .returning(),
-    );
+        .returning();
+    });
 
     if (!row) {
       throw DataApiErrorFactory.notFound('Provider', providerId);
@@ -419,6 +448,51 @@ export class ProviderService {
     );
 
     return this.replaceApiKeys(providerId, nextKeys);
+  }
+
+  async delete(providerId: string): Promise<void> {
+    await this.dbService.withWriteTx(async (tx) => {
+      const [provider] = await tx
+        .select({ presetProviderId: userProviderTable.presetProviderId })
+        .from(userProviderTable)
+        .where(eq(userProviderTable.providerId, providerId))
+        .limit(1);
+
+      if (!provider) {
+        throw DataApiErrorFactory.notFound('Provider', providerId);
+      }
+
+      if (
+        !canDeleteProvider({
+          id: providerId,
+          presetProviderId: provider.presetProviderId ?? undefined,
+        })
+      ) {
+        throw DataApiErrorFactory.invalidOperation(`Cannot delete preset provider '${providerId}'`);
+      }
+
+      const models = await tx
+        .select({ id: userModelTable.id })
+        .from(userModelTable)
+        .where(eq(userModelTable.providerId, providerId));
+
+      await this.pinService.purgeForEntitiesTx(
+        tx,
+        'model',
+        models.map((model) => model.id),
+      );
+
+      const deletedProviders = await tx
+        .delete(userProviderTable)
+        .where(eq(userProviderTable.providerId, providerId))
+        .returning({ providerId: userProviderTable.providerId });
+
+      if (deletedProviders.length === 0) {
+        throw DataApiErrorFactory.notFound('Provider', providerId);
+      }
+    });
+
+    this.lastUsedApiKeyIds.delete(providerId);
   }
 
   async batchUpsert(inputs: CreateProviderInput[]): Promise<void> {

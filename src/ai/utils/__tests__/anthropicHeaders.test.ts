@@ -50,6 +50,7 @@ function createAssistant(overrides: Partial<Assistant['settings']> = {}): Assist
     modelId: null,
     modelName: null,
     name: 'Assistant',
+    orderKey: 'a0',
     prompt: '',
     settings: { ...DEFAULT_ASSISTANT_SETTINGS, ...overrides },
     tags: [],

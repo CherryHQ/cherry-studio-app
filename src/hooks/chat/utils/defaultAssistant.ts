@@ -19,6 +19,7 @@ export function composeDefaultAssistant(modelId: UniqueModelId | null): Assistan
     modelId,
     modelName: null,
     name: i18n.t('chat.default.name'),
+    orderKey: '',
     prompt: '',
     settings: DEFAULT_ASSISTANT_SETTINGS,
     tags: [],

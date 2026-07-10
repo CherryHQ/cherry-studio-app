@@ -80,8 +80,12 @@ describe('provider-registry-service', () => {
   });
 
   test('returns image-generation support from override or model metadata', () => {
-    expect(providerRegistryService.getImageGenerationSupport('aihubmix', 'ernie-irag-edit')).toBeDefined();
-    expect(providerRegistryService.getImageGenerationSupport('dashscope', 'qwen-image')).toBeDefined();
+    expect(
+      providerRegistryService.getImageGenerationSupport('aihubmix', 'ernie-irag-edit'),
+    ).toBeDefined();
+    expect(
+      providerRegistryService.getImageGenerationSupport('dashscope', 'qwen-image'),
+    ).toBeDefined();
   });
 
   test('exposes provider model-list and auth metadata', () => {
@@ -109,5 +113,7 @@ describe('provider-registry-service', () => {
       modelListSource: 'registry',
       websites: { official: 'https://example.com' },
     });
+    expect(service.isRegistryProvider('login-provider')).toBe(true);
+    expect(service.isRegistryProvider('custom-provider')).toBe(false);
   });
 });

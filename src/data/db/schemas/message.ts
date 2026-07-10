@@ -49,8 +49,6 @@ export const messageTable = sqliteTable(
     modelId: text().references(() => userModelTable.id, { onDelete: 'set null' }),
     // Snapshot of model at message creation time
     modelSnapshot: text({ mode: 'json' }).$type<ModelSnapshot>(),
-    // Trace for tracking
-    traceId: text(),
     // Statistics: token usage, performance metrics, etc.
     stats: text({ mode: 'json' }).$type<MessageStats>(),
 
@@ -70,7 +68,6 @@ export const messageTable = sqliteTable(
     // Indexes
     index('message_parent_id_idx').on(table.parentId),
     index('message_topic_created_idx').on(table.topicId, table.createdAt),
-    index('message_trace_id_idx').on(table.traceId),
     // FTS5 content_rowid key (see the fts_rowid column). UNIQUE so its backing index makes the
     // per-row `MAX(fts_rowid)+1` assignment in the FTS INSERT trigger an O(log N) lookup (a bare
     // column would make a bulk migration O(N²)), and rejects any duplicate value loudly.
@@ -91,10 +88,7 @@ export const messageTable = sqliteTable(
     // Structural role<->null coupling: the virtual root (role='root') is the only row with a
     // null parent, and every content row must have a parent. Makes "content always has a
     // parent" and "root <=> parentId IS NULL" DB invariants, not service-layer discipline.
-    check(
-      'message_root_parent_check',
-      sql`(${table.role} = 'root') = (${table.parentId} is null)`,
-    ),
+    check('message_root_parent_check', sql`(${table.role} = 'root') = (${table.parentId} is null)`),
   ],
 );
 
