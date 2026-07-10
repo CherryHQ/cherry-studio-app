@@ -119,6 +119,14 @@ Provider, Model, Assistant, Tag, Pin, Prompt, Topic, and Message schemas are not
 
 During mobile development, these local schemas may still reset when desktop alignment requires breaking structure or behavior changes. When desktop changes a shared domain, mobile should update both schema and local service behavior rather than preserving a mobile-only interpretation for compatibility.
 
+Development-stage legacy migration-ledger adoption and downgrade bridges are intentionally out of scope. Desktop and mobile also cannot safely open the same physical SQLite file today because their Drizzle timelines differ. Future sharing should use an explicit shared-entity export or sync contract rather than file-level interchange.
+
+## Startup Measurement Boundary
+
+`InitialDataGate` currently includes database open/configuration, bundled migrations, custom FTS SQL, seeding, cached boot preferences, i18n initialization, and orphan pending-Message reconciliation. These consistency steps must finish before the Data Runtime is exposed; they must not be skipped merely to shorten the splash screen.
+
+No physical-device cold-start timing has been captured for this V1 change. Type checking, Jest duration, Metro readiness, and Expo export time are not substitutes for first-frame measurements. A future performance pass should record each startup step and first chat paint on release-like iOS and Android builds, then move only measured nonessential work such as catalog refresh or non-current history prefetch behind the first screen. Until that evidence exists, this change makes no startup-speed improvement claim.
+
 ## Reopen When
 
 - Mobile brings a new desktop domain into scope.

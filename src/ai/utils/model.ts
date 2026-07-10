@@ -29,6 +29,9 @@ export const isGenerateImageModel = (model: Model): boolean =>
 export const isWebSearchModel = (model: Model): boolean =>
   model.capabilities.includes(MODEL_CAPABILITY.WEB_SEARCH);
 
+export const isFunctionCallingModel = (model: Model): boolean =>
+  model.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL);
+
 export const isSupportedThinkingTokenModel = (model: Model): boolean =>
   model.reasoning?.thinkingTokenLimits != null;
 

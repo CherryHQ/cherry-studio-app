@@ -1,6 +1,6 @@
 import type { PreferenceDefaultScopeType, PreferenceKeyType } from '@/data/preference';
 import type { PreferenceService } from '@/data/services/PreferenceService';
-import { WebSearchService } from '@/data/services/WebSearchService';
+import { WebSearchService } from '@/services/webSearch/WebSearchService';
 
 describe('WebSearchService', () => {
   const originalFetch = global.fetch;

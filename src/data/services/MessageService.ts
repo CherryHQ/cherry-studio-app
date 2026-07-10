@@ -442,7 +442,6 @@ export class MessageService {
           stats: dto.stats ?? null,
           status: dto.status ?? 'pending',
           topicId,
-          traceId: dto.traceId ?? null,
         })
         .returning();
 
@@ -487,7 +486,6 @@ export class MessageService {
             stats: dto.stats ?? null,
             status: dto.status ?? 'pending',
             topicId: input.topicId,
-            traceId: dto.traceId ?? null,
           })
           .returning();
         userMessage = rowToMessage(row);
@@ -533,7 +531,6 @@ export class MessageService {
             stats: placeholder.stats ?? null,
             status: placeholder.status ?? 'pending',
             topicId: input.topicId,
-            traceId: placeholder.traceId ?? null,
           })
           .returning();
         placeholders.push(rowToMessage(row));
@@ -597,10 +594,6 @@ export class MessageService {
       if (dto.status !== undefined) {
         updates.status = dto.status;
       }
-      if (dto.traceId !== undefined) {
-        updates.traceId = dto.traceId;
-      }
-
       const [row] = await tx
         .update(messageTable)
         .set(updates)
@@ -674,6 +667,13 @@ export class MessageService {
       }
 
       if (newActiveNodeId !== undefined) {
+        if (
+          newActiveNodeId !== null &&
+          newActiveNodeId === (await getRootMessageIdTx(tx, message.topicId))
+        ) {
+          newActiveNodeId = null;
+        }
+
         if (newActiveNodeId === null) {
           await tx
             .update(topicTable)
@@ -879,7 +879,6 @@ export function rowToMessage(row: MessageRow): Message {
     stats: row.stats ?? null,
     status: row.status as Message['status'],
     topicId: row.topicId,
-    traceId: row.traceId,
     updatedAt: timestampToISO(row.updatedAt),
   };
 }

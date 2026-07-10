@@ -1,5 +1,6 @@
 import type { ProtoProviderConfig } from '@cherrystudio/provider-registry';
 import { buildRuntimeEndpointConfigs, ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { PinService } from '@/data/services/PinService';
 import { providerRegistryService } from '@/data/services/ProviderRegistryService';
 import { type CreateProviderInput, ProviderService } from '@/data/services/ProviderService';
 import type { ApiFeatures, AuthConfig } from '@/data/types/provider';
@@ -86,6 +87,6 @@ export class PresetProviderSeeder implements DatabaseSeeder {
       providerId: 'cherryai',
     });
 
-    await new ProviderService(dbService).batchUpsert(rows);
+    await new ProviderService(dbService, new PinService(dbService)).batchUpsert(rows);
   }
 }

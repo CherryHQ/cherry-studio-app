@@ -3,8 +3,18 @@ import type { Message } from '@/data/types/message';
 import { MessageService } from '../MessageService';
 
 jest.mock('@/data/db/schemas', () => ({
-  messageTable: {},
-  topicTable: {},
+  messageTable: {
+    deletedAt: 'message.deletedAt',
+    id: 'message.id',
+    parentId: 'message.parentId',
+    role: 'message.role',
+    topicId: 'message.topicId',
+  },
+  topicTable: {
+    activeNodeId: 'topic.activeNodeId',
+    deletedAt: 'topic.deletedAt',
+    id: 'topic.id',
+  },
 }));
 
 describe('MessageService', () => {
@@ -55,7 +65,7 @@ describe('MessageService', () => {
   });
 
   test('markMessagesError updates the given ids to error status', async () => {
-    const updateCalls: Array<{ status: string }> = [];
+    const updateCalls: { status: string }[] = [];
     const tx = {
       update: () => ({
         set: (values: { status: string }) => ({
@@ -86,6 +96,52 @@ describe('MessageService', () => {
     await service.markMessagesError([]);
 
     expect(withWriteTx).not.toHaveBeenCalled();
+  });
+
+  test('clears the active node when deleting the first branch below the virtual root', async () => {
+    const topicId = '750e8400-e29b-41d4-a716-446655440000';
+    const message = { ...createMessage('message-1', 'user'), parentId: 'root-1', topicId };
+    const topic = { activeNodeId: message.id, id: topicId };
+    const topicUpdates: Record<string, unknown>[] = [];
+    const db = {
+      all: jest.fn(async () => []),
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({ limit: jest.fn(async () => [topic]) })),
+        })),
+      })),
+    };
+    const tx = {
+      delete: jest.fn(() => ({ where: jest.fn(async () => undefined) })),
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({ limit: jest.fn(async () => [{ id: 'root-1' }]) })),
+        })),
+      })),
+      update: jest.fn(() => ({
+        set: jest.fn((values: Record<string, unknown>) => ({
+          where: jest.fn(async () => {
+            topicUpdates.push(values);
+          }),
+        })),
+      })),
+    };
+    const dbService = {
+      getDb: () => db,
+      withWriteTx: jest.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    } as unknown as DbService;
+    const topicService = { setActiveNodeTx: jest.fn() };
+    const service = new MessageService(dbService, topicService as never);
+    jest.spyOn(service, 'getById').mockResolvedValue(message);
+
+    await expect(service.delete(message.id, true, 'parent')).resolves.toEqual({
+      deletedIds: [message.id],
+      newActiveNodeId: null,
+    });
+    expect(topicUpdates).toContainEqual({ activeNodeId: null });
+    expect(topicService.setActiveNodeTx).not.toHaveBeenCalled();
   });
 });
 

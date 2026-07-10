@@ -9,17 +9,14 @@ import type {
   WebSearchResponse,
   WebSearchSearchKeywordsRequest,
 } from '@/data/types/webSearch';
-import { postProcessWebSearchResponse } from '@/services/webSearch/postProcessing';
-import type { WebSearchProviderDriver } from '@/services/webSearch/providers/factory';
-import { createWebSearchProvider } from '@/services/webSearch/providers/factory';
-import { filterWebSearchResponseWithBlacklist } from '@/services/webSearch/utils/blacklist';
-import { getProviderForCapability, getRuntimeConfig } from '@/services/webSearch/utils/config';
-import { isAbortError } from '@/services/webSearch/utils/errors';
-import {
-  normalizeWebSearchKeywords,
-  normalizeWebSearchUrls,
-} from '@/services/webSearch/utils/input';
-import { ApiKeyRotationState } from '@/services/webSearch/utils/provider';
+import { postProcessWebSearchResponse } from './postProcessing';
+import type { WebSearchProviderDriver } from './providers/factory';
+import { createWebSearchProvider } from './providers/factory';
+import { filterWebSearchResponseWithBlacklist } from './utils/blacklist';
+import { getProviderForCapability, getRuntimeConfig } from './utils/config';
+import { isAbortError } from './utils/errors';
+import { normalizeWebSearchKeywords, normalizeWebSearchUrls } from './utils/input';
+import { ApiKeyRotationState } from './utils/provider';
 
 const logger = loggerService.withContext('WebSearchService');
 

@@ -53,6 +53,7 @@ function rowToAssistant(
     modelId: row.modelId as UniqueModelId | null,
     modelName,
     name: row.name,
+    orderKey: row.orderKey,
     prompt: row.prompt,
     settings: row.settings,
     tags,
