@@ -82,32 +82,10 @@
           "ios": {
             "deploymentTarget": "17.0",
             "buildReactNativeFromSource": true
-          },
-          "android": {
-            "packagingOptions": {
-              "jniLibs": {
-                "pickFirsts": [
-                  "**/libratex_ffi.so",
-                  "**/libc++_shared.so",
-                  "**/libfbjni.so"
-                ]
-              },
-              "resources": {
-                "pickFirsts": [
-                  "**/io/ratex/DisplayItem*.dex",
-                  "**/io/ratex/DisplayList*.dex",
-                  "**/io/ratex/RaTeX*.dex",
-                  "**/io/ratex/rn/*.dex"
-                ],
-                "excludes": [
-                  "META-INF/INDEX.LIST",
-                  "META-INF/io.netty.versions.properties"
-                ]
-              }
-            }
           }
         }
       ],
+      "./plugins/withRatexPackagingOptions.js",
       "expo-status-bar"
     ],
     "experiments": {
