@@ -95,7 +95,7 @@
     "i18next": "^26.1.0",
     "katex": "0.17.0",
     "lucide-uniwind": "workspace:*",
-    "ratex-react-native": "^0.1.4",
+    "ratex-react-native": "^0.1.13",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-i18next": "^17.0.7",
