@@ -82,7 +82,18 @@
           "ios": {
             "deploymentTarget": "17.0",
             "buildReactNativeFromSource": true
+          },
+        "android": {
+          "packagingOptions": {
+            "jniLibs": {
+              "pickFirsts": [
+                "**/libratex_ffi.so",
+                "**/libc++_shared.so",
+                "**/libfbjni.so"
+              ]
+            }
           }
+        }
         }
       ],
       "expo-status-bar"
