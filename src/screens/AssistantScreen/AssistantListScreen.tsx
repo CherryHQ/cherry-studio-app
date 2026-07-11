@@ -6,9 +6,6 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, Pressable, ScrollView, Text, View } from 'react-native';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
-import { AssistantCatalogSheet } from '@/components/assistantCatalog/AssistantCatalogSheet';
-import type { AssistantCatalogPreset } from '@/data/presets/assistantCatalogService';
-import { toCreateAssistantDtoFromCatalogPreset } from '@/data/presets/assistantCatalogService';
 import type { Assistant } from '@/data/types/assistant';
 import { useAssistantMutations, useAssistantsApi } from '@/hooks/chat';
 import { useSettingsConfirmDialog } from '@/screens/SettingsScreen/hooks/useSettingsConfirmDialog';
@@ -20,8 +17,7 @@ export default function AssistantListScreen() {
   const router = useRouter();
   const { toast } = useToast();
   const { assistants, isLoading } = useAssistantsApi();
-  const { createAssistant, deleteAssistant } = useAssistantMutations();
-  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
+  const { deleteAssistant } = useAssistantMutations();
   const { confirmDialog, requestConfirm } = useSettingsConfirmDialog();
   // MenuView (iOS) hosts each row in a SwiftUI `Host matchContents` that sizes to
   // the child's intrinsic width; without an explicit width the row's flex layout
@@ -39,38 +35,15 @@ export default function AssistantListScreen() {
   }, [router]);
 
   const openCatalog = useCallback(() => {
-    setIsCatalogOpen(true);
-  }, []);
-
-  const closeCatalog = useCallback(() => {
-    setIsCatalogOpen(false);
-  }, []);
-
-  const handleAddPreset = useCallback(
-    async (preset: AssistantCatalogPreset) => {
-      try {
-        await createAssistant(toCreateAssistantDtoFromCatalogPreset(preset));
-        toast.show({
-          label: t('assistant.toast.addSuccess', { name: preset.name }),
-          variant: 'success',
-        });
-      } catch {
-        toast.show({
-          label: t('assistant.toast.addFailed'),
-          variant: 'danger',
-        });
-        throw new Error('addPreset failed');
-      }
-    },
-    [createAssistant, t, toast],
-  );
+    router.push('/assistants/catalog');
+  }, [router]);
 
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
         accessibilityLabel: t('assistant.actions.catalog'),
         androidIcon: StoreIcon,
-        icon: 'store',
+        icon: 'storefront',
         key: 'open-catalog',
         onPress: openCatalog,
       },
@@ -138,11 +111,6 @@ export default function AssistantListScreen() {
         )}
       </ScrollView>
       {confirmDialog}
-      <AssistantCatalogSheet
-        isOpen={isCatalogOpen}
-        onAddPreset={handleAddPreset}
-        onClose={closeCatalog}
-      />
     </>
   );
 }
