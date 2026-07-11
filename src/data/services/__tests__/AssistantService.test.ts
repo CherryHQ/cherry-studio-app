@@ -7,6 +7,7 @@ import type { ModelService } from '../ModelService';
 import type { PinService } from '../PinService';
 import type { PreferenceService } from '../PreferenceService';
 import type { TagService } from '../TagService';
+import { applyMoves, insertWithOrderKey } from '../utils/orderKey';
 
 jest.mock('uuid', () => ({ v7: jest.fn(() => '00000000-0000-7000-8000-000000000000') }));
 jest.mock('../utils/orderKey', () => ({
@@ -15,6 +16,10 @@ jest.mock('../utils/orderKey', () => ({
 }));
 
 describe('AssistantService', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   test('reads desktop order and opaque knowledge/MCP relation ids without resolving targets', async () => {
     const row = createAssistantRow({
       settings: {
@@ -92,6 +97,45 @@ describe('AssistantService', () => {
     expect(transaction.delete).not.toHaveBeenCalled();
     expect(transaction.insert).not.toHaveBeenCalled();
   });
+
+  test('scopes create and reorder operations to live assistants', async () => {
+    const row = createAssistantRow();
+    jest.mocked(insertWithOrderKey).mockResolvedValue(row);
+    const queryRows = Object.assign(Promise.resolve([{ id: row.id }]), {
+      limit: jest.fn(async () => [{ id: row.id }]),
+    });
+    const tx = {
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({ where: jest.fn(() => queryRows) })),
+      })),
+    };
+    const tagService = {
+      getTagsByEntitiesTx: jest.fn(async () => new Map([[row.id, []]])),
+    } as unknown as TagService;
+    const service = new AssistantService(
+      {
+        withWriteTx: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
+      } as unknown as DbService,
+      {} as ModelService,
+      { get: jest.fn(async () => null) } as unknown as PreferenceService,
+      tagService,
+      {} as PinService,
+    );
+
+    await service.create({ name: 'Assistant' });
+    await service.reorder(row.id, { position: 'first' });
+    await service.reorderBatch([{ anchor: { position: 'last' }, id: row.id }]);
+
+    expect(jest.mocked(insertWithOrderKey).mock.calls[0]?.[3]).toEqual(
+      expect.objectContaining({ scope: expect.anything() }),
+    );
+    expect(jest.mocked(applyMoves).mock.calls[0]?.[3]).toEqual(
+      expect.objectContaining({ scope: expect.anything() }),
+    );
+    expect(jest.mocked(applyMoves).mock.calls[1]?.[3]).toEqual(
+      expect.objectContaining({ scope: expect.anything() }),
+    );
+  });
 });
 
 function createReadDb(row: AssistantRow) {
@@ -161,7 +205,7 @@ function createAssistantRow(overrides: Partial<AssistantRow> = {}): AssistantRow
     createdAt: 1_767_225_600_000,
     deletedAt: null,
     description: '',
-    emoji: 'A',
+    emoji: '😀',
     id: '00000000-0000-4000-8000-000000000001',
     modelId: null,
     name: 'Assistant',

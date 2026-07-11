@@ -439,8 +439,7 @@ export class AiService {
 
   /**
    * Priority: explicit `uniqueModelId` > `assistant.modelId` > runtime default model.
-   * Assistant-less topics do not persist `DEFAULT_ASSISTANT_ID`; they resolve
-   * `chat.default_model_id` at send time, matching desktop.
+   * Assistant-less topics resolve `chat.default_model_id` at send time.
    */
   private async getProviderAndModel(request: AiBaseRequest & { chatId?: string }) {
     let assistant: Assistant | undefined;

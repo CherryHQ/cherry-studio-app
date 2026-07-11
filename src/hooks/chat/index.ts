@@ -1,11 +1,9 @@
 export {
-  composeDefaultAssistant,
   useAssistant,
   useAssistantApiById,
   useAssistantMutations,
   useAssistants,
   useAssistantsApi,
-  useDefaultAssistant,
 } from './useAssistant';
 export { useHydrateTopicDetails } from './useHydrateTopicDetails';
 export {

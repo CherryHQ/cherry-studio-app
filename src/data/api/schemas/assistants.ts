@@ -13,8 +13,6 @@ import {
 const ASSISTANT_MUTABLE_FIELDS = {
   description: true,
   emoji: true,
-  knowledgeBaseIds: true,
-  mcpServerIds: true,
   modelId: true,
   name: true,
   prompt: true,
@@ -26,7 +24,8 @@ const TagIdsField = z.array(TagIdSchema).optional();
 export const CreateAssistantSchema = AssistantSchema.pick(ASSISTANT_MUTABLE_FIELDS)
   .partial()
   .required({ name: true })
-  .extend({ tagIds: TagIdsField });
+  .extend({ tagIds: TagIdsField })
+  .strict();
 export type CreateAssistantDto = z.infer<typeof CreateAssistantSchema>;
 
 export const UpdateAssistantSchema = AssistantSchema.pick(ASSISTANT_MUTABLE_FIELDS)
@@ -34,7 +33,8 @@ export const UpdateAssistantSchema = AssistantSchema.pick(ASSISTANT_MUTABLE_FIEL
   .extend({
     settings: AssistantSettingsSchema.partial().optional(),
     tagIds: TagIdsField,
-  });
+  })
+  .strict();
 export type UpdateAssistantDto = z.infer<typeof UpdateAssistantSchema>;
 
 export const ASSISTANTS_DEFAULT_PAGE = 1;

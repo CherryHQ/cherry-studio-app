@@ -12,8 +12,8 @@ export const CreateTopicSchema = TopicSchema.pick({
   .partial()
   .extend({
     assistantId: z.string().nullable().optional(),
-    sourceNodeId: z.string().optional(),
-  });
+  })
+  .strict();
 export type CreateTopicDto = z.infer<typeof CreateTopicSchema>;
 
 export const UpdateTopicSchema = TopicSchema.pick({

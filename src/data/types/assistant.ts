@@ -31,8 +31,6 @@ export const AssistantSettingsSchema = z
   .passthrough();
 export type AssistantSettings = z.infer<typeof AssistantSettingsSchema>;
 
-export const DEFAULT_ASSISTANT_ID = 'default' as const;
-
 export const DEFAULT_ASSISTANT_SETTINGS: AssistantSettings = {
   customParameters: [],
   enableMaxTokens: false,
@@ -54,7 +52,7 @@ export const AssistantIdSchema = z.uuidv4();
 export const AssistantSchema = z.strictObject({
   createdAt: z.iso.datetime(),
   description: z.string(),
-  emoji: z.string(),
+  emoji: z.emoji(),
   id: AssistantIdSchema,
   knowledgeBaseIds: z.array(z.string()),
   mcpServerIds: z.array(z.string()),
