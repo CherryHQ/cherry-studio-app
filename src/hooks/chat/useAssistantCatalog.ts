@@ -10,27 +10,25 @@ import {
 } from '@/data/presets/assistantCatalogService';
 import { useAssistantMutations } from '@/hooks/chat/useAssistant';
 
+export interface UseAssistantCatalogReturn {
+  isLoading: boolean;
+  presets: AssistantCatalogPreset[];
+  addPreset: (preset: AssistantCatalogPreset) => Promise<{ id: string }>;
+  getTabs: (allLabel: string) => AssistantCatalogTab[];
+  filterPresets: (activeTab: string, search: string) => AssistantCatalogPreset[];
+}
 export function useAssistantCatalog({ enabled = true }: { enabled?: boolean } = {}) {
   const { i18n } = useTranslation();
   const language = i18n.language ?? 'en-US';
-  const [presets, setPresets] = useState<AssistantCatalogPreset[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [presets, setPresets] = useState<AssistantCatalogPreset[]>(() =>
+    enabled ? loadAssistantCatalogPresets(language) : [],
+  );
+  const isLoading = false;
   const { createAssistant } = useAssistantMutations();
-
   useEffect(() => {
     if (!enabled) return;
-    let cancelled = false;
-    setIsLoading(true);
-    queueMicrotask(() => {
-      const data = loadAssistantCatalogPresets(language);
-      if (!cancelled) {
-        setPresets(data);
-        setIsLoading(false);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
+    const data = loadAssistantCatalogPresets(language);
+    setPresets(data);
   }, [enabled, language]);
 
   const addPreset = useCallback(

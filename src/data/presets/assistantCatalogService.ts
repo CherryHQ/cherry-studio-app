@@ -52,6 +52,8 @@ import agentsEn from './data/agents-en.json';
 // (Dynamic `require(`./data/${fileName}`)` is not supported by Metro.)
 import agentsZh from './data/agents-zh.json';
 
+/** @internal exported for testing */
+export 
 function normalizePresets(value: unknown): AssistantCatalogPreset[] {
   if (!Array.isArray(value)) return [];
   return value.filter((p): p is AssistantCatalogPreset =>
@@ -61,7 +63,7 @@ function normalizePresets(value: unknown): AssistantCatalogPreset[] {
 
 /** Load bundled assistant presets JSON. */
 export function loadAssistantCatalogPresets(language: string): AssistantCatalogPreset[] {
-  const data: unknown = language === 'zh-CN' ? agentsZh : agentsEn;
+  const data: unknown = language.startsWith('zh') ? agentsZh : agentsEn;
   return normalizePresets(data);
 }
 
@@ -111,7 +113,8 @@ export function filterAssistantCatalogPresets(
 export function toCreateAssistantDtoFromCatalogPreset(
   preset: AssistantCatalogPreset,
 ): CreateAssistantDto {
-  const dto: CreateAssistantDto = { name: preset.name.trim(), prompt: preset.prompt?.trim() || '' };
+  const dto: CreateAssistantDto = { name: preset.name.trim() };
+  if (preset.prompt?.trim()) dto.prompt = preset.prompt.trim();
   if (preset.description?.trim()) dto.description = preset.description.trim();
   if (preset.emoji?.trim()) dto.emoji = preset.emoji.trim();
   if (preset.defaultModel?.provider && preset.defaultModel.id) {

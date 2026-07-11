@@ -3,6 +3,8 @@ import {
   buildAssistantCatalogTabs,
   filterAssistantCatalogPresets,
   getPresetKey,
+  loadAssistantCatalogPresets,
+  normalizePresets,
   toCreateAssistantDtoFromCatalogPreset,
 } from '../assistantCatalogService';
 
@@ -217,18 +219,105 @@ describe('toCreateAssistantDtoFromCatalogPreset', () => {
     expect(dto.modelId).toBe('openai::gpt-4o');
   });
 
-  it('sets empty string prompt when preset has no prompt', () => {
+  it('omits prompt from DTO when preset has no prompt', () => {
     const preset: AssistantCatalogPreset = {
       id: 'preset-noprompt',
       name: 'No Prompt',
     };
     const dto = toCreateAssistantDtoFromCatalogPreset(preset);
-    expect(dto.prompt).toBe('');
+    expect(dto.prompt).toBeUndefined();
+  });
+
+  it('omits modelId when defaultModel has only id without provider', () => {
+    const preset: AssistantCatalogPreset = {
+      id: 'preset-idonly',
+      name: 'Id Only',
+      prompt: 'Hello',
+      defaultModel: { id: 'gpt-4o' },
+    };
+    const dto = toCreateAssistantDtoFromCatalogPreset(preset);
+    expect(dto.modelId).toBeUndefined();
+  });
+
+  it('omits modelId when defaultModel has only provider without id', () => {
+    const preset: AssistantCatalogPreset = {
+      id: 'preset-provideronly',
+      name: 'Provider Only',
+      prompt: 'Hello',
+      defaultModel: { provider: 'openai' },
+    };
+    const dto = toCreateAssistantDtoFromCatalogPreset(preset);
+    expect(dto.modelId).toBeUndefined();
+  });
+  it('returns the preset id', () => {
+    expect(getPresetKey({ id: 'abc-123' })).toBe('abc-123');
   });
 });
 
-describe('getPresetKey', () => {
-  it('returns the preset id', () => {
-    expect(getPresetKey({ id: 'abc-123' })).toBe('abc-123');
+describe('normalizePresets', () => {
+  it('returns valid presets from an array', () => {
+    const result = normalizePresets([{ id: 'a', name: 'A', prompt: 'hello' }]);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('a');
+  });
+
+  it('filters out null entries', () => {
+    const result = normalizePresets([{ id: 'a', name: 'A' }, null, { id: 'b', name: 'B' }]);
+    expect(result).toHaveLength(2);
+  });
+
+  it('filters out entries missing id', () => {
+    const result = normalizePresets([{ name: 'A', prompt: 'hi' }, { id: 'b', name: 'B' }]);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('b');
+  });
+
+  it('filters out entries missing name', () => {
+    const result = normalizePresets([{ id: 'a', prompt: 'hi' }, { id: 'b', name: 'B' }]);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('b');
+  });
+
+  it('filters out non-object entries', () => {
+    const result = normalizePresets([{ id: 'a', name: 'A' }, 'string', 42]);
+    expect(result).toHaveLength(1);
+  });
+
+  it('returns empty array for non-array input', () => {
+    expect(normalizePresets(null)).toEqual([]);
+    expect(normalizePresets(undefined)).toEqual([]);
+    expect(normalizePresets('string')).toEqual([]);
+    expect(normalizePresets(42)).toEqual([]);
+    expect(normalizePresets({})).toEqual([]);
+  });
+});
+
+describe('loadAssistantCatalogPresets', () => {
+  it('returns English presets for non-Chinese languages', () => {
+    const result = loadAssistantCatalogPresets('en-US');
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThan(0);
+    // verify first entry has required fields
+    expect(typeof result[0].id).toBe('string');
+    expect(typeof result[0].name).toBe('string');
+  });
+
+  it('returns Chinese presets for zh-CN', () => {
+    const zhResult = loadAssistantCatalogPresets('zh-CN');
+    const enResult = loadAssistantCatalogPresets('en-US');
+    // Different data sets — at minimum first entry names differ
+    expect(zhResult[0].name).not.toBe(enResult[0].name);
+  });
+
+  it('returns Chinese presets for zh-TW', () => {
+    const zhResult = loadAssistantCatalogPresets('zh-TW');
+    const enResult = loadAssistantCatalogPresets('en-US');
+    expect(zhResult[0].name).not.toBe(enResult[0].name);
+  });
+
+  it('returns Chinese presets for zh-Hans', () => {
+    const zhResult = loadAssistantCatalogPresets('zh-Hans');
+    const enResult = loadAssistantCatalogPresets('en-US');
+    expect(zhResult[0].name).not.toBe(enResult[0].name);
   });
 });

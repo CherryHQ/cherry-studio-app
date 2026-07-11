@@ -60,6 +60,8 @@ export function AssistantCatalogSheet({ isOpen, onAddPreset, onClose }: Props) {
       setAddingIds((prev) => new Set(prev).add(key));
       try {
         await onAddPreset(preset);
+      } catch {
+        // ponytail: silent failure — parent should surface toast on error
       } finally {
         setAddingIds((prev) => {
           const next = new Set(prev);
@@ -129,6 +131,7 @@ export function AssistantCatalogSheet({ isOpen, onAddPreset, onClose }: Props) {
               data={visiblePresets}
               estimatedItemSize={72}
               keyExtractor={(item) => item.id}
+              recycleItems
               renderItem={renderItem}
               className="flex-1"
               contentContainerStyle={{ paddingBottom: 24 }}
