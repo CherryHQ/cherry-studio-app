@@ -107,6 +107,7 @@ function normalizeRemoteModels(
       family: remoteModel.family,
       group: remoteModel.group,
       id,
+      imageGeneration: remoteModel.imageGeneration,
       inputModalities: remoteModel.inputModalities,
       isDeprecated: remoteModel.isDeprecated ?? false,
       isEnabled: remoteModel.isEnabled ?? true,
@@ -122,6 +123,7 @@ function normalizeRemoteModels(
       pricing: remoteModel.pricing,
       providerId,
       reasoning: remoteModel.reasoning,
+      replaceWith: remoteModel.replaceWith,
       supportsStreaming: remoteModel.supportsStreaming ?? true,
     };
 
@@ -157,6 +159,7 @@ function enrichRemoteModelFromRegistry(
     endpointTypes: preferRegistryArray(merged.endpointTypes, model.endpointTypes),
     family: merged.family ?? model.family,
     group: merged.group ?? model.group,
+    imageGeneration: merged.imageGeneration ?? model.imageGeneration,
     inputModalities: preferRegistryArray(merged.inputModalities, model.inputModalities),
     maxInputTokens: merged.maxInputTokens ?? model.maxInputTokens,
     maxOutputTokens: merged.maxOutputTokens ?? model.maxOutputTokens,
@@ -167,6 +170,7 @@ function enrichRemoteModelFromRegistry(
     presetModelId: registryData.presetModel.id,
     pricing: merged.pricing ?? model.pricing,
     reasoning: merged.reasoning ?? model.reasoning,
+    replaceWith: merged.replaceWith ?? model.replaceWith,
   };
 }
 

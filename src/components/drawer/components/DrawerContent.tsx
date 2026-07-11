@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { StyleSheet, TextInput, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, TextInput, useWindowDimensions } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useDrawerActions, useDrawerPanelState } from '../context/DrawerProvider';
 import { useDrawerHeaderAnimation } from '../hooks/useDrawerHeaderAnimation';
 import { drawerContentLayoutTransition } from '../utils/drawerAnimation';
+import { DrawerFeatureArea } from './DrawerFeatureArea';
 import { DrawerHeader } from './DrawerHeader';
 import { DrawerTopicList } from './DrawerTopicList';
 
 export function DrawerContent() {
+  const { t } = useTranslation();
   const inputRef = useRef<TextInput>(null);
   const { width } = useWindowDimensions();
   const { isOpen, isSearchActive, searchText } = useDrawerPanelState();
@@ -70,6 +73,14 @@ export function DrawerContent() {
           searchText={searchText}
           setSearchText={setSearchText}
         />
+        {isSearchActive ? null : (
+          <Animated.View layout={drawerContentLayoutTransition}>
+            <DrawerFeatureArea />
+            <Text className="px-5 pt-3 pb-1 font-medium text-foreground-secondary text-sm">
+              {t('navigation.recents')}
+            </Text>
+          </Animated.View>
+        )}
         <Animated.View
           className="flex-1"
           layout={drawerContentLayoutTransition}

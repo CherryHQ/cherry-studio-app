@@ -18,7 +18,6 @@ import { mergeWebSearchProviderOverride } from '../WebSearchScreen/utils/provide
 const preferenceMapping = {
   compressionCutoffLimit: 'chat.web_search.compression.cutoff_limit',
   compressionMethod: 'chat.web_search.compression.method',
-  defaultFetchUrlsProvider: 'chat.web_search.default_fetch_urls_provider',
   defaultSearchKeywordsProvider: 'chat.web_search.default_search_keywords_provider',
   maxResults: 'chat.web_search.max_results',
   providerOverrides: 'chat.web_search.provider_overrides',
@@ -26,12 +25,6 @@ const preferenceMapping = {
 
 const searchKeywordsProviderOptions = createWebSearchProviderOptions(
   getMobileSupportedWebSearchProvidersByCapability('searchKeywords').filter(
-    (provider) => provider.type === 'api',
-  ),
-);
-
-const fetchUrlsProviderOptions = createWebSearchProviderOptions(
-  getMobileSupportedWebSearchProvidersByCapability('fetchUrls').filter(
     (provider) => provider.type === 'api',
   ),
 );
@@ -60,13 +53,6 @@ export function useWebSearchProviderPreferences() {
   const handleSearchKeywordsProviderChange = useCallback(
     (providerId: WebSearchProviderId | null) => {
       void setPreferences({ defaultSearchKeywordsProvider: providerId });
-    },
-    [setPreferences],
-  );
-
-  const handleFetchUrlsProviderChange = useCallback(
-    (providerId: WebSearchProviderId | null) => {
-      void setPreferences({ defaultFetchUrlsProvider: providerId });
     },
     [setPreferences],
   );
@@ -125,11 +111,6 @@ export function useWebSearchProviderPreferences() {
       options: compressionMethodOptions,
       value: preferences.compressionMethod,
       onValueChange: handleCompressionMethodChange,
-    },
-    fetchUrls: {
-      options: fetchUrlsProviderOptions,
-      value: preferences.defaultFetchUrlsProvider,
-      onValueChange: handleFetchUrlsProviderChange,
     },
     maxResults: {
       value: preferences.maxResults,

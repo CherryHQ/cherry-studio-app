@@ -1,4 +1,5 @@
-import m0000 from '../../../migrations/sqlite-drizzle/0000_pink_the_fury.sql';
+import m0000 from '../../../migrations/sqlite-drizzle/0000_release_baseline.sql';
+import m0001 from '../../../migrations/sqlite-drizzle/0001_message-status-index.sql';
 import journal from '../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main
@@ -9,5 +10,6 @@ export const migrations = {
   journal,
   migrations: {
     m0000,
+    m0001,
   },
 };

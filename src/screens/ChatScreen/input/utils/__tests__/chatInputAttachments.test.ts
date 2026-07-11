@@ -4,7 +4,6 @@ import {
   createChatInputMessageParts,
   createDocumentAttachmentDraft,
   createPhotoAttachmentDraft,
-  getChatInputFileExtension,
   hasChatInputSendableContent,
   isChatInputImageFileName,
   isChatInputImageMediaType,
@@ -89,12 +88,6 @@ describe('chat input attachments', () => {
     expect(isChatInputImageFileName('photo.HEIC')).toBe(true);
     expect(isChatInputImageFileName('brief.pdf')).toBe(false);
     expect(isChatInputImageFileName(undefined)).toBe(false);
-  });
-
-  test('extracts compact file extensions', () => {
-    expect(getChatInputFileExtension('report.pdf')).toBe('PDF');
-    expect(getChatInputFileExtension('archive.longextension')).toBe('LONGE');
-    expect(getChatInputFileExtension('README')).toBe('');
   });
 
   test('creates message parts with text before file attachments', () => {

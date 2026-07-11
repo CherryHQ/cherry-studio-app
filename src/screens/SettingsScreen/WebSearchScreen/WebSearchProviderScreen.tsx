@@ -2,11 +2,12 @@ import { Redirect, useLocalSearchParams } from 'expo-router';
 import { SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/data/preference';
 import { isMobileSupportedWebSearchProviderId } from '@/data/presets/webSearchProviders';
+import { openExternalUrl } from '@/utils/openExternalUrl';
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';
 import {
@@ -38,14 +39,14 @@ export default function WebSearchProviderSettingsScreen() {
       return;
     }
 
-    Linking.openURL(officialWebsite).catch(() => undefined);
+    void openExternalUrl(officialWebsite);
   }, [officialWebsite]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () =>
       officialWebsite
         ? [
             {
-              accessibilityLabel: t('settings.websearch.provider.officialWebsite'),
+              accessibilityLabel: t('common.officialWebsite'),
               androidIcon: SquareArrowOutUpRightIcon,
               icon: 'arrow.up.right.square',
               key: 'official-website',

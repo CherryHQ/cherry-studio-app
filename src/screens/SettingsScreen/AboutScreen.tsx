@@ -10,10 +10,11 @@ import {
 } from 'lucide-uniwind/png';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, Linking, ScrollView, Text, View } from 'react-native';
+import { Image, ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/components/headers';
+import { openExternalUrl } from '@/utils/openExternalUrl';
 import { SettingsSection } from './components/SettingsSection';
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'latest';
@@ -38,7 +39,7 @@ export default function AboutSettingsScreen() {
   const { t } = useTranslation();
 
   const openLink = useCallback((url: string) => {
-    Linking.openURL(url).catch(() => undefined);
+    void openExternalUrl(url);
   }, []);
 
   return (

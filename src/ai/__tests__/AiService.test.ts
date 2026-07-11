@@ -6,6 +6,14 @@ import { createUniqueModelId, type Model, type UniqueModelId } from '@/data/type
 import type { Provider } from '@/data/types/provider';
 
 const mockGenerate = jest.fn(async () => ({ text: 'ok', usage: undefined }));
+const mockStream = jest.fn(
+  () =>
+    new ReadableStream({
+      start(controller) {
+        controller.close();
+      },
+    }),
+);
 const mockAgentConstructor = jest.fn();
 
 jest.mock('@cherrystudio/ai-core', () => ({
@@ -21,7 +29,7 @@ jest.mock('@/integration/cherryAi', () => ({
 jest.mock('@/ai/runtime/aiSdk/Agent', () => ({
   Agent: jest.fn().mockImplementation((params) => {
     mockAgentConstructor(params);
-    return { generate: mockGenerate };
+    return { generate: mockGenerate, stream: mockStream };
   }),
 }));
 
@@ -256,6 +264,154 @@ describe('AiService web search plugin wiring', () => {
       }),
     );
   });
+
+  it('exposes configured external web search as a bounded agent tool', async () => {
+    const model = createModel('gpt-4o-mini', {
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL, MODEL_CAPABILITY.WEB_SEARCH],
+    });
+    const assistant = createAssistant(model.id);
+    assistant.settings.enableWebSearch = true;
+    assistant.settings.enableMaxToolCalls = true;
+    assistant.settings.maxToolCalls = 3;
+    const services = createServices({ assistant, model, webSearchProviderId: 'tavily' });
+    const service = new AiService(services);
+    const controller = new AbortController();
+
+    await service.streamText({
+      assistantId: assistant.id,
+      chatId: 'topic-1',
+      messages: [],
+      requestOptions: { signal: controller.signal },
+      trigger: 'submit-message',
+    });
+
+    const params = mockAgentConstructor.mock.calls.at(-1)?.[0];
+    expect(params).toEqual(
+      expect.objectContaining({
+        options: expect.objectContaining({ stopWhen: expect.any(Function) }),
+        plugins: expect.not.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+        tools: expect.objectContaining({ web_search: expect.any(Object) }),
+      }),
+    );
+    expect(params.options.stopWhen({ steps: Array.from({ length: 2 }, () => ({})) })).toBe(false);
+    expect(params.options.stopWhen({ steps: Array.from({ length: 3 }, () => ({})) })).toBe(true);
+
+    const result = await params.tools.web_search.execute(
+      { query: 'Cherry Studio mobile' },
+      { abortSignal: controller.signal },
+    );
+
+    expect(services.webSearch.searchKeywords).toHaveBeenCalledWith(
+      { keywords: ['Cherry Studio mobile'] },
+      { signal: controller.signal },
+    );
+    expect(result).toEqual([
+      {
+        content: 'Mobile result',
+        id: 1,
+        title: 'Cherry Studio',
+        url: 'https://example.com/cherry',
+      },
+    ]);
+  });
+
+  it('uses provider-native web search alone when no external provider is configured', async () => {
+    const model = createModel('gpt-4o-mini', {
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL, MODEL_CAPABILITY.WEB_SEARCH],
+    });
+    const assistant = createAssistant(model.id);
+    assistant.settings.enableWebSearch = true;
+    const service = new AiService(createServices({ assistant, model }));
+
+    await service.streamText({
+      assistantId: assistant.id,
+      chatId: 'topic-1',
+      messages: [],
+      requestOptions: { signal: new AbortController().signal },
+      trigger: 'submit-message',
+    });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+        tools: undefined,
+      }),
+    );
+  });
+
+  it('falls back to provider-native search when the model cannot call the external tool', async () => {
+    const model = createModel('gpt-4o-mini', {
+      capabilities: [MODEL_CAPABILITY.WEB_SEARCH],
+    });
+    const assistant = createAssistant(model.id);
+    assistant.settings.enableWebSearch = true;
+    const service = new AiService(
+      createServices({ assistant, model, webSearchProviderId: 'tavily' }),
+    );
+
+    await service.streamText({
+      assistantId: assistant.id,
+      chatId: 'topic-1',
+      messages: [],
+      requestOptions: { signal: new AbortController().signal },
+      trigger: 'submit-message',
+    });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+        tools: undefined,
+      }),
+    );
+  });
+
+  it('exposes external search to report missing configuration when no native search exists', async () => {
+    const model = createModel('gpt-4o-mini', {
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL],
+    });
+    const assistant = createAssistant(model.id);
+    assistant.settings.enableWebSearch = true;
+    const service = new AiService(createServices({ assistant, model }));
+
+    await service.streamText({
+      assistantId: assistant.id,
+      chatId: 'topic-1',
+      messages: [],
+      requestOptions: { signal: new AbortController().signal },
+      trigger: 'submit-message',
+    });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.not.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+        tools: expect.objectContaining({ web_search: expect.any(Object) }),
+      }),
+    );
+  });
+
+  it('forces provider-native search for OpenRouter sonar models even when external search is configured', async () => {
+    const provider = createProvider({ id: 'openrouter', presetProviderId: 'openrouter' });
+    const model = createModel('perplexity/sonar-pro', { providerId: 'openrouter' });
+    const assistant = createAssistant(model.id);
+    const service = new AiService(
+      createServices({ assistant, model, provider, webSearchProviderId: 'tavily' }),
+    );
+
+    await service.streamText({
+      assistantId: assistant.id,
+      chatId: 'topic-1',
+      messages: [],
+      requestOptions: { signal: new AbortController().signal },
+      trigger: 'submit-message',
+    });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+        tools: undefined,
+      }),
+    );
+  });
 });
 
 function createServices({
@@ -264,6 +420,7 @@ function createServices({
   model,
   models,
   provider = createProvider(),
+  webSearchProviderId = null,
   webSearchPreferences = {
     'chat.web_search.max_results': 5,
     'chat.web_search.exclude_domains': [],
@@ -274,6 +431,7 @@ function createServices({
   model?: Model;
   models?: Model[];
   provider?: Provider;
+  webSearchProviderId?: string | null;
   webSearchPreferences?: {
     'chat.web_search.max_results': number;
     'chat.web_search.exclude_domains': string[];
@@ -290,13 +448,31 @@ function createServices({
       getById: jest.fn(async (id: UniqueModelId) => modelsById.get(id)),
     },
     preference: {
-      get: jest.fn(async () => defaultModelId ?? null),
+      get: jest.fn(async (key: string) =>
+        key === 'chat.default_model_id' ? (defaultModelId ?? null) : webSearchProviderId,
+      ),
       getMultipleRawCached: jest.fn(() => webSearchPreferences),
     },
     provider: {
       getAuthConfig: jest.fn(async () => null),
       getByProviderId: jest.fn(async () => provider),
       getRotatedApiKey: jest.fn(async () => 'rotated-key'),
+    },
+    webSearch: {
+      searchKeywords: jest.fn(async () => ({
+        capability: 'searchKeywords',
+        inputs: ['Cherry Studio mobile'],
+        providerId: 'tavily',
+        query: 'Cherry Studio mobile',
+        results: [
+          {
+            content: 'Mobile result',
+            sourceInput: 'Cherry Studio mobile',
+            title: 'Cherry Studio',
+            url: 'https://example.com/cherry',
+          },
+        ],
+      })),
     },
   } as unknown as AiServiceDependencies;
 }
@@ -306,7 +482,6 @@ function createProvider(overrides: Partial<Provider> = {}): Provider {
     apiFeatures: {
       arrayContent: true,
       developerRole: true,
-      enableThinking: false,
       serviceTier: true,
       streamOptions: true,
       verbosity: false,
@@ -356,6 +531,7 @@ function createAssistant(modelId: Model['id'] | null): Assistant {
     modelId,
     modelName: null,
     name: 'Assistant',
+    orderKey: 'a0',
     prompt: '',
     settings: {
       ...DEFAULT_ASSISTANT_SETTINGS,

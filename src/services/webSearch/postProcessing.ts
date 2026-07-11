@@ -1,3 +1,4 @@
+import { sliceByTokens } from 'tokenx';
 import type {
   WebSearchCompressionConfig,
   WebSearchExecutionConfig,
@@ -40,13 +41,11 @@ function applyCutoff(
   const perResultLimit = Math.max(1, Math.floor(config.cutoffLimit / results.length));
 
   return results.map((result) => {
-    if (result.content.length <= perResultLimit) {
-      return result;
-    }
+    const sliced = sliceByTokens(result.content, 0, perResultLimit);
 
     return {
       ...result,
-      content: `${result.content.slice(0, perResultLimit)}...`,
+      content: sliced.length < result.content.length ? `${sliced}...` : sliced,
     };
   });
 }

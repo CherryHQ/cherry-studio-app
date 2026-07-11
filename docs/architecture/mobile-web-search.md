@@ -12,7 +12,7 @@ Cherry Mobile has two different concepts that are easy to confuse:
 Model-native web search configured through AI provider options during an AI request. This path is built in `src/ai/utils/websearch.ts` and participates in `AiService` provider options.
 
 **Web Search Provider**:
-An external search/fetch provider executed by `WebSearchService`. This path is preference-backed and uses its own provider registry.
+An external search/fetch provider executed by `WebSearchService`. This path is preference-backed and uses its own provider registry. It is also bridged into AI requests as the `web_search` tool (see [Web Search In AI Requests](#web-search-in-ai-requests)), but its execution, registry, and persistence stay independent of AI provider options.
 
 Do not use "web search" without specifying which path is being discussed when architecture or persistence matters.
 
@@ -37,6 +37,18 @@ Runtime behavior:
 
 Abort errors are propagated when the caller's signal is aborted.
 
+## Web Search In AI Requests
+
+External web search reaches the model as an AI-SDK tool, not as provider options. `src/ai/createWebSearchTool.ts` wraps `WebSearchService.searchKeywords` in a `web_search` tool (id `WEB_SEARCH_TOOL_NAME`) with a `2..200` self-contained query schema. Its `execute` classifies failures: permanent configuration errors return a do-not-retry message, transient errors return a retryable note, and abort errors are rethrown.
+
+`AiService.buildAgentParamsFor` (`src/ai/AiService.ts`) arbitrates the external tool against provider-native web search — they are mutually exclusive within one request:
+
+- Provider-native is forced for OpenRouter built-in web-search models and `sonar` models; the external tool is never attached for them.
+- Otherwise the external `web_search` tool is attached when the assistant has web search enabled, the model supports function calling, and either an external provider is configured or the model has no native web-search plugin config.
+- When the tool is attached, the request also sets `stopWhen: stepCountIs(...)` (bounded by the assistant's max tool calls, default 20).
+
+This means a request carries at most one web-search mechanism. Enabling web search without a configured external provider still attaches the tool so calls fail with an explicit unsupported/not-configured error rather than silently doing nothing.
+
 ## Provider Registry
 
 Current mobile web search provider ids:
@@ -49,12 +61,13 @@ Current mobile web search provider ids:
 - `querit`
 - `jina`
 
-Current unsupported mobile entries:
+Current unsupported mobile entries (registered as `UnsupportedProvider` in `src/services/webSearch/providers/registry.ts`):
 
 - `exa-mcp`
 - `fetch`
+- `firecrawl`
 
-Unsupported entries are hidden from mobile settings and default-provider selectors until implemented. They remain in the provider id set and runtime registry as `UnsupportedProvider` entries so old preferences or direct calls fail with an explicit unsupported-provider error.
+Unsupported entries are hidden from mobile settings and default-provider selectors until implemented. They remain in the provider id set and runtime registry as `UnsupportedProvider` entries so old preferences or synced desktop values fail with an explicit unsupported-provider error instead of being silently mapped or dropped.
 
 ## Preferences
 
@@ -83,4 +96,5 @@ Search results pass through blacklist filtering and response post-processing bef
 
 ## Reopen When
 
-- Mobile implements `exa-mcp`, `fetch`, or another desktop web-search provider.
+- Mobile implements `exa-mcp`, `fetch`, `firecrawl`, or another desktop web-search provider.
+- A single AI request needs to combine external and provider-native web search instead of arbitrating to one.

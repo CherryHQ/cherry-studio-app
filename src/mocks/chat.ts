@@ -272,7 +272,7 @@ function createShowcaseMarkdownContent() {
     '',
     '```ts',
     'function greet(name: string): string {',
-    '  return `Hello, ${name}!`;',
+    '  return `Hello, $' + '{name}!`;',
     '}',
     '',
     'console.log(greet("Cherry"));',
@@ -356,35 +356,150 @@ function createShowcaseDataParts(): CherryMessagePart[] {
 
 function createShowcaseToolParts(): CherryMessagePart[] {
   return [
-    { type: 'step-start' },
+    {
+      state: 'done',
+      text: '工具组件 Showcase：Web Search、Meta Tool、MCP Tool、Generic Tool。',
+      type: 'text',
+    },
     {
       input: { query: 'cherry studio 是什么' },
-      state: 'input-available',
+      output: [
+        {
+          content: 'Cherry Studio is a desktop client for working with multiple LLM providers.',
+          id: 1,
+          title: 'Cherry Studio 官网',
+          url: 'https://cherry-ai.com',
+        },
+        {
+          content: 'Open source repository for Cherry Studio.',
+          id: 2,
+          title: 'GitHub 仓库',
+          url: 'https://github.com/CherryHQ/cherry-studio',
+        },
+      ],
+      toolMetadata: {
+        cherry: {
+          tool: { type: 'builtin' },
+        },
+      },
+      state: 'output-available',
       title: 'Web Search',
-      toolCallId: 'showcase-tool-1',
+      toolCallId: 'showcase-tool-web-search',
       toolName: 'web_search',
       type: 'dynamic-tool',
     },
     {
-      input: { query: 'cherry studio 是什么' },
+      input: { namespace: 'browser', query: 'open url' },
       output: {
-        results: [
-          { title: 'Cherry Studio 官网', url: 'https://cherry-ai.com' },
-          { title: 'GitHub 仓库', url: 'https://github.com/CherryHQ/cherry-studio' },
+        matchedNamespaces: [
+          {
+            namespace: 'browser',
+            tools: [
+              { description: 'Open a URL in the in-app browser.', name: 'open_url' },
+              { description: 'Take a screenshot of the current page.', name: 'screenshot' },
+            ],
+          },
         ],
       },
+      toolMetadata: {
+        cherry: {
+          tool: { type: 'builtin' },
+          toolName: 'tool_search',
+        },
+      },
       state: 'output-available',
-      title: 'Web Search',
-      toolCallId: 'showcase-tool-2',
-      toolName: 'web_search',
+      title: 'Meta Tool Search',
+      toolCallId: 'showcase-tool-meta-search',
+      toolName: 'tool_search',
+      type: 'dynamic-tool',
+    },
+    {
+      input: { name: 'browser.open_url' },
+      output: '/**\n * Open a URL in the in-app browser.\n * @param url Absolute URL to open.\n */',
+      toolMetadata: {
+        cherry: {
+          tool: { type: 'builtin' },
+          toolName: 'tool_inspect',
+        },
+      },
+      state: 'output-available',
+      title: 'Meta Tool Inspect',
+      toolCallId: 'showcase-tool-meta-inspect',
+      toolName: 'tool_inspect',
+      type: 'dynamic-tool',
+    },
+    {
+      input: {
+        name: 'browser.screenshot',
+        params: { fullPage: false },
+      },
+      output: {
+        format: 'png',
+        ok: true,
+        path: '/tmp/cherry-browser-screenshot.png',
+      },
+      toolMetadata: {
+        cherry: {
+          tool: { type: 'builtin' },
+          toolName: 'tool_invoke',
+        },
+      },
+      state: 'output-available',
+      title: 'Meta Tool Invoke',
+      toolCallId: 'showcase-tool-meta-invoke',
+      toolName: 'tool_invoke',
+      type: 'dynamic-tool',
+    },
+    {
+      input: {
+        code: 'const total = [1, 2, 3].reduce((sum, value) => sum + value, 0);\nreturn total;',
+      },
+      output: {
+        isError: false,
+        logs: ['total=6'],
+        result: 6,
+      },
+      toolMetadata: {
+        cherry: {
+          tool: { type: 'builtin' },
+          toolName: 'tool_exec',
+        },
+      },
+      state: 'output-available',
+      title: 'Meta Tool Exec',
+      toolCallId: 'showcase-tool-meta-exec',
+      toolName: 'tool_exec',
+      type: 'dynamic-tool',
+    },
+    {
+      input: {
+        path: '/Users/eeee/Documents/notes/project-plan.md',
+      },
+      output: {
+        content: '# Project Plan\n\n- Define scope\n- Review source URLs\n- Ship mobile UI parity',
+        mimeType: 'text/markdown',
+      },
+      toolMetadata: {
+        cherry: {
+          tool: {
+            serverId: 'filesystem',
+            serverName: 'Filesystem',
+            type: 'mcp',
+          },
+        },
+      },
+      state: 'output-available',
+      title: 'MCP Filesystem Read',
+      toolCallId: 'showcase-tool-mcp-filesystem-read',
+      toolName: 'read_file',
       type: 'dynamic-tool',
     },
     {
       errorText: '调用超时：工具在 30s 内没有返回结果。',
       input: { endpoint: '/api/data' },
       state: 'output-error',
-      title: 'API Call',
-      toolCallId: 'showcase-tool-3',
+      title: 'Generic Tool Error',
+      toolCallId: 'showcase-tool-generic-error',
       toolName: 'api_call',
       type: 'dynamic-tool',
     },
@@ -392,8 +507,8 @@ function createShowcaseToolParts(): CherryMessagePart[] {
       approval: { id: 'showcase-approval-1' },
       input: { path: '/etc/hosts' },
       state: 'approval-requested',
-      title: 'Read File',
-      toolCallId: 'showcase-tool-4',
+      title: 'Tool Approval',
+      toolCallId: 'showcase-tool-approval',
       toolName: 'read_file',
       type: 'dynamic-tool',
     },
@@ -401,7 +516,7 @@ function createShowcaseToolParts(): CherryMessagePart[] {
       input: { expression: '2 + 2 * 3' },
       output: 8,
       state: 'output-available',
-      toolCallId: 'showcase-tool-5',
+      toolCallId: 'showcase-tool-static-calculator',
       type: 'tool-calculator',
     },
     {

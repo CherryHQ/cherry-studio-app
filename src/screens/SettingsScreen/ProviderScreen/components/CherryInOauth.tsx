@@ -3,12 +3,13 @@ import { Button, Card, Spinner, useToast } from 'heroui-native';
 import { LogInIcon, LogOutIcon, WalletIcon } from 'lucide-uniwind/png';
 import { Fragment, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, Linking, Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 import {
   UserCancelledError,
   useCherryInOauth,
 } from '@/hooks/features/cherryInAuth/useCherryInOauth';
+import { openExternalUrl } from '@/utils/openExternalUrl';
 import { useSettingsConfirmDialog } from '../../hooks/useSettingsConfirmDialog';
 
 const CHERRYIN_TOPUP_URL = 'https://open.cherryin.ai/console/topup';
@@ -65,7 +66,7 @@ export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProp
   }, [handleOAuthLogin, t, toast]);
 
   const handleTopup = useCallback(() => {
-    Linking.openURL(CHERRYIN_TOPUP_URL);
+    void openExternalUrl(CHERRYIN_TOPUP_URL);
   }, []);
 
   // Loading state
@@ -180,7 +181,7 @@ export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProp
           <Text
             accessibilityRole="link"
             className="text-xs text-foreground-muted underline"
-            onPress={() => Linking.openURL('https://open.cherryin.ai')}
+            onPress={() => void openExternalUrl('https://open.cherryin.ai')}
           >
             {t('settings.provider.oauth.cherryIn.service_attribution')}
           </Text>

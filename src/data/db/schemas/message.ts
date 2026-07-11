@@ -49,8 +49,6 @@ export const messageTable = sqliteTable(
     modelId: text().references(() => userModelTable.id, { onDelete: 'set null' }),
     // Snapshot of model at message creation time
     modelSnapshot: text({ mode: 'json' }).$type<ModelSnapshot>(),
-    // Trace for tracking
-    traceId: text(),
     // Statistics: token usage, performance metrics, etc.
     stats: text({ mode: 'json' }).$type<MessageStats>(),
 
@@ -70,7 +68,10 @@ export const messageTable = sqliteTable(
     // Indexes
     index('message_parent_id_idx').on(table.parentId),
     index('message_topic_created_idx').on(table.topicId, table.createdAt),
-    index('message_trace_id_idx').on(table.traceId),
+    // Backs findPendingAssistantMessageIds (post-ready reconcile); without it that lookup
+    // full-scans. Plain, not partial — Drizzle binds `status = ?`, which SQLite cannot match
+    // to a partial index.
+    index('message_status_idx').on(table.status),
     // FTS5 content_rowid key (see the fts_rowid column). UNIQUE so its backing index makes the
     // per-row `MAX(fts_rowid)+1` assignment in the FTS INSERT trigger an O(log N) lookup (a bare
     // column would make a bulk migration O(N²)), and rejects any duplicate value loudly.
@@ -91,10 +92,7 @@ export const messageTable = sqliteTable(
     // Structural role<->null coupling: the virtual root (role='root') is the only row with a
     // null parent, and every content row must have a parent. Makes "content always has a
     // parent" and "root <=> parentId IS NULL" DB invariants, not service-layer discipline.
-    check(
-      'message_root_parent_check',
-      sql`(${table.role} = 'root') = (${table.parentId} is null)`,
-    ),
+    check('message_root_parent_check', sql`(${table.role} = 'root') = (${table.parentId} is null)`),
   ],
 );
 
@@ -115,7 +113,9 @@ export const messageTable = sqliteTable(
 
 /**
  * Custom SQL statements that Drizzle cannot manage
- * These are executed after every migration via DbService.runCustomMigrations()
+ * DbService.runCustomMigrations() executes them after bundled migrations, skipping
+ * the run when their content hash matches the app_state journal (editing any
+ * statement changes the hash and re-applies the whole batch on next boot).
  *
  * Virtual tables use IF NOT EXISTS; triggers are DROP + CREATE (not IF NOT EXISTS) so an
  * edited trigger body actually takes effect on databases that already have the old trigger.

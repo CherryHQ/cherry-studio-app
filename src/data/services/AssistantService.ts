@@ -53,6 +53,7 @@ function rowToAssistant(
     modelId: row.modelId as UniqueModelId | null,
     modelName,
     name: row.name,
+    orderKey: row.orderKey,
     prompt: row.prompt,
     settings: row.settings,
     tags,
@@ -176,7 +177,7 @@ export class AssistantService {
 
     const { row, tags } = await this.dbService.withWriteTx(async (tx) => {
       const modelId = await this.resolveCreateModelId(tx, dto.modelId);
-      const { knowledgeBaseIds, mcpServerIds, tagIds, ...columnDto } = dto;
+      const { tagIds, ...columnDto } = dto;
       const inserted = (await insertWithOrderKey(
         tx,
         assistantTable,
@@ -186,10 +187,8 @@ export class AssistantService {
           modelId,
           settings: dto.settings ?? DEFAULT_ASSISTANT_SETTINGS,
         },
-        { pkColumn: assistantTable.id },
+        { pkColumn: assistantTable.id, scope: isNull(assistantTable.deletedAt) },
       )) as AssistantRow;
-
-      await this.syncRelationsTx(tx, inserted.id, { knowledgeBaseIds, mcpServerIds });
 
       if (tagIds !== undefined) {
         await this.tagService.syncEntityTagsTx(tx, 'assistant', inserted.id, tagIds);
@@ -204,15 +203,7 @@ export class AssistantService {
 
     const modelName = await this.getModelName(row.modelId);
 
-    return rowToAssistant(
-      row,
-      {
-        knowledgeBaseIds: dto.knowledgeBaseIds ?? [],
-        mcpServerIds: dto.mcpServerIds ?? [],
-      },
-      tags,
-      modelName,
-    );
+    return rowToAssistant(row, createEmptyRelations(), tags, modelName);
   }
 
   async update(id: string, dto: UpdateAssistantDto): Promise<Assistant> {
@@ -222,13 +213,7 @@ export class AssistantService {
       this.validateName(dto.name);
     }
 
-    const {
-      knowledgeBaseIds,
-      mcpServerIds,
-      settings: settingsPatch,
-      tagIds,
-      ...columnFields
-    } = dto;
+    const { settings: settingsPatch, tagIds, ...columnFields } = dto;
     const updates = Object.fromEntries(
       Object.entries(columnFields).filter(([, value]) => value !== undefined),
     ) as Partial<typeof assistantTable.$inferInsert>;
@@ -238,17 +223,12 @@ export class AssistantService {
     }
 
     const hasColumnUpdates = Object.keys(updates).length > 0;
-    const hasRelationUpdates = knowledgeBaseIds !== undefined || mcpServerIds !== undefined;
     const hasTagUpdates = tagIds !== undefined;
 
-    if (!hasColumnUpdates && !hasRelationUpdates && !hasTagUpdates) {
+    if (!hasColumnUpdates && !hasTagUpdates) {
       return current;
     }
 
-    const nextRelations: AssistantRelationIds = {
-      knowledgeBaseIds: knowledgeBaseIds ?? current.knowledgeBaseIds,
-      mcpServerIds: mcpServerIds ?? current.mcpServerIds,
-    };
     const aliveFilter = and(eq(assistantTable.id, id), isNull(assistantTable.deletedAt));
 
     const { modelName, row, tags } = await this.dbService.withWriteTx(async (tx) => {
@@ -278,8 +258,6 @@ export class AssistantService {
         next = existing;
       }
 
-      await this.syncRelationsTx(tx, id, { knowledgeBaseIds, mcpServerIds });
-
       if (hasTagUpdates) {
         await this.tagService.syncEntityTagsTx(tx, 'assistant', id, tagIds);
       }
@@ -295,7 +273,7 @@ export class AssistantService {
       return { modelName: nextModelName, row: next, tags: nextTags };
     });
 
-    return rowToAssistant(row, nextRelations, tags, modelName);
+    return rowToAssistant(row, current, tags, modelName);
   }
 
   async delete(id: string): Promise<void> {
@@ -325,6 +303,7 @@ export class AssistantService {
 
       await applyMoves(tx, assistantTable, [{ anchor, id }], {
         pkColumn: assistantTable.id,
+        scope: isNull(assistantTable.deletedAt),
       });
     });
   }
@@ -349,6 +328,7 @@ export class AssistantService {
 
       await applyMoves(tx, assistantTable, moves, {
         pkColumn: assistantTable.id,
+        scope: isNull(assistantTable.deletedAt),
       });
     });
   }
@@ -459,86 +439,6 @@ export class AssistantService {
     }
 
     return result;
-  }
-
-  private async syncRelationsTx(
-    tx: TxLike,
-    assistantId: string,
-    dto: { knowledgeBaseIds?: string[]; mcpServerIds?: string[] },
-  ): Promise<void> {
-    if (dto.mcpServerIds !== undefined) {
-      await this.syncMcpServerIdsTx(tx, assistantId, dto.mcpServerIds);
-    }
-
-    if (dto.knowledgeBaseIds !== undefined) {
-      await this.syncKnowledgeBaseIdsTx(tx, assistantId, dto.knowledgeBaseIds);
-    }
-  }
-
-  private async syncMcpServerIdsTx(tx: TxLike, assistantId: string, mcpServerIds: string[]) {
-    const existing = await tx
-      .select({ mcpServerId: assistantMcpServerTable.mcpServerId })
-      .from(assistantMcpServerTable)
-      .where(eq(assistantMcpServerTable.assistantId, assistantId));
-    const existingIds = new Set(existing.map((row: { mcpServerId: string }) => row.mcpServerId));
-    const desiredIds = new Set(mcpServerIds);
-    const toRemove = existing
-      .filter((row: { mcpServerId: string }) => !desiredIds.has(row.mcpServerId))
-      .map((row: { mcpServerId: string }) => row.mcpServerId);
-    const toAdd = mcpServerIds.filter((mcpServerId) => !existingIds.has(mcpServerId));
-
-    if (toRemove.length > 0) {
-      await tx
-        .delete(assistantMcpServerTable)
-        .where(
-          and(
-            eq(assistantMcpServerTable.assistantId, assistantId),
-            inArray(assistantMcpServerTable.mcpServerId, toRemove),
-          ),
-        );
-    }
-
-    if (toAdd.length > 0) {
-      await tx
-        .insert(assistantMcpServerTable)
-        .values(toAdd.map((mcpServerId) => ({ assistantId, mcpServerId })));
-    }
-  }
-
-  private async syncKnowledgeBaseIdsTx(
-    tx: TxLike,
-    assistantId: string,
-    knowledgeBaseIds: string[],
-  ) {
-    const existing = await tx
-      .select({ knowledgeBaseId: assistantKnowledgeBaseTable.knowledgeBaseId })
-      .from(assistantKnowledgeBaseTable)
-      .where(eq(assistantKnowledgeBaseTable.assistantId, assistantId));
-    const existingIds = new Set(
-      existing.map((row: { knowledgeBaseId: string }) => row.knowledgeBaseId),
-    );
-    const desiredIds = new Set(knowledgeBaseIds);
-    const toRemove = existing
-      .filter((row: { knowledgeBaseId: string }) => !desiredIds.has(row.knowledgeBaseId))
-      .map((row: { knowledgeBaseId: string }) => row.knowledgeBaseId);
-    const toAdd = knowledgeBaseIds.filter((knowledgeBaseId) => !existingIds.has(knowledgeBaseId));
-
-    if (toRemove.length > 0) {
-      await tx
-        .delete(assistantKnowledgeBaseTable)
-        .where(
-          and(
-            eq(assistantKnowledgeBaseTable.assistantId, assistantId),
-            inArray(assistantKnowledgeBaseTable.knowledgeBaseId, toRemove),
-          ),
-        );
-    }
-
-    if (toAdd.length > 0) {
-      await tx
-        .insert(assistantKnowledgeBaseTable)
-        .values(toAdd.map((knowledgeBaseId) => ({ assistantId, knowledgeBaseId })));
-    }
   }
 
   private validateName(name: string): void {
