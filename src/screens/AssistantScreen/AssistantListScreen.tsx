@@ -1,12 +1,14 @@
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import { useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
-import { BotIcon, ChevronRightIcon, GlobeIcon, PlusIcon } from 'lucide-uniwind/png';
+import { BotIcon, ChevronRightIcon, GlobeIcon, PlusIcon, StoreIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, Pressable, ScrollView, Text, View } from 'react-native';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
-
+import { AssistantCatalogSheet } from '@/components/assistantCatalog/AssistantCatalogSheet';
+import type { AssistantCatalogPreset } from '@/data/presets/assistantCatalogService';
+import { toCreateAssistantDtoFromCatalogPreset } from '@/data/presets/assistantCatalogService';
 import type { Assistant } from '@/data/types/assistant';
 import { useAssistantMutations, useAssistantsApi } from '@/hooks/chat';
 import { useSettingsConfirmDialog } from '@/screens/SettingsScreen/hooks/useSettingsConfirmDialog';
@@ -18,7 +20,8 @@ export default function AssistantListScreen() {
   const router = useRouter();
   const { toast } = useToast();
   const { assistants, isLoading } = useAssistantsApi();
-  const { deleteAssistant } = useAssistantMutations();
+  const { createAssistant, deleteAssistant } = useAssistantMutations();
+  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const { confirmDialog, requestConfirm } = useSettingsConfirmDialog();
   // MenuView (iOS) hosts each row in a SwiftUI `Host matchContents` that sizes to
   // the child's intrinsic width; without an explicit width the row's flex layout
@@ -34,8 +37,31 @@ export default function AssistantListScreen() {
   const openCreateAssistant = useCallback(() => {
     router.push('/assistants/edit');
   }, [router]);
+
+  const openCatalog = useCallback(() => {
+    setIsCatalogOpen(true);
+  }, []);
+
+  const closeCatalog = useCallback(() => {
+    setIsCatalogOpen(false);
+  }, []);
+
+  const handleAddPreset = useCallback(
+    async (preset: AssistantCatalogPreset) => {
+      return createAssistant(toCreateAssistantDtoFromCatalogPreset(preset));
+    },
+    [createAssistant],
+  );
+
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
+      {
+        accessibilityLabel: t('assistant.actions.catalog'),
+        androidIcon: StoreIcon,
+        icon: 'store',
+        key: 'open-catalog',
+        onPress: openCatalog,
+      },
       {
         accessibilityLabel: t('assistant.actions.create'),
         androidIcon: PlusIcon,
@@ -44,7 +70,7 @@ export default function AssistantListScreen() {
         onPress: openCreateAssistant,
       },
     ],
-    [openCreateAssistant, t],
+    [openCatalog, openCreateAssistant, t],
   );
   const openEditAssistant = useCallback(
     (assistantId: string) => {
@@ -100,6 +126,11 @@ export default function AssistantListScreen() {
         )}
       </ScrollView>
       {confirmDialog}
+      <AssistantCatalogSheet
+        isOpen={isCatalogOpen}
+        onAddPreset={handleAddPreset}
+        onClose={closeCatalog}
+      />
     </>
   );
 }

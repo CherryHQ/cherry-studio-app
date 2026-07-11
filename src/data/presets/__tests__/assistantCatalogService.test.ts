@@ -53,6 +53,13 @@ const samplePresets: AssistantCatalogPreset[] = [
     group: ['Entertainment'],
     prompt: 'You are an entertainment expert.',
   },
+  {
+    id: 'preset-7',
+    name: 'Hobbyist',
+    emoji: '🛠️',
+    group: ['Hobbies'],
+    prompt: 'You are a hobby expert.',
+  },
 ];
 
 describe('buildAssistantCatalogTabs', () => {
@@ -80,26 +87,15 @@ describe('buildAssistantCatalogTabs', () => {
   it('places unranked groups after ranked ones', () => {
     const tabs = buildAssistantCatalogTabs(samplePresets, 'All');
     const categoryTabs = tabs.slice(1);
-    const _lastRankedIdx =
-      categoryTabs.length -
-      1 -
-      [...categoryTabs]
-        .reverse()
-        .findIndex(
-          (t) =>
-            ![
-              'Career',
-              'Business',
-              'Tools',
-              'Writing',
-              'Programming',
-              'Creative',
-              'Design',
-              'Entertainment',
-            ].includes(t.id),
-        );
-    // All groups in samplePresets are ranked, so no unranked groups to test edge case
-    expect(categoryTabs.every((t) => t.count > 0)).toBe(true);
+    // 'Hobbies' is an unranked group (not in GROUP_RANK_ALIASES) and should
+    // appear after every ranked group.
+    const hobbiesIdx = categoryTabs.findIndex((t) => t.id === 'Hobbies');
+    const rankedTabs = categoryTabs.filter((t) => t.id !== 'Hobbies');
+    expect(hobbiesIdx).toBeGreaterThanOrEqual(0);
+    for (const ranked of rankedTabs) {
+      const rankedIdx = categoryTabs.findIndex((t) => t.id === ranked.id);
+      expect(rankedIdx).toBeLessThan(hobbiesIdx);
+    }
   });
 
   it('returns only the "__all__" tab when presets have no groups', () => {

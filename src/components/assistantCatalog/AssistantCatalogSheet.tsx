@@ -18,12 +18,22 @@ type Props = {
   onClose: () => void;
 };
 
+const SHEET_CLOSED_INDEX = 0;
+const SHEET_OPEN_INDEX = 1;
+
 export function AssistantCatalogSheet({ isOpen, onAddPreset, onClose }: Props) {
   const { t } = useTranslation();
   const { isLoading, getTabs, filterPresets } = useAssistantCatalog({ enabled: isOpen });
+  const [sheetIndex, setSheetIndex] = useState(SHEET_CLOSED_INDEX);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [activeTab, setActiveTab] = useState('__all__');
   const [search, setSearch] = useState('');
   const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
+
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    setSheetIndex(isOpen ? SHEET_OPEN_INDEX : SHEET_CLOSED_INDEX);
+  }
 
   const allLabel = t('common.all');
   const tabs = useMemo(() => getTabs(allLabel), [getTabs, allLabel]);
@@ -70,8 +80,8 @@ export function AssistantCatalogSheet({ isOpen, onAddPreset, onClose }: Props) {
 
   return (
     <SelectionBottomSheet
-      index={isOpen ? 1 : 0}
-      onIndexChange={() => {}}
+      index={sheetIndex}
+      onIndexChange={setSheetIndex}
       onSettle={handleSheetSettle}
     >
       {(_ctx: SelectionBottomSheetRenderContext) => (
