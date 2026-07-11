@@ -16,6 +16,14 @@ export async function bootstrapAppRuntime(services: DataServices) {
 
   applyThemeModePreference(preferences.themeMode);
   await initI18n(preferences.language);
+}
+
+/** Runs after the Initial Data Gate opens (first paint), off the startup
+ * critical path. Per ADR 0002 the gate must only wait for database readiness
+ * and initial/boot preferences — data repair and diagnostics belong here, not
+ * in `bootstrapAppRuntime`. Best-effort: callers fire-and-forget and a failure
+ * must not surface to the user. */
+export async function runPostReadyTasks(services: DataServices) {
   await reconcileStalePendingMessages(services);
 }
 
