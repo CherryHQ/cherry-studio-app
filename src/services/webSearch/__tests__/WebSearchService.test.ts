@@ -92,26 +92,29 @@ describe('WebSearchService', () => {
     });
   });
 
-  test('reports unsupported mobile providers during checks', async () => {
+  test.each([
+    { capability: 'fetchUrls' as const, id: 'fetch' as const, name: 'fetch' },
+    { capability: 'searchKeywords' as const, id: 'firecrawl' as const, name: 'Firecrawl' },
+  ])('reports unsupported mobile provider $id during checks', async ({ capability, id, name }) => {
     const service = new WebSearchService(createPreferenceService());
 
     await expect(
       service.checkProvider({
         provider: {
-          id: 'fetch',
-          name: 'fetch',
+          id,
+          name,
           type: 'api',
           apiKeys: [],
-          capabilities: [{ feature: 'fetchUrls' }],
+          capabilities: [{ feature: capability }],
           engines: [],
           basicAuthUsername: '',
           basicAuthPassword: '',
         },
-        capability: 'fetchUrls',
+        capability,
       }),
     ).resolves.toEqual({
       valid: false,
-      error: 'Web search provider fetch is not supported on mobile',
+      error: `Web search provider ${id} is not supported on mobile`,
     });
   });
 });

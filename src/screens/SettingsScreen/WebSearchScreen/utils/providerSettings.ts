@@ -55,6 +55,9 @@ const WEB_SEARCH_PROVIDER_DISPLAY_META: Record<WebSearchProviderId, WebSearchPro
     fetch: {
       descriptionKey: 'settings.websearch.providerDescription.fetch',
     },
+    firecrawl: {
+      officialWebsite: 'https://firecrawl.dev',
+    },
     jina: {
       officialWebsite: 'https://jina.ai/reader',
     },
@@ -77,6 +80,7 @@ const WEB_SEARCH_PROVIDER_DETAIL_SECTIONS = {
   exa: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
   'exa-mcp': [],
   fetch: [{ type: 'description' }],
+  firecrawl: [],
   jina: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
   querit: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
   searxng: [{ type: 'capabilityApiHosts' }, { type: 'basicAuth' }],

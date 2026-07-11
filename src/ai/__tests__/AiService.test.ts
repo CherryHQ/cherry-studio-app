@@ -364,6 +364,54 @@ describe('AiService web search plugin wiring', () => {
       }),
     );
   });
+
+  it('exposes external search to report missing configuration when no native search exists', async () => {
+    const model = createModel('gpt-4o-mini', {
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL],
+    });
+    const assistant = createAssistant(model.id);
+    assistant.settings.enableWebSearch = true;
+    const service = new AiService(createServices({ assistant, model }));
+
+    await service.streamText({
+      assistantId: assistant.id,
+      chatId: 'topic-1',
+      messages: [],
+      requestOptions: { signal: new AbortController().signal },
+      trigger: 'submit-message',
+    });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.not.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+        tools: expect.objectContaining({ web_search: expect.any(Object) }),
+      }),
+    );
+  });
+
+  it('forces provider-native search for OpenRouter sonar models even when external search is configured', async () => {
+    const provider = createProvider({ id: 'openrouter', presetProviderId: 'openrouter' });
+    const model = createModel('perplexity/sonar-pro', { providerId: 'openrouter' });
+    const assistant = createAssistant(model.id);
+    const service = new AiService(
+      createServices({ assistant, model, provider, webSearchProviderId: 'tavily' }),
+    );
+
+    await service.streamText({
+      assistantId: assistant.id,
+      chatId: 'topic-1',
+      messages: [],
+      requestOptions: { signal: new AbortController().signal },
+      trigger: 'submit-message',
+    });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+        tools: undefined,
+      }),
+    );
+  });
 });
 
 function createServices({

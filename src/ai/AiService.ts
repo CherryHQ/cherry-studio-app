@@ -47,6 +47,7 @@ import {
   isGeminiModel,
   isGrokModel,
   isOpenAIModel,
+  isOpenRouterBuiltInWebSearchModel,
 } from './utils/model';
 import {
   filterStandardParams,
@@ -335,8 +336,10 @@ export class AiService {
       buildOptions.shouldIncludeExternalTools && assistant?.settings.enableWebSearch
         ? await this.services.preference.get('chat.web_search.default_search_keywords_provider')
         : null;
-    const shouldUseExternalWebSearch = Boolean(
-      externalWebSearchProviderId && isFunctionCallingModel(model),
+    const shouldForceNativeWebSearch =
+      isOpenRouterBuiltInWebSearchModel(model) || model.id.toLowerCase().includes('sonar');
+    const hasConfiguredExternalWebSearch = Boolean(
+      externalWebSearchProviderId && isFunctionCallingModel(model) && !shouldForceNativeWebSearch,
     );
     const capabilities = assistant
       ? resolveCapabilities(
@@ -346,12 +349,18 @@ export class AiService {
           sdkConfig.providerId,
           this.services.preference,
           {
-            webSearchProviderId: shouldUseExternalWebSearch
+            webSearchProviderId: hasConfiguredExternalWebSearch
               ? (externalWebSearchProviderId ?? undefined)
               : undefined,
           },
         )
       : undefined;
+    const shouldUseExternalWebSearch = Boolean(
+      buildOptions.shouldIncludeExternalTools &&
+        assistant?.settings.enableWebSearch &&
+        isFunctionCallingModel(model) &&
+        (hasConfiguredExternalWebSearch || !capabilities?.webSearchPluginConfig),
+    );
     const providerOptions =
       assistant && capabilities
         ? buildCapabilityProviderOptions(assistant, model, provider, capabilities)
@@ -515,8 +524,9 @@ function resolveCapabilities(
   );
   const enableWebSearch = Boolean(
     !options.webSearchProviderId &&
-      assistant.settings?.enableWebSearch &&
-      model.capabilities.includes('web-search'),
+      ((assistant.settings?.enableWebSearch && model.capabilities.includes('web-search')) ||
+        isOpenRouterBuiltInWebSearchModel(model) ||
+        model.id.includes('sonar')),
   );
   const enableGenerateImage = model.capabilities.includes('image-generation');
 

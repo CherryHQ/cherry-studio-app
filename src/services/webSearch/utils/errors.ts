@@ -9,7 +9,7 @@ export function isAbortError(error: unknown): boolean {
 
 /** Configuration failures that cannot succeed until the user changes Web Search settings. */
 export function isPermanentWebSearchConfigError(message: string): boolean {
-  return /is not configured for capability|does not (support|implement) capability|Unknown web search provider/i.test(
+  return /is not configured for capability|does not (support|implement) capability|Unknown web search provider|is not supported on mobile/i.test(
     message,
   );
 }
