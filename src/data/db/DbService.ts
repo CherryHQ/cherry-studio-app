@@ -7,8 +7,11 @@ import { customSqlStatements } from './customSql';
 import { migrations } from './migrations';
 import { type DatabaseSchema, schema } from './schemas';
 import { seedDatabase } from './seeding';
+import { hashObject } from './seeding/hashObject';
 
 const databaseName = 'cherry.db';
+// app_state journal key for the custom (FTS) DDL; mirrors SeedRunner's `seed:` journal.
+const customSqlJournalKey = 'custom-sql:message-fts';
 
 const logger = loggerService.withContext('DbService');
 
@@ -22,7 +25,7 @@ export class DbService {
   private writeTail: Promise<void> = Promise.resolve();
 
   constructor() {
-    this.sqlite = SQLite.openDatabaseSync(databaseName, { enableChangeListener: true });
+    this.sqlite = SQLite.openDatabaseSync(databaseName);
     this.db = createDrizzleDatabase(this.sqlite);
   }
 
@@ -112,8 +115,45 @@ export class DbService {
   }
 
   private runCustomMigrations(): void {
+    // The statements DROP + CREATE triggers, i.e. they write sqlite_master on the
+    // startup critical path. Journal a content hash so unchanged DDL is skipped;
+    // an unreadable journal falls through to running them (today's behavior).
+    const version = hashObject(customSqlStatements);
+    if (this.readCustomSqlJournalVersion() === version) {
+      return;
+    }
+
     for (const statement of customSqlStatements) {
       this.sqlite.execSync(statement);
+    }
+
+    const now = Date.now();
+    this.sqlite.runSync(
+      `INSERT INTO app_state (key, value, description, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      customSqlJournalKey,
+      JSON.stringify({ version }),
+      'Journal for the custom FTS DDL run by DbService',
+      now,
+      now,
+    );
+  }
+
+  private readCustomSqlJournalVersion(): string | null {
+    try {
+      const row = this.sqlite.getFirstSync<{ value: string }>(
+        'SELECT value FROM app_state WHERE key = ?',
+        customSqlJournalKey,
+      );
+      if (!row) {
+        return null;
+      }
+      const parsed = JSON.parse(row.value) as { version?: string };
+      return parsed.version ?? null;
+    } catch (error) {
+      logger.warn('Failed to read custom SQL journal; re-running custom DDL', error as Error);
+      return null;
     }
   }
 

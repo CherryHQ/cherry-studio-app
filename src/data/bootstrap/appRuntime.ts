@@ -16,7 +16,21 @@ export async function bootstrapAppRuntime(services: DataServices) {
 
   applyThemeModePreference(preferences.themeMode);
   await initI18n(preferences.language);
-  await reconcileStalePendingMessages(services);
+}
+
+/** Runs after the Initial Data Gate opens (first paint), off the startup
+ * critical path. Per ADR 0002 the gate must only wait for database readiness
+ * and initial/boot preferences — data repair and diagnostics belong here, not
+ * in `bootstrapAppRuntime`. Best-effort: callers fire-and-forget and a failure
+ * must not surface to the user. */
+export async function runPostReadyTasks(services: DataServices) {
+  // The catch lives here, not in callers: they `void` this promise, so a task
+  // added below without its own handling would become an unhandled rejection.
+  try {
+    await reconcileStalePendingMessages(services);
+  } catch (error) {
+    logger.error('Post-ready tasks failed', error as Error);
+  }
 }
 
 /** Crash-orphaned assistant messages left `pending` from a previous run —

@@ -400,7 +400,10 @@ export class MessageService {
           parentId: source.parentId,
           role: source.role,
           siblingsGroupId,
-          status: 'pending',
+          // A user sibling (edit-and-resend) already carries its final content; only
+          // assistant turns stream. Boot reconcile repairs assistant `pending` rows only,
+          // so a user row left `pending` would never be repaired.
+          status: source.role === 'user' ? 'success' : 'pending',
           topicId: source.topicId,
         })
         .returning();
@@ -645,17 +648,48 @@ export class MessageService {
 
         await tx.delete(messageTable).where(inArray(messageTable.id, deletedIds));
       } else {
+        // Splice this node out: reparent its children onto their grandparent.
+        // siblingsGroupId is scoped to the parent, so a moved group's id could collide
+        // with an unrelated group already under the destination parent and be
+        // mis-rendered as one multi-response set. Rebase each distinct non-zero moved
+        // group to a fresh id above both sides; group 0 (no group) carries unchanged.
         const children = await tx
-          .select({ id: messageTable.id })
+          .select({ id: messageTable.id, siblingsGroupId: messageTable.siblingsGroupId })
           .from(messageTable)
           .where(and(eq(messageTable.parentId, id), isNull(messageTable.deletedAt)));
         reparentedIds = children.map((child) => child.id);
 
-        if (reparentedIds.length > 0) {
-          await tx
-            .update(messageTable)
-            .set({ parentId: message.parentId })
-            .where(inArray(messageTable.id, reparentedIds));
+        if (children.length > 0) {
+          const newParentId = message.parentId;
+          const destinationGroups = newParentId
+            ? await tx
+                .select({ siblingsGroupId: messageTable.siblingsGroupId })
+                .from(messageTable)
+                .where(and(eq(messageTable.parentId, newParentId), isNull(messageTable.deletedAt)))
+            : [];
+          let nextGroupId =
+            Math.max(
+              0,
+              ...destinationGroups.map((row) => row.siblingsGroupId),
+              ...children.map((child) => child.siblingsGroupId),
+            ) + 1;
+
+          const childIdsByGroup = new Map<number, string[]>();
+          for (const child of children) {
+            const ids = childIdsByGroup.get(child.siblingsGroupId) ?? [];
+            ids.push(child.id);
+            childIdsByGroup.set(child.siblingsGroupId, ids);
+          }
+
+          for (const [groupId, ids] of childIdsByGroup) {
+            await tx
+              .update(messageTable)
+              .set({
+                parentId: newParentId,
+                siblingsGroupId: groupId === 0 ? 0 : nextGroupId++,
+              })
+              .where(inArray(messageTable.id, ids));
+          }
         }
 
         deletedIds = [id];

@@ -64,18 +64,22 @@ describe('ProviderService', () => {
     );
 
     const provider = await service.update(row.providerId, {
-      providerSettings: { timeout: 30_000 },
+      providerSettings: { serviceTier: null, timeout: 30_000, verbosity: null },
     });
 
     expect(writtenSettings).toEqual({
       futureDesktopSetting: { enabled: true },
       notes: 'keep me',
+      serviceTier: null,
       timeout: 30_000,
+      verbosity: null,
     });
     expect(provider.settings).toMatchObject({
       futureDesktopSetting: { enabled: true },
       notes: 'keep me',
+      serviceTier: null,
       timeout: 30_000,
+      verbosity: null,
     });
   });
 

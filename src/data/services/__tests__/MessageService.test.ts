@@ -143,6 +143,118 @@ describe('MessageService', () => {
     expect(topicUpdates).toContainEqual({ activeNodeId: null });
     expect(topicService.setActiveNodeTx).not.toHaveBeenCalled();
   });
+
+  test('delete without cascade rebases moved sibling groups above both sides', async () => {
+    const topicId = '750e8400-e29b-41d4-a716-446655440000';
+    const message = { ...createMessage('message-2', 'assistant'), parentId: 'parent-1', topicId };
+    const topic = { activeNodeId: 'unrelated-node', id: topicId };
+    // First tx select: children of the deleted node; second: groups already at
+    // the destination parent. max(7, 5, 0) + 1 = 8 becomes the rebased group id.
+    const selectResults: unknown[][] = [
+      [
+        { id: 'child-1', siblingsGroupId: 5 },
+        { id: 'child-2', siblingsGroupId: 5 },
+        { id: 'child-3', siblingsGroupId: 0 },
+      ],
+      [{ siblingsGroupId: 7 }],
+    ];
+    const moveUpdates: Record<string, unknown>[] = [];
+    const db = {
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({ limit: jest.fn(async () => [topic]) })),
+        })),
+      })),
+    };
+    const tx = {
+      delete: jest.fn(() => ({ where: jest.fn(async () => undefined) })),
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(async () => selectResults.shift() ?? []),
+        })),
+      })),
+      update: jest.fn(() => ({
+        set: jest.fn((values: Record<string, unknown>) => ({
+          where: jest.fn(async () => {
+            moveUpdates.push(values);
+          }),
+        })),
+      })),
+    };
+    const dbService = {
+      getDb: () => db,
+      withWriteTx: jest.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    } as unknown as DbService;
+    const topicService = { setActiveNodeTx: jest.fn() };
+    const service = new MessageService(dbService, topicService as never);
+    jest.spyOn(service, 'getById').mockResolvedValue(message);
+
+    await expect(service.delete(message.id, false, 'parent')).resolves.toEqual({
+      deletedIds: [message.id],
+      reparentedIds: ['child-1', 'child-2', 'child-3'],
+    });
+    expect(moveUpdates).toEqual([
+      { parentId: 'parent-1', siblingsGroupId: 8 },
+      { parentId: 'parent-1', siblingsGroupId: 0 },
+    ]);
+    expect(tx.delete).toHaveBeenCalledTimes(1);
+    expect(topicService.setActiveNodeTx).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['user', 'success'],
+    ['assistant', 'pending'],
+  ] as const)('createSibling inserts a %s sibling with status %s', async (role, expectedStatus) => {
+    const topicId = '750e8400-e29b-41d4-a716-446655440000';
+    const sourceRow = {
+      createdAt: 1747267200000,
+      data: { parts: [] },
+      deletedAt: null,
+      ftsRowid: 1,
+      id: 'source-1',
+      modelId: null,
+      modelSnapshot: null,
+      parentId: 'parent-1',
+      role,
+      searchableText: '',
+      siblingsGroupId: 42,
+      stats: null,
+      status: 'success',
+      topicId,
+      updatedAt: 1747267200000,
+    };
+    const insertedValues: Record<string, unknown>[] = [];
+    const tx = {
+      insert: jest.fn(() => ({
+        values: jest.fn((values: Record<string, unknown>) => {
+          insertedValues.push(values);
+          return { returning: jest.fn(async () => [{ ...sourceRow, ...values, id: 'sibling-1' }]) };
+        }),
+      })),
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({ limit: jest.fn(async () => [sourceRow]) })),
+        })),
+      })),
+    };
+    const dbService = {
+      withWriteTx: jest.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    } as unknown as DbService;
+    const topicService = { setActiveNodeTx: jest.fn() };
+    const service = new MessageService(dbService, topicService as never);
+
+    const sibling = await service.createSibling('source-1', { parts: [] });
+
+    expect(insertedValues).toEqual([expect.objectContaining({ status: expectedStatus })]);
+    expect(sibling.status).toBe(expectedStatus);
+    expect(topicService.setActiveNodeTx).toHaveBeenCalledWith(tx, topicId, 'sibling-1', {
+      assumeValid: true,
+    });
+  });
 });
 
 function createMessage(id: string, role: Message['role']): Message {

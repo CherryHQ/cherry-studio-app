@@ -43,6 +43,7 @@ import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/
 import { addAnthropicHeaders } from './utils/anthropicHeaders';
 import {
   isAnthropicModel,
+  isForcedNativeWebSearchModel,
   isFunctionCallingModel,
   isGeminiModel,
   isGrokModel,
@@ -335,8 +336,9 @@ export class AiService {
       buildOptions.shouldIncludeExternalTools && assistant?.settings.enableWebSearch
         ? await this.services.preference.get('chat.web_search.default_search_keywords_provider')
         : null;
-    const shouldUseExternalWebSearch = Boolean(
-      externalWebSearchProviderId && isFunctionCallingModel(model),
+    const shouldForceNativeWebSearch = isForcedNativeWebSearchModel(model);
+    const hasConfiguredExternalWebSearch = Boolean(
+      externalWebSearchProviderId && isFunctionCallingModel(model) && !shouldForceNativeWebSearch,
     );
     const capabilities = assistant
       ? resolveCapabilities(
@@ -346,12 +348,18 @@ export class AiService {
           sdkConfig.providerId,
           this.services.preference,
           {
-            webSearchProviderId: shouldUseExternalWebSearch
+            webSearchProviderId: hasConfiguredExternalWebSearch
               ? (externalWebSearchProviderId ?? undefined)
               : undefined,
           },
         )
       : undefined;
+    const shouldUseExternalWebSearch = Boolean(
+      buildOptions.shouldIncludeExternalTools &&
+        assistant?.settings.enableWebSearch &&
+        isFunctionCallingModel(model) &&
+        (hasConfiguredExternalWebSearch || !capabilities?.webSearchPluginConfig),
+    );
     const providerOptions =
       assistant && capabilities
         ? buildCapabilityProviderOptions(assistant, model, provider, capabilities)
@@ -439,8 +447,7 @@ export class AiService {
 
   /**
    * Priority: explicit `uniqueModelId` > `assistant.modelId` > runtime default model.
-   * Assistant-less topics do not persist `DEFAULT_ASSISTANT_ID`; they resolve
-   * `chat.default_model_id` at send time, matching desktop.
+   * Assistant-less topics resolve `chat.default_model_id` at send time.
    */
   private async getProviderAndModel(request: AiBaseRequest & { chatId?: string }) {
     let assistant: Assistant | undefined;
@@ -516,8 +523,8 @@ function resolveCapabilities(
   );
   const enableWebSearch = Boolean(
     !options.webSearchProviderId &&
-      assistant.settings?.enableWebSearch &&
-      model.capabilities.includes('web-search'),
+      ((assistant.settings?.enableWebSearch && model.capabilities.includes('web-search')) ||
+        isForcedNativeWebSearchModel(model)),
   );
   const enableGenerateImage = model.capabilities.includes('image-generation');
 

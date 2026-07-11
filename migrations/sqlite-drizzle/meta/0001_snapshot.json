@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "502fbbf9-8609-4738-a34e-83cb82f5682f",
-  "prevId": "dc86a6c3-0f05-4471-881f-e72d6b5305e0",
+  "id": "3ce7175e-f99d-44d2-805c-6e2bbf6633be",
+  "prevId": "72404ce4-1838-41ee-9a69-9e8d6f037021",
   "tables": {
     "app_state": {
       "name": "app_state",
@@ -551,6 +551,13 @@
           ],
           "isUnique": false
         },
+        "message_status_idx": {
+          "name": "message_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
         "message_fts_rowid_uniq": {
           "name": "message_fts_rowid_uniq",
           "columns": [
@@ -1076,13 +1083,6 @@
         },
         "output_modalities": {
           "name": "output_modalities",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "owned_by": {
-          "name": "owned_by",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

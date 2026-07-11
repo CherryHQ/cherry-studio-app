@@ -2,7 +2,7 @@
  * Auto-generated provider icon registry
  * Do not edit manually.
  *
- * Total icons: 159
+ * Total icons: 160
  */
 
 import { PROVIDER_ID_ALIASES } from '../provider-aliases';
@@ -114,10 +114,6 @@ export const PROVIDER_ICONS = {
     light: require('./light/bytedance.png'),
     dark: require('./light/bytedance.png'),
   },
-  cephalon: {
-    light: require('./light/cephalon.png'),
-    dark: require('./dark/cephalon.png'),
-  },
   cerebras: {
     light: require('./light/cerebras.png'),
     dark: require('./light/cerebras.png'),
@@ -125,6 +121,10 @@ export const PROVIDER_ICONS = {
   cherryin: {
     light: require('./light/cherryin.png'),
     dark: require('./light/cherryin.png'),
+  },
+  'claude-code': {
+    light: require('./light/claude-code.png'),
+    dark: require('./light/claude-code.png'),
   },
   cloudflare: {
     light: require('./light/cloudflare.png'),
@@ -209,6 +209,10 @@ export const PROVIDER_ICONS = {
   felo: {
     light: require('./light/felo.png'),
     dark: require('./light/felo.png'),
+  },
+  firecrawl: {
+    light: require('./light/firecrawl.png'),
+    dark: require('./dark/firecrawl.png'),
   },
   fireworks: {
     light: require('./light/fireworks.png'),
@@ -450,6 +454,10 @@ export const PROVIDER_ICONS = {
     light: require('./light/openclaw.png'),
     dark: require('./light/openclaw.png'),
   },
+  opencode: {
+    light: require('./light/opencode.png'),
+    dark: require('./light/opencode.png'),
+  },
   openrouter: {
     light: require('./light/openrouter.png'),
     dark: require('./dark/openrouter.png'),
@@ -569,10 +577,6 @@ export const PROVIDER_ICONS = {
   together: {
     light: require('./light/together.png'),
     dark: require('./dark/together.png'),
-  },
-  tokenflux: {
-    light: require('./light/tokenflux.png'),
-    dark: require('./light/tokenflux.png'),
   },
   twitter: {
     light: require('./light/twitter.png'),

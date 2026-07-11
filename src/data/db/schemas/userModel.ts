@@ -40,6 +40,7 @@ import { userProviderTable } from './userProvider';
 export const REGISTRY_ENRICHABLE_FIELDS = [
   'name',
   'description',
+  'group',
   'capabilities',
   'inputModalities',
   'outputModalities',
@@ -103,9 +104,6 @@ export const userModelTable = sqliteTable(
 
     /** Supported output modalities (e.g., TEXT, VISION, AUDIO, VIDEO, VECTOR) */
     outputModalities: text({ mode: 'json' }).$type<Modality[]>(),
-
-    /** Provider/organization owner returned by model listing APIs. */
-    ownedBy: text(),
 
     /** Endpoint types (optional, override Provider default) */
     endpointTypes: text({ mode: 'json' }).$type<EndpointType[]>(),

@@ -2,6 +2,11 @@ import type { DbService } from '@/data/db/DbService';
 import type { PreferenceKeyType } from '@/data/preference';
 import { PreferenceService } from '@/data/services/PreferenceService';
 
+jest.mock('@logger', () => ({
+  loggerService: {
+    withContext: () => ({ warn: jest.fn() }),
+  },
+}));
 jest.mock('@/data/db/schemas', () => ({
   preferenceTable: {
     key: 'key',
@@ -38,6 +43,25 @@ describe('PreferenceService', () => {
 
     await expect(service.get('chat.default_model_id')).resolves.toBe('provider:model');
     await expect(service.get('app.language')).resolves.toBeNull();
+  });
+
+  test('ignores malformed persisted web search provider overrides', async () => {
+    const dbService = createFakeDbService([
+      {
+        key: 'chat.web_search.provider_overrides',
+        scope: 'default',
+        value: {
+          tavily: {
+            capabilities: { searchKeywords: { apiHost: 42 } },
+          },
+        },
+      },
+    ]);
+    const service = new PreferenceService(dbService);
+
+    await service.init();
+
+    await expect(service.get('chat.web_search.provider_overrides')).resolves.toEqual({});
   });
 
   test('returns mapped and full cached preferences', async () => {
@@ -170,7 +194,7 @@ describe('PreferenceService', () => {
 
 function createFakeDbService(rows: PreferenceRow[] = []) {
   const rowMap = new Map(rows.map((row) => [rowKey(row.scope, row.key), row]));
-  const writeWaiters: Array<() => void> = [];
+  const writeWaiters: (() => void)[] = [];
 
   const db = {
     insert: () => ({

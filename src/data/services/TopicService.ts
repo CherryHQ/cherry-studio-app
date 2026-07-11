@@ -94,23 +94,11 @@ export class TopicService {
     const groupId = dto.groupId ?? null;
 
     const row = (await this.dbService.withWriteTx(async (tx) => {
-      if (dto.sourceNodeId) {
-        const [source] = await tx
-          .select({ id: messageTable.id })
-          .from(messageTable)
-          .where(and(eq(messageTable.id, dto.sourceNodeId), isNull(messageTable.deletedAt)))
-          .limit(1);
-
-        if (!source) {
-          throw DataApiErrorFactory.notFound('Message', dto.sourceNodeId);
-        }
-      }
-
       const topicRow = (await insertWithOrderKey(
         tx,
         topicTable,
         {
-          activeNodeId: dto.sourceNodeId ?? null,
+          activeNodeId: null,
           assistantId: dto.assistantId ?? null,
           groupId,
           name: dto.name ?? '',

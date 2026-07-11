@@ -426,6 +426,19 @@ export const isDeepSeekHybridInferenceModel = (model: Model): boolean => {
 export const isOpenAIWebSearchModel = (model: Model): boolean =>
   isOpenAIModel(model) && isWebSearchModel(model);
 
+export const isOpenRouterBuiltInWebSearchModel = (model: Model): boolean =>
+  model.providerId === 'openrouter' &&
+  (isOpenAIWebSearchModel(model) || model.modelId.toLowerCase().includes('sonar'));
+
+/**
+ * Models whose provider-native web search stays on regardless of the assistant
+ * toggle or a configured external search provider (mirrors desktop). Single
+ * source of truth: the "force native" gate and the capability resolution must
+ * agree, or a model can end up with neither native nor external search.
+ */
+export const isForcedNativeWebSearchModel = (model: Model): boolean =>
+  isOpenRouterBuiltInWebSearchModel(model) || model.id.toLowerCase().includes('sonar');
+
 export const isHunyuanSearchModel = (model: Model): boolean =>
   isHunyuanModel(model) && isWebSearchModel(model);
 

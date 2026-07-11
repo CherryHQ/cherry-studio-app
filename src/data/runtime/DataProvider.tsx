@@ -1,3 +1,4 @@
+import * as SplashScreen from 'expo-splash-screen';
 import {
   createContext,
   type PropsWithChildren,
@@ -7,11 +8,26 @@ import {
   useState,
 } from 'react';
 
+import { runPostReadyTasks } from '@/data/bootstrap/appRuntime';
 import { DbService } from '@/data/db/DbService';
 import { createDataServices, type DataServices } from '@/data/services/createDataServices';
 
+/** The long-lived resources owned by `DataProvider`. Injectable so tests can
+ * drive the startup sequence without opening a real SQLite database. */
+export type DataRuntime = {
+  dbService: Pick<DbService, 'init' | 'dispose'>;
+  services: DataServices;
+};
+
+function createDefaultRuntime(): DataRuntime {
+  const dbService = new DbService();
+  return { dbService, services: createDataServices(dbService) };
+}
+
 type DataProviderProps = PropsWithChildren<{
   bootstrap: (services: DataServices) => Promise<void> | void;
+  /** Test seam. Defaults to a real `DbService` + full service graph. */
+  createRuntime?: () => DataRuntime;
 }>;
 
 type DataState =
@@ -33,14 +49,11 @@ type DataState =
 
 const DataContext = createContext<DataState | null>(null);
 
-export function DataProvider({ bootstrap, children }: DataProviderProps) {
-  const { dbService, services } = useMemo(() => {
-    const dbService = new DbService();
-    return {
-      dbService,
-      services: createDataServices(dbService),
-    };
-  }, []);
+export function DataProvider({ bootstrap, children, createRuntime }: DataProviderProps) {
+  const { dbService, services } = useMemo(
+    () => (createRuntime ?? createDefaultRuntime)(),
+    [createRuntime],
+  );
   const [state, setState] = useState<DataState>({ status: 'loading' });
 
   useEffect(() => {
@@ -59,11 +72,19 @@ export function DataProvider({ bootstrap, children }: DataProviderProps) {
 
         if (!disposed) {
           setState({ services, status: 'ready' });
+          // Off the startup critical path: fire once the gate opens.
+          void runPostReadyTasks(services);
         }
       } catch (error) {
         if (!disposed) {
           setState({ error: toError(error), status: 'error' });
         }
+      } finally {
+        // The native splash is held up by `preventAutoHideAsync` in the root
+        // layout; reveal the app once init settles either way. Imperative (not
+        // an effect) because the error path throws during `InitialDataGate`
+        // render and would never run a commit-phase effect.
+        void SplashScreen.hideAsync().catch(() => {});
       }
     }
 

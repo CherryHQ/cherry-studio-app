@@ -92,6 +92,8 @@ These exclusions are mobile runtime scope limits, not a new Provider/Model domai
 
 Provider-native web search is an AI request option. It is separate from `WebSearchService`.
 
+Beyond provider options, `buildAgentParamsFor` may also attach a tool set. When the external web search path wins arbitration (see [Web Search](./mobile-web-search.md#web-search-in-ai-requests)), the request carries a `tools: { web_search }` entry backed by `WebSearchService` plus `stopWhen: stepCountIs(...)` (bounded by the assistant's max tool calls, default 20). External web search and provider-native web search are mutually exclusive within one request; a request never carries both.
+
 ## Special Providers
 
 CherryAI:

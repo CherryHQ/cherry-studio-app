@@ -9,19 +9,24 @@ import type {
 import { userModelTable } from '@/data/db/schemas/userModel';
 import {
   createUniqueModelId,
-  MODEL_CAPABILITY,
   type EndpointType,
+  MODEL_CAPABILITY,
   type Model,
   type ModelCapability,
 } from '@/data/types/model';
 import type { EndpointConfigs } from '@/data/types/provider';
-
+import type { PinService } from './PinService';
+import type { PreferenceService } from './PreferenceService';
 import {
   type ModelRegistryLookup,
   mergePresetModel,
   providerRegistryService,
 } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
+
+const SQLITE_BATCH_SIZE = 500;
+const SQLITE_MAX_VARIABLES = 999;
+const USER_MODEL_GENERATED_VARIABLES_PER_ROW = 3;
 
 export type CreateModelInput = {
   capabilities?: InsertUserModelRow['capabilities'];
@@ -79,7 +84,6 @@ function rowToModel(row: UserModelRow): Model {
     modelId: row.modelId,
     name: row.name,
     outputModalities: row.outputModalities ?? undefined,
-    ownedBy: row.ownedBy ?? undefined,
     parameters: row.parameters ?? undefined,
     presetModelId: row.presetModelId ?? undefined,
     pricing: row.pricing ?? undefined,
@@ -144,13 +148,6 @@ function enrichModelFromRegistry(row: UserModelRow): Model {
     return model;
   }
 
-  const merged = mergePresetModel(
-    registryData.presetModel,
-    registryData.registryOverride,
-    model.providerId,
-    registryData.reasoningFormatTypes,
-    registryData.defaultChatEndpoint,
-  );
   const updates: Partial<Model> = {};
   const userOverrides = row.userOverrides;
 
@@ -168,38 +165,10 @@ function enrichModelFromRegistry(row: UserModelRow): Model {
     }
   }
 
-  if (merged.contextWindow !== undefined && !hasUserOverride(userOverrides, 'contextWindow')) {
-    updates.contextWindow = merged.contextWindow;
-  }
-  if (merged.endpointTypes !== undefined && !hasUserOverride(userOverrides, 'endpointTypes')) {
-    updates.endpointTypes = merged.endpointTypes;
-  }
-  if (merged.imageGeneration) {
-    updates.imageGeneration = merged.imageGeneration;
-  }
-  if (merged.inputModalities !== undefined && !hasUserOverride(userOverrides, 'inputModalities')) {
-    updates.inputModalities = merged.inputModalities;
-  }
-  if (merged.maxInputTokens !== undefined && !hasUserOverride(userOverrides, 'maxInputTokens')) {
-    updates.maxInputTokens = merged.maxInputTokens;
-  }
-  if (merged.maxOutputTokens !== undefined && !hasUserOverride(userOverrides, 'maxOutputTokens')) {
-    updates.maxOutputTokens = merged.maxOutputTokens;
-  }
-  if (merged.outputModalities !== undefined && !hasUserOverride(userOverrides, 'outputModalities')) {
-    updates.outputModalities = merged.outputModalities;
-  }
-  if (merged.parameters !== undefined && !hasUserOverride(userOverrides, 'parameters')) {
-    updates.parameters = merged.parameters;
-  }
-  if (merged.pricing !== undefined && !hasUserOverride(userOverrides, 'pricing')) {
-    updates.pricing = merged.pricing;
-  }
-  if (merged.reasoning !== undefined && !hasUserOverride(userOverrides, 'reasoning')) {
-    updates.reasoning = merged.reasoning;
-  }
-  if (merged.replaceWith) {
-    updates.replaceWith = merged.replaceWith;
+  const imageGeneration =
+    registryData.registryOverride?.imageGeneration ?? registryData.presetModel.imageGeneration;
+  if (imageGeneration) {
+    updates.imageGeneration = imageGeneration;
   }
 
   return Object.keys(updates).length > 0 ? { ...model, ...updates } : model;
@@ -224,7 +193,6 @@ function modelToInsert(model: Model): ModelInputWithoutOrderKey {
     name: model.name,
     notes: null,
     outputModalities: model.outputModalities ?? null,
-    ownedBy: model.ownedBy ?? null,
     parameters: model.parameters ?? null,
     presetModelId: model.presetModelId ?? null,
     pricing: model.pricing ?? null,
@@ -254,7 +222,6 @@ function customInputToInsert(input: CreateModelInput): ModelInputWithoutOrderKey
     name: input.name ?? input.modelId,
     notes: null,
     outputModalities: input.outputModalities ?? null,
-    ownedBy: input.ownedBy ?? null,
     parameters: input.parameters ?? null,
     presetModelId: input.presetModelId ?? null,
     pricing: input.pricing ?? null,
@@ -289,7 +256,6 @@ function buildCreateValues(input: CreateModelInput): ModelInputWithoutOrderKey {
       isHidden: input.isHidden ?? merged.isHidden,
       modelId: input.modelId,
       name: input.name ?? merged.name,
-      ownedBy: input.ownedBy ?? merged.ownedBy,
       presetModelId: registryData.presetModel.id,
       supportsStreaming: input.supportsStreaming ?? merged.supportsStreaming,
     }),
@@ -297,7 +263,11 @@ function buildCreateValues(input: CreateModelInput): ModelInputWithoutOrderKey {
 }
 
 export class ModelService {
-  constructor(private readonly dbService: DbService) {}
+  constructor(
+    private readonly dbService: DbService,
+    private readonly preferenceService: PreferenceService,
+    private readonly pinService: PinService,
+  ) {}
 
   private get db() {
     return this.dbService.getDb();
@@ -379,9 +349,9 @@ export class ModelService {
     },
   ): Promise<ReconcileProviderModelsResult> {
     const toAdd = input.toAdd ?? [];
-    const toRemove = Array.from(new Set(input.toRemove ?? []));
+    const requestedRemoveIds = Array.from(new Set(input.toRemove ?? []));
 
-    if (toAdd.length === 0 && toRemove.length === 0) {
+    if (toAdd.length === 0 && requestedRemoveIds.length === 0) {
       return { added: [], removedIds: [] };
     }
 
@@ -397,29 +367,57 @@ export class ModelService {
       return buildCreateValues({ ...normalizedInput, registryData });
     });
 
-    const rows = await this.dbService.withWriteTx(async (tx) => {
-      const inserted =
-        values.length > 0
-          ? ((await insertManyWithOrderKey(tx, userModelTable, values, {
-              pkColumn: userModelTable.id,
-              scope: eq(userModelTable.providerId, providerId),
-            })) as UserModelRow[])
-          : [];
-
-      if (toRemove.length > 0) {
-        await tx
-          .delete(userModelTable)
-          .where(
-            and(eq(userModelTable.providerId, providerId), inArray(userModelTable.id, toRemove)),
-          );
+    const defaultModelId = await this.preferenceService.get('chat.default_model_id');
+    const { inserted, removedIds } = await this.dbService.withWriteTx(async (tx) => {
+      const existingRows: Pick<UserModelRow, 'id' | 'presetModelId'>[] = [];
+      for (const ids of chunks(requestedRemoveIds, SQLITE_BATCH_SIZE)) {
+        existingRows.push(
+          ...(await tx
+            .select({ id: userModelTable.id, presetModelId: userModelTable.presetModelId })
+            .from(userModelTable)
+            .where(
+              and(eq(userModelTable.providerId, providerId), inArray(userModelTable.id, ids)),
+            )),
+        );
       }
 
-      return inserted;
+      const protectedIds = new Set(
+        existingRows
+          .filter((row) => !row.presetModelId || row.id === defaultModelId)
+          .map((row) => row.id),
+      );
+      const removableIds = existingRows.map((row) => row.id).filter((id) => !protectedIds.has(id));
+      const actuallyRemovedIds: string[] = [];
+
+      for (const ids of chunks(removableIds, SQLITE_BATCH_SIZE)) {
+        const deletedRows = await tx
+          .delete(userModelTable)
+          .where(and(eq(userModelTable.providerId, providerId), inArray(userModelTable.id, ids)))
+          .returning({ id: userModelTable.id });
+        actuallyRemovedIds.push(...deletedRows.map((row: { id: string }) => row.id));
+      }
+
+      if (actuallyRemovedIds.length > 0) {
+        await this.pinService.purgeForEntitiesTx(tx, 'model', actuallyRemovedIds);
+      }
+
+      const insertableValues = values.filter((value) => !protectedIds.has(value.id));
+      const insertedRows: UserModelRow[] = [];
+      for (const valueChunk of chunks(insertableValues, getInsertBatchSize(insertableValues))) {
+        insertedRows.push(
+          ...((await insertManyWithOrderKey(tx, userModelTable, valueChunk, {
+            pkColumn: userModelTable.id,
+            scope: eq(userModelTable.providerId, providerId),
+          })) as UserModelRow[]),
+        );
+      }
+
+      return { inserted: insertedRows, removedIds: actuallyRemovedIds };
     });
 
     return {
-      added: rows.map(rowToModel),
-      removedIds: toRemove,
+      added: inserted.map(rowToModel),
+      removedIds,
     };
   }
 
@@ -460,4 +458,21 @@ export class ModelService {
 
     return result;
   }
+}
+
+function chunks<TValue>(values: TValue[], size: number): TValue[][] {
+  const result: TValue[][] = [];
+  for (let offset = 0; offset < values.length; offset += size) {
+    result.push(values.slice(offset, offset + size));
+  }
+  return result;
+}
+
+function getInsertBatchSize(values: ModelInputWithoutOrderKey[]): number {
+  const variablesPerRow = values.reduce(
+    (maximum, value) =>
+      Math.max(maximum, Object.keys(value).length + USER_MODEL_GENERATED_VARIABLES_PER_ROW),
+    1,
+  );
+  return Math.max(1, Math.floor(SQLITE_MAX_VARIABLES / variablesPerRow));
 }

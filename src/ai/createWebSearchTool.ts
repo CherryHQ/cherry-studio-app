@@ -14,8 +14,20 @@ export const WEB_SEARCH_PROVIDER_NOT_CONFIGURED_MESSAGE =
 
 const WEB_SEARCH_DESCRIPTION = `Search the web for current information, news, and real-time data.
 
-Use this when facts may have changed or when the user asks for current information. You may refine
-the query and search more than once. Cite sources by their [id] in the final answer.`;
+Use this when:
+- The user asks about recent events, current prices, or live data
+- You need to verify facts you're uncertain about or that may have changed
+- The user references something you don't have context on
+
+Don't use for:
+- Math, code reasoning, or things you can answer from your training
+- Well-known facts unlikely to have changed
+
+You may call this multiple times with different queries to broaden coverage. Cite sources by [id] in
+your final answer.`;
+
+export const WEB_LOOKUP_ERROR_NOTE =
+  'Web lookup failed (network/provider error); retry or inform the user.';
 
 const webSearchResultSchema = z.object({
   content: z.string(),
@@ -29,10 +41,21 @@ const webSearchOutputSchema = z.union([
   z.object({ error: z.string() }),
 ]);
 
+export const webSearchInputSchema = z.object({
+  query: z
+    .string()
+    .trim()
+    .min(2, 'Query must be at least 2 characters')
+    .max(200, 'Query should be concise - break long questions into multiple searches')
+    .describe(
+      'Self-contained web search query. Do not use pronouns or context-dependent references; expand the topic from earlier messages.',
+    ),
+});
+
 export function createWebSearchTool(webSearchService: WebSearchService) {
   return tool({
     description: WEB_SEARCH_DESCRIPTION,
-    inputSchema: z.object({ query: z.string().trim().min(1) }),
+    inputSchema: webSearchInputSchema,
     outputSchema: webSearchOutputSchema,
     strict: true,
     execute: async ({ query }, options) => {
@@ -58,7 +81,7 @@ export function createWebSearchTool(webSearchService: WebSearchService) {
         return {
           error: isPermanentWebSearchConfigError(message)
             ? WEB_SEARCH_PROVIDER_NOT_CONFIGURED_MESSAGE
-            : message,
+            : WEB_LOOKUP_ERROR_NOTE,
         };
       }
     },

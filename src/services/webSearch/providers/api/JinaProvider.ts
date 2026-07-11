@@ -76,7 +76,7 @@ export class JinaProvider extends BaseWebSearchProvider {
     const normalizedQuery = query.trim();
 
     return {
-      apiKey: this.resolveApiKey(),
+      apiKey: this.resolveApiKey(false),
       query: normalizedQuery,
       maxResults: config.maxResults,
       requestUrl: `${withoutTrailingSlash(resolveProviderApiHost(this.provider, 'searchKeywords'))}/${encodeURIComponent(
@@ -94,7 +94,7 @@ export class JinaProvider extends BaseWebSearchProvider {
     const url = query.trim();
 
     return {
-      apiKey: this.resolveApiKey(),
+      apiKey: this.resolveApiKey(false),
       query: url,
       maxResults: config.maxResults,
       requestUrl: `${withoutTrailingSlash(resolveProviderApiHost(this.provider, 'fetchUrls'))}/${url}`,
@@ -107,7 +107,7 @@ export class JinaProvider extends BaseWebSearchProvider {
       method: 'GET',
       headers: this.buildHeaders({
         Accept: 'application/json',
-        Authorization: `Bearer ${context.apiKey}`,
+        ...(context.apiKey ? { Authorization: `Bearer ${context.apiKey}` } : {}),
       }),
       signal: context.signal,
     });
@@ -127,7 +127,7 @@ export class JinaProvider extends BaseWebSearchProvider {
       method: 'GET',
       headers: this.buildHeaders({
         Accept: 'application/json',
-        Authorization: `Bearer ${context.apiKey}`,
+        ...(context.apiKey ? { Authorization: `Bearer ${context.apiKey}` } : {}),
         'X-Retain-Images': 'none',
       }),
       signal: context.signal,

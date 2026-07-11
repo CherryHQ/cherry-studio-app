@@ -33,7 +33,7 @@ describe('assistant data schemas', () => {
     const assistant = AssistantSchema.parse({
       createdAt: '2026-01-01T00:00:00.000Z',
       description: '',
-      emoji: 'A',
+      emoji: '😀',
       id: '00000000-0000-4000-8000-000000000001',
       knowledgeBaseIds: [],
       mcpServerIds: [],
@@ -48,5 +48,26 @@ describe('assistant data schemas', () => {
     });
 
     expect(assistant.orderKey).toBe('a0');
+  });
+
+  test('rejects non-emoji assistant icons', () => {
+    expect(
+      AssistantSchema.safeParse({
+        createdAt: '2026-01-01T00:00:00.000Z',
+        description: '',
+        emoji: 'assistant',
+        id: '00000000-0000-4000-8000-000000000001',
+        knowledgeBaseIds: [],
+        mcpServerIds: [],
+        modelId: null,
+        modelName: null,
+        name: 'Assistant',
+        orderKey: 'a0',
+        prompt: '',
+        settings: DEFAULT_ASSISTANT_SETTINGS,
+        tags: [],
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }).success,
+    ).toBe(false);
   });
 });
