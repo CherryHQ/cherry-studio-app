@@ -1,6 +1,7 @@
 import { BotIcon } from 'lucide-uniwind/png';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 
+import { PrismSweep } from '@/components/prismSweep';
 import type { Message } from '@/data/types/message';
 
 import { MessageParts } from '../../messageContent';
@@ -20,7 +21,7 @@ export function AssistantMessageItem({ message }: AssistantMessageItemProps) {
       <View className="min-w-0 flex-1 gap-2 pt-0.5">
         {isPendingEmptyMessage ? (
           <View className="items-start py-1">
-            <ActivityIndicator size="small" />
+            <PrismSweep active size={16} />
           </View>
         ) : (
           <MessageParts message={message} />
