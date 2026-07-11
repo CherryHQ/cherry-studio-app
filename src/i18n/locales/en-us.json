@@ -167,6 +167,8 @@
   "assistant.list.webBadge": "Web",
   "assistant.model.none": "No model selected",
   "assistant.toast.deleteFailed": "Assistant was not deleted. Try again.",
+  "assistant.toast.addFailed": "Assistant was not added. Try again.",
+  "assistant.toast.addSuccess": "Added \"{{name}}\"",
   "assistant.toast.saveFailed": "Assistant was not saved. Try again.",
   "settings.about.contact.title": "Contact",
   "settings.about.feedback.title": "Feedback",

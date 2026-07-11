@@ -48,9 +48,21 @@ export default function AssistantListScreen() {
 
   const handleAddPreset = useCallback(
     async (preset: AssistantCatalogPreset) => {
-      return createAssistant(toCreateAssistantDtoFromCatalogPreset(preset));
+      try {
+        await createAssistant(toCreateAssistantDtoFromCatalogPreset(preset));
+        toast.show({
+          label: t('assistant.toast.addSuccess', { name: preset.name }),
+          variant: 'success',
+        });
+      } catch {
+        toast.show({
+          label: t('assistant.toast.addFailed'),
+          variant: 'danger',
+        });
+        throw new Error('addPreset failed');
+      }
     },
-    [createAssistant],
+    [createAssistant, t, toast],
   );
 
   const rightActions = useMemo<HeaderToolbarAction[]>(

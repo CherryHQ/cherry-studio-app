@@ -167,6 +167,8 @@
   "assistant.list.webBadge": "联网",
   "assistant.model.none": "未选择模型",
   "assistant.toast.deleteFailed": "助手删除失败，请重试。",
+  "assistant.toast.addFailed": "助手添加失败，请重试。",
+  "assistant.toast.addSuccess": "已添加「{{name}}」",
   "assistant.toast.saveFailed": "助手保存失败，请重试。",
   "settings.about.contact.title": "联系我们",
   "settings.about.feedback.title": "反馈",
