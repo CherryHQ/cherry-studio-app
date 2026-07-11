@@ -1,17 +1,17 @@
-import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { Accordion } from 'heroui-native/accordion';
 import { SearchField } from 'heroui-native/search-field';
-import { useMemo, useRef, useState } from 'react';
+import { PlusIcon } from 'lucide-uniwind/png';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useUniwind } from 'uniwind';
 
-import { BackHeader } from '@/components/headers';
+import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { isLiquidGlassAvailable } from '@/config/constants';
 import { queryKeys } from '@/data/api';
 import { useDataQuery } from '@/data/hooks';
+import { ProviderAvatar } from './components/ProviderAvatar';
 import { SettingsSection } from './components/SettingsSection';
 import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';
 
@@ -21,8 +21,6 @@ export default function ProviderSettingsScreen() {
   const { t } = useTranslation();
   const headerHeight = useHeaderHeight();
   const router = useRouter();
-  const { theme } = useUniwind();
-  const iconTheme = theme === 'dark' ? 'dark' : 'light';
   const topInset = isLiquidGlassAvailable ? headerHeight : 0;
   const [searchText, setSearchText] = useState('');
   const isNavigatingRef = useRef(false);
@@ -43,27 +41,29 @@ export default function ProviderSettingsScreen() {
   });
   const providerItems = useMemo<SettingsServiceRowProps[]>(
     () =>
-      (providersQuery.data ?? []).map((provider) => {
-        const iconSource = resolveProviderIcon(provider.presetProviderId ?? provider.id);
-
-        return {
-          id: provider.id,
-          imageSource: iconSource?.[iconTheme],
-          isEnabled: provider.isEnabled,
-          name: provider.name,
-          onPress: () => {
-            if (isNavigatingRef.current) {
-              return;
-            }
-            isNavigatingRef.current = true;
-            router.push({
-              pathname: '/settings/provider/[providerId]',
-              params: { providerId: provider.id, providerName: provider.name },
-            });
-          },
-        };
-      }),
-    [iconTheme, providersQuery.data, router],
+      (providersQuery.data ?? []).map((provider) => ({
+        avatar: (
+          <ProviderAvatar
+            presetProviderId={provider.presetProviderId}
+            providerId={provider.id}
+            providerName={provider.name}
+          />
+        ),
+        id: provider.id,
+        isEnabled: provider.isEnabled,
+        name: provider.name,
+        onPress: () => {
+          if (isNavigatingRef.current) {
+            return;
+          }
+          isNavigatingRef.current = true;
+          router.push({
+            pathname: '/settings/provider/[providerId]',
+            params: { providerId: provider.id, providerName: provider.name },
+          });
+        },
+      })),
+    [providersQuery.data, router],
   );
   const enabledProviderItems = useMemo(
     () => providerItems.filter((item) => item.isEnabled),
@@ -80,10 +80,25 @@ export default function ProviderSettingsScreen() {
       ? enabledProviderItems.filter((item) => item.name.toLocaleLowerCase().includes(query))
       : enabledProviderItems;
   }, [enabledProviderItems, searchText]);
+  const openCreateProvider = useCallback(() => {
+    router.push('/settings/provider/new');
+  }, [router]);
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('settings.provider.add.title'),
+        androidIcon: PlusIcon,
+        icon: 'plus',
+        key: 'create-provider',
+        onPress: openCreateProvider,
+      },
+    ],
+    [openCreateProvider, t],
+  );
 
   return (
     <>
-      <BackHeader title={t('settings.pages.provider.title')} />
+      <BackHeader rightActions={rightActions} title={t('settings.pages.provider.title')} />
       <Pressable
         accessible={false}
         className="flex-1 gap-3 px-4"
