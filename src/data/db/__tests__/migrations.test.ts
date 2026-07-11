@@ -6,12 +6,14 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
-  test('builds the release schema from a single baseline migration', () => {
+  test('replays the full journal on top of the release baseline', () => {
     const database = new DatabaseSync(':memory:');
 
     try {
       const migrationSqlFiles = readMigrationSqlFiles();
-      expect(migrationSqlFiles).toHaveLength(1);
+      // 0000_release_baseline is frozen; every schema change after it must be a
+      // new appended migration (never edit or re-squash shipped entries).
+      expect(migrationSqlFiles.length).toBeGreaterThanOrEqual(1);
 
       for (const migrationSql of migrationSqlFiles) {
         for (const statement of migrationSql.split('--> statement-breakpoint')) {
@@ -57,6 +59,7 @@ describe('bundled SQLite migrations', () => {
         expect.arrayContaining([
           expect.objectContaining({ name: 'message_parent_id_idx', unique: 0 }),
           expect.objectContaining({ name: 'message_topic_created_idx', unique: 0 }),
+          expect.objectContaining({ name: 'message_status_idx', unique: 0 }),
           expect.objectContaining({ name: 'message_topic_root_uniq', unique: 1 }),
         ]),
       );

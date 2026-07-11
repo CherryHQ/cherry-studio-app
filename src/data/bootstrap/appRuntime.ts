@@ -24,7 +24,13 @@ export async function bootstrapAppRuntime(services: DataServices) {
  * in `bootstrapAppRuntime`. Best-effort: callers fire-and-forget and a failure
  * must not surface to the user. */
 export async function runPostReadyTasks(services: DataServices) {
-  await reconcileStalePendingMessages(services);
+  // The catch lives here, not in callers: they `void` this promise, so a task
+  // added below without its own handling would become an unhandled rejection.
+  try {
+    await reconcileStalePendingMessages(services);
+  } catch (error) {
+    logger.error('Post-ready tasks failed', error as Error);
+  }
 }
 
 /** Crash-orphaned assistant messages left `pending` from a previous run —

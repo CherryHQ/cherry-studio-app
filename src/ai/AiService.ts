@@ -43,11 +43,11 @@ import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/
 import { addAnthropicHeaders } from './utils/anthropicHeaders';
 import {
   isAnthropicModel,
+  isForcedNativeWebSearchModel,
   isFunctionCallingModel,
   isGeminiModel,
   isGrokModel,
   isOpenAIModel,
-  isOpenRouterBuiltInWebSearchModel,
 } from './utils/model';
 import {
   filterStandardParams,
@@ -336,8 +336,7 @@ export class AiService {
       buildOptions.shouldIncludeExternalTools && assistant?.settings.enableWebSearch
         ? await this.services.preference.get('chat.web_search.default_search_keywords_provider')
         : null;
-    const shouldForceNativeWebSearch =
-      isOpenRouterBuiltInWebSearchModel(model) || model.id.toLowerCase().includes('sonar');
+    const shouldForceNativeWebSearch = isForcedNativeWebSearchModel(model);
     const hasConfiguredExternalWebSearch = Boolean(
       externalWebSearchProviderId && isFunctionCallingModel(model) && !shouldForceNativeWebSearch,
     );
@@ -525,8 +524,7 @@ function resolveCapabilities(
   const enableWebSearch = Boolean(
     !options.webSearchProviderId &&
       ((assistant.settings?.enableWebSearch && model.capabilities.includes('web-search')) ||
-        isOpenRouterBuiltInWebSearchModel(model) ||
-        model.id.includes('sonar')),
+        isForcedNativeWebSearchModel(model)),
   );
   const enableGenerateImage = model.capabilities.includes('image-generation');
 
