@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
   pull_request:
     branches:
-      - main
+      - v0.2
     types: [ready_for_review, synchronize, opened]
 
 jobs:
