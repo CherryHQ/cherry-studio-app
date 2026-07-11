@@ -123,7 +123,9 @@ Development-stage legacy migration-ledger adoption and downgrade bridges are int
 
 ## Startup Measurement Boundary
 
-`InitialDataGate` currently includes database open/configuration, bundled migrations, custom FTS SQL, seeding, cached boot preferences, i18n initialization, and orphan pending-Message reconciliation. These consistency steps must finish before the Data Runtime is exposed; they must not be skipped merely to shorten the splash screen.
+`InitialDataGate` currently includes database open/configuration, bundled migrations, custom FTS SQL, seeding, cached boot preferences, and i18n initialization. These consistency steps must finish before the Data Runtime is exposed; they must not be skipped merely to shorten the splash screen. The native splash is held across the whole gate (root layout calls `SplashScreen.preventAutoHideAsync`; `DataProvider` calls `hideAsync` once init settles) so the gate never exposes a blank frame while it renders `null`.
+
+Orphan pending-Message reconciliation no longer runs inside the gate. It is a `runPostReadyTasks` step that `DataProvider` fires after the gate opens (see [Runtime Ownership](./mobile-runtime-ownership.md)). This is a gate-contract correction, not a measured optimization: per ADR 0002 the gate must only wait for database readiness and initial/boot preferences, so diagnostics and data repair belong after first paint.
 
 No physical-device cold-start timing has been captured for this V1 change. Type checking, Jest duration, Metro readiness, and Expo export time are not substitutes for first-frame measurements. A future performance pass should record each startup step and first chat paint on release-like iOS and Android builds, then move only measured nonessential work such as catalog refresh or non-current history prefetch behind the first screen. Until that evidence exists, this change makes no startup-speed improvement claim.
 
