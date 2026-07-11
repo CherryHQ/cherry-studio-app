@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1782885899481,
-      "tag": "0000_pink_the_fury",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1783684061253,
-      "tag": "0001_mixed_night_thrasher",
+      "when": 1783738412383,
+      "tag": "0000_release_baseline",
       "breakpoints": true
     }
   ]

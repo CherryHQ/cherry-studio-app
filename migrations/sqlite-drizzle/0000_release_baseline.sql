@@ -73,7 +73,6 @@ CREATE TABLE `message` (
 	`siblings_group_id` integer DEFAULT 0 NOT NULL,
 	`model_id` text,
 	`model_snapshot` text,
-	`trace_id` text,
 	`stats` text,
 	`fts_rowid` integer,
 	`created_at` integer NOT NULL,
@@ -89,7 +88,6 @@ CREATE TABLE `message` (
 --> statement-breakpoint
 CREATE INDEX `message_parent_id_idx` ON `message` (`parent_id`);--> statement-breakpoint
 CREATE INDEX `message_topic_created_idx` ON `message` (`topic_id`,`created_at`);--> statement-breakpoint
-CREATE INDEX `message_trace_id_idx` ON `message` (`trace_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `message_fts_rowid_uniq` ON `message` (`fts_rowid`);--> statement-breakpoint
 CREATE UNIQUE INDEX `message_topic_root_uniq` ON `message` (`topic_id`) WHERE "message"."parent_id" is null and "message"."deleted_at" is null;--> statement-breakpoint
 CREATE TABLE `pin` (
@@ -138,6 +136,7 @@ CREATE TABLE `topic` (
 	`assistant_id` text,
 	`active_node_id` text,
 	`group_id` text,
+	`trace_id` text,
 	`order_key` text NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
@@ -161,7 +160,6 @@ CREATE TABLE `user_model` (
 	`capabilities` text NOT NULL,
 	`input_modalities` text,
 	`output_modalities` text,
-	`owned_by` text,
 	`endpoint_types` text,
 	`custom_endpoint_url` text,
 	`context_window` integer,

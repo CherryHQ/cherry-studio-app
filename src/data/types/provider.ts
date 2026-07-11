@@ -121,13 +121,13 @@ export type ProviderSettings = {
   oauthAvatar?: string;
   oauthUsername?: string;
   rateLimit?: number;
-  serviceTier?: string;
+  serviceTier?: string | null;
   streamOptions?: {
     includeUsage?: boolean;
   };
   summaryText?: 'auto' | 'concise' | 'detailed' | null;
   timeout?: number;
-  verbosity?: string;
+  verbosity?: string | null;
 };
 
 export const DEFAULT_PROVIDER_SETTINGS: ProviderSettings = {};

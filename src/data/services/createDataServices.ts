@@ -19,7 +19,7 @@ export function createDataServices(dbService: DbService) {
   const preference = new PreferenceService(dbService);
   const pin = new PinService(dbService);
   const provider = new ProviderService(dbService, pin);
-  const model = new ModelService(dbService);
+  const model = new ModelService(dbService, preference, pin);
   const tag = new TagService(dbService);
   const group = new GroupService(dbService);
   const prompt = new PromptService(dbService);
