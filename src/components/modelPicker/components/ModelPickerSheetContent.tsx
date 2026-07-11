@@ -1,7 +1,11 @@
-import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
+import {
+  LegendList,
+  type LegendListRef,
+  type LegendListRenderItemProps,
+} from '@legendapp/list/react-native';
 import { cn } from 'heroui-native/utils';
 import { CheckIcon } from 'lucide-uniwind/png';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ModelPickerGroup, ModelPickerModelItem } from '../utils/modelPickerData';
@@ -14,6 +18,7 @@ type ModelPickerSheetContentProps = {
   emptyText?: string;
   hasMoreItems?: boolean;
   isLoading?: boolean;
+  isOpen?: boolean;
   isSearching: boolean;
   listItems: readonly ModelPickerListItem[];
   loadingText?: string;
@@ -32,6 +37,7 @@ export function ModelPickerSheetContent({
   emptyText,
   hasMoreItems = false,
   isLoading = false,
+  isOpen = false,
   listItems,
   loadingText,
   onEndReached,
@@ -39,6 +45,41 @@ export function ModelPickerSheetContent({
   pinnedModelIds,
   selectedModelId,
 }: ModelPickerSheetContentProps) {
+  const listRef = useRef<LegendListRef>(null);
+  const hasScrolledToSelectedRef = useRef(false);
+  const selectedRowIndex = useMemo(() => {
+    if (!selectedModelId) {
+      return -1;
+    }
+
+    return listItems.findIndex(
+      (item) => item.type === 'model' && item.item.modelId === selectedModelId,
+    );
+  }, [listItems, selectedModelId]);
+  // Scroll to the selected model once per open. Guarding on a ref (rather than
+  // re-running whenever the list grows) keeps lazy-loading or manual scrolling
+  // from yanking the user back to the selected row.
+  useEffect(() => {
+    if (!isOpen) {
+      hasScrolledToSelectedRef.current = false;
+      return;
+    }
+
+    if (hasScrolledToSelectedRef.current || selectedRowIndex < 0) {
+      return;
+    }
+
+    hasScrolledToSelectedRef.current = true;
+    const frame = requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({
+        animated: false,
+        index: selectedRowIndex,
+        viewPosition: 0.35,
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [isOpen, selectedRowIndex]);
   const pinnedModelIdSet = useMemo(() => new Set(pinnedModelIds), [pinnedModelIds]);
   const listExtraData = useMemo<ModelPickerSheetContentExtraData>(
     () => ({
@@ -95,6 +136,7 @@ export function ModelPickerSheetContent({
 
   return (
     <LegendList
+      ref={listRef}
       contentContainerStyle={styles.listContentContainer}
       data={listItems}
       drawDistance={320}

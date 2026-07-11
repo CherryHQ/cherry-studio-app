@@ -55,9 +55,39 @@ export function ModelPickerBottomSheet({
     () => groups.reduce((total, group) => total + 1 + group.items.length, 0),
     [groups],
   );
+  // Row index (including group-header rows) of the currently selected model in
+  // the fully expanded list, so the sheet can scroll to it on open.
+  const selectedModelListIndex = useMemo(() => {
+    if (!selectedModelId) {
+      return -1;
+    }
+
+    let index = 0;
+    for (const group of groups) {
+      index += 1; // group header occupies a row
+      for (const model of group.items) {
+        if (model.modelId === selectedModelId) {
+          return index;
+        }
+        index += 1;
+      }
+    }
+
+    return -1;
+  }, [groups, selectedModelId]);
+  // Ensure the selected model is materialized even when it sits past the lazy
+  // window, plus a batch of trailing rows so the selected model can settle at
+  // an upper-third position instead of being pinned to the very bottom.
+  const listItemLimit =
+    selectedModelListIndex >= 0
+      ? Math.max(
+          visibleListItemCount,
+          selectedModelListIndex + 1 + modelPickerListItemBatchSize,
+        )
+      : visibleListItemCount;
   const listItems = useMemo(
-    () => buildModelPickerListItems(groups, visibleListItemCount),
-    [groups, visibleListItemCount],
+    () => buildModelPickerListItems(groups, listItemLimit),
+    [groups, listItemLimit],
   );
   const hasMoreListItems = listItems.length < totalListItemCount;
 
@@ -125,6 +155,7 @@ export function ModelPickerBottomSheet({
               <ModelPickerSheetContent
                 emptyText={t('settings.provider.models.search.empty')}
                 isLoading={isLoading}
+                isOpen={sheetIndex === OPEN_INDEX}
                 isSearching={isSearching}
                 hasMoreItems={hasMoreListItems}
                 listItems={listItems}
