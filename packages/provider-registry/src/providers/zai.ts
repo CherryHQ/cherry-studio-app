@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'zai',
@@ -9,7 +9,7 @@ export default openaiCompatible({
     apiKey: 'https://z.ai/manage-apikey/apikey-list',
     docs: 'https://docs.z.ai/',
     models: 'https://docs.z.ai/models',
-    official: 'https://z.ai'
+    official: 'https://z.ai',
   },
-  presetProviderId: 'zhipu'
-})
+  presetProviderId: 'zhipu',
+});

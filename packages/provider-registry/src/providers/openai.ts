@@ -1,4 +1,4 @@
-import { defineProvider } from './types'
+import { defineProvider } from './types';
 
 export default defineProvider({
   id: 'openai',
@@ -7,18 +7,18 @@ export default defineProvider({
   endpointConfigs: {
     'openai-responses': {
       adapterFamily: 'openai',
-      baseUrl: 'https://api.openai.com'
-    }
+      baseUrl: 'https://api.openai.com',
+    },
   },
   apiFeatures: {
-    serviceTier: true
+    serviceTier: true,
   },
   metadata: {
     website: {
       apiKey: 'https://platform.openai.com/api-keys',
       docs: 'https://platform.openai.com/docs',
       models: 'https://platform.openai.com/docs/models',
-      official: 'https://openai.com/'
-    }
-  }
-})
+      official: 'https://openai.com/',
+    },
+  },
+});

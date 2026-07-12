@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'alibaba',
@@ -22,18 +22,18 @@ export default defineCreator({
                 default: 1,
                 max: 1,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               size: {
                 default: '1664x928',
                 options: ['1664x928', '1472x1140', '1328x1328', '1140x1472', '928x1664'],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'qwen-image-edit',
@@ -47,19 +47,19 @@ export default defineCreator({
           edit: {
             supports: {
               addWatermark: {
-                type: 'switch'
+                type: 'switch',
               },
               outputFormat: {
                 options: ['jpeg', 'png', 'webp'],
-                type: 'enum'
+                type: 'enum',
               },
               seed: {
-                type: 'text'
-              }
-            }
-          }
-        }
-      }
+                type: 'text',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'wan2-6-image',
@@ -71,29 +71,29 @@ export default defineCreator({
           generate: {
             supports: {
               addWatermark: {
-                type: 'switch'
+                type: 'switch',
               },
               imageResolution: {
                 default: '1K',
                 options: ['1K', '2K'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               negativePrompt: {
                 multiline: true,
-                type: 'text'
+                type: 'text',
               },
               promptExtend: {
                 default: true,
-                type: 'switch'
+                type: 'switch',
               },
               seed: {
-                type: 'text'
-              }
-            }
-          }
-        }
-      }
+                type: 'text',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'wan2-7-image',
@@ -106,25 +106,25 @@ export default defineCreator({
           generate: {
             supports: {
               addWatermark: {
-                type: 'switch'
+                type: 'switch',
               },
               imageResolution: {
                 default: '1K',
                 options: ['1K', '2K'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               seed: {
-                type: 'text'
+                type: 'text',
               },
               thinkingMode: {
                 default: true,
-                type: 'switch'
-              }
-            }
-          }
-        }
-      }
+                type: 'switch',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'wan2-7-image-pro',
@@ -137,25 +137,25 @@ export default defineCreator({
           generate: {
             supports: {
               addWatermark: {
-                type: 'switch'
+                type: 'switch',
               },
               imageResolution: {
                 default: '2K',
                 options: ['1K', '2K', '4K'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               seed: {
-                type: 'text'
+                type: 'text',
               },
               thinkingMode: {
                 default: true,
-                type: 'switch'
-              }
-            }
-          }
-        }
-      }
+                type: 'switch',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'wan2-6-t2i',
@@ -168,29 +168,29 @@ export default defineCreator({
           generate: {
             supports: {
               addWatermark: {
-                type: 'switch'
+                type: 'switch',
               },
               imageResolution: {
                 default: '1K',
                 options: ['1K', '2K'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               negativePrompt: {
                 multiline: true,
-                type: 'text'
+                type: 'text',
               },
               promptExtend: {
                 default: true,
-                type: 'switch'
+                type: 'switch',
               },
               seed: {
-                type: 'text'
-              }
-            }
-          }
-        }
-      }
-    }
-  ]
-})
+                type: 'text',
+              },
+            },
+          },
+        },
+      },
+    },
+  ],
+});

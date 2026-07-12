@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'yi',
@@ -8,6 +8,6 @@ export default openaiCompatible({
     apiKey: 'https://platform.lingyiwanwu.com/apikeys',
     docs: 'https://platform.lingyiwanwu.com/docs',
     models: 'https://platform.lingyiwanwu.com/docs',
-    official: 'https://platform.lingyiwanwu.com/'
-  }
-})
+    official: 'https://platform.lingyiwanwu.com/',
+  },
+});

@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 // Tencent serves Hunyuan through TokenHub (a multi-vendor gateway that also re-hosts deepseek/glm/kimi/…),
 // so there's no clean hunyuan-only API to fetch — listing it would over-claim third-party models. Hand-listed;
@@ -22,7 +22,7 @@ export default defineCreator({
       name: 'Hunyuan A13B Instruct',
       capabilities: ['reasoning', 'function-call'],
       contextWindow: 262144,
-      maxOutputTokens: 32768
+      maxOutputTokens: 32768,
     },
     {
       id: 'hy3-preview',
@@ -30,7 +30,7 @@ export default defineCreator({
       capabilities: ['reasoning', 'function-call'],
       contextWindow: 262144,
       maxInputTokens: 196608,
-      maxOutputTokens: 131072
+      maxOutputTokens: 131072,
     },
     {
       id: 'hunyuan-2-0-thinking',
@@ -38,7 +38,7 @@ export default defineCreator({
       capabilities: ['reasoning', 'function-call'],
       contextWindow: 196608,
       maxInputTokens: 131072,
-      maxOutputTokens: 65536
+      maxOutputTokens: 65536,
     },
     {
       id: 'hunyuan-2-0-instruct',
@@ -46,10 +46,16 @@ export default defineCreator({
       capabilities: ['function-call'],
       contextWindow: 147456,
       maxInputTokens: 131072,
-      maxOutputTokens: 16384
+      maxOutputTokens: 16384,
     },
     { id: 'tc-code', name: 'Tencent Code', capabilities: ['function-call'] },
-    { id: 'hy-role', name: 'Hunyuan Role', contextWindow: 32768, maxInputTokens: 28672, maxOutputTokens: 4096 },
+    {
+      id: 'hy-role',
+      name: 'Hunyuan Role',
+      contextWindow: 32768,
+      maxInputTokens: 28672,
+      maxOutputTokens: 4096,
+    },
     { id: 'hy-mt2-pro', name: 'Hunyuan MT2 Pro', contextWindow: 8192, maxOutputTokens: 4096 },
     { id: 'hy-mt2-plus', name: 'Hunyuan MT2 Plus', contextWindow: 8192, maxOutputTokens: 4096 },
     { id: 'hy-mt2-lite', name: 'Hunyuan MT2 Lite', contextWindow: 8192, maxOutputTokens: 4096 },
@@ -70,15 +76,15 @@ export default defineCreator({
                 type: 'enum',
                 options: ['1:1', '4:3', '3:4', '16:9', '9:16'],
                 default: '1:1',
-                render: 'chips'
+                render: 'chips',
               },
               negativePrompt: { type: 'text', multiline: true },
               addWatermark: { type: 'switch' },
-              seed: { type: 'text' }
-            }
-          }
-        }
-      }
+              seed: { type: 'text' },
+            },
+          },
+        },
+      },
     },
     {
       id: 'hy-image-lite',
@@ -94,14 +100,14 @@ export default defineCreator({
                 type: 'enum',
                 options: ['1:1', '4:3', '3:4', '16:9', '9:16'],
                 default: '1:1',
-                render: 'chips'
+                render: 'chips',
               },
               addWatermark: { type: 'switch' },
-              seed: { type: 'text' }
-            }
-          }
-        }
-      }
-    }
-  ]
-})
+              seed: { type: 'text' },
+            },
+          },
+        },
+      },
+    },
+  ],
+});

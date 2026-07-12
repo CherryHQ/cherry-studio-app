@@ -6,48 +6,54 @@
  * are released — the next access triggers a fresh load from disk.
  */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs';
 
-import type { ModelConfig } from './schemas/model'
-import { ModelListSchema } from './schemas/model'
-import type { ProviderConfig } from './schemas/provider'
-import { ProviderListSchema } from './schemas/provider'
-import type { ProviderModelOverride } from './schemas/provider-models'
-import { ProviderModelListSchema } from './schemas/provider-models'
-import { normalizeModelId } from './utils/normalize'
+import type { ModelConfig } from './schemas/model';
+import { ModelListSchema } from './schemas/model';
+import type { ProviderConfig } from './schemas/provider';
+import { ProviderListSchema } from './schemas/provider';
+import type { ProviderModelOverride } from './schemas/provider-models';
+import { ProviderModelListSchema } from './schemas/provider-models';
+import { normalizeModelId } from './utils/normalize';
 
 function readAndParse<T>(jsonPath: string, schema: { parse: (data: unknown) => T }): T {
   try {
-    const data = JSON.parse(readFileSync(jsonPath, 'utf-8'))
-    return schema.parse(data)
+    const data = JSON.parse(readFileSync(jsonPath, 'utf-8'));
+    return schema.parse(data);
   } catch (error) {
-    throw new Error(`Failed to load registry file: ${jsonPath}`, { cause: error })
+    throw new Error(`Failed to load registry file: ${jsonPath}`, { cause: error });
   }
 }
 
 export function readModelRegistry(jsonPath: string): { version: string; models: ModelConfig[] } {
-  const registry = readAndParse(jsonPath, ModelListSchema)
-  return { version: registry.version, models: registry.models }
+  const registry = readAndParse(jsonPath, ModelListSchema);
+  return { version: registry.version, models: registry.models };
 }
 
-export function readProviderRegistry(jsonPath: string): { version: string; providers: ProviderConfig[] } {
-  const registry = readAndParse(jsonPath, ProviderListSchema)
-  return { version: registry.version, providers: registry.providers }
+export function readProviderRegistry(jsonPath: string): {
+  version: string;
+  providers: ProviderConfig[];
+} {
+  const registry = readAndParse(jsonPath, ProviderListSchema);
+  return { version: registry.version, providers: registry.providers };
 }
 
-export function readProviderModelRegistry(jsonPath: string): { version: string; overrides: ProviderModelOverride[] } {
-  const registry = readAndParse(jsonPath, ProviderModelListSchema)
-  return { version: registry.version, overrides: registry.overrides }
+export function readProviderModelRegistry(jsonPath: string): {
+  version: string;
+  overrides: ProviderModelOverride[];
+} {
+  const registry = readAndParse(jsonPath, ProviderModelListSchema);
+  return { version: registry.version, overrides: registry.overrides };
 }
 
 export interface RegistryPaths {
-  models: string
-  providers: string
-  providerModels: string
+  models: string;
+  providers: string;
+  providerModels: string;
 }
 
 /** Default idle TTL in milliseconds (30 seconds). */
-const DEFAULT_IDLE_TTL_MS = 30_000
+const DEFAULT_IDLE_TTL_MS = 30_000;
 
 /**
  * Cached registry data with pre-computed indexes and idle auto-expiry.
@@ -56,149 +62,151 @@ const DEFAULT_IDLE_TTL_MS = 30_000
  * and everything is released after {@link idleTtlMs} of no access.
  */
 export class RegistryLoader {
-  private models: ModelConfig[] | null = null
-  private providers: ProviderConfig[] | null = null
-  private providerModels: ProviderModelOverride[] | null = null
-  private modelsVersion: string | null = null
-  private providersVersion: string | null = null
-  private providerModelsVersion: string | null = null
+  private models: ModelConfig[] | null = null;
+  private providers: ProviderConfig[] | null = null;
+  private providerModels: ProviderModelOverride[] | null = null;
+  private modelsVersion: string | null = null;
+  private providersVersion: string | null = null;
+  private providerModelsVersion: string | null = null;
 
-  private modelById: Map<string, ModelConfig> | null = null
-  private modelByNormId: Map<string, ModelConfig> | null = null
-  private overrideByKey: Map<string, ProviderModelOverride> | null = null
-  private overrideByNormKey: Map<string, ProviderModelOverride> | null = null
-  private overrideByApiKey: Map<string, ProviderModelOverride> | null = null
-  private overrideByNormApiKey: Map<string, ProviderModelOverride> | null = null
-  private overridesByProvider: Map<string, ProviderModelOverride[]> | null = null
+  private modelById: Map<string, ModelConfig> | null = null;
+  private modelByNormId: Map<string, ModelConfig> | null = null;
+  private overrideByKey: Map<string, ProviderModelOverride> | null = null;
+  private overrideByNormKey: Map<string, ProviderModelOverride> | null = null;
+  private overrideByApiKey: Map<string, ProviderModelOverride> | null = null;
+  private overrideByNormApiKey: Map<string, ProviderModelOverride> | null = null;
+  private overridesByProvider: Map<string, ProviderModelOverride[]> | null = null;
 
-  private idleTimer: ReturnType<typeof setTimeout> | null = null
-  private readonly idleTtlMs: number
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly idleTtlMs: number;
 
   constructor(
     private readonly paths: RegistryPaths,
-    idleTtlMs?: number
+    idleTtlMs?: number,
   ) {
-    this.idleTtlMs = idleTtlMs ?? DEFAULT_IDLE_TTL_MS
+    this.idleTtlMs = idleTtlMs ?? DEFAULT_IDLE_TTL_MS;
   }
 
   /** Reset the idle timer. Called on every public access. */
   private touch(): void {
-    if (this.idleTimer) clearTimeout(this.idleTimer)
-    this.idleTimer = setTimeout(() => this.invalidate(), this.idleTtlMs)
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => this.invalidate(), this.idleTtlMs);
   }
 
   /** Load and cache models.json. Returns models array. */
   loadModels(): ModelConfig[] {
-    this.touch()
-    if (this.models) return this.models
-    const data = readModelRegistry(this.paths.models)
-    this.models = data.models ?? []
-    this.modelsVersion = data.version
-    this.buildModelIndex()
-    return this.models
+    this.touch();
+    if (this.models) return this.models;
+    const data = readModelRegistry(this.paths.models);
+    this.models = data.models ?? [];
+    this.modelsVersion = data.version;
+    this.buildModelIndex();
+    return this.models;
   }
 
   /** Load and cache providers.json. Returns providers array. */
   loadProviders(): ProviderConfig[] {
-    this.touch()
-    if (this.providers) return this.providers
-    const data = readProviderRegistry(this.paths.providers)
-    this.providers = data.providers ?? []
-    this.providersVersion = data.version
-    return this.providers
+    this.touch();
+    if (this.providers) return this.providers;
+    const data = readProviderRegistry(this.paths.providers);
+    this.providers = data.providers ?? [];
+    this.providersVersion = data.version;
+    return this.providers;
   }
 
   /** Load and cache provider-models.json. Returns overrides array. */
   loadProviderModels(): ProviderModelOverride[] {
-    this.touch()
-    if (this.providerModels) return this.providerModels
-    const data = readProviderModelRegistry(this.paths.providerModels)
-    this.providerModels = data.overrides ?? []
-    this.providerModelsVersion = data.version
-    this.buildOverrideIndex()
-    return this.providerModels
+    this.touch();
+    if (this.providerModels) return this.providerModels;
+    const data = readProviderModelRegistry(this.paths.providerModels);
+    this.providerModels = data.overrides ?? [];
+    this.providerModelsVersion = data.version;
+    this.buildOverrideIndex();
+    return this.providerModels;
   }
 
   /** Get the models.json version string. */
   getModelsVersion(): string {
-    this.loadModels()
-    return this.modelsVersion!
+    this.loadModels();
+    return this.modelsVersion!;
   }
 
   /** Get the providers.json version string. */
   getProvidersVersion(): string {
-    this.loadProviders()
-    return this.providersVersion!
+    this.loadProviders();
+    return this.providersVersion!;
   }
 
   /** Get the provider-models.json version string. */
   getProviderModelsVersion(): string {
-    this.loadProviderModels()
-    return this.providerModelsVersion!
+    this.loadProviderModels();
+    return this.providerModelsVersion!;
   }
 
   private buildModelIndex(): void {
-    this.modelById = new Map()
-    this.modelByNormId = new Map()
+    this.modelById = new Map();
+    this.modelByNormId = new Map();
     for (const m of this.models!) {
-      this.modelById.set(m.id, m)
-      const nid = normalizeModelId(m.id)
+      this.modelById.set(m.id, m);
+      const nid = normalizeModelId(m.id);
       if (!this.modelByNormId.has(nid)) {
-        this.modelByNormId.set(nid, m)
+        this.modelByNormId.set(nid, m);
       }
     }
   }
 
   private buildOverrideIndex(): void {
-    this.overrideByKey = new Map()
-    this.overrideByNormKey = new Map()
-    this.overrideByApiKey = new Map()
-    this.overrideByNormApiKey = new Map()
-    this.overridesByProvider = new Map()
+    this.overrideByKey = new Map();
+    this.overrideByNormKey = new Map();
+    this.overrideByApiKey = new Map();
+    this.overrideByNormApiKey = new Map();
+    this.overridesByProvider = new Map();
     for (const pm of this.providerModels!) {
-      const key = `${pm.providerId}::${pm.modelId}`
+      const key = `${pm.providerId}::${pm.modelId}`;
       // `modelId` is NOT unique: a provider may serve one canonical model under several apiModelIds
       // (tokenhub's dated 原厂直供 variants share `deepseek-v4-flash`). The canonical key must resolve to
       // the undated/self variant (`apiModelId === modelId`) — the dated ones stay reachable only via the
       // apiModelId index below. Order-independent: a self variant claims the slot whenever it appears.
       if (!this.overrideByKey.has(key) || pm.apiModelId === pm.modelId) {
-        this.overrideByKey.set(key, pm)
+        this.overrideByKey.set(key, pm);
       }
-      const normKey = `${pm.providerId}::${normalizeModelId(pm.modelId)}`
+      const normKey = `${pm.providerId}::${normalizeModelId(pm.modelId)}`;
       if (!this.overrideByNormKey.has(normKey)) {
-        this.overrideByNormKey.set(normKey, pm)
+        this.overrideByNormKey.set(normKey, pm);
       }
       if (pm.apiModelId) {
-        const apiKey = `${pm.providerId}::${pm.apiModelId}`
-        this.overrideByApiKey.set(apiKey, pm)
-        const normApiKey = `${pm.providerId}::${normalizeModelId(pm.apiModelId)}`
+        const apiKey = `${pm.providerId}::${pm.apiModelId}`;
+        this.overrideByApiKey.set(apiKey, pm);
+        const normApiKey = `${pm.providerId}::${normalizeModelId(pm.apiModelId)}`;
         if (!this.overrideByNormApiKey.has(normApiKey)) {
-          this.overrideByNormApiKey.set(normApiKey, pm)
+          this.overrideByNormApiKey.set(normApiKey, pm);
         }
       }
-      let arr = this.overridesByProvider.get(pm.providerId)
+      let arr = this.overridesByProvider.get(pm.providerId);
       if (!arr) {
-        arr = []
-        this.overridesByProvider.set(pm.providerId, arr)
+        arr = [];
+        this.overridesByProvider.set(pm.providerId, arr);
       }
-      arr.push(pm)
+      arr.push(pm);
     }
   }
 
   findModel(modelId: string): ModelConfig | null {
-    this.loadModels()
-    return this.modelById!.get(modelId) ?? this.modelByNormId!.get(normalizeModelId(modelId)) ?? null
+    this.loadModels();
+    return (
+      this.modelById!.get(modelId) ?? this.modelByNormId!.get(normalizeModelId(modelId)) ?? null
+    );
   }
 
   findProvider(providerId: string): ProviderConfig | null {
-    const providers = this.loadProviders()
-    return providers.find((p) => p.id === providerId) ?? null
+    const providers = this.loadProviders();
+    return providers.find((p) => p.id === providerId) ?? null;
   }
 
   findOverride(providerId: string, modelId: string): ProviderModelOverride | null {
-    this.loadProviderModels()
-    const key = `${providerId}::${modelId}`
-    const normKey = `${providerId}::${normalizeModelId(modelId)}`
+    this.loadProviderModels();
+    const key = `${providerId}::${modelId}`;
+    const normKey = `${providerId}::${normalizeModelId(modelId)}`;
     // BOTH exact lookups (canonical modelId, then provider apiModelId) must precede BOTH normalized
     // fallbacks. `normalizeModelId` strips size/date suffixes, so several distinct rows collapse to one
     // normalized key (`google.gemma-3-27b-it` and `gemma-3-12b-it` both → `gemma-3-it`). If the normalized
@@ -210,33 +218,33 @@ export class RegistryLoader {
       this.overrideByNormKey!.get(normKey) ??
       this.overrideByNormApiKey!.get(normKey) ??
       null
-    )
+    );
   }
 
   /** O(1) get all overrides for a provider. */
   getOverridesForProvider(providerId: string): ProviderModelOverride[] {
-    this.loadProviderModels()
-    return this.overridesByProvider!.get(providerId) ?? []
+    this.loadProviderModels();
+    return this.overridesByProvider!.get(providerId) ?? [];
   }
 
   /** Release all cached data and indexes. Next access triggers a fresh load. */
   invalidate(): void {
-    this.models = null
-    this.providers = null
-    this.providerModels = null
-    this.modelsVersion = null
-    this.providersVersion = null
-    this.providerModelsVersion = null
-    this.modelById = null
-    this.modelByNormId = null
-    this.overrideByKey = null
-    this.overrideByNormKey = null
-    this.overrideByApiKey = null
-    this.overrideByNormApiKey = null
-    this.overridesByProvider = null
+    this.models = null;
+    this.providers = null;
+    this.providerModels = null;
+    this.modelsVersion = null;
+    this.providersVersion = null;
+    this.providerModelsVersion = null;
+    this.modelById = null;
+    this.modelByNormId = null;
+    this.overrideByKey = null;
+    this.overrideByNormKey = null;
+    this.overrideByApiKey = null;
+    this.overrideByNormApiKey = null;
+    this.overridesByProvider = null;
     if (this.idleTimer) {
-      clearTimeout(this.idleTimer)
-      this.idleTimer = null
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
     }
   }
 }

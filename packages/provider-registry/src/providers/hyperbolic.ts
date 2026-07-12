@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'hyperbolic',
@@ -8,6 +8,6 @@ export default openaiCompatible({
     apiKey: 'https://app.hyperbolic.xyz/settings',
     docs: 'https://docs.hyperbolic.xyz',
     models: 'https://app.hyperbolic.xyz/models',
-    official: 'https://app.hyperbolic.xyz'
-  }
-})
+    official: 'https://app.hyperbolic.xyz',
+  },
+});

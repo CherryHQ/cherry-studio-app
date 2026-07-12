@@ -1,4 +1,4 @@
-import { defineProvider } from './types'
+import { defineProvider } from './types';
 
 export default defineProvider({
   id: 'tencent-cloud-ti',
@@ -7,15 +7,15 @@ export default defineProvider({
   endpointConfigs: {
     'openai-chat-completions': {
       adapterFamily: 'openai-compatible',
-      baseUrl: 'https://api.lkeap.cloud.tencent.com'
-    }
+      baseUrl: 'https://api.lkeap.cloud.tencent.com',
+    },
   },
   metadata: {
     website: {
       apiKey: 'https://console.cloud.tencent.com/lkeap/api',
       docs: 'https://cloud.tencent.com/document/product/1772',
       models: 'https://console.cloud.tencent.com/tione/v2/aimarket',
-      official: 'https://cloud.tencent.com/product/ti'
-    }
-  }
-})
+      official: 'https://cloud.tencent.com/product/ti',
+    },
+  },
+});

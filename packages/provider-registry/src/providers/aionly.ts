@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'aionly',
@@ -8,6 +8,6 @@ export default openaiCompatible({
     apiKey: 'https://maas.aiionly.com/keyApi',
     docs: 'https://maas.aiionly.com/document',
     models: 'https://maas.aiionly.com',
-    official: 'https://www.aiionly.com'
-  }
-})
+    official: 'https://www.aiionly.com',
+  },
+});

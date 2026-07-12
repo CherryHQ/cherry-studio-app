@@ -1,5 +1,5 @@
-import { googleModels } from './_api'
-import { defineCreator } from './types'
+import { googleModels } from './_api';
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'google',
@@ -16,7 +16,7 @@ export default defineCreator({
     'learnlm',
     'text-embedding-004',
     'text-embedding-005',
-    'text-multilingual-embedding'
+    'text-multilingual-embedding',
   ],
   webSearch: [
     'gemini-2',
@@ -26,7 +26,7 @@ export default defineCreator({
     'gemini-3-5-pro',
     'gemini-flash-latest',
     'gemini-pro-latest',
-    'gemini-flash-lite-latest'
+    'gemini-flash-lite-latest',
   ],
   models: [
     {
@@ -44,23 +44,29 @@ export default defineCreator({
               aspectRatio: {
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               imageResolution: {
                 options: ['1K', '2K', '4K'],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'gemini-3-pro-image-preview',
       name: 'gemini-3-pro-image-preview',
       family: 'gemini-pro',
-      capabilities: ['reasoning', 'image-recognition', 'image-generation', 'file-input', 'web-search'],
+      capabilities: [
+        'reasoning',
+        'image-recognition',
+        'image-generation',
+        'file-input',
+        'web-search',
+      ],
       inputModalities: ['text', 'image'],
       outputModalities: ['text', 'image'],
       imageGeneration: {
@@ -70,17 +76,17 @@ export default defineCreator({
               aspectRatio: {
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               imageResolution: {
                 options: ['1K', '2K', '4K'],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'imagen-4-0-ultra-generate-001',
@@ -97,22 +103,22 @@ export default defineCreator({
                 default: 'ASPECT_1_1',
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 4,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               personGeneration: {
                 options: ['DONT_ALLOW', 'ALLOW_ADULT', 'ALLOW_ALL'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'imagen-4-0-fast-generate-001',
@@ -129,22 +135,22 @@ export default defineCreator({
                 default: 'ASPECT_1_1',
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 4,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               personGeneration: {
                 options: ['DONT_ALLOW', 'ALLOW_ADULT', 'ALLOW_ALL'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'imagen-4-0-generate-001',
@@ -161,22 +167,22 @@ export default defineCreator({
                 default: 'ASPECT_1_1',
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 4,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               personGeneration: {
                 options: ['DONT_ALLOW', 'ALLOW_ADULT', 'ALLOW_ALL'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'gemini-2-5-flash-image-preview',
@@ -192,17 +198,17 @@ export default defineCreator({
               aspectRatio: {
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               imageResolution: {
                 options: ['1K', '2K', '4K'],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'imagen-4',
@@ -219,22 +225,22 @@ export default defineCreator({
                 default: 'ASPECT_1_1',
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 4,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               personGeneration: {
                 options: ['DONT_ALLOW', 'ALLOW_ADULT', 'ALLOW_ALL'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'imagen-3',
@@ -251,26 +257,26 @@ export default defineCreator({
                 default: 'ASPECT_1_1',
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               negativePrompt: {
                 multiline: true,
-                type: 'text'
+                type: 'text',
               },
               numImages: {
                 default: 1,
                 max: 4,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               personGeneration: {
                 options: ['DONT_ALLOW', 'ALLOW_ADULT', 'ALLOW_ALL'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'imagen-4-ultra',
@@ -287,22 +293,22 @@ export default defineCreator({
                 default: 'ASPECT_1_1',
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 4,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               personGeneration: {
                 options: ['DONT_ALLOW', 'ALLOW_ADULT', 'ALLOW_ALL'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'imagen-3-fast',
@@ -319,26 +325,26 @@ export default defineCreator({
                 default: 'ASPECT_1_1',
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               negativePrompt: {
                 multiline: true,
-                type: 'text'
+                type: 'text',
               },
               numImages: {
                 default: 1,
                 max: 4,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               personGeneration: {
                 options: ['DONT_ALLOW', 'ALLOW_ADULT', 'ALLOW_ALL'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'imagen-4-fast',
@@ -355,22 +361,22 @@ export default defineCreator({
                 default: 'ASPECT_1_1',
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 4,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               personGeneration: {
                 options: ['DONT_ALLOW', 'ALLOW_ADULT', 'ALLOW_ALL'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'imagen-4-0',
@@ -386,22 +392,22 @@ export default defineCreator({
                 default: 'ASPECT_1_1',
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 4,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               personGeneration: {
                 options: ['DONT_ALLOW', 'ALLOW_ADULT', 'ALLOW_ALL'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'imagen-4-0-fast-generate-preview-06-06',
@@ -417,22 +423,22 @@ export default defineCreator({
                 default: 'ASPECT_1_1',
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 4,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               personGeneration: {
                 options: ['DONT_ALLOW', 'ALLOW_ADULT', 'ALLOW_ALL'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'imagen-4-0-ultra',
@@ -449,22 +455,22 @@ export default defineCreator({
                 default: 'ASPECT_1_1',
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 4,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               personGeneration: {
                 options: ['DONT_ALLOW', 'ALLOW_ADULT', 'ALLOW_ALL'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'gemini-3-1-flash-image-preview',
@@ -480,17 +486,17 @@ export default defineCreator({
               aspectRatio: {
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               imageResolution: {
                 options: ['1K', '2K', '4K'],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'imagen-4-0-generate-preview-06-06',
@@ -505,22 +511,22 @@ export default defineCreator({
               aspectRatio: {
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 4,
                 max: 4,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               personGeneration: {
                 options: ['ALLOW_ALL', 'ALLOW_ADULT', 'DONT_ALLOW'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'imagen-4-0-ultra-generate-preview-06-06',
@@ -535,16 +541,16 @@ export default defineCreator({
               aspectRatio: {
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               personGeneration: {
                 options: ['ALLOW_ALL', 'ALLOW_ADULT', 'DONT_ALLOW'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'gemini-3-pro-image',
@@ -557,7 +563,7 @@ export default defineCreator({
         'image-generation',
         'structured-output',
         'file-input',
-        'web-search'
+        'web-search',
       ],
       inputModalities: ['image', 'text'],
       outputModalities: ['text', 'image'],
@@ -568,17 +574,17 @@ export default defineCreator({
               aspectRatio: {
                 options: ['ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_4_3', 'ASPECT_9_16', 'ASPECT_16_9'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               imageResolution: {
                 options: ['1K', '2K', '4K'],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
-    }
-  ]
-})
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
+    },
+  ],
+});

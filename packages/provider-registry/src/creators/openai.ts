@@ -1,5 +1,5 @@
-import { openaiCompatible } from './_api'
-import { defineCreator } from './types'
+import { openaiCompatible } from './_api';
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'openai',
@@ -19,7 +19,7 @@ export default defineCreator({
     'text-embedding-ada',
     'text-moderation',
     'davinci',
-    'babbage'
+    'babbage',
   ],
   webSearch: ['gpt-4o', 'gpt-5', 'o3', 'o4'],
   models: [
@@ -36,60 +36,60 @@ export default defineCreator({
             supports: {
               background: {
                 options: ['auto', 'transparent', 'opaque'],
-                type: 'enum'
+                type: 'enum',
               },
               moderation: {
                 options: ['auto', 'low'],
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 10,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               quality: {
                 options: ['auto', 'low', 'medium', 'high'],
-                type: 'enum'
+                type: 'enum',
               },
               size: {
                 default: '1024x1024',
                 options: ['auto', '1024x1024', '1536x1024', '1024x1536'],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
+                type: 'enum',
+              },
+            },
           },
           generate: {
             supports: {
               background: {
                 options: ['auto', 'transparent', 'opaque'],
-                type: 'enum'
+                type: 'enum',
               },
               moderation: {
                 options: ['auto', 'low'],
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 10,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               quality: {
                 options: ['auto', 'low', 'medium', 'high'],
-                type: 'enum'
+                type: 'enum',
               },
               size: {
                 default: '1024x1024',
                 options: ['auto', '1024x1024', '1536x1024', '1024x1536'],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'dall-e-3',
@@ -104,22 +104,22 @@ export default defineCreator({
             supports: {
               quality: {
                 options: ['standard', 'hd'],
-                type: 'enum'
+                type: 'enum',
               },
               size: {
                 default: '1024x1024',
                 options: ['1024x1024', '1792x1024', '1024x1792'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               style: {
                 options: ['vivid', 'natural'],
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'dall-e-2',
@@ -135,18 +135,18 @@ export default defineCreator({
                 default: 1,
                 max: 10,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               size: {
                 default: '1024x1024',
                 options: ['256x256', '512x512', '1024x1024'],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'gpt-image-2',
@@ -161,28 +161,28 @@ export default defineCreator({
             supports: {
               background: {
                 options: ['auto', 'opaque'],
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 10,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               quality: {
                 options: ['auto', 'low', 'medium', 'high'],
-                type: 'enum'
+                type: 'enum',
               },
               size: {
                 default: '1024x1024',
                 options: ['auto', '1024x1024', '1536x1024', '1024x1536'],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'gpt-image-1',
@@ -197,60 +197,60 @@ export default defineCreator({
             supports: {
               background: {
                 options: ['auto', 'transparent', 'opaque'],
-                type: 'enum'
+                type: 'enum',
               },
               moderation: {
                 options: ['auto', 'low'],
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 10,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               quality: {
                 options: ['auto', 'low', 'medium', 'high'],
-                type: 'enum'
+                type: 'enum',
               },
               size: {
                 default: '1024x1024',
                 options: ['auto', '1024x1024', '1536x1024', '1024x1536'],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
+                type: 'enum',
+              },
+            },
           },
           generate: {
             supports: {
               background: {
                 options: ['auto', 'transparent', 'opaque'],
-                type: 'enum'
+                type: 'enum',
               },
               moderation: {
                 options: ['auto', 'low'],
-                type: 'enum'
+                type: 'enum',
               },
               numImages: {
                 default: 1,
                 max: 10,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               quality: {
                 options: ['auto', 'low', 'medium', 'high'],
-                type: 'enum'
+                type: 'enum',
               },
               size: {
                 default: '1024x1024',
                 options: ['auto', '1024x1024', '1536x1024', '1024x1536'],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
-    }
-  ]
-})
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
+    },
+  ],
+});

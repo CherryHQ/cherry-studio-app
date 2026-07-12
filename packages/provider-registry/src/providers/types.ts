@@ -8,8 +8,8 @@
  * as `"{name} - AI model provider"`). The GENERATION-only fields below (`modelsDevProvider` / `fetchModels`
  * / `overrides`) drive `provider-models.json` and are NOT emitted to `providers.json`.
  */
-import type { ApiFeatures, ProviderConfig } from '../schemas/provider'
-import type { ProviderModelOverride } from '../schemas/provider-models'
+import type { ApiFeatures, ProviderConfig } from '../schemas/provider';
+import type { ProviderModelOverride } from '../schemas/provider-models';
 
 /**
  * Connection config emitted to `providers.json`. `description` is templated, so it's omitted here;
@@ -20,35 +20,35 @@ type ProviderConnection = Omit<
   ProviderConfig,
   'description' | 'endpointConfigs' | 'defaultChatEndpoint' | 'apiFeatures' | 'modelListSource'
 > & {
-  endpointConfigs: Partial<ProviderConfig['endpointConfigs']>
-  defaultChatEndpoint?: ProviderConfig['defaultChatEndpoint']
+  endpointConfigs: Partial<ProviderConfig['endpointConfigs']>;
+  defaultChatEndpoint?: ProviderConfig['defaultChatEndpoint'];
   /** Defaults to `api`; only registry-backed providers need to declare it. */
-  modelListSource?: ProviderConfig['modelListSource']
+  modelListSource?: ProviderConfig['modelListSource'];
   /** Only the non-default flags are declared; the schema fills the rest at load time. */
-  apiFeatures?: Partial<ApiFeatures>
-}
+  apiFeatures?: Partial<ApiFeatures>;
+};
 
 /** A provider as emitted to `providers.json`: the connection config plus its templated `description`. */
-export type ProviderEntry = ProviderConnection & { description: string }
+export type ProviderEntry = ProviderConnection & { description: string };
 
 /** A provider's website links (official / docs / apiKey / models). */
-type ProviderWebsite = ProviderConfig['metadata']['website']
+type ProviderWebsite = ProviderConfig['metadata']['website'];
 
 export interface Provider extends ProviderConnection {
   /** models.dev provider key whose listing is this provider's served catalog (with per-model pricing). */
-  modelsDevProvider?: string
+  modelsDevProvider?: string;
   /** …or fetch the served list from the provider's own `/models` API (see `../creators/_api.ts`). */
-  fetchModels?: () => Promise<{ id: string }[]>
+  fetchModels?: () => Promise<{ id: string }[]>;
   /** Manual overrides — for what the runtime can't derive (bedrock arns, `disabled`, `imageGeneration`). */
-  overrides?: Partial<ProviderModelOverride>[]
+  overrides?: Partial<ProviderModelOverride>[];
 }
 
 export function defineProvider(p: Provider): Provider {
-  return p
+  return p;
 }
 
 /** Generation-only fields shared by every provider, kept out of the connection config. */
-type GenFields = Pick<Provider, 'modelsDevProvider' | 'fetchModels' | 'overrides'>
+type GenFields = Pick<Provider, 'modelsDevProvider' | 'fetchModels' | 'overrides'>;
 
 /**
  * Helper for the common OpenAI-compatible provider: `openai-chat-completions` over `baseUrl` (and an
@@ -57,19 +57,20 @@ type GenFields = Pick<Provider, 'modelsDevProvider' | 'fetchModels' | 'overrides
  */
 export function openaiCompatible(
   p: {
-    id: string
-    name: string
-    baseUrl: string
-    anthropic?: string
-    website: ProviderWebsite
-    apiFeatures?: Partial<ApiFeatures>
-    presetProviderId?: string
-  } & GenFields
+    id: string;
+    name: string;
+    baseUrl: string;
+    anthropic?: string;
+    website: ProviderWebsite;
+    apiFeatures?: Partial<ApiFeatures>;
+    presetProviderId?: string;
+  } & GenFields,
 ): Provider {
   const endpointConfigs: ProviderConnection['endpointConfigs'] = {
-    'openai-chat-completions': { adapterFamily: 'openai-compatible', baseUrl: p.baseUrl }
-  }
-  if (p.anthropic) endpointConfigs['anthropic-messages'] = { adapterFamily: 'anthropic', baseUrl: p.anthropic }
+    'openai-chat-completions': { adapterFamily: 'openai-compatible', baseUrl: p.baseUrl },
+  };
+  if (p.anthropic)
+    endpointConfigs['anthropic-messages'] = { adapterFamily: 'anthropic', baseUrl: p.anthropic };
   return defineProvider({
     id: p.id,
     name: p.name,
@@ -80,6 +81,6 @@ export function openaiCompatible(
     ...(p.presetProviderId ? { presetProviderId: p.presetProviderId } : {}),
     ...(p.modelsDevProvider ? { modelsDevProvider: p.modelsDevProvider } : {}),
     ...(p.fetchModels ? { fetchModels: p.fetchModels } : {}),
-    ...(p.overrides ? { overrides: p.overrides } : {})
-  })
+    ...(p.overrides ? { overrides: p.overrides } : {}),
+  });
 }

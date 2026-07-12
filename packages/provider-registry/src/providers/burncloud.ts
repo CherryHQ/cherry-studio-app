@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'burncloud',
@@ -8,6 +8,6 @@ export default openaiCompatible({
     apiKey: 'https://ai.burncloud.com/token',
     docs: 'https://ai.burncloud.com/docs',
     models: 'https://ai.burncloud.com/pricing',
-    official: 'https://ai.burncloud.com/'
-  }
-})
+    official: 'https://ai.burncloud.com/',
+  },
+});

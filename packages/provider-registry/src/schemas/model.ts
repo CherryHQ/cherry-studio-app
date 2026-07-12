@@ -3,7 +3,7 @@
  * Defines the structure for model metadata, capabilities, and configurations
  */
 
-import * as z from 'zod'
+import * as z from 'zod';
 
 import {
   MetadataSchema,
@@ -11,18 +11,24 @@ import {
   NumericRangeSchema,
   PricePerTokenSchema,
   VersionSchema,
-  ZodCurrencySchema
-} from './common'
-import { CANONICAL_PARAM_KEY, MODALITY, MODEL_CAPABILITY, objectValues, REASONING_EFFORT } from './enums'
+  ZodCurrencySchema,
+} from './common';
+import {
+  CANONICAL_PARAM_KEY,
+  MODALITY,
+  MODEL_CAPABILITY,
+  objectValues,
+  REASONING_EFFORT,
+} from './enums';
 
-export const ModalitySchema = z.enum(objectValues(MODALITY))
-export type ModalityType = z.infer<typeof ModalitySchema>
+export const ModalitySchema = z.enum(objectValues(MODALITY));
+export type ModalityType = z.infer<typeof ModalitySchema>;
 
-export const ModelCapabilityTypeSchema = z.enum(objectValues(MODEL_CAPABILITY))
-export type ModelCapabilityType = z.infer<typeof ModelCapabilityTypeSchema>
+export const ModelCapabilityTypeSchema = z.enum(objectValues(MODEL_CAPABILITY));
+export type ModelCapabilityType = z.infer<typeof ModelCapabilityTypeSchema>;
 
-export const CanonicalParamKeySchema = z.enum(objectValues(CANONICAL_PARAM_KEY))
-export type CanonicalParamKeyType = z.infer<typeof CanonicalParamKeySchema>
+export const CanonicalParamKeySchema = z.enum(objectValues(CANONICAL_PARAM_KEY));
+export type CanonicalParamKeyType = z.infer<typeof CanonicalParamKeySchema>;
 
 // Thinking token limits schema (shared across reasoning types)
 // min and max must be both present or both absent; when present, min <= max
@@ -30,24 +36,24 @@ export const ThinkingTokenLimitsSchema = z
   .object({
     min: z.number().nonnegative().optional(),
     max: z.number().positive().optional(),
-    default: z.number().nonnegative().optional()
+    default: z.number().nonnegative().optional(),
   })
   .refine((d) => (d.min == null) === (d.max == null), {
-    message: 'min and max must be both present or both absent'
+    message: 'min and max must be both present or both absent',
   })
   .refine((d) => d.min == null || d.max == null || d.min <= d.max, {
-    message: 'min must be less than or equal to max'
-  })
+    message: 'min must be less than or equal to max',
+  });
 
 /** Reasoning effort levels shared across providers */
-export const ReasoningEffortSchema = z.enum(objectValues(REASONING_EFFORT))
+export const ReasoningEffortSchema = z.enum(objectValues(REASONING_EFFORT));
 
 // Common reasoning fields shared across all reasoning type variants
 // Exported for shared/runtime types to reuse
 export const CommonReasoningFieldsSchema = {
   thinkingTokenLimits: ThinkingTokenLimitsSchema.optional(),
-  supportedEfforts: z.array(ReasoningEffortSchema).optional()
-}
+  supportedEfforts: z.array(ReasoningEffortSchema).optional(),
+};
 
 /**
  * Reasoning support schema — describes model-level reasoning capabilities.
@@ -57,8 +63,8 @@ export const CommonReasoningFieldsSchema = {
  * (see provider.ts ProviderReasoningFormatSchema).
  */
 export const ReasoningSupportSchema = z.object({
-  ...CommonReasoningFieldsSchema
-})
+  ...CommonReasoningFieldsSchema,
+});
 
 /**
  * Image-generation support describes what controls a model accepts, in a
@@ -79,12 +85,12 @@ export const ReasoningSupportSchema = z.object({
  * Per-mode transport routing (PPIO endpoint URL + sync/async flag) lives
  * on `ModeDef.vendorTransport` so it travels with the registry data.
  */
-export const ImageGenerationModeSchema = z.enum(['generate', 'edit', 'remix', 'upscale', 'merge'])
+export const ImageGenerationModeSchema = z.enum(['generate', 'edit', 'remix', 'upscale', 'merge']);
 
 const SwitchSpecSchema = z.object({
   type: z.literal('switch'),
-  default: z.boolean().optional()
-})
+  default: z.boolean().optional(),
+});
 
 const EnumSpecSchema = z.object({
   type: z.literal('enum'),
@@ -93,8 +99,8 @@ const EnumSpecSchema = z.object({
   /** `'chips'` for compact button rows (size / aspectRatio / imageResolution);
    *  defaults to `'select'` (dropdown) when omitted. */
   render: z.enum(['select', 'chips']).optional(),
-  columns: z.number().int().positive().optional()
-})
+  columns: z.number().int().positive().optional(),
+});
 
 const RangeSpecSchema = z
   .object({
@@ -102,9 +108,9 @@ const RangeSpecSchema = z
     min: z.number(),
     max: z.number(),
     default: z.number().optional(),
-    step: z.number().optional()
+    step: z.number().optional(),
   })
-  .refine((r) => r.min <= r.max, { message: 'min must be ≤ max' })
+  .refine((r) => r.min <= r.max, { message: 'min must be ≤ max' });
 
 const SizeSpecSchema = z.object({
   type: z.literal('size'),
@@ -114,21 +120,21 @@ const SizeSpecSchema = z.object({
   /** When set, the size widget only renders when the named enum is at
    *  `'custom'` (CogView pattern: pick the `'custom'` chip on the size
    *  enum to reveal width/height inputs). */
-  pairedEnumKey: z.string().optional()
-})
+  pairedEnumKey: z.string().optional(),
+});
 
 const TextSpecSchema = z.object({
   type: z.literal('text'),
-  multiline: z.boolean().optional()
-})
+  multiline: z.boolean().optional(),
+});
 
 export const SupportSpecSchema = z.discriminatedUnion('type', [
   SwitchSpecSchema,
   EnumSpecSchema,
   RangeSpecSchema,
   SizeSpecSchema,
-  TextSpecSchema
-])
+  TextSpecSchema,
+]);
 
 /**
  * Per-mode model capability declaration. The renderer iterates `supports`
@@ -151,7 +157,7 @@ const ImageModeDefSchema = z.object({
   vendorTransport: z
     .object({
       endpoint: z.string(),
-      isSync: z.boolean().optional()
+      isSync: z.boolean().optional(),
     })
     .optional(),
   /**
@@ -161,15 +167,15 @@ const ImageModeDefSchema = z.object({
    * languages) or PPIO's image-upscaler / image-eraser / image-remove-bg
    * variants. Default is `true` (prompt required).
    */
-  requirePrompt: z.boolean().optional()
-})
+  requirePrompt: z.boolean().optional(),
+});
 
 export const ImageGenerationSupportSchema = z.object({
   // `z.partialRecord` because not every mode is declared — single-mode
   // models only carry `generate`; Ideogram V_* carry generate/remix/upscale
   // but no edit/merge. Zod's plain `z.record(enum, …)` is exhaustive.
-  modes: z.partialRecord(ImageGenerationModeSchema, ImageModeDefSchema)
-})
+  modes: z.partialRecord(ImageGenerationModeSchema, ImageModeDefSchema),
+});
 
 // Parameter support configuration
 // Defaults reflect the most common LLM provider capabilities
@@ -177,21 +183,21 @@ export const ParameterSupportSchema = z.object({
   temperature: z
     .object({
       supported: z.boolean(),
-      range: NumericRangeSchema.optional()
+      range: NumericRangeSchema.optional(),
     })
     .default({ supported: true }),
 
   topP: z
     .object({
       supported: z.boolean(),
-      range: NumericRangeSchema.optional()
+      range: NumericRangeSchema.optional(),
     })
     .default({ supported: true }),
 
   topK: z
     .object({
       supported: z.boolean(),
-      range: NumericRangeSchema.optional()
+      range: NumericRangeSchema.optional(),
     })
     .default({ supported: false }),
 
@@ -199,8 +205,8 @@ export const ParameterSupportSchema = z.object({
   presencePenalty: z.boolean().default(true),
   maxTokens: z.boolean().default(true),
   stopSequences: z.boolean().default(true),
-  systemMessage: z.boolean().default(true)
-})
+  systemMessage: z.boolean().default(true),
+});
 
 /**
  * Model pricing configuration.
@@ -222,17 +228,17 @@ export const ModelPricingSchema = z.object({
     .object({
       price: z.number(),
       currency: ZodCurrencySchema,
-      unit: z.enum(['image', 'pixel']).optional()
+      unit: z.enum(['image', 'pixel']).optional(),
     })
     .optional(),
 
   perMinute: z
     .object({
       price: z.number(),
-      currency: ZodCurrencySchema
+      currency: ZodCurrencySchema,
     })
-    .optional()
-})
+    .optional(),
+});
 
 // Model configuration schema
 export const ModelConfigSchema = z.object({
@@ -245,7 +251,7 @@ export const ModelConfigSchema = z.object({
   capabilities: z
     .array(ModelCapabilityTypeSchema)
     .refine((arr) => new Set(arr).size === arr.length, {
-      message: 'Capabilities must be unique'
+      message: 'Capabilities must be unique',
     })
     .optional(),
 
@@ -253,13 +259,13 @@ export const ModelConfigSchema = z.object({
   inputModalities: z
     .array(ModalitySchema)
     .refine((arr) => new Set(arr).size === arr.length, {
-      message: 'Input modalities must be unique'
+      message: 'Input modalities must be unique',
     })
     .optional(),
   outputModalities: z
     .array(ModalitySchema)
     .refine((arr) => new Set(arr).size === arr.length, {
-      message: 'Output modalities must be unique'
+      message: 'Output modalities must be unique',
     })
     .optional(),
 
@@ -293,22 +299,22 @@ export const ModelConfigSchema = z.object({
   openWeights: z.boolean().optional(),
 
   // Additional metadata
-  metadata: MetadataSchema
-})
+  metadata: MetadataSchema,
+});
 
 // Model list container schema for JSON files
 export const ModelListSchema = z.object({
   version: VersionSchema,
-  models: z.array(ModelConfigSchema)
-})
+  models: z.array(ModelConfigSchema),
+});
 
-export type ThinkingTokenLimits = z.infer<typeof ThinkingTokenLimitsSchema>
-export type ReasoningSupport = z.infer<typeof ReasoningSupportSchema>
-export type ParameterSupport = z.infer<typeof ParameterSupportSchema>
-export type ImageGenerationMode = z.infer<typeof ImageGenerationModeSchema>
-export type SupportSpec = z.infer<typeof SupportSpecSchema>
-export type ImageModeDef = z.infer<typeof ImageModeDefSchema>
-export type ImageGenerationSupport = z.infer<typeof ImageGenerationSupportSchema>
-export type ModelPricing = z.infer<typeof ModelPricingSchema>
-export type ModelConfig = z.infer<typeof ModelConfigSchema>
-export type ModelList = z.infer<typeof ModelListSchema>
+export type ThinkingTokenLimits = z.infer<typeof ThinkingTokenLimitsSchema>;
+export type ReasoningSupport = z.infer<typeof ReasoningSupportSchema>;
+export type ParameterSupport = z.infer<typeof ParameterSupportSchema>;
+export type ImageGenerationMode = z.infer<typeof ImageGenerationModeSchema>;
+export type SupportSpec = z.infer<typeof SupportSpecSchema>;
+export type ImageModeDef = z.infer<typeof ImageModeDefSchema>;
+export type ImageGenerationSupport = z.infer<typeof ImageGenerationSupportSchema>;
+export type ModelPricing = z.infer<typeof ModelPricingSchema>;
+export type ModelConfig = z.infer<typeof ModelConfigSchema>;
+export type ModelList = z.infer<typeof ModelListSchema>;

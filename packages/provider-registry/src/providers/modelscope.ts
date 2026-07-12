@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'modelscope',
@@ -9,7 +9,7 @@ export default openaiCompatible({
     apiKey: 'https://modelscope.cn/my/myaccesstoken',
     docs: 'https://modelscope.cn/docs/model-service/API-Inference/intro',
     models: 'https://modelscope.cn/models',
-    official: 'https://modelscope.cn'
+    official: 'https://modelscope.cn',
   },
-  modelsDevProvider: 'modelscope'
-})
+  modelsDevProvider: 'modelscope',
+});

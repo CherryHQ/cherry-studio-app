@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'fireworks',
@@ -8,7 +8,7 @@ export default openaiCompatible({
     apiKey: 'https://fireworks.ai/account/api-keys',
     docs: 'https://docs.fireworks.ai/getting-started/introduction',
     models: 'https://fireworks.ai/dashboard/models',
-    official: 'https://fireworks.ai/'
+    official: 'https://fireworks.ai/',
   },
-  modelsDevProvider: 'fireworks-ai'
-})
+  modelsDevProvider: 'fireworks-ai',
+});

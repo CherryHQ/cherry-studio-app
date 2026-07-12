@@ -1,5 +1,5 @@
-import { openaiCompatible } from './_api'
-import { defineCreator } from './types'
+import { openaiCompatible } from './_api';
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'mistral',
@@ -15,6 +15,6 @@ export default defineCreator({
     'voxtral',
     'pixtral',
     'open-mistral',
-    'open-mixtral'
-  ]
-})
+    'open-mixtral',
+  ],
+});

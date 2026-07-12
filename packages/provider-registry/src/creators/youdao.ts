@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 // NetEase Youdao's BCE embedding/reranker line (BCEmbedding) — served under the `bce-` prefix, in no
 // clean upstream listing, so hand-listed here. A SEPARATE creator from BAAI (`baai.ts`) even though both
@@ -11,6 +11,11 @@ export default defineCreator({
   idPrefixes: ['bce'],
   models: [
     { id: 'bce-embedding-base-v1', name: 'BCE Embedding Base v1', contextWindow: 512 },
-    { id: 'bce-reranker-base-v1', name: 'BCE Reranker Base v1', capabilities: ['rerank'], contextWindow: 512 }
-  ]
-})
+    {
+      id: 'bce-reranker-base-v1',
+      name: 'BCE Reranker Base v1',
+      capabilities: ['rerank'],
+      contextWindow: 512,
+    },
+  ],
+});

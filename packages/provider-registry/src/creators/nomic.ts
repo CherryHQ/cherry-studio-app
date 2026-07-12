@@ -1,8 +1,8 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'nomic',
   name: 'Nomic',
   kind: 'embedding',
-  idPrefixes: ['nomic-embed']
-})
+  idPrefixes: ['nomic-embed'],
+});

@@ -1,5 +1,5 @@
-import { anthropicModels } from './_api'
-import { defineCreator } from './types'
+import { anthropicModels } from './_api';
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'anthropic',
@@ -13,6 +13,6 @@ export default defineCreator({
     'claude-haiku-4',
     'claude-3-5-haiku',
     'claude-3-5-sonnet',
-    'claude-3-7-sonnet'
-  ]
-})
+    'claude-3-7-sonnet',
+  ],
+});

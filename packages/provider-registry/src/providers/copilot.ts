@@ -1,4 +1,4 @@
-import { defineProvider } from './types'
+import { defineProvider } from './types';
 
 export default defineProvider({
   id: 'copilot',
@@ -7,13 +7,13 @@ export default defineProvider({
   endpointConfigs: {
     'openai-chat-completions': {
       adapterFamily: 'github-copilot-openai-compatible',
-      baseUrl: 'https://api.githubcopilot.com/'
-    }
+      baseUrl: 'https://api.githubcopilot.com/',
+    },
   },
   metadata: {
     website: {
-      official: 'https://github.com/features/copilot'
-    }
+      official: 'https://github.com/features/copilot',
+    },
   },
-  modelsDevProvider: 'github-copilot'
-})
+  modelsDevProvider: 'github-copilot',
+});
