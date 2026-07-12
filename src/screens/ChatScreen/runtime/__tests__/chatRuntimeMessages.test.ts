@@ -1,6 +1,33 @@
 import type { Message } from '@/data/types/message';
 
-import { mergeMessagesWithOverlay } from '../chatRuntimeMessages';
+import { mergeMessagesWithOverlay, statsFromMetadata } from '../chatRuntimeMessages';
+
+describe('statsFromMetadata', () => {
+  test('projects present token fields, dropping absent ones', () => {
+    expect(
+      statsFromMetadata({ totalTokens: 150, promptTokens: 100, completionTokens: 50 }),
+    ).toEqual({
+      totalTokens: 150,
+      promptTokens: 100,
+      completionTokens: 50,
+    });
+  });
+
+  test('includes thoughtsTokens when present', () => {
+    expect(statsFromMetadata({ totalTokens: 10, thoughtsTokens: 4 })).toEqual({
+      totalTokens: 10,
+      thoughtsTokens: 4,
+    });
+  });
+
+  test('returns undefined for undefined metadata', () => {
+    expect(statsFromMetadata(undefined)).toBeUndefined();
+  });
+
+  test('returns undefined when metadata has no token fields', () => {
+    expect(statsFromMetadata({ modelId: 'gpt-5' })).toBeUndefined();
+  });
+});
 
 describe('chat runtime messages', () => {
   test('replaces a persisted placeholder with the streaming overlay', () => {

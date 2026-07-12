@@ -1,9 +1,5 @@
-import m0000 from '../../../migrations/sqlite-drizzle/0000_create_preference.sql';
-import m0001 from '../../../migrations/sqlite-drizzle/0001_create_app_state.sql';
-import m0002 from '../../../migrations/sqlite-drizzle/0002_shocking_mandarin.sql';
-import m0003 from '../../../migrations/sqlite-drizzle/0003_loving_justin_hammer.sql';
-import m0004 from '../../../migrations/sqlite-drizzle/0004_lovely_thunderbolt_ross.sql';
-import m0005 from '../../../migrations/sqlite-drizzle/0005_add_user_model_owned_by.sql';
+import m0000 from '../../../migrations/sqlite-drizzle/0000_release_baseline.sql';
+import m0001 from '../../../migrations/sqlite-drizzle/0001_message-status-index.sql';
 import journal from '../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main
@@ -15,9 +11,5 @@ export const migrations = {
   migrations: {
     m0000,
     m0001,
-    m0002,
-    m0003,
-    m0004,
-    m0005,
   },
 };

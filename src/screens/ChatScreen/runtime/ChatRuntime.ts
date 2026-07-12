@@ -1,6 +1,7 @@
 import { readUIMessageStream } from 'ai';
 
 import { toCherryUIMessage } from '@/ai/messages/messageConverter';
+import { serializeError } from '@/ai/utils/serializeError';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { DataServices } from '@/data/services/createDataServices';
 import type {
@@ -12,8 +13,11 @@ import type {
 import type { Model, UniqueModelId } from '@/data/types/model';
 import { isUniqueModelId } from '@/data/types/model';
 import type { Topic } from '@/data/types/topic';
+import { type CherryReasoningMeta, readCherryMeta, withCherryMeta } from '@/data/types/uiParts';
 
-import { applyStreamingMessage } from './chatRuntimeMessages';
+import { applyStreamingMessage, statsFromMetadata } from './chatRuntimeMessages';
+import { normalizeAssistantMessageCitations } from './normalizeCitations';
+import { extractMainText, maybeRenameTopicFromConversationSummary } from './topicNaming';
 
 export type ChatRuntimeTopicStatus = 'aborting' | 'idle' | 'reserving' | 'streaming';
 
@@ -282,6 +286,7 @@ export class ChatRuntime {
       const history = await this.dependencies.services.message.getPathToNode(
         reservedTurn.userMessage.id,
       );
+      const isFirstExchange = history.length === 1;
       throwIfAborted(abortController.signal);
       const stream = await this.dependencies.services.ai.streamText({
         assistantId: topic.assistantId,
@@ -314,6 +319,16 @@ export class ChatRuntime {
         latestAssistantMessage,
         status: 'success',
       });
+
+      if (isFirstExchange) {
+        void this.autoNameTopicFromSummary({
+          assistantId: topic.assistantId,
+          assistantParts: (latestAssistantMessage?.parts ?? []) as CherryMessagePart[],
+          defaultModelId: model.id,
+          topicId,
+          userParts: parts,
+        });
+      }
     } catch (error) {
       terminalAssistantMessage = await this.persistFailedAssistantMessage({
         assistantPlaceholder,
@@ -357,6 +372,37 @@ export class ChatRuntime {
     }
   }
 
+  /**
+   * Fire-and-forget: not awaited by the caller, so the naming LLM call
+   * never delays the turn's snapshot from reaching 'idle'.
+   */
+  private async autoNameTopicFromSummary(input: {
+    assistantId?: string;
+    assistantParts: readonly CherryMessagePart[];
+    defaultModelId: UniqueModelId;
+    topicId: string;
+    userParts: readonly CherryMessagePart[];
+  }): Promise<void> {
+    const userText = extractMainText(input.userParts);
+    const assistantText = extractMainText(input.assistantParts);
+    if (!userText || !assistantText) {
+      return;
+    }
+
+    const renamed = await maybeRenameTopicFromConversationSummary({
+      assistantId: input.assistantId,
+      assistantText,
+      defaultModelId: input.defaultModelId,
+      services: this.dependencies.services,
+      topicId: input.topicId,
+      userText,
+    });
+
+    if (renamed) {
+      await this.dependencies.invalidateTopics();
+    }
+  }
+
   private emit(): void {
     for (const listener of this.listeners) {
       listener();
@@ -379,9 +425,11 @@ export class ChatRuntime {
     const dataParts = input.wasAborted
       ? latestParts
       : appendErrorPart(latestParts as CherryMessagePart[], input.error);
+    const stats = statsFromMetadata(input.latestAssistantMessage?.metadata);
 
     return await this.dependencies.services.message.update(assistantPlaceholder.id, {
-      data: { parts: dataParts as CherryMessagePart[] },
+      data: { parts: finalizeInterruptedReasoningParts(dataParts as CherryMessagePart[]) },
+      ...(stats && { stats }),
       status: input.wasAborted ? 'paused' : 'error',
     });
   }
@@ -391,8 +439,18 @@ export class ChatRuntime {
     latestAssistantMessage?: CherryUIMessage;
     status: 'paused' | 'success';
   }): Promise<Message> {
+    const normalizedMessage =
+      input.status === 'success' && input.latestAssistantMessage
+        ? normalizeAssistantMessageCitations(input.latestAssistantMessage)
+        : input.latestAssistantMessage;
+    const parts = (normalizedMessage?.parts ?? []) as CherryMessagePart[];
+    const stats = statsFromMetadata(input.latestAssistantMessage?.metadata);
+
     return await this.dependencies.services.message.update(input.assistantPlaceholder.id, {
-      data: { parts: (input.latestAssistantMessage?.parts ?? []) as CherryMessagePart[] },
+      data: {
+        parts: input.status === 'success' ? parts : finalizeInterruptedReasoningParts(parts),
+      },
+      ...(stats && { stats }),
       status: input.status,
     });
   }
@@ -512,15 +570,9 @@ function getTurnParts(input: {
 }
 
 function toErrorPart(error: unknown): CherryMessagePart {
-  const normalizedError = toError(error);
-
   return {
     type: 'data-error',
-    data: {
-      message: normalizedError.message,
-      name: normalizedError.name,
-      stack: normalizedError.stack ?? null,
-    },
+    data: serializeError(error),
   } as CherryMessagePart;
 }
 
@@ -530,6 +582,31 @@ function appendErrorPart(parts: readonly CherryMessagePart[], error: unknown): C
   }
 
   return [...parts, toErrorPart(error)] as CherryMessagePart[];
+}
+
+/**
+ * A reasoning part can still be `state: 'streaming'` when a turn ends early
+ * (abort, network error, app kill). Left as-is, ReasoningPart would treat it
+ * as perpetually thinking on every future render. Force it to `done` and
+ * backfill `thinkingMs` from `startedAt` when the stream never sent a
+ * `reasoning-end` to compute it.
+ */
+function finalizeInterruptedReasoningParts(parts: CherryMessagePart[]): CherryMessagePart[] {
+  return parts.map((part) => {
+    if (part.type !== 'reasoning' || part.state !== 'streaming') {
+      return part;
+    }
+
+    const cherry = readCherryMeta(part);
+    const startedAt = cherry?.startedAt;
+    const thinkingMs = cherry?.thinkingMs;
+    const patch: Partial<CherryReasoningMeta> =
+      typeof startedAt === 'number' && Number.isFinite(startedAt) && !Number.isFinite(thinkingMs)
+        ? { thinkingMs: Math.max(0, Date.now() - startedAt) }
+        : {};
+
+    return withCherryMeta({ ...part, state: 'done' }, patch);
+  });
 }
 
 function toModelSnapshot(model: Model): ModelSnapshot {

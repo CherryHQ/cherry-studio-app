@@ -22,10 +22,7 @@ describe('web search provider settings', () => {
       { type: 'capabilityApiHosts' },
     ]);
     expect(getWebSearchProviderDetailSections('fetch')).toEqual([{ type: 'description' }]);
-    expect(getWebSearchProviderDetailSections('zhipu')).toEqual([
-      { type: 'zhipuApiKeyShortcut' },
-      { type: 'capabilityApiHosts' },
-    ]);
+    expect(getWebSearchProviderDetailSections('zhipu')).toEqual([{ type: 'zhipuApiKeyShortcut' }]);
     expect(getWebSearchProviderDetailSections('searxng')).toEqual([
       { type: 'capabilityApiHosts' },
       { type: 'basicAuth' },

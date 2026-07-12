@@ -6,8 +6,10 @@ import { useTranslation } from 'react-i18next';
 import { queryKeys } from '@/data/api';
 import { useDataServices } from '@/data/runtime';
 import { providerRegistryService } from '@/data/services/ProviderRegistryService';
+import type { UpdateProviderInput } from '@/data/services/ProviderService';
 import type { Provider } from '@/data/types/provider';
 
+import { enableProviderWhenModelsAvailable } from '../../utils/providerEnablement';
 import {
   buildProviderModelPullPreview,
   type ProviderModelPullApplyPayload,
@@ -19,27 +21,30 @@ import {
 } from '../utils/providerModelPullTimeout';
 
 type UseProviderModelPullOptions = {
+  initialPreview?: ProviderModelPullPreview | null;
+  onPreviewReady?: (preview: ProviderModelPullPreview) => void;
   provider: Provider | undefined;
   providerId: string;
 };
 
-export function useProviderModelPull({ provider, providerId }: UseProviderModelPullOptions) {
+export type ProviderModelPullLoadResult = 'empty' | 'error' | 'ready';
+
+export function useProviderModelPull({
+  initialPreview = null,
+  onPreviewReady,
+  provider,
+  providerId,
+}: UseProviderModelPullOptions) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const services = useDataServices();
   const queryClient = useQueryClient();
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [preview, setPreview] = useState<ProviderModelPullPreview | null>(null);
-
-  const closeSheet = useCallback(() => {
-    setIsSheetOpen(false);
-  }, []);
+  const [preview, setPreview] = useState<ProviderModelPullPreview | null>(initialPreview);
 
   const resetPreview = useCallback(() => {
     setPreview(null);
-    setIsSheetOpen(false);
   }, []);
 
   const refreshModelQueries = useCallback(async () => {
@@ -52,9 +57,9 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
     ]);
   }, [providerId, queryClient]);
 
-  const openPullPreview = useCallback(async () => {
+  const loadPullPreview = useCallback(async (): Promise<ProviderModelPullLoadResult> => {
     if (!provider || !providerId) {
-      return;
+      return 'error';
     }
 
     setIsPreviewLoading(true);
@@ -83,15 +88,22 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
 
       if (!hasChanges) {
         setPreview(null);
+        await enableProviderWhenModelsAvailable(
+          provider,
+          (updates: UpdateProviderInput) => services.provider.update(providerId, updates),
+          localModels.length,
+          'pull_reconcile_up_to_date',
+        );
         toast.show({
           label: t('settings.provider.models.pullUpToDate'),
           variant: 'success',
         });
-        return;
+        return 'empty';
       }
 
       setPreview(nextPreview);
-      setIsSheetOpen(true);
+      onPreviewReady?.(nextPreview);
+      return 'ready';
     } catch (error) {
       toast.show({
         label: t(
@@ -101,15 +113,25 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
         ),
         variant: 'danger',
       });
+      return 'error';
     } finally {
       setIsPreviewLoading(false);
     }
-  }, [provider, providerId, services.ai, services.model, t, toast]);
+  }, [
+    onPreviewReady,
+    provider,
+    providerId,
+    services.ai,
+    services.model,
+    services.provider,
+    t,
+    toast,
+  ]);
 
   const applyPullPreview = useCallback(
     async (payload: ProviderModelPullApplyPayload) => {
       if (!provider) {
-        return;
+        return false;
       }
 
       setIsApplying(true);
@@ -118,6 +140,13 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
           defaultChatEndpoint: provider.defaultChatEndpoint,
           endpointConfigs: provider.endpointConfigs,
         });
+        const remainingModels = await services.model.list({ providerId });
+        await enableProviderWhenModelsAvailable(
+          provider,
+          (updates: UpdateProviderInput) => services.provider.update(providerId, updates),
+          remainingModels.length,
+          'pull_reconcile_apply',
+        );
         await refreshModelQueries();
         toast.show({
           label: t('settings.provider.models.pullApplyResult', {
@@ -127,26 +156,36 @@ export function useProviderModelPull({ provider, providerId }: UseProviderModelP
           variant: 'success',
         });
         resetPreview();
+        return true;
       } catch {
         toast.show({
           label: t('settings.provider.models.pullApplyFailed'),
           variant: 'danger',
         });
+        return false;
       } finally {
         setIsApplying(false);
       }
     },
-    [provider, providerId, refreshModelQueries, resetPreview, services.model, t, toast],
+    [
+      provider,
+      providerId,
+      refreshModelQueries,
+      resetPreview,
+      services.model,
+      services.provider,
+      t,
+      toast,
+    ],
   );
 
   return {
     applyPullPreview,
-    closeSheet,
     isApplying,
     isBusy: isPreviewLoading || isApplying,
     isPreviewLoading,
-    isSheetOpen,
-    openPullPreview,
+    loadPullPreview,
     preview,
+    resetPreview,
   };
 }

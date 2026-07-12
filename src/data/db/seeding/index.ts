@@ -1,5 +1,6 @@
 import type { DbService } from '../DbService';
 import { SeedRunner } from './SeedRunner';
+import { DefaultAssistantSeeder } from './seeders/DefaultAssistantSeeder';
 import { MockChatSeeder } from './seeders/MockChatSeeder';
 import { PreferenceSeeder } from './seeders/PreferenceSeeder';
 import { PresetProviderSeeder } from './seeders/PresetProviderSeeder';
@@ -10,7 +11,11 @@ export async function seedDatabase(dbService: DbService) {
 }
 
 async function createSeeders(): Promise<DatabaseSeeder[]> {
-  const seeders: DatabaseSeeder[] = [new PreferenceSeeder(), new PresetProviderSeeder()];
+  const seeders: DatabaseSeeder[] = [
+    new PreferenceSeeder(),
+    new PresetProviderSeeder(),
+    new DefaultAssistantSeeder(),
+  ];
 
   if (isDevelopmentBuild()) {
     seeders.push(new MockChatSeeder());

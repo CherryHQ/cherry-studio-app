@@ -1,14 +1,13 @@
-import { ChevronsUpDownIcon } from 'lucide-uniwind/png';
-import { useCallback, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { ChevronRightIcon } from 'lucide-uniwind/png';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/components/headers';
 import {
-  getNextModelSelection,
   MODEL_SETTING_KIND_TITLE_KEYS,
   MODEL_SETTING_KINDS,
-  ModelPickerBottomSheet,
   type ModelPickerModelItem,
   type ModelSettingKind,
   useModelPickerData,
@@ -24,30 +23,9 @@ const MODEL_SETTING_ICONS = {
 
 export default function ModelSettingsScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const modelSettings = useModelSettingSelections();
   const modelPickerData = useModelPickerData();
-  const [activeTarget, setActiveTarget] = useState<ModelSettingKind | null>(null);
-  const openModelPicker = useCallback((kind: ModelSettingKind) => {
-    setActiveTarget(kind);
-  }, []);
-  const closeModelPicker = useCallback(() => {
-    setActiveTarget(null);
-  }, []);
-  const handleModelPress = useCallback(
-    (item: ModelPickerModelItem) => {
-      if (!activeTarget) {
-        return;
-      }
-
-      const nextModelId = getNextModelSelection(
-        modelSettings.selections[activeTarget],
-        item.modelId,
-      );
-
-      modelSettings.onSelectionChange(activeTarget, nextModelId);
-    },
-    [activeTarget, modelSettings],
-  );
   const items = useMemo(
     () =>
       MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => ({
@@ -59,9 +37,9 @@ export default function ModelSettingsScreen() {
         ),
         iconEmoji: MODEL_SETTING_ICONS[kind],
         title: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
-        onPress: () => openModelPicker(kind),
+        onPress: () => router.push(`/settings/model/${kind}`),
       })),
-    [modelPickerData.getModelItem, modelSettings.selections, openModelPicker, t],
+    [modelPickerData.getModelItem, modelSettings.selections, router, t],
   );
 
   return (
@@ -79,12 +57,6 @@ export default function ModelSettingsScreen() {
           ))}
         </View>
       </ScrollView>
-      <ModelPickerBottomSheet
-        isOpen={activeTarget !== null}
-        selectedModelId={activeTarget ? modelSettings.selections[activeTarget] : null}
-        onClose={closeModelPicker}
-        onSelect={handleModelPress}
-      />
     </>
   );
 }
@@ -101,7 +73,7 @@ function SelectedModelAccessory({
       <Text className="min-w-0 shrink text-right text-default-foreground text-sm" numberOfLines={1}>
         {item?.model.name ?? placeholder}
       </Text>
-      <ChevronsUpDownIcon className="size-6 text-default-foreground" strokeWidth={2} />
+      <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
     </View>
   );
 }

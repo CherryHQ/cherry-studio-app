@@ -3,6 +3,7 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
 import type { DbService } from '@/data/db/DbService';
+import { userModelTable } from '@/data/db/schemas/userModel';
 import type { InsertUserProviderRow, UserProviderRow } from '@/data/db/schemas/userProvider';
 import { userProviderTable } from '@/data/db/schemas/userProvider';
 import { DataApiErrorFactory } from '@/data/types/apiTypes';
@@ -22,6 +23,7 @@ import {
   DEFAULT_PROVIDER_SETTINGS,
 } from '@/data/types/provider';
 
+import type { PinService } from './PinService';
 import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
 
@@ -31,7 +33,6 @@ export type CreateProviderInput = {
   authConfig?: InsertUserProviderRow['authConfig'];
   defaultChatEndpoint?: InsertUserProviderRow['defaultChatEndpoint'];
   endpointConfigs?: EndpointConfigs | null;
-  isEnabled?: boolean;
   name: string;
   presetProviderId?: string | null;
   providerId: string;
@@ -48,6 +49,13 @@ export type UpdateProviderInput = {
   name?: string;
   providerSettings?: ProviderSettings | null;
 };
+
+export function canDeleteProvider(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean {
+  return (
+    provider.presetProviderId !== provider.id &&
+    !providerRegistryService.isRegistryProvider(provider.id)
+  );
+}
 
 function mergeCatalogEndpointConfigs(
   existing: EndpointConfigs | null | undefined,
@@ -176,12 +184,14 @@ function rowToProvider(row: UserProviderRow): Provider {
       ...row.apiFeatures,
     },
     apiKeys,
+    authMethods: metadata.authMethods,
     authType,
     defaultChatEndpoint: row.defaultChatEndpoint ?? undefined,
     description: metadata.description,
     endpointConfigs: row.endpointConfigs as EndpointConfigs | undefined,
     id: row.providerId,
     isEnabled: row.isEnabled,
+    modelListSource: metadata.modelListSource,
     name: row.name,
     presetProviderId: row.presetProviderId ?? undefined,
     settings: {
@@ -199,7 +209,9 @@ function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
     authConfig: input.authConfig ?? null,
     defaultChatEndpoint: input.defaultChatEndpoint ?? null,
     endpointConfigs: withInferredAdapterFamilies(input.endpointConfigs),
-    isEnabled: input.isEnabled ?? true,
+    // New providers always start disabled — enableProviderWhenModelsAvailable flips this
+    // once a flow (connection check, model pull) confirms usable models exist.
+    isEnabled: false,
     name: input.name,
     presetProviderId: input.presetProviderId ?? null,
     providerId: input.providerId,
@@ -210,7 +222,10 @@ function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
 export class ProviderService {
   private readonly lastUsedApiKeyIds = new Map<string, string>();
 
-  constructor(private readonly dbService: DbService) {}
+  constructor(
+    private readonly dbService: DbService,
+    private readonly pinService: PinService,
+  ) {}
 
   private get db() {
     return this.dbService.getDb();
@@ -350,17 +365,34 @@ export class ProviderService {
     if (input.name !== undefined) {
       updates.name = input.name;
     }
-    if (input.providerSettings !== undefined) {
-      updates.providerSettings = input.providerSettings;
-    }
+    const [row] = await this.dbService.withWriteTx(async (tx) => {
+      if (input.providerSettings !== undefined) {
+        if (input.providerSettings === null) {
+          updates.providerSettings = null;
+        } else {
+          const [current] = await tx
+            .select({ providerSettings: userProviderTable.providerSettings })
+            .from(userProviderTable)
+            .where(eq(userProviderTable.providerId, providerId))
+            .limit(1);
 
-    const [row] = await this.dbService.withWriteTx((tx) =>
-      tx
+          if (!current) {
+            throw DataApiErrorFactory.notFound('Provider', providerId);
+          }
+
+          updates.providerSettings = {
+            ...(current.providerSettings as Partial<ProviderSettings> | null),
+            ...input.providerSettings,
+          };
+        }
+      }
+
+      return tx
         .update(userProviderTable)
         .set(updates)
         .where(eq(userProviderTable.providerId, providerId))
-        .returning(),
-    );
+        .returning();
+    });
 
     if (!row) {
       throw DataApiErrorFactory.notFound('Provider', providerId);
@@ -419,16 +451,48 @@ export class ProviderService {
   }
 
   async delete(providerId: string): Promise<void> {
-    const [row] = await this.dbService.withWriteTx((tx) =>
-      tx
+    await this.dbService.withWriteTx(async (tx) => {
+      const [provider] = await tx
+        .select({ presetProviderId: userProviderTable.presetProviderId })
+        .from(userProviderTable)
+        .where(eq(userProviderTable.providerId, providerId))
+        .limit(1);
+
+      if (!provider) {
+        throw DataApiErrorFactory.notFound('Provider', providerId);
+      }
+
+      if (
+        !canDeleteProvider({
+          id: providerId,
+          presetProviderId: provider.presetProviderId ?? undefined,
+        })
+      ) {
+        throw DataApiErrorFactory.invalidOperation(`Cannot delete preset provider '${providerId}'`);
+      }
+
+      const models = await tx
+        .select({ id: userModelTable.id })
+        .from(userModelTable)
+        .where(eq(userModelTable.providerId, providerId));
+
+      await this.pinService.purgeForEntitiesTx(
+        tx,
+        'model',
+        models.map((model) => model.id),
+      );
+
+      const deletedProviders = await tx
         .delete(userProviderTable)
         .where(eq(userProviderTable.providerId, providerId))
-        .returning({ providerId: userProviderTable.providerId }),
-    );
+        .returning({ providerId: userProviderTable.providerId });
 
-    if (!row) {
-      throw DataApiErrorFactory.notFound('Provider', providerId);
-    }
+      if (deletedProviders.length === 0) {
+        throw DataApiErrorFactory.notFound('Provider', providerId);
+      }
+    });
+
+    this.lastUsedApiKeyIds.delete(providerId);
   }
 
   async batchUpsert(inputs: CreateProviderInput[]): Promise<void> {

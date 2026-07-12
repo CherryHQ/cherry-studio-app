@@ -8,12 +8,13 @@ import {
   RssIcon,
   SquareArrowOutUpRightIcon,
 } from 'lucide-uniwind/png';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, Linking, ScrollView, Text, View } from 'react-native';
+import { Image, ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
+import { BackHeader } from '@/components/headers';
+import { openExternalUrl } from '@/utils/openExternalUrl';
 import { SettingsSection } from './components/SettingsSection';
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'latest';
@@ -28,9 +29,9 @@ function GitHubIcon({ className }: { className?: string }) {
 const ABOUT_LINKS = {
   contact: 'https://docs.cherry-ai.com/contact-us/questions/',
   feedback: 'https://github.com/CherryHQ/cherry-studio-app/issues/',
-  github: 'https://github.com/CherryHQ/cherry-studio-app',
   license: 'https://github.com/CherryHQ/cherry-studio/blob/main/LICENSE/',
   releases: 'https://github.com/CherryHQ/cherry-studio-app/releases/',
+  repository: 'https://github.com/CherryHQ/cherry-studio-app',
   website: 'https://www.cherry-ai.com/',
 } as const;
 
@@ -38,24 +39,12 @@ export default function AboutSettingsScreen() {
   const { t } = useTranslation();
 
   const openLink = useCallback((url: string) => {
-    Linking.openURL(url).catch(() => undefined);
+    void openExternalUrl(url);
   }, []);
-
-  const rightActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('settings.about.github.title'),
-        androidIcon: GitHubIcon,
-        key: 'github',
-        onPress: () => openLink(ABOUT_LINKS.github),
-      },
-    ],
-    [openLink, t],
-  );
 
   return (
     <>
-      <BackHeader rightActions={rightActions} title={t('settings.about.header')} />
+      <BackHeader title={t('settings.about.header')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
@@ -84,6 +73,17 @@ export default function AboutSettingsScreen() {
 
           <SettingsSection
             items={[
+              {
+                accessory: (
+                  <SquareArrowOutUpRightIcon
+                    className="size-5 text-default-foreground"
+                    strokeWidth={2}
+                  />
+                ),
+                icon: GitHubIcon,
+                title: t('settings.about.repository.title'),
+                onPress: () => openLink(ABOUT_LINKS.repository),
+              },
               {
                 accessory: (
                   <SquareArrowOutUpRightIcon

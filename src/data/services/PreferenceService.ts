@@ -1,3 +1,4 @@
+import { loggerService } from '@logger';
 import { eq } from 'drizzle-orm';
 
 import type { DbService } from '@/data/db/DbService';
@@ -11,6 +12,9 @@ import {
   type PreferenceKeyType,
   type PreferenceUpdateOptions,
 } from '@/data/preference';
+import { WebSearchProviderOverridesSchema } from '@/data/presets/webSearchProviders';
+
+const logger = loggerService.withContext('PreferenceService');
 
 type PreferenceListener = () => void;
 type PreferenceValue = PreferenceDefaultScopeType[PreferenceKeyType];
@@ -64,7 +68,10 @@ export class PreferenceService {
 
     for (const row of rows) {
       if (isPreferenceKey(row.key)) {
-        this.cache[row.key] = row.value as PreferenceValue;
+        const value = parsePersistedPreference(row.key, row.value);
+        if (value !== undefined) {
+          this.cache[row.key] = value;
+        }
       }
     }
   }
@@ -255,6 +262,25 @@ export class PreferenceService {
       }
     }
   }
+}
+
+function parsePersistedPreference(
+  key: PreferenceKeyType,
+  value: unknown,
+): PreferenceValue | undefined {
+  if (key !== 'chat.web_search.provider_overrides') {
+    return value as PreferenceValue;
+  }
+
+  const parsed = WebSearchProviderOverridesSchema.safeParse(value);
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  logger.warn('Ignoring malformed persisted web search provider overrides', {
+    issues: parsed.error.issues,
+  });
+  return undefined;
 }
 
 function isPreferenceValueEqual(left: unknown, right: unknown): boolean {

@@ -19,6 +19,7 @@ It does not define remote agent orchestration, Expo scaffolding, package install
 - [Navigation And Insets](./mobile-navigation-and-insets.md): Expo Router stacks, drawer, bottom sheets, Android back, edge-to-edge, and safe-area/inset strategy.
 - [UI Components](./mobile-ui-components.md): current button/control wrappers and the boundary between shared wrappers and feature-local `Pressable` controls.
 - [Chat Streaming And Rendering](./mobile-chat-streaming-rendering.md): AI SDK UI message streaming, Chat Runtime overlay, Message History Window, and current Markdown rendering.
+- [Extension Points](./mobile-extension-points.md): where future feature domains (drawing/canvas, cloud agent) attach to the existing data, AI, and UI layers.
 
 ## Decision Index
 
@@ -29,6 +30,8 @@ It does not define remote agent orchestration, Expo scaffolding, package install
 - [ADR 0005: Preserve Message Part Rendering Boundaries](../adr/0005-preserve-message-part-rendering-boundaries.md)
 - [ADR 0006: Use Platform-Native Navigation Gestures](../adr/0006-use-platform-native-navigation-gestures.md)
 - [ADR 0007: Use Component Bottom Sheets For Model Picker](../adr/0007-use-component-bottom-sheets-for-model-picker.md)
+- [ADR 0008: Defer op-sqlite Storage Migration](../adr/0008-defer-op-sqlite-storage-migration.md)
+- [ADR 0009: Keep Flat src Layout](../adr/0009-keep-flat-src-layout.md)
 
 ## Current Baseline
 
@@ -44,7 +47,7 @@ It does not define remote agent orchestration, Expo scaffolding, package install
 - Markdown-capable assistant parts use a unified `StreamdownText` path for both active streaming output and stable historical messages; user messages render as plain text.
 - AI provider/model request architecture is implemented through mobile Provider/Model records, endpoint configs, adapter-family resolution, `AiService`, and the AI SDK Agent adapter.
 - CherryIN OAuth follows desktop storage semantics: OAuth credentials live in provider `authConfig`; OAuth-derived gateway keys are normal provider `apiKeys` entries labeled `OAuth`.
-- External web search is a preference-backed `WebSearchService` provider registry and remains separate from provider-native web search options in AI requests; Zhipu's API-key bridge is a provider-specific exception.
+- External web search is a preference-backed `WebSearchService` provider registry, separate from provider-native web search options; it is bridged into AI requests as the `web_search` tool and arbitrated mutually exclusive with provider-native web search per request. Zhipu's API-key bridge is a provider-specific exception.
 - Navigation uses Expo Router stacks and drawer. Android predictive back remains disabled in `app.json` until real-device validation.
 - Model picker uses a reusable component-level Expo UI `BottomSheet`, not a route-level `formSheet`.
 - Settings uses route-level `formSheet` presentation.

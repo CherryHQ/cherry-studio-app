@@ -9,4 +9,3 @@ export { ProviderRegistryService } from './ProviderRegistryService';
 export { ProviderService } from './ProviderService';
 export { TagService } from './TagService';
 export { TopicService } from './TopicService';
-export { WebSearchService } from './WebSearchService';

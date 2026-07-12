@@ -85,6 +85,82 @@ describe('ChatRuntime', () => {
     );
   });
 
+  test('persists token usage stats projected from the final assistant metadata', async () => {
+    const services = createServices();
+    const runtime = createRuntime({ services });
+    const assistantChunk = {
+      ...createUiMessage('assistant-1', 'hello'),
+      metadata: { totalTokens: 150, promptTokens: 100, completionTokens: 50 },
+    };
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
+      data: { parts: assistantChunk.parts },
+      stats: { totalTokens: 150, promptTokens: 100, completionTokens: 50 },
+      status: 'success',
+    });
+  });
+
+  test('normalizes source-url citations into text part references on successful persistence', async () => {
+    const services = createServices();
+    const runtime = createRuntime({ services });
+    const assistantChunk = {
+      id: 'assistant-1',
+      parts: [
+        { type: 'text', text: 'Cherry Studio ships on mobile[1]' },
+        {
+          type: 'source-url',
+          sourceId: 'citation-0',
+          url: 'https://source1.test',
+          title: 'Source 1',
+        },
+      ],
+      role: 'assistant',
+    } as CherryUIMessage;
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.update).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: {
+          parts: [
+            expect.objectContaining({
+              type: 'text',
+              providerMetadata: {
+                cherry: {
+                  references: [
+                    expect.objectContaining({
+                      category: 'citation',
+                      citationType: 'web',
+                      content: {
+                        source: 'ai-sdk',
+                        results: [{ number: 1, url: 'https://source1.test', title: 'Source 1' }],
+                      },
+                    }),
+                  ],
+                },
+              },
+            }),
+            assistantChunk.parts[1],
+          ],
+        },
+        status: 'success',
+      }),
+    );
+  });
+
   test('sends a file-only payload without requiring text', async () => {
     const services = createServices();
     const runtime = createRuntime({ services });
@@ -213,6 +289,38 @@ describe('ChatRuntime', () => {
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
+  test('persists AI SDK error fields (e.g. statusCode) alongside message/name/stack', async () => {
+    const services = createServices();
+    const runtime = createRuntime({ services });
+    const apiError = Object.assign(new Error('rate limited'), {
+      statusCode: 429,
+      isRetryable: true,
+    });
+    mockReadUIMessageStream.mockReturnValue(failingAsyncIterable(apiError));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
+      data: {
+        parts: [
+          expect.objectContaining({
+            data: expect.objectContaining({
+              message: 'rate limited',
+              statusCode: 429,
+              isRetryable: true,
+            }),
+            type: 'data-error',
+          }),
+        ],
+      },
+      status: 'error',
+    });
+  });
+
   test('appends an error part when streaming fails after partial output', async () => {
     const services = createServices();
     const runtime = createRuntime({ services });
@@ -239,6 +347,49 @@ describe('ChatRuntime', () => {
       },
       status: 'error',
     });
+  });
+
+  test('finalizes a lingering streaming reasoning part when the stream fails after partial output', async () => {
+    const services = createServices();
+    const runtime = createRuntime({ services });
+    const partialChunk: CherryUIMessage = {
+      id: 'assistant-1',
+      parts: [
+        {
+          providerMetadata: { cherry: { startedAt: 1000 } },
+          state: 'streaming',
+          text: 'still thinking',
+          type: 'reasoning',
+        } as CherryMessagePart,
+      ],
+      role: 'assistant',
+    } as CherryUIMessage;
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterableWithFailure([partialChunk], new Error('stream failed')),
+    );
+    const dateSpy = jest.spyOn(Date, 'now').mockReturnValue(4500);
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
+      data: {
+        parts: [
+          expect.objectContaining({
+            providerMetadata: { cherry: { startedAt: 1000, thinkingMs: 3500 } },
+            state: 'done',
+            type: 'reasoning',
+          }),
+          expect.objectContaining({ type: 'data-error' }),
+        ],
+      },
+      status: 'error',
+    });
+
+    dateSpy.mockRestore();
   });
 
   test('creates a topic before sending the first new-topic message', async () => {
@@ -500,6 +651,59 @@ describe('ChatRuntime', () => {
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
+  test('auto-names the topic from the conversation summary after the first exchange', async () => {
+    const services = createServices();
+    const preferences: Record<string, unknown> = {
+      'app.language': 'en-US',
+      'topic.naming.enabled': true,
+      'topic.naming.model_id': null,
+      'topic.naming_prompt': '',
+    };
+    services.preference.get = jest.fn(
+      async (key: string) => preferences[key],
+    ) as typeof services.preference.get;
+    services.ai.generateText = jest.fn(async () => ({ text: 'Generated Topic Title' }));
+    const invalidateTopics = jest.fn(async () => undefined);
+    const runtime = createRuntime({ invalidateTopics, services });
+    const assistantChunk = createUiMessage('assistant-1', 'hello');
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    await waitUntil(() => (services.topic.update as jest.Mock).mock.calls.length > 0);
+
+    expect(services.topic.update).toHaveBeenCalledWith('topic-1', {
+      isNameManuallyEdited: false,
+      name: 'Generated Topic Title',
+    });
+    expect(invalidateTopics).toHaveBeenCalled();
+  });
+
+  test('does not auto-name a topic that already has history', async () => {
+    const services = createServices();
+    services.message.getPathToNode = jest.fn(async () => [
+      createMessage('user-0', 'user'),
+      createMessage('assistant-0', 'assistant'),
+      createMessage('user-1', 'user'),
+    ]);
+    services.ai.generateText = jest.fn(async () => ({ text: 'Generated Topic Title' }));
+    const runtime = createRuntime({ services });
+    const assistantChunk = createUiMessage('assistant-1', 'hello');
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.ai.generateText).not.toHaveBeenCalled();
+  });
+
   test('does not open a new topic when aborted after topic creation', async () => {
     const services = createServices();
     const invalidateTopics = createDeferredInvalidation({ blockOnCall: 1 });
@@ -731,6 +935,7 @@ function createAssistant(id: string, modelId: UniqueModelId | null): Assistant {
     modelId,
     modelName: modelId,
     name: 'Assistant',
+    orderKey: 'a0',
     prompt: '',
     settings: DEFAULT_ASSISTANT_SETTINGS,
     tags: [],

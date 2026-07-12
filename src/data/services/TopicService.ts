@@ -12,6 +12,7 @@ import {
   type SQL,
   sql,
 } from 'drizzle-orm';
+import * as Crypto from 'expo-crypto';
 
 import type { OrderRequest } from '@/data/api/schemas/_endpointHelpers';
 import type {
@@ -24,6 +25,7 @@ import { type CursorPaginationResponse, DataApiErrorFactory } from '@/data/types
 import type { Topic } from '@/data/types/topic';
 import type { DbService } from '../db/DbService';
 import { messageTable, pinTable, type TopicRow, topicTable } from '../db/schemas';
+import { createRootMessageTx } from './MessageService';
 import type { PinService } from './PinService';
 import type { TagService } from './TagService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
@@ -65,27 +67,38 @@ export class TopicService {
     return rowToTopic(row);
   }
 
+  async ensureTraceId(topicId: string): Promise<string> {
+    return await this.dbService.withWriteTx(async (tx) => {
+      const [row] = await tx
+        .select({ traceId: topicTable.traceId })
+        .from(topicTable)
+        .where(and(eq(topicTable.id, topicId), isNull(topicTable.deletedAt)))
+        .limit(1);
+
+      if (!row) {
+        throw DataApiErrorFactory.notFound('Topic', topicId);
+      }
+      if (row.traceId) {
+        return row.traceId;
+      }
+
+      const traceId = [...Crypto.getRandomBytes(16)]
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('');
+      await tx.update(topicTable).set({ traceId }).where(eq(topicTable.id, topicId));
+      return traceId;
+    });
+  }
+
   async create(dto: CreateTopicDto): Promise<Topic> {
     const groupId = dto.groupId ?? null;
 
     const row = (await this.dbService.withWriteTx(async (tx) => {
-      if (dto.sourceNodeId) {
-        const [source] = await tx
-          .select({ id: messageTable.id })
-          .from(messageTable)
-          .where(and(eq(messageTable.id, dto.sourceNodeId), isNull(messageTable.deletedAt)))
-          .limit(1);
-
-        if (!source) {
-          throw DataApiErrorFactory.notFound('Message', dto.sourceNodeId);
-        }
-      }
-
-      return insertWithOrderKey(
+      const topicRow = (await insertWithOrderKey(
         tx,
         topicTable,
         {
-          activeNodeId: dto.sourceNodeId ?? null,
+          activeNodeId: null,
           assistantId: dto.assistantId ?? null,
           groupId,
           name: dto.name ?? '',
@@ -94,7 +107,11 @@ export class TopicService {
           pkColumn: topicTable.id,
           scope: topicScopePredicate(groupId),
         },
-      );
+      )) as TopicRow;
+
+      await createRootMessageTx(tx, topicRow.id);
+
+      return topicRow;
     })) as TopicRow;
 
     return rowToTopic(row);
@@ -173,13 +190,20 @@ export class TopicService {
       }
 
       const [message] = await tx
-        .select({ topicId: messageTable.topicId })
+        .select({ role: messageTable.role, topicId: messageTable.topicId })
         .from(messageTable)
         .where(and(eq(messageTable.id, nodeId), isNull(messageTable.deletedAt)))
         .limit(1);
 
       if (!message || message.topicId !== topicId) {
         throw DataApiErrorFactory.notFound('Message', nodeId);
+      }
+
+      if (message.role === 'root') {
+        throw DataApiErrorFactory.invalidOperation(
+          'set active node',
+          'the virtual root cannot be the active node',
+        );
       }
     }
 
@@ -344,6 +368,7 @@ export function rowToTopic(row: TopicRow): Topic {
     isNameManuallyEdited: row.isNameManuallyEdited,
     name: row.name,
     orderKey: row.orderKey,
+    ...(row.traceId ? { traceId: row.traceId } : {}),
     updatedAt: timestampToISO(row.updatedAt),
   };
 }

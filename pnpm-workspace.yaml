@@ -15,5 +15,32 @@ patchedDependencies:
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
   metro@0.84.4: patches/metro@0.84.4.patch
   metro-runtime@0.84.4: patches/metro-runtime@0.84.4.patch
-  react-native-worklets@0.8.3: patches/react-native-worklets@0.8.3.patch
-  react-native-reanimated@4.3.1: patches/react-native-reanimated@4.3.1.patch
+  uniwind@1.6.5: patches/uniwind@1.6.5.patch
+  react-native-reanimated@4.5.0: patches/react-native-reanimated@4.5.0.patch
+
+minimumReleaseAgeExclude:
+  - '@expo/cli@57.0.3'
+  - '@expo/fingerprint@0.20.1'
+  - '@expo/inline-modules@0.1.1'
+  - '@expo/local-build-cache-provider@57.0.1'
+  - '@expo/metro-config@57.0.2'
+  - '@expo/prebuild-config@57.0.3'
+  - '@expo/router-server@57.0.1'
+  - babel-preset-expo@57.0.1
+  - expo-asset@57.0.2
+  - expo-constants@57.0.2
+  - expo-modules-autolinking@57.0.3
+  - expo-modules-core@57.0.1
+  - expo@57.0.1
+  - expo-router@57.0.2
+  - '@expo/metro-runtime@57.0.2'
+  - '@expo/ui@57.0.2'
+  - expo-auth-session@57.0.1
+  - expo-build-properties@57.0.2
+  - expo-dev-client@57.0.4
+  - expo-dev-launcher@57.0.4
+  - expo-dev-menu@57.0.4
+  - expo-linking@57.0.1
+  - expo-splash-screen@57.0.1
+  - heroui-native@1.0.5
+  - react-native-enriched-markdown@0.7.3

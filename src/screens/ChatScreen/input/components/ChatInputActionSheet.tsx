@@ -1,12 +1,12 @@
-import { BottomSheet, BottomSheetView } from '@expo/ui/community/bottom-sheet';
+import { ModalBottomSheet } from '@swmansion/react-native-bottom-sheet';
 import * as DocumentPicker from 'expo-document-picker';
-import { XIcon } from 'lucide-uniwind/png';
+import { GlassView } from 'expo-glass-effect';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { PhotoFile } from 'react-native-vision-camera';
+import { isLiquidGlassAvailable } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
 import { type InlinePhotoPickerAsset, InlinePhotoPickerView } from '@/modules/inlinePhotoPicker';
 import { ChatInputActionList } from '@/screens/ChatScreen/input/components/ChatInputActionList';
@@ -33,12 +33,12 @@ import {
   chatInputSubviewExiting,
 } from '@/screens/ChatScreen/input/utils/chatInputMotion';
 
-// The sheet opens at 50% and stays there for both the action list and the inline
-// photo picker (the picker no longer auto-expands to 100%); 100% is kept as a
-// snap point only so the user can still drag it up. Fixed values (no dynamic
-// sizing) so the sheet doesn't reflow its contents as they measure. Module-level
-// for a stable array identity.
-const SHEET_SNAP_POINTS = ['50%', '100%'];
+// Detent indices into the `detents` array built from `useWindowDimensions()`
+// below: 0 is closed, 1 is the default open height (half the screen), and 2 is
+// reachable only by the user dragging further up (never asserted
+// programmatically) — mirrors the old '50%'/'100%' snap points.
+const CLOSED_INDEX = 0;
+const OPEN_INDEX = 1;
 
 // How long to let the sheet collapse before presenting the full-screen system
 // library — ChatGPT-style "collapse the inline grid, then expand the full
@@ -55,16 +55,27 @@ const logger = loggerService.withContext('ChatInputActionSheet');
  */
 export function ChatInputActionSheet() {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const { addAttachments, closeActionSheet, selectAction } = useChatInputActions();
   const { isActionSheetOpen, selectedToolId } = useChatInputState();
   const { actions } = useChatInputMedia();
   const { launchImageLibrary } = actions;
   const [isInlinePickerOpen, setIsInlinePickerOpen] = useState(false);
   const [isInlineCameraOpen, setIsInlineCameraOpen] = useState(false);
+  // `sheetIndex` mostly mirrors `isActionSheetOpen`, except while the user has
+  // dragged past `OPEN_INDEX` up to the full-height detent — adjusted during
+  // render (not an effect) per
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes.
+  const [sheetIndex, setSheetIndex] = useState(CLOSED_INDEX);
+  const [prevIsActionSheetOpen, setPrevIsActionSheetOpen] = useState(isActionSheetOpen);
   // Latest selection from the native picker, captured so the native confirm
   // button can commit it without round-tripping each asset back down as a prop.
   const latestAssetsRef = useRef<InlinePhotoPickerAsset[]>([]);
+
+  if (isActionSheetOpen !== prevIsActionSheetOpen) {
+    setPrevIsActionSheetOpen(isActionSheetOpen);
+    setSheetIndex(isActionSheetOpen ? OPEN_INDEX : CLOSED_INDEX);
+  }
 
   const handleClose = useCallback(() => {
     setIsInlinePickerOpen(false);
@@ -148,15 +159,29 @@ export function ChatInputActionSheet() {
   }, [addAttachments, handleClose]);
 
   return (
-    <BottomSheet
-      enableDynamicSizing={false}
-      enablePanDownToClose
-      handleComponent={null}
-      index={isActionSheetOpen ? 0 : -1}
-      onClose={handleClose}
-      snapPoints={SHEET_SNAP_POINTS}
+    <ModalBottomSheet
+      detents={[0, windowHeight * 0.5, windowHeight]}
+      index={sheetIndex}
+      onIndexChange={setSheetIndex}
+      // Fires on every settle (drag or programmatic) — including once,
+      // harmlessly, on initial mount — so it's the right replacement for the
+      // old `onClose`, which also fired unconditionally whenever the sheet
+      // finished closing regardless of cause.
+      onSettle={(nextIndex) => {
+        if (nextIndex === CLOSED_INDEX) {
+          handleClose();
+        }
+      }}
+      scrimColor="rgba(0, 0, 0, 0.7)"
+      surface={
+        isLiquidGlassAvailable ? (
+          <GlassView glassEffectStyle="regular" style={[StyleSheet.absoluteFill, styles.surfaceGlass]} />
+        ) : (
+          <View className="rounded-t-3xl bg-background" style={StyleSheet.absoluteFill} />
+        )
+      }
     >
-      <BottomSheetView style={styles.sheetViewport}>
+      <View style={styles.sheetViewport}>
         {isInlineCameraOpen ? (
           // Wrapped in an Animated.View so the camera scales up from ~90% + fades
           // in on open and reverses on back (`transformOrigin: 'top'` so it grows
@@ -173,12 +198,11 @@ export function ChatInputActionSheet() {
               onError={(message) => {
                 logger.warn(`inline camera error: ${message}`);
               }}
-              // The @expo/ui sheet hosts this inside a SwiftUI view that respects
-              // the bottom safe area, leaving a blank strip over the home
-              // indicator. A negative bottom margin pulls the preview down to fill
-              // it edge-to-edge; the floating control bar re-applies the inset as
-              // padding so its buttons stay above the home indicator.
-              style={{ marginBottom: -insets.bottom }}
+              // Unlike the old @expo/ui SwiftUI-hosted sheet, this sheet
+              // doesn't add its own bottom safe-area padding to content, so
+              // the negative-margin workaround this used to need is gone. The
+              // floating control bar still applies the inset as padding so
+              // its buttons stay above the home indicator.
             />
           </Animated.View>
         ) : isInlinePickerOpen ? (
@@ -206,35 +230,25 @@ export function ChatInputActionSheet() {
                 latestAssetsRef.current = event.nativeEvent.assets;
               }}
               selectionLimit={9}
-              // The @expo/ui sheet hosts this inside a SwiftUI view that respects
-              // the bottom safe area, leaving a blank strip over the home
-              // indicator. A negative bottom margin pulls the native picker down
-              // to fill it edge-to-edge. The negative top margin absorbs
-              // PHPicker's own ~10pt top content inset so the grid sits flush
-              // against the sheet top (the overflow is clipped by the sheet card's
-              // rounded mask).
-              style={[styles.inlinePicker, { marginBottom: -insets.bottom, marginTop: -16 }]}
+              // Unlike the old @expo/ui SwiftUI-hosted sheet, this sheet
+              // doesn't add its own bottom safe-area padding to content, so
+              // the bottom negative-margin workaround this used to need is
+              // gone. The top negative margin still absorbs PHPicker's own
+              // ~10pt top content inset so the grid sits flush against the
+              // sheet top (verify the overflow still gets clipped by the
+              // surface's rounded top corners under the new sheet).
+              style={[styles.inlinePicker, { marginTop: -16 }]}
             />
           </Animated.View>
         ) : (
           <View style={styles.stackHost}>
             <View className="flex-row items-center px-4 pt-4 pb-2">
-              <Pressable
-                accessibilityLabel={t('common.close')}
-                accessibilityRole="button"
-                className="size-8 items-center justify-center rounded-full active:opacity-70"
-                hitSlop={6}
-                onPress={handleClose}
-              >
-                <XIcon className="size-6 text-foreground" strokeWidth={2} />
-              </Pressable>
               <Text
                 className="flex-1 text-center font-semibold text-foreground text-lg"
                 numberOfLines={1}
               >
                 {t('chat.actionSheet.title')}
               </Text>
-              <View className="size-8" />
             </View>
             <ScrollView
               contentContainerStyle={styles.scrollContent}
@@ -254,8 +268,8 @@ export function ChatInputActionSheet() {
             </ScrollView>
           </View>
         )}
-      </BottomSheetView>
-    </BottomSheet>
+      </View>
+    </ModalBottomSheet>
   );
 }
 
@@ -285,5 +299,12 @@ const styles = StyleSheet.create({
   subview: {
     flex: 1,
     transformOrigin: 'top',
+  },
+  // Matches `rounded-t-3xl`'s --cs-radius-3xl (22px) — GlassView doesn't take
+  // className, so the radius is set directly to keep the same silhouette as
+  // the non-glass fallback.
+  surfaceGlass: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
   },
 });

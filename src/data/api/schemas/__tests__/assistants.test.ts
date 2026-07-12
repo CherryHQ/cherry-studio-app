@@ -1,4 +1,8 @@
-import { ListAssistantsQuerySchema, UpdateAssistantSchema } from '../assistants';
+import {
+  CreateAssistantSchema,
+  ListAssistantsQuerySchema,
+  UpdateAssistantSchema,
+} from '../assistants';
 
 describe('assistant api schemas', () => {
   test('fills assistant list pagination defaults', () => {
@@ -16,5 +20,34 @@ describe('assistant api schemas', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  test('keeps unknown settings fields in partial update payloads', () => {
+    expect(
+      UpdateAssistantSchema.parse({
+        settings: {
+          futureDesktopSetting: { enabled: true },
+          toolUseMode: 'prompt',
+        },
+      }),
+    ).toEqual({
+      settings: {
+        futureDesktopSetting: { enabled: true },
+        toolUseMode: 'prompt',
+      },
+    });
+  });
+
+  test.each([
+    CreateAssistantSchema,
+    UpdateAssistantSchema,
+  ])('rejects MCP and knowledge-base relation writes', (schema) => {
+    expect(
+      schema.safeParse({
+        name: 'Assistant',
+        knowledgeBaseIds: ['knowledge-1'],
+        mcpServerIds: ['mcp-1'],
+      }).success,
+    ).toBe(false);
   });
 });

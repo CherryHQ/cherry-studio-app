@@ -5,32 +5,31 @@ import { TagSchema } from './tag';
 export const McpModeSchema = z.enum(['disabled', 'auto', 'manual']);
 export type McpMode = z.infer<typeof McpModeSchema>;
 
-export const AssistantSettingsSchema = z.object({
-  customParameters: z.array(
-    z.discriminatedUnion('type', [
-      z.object({ name: z.string(), type: z.literal('string'), value: z.string() }),
-      z.object({ name: z.string(), type: z.literal('number'), value: z.number() }),
-      z.object({ name: z.string(), type: z.literal('boolean'), value: z.boolean() }),
-      z.object({ name: z.string(), type: z.literal('json'), value: z.unknown() }),
-    ]),
-  ),
-  enableMaxTokens: z.boolean(),
-  enableMaxToolCalls: z.boolean(),
-  enableTemperature: z.boolean(),
-  enableTopP: z.boolean(),
-  enableWebSearch: z.boolean(),
-  maxTokens: z.number().int().positive(),
-  maxToolCalls: z.number().int().positive(),
-  mcpMode: McpModeSchema,
-  reasoning_effort: z.string(),
-  streamOutput: z.boolean(),
-  temperature: z.number().min(0).max(2),
-  toolUseMode: z.enum(['function', 'prompt']),
-  topP: z.number().min(0).max(1),
-});
+export const AssistantSettingsSchema = z
+  .object({
+    customParameters: z.array(
+      z.discriminatedUnion('type', [
+        z.object({ name: z.string(), type: z.literal('string'), value: z.string() }),
+        z.object({ name: z.string(), type: z.literal('number'), value: z.number() }),
+        z.object({ name: z.string(), type: z.literal('boolean'), value: z.boolean() }),
+        z.object({ name: z.string(), type: z.literal('json'), value: z.unknown() }),
+      ]),
+    ),
+    enableMaxTokens: z.boolean(),
+    enableMaxToolCalls: z.boolean(),
+    enableTemperature: z.boolean(),
+    enableTopP: z.boolean(),
+    enableWebSearch: z.boolean(),
+    maxTokens: z.number().int().positive(),
+    maxToolCalls: z.number().int().positive(),
+    mcpMode: McpModeSchema,
+    reasoning_effort: z.string(),
+    streamOutput: z.boolean(),
+    temperature: z.number().min(0).max(2),
+    topP: z.number().min(0).max(1),
+  })
+  .passthrough();
 export type AssistantSettings = z.infer<typeof AssistantSettingsSchema>;
-
-export const DEFAULT_ASSISTANT_ID = 'default' as const;
 
 export const DEFAULT_ASSISTANT_SETTINGS: AssistantSettings = {
   customParameters: [],
@@ -45,7 +44,6 @@ export const DEFAULT_ASSISTANT_SETTINGS: AssistantSettings = {
   reasoning_effort: 'default',
   streamOutput: true,
   temperature: 1,
-  toolUseMode: 'function',
   topP: 1,
 };
 
@@ -54,13 +52,14 @@ export const AssistantIdSchema = z.uuidv4();
 export const AssistantSchema = z.strictObject({
   createdAt: z.iso.datetime(),
   description: z.string(),
-  emoji: z.string(),
+  emoji: z.emoji(),
   id: AssistantIdSchema,
   knowledgeBaseIds: z.array(z.string()),
   mcpServerIds: z.array(z.string()),
   modelId: UniqueModelIdSchema.nullable(),
   modelName: z.string().nullable(),
   name: z.string().min(1),
+  orderKey: z.string(),
   prompt: z.string(),
   settings: AssistantSettingsSchema,
   tags: z.array(TagSchema),

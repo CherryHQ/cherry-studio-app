@@ -19,8 +19,11 @@ export const MessageIdSchema = z.uuid();
 export type MessageId = z.infer<typeof MessageIdSchema>;
 
 export const MessageStatsSchema = z.strictObject({
+  cacheReadTokens: z.number().optional(),
+  cacheWriteTokens: z.number().optional(),
   completionTokens: z.number().optional(),
   cost: z.number().optional(),
+  noCacheTokens: z.number().optional(),
   promptTokens: z.number().optional(),
   thoughtsTokens: z.number().optional(),
   timeCompletionMs: z.number().optional(),
@@ -37,10 +40,13 @@ export interface MessageData {
 }
 
 export interface CherryUIMessageMetadata {
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
   completionTokens?: number;
   createdAt?: string;
   modelId?: string;
   modelSnapshot?: ModelSnapshot;
+  noCacheTokens?: number;
   parentId?: string | null;
   promptTokens?: number;
   siblingsGroupId?: number;
@@ -173,7 +179,7 @@ export const ModelSnapshotSchema = z.strictObject({
 });
 export type ModelSnapshot = z.infer<typeof ModelSnapshotSchema>;
 
-export const MessageRoleSchema = z.enum(['user', 'assistant', 'system']);
+export const MessageRoleSchema = z.enum(['user', 'assistant', 'system', 'root']);
 export type MessageRole = z.infer<typeof MessageRoleSchema>;
 
 export const MessageStatusSchema = z.enum(['pending', 'success', 'error', 'paused']);
@@ -192,7 +198,6 @@ export const MessageSchema = z.strictObject({
   stats: MessageStatsSchema.nullable().optional(),
   status: MessageStatusSchema,
   topicId: z.string(),
-  traceId: z.string().nullable().optional(),
   updatedAt: z.iso.datetime(),
 });
 export type Message = z.infer<typeof MessageSchema>;
@@ -217,6 +222,7 @@ export interface SiblingsGroup {
 export interface TreeResponse {
   activeNodeId: string | null;
   nodes: TreeNode[];
+  rootId: null | string;
   siblingsGroups: SiblingsGroup[];
 }
 

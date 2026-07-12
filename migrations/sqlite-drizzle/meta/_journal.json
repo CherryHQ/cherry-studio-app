@@ -5,43 +5,15 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1778601600000,
-      "tag": "0000_create_preference",
+      "when": 1783738412383,
+      "tag": "0000_release_baseline",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "6",
-      "when": 1778601600001,
-      "tag": "0001_create_app_state",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1778820680763,
-      "tag": "0002_shocking_mandarin",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1779600750664,
-      "tag": "0003_loving_justin_hammer",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1779696110055,
-      "tag": "0004_lovely_thunderbolt_ross",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1780502400000,
-      "tag": "0005_add_user_model_owned_by",
+      "when": 1783754760843,
+      "tag": "0001_message-status-index",
       "breakpoints": true
     }
   ]
