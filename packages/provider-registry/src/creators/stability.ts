@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'stability',
@@ -11,42 +11,42 @@ export default defineCreator({
       name: 'Stable Diffusion 3.5 Large',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'stable-diffusion-3-5-large-turbo',
       name: 'Stable Diffusion 3.5 Large Turbo',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'stable-diffusion-3',
       name: 'Stable Diffusion 3',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'stable-diffusion-xl-base-1-0',
       name: 'Stable Diffusion XL Base 1.0',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'stable-diffusion-v1-5',
       name: 'Stable Diffusion v1.5',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'stable-diffusion-v1-4',
       name: 'Stable Diffusion v1.4',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
-    }
-  ]
-})
+      outputModalities: ['image'],
+    },
+  ],
+});

@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'black-forest-labs',
@@ -13,42 +13,42 @@ export default defineCreator({
       name: 'FLUX.1 Pro',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'flux-1-1-pro-ultra',
       name: 'FLUX1.1 Pro Ultra',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'flux-dev',
       name: 'FLUX.1 Dev',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'flux-schnell',
       name: 'FLUX.1 Schnell',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'flux-fill-pro',
       name: 'FLUX.1 Fill Pro',
       capabilities: ['image-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'flux-kontext-dev',
       name: 'FLUX.1 Kontext Dev',
       capabilities: ['image-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'flux-kontext-pro',
@@ -70,24 +70,24 @@ export default defineCreator({
                   'ASPECT_16_9',
                   'ASPECT_9_16',
                   'ASPECT_21_9',
-                  'ASPECT_9_21'
+                  'ASPECT_9_21',
                 ],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               safetyTolerance: {
                 default: 2,
                 max: 6,
                 min: 0,
-                type: 'range'
+                type: 'range',
               },
               seed: {
-                type: 'text'
-              }
-            }
-          }
-        }
-      }
+                type: 'text',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'flux-kontext-max',
@@ -109,24 +109,24 @@ export default defineCreator({
                   'ASPECT_16_9',
                   'ASPECT_9_16',
                   'ASPECT_21_9',
-                  'ASPECT_9_21'
+                  'ASPECT_9_21',
                 ],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               safetyTolerance: {
                 default: 2,
                 max: 6,
                 min: 0,
-                type: 'range'
+                type: 'range',
               },
               seed: {
-                type: 'text'
-              }
-            }
-          }
-        }
-      }
+                type: 'text',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'flux-2-pro',
@@ -148,24 +148,24 @@ export default defineCreator({
                   'ASPECT_16_9',
                   'ASPECT_9_16',
                   'ASPECT_21_9',
-                  'ASPECT_9_21'
+                  'ASPECT_9_21',
                 ],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               safetyTolerance: {
                 default: 2,
                 max: 6,
                 min: 0,
-                type: 'range'
+                type: 'range',
               },
               seed: {
-                type: 'text'
-              }
-            }
-          }
-        }
-      }
+                type: 'text',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'flux-2-flex',
@@ -187,24 +187,24 @@ export default defineCreator({
                   'ASPECT_16_9',
                   'ASPECT_9_16',
                   'ASPECT_21_9',
-                  'ASPECT_9_21'
+                  'ASPECT_9_21',
                 ],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               safetyTolerance: {
                 default: 2,
                 max: 6,
                 min: 0,
-                type: 'range'
+                type: 'range',
               },
               seed: {
-                type: 'text'
-              }
-            }
-          }
-        }
-      }
-    }
-  ]
-})
+                type: 'text',
+              },
+            },
+          },
+        },
+      },
+    },
+  ],
+});

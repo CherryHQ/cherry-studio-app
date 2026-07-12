@@ -16,7 +16,7 @@ export function ContextMenu({
 }: ContextMenuProps) {
   const menuActions = useMemo<MenuAction[]>(
     () =>
-      actions.map(action => ({
+      actions.map((action) => ({
         id: action.id,
         title: action.title,
         // SF Symbol strings aren't rendered on Android; harmless (text-only entry).
@@ -37,7 +37,8 @@ export function ContextMenu({
       onPressAction={({ nativeEvent }) => onPressAction?.(nativeEvent.event)}
       onOpenMenu={onOpenMenu}
       onCloseMenu={onCloseMenu}
-      style={style}>
+      style={style}
+    >
       {children}
     </MenuView>
   );

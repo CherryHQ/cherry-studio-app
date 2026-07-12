@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 // Voyage AI — embedders + rerankers (docs.voyageai.com). `kind: 'embedding'` auto-tags every model
 // `embedding` (+ `vector` output); the generator re-tags `rerank-*` ids as `rerank`. Context lengths
@@ -33,20 +33,25 @@ export default defineCreator({
       id: 'voyage-multimodal-3-5',
       name: 'Voyage Multimodal 3.5',
       contextWindow: 32000,
-      inputModalities: ['text', 'image', 'video']
+      inputModalities: ['text', 'image', 'video'],
     },
     {
       id: 'voyage-multimodal-3',
       name: 'Voyage Multimodal 3',
       contextWindow: 32000,
-      inputModalities: ['text', 'image']
+      inputModalities: ['text', 'image'],
     },
     // ── Rerankers ──
     { id: 'rerank-2-5', name: 'Rerank 2.5', capabilities: ['rerank'], contextWindow: 32000 },
-    { id: 'rerank-2-5-lite', name: 'Rerank 2.5 Lite', capabilities: ['rerank'], contextWindow: 32000 },
+    {
+      id: 'rerank-2-5-lite',
+      name: 'Rerank 2.5 Lite',
+      capabilities: ['rerank'],
+      contextWindow: 32000,
+    },
     { id: 'rerank-2', name: 'Rerank 2', capabilities: ['rerank'], contextWindow: 16000 },
     { id: 'rerank-2-lite', name: 'Rerank 2 Lite', capabilities: ['rerank'], contextWindow: 8000 },
     { id: 'rerank-1', name: 'Rerank 1', capabilities: ['rerank'], contextWindow: 8000 },
-    { id: 'rerank-lite-1', name: 'Rerank Lite 1', capabilities: ['rerank'], contextWindow: 4000 }
-  ]
-})
+    { id: 'rerank-lite-1', name: 'Rerank Lite 1', capabilities: ['rerank'], contextWindow: 4000 },
+  ],
+});

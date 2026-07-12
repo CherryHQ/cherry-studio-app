@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'luma',
@@ -11,14 +11,14 @@ export default defineCreator({
       name: 'Luma Photon',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'photon-flash',
       name: 'Luma Photon Flash',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
-    }
-  ]
-})
+      outputModalities: ['image'],
+    },
+  ],
+});

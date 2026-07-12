@@ -1,8 +1,8 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'minimax',
   name: 'MiniMax',
   modelsDevProviders: ['minimax', 'minimax-cn'],
-  idPrefixes: ['minimax', 'abab']
-})
+  idPrefixes: ['minimax', 'abab'],
+});

@@ -1,8 +1,8 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'recraft',
   name: 'Recraft',
   families: ['recraft'],
-  idPrefixes: ['recraft']
-})
+  idPrefixes: ['recraft'],
+});

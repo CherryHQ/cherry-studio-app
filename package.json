@@ -32,7 +32,8 @@
     "e2e:ios": "maestro test --platform ios .maestro/flows",
     "e2e:ios:debug": "maestro test --platform ios --debug-output artifacts/e2e .maestro/flows",
     "e2e:ios:flow": "maestro test --platform ios",
-    "e2e:maestro:check": "for f in .maestro/flows/*.yaml; do maestro check-syntax \"$f\" || exit 1; done"
+    "e2e:maestro:check": "for f in .maestro/flows/*.yaml; do maestro check-syntax \"$f\" || exit 1; done",
+    "prepare": "prek install"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",
@@ -140,7 +141,8 @@
     "sf-symbols-typescript": "^2.2.0",
     "sharp": "^0.34.5",
     "tsx": "^4.20.6",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "@j178/prek": "^0.4.6"
   },
   "private": true,
   "packageManager": "pnpm@11.8.0"

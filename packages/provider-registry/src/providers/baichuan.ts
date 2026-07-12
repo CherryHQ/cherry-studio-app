@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'baichuan',
@@ -8,9 +8,9 @@ export default openaiCompatible({
     apiKey: 'https://platform.baichuan-ai.com/console/apikey',
     docs: 'https://platform.baichuan-ai.com/docs',
     models: 'https://platform.baichuan-ai.com/prices',
-    official: 'https://www.baichuan-ai.com/'
+    official: 'https://www.baichuan-ai.com/',
   },
   apiFeatures: {
-    arrayContent: false
-  }
-})
+    arrayContent: false,
+  },
+});

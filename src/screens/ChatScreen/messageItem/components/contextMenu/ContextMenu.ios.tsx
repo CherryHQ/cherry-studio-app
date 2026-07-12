@@ -24,7 +24,8 @@ export function ContextMenu({
       onPressAction={({ nativeEvent }) => onPressAction?.(nativeEvent.id)}
       onOpenMenu={onOpenMenu}
       onCloseMenu={onCloseMenu}
-      style={style}>
+      style={style}
+    >
       {children}
     </ContextMenuView>
   );

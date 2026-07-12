@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'jina',
@@ -8,6 +8,6 @@ export default openaiCompatible({
     apiKey: 'https://jina.ai/',
     docs: 'https://jina.ai',
     models: 'https://jina.ai',
-    official: 'https://jina.ai'
-  }
-})
+    official: 'https://jina.ai',
+  },
+});

@@ -51,12 +51,12 @@ export const COMMON_AGGREGATOR_PREFIXES = [
   'openai-',
   // Underscore-based prefixes
   'dmxapi_',
-  'aistudio_'
-]
+  'aistudio_',
+];
 
 export const PREFIX_EXPANSIONS: [string, string][] = [
-  ['mm-', 'minimax-'] // MiniMax shorthand: mm-m2-1 → minimax-m2-1
-]
+  ['mm-', 'minimax-'], // MiniMax shorthand: mm-m2-1 → minimax-m2-1
+];
 
 export const COLON_VARIANT_SUFFIXES = [
   ':free',
@@ -67,8 +67,8 @@ export const COLON_VARIANT_SUFFIXES = [
   ':thinking',
   ':exacto',
   ':latest',
-  ':cloud'
-]
+  ':cloud',
+];
 
 export const HYPHEN_VARIANT_SUFFIXES = [
   '-free',
@@ -95,19 +95,28 @@ export const HYPHEN_VARIANT_SUFFIXES = [
   '-fw',
   '-di',
   '-t',
-  '-reverse'
-]
+  '-reverse',
+];
 
-export const PAREN_VARIANT_SUFFIXES = ['(free)', '(beta)', '(preview)', '(thinking)']
+export const PAREN_VARIANT_SUFFIXES = ['(free)', '(beta)', '(preview)', '(thinking)'];
 
-const PROTECTED_COMPOUND_PREFIXES = ['non', 'no', 'pre', 'anti', 'post']
+const PROTECTED_COMPOUND_PREFIXES = ['non', 'no', 'pre', 'anti', 'post'];
 
-const PARAMETER_SIZE_PATTERN = /-(\d+(?:\.\d+)?b)(?=-|$)/i
+const PARAMETER_SIZE_PATTERN = /-(\d+(?:\.\d+)?b)(?=-|$)/i;
 
 // Quantization markers denote the same logical model at a different precision
 // (e.g. `glm-4-5-fp8` is `glm-4-5`). Stripping them lets the resolver collapse
 // the redundant spellings a provider might return.
-export const QUANTIZATION_SUFFIXES = ['-fp8', '-fp16', '-bf16', '-awq', '-int4', '-int8', '-gguf', '-gptq']
+export const QUANTIZATION_SUFFIXES = [
+  '-fp8',
+  '-fp16',
+  '-bf16',
+  '-awq',
+  '-int4',
+  '-int8',
+  '-gguf',
+  '-gptq',
+];
 
 // Trailing release-date stamps (`claude-sonnet-4-5-20250929`, `gpt-4o-2024-08-06`,
 // `kimi-k2-250905`) denote the same model line. This is the SINGLE definition shared by the build
@@ -116,7 +125,7 @@ export const QUANTIZATION_SUFFIXES = ['-fp8', '-fp16', '-bf16', '-awq', '-int4',
 // a YYMM, or an MMDD — all requiring a valid month (01-12) and day (01-31), so sizes/versions
 // (`glm-4-9b`, `qwen3-235b`) are never touched. A leading `@…` tag is also dropped (`gemini-2-0@001`).
 const DATE_SNAPSHOT_PATTERN =
-  /-20\d{2}-(?:0[1-9]|1[0-2])-(?:[0-2]\d|3[01])$|-20\d{2}(?:0[1-9]|1[0-2])(?:[0-2]\d|3[01])$|-2\d(?:0[1-9]|1[0-2])(?:[0-2]\d|3[01])$|-(?:0[1-9]|1[0-2])(?:[0-2]\d|3[01])$|-2\d(?:0[1-9]|1[0-2])$/
+  /-20\d{2}-(?:0[1-9]|1[0-2])-(?:[0-2]\d|3[01])$|-20\d{2}(?:0[1-9]|1[0-2])(?:[0-2]\d|3[01])$|-2\d(?:0[1-9]|1[0-2])(?:[0-2]\d|3[01])$|-(?:0[1-9]|1[0-2])(?:[0-2]\d|3[01])$|-2\d(?:0[1-9]|1[0-2])$/;
 
 // Bedrock re-lists other creators' models as cross-vendor ARNs: a leading region(s)+vendor DOTTED
 // prefix (`us.anthropic.`, `global.meta.`) and/or a vendor DASH prefix (`meta-llama`, `cohere-command`),
@@ -124,26 +133,29 @@ const DATE_SNAPSHOT_PATTERN =
 // resolver strip these so `us.anthropic.claude-sonnet-4-5-v1:0` folds to the same canonical id as
 // `claude-sonnet-4-5`. The `v` is optional: `openai.gpt-oss-120b-1:0` spells its revision bare, and eating
 // only the `:0` would leave a phantom `…-120b-1` id. Colon-less ids (`whisper-v3`) are never touched.
-const BEDROCK_VENDOR = 'anthropic|amazon|meta|google|mistralai|cohere|openai|ai21|microsoft|nvidia'
-const BEDROCK_VENDOR_DASH = new RegExp(`^(?:${BEDROCK_VENDOR})-{1,2}`)
-const BEDROCK_REVISION_PATTERN = /(?:[-_]v?\d+)?:\d+$/i
+const BEDROCK_VENDOR = 'anthropic|amazon|meta|google|mistralai|cohere|openai|ai21|microsoft|nvidia';
+const BEDROCK_VENDOR_DASH = new RegExp(`^(?:${BEDROCK_VENDOR})-{1,2}`);
+const BEDROCK_REVISION_PATTERN = /(?:[-_]v?\d+)?:\d+$/i;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Functions
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function stripAggregatorPrefixes(modelId: string, additionalPrefixes: string[] = []): string {
-  const allPrefixes = [...additionalPrefixes, ...COMMON_AGGREGATOR_PREFIXES]
-  let result = modelId
+export function stripAggregatorPrefixes(
+  modelId: string,
+  additionalPrefixes: string[] = [],
+): string {
+  const allPrefixes = [...additionalPrefixes, ...COMMON_AGGREGATOR_PREFIXES];
+  let result = modelId;
 
   for (const prefix of allPrefixes) {
     if (result.startsWith(prefix)) {
-      result = result.slice(prefix.length)
-      break
+      result = result.slice(prefix.length);
+      break;
     }
   }
 
-  return result
+  return result;
 }
 
 /**
@@ -155,12 +167,12 @@ export function stripAggregatorPrefixes(modelId: string, additionalPrefixes: str
  * Tries one then two leading segments. `isKnownId` decides existence (registry/index membership).
  */
 export function stripHostReprefix(modelId: string, isKnownId: (id: string) => boolean): string {
-  const segs = modelId.split('-')
+  const segs = modelId.split('-');
   for (let n = 1; n <= 2 && n < segs.length; n++) {
-    const rest = segs.slice(n).join('-')
-    if (isKnownId(rest)) return rest
+    const rest = segs.slice(n).join('-');
+    if (isKnownId(rest)) return rest;
   }
-  return modelId
+  return modelId;
 }
 
 /**
@@ -169,90 +181,90 @@ export function stripHostReprefix(modelId: string, isKnownId: (id: string) => bo
  * All-alpha dotted words only, so a version like `qwen3.7` is never touched.
  */
 export function stripBedrockVendorPrefix(modelId: string): string {
-  return modelId.replace(/^(?:[a-z]+\.)+/, '').replace(BEDROCK_VENDOR_DASH, '')
+  return modelId.replace(/^(?:[a-z]+\.)+/, '').replace(BEDROCK_VENDOR_DASH, '');
 }
 
 /** Strip a Bedrock ARN model revision: `claude-…-v1:0` / `…:0` → bare id (keeps `whisper-v3`, no colon). */
 export function stripBedrockRevision(modelId: string): string {
-  return modelId.replace(BEDROCK_REVISION_PATTERN, '')
+  return modelId.replace(BEDROCK_REVISION_PATTERN, '');
 }
 
 export function expandKnownPrefixes(modelId: string): string {
   for (const [abbrev, canonical] of PREFIX_EXPANSIONS) {
     if (modelId.startsWith(abbrev)) {
-      return canonical + modelId.slice(abbrev.length)
+      return canonical + modelId.slice(abbrev.length);
     }
   }
-  return modelId
+  return modelId;
 }
 
 export function stripVariantSuffixes(
   modelId: string,
   options: {
-    colonSuffixes?: string[]
-    hyphenSuffixes?: string[]
-    parenSuffixes?: string[]
-    officialModelsWithSuffix?: Set<string>
-  } = {}
+    colonSuffixes?: string[];
+    hyphenSuffixes?: string[];
+    parenSuffixes?: string[];
+    officialModelsWithSuffix?: Set<string>;
+  } = {},
 ): string {
-  const colonSuffixes = options.colonSuffixes ?? COLON_VARIANT_SUFFIXES
-  const hyphenSuffixes = options.hyphenSuffixes ?? HYPHEN_VARIANT_SUFFIXES
-  const parenSuffixes = options.parenSuffixes ?? PAREN_VARIANT_SUFFIXES
-  const officialModels = options.officialModelsWithSuffix ?? new Set<string>()
+  const colonSuffixes = options.colonSuffixes ?? COLON_VARIANT_SUFFIXES;
+  const hyphenSuffixes = options.hyphenSuffixes ?? HYPHEN_VARIANT_SUFFIXES;
+  const parenSuffixes = options.parenSuffixes ?? PAREN_VARIANT_SUFFIXES;
+  const officialModels = options.officialModelsWithSuffix ?? new Set<string>();
 
   if (officialModels.has(modelId)) {
-    return modelId
+    return modelId;
   }
 
-  const colonIdx = modelId.lastIndexOf(':')
+  const colonIdx = modelId.lastIndexOf(':');
   if (colonIdx > 0) {
-    const suffix = modelId.slice(colonIdx)
+    const suffix = modelId.slice(colonIdx);
     if (colonSuffixes.includes(suffix)) {
-      return modelId.slice(0, colonIdx)
+      return modelId.slice(0, colonIdx);
     }
   }
 
   for (const suffix of hyphenSuffixes) {
     if (modelId.endsWith(suffix)) {
-      const remaining = modelId.slice(0, -suffix.length)
+      const remaining = modelId.slice(0, -suffix.length);
       // Only protect when the prefix is its OWN token (`...-no-think` → keep), not a substring of the
       // last word (`volcano-free`, `pino-search`, `inferno-search` must still strip).
       if (PROTECTED_COMPOUND_PREFIXES.some((p) => remaining === p || remaining.endsWith(`-${p}`))) {
-        continue
+        continue;
       }
-      return remaining
+      return remaining;
     }
   }
 
   for (const suffix of parenSuffixes) {
     if (modelId.endsWith(suffix)) {
-      let result = modelId.slice(0, -suffix.length)
+      let result = modelId.slice(0, -suffix.length);
       if (result.endsWith(' ')) {
-        result = result.slice(0, -1)
+        result = result.slice(0, -1);
       }
-      return result
+      return result;
     }
   }
 
-  return modelId
+  return modelId;
 }
 
 export function normalizeVersionSeparators(modelId: string): string {
   // `,` `.` `p` `_` between digits are all version separators: 3.5 / 3,5 / 3p5 / 3_5 → 3-5
-  return modelId.replace(/(\d)[,._p](?=\d)/g, '$1-')
+  return modelId.replace(/(\d)[,._p](?=\d)/g, '$1-');
 }
 
 export function stripQuantization(modelId: string): string {
   for (const suffix of QUANTIZATION_SUFFIXES) {
     if (modelId.endsWith(suffix)) {
-      return modelId.slice(0, -suffix.length)
+      return modelId.slice(0, -suffix.length);
     }
   }
-  return modelId
+  return modelId;
 }
 
 export function stripDateSnapshot(modelId: string): string {
-  return modelId.replace(/@.*$/, '').replace(DATE_SNAPSHOT_PATTERN, '')
+  return modelId.replace(/@.*$/, '').replace(DATE_SNAPSHOT_PATTERN, '');
 }
 
 /**
@@ -262,21 +274,21 @@ export function stripDateSnapshot(modelId: string): string {
  * SHARED by the build canonicalizer (`scripts/canonicalize.ts`) and the runtime resolver below.
  */
 export function stripVariantQuantDateSuffixes(modelId: string): string {
-  let result = modelId
+  let result = modelId;
   for (;;) {
-    const next = stripDateSnapshot(stripQuantization(stripVariantSuffixes(result)))
-    if (next === result) return result
-    result = next
+    const next = stripDateSnapshot(stripQuantization(stripVariantSuffixes(result)));
+    if (next === result) return result;
+    result = next;
   }
 }
 
 export function extractParameterSize(modelId: string): string | undefined {
-  const match = modelId.match(PARAMETER_SIZE_PATTERN)
-  return match ? match[1].toLowerCase() : undefined
+  const match = modelId.match(PARAMETER_SIZE_PATTERN);
+  return match ? match[1].toLowerCase() : undefined;
 }
 
 export function stripParameterSize(modelId: string): string {
-  return modelId.replace(PARAMETER_SIZE_PATTERN, '')
+  return modelId.replace(PARAMETER_SIZE_PATTERN, '');
 }
 
 /**
@@ -284,24 +296,24 @@ export function stripParameterSize(modelId: string): string {
  * This is the single source of truth for model ID normalization.
  */
 export function normalizeModelId(modelId: string): string {
-  const parts = modelId.split('/')
-  let baseName = parts[parts.length - 1].toLowerCase()
-  baseName = stripAggregatorPrefixes(baseName)
+  const parts = modelId.split('/');
+  let baseName = parts[parts.length - 1].toLowerCase();
+  baseName = stripAggregatorPrefixes(baseName);
   // Bedrock cross-vendor ARNs: drop the `[region.]vendor.` / `vendor-` prefix and the `…-v1:0` revision
   // (mirrors the build canonicalizer) so `us.anthropic.claude-…-v1:0` resolves to the catalog row.
-  baseName = stripBedrockVendorPrefix(baseName)
-  baseName = stripBedrockRevision(baseName)
-  baseName = expandKnownPrefixes(baseName)
+  baseName = stripBedrockVendorPrefix(baseName);
+  baseName = stripBedrockRevision(baseName);
+  baseName = expandKnownPrefixes(baseName);
   // Parameter size joins the fixpoint loop too: stripping `-30b` can expose a variant suffix and
   // vice versa, so iterate the whole strip stage until stable.
   for (;;) {
-    const next = stripParameterSize(stripVariantQuantDateSuffixes(baseName))
-    if (next === baseName) break
-    baseName = next
+    const next = stripParameterSize(stripVariantQuantDateSuffixes(baseName));
+    if (next === baseName) break;
+    baseName = next;
   }
-  baseName = normalizeVersionSeparators(baseName)
+  baseName = normalizeVersionSeparators(baseName);
   // Underscores are an interchangeable separator (HF-style `bce-embedding-base_v1`). The catalog folds
   // them to `-` (every base id is dash-only), so fold here too or such ids would never resolve.
-  baseName = baseName.replace(/_/g, '-')
-  return baseName
+  baseName = baseName.replace(/_/g, '-');
+  return baseName;
 }

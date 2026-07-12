@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'suno',
@@ -11,28 +11,28 @@ export default defineCreator({
       name: 'Suno v4.5',
       capabilities: ['audio-generation'],
       inputModalities: ['text'],
-      outputModalities: ['audio']
+      outputModalities: ['audio'],
     },
     {
       id: 'suno-v4',
       name: 'Suno v4',
       capabilities: ['audio-generation'],
       inputModalities: ['text'],
-      outputModalities: ['audio']
+      outputModalities: ['audio'],
     },
     {
       id: 'suno-v3-5',
       name: 'Suno v3.5',
       capabilities: ['audio-generation'],
       inputModalities: ['text'],
-      outputModalities: ['audio']
+      outputModalities: ['audio'],
     },
     {
       id: 'suno-v3',
       name: 'Suno v3',
       capabilities: ['audio-generation'],
       inputModalities: ['text'],
-      outputModalities: ['audio']
-    }
-  ]
-})
+      outputModalities: ['audio'],
+    },
+  ],
+});

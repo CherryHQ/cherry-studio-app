@@ -1,4 +1,4 @@
-import { defineProvider } from './types'
+import { defineProvider } from './types';
 
 export default defineProvider({
   id: 'mistral',
@@ -7,18 +7,18 @@ export default defineProvider({
   endpointConfigs: {
     'openai-chat-completions': {
       adapterFamily: 'mistral',
-      baseUrl: 'https://api.mistral.ai'
-    }
+      baseUrl: 'https://api.mistral.ai',
+    },
   },
   apiFeatures: {
-    streamOptions: false
+    streamOptions: false,
   },
   metadata: {
     website: {
       apiKey: 'https://console.mistral.ai/api-keys/',
       docs: 'https://docs.mistral.ai',
       models: 'https://docs.mistral.ai/getting-started/models/models_overview',
-      official: 'https://mistral.ai'
-    }
-  }
-})
+      official: 'https://mistral.ai',
+    },
+  },
+});

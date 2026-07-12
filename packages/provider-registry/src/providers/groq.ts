@@ -1,4 +1,4 @@
-import { defineProvider } from './types'
+import { defineProvider } from './types';
 
 export default defineProvider({
   id: 'groq',
@@ -7,19 +7,19 @@ export default defineProvider({
   endpointConfigs: {
     'openai-chat-completions': {
       adapterFamily: 'groq',
-      baseUrl: 'https://api.groq.com/openai'
-    }
+      baseUrl: 'https://api.groq.com/openai',
+    },
   },
   apiFeatures: {
-    serviceTier: true
+    serviceTier: true,
   },
   metadata: {
     website: {
       apiKey: 'https://console.groq.com/keys',
       docs: 'https://console.groq.com/docs/quickstart',
       models: 'https://console.groq.com/docs/models',
-      official: 'https://groq.com/'
-    }
+      official: 'https://groq.com/',
+    },
   },
-  modelsDevProvider: 'groq'
-})
+  modelsDevProvider: 'groq',
+});

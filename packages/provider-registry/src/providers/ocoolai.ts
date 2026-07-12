@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'ocoolai',
@@ -8,6 +8,6 @@ export default openaiCompatible({
     apiKey: 'https://one.ocoolai.com/token',
     docs: 'https://docs.ocoolai.com/',
     models: 'https://api.ocoolai.com/info/models/',
-    official: 'https://one.ocoolai.com/'
-  }
-})
+    official: 'https://one.ocoolai.com/',
+  },
+});

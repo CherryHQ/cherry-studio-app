@@ -51,7 +51,8 @@ export const VENDOR_PATTERNS = {
    * `text-embedding` is scoped to the `-3`/`-ada` SKUs on purpose — bare `text-embedding-0xx` is Google's,
    * and `VENDOR_PATTERNS` is a flat set with no per-creator disambiguation.
    */
-  openai: /\bgpt\b|^o[134]|^chatgpt|^codex|^davinci|^babbage|^dall-e|^text-moderation|^text-embedding-(?:3|ada)/i,
+  openai:
+    /\bgpt\b|^o[134]|^chatgpt|^codex|^davinci|^babbage|^dall-e|^text-moderation|^text-embedding-(?:3|ada)/i,
 
   /** Alibaba Qwen family (qwen, qwq, qvq). */
   qwen: /^qwen|^qwq|^qvq|^tongyi/i,
@@ -90,10 +91,11 @@ export const VENDOR_PATTERNS = {
   zhipu: /^(?:glm|chatglm|cogview|cogvideo|codegeex)/i,
 
   /** Mistral family — incl. the `open-*` open-weight line (`open-mistral-7b`, `open-mixtral-8x22b`) and `labs-*`. */
-  mistral: /^(?:open-|labs-)?(?:mistral|pixtral|codestral|ministral|voxtral|devstral|mixtral|magistral)/i
-} as const satisfies Record<string, RegExp>
+  mistral:
+    /^(?:open-|labs-)?(?:mistral|pixtral|codestral|ministral|voxtral|devstral|mixtral|magistral)/i,
+} as const satisfies Record<string, RegExp>;
 
-export type VendorKey = keyof typeof VENDOR_PATTERNS
+export type VendorKey = keyof typeof VENDOR_PATTERNS;
 
 /**
  * Return the vendor slug for a normalized model ID, or `undefined` if
@@ -102,9 +104,9 @@ export type VendorKey = keyof typeof VENDOR_PATTERNS
  */
 export function matchVendor(normalizedId: string): VendorKey | undefined {
   for (const [vendor, pattern] of Object.entries(VENDOR_PATTERNS) as [VendorKey, RegExp][]) {
-    if (pattern.test(normalizedId)) return vendor
+    if (pattern.test(normalizedId)) return vendor;
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -113,6 +115,6 @@ export function matchVendor(normalizedId: string): VendorKey | undefined {
  * higher-level logic.
  */
 export function isVendor(vendor: VendorKey): (normalizedId: string) => boolean {
-  const pattern = VENDOR_PATTERNS[vendor]
-  return (id: string) => pattern.test(id)
+  const pattern = VENDOR_PATTERNS[vendor];
+  return (id: string) => pattern.test(id);
 }

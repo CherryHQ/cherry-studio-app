@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'stepfun',
@@ -9,6 +9,6 @@ export default openaiCompatible({
     apiKey: 'https://platform.stepfun.com/interface-key',
     docs: 'https://platform.stepfun.com/docs/overview/concept',
     models: 'https://platform.stepfun.com/docs/llm/text',
-    official: 'https://platform.stepfun.com/'
-  }
-})
+    official: 'https://platform.stepfun.com/',
+  },
+});

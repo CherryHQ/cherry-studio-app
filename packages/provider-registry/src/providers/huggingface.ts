@@ -1,4 +1,4 @@
-import { defineProvider } from './types'
+import { defineProvider } from './types';
 
 export default defineProvider({
   id: 'huggingface',
@@ -7,16 +7,16 @@ export default defineProvider({
   endpointConfigs: {
     'openai-responses': {
       adapterFamily: 'huggingface',
-      baseUrl: 'https://router.huggingface.co/v1/'
-    }
+      baseUrl: 'https://router.huggingface.co/v1/',
+    },
   },
   metadata: {
     website: {
       apiKey: 'https://huggingface.co/settings/tokens',
       docs: 'https://huggingface.co/docs',
       models: 'https://huggingface.co/models',
-      official: 'https://huggingface.co/'
-    }
+      official: 'https://huggingface.co/',
+    },
   },
-  modelsDevProvider: 'huggingface'
-})
+  modelsDevProvider: 'huggingface',
+});

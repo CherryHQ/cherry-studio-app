@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'xirang',
@@ -8,9 +8,9 @@ export default openaiCompatible({
     apiKey: 'https://huiju.ctyun.cn/service/serviceGroup',
     docs: 'https://www.ctyun.cn/products/ctxirang',
     models: 'https://huiju.ctyun.cn/modelSquare/',
-    official: 'https://www.ctyun.cn'
+    official: 'https://www.ctyun.cn',
   },
   apiFeatures: {
-    arrayContent: false
-  }
-})
+    arrayContent: false,
+  },
+});

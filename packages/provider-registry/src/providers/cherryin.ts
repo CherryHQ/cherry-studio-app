@@ -1,4 +1,4 @@
-import { defineProvider } from './types'
+import { defineProvider } from './types';
 
 export default defineProvider({
   id: 'cherryin',
@@ -7,19 +7,19 @@ export default defineProvider({
   endpointConfigs: {
     'anthropic-messages': {
       adapterFamily: 'cherryin',
-      baseUrl: 'https://open.cherryin.net'
+      baseUrl: 'https://open.cherryin.net',
     },
     'openai-chat-completions': {
       adapterFamily: 'cherryin',
-      baseUrl: 'https://open.cherryin.net'
-    }
+      baseUrl: 'https://open.cherryin.net',
+    },
   },
   metadata: {
     website: {
       apiKey: 'https://open.cherryin.ai/console/token',
       docs: 'https://open.cherryin.ai',
       models: 'https://open.cherryin.ai/pricing',
-      official: 'https://open.cherryin.ai'
-    }
-  }
-})
+      official: 'https://open.cherryin.ai',
+    },
+  },
+});

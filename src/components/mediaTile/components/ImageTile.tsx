@@ -31,7 +31,12 @@ export function ImageTile({
   );
   const content = (
     <>
-      <Image cachePolicy="memory-disk" className="absolute inset-0" contentFit="cover" source={uri} />
+      <Image
+        cachePolicy="memory-disk"
+        className="absolute inset-0"
+        contentFit="cover"
+        source={uri}
+      />
       {children}
     </>
   );

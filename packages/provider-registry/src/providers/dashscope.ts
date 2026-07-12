@@ -1,4 +1,4 @@
-import { defineProvider } from './types'
+import { defineProvider } from './types';
 
 export default defineProvider({
   id: 'dashscope',
@@ -7,24 +7,24 @@ export default defineProvider({
   endpointConfigs: {
     'anthropic-messages': {
       adapterFamily: 'anthropic',
-      baseUrl: 'https://dashscope.aliyuncs.com/apps/anthropic'
+      baseUrl: 'https://dashscope.aliyuncs.com/apps/anthropic',
     },
     'openai-chat-completions': {
       adapterFamily: 'openai-compatible',
-      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/'
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/',
     },
     'openai-responses': {
       adapterFamily: 'openai',
-      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/'
-    }
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/',
+    },
   },
   metadata: {
     website: {
       apiKey: 'https://bailian.console.aliyun.com/?tab=model#/api-key',
       docs: 'https://help.aliyun.com/zh/model-studio/getting-started/',
       models: 'https://bailian.console.aliyun.com/?tab=model#/model-market',
-      official: 'https://www.aliyun.com/product/bailian'
-    }
+      official: 'https://www.aliyun.com/product/bailian',
+    },
   },
   overrides: [
     {
@@ -42,14 +42,14 @@ export default defineProvider({
                 default: '1328x1328',
                 options: ['1664x928', '1472x1140', '1328x1328', '1140x1472', '928x1664'],
                 render: 'chips',
-                type: 'enum'
-              }
+                type: 'enum',
+              },
             },
-            vendorTransport: { endpoint: '/api/v1/services/aigc/text2image/image-synthesis' }
-          }
-        }
+            vendorTransport: { endpoint: '/api/v1/services/aigc/text2image/image-synthesis' },
+          },
+        },
       },
-      modelId: 'qwen-image'
+      modelId: 'qwen-image',
     },
     {
       apiModelId: 'qwen-image-edit',
@@ -59,13 +59,16 @@ export default defineProvider({
             supports: {
               addWatermark: { default: false, type: 'switch' },
               negativePrompt: { multiline: true, type: 'text' },
-              seed: { type: 'text' }
+              seed: { type: 'text' },
             },
-            vendorTransport: { endpoint: '/api/v1/services/aigc/multimodal-generation/generation', isSync: true }
-          }
-        }
+            vendorTransport: {
+              endpoint: '/api/v1/services/aigc/multimodal-generation/generation',
+              isSync: true,
+            },
+          },
+        },
       },
-      modelId: 'qwen-image-edit'
+      modelId: 'qwen-image-edit',
     },
     {
       apiModelId: 'qwen-mt-image',
@@ -78,19 +81,23 @@ export default defineProvider({
               sourceLang: {
                 default: 'auto',
                 options: ['auto', 'zh', 'en', 'ja', 'ko', 'fr', 'es', 'ru', 'de'],
-                type: 'enum'
+                type: 'enum',
               },
-              targetLang: { default: 'en', options: ['en', 'zh', 'ja', 'ko', 'fr', 'es', 'ru', 'de'], type: 'enum' }
+              targetLang: {
+                default: 'en',
+                options: ['en', 'zh', 'ja', 'ko', 'fr', 'es', 'ru', 'de'],
+                type: 'enum',
+              },
             },
-            vendorTransport: { endpoint: '/api/v1/services/aigc/image2image/image-synthesis' }
-          }
-        }
+            vendorTransport: { endpoint: '/api/v1/services/aigc/image2image/image-synthesis' },
+          },
+        },
       },
       inputModalities: ['image'],
       modelId: 'qwen-mt-image',
       name: 'Qwen MT Image',
       outputModalities: ['image'],
-      ownedBy: 'alibaba'
+      ownedBy: 'alibaba',
     },
     {
       apiModelId: 'wan2.5-i2i-preview',
@@ -108,18 +115,18 @@ export default defineProvider({
                 default: '1280x1280',
                 options: ['1280x1280', '1024x1024', '1664x928', '928x1664'],
                 render: 'chips',
-                type: 'enum'
-              }
+                type: 'enum',
+              },
             },
-            vendorTransport: { endpoint: '/api/v1/services/aigc/image2image/image-synthesis' }
-          }
-        }
+            vendorTransport: { endpoint: '/api/v1/services/aigc/image2image/image-synthesis' },
+          },
+        },
       },
       inputModalities: ['text', 'image'],
       modelId: 'wan2-5-i2i-preview',
       name: 'Wan 2.5 i2i Preview',
       outputModalities: ['image'],
-      ownedBy: 'alibaba'
+      ownedBy: 'alibaba',
     },
     {
       apiModelId: 'wan2.6-image',
@@ -129,17 +136,22 @@ export default defineProvider({
             supports: {
               addWatermark: { default: false, type: 'switch' },
               enableInterleave: { default: true, type: 'switch' },
-              imageResolution: { default: '1K', options: ['1K', '2K'], render: 'chips', type: 'enum' },
+              imageResolution: {
+                default: '1K',
+                options: ['1K', '2K'],
+                render: 'chips',
+                type: 'enum',
+              },
               negativePrompt: { multiline: true, type: 'text' },
               numImages: { default: 1, max: 4, min: 1, type: 'range' },
               promptExtend: { default: true, type: 'switch' },
-              seed: { type: 'text' }
+              seed: { type: 'text' },
             },
-            vendorTransport: { endpoint: '/api/v1/services/aigc/image-generation/generation' }
-          }
-        }
+            vendorTransport: { endpoint: '/api/v1/services/aigc/image-generation/generation' },
+          },
+        },
       },
-      modelId: 'wan2-6-image'
+      modelId: 'wan2-6-image',
     },
     {
       apiModelId: 'wan2.7-image',
@@ -148,16 +160,21 @@ export default defineProvider({
           generate: {
             supports: {
               addWatermark: { default: false, type: 'switch' },
-              imageResolution: { default: '2K', options: ['1K', '2K'], render: 'chips', type: 'enum' },
+              imageResolution: {
+                default: '2K',
+                options: ['1K', '2K'],
+                render: 'chips',
+                type: 'enum',
+              },
               numImages: { default: 1, max: 4, min: 1, type: 'range' },
               seed: { type: 'text' },
-              thinkingMode: { default: true, type: 'switch' }
+              thinkingMode: { default: true, type: 'switch' },
             },
-            vendorTransport: { endpoint: '/api/v1/services/aigc/image-generation/generation' }
-          }
-        }
+            vendorTransport: { endpoint: '/api/v1/services/aigc/image-generation/generation' },
+          },
+        },
       },
-      modelId: 'wan2-7-image'
+      modelId: 'wan2-7-image',
     },
     {
       apiModelId: 'wan2.7-image-pro',
@@ -166,16 +183,21 @@ export default defineProvider({
           generate: {
             supports: {
               addWatermark: { default: false, type: 'switch' },
-              imageResolution: { default: '2K', options: ['1K', '2K', '4K'], render: 'chips', type: 'enum' },
+              imageResolution: {
+                default: '2K',
+                options: ['1K', '2K', '4K'],
+                render: 'chips',
+                type: 'enum',
+              },
               numImages: { default: 1, max: 4, min: 1, type: 'range' },
               seed: { type: 'text' },
-              thinkingMode: { default: true, type: 'switch' }
+              thinkingMode: { default: true, type: 'switch' },
             },
-            vendorTransport: { endpoint: '/api/v1/services/aigc/image-generation/generation' }
-          }
-        }
+            vendorTransport: { endpoint: '/api/v1/services/aigc/image-generation/generation' },
+          },
+        },
       },
-      modelId: 'wan2-7-image-pro'
+      modelId: 'wan2-7-image-pro',
     },
     {
       apiModelId: 'wanx-v1',
@@ -193,7 +215,7 @@ export default defineProvider({
                 default: '1024x1024',
                 options: ['1024x1024', '720x1280', '1280x720', '768x1152'],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               style: {
                 default: '<auto>',
@@ -207,20 +229,20 @@ export default defineProvider({
                   '<watercolor>',
                   '<sketch>',
                   '<chinese painting>',
-                  '<flat illustration>'
+                  '<flat illustration>',
                 ],
-                type: 'enum'
-              }
+                type: 'enum',
+              },
             },
-            vendorTransport: { endpoint: '/api/v1/services/aigc/text2image/image-synthesis' }
-          }
-        }
+            vendorTransport: { endpoint: '/api/v1/services/aigc/text2image/image-synthesis' },
+          },
+        },
       },
       inputModalities: ['text', 'image'],
       modelId: 'wanx-v1',
       name: 'Wanx v1',
       outputModalities: ['image'],
-      ownedBy: 'alibaba'
+      ownedBy: 'alibaba',
     },
     {
       apiModelId: 'wanx2.0-t2i-turbo',
@@ -238,18 +260,18 @@ export default defineProvider({
                 default: '1024x1024',
                 options: ['1024x1024', '1280x720', '720x1280', '1440x720', '720x1440'],
                 render: 'chips',
-                type: 'enum'
-              }
+                type: 'enum',
+              },
             },
-            vendorTransport: { endpoint: '/api/v1/services/aigc/text2image/image-synthesis' }
-          }
-        }
+            vendorTransport: { endpoint: '/api/v1/services/aigc/text2image/image-synthesis' },
+          },
+        },
       },
       inputModalities: ['text'],
       modelId: 'wanx2-0-t2i-turbo',
       name: 'Wanx 2.0 T2I Turbo',
       outputModalities: ['image'],
-      ownedBy: 'alibaba'
+      ownedBy: 'alibaba',
     },
     {
       apiModelId: 'wanx2.1-imageedit',
@@ -272,9 +294,9 @@ export default defineProvider({
                   'super_resolution',
                   'colorization',
                   'doodle',
-                  'control_cartoon_feature'
+                  'control_cartoon_feature',
                 ],
-                type: 'enum'
+                type: 'enum',
               },
               isSketch: { default: false, type: 'switch' },
               leftScale: { default: 1, max: 2, min: 1, step: 0.05, type: 'range' },
@@ -283,17 +305,17 @@ export default defineProvider({
               seed: { type: 'text' },
               strength: { default: 0.5, max: 1, min: 0, step: 0.05, type: 'range' },
               topScale: { default: 1, max: 2, min: 1, step: 0.05, type: 'range' },
-              upscaleFactor: { default: 2, max: 4, min: 1, step: 1, type: 'range' }
+              upscaleFactor: { default: 2, max: 4, min: 1, step: 1, type: 'range' },
             },
-            vendorTransport: { endpoint: '/api/v1/services/aigc/image2image/image-synthesis' }
-          }
-        }
+            vendorTransport: { endpoint: '/api/v1/services/aigc/image2image/image-synthesis' },
+          },
+        },
       },
       inputModalities: ['text', 'image'],
       modelId: 'wanx2-1-imageedit',
       name: 'Wanx 2.1 Image Edit',
       outputModalities: ['image'],
-      ownedBy: 'alibaba'
+      ownedBy: 'alibaba',
     },
     {
       apiModelId: 'wanx2.1-t2i-plus',
@@ -311,18 +333,18 @@ export default defineProvider({
                 default: '1024x1024',
                 options: ['1024x1024', '1280x720', '720x1280', '1440x720', '720x1440'],
                 render: 'chips',
-                type: 'enum'
-              }
+                type: 'enum',
+              },
             },
-            vendorTransport: { endpoint: '/api/v1/services/aigc/text2image/image-synthesis' }
-          }
-        }
+            vendorTransport: { endpoint: '/api/v1/services/aigc/text2image/image-synthesis' },
+          },
+        },
       },
       inputModalities: ['text'],
       modelId: 'wanx2-1-t2i-plus',
       name: 'Wanx 2.1 T2I Plus',
       outputModalities: ['image'],
-      ownedBy: 'alibaba'
+      ownedBy: 'alibaba',
     },
     {
       apiModelId: 'wanx2.1-t2i-turbo',
@@ -340,18 +362,18 @@ export default defineProvider({
                 default: '1024x1024',
                 options: ['1024x1024', '1280x720', '720x1280', '1440x720', '720x1440'],
                 render: 'chips',
-                type: 'enum'
-              }
+                type: 'enum',
+              },
             },
-            vendorTransport: { endpoint: '/api/v1/services/aigc/text2image/image-synthesis' }
-          }
-        }
+            vendorTransport: { endpoint: '/api/v1/services/aigc/text2image/image-synthesis' },
+          },
+        },
       },
       inputModalities: ['text'],
       modelId: 'wanx2-1-t2i-turbo',
       name: 'Wanx 2.1 T2I Turbo',
       outputModalities: ['image'],
-      ownedBy: 'alibaba'
-    }
-  ]
-})
+      ownedBy: 'alibaba',
+    },
+  ],
+});
