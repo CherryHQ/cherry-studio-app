@@ -11,7 +11,6 @@ import {
 import { useAssistantMutations } from '@/hooks/chat/useAssistant';
 
 export interface UseAssistantCatalogReturn {
-  isLoading: boolean;
   presets: AssistantCatalogPreset[];
   addPreset: (preset: AssistantCatalogPreset) => Promise<{ id: string }>;
   getTabs: (allLabel: string) => AssistantCatalogTab[];
@@ -23,12 +22,12 @@ export function useAssistantCatalog({ enabled = true }: { enabled?: boolean } = 
   const [presets, setPresets] = useState<AssistantCatalogPreset[]>(() =>
     enabled ? loadAssistantCatalogPresets(language) : [],
   );
-  const isLoading = false;
   const { createAssistant } = useAssistantMutations();
+
+  // Sync when enabled or language changes (lazy init already covers first mount)
   useEffect(() => {
     if (!enabled) return;
-    const data = loadAssistantCatalogPresets(language);
-    setPresets(data);
+    setPresets(loadAssistantCatalogPresets(language));
   }, [enabled, language]);
 
   const addPreset = useCallback(
@@ -39,8 +38,8 @@ export function useAssistantCatalog({ enabled = true }: { enabled?: boolean } = 
   );
 
   const getTabs = useCallback(
-    (allLabel: string): AssistantCatalogTab[] => buildAssistantCatalogTabs(presets, allLabel),
-    [presets],
+    (allLabel: string): AssistantCatalogTab[] => buildAssistantCatalogTabs(presets, allLabel, language),
+    [presets, language],
   );
 
   const filterPresets = useCallback(
@@ -49,5 +48,5 @@ export function useAssistantCatalog({ enabled = true }: { enabled?: boolean } = 
     [presets],
   );
 
-  return { isLoading, presets, addPreset, getTabs, filterPresets };
+  return { presets, addPreset, getTabs, filterPresets };
 }

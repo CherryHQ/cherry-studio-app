@@ -14,7 +14,7 @@ import { useAssistantMutations } from '@/hooks/chat';
 import { useAssistantCatalog } from '@/hooks/chat/useAssistantCatalog';
 export default function AssistantCatalogScreen() {
   const { t } = useTranslation();
-  const { isLoading, getTabs, filterPresets } = useAssistantCatalog({ enabled: true });
+  const { getTabs, filterPresets } = useAssistantCatalog({ enabled: true });
   const { createAssistant } = useAssistantMutations();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('__all__');
@@ -66,6 +66,8 @@ export default function AssistantCatalogScreen() {
     [openDialog],
   );
 
+  const keyExtractor = useCallback((item: AssistantCatalogPreset) => item.id, []);
+
   return (
     <View className="flex-1">
       <BackHeader title={t('library.assistant_catalog.title')} />
@@ -81,6 +83,8 @@ export default function AssistantCatalogScreen() {
         showsHorizontalScrollIndicator={false}
         style={{ flexGrow: 0 }}
         contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 12 }}
+        accessibilityRole="tablist"
+        accessibilityLabel={t('assistant.catalog.tabs')}
       >
         {tabs.map((tab) => (
           <Chip
@@ -88,18 +92,17 @@ export default function AssistantCatalogScreen() {
             size="md"
             variant={activeTab === tab.id ? 'primary' : 'soft'}
             onPress={() => setActiveTab(tab.id)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === tab.id }}
+            accessibilityLabel={`${tab.label} (${tab.count})`}
           >
             <Chip.Label>{`${tab.label} (${tab.count})`}</Chip.Label>
           </Chip>
         ))}
       </ScrollView>
 
-      {/* Preset list / loading / empty */}
-      {isLoading ? (
-        <View className="flex-1 items-center justify-center py-8">
-          <Text className="text-default-foreground">{t('common.loading')}</Text>
-        </View>
-      ) : visiblePresets.length === 0 ? (
+      {/* Preset list / empty */}
+      {visiblePresets.length === 0 ? (
         <View className="flex-1 items-center justify-center px-4 py-8">
           <Text className="text-default-foreground">
             {search ? t('common.noResults') : t('assistant.catalog.empty')}
@@ -109,7 +112,7 @@ export default function AssistantCatalogScreen() {
         <LegendList
           data={visiblePresets}
           estimatedItemSize={72}
-          keyExtractor={(item) => item.id}
+          keyExtractor={keyExtractor}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           recycleItems
@@ -117,6 +120,8 @@ export default function AssistantCatalogScreen() {
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 24, paddingHorizontal: 16 }}
+          accessibilityRole="list"
+          accessibilityLabel={t('assistant.catalog.presetList')}
         />
       )}
 
@@ -147,6 +152,7 @@ export default function AssistantCatalogScreen() {
             {/* Actions */}
             <View className="flex-row justify-end gap-3 pt-1">
               <Button
+                accessibilityLabel={t('common.cancel')}
                 className="min-w-20 rounded-xl"
                 size="sm"
                 variant="secondary"
@@ -155,6 +161,7 @@ export default function AssistantCatalogScreen() {
                 <Text className="text-foreground text-sm">{t('common.cancel')}</Text>
               </Button>
               <Button
+                accessibilityLabel={t('assistant.catalog.addToAssistant')}
                 className="min-w-24 rounded-xl"
                 size="sm"
                 variant="primary"
@@ -195,6 +202,8 @@ const PresetRow = memo(function PresetRow({
     <Pressable
       className="mb-2 flex-row items-center gap-3 overflow-hidden rounded-lg border border-border-subtle bg-card px-3.5 py-2.5 active:opacity-70"
       onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={`${preset.name}${summary ? `, ${summary}` : ''}`}
     >
       {/* Emoji with blur background */}
       <View className="relative size-9 shrink-0 items-center justify-center rounded-lg overflow-hidden">

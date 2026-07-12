@@ -67,10 +67,8 @@ describe('useAssistantCatalog', () => {
     expect(mockLoadPresets).not.toHaveBeenCalled();
   });
 
-  it('returns isLoading as false after mount', async () => {
+  it('returns presets after mount', async () => {
     const result = await renderHook(true);
-    // Synchronous load — isLoading is always false
-    expect(result.isLoading).toBe(false);
     expect(result.presets).toEqual(samplePresets);
   });
 
