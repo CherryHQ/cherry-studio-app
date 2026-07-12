@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   type AssistantCatalogPreset,
@@ -19,16 +19,10 @@ export interface UseAssistantCatalogReturn {
 export function useAssistantCatalog({ enabled = true }: { enabled?: boolean } = {}) {
   const { i18n } = useTranslation();
   const language = i18n.language ?? 'en-US';
-  const [presets, setPresets] = useState<AssistantCatalogPreset[]>(() =>
+  const [presets] = useState<AssistantCatalogPreset[]>(() =>
     enabled ? loadAssistantCatalogPresets(language) : [],
   );
   const { createAssistant } = useAssistantMutations();
-
-  // Sync when enabled or language changes (lazy init already covers first mount)
-  useEffect(() => {
-    if (!enabled) return;
-    setPresets(loadAssistantCatalogPresets(language));
-  }, [enabled, language]);
 
   const addPreset = useCallback(
     async (preset: AssistantCatalogPreset) => {
