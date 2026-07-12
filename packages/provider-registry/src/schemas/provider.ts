@@ -3,20 +3,14 @@
  * Defines the structure for provider connections and API configurations
  */
 
-import * as z from 'zod';
+import * as z from 'zod'
 
-import { MetadataSchema, ProviderIdSchema, VersionSchema } from './common';
-import {
-  ENDPOINT_TYPE,
-  type EndpointType,
-  GEMINI_THINKING_LEVEL,
-  objectValues,
-  REASONING_EFFORT,
-} from './enums';
-import { CommonReasoningFieldsSchema } from './model';
+import { MetadataSchema, ProviderIdSchema, VersionSchema } from './common'
+import { ENDPOINT_TYPE, type EndpointType, GEMINI_THINKING_LEVEL, objectValues, REASONING_EFFORT } from './enums'
+import { CommonReasoningFieldsSchema } from './model'
 
-export const EndpointTypeSchema = z.enum(objectValues(ENDPOINT_TYPE));
-const endpointTypeValues: readonly string[] = objectValues(ENDPOINT_TYPE);
+export const EndpointTypeSchema = z.enum(objectValues(ENDPOINT_TYPE))
+const endpointTypeValues: readonly string[] = objectValues(ENDPOINT_TYPE)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // API Features
@@ -37,11 +31,9 @@ export const ApiFeaturesSchema = z.object({
   developerRole: z.boolean().default(false),
   /** Whether the provider supports service tier selection (OpenAI/Groq-specific) */
   serviceTier: z.boolean().default(false),
-  /** Whether the provider supports verbosity settings (Gemini-specific) */
-  verbosity: z.boolean().default(false),
-  /** Whether the provider supports enable_thinking parameter */
-  enableThinking: z.boolean().default(true),
-});
+  /** Whether the provider supports verbosity settings (OpenAI-specific) */
+  verbosity: z.boolean().default(false)
+})
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Provider Reasoning Format
@@ -51,7 +43,7 @@ export const ApiFeaturesSchema = z.object({
 // (effort levels, token limits) are in model.ts ReasoningSupportSchema.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const ReasoningEffortSchema = z.enum(objectValues(REASONING_EFFORT));
+const ReasoningEffortSchema = z.enum(objectValues(REASONING_EFFORT))
 
 /** Provider reasoning format — discriminated union by format type */
 export const ProviderReasoningFormatSchema = z.discriminatedUnion('type', [
@@ -59,9 +51,9 @@ export const ProviderReasoningFormatSchema = z.discriminatedUnion('type', [
     type: z.literal('openai-chat'),
     params: z
       .object({
-        reasoningEffort: ReasoningEffortSchema.optional(),
+        reasoningEffort: ReasoningEffortSchema.optional()
       })
-      .optional(),
+      .optional()
   }),
   z.object({
     type: z.literal('openai-responses'),
@@ -69,10 +61,10 @@ export const ProviderReasoningFormatSchema = z.discriminatedUnion('type', [
       .object({
         reasoning: z.object({
           effort: ReasoningEffortSchema.optional(),
-          summary: z.enum(['auto', 'concise', 'detailed']).optional(),
-        }),
+          summary: z.enum(['auto', 'concise', 'detailed']).optional()
+        })
       })
-      .optional(),
+      .optional()
   }),
   z.object({
     type: z.literal('anthropic'),
@@ -80,9 +72,9 @@ export const ProviderReasoningFormatSchema = z.discriminatedUnion('type', [
       .object({
         type: z.union([z.literal('enabled'), z.literal('disabled'), z.literal('adaptive')]),
         budgetTokens: z.number().optional(),
-        effort: ReasoningEffortSchema.optional(),
+        effort: ReasoningEffortSchema.optional()
       })
-      .optional(),
+      .optional()
   }),
   z.object({
     type: z.literal('gemini'),
@@ -92,17 +84,17 @@ export const ProviderReasoningFormatSchema = z.discriminatedUnion('type', [
           .object({
             thinkingConfig: z.object({
               includeThoughts: z.boolean().optional(),
-              thinkingBudget: z.number().optional(),
-            }),
+              thinkingBudget: z.number().optional()
+            })
           })
           .optional(),
         z
           .object({
-            thinkingLevel: z.enum(objectValues(GEMINI_THINKING_LEVEL)).optional(),
+            thinkingLevel: z.enum(objectValues(GEMINI_THINKING_LEVEL)).optional()
           })
-          .optional(),
+          .optional()
       ])
-      .optional(),
+      .optional()
   }),
   z.object({
     type: z.literal('openrouter'),
@@ -116,47 +108,47 @@ export const ProviderReasoningFormatSchema = z.discriminatedUnion('type', [
                 z.literal('minimal'),
                 z.literal('low'),
                 z.literal('medium'),
-                z.literal('high'),
+                z.literal('high')
               ])
               .optional(),
             maxTokens: z.number().optional(),
-            exclude: z.boolean().optional(),
+            exclude: z.boolean().optional()
           })
           .refine(
             (v) => v.effort == null || v.maxTokens == null,
-            'Only one of effort or maxTokens can be specified, not both',
-          ),
+            'Only one of effort or maxTokens can be specified, not both'
+          )
       })
-      .optional(),
+      .optional()
   }),
   z.object({
     type: z.literal('enable-thinking'),
     params: z
       .object({
         enableThinking: z.boolean(),
-        thinkingBudget: z.number().optional(),
+        thinkingBudget: z.number().optional()
       })
       .optional(),
-    ...CommonReasoningFieldsSchema,
+    ...CommonReasoningFieldsSchema
   }),
   z.object({
     type: z.literal('thinking-type'),
     params: z
       .object({
         thinking: z.object({
-          type: z.union([z.literal('enabled'), z.literal('disabled'), z.literal('auto')]),
-        }),
+          type: z.union([z.literal('enabled'), z.literal('disabled'), z.literal('auto')])
+        })
       })
-      .optional(),
+      .optional()
   }),
   z.object({
     type: z.literal('dashscope'),
     params: z
       .object({
         enableThinking: z.boolean(),
-        incrementalOutput: z.boolean().optional(),
+        incrementalOutput: z.boolean().optional()
       })
-      .optional(),
+      .optional()
   }),
   // TODO: API layer must convert camelCase → snake_case (chat_template_kwargs, enable_thinking, thinking_budget)
   // when building the actual request payload for vLLM/SGLang/nvidia endpoints
@@ -167,12 +159,12 @@ export const ProviderReasoningFormatSchema = z.discriminatedUnion('type', [
         chatTemplateKwargs: z.object({
           enableThinking: z.boolean().optional(),
           thinking: z.boolean().optional(),
-          thinkingBudget: z.number().optional(),
-        }),
+          thinkingBudget: z.number().optional()
+        })
       })
-      .optional(),
-  }),
-]);
+      .optional()
+  })
+])
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Provider Config
@@ -183,9 +175,9 @@ export const ProviderWebsiteSchema = z.object({
     official: z.url().optional(),
     docs: z.url().optional(),
     apiKey: z.url().optional(),
-    models: z.url().optional(),
-  }),
-});
+    models: z.url().optional()
+  })
+})
 
 /** Per-endpoint-type configuration in registry */
 export const RegistryEndpointConfigSchema = z.object({
@@ -199,7 +191,7 @@ export const RegistryEndpointConfigSchema = z.object({
       /** Embedding models listing endpoint (if separate from default) */
       embedding: z.url().optional(),
       /** Reranker models listing endpoint (if separate from default) */
-      reranker: z.url().optional(),
+      reranker: z.url().optional()
     })
     .optional(),
   /** How this endpoint type expects reasoning parameters to be formatted */
@@ -209,8 +201,8 @@ export const RegistryEndpointConfigSchema = z.object({
    * registered in `appProviderIds`. Resolvers should prefer this over
    * heuristic id/baseUrl inference when present.
    */
-  adapterFamily: z.string().optional(),
-});
+  adapterFamily: z.string().optional()
+})
 
 export const ProviderConfigSchema = z
   .object({
@@ -225,37 +217,60 @@ export const ProviderConfigSchema = z
     endpointConfigs: z
       .record(
         z.string().refine((k): k is EndpointType => endpointTypeValues.includes(k), {
-          message: `Invalid endpoint type key, must be one of: ${objectValues(ENDPOINT_TYPE).join(', ')}`,
+          message: `Invalid endpoint type key, must be one of: ${objectValues(ENDPOINT_TYPE).join(', ')}`
         }),
-        RegistryEndpointConfigSchema,
+        RegistryEndpointConfigSchema
       )
       .optional(),
     /** Default endpoint type for chat requests — null for providers not bound by this (e.g. AWS, Vertex) */
     defaultChatEndpoint: EndpointTypeSchema.nullable().default(null),
+    /**
+     * Where this provider's model list comes from. `'registry'` means it cannot
+     * be enumerated over an API (login-based subscription providers); the shipped
+     * registry catalog is returned by the model-list chokepoint instead. Defaults
+     * to `'api'` (the provider exposes a `/models` endpoint).
+     */
+    modelListSource: z.enum(['api', 'registry']).default('api'),
+    /**
+     * Which credential kinds the provider accepts — the auth UIs to surface and
+     * the runtime credential semantics. A *set*, because a provider can offer
+     * more than one (CherryIN takes both a user API key and an app-managed OAuth
+     * login). Members:
+     * - `'api-key'` — user-entered key (the api-key/host inputs).
+     * - `'oauth'` — app-managed OAuth session the app holds and refreshes.
+     * - `'external-cli'` — credential lives in an external CLI's store and only
+     *   works through that CLI's runtime (e.g. `claude-code`); drives env
+     *   stripping and chat-picker hiding.
+     *
+     * Absent ⇒ the default `['api-key']`. "Login-based" (suppress the api-key
+     * inputs) is the derived `!includes('api-key')`, not a value of its own.
+     */
+    authMethods: z.array(z.enum(['api-key', 'oauth', 'external-cli'])).optional(),
     /** API feature flags controlling request construction */
     apiFeatures: ApiFeaturesSchema.optional(),
     /** Additional metadata including website URLs */
-    metadata: MetadataSchema.and(ProviderWebsiteSchema),
+    metadata: MetadataSchema.and(ProviderWebsiteSchema)
   })
   .refine(
     (data) => {
       if (data.endpointConfigs && data.defaultChatEndpoint) {
-        return data.defaultChatEndpoint in data.endpointConfigs;
+        return data.defaultChatEndpoint in data.endpointConfigs
       }
-      return true;
+      return true
     },
     {
-      message: 'defaultChatEndpoint must exist as a key in endpointConfigs',
-    },
-  );
+      message: 'defaultChatEndpoint must exist as a key in endpointConfigs'
+    }
+  )
 
 export const ProviderListSchema = z.object({
   version: VersionSchema,
-  providers: z.array(ProviderConfigSchema),
-});
+  providers: z.array(ProviderConfigSchema)
+})
 
-export type ApiFeatures = z.infer<typeof ApiFeaturesSchema>;
-export type ProviderReasoningFormat = z.infer<typeof ProviderReasoningFormatSchema>;
-export type RegistryEndpointConfig = z.infer<typeof RegistryEndpointConfigSchema>;
-export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
-export type ProviderList = z.infer<typeof ProviderListSchema>;
+export { ENDPOINT_TYPE } from './enums'
+export type ApiFeatures = z.infer<typeof ApiFeaturesSchema>
+export type ProviderReasoningFormat = z.infer<typeof ProviderReasoningFormatSchema>
+export type RegistryEndpointConfig = z.infer<typeof RegistryEndpointConfigSchema>
+export type ProviderConfig = z.infer<typeof ProviderConfigSchema>
+export type ProviderList = z.infer<typeof ProviderListSchema>

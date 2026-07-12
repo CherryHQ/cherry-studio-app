@@ -935,6 +935,7 @@ function createAssistant(id: string, modelId: UniqueModelId | null): Assistant {
     modelId,
     modelName: modelId,
     name: 'Assistant',
+    orderKey: 'a0',
     prompt: '',
     settings: DEFAULT_ASSISTANT_SETTINGS,
     tags: [],

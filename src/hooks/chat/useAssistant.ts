@@ -1,14 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { queryKeys } from '@/data/api';
 import type { CreateAssistantDto, UpdateAssistantDto } from '@/data/api/schemas/assistants';
-import { useDataQuery, usePreference } from '@/data/hooks';
+import { useDataQuery } from '@/data/hooks';
 import { useDataServices } from '@/data/runtime';
 import { type Assistant, type AssistantSettings } from '@/data/types/assistant';
-import type { Model, UniqueModelId } from '@/data/types/model';
+import type { Model } from '@/data/types/model';
 
 import { useDefaultModel, useModelById } from './useModel';
-import { composeDefaultAssistant } from './utils/defaultAssistant';
 import {
   reconcileReasoningEffortForModel,
   reconcileWebSearchForModel,
@@ -16,8 +15,6 @@ import {
 
 const ASSISTANTS_LIST_LIMIT = 500;
 const EMPTY_ASSISTANTS: readonly Assistant[] = Object.freeze([]);
-
-export { composeDefaultAssistant };
 
 export function useAssistantsApi() {
   const query = useDataQuery({
@@ -130,14 +127,6 @@ export function useAssistants() {
     removeAssistant: (id: string) => deleteAssistant(id),
     updateAssistant: (id: string, patch: UpdateAssistantDto) => updateAssistant(id, patch),
   };
-}
-
-export function useDefaultAssistant(): { assistant: Assistant } {
-  const [defaultModelId] = usePreference('chat.default_model_id');
-  const modelId = (defaultModelId ?? null) as UniqueModelId | null;
-  const assistant = useMemo(() => composeDefaultAssistant(modelId), [modelId]);
-
-  return { assistant };
 }
 
 export function useAssistant(id: string | null | undefined) {

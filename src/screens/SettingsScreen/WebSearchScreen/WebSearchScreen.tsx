@@ -24,10 +24,6 @@ export default function WebSearchSettingsScreen() {
     webSearchProviders.searchKeywords.options,
     iconTheme,
   );
-  const fetchUrlProviderOptions = useWebSearchProviderIconOptions(
-    webSearchProviders.fetchUrls.options,
-    iconTheme,
-  );
   const apiWebSearchProviderItems = useMemo<SettingsServiceRowProps[]>(
     () =>
       MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS.filter((provider) => provider.type === 'api').map(
@@ -69,18 +65,6 @@ export default function WebSearchSettingsScreen() {
                 />
               ),
               title: t('settings.websearch.defaultProvider'),
-            },
-            {
-              accessory: (
-                <SettingSelect
-                  isClearable
-                  label={t('settings.websearch.fetchUrlsProvider')}
-                  options={fetchUrlProviderOptions}
-                  value={webSearchProviders.fetchUrls.value}
-                  onValueChange={webSearchProviders.fetchUrls.onValueChange}
-                />
-              ),
-              title: t('settings.websearch.fetchUrlsProvider'),
             },
             {
               accessory: (

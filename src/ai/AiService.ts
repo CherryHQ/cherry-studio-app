@@ -7,7 +7,13 @@ import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugi
 import { providerToolPlugin } from '@cherrystudio/ai-core/built-in/plugins';
 import { extensionRegistry } from '@cherrystudio/ai-core/provider';
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 'ai';
+import {
+  type LanguageModelUsage,
+  type ModelMessage,
+  stepCountIs,
+  type ToolSet,
+  type UIMessageChunk,
+} from 'ai';
 import type { AssistantService } from '@/data/services/AssistantService';
 import type { ModelService } from '@/data/services/ModelService';
 import type { PreferenceService } from '@/data/services/PreferenceService';
@@ -16,7 +22,9 @@ import type { Assistant } from '@/data/types/assistant';
 import type { Model, UniqueModelId } from '@/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
+import type { WebSearchService } from '@/services/webSearch/WebSearchService';
 
+import { createWebSearchTool, WEB_SEARCH_TOOL_NAME } from './createWebSearchTool';
 import { resolveMediaCapabilities } from './messages/messageCapabilities';
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { providerToAiSdkConfig } from './provider/config';
@@ -33,7 +41,14 @@ import { createSimulateStreamingPlugin } from './runtime/aiSdk/plugins/simulateS
 import type { AppProviderId, AppProviderSettingsMap } from './types';
 import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/requests';
 import { addAnthropicHeaders } from './utils/anthropicHeaders';
-import { isAnthropicModel, isGeminiModel, isGrokModel, isOpenAIModel } from './utils/model';
+import {
+  isAnthropicModel,
+  isForcedNativeWebSearchModel,
+  isFunctionCallingModel,
+  isGeminiModel,
+  isGrokModel,
+  isOpenAIModel,
+} from './utils/model';
 import {
   filterStandardParams,
   getMaxTokens,
@@ -89,6 +104,7 @@ export interface AiServiceDependencies {
   model: ModelService;
   preference: PreferenceService;
   provider: ProviderService;
+  webSearch: WebSearchService;
 }
 
 /**
@@ -116,7 +132,10 @@ export class AiService {
       );
     }
 
-    const { sdkConfig, model, system, plugins, options } = await this.buildAgentParamsFor(request);
+    const { sdkConfig, model, system, tools, plugins, options } = await this.buildAgentParamsFor(
+      request,
+      { shouldIncludeExternalTools: true },
+    );
     const preparedMessages = await resolveUIMessageFileUrls(request.messages ?? []);
 
     const agent = new Agent({
@@ -127,6 +146,7 @@ export class AiService {
       mediaCapabilities: resolveMediaCapabilities(model),
       plugins,
       system,
+      tools,
       options,
     });
 
@@ -304,6 +324,7 @@ export class AiService {
 
   private async buildAgentParamsFor(
     request: AiBaseRequest & { apiKeyOverride?: string; chatId?: string },
+    buildOptions: { shouldIncludeExternalTools?: boolean } = {},
   ) {
     const { provider, model, assistant } = await this.getProviderAndModel(request);
     const sdkConfig = await providerToAiSdkConfig(provider, model, {
@@ -311,6 +332,14 @@ export class AiService {
         request.apiKeyOverride ?? this.services.provider.getRotatedApiKey(providerId),
       getAuthConfig: (providerId) => this.services.provider.getAuthConfig(providerId),
     });
+    const externalWebSearchProviderId =
+      buildOptions.shouldIncludeExternalTools && assistant?.settings.enableWebSearch
+        ? await this.services.preference.get('chat.web_search.default_search_keywords_provider')
+        : null;
+    const shouldForceNativeWebSearch = isForcedNativeWebSearchModel(model);
+    const hasConfiguredExternalWebSearch = Boolean(
+      externalWebSearchProviderId && isFunctionCallingModel(model) && !shouldForceNativeWebSearch,
+    );
     const capabilities = assistant
       ? resolveCapabilities(
           model,
@@ -318,8 +347,19 @@ export class AiService {
           assistant,
           sdkConfig.providerId,
           this.services.preference,
+          {
+            webSearchProviderId: hasConfiguredExternalWebSearch
+              ? (externalWebSearchProviderId ?? undefined)
+              : undefined,
+          },
         )
       : undefined;
+    const shouldUseExternalWebSearch = Boolean(
+      buildOptions.shouldIncludeExternalTools &&
+        assistant?.settings.enableWebSearch &&
+        isFunctionCallingModel(model) &&
+        (hasConfiguredExternalWebSearch || !capabilities?.webSearchPluginConfig),
+    );
     const providerOptions =
       assistant && capabilities
         ? buildCapabilityProviderOptions(assistant, model, provider, capabilities)
@@ -353,6 +393,12 @@ export class AiService {
       streamOutput: capabilities?.streamOutput ?? true,
       webSearchPluginConfig: capabilities?.webSearchPluginConfig,
     });
+    const tools =
+      shouldUseExternalWebSearch && assistant?.settings.enableWebSearch
+        ? ({
+            [WEB_SEARCH_TOOL_NAME]: createWebSearchTool(this.services.webSearch),
+          } satisfies ToolSet)
+        : undefined;
     const system = assistant?.prompt
       ? await replacePromptVariables(assistant.prompt, model.name, this.services.preference)
       : undefined;
@@ -367,6 +413,7 @@ export class AiService {
       assistant,
       system,
       plugins,
+      tools,
       options: {
         maxRetries: request.requestOptions?.maxRetries ?? 0,
         timeout: request.requestOptions?.timeout ?? getTimeout(model),
@@ -376,6 +423,11 @@ export class AiService {
         }),
         ...standardParams,
         ...filteredStandardParams,
+        ...(tools && {
+          stopWhen: stepCountIs(
+            assistant?.settings.enableMaxToolCalls ? assistant.settings.maxToolCalls : 20,
+          ),
+        }),
       },
     };
   }
@@ -395,8 +447,7 @@ export class AiService {
 
   /**
    * Priority: explicit `uniqueModelId` > `assistant.modelId` > runtime default model.
-   * Assistant-less topics do not persist `DEFAULT_ASSISTANT_ID`; they resolve
-   * `chat.default_model_id` at send time, matching desktop.
+   * Assistant-less topics resolve `chat.default_model_id` at send time.
    */
   private async getProviderAndModel(request: AiBaseRequest & { chatId?: string }) {
     let assistant: Assistant | undefined;
@@ -465,12 +516,15 @@ function resolveCapabilities(
   assistant: Assistant,
   aiSdkProviderId: string,
   preference: PreferenceService,
+  options: { webSearchProviderId?: string } = {},
 ) {
   const enableReasoning = Boolean(
     model.reasoning && assistant.settings?.reasoning_effort !== undefined,
   );
   const enableWebSearch = Boolean(
-    assistant.settings?.enableWebSearch && model.capabilities.includes('web-search'),
+    !options.webSearchProviderId &&
+      ((assistant.settings?.enableWebSearch && model.capabilities.includes('web-search')) ||
+        isForcedNativeWebSearchModel(model)),
   );
   const enableGenerateImage = model.capabilities.includes('image-generation');
 

@@ -17,6 +17,7 @@ patchedDependencies:
   metro@0.84.4: patches/metro@0.84.4.patch
   metro-runtime@0.84.4: patches/metro-runtime@0.84.4.patch
   uniwind@1.6.5: patches/uniwind@1.6.5.patch
+  react-native-reanimated@4.5.0: patches/react-native-reanimated@4.5.0.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'
@@ -42,3 +43,5 @@ minimumReleaseAgeExclude:
   - expo-dev-menu@57.0.4
   - expo-linking@57.0.1
   - expo-splash-screen@57.0.1
+  - heroui-native@1.0.5
+  - react-native-enriched-markdown@0.7.3

@@ -1,4 +1,9 @@
-import { MODALITY, MODEL_CAPABILITY, VENDOR_PATTERNS } from '@cherrystudio/provider-registry';
+import {
+  MODALITY,
+  MODEL_CAPABILITY,
+  REASONING_EFFORT,
+  VENDOR_PATTERNS,
+} from '@cherrystudio/provider-registry';
 
 import type { Model } from '@/data/types/model';
 import { parseUniqueModelId } from '@/data/types/model';
@@ -24,15 +29,114 @@ export const isGenerateImageModel = (model: Model): boolean =>
 export const isWebSearchModel = (model: Model): boolean =>
   model.capabilities.includes(MODEL_CAPABILITY.WEB_SEARCH);
 
+export const isFunctionCallingModel = (model: Model): boolean =>
+  model.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL);
+
 export const isSupportedThinkingTokenModel = (model: Model): boolean =>
   model.reasoning?.thinkingTokenLimits != null;
 
 export const isSupportedReasoningEffortModel = (model: Model): boolean =>
   (model.reasoning?.supportedEfforts?.length ?? 0) > 0;
 
+const DEFAULT_REASONING_EFFORT_OPTION = 'default';
+
+function withDefaultReasoningEffortOptions(efforts: readonly string[]): string[] {
+  return [DEFAULT_REASONING_EFFORT_OPTION, ...efforts];
+}
+
 export const getModelSupportedReasoningEffortOptions = (
   model: Model | undefined | null,
-): string[] | undefined => model?.reasoning?.supportedEfforts;
+): string[] | undefined => {
+  if (!model || !isReasoningModel(model)) {
+    return undefined;
+  }
+
+  const supportedEfforts = model.reasoning?.supportedEfforts ?? [];
+  if (supportedEfforts.length > 0) {
+    return withDefaultReasoningEffortOptions(supportedEfforts);
+  }
+
+  if (isGrok4FastReasoningModel(model)) {
+    return withDefaultReasoningEffortOptions([REASONING_EFFORT.NONE, REASONING_EFFORT.AUTO]);
+  }
+
+  if (!model.reasoning?.thinkingTokenLimits) {
+    return undefined;
+  }
+
+  if (isSupportedThinkingTokenClaudeModel(model)) {
+    return withDefaultReasoningEffortOptions([
+      REASONING_EFFORT.NONE,
+      REASONING_EFFORT.LOW,
+      REASONING_EFFORT.MEDIUM,
+      REASONING_EFFORT.HIGH,
+      ...(isClaude46SeriesModel(model) || isClaude47SeriesModel(model)
+        ? [REASONING_EFFORT.MAX]
+        : []),
+    ]);
+  }
+
+  if (isSupportedThinkingTokenGeminiModel(model)) {
+    return withDefaultReasoningEffortOptions([
+      REASONING_EFFORT.NONE,
+      REASONING_EFFORT.MINIMAL,
+      REASONING_EFFORT.LOW,
+      REASONING_EFFORT.MEDIUM,
+      REASONING_EFFORT.HIGH,
+      REASONING_EFFORT.AUTO,
+    ]);
+  }
+
+  if (isSupportedThinkingTokenQwenModel(model)) {
+    return withDefaultReasoningEffortOptions([
+      ...(isQwenAlwaysThinkModel(model) ? [] : [REASONING_EFFORT.NONE]),
+      REASONING_EFFORT.LOW,
+      REASONING_EFFORT.MEDIUM,
+      REASONING_EFFORT.HIGH,
+    ]);
+  }
+
+  if (isSupportedThinkingTokenDoubaoModel(model)) {
+    if (isDoubaoSeedAfter251015(model) || isDoubaoSeed18Model(model)) {
+      return withDefaultReasoningEffortOptions([
+        REASONING_EFFORT.MINIMAL,
+        REASONING_EFFORT.LOW,
+        REASONING_EFFORT.MEDIUM,
+        REASONING_EFFORT.HIGH,
+      ]);
+    }
+
+    return withDefaultReasoningEffortOptions([
+      REASONING_EFFORT.NONE,
+      ...(isDoubaoThinkingAutoModel(model) ? [REASONING_EFFORT.AUTO] : []),
+      REASONING_EFFORT.HIGH,
+    ]);
+  }
+
+  if (isDeepSeekV4PlusModel(model)) {
+    return withDefaultReasoningEffortOptions([
+      REASONING_EFFORT.NONE,
+      REASONING_EFFORT.HIGH,
+      REASONING_EFFORT.MAX,
+    ]);
+  }
+
+  if (
+    isSupportedThinkingTokenHunyuanModel(model) ||
+    isSupportedThinkingTokenZhipuModel(model) ||
+    isSupportedThinkingTokenMiMoModel(model) ||
+    isSupportedThinkingTokenKimiModel(model) ||
+    isDeepSeekHybridInferenceModel(model)
+  ) {
+    return withDefaultReasoningEffortOptions([REASONING_EFFORT.NONE, REASONING_EFFORT.AUTO]);
+  }
+
+  if (isMistralModel(model)) {
+    return withDefaultReasoningEffortOptions([REASONING_EFFORT.NONE, REASONING_EFFORT.HIGH]);
+  }
+
+  return undefined;
+};
 
 export const getBaseModelName = (id: string, delimiter = '/'): string => {
   const parts = id.split(delimiter);
@@ -321,6 +425,19 @@ export const isDeepSeekHybridInferenceModel = (model: Model): boolean => {
 
 export const isOpenAIWebSearchModel = (model: Model): boolean =>
   isOpenAIModel(model) && isWebSearchModel(model);
+
+export const isOpenRouterBuiltInWebSearchModel = (model: Model): boolean =>
+  model.providerId === 'openrouter' &&
+  (isOpenAIWebSearchModel(model) || model.modelId.toLowerCase().includes('sonar'));
+
+/**
+ * Models whose provider-native web search stays on regardless of the assistant
+ * toggle or a configured external search provider (mirrors desktop). Single
+ * source of truth: the "force native" gate and the capability resolution must
+ * agree, or a model can end up with neither native nor external search.
+ */
+export const isForcedNativeWebSearchModel = (model: Model): boolean =>
+  isOpenRouterBuiltInWebSearchModel(model) || model.id.toLowerCase().includes('sonar');
 
 export const isHunyuanSearchModel = (model: Model): boolean =>
   isHunyuanModel(model) && isWebSearchModel(model);

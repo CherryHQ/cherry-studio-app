@@ -25,4 +25,5 @@ export const WEB_SEARCH_PROVIDER_REGISTRY = {
   querit: QueritProvider,
   fetch: UnsupportedProvider,
   jina: JinaProvider,
+  firecrawl: UnsupportedProvider,
 } as const satisfies Record<WebSearchProvider['id'], WebSearchProviderConstructor>;

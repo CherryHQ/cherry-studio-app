@@ -25,7 +25,6 @@ export const CreateMessageSchema = z.strictObject({
   siblingsGroupId: z.number().optional(),
   stats: MessageStatsSchema.optional(),
   status: MessageStatusSchema.optional(),
-  traceId: z.string().optional(),
 });
 export type CreateMessageDto = z.infer<typeof CreateMessageSchema>;
 
@@ -35,7 +34,6 @@ export const UpdateMessageSchema = z.strictObject({
   siblingsGroupId: z.number().optional(),
   stats: MessageStatsSchema.nullable().optional(),
   status: MessageStatusSchema.optional(),
-  traceId: z.string().nullable().optional(),
 });
 export type UpdateMessageDto = z.infer<typeof UpdateMessageSchema>;
 

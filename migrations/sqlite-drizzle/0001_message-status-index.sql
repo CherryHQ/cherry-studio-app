@@ -1,0 +1,1 @@
+CREATE INDEX `message_status_idx` ON `message` (`status`);

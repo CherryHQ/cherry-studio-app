@@ -36,16 +36,6 @@ export function isChatInputImageFileName(name: string | null | undefined) {
   return extension ? imageFileExtensions.has(extension) : false;
 }
 
-export function getChatInputFileExtension(name: string) {
-  const extension = name.trim().split('.').pop();
-
-  if (!extension || extension === name) {
-    return '';
-  }
-
-  return extension.slice(0, 5).toUpperCase();
-}
-
 export function appendChatInputAttachments(
   current: readonly ChatInputAttachmentDraft[],
   next: readonly ChatInputAttachmentDraft[],

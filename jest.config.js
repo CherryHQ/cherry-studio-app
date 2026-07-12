@@ -1,10 +1,14 @@
 module.exports = {
   preset: 'jest-expo',
   testEnvironment: 'node',
+  // `expo prebuild` output: Pods vendor their own test suites, which jest would
+  // otherwise collect (hundreds of failing foreign suites drowning real results).
+  testPathIgnorePatterns: ['/node_modules/', '/ios/', '/android/'],
   moduleNameMapper: {
     '^lucide-uniwind/png/generated/(.*)$':
       '<rootDir>/packages/lucide-uniwind/src/png-icons/generated/$1',
     '^lucide-uniwind/png$': '<rootDir>/packages/lucide-uniwind/src/png-icons/index.ts',
+    '^vitest$': '<rootDir>/tests/vitestJestShim.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@logger$': '<rootDir>/src/core/logger/LoggerService.ts',
   },

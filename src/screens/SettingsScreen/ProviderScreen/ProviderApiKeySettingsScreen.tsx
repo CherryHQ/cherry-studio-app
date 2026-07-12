@@ -109,7 +109,8 @@ export default function ProviderApiKeySettingsScreen() {
       const nextApiKeys = draft.apiKeyEntries.map((entry) =>
         entry.id === id ? { ...entry, key } : entry,
       );
-      const isPersisted = apiKeys?.some((entry) => entry.id === id) ?? false;
+      const persistedApiKey = apiKeys?.find((entry) => entry.id === id);
+      const isPersisted = Boolean(persistedApiKey);
 
       updateApiKey(id, key);
 
@@ -124,6 +125,11 @@ export default function ProviderApiKeySettingsScreen() {
           ...current,
           [id]: t('settings.provider.apiService.apiKeyRequired'),
         }));
+        return;
+      }
+
+      if (persistedApiKey?.key === key) {
+        setApiKeyErrors((current) => removeApiKeyError(current, id));
         return;
       }
 

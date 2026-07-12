@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "dc86a6c3-0f05-4471-881f-e72d6b5305e0",
+  "id": "72404ce4-1838-41ee-9a69-9e8d6f037021",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "app_state": {
@@ -464,13 +464,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "trace_id": {
-          "name": "trace_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "stats": {
           "name": "stats",
           "type": "text",
@@ -516,11 +509,6 @@
         "message_topic_created_idx": {
           "name": "message_topic_created_idx",
           "columns": ["topic_id", "created_at"],
-          "isUnique": false
-        },
-        "message_trace_id_idx": {
-          "name": "message_trace_id_idx",
-          "columns": ["trace_id"],
           "isUnique": false
         },
         "message_fts_rowid_uniq": {
@@ -851,6 +839,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "trace_id": {
+          "name": "trace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "order_key": {
           "name": "order_key",
           "type": "text",
@@ -994,13 +989,6 @@
         },
         "output_modalities": {
           "name": "output_modalities",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "owned_by": {
-          "name": "owned_by",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

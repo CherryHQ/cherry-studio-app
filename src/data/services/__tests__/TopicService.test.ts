@@ -1,3 +1,5 @@
+import * as Crypto from 'expo-crypto';
+
 import type { DbService } from '@/data/db/DbService';
 import type { PinService } from '@/data/services/PinService';
 import type { TagService } from '@/data/services/TagService';
@@ -10,8 +12,14 @@ jest.mock('@/data/db/schemas', () => ({
   },
   pinTable: {},
   topicTable: {
+    deletedAt: 'deletedAt',
     id: 'id',
+    traceId: 'traceId',
   },
+}));
+
+jest.mock('expo-crypto', () => ({
+  getRandomBytes: jest.fn(),
 }));
 
 jest.mock('../utils/orderKey', () => ({
@@ -20,6 +28,38 @@ jest.mock('../utils/orderKey', () => ({
 }));
 
 describe('TopicService', () => {
+  test('creates and persists a desktop-compatible trace id once', async () => {
+    const expectedTraceId = '000102030405060708090a0b0c0d0e0f';
+    jest
+      .mocked(Crypto.getRandomBytes)
+      .mockReturnValue(Uint8Array.from({ length: 16 }, (_, i) => i));
+    const updates: Record<string, unknown>[] = [];
+    const tx = {
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({ limit: jest.fn(async () => [{ traceId: null }]) })),
+        })),
+      })),
+      update: jest.fn(() => ({
+        set: jest.fn((values: Record<string, unknown>) => {
+          updates.push(values);
+          return { where: jest.fn(async () => undefined) };
+        }),
+      })),
+    };
+    const dbService = {
+      withWriteTx: jest.fn(async (callback: (transaction: typeof tx) => Promise<string>) =>
+        callback(tx),
+      ),
+    } as unknown as DbService;
+    const service = new TopicService(dbService, {} as PinService, {} as TagService);
+
+    await expect(service.ensureTraceId('550e8400-e29b-41d4-a716-446655440000')).resolves.toBe(
+      expectedTraceId,
+    );
+    expect(updates).toEqual([{ traceId: expectedTraceId }]);
+  });
+
   test('purges topic tag bindings when deleting a topic', async () => {
     const operations: string[] = [];
     type Tx = {

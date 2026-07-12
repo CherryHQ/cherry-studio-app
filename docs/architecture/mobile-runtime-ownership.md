@@ -36,7 +36,8 @@ One-shot network requests, pure transforms, schema validation, Message Part pars
 `DataProvider`:
 
 - Owns `DbService`, SQLite/Drizzle initialization, bundled migrations, custom SQL, seeders, initial preference loading, app bootstrap, and `DbService.dispose()`.
-- Creates the Data Service Graph through `createDataServices()`.
+- Creates the Data Service Graph through `createDataServices()` (injectable via `createRuntime` for tests).
+- Hides the native splash once init settles and fires `runPostReadyTasks` after the gate opens.
 - Disposes `WebSearchService` API-key rotation state and closes the SQLite database on unmount.
 - Does not own chat streams or route-level chat state.
 
@@ -92,13 +93,20 @@ This shape is illustrative. Not every runtime must expose exactly the same metho
 - Reads cached boot preferences.
 - Applies Uniwind theme mode.
 - Initializes i18n.
-- Must not run full provider refresh, full history prefetch, or index building.
+- Must not run full provider refresh, full history prefetch, index building, data repair, or diagnostics.
+
+`runPostReadyTasks`:
+
+- Runs after the gate opens (first paint), off the startup critical path.
+- Currently performs orphan pending-Message reconciliation (crash-orphaned `pending` assistant messages).
+- `DataProvider` fires it fire-and-forget once status becomes `ready`; it must stay best-effort and must not block or reopen the gate.
 
 `InitialDataGate`:
 
 - The only current gate allowed to block initial app rendering.
 - Waits for `DataProvider` status to become ready.
 - Renders `null` while data initializes and throws initialization errors.
+- The native splash is retained across this window: the root layout calls `SplashScreen.preventAutoHideAsync` and `DataProvider` calls `SplashScreen.hideAsync` once init settles (ready or error), so the `null` frame is never a blank screen. The hide is imperative, not an effect, because the error path throws during gate render.
 - Does not currently wait for current assistant/topic, message windows, or chat runtime state.
 
 Route-level loading:

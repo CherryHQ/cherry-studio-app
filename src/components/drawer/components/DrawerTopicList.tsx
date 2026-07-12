@@ -4,13 +4,10 @@ import { cn } from 'heroui-native/utils';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, Pressable, Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
 import type { Topic } from '@/data/types/topic';
 
 import { useDrawerActions, useDrawerPanelState, useDrawerTopics } from '../context/DrawerProvider';
-import { drawerContentLayoutTransition, drawerFeatureAreaEntering } from '../utils/drawerAnimation';
 
-import { DrawerFeatureArea } from './DrawerFeatureArea';
 import { DrawerNewChatButton } from './DrawerNewChatButton';
 import { useDrawerTopicActionDialogs } from './DrawerTopicActionDialogs';
 
@@ -97,19 +94,6 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={listEmptyComponent}
-        ListHeaderComponent={
-          isSearchActive ? null : (
-            <Animated.View
-              entering={drawerFeatureAreaEntering}
-              layout={drawerContentLayoutTransition}
-            >
-              <DrawerFeatureArea />
-              <Text className="px-5 pt-3 pb-1 font-medium text-foreground-secondary text-sm">
-                {t('navigation.recents')}
-              </Text>
-            </Animated.View>
-          )
-        }
         onEndReached={loadMoreTopics}
         onEndReachedThreshold={0.7}
         recycleItems
