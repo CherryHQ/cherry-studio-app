@@ -319,6 +319,9 @@ importers:
       lucide:
         specifier: ^1.14.0
         version: 1.14.0
+      react-test-renderer:
+        specifier: ^19.2.7
+        version: 19.2.7(react@19.2.3)
       sf-symbols-typescript:
         specifier: ^2.2.0
         version: 2.2.0
@@ -6615,6 +6618,9 @@ packages:
   react-is@19.2.6:
     resolution: {integrity: sha512-XjBR15BhXuylgWGuslhDKqlSayuqvqBX91BP8pauG8kd1zY8kotkNWbXksTCNRarse4kuGbe2kIY05ARtwNIvw==}
 
+  react-is@19.2.7:
+    resolution: {integrity: sha512-kZFnouyVv7eP/Phmrlo9FK+zcAdriZJvzxXHF1Sl1P377WSGe2G/JxVolhTrB/jeV47lKImhNUsijjHAAbcl/A==}
+
   react-native-drawer-layout@4.2.4:
     resolution: {integrity: sha512-l1Le5HcVidobnJm8xqFZo46Rs8FDHdxbTZhkjxpNSRgU+QMoQXilOfzTHAeNjEGiKVGgIs9cW3ctXeHqgp5jJg==}
     peerDependencies:
@@ -6776,6 +6782,11 @@ packages:
     resolution: {integrity: sha512-TMR1LnSFiWZMJkCgNf5ATSvAheTT2NvKIwiVwdBPHxjBI7n/JbWd4gaZ16DVd9foAXdvDz+sB5yxZTwMjPRxpw==}
     peerDependencies:
       react: ^19.2.3
+
+  react-test-renderer@19.2.7:
+    resolution: {integrity: sha512-U4TyPDJ9MsC8rFimXuJum8w40aPc9kbOZYO8Pc2/4A884i8hwJsMNA/JNyuOc/f2/37wHvk7HjpVl1V4re7Dig==}
+    peerDependencies:
+      react: ^19.2.7
 
   react@19.2.3:
     resolution: {integrity: sha512-Ku/hhYbVjOQnXDZFv2+RibmLFGwFdeeKHFcOTlrt7xplBnya5OGn/hIRDsqDiSUcfORsDC7MPxwork8jBwsIWA==}
@@ -14341,6 +14352,8 @@ snapshots:
 
   react-is@19.2.6: {}
 
+  react-is@19.2.7: {}
+
   react-native-drawer-layout@4.2.4(89acde5a517e72e1ce63459f1c0ab013):
     dependencies:
       color: 4.2.3
@@ -14548,6 +14561,12 @@ snapshots:
     dependencies:
       react: 19.2.3
       react-is: 19.2.6
+      scheduler: 0.27.0
+
+  react-test-renderer@19.2.7(react@19.2.3):
+    dependencies:
+      react: 19.2.3
+      react-is: 19.2.7
       scheduler: 0.27.0
 
   react@19.2.3: {}

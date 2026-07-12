@@ -1,10 +1,13 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { Trash2Icon, SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 
-import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
+import { BackHeader } from '@/components/headers';
+import type { HeaderToolbarAction } from '@/components/headers/BackHeader/BackHeader.types';
+import { queryKeys } from '@/data/api';
+import { useDataMutation } from '@/data/hooks';
 import {
   canEditProviderEndpoint,
   shouldShowApiKeys,
@@ -15,7 +18,16 @@ import { openExternalUrl } from '@/utils/openExternalUrl';
 import { ProviderApiManagementSection } from './components/ProviderApiManagementSection';
 import { ProviderModelList } from './components/ProviderModelList';
 import { useProviderDetailSettings } from './detail';
-import { ProviderModelCheckSheet, useProviderModelCheck, useProviderModelPull } from './models';
+import { useSettingsConfirmDialog } from '@/screens/SettingsScreen/hooks/useSettingsConfirmDialog';
+import { useToast } from 'heroui-native/toast';
+import {
+  ProviderModelAddSheet,
+  ProviderModelCheckSheet,
+  ProviderModelPullSheet,
+  useProviderModelAdd,
+  useProviderModelCheck,
+  useProviderModelPull,
+} from './models';
 import { stashProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
 
 export default function ProviderDetailSettingsScreen() {
@@ -28,6 +40,8 @@ export default function ProviderDetailSettingsScreen() {
   const [apiKeysVisible, setApiKeysVisible] = useState(false);
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
+  const { confirmDialog, requestConfirm } = useSettingsConfirmDialog();
+  const { toast } = useToast();
   const { apiKeys, apiKeysQuery, authConfig, authConfigQuery } = useProviderApiServiceQueries(
     providerId ?? '',
   );
@@ -64,6 +78,57 @@ export default function ProviderDetailSettingsScreen() {
     authConfig,
     provider,
   });
+  const { mutateAsync: deleteProvider } = useDataMutation({
+    invalidateQueries: [
+      queryKeys.providers.list(),
+      queryKeys.providers.list({ enabled: true }),
+      queryKeys.providers.list({ enabled: false }),
+      ...(providerId ? [queryKeys.providers.detail(providerId)] : []),
+    ],
+    mutationFn: (services) => {
+      if (!providerId) {
+        throw new Error('providerId is required');
+      }
+
+      return services.provider.delete(providerId);
+    },
+  });
+  const isCustomProvider = provider && !provider.presetProviderId;
+  const handleDelete = useCallback(() => {
+    if (!provider) {
+      return;
+    }
+
+    requestConfirm({
+      title: t('settings.provider.delete.title'),
+      message: t('settings.provider.delete.message', { name: provider.name }),
+      onConfirm: () => {
+        void deleteProvider()
+          .then(() => router.back())
+          .catch(() => {
+            toast.show({
+              label: t('settings.provider.delete.error'),
+              variant: 'danger',
+            });
+          });
+      },
+    });
+  }, [deleteProvider, provider, requestConfirm, router, t, toast]);
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () =>
+      isCustomProvider
+        ? [
+            {
+              accessibilityLabel: t('settings.provider.delete.title'),
+              androidIcon: Trash2Icon,
+              icon: 'trash',
+              key: 'delete-provider',
+              onPress: handleDelete,
+            },
+          ]
+        : [],
+    [handleDelete, isCustomProvider, t],
+  );
   const canEditEndpoint = canEditProviderEndpoint(provider);
   const showApiKeys = draft ? shouldShowApiKeys(draft.authDraft.type) : false;
   const isApiDraftLoading = apiKeysQuery.isPending || authConfigQuery.isPending || !draft;
@@ -154,6 +219,7 @@ export default function ProviderDetailSettingsScreen() {
 
   return (
     <>
+      {confirmDialog}
       <BackHeader
         rightActions={rightActions}
         title={providerName ?? t('settings.pages.provider.title')}
