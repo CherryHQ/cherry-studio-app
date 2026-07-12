@@ -14,11 +14,11 @@ export {
   MODEL_CAPABILITY,
   objectValues,
   OPENAI_REASONING_EFFORT,
-  REASONING_EFFORT
-} from './schemas/enums'
+  REASONING_EFFORT,
+} from './schemas/enums';
 
 // Runtime schemas (zod) — needed by shared types that compose them
-export { ImageGenerationSupportSchema } from './schemas/model'
+export { ImageGenerationSupportSchema } from './schemas/model';
 
 // Enum types (PascalCase, derived from const objects)
 export type {
@@ -30,8 +30,8 @@ export type {
   Modality,
   ModelCapability,
   OpenAIReasoningEffort,
-  ReasoningEffort
-} from './schemas/enums'
+  ReasoningEffort,
+} from './schemas/enums';
 
 // Schema-inferred types (replaces proto types)
 export type {
@@ -44,34 +44,34 @@ export type {
   ModelPricing as ProtoModelPricing,
   ReasoningSupport as ProtoReasoningSupport,
   ReasoningSupport,
-  SupportSpec
-} from './schemas/model'
+  SupportSpec,
+} from './schemas/model';
 export type {
   ProviderConfig as ProtoProviderConfig,
   ProviderReasoningFormat as ProtoProviderReasoningFormat,
   ProviderConfig,
   ProviderReasoningFormat,
-  RegistryEndpointConfig
-} from './schemas/provider'
+  RegistryEndpointConfig,
+} from './schemas/provider';
 export type {
   ProviderModelOverride as ProtoProviderModelOverride,
-  ProviderModelOverride
-} from './schemas/provider-models'
+  ProviderModelOverride,
+} from './schemas/provider-models';
 
 // Model ID normalization utilities
-export { normalizeModelId } from './utils/normalize'
+export { normalizeModelId } from './utils/normalize';
 
 // Pure lookup and transformation utilities (no fs dependency)
-export type { ModelLookupResult, RuntimeEndpointConfig } from './registry-utils'
+export type { ModelLookupResult, RuntimeEndpointConfig } from './registry-utils';
 export {
   buildRuntimeEndpointConfigs,
   inferAdapterFamily,
   lookupRegistryModel,
-  lookupRegistryProvider
-} from './registry-utils'
+  lookupRegistryProvider,
+} from './registry-utils';
 
 // Shared vendor identity regex — consumed by @shared capability inference
 // and @cherrystudio/ui icon routing. Single source of truth for "which
 // vendor does this raw model ID belong to".
-export type { VendorKey } from './patterns/vendor-patterns'
-export { isVendor, matchVendor, VENDOR_PATTERNS } from './patterns/vendor-patterns'
+export type { VendorKey } from './patterns/vendor-patterns';
+export { isVendor, matchVendor, VENDOR_PATTERNS } from './patterns/vendor-patterns';

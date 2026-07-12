@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'kling',
@@ -12,56 +12,56 @@ export default defineCreator({
       name: 'Kling v2.6',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
+      outputModalities: ['video'],
     },
     {
       id: 'kling-v2-5-turbo',
       name: 'Kling v2.5 Turbo',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
+      outputModalities: ['video'],
     },
     {
       id: 'kling-v2-master',
       name: 'Kling v2 Master',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
+      outputModalities: ['video'],
     },
     {
       id: 'kling-v2-1',
       name: 'Kling v2.1',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
+      outputModalities: ['video'],
     },
     {
       id: 'kling-v2-1-master',
       name: 'Kling v2.1 Master',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
+      outputModalities: ['video'],
     },
     {
       id: 'kling-v1-6',
       name: 'Kling v1.6',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
+      outputModalities: ['video'],
     },
     {
       id: 'kling-v1-5',
       name: 'Kling v1.5',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
+      outputModalities: ['video'],
     },
     {
       id: 'kling-v1',
       name: 'Kling v1',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
+      outputModalities: ['video'],
     },
     {
       id: 'kolors',
@@ -78,40 +78,40 @@ export default defineCreator({
                 default: 4.5,
                 max: 20,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               negativePrompt: {
                 multiline: true,
-                type: 'text'
+                type: 'text',
               },
               numImages: {
                 default: 1,
                 max: 4,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               numInferenceSteps: {
                 default: 25,
                 max: 50,
                 min: 1,
-                type: 'range'
+                type: 'range',
               },
               promptEnhancement: {
-                type: 'switch'
+                type: 'switch',
               },
               seed: {
-                type: 'text'
+                type: 'text',
               },
               size: {
                 default: '1024x1024',
                 options: ['1024x1024', '1280x960', '960x1280', '768x1024', '1024x768'],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
-    }
-  ]
-})
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
+    },
+  ],
+});

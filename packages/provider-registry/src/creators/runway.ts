@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'runway',
@@ -12,21 +12,21 @@ export default defineCreator({
       name: 'Runway Gen-4 Turbo',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
+      outputModalities: ['video'],
     },
     {
       id: 'runway-gen-3a-turbo',
       name: 'Runway Gen-3 Alpha Turbo',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
+      outputModalities: ['video'],
     },
     {
       id: 'runway-aleph',
       name: 'Runway Aleph',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
-    }
-  ]
-})
+      outputModalities: ['video'],
+    },
+  ],
+});

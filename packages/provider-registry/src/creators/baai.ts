@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 // BAAI's BGE family isn't in a clean upstream listing, so it's hand-listed. `kind: 'embedding'` derives
 // the `embedding` capability + `vector` output for the plain models; any id containing `reranker` is tagged
@@ -21,9 +21,29 @@ export default defineCreator({
     { id: 'bge-small-zh-v1-5', name: 'BGE Small ZH v1.5', contextWindow: 512 },
     // Rerankers are the exception to the creator's `kind: 'embedding'` — mark them explicitly so they're not
     // tagged as embedders by default (the generator also infers `rerank` from the id, this makes it certain).
-    { id: 'bge-reranker-v2-m3', name: 'BGE Reranker v2 M3', capabilities: ['rerank'], contextWindow: 8192 },
-    { id: 'bge-reranker-v2-gemma', name: 'BGE Reranker v2 Gemma', capabilities: ['rerank'], contextWindow: 8192 },
-    { id: 'bge-reranker-large', name: 'BGE Reranker Large', capabilities: ['rerank'], contextWindow: 512 },
-    { id: 'bge-reranker-base', name: 'BGE Reranker Base', capabilities: ['rerank'], contextWindow: 512 }
-  ]
-})
+    {
+      id: 'bge-reranker-v2-m3',
+      name: 'BGE Reranker v2 M3',
+      capabilities: ['rerank'],
+      contextWindow: 8192,
+    },
+    {
+      id: 'bge-reranker-v2-gemma',
+      name: 'BGE Reranker v2 Gemma',
+      capabilities: ['rerank'],
+      contextWindow: 8192,
+    },
+    {
+      id: 'bge-reranker-large',
+      name: 'BGE Reranker Large',
+      capabilities: ['rerank'],
+      contextWindow: 512,
+    },
+    {
+      id: 'bge-reranker-base',
+      name: 'BGE Reranker Base',
+      capabilities: ['rerank'],
+      contextWindow: 512,
+    },
+  ],
+});

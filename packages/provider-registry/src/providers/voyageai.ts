@@ -1,4 +1,4 @@
-import { defineProvider } from './types'
+import { defineProvider } from './types';
 
 export default defineProvider({
   id: 'voyageai',
@@ -7,15 +7,15 @@ export default defineProvider({
   endpointConfigs: {
     'openai-chat-completions': {
       adapterFamily: 'voyage',
-      baseUrl: 'https://api.voyageai.com'
-    }
+      baseUrl: 'https://api.voyageai.com',
+    },
   },
   metadata: {
     website: {
       apiKey: 'https://dashboard.voyageai.com/organization/api-keys',
       docs: 'https://docs.voyageai.com/docs',
       models: 'https://docs.voyageai.com/docs',
-      official: 'https://www.voyageai.com/'
-    }
-  }
-})
+      official: 'https://www.voyageai.com/',
+    },
+  },
+});

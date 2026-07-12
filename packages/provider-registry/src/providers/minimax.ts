@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'minimax',
@@ -9,9 +9,9 @@ export default openaiCompatible({
     apiKey: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
     docs: 'https://platform.minimaxi.com/docs/api-reference/text-openai-api',
     models: 'https://platform.minimaxi.com/document/Models',
-    official: 'https://platform.minimaxi.com/'
+    official: 'https://platform.minimaxi.com/',
   },
   apiFeatures: {
-    arrayContent: false
-  }
-})
+    arrayContent: false,
+  },
+});

@@ -1,4 +1,4 @@
-import { defineProvider } from './types'
+import { defineProvider } from './types';
 
 // Tencent's TokenHub gateway serves Hunyuan (hy/hunyuan → tencent) AND re-hosts third-party models
 // (deepseek/glm/kimi/minimax/qwen → their own creators). These rows are tokenhub's served catalog: the
@@ -11,17 +11,23 @@ export default defineProvider({
   name: 'TokenHub',
   defaultChatEndpoint: 'openai-chat-completions',
   endpointConfigs: {
-    'anthropic-messages': { adapterFamily: 'anthropic', baseUrl: 'https://tokenhub.tencentmaas.com' },
-    'openai-chat-completions': { adapterFamily: 'openai-compatible', baseUrl: 'https://tokenhub.tencentmaas.com/v1' },
-    'openai-responses': { adapterFamily: 'openai', baseUrl: 'https://tokenhub.tencentmaas.com/v1' }
+    'anthropic-messages': {
+      adapterFamily: 'anthropic',
+      baseUrl: 'https://tokenhub.tencentmaas.com',
+    },
+    'openai-chat-completions': {
+      adapterFamily: 'openai-compatible',
+      baseUrl: 'https://tokenhub.tencentmaas.com/v1',
+    },
+    'openai-responses': { adapterFamily: 'openai', baseUrl: 'https://tokenhub.tencentmaas.com/v1' },
   },
   metadata: {
     website: {
       apiKey: 'https://console.cloud.tencent.com/tokenhub/inference',
       docs: 'https://cloud.tencent.com/document/product/1823',
       models: 'https://cloud.tencent.com/document/product/1823/130079',
-      official: 'https://cloud.tencent.com/product/tokenhub'
-    }
+      official: 'https://cloud.tencent.com/product/tokenhub',
+    },
   },
   overrides: [
     // Tencent-own
@@ -45,16 +51,16 @@ export default defineProvider({
                 type: 'enum',
                 options: ['1:1', '4:3', '3:4', '16:9', '9:16'],
                 default: '1:1',
-                render: 'chips'
+                render: 'chips',
               },
               negativePrompt: { type: 'text', multiline: true },
               addWatermark: { type: 'switch' },
-              seed: { type: 'text' }
+              seed: { type: 'text' },
             },
-            vendorTransport: { endpoint: '/v1/api/image/submit' }
-          }
-        }
-      }
+            vendorTransport: { endpoint: '/v1/api/image/submit' },
+          },
+        },
+      },
     },
     {
       modelId: 'hy-image-lite',
@@ -67,21 +73,29 @@ export default defineProvider({
                 type: 'enum',
                 options: ['1:1', '4:3', '3:4', '16:9', '9:16'],
                 default: '1:1',
-                render: 'chips'
+                render: 'chips',
               },
               addWatermark: { type: 'switch' },
-              seed: { type: 'text' }
+              seed: { type: 'text' },
             },
-            vendorTransport: { endpoint: '/v1/api/image/lite', isSync: true }
-          }
-        }
-      }
+            vendorTransport: { endpoint: '/v1/api/image/lite', isSync: true },
+          },
+        },
+      },
     },
     // re-hosted third-party
     { modelId: 'deepseek-v4-flash', apiModelId: 'deepseek-v4-flash' },
-    { modelId: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash 原厂直供', apiModelId: 'deepseek-v4-flash-202605' },
+    {
+      modelId: 'deepseek-v4-flash',
+      name: 'DeepSeek-V4-Flash 原厂直供',
+      apiModelId: 'deepseek-v4-flash-202605',
+    },
     { modelId: 'deepseek-v4-pro', apiModelId: 'deepseek-v4-pro' },
-    { modelId: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro 原厂直供', apiModelId: 'deepseek-v4-pro-202606' },
+    {
+      modelId: 'deepseek-v4-pro',
+      name: 'DeepSeek-V4-Pro 原厂直供',
+      apiModelId: 'deepseek-v4-pro-202606',
+    },
     { modelId: 'deepseek-v3-2', apiModelId: 'deepseek-v3.2' },
     { modelId: 'glm-5', apiModelId: 'glm-5' },
     { modelId: 'glm-5-1', apiModelId: 'glm-5.1' },
@@ -95,6 +109,6 @@ export default defineProvider({
     { modelId: 'minimax-m2-7', apiModelId: 'minimax-m2.7' },
     { modelId: 'minimax-m3', apiModelId: 'minimax-m3' },
     { modelId: 'qwen3-5-flash', apiModelId: 'qwen3.5-flash' },
-    { modelId: 'qwen3-5-plus', apiModelId: 'qwen3.5-plus' }
-  ]
-})
+    { modelId: 'qwen3-5-plus', apiModelId: 'qwen3.5-plus' },
+  ],
+});

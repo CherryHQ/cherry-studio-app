@@ -1,4 +1,4 @@
-import { defineProvider } from './types'
+import { defineProvider } from './types';
 
 export default defineProvider({
   id: 'gpustack',
@@ -6,14 +6,14 @@ export default defineProvider({
   defaultChatEndpoint: 'openai-chat-completions',
   endpointConfigs: {
     'openai-chat-completions': {
-      adapterFamily: 'openai-compatible'
-    }
+      adapterFamily: 'openai-compatible',
+    },
   },
   metadata: {
     website: {
       docs: 'https://docs.gpustack.ai/latest/',
       models: 'https://docs.gpustack.ai/latest/overview/#supported-models',
-      official: 'https://gpustack.ai/'
-    }
-  }
-})
+      official: 'https://gpustack.ai/',
+    },
+  },
+});

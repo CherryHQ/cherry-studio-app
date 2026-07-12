@@ -175,7 +175,10 @@ export function ChatInputActionSheet() {
       scrimColor="rgba(0, 0, 0, 0.7)"
       surface={
         isLiquidGlassAvailable ? (
-          <GlassView glassEffectStyle="regular" style={[StyleSheet.absoluteFill, styles.surfaceGlass]} />
+          <GlassView
+            glassEffectStyle="regular"
+            style={[StyleSheet.absoluteFill, styles.surfaceGlass]}
+          />
         ) : (
           <View className="rounded-t-3xl bg-background" style={StyleSheet.absoluteFill} />
         )

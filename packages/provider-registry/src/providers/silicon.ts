@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'silicon',
@@ -9,7 +9,7 @@ export default openaiCompatible({
     apiKey: 'https://cloud.siliconflow.cn/',
     docs: 'https://docs.siliconflow.cn/',
     models: 'https://cloud.siliconflow.cn/models',
-    official: 'https://www.siliconflow.cn'
+    official: 'https://www.siliconflow.cn',
   },
-  modelsDevProvider: 'siliconflow'
-})
+  modelsDevProvider: 'siliconflow',
+});

@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'vidu',
@@ -12,35 +12,35 @@ export default defineCreator({
       name: 'Vidu Q3 Pro',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
+      outputModalities: ['video'],
     },
     {
       id: 'viduq3-turbo',
       name: 'Vidu Q3 Turbo',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
+      outputModalities: ['video'],
     },
     {
       id: 'viduq3-pro-fast',
       name: 'Vidu Q3 Pro Fast',
       capabilities: ['video-generation'],
       inputModalities: ['text', 'image'],
-      outputModalities: ['video']
+      outputModalities: ['video'],
     },
     {
       id: 'viduq2',
       name: 'Vidu Q2',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'viduq1',
       name: 'Vidu Q1',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
-    }
-  ]
-})
+      outputModalities: ['image'],
+    },
+  ],
+});

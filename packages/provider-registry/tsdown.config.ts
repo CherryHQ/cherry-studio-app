@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from 'tsdown';
 
 // Two entries: the default runtime surface (`index`) and the Node-only loader (`./node` →
 // `registry-loader`). A package-local tsconfig (no project `references`) is required so
@@ -7,11 +7,11 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     'mobile-loader': 'src/mobile-loader.ts',
-    'registry-loader': 'src/registry-loader.ts'
+    'registry-loader': 'src/registry-loader.ts',
   },
   outDir: 'dist',
   format: ['esm', 'cjs'],
   clean: true,
   dts: true,
-  tsconfig: 'tsconfig.json'
-})
+  tsconfig: 'tsconfig.json',
+});

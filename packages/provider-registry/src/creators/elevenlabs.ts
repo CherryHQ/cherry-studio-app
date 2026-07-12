@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'elevenlabs',
@@ -11,21 +11,21 @@ export default defineCreator({
       name: 'ElevenLabs v3',
       capabilities: ['audio-generation'],
       inputModalities: ['text'],
-      outputModalities: ['audio']
+      outputModalities: ['audio'],
     },
     {
       id: 'elevenlabs-v2-5-turbo',
       name: 'ElevenLabs v2.5 Turbo',
       capabilities: ['audio-generation'],
       inputModalities: ['text'],
-      outputModalities: ['audio']
+      outputModalities: ['audio'],
     },
     {
       id: 'elevenlabs-music',
       name: 'ElevenLabs Music',
       capabilities: ['audio-generation'],
       inputModalities: ['text'],
-      outputModalities: ['audio']
-    }
-  ]
-})
+      outputModalities: ['audio'],
+    },
+  ],
+});

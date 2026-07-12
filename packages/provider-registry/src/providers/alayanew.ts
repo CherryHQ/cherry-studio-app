@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'alayanew',
@@ -8,6 +8,6 @@ export default openaiCompatible({
     apiKey: 'https://www.alayanew.com/',
     docs: 'https://docs.alayanew.com/docs/modelService/interview',
     models: 'https://www.alayanew.com/product/deepseek',
-    official: 'https://www.alayanew.com/'
-  }
-})
+    official: 'https://www.alayanew.com/',
+  },
+});

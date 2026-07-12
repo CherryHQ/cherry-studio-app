@@ -3,15 +3,15 @@
  * Safe to import from browser/renderer contexts.
  */
 
-import { ENDPOINT_TYPE, type EndpointType } from './schemas/enums'
-import type { ModelConfig } from './schemas/model'
-import type { ProviderConfig, RegistryEndpointConfig } from './schemas/provider'
-import type { ProviderModelOverride } from './schemas/provider-models'
-import { normalizeModelId } from './utils/normalize'
+import { ENDPOINT_TYPE, type EndpointType } from './schemas/enums';
+import type { ModelConfig } from './schemas/model';
+import type { ProviderConfig, RegistryEndpointConfig } from './schemas/provider';
+import type { ProviderModelOverride } from './schemas/provider-models';
+import { normalizeModelId } from './utils/normalize';
 
 export interface ModelLookupResult {
-  presetModel: ModelConfig | null
-  registryOverride: ProviderModelOverride | null
+  presetModel: ModelConfig | null;
+  registryOverride: ProviderModelOverride | null;
 }
 
 /**
@@ -22,37 +22,43 @@ export function lookupRegistryModel(
   models: ModelConfig[],
   providerModels: ProviderModelOverride[],
   providerId: string,
-  modelId: string
+  modelId: string,
 ): ModelLookupResult {
   // Exact match first, then normalized fallback
-  let presetModel = models.find((m) => m.id === modelId) ?? null
+  let presetModel = models.find((m) => m.id === modelId) ?? null;
   if (!presetModel) {
-    const normalizedId = normalizeModelId(modelId)
-    presetModel = models.find((m) => normalizeModelId(m.id) === normalizedId) ?? null
+    const normalizedId = normalizeModelId(modelId);
+    presetModel = models.find((m) => normalizeModelId(m.id) === normalizedId) ?? null;
   }
 
-  let registryOverride = providerModels.find((pm) => pm.providerId === providerId && pm.modelId === modelId) ?? null
+  let registryOverride =
+    providerModels.find((pm) => pm.providerId === providerId && pm.modelId === modelId) ?? null;
   if (!registryOverride) {
-    const normalizedId = normalizeModelId(modelId)
+    const normalizedId = normalizeModelId(modelId);
     registryOverride =
-      providerModels.find((pm) => pm.providerId === providerId && normalizeModelId(pm.modelId) === normalizedId) ?? null
+      providerModels.find(
+        (pm) => pm.providerId === providerId && normalizeModelId(pm.modelId) === normalizedId,
+      ) ?? null;
   }
 
-  return { presetModel, registryOverride }
+  return { presetModel, registryOverride };
 }
 
 /**
  * Find a provider config by ID from loaded registry data.
  */
-export function lookupRegistryProvider(providers: ProviderConfig[], providerId: string): ProviderConfig | null {
-  return providers.find((p) => p.id === providerId) ?? null
+export function lookupRegistryProvider(
+  providers: ProviderConfig[],
+  providerId: string,
+): ProviderConfig | null {
+  return providers.find((p) => p.id === providerId) ?? null;
 }
 
 export interface RuntimeEndpointConfig {
-  baseUrl?: string
-  modelsApiUrls?: { default?: string; embedding?: string; reranker?: string }
-  reasoningFormatType?: string
-  adapterFamily?: string
+  baseUrl?: string;
+  modelsApiUrls?: { default?: string; embedding?: string; reranker?: string };
+  reasoningFormatType?: string;
+  adapterFamily?: string;
 }
 
 /**
@@ -60,24 +66,25 @@ export interface RuntimeEndpointConfig {
  * to runtime endpointConfigs (with reasoningFormatType string).
  */
 export function buildRuntimeEndpointConfigs(
-  registryConfigs: Record<string, RegistryEndpointConfig> | undefined
+  registryConfigs: Record<string, RegistryEndpointConfig> | undefined,
 ): Record<string, RuntimeEndpointConfig> | null {
-  if (!registryConfigs || Object.keys(registryConfigs).length === 0) return null
+  if (!registryConfigs || Object.keys(registryConfigs).length === 0) return null;
 
-  const configs: Record<string, RuntimeEndpointConfig> = {}
+  const configs: Record<string, RuntimeEndpointConfig> = {};
 
   for (const [k, regConfig] of Object.entries(registryConfigs)) {
-    const config: RuntimeEndpointConfig = {}
+    const config: RuntimeEndpointConfig = {};
 
-    if (regConfig.baseUrl) config.baseUrl = regConfig.baseUrl
-    if (regConfig.modelsApiUrls) config.modelsApiUrls = regConfig.modelsApiUrls
-    if (regConfig.reasoningFormat?.type) config.reasoningFormatType = regConfig.reasoningFormat.type
-    if (regConfig.adapterFamily) config.adapterFamily = regConfig.adapterFamily
+    if (regConfig.baseUrl) config.baseUrl = regConfig.baseUrl;
+    if (regConfig.modelsApiUrls) config.modelsApiUrls = regConfig.modelsApiUrls;
+    if (regConfig.reasoningFormat?.type)
+      config.reasoningFormatType = regConfig.reasoningFormat.type;
+    if (regConfig.adapterFamily) config.adapterFamily = regConfig.adapterFamily;
 
-    if (Object.keys(config).length > 0) configs[k] = config
+    if (Object.keys(config).length > 0) configs[k] = config;
   }
 
-  return Object.keys(configs).length > 0 ? configs : null
+  return Object.keys(configs).length > 0 ? configs : null;
 }
 
 /**
@@ -92,8 +99,8 @@ const ENDPOINT_TYPE_TO_DEFAULT_ADAPTER_FAMILY: Partial<Record<EndpointType, stri
   [ENDPOINT_TYPE.OLLAMA_CHAT]: 'ollama',
   [ENDPOINT_TYPE.OLLAMA_GENERATE]: 'ollama',
   [ENDPOINT_TYPE.JINA_RERANK]: 'jina-rerank',
-  [ENDPOINT_TYPE.OPENAI_RESPONSES]: 'openai'
-}
+  [ENDPOINT_TYPE.OPENAI_RESPONSES]: 'openai',
+};
 
 /**
  * Compute the AI SDK adapter family for an endpoint. Single source of truth
@@ -109,8 +116,11 @@ const ENDPOINT_TYPE_TO_DEFAULT_ADAPTER_FAMILY: Partial<Record<EndpointType, stri
  */
 export function inferAdapterFamily(
   endpointType: EndpointType,
-  catalogConfig?: Pick<RegistryEndpointConfig, 'adapterFamily'> | Pick<RuntimeEndpointConfig, 'adapterFamily'> | null
+  catalogConfig?:
+    | Pick<RegistryEndpointConfig, 'adapterFamily'>
+    | Pick<RuntimeEndpointConfig, 'adapterFamily'>
+    | null,
 ): string {
-  if (catalogConfig?.adapterFamily) return catalogConfig.adapterFamily
-  return ENDPOINT_TYPE_TO_DEFAULT_ADAPTER_FAMILY[endpointType] ?? 'openai-compatible'
+  if (catalogConfig?.adapterFamily) return catalogConfig.adapterFamily;
+  return ENDPOINT_TYPE_TO_DEFAULT_ADAPTER_FAMILY[endpointType] ?? 'openai-compatible';
 }

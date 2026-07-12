@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'baidu-cloud',
@@ -8,6 +8,6 @@ export default openaiCompatible({
     apiKey: 'https://console.bce.baidu.com/iam/#/iam/apikey/list',
     docs: 'https://cloud.baidu.com/doc/index.html',
     models: 'https://cloud.baidu.com/doc/WENXINWORKSHOP/s/Fm2vrveyu',
-    official: 'https://cloud.baidu.com/'
-  }
-})
+    official: 'https://cloud.baidu.com/',
+  },
+});

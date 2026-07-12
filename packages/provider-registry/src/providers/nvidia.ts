@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'nvidia',
@@ -8,7 +8,7 @@ export default openaiCompatible({
     apiKey: 'https://build.nvidia.com/meta/llama-3_1-405b-instruct',
     docs: 'https://docs.api.nvidia.com/nim/reference/llm-apis',
     models: 'https://build.nvidia.com/nim',
-    official: 'https://build.nvidia.com/explore/discover'
+    official: 'https://build.nvidia.com/explore/discover',
   },
-  modelsDevProvider: 'nvidia'
-})
+  modelsDevProvider: 'nvidia',
+});

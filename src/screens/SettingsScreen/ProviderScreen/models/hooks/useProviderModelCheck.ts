@@ -224,7 +224,17 @@ export function useProviderModelCheck({
         );
       }
     }
-  }, [models.length, provider, providerId, selectedApiKey, selectedModel, services.ai, services.provider, t, toast]);
+  }, [
+    models.length,
+    provider,
+    providerId,
+    selectedApiKey,
+    selectedModel,
+    services.ai,
+    services.provider,
+    t,
+    toast,
+  ]);
 
   const updateSelectedModelId = useCallback((modelId: UniqueModelId) => {
     setSelectedModelId(modelId);

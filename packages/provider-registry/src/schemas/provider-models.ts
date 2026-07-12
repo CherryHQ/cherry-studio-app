@@ -5,24 +5,24 @@
  * This file was renamed from override.ts for clearer semantics
  */
 
-import * as z from 'zod'
+import * as z from 'zod';
 
-import { ModelIdSchema, ProviderIdSchema, VersionSchema } from './common'
+import { ModelIdSchema, ProviderIdSchema, VersionSchema } from './common';
 import {
   ImageGenerationSupportSchema,
   ModalitySchema,
   ModelCapabilityTypeSchema,
   ModelPricingSchema,
   ParameterSupportSchema,
-  ReasoningSupportSchema
-} from './model'
-import { EndpointTypeSchema } from './provider'
+  ReasoningSupportSchema,
+} from './model';
+import { EndpointTypeSchema } from './provider';
 
 export const CapabilityOverrideSchema = z.object({
   add: z.array(ModelCapabilityTypeSchema).optional(), // Add capabilities
   remove: z.array(ModelCapabilityTypeSchema).optional(), // Remove capabilities
-  force: z.array(ModelCapabilityTypeSchema).optional() // Force set capabilities (ignore base config)
-})
+  force: z.array(ModelCapabilityTypeSchema).optional(), // Force set capabilities (ignore base config)
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Provider-Model Override Schema
@@ -53,7 +53,7 @@ export const ProviderModelOverrideSchema = z.object({
     .object({
       contextWindow: z.number().optional(),
       maxOutputTokens: z.number().optional(),
-      maxInputTokens: z.number().optional()
+      maxInputTokens: z.number().optional(),
     })
     .optional(),
   pricing: ModelPricingSchema.partial().optional(),
@@ -87,16 +87,16 @@ export const ProviderModelOverrideSchema = z.object({
   replaceWith: ModelIdSchema.optional(),
 
   // Metadata
-  reason: z.string().optional()
-})
+  reason: z.string().optional(),
+});
 
 // Container schema for JSON files
 export const ProviderModelListSchema = z.object({
   version: VersionSchema,
-  overrides: z.array(ProviderModelOverrideSchema)
-})
+  overrides: z.array(ProviderModelOverrideSchema),
+});
 
 // Type exports
-export type CapabilityOverride = z.infer<typeof CapabilityOverrideSchema>
-export type ProviderModelOverride = z.infer<typeof ProviderModelOverrideSchema>
-export type ProviderModelList = z.infer<typeof ProviderModelListSchema>
+export type CapabilityOverride = z.infer<typeof CapabilityOverrideSchema>;
+export type ProviderModelOverride = z.infer<typeof ProviderModelOverrideSchema>;
+export type ProviderModelList = z.infer<typeof ProviderModelListSchema>;

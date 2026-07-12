@@ -1,4 +1,4 @@
-import { defineCreator } from './types'
+import { defineCreator } from './types';
 
 export default defineCreator({
   id: 'ideogram',
@@ -16,7 +16,11 @@ export default defineCreator({
         modes: {
           generate: {
             supports: {
-              renderingSpeed: { options: ['FLASH', 'TURBO', 'DEFAULT', 'QUALITY'], default: 'DEFAULT', type: 'enum' },
+              renderingSpeed: {
+                options: ['FLASH', 'TURBO', 'DEFAULT', 'QUALITY'],
+                default: 'DEFAULT',
+                type: 'enum',
+              },
               size: {
                 options: [
                   '2048x2048',
@@ -41,18 +45,22 @@ export default defineCreator({
                   '1280x3072',
                   '3072x1280',
                   '1024x3072',
-                  '3072x1024'
+                  '3072x1024',
                 ],
                 default: '2048x2048',
                 render: 'chips',
-                type: 'enum'
-              }
-            }
+                type: 'enum',
+              },
+            },
           },
           remix: {
             supports: {
               imageWeight: { max: 100, min: 1, type: 'range' },
-              renderingSpeed: { options: ['FLASH', 'TURBO', 'DEFAULT', 'QUALITY'], default: 'DEFAULT', type: 'enum' },
+              renderingSpeed: {
+                options: ['FLASH', 'TURBO', 'DEFAULT', 'QUALITY'],
+                default: 'DEFAULT',
+                type: 'enum',
+              },
               size: {
                 options: [
                   '2048x2048',
@@ -77,16 +85,16 @@ export default defineCreator({
                   '1280x3072',
                   '3072x1280',
                   '1024x3072',
-                  '3072x1024'
+                  '3072x1024',
                 ],
                 default: '2048x2048',
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
-      }
+                type: 'enum',
+              },
+            },
+          },
+        },
+      },
     },
     {
       id: 'ideogram-v3',
@@ -114,18 +122,25 @@ export default defineCreator({
                   '4:3',
                   '5:4',
                   '16:9',
-                  '16:10'
+                  '16:10',
                 ],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               magicPromptOption: { type: 'switch' },
               negativePrompt: { multiline: true, type: 'text' },
               numImages: { max: 8, min: 1, type: 'range' },
-              renderingSpeed: { options: ['FLASH', 'TURBO', 'DEFAULT', 'QUALITY'], default: 'DEFAULT', type: 'enum' },
+              renderingSpeed: {
+                options: ['FLASH', 'TURBO', 'DEFAULT', 'QUALITY'],
+                default: 'DEFAULT',
+                type: 'enum',
+              },
               seed: { type: 'text' },
-              styleType: { options: ['AUTO', 'GENERAL', 'REALISTIC', 'DESIGN', 'FICTION'], type: 'enum' }
-            }
+              styleType: {
+                options: ['AUTO', 'GENERAL', 'REALISTIC', 'DESIGN', 'FICTION'],
+                type: 'enum',
+              },
+            },
           },
           remix: {
             supports: {
@@ -145,19 +160,26 @@ export default defineCreator({
                   '4:3',
                   '5:4',
                   '16:9',
-                  '16:10'
+                  '16:10',
                 ],
                 render: 'chips',
-                type: 'enum'
+                type: 'enum',
               },
               imageWeight: { max: 100, min: 1, type: 'range' },
               magicPromptOption: { type: 'switch' },
               negativePrompt: { multiline: true, type: 'text' },
               numImages: { max: 8, min: 1, type: 'range' },
-              renderingSpeed: { options: ['FLASH', 'TURBO', 'DEFAULT', 'QUALITY'], default: 'DEFAULT', type: 'enum' },
+              renderingSpeed: {
+                options: ['FLASH', 'TURBO', 'DEFAULT', 'QUALITY'],
+                default: 'DEFAULT',
+                type: 'enum',
+              },
               seed: { type: 'text' },
-              styleType: { options: ['AUTO', 'GENERAL', 'REALISTIC', 'DESIGN', 'FICTION'], type: 'enum' }
-            }
+              styleType: {
+                options: ['AUTO', 'GENERAL', 'REALISTIC', 'DESIGN', 'FICTION'],
+                type: 'enum',
+              },
+            },
           },
           upscale: {
             supports: {
@@ -165,32 +187,32 @@ export default defineCreator({
               magicPromptOption: { type: 'switch' },
               numImages: { max: 8, min: 1, type: 'range' },
               resemblance: { max: 100, min: 1, type: 'range' },
-              seed: { type: 'text' }
-            }
-          }
-        }
-      }
+              seed: { type: 'text' },
+            },
+          },
+        },
+      },
     },
     {
       id: 'ideogram-v2',
       name: 'Ideogram v2',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'ideogram-v2a',
       name: 'Ideogram v2a',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
+      outputModalities: ['image'],
     },
     {
       id: 'ideogram-v2a-turbo',
       name: 'Ideogram v2a Turbo',
       capabilities: ['image-generation'],
       inputModalities: ['text'],
-      outputModalities: ['image']
-    }
-  ]
-})
+      outputModalities: ['image'],
+    },
+  ],
+});

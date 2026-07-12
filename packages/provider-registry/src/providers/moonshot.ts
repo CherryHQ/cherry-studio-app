@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'moonshot',
@@ -9,6 +9,6 @@ export default openaiCompatible({
     apiKey: 'https://platform.moonshot.cn/console/api-keys',
     docs: 'https://platform.moonshot.cn/docs/',
     models: 'https://platform.moonshot.cn/docs/',
-    official: 'https://www.moonshot.cn/'
-  }
-})
+    official: 'https://www.moonshot.cn/',
+  },
+});

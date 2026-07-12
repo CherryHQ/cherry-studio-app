@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'qiniu',
@@ -9,10 +9,10 @@ export default openaiCompatible({
     apiKey: 'https://portal.qiniu.com/ai-inference/api-key',
     docs: 'https://developer.qiniu.com/aitokenapi',
     models: 'https://developer.qiniu.com/aitokenapi/12883/model-list',
-    official: 'https://qiniu.com'
+    official: 'https://qiniu.com',
   },
   apiFeatures: {
-    developerRole: false
+    developerRole: false,
   },
-  modelsDevProvider: 'qiniu-ai'
-})
+  modelsDevProvider: 'qiniu-ai',
+});

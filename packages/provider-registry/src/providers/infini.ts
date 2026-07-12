@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'infini',
@@ -8,6 +8,6 @@ export default openaiCompatible({
     apiKey: 'https://cloud.infini-ai.com/iam/secret/key',
     docs: 'https://docs.infini-ai.com/gen-studio/api/maas.html',
     models: 'https://cloud.infini-ai.com/genstudio/model',
-    official: 'https://cloud.infini-ai.com/'
-  }
-})
+    official: 'https://cloud.infini-ai.com/',
+  },
+});

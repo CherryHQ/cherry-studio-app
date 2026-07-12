@@ -1,4 +1,4 @@
-import { openaiCompatible } from './types'
+import { openaiCompatible } from './types';
 
 export default openaiCompatible({
   id: 'zhipu',
@@ -9,7 +9,7 @@ export default openaiCompatible({
     apiKey: 'https://open.bigmodel.cn/apikey/platform',
     docs: 'https://docs.bigmodel.cn/',
     models: 'https://open.bigmodel.cn/modelcenter/square',
-    official: 'https://open.bigmodel.cn/'
+    official: 'https://open.bigmodel.cn/',
   },
   overrides: [
     {
@@ -23,15 +23,23 @@ export default openaiCompatible({
               quality: { options: ['standard', 'hd'], type: 'enum' },
               size: {
                 default: '1024x1024',
-                options: ['1024x1024', '768x1344', '864x1152', '1344x768', '1152x864', '1440x720', '720x1440'],
+                options: [
+                  '1024x1024',
+                  '768x1344',
+                  '864x1152',
+                  '1344x768',
+                  '1152x864',
+                  '1440x720',
+                  '720x1440',
+                ],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
+                type: 'enum',
+              },
+            },
+          },
+        },
       },
-      modelId: 'cogview-4'
+      modelId: 'cogview-4',
     },
     {
       imageGeneration: {
@@ -44,15 +52,23 @@ export default openaiCompatible({
               quality: { options: ['standard', 'hd'], type: 'enum' },
               size: {
                 default: '1280x1280',
-                options: ['1280x1280', '1568x1056', '1056x1568', '1472x1088', '1088x1472', '1728x960', '960x1728'],
+                options: [
+                  '1280x1280',
+                  '1568x1056',
+                  '1056x1568',
+                  '1472x1088',
+                  '1088x1472',
+                  '1728x960',
+                  '960x1728',
+                ],
                 render: 'chips',
-                type: 'enum'
-              }
-            }
-          }
-        }
+                type: 'enum',
+              },
+            },
+          },
+        },
       },
-      modelId: 'glm-image'
-    }
-  ]
-})
+      modelId: 'glm-image',
+    },
+  ],
+});
