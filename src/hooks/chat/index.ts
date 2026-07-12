@@ -5,7 +5,6 @@ export {
   useAssistants,
   useAssistantsApi,
 } from './useAssistant';
-export { useAssistantCatalog } from './useAssistantCatalog';
 export { useHydrateTopicDetails } from './useHydrateTopicDetails';
 export {
   type MessagesOptions,
