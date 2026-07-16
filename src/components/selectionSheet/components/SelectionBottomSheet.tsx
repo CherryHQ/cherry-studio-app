@@ -3,7 +3,7 @@ import { GlassView } from 'expo-glass-effect';
 import type { ReactNode } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { isLiquidGlassAvailable } from '@/config/constants';
+import { isLiquidGlassAvailable, sheetScrimColor } from '@/config/constants';
 
 export const selectionSheetSnapPointFraction = 0.85;
 
@@ -36,6 +36,10 @@ export function SelectionBottomSheet({
       nativeOverlay
       onIndexChange={onIndexChange}
       onSettle={onSettle}
+      // Dim the background behind the sheet so it reads as a layer above the
+      // screen. `scrimOpacities` defaults to 0 (closed) → 1 (open), so only the
+      // color is needed here.
+      scrimColor={sheetScrimColor}
       surface={
         // Pin the surface to the full window width too — see the content note
         // below. `StyleSheet.absoluteFill` alone glued the glass to the same

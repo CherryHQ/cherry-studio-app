@@ -8,6 +8,10 @@ export const isAndroid = process.env.EXPO_OS === 'android';
 export const isIOS = process.env.EXPO_OS === 'ios';
 export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
+// Shared scrim (backdrop) color for every `ModalBottomSheet` so all sheets dim
+// the background behind them consistently. Single source of truth — tune here.
+export const sheetScrimColor = 'rgba(0, 0, 0, 0.4)';
+
 // CherryIN OAuth configuration
 export const CHERRYIN_CONFIG = {
   CLIENT_ID: '2a348c87-bae1-4756-a62f-b2e97200fd6d',
