@@ -233,7 +233,10 @@ export default function NewProviderScreen() {
             <AvatarPreview name={name} size={avatarPreviewSize} uri={avatarDraftUri} />
             <View className="flex-row items-center gap-3">
               <MenuView actions={uploadActions} onPressAction={handleUploadAction}>
-                <Button className="h-10 min-h-10 flex-row gap-2 rounded-xl px-4" variant="secondary">
+                <Button
+                  className="h-10 min-h-10 flex-row gap-2 rounded-xl px-4"
+                  variant="secondary"
+                >
                   <ImageUpIcon className="size-4 text-default-foreground" strokeWidth={2} />
                   <Text className="text-base text-foreground">
                     {t('settings.provider.add.uploadImage')}

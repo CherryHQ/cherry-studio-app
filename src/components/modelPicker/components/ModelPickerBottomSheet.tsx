@@ -80,10 +80,7 @@ export function ModelPickerBottomSheet({
   // an upper-third position instead of being pinned to the very bottom.
   const listItemLimit =
     selectedModelListIndex >= 0
-      ? Math.max(
-          visibleListItemCount,
-          selectedModelListIndex + 1 + modelPickerListItemBatchSize,
-        )
+      ? Math.max(visibleListItemCount, selectedModelListIndex + 1 + modelPickerListItemBatchSize)
       : visibleListItemCount;
   const listItems = useMemo(
     () => buildModelPickerListItems(groups, listItemLimit),
