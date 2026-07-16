@@ -6,7 +6,8 @@ import { useToast } from 'heroui-native/toast';
 import { ChevronsUpDownIcon, XIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { EmojiPickerBottomSheet } from '@/components/emojiPicker';
 import { CloseHeader, type CloseHeaderAction } from '@/components/headers';
 import {
@@ -41,6 +42,8 @@ type AssistantFormState = {
 };
 
 const defaultEmoji = '🌟';
+// Gap kept between the keyboard and the focused input inside the form.
+const keyboardBottomOffset = 16;
 const reasoningEffortOptions = ['default', 'minimal', 'low', 'medium', 'high'] as const;
 
 export default function AssistantEditScreen() {
@@ -137,14 +140,16 @@ export default function AssistantEditScreen() {
   return (
     <>
       <CloseHeader rightActions={saveActions} title={title} />
-      <ScrollView
+      <KeyboardAwareScrollView
         alwaysBounceVertical={false}
-        className="flex-1"
-        contentContainerClassName="gap-6 px-4 pt-5 pb-8"
+        bottomOffset={keyboardBottomOffset}
+        contentContainerStyle={styles.scrollContent}
         contentInsetAdjustmentBehavior="automatic"
+        disableScrollOnKeyboardHide
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        style={styles.scroll}
       >
         {isLoading && isEditing ? (
           <Text className="text-center text-default-foreground text-sm">
@@ -322,7 +327,7 @@ export default function AssistantEditScreen() {
             </FormSection>
           </>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
       <ModelPickerBottomSheet
         isOpen={isModelPickerOpen}
         selectedModelId={form.modelId}
@@ -521,6 +526,15 @@ function getSingleParamValue(value: string | string[] | undefined) {
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    gap: 24,
+    paddingBottom: 32,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+  },
   textArea: {
     includeFontPadding: false,
     paddingBottom: 12,
