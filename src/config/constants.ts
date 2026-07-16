@@ -12,6 +12,9 @@ export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassE
 // the background behind them consistently. Single source of truth — tune here.
 export const sheetScrimColor = 'rgba(0, 0, 0, 0.4)';
 
+// Gap kept between the keyboard and the focused input inside scrollable forms.
+export const keyboardBottomOffset = 16;
+
 // CherryIN OAuth configuration
 export const CHERRYIN_CONFIG = {
   CLIENT_ID: '2a348c87-bae1-4756-a62f-b2e97200fd6d',

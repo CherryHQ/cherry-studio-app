@@ -3,8 +3,8 @@ import { Input } from 'heroui-native/input';
 import { Switch } from 'heroui-native/switch';
 import { TextArea } from 'heroui-native/text-area';
 import { useToast } from 'heroui-native/toast';
-import { ChevronsUpDownIcon, XIcon } from 'lucide-uniwind/png';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ChevronDownIcon } from 'lucide-uniwind/png';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -12,9 +12,11 @@ import { EmojiPickerBottomSheet } from '@/components/emojiPicker';
 import { CloseHeader, type CloseHeaderAction } from '@/components/headers';
 import {
   ModelPickerBottomSheet,
+  ModelPickerIcon,
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/components/modelPicker';
+import { keyboardBottomOffset } from '@/config/constants';
 import type { CreateAssistantDto } from '@/data/api/schemas/assistants';
 import {
   type Assistant,
@@ -42,9 +44,6 @@ type AssistantFormState = {
 };
 
 const defaultEmoji = '🌟';
-// Gap kept between the keyboard and the focused input inside the form.
-const keyboardBottomOffset = 16;
-const reasoningEffortOptions = ['default', 'minimal', 'low', 'medium', 'high'] as const;
 
 export default function AssistantEditScreen() {
   const { t } = useTranslation();
@@ -58,15 +57,20 @@ export default function AssistantEditScreen() {
   const modelPickerData = useModelPickerData();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
-  const [form, setForm] = useState<AssistantFormState>(() => createFormState());
+  const [form, setForm] = useState<AssistantFormState>(() => createFormState(assistant));
+  const [syncedAssistant, setSyncedAssistant] = useState(assistant);
   const selectedModel = modelPickerData.getModelItem(form.modelId);
   const isSaving = isCreating || isUpdating;
 
-  useEffect(() => {
+  // Re-seed the form from the async assistant record when it first arrives (or
+  // is swapped). Done during render — not in an effect — so React collapses it
+  // into the same commit instead of triggering a cascading re-render.
+  if (assistant !== syncedAssistant) {
+    setSyncedAssistant(assistant);
     if (assistant) {
       setForm(createFormState(assistant));
     }
-  }, [assistant]);
+  }
 
   const updateForm = useCallback(
     <TKey extends keyof AssistantFormState>(key: TKey, value: AssistantFormState[TKey]) => {
@@ -93,9 +97,6 @@ export default function AssistantEditScreen() {
   }, []);
   const handleEmojiSelect = useCallback((emoji: string) => {
     setForm((current) => ({ ...current, emoji }));
-  }, []);
-  const clearModel = useCallback(() => {
-    setForm((current) => ({ ...current, modelId: null }));
   }, []);
   const handleSave = useCallback(async () => {
     const dto = buildAssistantDto(form, assistant?.settings);
@@ -131,7 +132,6 @@ export default function AssistantEditScreen() {
         onPress: () => {
           void handleSave();
         },
-        variant: 'prominent',
       },
     ],
     [handleSave, isSaving, t],
@@ -158,34 +158,37 @@ export default function AssistantEditScreen() {
         ) : (
           <>
             <FormSection title={t('assistant.form.basicSection')}>
-              <FormField label={t('assistant.form.name')}>
-                <Input
-                  accessibilityLabel={t('assistant.form.name')}
-                  autoCorrect={false}
-                  className="rounded-2xl px-4 text-base text-foreground leading-5"
-                  onChangeText={(value) => updateForm('name', value)}
-                  placeholder={t('assistant.form.namePlaceholder')}
-                  placeholderColorClassName="accent-muted"
-                  returnKeyType="next"
-                  style={styles.textInput}
-                  value={form.name}
-                />
-              </FormField>
-              <FormField label={t('assistant.form.emoji')}>
+              <View className="flex-row items-center gap-3">
                 <Pressable
                   accessibilityLabel={t('assistant.form.emoji')}
                   accessibilityRole="button"
-                  className="min-h-12 flex-row items-center justify-between gap-3 rounded-2xl bg-field px-4 active:opacity-70"
+                  className="size-12 items-center justify-center rounded-2xl border border-border active:opacity-70"
                   onPress={openEmojiPicker}
                 >
-                  <Text className="text-2xl">{form.emoji.trim() || defaultEmoji}</Text>
-                  <ChevronsUpDownIcon className="size-5 text-default-foreground" strokeWidth={2} />
+                  <Text className="text-2xl" style={styles.emojiGlyph}>
+                    {form.emoji.trim() || defaultEmoji}
+                  </Text>
                 </Pressable>
-              </FormField>
+                <View className="min-w-0 flex-1">
+                  <Input
+                    accessibilityLabel={t('assistant.form.name')}
+                    autoCorrect={false}
+                    variant="secondary"
+                    className="rounded-2xl px-4 text-base text-foreground leading-5"
+                    onChangeText={(value) => updateForm('name', value)}
+                    placeholder={t('assistant.form.namePlaceholder')}
+                    placeholderColorClassName="accent-muted"
+                    returnKeyType="next"
+                    style={styles.textInput}
+                    value={form.name}
+                  />
+                </View>
+              </View>
               <FormField label={t('assistant.form.description')}>
                 <Input
                   accessibilityLabel={t('assistant.form.description')}
                   autoCorrect
+                  variant="secondary"
                   className="rounded-2xl px-4 text-base text-foreground leading-5"
                   onChangeText={(value) => updateForm('description', value)}
                   placeholder={t('assistant.form.descriptionPlaceholder')}
@@ -194,38 +197,11 @@ export default function AssistantEditScreen() {
                   value={form.description}
                 />
               </FormField>
-              <FormField label={t('assistant.form.model')}>
-                <View className="flex-row items-center gap-2">
-                  <Pressable
-                    accessibilityLabel={t('assistant.form.model')}
-                    accessibilityRole="button"
-                    className="min-h-12 min-w-0 flex-1 flex-row items-center justify-between gap-3 rounded-2xl bg-field px-4 active:opacity-70"
-                    onPress={openModelPicker}
-                  >
-                    <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={1}>
-                      {selectedModel?.model.name ?? t('assistant.model.none')}
-                    </Text>
-                    <ChevronsUpDownIcon
-                      className="size-5 text-default-foreground"
-                      strokeWidth={2}
-                    />
-                  </Pressable>
-                  {form.modelId ? (
-                    <Pressable
-                      accessibilityLabel={t('common.clear')}
-                      accessibilityRole="button"
-                      className="size-11 items-center justify-center rounded-full bg-surface-secondary active:opacity-70"
-                      onPress={clearModel}
-                    >
-                      <XIcon className="size-5 text-default-foreground" strokeWidth={2.25} />
-                    </Pressable>
-                  ) : null}
-                </View>
-              </FormField>
               <FormField label={t('assistant.form.prompt')}>
                 <TextArea
                   accessibilityLabel={t('assistant.form.prompt')}
                   autoCorrect
+                  variant="secondary"
                   className="min-h-32 rounded-2xl px-4 text-base text-foreground leading-5"
                   multiline
                   onChangeText={(value) => updateForm('prompt', value)}
@@ -237,75 +213,76 @@ export default function AssistantEditScreen() {
               </FormField>
             </FormSection>
             <FormSection title={t('assistant.form.generationSection')}>
+              <Pressable
+                accessibilityLabel={t('assistant.form.model')}
+                accessibilityRole="button"
+                className="min-h-12 flex-row items-center justify-between gap-3 rounded-2xl border border-border px-4 py-2 active:opacity-70"
+                onPress={openModelPicker}
+              >
+                {selectedModel ? (
+                  <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={1}>
+                    {selectedModel.provider.name}
+                  </Text>
+                ) : (
+                  <Text
+                    className="min-w-0 flex-1 text-base text-default-foreground"
+                    numberOfLines={1}
+                  >
+                    {t('assistant.model.none')}
+                  </Text>
+                )}
+                <View className="max-w-[60%] flex-row items-center justify-end gap-2">
+                  {selectedModel ? (
+                    <>
+                      <ModelPickerIcon item={selectedModel} size={20} />
+                      <Text
+                        className="min-w-0 shrink text-right text-default-foreground text-sm"
+                        numberOfLines={1}
+                      >
+                        {selectedModel.model.name}
+                      </Text>
+                    </>
+                  ) : null}
+                  <ChevronDownIcon className="size-6 text-default-foreground" strokeWidth={2} />
+                </View>
+              </Pressable>
               <SwitchRow
                 label={t('assistant.form.enableTemperature')}
                 value={form.enableTemperature}
                 onValueChange={(value) => updateForm('enableTemperature', value)}
               />
-              <NumberField
-                disabled={!form.enableTemperature}
-                label={t('assistant.form.temperature')}
-                value={form.temperature}
-                onChangeText={(value) => updateForm('temperature', value)}
-              />
+              {form.enableTemperature ? (
+                <NumberField
+                  accessibilityLabel={t('assistant.form.temperature')}
+                  value={form.temperature}
+                  onChangeText={(value) => updateForm('temperature', value)}
+                />
+              ) : null}
               <SwitchRow
                 label={t('assistant.form.enableTopP')}
                 value={form.enableTopP}
                 onValueChange={(value) => updateForm('enableTopP', value)}
               />
-              <NumberField
-                disabled={!form.enableTopP}
-                label={t('assistant.form.topP')}
-                value={form.topP}
-                onChangeText={(value) => updateForm('topP', value)}
-              />
+              {form.enableTopP ? (
+                <NumberField
+                  accessibilityLabel={t('assistant.form.topP')}
+                  value={form.topP}
+                  onChangeText={(value) => updateForm('topP', value)}
+                />
+              ) : null}
               <SwitchRow
                 label={t('assistant.form.enableMaxTokens')}
                 value={form.enableMaxTokens}
                 onValueChange={(value) => updateForm('enableMaxTokens', value)}
               />
-              <NumberField
-                disabled={!form.enableMaxTokens}
-                inputMode="numeric"
-                label={t('assistant.form.maxTokens')}
-                value={form.maxTokens}
-                onChangeText={(value) => updateForm('maxTokens', value)}
-              />
-              <SwitchRow
-                label={t('assistant.form.enableWebSearch')}
-                value={form.enableWebSearch}
-                onValueChange={(value) => updateForm('enableWebSearch', value)}
-              />
-              <FormField label={t('assistant.form.reasoningEffort')}>
-                <View className="flex-row flex-wrap gap-2">
-                  {reasoningEffortOptions.map((option) => (
-                    <Pressable
-                      key={option}
-                      accessibilityLabel={t(`chat.reasoning.${option}`)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: form.reasoningEffort === option }}
-                      className={
-                        form.reasoningEffort === option
-                          ? 'rounded-full bg-foreground px-3 py-2 active:opacity-80'
-                          : 'rounded-full bg-surface-secondary px-3 py-2 active:opacity-70'
-                      }
-                      onPress={() => updateForm('reasoningEffort', option)}
-                    >
-                      <Text
-                        className={
-                          form.reasoningEffort === option
-                            ? 'font-semibold text-background text-sm'
-                            : 'font-semibold text-foreground text-sm'
-                        }
-                      >
-                        {t(`chat.reasoning.${option}`)}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </FormField>
-            </FormSection>
-            <FormSection title={t('assistant.form.advancedSection')}>
+              {form.enableMaxTokens ? (
+                <NumberField
+                  accessibilityLabel={t('assistant.form.maxTokens')}
+                  inputMode="numeric"
+                  value={form.maxTokens}
+                  onChangeText={(value) => updateForm('maxTokens', value)}
+                />
+              ) : null}
               <FormField
                 label={t('assistant.form.customParameters')}
                 description={t('assistant.form.customParametersDescription')}
@@ -313,6 +290,7 @@ export default function AssistantEditScreen() {
                 <TextArea
                   accessibilityLabel={t('assistant.form.customParameters')}
                   autoCapitalize="none"
+                  variant="secondary"
                   autoCorrect={false}
                   className="min-h-28 rounded-2xl px-4 font-mono text-sm text-foreground leading-5"
                   multiline
@@ -394,33 +372,29 @@ function SwitchRow({
 }
 
 function NumberField({
-  disabled,
+  accessibilityLabel,
   inputMode = 'decimal',
-  label,
   onChangeText,
   value,
 }: {
-  disabled?: boolean;
+  accessibilityLabel: string;
   inputMode?: 'decimal' | 'numeric';
-  label: string;
   onChangeText: (value: string) => void;
   value: string;
 }) {
   return (
-    <FormField label={label}>
-      <Input
-        accessibilityLabel={label}
-        className="rounded-2xl px-4 text-base text-foreground leading-5 disabled:opacity-50"
-        editable={!disabled}
-        inputMode={inputMode}
-        keyboardType={inputMode === 'numeric' ? 'number-pad' : 'decimal-pad'}
-        onChangeText={onChangeText}
-        placeholder="0"
-        placeholderColorClassName="accent-muted"
-        style={styles.textInput}
-        value={value}
-      />
-    </FormField>
+    <Input
+      accessibilityLabel={accessibilityLabel}
+      className="rounded-2xl px-4 text-base text-foreground leading-5"
+      variant="secondary"
+      inputMode={inputMode}
+      keyboardType={inputMode === 'numeric' ? 'number-pad' : 'decimal-pad'}
+      onChangeText={onChangeText}
+      placeholder="0"
+      placeholderColorClassName="accent-muted"
+      style={styles.textInput}
+      value={value}
+    />
   );
 }
 
@@ -526,6 +500,9 @@ function getSingleParamValue(value: string | string[] | undefined) {
 }
 
 const styles = StyleSheet.create({
+  emojiGlyph: {
+    includeFontPadding: false,
+  },
   scroll: {
     flex: 1,
   },
