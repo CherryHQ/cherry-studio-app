@@ -7,6 +7,7 @@ import { ChevronsUpDownIcon, XIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { EmojiPickerBottomSheet } from '@/components/emojiPicker';
 import { CloseHeader, type CloseHeaderAction } from '@/components/headers';
 import {
   ModelPickerBottomSheet,
@@ -53,6 +54,7 @@ export default function AssistantEditScreen() {
   const { createAssistant, isCreating, isUpdating, updateAssistant } = useAssistantMutations();
   const modelPickerData = useModelPickerData();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [form, setForm] = useState<AssistantFormState>(() => createFormState());
   const selectedModel = modelPickerData.getModelItem(form.modelId);
   const isSaving = isCreating || isUpdating;
@@ -78,6 +80,16 @@ export default function AssistantEditScreen() {
   }, []);
   const handleModelSelect = useCallback((item: ModelPickerModelItem) => {
     setForm((current) => ({ ...current, modelId: item.modelId }));
+  }, []);
+  const openEmojiPicker = useCallback(() => {
+    Keyboard.dismiss();
+    setIsEmojiPickerOpen(true);
+  }, []);
+  const closeEmojiPicker = useCallback(() => {
+    setIsEmojiPickerOpen(false);
+  }, []);
+  const handleEmojiSelect = useCallback((emoji: string) => {
+    setForm((current) => ({ ...current, emoji }));
   }, []);
   const clearModel = useCallback(() => {
     setForm((current) => ({ ...current, modelId: null }));
@@ -156,17 +168,18 @@ export default function AssistantEditScreen() {
                   />
                 </FormField>
                 <FormField label={t('assistant.form.emoji')}>
-                  <Input
+                  <Pressable
                     accessibilityLabel={t('assistant.form.emoji')}
-                    autoCorrect={false}
-                    className="rounded-2xl px-4 text-base text-foreground leading-5"
-                    maxLength={8}
-                    onChangeText={(value) => updateForm('emoji', value)}
-                    placeholder={defaultEmoji}
-                    placeholderColorClassName="accent-muted"
-                    style={styles.textInput}
-                    value={form.emoji}
-                  />
+                    accessibilityRole="button"
+                    className="min-h-12 flex-row items-center justify-between gap-3 rounded-2xl bg-field px-4 active:opacity-70"
+                    onPress={openEmojiPicker}
+                  >
+                    <Text className="text-2xl">{form.emoji.trim() || defaultEmoji}</Text>
+                    <ChevronsUpDownIcon
+                      className="size-5 text-default-foreground"
+                      strokeWidth={2}
+                    />
+                  </Pressable>
                 </FormField>
                 <FormField label={t('assistant.form.description')}>
                   <Input
@@ -320,6 +333,11 @@ export default function AssistantEditScreen() {
         selectedModelId={form.modelId}
         onClose={closeModelPicker}
         onSelect={handleModelSelect}
+      />
+      <EmojiPickerBottomSheet
+        isOpen={isEmojiPickerOpen}
+        onClose={closeEmojiPicker}
+        onSelect={handleEmojiSelect}
       />
     </>
   );
