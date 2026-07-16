@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import type { PhotoFile } from 'react-native-vision-camera';
-import { isLiquidGlassAvailable } from '@/config/constants';
+import { isLiquidGlassAvailable, sheetScrimColor } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
 import { type InlinePhotoPickerAsset, InlinePhotoPickerView } from '@/modules/inlinePhotoPicker';
 import { ChatInputActionList } from '@/screens/ChatScreen/input/components/ChatInputActionList';
@@ -172,7 +172,7 @@ export function ChatInputActionSheet() {
           handleClose();
         }
       }}
-      scrimColor="rgba(0, 0, 0, 0.7)"
+      scrimColor={sheetScrimColor}
       surface={
         isLiquidGlassAvailable ? (
           <GlassView
