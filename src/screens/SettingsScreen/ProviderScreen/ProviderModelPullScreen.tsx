@@ -7,16 +7,19 @@ import { Spinner } from 'heroui-native/spinner';
 import { cn } from 'heroui-native/utils';
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackHeader } from '@/components/headers';
-import { ModelPickerIcon, type ModelPickerModelItem } from '@/components/modelPicker';
-import { ModelPickerTagChip } from '@/components/modelPicker/components/ModelPickerTagChip';
 import {
+  filterModelsByModelPickerTags,
+  getAvailableModelPickerFilterTagsForModels,
   getModelPickerTags,
+  ModelPickerIcon,
+  type ModelPickerModelItem,
   type ModelPickerTag,
-} from '@/components/modelPicker/utils/modelPickerData';
+} from '@/components/modelPicker';
+import { ModelPickerTagChip } from '@/components/modelPicker/components/ModelPickerTagChip';
 import type { Model, UniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 import { useProviderDetailSettings } from './detail';
@@ -140,6 +143,7 @@ function ProviderModelPullPreviewPage({
     'missing',
   ]);
   const [applyingSection, setApplyingSection] = useState<ProviderModelPullSectionKey | null>(null);
+  const [selectedFilterTags, setSelectedFilterTags] = useState<ModelPickerTag[]>([]);
   const [selectionOverride, setSelectionOverride] =
     useState<ProviderModelPullSelectionOverride | null>(null);
   const previewKey = useMemo(() => getPreviewKey(preview), [preview]);
@@ -152,9 +156,20 @@ function ProviderModelPullPreviewPage({
   const selectedAddedIds = selection.addedIds;
   const selectedMissingIds = selection.missingIds;
   const missingCount = preview.missing.length;
-  const displayedPreview = useMemo(
+  const searchedPreview = useMemo(
     () => filterProviderModelPullPreview(preview, deferredSearchText),
     [deferredSearchText, preview],
+  );
+  const displayedPreview = useMemo(
+    () => ({
+      added: filterModelsByModelPickerTags(searchedPreview.added, selectedFilterTags),
+      missing: filterModelsByModelPickerTags(searchedPreview.missing, selectedFilterTags),
+    }),
+    [searchedPreview, selectedFilterTags],
+  );
+  const availableFilterTags = useMemo(
+    () => getAvailableModelPickerFilterTagsForModels([...preview.added, ...preview.missing]),
+    [preview],
   );
   const displayedAddedCount = displayedPreview.added.length;
   const displayedMissingCount = displayedPreview.missing.length;
@@ -261,6 +276,11 @@ function ProviderModelPullPreviewPage({
     },
     [],
   );
+  const toggleFilterTag = useCallback((tag: ModelPickerTag) => {
+    setSelectedFilterTags((current) =>
+      current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag],
+    );
+  }, []);
   const renderItem = useCallback(
     ({ extraData, item }: LegendListRenderItemProps<ProviderModelPullListItem>) => {
       if (item.type === 'section') {
@@ -350,8 +370,15 @@ function ProviderModelPullPreviewPage({
           ) : null
         }
         ListHeaderComponent={
-          <View className="pb-4">
+          <View className="gap-3 pb-3">
             <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
+            {availableFilterTags.length > 0 ? (
+              <ProviderModelPullFilterBar
+                availableTags={availableFilterTags}
+                selectedTags={selectedFilterTags}
+                onToggleTag={toggleFilterTag}
+              />
+            ) : null}
           </View>
         }
         maintainVisibleContentPosition={false}
@@ -400,6 +427,36 @@ function ProviderModelPullPreviewPage({
   );
 }
 
+function ProviderModelPullFilterBar({
+  availableTags,
+  onToggleTag,
+  selectedTags,
+}: {
+  availableTags: readonly ModelPickerTag[];
+  onToggleTag: (tag: ModelPickerTag) => void;
+  selectedTags: readonly ModelPickerTag[];
+}) {
+  return (
+    <ScrollView
+      contentContainerClassName="gap-2"
+      horizontal
+      keyboardShouldPersistTaps="handled"
+      showsHorizontalScrollIndicator={false}
+    >
+      {availableTags.map((tag) => (
+        <ModelPickerTagChip
+          key={tag}
+          isActive={selectedTags.includes(tag)}
+          showLabel
+          size="md"
+          tag={tag}
+          onPress={() => onToggleTag(tag)}
+        />
+      ))}
+    </ScrollView>
+  );
+}
+
 function PullSearchEmptyState({ title }: { title: string }) {
   return (
     <View className="items-center justify-center px-4 py-10">
@@ -434,7 +491,7 @@ function PullSectionHeader({
   return (
     <Accordion
       animation={false}
-      className={cn('w-full', !isFirstSection && 'pt-2')}
+      className={cn('w-full', !isFirstSection && 'pt-3')}
       hideSeparator
       isCollapsible
       isDisabled={isDisabled}

@@ -9,7 +9,9 @@ import {
 } from '@/data/types/provider';
 import {
   buildModelPickerGroups,
+  filterModelsByModelPickerTags,
   getAvailableModelPickerFilterTags,
+  getAvailableModelPickerFilterTagsForModels,
   getModelPickerModelItem,
   getPinnedModelIds,
 } from '../modelPickerData';
@@ -263,8 +265,8 @@ describe('model picker data helpers', () => {
         providers,
       }),
     ).toEqual([
-      MODEL_CAPABILITY.IMAGE_RECOGNITION,
       MODEL_CAPABILITY.REASONING,
+      MODEL_CAPABILITY.IMAGE_RECOGNITION,
       MODEL_CAPABILITY.FUNCTION_CALL,
       MODEL_CAPABILITY.WEB_SEARCH,
     ]);
@@ -283,6 +285,41 @@ describe('model picker data helpers', () => {
       'anthropic::claude-3-5-sonnet',
       'deepseek::deepseek-r1',
     ]);
+  });
+
+  test('filters arbitrary model collections by their available tags', () => {
+    const pullModels = [
+      createModel({
+        capabilities: [MODEL_CAPABILITY.REASONING, MODEL_CAPABILITY.FUNCTION_CALL],
+        modelId: 'reasoning-tools',
+        name: 'Reasoning Tools',
+        providerId: 'custom',
+      }),
+      createModel({
+        capabilities: [MODEL_CAPABILITY.REASONING],
+        isEnabled: false,
+        modelId: 'reasoning-only',
+        name: 'Reasoning Only',
+        providerId: 'custom',
+      }),
+      createModel({
+        capabilities: [MODEL_CAPABILITY.AUDIO_RECOGNITION],
+        modelId: 'audio-only',
+        name: 'Audio Only',
+        providerId: 'custom',
+      }),
+    ];
+
+    expect(getAvailableModelPickerFilterTagsForModels(pullModels)).toEqual([
+      MODEL_CAPABILITY.REASONING,
+      MODEL_CAPABILITY.FUNCTION_CALL,
+    ]);
+    expect(
+      filterModelsByModelPickerTags(pullModels, [
+        MODEL_CAPABILITY.REASONING,
+        MODEL_CAPABILITY.FUNCTION_CALL,
+      ]),
+    ).toEqual([pullModels[0]]);
   });
 
   test('builds list items up to the visible limit without a trailing empty group', () => {
