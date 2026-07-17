@@ -1,8 +1,8 @@
-import { requireNativeViewManager } from 'expo-modules-core';
+import { requireNativeView } from 'expo';
 import type { ComponentType } from 'react';
 
 import type { InlinePhotoPickerViewProps } from './InlinePhotoPickerView.types';
 
-export const InlinePhotoPickerView = requireNativeViewManager(
+export const InlinePhotoPickerView = requireNativeView(
   'InlinePhotoPicker',
 ) as ComponentType<InlinePhotoPickerViewProps>;
