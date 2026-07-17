@@ -61,11 +61,23 @@
       "skillPath": "plugins/expo/skills/native-data-fetching/SKILL.md",
       "computedHash": "3cd0ba91f359f9f84cd40f36f356287994a0e952520fac6e03ef7952d0397879"
     },
+    "react-coding-style": {
+      "source": "LegendApp/legend-skills",
+      "sourceType": "github",
+      "skillPath": "react-coding-style/SKILL.md",
+      "computedHash": "0b5629a19a73cad9d0ee56dd77acd41031ab7e2275df056b2288a6f1583d6e68"
+    },
     "react-devtools": {
       "source": "callstackincubator/agent-device",
       "sourceType": "github",
       "skillPath": "skills/react-devtools/SKILL.md",
       "computedHash": "370da1d568b14a8b21b6bd0415d554ae73d8ef1749fbc72045afdcb4f3234dce"
+    },
+    "simplify": {
+      "source": "LegendApp/legend-skills",
+      "sourceType": "github",
+      "skillPath": "simplify/SKILL.md",
+      "computedHash": "bfbefa03b417407210f6fd35a008ec8b4edf1f34bd7e656e54a93d586c45c59e"
     },
     "upgrading-expo": {
       "source": "expo/skills",
