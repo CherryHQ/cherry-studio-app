@@ -2,8 +2,13 @@ import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
 import { useEffect } from 'react';
 import { Text, TextInput, type ViewProps } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { thinkingAccentColor } from '@/components/effortSlider/utils/thinkingPalette';
 
-import { ChatInputProvider, useChatInputActions } from '../../context/ChatInputProvider';
+import {
+  ChatInputProvider,
+  useChatInputActions,
+  useChatInputState,
+} from '../../context/ChatInputProvider';
 import type { ChatInputAttachmentDraft } from '../../utils/chatInputAttachments';
 import { CHAT_INPUT_DEFAULT_REASONING_EFFORT } from '../../utils/chatInputReasoning';
 import { ChatInputSurface } from '../ChatInputSurface';
@@ -82,7 +87,18 @@ jest.mock('react-native-reanimated', () => {
     interpolate: (_value: number, _inputRange: number[], outputRange: number[]) => outputRange[0],
     runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
     useAnimatedStyle: (factory: () => unknown) => factory(),
-    useSharedValue: (initialValue: unknown) => ({ set: jest.fn(), value: initialValue }),
+    useDerivedValue: (factory: () => unknown) => ({ value: factory() }),
+    useReducedMotion: () => false,
+    useSharedValue: (initialValue: unknown) => {
+      const shared = {
+        value: initialValue,
+        get: () => shared.value,
+        set: (next: unknown) => {
+          shared.value = next;
+        },
+      };
+      return shared;
+    },
     withDelay: (_delayMs: number, animation: unknown) => animation,
     withSpring: (toValue: unknown) => toValue,
     withTiming: (
@@ -140,9 +156,23 @@ jest.mock('@/screens/ChatScreen/input/hooks/useChatInputPhotoPicker', () => ({
   }),
 }));
 
+let probedState: ReturnType<typeof useChatInputState> | null = null;
+let probedActions: ReturnType<typeof useChatInputActions> | null = null;
+
+// Exposes provider context to assertions: the reasoning panel itself mounts at
+// the workspace level, so the surface tests observe/drive its state directly.
+function ContextProbe() {
+  probedState = useChatInputState();
+  probedActions = useChatInputActions();
+
+  return null;
+}
+
 describe('ChatInputSurface', () => {
   beforeEach(() => {
     mockToastShow.mockReset();
+    probedState = null;
+    probedActions = null;
   });
 
   test('restores draft and attachments and shows a toast when send rejects', async () => {
@@ -242,12 +272,13 @@ describe('ChatInputSurface', () => {
     ).toHaveLength(0);
   });
 
-  test('cycles reasoning effort from the bottom toolbar', async () => {
+  test('toggles the reasoning panel from the bottom toolbar', async () => {
     let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
       renderer = create(
         <ChatInputProvider>
+          <ContextProbe />
           <ChatInputSurface
             isSendEnabled
             isStreaming={false}
@@ -266,11 +297,18 @@ describe('ChatInputSurface', () => {
     }
 
     expect(getReasoningSlotLabel(renderer)).toBe('chat.reasoning.default');
-    expect(getReasoningSlotClassName(renderer)).toContain('text-accent');
+    expect(getReasoningSlotColor(renderer)).toBe(thinkingAccentColor.light);
+    expect(probedState?.isReasoningPanelOpen).toBe(false);
+
+    // Pressing the pill no longer cycles the effort — it toggles the panel.
+    await pressReasoningButton(renderer);
+
+    expect(probedState?.isReasoningPanelOpen).toBe(true);
+    expect(getReasoningSlotLabel(renderer)).toBe('chat.reasoning.default');
 
     await pressReasoningButton(renderer);
 
-    expect(getReasoningSlotLabel(renderer)).toBe('chat.reasoning.minimal');
+    expect(probedState?.isReasoningPanelOpen).toBe(false);
   });
 
   test('hides reasoning controls when no model reasoning options are available', async () => {
@@ -303,12 +341,13 @@ describe('ChatInputSurface', () => {
     expect(getReasoningSlotLabel(renderer)).toBeNull();
   });
 
-  test('cycles only through model-supported reasoning efforts', async () => {
+  test('reflects an effort selected from the panel in the pill label', async () => {
     let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
       renderer = create(
         <ChatInputProvider>
+          <ContextProbe />
           <ChatInputSurface
             isSendEnabled
             isStreaming={false}
@@ -326,21 +365,20 @@ describe('ChatInputSurface', () => {
       throw new Error('ChatInputSurface test renderer was not created.');
     }
 
-    await pressReasoningButton(renderer);
+    await act(async () => {
+      probedActions?.selectReasoningEffort(REASONING_EFFORT.HIGH);
+    });
 
     expect(getReasoningSlotLabel(renderer)).toBe('chat.reasoning.high');
-
-    await pressReasoningButton(renderer);
-
-    expect(getReasoningSlotLabel(renderer)).toBe('chat.reasoning.default');
   });
 
-  test('renders meter bars for the selected model reasoning range', async () => {
+  test('renders the meter only while reasoning is off', async () => {
     let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
       renderer = create(
         <ChatInputProvider>
+          <ContextProbe />
           <ChatInputSurface
             isSendEnabled
             isStreaming={false}
@@ -349,6 +387,7 @@ describe('ChatInputSurface', () => {
             onSendPress={jest.fn()}
             onStopPress={jest.fn()}
             reasoningEfforts={[
+              REASONING_EFFORT.NONE,
               CHAT_INPUT_DEFAULT_REASONING_EFFORT,
               REASONING_EFFORT.LOW,
               REASONING_EFFORT.MEDIUM,
@@ -363,6 +402,10 @@ describe('ChatInputSurface', () => {
       throw new Error('ChatInputSurface test renderer was not created.');
     }
 
+    await act(async () => {
+      probedActions?.selectReasoningEffort(REASONING_EFFORT.NONE);
+    });
+
     const meter = renderer.root.findByProps({
       testID: 'chat-input-reasoning-meter',
     });
@@ -371,6 +414,17 @@ describe('ChatInputSurface', () => {
       : [meter.props.children];
 
     expect(meterChildren).toHaveLength(3);
+
+    await act(async () => {
+      probedActions?.selectReasoningEffort(REASONING_EFFORT.HIGH);
+    });
+
+    expect(
+      renderer.root.findAllByProps({
+        testID: 'chat-input-reasoning-meter',
+      }),
+    ).toHaveLength(0);
+    expect(getReasoningSlotLabel(renderer)).toBe('chat.reasoning.high');
   });
 
   test('does not render the off reasoning label in the bottom toolbar', async () => {
@@ -379,6 +433,7 @@ describe('ChatInputSurface', () => {
     await act(async () => {
       renderer = create(
         <ChatInputProvider>
+          <ContextProbe />
           <ChatInputSurface
             isSendEnabled
             isStreaming={false}
@@ -396,7 +451,9 @@ describe('ChatInputSurface', () => {
       throw new Error('ChatInputSurface test renderer was not created.');
     }
 
-    await pressReasoningButton(renderer);
+    await act(async () => {
+      probedActions?.selectReasoningEffort(REASONING_EFFORT.NONE);
+    });
 
     const reasoningPill = renderer.root.findByProps({
       testID: 'chat-input-reasoning-pill',
@@ -446,15 +503,15 @@ function getReasoningSlotLabel(renderer: ReactTestRenderer) {
     testID: 'chat-input-reasoning-slot-label',
   });
 
-  return slotLabels[0]?.props.children ?? null;
+  return slotLabels[0]?.props.value ?? null;
 }
 
-function getReasoningSlotClassName(renderer: ReactTestRenderer) {
+function getReasoningSlotColor(renderer: ReactTestRenderer) {
   const slotLabels = renderer.root.findAllByProps({
     testID: 'chat-input-reasoning-slot-label',
   });
 
-  return slotLabels[0]?.props.className ?? '';
+  return slotLabels[0]?.props.color ?? '';
 }
 
 function findText(renderer: ReactTestRenderer, text: string) {

@@ -1,0 +1,87 @@
+import { clamp01, magnetize, nearestStopIndex, stopFraction } from '../effortSliderMath';
+
+describe('clamp01', () => {
+  it('clamps to the unit interval', () => {
+    expect(clamp01(-0.5)).toBe(0);
+    expect(clamp01(0.25)).toBe(0.25);
+    expect(clamp01(1.5)).toBe(1);
+  });
+});
+
+describe('stopFraction', () => {
+  it('spaces stops evenly across the track', () => {
+    expect(stopFraction(0, 5)).toBe(0);
+    expect(stopFraction(2, 5)).toBe(0.5);
+    expect(stopFraction(4, 5)).toBe(1);
+  });
+
+  it('clamps out-of-range indices', () => {
+    expect(stopFraction(-1, 5)).toBe(0);
+    expect(stopFraction(9, 5)).toBe(1);
+  });
+
+  it('collapses degenerate tracks to 0', () => {
+    expect(stopFraction(0, 1)).toBe(0);
+    expect(stopFraction(0, 0)).toBe(0);
+  });
+});
+
+describe('nearestStopIndex', () => {
+  it('rounds to the closest stop', () => {
+    expect(nearestStopIndex(0, 5)).toBe(0);
+    expect(nearestStopIndex(0.3, 5)).toBe(1);
+    expect(nearestStopIndex(0.4, 5)).toBe(2);
+    expect(nearestStopIndex(1, 5)).toBe(4);
+  });
+
+  it('clamps positions outside the track', () => {
+    expect(nearestStopIndex(-0.2, 5)).toBe(0);
+    expect(nearestStopIndex(1.7, 5)).toBe(4);
+  });
+});
+
+describe('magnetize', () => {
+  const stopCount = 6;
+  const radius = 0.5;
+
+  it('leaves exact stop positions unchanged', () => {
+    expect(magnetize(0.4, stopCount, radius)).toBe(0.4);
+  });
+
+  it('pulls positions near a stop toward it', () => {
+    const stop = stopFraction(2, stopCount);
+    const nearStop = stop + 0.1 / (stopCount - 1);
+    const pulled = magnetize(nearStop, stopCount, radius);
+    expect(Math.abs(pulled - stop)).toBeLessThan(Math.abs(nearStop - stop));
+    expect(pulled).toBeGreaterThan(stop);
+  });
+
+  it('is strongest close to the stop and fades toward the radius edge', () => {
+    const stop = stopFraction(2, stopCount);
+    const closePull = magnetize(stop + 0.05 / (stopCount - 1), stopCount, radius) - stop;
+    const farPull = magnetize(stop + 0.45 / (stopCount - 1), stopCount, radius) - stop;
+    // Relative attraction: close positions keep a smaller share of their offset.
+    expect(closePull / 0.05).toBeLessThan(farPull / 0.45);
+  });
+
+  it('does not cross the stop it magnetizes toward', () => {
+    const stop = stopFraction(3, stopCount);
+    for (const offset of [0.02, 0.1, 0.2, 0.3, 0.45]) {
+      const above = magnetize(stop + offset / (stopCount - 1), stopCount, radius);
+      const below = magnetize(stop - offset / (stopCount - 1), stopCount, radius);
+      expect(above).toBeGreaterThanOrEqual(stop);
+      expect(below).toBeLessThanOrEqual(stop);
+    }
+  });
+
+  it('keeps the midpoint between stops in place', () => {
+    // distance 0.5 == radius → outside the magnet's effect
+    const midpoint = 0.5 * (stopFraction(1, stopCount) + stopFraction(2, stopCount));
+    expect(magnetize(midpoint, stopCount, radius)).toBeCloseTo(midpoint, 10);
+  });
+
+  it('clamps and survives degenerate tracks', () => {
+    expect(magnetize(1.4, stopCount, radius)).toBe(1);
+    expect(magnetize(0.7, 1, radius)).toBe(0);
+  });
+});

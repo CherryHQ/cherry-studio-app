@@ -1,12 +1,5 @@
 import * as SplashScreen from 'expo-splash-screen';
-import {
-  createContext,
-  type PropsWithChildren,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { createContext, type PropsWithChildren, use, useEffect, useMemo, useState } from 'react';
 
 import { runPostReadyTasks } from '@/data/bootstrap/appRuntime';
 import { DbService } from '@/data/db/DbService';
@@ -101,7 +94,7 @@ export function DataProvider({ bootstrap, children, createRuntime }: DataProvide
 }
 
 export function useDataState() {
-  const state = useContext(DataContext);
+  const state = use(DataContext);
 
   if (!state) {
     throw new Error('useDataState must be used within DataProvider');

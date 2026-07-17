@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { resolveIcon } from '@cherrystudio/ui/icons';
+import { useCallback, useRef } from 'react';
 import {
   getNextModelSelection,
   ModelPickerBottomSheet,
@@ -8,15 +9,14 @@ import {
   usePrefetchModelPickerData,
 } from '@/components/modelPicker';
 import { isUniqueModelId } from '@/data/types/model';
-import { useModelById, useTopic } from '@/hooks/chat';
+import { useModelById, useProviders, useTopic } from '@/hooks/chat';
 import { ChatInputActionSheet } from '@/screens/ChatScreen/input/components/ChatInputActionSheet';
 import {
   type ChatInputSendPayload,
   ChatInputSurface,
 } from '@/screens/ChatScreen/input/components/ChatInputSurface';
-import { ChatInputProvider } from '@/screens/ChatScreen/input/context/ChatInputProvider';
+import { useChatInputReasoningEfforts } from '@/screens/ChatScreen/input/hooks/useChatInputReasoningEfforts';
 import { createChatInputMessageParts } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
-import { getChatInputReasoningEffortsForModel } from '@/screens/ChatScreen/input/utils/chatInputReasoning';
 import { useChatRuntimeTopic } from '@/screens/ChatScreen/runtime';
 
 type ChatInputProps = {
@@ -35,10 +35,17 @@ export function ChatInput({ topicId }: ChatInputProps) {
   const selectedAssistantId = topicId ? (topicQuery.data?.assistantId ?? null) : null;
   const { model: selectedModel } = useModelById(selectedModelId);
   const selectedModelLabel = selectedModel?.name;
-  const reasoningEfforts = useMemo(
-    () => (selectedModelId ? getChatInputReasoningEffortsForModel(selectedModel) : []),
-    [selectedModel, selectedModelId],
-  );
+  const { providers } = useProviders();
+  const selectedModelProvider = selectedModel
+    ? providers.find((provider) => provider.id === selectedModel.providerId)
+    : undefined;
+  const selectedModelIcon = selectedModel
+    ? resolveIcon(
+        selectedModel.modelId,
+        selectedModelProvider?.presetProviderId ?? selectedModel.providerId,
+      )
+    : undefined;
+  const reasoningEfforts = useChatInputReasoningEfforts();
 
   const openModelPicker = useCallback(() => {
     modelPickerRef.current?.present();
@@ -65,11 +72,14 @@ export function ChatInput({ topicId }: ChatInputProps) {
     [chatRuntime, selectedAssistantId, selectedModelId],
   );
 
+  // ChatInputProvider lives up in ChatWorkspace so the reasoning panel
+  // (mounted at the workspace level) shares this composer's state.
   return (
-    <ChatInputProvider>
+    <>
       <ChatInputSurface
         isSendEnabled
         isStreaming={chatRuntime.isBusy}
+        modelIcon={selectedModelIcon}
         modelLabel={selectedModelLabel}
         onModelPickerPress={openModelPicker}
         onSendPress={handleSendPress}
@@ -82,6 +92,6 @@ export function ChatInput({ topicId }: ChatInputProps) {
         ref={modelPickerRef}
         selectedModelId={selectedModelId}
       />
-    </ChatInputProvider>
+    </>
   );
 }

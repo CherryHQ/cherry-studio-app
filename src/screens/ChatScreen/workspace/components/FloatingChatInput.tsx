@@ -6,6 +6,7 @@ import { ChatInput } from '../../input';
 import {
   chatInputHorizontalScreenInset,
   chatInputMinBottomPadding,
+  getChatInputKeyboardStickyOffset,
 } from '../../input/chatInputLayout';
 
 type FloatingChatInputProps = {
@@ -16,7 +17,7 @@ type FloatingChatInputProps = {
 export function FloatingChatInput({ onHeightChange, topicId }: FloatingChatInputProps) {
   const { bottom } = useSafeAreaInsets();
   const bottomPadding = Math.max(bottom, chatInputMinBottomPadding);
-  const keyboardInputOffset = Math.max(bottom - chatInputMinBottomPadding, 0);
+  const keyboardInputOffset = getChatInputKeyboardStickyOffset(bottom);
 
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
