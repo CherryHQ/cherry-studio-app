@@ -13,6 +13,12 @@
       "skillPath": "plugins/expo/skills/building-native-ui/SKILL.md",
       "computedHash": "342df93f481a0dba919f372d6c7b40d2b4bf5b51dd24363aea2e5d0bae27a6fa"
     },
+    "diagnose": {
+      "source": "LegendApp/legend-skills",
+      "sourceType": "github",
+      "skillPath": "diagnose/SKILL.md",
+      "computedHash": "bb6f2f6537dd9ac1ae9d987088a36671782d1fa864f4a4d9b1212eb351760f40"
+    },
     "diagnose-fix-loop": {
       "source": "LegendApp/legend-skills",
       "sourceType": "github",
