@@ -9,10 +9,12 @@ import { useToast } from 'heroui-native/toast';
 import { EyeIcon, EyeOffIcon, ImageUpIcon, RotateCcwIcon, SaveIcon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, ScrollView, Text, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { Image } from '@/components/uniwind';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
+import { Image } from '@/components/uniwind';
+import { keyboardBottomOffset } from '@/config/constants';
 import { queryKeys } from '@/data/api';
 import { useDataMutation } from '@/data/hooks';
 import { ENDPOINT_TYPE } from '@/data/types/model';
@@ -221,11 +223,15 @@ export default function NewProviderScreen() {
   return (
     <>
       <BackHeader rightActions={rightActions} title={t('settings.provider.add.title')} />
-      <ScrollView
+      <KeyboardAwareScrollView
         alwaysBounceVertical={false}
+        bottomOffset={keyboardBottomOffset}
         className="flex-1"
         contentInsetAdjustmentBehavior="automatic"
+        disableScrollOnKeyboardHide
+        keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
+        mode="layout"
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-6 px-6 py-8">
@@ -351,7 +357,7 @@ export default function NewProviderScreen() {
             </Accordion.Item>
           </Accordion>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </>
   );
 }
