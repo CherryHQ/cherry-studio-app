@@ -9,7 +9,9 @@ export { useModelSettingSelections } from './hooks/useModelSettingSelections';
 export { usePrefetchModelPickerData } from './hooks/usePrefetchModelPickerData';
 export {
   buildModelPickerGroups,
+  filterModelsByModelPickerTags,
   getAvailableModelPickerFilterTags,
+  getAvailableModelPickerFilterTagsForModels,
   getModelPickerModelItem,
   getModelPickerModelLabel,
   getModelPickerTagLabelKey,

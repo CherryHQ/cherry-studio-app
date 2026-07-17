@@ -21,22 +21,24 @@ export function SettingTextInput({
   value,
 }: SettingTextInputProps) {
   const [draftValue, setDraftValue] = useState(value);
+  const [sourceValue, setSourceValue] = useState(value);
   const draftValueRef = useRef(draftValue);
   const onCommitRef = useRef(onCommit);
   const valueRef = useRef(value);
 
-  useEffect(() => {
+  if (sourceValue !== value) {
+    setSourceValue(value);
     setDraftValue(value);
+  }
+
+  useEffect(() => {
     draftValueRef.current = value;
+    valueRef.current = value;
   }, [value]);
 
   useEffect(() => {
     onCommitRef.current = onCommit;
   }, [onCommit]);
-
-  useEffect(() => {
-    valueRef.current = value;
-  }, [value]);
 
   const commitValue = useCallback((nextValue = draftValueRef.current) => {
     if (nextValue !== valueRef.current) {

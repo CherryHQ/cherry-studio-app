@@ -1,13 +1,9 @@
-import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
 import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
-import {
-  createImagePickerAttachmentDraft,
-  createPhotoAttachmentDraft,
-} from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+import { createPhotoAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
 import {
   filterChatInputSelectedPhotoIds,
   getChatInputSelectedPhotoOrder,
@@ -17,19 +13,34 @@ import {
 export type ChatInputPhotoAccess = 'all' | 'limited' | 'none';
 
 export type ChatInputPhotoPreview = {
+  fileName: string;
   id: string;
   uri: string;
 };
 
-const maxPhotoPreviewCount = 20;
+export const CHAT_INPUT_PHOTO_SELECTION_LIMIT = 9;
+
+const photoPreviewPageSize = 60;
 const photoPermissionsPickerRefreshDelay = 500;
 
+type PhotoPreviewPage = {
+  hasNextPhotoPage: boolean;
+  nextOffset: number;
+  photoPreviews: ChatInputPhotoPreview[];
+};
+
 type PhotoLibrarySnapshot = {
+  canAskPhotoPermissionAgain: boolean;
+  hasNextPhotoPage: boolean;
+  nextOffset: number;
   photoAccess: ChatInputPhotoAccess;
   photoPreviews: ChatInputPhotoPreview[];
 };
 
-type ChatInputPhotoPickerState = {
+export type ChatInputPhotoPickerState = {
+  canAskPhotoPermissionAgain: boolean;
+  hasNextPhotoPage: boolean;
+  isPhotoPageLoading: boolean;
   photoAccess: ChatInputPhotoAccess | null;
   photoPreviews: ChatInputPhotoPreview[];
   selectedPhotoCount: number;
@@ -37,20 +48,21 @@ type ChatInputPhotoPickerState = {
   shouldShowPhotosTile: boolean;
 };
 
-type ChatInputPhotoPickerActions = {
-  addSelectedPhotoPreviews: () => void;
+export type ChatInputPhotoPickerActions = {
+  addSelectedPhotoPreviews: () => Promise<boolean>;
   clearSelectedPhotos: () => void;
-  launchCamera: () => Promise<void>;
-  launchImageLibrary: () => Promise<void>;
+  loadMorePhotoPreviews: () => Promise<void>;
   presentLimitedPhotoPermissionsPicker: () => Promise<void>;
+  requestPhotoLibraryPermission: () => Promise<void>;
   togglePhotoSelection: (photoId: string) => void;
 };
 
-const photoPreviewQuery = () =>
+const photoPreviewQuery = (offset: number) =>
   new MediaLibrary.Query()
     .eq(MediaLibrary.AssetField.MEDIA_TYPE, MediaLibrary.MediaType.IMAGE)
     .orderBy({ ascending: false, key: MediaLibrary.AssetField.CREATION_TIME })
-    .limit(maxPhotoPreviewCount);
+    .limit(photoPreviewPageSize)
+    .offset(offset);
 
 function readPhotoAccess(permission: MediaLibrary.PermissionResponse): ChatInputPhotoAccess {
   const accessPrivileges = (
@@ -66,32 +78,45 @@ function readPhotoAccess(permission: MediaLibrary.PermissionResponse): ChatInput
   return accessPrivileges ?? 'all';
 }
 
-async function loadPhotoPreviews() {
-  const assets = await photoPreviewQuery().exe();
-  const previews = await Promise.all(
-    assets.map(async (asset) => ({
-      id: asset.id,
-      uri: await asset.getUri(),
-    })),
-  );
+export async function loadPhotoPreviewPage(offset: number): Promise<PhotoPreviewPage> {
+  const assets = await photoPreviewQuery(offset).exeForMetadata();
+  const photoPreviews = assets.map((asset) => ({
+    fileName: asset.filename ?? 'Image',
+    id: asset.id,
+    // expo-image reads ph:// on iOS and content:// on Android directly, so
+    // opening the grid does not need to export every original into app storage.
+    uri: asset.id,
+  }));
 
-  return previews;
+  return {
+    hasNextPhotoPage: assets.length === photoPreviewPageSize,
+    nextOffset: offset + assets.length,
+    photoPreviews,
+  };
 }
 
-async function readPhotoLibrarySnapshot(): Promise<PhotoLibrarySnapshot> {
-  const permission = await MediaLibrary.getPermissionsAsync(false, ['photo']);
+async function readPhotoLibrarySnapshot(
+  knownPermission?: MediaLibrary.PermissionResponse,
+): Promise<PhotoLibrarySnapshot> {
+  const permission = knownPermission ?? (await MediaLibrary.getPermissionsAsync(false, ['photo']));
   const photoAccess = readPhotoAccess(permission);
 
   if (!permission.granted) {
     return {
+      canAskPhotoPermissionAgain: permission.canAskAgain,
+      hasNextPhotoPage: false,
+      nextOffset: 0,
       photoAccess,
       photoPreviews: [],
     };
   }
 
+  const firstPage = await loadPhotoPreviewPage(0);
+
   return {
+    ...firstPage,
+    canAskPhotoPermissionAgain: permission.canAskAgain,
     photoAccess,
-    photoPreviews: await loadPhotoPreviews(),
   };
 }
 
@@ -103,6 +128,12 @@ export function useChatInputPhotoPicker(
   const photoPermissionsPickerRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  const photoLoadRevisionRef = useRef(0);
+  const loadingRevisionRef = useRef<number | null>(null);
+  const nextPhotoPageOffsetRef = useRef(0);
+  const [canAskPhotoPermissionAgain, setCanAskPhotoPermissionAgain] = useState(true);
+  const [hasNextPhotoPage, setHasNextPhotoPage] = useState(false);
+  const [isPhotoPageLoading, setIsPhotoPageLoading] = useState(false);
   const [photoAccess, setPhotoAccess] = useState<ChatInputPhotoAccess | null>(null);
   const [photoPreviews, setPhotoPreviews] = useState<ChatInputPhotoPreview[]>([]);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
@@ -115,6 +146,9 @@ export function useChatInputPhotoPicker(
   }, [selectedPhotoIds]);
 
   const applyPhotoLibrarySnapshot = useCallback((snapshot: PhotoLibrarySnapshot) => {
+    nextPhotoPageOffsetRef.current = snapshot.nextOffset;
+    setCanAskPhotoPermissionAgain(snapshot.canAskPhotoPermissionAgain);
+    setHasNextPhotoPage(snapshot.hasNextPhotoPage);
     setPhotoAccess(snapshot.photoAccess);
     setPhotoPreviews(snapshot.photoPreviews);
 
@@ -128,10 +162,37 @@ export function useChatInputPhotoPicker(
     );
   }, []);
 
-  const refreshPhotoPermissionsAndPreviews = useCallback(async () => {
-    const snapshot = await readPhotoLibrarySnapshot();
-    applyPhotoLibrarySnapshot(snapshot);
-  }, [applyPhotoLibrarySnapshot]);
+  const refreshPhotoPermissionsAndPreviews = useCallback(
+    async (knownPermission?: MediaLibrary.PermissionResponse) => {
+      const revision = photoLoadRevisionRef.current + 1;
+      photoLoadRevisionRef.current = revision;
+      loadingRevisionRef.current = revision;
+      setIsPhotoPageLoading(true);
+
+      try {
+        const snapshot = await readPhotoLibrarySnapshot(knownPermission);
+
+        if (photoLoadRevisionRef.current === revision) {
+          applyPhotoLibrarySnapshot(snapshot);
+        }
+      } catch {
+        if (photoLoadRevisionRef.current === revision) {
+          nextPhotoPageOffsetRef.current = 0;
+          setCanAskPhotoPermissionAgain(false);
+          setHasNextPhotoPage(false);
+          setPhotoAccess('none');
+          setPhotoPreviews([]);
+          setSelectedPhotoIds([]);
+        }
+      } finally {
+        if (loadingRevisionRef.current === revision) {
+          loadingRevisionRef.current = null;
+          setIsPhotoPageLoading(false);
+        }
+      }
+    },
+    [applyPhotoLibrarySnapshot],
+  );
 
   useEffect(() => {
     isOpenRef.current = isOpen;
@@ -142,26 +203,14 @@ export function useChatInputPhotoPicker(
       return;
     }
 
-    let isMounted = true;
-
-    void readPhotoLibrarySnapshot()
-      .then((snapshot) => {
-        if (isMounted) {
-          applyPhotoLibrarySnapshot(snapshot);
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setPhotoAccess('none');
-          setPhotoPreviews([]);
-          setSelectedPhotoIds([]);
-        }
-      });
+    const frame = requestAnimationFrame(() => {
+      void refreshPhotoPermissionsAndPreviews();
+    });
 
     return () => {
-      isMounted = false;
+      cancelAnimationFrame(frame);
     };
-  }, [applyPhotoLibrarySnapshot, isOpen]);
+  }, [isOpen, refreshPhotoPermissionsAndPreviews]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -203,48 +252,10 @@ export function useChatInputPhotoPicker(
     };
   }, []);
 
-  const launchCamera = useCallback(async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-
-    if (!permission.granted) {
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      onAttachmentsAdd(result.assets.map(createImagePickerAttachmentDraft));
-    }
-
-    await refreshPhotoPermissionsAndPreviews();
-  }, [onAttachmentsAdd, refreshPhotoPermissionsAndPreviews]);
-
-  const launchImageLibrary = useCallback(async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(false);
-
-    if (!permission.granted) {
-      setPhotoAccess('none');
-      setPhotoPreviews([]);
-      setSelectedPhotoIds([]);
-      return;
-    }
-
-    setPhotoAccess(permission.accessPrivileges ?? 'all');
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsMultipleSelection: true,
-      orderedSelection: true,
-    });
-
-    if (!result.canceled) {
-      onAttachmentsAdd(result.assets.map(createImagePickerAttachmentDraft));
-    }
-
-    await refreshPhotoPermissionsAndPreviews();
-  }, [onAttachmentsAdd, refreshPhotoPermissionsAndPreviews]);
+  const requestPhotoLibraryPermission = useCallback(async () => {
+    const permission = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
+    await refreshPhotoPermissionsAndPreviews(permission);
+  }, [refreshPhotoPermissionsAndPreviews]);
 
   const presentLimitedPhotoPermissionsPicker = useCallback(async () => {
     await MediaLibrary.presentPermissionsPicker(['photo']);
@@ -260,59 +271,121 @@ export function useChatInputPhotoPicker(
   }, [refreshPhotoPermissionsAndPreviews]);
 
   const togglePhotoSelection = useCallback((photoId: string) => {
-    setSelectedPhotoIds((current) => getNextChatInputSelectedPhotoIds(current, photoId));
+    setSelectedPhotoIds((current) =>
+      getNextChatInputSelectedPhotoIds(current, photoId, CHAT_INPUT_PHOTO_SELECTION_LIMIT),
+    );
   }, []);
 
   const clearSelectedPhotos = useCallback(() => {
     setSelectedPhotoIds([]);
   }, []);
 
-  const addSelectedPhotoPreviews = useCallback(() => {
+  const addSelectedPhotoPreviews = useCallback(async () => {
     if (selectedPhotoIds.length === 0) {
-      return;
+      return false;
     }
 
     const photoPreviewById = new Map(photoPreviews.map((photo) => [photo.id, photo]));
-    const attachments = selectedPhotoIds
+    const selectedPhotoPreviews = selectedPhotoIds
       .map((photoId) => photoPreviewById.get(photoId))
-      .filter((photo): photo is ChatInputPhotoPreview => photo !== undefined)
-      .map(createPhotoAttachmentDraft);
+      .filter((photo): photo is ChatInputPhotoPreview => photo !== undefined);
 
-    if (attachments.length === 0) {
+    if (selectedPhotoPreviews.length === 0) {
       clearSelectedPhotos();
-      return;
+      return false;
     }
+
+    const attachments = await Promise.all(
+      selectedPhotoPreviews.map(async (photo) => {
+        const uri = await new MediaLibrary.Asset(photo.id).getUri();
+        return createPhotoAttachmentDraft({
+          ...photo,
+          uri,
+        });
+      }),
+    );
 
     onAttachmentsAdd(attachments);
     clearSelectedPhotos();
+    return true;
   }, [clearSelectedPhotos, onAttachmentsAdd, photoPreviews, selectedPhotoIds]);
+
+  const loadMorePhotoPreviews = useCallback(async () => {
+    if (
+      loadingRevisionRef.current !== null ||
+      !hasNextPhotoPage ||
+      photoAccess === null ||
+      photoAccess === 'none'
+    ) {
+      return;
+    }
+
+    const revision = photoLoadRevisionRef.current;
+    loadingRevisionRef.current = revision;
+    setIsPhotoPageLoading(true);
+
+    try {
+      const page = await loadPhotoPreviewPage(nextPhotoPageOffsetRef.current);
+
+      if (photoLoadRevisionRef.current !== revision) {
+        return;
+      }
+
+      nextPhotoPageOffsetRef.current = page.nextOffset;
+      setHasNextPhotoPage(page.hasNextPhotoPage);
+      setPhotoPreviews((current) => {
+        const existingPhotoIds = new Set(current.map((photo) => photo.id));
+        return [
+          ...current,
+          ...page.photoPreviews.filter((photo) => !existingPhotoIds.has(photo.id)),
+        ];
+      });
+    } finally {
+      if (loadingRevisionRef.current === revision) {
+        loadingRevisionRef.current = null;
+        setIsPhotoPageLoading(false);
+      }
+    }
+  }, [hasNextPhotoPage, photoAccess]);
 
   const state: ChatInputPhotoPickerState = useMemo(
     () => ({
+      canAskPhotoPermissionAgain,
+      hasNextPhotoPage,
+      isPhotoPageLoading,
       photoAccess,
       photoPreviews,
       selectedPhotoCount,
       selectedPhotoOrder,
       shouldShowPhotosTile,
     }),
-    [photoAccess, photoPreviews, selectedPhotoCount, selectedPhotoOrder, shouldShowPhotosTile],
+    [
+      canAskPhotoPermissionAgain,
+      hasNextPhotoPage,
+      isPhotoPageLoading,
+      photoAccess,
+      photoPreviews,
+      selectedPhotoCount,
+      selectedPhotoOrder,
+      shouldShowPhotosTile,
+    ],
   );
 
   const actions: ChatInputPhotoPickerActions = useMemo(
     () => ({
       addSelectedPhotoPreviews,
       clearSelectedPhotos,
-      launchCamera,
-      launchImageLibrary,
+      loadMorePhotoPreviews,
       presentLimitedPhotoPermissionsPicker,
+      requestPhotoLibraryPermission,
       togglePhotoSelection,
     }),
     [
       addSelectedPhotoPreviews,
       clearSelectedPhotos,
-      launchCamera,
-      launchImageLibrary,
+      loadMorePhotoPreviews,
       presentLimitedPhotoPermissionsPicker,
+      requestPhotoLibraryPermission,
       togglePhotoSelection,
     ],
   );

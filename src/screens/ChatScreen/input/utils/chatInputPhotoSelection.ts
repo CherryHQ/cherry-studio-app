@@ -16,9 +16,14 @@ export function getChatInputSelectedPhotoOrder(selectedPhotoIds: readonly string
 export function getNextChatInputSelectedPhotoIds(
   selectedPhotoIds: readonly string[],
   photoId: string,
+  selectionLimit = Number.POSITIVE_INFINITY,
 ) {
   if (selectedPhotoIds.includes(photoId)) {
     return selectedPhotoIds.filter((selectedPhotoId) => selectedPhotoId !== photoId);
+  }
+
+  if (selectedPhotoIds.length >= selectionLimit) {
+    return [...selectedPhotoIds];
   }
 
   return [...selectedPhotoIds, photoId];

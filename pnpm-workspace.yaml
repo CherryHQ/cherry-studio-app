@@ -46,3 +46,5 @@ minimumReleaseAgeExclude:
   - expo-splash-screen@57.0.1
   - heroui-native@1.0.5
   - react-native-enriched-markdown@0.7.3
+  - expo-camera@57.0.3
+  - '@legendapp/list@3.3.3'

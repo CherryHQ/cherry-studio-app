@@ -145,7 +145,7 @@ export function ChatInputSurface({
   const [contentWidth, setContentWidth] = useState<number | null>(null);
 
   useEffect(() => {
-    expandProgress.value = withSpring(isComposerExpanded ? 1 : 0, chatInputSpringConfig);
+    expandProgress.set(withSpring(isComposerExpanded ? 1 : 0, chatInputSpringConfig));
   }, [isComposerExpanded, expandProgress]);
 
   useEffect(() => {
@@ -188,14 +188,14 @@ export function ChatInputSurface({
     (event: LayoutChangeEvent) => {
       const nextWidth = event.nativeEvent.layout.width;
 
-      availableWidth.value = nextWidth;
+      availableWidth.set(nextWidth);
       setContentWidth((current) => (current === nextWidth ? current : nextWidth));
     },
     [availableWidth],
   );
   const handleContentLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      contentHeight.value = withTiming(event.nativeEvent.layout.height, chatInputMotionConfig);
+      contentHeight.set(withTiming(event.nativeEvent.layout.height, chatInputMotionConfig));
     },
     [contentHeight],
   );
@@ -423,8 +423,8 @@ function ChatInputReasoningPill({
 
     cancelAnimation(pillWidth);
     cancelAnimation(slotWidth);
-    pillWidth.value = withTiming(targetPillWidth, chatInputMotionConfig);
-    slotWidth.value = withTiming(resolvedSlotTextWidth, chatInputMotionConfig);
+    pillWidth.set(withTiming(targetPillWidth, chatInputMotionConfig));
+    slotWidth.set(withTiming(resolvedSlotTextWidth, chatInputMotionConfig));
   }, [isOff, pillWidth, resolvedSlotTextWidth, slotWidth]);
 
   return (
