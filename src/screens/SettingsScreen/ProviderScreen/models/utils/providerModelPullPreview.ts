@@ -59,6 +59,31 @@ export function createDefaultProviderModelPullSelection(
   };
 }
 
+export function filterProviderModelPullPreview(
+  preview: ProviderModelPullPreview,
+  searchText: string,
+): ProviderModelPullPreview {
+  const keywords = searchText
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .map((keyword) => keyword.trim())
+    .filter(Boolean);
+
+  if (keywords.length === 0) {
+    return preview;
+  }
+
+  const matchesSearch = (model: Model) => {
+    const haystack = [model.modelId, model.name].join(' ').toLocaleLowerCase();
+    return keywords.every((keyword) => haystack.includes(keyword));
+  };
+
+  return {
+    added: preview.added.filter(matchesSearch),
+    missing: preview.missing.filter(matchesSearch),
+  };
+}
+
 export function buildProviderModelPullApplyPayload(
   preview: ProviderModelPullPreview,
   selection: ProviderModelPullSelection,

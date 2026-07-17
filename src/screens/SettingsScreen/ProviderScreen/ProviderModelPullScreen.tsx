@@ -1,11 +1,12 @@
+import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Button } from 'heroui-native/button';
 import { Checkbox } from 'heroui-native/checkbox';
 import { Spinner } from 'heroui-native/spinner';
 import { cn } from 'heroui-native/utils';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackHeader } from '@/components/headers';
@@ -18,10 +19,11 @@ import {
 import type { Model, UniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 import { useProviderDetailSettings } from './detail';
-import { useProviderModelPull } from './models';
+import { ProviderModelSearchField, useProviderModelPull } from './models';
 import {
   buildProviderModelPullApplyPayload,
   createDefaultProviderModelPullSelection,
+  filterProviderModelPullPreview,
   type ProviderModelPullPreview,
   type ProviderModelPullSelection,
 } from './models/utils/providerModelPullPreview';
@@ -30,6 +32,33 @@ import { consumeProviderModelPullPreview } from './models/utils/providerModelPul
 type ProviderModelPullSelectionOverride = ProviderModelPullSelection & {
   previewKey: string;
 };
+
+type PullSectionKey = 'added' | 'missing';
+
+type PullListItem =
+  | {
+      isFirstSection: boolean;
+      key: string;
+      section: PullSectionKey;
+      type: 'section';
+    }
+  | {
+      isFirst: boolean;
+      isLast: boolean;
+      key: string;
+      model: Model;
+      section: PullSectionKey;
+      type: 'model';
+    };
+
+type PullListExtraData = {
+  isApplying: boolean;
+  provider: Provider | undefined;
+  selectedAddedIds: Set<UniqueModelId>;
+  selectedMissingIds: Set<UniqueModelId>;
+};
+
+const pullModelEstimatedRowHeight = 58;
 
 export default function ProviderModelPullScreen() {
   const { providerId } = useLocalSearchParams<{ providerId?: string; providerName?: string }>();
@@ -118,6 +147,8 @@ function ProviderModelPullPreviewPage({
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const [searchText, setSearchText] = useState('');
+  const deferredSearchText = useDeferredValue(searchText);
   const [selectionOverride, setSelectionOverride] =
     useState<ProviderModelPullSelectionOverride | null>(null);
   const previewKey = useMemo(() => getPreviewKey(preview), [preview]);
@@ -131,61 +162,76 @@ function ProviderModelPullPreviewPage({
   const selectedMissingIds = selection.missingIds;
   const addedCount = preview.added.length;
   const missingCount = preview.missing.length;
+  const displayedPreview = useMemo(
+    () => filterProviderModelPullPreview(preview, deferredSearchText),
+    [deferredSearchText, preview],
+  );
+  const displayedAddedCount = displayedPreview.added.length;
+  const displayedMissingCount = displayedPreview.missing.length;
   const selectedTotal = selectedAddedIds.size + selectedMissingIds.size;
   const totalRows = addedCount + missingCount;
   const isAllSelected = selectedTotal === totalRows && totalRows > 0;
-  const allAddedSelected = addedCount > 0 && selectedAddedIds.size === addedCount;
-  const allMissingSelected = missingCount > 0 && selectedMissingIds.size === missingCount;
+  const allDisplayedAddedSelected = areAllModelsSelected(displayedPreview.added, selectedAddedIds);
+  const allDisplayedMissingSelected = areAllModelsSelected(
+    displayedPreview.missing,
+    selectedMissingIds,
+  );
   const applyLabel = isAllSelected
     ? t('settings.provider.models.pullApplyAll')
     : t('settings.provider.models.pullApplySelected');
+  const listItems = useMemo(() => buildPullListItems(displayedPreview), [displayedPreview]);
+  const listExtraData = useMemo<PullListExtraData>(
+    () => ({
+      isApplying,
+      provider,
+      selectedAddedIds,
+      selectedMissingIds,
+    }),
+    [isApplying, provider, selectedAddedIds, selectedMissingIds],
+  );
 
   const toggleAddedSelection = useCallback(
     (modelId: UniqueModelId) => {
       setSelectionOverride((current) => {
-        const baseSelection = getSelectionForUpdate(current, previewKey, {
-          addedIds: selectedAddedIds,
-          missingIds: selectedMissingIds,
-        });
+        const baseSelection = getSelectionForUpdate(current, previewKey, defaultSelection);
         return {
           ...baseSelection,
           addedIds: toggleSetItem(baseSelection.addedIds, modelId),
         };
       });
     },
-    [previewKey, selectedAddedIds, selectedMissingIds],
+    [defaultSelection, previewKey],
   );
   const toggleMissingSelection = useCallback(
     (modelId: UniqueModelId) => {
       setSelectionOverride((current) => {
-        const baseSelection = getSelectionForUpdate(current, previewKey, {
-          addedIds: selectedAddedIds,
-          missingIds: selectedMissingIds,
-        });
+        const baseSelection = getSelectionForUpdate(current, previewKey, defaultSelection);
         return {
           ...baseSelection,
           missingIds: toggleSetItem(baseSelection.missingIds, modelId),
         };
       });
     },
-    [previewKey, selectedAddedIds, selectedMissingIds],
+    [defaultSelection, previewKey],
   );
   const toggleAllAdded = useCallback(() => {
-    setSelectionOverride({
-      addedIds: allAddedSelected ? new Set() : new Set(preview.added.map((model) => model.id)),
-      missingIds: selectedMissingIds,
-      previewKey,
+    setSelectionOverride((current) => {
+      const baseSelection = getSelectionForUpdate(current, previewKey, defaultSelection);
+      return {
+        ...baseSelection,
+        addedIds: toggleModelsSelection(baseSelection.addedIds, displayedPreview.added),
+      };
     });
-  }, [allAddedSelected, preview.added, previewKey, selectedMissingIds]);
+  }, [defaultSelection, displayedPreview.added, previewKey]);
   const toggleAllMissing = useCallback(() => {
-    setSelectionOverride({
-      addedIds: selectedAddedIds,
-      missingIds: allMissingSelected
-        ? new Set()
-        : new Set(preview.missing.map((model) => model.id)),
-      previewKey,
+    setSelectionOverride((current) => {
+      const baseSelection = getSelectionForUpdate(current, previewKey, defaultSelection);
+      return {
+        ...baseSelection,
+        missingIds: toggleModelsSelection(baseSelection.missingIds, displayedPreview.missing),
+      };
     });
-  }, [allMissingSelected, preview.missing, previewKey, selectedAddedIds]);
+  }, [defaultSelection, displayedPreview.missing, previewKey]);
   const handleApply = useCallback(() => {
     const payload = buildProviderModelPullApplyPayload(preview, {
       addedIds: selectedAddedIds,
@@ -197,54 +243,96 @@ function ProviderModelPullPreviewPage({
 
     void onApply(payload);
   }, [onApply, preview, selectedAddedIds, selectedMissingIds]);
+  const renderItem = useCallback(
+    ({ extraData, item }: LegendListRenderItemProps<PullListItem>) => {
+      if (item.type === 'section') {
+        const isAddedSection = item.section === 'added';
+        const count = isAddedSection ? displayedAddedCount : displayedMissingCount;
+        const isAllSectionSelected = isAddedSection
+          ? allDisplayedAddedSelected
+          : allDisplayedMissingSelected;
+
+        return (
+          <PullSectionHeader
+            actionLabel={t(
+              isAllSectionSelected
+                ? 'settings.provider.models.pullDeselectAll'
+                : 'settings.provider.models.pullSelectAll',
+            )}
+            count={count}
+            isDisabled={extraData.isApplying}
+            isFirstSection={item.isFirstSection}
+            title={t(
+              isAddedSection
+                ? 'settings.provider.models.pullAddedSection'
+                : 'settings.provider.models.pullMissingSection',
+            )}
+            onActionPress={isAddedSection ? toggleAllAdded : toggleAllMissing}
+          />
+        );
+      }
+
+      const isAddedSection = item.section === 'added';
+      const selectedIds = isAddedSection
+        ? extraData.selectedAddedIds
+        : extraData.selectedMissingIds;
+
+      return (
+        <PullModelRow
+          isDisabled={extraData.isApplying}
+          isFirst={item.isFirst}
+          isLast={item.isLast}
+          isMissing={!isAddedSection}
+          isSelected={selectedIds.has(item.model.id)}
+          model={item.model}
+          provider={extraData.provider}
+          onToggleModel={isAddedSection ? toggleAddedSelection : toggleMissingSelection}
+        />
+      );
+    },
+    [
+      allDisplayedAddedSelected,
+      allDisplayedMissingSelected,
+      displayedAddedCount,
+      displayedMissingCount,
+      t,
+      toggleAddedSelection,
+      toggleAllAdded,
+      toggleAllMissing,
+      toggleMissingSelection,
+    ],
+  );
+  const keyExtractor = useCallback((item: PullListItem) => item.key, []);
+  const getItemType = useCallback((item: PullListItem) => item.type, []);
 
   return (
     <View className="flex-1">
-      <ScrollView
+      <LegendList
         alwaysBounceVertical={false}
-        className="flex-1"
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={styles.listContent}
         contentInsetAdjustmentBehavior="automatic"
+        data={listItems}
+        drawDistance={320}
+        estimatedItemSize={pullModelEstimatedRowHeight}
+        extraData={listExtraData}
+        getItemType={getItemType}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        keyExtractor={keyExtractor}
+        ListEmptyComponent={
+          <PullSearchEmptyState title={t('settings.provider.models.search.empty')} />
+        }
+        ListHeaderComponent={
+          <View className="pb-4">
+            <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
+          </View>
+        }
+        maintainVisibleContentPosition={false}
+        recycleItems
+        renderItem={renderItem}
         showsVerticalScrollIndicator={false}
-      >
-        {preview.added.length ? (
-          <PullSection
-            actionLabel={t(
-              allAddedSelected
-                ? 'settings.provider.models.pullDeselectAll'
-                : 'settings.provider.models.pullSelectAll',
-            )}
-            count={preview.added.length}
-            isDisabled={isApplying}
-            isMissing={false}
-            models={preview.added}
-            provider={provider}
-            selectedIds={selectedAddedIds}
-            title={t('settings.provider.models.pullAddedSection')}
-            onActionPress={toggleAllAdded}
-            onToggleModel={toggleAddedSelection}
-          />
-        ) : null}
-
-        {preview.missing.length ? (
-          <PullSection
-            actionLabel={t(
-              allMissingSelected
-                ? 'settings.provider.models.pullDeselectAll'
-                : 'settings.provider.models.pullSelectAll',
-            )}
-            count={preview.missing.length}
-            isDisabled={isApplying}
-            isMissing
-            models={preview.missing}
-            provider={provider}
-            selectedIds={selectedMissingIds}
-            title={t('settings.provider.models.pullMissingSection')}
-            onActionPress={toggleAllMissing}
-            onToggleModel={toggleMissingSelection}
-          />
-        ) : null}
-      </ScrollView>
+        style={styles.list}
+      />
 
       <View
         className="border-border border-t px-4 pt-3"
@@ -268,67 +356,59 @@ function ProviderModelPullPreviewPage({
   );
 }
 
-function PullSection({
+function PullSearchEmptyState({ title }: { title: string }) {
+  return (
+    <View className="items-center justify-center px-4 py-10">
+      <Text className="text-center text-base text-default-foreground">{title}</Text>
+    </View>
+  );
+}
+
+function PullSectionHeader({
   actionLabel,
   count,
   isDisabled,
-  isMissing,
-  models,
+  isFirstSection,
   onActionPress,
-  onToggleModel,
-  provider,
-  selectedIds,
   title,
 }: {
   actionLabel: string;
   count: number;
   isDisabled: boolean;
-  isMissing: boolean;
-  models: Model[];
+  isFirstSection: boolean;
   onActionPress: () => void;
-  onToggleModel: (modelId: UniqueModelId) => void;
-  provider: Provider | undefined;
-  selectedIds: Set<UniqueModelId>;
   title: string;
 }) {
   return (
-    <View className="gap-2">
-      <View className="flex-row items-center justify-between gap-3 px-1">
-        <View className="min-w-0 flex-1 flex-row items-center gap-2">
-          <Text className="font-medium text-default-foreground text-sm" numberOfLines={1}>
-            {title} ({count})
-          </Text>
-        </View>
-        <Pressable
-          accessibilityLabel={actionLabel}
-          accessibilityRole="button"
-          className="px-1 py-1 active:opacity-60 disabled:opacity-40"
-          disabled={isDisabled}
-          hitSlop={6}
-          onPress={onActionPress}
-        >
-          <Text className="font-medium text-accent text-sm">{actionLabel}</Text>
-        </Pressable>
+    <View
+      className={cn(
+        'flex-row items-center justify-between gap-3 px-1 pb-2',
+        !isFirstSection && 'pt-4',
+      )}
+    >
+      <View className="min-w-0 flex-1 flex-row items-center gap-2">
+        <Text className="font-medium text-default-foreground text-sm" numberOfLines={1}>
+          {title} ({count})
+        </Text>
       </View>
-      <View className="overflow-hidden rounded-xl bg-settings-grouped-surface">
-        {models.map((model) => (
-          <PullModelRow
-            key={model.id}
-            isDisabled={isDisabled}
-            isMissing={isMissing}
-            isSelected={selectedIds.has(model.id)}
-            model={model}
-            provider={provider}
-            onToggleModel={onToggleModel}
-          />
-        ))}
-      </View>
+      <Pressable
+        accessibilityLabel={actionLabel}
+        accessibilityRole="button"
+        className="px-1 py-1 active:opacity-60 disabled:opacity-40"
+        disabled={isDisabled}
+        hitSlop={6}
+        onPress={onActionPress}
+      >
+        <Text className="font-medium text-accent text-sm">{actionLabel}</Text>
+      </Pressable>
     </View>
   );
 }
 
-function PullModelRow({
+const PullModelRow = memo(function PullModelRow({
   isDisabled,
+  isFirst,
+  isLast,
   isMissing,
   isSelected,
   model,
@@ -336,6 +416,8 @@ function PullModelRow({
   provider,
 }: {
   isDisabled: boolean;
+  isFirst: boolean;
+  isLast: boolean;
   isMissing: boolean;
   isSelected: boolean;
   model: Model;
@@ -367,7 +449,11 @@ function PullModelRow({
       accessibilityLabel={model.name}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: isSelected, disabled: isDisabled }}
-      className="flex-row items-center gap-3 bg-transparent px-3 py-2 active:opacity-60 disabled:opacity-40"
+      className={cn(
+        'flex-row items-center gap-3 bg-settings-grouped-surface px-3 py-2 active:opacity-60 disabled:opacity-40',
+        isFirst && 'rounded-t-xl',
+        isLast && 'rounded-b-xl',
+      )}
       disabled={isDisabled}
       onPress={handleToggle}
     >
@@ -414,7 +500,7 @@ function PullModelRow({
       </View>
     </Pressable>
   );
-}
+});
 
 function PullModelFallbackIcon({ model }: { model: Model }) {
   const initial = model.name.trim().charAt(0).toUpperCase() || 'M';
@@ -449,11 +535,72 @@ function toggleSetItem<TItem>(items: Set<TItem>, item: TItem): Set<TItem> {
   return next;
 }
 
+function areAllModelsSelected(
+  models: readonly Model[],
+  selectedIds: ReadonlySet<UniqueModelId>,
+): boolean {
+  return models.length > 0 && models.every((model) => selectedIds.has(model.id));
+}
+
+function toggleModelsSelection(
+  selectedIds: Set<UniqueModelId>,
+  models: readonly Model[],
+): Set<UniqueModelId> {
+  const next = new Set(selectedIds);
+  const shouldDeselect = areAllModelsSelected(models, selectedIds);
+
+  for (const model of models) {
+    if (shouldDeselect) {
+      next.delete(model.id);
+    } else {
+      next.add(model.id);
+    }
+  }
+
+  return next;
+}
+
 function getPreviewKey(preview: ProviderModelPullPreview): string {
   return [
     ...preview.added.map((model) => `added:${model.id}`),
     ...preview.missing.map((model) => `missing:${model.id}`),
   ].join('|');
+}
+
+function buildPullListItems(preview: ProviderModelPullPreview): PullListItem[] {
+  const items: PullListItem[] = [];
+  const sections: { models: Model[]; section: PullSectionKey }[] = [
+    { models: preview.added, section: 'added' },
+    { models: preview.missing, section: 'missing' },
+  ];
+  let renderedSectionCount = 0;
+
+  for (const { models, section } of sections) {
+    if (models.length === 0) {
+      continue;
+    }
+
+    items.push({
+      isFirstSection: renderedSectionCount === 0,
+      key: `section:${section}`,
+      section,
+      type: 'section',
+    });
+    renderedSectionCount += 1;
+
+    for (const [index, model] of models.entries()) {
+      items.push({
+        isFirst: index === 0,
+        isLast: index === models.length - 1,
+        key: `model:${section}:${model.id}`,
+        model,
+        section,
+        type: 'model',
+      });
+    }
+  }
+
+  return items;
 }
 
 function getSelectionForUpdate(
@@ -472,8 +619,10 @@ function getSelectionForUpdate(
 }
 
 const styles = StyleSheet.create({
-  scrollContent: {
-    gap: 16,
+  list: {
+    flex: 1,
+  },
+  listContent: {
     paddingHorizontal: 16,
     paddingVertical: 20,
   },

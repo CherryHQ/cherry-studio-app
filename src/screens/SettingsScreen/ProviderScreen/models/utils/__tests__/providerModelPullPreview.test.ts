@@ -4,6 +4,7 @@ import {
   buildProviderModelPullApplyPayload,
   buildProviderModelPullPreview,
   createDefaultProviderModelPullSelection,
+  filterProviderModelPullPreview,
 } from '../providerModelPullPreview';
 
 describe('provider model pull preview helpers', () => {
@@ -133,6 +134,26 @@ describe('provider model pull preview helpers', () => {
         missingIds: new Set(),
       }),
     ).toBeNull();
+  });
+
+  test('filters pull rows by model id and name', () => {
+    const preview = {
+      added: [
+        model({ modelId: 'alpha-chat-v2', name: 'First Assistant' }),
+        model({ modelId: 'beta-vision', name: 'Image Model' }),
+      ],
+      missing: [model({ modelId: 'legacy-reasoner', name: 'Alpha Reasoning' })],
+    };
+
+    expect(filterProviderModelPullPreview(preview, 'BETA').added).toEqual([preview.added[1]]);
+    expect(filterProviderModelPullPreview(preview, 'alpha reasoning').missing).toEqual([
+      preview.missing[0],
+    ]);
+    expect(filterProviderModelPullPreview(preview, 'image alpha')).toEqual({
+      added: [],
+      missing: [],
+    });
+    expect(filterProviderModelPullPreview(preview, '  ')).toBe(preview);
   });
 });
 
