@@ -82,7 +82,7 @@ jest.mock('react-native-reanimated', () => {
     interpolate: (_value: number, _inputRange: number[], outputRange: number[]) => outputRange[0],
     runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
     useAnimatedStyle: (factory: () => unknown) => factory(),
-    useSharedValue: (initialValue: unknown) => ({ value: initialValue }),
+    useSharedValue: (initialValue: unknown) => ({ set: jest.fn(), value: initialValue }),
     withDelay: (_delayMs: number, animation: unknown) => animation,
     withSpring: (toValue: unknown) => toValue,
     withTiming: (

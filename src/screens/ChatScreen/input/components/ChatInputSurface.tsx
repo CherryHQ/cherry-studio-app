@@ -138,7 +138,7 @@ export function ChatInputSurface({
   const [contentWidth, setContentWidth] = useState<number | null>(null);
 
   useEffect(() => {
-    expandProgress.value = withSpring(isComposerExpanded ? 1 : 0, chatInputSpringConfig);
+    expandProgress.set(withSpring(isComposerExpanded ? 1 : 0, chatInputSpringConfig));
   }, [isComposerExpanded, expandProgress]);
 
   useEffect(() => {
@@ -181,14 +181,14 @@ export function ChatInputSurface({
     (event: LayoutChangeEvent) => {
       const nextWidth = event.nativeEvent.layout.width;
 
-      availableWidth.value = nextWidth;
+      availableWidth.set(nextWidth);
       setContentWidth((current) => (current === nextWidth ? current : nextWidth));
     },
     [availableWidth],
   );
   const handleContentLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      contentHeight.value = withTiming(event.nativeEvent.layout.height, chatInputMotionConfig);
+      contentHeight.set(withTiming(event.nativeEvent.layout.height, chatInputMotionConfig));
     },
     [contentHeight],
   );
@@ -374,8 +374,8 @@ function ChatInputReasoningPill({
 
     cancelAnimation(pillWidth);
     cancelAnimation(slotWidth);
-    pillWidth.value = withTiming(targetPillWidth, chatInputMotionConfig);
-    slotWidth.value = withTiming(resolvedSlotTextWidth, chatInputMotionConfig);
+    pillWidth.set(withTiming(targetPillWidth, chatInputMotionConfig));
+    slotWidth.set(withTiming(resolvedSlotTextWidth, chatInputMotionConfig));
   }, [isOff, meterBarCount, pillWidth, resolvedSlotTextWidth, slotWidth]);
 
   return (
@@ -458,26 +458,32 @@ function ChatInputSlotText({
   onLabelLayout: (label: string, width: number) => void;
   slotWidth: SharedValue<number>;
 }) {
-  const [currentLabel, setCurrentLabel] = useState(label);
-  const [previousLabel, setPreviousLabel] = useState<string | null>(null);
+  const [labelState, setLabelState] = useState({ current: label, previous: null as string | null });
   const slotProgress = useSharedValue(1);
   const labelsToMeasure = useMemo(() => Array.from(new Set([label, ...labels])), [label, labels]);
+  const clearPreviousLabel = useCallback(() => {
+    setLabelState((current) => ({ ...current, previous: null }));
+  }, []);
+
+  if (label !== labelState.current) {
+    setLabelState({ current: label, previous: labelState.current });
+  }
 
   useEffect(() => {
-    if (label === currentLabel) {
+    if (labelState.previous === null) {
       return;
     }
 
     cancelAnimation(slotProgress);
-    setPreviousLabel(currentLabel);
-    setCurrentLabel(label);
-    slotProgress.value = 0;
-    slotProgress.value = withTiming(1, chatInputMotionConfig, (isFinished) => {
-      if (isFinished) {
-        runOnJS(setPreviousLabel)(null);
-      }
-    });
-  }, [currentLabel, label, slotProgress]);
+    slotProgress.set(0);
+    slotProgress.set(
+      withTiming(1, chatInputMotionConfig, (isFinished) => {
+        if (isFinished) {
+          runOnJS(clearPreviousLabel)();
+        }
+      }),
+    );
+  }, [clearPreviousLabel, labelState.previous, slotProgress]);
 
   const previousTextStyle = useAnimatedStyle(() => ({
     opacity: interpolate(slotProgress.value, [0, 1], [1, 0], Extrapolation.CLAMP),
@@ -529,14 +535,14 @@ function ChatInputSlotText({
         ))}
       </View>
       <Animated.View className="h-5 overflow-hidden" style={slotWidthStyle}>
-        {previousLabel ? (
+        {labelState.previous ? (
           <Animated.Text
             className="absolute inset-x-0 top-0 text-center font-semibold text-accent text-sm leading-5"
             numberOfLines={1}
             style={previousTextStyle}
             testID="chat-input-reasoning-slot-previous-label"
           >
-            {previousLabel}
+            {labelState.previous}
           </Animated.Text>
         ) : null}
         <Animated.Text
@@ -545,7 +551,7 @@ function ChatInputSlotText({
           style={currentTextStyle}
           testID="chat-input-reasoning-slot-label"
         >
-          {currentLabel}
+          {labelState.current}
         </Animated.Text>
       </Animated.View>
     </View>

@@ -75,26 +75,33 @@ export function WebSearchApiServiceApiKeysField({
   );
 }
 
+type ApiKeysCommitInputProps = {
+  accessibilityLabel: string;
+  onCommit: (value: string) => void;
+  placeholder: string;
+  secureTextEntry: boolean;
+  value: string;
+};
+
 function ApiKeysCommitInput({
   accessibilityLabel,
   onCommit,
   placeholder,
   secureTextEntry,
   value,
-}: {
-  accessibilityLabel: string;
-  onCommit: (value: string) => void;
-  placeholder: string;
-  secureTextEntry: boolean;
-  value: string;
-}) {
+}: ApiKeysCommitInputProps) {
   const [draftValue, setDraftValue] = useState(value);
+  const [sourceValue, setSourceValue] = useState(value);
   const draftValueRef = useRef(draftValue);
   const onCommitRef = useRef(onCommit);
   const valueRef = useRef(value);
 
-  useEffect(() => {
+  if (sourceValue !== value) {
+    setSourceValue(value);
     setDraftValue(value);
+  }
+
+  useEffect(() => {
     draftValueRef.current = value;
     valueRef.current = value;
   }, [value]);

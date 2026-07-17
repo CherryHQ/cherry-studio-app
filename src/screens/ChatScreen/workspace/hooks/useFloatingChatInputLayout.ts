@@ -15,7 +15,7 @@ export function useFloatingChatInputLayout() {
 
   const handleInputHeightChange = useCallback(
     (nextHeight: number) => {
-      inputHeightShared.value = nextHeight;
+      inputHeightShared.set(nextHeight);
 
       const nextClampedHeight = Math.max(Math.ceil(nextHeight), minimumInputHeight);
 

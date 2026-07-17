@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { usePreference } from '@/data/hooks';
 import type { WebSearchProviderId } from '@/data/preference';
@@ -9,6 +9,11 @@ import {
   type WebSearchApiKeyEntry,
 } from '../utils/webSearchApiServiceApiKeys';
 
+type ApiKeyEntriesState = {
+  entries: WebSearchApiKeyEntry[];
+  persistedKey: string;
+};
+
 export function useWebSearchApiKeySettings(providerId: WebSearchProviderId | undefined) {
   const [providerOverrides, setProviderOverrides] = usePreference(
     'chat.web_search.provider_overrides',
@@ -18,17 +23,21 @@ export function useWebSearchApiKeySettings(providerId: WebSearchProviderId | und
       normalizeWebSearchApiKeys(providerId ? (providerOverrides[providerId]?.apiKeys ?? []) : []),
     [providerId, providerOverrides],
   );
-  const [entries, setEntries] = useState<WebSearchApiKeyEntry[]>(() =>
-    buildWebSearchApiKeyEntries(persistedApiKeys),
-  );
+  const persistedKey = JSON.stringify([providerId, persistedApiKeys]);
+  const [entriesState, setEntriesState] = useState<ApiKeyEntriesState>(() => ({
+    entries: buildWebSearchApiKeyEntries(persistedApiKeys),
+    persistedKey,
+  }));
 
-  useEffect(() => {
-    setEntries((current) => {
-      const pendingEntries = current.filter((entry) => entry.isNew);
-
-      return [...buildWebSearchApiKeyEntries(persistedApiKeys), ...pendingEntries];
+  if (entriesState.persistedKey !== persistedKey) {
+    const pendingEntries = entriesState.entries.filter((entry) => entry.isNew);
+    setEntriesState({
+      entries: [...buildWebSearchApiKeyEntries(persistedApiKeys), ...pendingEntries],
+      persistedKey,
     });
-  }, [persistedApiKeys]);
+  }
+
+  const entries = entriesState.entries;
 
   const saveApiKeys = useCallback(
     async (nextEntries: readonly WebSearchApiKeyEntry[]) => {
@@ -48,19 +57,26 @@ export function useWebSearchApiKeySettings(providerId: WebSearchProviderId | und
   );
 
   const addApiKey = useCallback(() => {
-    setEntries((current) =>
-      current.some((entry) => entry.isNew)
-        ? current
-        : [...current, createEmptyWebSearchApiKeyEntry()],
-    );
+    setEntriesState((current) => ({
+      ...current,
+      entries: current.entries.some((entry) => entry.isNew)
+        ? current.entries
+        : [...current.entries, createEmptyWebSearchApiKeyEntry()],
+    }));
   }, []);
 
   const removeApiKey = useCallback((id: string) => {
-    setEntries((current) => current.filter((entry) => entry.id !== id));
+    setEntriesState((current) => ({
+      ...current,
+      entries: current.entries.filter((entry) => entry.id !== id),
+    }));
   }, []);
 
   const updateApiKey = useCallback((id: string, key: string) => {
-    setEntries((current) => current.map((entry) => (entry.id === id ? { ...entry, key } : entry)));
+    setEntriesState((current) => ({
+      ...current,
+      entries: current.entries.map((entry) => (entry.id === id ? { ...entry, key } : entry)),
+    }));
   }, []);
 
   return {

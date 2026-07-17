@@ -53,15 +53,14 @@ export default function ProviderModelPullScreen() {
   const { providerId } = useLocalSearchParams<{ providerId?: string; providerName?: string }>();
   const { t } = useTranslation();
   const router = useRouter();
-  const initialPreviewRef = useRef<ProviderModelPullPreview | null>(null);
-  if (providerId && !initialPreviewRef.current) {
-    initialPreviewRef.current = consumeProviderModelPullPreview(providerId);
-  }
-  const loadStartedRef = useRef(Boolean(initialPreviewRef.current));
+  const [initialPreview] = useState(() =>
+    providerId ? consumeProviderModelPullPreview(providerId) : null,
+  );
+  const loadStartedRef = useRef(Boolean(initialPreview));
   const { provider, providerQuery } = useProviderDetailSettings(providerId ?? '');
   const { applyPullPreview, isApplying, isPreviewLoading, loadPullPreview, preview } =
     useProviderModelPull({
-      initialPreview: initialPreviewRef.current,
+      initialPreview,
       provider,
       providerId: providerId ?? '',
     });

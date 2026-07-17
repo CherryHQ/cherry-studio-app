@@ -1,5 +1,5 @@
 import { Input } from 'heroui-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { StyleSheet } from 'react-native';
 
 type SettingNumberInputProps = {
@@ -16,10 +16,12 @@ export function SettingNumberInput({
   value,
 }: SettingNumberInputProps) {
   const [draftValue, setDraftValue] = useState(() => String(value));
+  const [sourceValue, setSourceValue] = useState(value);
 
-  useEffect(() => {
+  if (sourceValue !== value) {
+    setSourceValue(value);
     setDraftValue(String(value));
-  }, [value]);
+  }
 
   const commitValue = useCallback(() => {
     const nextValue = Number(draftValue);
