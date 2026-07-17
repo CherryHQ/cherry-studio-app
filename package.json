@@ -60,6 +60,7 @@
     "@legendapp/list": "3.3.0",
     "@magrinj/expo-quick-look": "^0.3.1",
     "@openrouter/ai-sdk-provider": "^2.9.0",
+    "@shopify/react-native-skia": "2.6.2",
     "@swmansion/react-native-bottom-sheet": "0.15.3",
     "@tanstack/react-query": "^5.100.10",
     "ai": "^6.0.143",
@@ -77,6 +78,7 @@
     "expo-file-system": "~57.0.0",
     "expo-font": "~57.0.0",
     "expo-glass-effect": "~57.0.0",
+    "expo-haptics": "~57.0.1",
     "expo-image": "~57.0.0",
     "expo-image-picker": "~57.0.1",
     "expo-intent-launcher": "~57.0.0",
@@ -127,6 +129,7 @@
     "@babel/generator": "^7.29.7",
     "@babel/preset-typescript": "^7.27.1",
     "@biomejs/biome": "^2.4.15",
+    "@j178/prek": "^0.4.6",
     "@react-native/jest-preset": "0.86.0",
     "@types/jest": "^29.5.14",
     "@types/node": "^25.7.0",
@@ -142,8 +145,7 @@
     "sf-symbols-typescript": "^2.2.0",
     "sharp": "^0.34.5",
     "tsx": "^4.20.6",
-    "typescript": "~6.0.3",
-    "@j178/prek": "^0.4.6"
+    "typescript": "~6.0.3"
   },
   "private": true,
   "packageManager": "pnpm@11.8.0"

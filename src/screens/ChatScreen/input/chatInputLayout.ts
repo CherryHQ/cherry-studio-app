@@ -16,3 +16,10 @@ export const chatInputMessageListGap = 8;
 export function getChatInputMinimumHeight(bottomInset: number) {
   return chatInputMinComposerHeight + Math.max(bottomInset, chatInputMinBottomPadding);
 }
+
+// KeyboardStickyView offset shared by the floating input and anything that
+// must ride along with it (e.g. the reasoning panel): with the keyboard open
+// the safe-area bottom padding is no longer needed, keep only the minimum.
+export function getChatInputKeyboardStickyOffset(bottomInset: number) {
+  return Math.max(bottomInset - chatInputMinBottomPadding, 0);
+}
