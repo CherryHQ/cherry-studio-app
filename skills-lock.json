@@ -43,6 +43,12 @@
       "skillPath": "plugins/expo/skills/expo-tailwind-setup/SKILL.md",
       "computedHash": "d39e806942fe880347f161056729b588a3cb0f1796270eebf52633fe11cfdce1"
     },
+    "legend-list-best-practices": {
+      "source": "LegendApp/legend-skills",
+      "sourceType": "github",
+      "skillPath": "legend-list-best-practices/SKILL.md",
+      "computedHash": "61b4dec19494fcae599b7aedfa1553323a46f446536feeb9b2a584a298d45cef"
+    },
     "native-data-fetching": {
       "source": "expo/skills",
       "sourceType": "github",
