@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
  * Ticks a live "how long has the model been thinking" duration while
@@ -17,28 +17,25 @@ export function useThinkingTimerMs(
     }
     return finalMs ?? 0;
   });
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   useEffect(() => {
     if (!isThinking) {
-      setDisplayMs(finalMs ?? 0);
       return;
     }
 
-    setDisplayMs(startedAt !== undefined ? Math.max(0, Date.now() - startedAt) : 0);
-    intervalRef.current = setInterval(() => {
+    const resetTimeout = setTimeout(() => {
+      setDisplayMs(startedAt !== undefined ? Math.max(0, Date.now() - startedAt) : 0);
+    }, 0);
+    const interval = setInterval(() => {
       setDisplayMs((previous) =>
         startedAt !== undefined ? Math.max(0, Date.now() - startedAt) : previous + 100,
       );
     }, 100);
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      clearTimeout(resetTimeout);
+      clearInterval(interval);
     };
-  }, [isThinking, startedAt, finalMs]);
+  }, [isThinking, startedAt]);
 
-  return displayMs;
+  return isThinking ? displayMs : (finalMs ?? 0);
 }

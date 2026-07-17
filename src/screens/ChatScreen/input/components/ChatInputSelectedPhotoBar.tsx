@@ -1,12 +1,14 @@
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text } from 'react-native';
 
 type ChatInputSelectedPhotoBarProps = {
+  isLoading?: boolean;
   selectedPhotoCount: number;
   onPress: () => void;
 };
 
 export function ChatInputSelectedPhotoBar({
+  isLoading = false,
   selectedPhotoCount,
   onPress,
 }: ChatInputSelectedPhotoBarProps) {
@@ -17,17 +19,25 @@ export function ChatInputSelectedPhotoBar({
   }
 
   return (
-    <View className="right-0 left-0" pointerEvents="box-none">
-      <Pressable
-        accessibilityLabel={t('chat.media.addSelectedPhoto', { count: selectedPhotoCount })}
-        accessibilityRole="button"
-        className="w-[85%] items-center justify-center self-center rounded-full bg-black py-3 active:opacity-80"
-        onPress={onPress}
-      >
-        <Text className="font-semibold text-lg text-white">
+    <Pressable
+      accessibilityLabel={t('chat.media.addSelectedPhoto', { count: selectedPhotoCount })}
+      accessibilityRole="button"
+      className="h-[52px] min-w-[156px] max-w-[240px] items-center justify-center rounded-full bg-black px-6 active:opacity-80 disabled:opacity-60"
+      disabled={isLoading}
+      onPress={onPress}
+    >
+      {isLoading ? (
+        <ActivityIndicator color="#FFFFFF" />
+      ) : (
+        <Text
+          adjustsFontSizeToFit
+          className="font-semibold text-lg text-white"
+          minimumFontScale={0.8}
+          numberOfLines={1}
+        >
           {t('chat.media.addSelectedPhoto', { count: selectedPhotoCount })}
         </Text>
-      </Pressable>
-    </View>
+      )}
+    </Pressable>
   );
 }
