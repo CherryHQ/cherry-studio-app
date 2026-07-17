@@ -1,14 +1,14 @@
 import { ModalBottomSheet } from '@swmansion/react-native-bottom-sheet';
+import type { CameraCapturedPicture } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
 import { GlassView } from 'expo-glass-effect';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-import type { PhotoFile } from 'react-native-vision-camera';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isLiquidGlassAvailable, sheetScrimColor } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
-import { type InlinePhotoPickerAsset, InlinePhotoPickerView } from '@/modules/inlinePhotoPicker';
 import { ChatInputActionList } from '@/screens/ChatScreen/input/components/ChatInputActionList';
 import { ChatInputInlineCamera } from '@/screens/ChatScreen/input/components/ChatInputInlineCamera';
 import {
@@ -17,6 +17,7 @@ import {
   ChatInputMediaStrip,
   ChatInputPhotosTile,
 } from '@/screens/ChatScreen/input/components/ChatInputMediaStrip';
+import { ChatInputPhotoGrid } from '@/screens/ChatScreen/input/components/ChatInputPhotoGrid';
 import {
   useChatInputActions,
   useChatInputMedia,
@@ -26,7 +27,6 @@ import type { ChatInputActionId } from '@/screens/ChatScreen/input/utils/chatInp
 import {
   createCameraAttachmentDraft,
   createDocumentAttachmentDraft,
-  createInlinePhotoAttachmentDraft,
 } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
 import {
   chatInputSubviewEntering,
@@ -40,12 +40,6 @@ import {
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
 
-// How long to let the sheet collapse before presenting the full-screen system
-// library — ChatGPT-style "collapse the inline grid, then expand the full
-// picker". Tuned to the sheet's dismiss animation so the picker slides up right
-// as the sheet finishes, with no chat visible in between.
-const INLINE_COLLAPSE_DURATION_MS = 300;
-
 const logger = loggerService.withContext('ChatInputActionSheet');
 
 /**
@@ -56,11 +50,12 @@ const logger = loggerService.withContext('ChatInputActionSheet');
 export function ChatInputActionSheet() {
   const { t } = useTranslation();
   const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { addAttachments, closeActionSheet, selectAction } = useChatInputActions();
   const { isActionSheetOpen, selectedToolId } = useChatInputState();
-  const { actions } = useChatInputMedia();
-  const { launchImageLibrary } = actions;
-  const [isInlinePickerOpen, setIsInlinePickerOpen] = useState(false);
+  const { actions, state: mediaState } = useChatInputMedia();
+  const { clearSelectedPhotos } = actions;
+  const [isPhotoGridOpen, setIsPhotoGridOpen] = useState(false);
   const [isInlineCameraOpen, setIsInlineCameraOpen] = useState(false);
   // `sheetIndex` mostly mirrors `isActionSheetOpen`, except while the user has
   // dragged past `OPEN_INDEX` up to the full-height detent — adjusted during
@@ -68,21 +63,17 @@ export function ChatInputActionSheet() {
   // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes.
   const [sheetIndex, setSheetIndex] = useState(CLOSED_INDEX);
   const [prevIsActionSheetOpen, setPrevIsActionSheetOpen] = useState(isActionSheetOpen);
-  // Latest selection from the native picker, captured so the native confirm
-  // button can commit it without round-tripping each asset back down as a prop.
-  const latestAssetsRef = useRef<InlinePhotoPickerAsset[]>([]);
-
   if (isActionSheetOpen !== prevIsActionSheetOpen) {
     setPrevIsActionSheetOpen(isActionSheetOpen);
     setSheetIndex(isActionSheetOpen ? OPEN_INDEX : CLOSED_INDEX);
   }
 
   const handleClose = useCallback(() => {
-    setIsInlinePickerOpen(false);
+    setIsPhotoGridOpen(false);
     setIsInlineCameraOpen(false);
-    latestAssetsRef.current = [];
+    clearSelectedPhotos();
     closeActionSheet();
-  }, [closeActionSheet]);
+  }, [clearSelectedPhotos, closeActionSheet]);
   const handleAddFilePress = useCallback(async () => {
     const result = await DocumentPicker.getDocumentAsync({
       copyToCacheDirectory: true,
@@ -104,59 +95,30 @@ export function ChatInputActionSheet() {
     },
     [closeActionSheet, selectAction],
   );
-  // Tapping the "图片" tile: iOS shows the native inline photo picker in-sheet;
-  // Android has no such native module, so hand off to the system gallery via
-  // expo-image-picker instead.
   const handlePhotosPress = useCallback(() => {
-    if (Platform.OS !== 'ios') {
-      handleClose();
-      void launchImageLibrary();
-      return;
-    }
-
-    setIsInlinePickerOpen(true);
-  }, [handleClose, launchImageLibrary]);
-  // Tapping the "相机" tile opens the inline VisionCamera sub-view in-sheet
+    setIsPhotoGridOpen(true);
+  }, []);
+  // Tapping the "相机" tile opens the inline camera sub-view in-sheet
   // (mirrors the inline photo picker) instead of the full-screen system camera.
   const handleCameraPress = useCallback(() => {
     setIsInlineCameraOpen(true);
   }, []);
   const handleCameraBack = useCallback(() => {
     setIsInlineCameraOpen(false);
+    setSheetIndex(OPEN_INDEX);
   }, []);
   const handleCameraCapture = useCallback(
-    (photo: PhotoFile) => {
-      addAttachments([createCameraAttachmentDraft({ filePath: photo.filePath })]);
+    (photo: CameraCapturedPicture) => {
+      addAttachments([createCameraAttachmentDraft({ uri: photo.uri })]);
       handleClose();
     },
     [addAttachments, handleClose],
   );
   const handleInlineBack = useCallback(() => {
-    setIsInlinePickerOpen(false);
-    latestAssetsRef.current = [];
-  }, []);
-  const handleAllPhotosPress = useCallback(() => {
-    // ChatGPT-style hand-off: collapse the inline grid first, then present the
-    // full-screen system library. The sheet must be gone before we launch —
-    // expo-image-picker presents from the top-most view controller, so launching
-    // while the sheet is still up would nest the picker inside it (and tear it
-    // down when the sheet closes). The delay covers the sheet's collapse so the
-    // picker slides up right as it finishes, and the user lands back on the chat
-    // afterwards instead of the inline picker.
-    handleClose();
-    setTimeout(() => {
-      void launchImageLibrary();
-    }, INLINE_COLLAPSE_DURATION_MS);
-  }, [handleClose, launchImageLibrary]);
-  const handleInlineConfirm = useCallback(() => {
-    const assets = latestAssetsRef.current;
-
-    if (assets.length > 0) {
-      addAttachments(assets.map(createInlinePhotoAttachmentDraft));
-    }
-
-    handleClose();
-  }, [addAttachments, handleClose]);
+    clearSelectedPhotos();
+    setIsPhotoGridOpen(false);
+    setSheetIndex(OPEN_INDEX);
+  }, [clearSelectedPhotos]);
 
   return (
     <ModalBottomSheet
@@ -193,8 +155,10 @@ export function ChatInputActionSheet() {
             entering={chatInputSubviewEntering}
             exiting={chatInputSubviewExiting}
             style={styles.subview}
+            testID="chat-input-media-viewport"
           >
             <ChatInputInlineCamera
+              bottomInset={insets.bottom}
               isActive={isInlineCameraOpen && isActionSheetOpen}
               onBack={handleCameraBack}
               onCapture={handleCameraCapture}
@@ -208,39 +172,22 @@ export function ChatInputActionSheet() {
               // its buttons stay above the home indicator.
             />
           </Animated.View>
-        ) : isInlinePickerOpen ? (
-          // Rendered without the header wrapper: the inline picker needs the full
-          // sheet area, and react-native-screens' Screen would inset its content
-          // by the safe area (leaving top/bottom gaps). Its back/confirm controls
-          // are drawn natively, so no header is needed here. The Animated.View
-          // gives it the same scale-up/fade as the camera.
+        ) : isPhotoGridOpen ? (
           <Animated.View
             entering={chatInputSubviewEntering}
             exiting={chatInputSubviewExiting}
             style={styles.subview}
+            testID="chat-input-media-viewport"
           >
-            <InlinePhotoPickerView
-              allPhotosLabel={t('chat.media.allPhotos')}
-              backAccessibilityLabel={t('common.back')}
-              confirmLabelTemplate={t('chat.media.addPhotosTemplate')}
-              onAllPhotosPress={handleAllPhotosPress}
-              onBackPress={handleInlineBack}
-              onConfirm={handleInlineConfirm}
-              onError={(event) => {
-                logger.warn(`inline picker error: ${event.nativeEvent.message}`);
+            <ChatInputPhotoGrid
+              actions={actions}
+              bottomInset={insets.bottom}
+              onBack={handleInlineBack}
+              onConfirm={handleClose}
+              onError={(message) => {
+                logger.warn(`photo grid error: ${message}`);
               }}
-              onSelectionChange={(event) => {
-                latestAssetsRef.current = event.nativeEvent.assets;
-              }}
-              selectionLimit={9}
-              // Unlike the old @expo/ui SwiftUI-hosted sheet, this sheet
-              // doesn't add its own bottom safe-area padding to content, so
-              // the bottom negative-margin workaround this used to need is
-              // gone. The top negative margin still absorbs PHPicker's own
-              // ~10pt top content inset so the grid sits flush against the
-              // sheet top (verify the overflow still gets clipped by the
-              // surface's rounded top corners under the new sheet).
-              style={[styles.inlinePicker, { marginTop: -16 }]}
+              state={mediaState}
             />
           </Animated.View>
         ) : (
@@ -277,9 +224,6 @@ export function ChatInputActionSheet() {
 }
 
 const styles = StyleSheet.create({
-  inlinePicker: {
-    flex: 1,
-  },
   scrollContent: {
     gap: 16,
     paddingBottom: 28,

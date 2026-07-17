@@ -1,5 +1,11 @@
+import {
+  type CameraCapturedPicture,
+  type CameraType,
+  CameraView,
+  useCameraPermissions,
+} from 'expo-camera';
 import { CameraIcon, ChevronLeftIcon, SwitchCameraIcon } from 'lucide-uniwind/png';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AppState,
@@ -11,37 +17,31 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  Camera,
-  type CameraPosition,
-  type PhotoFile,
-  useCameraDevice,
-  useCameraPermission,
-  usePhotoOutput,
-} from 'react-native-vision-camera';
 
 import { CameraControlButton } from './CameraControlButton/CameraControlButton';
 import { CameraShutterButton } from './CameraShutterButton/CameraShutterButton';
+import { ChatInputMediaControlOverlay } from './ChatInputMediaControlOverlay';
 
 type ChatInputInlineCameraProps = {
-  // Whether the host sheet currently shows the camera. Drives VisionCamera's
-  // `isActive` so the capture session only runs while visible (battery + heat).
+  bottomInset: number;
+  // Whether the host sheet currently shows the camera. The preview is removed
+  // while inactive so Android also releases the capture session.
   isActive: boolean;
   onBack: () => void;
-  onCapture: (photo: PhotoFile) => void;
+  onCapture: (photo: CameraCapturedPicture) => void;
   onError: (message: string) => void;
   style?: StyleProp<ViewStyle>;
 };
 
 /**
  * ChatGPT-style inline camera that lives INSIDE the "+" action sheet (mirrors
- * the inline photo picker): a full-bleed VisionCamera preview fills the entire
+ * the inline photo picker): a full-bleed Expo Camera preview fills the entire
  * sheet, with self-drawn back / shutter / flip controls FLOATING on top of it
  * (transparent control bar, no black strip stealing preview space). Capture
  * writes a JPEG to a temp path that the caller turns into an attachment draft.
  */
 export function ChatInputInlineCamera({
+  bottomInset,
   isActive,
   onBack,
   onCapture,
@@ -49,25 +49,27 @@ export function ChatInputInlineCamera({
   style,
 }: ChatInputInlineCameraProps) {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const [position, setPosition] = useState<CameraPosition>('back');
+  const cameraRef = useRef<CameraView>(null);
+  const didRequestPermissionRef = useRef(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [facing, setFacing] = useState<CameraType>('back');
   const [isCapturing, setIsCapturing] = useState(false);
   const [isForeground, setIsForeground] = useState(true);
-  const device = useCameraDevice(position);
-  // VisionCamera v5 routes capture through a photo "output" attached to the
-  // <Camera>; force JPEG so the attachment's image/jpeg media type is accurate.
-  const photoOutput = usePhotoOutput({ containerFormat: 'jpeg' });
-  const outputs = useMemo(() => [photoOutput], [photoOutput]);
-  const { hasPermission, requestPermission } = useCameraPermission();
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [hasMountError, setHasMountError] = useState(false);
 
   useEffect(() => {
-    if (!hasPermission) {
+    if (
+      permission &&
+      !permission.granted &&
+      permission.canAskAgain &&
+      !didRequestPermissionRef.current
+    ) {
+      didRequestPermissionRef.current = true;
       void requestPermission();
     }
-  }, [hasPermission, requestPermission]);
+  }, [permission, requestPermission]);
 
-  // Suspend the capture session while the app is backgrounded; VisionCamera
-  // expects `isActive` to track foreground state, not just visibility.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (status) => {
       setIsForeground(status === 'active');
@@ -77,40 +79,57 @@ export function ChatInputInlineCamera({
   }, []);
 
   const handleFlip = useCallback(() => {
-    setPosition((current) => (current === 'back' ? 'front' : 'back'));
+    setIsCameraReady(false);
+    setHasMountError(false);
+    setFacing((current) => (current === 'back' ? 'front' : 'back'));
   }, []);
 
   const handleCapture = useCallback(async () => {
-    if (isCapturing) {
+    if (isCapturing || !isCameraReady || !cameraRef.current) {
       return;
     }
 
     setIsCapturing(true);
 
     try {
-      const photo = await photoOutput.capturePhotoToFile({}, {});
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 1,
+      });
       onCapture(photo);
     } catch (error) {
       onError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsCapturing(false);
     }
-  }, [isCapturing, onCapture, onError, photoOutput]);
+  }, [isCameraReady, isCapturing, onCapture, onError]);
 
   const handleOpenSettings = useCallback(() => {
     void Linking.openSettings();
   }, []);
 
-  const canCapture = hasPermission && device != null;
+  const hasPermission = permission?.granted ?? false;
+  const canUseCamera = hasPermission && !hasMountError;
+  const shouldRenderCamera = canUseCamera && isActive && isForeground;
+  const canCapture = shouldRenderCamera && isCameraReady;
 
   return (
     <View className="flex-1 bg-black" style={style}>
-      {canCapture ? (
+      {shouldRenderCamera ? (
         // Full-bleed preview: fills the whole sheet, controls float over it.
-        <Camera
-          device={device}
-          isActive={isActive && isForeground}
-          outputs={outputs}
+        <CameraView
+          ref={cameraRef}
+          active={isActive && isForeground}
+          facing={facing}
+          mirror={facing === 'front'}
+          mode="picture"
+          onCameraReady={() => {
+            setIsCameraReady(true);
+          }}
+          onMountError={(error) => {
+            setHasMountError(true);
+            setIsCameraReady(false);
+            onError(error.message);
+          }}
           style={StyleSheet.absoluteFill}
         />
       ) : (
@@ -144,31 +163,40 @@ export function ChatInputInlineCamera({
           preview; buttons keep a translucent dark backing so they stay legible
           over bright scenes. The bottom safe-area inset is applied here so the
           preview itself still runs edge-to-edge under the home indicator. */}
-      <View
-        className="absolute inset-x-0 bottom-0 flex-row items-center justify-between px-10 pt-4"
-        style={{ paddingBottom: Math.max(insets.bottom, 16) }}
-      >
-        <CameraControlButton
-          accessibilityLabel={t('common.back')}
-          icon={ChevronLeftIcon}
-          onPress={onBack}
-          sfSymbol="chevron.left"
-        />
+      <ChatInputMediaControlOverlay>
+        <View
+          className="absolute inset-x-0 flex-row items-center justify-between px-10"
+          style={[styles.controlBar, { bottom: Math.max(bottomInset, 16) }]}
+          testID="chat-input-camera-controls"
+        >
+          <CameraControlButton
+            accessibilityLabel={t('common.back')}
+            icon={ChevronLeftIcon}
+            onPress={onBack}
+            sfSymbol="chevron.left"
+          />
 
-        <CameraShutterButton
-          accessibilityLabel={t('chat.media.takePhoto')}
-          disabled={!canCapture || isCapturing}
-          onPress={handleCapture}
-        />
+          <CameraShutterButton
+            accessibilityLabel={t('chat.media.takePhoto')}
+            disabled={!canCapture || isCapturing}
+            onPress={handleCapture}
+          />
 
-        <CameraControlButton
-          accessibilityLabel={t('chat.media.flipCamera')}
-          disabled={!canCapture}
-          icon={SwitchCameraIcon}
-          onPress={handleFlip}
-          sfSymbol="camera.rotate"
-        />
-      </View>
+          <CameraControlButton
+            accessibilityLabel={t('chat.media.flipCamera')}
+            disabled={!shouldRenderCamera || isCapturing}
+            icon={SwitchCameraIcon}
+            onPress={handleFlip}
+            sfSymbol="camera.rotate"
+          />
+        </View>
+      </ChatInputMediaControlOverlay>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  controlBar: {
+    height: 72,
+  },
+});

@@ -1,6 +1,7 @@
 import {
   appendChatInputAttachments,
   type ChatInputAttachmentDraft,
+  createCameraAttachmentDraft,
   createChatInputMessageParts,
   createDocumentAttachmentDraft,
   createPhotoAttachmentDraft,
@@ -49,6 +50,32 @@ describe('chat input attachments', () => {
       mediaType: 'image/png',
       name: 'screen.png',
     });
+  });
+
+  test('creates photo attachments with filename metadata', () => {
+    expect(
+      createPhotoAttachmentDraft({
+        fileName: 'camera-shot.HEIC',
+        id: 'photo-a',
+        uri: 'file://photo-a.heic',
+      }),
+    ).toMatchObject({
+      id: 'photo:photo-a',
+      mediaType: 'image/heic',
+      name: 'camera-shot.HEIC',
+      uri: 'file://photo-a.heic',
+    });
+  });
+
+  test('creates camera attachments from expo-camera URIs', () => {
+    expect(createCameraAttachmentDraft({ uri: 'file://camera-shot.jpg' })).toMatchObject({
+      id: 'photo:file://camera-shot.jpg',
+      mediaType: 'image/jpeg',
+      uri: 'file://camera-shot.jpg',
+    });
+    expect(createCameraAttachmentDraft({ uri: '/tmp/camera-shot.jpg' }).uri).toBe(
+      'file:///tmp/camera-shot.jpg',
+    );
   });
 
   test('classifies image documents by filename when media type is missing', () => {
