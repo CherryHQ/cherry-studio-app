@@ -11,6 +11,14 @@ trustPolicyExclude:
   - tinyexec@1.2.2
   - ua-parser-js@0.7.41||1.0.41
 
+packageExtensions:
+  '@bottom-tabs/react-navigation@1.4.0':
+    peerDependencies:
+      expo-router: '>=57'
+    peerDependenciesMeta:
+      '@react-navigation/native':
+        optional: true
+
 overrides:
   react-native-svg: 15.15.4
 
@@ -29,6 +37,7 @@ patchedDependencies:
   metro-runtime@0.84.4: patches/metro-runtime@0.84.4.patch
   uniwind@1.6.5: patches/uniwind@1.6.5.patch
   react-native-reanimated@4.5.0: patches/react-native-reanimated@4.5.0.patch
+  '@bottom-tabs/react-navigation@1.4.0': patches/@bottom-tabs__react-navigation@1.4.0.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'

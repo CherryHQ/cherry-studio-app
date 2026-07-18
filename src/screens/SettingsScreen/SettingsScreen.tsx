@@ -11,7 +11,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
-import { CloseHeader } from '@/components/headers';
+import { TabRootHeader } from '@/components/headers';
 import { SettingSelect } from './components/SettingSelect';
 import { SettingsProfileHeader } from './components/SettingsProfileHeader';
 import { SettingsSection } from './components/SettingsSection';
@@ -26,7 +26,7 @@ export default function SettingsScreen() {
 
   return (
     <>
-      <CloseHeader />
+      <TabRootHeader title={t('navigation.settings')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

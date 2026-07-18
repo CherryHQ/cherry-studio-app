@@ -57,9 +57,11 @@ SettingsScreen/
 
 - `ChatScreen/`: chat topic screen, new-topic screen, message content, message item rows, and
   workspace behavior.
+- `AssistantScreen/`: assistant list and assistant editing flows.
 - `SettingsScreen/`: settings home, about/data/model/provider/web-search settings screens, and
   settings-specific UI controls.
+- `TopicListScreen/`: message-tab topic search, pagination, topic actions, and navigation.
 
-Reusable modules that remain in `src/components` include app shell modules (`drawer`, `headers`,
-`navigation`), shared flows such as `modelPicker`, shared UI behavior such as `confirmDialog`, and
-native dependency adapters such as `nativePrimitives`.
+Reusable modules that remain in `src/components` include app shell modules (`headers`, `navigation`),
+shared flows such as `modelPicker`, shared UI behavior such as `confirmDialog`, and native dependency
+adapters such as `nativePrimitives`.

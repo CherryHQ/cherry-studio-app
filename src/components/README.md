@@ -43,8 +43,8 @@ Only add the subdirectories that the module actually needs.
 
 ## Imports
 
-- External callers should import from the module root: `@/components/drawer`,
-  `@/components/modelPicker`, `@/components/headers`.
+- External callers should import from the module root: `@/components/modelPicker`,
+  `@/components/headers`.
 - Module internals should use relative imports for their own `components`, `context`, `hooks`, and
   `utils`.
 - Tests may import the specific utility under test. Consumer tests should use the public module
