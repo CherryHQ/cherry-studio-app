@@ -21,11 +21,20 @@ jest.mock('@shopify/react-native-skia', () => {
     Group: inert('SkiaGroup'),
     Text: inert('SkiaText'),
     BlurMask: inert('SkiaBlurMask'),
+    RoundedRect: inert('SkiaRoundedRect'),
+    Shader: inert('SkiaShader'),
     matchFont: () => ({
       getGlyphIDs: (text: string) => Array.from(text).map((_, index) => index),
       getGlyphWidths: (ids: number[]) => ids.map(() => 8),
       getMetrics: () => ({ ascent: -11, descent: 3 }),
     }),
+    // thinkingPixelField.ts compiles its SkSL at module scope, so RuntimeEffect.Make
+    // must return a truthy stub or the ChatInputSurface import chain throws under test.
+    Skia: {
+      RuntimeEffect: {
+        Make: () => ({}),
+      },
+    },
   };
 });
 
