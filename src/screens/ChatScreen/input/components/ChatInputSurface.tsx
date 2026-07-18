@@ -1,3 +1,4 @@
+import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
 import type { IconPngSource } from '@cherrystudio/ui/icons';
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useToast } from 'heroui-native/toast';
@@ -14,6 +15,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useUniwind } from 'uniwind';
+import { thinkingAccentColor } from '@/components/effortSlider';
 import { Image } from '@/components/uniwind';
 import { loggerService } from '@/core/logger/LoggerService';
 import {
@@ -37,10 +39,16 @@ import {
   chatInputMotionConfig,
   chatInputSpringConfig,
 } from '@/screens/ChatScreen/input/utils/chatInputMotion';
+import {
+  type ChatInputReasoningEffort,
+  getChatInputReasoningEffortOption,
+} from '@/screens/ChatScreen/input/utils/chatInputReasoning';
 
 const inputBottomToolbarStyle = {
   minHeight: chatInputBottomToolbarHeight,
 };
+
+const emptyReasoningEfforts: readonly ChatInputReasoningEffort[] = [];
 
 const logger = loggerService.withContext('ChatInputSurface');
 
@@ -53,6 +61,8 @@ type ChatInputSurfaceProps = {
   onModelPickerPress: () => void;
   onSendPress: (payload: ChatInputSendPayload) => Promise<void>;
   onStopPress: () => void;
+  /** Reasoning stops of the selected model; empty hides the effort label in the model pill. */
+  reasoningEfforts?: readonly ChatInputReasoningEffort[];
 };
 
 export type ChatInputSendPayload = {
@@ -68,6 +78,7 @@ export function ChatInputSurface({
   onModelPickerPress,
   onSendPress,
   onStopPress,
+  reasoningEfforts = emptyReasoningEfforts,
 }: ChatInputSurfaceProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -80,8 +91,12 @@ export function ChatInputSurface({
     setInputFocused,
   } = useChatInputActions();
   const { inputRef } = useChatInputMeta();
-  const { attachments, draft, isComposerExpanded, isInputFocused, selectedTool } =
+  const { attachments, draft, isComposerExpanded, isInputFocused, reasoningEffort, selectedTool } =
     useChatInputState();
+  const reasoningEffortLabelKey =
+    reasoningEfforts.length > 0
+      ? getChatInputReasoningEffortOption(reasoningEffort)?.labelKey
+      : undefined;
   const expandProgress = useSharedValue(0);
   const contentHeight = useSharedValue(0);
   const availableWidth = useSharedValue(0);
@@ -208,8 +223,11 @@ export function ChatInputSurface({
                 {modelLabel ? (
                   <ChatInputModelButton
                     accessibilityLabel={modelLabel}
+                    effortLabel={reasoningEffortLabelKey ? t(reasoningEffortLabelKey) : undefined}
                     icon={modelIcon}
                     initial={modelLabel.trim().charAt(0).toUpperCase() || 'M'}
+                    isEffortMax={reasoningEffort === REASONING_EFFORT.MAX}
+                    label={modelLabel}
                     onPress={handleModelPickerPress}
                   />
                 ) : (
@@ -236,13 +254,21 @@ export function ChatInputSurface({
 
 function ChatInputModelButton({
   accessibilityLabel,
+  effortLabel,
   icon,
   initial,
+  isEffortMax = false,
+  label,
   onPress,
 }: {
   accessibilityLabel: string;
+  /** Current reasoning effort of the model; rendered muted next to the name. */
+  effortLabel?: string;
   icon?: IconPngSource;
   initial: string;
+  /** The max stop stands out in the thinking accent color instead of muted. */
+  isEffortMax?: boolean;
+  label: string;
   onPress: () => void;
 }) {
   const { theme } = useUniwind();
@@ -251,7 +277,7 @@ function ChatInputModelButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      className="size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-secondary active:bg-surface-tertiary active:opacity-70"
+      className="h-8 min-w-0 shrink flex-row items-center gap-1.5 rounded-full bg-surface-secondary px-2.5 active:bg-surface-tertiary active:opacity-70"
       onPress={onPress}
       testID="chat-input-model-button"
     >
@@ -260,11 +286,28 @@ function ChatInputModelButton({
           cachePolicy="memory-disk"
           contentFit="contain"
           source={icon[theme === 'dark' ? 'dark' : 'light']}
-          style={{ height: 22, width: 22 }}
+          style={{ height: 18, width: 18 }}
         />
       ) : (
         <Text className="font-semibold text-foreground text-sm">{initial}</Text>
       )}
+      <Text className="min-w-0 shrink font-semibold text-foreground text-sm" numberOfLines={1}>
+        {label}
+      </Text>
+      {effortLabel ? (
+        <Text
+          className="shrink-0 text-default-foreground text-sm"
+          numberOfLines={1}
+          style={
+            isEffortMax
+              ? { color: thinkingAccentColor[theme === 'dark' ? 'dark' : 'light'] }
+              : undefined
+          }
+          testID="chat-input-model-effort-label"
+        >
+          {effortLabel}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }

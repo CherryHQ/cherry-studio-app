@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Text, TextInput, type ViewProps } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { thinkingAccentColor } from '@/components/effortSlider/utils/thinkingPalette';
 
 import { ChatInputProvider, useChatInputActions } from '../../context/ChatInputProvider';
 import type { ChatInputAttachmentDraft } from '../../utils/chatInputAttachments';
@@ -250,6 +251,101 @@ describe('ChatInputSurface', () => {
       }),
     ).toHaveLength(0);
   });
+
+  test('shows the current reasoning effort muted next to the model name', async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+            reasoningEfforts={['default', 'high']}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    expect(findText(renderer, 'Model')).toBe(true);
+
+    const effortLabels = renderer.root.findAllByProps({
+      testID: 'chat-input-model-effort-label',
+    });
+    expect(effortLabels.length).toBeGreaterThan(0);
+    expect(effortLabels[0].props.children).toBe('chat.reasoning.default');
+    expect(effortLabels[0].props.className).toContain('text-default-foreground');
+    expect(effortLabels[0].props.style).toBeUndefined();
+  });
+
+  test('shows the max effort label in the thinking accent color', async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <SeedMaxReasoningEffort />
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+            reasoningEfforts={['default', 'max']}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    const effortLabels = renderer.root.findAllByProps({
+      testID: 'chat-input-model-effort-label',
+    });
+    expect(effortLabels.length).toBeGreaterThan(0);
+    expect(effortLabels[0].props.children).toBe('chat.reasoning.max');
+    expect(effortLabels[0].props.style).toEqual({ color: thinkingAccentColor.light });
+  });
+
+  test('hides the effort label when the model has no reasoning stops', async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    expect(
+      renderer.root.findAllByProps({
+        testID: 'chat-input-model-effort-label',
+      }),
+    ).toHaveLength(0);
+  });
 });
 
 function SeedChatInputState({
@@ -273,6 +369,16 @@ function getTextInputValue(renderer: ReactTestRenderer) {
   const textInput = renderer.root.findByType(TextInput);
 
   return textInput.props.value;
+}
+
+function SeedMaxReasoningEffort() {
+  const { selectReasoningEffort } = useChatInputActions();
+
+  useEffect(() => {
+    selectReasoningEffort('max');
+  }, [selectReasoningEffort]);
+
+  return null;
 }
 
 function findText(renderer: ReactTestRenderer, text: string) {

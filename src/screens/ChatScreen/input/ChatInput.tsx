@@ -75,8 +75,6 @@ export function ChatInput({ topicId }: ChatInputProps) {
     [chatRuntime, selectedAssistantId, selectedModelId],
   );
 
-  // ChatInputProvider lives up in ChatWorkspace so the reasoning panel
-  // (mounted at the workspace level) shares this composer's state.
   return (
     <>
       <ChatInputSurface
@@ -87,6 +85,7 @@ export function ChatInput({ topicId }: ChatInputProps) {
         onModelPickerPress={openModelPicker}
         onSendPress={handleSendPress}
         onStopPress={chatRuntime.abort}
+        reasoningEfforts={reasoningEfforts}
       />
       <ChatInputActionSheet />
       <ModelPickerBottomSheet
