@@ -6,6 +6,7 @@ This module owns reusable model selection state, model picker sheet UI, and mode
 
 - `ModelPickerBottomSheet` renders the reusable model picker bottom sheet.
 - `ModelPickerSheetContent` renders the selectable model list inside the sheet.
+- `ModelPickerIcon` and `ModelPickerTagChip` render model metadata used by picker consumers.
 - `useModelSettingSelections` reads and updates model selection preferences.
 - Model setting constants and helpers are exported from `index.ts`.
 

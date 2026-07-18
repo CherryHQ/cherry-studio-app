@@ -6,8 +6,8 @@ import {
   useChatInputActions,
   useChatInputMeta,
   useChatInputState,
-} from '@/screens/ChatScreen/input/context/ChatInputProvider';
-import { hasChatInputSendableContent } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+} from '../context/ChatInputProvider';
+import { hasChatInputSendableContent } from '../utils/chatInputAttachments';
 
 const buttonSize = 32;
 

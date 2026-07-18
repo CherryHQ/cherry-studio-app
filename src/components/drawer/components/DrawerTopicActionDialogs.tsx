@@ -18,7 +18,7 @@ type DrawerTopicActionDialogs = {
 
 /**
  * Owns the rename/delete dialogs for sidebar topics and the state that drives
- * them, mirroring the `useSettingsConfirmDialog` pattern: the caller renders
+ * them, mirroring the shared `useConfirmDialog` pattern: the caller renders
  * `dialogs` once and triggers them via `requestRename` / `requestDelete` from
  * each topic row's long-press menu. The actual mutations live in the drawer
  * actions context (so deleting the active topic can also navigate away).

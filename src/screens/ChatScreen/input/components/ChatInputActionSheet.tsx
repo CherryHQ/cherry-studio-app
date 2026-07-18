@@ -9,29 +9,26 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isLiquidGlassAvailable, sheetScrimColor } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
-import { ChatInputActionList } from '@/screens/ChatScreen/input/components/ChatInputActionList';
-import { ChatInputInlineCamera } from '@/screens/ChatScreen/input/components/ChatInputInlineCamera';
+import {
+  useChatInputActions,
+  useChatInputMedia,
+  useChatInputState,
+} from '../context/ChatInputProvider';
+import type { ChatInputActionId } from '../utils/chatInputActions';
+import {
+  createCameraAttachmentDraft,
+  createDocumentAttachmentDraft,
+} from '../utils/chatInputAttachments';
+import { chatInputSubviewEntering, chatInputSubviewExiting } from '../utils/chatInputMotion';
+import { ChatInputActionList } from './ChatInputActionList';
+import { ChatInputInlineCamera } from './ChatInputInlineCamera';
 import {
   ChatInputCameraTile,
   ChatInputFileTile,
   ChatInputMediaStrip,
   ChatInputPhotosTile,
-} from '@/screens/ChatScreen/input/components/ChatInputMediaStrip';
-import { ChatInputPhotoGrid } from '@/screens/ChatScreen/input/components/ChatInputPhotoGrid';
-import {
-  useChatInputActions,
-  useChatInputMedia,
-  useChatInputState,
-} from '@/screens/ChatScreen/input/context/ChatInputProvider';
-import type { ChatInputActionId } from '@/screens/ChatScreen/input/utils/chatInputActions';
-import {
-  createCameraAttachmentDraft,
-  createDocumentAttachmentDraft,
-} from '@/screens/ChatScreen/input/utils/chatInputAttachments';
-import {
-  chatInputSubviewEntering,
-  chatInputSubviewExiting,
-} from '@/screens/ChatScreen/input/utils/chatInputMotion';
+} from './ChatInputMediaStrip';
+import { ChatInputPhotoGrid } from './ChatInputPhotoGrid';
 
 // Detent indices into the `detents` array built from `useWindowDimensions()`
 // below: 0 is closed, 1 is the default open height (half the screen), and 2 is

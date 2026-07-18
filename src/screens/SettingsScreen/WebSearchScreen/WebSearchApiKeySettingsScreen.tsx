@@ -2,7 +2,7 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
-
+import { useConfirmDialog } from '@/components/confirmDialog';
 import { BackHeader } from '@/components/headers';
 import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/data/preference';
 import { isMobileSupportedWebSearchProviderId } from '@/data/presets/webSearchProviders';
@@ -11,8 +11,7 @@ import {
   useWebSearchApiKeySettings,
   type WebSearchApiKeyEntry,
   WebSearchApiServiceApiKeyForm,
-} from '@/screens/SettingsScreen/WebSearchScreen/apiService';
-import { useSettingsConfirmDialog } from '../hooks/useSettingsConfirmDialog';
+} from './apiService';
 import {
   getWebSearchProviderDetailSections,
   getWebSearchProviderPreset,
@@ -44,7 +43,7 @@ export default function WebSearchApiKeySettingsScreen() {
   const [apiKeyErrors, setApiKeyErrors] = useState<Record<string, string>>({});
   const [pendingApiKeyIds, setPendingApiKeyIds] = useState<ReadonlySet<string>>(() => new Set());
   const pendingApiKeyIdsRef = useRef<ReadonlySet<string>>(new Set());
-  const { confirmDialog, requestConfirm } = useSettingsConfirmDialog();
+  const { confirmDialog, requestConfirm } = useConfirmDialog();
 
   const closeSheet = useCallback(() => {
     router.back();

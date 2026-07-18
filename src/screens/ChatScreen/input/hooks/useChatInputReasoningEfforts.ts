@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useModelSettingSelections } from '@/components/modelPicker';
 import { isUniqueModelId } from '@/data/types/model';
 import { useModelById } from '@/hooks/chat';
-import { getChatInputReasoningEffortsForModel } from '@/screens/ChatScreen/input/utils/chatInputReasoning';
+import { getChatInputReasoningEffortsForModel } from '../utils/chatInputReasoning';
 
 /**
  * Reasoning effort levels supported by the currently selected default model,

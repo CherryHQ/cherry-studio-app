@@ -9,22 +9,22 @@ import {
   useState,
 } from 'react';
 import { type TextInput } from 'react-native';
-import { useChatInputPhotoPicker } from '@/screens/ChatScreen/input/hooks/useChatInputPhotoPicker';
+import { useChatInputPhotoPicker } from '../hooks/useChatInputPhotoPicker';
 import {
   type ChatInputAction,
   type ChatInputActionId,
   getChatInputAction,
   toggleChatInputAction,
-} from '@/screens/ChatScreen/input/utils/chatInputActions';
+} from '../utils/chatInputActions';
 import {
   appendChatInputAttachments,
   type ChatInputAttachmentDraft,
   removeChatInputAttachment,
-} from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+} from '../utils/chatInputAttachments';
 import {
   CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   type ChatInputReasoningEffort,
-} from '@/screens/ChatScreen/input/utils/chatInputReasoning';
+} from '../utils/chatInputReasoning';
 
 type ChatInputStateContextValue = {
   attachments: readonly ChatInputAttachmentDraft[];

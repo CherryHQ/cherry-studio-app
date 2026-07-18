@@ -2,10 +2,9 @@ import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
-
-import { PrismSweep } from '@/components/prismSweep';
 import type { CherryMessagePart } from '@/data/types/message';
 import { readCherryMeta } from '@/data/types/uiParts';
+import { PrismSweep } from '../../prismSweep';
 
 import { useThinkingTimerMs } from '../hooks/useThinkingTimerMs';
 import { PartMarkdown } from './PartMarkdown';

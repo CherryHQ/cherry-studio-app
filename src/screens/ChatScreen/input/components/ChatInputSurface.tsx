@@ -15,34 +15,31 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useUniwind } from 'uniwind';
-import { thinkingAccentColor } from '@/components/effortSlider';
-import { Image } from '@/components/uniwind';
+import { Image } from '@/components/nativePrimitives';
 import { loggerService } from '@/core/logger/LoggerService';
 import {
   chatInputBottomToolbarHeight,
   chatInputMinComposerHeight,
   chatInputMinSurfaceWidth,
   chatInputRestingWidthDelta,
-} from '@/screens/ChatScreen/input/chatInputLayout';
-import { ChatInputAddButton } from '@/screens/ChatScreen/input/components/ChatInputAddButton';
-import { ChatInputAttachmentPreviewStrip } from '@/screens/ChatScreen/input/components/ChatInputMediaStrip';
-import { ChatInputPrimaryActionButton } from '@/screens/ChatScreen/input/components/ChatInputPrimaryActionButton';
-import { ChatInputTextArea } from '@/screens/ChatScreen/input/components/ChatInputTextArea';
-import { ChatInputToolbar } from '@/screens/ChatScreen/input/components/ChatInputToolbar';
+} from '../chatInputLayout';
 import {
   useChatInputActions,
   useChatInputMeta,
   useChatInputState,
-} from '@/screens/ChatScreen/input/context/ChatInputProvider';
-import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
-import {
-  chatInputMotionConfig,
-  chatInputSpringConfig,
-} from '@/screens/ChatScreen/input/utils/chatInputMotion';
+} from '../context/ChatInputProvider';
+import { thinkingAccentColor } from '../effortSlider';
+import type { ChatInputAttachmentDraft } from '../utils/chatInputAttachments';
+import { chatInputMotionConfig, chatInputSpringConfig } from '../utils/chatInputMotion';
 import {
   type ChatInputReasoningEffort,
   getChatInputReasoningEffortOption,
-} from '@/screens/ChatScreen/input/utils/chatInputReasoning';
+} from '../utils/chatInputReasoning';
+import { ChatInputAddButton } from './ChatInputAddButton';
+import { ChatInputAttachmentPreviewStrip } from './ChatInputMediaStrip';
+import { ChatInputPrimaryActionButton } from './ChatInputPrimaryActionButton';
+import { ChatInputTextArea } from './ChatInputTextArea';
+import { ChatInputToolbar } from './ChatInputToolbar';
 
 const inputBottomToolbarStyle = {
   minHeight: chatInputBottomToolbarHeight,

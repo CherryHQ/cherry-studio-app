@@ -34,6 +34,7 @@ internal provider or leaf components.
   input assets, and the text input ref.
 - `useChatInputPhotoPicker` owns platform photo permissions, photo preview loading, and selected
   photo ids.
+- `effortSlider/` owns the reasoning-effort control used by the chat input surface.
 - Leaf components render controls from provider state and call provider actions. They should not
   introduce parallel state for the same behavior.
 - Future selected image/file display should extend the selected input assets shape rather than adding

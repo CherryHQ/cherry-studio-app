@@ -8,7 +8,6 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { EmojiPickerBottomSheet } from '@/components/emojiPicker';
 import { CloseHeader, type CloseHeaderAction } from '@/components/headers';
 import {
   ModelPickerBottomSheet,
@@ -25,6 +24,7 @@ import {
 } from '@/data/types/assistant';
 import type { UniqueModelId } from '@/data/types/model';
 import { useAssistantApiById, useAssistantMutations } from '@/hooks/chat';
+import { EmojiPickerBottomSheet } from './components/EmojiPickerBottomSheet';
 
 type AssistantFormState = {
   customParametersJson: string;

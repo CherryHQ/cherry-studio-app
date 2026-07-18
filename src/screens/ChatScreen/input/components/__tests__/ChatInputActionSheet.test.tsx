@@ -57,7 +57,7 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
-jest.mock('@/screens/ChatScreen/input/context/ChatInputProvider', () => ({
+jest.mock('../../context/ChatInputProvider', () => ({
   useChatInputActions: () => ({
     addAttachments: jest.fn(),
     closeActionSheet: jest.fn(),
@@ -75,7 +75,7 @@ jest.mock('@/screens/ChatScreen/input/context/ChatInputProvider', () => ({
   }),
 }));
 
-jest.mock('@/screens/ChatScreen/input/components/ChatInputMediaStrip', () => {
+jest.mock('../ChatInputMediaStrip', () => {
   const { Pressable: MockPressable, View: MockView } = jest.requireActual('react-native');
 
   return {
@@ -90,7 +90,7 @@ jest.mock('@/screens/ChatScreen/input/components/ChatInputMediaStrip', () => {
   };
 });
 
-jest.mock('@/screens/ChatScreen/input/components/ChatInputActionList', () => {
+jest.mock('../ChatInputActionList', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
   return {
@@ -98,7 +98,7 @@ jest.mock('@/screens/ChatScreen/input/components/ChatInputActionList', () => {
   };
 });
 
-jest.mock('@/screens/ChatScreen/input/components/ChatInputInlineCamera', () => {
+jest.mock('../ChatInputInlineCamera', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
   return {
@@ -109,7 +109,7 @@ jest.mock('@/screens/ChatScreen/input/components/ChatInputInlineCamera', () => {
   };
 });
 
-jest.mock('@/screens/ChatScreen/input/components/ChatInputPhotoGrid', () => {
+jest.mock('../ChatInputPhotoGrid', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
   return {
@@ -120,7 +120,7 @@ jest.mock('@/screens/ChatScreen/input/components/ChatInputPhotoGrid', () => {
   };
 });
 
-jest.mock('@/screens/ChatScreen/input/utils/chatInputMotion', () => ({
+jest.mock('../../utils/chatInputMotion', () => ({
   chatInputSubviewEntering: undefined,
   chatInputSubviewExiting: undefined,
 }));

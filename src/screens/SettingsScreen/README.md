@@ -4,13 +4,15 @@ This module owns settings screens' shared UI and feature-specific settings modul
 
 ## Public Interface
 
-- Shared settings controls are exported from `index.ts`.
-- Feature settings modules expose their own `index.ts` files under `provider/` and `webSearch/`.
+- Route screen components are exported from `index.ts`.
+- Feature settings modules expose their own `index.ts` files under `ProviderScreen/` and
+  `WebSearchScreen/`.
 - Reusable model selection lives in `src/components/modelPicker`; settings screens consume that
   module instead of owning it.
 
 ## Organization
 
-- `components/` contains reusable settings row, section, select, input, and service-row UI.
+- `components/` contains settings-private row, section, select, input, and service-row UI shared by
+  nested settings areas through relative imports.
 - `hooks/` contains shared settings preference hooks.
-- `provider/` and `webSearch/` contain feature-specific settings modules.
+- `ProviderScreen/` and `WebSearchScreen/` contain feature-specific settings modules.

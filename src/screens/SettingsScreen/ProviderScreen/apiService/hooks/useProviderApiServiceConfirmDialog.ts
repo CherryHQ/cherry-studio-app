@@ -1,5 +1,5 @@
-import { useSettingsConfirmDialog } from '../../../hooks/useSettingsConfirmDialog';
+import { useConfirmDialog } from '@/components/confirmDialog';
 
 export function useProviderApiServiceConfirmDialog() {
-  return useSettingsConfirmDialog();
+  return useConfirmDialog();
 }

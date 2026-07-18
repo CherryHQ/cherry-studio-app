@@ -12,10 +12,10 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
 import { CloseHeader } from '@/components/headers';
-import { usePrefetchProviders } from '@/hooks/settings/usePrefetchProviders';
 import { SettingSelect } from './components/SettingSelect';
 import { SettingsProfileHeader } from './components/SettingsProfileHeader';
 import { SettingsSection } from './components/SettingsSection';
+import { usePrefetchProviders } from './hooks/usePrefetchProviders';
 import { useSettingPreferences } from './hooks/useSettingPreferences';
 
 export default function SettingsScreen() {

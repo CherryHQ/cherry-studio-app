@@ -1,9 +1,8 @@
 import { useEffect } from 'react';
 import { Text, TextInput, type ViewProps } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { thinkingAccentColor } from '@/components/effortSlider/utils/thinkingPalette';
-
 import { ChatInputProvider, useChatInputActions } from '../../context/ChatInputProvider';
+import { thinkingAccentColor } from '../../effortSlider';
 import type { ChatInputAttachmentDraft } from '../../utils/chatInputAttachments';
 import { ChatInputSurface } from '../ChatInputSurface';
 
@@ -113,7 +112,7 @@ jest.mock('@magrinj/expo-quick-look', () => ({
   },
 }));
 
-jest.mock('@/components/uniwind', () => {
+jest.mock('@/components/nativePrimitives', () => {
   const { View } = jest.requireActual('react-native');
 
   return {
@@ -134,7 +133,7 @@ jest.mock('lucide-uniwind', () => {
   );
 });
 
-jest.mock('@/screens/ChatScreen/input/hooks/useChatInputPhotoPicker', () => ({
+jest.mock('../../hooks/useChatInputPhotoPicker', () => ({
   useChatInputPhotoPicker: () => ({
     addSelectedPhotoPreviews: jest.fn(),
     clearSelectedPhotos: jest.fn(),

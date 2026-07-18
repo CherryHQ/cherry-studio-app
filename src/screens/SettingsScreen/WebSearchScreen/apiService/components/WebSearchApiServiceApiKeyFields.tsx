@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { SettingsIconButton } from '@/screens/SettingsScreen/components/SettingsIconButton';
+import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import type { WebSearchApiKeyEntry } from '../utils/webSearchApiServiceApiKeys';
 
 export function WebSearchApiServiceApiKeysField({

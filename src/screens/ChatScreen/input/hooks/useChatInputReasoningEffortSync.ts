@@ -1,14 +1,11 @@
 import { useEffect } from 'react';
-import {
-  useChatInputActions,
-  useChatInputState,
-} from '@/screens/ChatScreen/input/context/ChatInputProvider';
+import { useChatInputActions, useChatInputState } from '../context/ChatInputProvider';
 import {
   CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   type ChatInputReasoningEffort,
   getFallbackChatInputReasoningEffort,
   isChatInputReasoningEffortAvailable,
-} from '@/screens/ChatScreen/input/utils/chatInputReasoning';
+} from '../utils/chatInputReasoning';
 
 /**
  * Keeps the selected reasoning effort valid for the current model: clears it

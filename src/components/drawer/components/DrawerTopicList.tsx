@@ -4,13 +4,11 @@ import { PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
-import { PopupMenu, type PopupMenuItem } from '@/components/PopupMenu';
 import type { Topic } from '@/data/types/topic';
-
 import { useDrawerActions, useDrawerPanelState, useDrawerTopics } from '../context/DrawerProvider';
-
 import { DrawerNewChatButton } from './DrawerNewChatButton';
 import { useDrawerTopicActionDialogs } from './DrawerTopicActionDialogs';
+import { PopupMenu, type PopupMenuItem } from './PopupMenu';
 
 type DrawerTopicRowProps = {
   isActive: boolean;

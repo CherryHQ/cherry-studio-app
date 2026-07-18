@@ -5,9 +5,12 @@ import { memo, type ReactElement, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ModelPickerIcon, type ModelPickerModelItem } from '@/components/modelPicker';
-import { ModelPickerTagChip } from '@/components/modelPicker/components/ModelPickerTagChip';
-import { getModelPickerTags } from '@/components/modelPicker/utils/modelPickerData';
+import {
+  getModelPickerTags,
+  ModelPickerIcon,
+  type ModelPickerModelItem,
+  ModelPickerTagChip,
+} from '@/components/modelPicker';
 import type { Model } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 

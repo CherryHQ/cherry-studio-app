@@ -1,7 +1,7 @@
 import { resolveIcon } from '@cherrystudio/ui/icons';
 import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
-import { Image } from '@/components/uniwind';
+import { Image } from '@/components/nativePrimitives';
 
 import type { ModelPickerModelItem } from '../utils/modelPickerData';
 

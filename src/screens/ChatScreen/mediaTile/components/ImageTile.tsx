@@ -1,7 +1,7 @@
 import { cn } from 'heroui-native/utils';
 import type { ReactNode } from 'react';
 import { type AccessibilityState, Pressable, View } from 'react-native';
-import { Image } from '@/components/uniwind';
+import { Image } from '@/components/nativePrimitives';
 
 type ImageTileProps = {
   accessibilityLabel?: string;

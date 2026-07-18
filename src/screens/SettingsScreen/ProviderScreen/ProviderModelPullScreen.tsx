@@ -18,8 +18,8 @@ import {
   ModelPickerIcon,
   type ModelPickerModelItem,
   type ModelPickerTag,
+  ModelPickerTagChip,
 } from '@/components/modelPicker';
-import { ModelPickerTagChip } from '@/components/modelPicker/components/ModelPickerTagChip';
 import type { Model, UniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 import { useProviderDetailSettings } from './detail';

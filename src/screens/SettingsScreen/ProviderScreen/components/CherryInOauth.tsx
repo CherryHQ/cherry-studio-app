@@ -5,13 +5,10 @@ import { Fragment, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
-import { Image } from '@/components/uniwind';
-import {
-  UserCancelledError,
-  useCherryInOauth,
-} from '@/hooks/features/cherryInAuth/useCherryInOauth';
+import { useConfirmDialog } from '@/components/confirmDialog';
+import { Image } from '@/components/nativePrimitives';
 import { openExternalUrl } from '@/utils/openExternalUrl';
-import { useSettingsConfirmDialog } from '../../hooks/useSettingsConfirmDialog';
+import { UserCancelledError, useCherryInOauth } from '../hooks/useCherryInOauth';
 
 const CHERRYIN_TOPUP_URL = 'https://open.cherryin.ai/console/topup';
 
@@ -30,7 +27,7 @@ type CherryInOauthProps = {
 export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProps) {
   const { t } = useTranslation();
   const { theme } = useUniwind();
-  const { confirmDialog, requestConfirm } = useSettingsConfirmDialog();
+  const { confirmDialog, requestConfirm } = useConfirmDialog();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
   const providerIcon = resolveProviderIcon('cherryin');
   const { toast } = useToast();

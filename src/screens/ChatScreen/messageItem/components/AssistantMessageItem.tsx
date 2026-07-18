@@ -1,9 +1,7 @@
 import { View } from 'react-native';
-
-import { PrismSweep } from '@/components/prismSweep';
 import type { Message } from '@/data/types/message';
-
 import { MessageParts } from '../../messageContent';
+import { PrismSweep } from '../../prismSweep';
 
 type AssistantMessageItemProps = {
   message: Message;

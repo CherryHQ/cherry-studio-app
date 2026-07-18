@@ -20,16 +20,16 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { Image } from '@/components/uniwind';
-import { CameraControlButton } from '@/screens/ChatScreen/input/components/CameraControlButton/CameraControlButton';
-import { ChatInputMediaControlOverlay } from '@/screens/ChatScreen/input/components/ChatInputMediaControlOverlay';
-import { ChatInputSelectedPhotoBar } from '@/screens/ChatScreen/input/components/ChatInputSelectedPhotoBar';
+import { Image } from '@/components/nativePrimitives';
 import {
   CHAT_INPUT_PHOTO_SELECTION_LIMIT,
   type ChatInputPhotoPickerActions,
   type ChatInputPhotoPickerState,
   type ChatInputPhotoPreview,
-} from '@/screens/ChatScreen/input/hooks/useChatInputPhotoPicker';
+} from '../hooks/useChatInputPhotoPicker';
+import { CameraControlButton } from './CameraControlButton/CameraControlButton';
+import { ChatInputMediaControlOverlay } from './ChatInputMediaControlOverlay';
+import { ChatInputSelectedPhotoBar } from './ChatInputSelectedPhotoBar';
 
 const PHOTO_GRID_COLUMN_COUNT = 3;
 const PHOTO_GRID_GAP = 2;
