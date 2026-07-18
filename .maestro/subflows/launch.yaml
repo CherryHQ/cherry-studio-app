@@ -1,0 +1,25 @@
+appId: com.cherry-ai.cherry-studio-app
+---
+# 启动 dev-client。冷启动会自动重连上次使用的 Metro，直接进入主屏。
+# 陷阱：openLink 不能紧跟 launchApp —— openurl 落在冷启动窗口期会把 app
+# 留在后台（前台停在桌面），流程必挂。因此 deep link 只作为停在
+# launcher/白屏时的兜底，此时 app 必已在前台，无竞态。
+# 套件连续快速重启偶发白屏卡死，整段用 retry 包裹自愈（重启 app 再试）。
+# 前提：e2e:ios 脚本已通过 UserDefaults 关闭 dev-menu 悬浮 FAB
+# （EXDevMenuShowFloatingActionButton=NO），否则 FAB 会吞掉其停靠区域的点击。
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp
+      - extendedWaitUntil:
+          visible: "Open sidebar"
+          timeout: 30000
+          optional: true
+      - runFlow:
+          when:
+            notVisible: "Open sidebar"
+          commands:
+            - openLink: "cherrystudio://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"
+            - extendedWaitUntil:
+                visible: "Open sidebar"
+                timeout: 20000

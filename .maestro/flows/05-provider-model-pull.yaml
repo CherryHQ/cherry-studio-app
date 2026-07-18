@@ -1,0 +1,34 @@
+appId: com.cherry-ai.cherry-studio-app
+tags: [settings, provider, legend-list]
+---
+- runFlow: ../subflows/launch.yaml
+- tapOn: "Open sidebar"
+- tapOn: "Settings"
+- tapOn: "Model service"
+- tapOn: "CherryInExpress"
+# 等 API draft 加载完成、布局稳定后再点（同 04：Base URL 区块异步插入
+# 会推挤工具栏，过早点击会用过期坐标点空）
+- extendedWaitUntil:
+    visible: "Base URL"
+    timeout: 10000
+- waitForAnimationToEnd
+- tapOn: "Pull"
+# 预览加载（dev fixture 提供远端模型）
+- extendedWaitUntil:
+    visible: "Pull models"
+    timeout: 15000
+- assertVisible: "New models \\(\\d+\\)"
+- assertVisible: "Add \\d+ models"
+- assertVisible: "Deselect all"
+# 能力过滤 chips（横向 LegendList）：选中 Reasoning 应收窄列表
+- tapOn: "Reasoning"
+- assertVisible: "New models \\(\\d+\\)"
+- tapOn: "Reasoning"
+# 行选择切换：取消一行后计数应变化、出现 Select all
+- tapOn: "Qwen3.7 Plus"
+- assertVisible: "Select all"
+- tapOn: "Select all"
+- assertVisible: "Deselect all"
+# 不 Apply，直接返回（不落库）
+- tapOn: "Back"
+- assertVisible: "Model list"

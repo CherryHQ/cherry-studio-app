@@ -1,0 +1,28 @@
+appId: com.cherry-ai.cherry-studio-app
+tags: [settings, provider]
+---
+- runFlow: ../subflows/launch.yaml
+- tapOn: "Open sidebar"
+- tapOn: "Settings"
+- tapOn: "Model service"
+- tapOn: "CherryInExpress"
+# 等 API draft 加载完成、布局稳定后再点（Base URL 区块异步插入会推挤工具栏，
+# 过早点击会用过期坐标误触「Endpoint settings」）
+- extendedWaitUntil:
+    visible: "Base URL"
+    timeout: 10000
+- waitForAnimationToEnd
+- tapOn: "Add"
+# 表单骨架
+- assertVisible: "Add model"
+- assertVisible: "Model ID"
+- assertVisible: "Model name"
+- assertVisible: "Group name"
+- assertVisible: "More settings"
+# 填 Model ID 后 Save 应可用（不实际保存，返回丢弃）
+- tapOn: "Model ID"
+- inputText: "e2e-test-model"
+- hideKeyboard
+- assertVisible: "Save"
+- tapOn: "Back"
+- assertVisible: "Model list"

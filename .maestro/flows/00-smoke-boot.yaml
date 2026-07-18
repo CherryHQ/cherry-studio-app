@@ -1,0 +1,16 @@
+appId: com.cherry-ai.cherry-studio-app
+tags: [smoke]
+---
+- runFlow: ../subflows/launch.yaml
+# 主页骨架：导航栏、空态文案、输入区
+- assertVisible: "Open sidebar"
+- assertVisible: "New chat"
+- assertVisible: "What would you like to discuss?"
+- assertVisible: "Choose an assistant and model, then start chatting."
+- assertVisible: "Send message"
+- assertVisible: "Reasoning effort"
+# Reasoning effort 面板开合
+- tapOn: "Reasoning effort"
+- waitForAnimationToEnd
+- tapOn: "Send message"
+- assertVisible: "What would you like to discuss?"
