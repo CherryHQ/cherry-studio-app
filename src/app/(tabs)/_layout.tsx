@@ -50,7 +50,8 @@ export default function TabLayout() {
     <Tabs
       initialRouteName="(messages)"
       screenOptions={{
-        freezeOnBlur: true,
+        // freezeOnBlur 会让冻结中的 tab 错过 uniwind 的免重渲染主题 patch，
+        // 解冻后也不补发，导致切主题后整页停留旧主题（见 .context/theme-debug）。
         tabBarActiveTintColor: accentColor,
       }}
     >
