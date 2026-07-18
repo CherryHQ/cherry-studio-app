@@ -2,9 +2,52 @@ import { randomUUID as mockRandomUUID } from 'node:crypto';
 
 global.__DEV__ = true;
 
+// Some tests replace react-native wholesale. Keep Expo's lazy fetch setup from
+// falling through to the then-missing TurboModuleRegistry during teardown.
+const expoModules = (
+  globalThis as typeof globalThis & {
+    expo?: { modules?: Record<string, unknown> };
+  }
+).expo?.modules;
+if (expoModules) {
+  expoModules.ExpoModulesCoreJSLogger = { addListener: jest.fn() };
+}
+
 // expo-crypto's jest-expo auto-mock is an empty stub (randomUUID() returns
 // undefined), so anything depending on a real id breaks under test.
 jest.mock('expo-crypto', () => ({ randomUUID: mockRandomUUID }));
+
+// Callstack bottom tabs is a Fabric native view and is unavailable in Jest.
+// Keep its layout context present so tab-owned screens can render normally.
+jest.mock('react-native-bottom-tabs', () => {
+  const react = require('react');
+  const { View } = require('react-native');
+  const BottomTabBarHeightContext = react.createContext(0);
+  const TabView = ({
+    navigationState,
+    renderScene,
+  }: {
+    navigationState?: { index: number; routes: unknown[] };
+    renderScene?: (props: { route: unknown }) => unknown;
+  }) => {
+    const route = navigationState?.routes[navigationState.index];
+    const scene = route && renderScene ? renderScene({ route }) : null;
+
+    return react.createElement(
+      BottomTabBarHeightContext.Provider,
+      { value: 0 },
+      react.createElement(View, null, scene),
+    );
+  };
+
+  return {
+    __esModule: true,
+    BottomTabBarHeightContext,
+    default: TabView,
+    SceneMap: (scenes: Record<string, unknown>) => scenes,
+    useBottomTabBarHeight: () => react.use(BottomTabBarHeightContext),
+  };
+});
 
 // Minimal Skia surface for components that render under test (AnimatedText):
 // declarative elements become inert nodes and matchFont hands back fixed

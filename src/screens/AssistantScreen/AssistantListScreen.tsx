@@ -9,7 +9,7 @@ import ReanimatedSwipeable, {
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useConfirmDialog } from '@/components/confirmDialog';
-import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
+import { type HeaderToolbarAction, TabRootHeader } from '@/components/headers';
 
 import type { Assistant } from '@/data/types/assistant';
 import { useAssistantMutations, useAssistantsApi } from '@/hooks/chat';
@@ -69,7 +69,7 @@ export default function AssistantListScreen() {
 
   return (
     <>
-      <BackHeader rightActions={rightActions} title={t('assistant.list.title')} />
+      <TabRootHeader rightActions={rightActions} title={t('assistant.list.title')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
