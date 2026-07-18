@@ -1,6 +1,6 @@
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
-import { memo, type ReactElement, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
@@ -23,7 +23,7 @@ type TopicRowProps = {
 };
 
 type TopicListProps = {
-  ListHeaderComponent?: ReactElement | null;
+  showNewChatButton?: boolean;
 };
 
 const topicItemHeight = 44;
@@ -33,7 +33,7 @@ function topicKeyExtractor(item: Topic) {
   return item.id;
 }
 
-export const TopicList = memo(function TopicList({ ListHeaderComponent }: TopicListProps) {
+export const TopicList = memo(function TopicList({ showNewChatButton = true }: TopicListProps) {
   const { t } = useTranslation();
   const tabBarHeight = useBottomTabBarHeight();
   const { isSearchActive } = useTopicListSearch();
@@ -45,8 +45,11 @@ export const TopicList = memo(function TopicList({ ListHeaderComponent }: TopicL
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuTopic, setMenuTopic] = useState<Topic | null>(null);
   const contentContainerStyle = useMemo(
-    () => ({ paddingBottom: tabBarHeight + newChatButtonClearance, paddingTop: 2 }),
-    [tabBarHeight],
+    () => ({
+      paddingBottom: tabBarHeight + (showNewChatButton ? newChatButtonClearance : 0),
+      paddingTop: 2,
+    }),
+    [showNewChatButton, tabBarHeight],
   );
 
   const handleRowLongPress = useCallback((rowRef: React.RefObject<View | null>, topic: Topic) => {
@@ -128,14 +131,13 @@ export const TopicList = memo(function TopicList({ ListHeaderComponent }: TopicL
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={listEmptyComponent}
-        ListHeaderComponent={ListHeaderComponent}
         onEndReached={loadMoreTopics}
         onEndReachedThreshold={0.7}
         recycleItems
         renderItem={renderItem}
       />
       <View pointerEvents="box-none" ref={containerRef} style={styles.overlay}>
-        {isSearchActive ? null : <NewChatButton />}
+        {showNewChatButton && !isSearchActive ? <NewChatButton /> : null}
         {dialogs}
         <PopupMenu
           anchorRef={menuAnchorRef}

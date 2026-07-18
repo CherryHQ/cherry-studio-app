@@ -1,32 +1,19 @@
 import { Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
 
 import { TopicList } from './components/TopicList';
-import {
-  TopicListProvider,
-  useTopicListActions,
-  useTopicListSearch,
-} from './context/TopicListProvider';
+import { TopicListProvider, useTopicListActions } from './context/TopicListProvider';
 
 export function TopicListScreen() {
   const { t } = useTranslation();
-  const { isSearchActive } = useTopicListSearch();
-  const { closeSearch, openSearch, setSearchText } = useTopicListActions();
-  const listHeader = isSearchActive ? null : (
-    <View>
-      <Text className="px-5 pt-3 pb-1 font-medium text-foreground-secondary text-sm">
-        {t('navigation.recents')}
-      </Text>
-    </View>
-  );
+  const { closeSearch, openNewTopic, openSearch, setSearchText } = useTopicListActions();
 
   return (
     <>
-      <TopicList ListHeaderComponent={listHeader} />
+      <TopicList showNewChatButton={false} />
       <Stack.Screen
         options={{
-          headerLargeTitle: true,
+          headerLargeTitle: false,
           title: t('navigation.messages'),
         }}
       />
@@ -38,6 +25,13 @@ export function TopicListScreen() {
         onChangeText={(event) => setSearchText(event.nativeEvent.text)}
         onFocus={openSearch}
       />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          accessibilityLabel={t('navigation.newChat')}
+          icon="square.and.pencil"
+          onPress={openNewTopic}
+        />
+      </Stack.Toolbar>
     </>
   );
 }
