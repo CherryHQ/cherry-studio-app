@@ -5,7 +5,7 @@ import { MainHeader } from '@/components/headers';
 import { useMessages, useTopic } from '@/hooks/chat';
 
 import { NewTopicScreen } from './NewTopicScreen';
-import { ChatWorkspace } from './workspace';
+import { ChatWorkspace } from './workspace/ChatWorkspace';
 
 export function ChatScreen() {
   const { topicId } = useLocalSearchParams<{ topicId?: string }>();

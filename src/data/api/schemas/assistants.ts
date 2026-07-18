@@ -4,11 +4,7 @@ import type { OffsetPaginationParams, OffsetPaginationResponse } from '@/data/ty
 import { type Assistant, AssistantSchema, AssistantSettingsSchema } from '@/data/types/assistant';
 import { TagIdSchema } from '@/data/types/tag';
 
-import {
-  OrderBatchRequestSchema,
-  type OrderEndpoints,
-  OrderRequestSchema,
-} from './_endpointHelpers';
+import { type OrderEndpoints } from './_endpointHelpers';
 
 const ASSISTANT_MUTABLE_FIELDS = {
   description: true,
@@ -56,12 +52,6 @@ export const ListAssistantsQuerySchema = z.strictObject({
 export type ListAssistantsQueryParams = z.input<typeof ListAssistantsQuerySchema> &
   OffsetPaginationParams;
 export type ListAssistantsQuery = z.output<typeof ListAssistantsQuerySchema>;
-
-export const ReorderAssistantSchema = OrderRequestSchema;
-export type ReorderAssistantDto = z.infer<typeof ReorderAssistantSchema>;
-
-export const ReorderAssistantsBatchSchema = OrderBatchRequestSchema;
-export type ReorderAssistantsBatchDto = z.infer<typeof ReorderAssistantsBatchSchema>;
 
 export type AssistantSchemas = {
   '/assistants': {

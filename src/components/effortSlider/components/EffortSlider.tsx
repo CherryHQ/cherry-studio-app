@@ -112,18 +112,18 @@ export function EffortSlider({
 
   // Sync external value changes (e.g. model switch fallback) onto the thumb.
   useEffect(() => {
-    if (isPressed.value || activeStopIndex.value === valueIndex) {
+    if (isPressed.get() || activeStopIndex.get() === valueIndex) {
       return;
     }
-    activeStopIndex.value = valueIndex;
+    activeStopIndex.set(valueIndex);
     const target = stopFraction(valueIndex, stopCount);
-    position.value = reducedMotion ? target : withTiming(target, effortSliderSnapTiming);
+    position.set(reducedMotion ? target : withTiming(target, effortSliderSnapTiming));
   }, [activeStopIndex, isPressed, position, reducedMotion, stopCount, valueIndex]);
 
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
       const width = event.nativeEvent.layout.width;
-      trackWidth.value = width;
+      trackWidth.set(width);
       setMeasuredWidth((current) => (current === width ? current : width));
     },
     [trackWidth],

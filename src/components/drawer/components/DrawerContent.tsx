@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { StyleSheet, Text, TextInput, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { StyleSheet, Text, TextInput, useWindowDimensions } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 

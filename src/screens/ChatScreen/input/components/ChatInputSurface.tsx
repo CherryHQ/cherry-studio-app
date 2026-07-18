@@ -60,6 +60,10 @@ const inputBottomToolbarStyle = {
   minHeight: chatInputBottomToolbarHeight,
 };
 
+// Stable default: an inline `[]` default would be a new array identity every
+// render and re-run every hook that lists `reasoningEfforts` as a dependency.
+const emptyReasoningEfforts: readonly ChatInputReasoningEffort[] = [];
+
 const reasoningMeterMinBarHeight = 6;
 const reasoningMeterMaxBarHeight = 18;
 const reasoningIconButtonWidth = 32;
@@ -97,7 +101,7 @@ export function ChatInputSurface({
   onModelPickerPress,
   onSendPress,
   onStopPress,
-  reasoningEfforts = [],
+  reasoningEfforts = emptyReasoningEfforts,
 }: ChatInputSurfaceProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -128,16 +132,14 @@ export function ChatInputSurface({
   const isReasoningOff = isChatInputReasoningEffortOff(reasoningEffort);
   const reasoningOption = getChatInputReasoningEffortOption(reasoningEffort);
   const reasoningLabel = reasoningOption ? t(reasoningOption.labelKey) : t('chat.reasoning.title');
-  const reasoningLabels = useMemo(
-    () =>
-      chatInputReasoningEffortOptions
-        .filter(
-          (option) =>
-            reasoningEfforts.includes(option.value) && !isChatInputReasoningEffortOff(option.value),
-        )
-        .map((option) => t(option.labelKey)),
-    [reasoningEfforts, t],
-  );
+  const reasoningLabels = useMemo(() => {
+    const availableEfforts = new Set(reasoningEfforts);
+    return chatInputReasoningEffortOptions.flatMap((option) =>
+      availableEfforts.has(option.value) && !isChatInputReasoningEffortOff(option.value)
+        ? [t(option.labelKey)]
+        : [],
+    );
+  }, [reasoningEfforts, t]);
   const expandProgress = useSharedValue(0);
   const contentHeight = useSharedValue(0);
   const availableWidth = useSharedValue(0);
@@ -597,7 +599,7 @@ function ChatInputReasoningMeterBar({
       ? index * reasoningMeterBarStaggerMs
       : (barCount - index - 1) * reasoningMeterBarStaggerMs;
 
-    activeProgress.value = withDelay(delayMs, withTiming(isActive ? 1 : 0, chatInputMotionConfig));
+    activeProgress.set(withDelay(delayMs, withTiming(isActive ? 1 : 0, chatInputMotionConfig)));
   }, [activeProgress, barCount, index, isActive]);
 
   const activeBarStyle = useAnimatedStyle(() => ({

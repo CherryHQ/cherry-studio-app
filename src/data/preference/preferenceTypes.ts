@@ -122,13 +122,11 @@ export type AutoDetectionMethod = 'franc' | 'llm' | 'auto';
  *
  * Pattern: 2–3 lowercase letters, optionally followed by `-` and 2–4 lowercase letters.
  */
-export const PersistedLangCodeSchema = z
+const PersistedLangCodeSchema = z
   .string()
   .regex(/^[a-z]{2,3}(-[a-z]{2,4})?$/)
   .brand<'PersistedLangCode'>();
 export type PersistedLangCode = z.infer<typeof PersistedLangCodeSchema>;
-export const parsePersistedLangCode = (value: string): PersistedLangCode =>
-  PersistedLangCodeSchema.parse(value);
 
 const TranslateLangCodePatternSchema = z.string().regex(/^[a-z]{2,3}(-[a-z]{2,4})?$/);
 
@@ -138,29 +136,16 @@ const TranslateLangCodePatternSchema = z.string().regex(/^[a-z]{2,3}(-[a-z]{2,4}
  * Use in preference/UI state and detection paths where "unknown" is meaningful.
  * Persistence paths should parse with {@link PersistedLangCodeSchema} instead.
  */
-export const TranslateLangCodeSchema = z.union([
-  z.literal('unknown'),
-  TranslateLangCodePatternSchema,
-]);
+const TranslateLangCodeSchema = z.union([z.literal('unknown'), TranslateLangCodePatternSchema]);
 export type TranslateLangCode = z.infer<typeof TranslateLangCodeSchema>;
-export const parseTranslateLangCode = (value: string): TranslateLangCode =>
-  TranslateLangCodeSchema.parse(value);
-export const isTranslateLangCode = (value: unknown): value is TranslateLangCode =>
-  TranslateLangCodeSchema.safeParse(value).success;
 export type TranslateSourceLanguage = TranslateLangCode | 'auto';
 export type TranslateBidirectionalPair = [TranslateLangCode, TranslateLangCode];
-export const parseTranslateBidirectionalPair = (
-  value: readonly [string, string],
-): TranslateBidirectionalPair => [
-  parseTranslateLangCode(value[0]),
-  parseTranslateLangCode(value[1]),
-];
 
 // ============================================================================
 // WebSearch Types
 // ============================================================================
 
-export const WEB_SEARCH_PROVIDER_TYPES = ['api', 'mcp'] as const;
+const WEB_SEARCH_PROVIDER_TYPES = ['api', 'mcp'] as const;
 
 export type WebSearchProviderType = (typeof WEB_SEARCH_PROVIDER_TYPES)[number];
 
@@ -179,7 +164,7 @@ export const WEB_SEARCH_PROVIDER_IDS = [
 
 export type WebSearchProviderId = (typeof WEB_SEARCH_PROVIDER_IDS)[number];
 
-export const WEB_SEARCH_CAPABILITIES = ['searchKeywords', 'fetchUrls'] as const;
+const WEB_SEARCH_CAPABILITIES = ['searchKeywords', 'fetchUrls'] as const;
 
 export type WebSearchCapability = (typeof WEB_SEARCH_CAPABILITIES)[number];
 
@@ -245,7 +230,7 @@ export enum codeCLI {
   openCode = 'opencode',
 }
 
-export const CODE_CLI_IDS = Object.values(codeCLI) as unknown as readonly [
+const CODE_CLI_IDS = Object.values(codeCLI) as unknown as readonly [
   'qwen-code',
   'claude-code',
   'gemini-cli',
@@ -284,15 +269,15 @@ export type WebSearchCompressionMethod = 'none' | 'cutoff';
 // File Processor Types
 // ============================================================================
 
-export const FILE_PROCESSOR_TYPES = ['api', 'builtin'] as const;
+const FILE_PROCESSOR_TYPES = ['api', 'builtin'] as const;
 
 export type FileProcessorType = (typeof FILE_PROCESSOR_TYPES)[number];
 
-export const FILE_PROCESSOR_FEATURES = ['image_to_text', 'document_to_markdown'] as const;
+const FILE_PROCESSOR_FEATURES = ['image_to_text', 'document_to_markdown'] as const;
 
 export type FileProcessorFeature = (typeof FILE_PROCESSOR_FEATURES)[number];
 
-export const FILE_PROCESSOR_IDS = [
+const FILE_PROCESSOR_IDS = [
   'tesseract',
   'system',
   'paddleocr',

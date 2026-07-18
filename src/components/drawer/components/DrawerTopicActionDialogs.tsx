@@ -67,13 +67,9 @@ export function useDrawerTopicActionDialogs(): DrawerTopicActionDialogs {
     }
 
     setIsSubmitting(true);
-
-    try {
-      await renameTopic(target.id, trimmedName);
-      setRenameTarget(null);
-    } finally {
-      setIsSubmitting(false);
-    }
+    await renameTopic(target.id, trimmedName)
+      .then(() => setRenameTarget(null))
+      .finally(() => setIsSubmitting(false));
   }, [nameDraft, renameTarget, renameTopic]);
 
   const confirmDelete = useCallback(async () => {
@@ -84,13 +80,9 @@ export function useDrawerTopicActionDialogs(): DrawerTopicActionDialogs {
     }
 
     setIsSubmitting(true);
-
-    try {
-      await deleteTopic(target.id);
-      setDeleteTarget(null);
-    } finally {
-      setIsSubmitting(false);
-    }
+    await deleteTopic(target.id)
+      .then(() => setDeleteTarget(null))
+      .finally(() => setIsSubmitting(false));
   }, [deleteTarget, deleteTopic]);
 
   const dialogs = (

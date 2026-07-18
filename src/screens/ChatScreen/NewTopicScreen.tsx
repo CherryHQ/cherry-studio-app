@@ -1,7 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { ChatComposer, ChatWorkspaceFrame, useFloatingChatInputLayout } from './workspace';
+import { ChatComposer } from './workspace/components/ChatComposer';
+import { ChatWorkspaceFrame } from './workspace/components/ChatWorkspaceFrame';
+import { useFloatingChatInputLayout } from './workspace/hooks/useFloatingChatInputLayout';
 
 export function NewTopicScreen() {
   const { t } = useTranslation();

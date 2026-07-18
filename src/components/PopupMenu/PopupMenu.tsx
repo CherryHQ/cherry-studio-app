@@ -1,6 +1,6 @@
 import { cn } from 'heroui-native/utils';
 import { memo, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text } from 'react-native';
 import Animated, { FadeIn, ReduceMotion } from 'react-native-reanimated';
 
 import type { PopupMenuProps } from './types';

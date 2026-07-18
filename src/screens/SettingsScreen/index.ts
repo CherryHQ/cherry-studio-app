@@ -4,7 +4,6 @@ export type { SettingSelectOption } from './components/SettingSelect';
 export { SettingSelect } from './components/SettingSelect';
 export type { SettingsItemProps } from './components/SettingsItem';
 export { SettingsItem } from './components/SettingsItem';
-export { SettingsPlaceholderScreen } from './components/SettingsPlaceholderScreen';
 export { SettingsSection } from './components/SettingsSection';
 export type { SettingsServiceRowProps } from './components/SettingsServiceRow';
 export { SettingsServiceRow } from './components/SettingsServiceRow';

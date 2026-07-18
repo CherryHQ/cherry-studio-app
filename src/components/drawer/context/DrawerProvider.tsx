@@ -323,18 +323,3 @@ export function useDrawerNavigationBridge() {
 
   return context;
 }
-
-export function useDrawer() {
-  const panelState = useDrawerPanelState();
-  const topics = useDrawerTopics();
-  const actions = useDrawerActions();
-
-  return useMemo(
-    () => ({
-      ...panelState,
-      ...topics,
-      ...actions,
-    }),
-    [panelState, topics, actions],
-  );
-}

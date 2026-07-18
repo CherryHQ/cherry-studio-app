@@ -162,8 +162,15 @@ let probedActions: ReturnType<typeof useChatInputActions> | null = null;
 // Exposes provider context to assertions: the reasoning panel itself mounts at
 // the workspace level, so the surface tests observe/drive its state directly.
 function ContextProbe() {
-  probedState = useChatInputState();
-  probedActions = useChatInputActions();
+  const state = useChatInputState();
+  const actions = useChatInputActions();
+
+  // Reassigning module-level variables during render is a side effect; write
+  // them from an effect (runs after every render, flushed inside `act`).
+  useEffect(() => {
+    probedState = state;
+    probedActions = actions;
+  });
 
   return null;
 }

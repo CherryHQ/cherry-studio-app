@@ -63,7 +63,7 @@ export function useProviderModelPull({
     }
 
     setIsPreviewLoading(true);
-    try {
+    const load = async (): Promise<ProviderModelPullLoadResult> => {
       const [localModels, remoteModels] = await withProviderModelPullTimeout((signal) =>
         Promise.all([
           services.model.list({ providerId }),
@@ -104,19 +104,20 @@ export function useProviderModelPull({
       setPreview(nextPreview);
       onPreviewReady?.(nextPreview);
       return 'ready';
-    } catch (error) {
-      toast.show({
-        label: t(
-          isProviderModelPullTimeoutError(error)
-            ? 'settings.provider.models.pullTimedOut'
-            : 'settings.provider.models.pullFailed',
-        ),
-        variant: 'danger',
-      });
-      return 'error';
-    } finally {
-      setIsPreviewLoading(false);
-    }
+    };
+    return await load()
+      .catch((error): ProviderModelPullLoadResult => {
+        toast.show({
+          label: t(
+            isProviderModelPullTimeoutError(error)
+              ? 'settings.provider.models.pullTimedOut'
+              : 'settings.provider.models.pullFailed',
+          ),
+          variant: 'danger',
+        });
+        return 'error';
+      })
+      .finally(() => setIsPreviewLoading(false));
   }, [
     onPreviewReady,
     provider,
@@ -135,11 +136,12 @@ export function useProviderModelPull({
       }
 
       setIsApplying(true);
-      try {
+      const apply = async () => {
         const result = await services.model.reconcileProviderModels(providerId, payload, {
           defaultChatEndpoint: provider.defaultChatEndpoint,
           endpointConfigs: provider.endpointConfigs,
         });
+        // react-doctor-disable-next-line server-sequential-independent-await -- list 必须读 reconcile 落库后的结果，两个 await 有先后依赖
         const remainingModels = await services.model.list({ providerId });
         await enableProviderWhenModelsAvailable(
           provider,
@@ -157,15 +159,16 @@ export function useProviderModelPull({
         });
         resetPreview();
         return true;
-      } catch {
-        toast.show({
-          label: t('settings.provider.models.pullApplyFailed'),
-          variant: 'danger',
-        });
-        return false;
-      } finally {
-        setIsApplying(false);
-      }
+      };
+      return await apply()
+        .catch(() => {
+          toast.show({
+            label: t('settings.provider.models.pullApplyFailed'),
+            variant: 'danger',
+          });
+          return false;
+        })
+        .finally(() => setIsApplying(false));
     },
     [
       provider,

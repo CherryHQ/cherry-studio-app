@@ -521,6 +521,7 @@ export class MessageService {
 
       const placeholders: Message[] = [];
       for (const placeholder of input.placeholders) {
+        // react-doctor-disable-next-line async-await-in-loop -- 同一写事务内按输入顺序插入占位消息，结果数组与 activeNode 取值依赖保序
         const [row] = await tx
           .insert(messageTable)
           .values({
@@ -682,6 +683,7 @@ export class MessageService {
           }
 
           for (const [groupId, ids] of childIdsByGroup) {
+            // react-doctor-disable-next-line async-await-in-loop -- 同一写事务内本质串行，且 nextGroupId 递增分配需确定性顺序
             await tx
               .update(messageTable)
               .set({

@@ -3,8 +3,9 @@ import { Button, Card, Spinner, useToast } from 'heroui-native';
 import { LogInIcon, LogOutIcon, WalletIcon } from 'lucide-uniwind/png';
 import { Fragment, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
+import { Image } from '@/components/uniwind';
 import {
   UserCancelledError,
   useCherryInOauth,

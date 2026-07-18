@@ -23,9 +23,6 @@ export const isAudioModel = (model: Model): boolean =>
   model.capabilities.includes(MODEL_CAPABILITY.AUDIO_RECOGNITION) ||
   model.inputModalities?.includes(MODALITY.AUDIO) === true;
 
-export const isGenerateImageModel = (model: Model): boolean =>
-  model.capabilities.includes(MODEL_CAPABILITY.IMAGE_GENERATION);
-
 export const isWebSearchModel = (model: Model): boolean =>
   model.capabilities.includes(MODEL_CAPABILITY.WEB_SEARCH);
 
@@ -169,11 +166,7 @@ export const isGeminiModel = vendorCheck(VENDOR_PATTERNS.gemini);
 export const isGrokModel = vendorCheck(VENDOR_PATTERNS.grok);
 export const isOpenAIModel = vendorCheck(VENDOR_PATTERNS.openai);
 export const isQwenModel = vendorCheck(VENDOR_PATTERNS.qwen);
-export const isBaichuanModel = vendorCheck(VENDOR_PATTERNS.baichuan);
 export const isMiMoModel = vendorCheck(VENDOR_PATTERNS.mimo);
-export const isLingModel = vendorCheck(VENDOR_PATTERNS.ling);
-export const isMiniMaxModel = vendorCheck(VENDOR_PATTERNS.minimax);
-export const isStepModel = vendorCheck(VENDOR_PATTERNS.step);
 export const isMistralModel = vendorCheck(VENDOR_PATTERNS.mistral);
 
 export const isDoubaoModel = (model: Model): boolean =>
@@ -187,17 +180,6 @@ export const isHunyuanModel = (model: Model): boolean =>
 export const isKimiModel = (model: Model): boolean =>
   VENDOR_PATTERNS.kimi.test(getLowerBaseModelName(getRawModelId(model), '/')) ||
   model.providerId === 'moonshot';
-
-export const isDeepSeekModel = (model?: Model): boolean => {
-  if (!model) return false;
-  if (VENDOR_PATTERNS.deepseek.test(getLowerBaseModelName(getRawModelId(model), '/'))) return true;
-  if (model.providerId === 'deepseek') return true;
-  return model.name ? VENDOR_PATTERNS.deepseek.test(model.name.toLowerCase()) : false;
-};
-
-export const isPerplexityModel = (model: Model): boolean =>
-  VENDOR_PATTERNS.perplexity.test(getLowerBaseModelName(getRawModelId(model), '/')) ||
-  model.providerId === 'perplexity';
 
 export const isZhipuModel = (model: Model): boolean =>
   VENDOR_PATTERNS.zhipu.test(getLowerBaseModelName(getRawModelId(model))) ||
@@ -230,9 +212,6 @@ export const isOpenAIDeepResearchModel = (model: Model): boolean => {
 
 export const isSupportedReasoningEffortOpenAIModel = (model: Model): boolean =>
   isOpenAIModel(model) && isSupportedReasoningEffortModel(model);
-
-export const isOpenAIOpenWeightModel = (model: Model): boolean =>
-  getLowerBaseModelName(getRawModelId(model)).includes('gpt-oss');
 
 export const isGPT5FamilyModel = (model: Model): boolean =>
   getLowerBaseModelName(getRawModelId(model)).includes('gpt-5');
@@ -438,12 +417,6 @@ export const isOpenRouterBuiltInWebSearchModel = (model: Model): boolean =>
  */
 export const isForcedNativeWebSearchModel = (model: Model): boolean =>
   isOpenRouterBuiltInWebSearchModel(model) || model.id.toLowerCase().includes('sonar');
-
-export const isHunyuanSearchModel = (model: Model): boolean =>
-  isHunyuanModel(model) && isWebSearchModel(model);
-
-export const isPureGenerateImageModel = (model: Model): boolean =>
-  isGenerateImageModel(model) && !model.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL);
 
 export const getModelSupportedVerbosity = (
   model: Model | undefined | null,

@@ -34,10 +34,6 @@ export function isRegisteredProviderId(id: string): boolean {
   return allExtensions.some((ext) => ext.hasProviderId(id));
 }
 
-export function getAllProviderIds(): string[] {
-  return allExtensions.flatMap((ext) => ext.getProviderIds());
-}
-
 type ProviderIdsMap = UnionToIntersection<ExtensionConfigToIdResolutionMap<AllExtensionConfigs>>;
 
 function buildAppProviderIds(): ProviderIdsMap {

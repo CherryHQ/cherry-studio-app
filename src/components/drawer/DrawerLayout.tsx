@@ -84,6 +84,7 @@ function DrawerContentWithProgressBridge() {
     };
   }, [nativeDrawerProgress]);
 
+  // react-doctor-disable-next-line rn-animation-reaction-as-derived -- 桥接到模块级全局 drawerProgress，供 navigator context 之外的消费者读取，useDerivedValue 无法替代
   useAnimatedReaction(
     () => nativeDrawerProgress.value,
     (value) => {

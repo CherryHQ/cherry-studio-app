@@ -10,10 +10,11 @@ import {
 } from 'lucide-uniwind/png';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/components/headers';
+import { Image } from '@/components/uniwind';
 import { openExternalUrl } from '@/utils/openExternalUrl';
 import { SettingsSection } from './components/SettingsSection';
 

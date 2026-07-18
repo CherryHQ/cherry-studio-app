@@ -6,8 +6,8 @@ import { useSharedValue } from 'react-native-reanimated';
 import { isIOS } from '@/config/constants';
 import type { Message } from '@/data/types/message';
 import type { MessagesViewModel } from '@/hooks/chat';
-
-import { mergeMessagesWithOverlay, useChatRuntimeTopic } from '../runtime';
+import { useChatRuntimeTopic } from '../runtime/ChatRuntimeProvider';
+import { mergeMessagesWithOverlay } from '../runtime/chatRuntimeMessages';
 import { ChatComposer } from './components/ChatComposer';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessageList } from './components/ChatMessageList';

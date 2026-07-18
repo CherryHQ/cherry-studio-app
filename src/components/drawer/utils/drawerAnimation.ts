@@ -1,6 +1,5 @@
 import {
   Easing,
-  FadeIn,
   LinearTransition,
   ReduceMotion,
   type WithSpringConfig,
@@ -27,7 +26,3 @@ export const drawerContentLayoutTransition = LinearTransition.springify()
   .stiffness(drawerSpringConfig.stiffness)
   .overshootClamping(drawerSpringConfig.overshootClamping ? 1 : 0)
   .reduceMotion(drawerSpringConfig.reduceMotion);
-
-export const drawerFeatureAreaEntering = FadeIn.duration(drawerFadeTimingConfig.duration)
-  .easing(drawerFadeTimingConfig.easing)
-  .reduceMotion(drawerFadeTimingConfig.reduceMotion);

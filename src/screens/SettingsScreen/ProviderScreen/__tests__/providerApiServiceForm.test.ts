@@ -179,7 +179,6 @@ describe('provider API service form helpers', () => {
 
   it('saves endpoint configs without changing defaultChatEndpoint', () => {
     const payload = buildProviderApiServiceSavePayload({
-      apiKeys: [],
       authConfig: { type: 'api-key' },
       draft: createTestDraftSnapshot({
         baseUrlByEndpoint: {
@@ -233,7 +232,6 @@ describe('provider API service form helpers', () => {
 
   it('saves API key entries with enabled state', () => {
     const payload = buildProviderApiServiceSavePayload({
-      apiKeys: [{ id: 'key-a', isEnabled: true, key: 'sk-a' }],
       authConfig: { type: 'api-key' },
       draft: createTestDraftSnapshot({
         apiKeyEntries: [
@@ -330,7 +328,6 @@ describe('provider API service form helpers', () => {
   it('rejects invalid endpoint base URLs', () => {
     expect(() =>
       buildProviderApiServiceSavePayload({
-        apiKeys: [],
         authConfig: { type: 'api-key' },
         draft: createTestDraftSnapshot({
           baseUrlByEndpoint: {

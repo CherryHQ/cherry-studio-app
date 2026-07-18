@@ -17,7 +17,7 @@ type SearxngSearchResponse = {
 };
 
 function trimStringList(values: readonly string[]): string[] {
-  return values.map((value) => value.trim()).filter(Boolean);
+  return values.flatMap((value) => value.trim() || []);
 }
 
 function encodeBasicAuth(username: string, password: string): string {

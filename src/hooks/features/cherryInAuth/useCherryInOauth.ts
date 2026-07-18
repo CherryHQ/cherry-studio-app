@@ -118,9 +118,9 @@ export function useCherryInOauth(options: UseCherryInOauthOptions) {
     } catch (error) {
       console.error('[CherryIN] fetchData failed:', error);
       setBalance(null);
-    } finally {
-      setIsLoadingData(false);
     }
+
+    setIsLoadingData(false);
   }, [oauth]);
 
   const handleLogout = useCallback(() => {
@@ -143,9 +143,9 @@ export function useCherryInOauth(options: UseCherryInOauthOptions) {
             label: t('settings.provider.oauth.cherryIn.logout_warning'),
             description: message,
           });
-        } finally {
-          setIsLoggingOut(false);
         }
+
+        setIsLoggingOut(false);
       },
     });
   }, [requestConfirm, t, oauth, providerId, replaceApiKeysMutation, authConfigQuery, toast]);
@@ -156,7 +156,7 @@ export function useCherryInOauth(options: UseCherryInOauthOptions) {
     }
 
     setIsLoggingIn(true);
-    try {
+    const login = async () => {
       const result = await promptAsync();
 
       if (result.type !== 'success') {
@@ -181,9 +181,8 @@ export function useCherryInOauth(options: UseCherryInOauthOptions) {
       await fetchData();
 
       onOAuthComplete?.();
-    } finally {
-      setIsLoggingIn(false);
-    }
+    };
+    await login().finally(() => setIsLoggingIn(false));
   }, [
     request,
     promptAsync,

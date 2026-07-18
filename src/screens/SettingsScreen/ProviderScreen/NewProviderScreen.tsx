@@ -101,64 +101,6 @@ export default function NewProviderScreen() {
     },
   });
 
-  const selectAvatarFromCamera = useCallback(async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      mediaTypes: ['images'],
-      quality: 1,
-    });
-
-    const assetUri = result.canceled ? undefined : result.assets[0]?.uri;
-    if (assetUri) {
-      setAvatarDraftUri(assetUri);
-    }
-  }, []);
-
-  const selectAvatarFromPhotoLibrary = useCallback(async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(false);
-    if (!permission.granted) {
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      mediaTypes: ['images'],
-      quality: 1,
-      selectionLimit: 1,
-    });
-
-    const assetUri = result.canceled ? undefined : result.assets[0]?.uri;
-    if (assetUri) {
-      setAvatarDraftUri(assetUri);
-    }
-  }, []);
-
-  const uploadActions = useMemo<MenuAction[]>(
-    () => [
-      { id: 'camera', image: 'camera', title: t('chat.media.camera') },
-      { id: 'photos', image: 'photo', title: t('chat.media.photos') },
-    ],
-    [t],
-  );
-  const handleUploadAction = useCallback(
-    (event: NativeActionEvent) => {
-      if (event.nativeEvent.event === 'camera') {
-        void selectAvatarFromCamera();
-        return;
-      }
-      void selectAvatarFromPhotoLibrary();
-    },
-    [selectAvatarFromCamera, selectAvatarFromPhotoLibrary],
-  );
-  const resetAvatar = useCallback(() => setAvatarDraftUri(null), []);
-
   const canSubmit = name.trim().length > 0 && baseUrl.trim().length > 0;
   const handleFinish = useCallback(() => {
     if (!canSubmit || createProviderMutation.isPending) {
@@ -235,33 +177,11 @@ export default function NewProviderScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-6 px-6 py-8">
-          <View className="items-center gap-4">
-            <AvatarPreview name={name} size={avatarPreviewSize} uri={avatarDraftUri} />
-            <View className="flex-row items-center gap-3">
-              <MenuView actions={uploadActions} onPressAction={handleUploadAction}>
-                <Button
-                  className="h-10 min-h-10 flex-row gap-2 rounded-xl px-4"
-                  variant="secondary"
-                >
-                  <ImageUpIcon className="size-4 text-default-foreground" strokeWidth={2} />
-                  <Text className="text-base text-foreground">
-                    {t('settings.provider.add.uploadImage')}
-                  </Text>
-                </Button>
-              </MenuView>
-              <Button
-                className="h-10 min-h-10 flex-row gap-2 rounded-xl px-4"
-                isDisabled={!avatarDraftUri}
-                onPress={resetAvatar}
-                variant="secondary"
-              >
-                <RotateCcwIcon className="size-4 text-default-foreground" strokeWidth={2} />
-                <Text className="text-base text-foreground">
-                  {t('settings.provider.add.resetAvatar')}
-                </Text>
-              </Button>
-            </View>
-          </View>
+          <NewProviderAvatarSection
+            avatarUri={avatarDraftUri}
+            name={name}
+            onAvatarChange={setAvatarDraftUri}
+          />
 
           <FormField label={t('settings.provider.add.name')} required>
             <Input
@@ -359,6 +279,103 @@ export default function NewProviderScreen() {
         </View>
       </KeyboardAwareScrollView>
     </>
+  );
+}
+
+function NewProviderAvatarSection({
+  avatarUri,
+  name,
+  onAvatarChange,
+}: {
+  avatarUri: string | null;
+  name: string;
+  onAvatarChange: (uri: string | null) => void;
+}) {
+  const { t } = useTranslation();
+
+  const selectAvatarFromCamera = useCallback(async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      mediaTypes: ['images'],
+      quality: 1,
+    });
+
+    const assetUri = result.canceled ? undefined : result.assets[0]?.uri;
+    if (assetUri) {
+      onAvatarChange(assetUri);
+    }
+  }, [onAvatarChange]);
+
+  const selectAvatarFromPhotoLibrary = useCallback(async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(false);
+    if (!permission.granted) {
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      mediaTypes: ['images'],
+      quality: 1,
+      selectionLimit: 1,
+    });
+
+    const assetUri = result.canceled ? undefined : result.assets[0]?.uri;
+    if (assetUri) {
+      onAvatarChange(assetUri);
+    }
+  }, [onAvatarChange]);
+
+  const uploadActions = useMemo<MenuAction[]>(
+    () => [
+      { id: 'camera', image: 'camera', title: t('chat.media.camera') },
+      { id: 'photos', image: 'photo', title: t('chat.media.photos') },
+    ],
+    [t],
+  );
+  const handleUploadAction = useCallback(
+    (event: NativeActionEvent) => {
+      if (event.nativeEvent.event === 'camera') {
+        void selectAvatarFromCamera();
+        return;
+      }
+      void selectAvatarFromPhotoLibrary();
+    },
+    [selectAvatarFromCamera, selectAvatarFromPhotoLibrary],
+  );
+  const resetAvatar = useCallback(() => onAvatarChange(null), [onAvatarChange]);
+
+  return (
+    <View className="items-center gap-4">
+      <AvatarPreview name={name} size={avatarPreviewSize} uri={avatarUri} />
+      <View className="flex-row items-center gap-3">
+        <MenuView actions={uploadActions} onPressAction={handleUploadAction}>
+          <Button className="h-10 min-h-10 flex-row gap-2 rounded-xl px-4" variant="secondary">
+            <ImageUpIcon className="size-4 text-default-foreground" strokeWidth={2} />
+            <Text className="text-base text-foreground">
+              {t('settings.provider.add.uploadImage')}
+            </Text>
+          </Button>
+        </MenuView>
+        <Button
+          className="h-10 min-h-10 flex-row gap-2 rounded-xl px-4"
+          isDisabled={!avatarUri}
+          onPress={resetAvatar}
+          variant="secondary"
+        >
+          <RotateCcwIcon className="size-4 text-default-foreground" strokeWidth={2} />
+          <Text className="text-base text-foreground">
+            {t('settings.provider.add.resetAvatar')}
+          </Text>
+        </Button>
+      </View>
+    </View>
   );
 }
 

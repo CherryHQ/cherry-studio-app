@@ -68,10 +68,6 @@ export function getPinnedModelIds(pins: readonly Pin[]): UniqueModelId[] {
   );
 }
 
-export function getModelPickerModelLabel(modelId: string | null, models: readonly Model[]) {
-  return models.find((model) => model.id === modelId)?.name;
-}
-
 export function getModelPickerModelItem(
   modelId: string | null,
   {
@@ -301,7 +297,7 @@ function isChatCapableModel(model: Model): boolean {
 
 function getSelectableModelPickerModels(models: readonly Model[], providers: readonly Provider[]) {
   const enabledProviderIds = new Set(
-    providers.filter((provider) => provider.isEnabled).map((provider) => provider.id),
+    providers.flatMap((provider) => (provider.isEnabled ? [provider.id] : [])),
   );
 
   return models.filter(

@@ -44,10 +44,6 @@ export const DrawerNewChatButton = memo(function DrawerNewChatButton() {
 
 const styles = StyleSheet.create({
   shadow: {
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { height: 4, width: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
   },
 });

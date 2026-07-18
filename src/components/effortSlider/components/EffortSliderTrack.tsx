@@ -103,11 +103,7 @@ export function EffortSliderTrack({
             width: thumbWidth,
             height: thumbHeight,
             borderRadius: 8,
-            shadowColor: '#3e3832',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.15,
-            shadowRadius: 2,
-            elevation: 2,
+            boxShadow: '0 1px 2px rgba(62, 56, 50, 0.15)',
           },
           thumbStyle,
         ]}

@@ -26,9 +26,13 @@ function isTextPart(part: CherryMessagePart): part is TextPart {
 
 export function extractMainText(parts: readonly CherryMessagePart[]): string {
   return parts
-    .filter(isTextPart)
-    .map((part) => part.text?.trim())
-    .filter((text): text is string => !!text)
+    .flatMap((part) => {
+      if (!isTextPart(part)) {
+        return [];
+      }
+      const text = part.text?.trim();
+      return text ? [text] : [];
+    })
     .join('\n\n');
 }
 

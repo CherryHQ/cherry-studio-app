@@ -130,7 +130,3 @@ export function shouldShowApiKeys(authType: AuthConfig['type']): boolean {
 export function needsAuthConfigSave(authType: AuthConfig['type']): boolean {
   return authType !== 'api-key';
 }
-
-export function authConfigSignature(authConfig: AuthConfig): string {
-  return JSON.stringify(authConfig);
-}

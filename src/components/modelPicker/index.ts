@@ -13,7 +13,6 @@ export {
   getAvailableModelPickerFilterTags,
   getAvailableModelPickerFilterTagsForModels,
   getModelPickerModelItem,
-  getModelPickerModelLabel,
   getModelPickerTagLabelKey,
   getModelPickerTags,
   getPinnedModelIds,

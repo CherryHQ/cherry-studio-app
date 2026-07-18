@@ -35,17 +35,13 @@ export function usePins(entityType: EntityType) {
       }
 
       toggleInFlightRef.current = true;
-      try {
-        const existing = pins.find((pin) => pin.entityId === entityId);
-        if (existing) {
-          await deletePinMutation.mutateAsync(existing.id);
-          return;
-        }
-
-        await createPinMutation.mutateAsync({ entityId, entityType });
-      } finally {
+      const existing = pins.find((pin) => pin.entityId === entityId);
+      const mutation = existing
+        ? deletePinMutation.mutateAsync(existing.id)
+        : createPinMutation.mutateAsync({ entityId, entityType });
+      await mutation.finally(() => {
         toggleInFlightRef.current = false;
-      }
+      });
     },
     [
       createPinMutation,

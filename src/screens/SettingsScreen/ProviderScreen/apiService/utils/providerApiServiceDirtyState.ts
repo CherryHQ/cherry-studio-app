@@ -1,26 +1,13 @@
 import type { EndpointType } from '@/data/types/model';
-import type { ApiKeyEntry, AuthConfig, Provider } from '@/data/types/provider';
+import type { ApiKeyEntry, Provider } from '@/data/types/provider';
 
 import { apiKeyEntriesSignature, normalizeApiKeyEntries } from './providerApiServiceApiKeys';
-import {
-  authConfigSignature,
-  buildAuthConfigFromDraft,
-  getEffectiveAuthConfig,
-  needsAuthConfigSave,
-} from './providerApiServiceAuthDraft';
 import type { DraftSnapshot } from './providerApiServiceDraft';
 import {
   canEditProviderEndpoint,
   mergeEndpointConfigs,
   resolveVisibleEndpointTypes,
 } from './providerApiServiceEndpointRules';
-
-export type ProviderApiServiceDirtyState = {
-  apiKeyValuesDirty: boolean;
-  authDirty: boolean;
-  endpointConfigsDirty: boolean;
-  isDirty: boolean;
-};
 
 export function getProviderApiServiceEndpointDirtyState({
   draft,
@@ -64,40 +51,6 @@ export function getProviderApiServiceApiKeysDirtyState({
   );
 }
 
-export function getProviderApiServiceDirtyState({
-  apiKeys,
-  authConfig,
-  draft,
-  effectiveAuthConfig,
-  provider,
-}: {
-  apiKeys: readonly ApiKeyEntry[];
-  authConfig: AuthConfig | null | undefined;
-  draft: DraftSnapshot | null;
-  effectiveAuthConfig: AuthConfig | null;
-  provider: Provider | undefined;
-}): ProviderApiServiceDirtyState {
-  if (!provider || !draft) {
-    return {
-      apiKeyValuesDirty: false,
-      authDirty: false,
-      endpointConfigsDirty: false,
-      isDirty: false,
-    };
-  }
-
-  const apiKeyValuesDirty = getProviderApiServiceApiKeysDirtyState({ apiKeys, draft });
-  const endpointConfigsDirty = getProviderApiServiceEndpointDirtyState({ draft, provider });
-  const authDirty = getAuthDirtyState({ authConfig, draft, effectiveAuthConfig, provider });
-
-  return {
-    apiKeyValuesDirty,
-    authDirty,
-    endpointConfigsDirty,
-    isDirty: apiKeyValuesDirty || endpointConfigsDirty || authDirty,
-  };
-}
-
 export function endpointConfigsSignature(endpointConfigs: Provider['endpointConfigs']): string {
   return JSON.stringify(
     Object.entries(endpointConfigs ?? {})
@@ -120,29 +73,4 @@ function getPersistableEndpointTypes(draft: DraftSnapshot, provider: Provider): 
       draft.baseUrlByEndpoint[endpoint]?.trim() || provider.endpointConfigs?.[endpoint],
     );
   });
-}
-
-function getAuthDirtyState({
-  authConfig,
-  draft,
-  effectiveAuthConfig,
-  provider,
-}: {
-  authConfig: AuthConfig | null | undefined;
-  draft: DraftSnapshot;
-  effectiveAuthConfig: AuthConfig | null;
-  provider: Provider;
-}): boolean {
-  if (!effectiveAuthConfig || !needsAuthConfigSave(draft.authDraft.type)) {
-    return false;
-  }
-
-  try {
-    return (
-      authConfigSignature(buildAuthConfigFromDraft(authConfig, provider, draft.authDraft)) !==
-      authConfigSignature(getEffectiveAuthConfig(effectiveAuthConfig, provider))
-    );
-  } catch {
-    return true;
-  }
 }

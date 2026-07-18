@@ -29,8 +29,8 @@ export function useDrawerHeaderAnimation({
   const searchFadeProgress = useSharedValue(0);
 
   useEffect(() => {
-    searchProgress.value = withSpring(isSearchActive ? 1 : 0, drawerSpringConfig);
-    searchFadeProgress.value = withTiming(isSearchActive ? 1 : 0, drawerFadeTimingConfig);
+    searchProgress.set(withSpring(isSearchActive ? 1 : 0, drawerSpringConfig));
+    searchFadeProgress.set(withTiming(isSearchActive ? 1 : 0, drawerFadeTimingConfig));
   }, [isSearchActive, searchFadeProgress, searchProgress]);
 
   const collapsedHeaderStyle = useAnimatedStyle(() => {

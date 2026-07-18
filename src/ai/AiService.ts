@@ -132,11 +132,11 @@ export class AiService {
       );
     }
 
-    const { sdkConfig, model, system, tools, plugins, options } = await this.buildAgentParamsFor(
-      request,
-      { shouldIncludeExternalTools: true },
-    );
-    const preparedMessages = await resolveUIMessageFileUrls(request.messages ?? []);
+    const [{ sdkConfig, model, system, tools, plugins, options }, preparedMessages] =
+      await Promise.all([
+        this.buildAgentParamsFor(request, { shouldIncludeExternalTools: true }),
+        resolveUIMessageFileUrls(request.messages ?? []),
+      ]);
 
     const agent = new Agent({
       providerId: sdkConfig.providerId,
@@ -482,8 +482,10 @@ export class AiService {
 
     const { providerId, modelId } = parseUniqueModelId(uniqueModelId);
 
-    const provider = await this.services.provider.getByProviderId(providerId);
-    const model = await this.services.model.getById(uniqueModelId);
+    const [provider, model] = await Promise.all([
+      this.services.provider.getByProviderId(providerId),
+      this.services.model.getById(uniqueModelId),
+    ]);
     if (!model) {
       throw new Error(`Cannot resolve model: ${providerId}::${modelId}`);
     }

@@ -1,31 +1,8 @@
 import { queryKeys } from '@/data/api';
-import { useDataQuery, usePreference } from '@/data/hooks';
+import { useDataQuery } from '@/data/hooks';
 import type { Model, UniqueModelId } from '@/data/types/model';
 
 const EMPTY_MODELS: readonly Model[] = Object.freeze([]);
-
-export function useDefaultModel() {
-  const [defaultModelId, setDefaultModelId] = usePreference('chat.default_model_id');
-  const [quickModelId, setQuickModelId] = usePreference('feature.quick_assistant.model_id');
-  const [translateModelId, setTranslateModelId] = usePreference('feature.translate.model_id');
-
-  const { model: defaultModel } = useModelById(defaultModelId as UniqueModelId | null);
-  const { model: quickModel } = useModelById(
-    (quickModelId ?? defaultModelId) as UniqueModelId | null,
-  );
-  const { model: translateModel } = useModelById(
-    (translateModelId ?? defaultModelId) as UniqueModelId | null,
-  );
-
-  return {
-    defaultModel,
-    quickModel,
-    translateModel,
-    setDefaultModel: (next: { id: UniqueModelId }) => setDefaultModelId(next.id),
-    setQuickModel: (next: { id: UniqueModelId }) => setQuickModelId(next.id),
-    setTranslateModel: (next: { id: UniqueModelId }) => setTranslateModelId(next.id),
-  };
-}
 
 export function useModels(
   query: { capability?: string; enabled?: boolean; providerId?: string } = {},
