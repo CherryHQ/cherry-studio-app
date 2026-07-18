@@ -158,7 +158,8 @@ export function useProviderApiServiceDraft({
           return current;
         }
 
-        const { [endpoint]: _removedBaseUrl, ...baseUrlByEndpoint } = current.baseUrlByEndpoint;
+        const baseUrlByEndpoint = { ...current.baseUrlByEndpoint };
+        delete baseUrlByEndpoint[endpoint];
 
         return {
           ...current,

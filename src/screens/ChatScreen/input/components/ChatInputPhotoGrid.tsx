@@ -11,9 +11,11 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolation,
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -33,8 +35,13 @@ const PHOTO_GRID_COLUMN_COUNT = 3;
 const PHOTO_GRID_GAP = 2;
 const PHOTO_GRID_DRAW_DISTANCE = 360;
 const PHOTO_SELECTION_TIMING = { duration: 180 };
+
+function photoKeyExtractor(item: ChatInputPhotoPreview) {
+  return item.id;
+}
 const PHOTO_PRESS_IN_TIMING = { duration: 80 };
 const PHOTO_PRESS_OUT_TIMING = { duration: 140 };
+const PHOTO_CELL_ACCESSIBILITY_ACTIONS = [{ name: 'activate' as const }];
 
 type ChatInputPhotoGridProps = {
   actions: ChatInputPhotoPickerActions;
@@ -43,6 +50,11 @@ type ChatInputPhotoGridProps = {
   onConfirm: () => void;
   onError: (message: string) => void;
   state: ChatInputPhotoPickerState;
+};
+
+type ChatInputPhotoGridExtraData = {
+  isSelectionFull: boolean;
+  selectedPhotoOrder: ReadonlyMap<string, number>;
 };
 
 type ChatInputPhotoCellProps = {
@@ -71,7 +83,7 @@ const ChatInputPhotoCell = memo(function ChatInputPhotoCell({
     if (previousItemIdRef.current !== item.id) {
       previousItemIdRef.current = item.id;
       appliedSelectionRef.current = isSelected;
-      selectionProgress.value = isSelected ? 1 : 0;
+      selectionProgress.set(isSelected ? 1 : 0);
       return;
     }
 
@@ -80,7 +92,7 @@ const ChatInputPhotoCell = memo(function ChatInputPhotoCell({
     }
 
     appliedSelectionRef.current = isSelected;
-    selectionProgress.value = withTiming(isSelected ? 1 : 0, PHOTO_SELECTION_TIMING);
+    selectionProgress.set(withTiming(isSelected ? 1 : 0, PHOTO_SELECTION_TIMING));
   }, [isSelected, item.id, selectionProgress]);
 
   const imageStyle = useAnimatedStyle(() => ({
@@ -111,43 +123,56 @@ const ChatInputPhotoCell = memo(function ChatInputPhotoCell({
     onToggle(item.id);
   }, [isDisabled, item.id, onToggle]);
 
+  const pressGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .enabled(!isDisabled)
+        .onBegin(() => {
+          pressProgress.value = withTiming(0.94, PHOTO_PRESS_IN_TIMING);
+        })
+        .onFinalize(() => {
+          pressProgress.value = withTiming(1, PHOTO_PRESS_OUT_TIMING);
+        })
+        .onEnd(() => {
+          runOnJS(onToggle)(item.id);
+        }),
+    [isDisabled, item.id, onToggle, pressProgress],
+  );
+
   return (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: isDisabled, selected: isSelected }}
-      disabled={isDisabled}
-      onPress={handlePress}
-      onPressIn={() => {
-        pressProgress.value = withTiming(0.94, PHOTO_PRESS_IN_TIMING);
-      }}
-      onPressOut={() => {
-        pressProgress.value = withTiming(1, PHOTO_PRESS_OUT_TIMING);
-      }}
-      style={styles.photoCell}
-    >
-      <Animated.View style={[styles.photoImageWrapper, imageStyle]}>
-        <Image
-          cachePolicy="memory-disk"
-          contentFit="cover"
-          recyclingKey={item.id}
-          source={item.uri}
-          style={StyleSheet.absoluteFill}
-          transition={100}
-        />
-      </Animated.View>
-      <Animated.View pointerEvents="none" style={[styles.selectionBadge, badgeStyle]}>
-        <Text
-          adjustsFontSizeToFit
-          className="font-bold text-white text-xs"
-          minimumFontScale={0.7}
-          numberOfLines={1}
-          style={styles.selectionBadgeText}
-        >
-          {selectionIndex}
-        </Text>
-      </Animated.View>
-    </Pressable>
+    <GestureDetector gesture={pressGesture}>
+      <View
+        accessibilityActions={PHOTO_CELL_ACCESSIBILITY_ACTIONS}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: isDisabled, selected: isSelected }}
+        accessible
+        onAccessibilityAction={handlePress}
+        style={styles.photoCell}
+      >
+        <Animated.View style={[styles.photoImageWrapper, imageStyle]}>
+          <Image
+            cachePolicy="memory-disk"
+            contentFit="cover"
+            recyclingKey={item.id}
+            source={item.uri}
+            style={StyleSheet.absoluteFill}
+            transition={100}
+          />
+        </Animated.View>
+        <Animated.View pointerEvents="none" style={[styles.selectionBadge, badgeStyle]}>
+          <Text
+            adjustsFontSizeToFit
+            className="font-bold text-white text-xs"
+            minimumFontScale={0.7}
+            numberOfLines={1}
+            style={styles.selectionBadgeText}
+          >
+            {selectionIndex}
+          </Text>
+        </Animated.View>
+      </View>
+    </GestureDetector>
   );
 });
 
@@ -203,9 +228,9 @@ export function ChatInputPhotoGrid({
       }
     } catch (error) {
       onError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsConfirming(false);
     }
+
+    setIsConfirming(false);
   }, [addSelectedPhotoPreviews, isConfirming, onConfirm, onError, selectedPhotoCount]);
 
   const handlePermissionPress = useCallback(() => {
@@ -233,16 +258,24 @@ export function ChatInputPhotoGrid({
     });
   }, [hasNextPhotoPage, loadMorePhotoPreviews, onError]);
 
+  const listExtraData = useMemo<ChatInputPhotoGridExtraData>(
+    () => ({
+      isSelectionFull: selectedPhotoCount >= CHAT_INPUT_PHOTO_SELECTION_LIMIT,
+      selectedPhotoOrder,
+    }),
+    [selectedPhotoCount, selectedPhotoOrder],
+  );
+
   const renderItem = useCallback(
-    ({ item }: LegendListRenderItemProps<ChatInputPhotoPreview>) => {
-      const selectionIndex = selectedPhotoOrder.get(item.id) ?? 0;
+    ({ extraData, item }: LegendListRenderItemProps<ChatInputPhotoPreview>) => {
+      const { isSelectionFull, selectedPhotoOrder: photoOrder } =
+        extraData as ChatInputPhotoGridExtraData;
+      const selectionIndex = photoOrder.get(item.id) ?? 0;
 
       return (
         <ChatInputPhotoCell
           accessibilityLabel={t('chat.media.photoPreview')}
-          isDisabled={
-            selectionIndex === 0 && selectedPhotoCount >= CHAT_INPUT_PHOTO_SELECTION_LIMIT
-          }
+          isDisabled={selectionIndex === 0 && isSelectionFull}
           isSelected={selectionIndex > 0}
           item={item}
           onToggle={togglePhotoSelection}
@@ -250,7 +283,7 @@ export function ChatInputPhotoGrid({
         />
       );
     },
-    [selectedPhotoCount, selectedPhotoOrder, t, togglePhotoSelection],
+    [t, togglePhotoSelection],
   );
 
   const listContentStyle = useMemo(
@@ -320,8 +353,8 @@ export function ChatInputPhotoGrid({
           data={photoPreviews}
           drawDistance={PHOTO_GRID_DRAW_DISTANCE}
           estimatedItemSize={estimatedItemSize}
-          extraData={selectedPhotoOrder}
-          keyExtractor={(item) => item.id}
+          extraData={listExtraData}
+          keyExtractor={photoKeyExtractor}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
             <View style={styles.emptyState}>

@@ -24,7 +24,6 @@ import {
   isHostedGemma4ThinkingModel,
   isOpenAIDeepResearchModel,
   isOpenAIModel,
-  isOpenAIOpenWeightModel,
   isOpenAIReasoningModel,
   isQwen35to39Model,
   isQwenAlwaysThinkModel,
@@ -693,25 +692,6 @@ export function getXAIReasoningParams(
     default:
       return {};
   }
-}
-
-export function getOllamaReasoningParams(
-  assistant: Assistant,
-  model: Model,
-): { think?: boolean | string } {
-  const reasoningEffort = normalizedReasoningEffort(assistant);
-
-  if (isOpenAIOpenWeightModel(model)) {
-    if (reasoningEffort === 'low' || reasoningEffort === 'medium' || reasoningEffort === 'high') {
-      return { think: reasoningEffort };
-    }
-    if (reasoningEffort === 'none') {
-      return { think: false };
-    }
-    return { think: true };
-  }
-
-  return { think: reasoningEffort !== 'none' };
 }
 
 export function getReasoningTagName(modelId: string | undefined): string {

@@ -28,3 +28,30 @@ jest.mock('@shopify/react-native-skia', () => {
     }),
   };
 });
+
+// gesture-handler 真模块在 jest 下要求 Reanimated.default.createAnimatedComponent，
+// 而 jest 环境的 reanimated 没有这个 API。GestureDetector 透传 children，
+// Gesture.* 返回任意链式调用都指向自身的构建器。
+jest.mock('react-native-gesture-handler', () => {
+  const react = require('react');
+  const { View } = require('react-native');
+  const createChainableGesture = (): unknown => {
+    const gesture: object = new Proxy(
+      {},
+      {
+        get:
+          () =>
+          (..._args: unknown[]) =>
+            gesture,
+      },
+    );
+    return gesture;
+  };
+
+  return {
+    Gesture: new Proxy({}, { get: () => () => createChainableGesture() }),
+    GestureDetector: ({ children }: { children?: unknown }) => children,
+    GestureHandlerRootView: ({ children, ...props }: { children?: unknown }) =>
+      react.createElement(View, props, children),
+  };
+});

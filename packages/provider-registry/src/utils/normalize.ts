@@ -282,11 +282,6 @@ export function stripVariantQuantDateSuffixes(modelId: string): string {
   }
 }
 
-export function extractParameterSize(modelId: string): string | undefined {
-  const match = modelId.match(PARAMETER_SIZE_PATTERN);
-  return match ? match[1].toLowerCase() : undefined;
-}
-
 export function stripParameterSize(modelId: string): string {
   return modelId.replace(PARAMETER_SIZE_PATTERN, '');
 }

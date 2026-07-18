@@ -50,6 +50,7 @@ export class MockChatSeeder implements DatabaseSeeder {
         );
 
       for (const { messages, topic } of mockTopicMessages) {
+        // react-doctor-disable-next-line async-await-in-loop -- 同一写事务内本质串行，topic → root → 内容消息需保序插入
         await tx
           .insert(topicTable)
           .values({
@@ -87,6 +88,7 @@ export class MockChatSeeder implements DatabaseSeeder {
           });
 
         for (const message of messages) {
+          // react-doctor-disable-next-line async-await-in-loop -- 消息 parentId 可能引用先插入的行，且同一写事务内并行无收益
           await tx
             .insert(messageTable)
             .values({

@@ -42,11 +42,9 @@ export function PrismSweep({
 
   useEffect(() => {
     if (isAnimating) {
-      progress.value = 0;
-      progress.value = withRepeat(
-        withTiming(1, { duration: durationMs, easing: Easing.linear }),
-        -1,
-        false,
+      progress.set(0);
+      progress.set(
+        withRepeat(withTiming(1, { duration: durationMs, easing: Easing.linear }), -1, false),
       );
     } else {
       cancelAnimation(progress);

@@ -1,5 +1,5 @@
 import { type AiPlugin } from '../plugins';
-import { extensionRegistry } from '../providers';
+import { extensionRegistry } from '../providers/core/ExtensionRegistry';
 import { type CoreProviderSettingsMap, type StringKeys } from '../providers/types';
 import { RuntimeExecutor } from './executor';
 

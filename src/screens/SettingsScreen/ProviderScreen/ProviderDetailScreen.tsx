@@ -15,7 +15,9 @@ import { openExternalUrl } from '@/utils/openExternalUrl';
 import { ProviderApiManagementSection } from './components/ProviderApiManagementSection';
 import { ProviderModelList } from './components/ProviderModelList';
 import { useProviderDetailSettings } from './detail';
-import { ProviderModelCheckSheet, useProviderModelCheck, useProviderModelPull } from './models';
+import { ProviderModelCheckSheet } from './models/components/ProviderModelCheckSheet';
+import { useProviderModelCheck } from './models/hooks/useProviderModelCheck';
+import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import { stashProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
 
 export default function ProviderDetailSettingsScreen() {
@@ -176,18 +178,22 @@ export default function ProviderDetailSettingsScreen() {
             />
           </View>
         }
-        isAddDisabled={!provider}
-        isAddLoading={false}
         isLoading={modelsQuery.isPending}
-        isCheckDisabled={models.length === 0}
-        isCheckLoading={isModelChecking}
-        isPullDisabled={!provider || isModelPullLoading}
-        isPullLoading={isModelPullLoading}
         models={models}
         provider={provider}
-        onAddPress={openModelAddSettings}
-        onCheckPress={openCheckSheet}
-        onPullPress={() => void openModelPullSettings()}
+        toolbarActions={{
+          add: { isDisabled: !provider, onPress: openModelAddSettings },
+          check: {
+            isDisabled: models.length === 0,
+            isLoading: isModelChecking,
+            onPress: openCheckSheet,
+          },
+          pull: {
+            isDisabled: !provider || isModelPullLoading,
+            isLoading: isModelPullLoading,
+            onPress: () => void openModelPullSettings(),
+          },
+        }}
       />
       <ProviderModelCheckSheet
         apiKeyOptions={checkApiKeyOptions}

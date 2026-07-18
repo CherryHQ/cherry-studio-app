@@ -6,11 +6,10 @@ import type {
   WebSearchProviderOverrides,
 } from '@/data/preference';
 import {
-  PRESETS_WEB_SEARCH_PROVIDERS,
   WEB_SEARCH_PROVIDER_PRESET_MAP,
   type WebSearchProviderPreset,
 } from '@/data/presets/webSearchProviders';
-import type { WebSearchExecutionConfig, WebSearchResolvedConfig } from '@/data/types/webSearch';
+import type { WebSearchExecutionConfig } from '@/data/types/webSearch';
 import { normalizeWebSearchCutoffLimit } from '@/data/types/webSearch';
 
 export interface WebSearchPreferenceReader {
@@ -29,7 +28,7 @@ function trimString(value: string): string {
 }
 
 function trimStringList(values: readonly string[]): string[] {
-  return values.map(trimString).filter(Boolean);
+  return values.flatMap((value) => value.trim() || []);
 }
 
 export async function getProviderOverrides(
@@ -79,14 +78,6 @@ export function mergeWebSearchProviderPreset(
   };
 }
 
-export function resolveProviders(
-  providerOverrides: WebSearchProviderOverrides,
-): WebSearchProvider[] {
-  return PRESETS_WEB_SEARCH_PROVIDERS.map((preset) =>
-    mergeWebSearchProviderPreset(preset, providerOverrides[preset.id]),
-  );
-}
-
 export async function getRuntimeConfig(
   preferences: WebSearchPreferenceReader,
 ): Promise<WebSearchExecutionConfig> {
@@ -104,21 +95,6 @@ export async function getRuntimeConfig(
       method,
       cutoffLimit: normalizeWebSearchCutoffLimit(cutoffLimit),
     },
-  };
-}
-
-export async function getResolvedConfig(
-  preferences: WebSearchPreferenceReader,
-): Promise<WebSearchResolvedConfig> {
-  const [providerOverrides, runtime] = await Promise.all([
-    getProviderOverrides(preferences),
-    getRuntimeConfig(preferences),
-  ]);
-
-  return {
-    providers: resolveProviders(providerOverrides),
-    runtime,
-    providerOverrides,
   };
 }
 

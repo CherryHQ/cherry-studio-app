@@ -57,6 +57,5 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     borderWidth: 0,
     boxShadow: 'none',
-    elevation: 0,
   },
 });

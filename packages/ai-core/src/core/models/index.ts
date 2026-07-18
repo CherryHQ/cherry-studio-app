@@ -6,4 +6,4 @@
 export type { ModelConfig as ModelConfigType } from './types';
 
 // 模型工具函数
-export { hasModelId, isV2Model, isV3Model } from './utils';
+export { isV2Model, isV3Model } from './utils';

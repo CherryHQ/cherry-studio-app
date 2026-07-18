@@ -155,17 +155,16 @@ function ApiKeysSection() {
           label: t('settings.websearch.provider.checkSuccess'),
           variant: 'success',
         });
-        return;
+      } else {
+        setCheckResult({
+          status: 'error',
+          message: result.error || t('settings.websearch.provider.checkFailed'),
+        });
+        toast.show({
+          label: t('settings.websearch.provider.checkFailed'),
+          variant: 'danger',
+        });
       }
-
-      setCheckResult({
-        status: 'error',
-        message: result.error || t('settings.websearch.provider.checkFailed'),
-      });
-      toast.show({
-        label: t('settings.websearch.provider.checkFailed'),
-        variant: 'danger',
-      });
     } catch (error) {
       setCheckResult({
         status: 'error',
@@ -176,9 +175,9 @@ function ApiKeysSection() {
         label: t('settings.websearch.provider.checkFailed'),
         variant: 'danger',
       });
-    } finally {
-      setIsChecking(false);
     }
+
+    setIsChecking(false);
   }, [
     checkApiKeyOptions,
     checkProvider,
@@ -241,7 +240,7 @@ function buildCheckProviderConfig(
         apiHost: apiHostOverride.trim(),
       };
     }),
-    engines: override?.engines?.map((engine) => engine.trim()).filter(Boolean) ?? [],
+    engines: override?.engines?.flatMap((engine) => engine.trim() || []) ?? [],
     basicAuthUsername: override?.basicAuthUsername?.trim() ?? '',
     basicAuthPassword: override?.basicAuthPassword?.trim() ?? '',
   };

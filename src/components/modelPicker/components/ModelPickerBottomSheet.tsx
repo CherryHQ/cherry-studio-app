@@ -1,4 +1,11 @@
-import { type Ref, useCallback, useImperativeHandle, useMemo, useState } from 'react';
+import {
+  type ReactNode,
+  type Ref,
+  useCallback,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { SelectionBottomSheet, SelectionSheetSearchField } from '@/components/selectionSheet';
@@ -15,6 +22,12 @@ const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
 
 type ModelPickerBottomSheetProps = {
+  /**
+   * Pinned below the model list at the bottom of the sheet (e.g. the
+   * reasoning-effort slider). The slot owns its divider/padding so an empty
+   * render leaves no stray chrome behind.
+   */
+  footer?: ReactNode;
   isOpen?: boolean;
   onClose?: () => void;
   onSelect: (item: ModelPickerModelItem) => void;
@@ -28,6 +41,7 @@ export type ModelPickerBottomSheetHandle = {
 };
 
 export function ModelPickerBottomSheet({
+  footer,
   isOpen,
   onClose,
   onSelect,
@@ -43,6 +57,7 @@ export function ModelPickerBottomSheet({
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [searchText, setSearchText] = useState('');
   const [headerHeight, setHeaderHeight] = useState(0);
+  const [footerHeight, setFooterHeight] = useState(0);
   const [visibleListItemCount, setVisibleListItemCount] = useState(initialModelPickerListItemCount);
 
   if (isOpen !== prevIsOpen) {
@@ -108,6 +123,10 @@ export function ModelPickerBottomSheet({
     const nextHeight = Math.round(event.nativeEvent.layout.height);
     setHeaderHeight((currentHeight) => (currentHeight === nextHeight ? currentHeight : nextHeight));
   }, []);
+  const handleFooterLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextHeight = Math.round(event.nativeEvent.layout.height);
+    setFooterHeight((currentHeight) => (currentHeight === nextHeight ? currentHeight : nextHeight));
+  }, []);
   const handleListEndReached = useCallback(() => {
     setVisibleListItemCount((currentCount) => {
       if (currentCount >= totalListItemCount) {
@@ -139,7 +158,7 @@ export function ModelPickerBottomSheet({
     >
       {({ sheetHeight }) => {
         const modelListHeight = Math.max(
-          sheetHeight - (headerHeight || defaultModelPickerHeaderHeight),
+          sheetHeight - (headerHeight || defaultModelPickerHeaderHeight) - footerHeight,
           120,
         );
 
@@ -163,6 +182,7 @@ export function ModelPickerBottomSheet({
                 onSelect={handleSelect}
               />
             </View>
+            {footer ? <View onLayout={handleFooterLayout}>{footer}</View> : null}
           </>
         );
       }}

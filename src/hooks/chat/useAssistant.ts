@@ -4,14 +4,7 @@ import { queryKeys } from '@/data/api';
 import type { CreateAssistantDto, UpdateAssistantDto } from '@/data/api/schemas/assistants';
 import { useDataQuery } from '@/data/hooks';
 import { useDataServices } from '@/data/runtime';
-import { type Assistant, type AssistantSettings } from '@/data/types/assistant';
-import type { Model } from '@/data/types/model';
-
-import { useDefaultModel, useModelById } from './useModel';
-import {
-  reconcileReasoningEffortForModel,
-  reconcileWebSearchForModel,
-} from './utils/modelReconcile';
+import { type Assistant } from '@/data/types/assistant';
 
 const ASSISTANTS_LIST_LIMIT = 500;
 const EMPTY_ASSISTANTS: readonly Assistant[] = Object.freeze([]);
@@ -111,84 +104,5 @@ export function useAssistantMutations() {
     createMutation,
     updateMutation,
     deleteMutation,
-  };
-}
-
-export function useAssistants() {
-  const { assistants, error, isLoading, refetch } = useAssistantsApi();
-  const { createAssistant, deleteAssistant, updateAssistant } = useAssistantMutations();
-
-  return {
-    assistants,
-    isLoading,
-    error,
-    refetch,
-    addAssistant: (dto: CreateAssistantDto) => createAssistant(dto),
-    removeAssistant: (id: string) => deleteAssistant(id),
-    updateAssistant: (id: string, patch: UpdateAssistantDto) => updateAssistant(id, patch),
-  };
-}
-
-export function useAssistant(id: string | null | undefined) {
-  const { assistant } = useAssistantApiById(id ?? undefined);
-  const { updateAssistant: patchAssistant } = useAssistantMutations();
-  const { defaultModel } = useDefaultModel();
-
-  const modelId = assistant?.modelId ?? (!id ? defaultModel?.id : undefined);
-  const { model } = useModelById(modelId);
-
-  const updateAssistantSettings = useCallback(
-    (settings: Partial<AssistantSettings>) => {
-      if (!id || !assistant) {
-        return;
-      }
-
-      void patchAssistant(id, { settings });
-    },
-    [assistant, id, patchAssistant],
-  );
-
-  const setModel = useCallback(
-    (next: Model, extraSettings?: Partial<AssistantSettings>) => {
-      if (!id || !assistant) {
-        return;
-      }
-
-      const reasoning = reconcileReasoningEffortForModel(
-        next,
-        assistant.settings.reasoning_effort,
-        id,
-      );
-      const webSearch = reconcileWebSearchForModel(next, assistant.settings);
-      const settingsPatch =
-        extraSettings || reasoning || webSearch
-          ? { ...assistant.settings, ...extraSettings, ...reasoning, ...webSearch }
-          : undefined;
-
-      void patchAssistant(
-        id,
-        settingsPatch ? { modelId: next.id, settings: settingsPatch } : { modelId: next.id },
-      );
-    },
-    [assistant, id, patchAssistant],
-  );
-
-  const updateAssistant = useCallback(
-    (patch: UpdateAssistantDto) => {
-      if (!id) {
-        return Promise.resolve(undefined);
-      }
-
-      return patchAssistant(id, patch);
-    },
-    [id, patchAssistant],
-  );
-
-  return {
-    assistant,
-    model,
-    setModel,
-    updateAssistant,
-    updateAssistantSettings,
   };
 }

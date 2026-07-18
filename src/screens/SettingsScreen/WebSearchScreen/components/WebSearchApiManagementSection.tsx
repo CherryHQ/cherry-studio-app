@@ -12,7 +12,7 @@ import type {
 } from '@/data/preference';
 import type { WebSearchProviderPreset } from '@/data/presets/webSearchProviders';
 import { useDataServices } from '@/data/runtime';
-import { WebSearchApiServiceFieldGroup } from '../apiService';
+import { WebSearchApiServiceFieldGroup } from '../apiService/components/WebSearchApiServiceFields';
 import {
   WebSearchApiManagementContext,
   type WebSearchApiManagementContextValue,

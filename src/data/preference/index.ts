@@ -48,24 +48,12 @@ export type {
   WindowStyle,
 } from './preferenceTypes';
 export {
-  CODE_CLI_IDS,
   codeCLI,
-  FILE_PROCESSOR_FEATURES,
-  FILE_PROCESSOR_IDS,
-  FILE_PROCESSOR_TYPES,
-  isTranslateLangCode,
-  PersistedLangCodeSchema,
-  parsePersistedLangCode,
-  parseTranslateBidirectionalPair,
-  parseTranslateLangCode,
   SelectionFilterMode,
   SelectionTriggerMode,
   ThemeMode,
-  TranslateLangCodeSchema,
   UpgradeChannel,
-  WEB_SEARCH_CAPABILITIES,
   WEB_SEARCH_PROVIDER_IDS,
-  WEB_SEARCH_PROVIDER_TYPES,
 } from './preferenceTypes';
 export {
   getDefaultValue,

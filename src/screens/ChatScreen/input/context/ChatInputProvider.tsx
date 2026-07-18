@@ -24,7 +24,6 @@ import {
 import {
   CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   type ChatInputReasoningEffort,
-  shouldShowChatInputReasoningEffortTag,
 } from '@/screens/ChatScreen/input/utils/chatInputReasoning';
 
 type ChatInputStateContextValue = {
@@ -34,7 +33,6 @@ type ChatInputStateContextValue = {
   isComposerExpanded: boolean;
   isInputFocused: boolean;
   isReasoningEffortSelected: boolean;
-  isReasoningPanelOpen: boolean;
   reasoningEffort: ChatInputReasoningEffort;
   selectedTool?: ChatInputAction;
   selectedToolId: ChatInputActionId | null;
@@ -46,7 +44,6 @@ type ChatInputActionsContextValue = {
   clearReasoningEffort: () => void;
   clearSelectedTool: () => void;
   closeActionSheet: () => void;
-  closeReasoningPanel: () => void;
   openActionSheet: () => void;
   removeAttachment: (attachmentId: string) => void;
   selectAction: (actionId: ChatInputActionId) => void;
@@ -54,7 +51,6 @@ type ChatInputActionsContextValue = {
   setAttachments: (attachments: ChatInputAttachmentDraft[]) => void;
   setDraft: (draft: string) => void;
   setInputFocused: (isFocused: boolean) => void;
-  toggleReasoningPanel: () => void;
 };
 
 type ChatInputMediaContextValue = ReturnType<typeof useChatInputPhotoPicker>;
@@ -74,7 +70,6 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [isReasoningEffortSelected, setIsReasoningEffortSelected] = useState(false);
-  const [isReasoningPanelOpen, setIsReasoningPanelOpen] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState<ChatInputReasoningEffort>(
     CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   );
@@ -85,17 +80,11 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
   }, []);
   const media = useChatInputPhotoPicker(isActionSheetOpen, addAttachments);
   const selectedTool = useMemo(() => getChatInputAction(selectedToolId), [selectedToolId]);
-  const shouldExpandForReasoningEffort = shouldShowChatInputReasoningEffortTag(
-    isReasoningEffortSelected,
-    reasoningEffort,
-  );
   // Collapse to a centered pill only when nothing requires the full surface.
+  // Reasoning effort no longer expands the surface: its control lives in the
+  // model picker sheet and the toolbar shows no reasoning tag.
   const isComposerExpanded =
-    isInputFocused ||
-    draft.trim() !== '' ||
-    attachments.length > 0 ||
-    Boolean(selectedTool) ||
-    shouldExpandForReasoningEffort;
+    isInputFocused || draft.trim() !== '' || attachments.length > 0 || Boolean(selectedTool);
 
   const openActionSheet = useCallback(() => {
     // Don't blur/dismiss the keyboard: let iOS keep the input as first responder
@@ -119,17 +108,6 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
   const clearReasoningEffort = useCallback(() => {
     setIsReasoningEffortSelected(false);
     setReasoningEffort(CHAT_INPUT_DEFAULT_REASONING_EFFORT);
-    setIsReasoningPanelOpen(false);
-  }, []);
-
-  // Same first-responder rule as the action sheet: never blur the input when
-  // opening — iOS restores the keyboard instantly when the panel closes.
-  const toggleReasoningPanel = useCallback(() => {
-    setIsReasoningPanelOpen((current) => !current);
-  }, []);
-
-  const closeReasoningPanel = useCallback(() => {
-    setIsReasoningPanelOpen(false);
   }, []);
 
   const clearSelectedTool = useCallback(() => {
@@ -152,7 +130,6 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
       isComposerExpanded,
       isInputFocused,
       isReasoningEffortSelected,
-      isReasoningPanelOpen,
       reasoningEffort,
       selectedTool,
       selectedToolId,
@@ -164,7 +141,6 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
       isComposerExpanded,
       isInputFocused,
       isReasoningEffortSelected,
-      isReasoningPanelOpen,
       reasoningEffort,
       selectedTool,
       selectedToolId,
@@ -178,7 +154,6 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
       clearReasoningEffort,
       clearSelectedTool,
       closeActionSheet,
-      closeReasoningPanel,
       openActionSheet,
       removeAttachment,
       selectAction,
@@ -186,7 +161,6 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
       setAttachments,
       setDraft,
       setInputFocused: setIsInputFocused,
-      toggleReasoningPanel,
     }),
     [
       addAttachments,
@@ -194,12 +168,10 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
       clearReasoningEffort,
       clearSelectedTool,
       closeActionSheet,
-      closeReasoningPanel,
       openActionSheet,
       removeAttachment,
       selectAction,
       selectReasoningEffort,
-      toggleReasoningPanel,
     ],
   );
 

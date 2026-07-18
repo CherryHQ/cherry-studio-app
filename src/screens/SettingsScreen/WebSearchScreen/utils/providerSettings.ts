@@ -140,13 +140,14 @@ export function createWebSearchMenuEntry(
 export function getWebSearchFeatureSections(
   providers: readonly WebSearchProviderPreset[] = MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS,
 ): WebSearchProviderFeatureSection[] {
-  return WEB_SEARCH_CAPABILITY_ORDER.map((capability) => {
-    const entries = providers
-      .map((provider) => createWebSearchMenuEntry(provider, capability))
-      .filter((entry): entry is WebSearchProviderMenuEntry => Boolean(entry));
+  return WEB_SEARCH_CAPABILITY_ORDER.flatMap((capability) => {
+    const entries = providers.flatMap((provider) => {
+      const entry = createWebSearchMenuEntry(provider, capability);
+      return entry ? [entry] : [];
+    });
 
-    return { capability, entries };
-  }).filter((section) => section.entries.length > 0);
+    return entries.length > 0 ? [{ capability, entries }] : [];
+  });
 }
 
 export function normalizeWebSearchApiHost(value: string): string {

@@ -1,7 +1,15 @@
 import { KeyboardAwareLegendList } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { ScrollShadow } from 'heroui-native/scroll-shadow';
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -39,6 +47,10 @@ function renderMessageItem({ item }: LegendListRenderItemProps<Message>) {
   ) : (
     <AssistantMessageItem message={item} />
   );
+}
+
+function messageKeyExtractor(item: Message) {
+  return item.id;
 }
 
 export function ChatMessageList({
@@ -124,14 +136,14 @@ export function ChatMessageList({
     }
   }, []);
 
-  const reportReady = useCallback(() => {
+  const reportReady = useEffectEvent(() => {
     if (didReportReadyRef.current || !isMountedRef.current) {
       return;
     }
 
     didReportReadyRef.current = true;
     onReady?.();
-  }, [onReady]);
+  });
 
   const handleContentSizeChange = useCallback(
     (_width: number, height: number) => {
@@ -197,7 +209,6 @@ export function ChatMessageList({
     contentBaseHeight,
     lastMessageId,
     listRef,
-    reportReady,
     viewportHeight,
   ]);
 
@@ -241,7 +252,7 @@ export function ChatMessageList({
         drawDistance={80}
         estimatedItemSize={300}
         estimatedHeaderSize={contentTopInset}
-        keyExtractor={(item) => item.id}
+        keyExtractor={messageKeyExtractor}
         keyboardDismissMode="interactive"
         keyboardLiftBehavior="whenAtEnd"
         keyboardShouldPersistTaps="handled"

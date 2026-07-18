@@ -12,8 +12,9 @@ export type { EmbedManyParams, EmbedManyResult, RuntimeConfig } from './types';
 // === 便捷工厂函数 ===
 
 export { createExecutor } from './createExecutor';
+
 import { type AiPlugin } from '../plugins';
-import { extensionRegistry } from '../providers';
+import { extensionRegistry } from '../providers/core/ExtensionRegistry';
 import { type CoreProviderSettingsMap, type StringKeys } from '../providers/types';
 import { createExecutor } from './createExecutor';
 import { RuntimeExecutor } from './executor';
@@ -96,4 +97,4 @@ export async function createOpenAICompatibleExecutor(
 }
 
 // === Agent ===
-export { createAgent, type CreateAgentOptions } from '../agents';
+export { type CreateAgentOptions, createAgent } from '../agents';

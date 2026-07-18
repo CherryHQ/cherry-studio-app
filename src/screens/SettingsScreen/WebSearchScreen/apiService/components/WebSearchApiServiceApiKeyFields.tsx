@@ -110,10 +110,11 @@ function ApiKeysCommitInput({
     onCommitRef.current = onCommit;
   }, [onCommit]);
 
-  const commitValue = useCallback((nextValue = draftValueRef.current) => {
-    if (nextValue !== valueRef.current) {
-      onCommitRef.current(nextValue);
-      valueRef.current = nextValue;
+  const commitValue = useCallback((nextValue?: string) => {
+    const resolvedValue = nextValue ?? draftValueRef.current;
+    if (resolvedValue !== valueRef.current) {
+      onCommitRef.current(resolvedValue);
+      valueRef.current = resolvedValue;
     }
   }, []);
 

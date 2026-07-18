@@ -9,28 +9,25 @@ import type {
   WebSearchProviderOverrides,
   WebSearchProviderType,
 } from '@/data/preference';
-import { WEB_SEARCH_CAPABILITIES, WEB_SEARCH_PROVIDER_IDS } from '@/data/preference';
+import { WEB_SEARCH_PROVIDER_IDS } from '@/data/preference';
 
 export const WebSearchProviderIdSchema = z.enum(WEB_SEARCH_PROVIDER_IDS);
-export const WebSearchCapabilitySchema = z.enum(WEB_SEARCH_CAPABILITIES);
 export const WebSearchProviderCapabilityOverrideSchema: z.ZodType<WebSearchProviderCapabilityOverride> =
-  z.object({ apiHost: z.string().optional() }).strict();
+  z.strictObject({ apiHost: z.string().optional() });
 export const WebSearchProviderCapabilityOverridesSchema: z.ZodType<WebSearchProviderCapabilityOverrides> =
-  z
-    .object({
-      fetchUrls: WebSearchProviderCapabilityOverrideSchema.optional(),
-      searchKeywords: WebSearchProviderCapabilityOverrideSchema.optional(),
-    })
-    .strict();
-export const WebSearchProviderOverrideSchema: z.ZodType<WebSearchProviderOverride> = z
-  .object({
+  z.strictObject({
+    fetchUrls: WebSearchProviderCapabilityOverrideSchema.optional(),
+    searchKeywords: WebSearchProviderCapabilityOverrideSchema.optional(),
+  });
+export const WebSearchProviderOverrideSchema: z.ZodType<WebSearchProviderOverride> = z.strictObject(
+  {
     apiKeys: z.array(z.string()).optional(),
     basicAuthPassword: z.string().optional(),
     basicAuthUsername: z.string().optional(),
     capabilities: WebSearchProviderCapabilityOverridesSchema.optional(),
     engines: z.array(z.string()).optional(),
-  })
-  .strict();
+  },
+);
 export const WebSearchProviderOverridesSchema: z.ZodType<WebSearchProviderOverrides> =
   z.partialRecord(WebSearchProviderIdSchema, WebSearchProviderOverrideSchema);
 
@@ -107,12 +104,6 @@ export const WEB_SEARCH_PROVIDER_PRESET_MAP = {
   },
 } as const satisfies Record<WebSearchProviderId, WebSearchProviderPresetConfig>;
 
-export const PRESETS_WEB_SEARCH_PROVIDERS: readonly WebSearchProviderPreset[] =
-  WEB_SEARCH_PROVIDER_IDS.map((id) => ({
-    id,
-    ...WEB_SEARCH_PROVIDER_PRESET_MAP[id],
-  }));
-
 export const MOBILE_SUPPORTED_WEB_SEARCH_PROVIDER_IDS = [
   'zhipu',
   'tavily',
@@ -132,12 +123,6 @@ export const MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS: readonly WebSearchProviderPr
     id,
     ...WEB_SEARCH_PROVIDER_PRESET_MAP[id],
   }));
-
-export function getWebSearchProvidersByCapability(capability: WebSearchCapability) {
-  return PRESETS_WEB_SEARCH_PROVIDERS.filter((provider) =>
-    provider.capabilities.some((item) => item.feature === capability),
-  );
-}
 
 export function getMobileSupportedWebSearchProvidersByCapability(capability: WebSearchCapability) {
   return MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS.filter((provider) =>

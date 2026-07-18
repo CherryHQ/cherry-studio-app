@@ -237,6 +237,7 @@ export function mergeCustomProviderParameters(
   rawProviderId: string,
 ): Record<string, Record<string, JSONValue>> {
   const actualAiSdkProviderIds = Object.keys(providerOptions);
+  const actualAiSdkProviderIdSet = new Set(actualAiSdkProviderIds);
   const primaryAiSdkProviderId = actualAiSdkProviderIds[0] ?? rawProviderId;
 
   if (primaryAiSdkProviderId === 'openai-compatible' && 'reasoning_effort' in providerParams) {
@@ -248,7 +249,7 @@ export function mergeCustomProviderParameters(
 
   let result = providerOptions;
   for (const key of Object.keys(providerParams)) {
-    if (actualAiSdkProviderIds.includes(key)) {
+    if (actualAiSdkProviderIdSet.has(key)) {
       result = {
         ...result,
         [key]: {
@@ -256,7 +257,7 @@ export function mergeCustomProviderParameters(
           ...providerParams[key],
         },
       };
-    } else if (key === rawProviderId && !actualAiSdkProviderIds.includes(rawProviderId)) {
+    } else if (key === rawProviderId && !actualAiSdkProviderIdSet.has(rawProviderId)) {
       result = {
         ...result,
         [primaryAiSdkProviderId]: {

@@ -11,25 +11,13 @@ import type {
   SupportSpec,
 } from '@cherrystudio/provider-registry';
 import {
-  CANONICAL_PARAM_KEY,
   CURRENCY,
   ENDPOINT_TYPE,
-  MODALITY,
   MODEL_CAPABILITY,
   objectValues,
   REASONING_EFFORT,
 } from '@cherrystudio/provider-registry';
 import * as z from 'zod';
-
-export {
-  CANONICAL_PARAM_KEY,
-  CURRENCY,
-  ENDPOINT_TYPE,
-  MODALITY,
-  MODEL_CAPABILITY,
-  objectValues,
-  REASONING_EFFORT,
-};
 
 export type {
   CanonicalParamKey,
@@ -43,6 +31,7 @@ export type {
   ReasoningEffort,
   SupportSpec,
 };
+export { CURRENCY, ENDPOINT_TYPE, MODEL_CAPABILITY, objectValues, REASONING_EFFORT };
 
 export const UNIQUE_MODEL_ID_SEPARATOR = '::';
 const RESERVED_UNIQUE_MODEL_ID_ROUTE_CHARS = ['?', '#'] as const;
@@ -130,7 +119,7 @@ export const ThinkingTokenLimitsSchema = z
 
 const ReasoningEffortSchema = z.enum(objectValues(REASONING_EFFORT));
 
-export const ReasoningConfigSchema = z.object({
+const ReasoningConfigSchema = z.object({
   interleaved: z.boolean().optional(),
   supportedEfforts: z.array(ReasoningEffortSchema).optional(),
   thinkingTokenLimits: ThinkingTokenLimitsSchema.optional(),
@@ -143,7 +132,7 @@ const NumericRangeSchema = z.object({
   min: z.number(),
 });
 
-export const ParameterSupportSchema = z.object({
+const ParameterSupportSchema = z.object({
   frequencyPenalty: z.boolean().optional(),
   maxTokens: z.boolean().optional(),
   presencePenalty: z.boolean().optional(),
@@ -157,7 +146,7 @@ export const ParameterSupportSchema = z.object({
 });
 export type ParameterSupport = z.infer<typeof ParameterSupportSchema>;
 
-export const RuntimeModelPricingSchema = z.object({
+const RuntimeModelPricingSchema = z.object({
   cacheRead: PricePerTokenSchema.optional(),
   cacheWrite: PricePerTokenSchema.optional(),
   input: PricePerTokenSchema,

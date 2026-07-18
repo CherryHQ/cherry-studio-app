@@ -67,18 +67,6 @@ export type InferPaginationItem<R> =
       ? T
       : never;
 
-export function isOffsetPaginationResponse<T>(
-  response: PaginationResponse<T>,
-): response is OffsetPaginationResponse<T> {
-  return 'page' in response && 'total' in response;
-}
-
-export function isCursorPaginationResponse<T>(
-  response: PaginationResponse<T>,
-): response is CursorPaginationResponse<T> {
-  return !('page' in response);
-}
-
 export interface ServiceOptions {
   /** Database transaction to use. */
   transaction?: unknown;

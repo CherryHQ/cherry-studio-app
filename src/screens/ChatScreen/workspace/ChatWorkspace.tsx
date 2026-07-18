@@ -6,8 +6,8 @@ import { useSharedValue } from 'react-native-reanimated';
 import { isIOS } from '@/config/constants';
 import type { Message } from '@/data/types/message';
 import type { MessagesViewModel } from '@/hooks/chat';
-
-import { mergeMessagesWithOverlay, useChatRuntimeTopic } from '../runtime';
+import { useChatRuntimeTopic } from '../runtime/ChatRuntimeProvider';
+import { mergeMessagesWithOverlay } from '../runtime/chatRuntimeMessages';
 import { ChatComposer } from './components/ChatComposer';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessageList } from './components/ChatMessageList';
@@ -66,11 +66,7 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
         onPrefetchOlder={messageWindow.prefetchOlder}
         onReady={markListLoaded}
       />
-      <ChatComposer
-        inputHeight={inputHeightShared}
-        onHeightChange={handleInputHeightChange}
-        topicId={topicId}
-      />
+      <ChatComposer onHeightChange={handleInputHeightChange} topicId={topicId} />
       <ScrollToBottomButton
         gap={SCROLL_BUTTON_GAP_ABOVE_INPUT}
         inputHeight={inputHeightShared}

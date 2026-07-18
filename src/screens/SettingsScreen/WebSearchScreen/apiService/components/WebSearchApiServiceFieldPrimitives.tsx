@@ -1,9 +1,7 @@
 import { Input } from 'heroui-native/input';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TextInputEndEditingEvent } from 'react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-
-import { openExternalUrl } from '@/utils/openExternalUrl';
+import { StyleSheet, Text, View } from 'react-native';
 
 type SettingTextInputProps = {
   accessibilityLabel: string;
@@ -40,10 +38,11 @@ export function SettingTextInput({
     onCommitRef.current = onCommit;
   }, [onCommit]);
 
-  const commitValue = useCallback((nextValue = draftValueRef.current) => {
-    if (nextValue !== valueRef.current) {
-      onCommitRef.current(nextValue);
-      valueRef.current = nextValue;
+  const commitValue = useCallback((nextValue?: string) => {
+    const resolvedValue = nextValue ?? draftValueRef.current;
+    if (resolvedValue !== valueRef.current) {
+      onCommitRef.current(resolvedValue);
+      valueRef.current = resolvedValue;
     }
   }, []);
 
@@ -88,28 +87,6 @@ export function SettingTextInput({
       value={draftValue}
       variant="secondary"
     />
-  );
-}
-
-type ExternalLinkRowProps = {
-  label: string;
-  url: string;
-};
-
-export function ExternalTextLink({ label, url }: ExternalLinkRowProps) {
-  const handlePress = useCallback(() => {
-    void openExternalUrl(url);
-  }, [url]);
-
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="link"
-      className="py-1 active:opacity-60"
-      onPress={handlePress}
-    >
-      <Text className="text-accent text-sm">{label}</Text>
-    </Pressable>
   );
 }
 

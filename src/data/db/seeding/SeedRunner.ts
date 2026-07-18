@@ -32,6 +32,7 @@ export class SeedRunner {
         continue;
       }
 
+      // react-doctor-disable-next-line async-await-in-loop -- seeder 需按声明顺序执行，且每个跑完后立即写 journal 记录进度
       await seeder.run(this.dbService);
 
       await this.dbService.withWriteTx(async (tx) => {

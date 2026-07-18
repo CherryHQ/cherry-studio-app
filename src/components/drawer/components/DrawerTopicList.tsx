@@ -27,6 +27,11 @@ type DrawerTopicListExtraData = {
 
 const topicItemHeight = 44;
 const newChatButtonClearance = 80;
+const listContentContainerStyle = { paddingBottom: newChatButtonClearance, paddingTop: 2 };
+
+function topicKeyExtractor(item: Topic) {
+  return item.id;
+}
 
 export const DrawerTopicList = memo(function DrawerTopicList() {
   const { t } = useTranslation();
@@ -124,11 +129,11 @@ export const DrawerTopicList = memo(function DrawerTopicList() {
   return (
     <View ref={containerRef} className="flex-1">
       <LegendList
-        contentContainerStyle={{ paddingBottom: newChatButtonClearance, paddingTop: 2 }}
+        contentContainerStyle={listContentContainerStyle}
         data={topics}
         estimatedItemSize={topicItemHeight}
         extraData={listExtraData}
-        keyExtractor={(item) => item.id}
+        keyExtractor={topicKeyExtractor}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={listEmptyComponent}

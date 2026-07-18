@@ -1,10 +1,9 @@
 /**
- * `Message` -> AI SDK `UIMessage` / `ModelMessage`, with unresolved
- * `file://` URLs dropped until the mobile file resolver is wired to Expo
- * FileSystem.
+ * `Message` -> AI SDK `UIMessage`, with unresolved `file://` URLs dropped
+ * until the mobile file resolver is wired to Expo FileSystem.
  */
 
-import { convertToModelMessages, type ModelMessage, type UIMessage } from 'ai';
+import type { UIMessage } from 'ai';
 import type { CherryMessagePart, CherryUIMessage, Message } from '@/data/types/message';
 
 import { resolveFileUIPart } from './fileProcessor';
@@ -40,13 +39,4 @@ export async function resolveUIMessageFileUrls<T extends UIMessage = UIMessage>(
   messages: T[],
 ): Promise<T[]> {
   return Promise.all(messages.map(resolveMessageParts));
-}
-
-export async function prepareModelMessages(messages: Message[]): Promise<ModelMessage[]> {
-  const uiMessages = await resolveUIMessageFileUrls(messages.map(toCherryUIMessage));
-  return convertToModelMessages(uiMessages);
-}
-
-export async function prepareUIMessages(messages: Message[]): Promise<CherryUIMessage[]> {
-  return resolveUIMessageFileUrls(messages.map(toCherryUIMessage));
 }

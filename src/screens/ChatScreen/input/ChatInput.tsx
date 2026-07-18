@@ -11,10 +11,12 @@ import {
 import { isUniqueModelId } from '@/data/types/model';
 import { useModelById, useProviders, useTopic } from '@/hooks/chat';
 import { ChatInputActionSheet } from '@/screens/ChatScreen/input/components/ChatInputActionSheet';
+import { ChatInputReasoningSection } from '@/screens/ChatScreen/input/components/ChatInputReasoningSection';
 import {
   type ChatInputSendPayload,
   ChatInputSurface,
 } from '@/screens/ChatScreen/input/components/ChatInputSurface';
+import { useChatInputReasoningEffortSync } from '@/screens/ChatScreen/input/hooks/useChatInputReasoningEffortSync';
 import { useChatInputReasoningEfforts } from '@/screens/ChatScreen/input/hooks/useChatInputReasoningEfforts';
 import { createChatInputMessageParts } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
 import { useChatRuntimeTopic } from '@/screens/ChatScreen/runtime';
@@ -46,6 +48,7 @@ export function ChatInput({ topicId }: ChatInputProps) {
       )
     : undefined;
   const reasoningEfforts = useChatInputReasoningEfforts();
+  useChatInputReasoningEffortSync(reasoningEfforts);
 
   const openModelPicker = useCallback(() => {
     modelPickerRef.current?.present();
@@ -72,8 +75,6 @@ export function ChatInput({ topicId }: ChatInputProps) {
     [chatRuntime, selectedAssistantId, selectedModelId],
   );
 
-  // ChatInputProvider lives up in ChatWorkspace so the reasoning panel
-  // (mounted at the workspace level) shares this composer's state.
   return (
     <>
       <ChatInputSurface
@@ -88,6 +89,7 @@ export function ChatInput({ topicId }: ChatInputProps) {
       />
       <ChatInputActionSheet />
       <ModelPickerBottomSheet
+        footer={<ChatInputReasoningSection />}
         onSelect={handleModelSelect}
         ref={modelPickerRef}
         selectedModelId={selectedModelId}

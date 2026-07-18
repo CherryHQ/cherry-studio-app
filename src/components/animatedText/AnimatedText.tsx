@@ -105,20 +105,22 @@ export function AnimatedText({
   const glyphs = useMemo<GlyphLayout[]>(() => {
     const identities = glyphIdentities(value);
     const advances = font.getGlyphWidths(font.getGlyphIDs(value));
+    const layouts: GlyphLayout[] = [];
     let x = lineStartX(advances, width, align);
 
-    return identities.map((identity, index) => {
+    for (const [index, identity] of identities.entries()) {
       const advance = advances[index] ?? 0;
-      const layout: GlyphLayout = {
+      layouts.push({
         id: identity.id,
         char: identity.char,
         x,
         advance,
         delayMs: rippleDelayMs(index, identities.length, staggerStepMs),
-      };
+      });
       x += advance;
-      return layout;
-    });
+    }
+
+    return layouts;
   }, [align, font, staggerStepMs, value, width]);
 
   // Glyphs from the previous value that the new one doesn't contain; they
@@ -164,9 +166,7 @@ export function AnimatedText({
   const activeIds = new Set(glyphs.map((glyph) => glyph.id));
   const scene = [
     ...glyphs.map((glyph) => ({ glyph, departing: false })),
-    ...departed
-      .filter((glyph) => !activeIds.has(glyph.id))
-      .map((glyph) => ({ glyph, departing: true })),
+    ...departed.flatMap((glyph) => (activeIds.has(glyph.id) ? [] : [{ glyph, departing: true }])),
   ];
 
   return (

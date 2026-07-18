@@ -32,9 +32,9 @@ export function useDataMutation<TData, TError = Error, TVariables = void, TConte
     ...mutationOptions,
     mutationFn: (variables) => mutationFn(services, variables),
     onSuccess: async (data, variables, onMutateResult, context) => {
-      for (const queryKey of invalidateQueries ?? []) {
-        await queryClient.invalidateQueries({ queryKey });
-      }
+      await Promise.all(
+        (invalidateQueries ?? []).map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      );
 
       await onSuccess?.(data, variables, onMutateResult, context);
     },

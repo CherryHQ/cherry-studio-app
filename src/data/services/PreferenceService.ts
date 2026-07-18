@@ -232,6 +232,7 @@ export class PreferenceService {
       for (const key of keys) {
         const value = updates[key] as PreferenceValue;
 
+        // react-doctor-disable-next-line async-await-in-loop -- expo-sqlite 写事务内本质串行，并行化无收益
         await tx
           .insert(preferenceTable)
           .values({

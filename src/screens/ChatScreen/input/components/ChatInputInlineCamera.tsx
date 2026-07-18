@@ -98,9 +98,9 @@ export function ChatInputInlineCamera({
       onCapture(photo);
     } catch (error) {
       onError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsCapturing(false);
     }
+
+    setIsCapturing(false);
   }, [isCameraReady, isCapturing, onCapture, onError]);
 
   const handleOpenSettings = useCallback(() => {

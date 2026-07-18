@@ -13,11 +13,11 @@ import {
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import type { EndpointType } from '@/data/types/model';
 import { useProviderDetailSettings } from './detail';
+import { useProviderModelAdd } from './models/hooks/useProviderModelAdd';
 import {
   type ProviderModelAddFormState,
   providerModelAddEndpointOptions,
-  useProviderModelAdd,
-} from './models';
+} from './models/utils/providerModelAdd';
 
 const advancedSettingsScrollTopPadding = 16;
 const defaultKeyboardBottomOffset = 0;
@@ -159,9 +159,13 @@ function ProviderModelAddForm({
   const toggleMoreSettings = useCallback(() => {
     setShowMoreSettings((current) => !current);
   }, []);
+  const selectedEndpointTypes = useMemo(
+    () => new Set(formState.endpointTypes),
+    [formState.endpointTypes],
+  );
   const toggleEndpointType = useCallback(
     (endpointType: EndpointType) => {
-      const currentTypes = new Set(formState.endpointTypes);
+      const currentTypes = new Set(selectedEndpointTypes);
       if (currentTypes.has(endpointType)) {
         currentTypes.delete(endpointType);
       } else {
@@ -170,7 +174,7 @@ function ProviderModelAddForm({
 
       onEndpointTypesChange([...currentTypes]);
     },
-    [formState.endpointTypes, onEndpointTypesChange],
+    [onEndpointTypesChange, selectedEndpointTypes],
   );
 
   useEffect(() => clearAdvancedFieldScrollTimer, [clearAdvancedFieldScrollTimer]);
@@ -231,7 +235,7 @@ function ProviderModelAddForm({
                 <EndpointTypeChip
                   key={option.id}
                   isDisabled={isSubmitting}
-                  isSelected={formState.endpointTypes.includes(option.id)}
+                  isSelected={selectedEndpointTypes.has(option.id)}
                   label={t(option.labelKey)}
                   onPress={() => toggleEndpointType(option.id)}
                 />

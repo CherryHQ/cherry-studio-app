@@ -184,11 +184,11 @@ export function useChatInputPhotoPicker(
           setPhotoPreviews([]);
           setSelectedPhotoIds([]);
         }
-      } finally {
-        if (loadingRevisionRef.current === revision) {
-          loadingRevisionRef.current = null;
-          setIsPhotoPageLoading(false);
-        }
+      }
+
+      if (loadingRevisionRef.current === revision) {
+        loadingRevisionRef.current = null;
+        setIsPhotoPageLoading(false);
       }
     },
     [applyPhotoLibrarySnapshot],
@@ -324,28 +324,23 @@ export function useChatInputPhotoPicker(
     loadingRevisionRef.current = revision;
     setIsPhotoPageLoading(true);
 
-    try {
-      const page = await loadPhotoPreviewPage(nextPhotoPageOffsetRef.current);
-
-      if (photoLoadRevisionRef.current !== revision) {
-        return;
-      }
-
-      nextPhotoPageOffsetRef.current = page.nextOffset;
-      setHasNextPhotoPage(page.hasNextPhotoPage);
-      setPhotoPreviews((current) => {
-        const existingPhotoIds = new Set(current.map((photo) => photo.id));
-        return [
-          ...current,
-          ...page.photoPreviews.filter((photo) => !existingPhotoIds.has(photo.id)),
-        ];
-      });
-    } finally {
+    const page = await loadPhotoPreviewPage(nextPhotoPageOffsetRef.current).finally(() => {
       if (loadingRevisionRef.current === revision) {
         loadingRevisionRef.current = null;
         setIsPhotoPageLoading(false);
       }
+    });
+
+    if (photoLoadRevisionRef.current !== revision) {
+      return;
     }
+
+    nextPhotoPageOffsetRef.current = page.nextOffset;
+    setHasNextPhotoPage(page.hasNextPhotoPage);
+    setPhotoPreviews((current) => {
+      const existingPhotoIds = new Set(current.map((photo) => photo.id));
+      return [...current, ...page.photoPreviews.filter((photo) => !existingPhotoIds.has(photo.id))];
+    });
   }, [hasNextPhotoPage, photoAccess]);
 
   const state: ChatInputPhotoPickerState = useMemo(

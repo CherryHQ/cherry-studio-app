@@ -1,0 +1,22 @@
+appId: com.cherry-ai.cherry-studio-app
+tags: [settings, provider]
+---
+- runFlow: ../subflows/launch.yaml
+- tapOn: "Open sidebar"
+- tapOn: "Settings"
+- tapOn: "Model service"
+- tapOn: "CherryInExpress"
+# 详情骨架：开关、Base URL、密钥区、模型列表工具栏
+- assertVisible: "Enabled"
+- assertVisible: "Base URL"
+- assertVisible: "API Keys"
+- assertVisible: "Model list"
+- assertVisible: "Check"
+- assertVisible: "Pull"
+- assertVisible: "Add"
+# Check sheet 开合（不执行检查）
+- tapOn: "Check"
+- assertVisible: "Check model"
+- assertVisible: "Model to check"
+- tapOn: "Close"
+- assertVisible: "Model list"

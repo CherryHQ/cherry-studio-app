@@ -152,7 +152,7 @@ export function useProviderModelCheck({
       providerId,
     });
 
-    try {
+    const runCheck = async () => {
       const results = await checkProviderModelsHealth(
         {
           apiKey: selectedApiKey,
@@ -209,21 +209,25 @@ export function useProviderModelCheck({
         label: t('settings.provider.models.checkFailed'),
         variant: 'danger',
       });
-    } catch {
-      if (!abortController.signal.aborted && runIdRef.current === runId) {
-        toast.show({
-          label: t('settings.provider.models.checkFailed'),
-          variant: 'danger',
-        });
-      }
-    } finally {
-      if (runIdRef.current === runId) {
-        abortControllerRef.current = null;
-        setCheckState((current) =>
-          current.providerId === providerId ? { ...current, isChecking: false } : current,
-        );
-      }
-    }
+    };
+
+    await runCheck()
+      .catch(() => {
+        if (!abortController.signal.aborted && runIdRef.current === runId) {
+          toast.show({
+            label: t('settings.provider.models.checkFailed'),
+            variant: 'danger',
+          });
+        }
+      })
+      .finally(() => {
+        if (runIdRef.current === runId) {
+          abortControllerRef.current = null;
+          setCheckState((current) =>
+            current.providerId === providerId ? { ...current, isChecking: false } : current,
+          );
+        }
+      });
   }, [
     models.length,
     provider,

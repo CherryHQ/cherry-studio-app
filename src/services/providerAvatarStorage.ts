@@ -57,12 +57,3 @@ export function getProviderAvatarUri(providerId: string): string | undefined {
 
   return file.exists ? file.uri : undefined;
 }
-
-/** Delete a provider's stored avatar (no-op when absent). */
-export function removeProviderAvatar(providerId: string): void {
-  const file = avatarFile(providerId);
-
-  if (file.exists) {
-    file.delete();
-  }
-}

@@ -1,6 +1,5 @@
 export {
   DrawerProvider,
-  useDrawer,
   useDrawerActions,
   useDrawerPanelState,
   useDrawerTopics,

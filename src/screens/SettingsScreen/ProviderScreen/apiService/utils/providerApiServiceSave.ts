@@ -55,12 +55,10 @@ export function buildProviderApiServiceApiKeysPayload(draft: DraftSnapshot): Api
 }
 
 export function buildProviderApiServiceSavePayload({
-  apiKeys,
   authConfig,
   draft,
   provider,
 }: {
-  apiKeys: readonly ApiKeyEntry[];
   authConfig: AuthConfig | null | undefined;
   draft: DraftSnapshot;
   provider: Provider;

@@ -16,7 +16,7 @@ export const CreateTopicSchema = TopicSchema.pick({
   .strict();
 export type CreateTopicDto = z.infer<typeof CreateTopicSchema>;
 
-export const UpdateTopicSchema = TopicSchema.pick({
+const UpdateTopicSchema = TopicSchema.pick({
   groupId: true,
   isNameManuallyEdited: true,
   name: true,
@@ -27,14 +27,14 @@ export const UpdateTopicSchema = TopicSchema.pick({
   });
 export type UpdateTopicDto = z.infer<typeof UpdateTopicSchema>;
 
-export const ListTopicsQuerySchema = z.strictObject({
+const ListTopicsQuerySchema = z.strictObject({
   cursor: z.string().optional(),
   limit: z.coerce.number().int().positive().max(200).optional(),
   q: z.string().optional(),
 });
 export type ListTopicsQuery = z.infer<typeof ListTopicsQuerySchema>;
 
-export const SetActiveNodeSchema = z.strictObject({
+const SetActiveNodeSchema = z.strictObject({
   nodeId: z.string().min(1),
 });
 export type SetActiveNodeDto = z.infer<typeof SetActiveNodeSchema>;

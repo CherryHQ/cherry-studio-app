@@ -50,10 +50,7 @@ export function buildApiKeyEntriesFromInput(
 }
 
 export function buildApiKeysInputFromEntries(apiKeys: readonly ApiKeyEntry[]): string {
-  return apiKeys
-    .map((entry) => entry.key.trim())
-    .filter(Boolean)
-    .join(',');
+  return apiKeys.flatMap((entry) => entry.key.trim() || []).join(',');
 }
 
 export function cloneApiKeyEntries(apiKeys: readonly ApiKeyEntry[]): ApiKeyEntry[] {
@@ -68,20 +65,15 @@ export function createEmptyApiKeyEntry(): ApiKeyEntry {
   };
 }
 
-export function serializeKeyValues(input: string): string {
-  return JSON.stringify(parseApiKeysInput(input));
-}
-
 export function apiKeyEntriesSignature(apiKeys: readonly ApiKeyEntry[]): string {
   return JSON.stringify(
     apiKeys
-      .map((entry) => ({
-        id: entry.id,
-        isEnabled: entry.isEnabled,
-        key: entry.key.trim(),
-        label: entry.label ?? '',
-      }))
-      .filter((entry) => entry.key)
+      .flatMap((entry) => {
+        const key = entry.key.trim();
+        return key
+          ? [{ id: entry.id, isEnabled: entry.isEnabled, key, label: entry.label ?? '' }]
+          : [];
+      })
       .sort((left, right) => left.id.localeCompare(right.id)),
   );
 }

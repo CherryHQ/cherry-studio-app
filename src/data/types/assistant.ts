@@ -5,30 +5,28 @@ import { TagSchema } from './tag';
 export const McpModeSchema = z.enum(['disabled', 'auto', 'manual']);
 export type McpMode = z.infer<typeof McpModeSchema>;
 
-export const AssistantSettingsSchema = z
-  .object({
-    customParameters: z.array(
-      z.discriminatedUnion('type', [
-        z.object({ name: z.string(), type: z.literal('string'), value: z.string() }),
-        z.object({ name: z.string(), type: z.literal('number'), value: z.number() }),
-        z.object({ name: z.string(), type: z.literal('boolean'), value: z.boolean() }),
-        z.object({ name: z.string(), type: z.literal('json'), value: z.unknown() }),
-      ]),
-    ),
-    enableMaxTokens: z.boolean(),
-    enableMaxToolCalls: z.boolean(),
-    enableTemperature: z.boolean(),
-    enableTopP: z.boolean(),
-    enableWebSearch: z.boolean(),
-    maxTokens: z.number().int().positive(),
-    maxToolCalls: z.number().int().positive(),
-    mcpMode: McpModeSchema,
-    reasoning_effort: z.string(),
-    streamOutput: z.boolean(),
-    temperature: z.number().min(0).max(2),
-    topP: z.number().min(0).max(1),
-  })
-  .passthrough();
+export const AssistantSettingsSchema = z.looseObject({
+  customParameters: z.array(
+    z.discriminatedUnion('type', [
+      z.object({ name: z.string(), type: z.literal('string'), value: z.string() }),
+      z.object({ name: z.string(), type: z.literal('number'), value: z.number() }),
+      z.object({ name: z.string(), type: z.literal('boolean'), value: z.boolean() }),
+      z.object({ name: z.string(), type: z.literal('json'), value: z.unknown() }),
+    ]),
+  ),
+  enableMaxTokens: z.boolean(),
+  enableMaxToolCalls: z.boolean(),
+  enableTemperature: z.boolean(),
+  enableTopP: z.boolean(),
+  enableWebSearch: z.boolean(),
+  maxTokens: z.number().int().positive(),
+  maxToolCalls: z.number().int().positive(),
+  mcpMode: McpModeSchema,
+  reasoning_effort: z.string(),
+  streamOutput: z.boolean(),
+  temperature: z.number().min(0).max(2),
+  topP: z.number().min(0).max(1),
+});
 export type AssistantSettings = z.infer<typeof AssistantSettingsSchema>;
 
 export const DEFAULT_ASSISTANT_SETTINGS: AssistantSettings = {

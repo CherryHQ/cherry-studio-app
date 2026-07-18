@@ -24,20 +24,27 @@ export type ThinkingReveal = {
  * Ignition state machine for the pixel field: entering the trigger stop
  * mounts the canvas and plays the 1 s reveal sweep (fires mid-drag, before
  * release); leaving fades the whole field out and then unmounts it.
+ * `initiallyAtTrigger` pre-lights the field (no sweep) so remounting at the
+ * trigger stop — e.g. reopening the panel at max — shows it already lit
+ * instead of flashing ticks and replaying the ignition.
  */
 export function useThinkingReveal(
   activeStopIndex: SharedValue<number>,
   triggerStopIndex: number,
   enabled: boolean,
+  initiallyAtTrigger = false,
 ): ThinkingReveal {
-  const [fieldMounted, setFieldMounted] = useState(false);
-  const reveal = useSharedValue(0);
-  const fieldAlpha = useSharedValue(0);
+  const startLit = initiallyAtTrigger && enabled && triggerStopIndex >= 0;
+  const [fieldMounted, setFieldMounted] = useState(startLit);
+  const reveal = useSharedValue(startLit ? 1 : 0);
+  const fieldAlpha = useSharedValue(startLit ? 1 : 0);
 
   useAnimatedReaction(
     () => enabled && triggerStopIndex >= 0 && activeStopIndex.value === triggerStopIndex,
     (atTrigger, previous) => {
-      if (atTrigger === previous) {
+      // previous 为 null 是 reaction 首次运行（挂载/依赖重建），此时以预点亮
+      // 状态为基准，避免把「本来就在触发挡」当成一次进入而重放扫入。
+      if (atTrigger === (previous ?? startLit)) {
         return;
       }
       if (atTrigger) {
@@ -58,7 +65,7 @@ export function useThinkingReveal(
         });
       }
     },
-    [enabled, triggerStopIndex],
+    [enabled, triggerStopIndex, startLit],
   );
 
   return { fieldMounted, reveal, fieldAlpha };

@@ -1,7 +1,5 @@
 import * as z from 'zod';
 
-import { EntityIdSchema, EntityTypeSchema } from './entityType';
-
 export const TagIdSchema = z.uuidv4();
 export const TagNameSchema = z.string().trim().min(1).max(64);
 export const TagColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
@@ -20,7 +18,7 @@ export const CreateTagSchema = TagSchema.pick({ color: true, name: true })
   .required({ name: true });
 export type CreateTagDto = z.infer<typeof CreateTagSchema>;
 
-export const UpdateTagSchema = CreateTagSchema.partial();
+const UpdateTagSchema = CreateTagSchema.partial();
 export type UpdateTagDto = z.infer<typeof UpdateTagSchema>;
 
 export const SyncEntityTagsSchema = z.strictObject({
@@ -32,9 +30,3 @@ export const SyncEntityTagsSchema = z.strictObject({
     }),
 });
 export type SyncEntityTagsDto = z.infer<typeof SyncEntityTagsSchema>;
-
-export const TagEntityRefSchema = z.strictObject({
-  entityId: EntityIdSchema,
-  entityType: EntityTypeSchema,
-});
-export type TagEntityRef = z.infer<typeof TagEntityRefSchema>;
