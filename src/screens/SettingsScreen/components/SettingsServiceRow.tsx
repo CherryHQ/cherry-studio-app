@@ -3,7 +3,7 @@ import { cn } from 'heroui-native/utils';
 import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { memo, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { Image } from '@/components/uniwind';
+import { Image } from '@/components/nativePrimitives';
 
 export type SettingsServiceRowProps = {
   /** Custom leading visual; takes precedence over `imageSource` when provided. */

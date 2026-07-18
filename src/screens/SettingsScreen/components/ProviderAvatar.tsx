@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { Image } from '@/components/uniwind';
+import { Image } from '@/components/nativePrimitives';
 import { getProviderAvatarUri } from '@/services/providerAvatarStorage';
 
 /**

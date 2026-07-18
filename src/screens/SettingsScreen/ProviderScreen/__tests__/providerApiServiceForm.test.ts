@@ -6,29 +6,29 @@ import {
   formatApiKeysInput,
   normalizeApiKeyEntries,
   parseApiKeysInput,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceApiKeys';
-import { parseCredentialsDraft } from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceAuthDraft';
+} from '../apiService/utils/providerApiServiceApiKeys';
+import { parseCredentialsDraft } from '../apiService/utils/providerApiServiceAuthDraft';
 import {
   getProviderApiServiceApiKeysDirtyState,
   getProviderApiServiceEndpointDirtyState,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceDirtyState';
+} from '../apiService/utils/providerApiServiceDirtyState';
 import {
   createDraftSnapshot,
   type DraftSnapshot,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceDraft';
+} from '../apiService/utils/providerApiServiceDraft';
 import {
   buildAddableEndpointOptions,
   canEditProviderEndpoint,
   getConfigurableEndpointTypesForProvider,
   isConfigurableEndpointType,
   mergeEndpointConfigs,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceEndpointRules';
+} from '../apiService/utils/providerApiServiceEndpointRules';
 import {
   buildProviderApiServiceApiKeysPayload,
   buildProviderApiServiceEndpointUpdates,
   buildProviderApiServiceSavePayload,
   ProviderApiServiceSaveError,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceSave';
+} from '../apiService/utils/providerApiServiceSave';
 
 const DEFAULT_AUTH_DRAFT: DraftSnapshot['authDraft'] = {
   accessKeyId: '',

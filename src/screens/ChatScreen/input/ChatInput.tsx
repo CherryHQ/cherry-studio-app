@@ -10,16 +10,13 @@ import {
 } from '@/components/modelPicker';
 import { isUniqueModelId } from '@/data/types/model';
 import { useModelById, useProviders, useTopic } from '@/hooks/chat';
-import { ChatInputActionSheet } from '@/screens/ChatScreen/input/components/ChatInputActionSheet';
-import { ChatInputReasoningSection } from '@/screens/ChatScreen/input/components/ChatInputReasoningSection';
-import {
-  type ChatInputSendPayload,
-  ChatInputSurface,
-} from '@/screens/ChatScreen/input/components/ChatInputSurface';
-import { useChatInputReasoningEffortSync } from '@/screens/ChatScreen/input/hooks/useChatInputReasoningEffortSync';
-import { useChatInputReasoningEfforts } from '@/screens/ChatScreen/input/hooks/useChatInputReasoningEfforts';
-import { createChatInputMessageParts } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
-import { useChatRuntimeTopic } from '@/screens/ChatScreen/runtime';
+import { useChatRuntimeTopic } from '../runtime';
+import { ChatInputActionSheet } from './components/ChatInputActionSheet';
+import { ChatInputReasoningSection } from './components/ChatInputReasoningSection';
+import { type ChatInputSendPayload, ChatInputSurface } from './components/ChatInputSurface';
+import { useChatInputReasoningEffortSync } from './hooks/useChatInputReasoningEffortSync';
+import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
+import { createChatInputMessageParts } from './utils/chatInputAttachments';
 
 type ChatInputProps = {
   topicId?: string;

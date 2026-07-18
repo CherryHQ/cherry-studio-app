@@ -5,13 +5,13 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
+import { openExternalUrl } from '@/utils/openExternalUrl';
 import {
   canEditProviderEndpoint,
   shouldShowApiKeys,
   useProviderApiServiceDraft,
   useProviderApiServiceQueries,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService';
-import { openExternalUrl } from '@/utils/openExternalUrl';
+} from './apiService';
 import { ProviderApiManagementSection } from './components/ProviderApiManagementSection';
 import { ProviderModelList } from './components/ProviderModelList';
 import { useProviderDetailSettings } from './detail';

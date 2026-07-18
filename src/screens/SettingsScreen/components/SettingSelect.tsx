@@ -4,7 +4,7 @@ import { ChevronsUpDownIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-import { Image } from '@/components/uniwind';
+import { Image } from '@/components/nativePrimitives';
 
 const selectTriggerWidth = 128;
 const selectContentWidth = 256;

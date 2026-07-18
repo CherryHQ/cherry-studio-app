@@ -6,7 +6,8 @@ This module owns the app drawer shell, topic list, drawer search state, and navi
 
 - `DrawerRoot` wraps the root stack with `DrawerProvider`.
 - `DrawerLayout` renders the Expo drawer for the drawer route group.
-- Drawer state hooks are exported from `index.ts` for drawer-aware modules such as headers.
+- `useDrawerActions` is exported from `index.ts` for drawer-aware modules such as headers.
+- Drawer state and topic hooks remain private to this module.
 
 ## Organization
 

@@ -2,13 +2,13 @@ import * as MediaLibrary from 'expo-media-library';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
-import { createPhotoAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+import type { ChatInputAttachmentDraft } from '../utils/chatInputAttachments';
+import { createPhotoAttachmentDraft } from '../utils/chatInputAttachments';
 import {
   filterChatInputSelectedPhotoIds,
   getChatInputSelectedPhotoOrder,
   getNextChatInputSelectedPhotoIds,
-} from '@/screens/ChatScreen/input/utils/chatInputPhotoSelection';
+} from '../utils/chatInputPhotoSelection';
 
 export type ChatInputPhotoAccess = 'all' | 'limited' | 'none';
 

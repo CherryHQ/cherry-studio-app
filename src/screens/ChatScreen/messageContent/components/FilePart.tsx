@@ -1,5 +1,5 @@
-import { FileTile, ImageTile } from '@/components/mediaTile';
 import type { CherryMessagePart } from '@/data/types/message';
+import { FileTile, ImageTile } from '../../mediaTile';
 
 type FilePartProps = {
   part: Extract<CherryMessagePart, { type: 'file' }>;

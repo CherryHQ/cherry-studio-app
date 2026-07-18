@@ -3,7 +3,7 @@ import { useThemeColor } from 'heroui-native/hooks';
 import { CameraIcon, PencilIcon } from 'lucide-uniwind/png';
 import { View } from 'react-native';
 
-import { Image } from '@/components/uniwind';
+import { Image } from '@/components/nativePrimitives';
 
 const avatarSource = require('@/assets/icon.png');
 

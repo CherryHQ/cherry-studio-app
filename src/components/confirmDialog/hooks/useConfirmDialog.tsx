@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 
-export function useSettingsConfirmDialog() {
+export function useConfirmDialog() {
   const { t } = useTranslation();
   const [dialog, setDialog] = useState<{
     message: string;

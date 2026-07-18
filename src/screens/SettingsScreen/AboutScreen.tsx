@@ -14,7 +14,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/components/headers';
-import { Image } from '@/components/uniwind';
+import { Image } from '@/components/nativePrimitives';
 import { openExternalUrl } from '@/utils/openExternalUrl';
 import { SettingsSection } from './components/SettingsSection';
 

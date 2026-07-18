@@ -14,14 +14,11 @@ so the two contexts share one visual language instead of drifting apart.
 - `FileTile` — square bordered tile with the uppercased file extension in a
   bordered chip top-left, and the extension-less filename (wraps up to 3
   lines) pinned bottom-left. Optional `onPress` makes it tappable.
-- `getFileExtension` / `getFileBaseName` — pure helpers that split a filename
-  into the uppercased, truncated extension and the base name shown by
-  `FileTile`.
 
 ## Organization
 
 - `components/ImageTile.tsx`, `components/FileTile.tsx`: the two tiles.
-- `utils/getFileExtension.ts`: pure filename parsing, with tests.
+- `utils/getFileExtension.ts`: private filename parsing used by `FileTile`, with tests.
 
 ## Behavior notes
 

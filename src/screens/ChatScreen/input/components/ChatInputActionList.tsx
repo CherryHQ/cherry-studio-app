@@ -7,7 +7,7 @@ import {
   type ChatInputAction,
   type ChatInputActionId,
   chatInputActions,
-} from '@/screens/ChatScreen/input/utils/chatInputActions';
+} from '../utils/chatInputActions';
 
 type ChatInputActionListProps = {
   actions?: readonly ChatInputAction[];

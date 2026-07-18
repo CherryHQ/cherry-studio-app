@@ -1,6 +1,6 @@
 # Prism Sweep
 
-This module owns a reusable animated 5x5 dot-matrix indicator: a snake-style
+This ChatScreen-owned module provides an animated 5x5 dot-matrix indicator: a snake-style
 trail sweeps across alternating anti-diagonals, useful as a lightweight
 "working" indicator (e.g. a model thinking/streaming state).
 

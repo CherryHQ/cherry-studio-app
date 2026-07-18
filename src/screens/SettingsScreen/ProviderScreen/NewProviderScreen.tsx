@@ -13,7 +13,7 @@ import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
-import { Image } from '@/components/uniwind';
+import { Image } from '@/components/nativePrimitives';
 import { keyboardBottomOffset } from '@/config/constants';
 import { queryKeys } from '@/data/api';
 import { useDataMutation } from '@/data/hooks';

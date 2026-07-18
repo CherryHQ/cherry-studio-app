@@ -105,7 +105,9 @@ utils/messageQueryOptions.ts  ✅
 
 A `*Utils` suffix is used only when the file lives outside any `utils/` directory.
 
-**Hooks (`useXxx.ts`)** — live in `src/hooks/` (default, may group into sub-folders by feature, e.g. `src/hooks/chat/`) or co-located with the consuming feature (e.g. `src/screens/ChatScreen/input/hooks/`). A hook that embeds JSX in its return value uses the `.tsx` extension (e.g. `useSettingsConfirmDialog.tsx`); a hook with no JSX uses `.ts`.
+**Hooks (`useXxx.ts`)** — are co-located with their owning feature by default (e.g. `src/screens/ChatScreen/input/hooks/`). A hook moves to `src/hooks/` only when independent feature or screen domains consume it; cross-domain hooks may group into a domain folder such as `src/hooks/chat/`. A hook that embeds JSX in its return value uses the `.tsx` extension (e.g. `useConfirmDialog.tsx`); a hook with no JSX uses `.ts`.
+
+**Utilities** — pure helpers stay in the owning module's `utils/` by default. Only domain-neutral helpers consumed by independent domains move to top-level `src/utils/`. Multiple imports inside one screen tree do not establish cross-domain reuse.
 
 **Native module wrappers** — wrappers around custom native modules (under `modules/`, e.g. `modules/context-menu/`) or Expo modules carry no `*Api`, `*Client`, or `*Bridge` suffix. Categorize them by module shape per §5.2 (a stateful wrapper → `Service`/`Manager`; a pure-function set → `utils/`).
 
@@ -303,6 +305,8 @@ screens/ChatScreen/
 
 The top-level buckets (`components/`, `hooks/`, `services/`, `utils/`) stay reserved for small, independent, cross-domain pieces. A large, multi-file domain left scattered across those buckets instead of gathered into one subtree is the §6.7 scattered/impure anti-pattern.
 
+For UI modules, promotion is owner-based: keep the module under its screen until a second independent screen or feature domain consumes it. Import count inside one screen tree is not evidence of cross-domain ownership. App shell, design-system, and platform-adapter modules may be app-wide with one direct consumer, but must document that ownership and expose a stable public interface.
+
 For how screen subtrees fit the navigation, data, and runtime layering, see [Mobile Architecture Index](../architecture/mobile-architecture-index.md).
 
 ---
@@ -419,6 +423,12 @@ Forbidden. `Button.tsx` and `button.tsx` in the same directory will break on cas
 - Use `index.ts` or `index.tsx` (always lowercase).
 - A barrel must re-export only — no business logic.
 - Prefer **named exports** in barrels; avoid `export default` re-export chains.
+- Add a barrel only at a real module boundary used by routes, parent modules, sibling domains, or
+  external callers. Do not create barrels for private `components/`, `hooks/`, or `utils/` buckets.
+- External callers import the module root. Module internals import leaf files relatively and do not
+  route internal dependencies back through their own public barrel.
+- Keep the export surface narrow: export only the components, hooks, functions, and associated types
+  that callers need.
 
 ### 6.5 Directory Name vs Package Name
 

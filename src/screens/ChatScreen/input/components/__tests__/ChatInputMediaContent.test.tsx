@@ -15,7 +15,7 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-jest.mock('@/screens/ChatScreen/input/hooks/useChatInputPhotoPicker', () => ({
+jest.mock('../../hooks/useChatInputPhotoPicker', () => ({
   useChatInputPhotoPicker: jest.fn(),
 }));
 
@@ -74,7 +74,7 @@ jest.mock('lucide-uniwind/png', () => {
   );
 });
 
-jest.mock('@/components/uniwind', () => {
+jest.mock('@/components/nativePrimitives', () => {
   const { View } = jest.requireActual('react-native');
 
   return {

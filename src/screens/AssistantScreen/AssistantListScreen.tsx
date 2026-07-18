@@ -8,11 +8,11 @@ import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
+import { useConfirmDialog } from '@/components/confirmDialog';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 
 import type { Assistant } from '@/data/types/assistant';
 import { useAssistantMutations, useAssistantsApi } from '@/hooks/chat';
-import { useSettingsConfirmDialog } from '@/screens/SettingsScreen/hooks/useSettingsConfirmDialog';
 
 // Width of the revealed swipe-to-delete panel; keep in sync with `w-20` below.
 const deleteActionWidth = 80;
@@ -23,7 +23,7 @@ export default function AssistantListScreen() {
   const { toast } = useToast();
   const { assistants, isLoading } = useAssistantsApi();
   const { deleteAssistant } = useAssistantMutations();
-  const { confirmDialog, requestConfirm } = useSettingsConfirmDialog();
+  const { confirmDialog, requestConfirm } = useConfirmDialog();
 
   const openCreateAssistant = useCallback(() => {
     router.push('/assistants/edit');

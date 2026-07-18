@@ -11,5 +11,7 @@ workspace behavior.
 
 - `input/` owns the floating chat input and its sheet behavior.
 - `workspace/` owns message list placement, loading indicators, and floating input placement.
+- `mediaTile/` owns image and file tiles shared by chat input and message rendering.
+- `prismSweep/` owns the thinking indicator shared by message content and message rows.
 - `messageContent/` renders structured message parts.
 - `messageItem/` renders user and assistant message rows.

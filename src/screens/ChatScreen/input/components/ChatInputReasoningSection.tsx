@@ -3,16 +3,13 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, useColorScheme, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { EffortSlider, thinkingAccentColor } from '@/components/effortSlider';
-import {
-  useChatInputActions,
-  useChatInputState,
-} from '@/screens/ChatScreen/input/context/ChatInputProvider';
-import { useChatInputReasoningEfforts } from '@/screens/ChatScreen/input/hooks/useChatInputReasoningEfforts';
+import { useChatInputActions, useChatInputState } from '../context/ChatInputProvider';
+import { EffortSlider, thinkingAccentColor } from '../effortSlider';
+import { useChatInputReasoningEfforts } from '../hooks/useChatInputReasoningEfforts';
 import {
   type ChatInputReasoningEffort,
   getChatInputReasoningEffortOption,
-} from '@/screens/ChatScreen/input/utils/chatInputReasoning';
+} from '../utils/chatInputReasoning';
 
 /**
  * Reasoning-effort block pinned below the model list in the model picker

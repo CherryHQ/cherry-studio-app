@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
-import { LinearGradient } from '@/components/uniwind';
+import { LinearGradient } from '@/components/nativePrimitives';
 import type { Message } from '@/data/types/message';
 
 import { AssistantMessageItem, UserMessageItem } from '../../messageItem';

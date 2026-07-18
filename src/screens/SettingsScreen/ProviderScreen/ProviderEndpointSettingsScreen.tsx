@@ -19,7 +19,7 @@ import {
   useProviderApiServiceDraft,
   useProviderApiServiceQueries,
   useProviderApiServiceSheetClose,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService';
+} from './apiService';
 
 export default function ProviderEndpointSettingsScreen() {
   const { providerId, providerName } = useLocalSearchParams<{
