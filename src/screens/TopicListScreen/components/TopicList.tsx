@@ -1,8 +1,8 @@
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, type ReactElement, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 
 import type { Topic } from '@/data/types/topic';
@@ -22,6 +22,10 @@ type TopicRowProps = {
   topic: Topic;
 };
 
+type TopicListProps = {
+  ListHeaderComponent?: ReactElement | null;
+};
+
 const topicItemHeight = 44;
 const newChatButtonClearance = 96;
 
@@ -29,7 +33,7 @@ function topicKeyExtractor(item: Topic) {
   return item.id;
 }
 
-export const TopicList = memo(function TopicList() {
+export const TopicList = memo(function TopicList({ ListHeaderComponent }: TopicListProps) {
   const { t } = useTranslation();
   const tabBarHeight = useBottomTabBarHeight();
   const { isSearchActive } = useTopicListSearch();
@@ -113,8 +117,10 @@ export const TopicList = memo(function TopicList() {
   );
 
   return (
-    <View ref={containerRef} className="flex-1">
+    <>
       <LegendList
+        className="flex-1 bg-background"
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={contentContainerStyle}
         data={topics}
         estimatedItemSize={topicItemHeight}
@@ -122,23 +128,32 @@ export const TopicList = memo(function TopicList() {
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={listEmptyComponent}
+        ListHeaderComponent={ListHeaderComponent}
         onEndReached={loadMoreTopics}
         onEndReachedThreshold={0.7}
         recycleItems
         renderItem={renderItem}
       />
-      {isSearchActive ? null : <NewChatButton />}
-      {dialogs}
-      <PopupMenu
-        anchorRef={menuAnchorRef}
-        closeAccessibilityLabel={t('common.close')}
-        containerRef={containerRef}
-        items={menuItems}
-        visible={menuVisible}
-        onClose={closeMenu}
-      />
-    </View>
+      <View pointerEvents="box-none" ref={containerRef} style={styles.overlay}>
+        {isSearchActive ? null : <NewChatButton />}
+        {dialogs}
+        <PopupMenu
+          anchorRef={menuAnchorRef}
+          closeAccessibilityLabel={t('common.close')}
+          containerRef={containerRef}
+          items={menuItems}
+          visible={menuVisible}
+          onClose={closeMenu}
+        />
+      </View>
+    </>
   );
+});
+
+const styles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFill,
+  },
 });
 
 const TopicRow = memo(function TopicRow({ onPress, onLongPress, topic }: TopicRowProps) {

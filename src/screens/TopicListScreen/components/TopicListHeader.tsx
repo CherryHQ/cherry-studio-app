@@ -1,3 +1,4 @@
+// Android-only: retained for the custom messages-tab search header.
 import { CloseButton } from 'heroui-native/close-button';
 import { cn } from 'heroui-native/utils';
 import { SearchIcon } from 'lucide-uniwind/png';

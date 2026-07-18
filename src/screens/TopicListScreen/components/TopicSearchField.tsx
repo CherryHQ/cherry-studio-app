@@ -1,3 +1,4 @@
+// Android-only: retained for the custom messages-tab search field.
 import { SearchField } from 'heroui-native/search-field';
 import type { Ref } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,3 +1,4 @@
+// Android-only: retained for the custom messages-tab header transition.
 import { useEffect } from 'react';
 import {
   Extrapolation,

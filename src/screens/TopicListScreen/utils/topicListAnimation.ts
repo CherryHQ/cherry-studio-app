@@ -1,3 +1,4 @@
+// Android-only: retained for the custom messages-tab header transition.
 import {
   Easing,
   ReduceMotion,
