@@ -8,9 +8,15 @@ tags: [smoke]
 - assertVisible: "What would you like to discuss?"
 - assertVisible: "Choose an assistant and model, then start chatting."
 - assertVisible: "Send message"
-- assertVisible: "Reasoning effort"
-# Reasoning effort 面板开合
-- tapOn: "Reasoning effort"
+# Reasoning effort 滑杆钉在 model picker sheet 底部（分割线下方）
+- tapOn:
+    id: "chat-input-model-button"
+- extendedWaitUntil:
+    visible: "Reasoning effort"
+    timeout: 5000
+- assertVisible: "Search"
+# 点 scrim 关闭 sheet 回到主页（sheet 中部是模型列表，下滑只会滚动列表）
+- tapOn:
+    point: 50%,10%
 - waitForAnimationToEnd
-- tapOn: "Send message"
 - assertVisible: "What would you like to discuss?"

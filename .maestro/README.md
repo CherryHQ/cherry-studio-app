@@ -88,7 +88,7 @@ pnpm e2e:ios:flow .maestro/flows/00-smoke-boot.yaml
 
 | Flow | 覆盖面 | 排查结论 |
 | --- | --- | --- |
-| 00 | 冷启动、主页骨架、输入框、Reasoning effort 按钮 | ✅ 正常 |
+| 00 | 冷启动、主页骨架、输入框、model picker 底部 Reasoning effort 滑杆 | ✅ 正常 |
 | 01 | 侧栏、话题列表、100 条复杂消息渲染+滚动（LegendList） | ✅ 正常，初始定位底部 |
 | 02 | Settings 各屏可达性 | ✅ 正常 |
 | 03 | Provider 详情、工具栏（Check/Pull/Add）、Check sheet | ✅ 正常 |

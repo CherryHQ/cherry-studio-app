@@ -66,11 +66,7 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
         onPrefetchOlder={messageWindow.prefetchOlder}
         onReady={markListLoaded}
       />
-      <ChatComposer
-        inputHeight={inputHeightShared}
-        onHeightChange={handleInputHeightChange}
-        topicId={topicId}
-      />
+      <ChatComposer onHeightChange={handleInputHeightChange} topicId={topicId} />
       <ScrollToBottomButton
         gap={SCROLL_BUTTON_GAP_ABOVE_INPUT}
         inputHeight={inputHeightShared}

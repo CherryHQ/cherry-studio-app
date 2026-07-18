@@ -26,6 +26,8 @@ import {
 import { EffortSliderTrack, effortSliderTrackRadius } from './EffortSliderTrack';
 import { ThinkingPixelField } from './ThinkingPixelField';
 
+const unmeasuredStyle = { opacity: 0 } as const;
+
 export type EffortSliderOption = {
   value: string;
   /** Already-translated label; the component itself has no i18n dependency. */
@@ -66,6 +68,9 @@ export function EffortSlider({
 }: EffortSliderProps) {
   const reducedMotion = useReducedMotion();
   const isDark = useColorScheme() === 'dark';
+  // 0 until the first onLayout lands: with travelDistance 0 the thumb/fill
+  // would paint at the left edge, then teleport once measured — hide the
+  // track for those frames (the panel's fade-in covers the gap).
   const [measuredWidth, setMeasuredWidth] = useState(0);
 
   const stopCount = options.length;
@@ -104,6 +109,7 @@ export function EffortSlider({
     activeStopIndex,
     pixelStopIndex,
     !reducedMotion,
+    valueIndex === pixelStopIndex,
   );
   const time = useShaderClock(fieldMounted);
   const palette = isDark ? darkThinkingPalette : lightThinkingPalette;
@@ -152,6 +158,7 @@ export function EffortSlider({
         className={disabled ? 'opacity-60' : undefined}
         onAccessibilityAction={handleAccessibilityAction}
         onLayout={handleLayout}
+        style={measuredWidth === 0 ? unmeasuredStyle : undefined}
         testID={testID}
       >
         <EffortSliderTrack
