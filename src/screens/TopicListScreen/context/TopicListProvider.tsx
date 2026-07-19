@@ -1,15 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useIsFocused, useRouter } from 'expo-router';
-import {
-  createContext,
-  type PropsWithChildren,
-  use,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
-import { Keyboard } from 'react-native';
+import { createContext, type PropsWithChildren, use, useCallback, useEffect, useMemo } from 'react';
 
 import { queryKeys } from '@/data/api';
 import { useDataMutation } from '@/data/hooks';
@@ -19,28 +10,19 @@ import { useTopics } from '@/hooks/chat';
 import { prefetchTopicMessages } from '@/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/hooks/chat/utils/messageWindowPolicy';
 
-type TopicListSearchContextValue = {
-  isSearchActive: boolean;
-  searchText: string;
-};
-
 type TopicListTopicsContextValue = {
   isTopicListLoading: boolean;
   topics: readonly Topic[];
 };
 
 type TopicListActionsContextValue = {
-  closeSearch: () => void;
   deleteTopic: (topicId: string) => Promise<void>;
   loadMoreTopics: () => void;
   openNewTopic: () => void;
-  openSearch: () => void;
   openTopic: (topicId: string) => void;
   renameTopic: (topicId: string, name: string) => Promise<void>;
-  setSearchText: (value: string) => void;
 };
 
-const TopicListSearchContext = createContext<TopicListSearchContextValue | null>(null);
 const TopicListTopicsContext = createContext<TopicListTopicsContextValue | null>(null);
 const TopicListActionsContext = createContext<TopicListActionsContextValue | null>(null);
 
@@ -49,9 +31,7 @@ export function TopicListProvider({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
   const router = useRouter();
   const services = useDataServices();
-  const [isSearchActive, setIsSearchActive] = useState(false);
-  const [searchText, setSearchText] = useState('');
-  const topicList = useTopics({ q: searchText });
+  const topicList = useTopics({ q: '' });
 
   useEffect(() => {
     if (!isFocused) {
@@ -66,28 +46,16 @@ export function TopicListProvider({ children }: PropsWithChildren) {
     }
   }, [isFocused, queryClient, services, topicList.topics]);
 
-  const closeSearch = useCallback(() => {
-    Keyboard.dismiss();
-    setIsSearchActive(false);
-    setSearchText('');
-  }, []);
-
-  const openSearch = useCallback(() => {
-    setIsSearchActive(true);
-  }, []);
-
   const openNewTopic = useCallback(() => {
     router.push('/topics');
-    closeSearch();
-  }, [closeSearch, router]);
+  }, [router]);
 
   const openTopic = useCallback(
     (topicId: string) => {
       void prefetchTopicMessages(queryClient, services, topicId);
       router.push({ pathname: '/topics', params: { topicId } });
-      closeSearch();
     },
-    [closeSearch, queryClient, router, services],
+    [queryClient, router, services],
   );
 
   const renameTopicMutation = useDataMutation({
@@ -129,7 +97,6 @@ export function TopicListProvider({ children }: PropsWithChildren) {
     [deleteTopicMutation],
   );
 
-  const searchValue = useMemo(() => ({ isSearchActive, searchText }), [isSearchActive, searchText]);
   const topicsValue = useMemo(
     () => ({
       isTopicListLoading: topicList.isLoadingInitial,
@@ -139,43 +106,20 @@ export function TopicListProvider({ children }: PropsWithChildren) {
   );
   const actionsValue = useMemo(
     () => ({
-      closeSearch,
       deleteTopic,
       loadMoreTopics: topicList.loadMore,
       openNewTopic,
-      openSearch,
       openTopic,
       renameTopic,
-      setSearchText,
     }),
-    [
-      closeSearch,
-      deleteTopic,
-      openNewTopic,
-      openSearch,
-      openTopic,
-      renameTopic,
-      topicList.loadMore,
-    ],
+    [deleteTopic, openNewTopic, openTopic, renameTopic, topicList.loadMore],
   );
 
   return (
-    <TopicListSearchContext value={searchValue}>
-      <TopicListTopicsContext value={topicsValue}>
-        <TopicListActionsContext value={actionsValue}>{children}</TopicListActionsContext>
-      </TopicListTopicsContext>
-    </TopicListSearchContext>
+    <TopicListTopicsContext value={topicsValue}>
+      <TopicListActionsContext value={actionsValue}>{children}</TopicListActionsContext>
+    </TopicListTopicsContext>
   );
-}
-
-export function useTopicListSearch() {
-  const context = use(TopicListSearchContext);
-
-  if (!context) {
-    throw new Error('useTopicListSearch must be used within a TopicListProvider');
-  }
-
-  return context;
 }
 
 export function useTopicListTopics() {

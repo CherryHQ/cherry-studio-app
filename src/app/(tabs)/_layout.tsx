@@ -8,6 +8,12 @@ import type { ParamListBase, TabNavigationState } from 'expo-router/react-naviga
 import { useThemeColor } from 'heroui-native/hooks';
 import { useTranslation } from 'react-i18next';
 
+import {
+  SearchScopeProvider,
+  useSetSearchScope,
+} from '@/screens/GlobalSearchScreen/context/SearchScopeProvider';
+import { getSearchScopeForTabRoute } from '@/screens/GlobalSearchScreen/utils/searchScope';
+
 const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
 
 const Tabs = withLayoutContext<
@@ -21,6 +27,7 @@ const homeIcon = require('@/assets/navigation/home.png');
 const assistantsIcon = require('@/assets/navigation/assistants.png');
 const messagesIcon = require('@/assets/navigation/messages.png');
 const settingsIcon = require('@/assets/navigation/settings.png');
+const searchIcon = require('../../../packages/lucide-uniwind/src/png-icons/assets/search.png');
 
 export const unstable_settings = {
   initialRouteName: '(messages)',
@@ -42,12 +49,26 @@ function getSettingsIcon() {
   return settingsIcon;
 }
 
+function getSearchIcon() {
+  return searchIcon;
+}
+
 export default function TabLayout() {
+  return (
+    <SearchScopeProvider>
+      <TabNavigator />
+    </SearchScopeProvider>
+  );
+}
+
+function TabNavigator() {
   const { t } = useTranslation();
   const accentColor = useThemeColor('accent');
+  const setScope = useSetSearchScope();
 
   return (
     <Tabs
+      backBehavior="history"
       initialRouteName="(messages)"
       screenOptions={{
         // freezeOnBlur 会让冻结中的 tab 错过 uniwind 的免重渲染主题 patch，
@@ -88,6 +109,25 @@ export default function TabLayout() {
           tabBarIcon: getSettingsIcon,
           tabBarLabel: t('navigation.settings'),
           title: t('navigation.settings'),
+        }}
+      />
+      <Tabs.Screen
+        name="(search)"
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            const state = navigation.getState();
+            const activeRoute = state.routes[state.index];
+
+            if (activeRoute?.name !== '(search)') {
+              setScope(getSearchScopeForTabRoute(activeRoute?.name ?? '(messages)'));
+            }
+          },
+        })}
+        options={{
+          role: 'search',
+          tabBarIcon: getSearchIcon,
+          tabBarLabel: t('navigation.search'),
+          title: t('navigation.search'),
         }}
       />
     </Tabs>
