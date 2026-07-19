@@ -27,3 +27,29 @@ export const CHERRYIN_CONFIG = {
   REDIRECT_URI: 'cherrystudio://oauth/callback',
   SCOPES: 'openid profile email offline_access balance:read usage:read tokens:read tokens:write',
 };
+
+// Tuning knobs for the animated sticky header on the Home tab (profile avatar +
+// name). Single source of truth — adjust the animation feel here rather than
+// scattering magic numbers across HomeScreen's hooks/components.
+//
+// Pull-to-expand / lock behaviour is iOS-only (Android has no rubber-band
+// overscroll, so those interpolations stay frozen at rest).
+export const homeHeader = {
+  avatarSize: 130, // collapsed hero avatar diameter
+  avatarRestMarginTop: 40, // shifts the resting avatar below the hero box's optical center
+  barHeight: 44, // sticky bar content row height (excludes safe-area top inset)
+  collapseDistance: 200, // scroll distance over which the hero hands off to the sticky bar
+  heroContainerHeight: 400, // fixed hero box height; the expanding image overflows it, never pushes layout
+  nameGap: 12, // resting gap between the avatar's bottom edge and the name
+  nameBaseFontSize: 30,
+  nameLineHeight: 38,
+  crossFadeStartRatio: 0.75, // small title starts fading in at 0.75·R
+  lockTriggerPx: 100, // overscroll distance that snaps the avatar into the locked hero
+  unlockScrollPx: 150, // scroll-up distance (from locked) that releases the lock
+  lockTimingMs: 500, // lock / unlock spring-to-rest duration
+  expandedRadius: 40, // locked full-width hero corner radius
+  expandedNameFontSize: 40, // locked name font size
+  expandedNameLineHeight: 48, // locked name line height (keeps ascenders/descenders from clipping)
+  nameOverlayInsetX: 20, // locked name left inset from the big hero edge
+  nameLockedRise: 9, // locked name nudges up by this much (reference: translateY -10 -> -19)
+} as const;

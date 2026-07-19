@@ -62,6 +62,7 @@ SettingsScreen/
   settings-specific UI controls.
 - `TopicListScreen/`: message-tab topic pagination, topic actions, and navigation.
 - `GlobalSearchScreen/`: app-level native search entry and screen shell.
+- `HomeScreen/`: home-tab content and profile entry point.
 
 Reusable modules that remain in `src/components` include app shell modules (`headers`, `navigation`),
 shared flows such as `modelPicker`, shared UI behavior such as `confirmDialog`, and native dependency
