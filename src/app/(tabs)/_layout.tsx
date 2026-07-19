@@ -8,6 +8,12 @@ import type { ParamListBase, TabNavigationState } from 'expo-router/react-naviga
 import { useThemeColor } from 'heroui-native/hooks';
 import { useTranslation } from 'react-i18next';
 
+import {
+  SearchScopeProvider,
+  useSetSearchScope,
+} from '@/screens/GlobalSearchScreen/context/SearchScopeProvider';
+import { getSearchScopeForTabRoute } from '@/screens/GlobalSearchScreen/utils/searchScope';
+
 const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
 
 const Tabs = withLayoutContext<
@@ -48,8 +54,17 @@ function getSearchIcon() {
 }
 
 export default function TabLayout() {
+  return (
+    <SearchScopeProvider>
+      <TabNavigator />
+    </SearchScopeProvider>
+  );
+}
+
+function TabNavigator() {
   const { t } = useTranslation();
   const accentColor = useThemeColor('accent');
+  const setScope = useSetSearchScope();
 
   return (
     <Tabs
@@ -98,6 +113,16 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="(search)"
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            const state = navigation.getState();
+            const activeRoute = state.routes[state.index];
+
+            if (activeRoute?.name !== '(search)') {
+              setScope(getSearchScopeForTabRoute(activeRoute?.name ?? '(messages)'));
+            }
+          },
+        })}
         options={{
           role: 'search',
           tabBarIcon: getSearchIcon,

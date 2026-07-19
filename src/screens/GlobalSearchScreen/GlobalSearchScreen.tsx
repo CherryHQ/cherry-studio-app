@@ -1,10 +1,15 @@
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView } from 'react-native';
+import { View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { SearchBarCommands } from 'react-native-screens';
 
-import { isIOS, searchBarAutoFocusDelayMs } from '@/config/constants';
+import { isAndroid, isIOS, searchBarAutoFocusDelayMs } from '@/config/constants';
+
+import { SearchScopePager } from './components/SearchScopePager';
+import { SearchScopeTabs } from './components/SearchScopeTabs';
 
 export function GlobalSearchScreen() {
   const { t } = useTranslation();
@@ -23,18 +28,28 @@ export function GlobalSearchScreen() {
 
   return (
     <>
-      <ScrollView
-        className="flex-1 bg-background"
-        contentInsetAdjustmentBehavior="automatic"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
-      />
+      <KeyboardAvoidingView
+        behavior="padding"
+        enabled={isIOS}
+        style={{ flex: 1 }}
+        className="bg-background"
+      >
+        <SafeAreaView edges={['left', 'right']} style={{ flex: 1 }}>
+          {isAndroid ? <SearchScopeTabs /> : null}
+          <SearchScopePager />
+          {isIOS ? (
+            <View className="pb-16">
+              <SearchScopeTabs />
+            </View>
+          ) : null}
+        </SafeAreaView>
+      </KeyboardAvoidingView>
       <Stack.Screen options={{ headerLargeTitle: false, title: t('navigation.search') }} />
       <Stack.SearchBar
         ref={searchBarRef}
         autoCapitalize="none"
         autoFocus
-        hideNavigationBar={false}
+        hideNavigationBar
         hideWhenScrolling={false}
         obscureBackground={false}
         placeholder={t('navigation.search')}
