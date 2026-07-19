@@ -28,6 +28,31 @@ export const CHERRYIN_CONFIG = {
   SCOPES: 'openid profile email offline_access balance:read usage:read tokens:read tokens:write',
 };
 
+// Tuning knobs for the GitHub-style activity calendar card on the Home tab.
+// Sizes, colors and spring feel replicate the reference contribution-graph
+// animation 1:1 — adjust here, not in the activity components.
+export const homeActivityCalendar = {
+  cellSize: 14,
+  cellGap: 3,
+  cellRadius: 2,
+  dayLabelWidth: 25,
+  dayLabelGap: 8, // between the weekday-label column and the grid
+  dayLabelFontSize: 11,
+  dayLabelColor: '#656d76',
+  cardColor: '#ffffff',
+  cardRadius: 16,
+  cardPadding: 16,
+  cardShadow: '0px 0px 20px 0px rgba(0, 0, 0, 0.05)',
+  levelColors: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'], // no activity → highest, GitHub's green scale
+  sweepStepMs: 45, // per-diagonal delay of the bottom-left → top-right entrance wave
+  resetMaxDelayMs: 500, // each square rewinds after a random slice of this window
+  pressedScale: 0.96, // card press-down feedback
+  previewWidthRatio: 0.9, // preview data length: days = floor(windowWidth * ratio / dayWidth)
+  previewDayWidth: 3,
+  enterSpring: { mass: 1.1, damping: 13, stiffness: 150, overshootClamping: false },
+  exitSpring: { mass: 0.9, damping: 10, stiffness: 60 },
+} as const;
+
 // Tuning knobs for the animated sticky header on the Home tab (profile avatar +
 // name). Single source of truth — adjust the animation feel here rather than
 // scattering magic numbers across HomeScreen's hooks/components.

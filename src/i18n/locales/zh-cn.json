@@ -1,6 +1,8 @@
 {
   "home.emptyDescription": "打开菜单并选择一个话题来查看消息。",
   "home.emptyTitle": "从侧边栏选择聊天",
+  "home.activity.toggleHint": "播放或倒回活跃度动画。",
+  "home.activity.title": "活跃度",
   "home.title": "首页",
   "chat.actions.createImage": "创建图片",
   "chat.actions.webSearch": "网络搜索",

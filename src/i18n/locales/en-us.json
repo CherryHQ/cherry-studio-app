@@ -1,6 +1,8 @@
 {
   "home.emptyDescription": "Open the menu and choose a topic to view its messages.",
   "home.emptyTitle": "Select a chat from the sidebar",
+  "home.activity.toggleHint": "Plays or rewinds the activity animation.",
+  "home.activity.title": "Activity",
   "home.title": "Home",
   "chat.actions.createImage": "Create image",
   "chat.actions.webSearch": "Web search",

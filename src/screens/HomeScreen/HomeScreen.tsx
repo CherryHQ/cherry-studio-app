@@ -1,12 +1,17 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo } from 'react';
-import { View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { useWindowDimensions, View } from 'react-native';
 import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePreference } from '@/data/hooks';
 
+import {
+  createPreviewActivityData,
+  getPreviewActivityDayCount,
+  HomeActivityCard,
+} from './activity';
 import { HomePlaceholderCards } from './components/HomePlaceholderCards';
 import { HomeProfileHero } from './components/HomeProfileHero';
 import { HomeStickyBar } from './components/HomeStickyBar';
@@ -16,7 +21,13 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
+  const { width: windowWidth } = useWindowDimensions();
   const [userName] = usePreference('app.user.name');
+  const [activityEndDate] = useState(() => new Date());
+  const activityData = useMemo(
+    () => createPreviewActivityData(activityEndDate, getPreviewActivityDayCount(windowWidth)),
+    [activityEndDate, windowWidth],
+  );
   const { lockProgress, lockState, onScroll, scrollY } = useHomeHeaderAnimation();
 
   const openProfileSettings = useCallback(() => {
@@ -47,6 +58,7 @@ export default function HomeScreen() {
           userName={userName}
         />
         <View className="gap-3 px-2 pt-6">
+          <HomeActivityCard data={activityData} />
           <HomePlaceholderCards />
         </View>
       </Animated.ScrollView>
