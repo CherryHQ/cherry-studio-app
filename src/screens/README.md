@@ -60,7 +60,8 @@ SettingsScreen/
 - `AssistantScreen/`: assistant list and assistant editing flows.
 - `SettingsScreen/`: settings home, about/data/model/provider/web-search settings screens, and
   settings-specific UI controls.
-- `TopicListScreen/`: message-tab topic search, pagination, topic actions, and navigation.
+- `TopicListScreen/`: message-tab topic pagination, topic actions, and navigation.
+- `GlobalSearchScreen/`: app-level native search entry and screen shell.
 
 Reusable modules that remain in `src/components` include app shell modules (`headers`, `navigation`),
 shared flows such as `modelPicker`, shared UI behavior such as `confirmDialog`, and native dependency

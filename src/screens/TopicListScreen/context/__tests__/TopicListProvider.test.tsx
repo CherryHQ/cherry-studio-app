@@ -7,7 +7,7 @@ import type { Topic } from '@/data/types/topic';
 import { useTopics } from '@/hooks/chat';
 import { prefetchTopicMessages } from '@/hooks/chat/utils/messageQueryOptions';
 
-import { TopicListProvider, useTopicListActions, useTopicListSearch } from '../TopicListProvider';
+import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
 
 const mockRouterPush = jest.fn();
 const mockInvalidateQueries = jest.fn();
@@ -59,17 +59,14 @@ const mockLoadMoreTopics = jest.fn(async () => undefined);
 
 let mutationHookIndex = 0;
 let currentActions: ReturnType<typeof useTopicListActions> | undefined;
-let currentSearch: ReturnType<typeof useTopicListSearch> | undefined;
 let renderer: ReactTestRenderer | undefined;
 
 function TopicListProbe() {
   const actions = useTopicListActions();
-  const search = useTopicListSearch();
 
   useEffect(() => {
     currentActions = actions;
-    currentSearch = search;
-  }, [actions, search]);
+  }, [actions]);
 
   return null;
 }
@@ -81,7 +78,6 @@ function makeTopic(index: number): Topic {
 beforeEach(() => {
   jest.clearAllMocks();
   currentActions = undefined;
-  currentSearch = undefined;
   mutationHookIndex = 0;
   renderer = undefined;
 
@@ -127,12 +123,6 @@ describe('TopicListProvider', () => {
     );
 
     await act(async () => {
-      currentActions?.openSearch();
-      currentActions?.setSearchText('draft');
-    });
-    expect(currentSearch).toEqual({ isSearchActive: true, searchText: 'draft' });
-
-    await act(async () => {
       currentActions?.openTopic('topic-13');
     });
 
@@ -145,10 +135,9 @@ describe('TopicListProvider', () => {
       params: { topicId: 'topic-13' },
       pathname: '/topics',
     });
-    expect(currentSearch).toEqual({ isSearchActive: false, searchText: '' });
   });
 
-  test('passes search and pagination through while preserving topic mutations', async () => {
+  test('passes pagination through while preserving topic mutations', async () => {
     const observedQueries: string[] = [];
     useTopicsMock.mockImplementation(({ q }) => {
       observedQueries.push(q);
@@ -167,11 +156,10 @@ describe('TopicListProvider', () => {
       );
     });
     await act(async () => {
-      currentActions?.setSearchText('project');
       currentActions?.loadMoreTopics();
     });
 
-    expect(observedQueries).toContain('project');
+    expect(observedQueries).toContain('');
     expect(mockLoadMoreTopics).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -185,18 +173,13 @@ describe('TopicListProvider', () => {
     expect(mockDeleteTopic).toHaveBeenCalledWith('topic-2');
   });
 
-  test('pushes the topic-less route for a new chat and clears search', async () => {
+  test('pushes the topic-less route for a new chat', async () => {
     await renderProvider([]);
 
-    await act(async () => {
-      currentActions?.openSearch();
-      currentActions?.setSearchText('temporary');
-    });
     await act(async () => {
       currentActions?.openNewTopic();
     });
 
     expect(mockRouterPush).toHaveBeenCalledWith('/topics');
-    expect(currentSearch).toEqual({ isSearchActive: false, searchText: '' });
   });
 });

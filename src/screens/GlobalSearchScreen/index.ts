@@ -1,0 +1,1 @@
+export { GlobalSearchScreen } from './GlobalSearchScreen';

@@ -6,26 +6,25 @@ import { TopicListProvider, useTopicListActions } from './context/TopicListProvi
 
 export function TopicListScreen() {
   const { t } = useTranslation();
-  const { closeSearch, openNewTopic, openSearch, setSearchText } = useTopicListActions();
+  const { openNewTopic } = useTopicListActions();
 
   return (
     <>
-      <TopicList showNewChatButton={false} />
+      <TopicList />
       <Stack.Screen
         options={{
           headerLargeTitle: false,
           title: t('navigation.messages'),
         }}
       />
-      <Stack.SearchBar
-        hideWhenScrolling={false}
-        placement="integratedButton"
-        placeholder={t('navigation.search')}
-        onCancelButtonPress={closeSearch}
-        onChangeText={(event) => setSearchText(event.nativeEvent.text)}
-        onFocus={openSearch}
-      />
+      <Stack.Toolbar placement="left">
+        <Stack.Toolbar.Button>{t('common.edit')}</Stack.Toolbar.Button>
+      </Stack.Toolbar>
       <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          accessibilityLabel={t('common.filter')}
+          icon="line.3.horizontal.decrease"
+        />
         <Stack.Toolbar.Button
           accessibilityLabel={t('navigation.newChat')}
           icon="square.and.pencil"

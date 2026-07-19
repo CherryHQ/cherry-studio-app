@@ -21,6 +21,7 @@ const homeIcon = require('@/assets/navigation/home.png');
 const assistantsIcon = require('@/assets/navigation/assistants.png');
 const messagesIcon = require('@/assets/navigation/messages.png');
 const settingsIcon = require('@/assets/navigation/settings.png');
+const searchIcon = require('../../../packages/lucide-uniwind/src/png-icons/assets/search.png');
 
 export const unstable_settings = {
   initialRouteName: '(messages)',
@@ -42,12 +43,17 @@ function getSettingsIcon() {
   return settingsIcon;
 }
 
+function getSearchIcon() {
+  return searchIcon;
+}
+
 export default function TabLayout() {
   const { t } = useTranslation();
   const accentColor = useThemeColor('accent');
 
   return (
     <Tabs
+      backBehavior="history"
       initialRouteName="(messages)"
       screenOptions={{
         // freezeOnBlur 会让冻结中的 tab 错过 uniwind 的免重渲染主题 patch，
@@ -88,6 +94,15 @@ export default function TabLayout() {
           tabBarIcon: getSettingsIcon,
           tabBarLabel: t('navigation.settings'),
           title: t('navigation.settings'),
+        }}
+      />
+      <Tabs.Screen
+        name="(search)"
+        options={{
+          role: 'search',
+          tabBarIcon: getSearchIcon,
+          tabBarLabel: t('navigation.search'),
+          title: t('navigation.search'),
         }}
       />
     </Tabs>

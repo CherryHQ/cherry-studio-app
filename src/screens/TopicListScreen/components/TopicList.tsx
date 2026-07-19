@@ -7,12 +7,7 @@ import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 
 import type { Topic } from '@/data/types/topic';
 
-import {
-  useTopicListActions,
-  useTopicListSearch,
-  useTopicListTopics,
-} from '../context/TopicListProvider';
-import { NewChatButton } from './NewChatButton';
+import { useTopicListActions, useTopicListTopics } from '../context/TopicListProvider';
 import { PopupMenu, type PopupMenuItem } from './PopupMenu';
 import { useTopicActionDialogs } from './TopicActionDialogs';
 
@@ -22,21 +17,15 @@ type TopicRowProps = {
   topic: Topic;
 };
 
-type TopicListProps = {
-  showNewChatButton?: boolean;
-};
-
 const topicItemHeight = 44;
-const newChatButtonClearance = 96;
 
 function topicKeyExtractor(item: Topic) {
   return item.id;
 }
 
-export const TopicList = memo(function TopicList({ showNewChatButton = true }: TopicListProps) {
+export const TopicList = memo(function TopicList() {
   const { t } = useTranslation();
   const tabBarHeight = useBottomTabBarHeight();
-  const { isSearchActive } = useTopicListSearch();
   const { isTopicListLoading, topics } = useTopicListTopics();
   const { loadMoreTopics, openTopic } = useTopicListActions();
   const { dialogs, requestDelete, requestRename } = useTopicActionDialogs();
@@ -46,10 +35,10 @@ export const TopicList = memo(function TopicList({ showNewChatButton = true }: T
   const [menuTopic, setMenuTopic] = useState<Topic | null>(null);
   const contentContainerStyle = useMemo(
     () => ({
-      paddingBottom: tabBarHeight + (showNewChatButton ? newChatButtonClearance : 0),
+      paddingBottom: tabBarHeight,
       paddingTop: 2,
     }),
-    [showNewChatButton, tabBarHeight],
+    [tabBarHeight],
   );
 
   const handleRowLongPress = useCallback((rowRef: React.RefObject<View | null>, topic: Topic) => {
@@ -118,7 +107,6 @@ export const TopicList = memo(function TopicList({ showNewChatButton = true }: T
     ),
     [isTopicListLoading, t],
   );
-
   return (
     <>
       <LegendList
@@ -137,7 +125,6 @@ export const TopicList = memo(function TopicList({ showNewChatButton = true }: T
         renderItem={renderItem}
       />
       <View pointerEvents="box-none" ref={containerRef} style={styles.overlay}>
-        {showNewChatButton && !isSearchActive ? <NewChatButton /> : null}
         {dialogs}
         <PopupMenu
           anchorRef={menuAnchorRef}

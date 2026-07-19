@@ -15,6 +15,11 @@ export const sheetScrimColor = 'rgba(0, 0, 0, 0.4)';
 // Gap kept between the keyboard and the focused input inside scrollable forms.
 export const keyboardBottomOffset = 16;
 
+// Delay before imperatively focusing the native header search bar on iOS.
+// UISearchController attaches to the navigation bar asynchronously, and a
+// focus() call landing before that is silently ignored by UIKit.
+export const searchBarAutoFocusDelayMs = 100;
+
 // CherryIN OAuth configuration
 export const CHERRYIN_CONFIG = {
   CLIENT_ID: '2a348c87-bae1-4756-a62f-b2e97200fd6d',
