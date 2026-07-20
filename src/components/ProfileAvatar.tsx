@@ -1,43 +1,39 @@
-import type { ImageSource } from 'expo-image';
 import { useThemeColor } from 'heroui-native/hooks';
 import { CameraIcon, PencilIcon } from 'lucide-uniwind/png';
 import { View } from 'react-native';
 
 import { Image } from '@/components/nativePrimitives';
-
-const avatarSource = require('@/assets/icon.png');
+import { useAvatar } from '@/hooks/useAvatar';
 
 export type ProfileAvatarEditIcon = 'camera' | 'pencil';
 
 type ProfileEditableAvatarProps = {
   icon: ProfileAvatarEditIcon;
-  imageSource?: ImageSource | number;
   size: number;
 };
 
-export function ProfileEditableAvatar({ icon, imageSource, size }: ProfileEditableAvatarProps) {
+export function ProfileEditableAvatar({ icon, size }: ProfileEditableAvatarProps) {
   return (
     <View style={{ height: size, width: size }}>
-      <ProfileAvatarImage imageSource={imageSource} size={size} />
+      <ProfileAvatarImage size={size} />
       <ProfileAvatarEditBadge icon={icon} size={size} />
     </View>
   );
 }
 
 type ProfileAvatarImageProps = {
-  imageSource?: ImageSource | number;
   size: number;
 };
 
-export function ProfileAvatarImage({ imageSource, size }: ProfileAvatarImageProps) {
-  const source = imageSource ?? avatarSource;
+export function ProfileAvatarImage({ size }: ProfileAvatarImageProps) {
+  const avatarSource = useAvatar();
 
   return (
     <Image
       accessibilityIgnoresInvertColors
       cachePolicy="memory-disk"
       className="rounded-full"
-      source={source}
+      source={avatarSource}
       style={{ borderRadius: size / 2, height: size, width: size }}
     />
   );

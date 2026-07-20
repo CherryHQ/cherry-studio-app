@@ -13,8 +13,7 @@ import Animated, {
 import { Image } from '@/components/nativePrimitives';
 import { ProfileAvatarEditBadge } from '@/components/ProfileAvatar';
 import { homeHeader } from '@/config/constants';
-
-const avatarSource = require('@/assets/icon.png');
+import { useAvatar } from '@/hooks/useAvatar';
 
 const heroHeight = homeHeader.heroContainerHeight;
 // Clip trick from the reference header: the box's bounds extend far above its
@@ -64,6 +63,7 @@ export function HomeProfileHero({
 }: HomeProfileHeroProps) {
   const { t } = useTranslation();
   const { width: screenWidth } = useWindowDimensions();
+  const avatarSource = useAvatar();
   const nameWidth = useSharedValue(0);
   const measuredNameRef = useRef<string | null>(null);
 
