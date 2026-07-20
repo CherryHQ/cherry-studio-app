@@ -83,6 +83,31 @@ jest.mock('@shopify/react-native-skia', () => {
   };
 });
 
+// react-native-mmkv is a Nitro HybridObject with no JS fallback and (as of
+// 4.3.2) no official jest mock entry. The cacheService singleton constructs an
+// MMKV instance at module scope, so any import chain reaching it needs this
+// Map-backed stand-in. CacheService unit tests bypass it by injecting
+// InMemoryKVStorage directly.
+jest.mock('react-native-mmkv', () => {
+  const createMMKV = () => {
+    const store = new Map<string, string>();
+    return {
+      set: (key: string, value: string) => {
+        store.set(key, value);
+      },
+      getString: (key: string) => store.get(key),
+      contains: (key: string) => store.has(key),
+      remove: (key: string) => store.delete(key),
+      getAllKeys: () => [...store.keys()],
+      clearAll: () => {
+        store.clear();
+      },
+    };
+  };
+
+  return { createMMKV };
+});
+
 // gesture-handler 真模块在 jest 下要求 Reanimated.default.createAnimatedComponent，
 // 而 jest 环境的 reanimated 没有这个 API。GestureDetector 透传 children，
 // Gesture.* 返回任意链式调用都指向自身的构建器。
