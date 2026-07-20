@@ -3,9 +3,9 @@ import { createMMKV } from 'react-native-mmkv';
 /**
  * Minimal synchronous key-value abstraction backing the CacheService persist
  * tier. Production uses {@link createMmkvStorage}; tests inject
- * {@link InMemoryKVStorage}.
+ * {@link createInMemoryKvStorage}.
  */
-export interface KVStorage {
+export interface KvStorage {
   getString(key: string): string | undefined;
   set(key: string, value: string): void;
   delete(key: string): void;
@@ -13,10 +13,10 @@ export interface KVStorage {
 }
 
 /**
- * MMKV-backed KVStorage for the persist tier. Dedicated instance id so cache
+ * MMKV-backed KvStorage for the persist tier. Dedicated instance id so cache
  * data never mixes with other future MMKV uses.
  */
-export function createMmkvStorage(): KVStorage {
+export function createMmkvStorage(): KvStorage {
   const mmkv = createMMKV({ id: 'cherry-cache-persist' });
   return {
     getString: (key) => mmkv.getString(key),
@@ -29,24 +29,18 @@ export function createMmkvStorage(): KVStorage {
 }
 
 /**
- * Map-backed KVStorage for tests and non-persistent fallbacks.
+ * Map-backed KvStorage for tests and non-persistent fallbacks.
  */
-export class InMemoryKVStorage implements KVStorage {
-  private store = new Map<string, string>();
-
-  getString(key: string): string | undefined {
-    return this.store.get(key);
-  }
-
-  set(key: string, value: string): void {
-    this.store.set(key, value);
-  }
-
-  delete(key: string): void {
-    this.store.delete(key);
-  }
-
-  getAllKeys(): string[] {
-    return [...this.store.keys()];
-  }
+export function createInMemoryKvStorage(): KvStorage {
+  const store = new Map<string, string>();
+  return {
+    getString: (key) => store.get(key),
+    set: (key, value) => {
+      store.set(key, value);
+    },
+    delete: (key) => {
+      store.delete(key);
+    },
+    getAllKeys: () => [...store.keys()],
+  };
 }

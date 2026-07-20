@@ -1,4 +1,4 @@
-import { CacheService, InMemoryKVStorage } from '@/data/cache';
+import { CacheService, createInMemoryKvStorage } from '@/data/cache';
 import type { DbService } from '@/data/db/DbService';
 import type { UserProviderRow } from '@/data/db/schemas/userProvider';
 import type { ApiKeyEntry, ProviderSettings } from '@/data/types/provider';
@@ -216,7 +216,7 @@ function createService(
 }
 
 function createCacheService(): CacheService {
-  return new CacheService(new InMemoryKVStorage());
+  return new CacheService(createInMemoryKvStorage());
 }
 
 function apiKey(id: string, key: string, isEnabled = true): ApiKeyEntry {

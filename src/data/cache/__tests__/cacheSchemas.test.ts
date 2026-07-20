@@ -51,4 +51,13 @@ describe('deepEqual', () => {
     expect(deepEqual({ a: 1, b: 2 }, { b: 2, a: 1 })).toBe(true);
     expect(deepEqual({ a: 1 }, { a: 1, b: 2 })).toBe(false);
   });
+
+  test('non-plain objects compare unequal unless reference-identical', () => {
+    const date = new Date(1000);
+    expect(deepEqual(date, date)).toBe(true);
+    expect(deepEqual(new Date(1000), new Date(1000))).toBe(false);
+    expect(deepEqual(new Map(), new Map())).toBe(false);
+    expect(deepEqual(new Set([1]), new Set([1]))).toBe(false);
+    expect(deepEqual({ a: new Date(1000) }, { a: new Date(1000) })).toBe(false);
+  });
 });

@@ -12,6 +12,13 @@
  * actually an infrastructure component (cache manager) rather than a business
  * service. It contains zero business logic.
  *
+ * Ported API identifiers keep their desktop spelling verbatim (`hasTTL`,
+ * `getCasual`, `DefaultUseCache`, ...) as a deliberate exception to the local
+ * acronym/constant naming rules — same precedent as `DefaultPreferences` in
+ * the preference domain — so desktop call sites and schema entries port
+ * mechanically. Mobile-only additions (e.g. `KvStorage`) follow the local
+ * rules.
+ *
  * Tiers:
  * 1. Memory cache — cross-component, TTL-capable, lost on app restart
  * 2. Persist cache — survives restarts via a synchronous KV store (MMKV),
@@ -25,7 +32,7 @@
  *
  * The module-level singleton {@link cacheService} is the runtime instance —
  * hooks and services must share it. Tests construct their own
- * `new CacheService(new InMemoryKVStorage())` to avoid cross-test pollution.
+ * `new CacheService(createInMemoryKvStorage())` to avoid cross-test pollution.
  * Note the singleton survives DataProvider remounts and React Fast Refresh of
  * consumer modules; the memory tier is session-scoped by design (cleared only
  * by a full JS reload, equivalent to a desktop window refresh).
@@ -48,8 +55,8 @@ import type {
   CacheTierSummary,
 } from './cacheTypes';
 import { deepEqual } from './cacheUtils';
-import type { KVStorage } from './kvStorage';
-import { createMmkvStorage, InMemoryKVStorage } from './kvStorage';
+import type { KvStorage } from './kvStorage';
+import { createInMemoryKvStorage, createMmkvStorage } from './kvStorage';
 
 const logger = loggerService.withContext('CacheService');
 
@@ -65,9 +72,9 @@ export class CacheService {
   private subscribers = new Map<string, Set<CacheSubscriber>>();
 
   // Persist tier backing store (one entry per schema key, JSON-encoded)
-  private readonly storage: KVStorage;
+  private readonly storage: KvStorage;
 
-  constructor(storage: KVStorage = new InMemoryKVStorage()) {
+  constructor(storage: KvStorage = createInMemoryKvStorage()) {
     this.storage = storage;
     this.loadPersistCache();
   }
@@ -273,15 +280,15 @@ export class CacheService {
    * minimal and making `deletePersist` a true removal.
    */
   setPersist<K extends PersistCacheKey>(key: K, value: PersistCacheSchema[K]): void {
-    const existingValue = this.getPersist(key);
-
-    // Use deep comparison for persist cache (usually objects)
-    if (deepEqual(existingValue, value)) {
-      return; // Skip all updates
+    // Deep comparison gates only the memory update + notification. Storage
+    // canonicalization below runs unconditionally so a previously failed MMKV
+    // write — or a stale stored entry that now equals the schema default —
+    // self-heals on the next setPersist instead of being blocked forever by
+    // this short-circuit. The redundant single-key write is µs-level.
+    if (!deepEqual(this.getPersist(key), value)) {
+      this.persistCache.set(key, value);
+      this.notifySubscribers(key);
     }
-
-    this.persistCache.set(key, value);
-    this.notifySubscribers(key);
 
     try {
       if (deepEqual(value, DefaultPersistCache[key])) {
@@ -598,7 +605,7 @@ function formatBytes(bytes: number): string {
 
 /**
  * Runtime singleton shared by hooks and services, persist tier backed by MMKV.
- * In tests, construct an isolated `new CacheService(new InMemoryKVStorage())`
+ * In tests, construct an isolated `new CacheService(createInMemoryKvStorage())`
  * instead (react-native-mmkv is also globally mocked in jest.setup.ts for
  * anything that touches this singleton transitively).
  */

@@ -1,5 +1,5 @@
 import { CacheService } from '../CacheService';
-import { InMemoryKVStorage } from '../kvStorage';
+import { createInMemoryKvStorage } from '../kvStorage';
 
 const PROVIDER_KEY = 'settings.provider.openai.last_used_key_id' as const;
 
@@ -7,7 +7,7 @@ describe('CacheService memory tier', () => {
   let service: CacheService;
 
   beforeEach(() => {
-    service = new CacheService(new InMemoryKVStorage());
+    service = new CacheService(createInMemoryKvStorage());
   });
 
   test('set/get roundtrip with typed template key', () => {
@@ -94,7 +94,7 @@ describe('CacheService TTL', () => {
 
   beforeEach(() => {
     jest.useFakeTimers();
-    service = new CacheService(new InMemoryKVStorage());
+    service = new CacheService(createInMemoryKvStorage());
   });
 
   afterEach(() => {
@@ -145,13 +145,13 @@ describe('CacheService TTL', () => {
 
 describe('CacheService persist tier', () => {
   test('getPersist falls back to schema default and never returns undefined', () => {
-    const service = new CacheService(new InMemoryKVStorage());
+    const service = new CacheService(createInMemoryKvStorage());
     expect(service.getPersist('internal.persist_probe')).toBe(0);
     expect(service.hasPersist('internal.persist_probe')).toBe(false);
   });
 
   test('setPersist writes through and survives a "restart" on the same storage', () => {
-    const storage = new InMemoryKVStorage();
+    const storage = createInMemoryKvStorage();
     const service = new CacheService(storage);
 
     service.setPersist('internal.persist_probe', 42);
@@ -163,7 +163,7 @@ describe('CacheService persist tier', () => {
   });
 
   test('setPersist notifies subscribers and skips no-op writes', () => {
-    const service = new CacheService(new InMemoryKVStorage());
+    const service = new CacheService(createInMemoryKvStorage());
     const subscriber = jest.fn();
     service.subscribe('internal.persist_probe', subscriber);
 
@@ -175,7 +175,7 @@ describe('CacheService persist tier', () => {
   });
 
   test('setting the default value removes the stored entry (absent = default)', () => {
-    const storage = new InMemoryKVStorage();
+    const storage = createInMemoryKvStorage();
     const service = new CacheService(storage);
 
     service.setPersist('internal.persist_probe', 42);
@@ -187,7 +187,7 @@ describe('CacheService persist tier', () => {
   });
 
   test('deletePersist resets to the schema default', () => {
-    const storage = new InMemoryKVStorage();
+    const storage = createInMemoryKvStorage();
     const service = new CacheService(storage);
     const subscriber = jest.fn();
     service.subscribe('internal.persist_probe', subscriber);
@@ -201,8 +201,43 @@ describe('CacheService persist tier', () => {
     expect(subscriber).toHaveBeenCalledTimes(2);
   });
 
+  test('a failed storage write self-heals on a same-value retry', () => {
+    const storage = createInMemoryKvStorage();
+    const originalSet = storage.set.bind(storage);
+    let failNext = true;
+    storage.set = (key, value) => {
+      if (failNext) {
+        failNext = false;
+        throw new Error('mmkv write failed');
+      }
+      originalSet(key, value);
+    };
+    const service = new CacheService(storage);
+
+    service.setPersist('internal.persist_probe', 42);
+    expect(service.getPersist('internal.persist_probe')).toBe(42);
+    expect(storage.getAllKeys()).not.toContain('internal.persist_probe');
+
+    // Same-value retry must not be short-circuited away from storage
+    service.setPersist('internal.persist_probe', 42);
+    expect(storage.getAllKeys()).toContain('internal.persist_probe');
+    expect(new CacheService(storage).getPersist('internal.persist_probe')).toBe(42);
+  });
+
+  test('a stale stored entry equal to the default is physically removed', () => {
+    const storage = createInMemoryKvStorage();
+    // e.g. an override persisted before a schema-default change made it default-equal
+    storage.set('internal.persist_probe', JSON.stringify(0));
+
+    const service = new CacheService(storage);
+    service.deletePersist('internal.persist_probe');
+
+    expect(storage.getAllKeys()).not.toContain('internal.persist_probe');
+    expect(service.getPersist('internal.persist_probe')).toBe(0);
+  });
+
   test('a corrupted stored entry falls back to default and is dropped', () => {
-    const storage = new InMemoryKVStorage();
+    const storage = createInMemoryKvStorage();
     storage.set('internal.persist_probe', '{not json');
 
     const service = new CacheService(storage);
@@ -211,7 +246,7 @@ describe('CacheService persist tier', () => {
   });
 
   test('storage keys that left the schema are pruned on load', () => {
-    const storage = new InMemoryKVStorage();
+    const storage = createInMemoryKvStorage();
     storage.set('legacy.removed_key', JSON.stringify('stale'));
 
     new CacheService(storage);
@@ -223,7 +258,7 @@ describe('CacheService getStats', () => {
   test('reports per-tier counts and details', () => {
     jest.useFakeTimers();
     try {
-      const service = new CacheService(new InMemoryKVStorage());
+      const service = new CacheService(createInMemoryKvStorage());
       service.set(PROVIDER_KEY, 'key-1');
       service.setCasual('temp.expiring_key', 'x', 1000);
       service.registerHook(PROVIDER_KEY);

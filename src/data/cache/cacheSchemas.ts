@@ -122,6 +122,9 @@ export type UseCacheSchema = {
   'settings.provider.${providerId}.last_used_key_id': string;
 };
 
+// PascalCase kept verbatim from the desktop export of the same name (like
+// DefaultPreferences in the preference domain) so schema entries port with
+// zero rewrites — deliberate exception to the UPPER_SNAKE_CASE constant rule.
 export const DefaultUseCache: UseCacheSchema = {
   'settings.provider.${providerId}.last_used_key_id': '',
 };
