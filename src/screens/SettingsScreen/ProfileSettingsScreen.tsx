@@ -1,28 +1,32 @@
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
-import type { ImageSource } from 'expo-image';
+import { loggerService } from '@logger';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useThemeColor } from 'heroui-native/hooks';
 import { Input } from 'heroui-native/input';
+import { useToast } from 'heroui-native/toast';
 import { SaveIcon } from 'lucide-uniwind/png';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { ProfileAvatarEditBadge, ProfileAvatarImage } from '@/components/ProfileAvatar';
 import { usePreference } from '@/data/hooks';
+import { replaceUserAvatar } from '@/services/userAvatarStorage';
 
 const profileAvatarSize = 104;
+const logger = loggerService.withContext('ProfileSettingsScreen');
 
 type AvatarSourceValue = 'camera' | 'photos';
 
 export default function ProfileSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { toast } = useToast();
   const borderColor = useThemeColor('border');
   const inputRef = useRef<TextInput>(null);
   const [userName, setUserName] = usePreference('app.user.name');
-  const [draftAvatarUri, setDraftAvatarUri] = useState<string | null>(null);
+  const [avatar, setAvatar] = usePreference('app.user.avatar');
   const avatarActions = useMemo<MenuAction[]>(
     () => [
       {
@@ -39,46 +43,69 @@ export default function ProfileSettingsScreen() {
     [t],
   );
 
+  const persistSelectedAvatar = useCallback(
+    (sourceUri: string) =>
+      replaceUserAvatar(sourceUri, avatar, (nextAvatar) =>
+        setAvatar(nextAvatar, { optimistic: true }),
+      ),
+    [avatar, setAvatar],
+  );
+  const reportAvatarSaveError = useCallback(
+    (error: unknown) => {
+      logger.error('Failed to save user avatar', error as Error);
+      toast.show({ label: t('settings.profile.avatarSaveError'), variant: 'danger' });
+    },
+    [t, toast],
+  );
+
   const selectAvatarFromCamera = useCallback(async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
 
-    if (!permission.granted) {
-      return;
+      if (!permission.granted) {
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        mediaTypes: ['images'],
+        quality: 1,
+      });
+
+      const assetUri = result.canceled ? undefined : result.assets[0]?.uri;
+      if (assetUri) {
+        await persistSelectedAvatar(assetUri);
+      }
+    } catch (error) {
+      reportAvatarSaveError(error);
     }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      mediaTypes: ['images'],
-      quality: 1,
-    });
-
-    const assetUri = result.canceled ? undefined : result.assets[0]?.uri;
-    if (assetUri) {
-      setDraftAvatarUri(assetUri);
-    }
-  }, []);
+  }, [persistSelectedAvatar, reportAvatarSaveError]);
 
   const selectAvatarFromPhotoLibrary = useCallback(async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(false);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(false);
 
-    if (!permission.granted) {
-      return;
+      if (!permission.granted) {
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        mediaTypes: ['images'],
+        quality: 1,
+        selectionLimit: 1,
+      });
+
+      const assetUri = result.canceled ? undefined : result.assets[0]?.uri;
+      if (assetUri) {
+        await persistSelectedAvatar(assetUri);
+      }
+    } catch (error) {
+      reportAvatarSaveError(error);
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      mediaTypes: ['images'],
-      quality: 1,
-      selectionLimit: 1,
-    });
-
-    const assetUri = result.canceled ? undefined : result.assets[0]?.uri;
-    if (assetUri) {
-      setDraftAvatarUri(assetUri);
-    }
-  }, []);
+  }, [persistSelectedAvatar, reportAvatarSaveError]);
 
   const handleAvatarSourceChange = useCallback(
     (event: NativeActionEvent) => {
@@ -137,7 +164,6 @@ export default function ProfileSettingsScreen() {
             <MenuAvatarTrigger
               actions={avatarActions}
               accessibilityLabel={t('settings.profile.changeAvatar')}
-              imageSource={draftAvatarUri ? { uri: draftAvatarUri } : undefined}
               onPress={blurInput}
               onPressAction={handleAvatarSourceChange}
               size={profileAvatarSize}
@@ -170,7 +196,6 @@ export default function ProfileSettingsScreen() {
 type MenuAvatarTriggerProps = {
   accessibilityLabel: string;
   actions: MenuAction[];
-  imageSource?: ImageSource | number;
   onPress: () => void;
   onPressAction: (event: NativeActionEvent) => void;
   size: number;
@@ -179,7 +204,6 @@ type MenuAvatarTriggerProps = {
 function MenuAvatarTrigger({
   accessibilityLabel,
   actions,
-  imageSource,
   onPress,
   onPressAction,
   size,
@@ -192,7 +216,7 @@ function MenuAvatarTrigger({
       }}
       style={{ height: size, width: size }}
     >
-      <ProfileAvatarImage imageSource={imageSource} size={size} />
+      <ProfileAvatarImage size={size} />
       <MenuView actions={actions} onPressAction={onPressAction} style={styles.avatarMenuTrigger}>
         <View
           accessibilityLabel={accessibilityLabel}

@@ -76,6 +76,8 @@ export interface PreferenceSchemas {
     'app.tray.on_launch': boolean;
     // redux/settings/useSystemTitleBar
     'app.use_system_title_bar': boolean;
+    // redux/settings/userAvatar
+    'app.user.avatar': string;
     // redux/settings/userId
     'app.user.id': string;
     // redux/settings/userName
@@ -521,6 +523,7 @@ export const DefaultPreferences: PreferenceSchemas = {
     'app.tray.on_close': true,
     'app.tray.on_launch': false,
     'app.use_system_title_bar': false,
+    'app.user.avatar': '',
     'app.user.id': 'uuid()',
     'app.user.name': '',
     'app.zoom_factor': 1,

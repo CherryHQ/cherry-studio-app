@@ -229,6 +229,7 @@
   "settings.pages.websearch.placeholder": "Web search settings are coming soon.",
   "settings.pages.websearch.title": "Web search",
   "settings.plugin.title": "Plugins",
+  "settings.profile.avatarSaveError": "Failed to save avatar",
   "settings.profile.changeAvatar": "Change avatar",
   "settings.profile.edit": "Edit profile",
   "settings.profile.userName": "User Name",
