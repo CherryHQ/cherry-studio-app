@@ -32,10 +32,16 @@ function capExtractedText(text: string, filename: string): string {
  * `data:` / `https:` / `http:` URLs untouched. If the file can't be read,
  * returns `null` to signal the caller should drop the part.
  *
- * PDF files with `application/pdf` mediaType are handled differently: text is
- * extracted via the native module and returned as a `TextUIPart`.
+ * PDF files: when `extractPdf !== false`, text is extracted via the native
+ * PdfTextExtractor module and returned as a `TextUIPart`. When `extractPdf
+ * === false`, the PDF is treated like any other file (base64 data URL) so
+ * models that natively accept PDF (Gemini, Claude, OpenAI) receive the real
+ * bytes instead of extracted text.
  */
-export async function resolveFileUIPart(part: FileUIPart): Promise<FileUIPart | TextUIPart | null> {
+export async function resolveFileUIPart(
+  part: FileUIPart,
+  options?: { extractPdf?: boolean },
+): Promise<FileUIPart | TextUIPart | null> {
   const url = part.url;
   if (!url) return part;
   if (!url.startsWith('file://')) return part;
@@ -43,7 +49,9 @@ export async function resolveFileUIPart(part: FileUIPart): Promise<FileUIPart | 
   const filename = part.filename ?? 'file';
   const mediaType = part.mediaType || FALLBACK_MEDIA_TYPE;
 
-  if (mediaType === 'application/pdf') {
+  // PDF text extraction path — only when the model does NOT support native PDF.
+  // Models that accept PDF natively get the raw bytes as base64 data URL below.
+  if (mediaType === 'application/pdf' && options?.extractPdf !== false) {
     try {
       const filePath = url.slice(7);
       if (!filePath) {
@@ -64,6 +72,7 @@ export async function resolveFileUIPart(part: FileUIPart): Promise<FileUIPart | 
     }
   }
 
+  // Base64 inline path — all files (PDF included when extractPdf === false)
   try {
     const base64 = await FileSystem.readAsStringAsync(url, {
       encoding: FileSystem.EncodingType.Base64,

@@ -35,7 +35,9 @@ function getExtractText(): jest.Mock {
 
 const fileUrl = (path: string) => `file://${path}`;
 
-const filePart = (overrides: Partial<FileUIPart> = {}): FileUIPart =>
+type FilePartOverrides = Partial<Omit<FileUIPart, 'type'>>;
+
+const filePart = (overrides: FilePartOverrides = {}): FileUIPart =>
   ({
     type: 'file',
     url: fileUrl('/tmp/test.pdf'),
@@ -156,10 +158,31 @@ describe('resolveFileUIPart', () => {
         isTruncated: false,
       });
 
-      const result = await resolveFileUIPart(filePart({ filename: undefined }) as FileUIPart);
+      const result = await resolveFileUIPart(filePart({ filename: undefined }));
       expect(result).toEqual({
         type: 'text',
         text: `Attached file "file":\nsome content`,
+      });
+    });
+
+    describe('with extractPdf: false (native PDF model)', () => {
+      it('returns a base64 data URL instead of extracting text', async () => {
+        jest.mocked(require('expo-file-system').readAsStringAsync).mockResolvedValueOnce('cGQ=');
+
+        const result = await resolveFileUIPart(filePart(), { extractPdf: false });
+        expect(result).toEqual({
+          type: 'file',
+          url: 'data:application/pdf;base64,cGQ=',
+          mediaType: 'application/pdf',
+          filename: 'report.pdf',
+        });
+      });
+
+      it('does not call the native module at all', async () => {
+        jest.mocked(require('expo-file-system').readAsStringAsync).mockResolvedValueOnce('cGQ=');
+
+        await resolveFileUIPart(filePart(), { extractPdf: false });
+        expect(getExtractText()).not.toHaveBeenCalled();
       });
     });
   });

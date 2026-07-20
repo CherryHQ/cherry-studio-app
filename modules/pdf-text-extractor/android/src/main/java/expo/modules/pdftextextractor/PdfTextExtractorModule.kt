@@ -18,28 +18,22 @@ class ExtractOptions : Record {
     val maxPages: Int? = null
 }
 
-class InvalidFilePathException : CodedException(
+class InvalidFilePathException(cause: Throwable? = null) : CodedException(
     "INVALID_FILE_PATH",
     "Invalid file path provided",
-    null
+    cause
 )
 
-class FileNotFoundException : CodedException(
+class FileNotFoundException(cause: Throwable? = null) : CodedException(
     "FILE_NOT_FOUND",
     "PDF file not found at the specified path",
-    null
+    cause
 )
 
-class FailedToLoadDocumentException : CodedException(
+class FailedToLoadDocumentException(cause: Throwable? = null) : CodedException(
     "FAILED_TO_LOAD_DOCUMENT",
     "Failed to load PDF document. The file may be corrupted or password-protected",
-    null
-)
-
-class FailedToGetPageCountException : CodedException(
-    "FAILED_TO_GET_PAGE_COUNT",
-    "Failed to get PDF page count. The file may be corrupted or inaccessible",
-    null
+    cause
 )
 
 class PdfTextExtractorModule : Module() {
@@ -63,19 +57,12 @@ class PdfTextExtractorModule : Module() {
             } catch (e: CodedException) {
                 promise.reject(e)
             } catch (e: Exception) {
-                promise.reject(FailedToLoadDocumentException())
+                promise.reject(FailedToLoadDocumentException(e))
             }
         }
 
-        AsyncFunction("getPageCount") { filePath: String, promise: Promise ->
-            try {
-                val result = getPageCount(filePath)
-                promise.resolve(result)
-            } catch (e: CodedException) {
-                promise.reject(e)
-            } catch (e: Exception) {
-                promise.reject(FailedToGetPageCountException())
-            }
+        AsyncFunction("getPageCount") { filePath: String ->
+            getPageCount(filePath)
         }
     }
 
@@ -94,7 +81,7 @@ class PdfTextExtractorModule : Module() {
             val document: PDDocument = try {
                 PDDocument.load(file)
             } catch (e: Exception) {
-                throw FailedToLoadDocumentException()
+                throw FailedToLoadDocumentException(e)
             }
 
             return document.use { doc ->
@@ -127,7 +114,6 @@ class PdfTextExtractorModule : Module() {
                 )
             }
         } finally {
-            // 清理临时文件
             if (isTempFile && file.exists()) {
                 file.delete()
             }
@@ -135,18 +121,20 @@ class PdfTextExtractorModule : Module() {
     }
 
     private fun getPageCount(filePath: String): Int {
-        val isTempFile = filePath.startsWith("content://")
-        val file = parseFilePath(filePath)
-
         return try {
-            PDDocument.load(file).use { doc ->
-                doc.numberOfPages
+            val isTempFile = filePath.startsWith("content://")
+            val file = parseFilePath(filePath)
+            try {
+                PDDocument.load(file).use { doc ->
+                    doc.numberOfPages
+                }
+            } finally {
+                if (isTempFile && file.exists()) {
+                    file.delete()
+                }
             }
-        } finally {
-            // 清理临时文件
-            if (isTempFile && file.exists()) {
-                file.delete()
-            }
+        } catch (e: Exception) {
+            0
         }
     }
 
@@ -176,10 +164,17 @@ class PdfTextExtractorModule : Module() {
 
         val tempFile = File.createTempFile("pdf_temp_", ".pdf", context.cacheDir)
 
-        inputStream.use { input ->
-            tempFile.outputStream().use { output ->
-                input.copyTo(output)
+        try {
+            inputStream.use { input ->
+                tempFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
             }
+        } catch (e: Exception) {
+            if (tempFile.exists()) {
+                tempFile.delete()
+            }
+            throw e
         }
 
         return tempFile

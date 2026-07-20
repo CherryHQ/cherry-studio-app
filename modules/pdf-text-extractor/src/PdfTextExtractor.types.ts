@@ -51,7 +51,6 @@ export interface PdfTextExtractorModule {
    * @returns 提取结果
    */
   extractText(filePath: string, options?: ExtractOptions): Promise<ExtractResult>;
-
   /**
    * 获取 PDF 页数（异步方法）
    * @param filePath - PDF 文件路径

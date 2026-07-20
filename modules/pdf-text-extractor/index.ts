@@ -1,5 +1,4 @@
-import { requireNativeModule } from 'expo';
-import Constants from 'expo-constants';
+import { requireOptionalNativeModule } from 'expo';
 import { Platform } from 'react-native';
 
 import type {
@@ -8,13 +7,10 @@ import type {
   PdfTextExtractorModule,
 } from './src/PdfTextExtractor.types';
 
-// 导出类型
 export type { ExtractOptions, ExtractResult };
 
-const isUnsupportedEnvironment = Platform.OS === 'web' || Constants.appOwnership === 'expo';
-const NativeModule: PdfTextExtractorModule | null = isUnsupportedEnvironment
-  ? null
-  : requireNativeModule('PdfTextExtractor');
+const NativeModule: PdfTextExtractorModule | null =
+  Platform.OS === 'web' ? null : requireOptionalNativeModule('PdfTextExtractor');
 
 const getNativeModule = (): PdfTextExtractorModule => {
   if (!NativeModule) {
