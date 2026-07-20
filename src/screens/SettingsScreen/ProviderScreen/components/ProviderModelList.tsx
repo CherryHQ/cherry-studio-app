@@ -4,43 +4,28 @@ import { Keyboard, View } from 'react-native';
 
 import type { Model } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
+import { ProviderModelAccordion } from '../models/components/ProviderModelAccordion';
+import { ProviderModelSearchField } from '../models/components/ProviderModelSearchField';
 import {
-  ProviderModelAccordion,
-  ProviderModelSearchField,
   ProviderModelToolbar,
-  useProviderModelGroups,
-} from '../models';
+  type ProviderModelToolbarActions,
+} from '../models/components/ProviderModelToolbar';
+import { useProviderModelGroups } from '../models/hooks/useProviderModelGroups';
 
 type ProviderModelListProps = {
   header?: ReactElement;
-  isAddDisabled?: boolean;
-  isAddLoading?: boolean;
-  isCheckDisabled?: boolean;
-  isCheckLoading?: boolean;
   isLoading: boolean;
-  isPullDisabled?: boolean;
-  isPullLoading?: boolean;
   models: Model[];
-  onAddPress?: () => void;
-  onCheckPress?: () => void;
-  onPullPress?: () => void;
   provider: Provider | undefined;
+  toolbarActions: ProviderModelToolbarActions;
 };
 
 export function ProviderModelList({
   header,
-  isAddDisabled = false,
-  isAddLoading = false,
-  isCheckDisabled = false,
-  isCheckLoading = false,
   isLoading,
-  isPullDisabled = false,
-  isPullLoading = false,
   models,
-  onAddPress,
-  onCheckPress,
-  onPullPress,
   provider,
+  toolbarActions,
 }: ProviderModelListProps) {
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
@@ -62,17 +47,7 @@ export function ProviderModelList({
         <View className="gap-6 px-4 py-5">
           {header}
           <View className="gap-3">
-            <ProviderModelToolbar
-              isAddDisabled={isAddDisabled}
-              isAddLoading={isAddLoading}
-              isCheckDisabled={isCheckDisabled}
-              isCheckLoading={isCheckLoading}
-              isPullDisabled={isPullDisabled}
-              isPullLoading={isPullLoading}
-              onAddPress={onAddPress}
-              onCheckPress={onCheckPress}
-              onPullPress={onPullPress}
-            />
+            <ProviderModelToolbar actions={toolbarActions} />
             <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
           </View>
         </View>

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { ChatWorkspaceFrame, FloatingChatInput, useFloatingChatInputLayout } from './workspace';
+import { ChatComposer, ChatWorkspaceFrame, useFloatingChatInputLayout } from './workspace';
 
 export function NewTopicScreen() {
   const { t } = useTranslation();
@@ -23,7 +23,7 @@ export function NewTopicScreen() {
           {t('chat.newTopic.description')}
         </Text>
       </View>
-      <FloatingChatInput onHeightChange={handleInputHeightChange} />
+      <ChatComposer onHeightChange={handleInputHeightChange} />
     </ChatWorkspaceFrame>
   );
 }

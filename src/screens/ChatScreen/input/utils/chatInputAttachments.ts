@@ -1,8 +1,6 @@
 import type { DocumentPickerAsset } from 'expo-document-picker';
-import type { ImagePickerAsset } from 'expo-image-picker';
 
 import type { CherryMessagePart } from '@/data/types/message';
-import type { InlinePhotoPickerAsset } from '@/modules/inlinePhotoPicker';
 
 export type ChatInputAttachmentKind = 'file' | 'image';
 
@@ -16,6 +14,7 @@ export type ChatInputAttachmentDraft = {
 };
 
 type PhotoAttachmentInput = {
+  fileName?: string;
   id: string;
   uri: string;
 };
@@ -25,6 +24,16 @@ const fallbackFileMediaType = 'application/octet-stream';
 const fallbackImageName = 'Image';
 const fallbackFileName = 'File';
 const imageFileExtensions = new Set(['avif', 'gif', 'heic', 'heif', 'jpeg', 'jpg', 'png', 'webp']);
+const imageMediaTypeByExtension = new Map([
+  ['avif', 'image/avif'],
+  ['gif', 'image/gif'],
+  ['heic', 'image/heic'],
+  ['heif', 'image/heif'],
+  ['jpeg', 'image/jpeg'],
+  ['jpg', 'image/jpeg'],
+  ['png', 'image/png'],
+  ['webp', 'image/webp'],
+]);
 
 export function isChatInputImageMediaType(mediaType: string | null | undefined) {
   return mediaType?.startsWith('image/') ?? false;
@@ -61,52 +70,23 @@ export function removeChatInputAttachment(
 }
 
 export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ChatInputAttachmentDraft {
+  const extension = photo.fileName?.trim().split('.').pop()?.toLowerCase();
+
   return {
     id: getPhotoAttachmentId(photo.id),
     kind: 'image',
-    mediaType: fallbackImageMediaType,
-    name: fallbackImageName,
+    mediaType: (extension && imageMediaTypeByExtension.get(extension)) || fallbackImageMediaType,
+    name: photo.fileName || fallbackImageName,
     uri: photo.uri,
   };
 }
 
-export function createImagePickerAttachmentDraft(
-  asset: ImagePickerAsset,
-): ChatInputAttachmentDraft {
-  const mediaType = asset.mimeType ?? fallbackImageMediaType;
-  const idSource = asset.assetId ?? asset.uri;
-
-  return {
-    id: getPhotoAttachmentId(idSource),
-    kind: 'image',
-    mediaType,
-    name: asset.fileName ?? fallbackImageName,
-    size: asset.fileSize,
-    uri: asset.uri,
-  };
-}
-
-export function createInlinePhotoAttachmentDraft(
-  asset: InlinePhotoPickerAsset,
-): ChatInputAttachmentDraft {
-  return {
-    id: getPhotoAttachmentId(asset.assetId || asset.uri),
-    kind: 'image',
-    mediaType: asset.mimeType ?? fallbackImageMediaType,
-    name: asset.fileName || fallbackImageName,
-    size: asset.fileSize,
-    uri: asset.uri,
-  };
-}
-
 type CameraPhotoInput = {
-  filePath: string;
+  uri: string;
 };
 
-// VisionCamera's capturePhotoToFile() writes a JPEG to a unique temp path
-// WITHOUT a file:// scheme; the rest of the app expects a URI, so normalize it.
 export function createCameraAttachmentDraft(photo: CameraPhotoInput): ChatInputAttachmentDraft {
-  const uri = photo.filePath.startsWith('file://') ? photo.filePath : `file://${photo.filePath}`;
+  const uri = photo.uri.startsWith('file://') ? photo.uri : `file://${photo.uri}`;
 
   return {
     id: getPhotoAttachmentId(uri),

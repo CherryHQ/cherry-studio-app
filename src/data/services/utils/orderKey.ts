@@ -145,6 +145,7 @@ export async function applyMoves(
   for (const move of deduped) {
     assertAnchorNotSelf(move.id, move.anchor);
 
+    // react-doctor-disable-next-line async-await-in-loop -- 每次 move 的新 orderKey 依赖前一次 move 已写入的 key，必须串行
     const current = await selectRowByPk(tx, table, pkColumn, move.id, scope);
     if (!current) {
       throw DataApiErrorFactory.notFound(getTableName(table), move.id);
@@ -243,6 +244,7 @@ export async function resetOrder<T extends Record<string, unknown>>(
   for (let i = 0; i < orderedRows.length; i++) {
     const row = orderedRows[i] as Record<string, unknown>;
     const pkValue = resolvePkValue(row, pkColumn);
+    // react-doctor-disable-next-line async-await-in-loop -- 写事务内本质串行，按序重置 orderKey，并行化无收益
     await tx.update(table).set({ orderKey: orderKeys[i] }).where(eq(pkColumn, pkValue));
   }
 }

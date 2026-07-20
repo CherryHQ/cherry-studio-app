@@ -2,7 +2,7 @@
  * Auto-generated model icon registry
  * Do not edit manually.
  *
- * Total icons: 35
+ * Total icons: 36
  */
 
 import { MODEL_ID_ALIASES } from '../model-aliases';
@@ -105,6 +105,10 @@ export const MODEL_ICONS = {
   hailuo: {
     light: require('./light/hailuo.png'),
     dark: require('./light/hailuo.png'),
+  },
+  happyhorse: {
+    light: require('./light/happyhorse.png'),
+    dark: require('./dark/happyhorse.png'),
   },
   hunyuan: {
     light: require('./light/hunyuan.png'),

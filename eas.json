@@ -22,7 +22,8 @@
         "PROFILE": "preview"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
       },
       "ios": {}
     },

@@ -6,13 +6,13 @@ import { useSharedValue } from 'react-native-reanimated';
 import { isIOS } from '@/config/constants';
 import type { Message } from '@/data/types/message';
 import type { MessagesViewModel } from '@/hooks/chat';
-
-import { mergeMessagesWithOverlay, useChatRuntimeTopic } from '../runtime';
+import { useChatRuntimeTopic } from '../runtime/ChatRuntimeProvider';
+import { mergeMessagesWithOverlay } from '../runtime/chatRuntimeMessages';
+import { ChatComposer } from './components/ChatComposer';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessageList } from './components/ChatMessageList';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
 import { ChatWorkspaceFrame } from './components/ChatWorkspaceFrame';
-import { FloatingChatInput } from './components/FloatingChatInput';
 import { ScrollToBottomButton } from './components/ScrollToBottomButton';
 import { useFloatingChatInputLayout } from './hooks/useFloatingChatInputLayout';
 import { useMessageListInitialRenderGate } from './hooks/useMessageListInitialRenderGate';
@@ -66,7 +66,7 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
         onPrefetchOlder={messageWindow.prefetchOlder}
         onReady={markListLoaded}
       />
-      <FloatingChatInput topicId={topicId} onHeightChange={handleInputHeightChange} />
+      <ChatComposer onHeightChange={handleInputHeightChange} topicId={topicId} />
       <ScrollToBottomButton
         gap={SCROLL_BUTTON_GAP_ABOVE_INPUT}
         inputHeight={inputHeightShared}

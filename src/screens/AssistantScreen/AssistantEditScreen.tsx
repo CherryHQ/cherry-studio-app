@@ -3,16 +3,19 @@ import { Input } from 'heroui-native/input';
 import { Switch } from 'heroui-native/switch';
 import { TextArea } from 'heroui-native/text-area';
 import { useToast } from 'heroui-native/toast';
-import { ChevronsUpDownIcon, XIcon } from 'lucide-uniwind/png';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ChevronDownIcon } from 'lucide-uniwind/png';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { CloseHeader, type CloseHeaderAction } from '@/components/headers';
 import {
   ModelPickerBottomSheet,
+  ModelPickerIcon,
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/components/modelPicker';
+import { keyboardBottomOffset } from '@/config/constants';
 import type { CreateAssistantDto } from '@/data/api/schemas/assistants';
 import {
   type Assistant,
@@ -21,6 +24,7 @@ import {
 } from '@/data/types/assistant';
 import type { UniqueModelId } from '@/data/types/model';
 import { useAssistantApiById, useAssistantMutations } from '@/hooks/chat';
+import { EmojiPickerBottomSheet } from './components/EmojiPickerBottomSheet';
 
 type AssistantFormState = {
   customParametersJson: string;
@@ -40,7 +44,6 @@ type AssistantFormState = {
 };
 
 const defaultEmoji = '🌟';
-const reasoningEffortOptions = ['default', 'minimal', 'low', 'medium', 'high'] as const;
 
 export default function AssistantEditScreen() {
   const { t } = useTranslation();
@@ -53,15 +56,21 @@ export default function AssistantEditScreen() {
   const { createAssistant, isCreating, isUpdating, updateAssistant } = useAssistantMutations();
   const modelPickerData = useModelPickerData();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
-  const [form, setForm] = useState<AssistantFormState>(() => createFormState());
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+  const [form, setForm] = useState<AssistantFormState>(() => createFormState(assistant));
+  const [syncedAssistant, setSyncedAssistant] = useState(assistant);
   const selectedModel = modelPickerData.getModelItem(form.modelId);
   const isSaving = isCreating || isUpdating;
 
-  useEffect(() => {
+  // Re-seed the form from the async assistant record when it first arrives (or
+  // is swapped). Done during render — not in an effect — so React collapses it
+  // into the same commit instead of triggering a cascading re-render.
+  if (assistant !== syncedAssistant) {
+    setSyncedAssistant(assistant);
     if (assistant) {
       setForm(createFormState(assistant));
     }
-  }, [assistant]);
+  }
 
   const updateForm = useCallback(
     <TKey extends keyof AssistantFormState>(key: TKey, value: AssistantFormState[TKey]) => {
@@ -79,8 +88,15 @@ export default function AssistantEditScreen() {
   const handleModelSelect = useCallback((item: ModelPickerModelItem) => {
     setForm((current) => ({ ...current, modelId: item.modelId }));
   }, []);
-  const clearModel = useCallback(() => {
-    setForm((current) => ({ ...current, modelId: null }));
+  const openEmojiPicker = useCallback(() => {
+    Keyboard.dismiss();
+    setIsEmojiPickerOpen(true);
+  }, []);
+  const closeEmojiPicker = useCallback(() => {
+    setIsEmojiPickerOpen(false);
+  }, []);
+  const handleEmojiSelect = useCallback((emoji: string) => {
+    setForm((current) => ({ ...current, emoji }));
   }, []);
   const handleSave = useCallback(async () => {
     const dto = buildAssistantDto(form, assistant?.settings);
@@ -116,7 +132,6 @@ export default function AssistantEditScreen() {
         onPress: () => {
           void handleSave();
         },
-        variant: 'prominent',
       },
     ],
     [handleSave, isSaving, t],
@@ -125,27 +140,40 @@ export default function AssistantEditScreen() {
   return (
     <>
       <CloseHeader rightActions={saveActions} title={title} />
-      <Pressable accessible={false} className="flex-1" onPress={Keyboard.dismiss}>
-        <ScrollView
-          alwaysBounceVertical={false}
-          className="flex-1"
-          contentContainerClassName="gap-6 px-4 pt-5 pb-8"
-          contentInsetAdjustmentBehavior="automatic"
-          keyboardDismissMode="on-drag"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {isLoading && isEditing ? (
-            <Text className="text-center text-default-foreground text-sm">
-              {t('assistant.form.loading')}
-            </Text>
-          ) : (
-            <>
-              <FormSection title={t('assistant.form.basicSection')}>
-                <FormField label={t('assistant.form.name')}>
+      <KeyboardAwareScrollView
+        alwaysBounceVertical={false}
+        bottomOffset={keyboardBottomOffset}
+        contentContainerStyle={styles.scrollContent}
+        contentInsetAdjustmentBehavior="automatic"
+        disableScrollOnKeyboardHide
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        style={styles.scroll}
+      >
+        {isLoading && isEditing ? (
+          <Text className="text-center text-default-foreground text-sm">
+            {t('assistant.form.loading')}
+          </Text>
+        ) : (
+          <>
+            <FormSection title={t('assistant.form.basicSection')}>
+              <View className="flex-row items-center gap-3">
+                <Pressable
+                  accessibilityLabel={t('assistant.form.emoji')}
+                  accessibilityRole="button"
+                  className="size-12 items-center justify-center rounded-2xl border border-border active:opacity-70"
+                  onPress={openEmojiPicker}
+                >
+                  <Text className="text-2xl" style={styles.emojiGlyph}>
+                    {form.emoji.trim() || defaultEmoji}
+                  </Text>
+                </Pressable>
+                <View className="min-w-0 flex-1">
                   <Input
                     accessibilityLabel={t('assistant.form.name')}
                     autoCorrect={false}
+                    variant="secondary"
                     className="rounded-2xl px-4 text-base text-foreground leading-5"
                     onChangeText={(value) => updateForm('name', value)}
                     placeholder={t('assistant.form.namePlaceholder')}
@@ -154,172 +182,140 @@ export default function AssistantEditScreen() {
                     style={styles.textInput}
                     value={form.name}
                   />
-                </FormField>
-                <FormField label={t('assistant.form.emoji')}>
-                  <Input
-                    accessibilityLabel={t('assistant.form.emoji')}
-                    autoCorrect={false}
-                    className="rounded-2xl px-4 text-base text-foreground leading-5"
-                    maxLength={8}
-                    onChangeText={(value) => updateForm('emoji', value)}
-                    placeholder={defaultEmoji}
-                    placeholderColorClassName="accent-muted"
-                    style={styles.textInput}
-                    value={form.emoji}
-                  />
-                </FormField>
-                <FormField label={t('assistant.form.description')}>
-                  <Input
-                    accessibilityLabel={t('assistant.form.description')}
-                    autoCorrect
-                    className="rounded-2xl px-4 text-base text-foreground leading-5"
-                    onChangeText={(value) => updateForm('description', value)}
-                    placeholder={t('assistant.form.descriptionPlaceholder')}
-                    placeholderColorClassName="accent-muted"
-                    style={styles.textInput}
-                    value={form.description}
-                  />
-                </FormField>
-                <FormField label={t('assistant.form.model')}>
-                  <View className="flex-row items-center gap-2">
-                    <Pressable
-                      accessibilityLabel={t('assistant.form.model')}
-                      accessibilityRole="button"
-                      className="min-h-12 min-w-0 flex-1 flex-row items-center justify-between gap-3 rounded-2xl bg-field px-4 active:opacity-70"
-                      onPress={openModelPicker}
-                    >
-                      <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={1}>
-                        {selectedModel?.model.name ?? t('assistant.model.none')}
-                      </Text>
-                      <ChevronsUpDownIcon
-                        className="size-5 text-default-foreground"
-                        strokeWidth={2}
-                      />
-                    </Pressable>
-                    {form.modelId ? (
-                      <Pressable
-                        accessibilityLabel={t('common.clear')}
-                        accessibilityRole="button"
-                        className="size-11 items-center justify-center rounded-full bg-surface-secondary active:opacity-70"
-                        onPress={clearModel}
-                      >
-                        <XIcon className="size-5 text-default-foreground" strokeWidth={2.25} />
-                      </Pressable>
-                    ) : null}
-                  </View>
-                </FormField>
-                <FormField label={t('assistant.form.prompt')}>
-                  <TextArea
-                    accessibilityLabel={t('assistant.form.prompt')}
-                    autoCorrect
-                    className="min-h-32 rounded-2xl px-4 text-base text-foreground leading-5"
-                    multiline
-                    onChangeText={(value) => updateForm('prompt', value)}
-                    placeholder={t('assistant.form.promptPlaceholder')}
-                    placeholderColorClassName="accent-muted"
-                    style={styles.textArea}
-                    value={form.prompt}
-                  />
-                </FormField>
-              </FormSection>
-              <FormSection title={t('assistant.form.generationSection')}>
-                <SwitchRow
-                  label={t('assistant.form.enableTemperature')}
-                  value={form.enableTemperature}
-                  onValueChange={(value) => updateForm('enableTemperature', value)}
+                </View>
+              </View>
+              <FormField label={t('assistant.form.description')}>
+                <Input
+                  accessibilityLabel={t('assistant.form.description')}
+                  autoCorrect
+                  variant="secondary"
+                  className="rounded-2xl px-4 text-base text-foreground leading-5"
+                  onChangeText={(value) => updateForm('description', value)}
+                  placeholder={t('assistant.form.descriptionPlaceholder')}
+                  placeholderColorClassName="accent-muted"
+                  style={styles.textInput}
+                  value={form.description}
                 />
+              </FormField>
+              <FormField label={t('assistant.form.prompt')}>
+                <TextArea
+                  accessibilityLabel={t('assistant.form.prompt')}
+                  autoCorrect
+                  variant="secondary"
+                  className="min-h-32 rounded-2xl px-4 text-base text-foreground leading-5"
+                  multiline
+                  onChangeText={(value) => updateForm('prompt', value)}
+                  placeholder={t('assistant.form.promptPlaceholder')}
+                  placeholderColorClassName="accent-muted"
+                  style={styles.textArea}
+                  value={form.prompt}
+                />
+              </FormField>
+            </FormSection>
+            <FormSection title={t('assistant.form.generationSection')}>
+              <Pressable
+                accessibilityLabel={t('assistant.form.model')}
+                accessibilityRole="button"
+                className="min-h-12 flex-row items-center justify-between gap-3 rounded-2xl border border-border px-4 py-2 active:opacity-70"
+                onPress={openModelPicker}
+              >
+                {selectedModel ? (
+                  <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={1}>
+                    {selectedModel.provider.name}
+                  </Text>
+                ) : (
+                  <Text
+                    className="min-w-0 flex-1 text-base text-default-foreground"
+                    numberOfLines={1}
+                  >
+                    {t('assistant.model.none')}
+                  </Text>
+                )}
+                <View className="max-w-[60%] flex-row items-center justify-end gap-2">
+                  {selectedModel ? (
+                    <>
+                      <ModelPickerIcon item={selectedModel} size={20} />
+                      <Text
+                        className="min-w-0 shrink text-right text-default-foreground text-sm"
+                        numberOfLines={1}
+                      >
+                        {selectedModel.model.name}
+                      </Text>
+                    </>
+                  ) : null}
+                  <ChevronDownIcon className="size-6 text-default-foreground" strokeWidth={2} />
+                </View>
+              </Pressable>
+              <SwitchRow
+                label={t('assistant.form.enableTemperature')}
+                value={form.enableTemperature}
+                onValueChange={(value) => updateForm('enableTemperature', value)}
+              />
+              {form.enableTemperature ? (
                 <NumberField
-                  disabled={!form.enableTemperature}
-                  label={t('assistant.form.temperature')}
+                  accessibilityLabel={t('assistant.form.temperature')}
                   value={form.temperature}
                   onChangeText={(value) => updateForm('temperature', value)}
                 />
-                <SwitchRow
-                  label={t('assistant.form.enableTopP')}
-                  value={form.enableTopP}
-                  onValueChange={(value) => updateForm('enableTopP', value)}
-                />
+              ) : null}
+              <SwitchRow
+                label={t('assistant.form.enableTopP')}
+                value={form.enableTopP}
+                onValueChange={(value) => updateForm('enableTopP', value)}
+              />
+              {form.enableTopP ? (
                 <NumberField
-                  disabled={!form.enableTopP}
-                  label={t('assistant.form.topP')}
+                  accessibilityLabel={t('assistant.form.topP')}
                   value={form.topP}
                   onChangeText={(value) => updateForm('topP', value)}
                 />
-                <SwitchRow
-                  label={t('assistant.form.enableMaxTokens')}
-                  value={form.enableMaxTokens}
-                  onValueChange={(value) => updateForm('enableMaxTokens', value)}
-                />
+              ) : null}
+              <SwitchRow
+                label={t('assistant.form.enableMaxTokens')}
+                value={form.enableMaxTokens}
+                onValueChange={(value) => updateForm('enableMaxTokens', value)}
+              />
+              {form.enableMaxTokens ? (
                 <NumberField
-                  disabled={!form.enableMaxTokens}
+                  accessibilityLabel={t('assistant.form.maxTokens')}
                   inputMode="numeric"
-                  label={t('assistant.form.maxTokens')}
                   value={form.maxTokens}
                   onChangeText={(value) => updateForm('maxTokens', value)}
                 />
-                <SwitchRow
-                  label={t('assistant.form.enableWebSearch')}
-                  value={form.enableWebSearch}
-                  onValueChange={(value) => updateForm('enableWebSearch', value)}
+              ) : null}
+              <FormField
+                label={t('assistant.form.customParameters')}
+                description={t('assistant.form.customParametersDescription')}
+              >
+                <TextArea
+                  accessibilityLabel={t('assistant.form.customParameters')}
+                  autoCapitalize="none"
+                  variant="secondary"
+                  autoCorrect={false}
+                  className="min-h-28 rounded-2xl px-4 font-mono text-sm text-foreground leading-5"
+                  multiline
+                  onChangeText={(value) => updateForm('customParametersJson', value)}
+                  placeholder="[]"
+                  placeholderColorClassName="accent-muted"
+                  spellCheck={false}
+                  style={styles.textArea}
+                  value={form.customParametersJson}
                 />
-                <FormField label={t('assistant.form.reasoningEffort')}>
-                  <View className="flex-row flex-wrap gap-2">
-                    {reasoningEffortOptions.map((option) => (
-                      <Pressable
-                        key={option}
-                        accessibilityLabel={t(`chat.reasoning.${option}`)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: form.reasoningEffort === option }}
-                        className={
-                          form.reasoningEffort === option
-                            ? 'rounded-full bg-foreground px-3 py-2 active:opacity-80'
-                            : 'rounded-full bg-surface-secondary px-3 py-2 active:opacity-70'
-                        }
-                        onPress={() => updateForm('reasoningEffort', option)}
-                      >
-                        <Text
-                          className={
-                            form.reasoningEffort === option
-                              ? 'font-semibold text-background text-sm'
-                              : 'font-semibold text-foreground text-sm'
-                          }
-                        >
-                          {t(`chat.reasoning.${option}`)}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </FormField>
-              </FormSection>
-              <FormSection title={t('assistant.form.advancedSection')}>
-                <FormField
-                  label={t('assistant.form.customParameters')}
-                  description={t('assistant.form.customParametersDescription')}
-                >
-                  <TextArea
-                    accessibilityLabel={t('assistant.form.customParameters')}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    className="min-h-28 rounded-2xl px-4 font-mono text-sm text-foreground leading-5"
-                    multiline
-                    onChangeText={(value) => updateForm('customParametersJson', value)}
-                    placeholder="[]"
-                    placeholderColorClassName="accent-muted"
-                    spellCheck={false}
-                    style={styles.textArea}
-                    value={form.customParametersJson}
-                  />
-                </FormField>
-              </FormSection>
-            </>
-          )}
-        </ScrollView>
-      </Pressable>
+              </FormField>
+            </FormSection>
+          </>
+        )}
+      </KeyboardAwareScrollView>
       <ModelPickerBottomSheet
         isOpen={isModelPickerOpen}
         selectedModelId={form.modelId}
         onClose={closeModelPicker}
         onSelect={handleModelSelect}
+      />
+      <EmojiPickerBottomSheet
+        isOpen={isEmojiPickerOpen}
+        onClose={closeEmojiPicker}
+        onSelect={handleEmojiSelect}
       />
     </>
   );
@@ -376,33 +372,29 @@ function SwitchRow({
 }
 
 function NumberField({
-  disabled,
+  accessibilityLabel,
   inputMode = 'decimal',
-  label,
   onChangeText,
   value,
 }: {
-  disabled?: boolean;
+  accessibilityLabel: string;
   inputMode?: 'decimal' | 'numeric';
-  label: string;
   onChangeText: (value: string) => void;
   value: string;
 }) {
   return (
-    <FormField label={label}>
-      <Input
-        accessibilityLabel={label}
-        className="rounded-2xl px-4 text-base text-foreground leading-5 disabled:opacity-50"
-        editable={!disabled}
-        inputMode={inputMode}
-        keyboardType={inputMode === 'numeric' ? 'number-pad' : 'decimal-pad'}
-        onChangeText={onChangeText}
-        placeholder="0"
-        placeholderColorClassName="accent-muted"
-        style={styles.textInput}
-        value={value}
-      />
-    </FormField>
+    <Input
+      accessibilityLabel={accessibilityLabel}
+      className="rounded-2xl px-4 text-base text-foreground leading-5"
+      variant="secondary"
+      inputMode={inputMode}
+      keyboardType={inputMode === 'numeric' ? 'number-pad' : 'decimal-pad'}
+      onChangeText={onChangeText}
+      placeholder="0"
+      placeholderColorClassName="accent-muted"
+      style={styles.textInput}
+      value={value}
+    />
   );
 }
 
@@ -508,6 +500,18 @@ function getSingleParamValue(value: string | string[] | undefined) {
 }
 
 const styles = StyleSheet.create({
+  emojiGlyph: {
+    includeFontPadding: false,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    gap: 24,
+    paddingBottom: 32,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+  },
   textArea: {
     includeFontPadding: false,
     paddingBottom: 12,

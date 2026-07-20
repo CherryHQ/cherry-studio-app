@@ -1,8 +1,4 @@
-import {
-  type BranchMessagesResponse,
-  type CherryMessagePart,
-  type Message,
-} from '@/data/types/message';
+import { type CherryMessagePart, type Message } from '@/data/types/message';
 import type { Topic } from '@/data/types/topic';
 
 const baseDateMs = Date.parse('2026-05-15T00:00:00.000Z');
@@ -637,48 +633,3 @@ export const mockTopicMessages = mockTopics.map((topic) => ({
   messages: mockMessagesByTopicId[topic.id] ?? [],
   topic,
 }));
-
-export const activeMockTopic = mockTopics[0];
-export const demoChatMessages = activeMockTopic
-  ? (mockMessagesByTopicId[activeMockTopic.id] ?? [])
-  : [];
-
-export function getMockMessagesForTopic(topicId: string) {
-  return mockMessagesByTopicId[topicId] ?? [];
-}
-
-export type GetMockBranchMessagesParams = {
-  cursor?: string;
-  limit?: number;
-  topicId: string;
-};
-
-export function getMockBranchMessages({
-  cursor,
-  limit = 20,
-  topicId,
-}: GetMockBranchMessagesParams): BranchMessagesResponse {
-  const messages = getMockMessagesForTopic(topicId);
-  const topic = mockTopics.find((item) => item.id === topicId);
-
-  if (messages.length === 0 || limit <= 0) {
-    return {
-      activeNodeId: topic?.activeNodeId ?? null,
-      assistantId: topic?.assistantId ?? null,
-      items: [],
-    };
-  }
-
-  const cursorIndex =
-    typeof cursor === 'string' ? messages.findIndex((message) => message.id === cursor) : -1;
-  const endIndex = cursorIndex >= 0 ? cursorIndex : messages.length;
-  const startIndex = Math.max(0, endIndex - limit);
-  const page = messages.slice(startIndex, endIndex);
-
-  return {
-    activeNodeId: topic?.activeNodeId ?? null,
-    assistantId: topic?.assistantId ?? null,
-    items: page.map((message) => ({ message })),
-    nextCursor: startIndex > 0 ? page[0]?.id : undefined,
-  };
-}

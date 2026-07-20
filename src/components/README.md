@@ -4,8 +4,9 @@ This directory follows the repository-wide naming rules in
 [`docs/rules/naming-conventions.md`](../../docs/rules/naming-conventions.md). The notes below are
 the local conventions for `src/components`.
 
-`src/components` is for cross-screen reusable modules. Route-owned UI should live under
-`src/screens`.
+`src/components` is for independently owned modules shared across screens or feature domains.
+Route-owned UI should live under `src/screens` until a second independent owner actually consumes
+it.
 
 ## Module Names
 
@@ -42,20 +43,39 @@ Only add the subdirectories that the module actually needs.
 
 ## Imports
 
-- External callers should import from the module root: `@/components/drawer`,
-  `@/components/modelPicker`, `@/components/headers`.
+- External callers should import from the module root: `@/components/modelPicker`,
+  `@/components/headers`.
 - Module internals should use relative imports for their own `components`, `context`, `hooks`, and
   `utils`.
-- Tests may import the specific utility under test.
+- Tests may import the specific utility under test. Consumer tests should use the public module
+  root.
 - Do not make callers import leaf files under `components/` unless that file is intentionally the
   module's public surface.
+- `src/components` must not import screen-private modules from `src/screens`.
 
 ## Reusable vs Feature-Owned
 
-- Put reusable cross-screen UI or behavior in an independent module, such as `modelPicker`.
+- Count independent owners, not import statements. Reuse between `ChatScreen/input` and
+  `ChatScreen/messageContent` is still owned by `ChatScreen`.
+- Put UI or behavior in an independent module, such as `modelPicker`, when a second screen or
+  component domain consumes it.
 - Keep feature-specific UI inside the owning screen module under `src/screens`.
 - If a module starts being used outside its owning feature, move it to a neutral domain module
   instead of exporting through the original feature.
+- App shell modules, design-system adapters, and platform adapters may have one direct caller when
+  their ownership is inherently app-wide. These exceptions require a stable public API and a
+  `README.md` that explains the boundary.
+
+## Hooks, Utils, and Public API
+
+- Hooks stay with the module that owns their state and behavior. Only hooks used across independent
+  domains belong in top-level `src/hooks`.
+- Pure helpers stay in the owning module's `utils/`. Only domain-neutral helpers used across
+  independent domains belong in top-level `src/utils`.
+- Add `index.ts` only at a real module boundary. It must contain named re-exports only and expose the
+  smallest interface callers need.
+- Do not add barrels for private `components/`, `hooks/`, or `utils/` buckets. Import their leaf
+  files relatively from inside the module.
 
 ## File Names
 

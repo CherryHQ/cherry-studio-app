@@ -15,7 +15,7 @@ export class ApiKeyRotationState {
   private readonly lastUsedKeyByProvider = new Map<WebSearchProvider['id'], string>();
 
   resolve(provider: WebSearchProvider, required = true): string {
-    const keys = provider.apiKeys.map((key) => key.trim()).filter(Boolean);
+    const keys = provider.apiKeys.flatMap((key) => key.trim() || []);
 
     if (keys.length === 0) {
       if (required) {

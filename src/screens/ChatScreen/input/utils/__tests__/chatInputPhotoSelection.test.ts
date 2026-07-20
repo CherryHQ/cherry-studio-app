@@ -25,6 +25,13 @@ describe('chat input photo selection', () => {
     ]);
   });
 
+  test('does not add photos past the selection limit', () => {
+    expect(getNextChatInputSelectedPhotoIds(['photo-a', 'photo-b'], 'photo-c', 2)).toEqual([
+      'photo-a',
+      'photo-b',
+    ]);
+  });
+
   test('clears selected photos when access is none', () => {
     expect(filterChatInputSelectedPhotoIds(['photo-a'], 'none', [{ id: 'photo-a' }])).toEqual([]);
   });

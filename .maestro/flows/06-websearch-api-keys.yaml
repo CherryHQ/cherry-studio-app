@@ -1,0 +1,32 @@
+appId: com.cherry-ai.cherry-studio-app
+tags: [settings, websearch]
+---
+- runFlow: ../subflows/launch.yaml
+- tapOn: "Open sidebar"
+- tapOn: "Settings"
+- tapOn: "Web search"
+- tapOn: "Tavily"
+# 字段骨架
+- assertVisible: "API Keys"
+- assertVisible: "Search API host"
+# 输入两个逗号分隔的 key 并显示明文：应保持单行逗号串（历史"两行"缺陷回归点）
+- tapOn: "Show API keys"
+# 注意：点占位文案聚焦输入框；"API Keys" 是 section 标题，点它不会 focus
+- tapOn: "Enter API keys"
+- inputText: "sk-e2e-key-aaaa,sk-e2e-key-bbbb"
+- hideKeyboard
+- assertVisible: "sk-e2e-key-aaaa,sk-e2e-key-bbbb"
+# per-key 设置屏：两行独立 key + 删除动作
+- tapOn: "API Key settings"
+- assertVisible: "sk-e2e-key-aaaa"
+- assertVisible: "sk-e2e-key-bbbb"
+# 清理：逐个删除测试 key（不留脏数据）
+- tapOn: "Remove API Key"
+- assertVisible: "Remove API key?"
+- tapOn: "Remove"
+- tapOn: "Remove API Key"
+- tapOn: "Remove"
+- assertVisible: "Add API Key"
+- tapOn: "Back"
+- tapOn: "Back"
+- assertVisible: "API providers"

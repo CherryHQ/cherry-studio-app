@@ -1,0 +1,171 @@
+diff --git a/lib/commonjs/navigators/createNativeBottomTabNavigator.js b/lib/commonjs/navigators/createNativeBottomTabNavigator.js
+index 347a7f64e232f3ab3f8048e45254b37542b9d6dd..8d5abbcd2a8bf96defbf2fdfda3377bdd0d6979d 100644
+--- a/lib/commonjs/navigators/createNativeBottomTabNavigator.js
++++ b/lib/commonjs/navigators/createNativeBottomTabNavigator.js
+@@ -4,7 +4,7 @@ Object.defineProperty(exports, "__esModule", {
+   value: true
+ });
+ exports.default = createNativeBottomTabNavigator;
+-var _native = require("@react-navigation/native");
++var _native = require("expo-router/react-navigation");
+ var _color = _interopRequireDefault(require("color"));
+ var _NativeBottomTabView = _interopRequireDefault(require("../views/NativeBottomTabView.js"));
+ var _jsxRuntime = require("react/jsx-runtime");
+diff --git a/lib/commonjs/views/NativeBottomTabView.js b/lib/commonjs/views/NativeBottomTabView.js
+index 8698cb840bf92fa4b8e234a24b2a4846e38b6e3e..0f5ad31e940183a7f744aafcfe051a1db0f818c6 100644
+--- a/lib/commonjs/views/NativeBottomTabView.js
++++ b/lib/commonjs/views/NativeBottomTabView.js
+@@ -4,7 +4,7 @@ Object.defineProperty(exports, "__esModule", {
+   value: true
+ });
+ exports.default = NativeBottomTabView;
+-var _native = require("@react-navigation/native");
++var _native = require("expo-router/react-navigation");
+ var _reactNativeBottomTabs = _interopRequireDefault(require("react-native-bottom-tabs"));
+ var _jsxRuntime = require("react/jsx-runtime");
+ function _interopRequireDefault(e) { return e && e.__esModule ? e : { default: e }; }
+diff --git a/lib/module/navigators/createNativeBottomTabNavigator.js b/lib/module/navigators/createNativeBottomTabNavigator.js
+index 6e6c05312ccb0697474678f01e5f832d1f66f778..585487bcb04e01746b3a33c1615bf1838172a7ea 100644
+--- a/lib/module/navigators/createNativeBottomTabNavigator.js
++++ b/lib/module/navigators/createNativeBottomTabNavigator.js
+@@ -1,6 +1,6 @@
+ "use strict";
+ 
+-import { createNavigatorFactory, TabRouter, useNavigationBuilder, useTheme } from '@react-navigation/native';
++import { createNavigatorFactory, TabRouter, useNavigationBuilder, useTheme } from 'expo-router/react-navigation';
+ import Color from 'color';
+ import NativeBottomTabView from "../views/NativeBottomTabView.js";
+ import { jsx as _jsx } from "react/jsx-runtime";
+diff --git a/lib/module/views/NativeBottomTabView.js b/lib/module/views/NativeBottomTabView.js
+index 0668ec11c731831c2048bc69912561cf9e6e1d51..7388c84844d112c92b2e8eb57b58812b7c83df7a 100644
+--- a/lib/module/views/NativeBottomTabView.js
++++ b/lib/module/views/NativeBottomTabView.js
+@@ -1,6 +1,6 @@
+ "use strict";
+ 
+-import { CommonActions } from '@react-navigation/native';
++import { CommonActions } from 'expo-router/react-navigation';
+ import TabView from 'react-native-bottom-tabs';
+ import { jsx as _jsx } from "react/jsx-runtime";
+ export default function NativeBottomTabView({
+diff --git a/lib/typescript/commonjs/src/navigators/createNativeBottomTabNavigator.d.ts b/lib/typescript/commonjs/src/navigators/createNativeBottomTabNavigator.d.ts
+index 5ef6162dd7db44aad647cc6ae60ec28177f24a46..ca2c8bda7d60b384230a7420ab9ec4d9232b3bba 100644
+--- a/lib/typescript/commonjs/src/navigators/createNativeBottomTabNavigator.d.ts
++++ b/lib/typescript/commonjs/src/navigators/createNativeBottomTabNavigator.d.ts
+@@ -1,4 +1,4 @@
+-import { type DefaultNavigatorOptions, type NavigatorTypeBagBase, type ParamListBase, type StaticConfig, type TabNavigationState, type TabRouterOptions, type TypedNavigator } from '@react-navigation/native';
++import { type DefaultNavigatorOptions, type NavigatorTypeBagBase, type ParamListBase, type StaticConfig, type TabNavigationState, type TabRouterOptions, type TypedNavigator } from 'expo-router/react-navigation';
+ import type { NativeBottomTabNavigationConfig, NativeBottomTabNavigationEventMap, NativeBottomTabNavigationOptions, NativeBottomTabNavigationProp } from '../types';
+ export type NativeBottomTabNavigatorProps = DefaultNavigatorOptions<ParamListBase, string | undefined, TabNavigationState<ParamListBase>, NativeBottomTabNavigationOptions, NativeBottomTabNavigationEventMap, NativeBottomTabNavigationProp<ParamListBase>> & TabRouterOptions & NativeBottomTabNavigationConfig;
+ declare function NativeBottomTabNavigator({ id, initialRouteName, backBehavior, UNSTABLE_routeNamesChangeBehavior, children, layout, screenListeners, screenOptions, screenLayout, UNSTABLE_router, tabBarActiveTintColor: customActiveTintColor, tabBarInactiveTintColor: customInactiveTintColor, layoutDirection, ...rest }: NativeBottomTabNavigatorProps): import("react/jsx-runtime").JSX.Element;
+diff --git a/lib/typescript/commonjs/src/types.d.ts b/lib/typescript/commonjs/src/types.d.ts
+index 714f053c9e090726faabc09abaf9fe05cc35bd4d..364a3991868548122283b186bcd06c9ccf3acc32 100644
+--- a/lib/typescript/commonjs/src/types.d.ts
++++ b/lib/typescript/commonjs/src/types.d.ts
+@@ -1,4 +1,4 @@
+-import type { Descriptor, NavigationHelpers, NavigationProp, ParamListBase, RouteProp, TabActionHelpers, TabNavigationState } from '@react-navigation/native';
++import type { Descriptor, NavigationHelpers, NavigationProp, ParamListBase, RouteProp, TabActionHelpers, TabNavigationState } from 'expo-router/react-navigation';
+ import type { ImageSourcePropType, StyleProp, ViewStyle } from 'react-native';
+ import type TabView from 'react-native-bottom-tabs';
+ import type { AppleIcon, IconRenderingMode, TabRole } from 'react-native-bottom-tabs';
+diff --git a/lib/typescript/commonjs/src/views/NativeBottomTabView.d.ts b/lib/typescript/commonjs/src/views/NativeBottomTabView.d.ts
+index df1cb50317b95d97fcc047bb403bed7a4c194e48..438abed30dd80b876c65cf344a9fb670176d142c 100644
+--- a/lib/typescript/commonjs/src/views/NativeBottomTabView.d.ts
++++ b/lib/typescript/commonjs/src/views/NativeBottomTabView.d.ts
+@@ -1,4 +1,4 @@
+-import { type ParamListBase, type TabNavigationState } from '@react-navigation/native';
++import { type ParamListBase, type TabNavigationState } from 'expo-router/react-navigation';
+ import type { NativeBottomTabDescriptorMap, NativeBottomTabNavigationConfig, NativeBottomTabNavigationHelpers } from '../types';
+ type Props = NativeBottomTabNavigationConfig & {
+     state: TabNavigationState<ParamListBase>;
+diff --git a/lib/typescript/module/src/navigators/createNativeBottomTabNavigator.d.ts b/lib/typescript/module/src/navigators/createNativeBottomTabNavigator.d.ts
+index 5ef6162dd7db44aad647cc6ae60ec28177f24a46..ca2c8bda7d60b384230a7420ab9ec4d9232b3bba 100644
+--- a/lib/typescript/module/src/navigators/createNativeBottomTabNavigator.d.ts
++++ b/lib/typescript/module/src/navigators/createNativeBottomTabNavigator.d.ts
+@@ -1,4 +1,4 @@
+-import { type DefaultNavigatorOptions, type NavigatorTypeBagBase, type ParamListBase, type StaticConfig, type TabNavigationState, type TabRouterOptions, type TypedNavigator } from '@react-navigation/native';
++import { type DefaultNavigatorOptions, type NavigatorTypeBagBase, type ParamListBase, type StaticConfig, type TabNavigationState, type TabRouterOptions, type TypedNavigator } from 'expo-router/react-navigation';
+ import type { NativeBottomTabNavigationConfig, NativeBottomTabNavigationEventMap, NativeBottomTabNavigationOptions, NativeBottomTabNavigationProp } from '../types';
+ export type NativeBottomTabNavigatorProps = DefaultNavigatorOptions<ParamListBase, string | undefined, TabNavigationState<ParamListBase>, NativeBottomTabNavigationOptions, NativeBottomTabNavigationEventMap, NativeBottomTabNavigationProp<ParamListBase>> & TabRouterOptions & NativeBottomTabNavigationConfig;
+ declare function NativeBottomTabNavigator({ id, initialRouteName, backBehavior, UNSTABLE_routeNamesChangeBehavior, children, layout, screenListeners, screenOptions, screenLayout, UNSTABLE_router, tabBarActiveTintColor: customActiveTintColor, tabBarInactiveTintColor: customInactiveTintColor, layoutDirection, ...rest }: NativeBottomTabNavigatorProps): import("react/jsx-runtime").JSX.Element;
+diff --git a/lib/typescript/module/src/types.d.ts b/lib/typescript/module/src/types.d.ts
+index 714f053c9e090726faabc09abaf9fe05cc35bd4d..364a3991868548122283b186bcd06c9ccf3acc32 100644
+--- a/lib/typescript/module/src/types.d.ts
++++ b/lib/typescript/module/src/types.d.ts
+@@ -1,4 +1,4 @@
+-import type { Descriptor, NavigationHelpers, NavigationProp, ParamListBase, RouteProp, TabActionHelpers, TabNavigationState } from '@react-navigation/native';
++import type { Descriptor, NavigationHelpers, NavigationProp, ParamListBase, RouteProp, TabActionHelpers, TabNavigationState } from 'expo-router/react-navigation';
+ import type { ImageSourcePropType, StyleProp, ViewStyle } from 'react-native';
+ import type TabView from 'react-native-bottom-tabs';
+ import type { AppleIcon, IconRenderingMode, TabRole } from 'react-native-bottom-tabs';
+diff --git a/lib/typescript/module/src/views/NativeBottomTabView.d.ts b/lib/typescript/module/src/views/NativeBottomTabView.d.ts
+index df1cb50317b95d97fcc047bb403bed7a4c194e48..438abed30dd80b876c65cf344a9fb670176d142c 100644
+--- a/lib/typescript/module/src/views/NativeBottomTabView.d.ts
++++ b/lib/typescript/module/src/views/NativeBottomTabView.d.ts
+@@ -1,4 +1,4 @@
+-import { type ParamListBase, type TabNavigationState } from '@react-navigation/native';
++import { type ParamListBase, type TabNavigationState } from 'expo-router/react-navigation';
+ import type { NativeBottomTabDescriptorMap, NativeBottomTabNavigationConfig, NativeBottomTabNavigationHelpers } from '../types';
+ type Props = NativeBottomTabNavigationConfig & {
+     state: TabNavigationState<ParamListBase>;
+diff --git a/package.json b/package.json
+index 31602bc103718ce3b2858cca93e0655de45d602e..0d3070e4f5bb4a2a915c4a31df0ecf86650b52e2 100644
+--- a/package.json
++++ b/package.json
+@@ -56,7 +56,7 @@
+     "access": "public"
+   },
+   "devDependencies": {
+-    "@react-navigation/native": "^7.3.0",
++    "expo-router": "^57.0.6",
+     "@types/color": "^4.2.0",
+     "jest": "^29.7.0",
+     "react": "^19.1.0",
+@@ -69,7 +69,7 @@
+     "color": "^5.0.0"
+   },
+   "peerDependencies": {
+-    "@react-navigation/native": ">=7",
++    "expo-router": ">=57",
+     "react": "*",
+     "react-native": "*",
+     "react-native-bottom-tabs": "*"
+diff --git a/src/navigators/createNativeBottomTabNavigator.tsx b/src/navigators/createNativeBottomTabNavigator.tsx
+index 58f1647828094ca749ed3de9dae6bc924683ebf5..f2ba1e5780f8407622c766a8c27a8e09ee46a483 100644
+--- a/src/navigators/createNativeBottomTabNavigator.tsx
++++ b/src/navigators/createNativeBottomTabNavigator.tsx
+@@ -11,7 +11,7 @@ import {
+   type TypedNavigator,
+   useNavigationBuilder,
+   useTheme,
+-} from '@react-navigation/native';
++} from 'expo-router/react-navigation';
+ import Color from 'color';
+ 
+ import type {
+diff --git a/src/types.ts b/src/types.ts
+index eb1967cda23a67f686e015d2ddd6fb6efc907831..bce0a2c160dfbc80231b6e2afaafba381693ecb3 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -6,7 +6,7 @@ import type {
+   RouteProp,
+   TabActionHelpers,
+   TabNavigationState,
+-} from '@react-navigation/native';
++} from 'expo-router/react-navigation';
+ import type { ImageSourcePropType, StyleProp, ViewStyle } from 'react-native';
+ import type TabView from 'react-native-bottom-tabs';
+ import type {
+diff --git a/src/views/NativeBottomTabView.tsx b/src/views/NativeBottomTabView.tsx
+index 629bec4bd5d101e232657575ce6eaba4dae9c0c7..b7069f2662ef6e56bf6761be697f3d9b9afaa3b1 100644
+--- a/src/views/NativeBottomTabView.tsx
++++ b/src/views/NativeBottomTabView.tsx
+@@ -3,7 +3,7 @@ import {
+   type TabNavigationState,
+   type Route,
+   CommonActions,
+-} from '@react-navigation/native';
++} from 'expo-router/react-navigation';
+ import type {
+   NativeBottomTabDescriptorMap,
+   NativeBottomTabNavigationConfig,

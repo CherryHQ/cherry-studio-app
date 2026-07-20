@@ -29,12 +29,7 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { customProvider } from 'ai';
 
 import type { OpenRouterSearchConfig } from '../../plugins/built-in/webSearchPlugin';
-import type {
-  ExtensionConfigToIdResolutionMap,
-  ExtractExtensionIds,
-  ProviderVariant,
-  UnionToIntersection,
-} from '../types';
+import type { ExtractExtensionIds, ProviderVariant } from '../types';
 import { extensionRegistry } from './ExtensionRegistry';
 import type { ProviderExtensionConfig } from './ProviderExtension';
 import { ProviderExtension } from './ProviderExtension';
@@ -304,33 +299,6 @@ export const coreExtensions = [
  *
  */
 export type CoreProviderId = ExtractExtensionIds<(typeof coreExtensions)[number]>;
-
-type ExtensionConfigs = (typeof coreExtensions)[number]['config'];
-
-type ProviderIdsMap = UnionToIntersection<ExtensionConfigToIdResolutionMap<ExtensionConfigs>>;
-
-export const registeredProviderIds: ProviderIdsMap = (() => {
-  const map = {} as ProviderIdsMap;
-  coreExtensions.forEach((ext) => {
-    const config = ext.config as ProviderExtensionConfig<any, any, CoreProviderId>;
-    const name = config.name;
-    (map as Record<string, CoreProviderId>)[name] = name;
-
-    if (config.aliases) {
-      config.aliases.forEach((alias) => {
-        (map as Record<string, CoreProviderId>)[alias] = name;
-      });
-    }
-
-    if (config.variants) {
-      config.variants.forEach((variant) => {
-        (map as Record<string, CoreProviderId>)[`${name}-${variant.suffix}`] = name;
-      });
-    }
-  });
-
-  return map;
-})();
 
 // ==================== 初始化 Extension Registry ====================
 

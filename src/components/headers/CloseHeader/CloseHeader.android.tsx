@@ -19,14 +19,14 @@ function renderHeaderAction(action: CloseHeaderAction): ReactNode {
       accessibilityLabel={action.accessibilityLabel ?? action.label}
       accessibilityRole="button"
       className={cn(
-        'min-h-9 items-center justify-center rounded-full bg-accent px-4 active:opacity-80',
+        'min-h-9 items-center justify-center rounded-full px-2 active:opacity-60',
         action.disabled && 'opacity-50',
       )}
       disabled={action.disabled}
       key={action.key}
       onPress={action.onPress}
     >
-      <Text className="font-semibold text-base text-white">{action.label}</Text>
+      <Text className="font-semibold text-base text-foreground">{action.label}</Text>
     </Pressable>
   );
 }

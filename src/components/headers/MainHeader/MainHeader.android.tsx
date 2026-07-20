@@ -1,19 +1,16 @@
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import { Stack, useRouter } from 'expo-router';
 import { useThemeColor } from 'heroui-native/hooks';
-import { EllipsisIcon, MenuIcon, SquarePenIcon } from 'lucide-uniwind/png';
+import { ChevronLeftIcon, EllipsisIcon, SquarePenIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useDrawerActions } from '@/components/drawer';
-
 import { HeaderIconButton } from '../components/HeaderIconButton';
 import { useMainHeaderTopicActions } from './useMainHeaderTopicActions';
 
 export function MainHeader() {
   const { t } = useTranslation();
-  const { openDrawer } = useDrawerActions();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const separatorColor = useThemeColor('separator');
@@ -21,6 +18,9 @@ export function MainHeader() {
 
   const openNewTopic = useCallback(() => {
     router.setParams({ topicId: undefined });
+  }, [router]);
+  const goBack = useCallback(() => {
+    router.back();
   }, [router]);
   const menuActions = useMemo<MenuAction[]>(
     () => [
@@ -63,8 +63,8 @@ export function MainHeader() {
       >
         <View style={{ height: insets.top }} />
         <View className="h-11 flex-row items-center justify-between px-4">
-          <HeaderIconButton accessibilityLabel={t('navigation.openSidebar')} onPress={openDrawer}>
-            <MenuIcon className="size-6 text-foreground" strokeWidth={2} />
+          <HeaderIconButton accessibilityLabel={t('navigation.back')} onPress={goBack}>
+            <ChevronLeftIcon className="size-6 text-foreground" strokeWidth={2} />
           </HeaderIconButton>
           <View className="flex-row items-center">
             <HeaderIconButton accessibilityLabel={t('navigation.newChat')} onPress={openNewTopic}>

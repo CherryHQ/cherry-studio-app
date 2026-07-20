@@ -6,29 +6,29 @@ import {
   formatApiKeysInput,
   normalizeApiKeyEntries,
   parseApiKeysInput,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceApiKeys';
-import { parseCredentialsDraft } from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceAuthDraft';
+} from '../apiService/utils/providerApiServiceApiKeys';
+import { parseCredentialsDraft } from '../apiService/utils/providerApiServiceAuthDraft';
 import {
   getProviderApiServiceApiKeysDirtyState,
   getProviderApiServiceEndpointDirtyState,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceDirtyState';
+} from '../apiService/utils/providerApiServiceDirtyState';
 import {
   createDraftSnapshot,
   type DraftSnapshot,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceDraft';
+} from '../apiService/utils/providerApiServiceDraft';
 import {
   buildAddableEndpointOptions,
   canEditProviderEndpoint,
   getConfigurableEndpointTypesForProvider,
   isConfigurableEndpointType,
   mergeEndpointConfigs,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceEndpointRules';
+} from '../apiService/utils/providerApiServiceEndpointRules';
 import {
   buildProviderApiServiceApiKeysPayload,
   buildProviderApiServiceEndpointUpdates,
   buildProviderApiServiceSavePayload,
   ProviderApiServiceSaveError,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService/utils/providerApiServiceSave';
+} from '../apiService/utils/providerApiServiceSave';
 
 const DEFAULT_AUTH_DRAFT: DraftSnapshot['authDraft'] = {
   accessKeyId: '',
@@ -179,7 +179,6 @@ describe('provider API service form helpers', () => {
 
   it('saves endpoint configs without changing defaultChatEndpoint', () => {
     const payload = buildProviderApiServiceSavePayload({
-      apiKeys: [],
       authConfig: { type: 'api-key' },
       draft: createTestDraftSnapshot({
         baseUrlByEndpoint: {
@@ -233,7 +232,6 @@ describe('provider API service form helpers', () => {
 
   it('saves API key entries with enabled state', () => {
     const payload = buildProviderApiServiceSavePayload({
-      apiKeys: [{ id: 'key-a', isEnabled: true, key: 'sk-a' }],
       authConfig: { type: 'api-key' },
       draft: createTestDraftSnapshot({
         apiKeyEntries: [
@@ -330,7 +328,6 @@ describe('provider API service form helpers', () => {
   it('rejects invalid endpoint base URLs', () => {
     expect(() =>
       buildProviderApiServiceSavePayload({
-        apiKeys: [],
         authConfig: { type: 'api-key' },
         draft: createTestDraftSnapshot({
           baseUrlByEndpoint: {

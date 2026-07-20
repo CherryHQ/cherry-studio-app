@@ -2,10 +2,7 @@ import { cn } from 'heroui-native/utils';
 import { type PropsWithChildren } from 'react';
 import { type ViewProps } from 'react-native';
 import Animated from 'react-native-reanimated';
-import {
-  chatInputFadeIn,
-  chatInputLayoutTransition,
-} from '@/screens/ChatScreen/input/utils/chatInputMotion';
+import { chatInputFadeIn, chatInputLayoutTransition } from '../utils/chatInputMotion';
 
 type ChatInputAccessorySectionProps = PropsWithChildren<
   ViewProps & {

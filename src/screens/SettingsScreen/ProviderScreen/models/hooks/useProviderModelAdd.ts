@@ -160,7 +160,7 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
     }
 
     setIsSubmitting(true);
-    try {
+    const submit = async (): Promise<boolean> => {
       const existingModels = await services.model.list({ providerId });
       const { duplicateIds, inputs } = buildProviderModelAddInputs({
         existingModels,
@@ -183,6 +183,7 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
       }
 
       for (const input of inputs) {
+        // react-doctor-disable-next-line async-await-in-loop -- 每次创建的 orderKey 依赖前一条已插入的模型，并行会生成重复 key
         await services.model.createFromRegistry(input, providerConfig);
       }
       await refreshModelQueries();
@@ -192,15 +193,16 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
       });
       resetForm();
       return true;
-    } catch {
-      toast.show({
-        label: t('settings.provider.models.addFailed'),
-        variant: 'danger',
-      });
-      return false;
-    } finally {
-      setIsSubmitting(false);
-    }
+    };
+    return await submit()
+      .catch(() => {
+        toast.show({
+          label: t('settings.provider.models.addFailed'),
+          variant: 'danger',
+        });
+        return false;
+      })
+      .finally(() => setIsSubmitting(false));
   }, [
     formState,
     isEndpointTypesValid,

@@ -8,10 +8,9 @@ import { SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
+import { ProfileAvatarEditBadge, ProfileAvatarImage } from '@/components/ProfileAvatar';
 import { usePreference } from '@/data/hooks';
-import { SettingsAvatarEditBadge, SettingsAvatarImage } from './components/SettingsAvatar';
 
 const profileAvatarSize = 104;
 
@@ -193,14 +192,14 @@ function MenuAvatarTrigger({
       }}
       style={{ height: size, width: size }}
     >
-      <SettingsAvatarImage imageSource={imageSource} size={size} />
+      <ProfileAvatarImage imageSource={imageSource} size={size} />
       <MenuView actions={actions} onPressAction={onPressAction} style={styles.avatarMenuTrigger}>
         <View
           accessibilityLabel={accessibilityLabel}
           accessibilityRole="button"
           style={{ height: size, width: size }}
         >
-          <SettingsAvatarEditBadge icon="camera" size={size} />
+          <ProfileAvatarEditBadge icon="camera" size={size} />
         </View>
       </MenuView>
     </View>

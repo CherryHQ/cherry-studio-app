@@ -7,8 +7,6 @@
 
 import * as z from 'zod';
 
-import { OrderBatchRequestSchema, OrderRequestSchema } from '@/data/api/schemas/_endpointHelpers';
-
 import type { SearchParams } from './apiTypes';
 
 // ============================================================================
@@ -48,21 +46,10 @@ export const CreatePromptSchema = PromptSchema.pick({
 });
 export type CreatePromptDto = z.infer<typeof CreatePromptSchema>;
 
-export const UpdatePromptSchema = CreatePromptSchema.partial().refine(
+const UpdatePromptSchema = CreatePromptSchema.partial().refine(
   (dto) => dto.title !== undefined || dto.content !== undefined,
   { message: 'At least one field is required' },
 );
 export type UpdatePromptDto = z.infer<typeof UpdatePromptSchema>;
 
-export const ListPromptsQuerySchema = z.strictObject({
-  /** Free-text match against title OR content. */
-  search: z.string().trim().min(1).optional(),
-});
-export type ListPromptsQueryParams = z.input<typeof ListPromptsQuerySchema>;
 export type ListPromptsQuery = SearchParams;
-
-export const ReorderPromptSchema = OrderRequestSchema;
-export type ReorderPromptDto = z.infer<typeof ReorderPromptSchema>;
-
-export const ReorderPromptsBatchSchema = OrderBatchRequestSchema;
-export type ReorderPromptsBatchDto = z.infer<typeof ReorderPromptsBatchSchema>;

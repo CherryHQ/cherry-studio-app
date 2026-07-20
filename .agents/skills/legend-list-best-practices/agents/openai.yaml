@@ -1,0 +1,4 @@
+interface:
+  display_name: "Legend List Best Practices"
+  short_description: "Build, audit, and fix Legend List usage"
+  default_prompt: "Use $legend-list-best-practices to build, audit, or fix this LegendList implementation with correct identity, invalidation, recycling, measurement, and row rendering."

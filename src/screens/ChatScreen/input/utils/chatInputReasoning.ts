@@ -81,21 +81,6 @@ export function getChatInputReasoningEffortsForModel(
   return normalizeChatInputReasoningEfforts(supportedOptions);
 }
 
-export function getNextChatInputReasoningEffort(
-  value: ChatInputReasoningEffort,
-  availableEfforts: readonly ChatInputReasoningEffort[] = chatInputReasoningEffortCycleOrder,
-) {
-  const cycleOrder = normalizeChatInputReasoningEfforts(availableEfforts);
-  if (cycleOrder.length === 0) {
-    return value;
-  }
-
-  const currentIndex = cycleOrder.indexOf(value);
-  const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % cycleOrder.length;
-
-  return cycleOrder[nextIndex];
-}
-
 export function getFallbackChatInputReasoningEffort(
   availableEfforts: readonly ChatInputReasoningEffort[],
 ) {
@@ -111,56 +96,6 @@ export function isChatInputReasoningEffortAvailable(
   availableEfforts: readonly ChatInputReasoningEffort[],
 ) {
   return normalizeChatInputReasoningEfforts(availableEfforts).includes(reasoningEffort);
-}
-
-export function getChatInputReasoningEffortBarCount(value: ChatInputReasoningEffort) {
-  switch (value) {
-    case REASONING_EFFORT.MINIMAL:
-    case REASONING_EFFORT.LOW:
-      return 1;
-    case REASONING_EFFORT.MEDIUM:
-      return 2;
-    case REASONING_EFFORT.HIGH:
-    case CHAT_INPUT_DEFAULT_REASONING_EFFORT:
-      return 3;
-    case REASONING_EFFORT.MAX:
-      return 4;
-    case REASONING_EFFORT.AUTO:
-      return 5;
-    case REASONING_EFFORT.NONE:
-      return 0;
-  }
-
-  return 0;
-}
-
-export function getChatInputReasoningEffortMeterBarCount(
-  availableEfforts: readonly ChatInputReasoningEffort[],
-) {
-  const maxBarCount = normalizeChatInputReasoningEfforts(availableEfforts).reduce(
-    (currentMax, effort) => Math.max(currentMax, getChatInputReasoningEffortBarCount(effort)),
-    0,
-  );
-
-  return availableEfforts.length > 0 ? Math.max(1, maxBarCount) : 0;
-}
-
-export function isChatInputReasoningEffortOff(reasoningEffort: ChatInputReasoningEffort) {
-  return reasoningEffort === REASONING_EFFORT.NONE;
-}
-
-export function isChatInputReasoningEffortActive(reasoningEffort: ChatInputReasoningEffort) {
-  return (
-    reasoningEffort !== CHAT_INPUT_DEFAULT_REASONING_EFFORT &&
-    reasoningEffort !== REASONING_EFFORT.NONE
-  );
-}
-
-export function shouldShowChatInputReasoningEffortTag(
-  isReasoningEffortSelected: boolean,
-  reasoningEffort: ChatInputReasoningEffort,
-) {
-  return isReasoningEffortSelected && reasoningEffort !== REASONING_EFFORT.NONE;
 }
 
 function normalizeChatInputReasoningEfforts(values: readonly string[]): ChatInputReasoningEffort[] {

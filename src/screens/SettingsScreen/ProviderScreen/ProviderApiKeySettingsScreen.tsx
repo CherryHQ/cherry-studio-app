@@ -13,7 +13,7 @@ import {
   useProviderApiServiceDraft,
   useProviderApiServiceQueries,
   useProviderApiServiceSheetClose,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService';
+} from './apiService';
 
 export default function ProviderApiKeySettingsScreen() {
   const { providerId, providerName } = useLocalSearchParams<{
@@ -67,23 +67,24 @@ export default function ProviderApiKeySettingsScreen() {
       pendingApiKeyIdsRef.current = nextPendingIds;
       setPendingApiKeyIds(nextPendingIds);
 
+      let didSave = false;
       try {
         const normalizedApiKeys = normalizeApiKeyEntries(nextApiKeys);
         await replaceApiKeysMutation.mutateAsync(normalizedApiKeys);
         syncApiKeysDraft(providerId, normalizedApiKeys);
         setApiKeyErrors((current) => removeApiKeyError(current, apiKeyId));
-        return true;
+        didSave = true;
       } catch {
         setApiKeyErrors((current) => ({
           ...current,
           [apiKeyId]: t('settings.provider.apiService.saveFailed'),
         }));
-        return false;
-      } finally {
-        const nextPendingIds = new Set<string>();
-        pendingApiKeyIdsRef.current = nextPendingIds;
-        setPendingApiKeyIds(nextPendingIds);
       }
+
+      const clearedPendingIds = new Set<string>();
+      pendingApiKeyIdsRef.current = clearedPendingIds;
+      setPendingApiKeyIds(clearedPendingIds);
+      return didSave;
     },
     [providerId, replaceApiKeysMutation, syncApiKeysDraft, t],
   );

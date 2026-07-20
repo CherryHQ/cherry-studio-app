@@ -1,11 +1,13 @@
 import type { ImageSource } from 'expo-image';
 import { cn } from 'heroui-native/utils';
 import { ChevronRightIcon } from 'lucide-uniwind/png';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { Image } from '@/components/uniwind';
+import { Image } from '@/components/nativePrimitives';
 
 export type SettingsServiceRowProps = {
+  /** Custom leading visual; takes precedence over `imageSource` when provided. */
+  avatar?: ReactNode;
   id: string;
   imageSource?: ImageSource | number;
   isEnabled: boolean;
@@ -14,6 +16,7 @@ export type SettingsServiceRowProps = {
 };
 
 export const SettingsServiceRow = memo(function SettingsServiceRow({
+  avatar,
   id,
   imageSource,
   isEnabled,
@@ -29,15 +32,16 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
         onPress={onPress}
       >
         <View className="flex-1 flex-row items-center gap-2">
-          {imageSource ? (
-            <Image
-              cachePolicy="memory-disk"
-              className="size-5"
-              contentFit="contain"
-              recyclingKey={id}
-              source={imageSource}
-            />
-          ) : null}
+          {avatar ??
+            (imageSource ? (
+              <Image
+                cachePolicy="memory-disk"
+                className="size-5"
+                contentFit="contain"
+                recyclingKey={id}
+                source={imageSource}
+              />
+            ) : null)}
           <Text
             className={cn(
               'flex-1 text-base',

@@ -28,40 +28,30 @@ export function usePins(entityType: EntityType) {
   const isRefreshing = pinsQuery.isFetching && !pinsQuery.isLoading;
   const error = pinsQuery.error ?? createPinMutation.error ?? deletePinMutation.error;
 
-  const stateRef = useRef({
-    isLoading: pinsQuery.isLoading,
-    isMutating,
-    isRefreshing,
-    pins,
-  });
-  stateRef.current = {
-    isLoading: pinsQuery.isLoading,
-    isMutating,
-    isRefreshing,
-    pins,
-  };
-
   const togglePin = useCallback(
     async (entityId: string) => {
-      const state = stateRef.current;
-      if (state.isLoading || state.isRefreshing || state.isMutating || toggleInFlightRef.current) {
+      if (pinsQuery.isLoading || isRefreshing || isMutating || toggleInFlightRef.current) {
         return;
       }
 
       toggleInFlightRef.current = true;
-      try {
-        const existing = state.pins.find((pin) => pin.entityId === entityId);
-        if (existing) {
-          await deletePinMutation.mutateAsync(existing.id);
-          return;
-        }
-
-        await createPinMutation.mutateAsync({ entityId, entityType });
-      } finally {
+      const existing = pins.find((pin) => pin.entityId === entityId);
+      const mutation = existing
+        ? deletePinMutation.mutateAsync(existing.id)
+        : createPinMutation.mutateAsync({ entityId, entityType });
+      await mutation.finally(() => {
         toggleInFlightRef.current = false;
-      }
+      });
     },
-    [createPinMutation, deletePinMutation, entityType],
+    [
+      createPinMutation,
+      deletePinMutation,
+      entityType,
+      isMutating,
+      isRefreshing,
+      pins,
+      pinsQuery.isLoading,
+    ],
   );
 
   return {

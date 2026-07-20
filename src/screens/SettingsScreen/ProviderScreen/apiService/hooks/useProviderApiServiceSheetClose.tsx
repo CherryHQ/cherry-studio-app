@@ -58,9 +58,11 @@ export function useProviderApiServiceSheetClose({
       return;
     }
 
+    // react-doctor-disable-next-line no-impure-state-updater -- confirmDiscard 存放的是事件延续回调，不是 state updater
     confirmDiscard(closeWithoutPrompt);
   }, [closeWithoutPrompt, confirmDiscard, hasUnsavedChanges, isSaving]);
 
+  // react-doctor-disable-next-line effect-needs-cleanup -- addListener 的返回值就在下方 return unsubscribe 中清理
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (event) => {
       if (isConfirmedCloseRef.current) {
@@ -77,6 +79,7 @@ export function useProviderApiServiceSheetClose({
       }
 
       event.preventDefault();
+      // react-doctor-disable-next-line no-impure-state-updater -- confirmDiscard 存放的是事件延续回调，不是 state updater
       confirmDiscard(() => {
         isConfirmedCloseRef.current = true;
         navigation.dispatch(event.data.action as NavigationAction);

@@ -16,7 +16,7 @@ import type { TextInputEndEditingEvent } from 'react-native';
 import { Pressable, Text, View } from 'react-native';
 
 import type { ApiKeyEntry } from '@/data/types/provider';
-import { SettingsIconButton } from '@/screens/SettingsScreen/components/SettingsIconButton';
+import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import { providerApiServiceStyles } from '../utils/providerApiServiceStyles';
 
 const apiKeyPreviewMaxLength = 21;

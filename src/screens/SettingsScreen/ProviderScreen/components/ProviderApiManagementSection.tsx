@@ -3,10 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import type { Provider } from '@/data/types/provider';
-import {
-  ProviderApiServiceApiKeysField,
-  ProviderApiServiceEndpointField,
-} from '@/screens/SettingsScreen/ProviderScreen/apiService';
+import { ProviderApiServiceApiKeysField, ProviderApiServiceEndpointField } from '../apiService';
 import { CherryInOauth } from './CherryInOauth';
 
 const CHERRYIN_PROVIDER_ID = 'cherryin';

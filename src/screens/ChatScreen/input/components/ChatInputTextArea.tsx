@@ -2,18 +2,19 @@ import { TextArea } from 'heroui-native/text-area';
 import { cn } from 'heroui-native/utils';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet } from 'react-native';
-import {
-  chatInputMaxTextAreaHeight,
-  chatInputMinTextAreaHeight,
-} from '@/screens/ChatScreen/input/chatInputLayout';
+import { chatInputMaxTextAreaHeight, chatInputMinTextAreaHeight } from '../chatInputLayout';
 import {
   useChatInputActions,
   useChatInputMeta,
   useChatInputState,
-} from '@/screens/ChatScreen/input/context/ChatInputProvider';
+} from '../context/ChatInputProvider';
 
+// heroui-native's Input paints the border/outline `accent`-colored on focus
+// (`ios:focus:outline-accent` / `android:focus:border-accent`). `border-0` only
+// removes the resting border, not the focus outline, so the chat surface would
+// flash a green ring when focused. Override the focus states back to transparent.
 const transparentInputSurfaceClassName =
-  'border-0 bg-transparent shadow-none ios:shadow-none android:shadow-none';
+  'border-0 bg-transparent shadow-none ios:shadow-none android:shadow-none ios:focus:outline-transparent android:focus:border-transparent';
 
 export function ChatInputTextArea() {
   const { t } = useTranslation();
@@ -53,6 +54,5 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     borderWidth: 0,
     boxShadow: 'none',
-    elevation: 0,
   },
 });

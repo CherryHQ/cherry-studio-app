@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useCallback, useMemo, useState } from 'react';
 
 import type { Message } from '@/data/types/message';
 import { messageWindowPolicy } from './utils/messageWindowPolicy';
@@ -7,6 +7,11 @@ type MessageWindowSignature = {
   firstId: string | undefined;
   lastId: string | undefined;
   length: number;
+};
+
+type MessageRenderWindowState = {
+  signature: MessageWindowSignature;
+  visibleCount: number;
 };
 
 function getMessageWindowSignature(messages: readonly Message[]): MessageWindowSignature {
@@ -48,32 +53,31 @@ export function getVisibleCountForWindow(
 }
 
 export function useMessageRenderWindow(messages: readonly Message[]) {
-  const [visibleCount, setVisibleCount] = useState(() =>
-    Math.min(messageWindowPolicy.initialRenderCount, messages.length),
-  );
-  const signatureRef = useRef<MessageWindowSignature | null>(null);
   const signature = useMemo(() => getMessageWindowSignature(messages), [messages]);
-  const effectiveVisibleCount = getVisibleCountForWindow(
-    visibleCount,
-    signatureRef.current,
+  const [renderWindow, setRenderWindow] = useState<MessageRenderWindowState>(() => ({
     signature,
-  );
+    visibleCount: Math.min(messageWindowPolicy.initialRenderCount, messages.length),
+  }));
+  let effectiveVisibleCount = renderWindow.visibleCount;
 
-  useEffect(() => {
-    const previous = signatureRef.current;
-
-    signatureRef.current = signature;
-
-    setVisibleCount((currentVisibleCount) => {
-      return getVisibleCountForWindow(currentVisibleCount, previous, signature);
-    });
-  }, [signature]);
+  if (!areMessageWindowSignaturesEqual(renderWindow.signature, signature)) {
+    effectiveVisibleCount = getVisibleCountForWindow(
+      renderWindow.visibleCount,
+      renderWindow.signature,
+      signature,
+    );
+    setRenderWindow({ signature, visibleCount: effectiveVisibleCount });
+  }
 
   const revealMore = useCallback(() => {
     startTransition(() => {
-      setVisibleCount((currentVisibleCount) =>
-        Math.min(messages.length, currentVisibleCount + messageWindowPolicy.revealCount),
-      );
+      setRenderWindow((current) => ({
+        ...current,
+        visibleCount: Math.min(
+          messages.length,
+          current.visibleCount + messageWindowPolicy.revealCount,
+        ),
+      }));
     });
   }, [messages.length]);
 
@@ -88,4 +92,15 @@ export function useMessageRenderWindow(messages: readonly Message[]) {
     revealMore,
     visibleMessages,
   };
+}
+
+function areMessageWindowSignaturesEqual(
+  first: MessageWindowSignature,
+  second: MessageWindowSignature,
+): boolean {
+  return (
+    first.firstId === second.firstId &&
+    first.lastId === second.lastId &&
+    first.length === second.length
+  );
 }

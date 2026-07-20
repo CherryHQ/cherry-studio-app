@@ -1,5 +1,5 @@
 export const messageWindowPolicy = {
-  drawerPrefetchTopicCount: 12,
+  topicListPrefetchTopicCount: 12,
   initialFetchCount: 12,
   initialRenderCount: 4,
   olderFetchCount: 12,

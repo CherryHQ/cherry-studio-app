@@ -34,11 +34,18 @@ type OlderFetchOptions = {
 function flattenMessagePages(
   data: InfiniteData<BranchMessagesResponse, string | undefined> | undefined,
 ) {
-  return [...(data?.pages ?? [])]
-    .reverse()
-    .flatMap((page) => page.items)
-    .map((branchMessage) => branchMessage.message)
-    .filter((message) => message.role !== 'system');
+  const pages = data?.pages ?? [];
+  const messages: Message[] = [];
+
+  for (let pageIndex = pages.length - 1; pageIndex >= 0; pageIndex -= 1) {
+    for (const { message } of pages[pageIndex].items) {
+      if (message.role !== 'system') {
+        messages.push(message);
+      }
+    }
+  }
+
+  return messages;
 }
 
 export function useMessageHistoryWindow(
@@ -75,11 +82,7 @@ export function useMessageHistoryWindow(
       if (activeFetch) {
         if (fetchOptions.showLoading) {
           setIsLoadingOlder(true);
-          try {
-            await activeFetch;
-          } finally {
-            setIsLoadingOlder(false);
-          }
+          await activeFetch.finally(() => setIsLoadingOlder(false));
         }
         return;
       }
@@ -94,16 +97,14 @@ export function useMessageHistoryWindow(
         setIsLoadingOlder(true);
       }
 
-      try {
-        await fetchPromise;
-      } finally {
+      await fetchPromise.finally(() => {
         if (activeOlderFetchRef.current === fetchPromise) {
           activeOlderFetchRef.current = null;
         }
         if (fetchOptions.showLoading) {
           setIsLoadingOlder(false);
         }
-      }
+      });
     },
     [fetchNextPage, hasNextPage, isFetchingNextPage],
   );

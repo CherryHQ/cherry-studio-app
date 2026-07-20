@@ -18,7 +18,7 @@ export type ProviderConfig<
 };
 
 export type { AppProviderId, AppProviderSettingsMap, AppRuntimeConfig } from './merged';
-export { appProviderIds, getAllProviderIds, isRegisteredProviderId } from './merged';
+export { appProviderIds, isRegisteredProviderId } from './merged';
 
 /**
  * Model capability flags computed from model properties and assistant settings.

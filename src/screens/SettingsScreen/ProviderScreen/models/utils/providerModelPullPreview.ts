@@ -10,6 +10,25 @@ export type ProviderModelPullPreview = {
   missing: Model[];
 };
 
+export type ProviderModelPullSectionKey = keyof ProviderModelPullPreview;
+
+export type ProviderModelPullRowPosition = 'first' | 'middle' | 'last' | 'only';
+
+export type ProviderModelPullListItem =
+  | {
+      isFirstSection: boolean;
+      key: string;
+      section: ProviderModelPullSectionKey;
+      type: 'section';
+    }
+  | {
+      key: string;
+      model: Model;
+      position: ProviderModelPullRowPosition;
+      section: ProviderModelPullSectionKey;
+      type: 'model';
+    };
+
 export type ProviderModelPullSelection = {
   addedIds: Set<UniqueModelId>;
   missingIds: Set<UniqueModelId>;
@@ -59,16 +78,96 @@ export function createDefaultProviderModelPullSelection(
   };
 }
 
+export function filterProviderModelPullPreview(
+  preview: ProviderModelPullPreview,
+  searchText: string,
+): ProviderModelPullPreview {
+  const keywords = searchText
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .map((keyword) => keyword.trim())
+    .filter(Boolean);
+
+  if (keywords.length === 0) {
+    return preview;
+  }
+
+  const matchesSearch = (model: Model) => {
+    const haystack = [model.modelId, model.name].join(' ').toLocaleLowerCase();
+    return keywords.every((keyword) => haystack.includes(keyword));
+  };
+
+  return {
+    added: preview.added.filter(matchesSearch),
+    missing: preview.missing.filter(matchesSearch),
+  };
+}
+
+export function buildProviderModelPullListItems(
+  preview: ProviderModelPullPreview,
+  expandedSections: readonly ProviderModelPullSectionKey[],
+  visibleSections: readonly ProviderModelPullSectionKey[],
+): ProviderModelPullListItem[] {
+  const expandedSectionSet = new Set(expandedSections);
+  const visibleSectionSet = new Set(visibleSections);
+  const items: ProviderModelPullListItem[] = [];
+  const sections: { models: Model[]; section: ProviderModelPullSectionKey }[] = [
+    { models: preview.added, section: 'added' },
+    { models: preview.missing, section: 'missing' },
+  ];
+  let renderedSectionCount = 0;
+
+  for (const { models, section } of sections) {
+    if (!visibleSectionSet.has(section)) {
+      continue;
+    }
+
+    items.push({
+      isFirstSection: renderedSectionCount === 0,
+      key: `section:${section}`,
+      section,
+      type: 'section',
+    });
+    renderedSectionCount += 1;
+
+    if (!expandedSectionSet.has(section)) {
+      continue;
+    }
+
+    for (const [index, model] of models.entries()) {
+      items.push({
+        key: `model:${section}:${model.id}`,
+        model,
+        position: getModelRowPosition(index, models.length),
+        section,
+        type: 'model',
+      });
+    }
+  }
+
+  return items;
+}
+
+function getModelRowPosition(index: number, count: number): ProviderModelPullRowPosition {
+  if (count === 1) {
+    return 'only';
+  }
+  if (index === 0) {
+    return 'first';
+  }
+  return index === count - 1 ? 'last' : 'middle';
+}
+
 export function buildProviderModelPullApplyPayload(
   preview: ProviderModelPullPreview,
   selection: ProviderModelPullSelection,
 ): ProviderModelPullApplyPayload | null {
-  const toAdd = preview.added
-    .filter((model) => selection.addedIds.has(model.id))
-    .map(modelToCreateModelInput);
-  const toRemove = preview.missing
-    .filter((model) => selection.missingIds.has(model.id))
-    .map((model) => model.id);
+  const toAdd = preview.added.flatMap((model) =>
+    selection.addedIds.has(model.id) ? [modelToCreateModelInput(model)] : [],
+  );
+  const toRemove = preview.missing.flatMap((model) =>
+    selection.missingIds.has(model.id) ? [model.id] : [],
+  );
 
   if (toAdd.length === 0 && toRemove.length === 0) {
     return null;

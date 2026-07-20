@@ -26,19 +26,25 @@ export default function WebSearchSettingsScreen() {
   );
   const apiWebSearchProviderItems = useMemo<SettingsServiceRowProps[]>(
     () =>
-      MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS.filter((provider) => provider.type === 'api').map(
-        (provider) => ({
-          id: provider.id,
-          imageSource: resolveWebSearchProviderIcon(provider.id)?.[iconTheme],
-          isEnabled: true,
-          name: provider.name,
-          onPress: () =>
-            router.push({
-              pathname: './websearch/[providerId]',
-              params: { providerId: provider.id },
-            }),
-        }),
-      ),
+      MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS.flatMap((provider) => {
+        if (provider.type !== 'api') {
+          return [];
+        }
+
+        return [
+          {
+            id: provider.id,
+            imageSource: resolveWebSearchProviderIcon(provider.id)?.[iconTheme],
+            isEnabled: true,
+            name: provider.name,
+            onPress: () =>
+              router.push({
+                pathname: './websearch/[providerId]',
+                params: { providerId: provider.id },
+              }),
+          },
+        ];
+      }),
     [iconTheme, router],
   );
 

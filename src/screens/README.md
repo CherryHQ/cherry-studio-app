@@ -40,13 +40,30 @@ SettingsScreen/
 - Screen internals should use relative imports for their own submodules.
 - Cross-screen reusable modules should come from `src/components`.
 - Do not import screen-private modules from `src/components`.
+- Do not import one screen's private module from another screen. Move the shared behavior to a
+  neutral `src/components`, `src/hooks`, or `src/utils` module when the second owner appears.
+
+## Ownership Rules
+
+- Count independent screen or feature owners, not the number of importing files. Reuse within one
+  screen tree remains screen-private.
+- Co-locate providers, context, hooks, pure helpers, and tests with the UI behavior they coordinate.
+- Add an `index.ts` only when routes, a parent screen area, or sibling modules need a deliberate
+  public surface. Internal leaf imports remain relative.
+- Tests may deep-import the unit they directly test. Consumer tests use the same public boundary as
+  production callers.
 
 ## Current Ownership
 
 - `ChatScreen/`: chat topic screen, new-topic screen, message content, message item rows, and
   workspace behavior.
+- `AssistantScreen/`: assistant list and assistant editing flows.
 - `SettingsScreen/`: settings home, about/data/model/provider/web-search settings screens, and
   settings-specific UI controls.
+- `TopicListScreen/`: message-tab topic pagination, topic actions, and navigation.
+- `GlobalSearchScreen/`: app-level native search entry and screen shell.
+- `HomeScreen/`: home-tab content and profile entry point.
 
-Reusable modules that remain in `src/components` include app shell modules (`drawer`, `headers`,
-`navigation`) and independent reusable flows such as `modelPicker`.
+Reusable modules that remain in `src/components` include app shell modules (`headers`, `navigation`),
+shared flows such as `modelPicker`, shared UI behavior such as `confirmDialog`, and native dependency
+adapters such as `nativePrimitives`.

@@ -1,4 +1,11 @@
-import { type Ref, useCallback, useImperativeHandle, useMemo, useState } from 'react';
+import {
+  type ReactNode,
+  type Ref,
+  useCallback,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { SelectionBottomSheet, SelectionSheetSearchField } from '@/components/selectionSheet';
@@ -8,13 +15,19 @@ import { buildModelPickerListItems } from '../utils/modelPickerListItems';
 import { ModelPickerSheetContent } from './ModelPickerSheetContent';
 
 const defaultModelPickerHeaderHeight = 64;
-const initialModelPickerListItemCount = 12;
+const initialModelPickerListItemCount = 24;
 const modelPickerListItemBatchSize = 24;
 // Detent indices for the underlying `SelectionBottomSheet`: 0 closed, 1 open.
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
 
 type ModelPickerBottomSheetProps = {
+  /**
+   * Pinned below the model list at the bottom of the sheet (e.g. the
+   * reasoning-effort slider). The slot owns its divider/padding so an empty
+   * render leaves no stray chrome behind.
+   */
+  footer?: ReactNode;
   isOpen?: boolean;
   onClose?: () => void;
   onSelect: (item: ModelPickerModelItem) => void;
@@ -28,6 +41,7 @@ export type ModelPickerBottomSheetHandle = {
 };
 
 export function ModelPickerBottomSheet({
+  footer,
   isOpen,
   onClose,
   onSelect,
@@ -43,6 +57,7 @@ export function ModelPickerBottomSheet({
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [searchText, setSearchText] = useState('');
   const [headerHeight, setHeaderHeight] = useState(0);
+  const [footerHeight, setFooterHeight] = useState(0);
   const [visibleListItemCount, setVisibleListItemCount] = useState(initialModelPickerListItemCount);
 
   if (isOpen !== prevIsOpen) {
@@ -55,9 +70,36 @@ export function ModelPickerBottomSheet({
     () => groups.reduce((total, group) => total + 1 + group.items.length, 0),
     [groups],
   );
+  // Row index (including group-header rows) of the currently selected model in
+  // the fully expanded list, so the sheet can scroll to it on open.
+  const selectedModelListIndex = useMemo(() => {
+    if (!selectedModelId) {
+      return -1;
+    }
+
+    let index = 0;
+    for (const group of groups) {
+      index += 1; // group header occupies a row
+      for (const model of group.items) {
+        if (model.modelId === selectedModelId) {
+          return index;
+        }
+        index += 1;
+      }
+    }
+
+    return -1;
+  }, [groups, selectedModelId]);
+  // Ensure the selected model is materialized even when it sits past the lazy
+  // window, plus a batch of trailing rows so the selected model can settle at
+  // an upper-third position instead of being pinned to the very bottom.
+  const listItemLimit =
+    selectedModelListIndex >= 0
+      ? Math.max(visibleListItemCount, selectedModelListIndex + 1 + modelPickerListItemBatchSize)
+      : visibleListItemCount;
   const listItems = useMemo(
-    () => buildModelPickerListItems(groups, visibleListItemCount),
-    [groups, visibleListItemCount],
+    () => buildModelPickerListItems(groups, listItemLimit),
+    [groups, listItemLimit],
   );
   const hasMoreListItems = listItems.length < totalListItemCount;
 
@@ -80,6 +122,10 @@ export function ModelPickerBottomSheet({
   const handleHeaderLayout = useCallback((event: LayoutChangeEvent) => {
     const nextHeight = Math.round(event.nativeEvent.layout.height);
     setHeaderHeight((currentHeight) => (currentHeight === nextHeight ? currentHeight : nextHeight));
+  }, []);
+  const handleFooterLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextHeight = Math.round(event.nativeEvent.layout.height);
+    setFooterHeight((currentHeight) => (currentHeight === nextHeight ? currentHeight : nextHeight));
   }, []);
   const handleListEndReached = useCallback(() => {
     setVisibleListItemCount((currentCount) => {
@@ -111,8 +157,11 @@ export function ModelPickerBottomSheet({
       }}
     >
       {({ sheetHeight }) => {
+        // footerHeight only grows from onLayout; drop it when the slot is empty so
+        // a removed footer stops reserving its old band.
+        const effectiveFooterHeight = footer ? footerHeight : 0;
         const modelListHeight = Math.max(
-          sheetHeight - (headerHeight || defaultModelPickerHeaderHeight),
+          sheetHeight - (headerHeight || defaultModelPickerHeaderHeight) - effectiveFooterHeight,
           120,
         );
 
@@ -125,6 +174,7 @@ export function ModelPickerBottomSheet({
               <ModelPickerSheetContent
                 emptyText={t('settings.provider.models.search.empty')}
                 isLoading={isLoading}
+                isOpen={sheetIndex === OPEN_INDEX}
                 isSearching={isSearching}
                 hasMoreItems={hasMoreListItems}
                 listItems={listItems}
@@ -135,6 +185,7 @@ export function ModelPickerBottomSheet({
                 onSelect={handleSelect}
               />
             </View>
+            {footer ? <View onLayout={handleFooterLayout}>{footer}</View> : null}
           </>
         );
       }}

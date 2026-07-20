@@ -9,23 +9,22 @@ import {
   useState,
 } from 'react';
 import { type TextInput } from 'react-native';
-import { useChatInputPhotoPicker } from '@/screens/ChatScreen/input/hooks/useChatInputPhotoPicker';
+import { useChatInputPhotoPicker } from '../hooks/useChatInputPhotoPicker';
 import {
   type ChatInputAction,
   type ChatInputActionId,
   getChatInputAction,
   toggleChatInputAction,
-} from '@/screens/ChatScreen/input/utils/chatInputActions';
+} from '../utils/chatInputActions';
 import {
   appendChatInputAttachments,
   type ChatInputAttachmentDraft,
   removeChatInputAttachment,
-} from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+} from '../utils/chatInputAttachments';
 import {
   CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   type ChatInputReasoningEffort,
-  shouldShowChatInputReasoningEffortTag,
-} from '@/screens/ChatScreen/input/utils/chatInputReasoning';
+} from '../utils/chatInputReasoning';
 
 type ChatInputStateContextValue = {
   attachments: readonly ChatInputAttachmentDraft[];
@@ -81,17 +80,11 @@ export function ChatInputProvider({ children }: PropsWithChildren) {
   }, []);
   const media = useChatInputPhotoPicker(isActionSheetOpen, addAttachments);
   const selectedTool = useMemo(() => getChatInputAction(selectedToolId), [selectedToolId]);
-  const shouldExpandForReasoningEffort = shouldShowChatInputReasoningEffortTag(
-    isReasoningEffortSelected,
-    reasoningEffort,
-  );
   // Collapse to a centered pill only when nothing requires the full surface.
+  // Reasoning effort no longer expands the surface: its control lives in the
+  // model picker sheet and the toolbar shows no reasoning tag.
   const isComposerExpanded =
-    isInputFocused ||
-    draft.trim() !== '' ||
-    attachments.length > 0 ||
-    Boolean(selectedTool) ||
-    shouldExpandForReasoningEffort;
+    isInputFocused || draft.trim() !== '' || attachments.length > 0 || Boolean(selectedTool);
 
   const openActionSheet = useCallback(() => {
     // Don't blur/dismiss the keyboard: let iOS keep the input as first responder

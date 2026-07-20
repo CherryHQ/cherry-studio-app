@@ -117,6 +117,7 @@ export class PluginManager<TParams = unknown, TResult = unknown> {
     for (const plugin of this.plugins) {
       const hook = plugin.configureContext;
       if (hook) {
+        // react-doctor-disable-next-line async-await-in-loop -- 插件按注册顺序串行配置同一 context，后序钩子依赖前序修改
         await hook(context);
       }
     }
@@ -131,21 +132,19 @@ export class PluginManager<TParams = unknown, TResult = unknown> {
     result?: TResult,
     error?: Error,
   ): Promise<void> {
-    const promises = this.plugins
-      .map((plugin) => {
-        const hook = plugin[hookName];
-        if (!hook) return null;
+    const promises = this.plugins.flatMap((plugin) => {
+      const hook = plugin[hookName];
+      if (!hook) return [];
 
-        if (hookName === 'onError' && error !== undefined) {
-          return (hook as NonNullable<typeof plugin.onError>)(error, context);
-        } else if (hookName === 'onRequestEnd' && result !== undefined) {
-          return (hook as NonNullable<typeof plugin.onRequestEnd>)(context, result);
-        } else if (hookName === 'onRequestStart') {
-          return (hook as NonNullable<typeof plugin.onRequestStart>)(context);
-        }
-        return null;
-      })
-      .filter(Boolean);
+      if (hookName === 'onError' && error !== undefined) {
+        return [(hook as NonNullable<typeof plugin.onError>)(error, context)];
+      } else if (hookName === 'onRequestEnd' && result !== undefined) {
+        return [(hook as NonNullable<typeof plugin.onRequestEnd>)(context, result)];
+      } else if (hookName === 'onRequestStart') {
+        return [(hook as NonNullable<typeof plugin.onRequestStart>)(context)];
+      }
+      return [];
+    });
 
     // 使用 Promise.all 而不是 allSettled，让插件错误能够抛出
     await Promise.all(promises);
@@ -155,9 +154,9 @@ export class PluginManager<TParams = unknown, TResult = unknown> {
    * 收集所有流转换器（返回数组，AI SDK 原生支持）
    */
   collectStreamTransforms(params: TParams, context: AiRequestContext<TParams, TResult>) {
-    return this.plugins
-      .filter((plugin) => plugin.transformStream)
-      .map((plugin) => plugin.transformStream?.(params, context));
+    return this.plugins.flatMap((plugin) =>
+      plugin.transformStream ? [plugin.transformStream(params, context)] : [],
+    );
   }
 
   /**

@@ -199,9 +199,9 @@ export class TagService {
 
     const existingIds = new Set(existing.map((row: { tagId: string }) => row.tagId));
     const desiredIds = new Set(desiredTagIds);
-    const toRemove = existing
-      .filter((row: { tagId: string }) => !desiredIds.has(row.tagId))
-      .map((row: { tagId: string }) => row.tagId);
+    const toRemove = existing.flatMap((row: { tagId: string }) =>
+      desiredIds.has(row.tagId) ? [] : [row.tagId],
+    );
     const toAdd = desiredTagIds.filter((tagId) => !existingIds.has(tagId));
 
     if (toRemove.length > 0) {

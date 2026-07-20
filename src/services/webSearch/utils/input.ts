@@ -3,7 +3,7 @@ import { isValidUrl } from './url';
 export const MAX_WEB_SEARCH_INPUTS = 20;
 
 export function normalizeWebSearchKeywords(keywords: string[]): string[] {
-  const normalized = keywords.map((keyword) => keyword.trim()).filter(Boolean);
+  const normalized = keywords.flatMap((keyword) => keyword.trim() || []);
 
   if (normalized.length === 0) {
     throw new Error('At least one web search keyword is required');
@@ -17,7 +17,7 @@ export function normalizeWebSearchKeywords(keywords: string[]): string[] {
 }
 
 export function normalizeWebSearchUrls(urls: string[]): string[] {
-  const normalized = urls.map((url) => url.trim()).filter(Boolean);
+  const normalized = urls.flatMap((url) => url.trim() || []);
 
   if (normalized.length === 0) {
     throw new Error('At least one URL is required');

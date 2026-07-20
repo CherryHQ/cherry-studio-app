@@ -1,7 +1,7 @@
 import { useThemeColor } from 'heroui-native/hooks';
 import { useColorScheme } from 'react-native';
-import { StreamdownText } from 'react-native-streamdown';
 import type { MarkdownStyle } from 'react-native-enriched-markdown';
+import { StreamdownText } from 'react-native-streamdown';
 
 import { useMarkdownLinkPress } from '../hooks/useMarkdownLinkPress';
 

@@ -139,26 +139,6 @@ export interface MentionReference extends BaseReference {
 
 export type ContentReference = CitationReference | MentionReference;
 
-export function isCitation(ref: ContentReference): ref is CitationReference {
-  return ref.category === ReferenceCategory.CITATION;
-}
-
-export function isMention(ref: ContentReference): ref is MentionReference {
-  return ref.category === ReferenceCategory.MENTION;
-}
-
-export function isWebCitation(ref: ContentReference): ref is WebCitationReference {
-  return isCitation(ref) && ref.citationType === CitationType.WEB;
-}
-
-export function isKnowledgeCitation(ref: ContentReference): ref is KnowledgeCitationReference {
-  return isCitation(ref) && ref.citationType === CitationType.KNOWLEDGE;
-}
-
-export function isMemoryCitation(ref: ContentReference): ref is MemoryCitationReference {
-  return isCitation(ref) && ref.citationType === CitationType.MEMORY;
-}
-
 export interface SerializedErrorData {
   cause?: unknown;
   code?: string;
@@ -185,7 +165,7 @@ export type MessageRole = z.infer<typeof MessageRoleSchema>;
 export const MessageStatusSchema = z.enum(['pending', 'success', 'error', 'paused']);
 export type MessageStatus = z.infer<typeof MessageStatusSchema>;
 
-export const MessageSchema = z.strictObject({
+const MessageSchema = z.strictObject({
   createdAt: z.iso.datetime(),
   data: MessageDataSchema,
   id: MessageIdSchema,

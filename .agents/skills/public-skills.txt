@@ -2,12 +2,20 @@
 # One skill name per line.
 agent-device
 building-native-ui
+diagnose
+diagnose-fix-loop
 eas-update-insights
 expo-cicd-workflows
 expo-deployment
 expo-dev-client
 expo-tailwind-setup
+improve-react
+legend-list-best-practices
 native-data-fetching
+react-coding-style
 react-devtools
+react-native-best-practices
+simplify
 uniwind
 upgrading-expo
+vercel-react-native-skills

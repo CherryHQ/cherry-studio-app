@@ -13,6 +13,18 @@
       "skillPath": "plugins/expo/skills/building-native-ui/SKILL.md",
       "computedHash": "342df93f481a0dba919f372d6c7b40d2b4bf5b51dd24363aea2e5d0bae27a6fa"
     },
+    "diagnose": {
+      "source": "LegendApp/legend-skills",
+      "sourceType": "github",
+      "skillPath": "diagnose/SKILL.md",
+      "computedHash": "bb6f2f6537dd9ac1ae9d987088a36671782d1fa864f4a4d9b1212eb351760f40"
+    },
+    "diagnose-fix-loop": {
+      "source": "LegendApp/legend-skills",
+      "sourceType": "github",
+      "skillPath": "diagnose-fix-loop/SKILL.md",
+      "computedHash": "c7854d200bcc853aee1843f8b05f02181596f3ceb0df398c45745de7fed3a73b"
+    },
     "eas-update-insights": {
       "source": "expo/skills",
       "sourceType": "github",
@@ -43,11 +55,29 @@
       "skillPath": "plugins/expo/skills/expo-tailwind-setup/SKILL.md",
       "computedHash": "d39e806942fe880347f161056729b588a3cb0f1796270eebf52633fe11cfdce1"
     },
+    "improve-react": {
+      "source": "aidenybai/react-doctor",
+      "sourceType": "github",
+      "skillPath": "skills/improve-react/SKILL.md",
+      "computedHash": "0f763a1d7752989f45494837a46a8cea70b0048d141fc696b6846f829bef5407"
+    },
+    "legend-list-best-practices": {
+      "source": "LegendApp/legend-skills",
+      "sourceType": "github",
+      "skillPath": "legend-list-best-practices/SKILL.md",
+      "computedHash": "61b4dec19494fcae599b7aedfa1553323a46f446536feeb9b2a584a298d45cef"
+    },
     "native-data-fetching": {
       "source": "expo/skills",
       "sourceType": "github",
       "skillPath": "plugins/expo/skills/native-data-fetching/SKILL.md",
       "computedHash": "3cd0ba91f359f9f84cd40f36f356287994a0e952520fac6e03ef7952d0397879"
+    },
+    "react-coding-style": {
+      "source": "LegendApp/legend-skills",
+      "sourceType": "github",
+      "skillPath": "react-coding-style/SKILL.md",
+      "computedHash": "0b5629a19a73cad9d0ee56dd77acd41031ab7e2275df056b2288a6f1583d6e68"
     },
     "react-devtools": {
       "source": "callstackincubator/agent-device",
@@ -55,11 +85,29 @@
       "skillPath": "skills/react-devtools/SKILL.md",
       "computedHash": "370da1d568b14a8b21b6bd0415d554ae73d8ef1749fbc72045afdcb4f3234dce"
     },
+    "react-native-best-practices": {
+      "source": "callstackincubator/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-native-best-practices/SKILL.md",
+      "computedHash": "68a961f23c65fd9b4a85738afdf5ba32982cf66935bceb9031c97651e85fe7f9"
+    },
+    "simplify": {
+      "source": "LegendApp/legend-skills",
+      "sourceType": "github",
+      "skillPath": "simplify/SKILL.md",
+      "computedHash": "bfbefa03b417407210f6fd35a008ec8b4edf1f34bd7e656e54a93d586c45c59e"
+    },
     "upgrading-expo": {
       "source": "expo/skills",
       "sourceType": "github",
       "skillPath": "plugins/expo/skills/upgrading-expo/SKILL.md",
       "computedHash": "2c65483a035341da654b92b130fd5b45690b139b624613dc94c414bae1067f6c"
+    },
+    "vercel-react-native-skills": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-native-skills/SKILL.md",
+      "computedHash": "41d24eafa7c3d82e270439808f7cfbc4d51aeb2d14f2809a2267c16275784d06"
     }
   }
 }

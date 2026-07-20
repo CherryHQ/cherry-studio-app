@@ -1,14 +1,16 @@
 import '../styles/global.css';
 
 import { BottomSheetProvider } from '@swmansion/react-native-bottom-sheet';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useThemeColor } from 'heroui-native/hooks';
 import { HeroUINativeProvider } from 'heroui-native/provider';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
 
-import { DrawerRoot } from '@/components/drawer';
 import { NavigationThemeProvider } from '@/components/navigation';
+import { isIOS, isLiquidGlassAvailable } from '@/config/constants';
 import { DataProvider, InitialDataGate, QueryProvider } from '@/data';
 import { bootstrapAppRuntime } from '@/data/bootstrap/appRuntime';
 
@@ -28,7 +30,7 @@ export default function RootLayout() {
               <InitialDataGate>
                 <NavigationThemeProvider>
                   <BottomSheetProvider>
-                    <DrawerRoot />
+                    <RootStack />
                   </BottomSheetProvider>
                 </NavigationThemeProvider>
               </InitialDataGate>
@@ -37,5 +39,32 @@ export default function RootLayout() {
         </HeroUINativeProvider>
       </KeyboardProvider>
     </RootGestureView>
+  );
+}
+
+function RootStack() {
+  const [backgroundColor, foregroundColor] = useThemeColor(['background', 'foreground']);
+
+  return (
+    <Stack
+      screenOptions={{
+        headerShadowVisible: isIOS ? undefined : false,
+        headerStyle: isIOS ? undefined : { backgroundColor },
+        headerTransparent: isLiquidGlassAvailable,
+        headerTintColor: foregroundColor,
+      }}
+    >
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="topics"
+        options={{
+          contentStyle: { backgroundColor: 'transparent' },
+          headerBackButtonDisplayMode: 'minimal',
+          headerStyle: isIOS ? undefined : { backgroundColor: 'transparent' },
+          headerTransparent: isLiquidGlassAvailable,
+        }}
+      />
+    </Stack>
   );
 }

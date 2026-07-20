@@ -1,13 +1,11 @@
 import { Stack, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useDrawerActions } from '@/components/drawer';
 
 import { useMainHeaderTopicActions } from './useMainHeaderTopicActions';
 
 export function MainHeader() {
   const { t } = useTranslation();
-  const { openDrawer } = useDrawerActions();
   const router = useRouter();
   const topicActions = useMainHeaderTopicActions();
 
@@ -19,19 +17,11 @@ export function MainHeader() {
     <>
       <Stack.Screen
         options={{
-          headerBackVisible: false,
           headerTitle: '',
           title: '',
           headerTransparent: true,
         }}
       />
-      <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button
-          accessibilityLabel={t('navigation.openSidebar')}
-          icon="sidebar.left"
-          onPress={openDrawer}
-        />
-      </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button
           accessibilityLabel={t('navigation.newChat')}

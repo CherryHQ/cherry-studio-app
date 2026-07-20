@@ -1,12 +1,8 @@
 import { XIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text } from 'react-native';
-
-import {
-  ChatInputAccessoryItem,
-  ChatInputAccessorySection,
-} from '@/screens/ChatScreen/input/components/ChatInputAccessory';
-import type { ChatInputAction } from '@/screens/ChatScreen/input/utils/chatInputActions';
+import type { ChatInputAction } from '../utils/chatInputActions';
+import { ChatInputAccessoryItem, ChatInputAccessorySection } from './ChatInputAccessory';
 
 type ChatInputToolbarProps = {
   onToolClear: () => void;

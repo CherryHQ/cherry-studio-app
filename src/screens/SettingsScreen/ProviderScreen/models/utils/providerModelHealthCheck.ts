@@ -47,6 +47,7 @@ export async function checkProviderModelsHealth(
     }
 
     try {
+      // react-doctor-disable-next-line async-await-in-loop -- 刻意逐个检查以便逐条回调更新 UI，并避免并发打爆 provider
       const { latency } = await options.checkModel({
         modelId: model.id,
         timeout,

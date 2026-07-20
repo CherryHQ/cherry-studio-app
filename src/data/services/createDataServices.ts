@@ -1,4 +1,5 @@
 import { AiService } from '@/ai/AiService';
+import { cacheService } from '@/data/cache';
 import type { DbService } from '@/data/db/DbService';
 import { WebSearchService } from '@/services/webSearch/WebSearchService';
 
@@ -18,7 +19,7 @@ export type DataServices = ReturnType<typeof createDataServices>;
 export function createDataServices(dbService: DbService) {
   const preference = new PreferenceService(dbService);
   const pin = new PinService(dbService);
-  const provider = new ProviderService(dbService, pin);
+  const provider = new ProviderService(dbService, pin, cacheService);
   const model = new ModelService(dbService, preference, pin);
   const tag = new TagService(dbService);
   const group = new GroupService(dbService);

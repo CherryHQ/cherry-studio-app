@@ -328,6 +328,7 @@ export class ModelService {
       const result: UserModelRow[] = [];
       for (const providerId of new Set(values.map((value) => value.providerId))) {
         const scopedValues = values.filter((value) => value.providerId === providerId);
+        // react-doctor-disable-next-line async-await-in-loop -- 同一写事务内本质串行，orderKey 生成依赖事务内已写入的边界 key
         const inserted = (await insertManyWithOrderKey(tx, userModelTable, scopedValues, {
           pkColumn: userModelTable.id,
           scope: eq(userModelTable.providerId, providerId),
@@ -372,6 +373,7 @@ export class ModelService {
       const existingRows: Pick<UserModelRow, 'id' | 'presetModelId'>[] = [];
       for (const ids of chunks(requestedRemoveIds, SQLITE_BATCH_SIZE)) {
         existingRows.push(
+          // react-doctor-disable-next-line async-await-in-loop -- 分块规避 SQLite 变量上限，同一写事务内本质串行
           ...(await tx
             .select({ id: userModelTable.id, presetModelId: userModelTable.presetModelId })
             .from(userModelTable)
@@ -382,14 +384,17 @@ export class ModelService {
       }
 
       const protectedIds = new Set(
-        existingRows
-          .filter((row) => !row.presetModelId || row.id === defaultModelId)
-          .map((row) => row.id),
+        existingRows.flatMap((row) =>
+          !row.presetModelId || row.id === defaultModelId ? [row.id] : [],
+        ),
       );
-      const removableIds = existingRows.map((row) => row.id).filter((id) => !protectedIds.has(id));
+      const removableIds = existingRows.flatMap((row) =>
+        protectedIds.has(row.id) ? [] : [row.id],
+      );
       const actuallyRemovedIds: string[] = [];
 
       for (const ids of chunks(removableIds, SQLITE_BATCH_SIZE)) {
+        // react-doctor-disable-next-line async-await-in-loop -- 分块删除规避 SQLite 变量上限，同一写事务内本质串行
         const deletedRows = await tx
           .delete(userModelTable)
           .where(and(eq(userModelTable.providerId, providerId), inArray(userModelTable.id, ids)))
@@ -405,6 +410,7 @@ export class ModelService {
       const insertedRows: UserModelRow[] = [];
       for (const valueChunk of chunks(insertableValues, getInsertBatchSize(insertableValues))) {
         insertedRows.push(
+          // react-doctor-disable-next-line async-await-in-loop -- 后一分块的 orderKey 依赖前一分块已插入的边界 key，必须串行
           ...((await insertManyWithOrderKey(tx, userModelTable, valueChunk, {
             pkColumn: userModelTable.id,
             scope: eq(userModelTable.providerId, providerId),

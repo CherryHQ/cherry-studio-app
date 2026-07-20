@@ -2,7 +2,7 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
-
+import { useConfirmDialog } from '@/components/confirmDialog';
 import { BackHeader } from '@/components/headers';
 import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/data/preference';
 import { isMobileSupportedWebSearchProviderId } from '@/data/presets/webSearchProviders';
@@ -11,8 +11,7 @@ import {
   useWebSearchApiKeySettings,
   type WebSearchApiKeyEntry,
   WebSearchApiServiceApiKeyForm,
-} from '@/screens/SettingsScreen/WebSearchScreen/apiService';
-import { useSettingsConfirmDialog } from '../hooks/useSettingsConfirmDialog';
+} from './apiService';
 import {
   getWebSearchProviderDetailSections,
   getWebSearchProviderPreset,
@@ -44,7 +43,7 @@ export default function WebSearchApiKeySettingsScreen() {
   const [apiKeyErrors, setApiKeyErrors] = useState<Record<string, string>>({});
   const [pendingApiKeyIds, setPendingApiKeyIds] = useState<ReadonlySet<string>>(() => new Set());
   const pendingApiKeyIdsRef = useRef<ReadonlySet<string>>(new Set());
-  const { confirmDialog, requestConfirm } = useSettingsConfirmDialog();
+  const { confirmDialog, requestConfirm } = useConfirmDialog();
 
   const closeSheet = useCallback(() => {
     router.back();
@@ -66,21 +65,22 @@ export default function WebSearchApiKeySettingsScreen() {
       pendingApiKeyIdsRef.current = nextPendingIds;
       setPendingApiKeyIds(nextPendingIds);
 
+      let didSave = false;
       try {
         await saveApiKeys(nextEntries);
         setApiKeyErrors((current) => removeApiKeyError(current, apiKeyId));
-        return true;
+        didSave = true;
       } catch {
         setApiKeyErrors((current) => ({
           ...current,
           [apiKeyId]: t('settings.websearch.provider.saveFailed'),
         }));
-        return false;
-      } finally {
-        const nextPendingIds = new Set<string>();
-        pendingApiKeyIdsRef.current = nextPendingIds;
-        setPendingApiKeyIds(nextPendingIds);
       }
+
+      const clearedPendingIds = new Set<string>();
+      pendingApiKeyIdsRef.current = clearedPendingIds;
+      setPendingApiKeyIds(clearedPendingIds);
+      return didSave;
     },
     [saveApiKeys, t],
   );
@@ -119,7 +119,7 @@ export default function WebSearchApiKeySettingsScreen() {
       }
 
       const otherKeys = normalizeWebSearchApiKeys(
-        entries.filter((item) => item.id !== id).map((item) => item.key),
+        entries.flatMap((item) => (item.id === id ? [] : [item.key])),
       );
 
       if (otherKeys.includes(key.trim())) {

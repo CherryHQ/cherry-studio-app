@@ -5,7 +5,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import type { Model, UniqueModelId } from '@/data/types/model';
-import { SettingsDialogActionButton } from '@/screens/SettingsScreen/components/SettingsDialogActionButton';
+import { SettingsDialogActionButton } from '../../../components/SettingsDialogActionButton';
 import type { ProviderModelCheckApiKeyOption } from '../hooks/useProviderModelCheck';
 
 const selectContentWidth = 256;

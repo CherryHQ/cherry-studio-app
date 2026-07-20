@@ -1,12 +1,5 @@
 import * as SplashScreen from 'expo-splash-screen';
-import {
-  createContext,
-  type PropsWithChildren,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { createContext, type PropsWithChildren, use, useEffect, useMemo, useState } from 'react';
 
 import { runPostReadyTasks } from '@/data/bootstrap/appRuntime';
 import { DbService } from '@/data/db/DbService';
@@ -59,36 +52,13 @@ export function DataProvider({ bootstrap, children, createRuntime }: DataProvide
   useEffect(() => {
     let disposed = false;
 
-    async function initData() {
-      try {
-        await dbService.init();
-        await services.preference.init();
-
-        if (disposed) {
-          return;
-        }
-
-        await bootstrap(services);
-
-        if (!disposed) {
-          setState({ services, status: 'ready' });
-          // Off the startup critical path: fire once the gate opens.
-          void runPostReadyTasks(services);
-        }
-      } catch (error) {
-        if (!disposed) {
-          setState({ error: toError(error), status: 'error' });
-        }
-      } finally {
-        // The native splash is held up by `preventAutoHideAsync` in the root
-        // layout; reveal the app once init settles either way. Imperative (not
-        // an effect) because the error path throws during `InitialDataGate`
-        // render and would never run a commit-phase effect.
-        void SplashScreen.hideAsync().catch(() => {});
-      }
-    }
-
-    void initData();
+    void initData({
+      bootstrap,
+      dbService,
+      isDisposed: () => disposed,
+      services,
+      setState,
+    });
 
     return () => {
       disposed = true;
@@ -100,8 +70,50 @@ export function DataProvider({ bootstrap, children, createRuntime }: DataProvide
   return <DataContext.Provider value={state}>{children}</DataContext.Provider>;
 }
 
+// 模块级函数：try/finally 会让 React Compiler 对组件 bail out，故初始化流程放在组件体外。
+async function initData({
+  bootstrap,
+  dbService,
+  isDisposed,
+  services,
+  setState,
+}: {
+  bootstrap: DataProviderProps['bootstrap'];
+  dbService: DataRuntime['dbService'];
+  isDisposed: () => boolean;
+  services: DataServices;
+  setState: (state: DataState) => void;
+}) {
+  try {
+    await dbService.init();
+    await services.preference.init();
+
+    if (isDisposed()) {
+      return;
+    }
+
+    await bootstrap(services);
+
+    if (!isDisposed()) {
+      setState({ services, status: 'ready' });
+      // Off the startup critical path: fire once the gate opens.
+      void runPostReadyTasks(services);
+    }
+  } catch (error) {
+    if (!isDisposed()) {
+      setState({ error: toError(error), status: 'error' });
+    }
+  } finally {
+    // The native splash is held up by `preventAutoHideAsync` in the root
+    // layout; reveal the app once init settles either way. Imperative (not
+    // an effect) because the error path throws during `InitialDataGate`
+    // render and would never run a commit-phase effect.
+    void SplashScreen.hideAsync().catch(() => {});
+  }
+}
+
 export function useDataState() {
-  const state = useContext(DataContext);
+  const state = use(DataContext);
 
   if (!state) {
     throw new Error('useDataState must be used within DataProvider');

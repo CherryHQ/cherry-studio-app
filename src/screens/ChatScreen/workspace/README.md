@@ -6,7 +6,7 @@ render cover, and floating input placement.
 ## Public Interface
 
 - `ChatWorkspace` is exported from `index.ts` for normal topic screens.
-- `ChatWorkspaceFrame`, `FloatingChatInput`, and `useFloatingChatInputLayout` are exported for the
+- `ChatWorkspaceFrame`, `ChatComposer`, and `useFloatingChatInputLayout` are exported for the
   new-topic workspace, which shares the same input placement without a message list.
 - Internal workspace pieces should be imported through relative paths inside this module.
 

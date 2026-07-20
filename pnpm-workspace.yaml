@@ -1,6 +1,24 @@
 packages:
   - packages/*
 
+minimumReleaseAge: 1440
+trustPolicy: no-downgrade
+
+# 既有 lockfile 版本，早年发布缺 provenance 触发误报；升级后可移除对应条目
+trustPolicyExclude:
+  - eslint-import-resolver-typescript@3.10.1
+  - semver@6.3.1
+  - tinyexec@1.2.2
+  - ua-parser-js@0.7.41||1.0.41
+
+packageExtensions:
+  '@bottom-tabs/react-navigation@1.4.0':
+    peerDependencies:
+      expo-router: '>=57'
+    peerDependenciesMeta:
+      '@react-navigation/native':
+        optional: true
+
 overrides:
   react-native-svg: 15.15.4
 
@@ -11,6 +29,7 @@ allowBuilds:
   unrs-resolver: true
   core-js: true
   '@j178/prek': true
+  '@shopify/react-native-skia': true
 
 patchedDependencies:
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
@@ -18,6 +37,7 @@ patchedDependencies:
   metro-runtime@0.84.4: patches/metro-runtime@0.84.4.patch
   uniwind@1.6.5: patches/uniwind@1.6.5.patch
   react-native-reanimated@4.5.0: patches/react-native-reanimated@4.5.0.patch
+  '@bottom-tabs/react-navigation@1.4.0': patches/@bottom-tabs__react-navigation@1.4.0.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'
@@ -45,3 +65,5 @@ minimumReleaseAgeExclude:
   - expo-splash-screen@57.0.1
   - heroui-native@1.0.5
   - react-native-enriched-markdown@0.7.3
+  - expo-camera@57.0.3
+  - '@legendapp/list@3.3.3'

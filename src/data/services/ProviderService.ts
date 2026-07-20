@@ -2,6 +2,7 @@ import { inferAdapterFamily } from '@cherrystudio/provider-registry';
 import { asc, eq, inArray } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
+import type { CacheService } from '@/data/cache';
 import type { DbService } from '@/data/db/DbService';
 import { userModelTable } from '@/data/db/schemas/userModel';
 import type { InsertUserProviderRow, UserProviderRow } from '@/data/db/schemas/userProvider';
@@ -220,11 +221,10 @@ function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
 }
 
 export class ProviderService {
-  private readonly lastUsedApiKeyIds = new Map<string, string>();
-
   constructor(
     private readonly dbService: DbService,
     private readonly pinService: PinService,
+    private readonly cacheService: CacheService,
   ) {}
 
   private get db() {
@@ -315,19 +315,21 @@ export class ProviderService {
       return enabledKeys[0].key;
     }
 
-    // Round-robin using in-memory runtime state. Mobile keeps this scoped to
-    // the active data service graph instead of the desktop CacheService.
-    const lastUsedKeyId = this.lastUsedApiKeyIds.get(providerId);
+    // Round-robin via the CacheService memory tier, same key as the desktop
+    // main-process ProviderService. The schema default is '' so a fresh
+    // provider falls into the falsy branch.
+    const cacheKey = `settings.provider.${providerId}.last_used_key_id` as const;
+    const lastUsedKeyId = this.cacheService.get(cacheKey);
 
     if (!lastUsedKeyId) {
-      this.lastUsedApiKeyIds.set(providerId, enabledKeys[0].id);
+      this.cacheService.set(cacheKey, enabledKeys[0].id);
       return enabledKeys[0].key;
     }
 
     const currentIndex = enabledKeys.findIndex((key) => key.id === lastUsedKeyId);
     const nextIndex = (currentIndex + 1) % enabledKeys.length;
     const nextKey = enabledKeys[nextIndex];
-    this.lastUsedApiKeyIds.set(providerId, nextKey.id);
+    this.cacheService.set(cacheKey, nextKey.id);
 
     return nextKey.key;
   }
@@ -492,7 +494,7 @@ export class ProviderService {
       }
     });
 
-    this.lastUsedApiKeyIds.delete(providerId);
+    this.cacheService.delete(`settings.provider.${providerId}.last_used_key_id` as const);
   }
 
   async batchUpsert(inputs: CreateProviderInput[]): Promise<void> {
@@ -513,7 +515,9 @@ export class ProviderService {
         .from(userProviderTable)
         .where(inArray(userProviderTable.providerId, providerIds));
       const existing = new Set(existingRows.map((row) => row.providerId));
-      const newRows = inputs.filter((input) => !existing.has(input.providerId)).map(toInsert);
+      const newRows = inputs.flatMap((input) =>
+        existing.has(input.providerId) ? [] : [toInsert(input)],
+      );
 
       if (newRows.length > 0) {
         await insertManyWithOrderKey(tx, userProviderTable, newRows, {
@@ -528,6 +532,7 @@ export class ProviderService {
           continue;
         }
 
+        // react-doctor-disable-next-line async-await-in-loop -- 同一写事务内本质串行，并行化无收益
         await tx
           .update(userProviderTable)
           .set({

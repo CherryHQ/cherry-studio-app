@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { SettingsIconButton } from '@/screens/SettingsScreen/components/SettingsIconButton';
+import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import type { WebSearchApiKeyEntry } from '../utils/webSearchApiServiceApiKeys';
 
 export function WebSearchApiServiceApiKeysField({
@@ -75,26 +75,33 @@ export function WebSearchApiServiceApiKeysField({
   );
 }
 
+type ApiKeysCommitInputProps = {
+  accessibilityLabel: string;
+  onCommit: (value: string) => void;
+  placeholder: string;
+  secureTextEntry: boolean;
+  value: string;
+};
+
 function ApiKeysCommitInput({
   accessibilityLabel,
   onCommit,
   placeholder,
   secureTextEntry,
   value,
-}: {
-  accessibilityLabel: string;
-  onCommit: (value: string) => void;
-  placeholder: string;
-  secureTextEntry: boolean;
-  value: string;
-}) {
+}: ApiKeysCommitInputProps) {
   const [draftValue, setDraftValue] = useState(value);
+  const [sourceValue, setSourceValue] = useState(value);
   const draftValueRef = useRef(draftValue);
   const onCommitRef = useRef(onCommit);
   const valueRef = useRef(value);
 
-  useEffect(() => {
+  if (sourceValue !== value) {
+    setSourceValue(value);
     setDraftValue(value);
+  }
+
+  useEffect(() => {
     draftValueRef.current = value;
     valueRef.current = value;
   }, [value]);
@@ -103,10 +110,11 @@ function ApiKeysCommitInput({
     onCommitRef.current = onCommit;
   }, [onCommit]);
 
-  const commitValue = useCallback((nextValue = draftValueRef.current) => {
-    if (nextValue !== valueRef.current) {
-      onCommitRef.current(nextValue);
-      valueRef.current = nextValue;
+  const commitValue = useCallback((nextValue?: string) => {
+    const resolvedValue = nextValue ?? draftValueRef.current;
+    if (resolvedValue !== valueRef.current) {
+      onCommitRef.current(resolvedValue);
+      valueRef.current = resolvedValue;
     }
   }, []);
 

@@ -5,7 +5,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { SettingsDialogActionButton } from '@/screens/SettingsScreen/components/SettingsDialogActionButton';
+import { SettingsDialogActionButton } from '../../../components/SettingsDialogActionButton';
 
 const selectContentWidth = 256;
 

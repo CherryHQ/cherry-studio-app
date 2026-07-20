@@ -1,16 +1,29 @@
-import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import { useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
-import { BotIcon, ChevronRightIcon, GlobeIcon, PlusIcon, StoreIcon } from 'lucide-uniwind/png';
-import { useCallback, useMemo, useState } from 'react';
+
+import {
+  BotIcon,
+  ChevronRightIcon,
+  GlobeIcon,
+  PlusIcon,
+  StoreIcon,
+  Trash2Icon,
+} from 'lucide-uniwind/png';
+import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, Pressable, ScrollView, Text, View } from 'react-native';
-import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import ReanimatedSwipeable, {
+  type SwipeableMethods,
+} from 'react-native-gesture-handler/ReanimatedSwipeable';
+import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
+import { useConfirmDialog } from '@/components/confirmDialog';
+import { type HeaderToolbarAction, TabRootHeader } from '@/components/headers';
+
 import type { Assistant } from '@/data/types/assistant';
 import { useAssistantMutations, useAssistantsApi } from '@/hooks/chat';
-import { useSettingsConfirmDialog } from '@/screens/SettingsScreen/hooks/useSettingsConfirmDialog';
 
-const assistantCardMinHeight = 92;
+// Width of the revealed swipe-to-delete panel; keep in sync with `w-20` below.
+const deleteActionWidth = 80;
 
 export default function AssistantListScreen() {
   const { t } = useTranslation();
@@ -18,17 +31,7 @@ export default function AssistantListScreen() {
   const { toast } = useToast();
   const { assistants, isLoading } = useAssistantsApi();
   const { deleteAssistant } = useAssistantMutations();
-  const { confirmDialog, requestConfirm } = useSettingsConfirmDialog();
-  // MenuView (iOS) hosts each row in a SwiftUI `Host matchContents` that sizes to
-  // the child's intrinsic width; without an explicit width the row's flex layout
-  // collapses and the Pressable's hit area shrinks to its padding, so taps miss
-  // (see DrawerTopicRow). Measure the list width and hand it to each row.
-  const [rowWidth, setRowWidth] = useState(0);
-  const handleListLayout = useCallback((event: LayoutChangeEvent) => {
-    const nextWidth = event.nativeEvent.layout.width;
-
-    setRowWidth((current) => (current === nextWidth ? current : nextWidth));
-  }, []);
+  const { confirmDialog, requestConfirm } = useConfirmDialog();
 
   const openCreateAssistant = useCallback(() => {
     router.push('/assistants/edit');
@@ -86,21 +89,20 @@ export default function AssistantListScreen() {
 
   return (
     <>
-      <BackHeader rightActions={rightActions} title={t('assistant.list.title')} />
+      <TabRootHeader rightActions={rightActions} title={t('assistant.list.title')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
-        contentContainerClassName="gap-3 px-4 py-5"
+        contentContainerClassName="gap-3 px-2"
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
         {assistants.length > 0 ? (
-          <View className="gap-3" onLayout={handleListLayout}>
+          <View className="gap-3">
             {assistants.map((assistant) => (
               <AssistantListRow
                 key={assistant.id}
                 assistant={assistant}
-                width={rowWidth}
                 onDelete={requestDeleteAssistant}
                 onEdit={openEditAssistant}
               />
@@ -119,51 +121,41 @@ type AssistantListRowProps = {
   assistant: Assistant;
   onDelete: (assistant: Assistant) => void;
   onEdit: (assistantId: string) => void;
-  width: number;
 };
 
-function AssistantListRow({ assistant, onDelete, onEdit, width }: AssistantListRowProps) {
+function AssistantListRow({ assistant, onDelete, onEdit }: AssistantListRowProps) {
   const { t } = useTranslation();
   const descriptionText = assistant.description || assistant.prompt;
-  const actions = useMemo<MenuAction[]>(
-    () => [
-      { id: 'edit', image: 'pencil', title: t('common.edit') },
-      {
-        attributes: { destructive: true },
-        id: 'delete',
-        image: 'trash',
-        title: t('common.remove'),
-      },
-    ],
-    [t],
-  );
-  const handlePressAction = useCallback(
-    (event: NativeActionEvent) => {
-      const actionId = event.nativeEvent.event;
+  const swipeableRef = useRef<SwipeableMethods>(null);
 
-      if (actionId === 'edit') {
-        onEdit(assistant.id);
-        return;
-      }
-
-      if (actionId === 'delete') {
-        onDelete(assistant);
-      }
-    },
-    [assistant, onDelete, onEdit],
+  const handleDeletePress = useCallback(() => {
+    swipeableRef.current?.close();
+    onDelete(assistant);
+  }, [assistant, onDelete]);
+  const renderRightActions = useCallback(
+    (_progress: SharedValue<number>, drag: SharedValue<number>) => (
+      <DeleteAction drag={drag} label={t('common.remove')} onPress={handleDeletePress} />
+    ),
+    [handleDeletePress, t],
   );
 
   return (
-    <MenuView actions={actions} onPressAction={handlePressAction} shouldOpenOnLongPress>
+    <ReanimatedSwipeable
+      containerStyle={styles.swipeable}
+      friction={2}
+      overshootRight={false}
+      ref={swipeableRef}
+      renderRightActions={renderRightActions}
+      rightThreshold={40}
+    >
       <Pressable
         accessibilityLabel={assistant.name}
         accessibilityRole="button"
-        className="flex-row items-center gap-3 rounded-2xl border-continuous bg-settings-grouped-surface px-4 py-3 active:opacity-70"
+        className="flex-row items-center gap-3 bg-settings-grouped-surface px-4 py-3 active:opacity-70"
         onPress={() => onEdit(assistant.id)}
-        style={{ minHeight: assistantCardMinHeight, width: width || undefined }}
       >
-        <View className="size-12 items-center justify-center rounded-full bg-surface-secondary">
-          <Text className="text-2xl leading-7">{assistant.emoji || '🌟'}</Text>
+        <View className="size-9 items-center justify-center rounded-full bg-surface-secondary">
+          <Text className="text-xl leading-6">{assistant.emoji || '🌟'}</Text>
         </View>
         <View className="min-w-0 flex-1 gap-0.5">
           <Text className="font-semibold text-base text-foreground" numberOfLines={1}>
@@ -174,16 +166,44 @@ function AssistantListRow({ assistant, onDelete, onEdit, width }: AssistantListR
               {descriptionText}
             </Text>
           ) : null}
-          <View className="flex-row flex-wrap gap-1.5 pt-1">
-            <AssistantBadge label={getAssistantSubtitle(assistant, t('assistant.model.none'))} />
-            {assistant.settings.enableWebSearch ? (
+          {assistant.settings.enableWebSearch ? (
+            <View className="flex-row flex-wrap gap-1.5 pt-1">
               <AssistantBadge icon="web" label={t('assistant.list.webBadge')} />
-            ) : null}
-          </View>
+            </View>
+          ) : null}
         </View>
         <ChevronRightIcon className="size-5 text-default-foreground" strokeWidth={2.25} />
       </Pressable>
-    </MenuView>
+    </ReanimatedSwipeable>
+  );
+}
+
+type DeleteActionProps = {
+  drag: SharedValue<number>;
+  label: string;
+  onPress: () => void;
+};
+
+function DeleteAction({ drag, label, onPress }: DeleteActionProps) {
+  // Follow the drag so the button slides in with the finger: at rest `drag` is 0
+  // and the panel is pushed one width off-screen; fully open `drag` is
+  // `-deleteActionWidth`, landing it flush against the row (per the RNGH docs).
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: drag.value + deleteActionWidth }],
+  }));
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Pressable
+        accessibilityLabel={label}
+        accessibilityRole="button"
+        className="h-full w-20 items-center justify-center gap-1 bg-danger active:opacity-80"
+        onPress={onPress}
+      >
+        <Trash2Icon className="size-6 text-danger-foreground" strokeWidth={2} />
+        <Text className="font-medium text-danger-foreground text-xs">{label}</Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -240,6 +260,11 @@ function AssistantEmptyState({
   );
 }
 
-function getAssistantSubtitle(assistant: Assistant, fallback: string) {
-  return assistant.modelName ?? assistant.modelId ?? fallback;
-}
+const styles = StyleSheet.create({
+  // Clip the revealed delete action to the row's rounded card so its right
+  // corners match the surface instead of spilling past it.
+  swipeable: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+});

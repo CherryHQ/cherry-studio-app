@@ -36,12 +36,11 @@ export const MODEL_PICKER_TAGS = [
 ] as const;
 
 export const MODEL_PICKER_FILTER_TAGS = [
-  MODEL_CAPABILITY.IMAGE_RECOGNITION,
-  MODEL_CAPABILITY.AUDIO_RECOGNITION,
-  MODEL_CAPABILITY.EMBEDDING,
   MODEL_CAPABILITY.REASONING,
+  MODEL_CAPABILITY.IMAGE_RECOGNITION,
   MODEL_CAPABILITY.FUNCTION_CALL,
   MODEL_CAPABILITY.WEB_SEARCH,
+  MODEL_CAPABILITY.EMBEDDING,
   MODEL_CAPABILITY.RERANK,
   'free',
 ] as const;
@@ -67,10 +66,6 @@ export function getPinnedModelIds(pins: readonly Pin[]): UniqueModelId[] {
   return pins.flatMap((pin) =>
     pin.entityType === 'model' && isUniqueModelId(pin.entityId) ? [pin.entityId] : [],
   );
-}
-
-export function getModelPickerModelLabel(modelId: string | null, models: readonly Model[]) {
-  return models.find((model) => model.id === modelId)?.name;
 }
 
 export function getModelPickerModelItem(
@@ -119,13 +114,26 @@ export function getAvailableModelPickerFilterTags({
 }): ModelPickerTag[] {
   const selectableModels = getSelectableModelPickerModels(models, providers);
 
-  if (selectableModels.length === 0) {
+  return getAvailableModelPickerFilterTagsForModels(selectableModels);
+}
+
+export function getAvailableModelPickerFilterTagsForModels(
+  models: readonly Model[],
+): ModelPickerTag[] {
+  if (models.length === 0) {
     return [];
   }
 
   return MODEL_PICKER_FILTER_TAGS.filter((tag) =>
-    selectableModels.some((model) => matchesModelPickerTag(model, tag)),
+    models.some((model) => matchesModelPickerTag(model, tag)),
   );
+}
+
+export function filterModelsByModelPickerTags(
+  models: readonly Model[],
+  selectedTags: readonly ModelPickerTag[],
+): Model[] {
+  return models.filter((model) => matchesModelPickerSelectedTags(model, selectedTags));
 }
 
 export function buildModelPickerGroups({
@@ -289,7 +297,7 @@ function isChatCapableModel(model: Model): boolean {
 
 function getSelectableModelPickerModels(models: readonly Model[], providers: readonly Provider[]) {
   const enabledProviderIds = new Set(
-    providers.filter((provider) => provider.isEnabled).map((provider) => provider.id),
+    providers.flatMap((provider) => (provider.isEnabled ? [provider.id] : [])),
   );
 
   return models.filter(

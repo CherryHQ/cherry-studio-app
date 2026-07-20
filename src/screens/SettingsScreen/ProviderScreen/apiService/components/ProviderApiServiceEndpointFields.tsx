@@ -8,7 +8,7 @@ import type { TextInputEndEditingEvent } from 'react-native';
 import { Text, View } from 'react-native';
 
 import type { EndpointType } from '@/data/types/model';
-import { SettingsIconButton } from '@/screens/SettingsScreen/components/SettingsIconButton';
+import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import {
   getEndpointLabel,
   isConfigurableEndpointType,

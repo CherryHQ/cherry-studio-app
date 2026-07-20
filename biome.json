@@ -65,6 +65,18 @@
       }
     }
   },
+  "overrides": [
+    {
+      "includes": ["src/data/cache/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "enabled": true,
     "actions": {
