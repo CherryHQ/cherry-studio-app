@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SlotText } from '@/components/SlotText';
 
-import { useChatInputActions, useChatInputState } from '../context/ChatInputProvider';
 import { EffortSlider, thinkingAccentColor } from '../effortSlider';
 import { useChatInputReasoningEfforts } from '../hooks/useChatInputReasoningEfforts';
 import {
@@ -22,33 +21,18 @@ import {
  * when the model has no reasoning stops — leaves no stray chrome.
  */
 export function ChatInputReasoningSection({
-  reasoningEffort: reasoningEffortProp,
-  onSelectReasoningEffort: onSelectReasoningEffortProp,
+  reasoningEffort,
+  onSelectReasoningEffort,
 }: {
-  reasoningEffort?: string;
-  onSelectReasoningEffort?: (value: ChatInputReasoningEffort) => void;
-} = {}) {
+  reasoningEffort: string;
+  onSelectReasoningEffort: (value: ChatInputReasoningEffort) => void;
+}) {
   const { t } = useTranslation();
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  // Accept values as props so the component works inside ModalBottomSheet
-  // portals (Android) where ChatInputProvider context is not available.
-  // When props are provided, context hooks are only used as fallback.
-  let stateCtx: { reasoningEffort: string } | null = null;
-  let actionsCtx: { selectReasoningEffort: (value: ChatInputReasoningEffort) => void } | null =
-    null;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    stateCtx = useChatInputState();
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    actionsCtx = useChatInputActions();
-  } catch {
-    // Context not available (e.g. rendered inside ModalBottomSheet portal).
-    // Props from the parent are sufficient.
-  }
-  const reasoningEffort = reasoningEffortProp ?? stateCtx?.reasoningEffort ?? '';
-  const selectReasoningEffort =
-    onSelectReasoningEffortProp ?? actionsCtx?.selectReasoningEffort ?? (() => {});
+  // The component is rendered inside a ModalBottomSheet portal (Android)
+  // where ChatInputProvider context is unavailable, so all values must come
+  // from props — no fallback to context hooks.
   const reasoningEfforts = useChatInputReasoningEfforts();
 
   // Keep reasoningEfforts' own order (off → default → minimal → … → max → auto),
@@ -65,9 +49,9 @@ export function ChatInputReasoningSection({
 
   const handleChange = useCallback(
     (value: string) => {
-      selectReasoningEffort(value as ChatInputReasoningEffort);
+      onSelectReasoningEffort(value as ChatInputReasoningEffort);
     },
-    [selectReasoningEffort],
+    [onSelectReasoningEffort],
   );
 
   if (options.length === 0) {
