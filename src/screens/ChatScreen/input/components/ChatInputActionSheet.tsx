@@ -2,7 +2,7 @@ import { ModalBottomSheet } from '@swmansion/react-native-bottom-sheet';
 import type { CameraCapturedPicture } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
 import { GlassView } from 'expo-glass-effect';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -54,16 +54,16 @@ export function ChatInputActionSheet() {
   const { clearSelectedPhotos } = actions;
   const [isPhotoGridOpen, setIsPhotoGridOpen] = useState(false);
   const [isInlineCameraOpen, setIsInlineCameraOpen] = useState(false);
+  // `sheetIndex` mostly mirrors `isActionSheetOpen`, except while the user has
+  // dragged past `OPEN_INDEX` up to the full-height detent — adjusted during
+  // render (not an effect) per
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes.
   const [sheetIndex, setSheetIndex] = useState(CLOSED_INDEX);
-
-  // Sync the sheet index when the parent opens/closes it. On mount,
-  // `isActionSheetOpen` is already `true` (parent renders this component
-  // conditionally), so a render-time comparison against a `useState`-captured
-  // initial value would miss the transition. A `useEffect` catches every change
-  // including the first render.
-  useEffect(() => {
+  const [prevIsActionSheetOpen, setPrevIsActionSheetOpen] = useState(isActionSheetOpen);
+  if (isActionSheetOpen !== prevIsActionSheetOpen) {
+    setPrevIsActionSheetOpen(isActionSheetOpen);
     setSheetIndex(isActionSheetOpen ? OPEN_INDEX : CLOSED_INDEX);
-  }, [isActionSheetOpen]);
+  }
 
   const handleClose = useCallback(() => {
     setIsPhotoGridOpen(false);
@@ -162,6 +162,11 @@ export function ChatInputActionSheet() {
               onError={(message) => {
                 logger.warn(`inline camera error: ${message}`);
               }}
+              // Unlike the old @expo/ui SwiftUI-hosted sheet, this sheet
+              // doesn't add its own bottom safe-area padding to content, so
+              // the negative-margin workaround this used to need is gone. The
+              // floating control bar still applies the inset as padding so
+              // its buttons stay above the home indicator.
             />
           </Animated.View>
         ) : isPhotoGridOpen ? (
