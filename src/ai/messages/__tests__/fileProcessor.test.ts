@@ -1,248 +1,152 @@
 import type { FileUIPart } from '@/data/types/message';
 
-import { resolveFileUIPart } from '../fileProcessor';
+import { materializeNativeFilePart } from '../fileProcessor';
 
-// jest.mock factories MUST be inline function expressions, not variable references.
-// Jest hoists jest.mock calls before all imports/variables, so captured
-// outer-scope refs are undefined at factory-evaluation time.
-// Inline the mock function creation so it lives inside the hoisted factory.
+// ── Mocks ────────────────────────────────────────────────────────────
 
-jest.mock('expo-file-system', () => ({
-  readAsStringAsync: jest.fn(),
-  EncodingType: { Base64: 'base64' },
-}));
+const mockBase64 = jest.fn();
+const mockType = jest.fn();
 
-jest.mock('expo', () => {
-  // Create a stable mock function that always returns the same { extractText }.
-  // The extractText reference captured here persists for the test file's lifetime.
-  const extractText = jest.fn();
-  const nativeModule = jest.fn(() => ({ extractText }));
-  // Expose extractText on the fn so tests can access it
-  (nativeModule as unknown as Record<string, unknown>)._extractText = extractText;
-  return { requireNativeModule: nativeModule, requireOptionalNativeModule: nativeModule };
+jest.mock('expo-file-system', () => {
+  class MockFile {
+    readonly uri: string;
+    constructor(uri: string) {
+      this.uri = uri;
+    }
+    get type(): string {
+      return mockType();
+    }
+    async base64(): Promise<string> {
+      return mockBase64();
+    }
+  }
+  return { File: MockFile };
 });
 
-// Accessors that reach into the hoisted mock closure.
-function getRequireOptionalNativeModule(): jest.Mock {
-  return jest.mocked(require('expo').requireOptionalNativeModule);
-}
+beforeEach(() => {
+  mockBase64.mockReset();
+  mockType.mockReset();
+});
 
-function getExtractText(): jest.Mock {
-  return (getRequireOptionalNativeModule() as unknown as Record<string, unknown>)
-    ._extractText as jest.Mock;
-}
+// ── Helpers ──────────────────────────────────────────────────────────
 
-// --- Helpers ---
-
-const fileUrl = (path: string) => `file://${path}`;
-
-type FilePartOverrides = Partial<Omit<FileUIPart, 'type'>>;
-
-const filePart = (overrides: FilePartOverrides = {}): FileUIPart =>
+const filePart = (overrides: Partial<Omit<FileUIPart, 'type'>> = {}): FileUIPart =>
   ({
     type: 'file',
-    url: fileUrl('/tmp/test.pdf'),
+    url: 'file:///tmp/test.pdf',
     mediaType: 'application/pdf',
     filename: 'report.pdf',
     ...overrides,
   }) as FileUIPart;
 
-// --- Tests ---
+// ── Tests ────────────────────────────────────────────────────────────
 
-describe('resolveFileUIPart', () => {
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
+describe('materializeNativeFilePart', () => {
+  it('rewrites a file:// URL to a base64 data URL', async () => {
+    mockBase64.mockResolvedValue('dGVzdA==');
+    mockType.mockReturnValue('application/pdf');
 
-  describe('PDF path (mediaType === application/pdf)', () => {
-    it('returns a text part with extracted text on success', async () => {
-      getExtractText().mockResolvedValueOnce({
-        text: 'Hello world\ntest content',
-        totalPages: 1,
-        extractedPages: 1,
-        isTruncated: false,
-      });
+    const result = await materializeNativeFilePart(filePart());
 
-      const result = await resolveFileUIPart(filePart());
-      expect(result).toEqual({
-        type: 'text',
-        text: `Attached file "report.pdf":\nHello world\ntest content`,
-      });
-    });
-
-    it('returns a note when extraction returns empty text', async () => {
-      getExtractText().mockResolvedValueOnce({
-        text: '',
-        totalPages: 1,
-        extractedPages: 0,
-        isTruncated: false,
-      });
-
-      const result = await resolveFileUIPart(filePart());
-      expect(result).toEqual({
-        type: 'text',
-        text: `Attached file "report.pdf": [could not read this file].`,
-      });
-    });
-
-    it('returns a note when extraction returns whitespace-only text', async () => {
-      getExtractText().mockResolvedValueOnce({
-        text: '   \n  ',
-        totalPages: 1,
-        extractedPages: 0,
-        isTruncated: false,
-      });
-
-      const result = await resolveFileUIPart(filePart());
-      expect(result).toEqual({
-        type: 'text',
-        text: `Attached file "report.pdf": [could not read this file].`,
-      });
-    });
-
-    it('returns a note when native module throws', async () => {
-      getExtractText().mockRejectedValueOnce(new Error('native crash'));
-
-      const result = await resolveFileUIPart(filePart());
-      expect(result).toEqual({
-        type: 'text',
-        text: `Attached file "report.pdf": [could not read this file].`,
-      });
-    });
-
-    it('returns a note when the file path is empty', async () => {
-      const result = await resolveFileUIPart(filePart({ url: 'file://' }));
-      expect(result).toEqual({
-        type: 'text',
-        text: `Attached file "report.pdf": [could not read this file].`,
-      });
-    });
-
-    it('truncates text longer than PDF_TEXT_CAP', async () => {
-      const longText = 'A'.repeat(9000);
-      getExtractText().mockResolvedValueOnce({
-        text: longText,
-        totalPages: 100,
-        extractedPages: 50,
-        isTruncated: true,
-      });
-
-      const result = await resolveFileUIPart(filePart());
-      expect(result).toEqual({
-        type: 'text',
-        text: expect.stringMatching(
-          /^Attached file "report\.pdf":\nA{8000}\n\n\[Truncated 8000\/9000 chars\.\]$/,
-        ),
-      });
-    });
-
-    it('does not add truncation note when text fits within the cap', async () => {
-      getExtractText().mockResolvedValueOnce({
-        text: 'Short PDF content',
-        totalPages: 1,
-        extractedPages: 1,
-        isTruncated: false,
-      });
-
-      const result = await resolveFileUIPart(filePart());
-      expect(result).toEqual({
-        type: 'text',
-        text: `Attached file "report.pdf":\nShort PDF content`,
-      });
-    });
-
-    it('falls back to default name when part.filename is absent', async () => {
-      getExtractText().mockResolvedValueOnce({
-        text: 'some content',
-        totalPages: 1,
-        extractedPages: 1,
-        isTruncated: false,
-      });
-
-      const result = await resolveFileUIPart(filePart({ filename: undefined }));
-      expect(result).toEqual({
-        type: 'text',
-        text: `Attached file "file":\nsome content`,
-      });
-    });
-
-    describe('with extractPdf: false (native PDF model)', () => {
-      it('returns a base64 data URL instead of extracting text', async () => {
-        jest.mocked(require('expo-file-system').readAsStringAsync).mockResolvedValueOnce('cGQ=');
-
-        const result = await resolveFileUIPart(filePart(), { extractPdf: false });
-        expect(result).toEqual({
-          type: 'file',
-          url: 'data:application/pdf;base64,cGQ=',
-          mediaType: 'application/pdf',
-          filename: 'report.pdf',
-        });
-      });
-
-      it('does not call the native module at all', async () => {
-        jest.mocked(require('expo-file-system').readAsStringAsync).mockResolvedValueOnce('cGQ=');
-
-        await resolveFileUIPart(filePart(), { extractPdf: false });
-        expect(getExtractText()).not.toHaveBeenCalled();
-      });
+    expect(result).toEqual({
+      type: 'file',
+      url: 'data:application/pdf;base64,dGVzdA==',
+      mediaType: 'application/pdf',
+      filename: 'report.pdf',
     });
   });
 
-  describe('Non-PDF path (existing base64 behavior)', () => {
-    it('returns a base64 data URL for non-PDF files', async () => {
-      jest.mocked(require('expo-file-system').readAsStringAsync).mockResolvedValueOnce('cGQ=');
-      const part = filePart({
-        url: fileUrl('/tmp/photo.jpg'),
-        mediaType: 'image/jpeg',
-        filename: 'photo.jpg',
-      });
+  it('falls back to part.mediaType when file.type is empty', async () => {
+    mockBase64.mockResolvedValue('aGVsbG8=');
+    mockType.mockReturnValue('');
 
-      const result = await resolveFileUIPart(part);
-      expect(result).toEqual({
-        type: 'file',
-        url: 'data:image/jpeg;base64,cGQ=',
-        mediaType: 'image/jpeg',
-        filename: 'photo.jpg',
-      });
-    });
+    const result = await materializeNativeFilePart(filePart({ mediaType: 'image/png' }));
 
-    it('returns null when base64 read fails', async () => {
-      jest
-        .mocked(require('expo-file-system').readAsStringAsync)
-        .mockRejectedValueOnce(new Error('file not found'));
-      const part = filePart({
-        url: fileUrl('/tmp/missing.txt'),
-        mediaType: 'text/plain',
-      });
-
-      const result = await resolveFileUIPart(part);
-      expect(result).toBeNull();
+    expect(result).toEqual({
+      type: 'file',
+      url: 'data:image/png;base64,aGVsbG8=',
+      mediaType: 'image/png',
+      filename: 'report.pdf',
     });
   });
 
-  describe('URL guards', () => {
-    it('returns the part unchanged when URL is null', async () => {
-      const part = filePart({ url: undefined as unknown as string });
-      const result = await resolveFileUIPart(part);
-      expect(result).toBe(part);
-    });
+  it('falls back to application/octet-stream when neither file nor part has a type', async () => {
+    mockBase64.mockResolvedValue('aGVsbG8=');
+    mockType.mockReturnValue('');
 
-    it('returns the part unchanged for data: URLs', async () => {
-      const part = filePart({
-        url: 'data:image/png;base64,iVBORw0KGgo=',
-        mediaType: 'image/png',
-      });
-      const result = await resolveFileUIPart(part);
-      expect(result).toBe(part);
-    });
+    const result = await materializeNativeFilePart(
+      filePart({ mediaType: undefined as unknown as string }),
+    );
 
-    it('returns the part unchanged for https: URLs', async () => {
-      const part = filePart({
-        url: 'https://example.com/file.pdf',
-        mediaType: 'application/pdf',
-      });
-      const result = await resolveFileUIPart(part);
-      expect(result).toBe(part);
+    expect(result).toEqual({
+      type: 'file',
+      url: 'data:application/octet-stream;base64,aGVsbG8=',
+      mediaType: 'application/octet-stream',
+      filename: 'report.pdf',
     });
+  });
+
+  it('accepts content:// URIs (Android)', async () => {
+    mockBase64.mockResolvedValue('Y29udGVudA==');
+    mockType.mockReturnValue('text/plain');
+
+    const result = await materializeNativeFilePart(
+      filePart({ url: 'content://media/picker/photo.jpg' }),
+    );
+
+    expect(result).toEqual({
+      type: 'file',
+      url: 'data:text/plain;base64,Y29udGVudA==',
+      mediaType: 'text/plain',
+      filename: 'report.pdf',
+    });
+  });
+
+  it('leaves data: URLs untouched', async () => {
+    const part = filePart({ url: 'data:image/png;base64,iVBORw0KGgo=' });
+
+    const result = await materializeNativeFilePart(part);
+
+    expect(result).toBe(part);
+  });
+
+  it('leaves https: URLs untouched', async () => {
+    const part = filePart({ url: 'https://example.com/file.pdf' });
+
+    const result = await materializeNativeFilePart(part);
+
+    expect(result).toBe(part);
+  });
+
+  it('leaves http: URLs untouched', async () => {
+    const part = filePart({ url: 'http://example.com/file.pdf' });
+
+    const result = await materializeNativeFilePart(part);
+
+    expect(result).toBe(part);
+  });
+
+  it('returns the part unchanged when URL is empty', async () => {
+    const part = filePart({ url: '' });
+
+    const result = await materializeNativeFilePart(part);
+
+    expect(result).toBe(part);
+  });
+
+  it('returns the part unchanged when URL is undefined', async () => {
+    const part = filePart({ url: undefined as unknown as string });
+
+    const result = await materializeNativeFilePart(part);
+
+    expect(result).toBe(part);
+  });
+
+  it('returns null when base64 read fails', async () => {
+    mockBase64.mockRejectedValue(new Error('file not found'));
+
+    const result = await materializeNativeFilePart(filePart());
+
+    expect(result).toBeNull();
   });
 });

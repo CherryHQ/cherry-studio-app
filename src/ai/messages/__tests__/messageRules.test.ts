@@ -75,7 +75,7 @@ describe('toModelMessages', () => {
           { type: 'file', mediaType: 'image/png', url: 'data:application/octet-stream;base64,AA' },
         ]),
       ],
-      { image: false, video: true, audio: true },
+      { image: false, video: true, audio: true, pdf: true },
     );
     expect(model).toEqual([
       {

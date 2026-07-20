@@ -4,6 +4,7 @@ import type { UIMessage } from 'ai';
 import type { Model } from '@/data/types/model';
 
 import { resolveMediaCapabilities, stripUnsupportedMedia } from '../messageCapabilities';
+import type { MediaCapabilities } from '../messageCapabilities';
 
 const model = (inputModalities: string[]): Model =>
   ({ capabilities: [], inputModalities }) as unknown as Model;
@@ -16,22 +17,24 @@ const fileMsg = (mediaType: string): UIMessage =>
   }) as UIMessage;
 
 describe('resolveMediaCapabilities', () => {
-  it('derives modality flags from the model', () => {
+  it('derives modality flags from the model (pdf defaults to false without provider)', () => {
     expect(resolveMediaCapabilities(model([MODALITY.IMAGE]))).toEqual({
       image: true,
       video: false,
       audio: false,
+      pdf: false,
     });
     expect(resolveMediaCapabilities(model([]))).toEqual({
       image: false,
       video: false,
       audio: false,
+      pdf: false,
     });
   });
 });
 
 describe('stripUnsupportedMedia', () => {
-  const noVision = { image: false, video: true, audio: true };
+  const noVision: MediaCapabilities = { image: false, video: true, audio: true, pdf: true };
 
   it('replaces an image file part with a note when the model has no vision', () => {
     const [out] = stripUnsupportedMedia([fileMsg('image/png')], noVision);
@@ -45,6 +48,7 @@ describe('stripUnsupportedMedia', () => {
       image: true,
       video: false,
       audio: true,
+      pdf: true,
     });
     expect(out.parts).toEqual([
       { type: 'text', text: expect.stringContaining('video attachment omitted') },
@@ -56,6 +60,7 @@ describe('stripUnsupportedMedia', () => {
       image: true,
       video: true,
       audio: false,
+      pdf: true,
     });
     expect(out.parts).toEqual([
       { type: 'text', text: expect.stringContaining('audio attachment omitted') },
@@ -64,7 +69,9 @@ describe('stripUnsupportedMedia', () => {
 
   it('leaves the part untouched when the modality is supported (same reference)', () => {
     const msg = fileMsg('image/png');
-    expect(stripUnsupportedMedia([msg], { image: true, video: true, audio: true })[0]).toBe(msg);
+    expect(
+      stripUnsupportedMedia([msg], { image: true, video: true, audio: true, pdf: true })[0],
+    ).toBe(msg);
   });
 
   it('leaves non-gated files (e.g. PDF) untouched', () => {

@@ -1,9 +1,11 @@
 /** `Message` -> AI SDK `UIMessage`. */
 
 import type { UIMessage } from 'ai';
+
 import type { CherryMessagePart, CherryUIMessage, Message } from '@/data/types/message';
 
-import { resolveFileUIPart } from './fileProcessor';
+import { prepareChatMessages } from './attachmentRouting';
+import type { MediaCapabilities } from './messageCapabilities';
 
 export function toCherryUIMessage(message: Message): CherryUIMessage {
   const parts: CherryMessagePart[] = message.data?.parts ?? [];
@@ -14,30 +16,14 @@ export function toCherryUIMessage(message: Message): CherryUIMessage {
   } as CherryUIMessage;
 }
 
-/** Unresolvable file parts are dropped with a warning. */
-async function resolveMessageParts<T extends UIMessage>(
-  message: T,
-  options?: { extractPdf?: boolean },
-): Promise<T> {
-  if (!message.parts?.length) return message;
-
-  const resolved: UIMessage['parts'] = [];
-  for (const part of message.parts) {
-    if (part.type === 'file') {
-      const next = await resolveFileUIPart(part, options);
-      if (next) resolved.push(next as UIMessage['parts'][number]);
-      continue;
-    }
-    resolved.push(part as UIMessage['parts'][number]);
-  }
-
-  return { ...message, parts: resolved } as T;
-}
-
-/** Idempotent for non-file parts and non-`file://` URLs. */
+/**
+ * Resolve file URLs in messages: native files are inlined as base64 data URLs,
+ * non-native PDFs have text extracted. Delegates to `attachmentRouting` which
+ * carries the per-provider native-support logic.
+ */
 export async function resolveUIMessageFileUrls<T extends UIMessage = UIMessage>(
   messages: T[],
-  options?: { extractPdf?: boolean },
+  nativeSupport: MediaCapabilities,
 ): Promise<T[]> {
-  return Promise.all(messages.map((m) => resolveMessageParts(m, options)));
+  return prepareChatMessages(messages, nativeSupport);
 }

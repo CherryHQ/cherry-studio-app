@@ -39,7 +39,6 @@ import {
 } from './runtime/aiSdk/plugins/reasoningExtraction';
 import { createSimulateStreamingPlugin } from './runtime/aiSdk/plugins/simulateStreaming';
 import type { AppProviderId, AppProviderSettingsMap } from './types';
-import { shouldExtractPdf } from './messages/nativeFileSupport';
 import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/requests';
 import { addAnthropicHeaders } from './utils/anthropicHeaders';
 import {
@@ -136,10 +135,8 @@ export class AiService {
     const { sdkConfig, model, provider, system, tools, plugins, options } =
       await this.buildAgentParamsFor(request, { shouldIncludeExternalTools: true });
 
-    const extractPdf = shouldExtractPdf(provider, model, sdkConfig.providerId);
-    const preparedMessages = await resolveUIMessageFileUrls(request.messages ?? [], {
-      extractPdf,
-    });
+    const caps = resolveMediaCapabilities(model, provider, sdkConfig.providerId);
+    const preparedMessages = await resolveUIMessageFileUrls(request.messages ?? [], caps);
 
     const agent = new Agent({
       providerId: sdkConfig.providerId,
