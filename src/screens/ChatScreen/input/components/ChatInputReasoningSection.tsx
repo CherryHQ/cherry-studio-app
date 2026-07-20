@@ -3,6 +3,9 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, useColorScheme, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { SlotText } from '@/components/SlotText';
+
 import { useChatInputActions, useChatInputState } from '../context/ChatInputProvider';
 import { EffortSlider, thinkingAccentColor } from '../effortSlider';
 import { useChatInputReasoningEfforts } from '../hooks/useChatInputReasoningEfforts';
@@ -58,16 +61,15 @@ export function ChatInputReasoningSection() {
       style={{ paddingBottom: Math.max(insets.bottom, 16) }}
       testID="chat-input-reasoning-section"
     >
-      <View className="flex-row items-baseline gap-1.5">
+      <View className="flex-row items-center gap-1.5">
         <Text className="font-medium text-base text-foreground">{t('chat.reasoning.title')}</Text>
-        <Text
-          className="font-semibold text-base text-foreground"
-          style={
+        <SlotText
+          text={currentOption ? t(currentOption.labelKey) : ''}
+          textClassName="font-semibold text-base text-foreground"
+          textStyle={
             isMaxEffort ? { color: thinkingAccentColor[isDark ? 'dark' : 'light'] } : undefined
           }
-        >
-          {currentOption ? t(currentOption.labelKey) : ''}
-        </Text>
+        />
       </View>
       <View className="mt-3 flex-row items-center justify-between">
         <Text className="text-accent text-sm">{t('chat.reasoning.faster')}</Text>

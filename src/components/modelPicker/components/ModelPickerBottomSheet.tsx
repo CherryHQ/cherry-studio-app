@@ -15,7 +15,7 @@ import { buildModelPickerListItems } from '../utils/modelPickerListItems';
 import { ModelPickerSheetContent } from './ModelPickerSheetContent';
 
 const defaultModelPickerHeaderHeight = 64;
-const initialModelPickerListItemCount = 12;
+const initialModelPickerListItemCount = 24;
 const modelPickerListItemBatchSize = 24;
 // Detent indices for the underlying `SelectionBottomSheet`: 0 closed, 1 open.
 const CLOSED_INDEX = 0;
@@ -157,8 +157,11 @@ export function ModelPickerBottomSheet({
       }}
     >
       {({ sheetHeight }) => {
+        // footerHeight only grows from onLayout; drop it when the slot is empty so
+        // a removed footer stops reserving its old band.
+        const effectiveFooterHeight = footer ? footerHeight : 0;
         const modelListHeight = Math.max(
-          sheetHeight - (headerHeight || defaultModelPickerHeaderHeight) - footerHeight,
+          sheetHeight - (headerHeight || defaultModelPickerHeaderHeight) - effectiveFooterHeight,
           120,
         );
 

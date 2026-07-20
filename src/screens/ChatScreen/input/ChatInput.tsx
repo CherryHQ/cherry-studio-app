@@ -86,7 +86,7 @@ export function ChatInput({ topicId }: ChatInputProps) {
       />
       <ChatInputActionSheet />
       <ModelPickerBottomSheet
-        footer={<ChatInputReasoningSection />}
+        footer={reasoningEfforts.length > 0 ? <ChatInputReasoningSection /> : undefined}
         onSelect={handleModelSelect}
         ref={modelPickerRef}
         selectedModelId={selectedModelId}

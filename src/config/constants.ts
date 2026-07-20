@@ -12,6 +12,10 @@ export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassE
 // the background behind them consistently. Single source of truth — tune here.
 export const sheetScrimColor = 'rgba(0, 0, 0, 0.4)';
 
+// Brand accent (ui.theme_user.color_primary default). SlotText tints freshly
+// landed glyphs with it before they fade to the regular text color.
+export const slotTextHighlightColor = '#00b96b';
+
 // Gap kept between the keyboard and the focused input inside scrollable forms.
 export const keyboardBottomOffset = 16;
 
