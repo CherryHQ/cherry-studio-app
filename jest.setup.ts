@@ -66,6 +66,8 @@ jest.mock('@shopify/react-native-skia', () => {
     BlurMask: inert('SkiaBlurMask'),
     RoundedRect: inert('SkiaRoundedRect'),
     Shader: inert('SkiaShader'),
+    Path: inert('SkiaPath'),
+    Mask: inert('SkiaMask'),
     matchFont: () => ({
       getGlyphIDs: (text: string) => Array.from(text).map((_, index) => index),
       getGlyphWidths: (ids: number[]) => ids.map(() => 8),
