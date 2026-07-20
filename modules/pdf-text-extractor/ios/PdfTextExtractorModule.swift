@@ -23,6 +23,12 @@ public class PdfTextExtractorModule: Module {
 
   private func extractTextFromPDF(filePath: String, options: ExtractOptions?) throws -> [String: Any] {
     let url = try parseFileURL(filePath)
+    let didAccess = url.startAccessingSecurityScopedResource()
+    defer {
+      if didAccess {
+        url.stopAccessingSecurityScopedResource()
+      }
+    }
 
     guard let document = PDFDocument(url: url) else {
       throw FailedToLoadDocumentException()
@@ -72,6 +78,12 @@ public class PdfTextExtractorModule: Module {
   private func getPageCount(filePath: String) -> Int {
     do {
       let url = try parseFileURL(filePath)
+      let didAccess = url.startAccessingSecurityScopedResource()
+      defer {
+        if didAccess {
+          url.stopAccessingSecurityScopedResource()
+        }
+      }
       guard let document = PDFDocument(url: url) else {
         os_log("PdfTextExtractor: failed to load PDF at %{public}@", log: .default, type: .error, filePath)
         return 0
@@ -95,16 +107,6 @@ public class PdfTextExtractorModule: Module {
       url = parsed
     } else {
       url = URL(fileURLWithPath: filePath)
-    }
-
-    // Security-scoped URLs (e.g. from document picker with copyToCacheDirectory: false)
-    // need explicit access granted before reading. `startAccessingSecurityScopedResource`
-    // returns false for non-scoped URLs, so this guard is safe to call unconditionally.
-    let didAccess = url.startAccessingSecurityScopedResource()
-    defer {
-      if didAccess {
-        url.stopAccessingSecurityScopedResource()
-      }
     }
 
     guard FileManager.default.fileExists(atPath: url.path) else {

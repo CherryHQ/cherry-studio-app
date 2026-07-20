@@ -31,6 +31,20 @@ describe('resolveMediaCapabilities', () => {
       pdf: false,
     });
   });
+  it('resolves pdf: true for a first-party provider with a compatible model', () => {
+    jest.isolateModules(() => {
+      jest.mock('../../utils/model', () => ({
+        ...jest.requireActual('../../utils/model'),
+        isOpenAILLMModel: jest.fn().mockReturnValue(true),
+      }));
+
+      const { resolveMediaCapabilities: rmc } = require('../messageCapabilities');
+      const mockModel = model([MODALITY.IMAGE]);
+      const mockProvider = { id: 'my-openai', presetProviderId: undefined } as any;
+
+      expect(rmc(mockModel, mockProvider, 'openai')).toMatchObject({ pdf: true });
+    });
+  });
 });
 
 describe('stripUnsupportedMedia', () => {

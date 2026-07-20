@@ -301,4 +301,73 @@ describe('prepareChatMessages — routing', () => {
       ]);
     });
   });
+
+  describe('edge cases', () => {
+    it('returns message unchanged for empty parts array', async () => {
+      const msg = message([]);
+
+      const [result] = await resolveUIMessageFileUrls([msg], NATIVE_ALL);
+
+      expect(result).toBe(msg);
+      expect(result.parts).toEqual([]);
+    });
+
+    it('returns message unchanged for missing parts', async () => {
+      const msg = { id: 'msg-1', role: 'user' } as UIMessage;
+
+      const [result] = await resolveUIMessageFileUrls([msg], NATIVE_ALL);
+
+      expect(result).toBe(msg);
+    });
+
+    it('uses fallback filename for empty string filename', async () => {
+      mockBase64.mockResolvedValue('cGRm');
+      mockType.mockReturnValue('application/pdf');
+
+      const [result] = await resolveUIMessageFileUrls(
+        [message([filePart({ filename: '' })])],
+        NATIVE_ALL,
+      );
+
+      expect(result.parts).toEqual([expect.objectContaining({ type: 'file' })]);
+    });
+
+    it('routes a non-native non-PDF file to a note', async () => {
+      const caps: MediaCapabilities = { image: false, video: false, audio: false, pdf: false };
+
+      const [result] = await resolveUIMessageFileUrls(
+        [message([filePart({ mediaType: 'image/png', filename: 'photo.png' })])],
+        caps,
+      );
+
+      expect(result.parts).toEqual([
+        { type: 'text', text: 'Attached file "photo.png": [could not read this file].' },
+      ]);
+      expect(mockExtractText).not.toHaveBeenCalled();
+    });
+
+    it('routes a native-fallback non-PDF file (application/octet-stream) to a note when not native', async () => {
+      const caps: MediaCapabilities = { image: false, video: false, audio: false, pdf: false };
+
+      const [result] = await resolveUIMessageFileUrls(
+        [message([filePart({ mediaType: 'application/octet-stream', filename: 'data.bin' })])],
+        caps,
+      );
+
+      expect(result.parts).toEqual([
+        { type: 'text', text: 'Attached file "data.bin": [could not read this file].' },
+      ]);
+      expect(mockExtractText).not.toHaveBeenCalled();
+    });
+
+    it('produces a note when file part has no URL in the non-native path', async () => {
+      const caps: MediaCapabilities = { image: false, video: false, audio: false, pdf: false };
+
+      const [result] = await resolveUIMessageFileUrls([message([filePart({ url: '' })])], caps);
+
+      expect(result.parts).toEqual([
+        { type: 'text', text: 'Attached file "report.pdf": [could not read this file].' },
+      ]);
+    });
+  });
 });

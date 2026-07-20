@@ -91,7 +91,7 @@ async function prepareChatMessage<T extends UIMessage>(
     }
 
     const fp = part as FileUIPart;
-    const filename = fp.filename ?? 'file';
+    const filename = fp.filename || 'file';
     const mediaType = fp.mediaType || 'application/octet-stream';
 
     if (isNative(mediaType, nativeSupport)) {
@@ -102,8 +102,8 @@ async function prepareChatMessage<T extends UIMessage>(
         continue;
       }
       kept.push(inlined as UIMessage['parts'][number]);
-    } else {
-      // Non-native path — only PDF today; extract text
+    } else if (mediaType === 'application/pdf') {
+      // Non-native PDF — extract text
       const url = fp.url;
       if (!url) {
         kept.push(noteOf(filename) as UIMessage['parts'][number]);
@@ -111,6 +111,9 @@ async function prepareChatMessage<T extends UIMessage>(
       }
       const textPart = await extractNonNativePdf(url, filename);
       kept.push(textPart as UIMessage['parts'][number]);
+    } else {
+      // Non-native, non-PDF file — not supported; skip with a note
+      kept.push(noteOf(filename) as UIMessage['parts'][number]);
     }
   }
 

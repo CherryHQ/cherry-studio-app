@@ -152,12 +152,11 @@ class PdfTextExtractorModule : Module() {
     }
 
     private fun copyContentUriToTempFile(uri: Uri): File {
-        val inputStream = context.contentResolver.openInputStream(uri)
-            ?: throw InvalidFilePathException()
-
         val tempFile = File.createTempFile("pdf_temp_", ".pdf", context.cacheDir)
 
         try {
+            val inputStream = context.contentResolver.openInputStream(uri)
+                ?: throw InvalidFilePathException()
             inputStream.use { input ->
                 tempFile.outputStream().use { output ->
                     input.copyTo(output)

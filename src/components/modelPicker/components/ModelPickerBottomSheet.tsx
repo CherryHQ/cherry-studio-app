@@ -54,7 +54,7 @@ export function ModelPickerBottomSheet({
   // render below); the imperative caller (chat input) never passes `isOpen`
   // and drives it purely through the `present`/`dismiss` ref handle.
   const [sheetIndex, setSheetIndex] = useState(CLOSED_INDEX);
-  const [prevIsOpen, setPrevIsOpen] = useState<boolean | undefined>(undefined);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [searchText, setSearchText] = useState('');
   const [headerHeight, setHeaderHeight] = useState(0);
   const [footerHeight, setFooterHeight] = useState(0);
