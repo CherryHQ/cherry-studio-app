@@ -49,7 +49,7 @@ describe('resolveUIMessageFileUrls', () => {
     consoleWarnSpy.mockRestore();
   });
 
-  test('prefers a managed file URI over the persisted fallback URL', async () => {
+  test('uses a managed file URI without reading the persisted URL', async () => {
     testState.contents.set('file:///new-sandbox/files/entry.png', {
       base64: 'managed',
       type: 'image/png',
@@ -68,7 +68,7 @@ describe('resolveUIMessageFileUrls', () => {
     expect(testState.reads).toEqual(['file:///new-sandbox/files/entry.png']);
   });
 
-  test('falls back to the wire URL when the entry cannot be resolved', async () => {
+  test('drops a managed attachment when its entry cannot be resolved', async () => {
     testState.contents.set('file:///legacy/brief.pdf', { base64: 'legacy', type: '' });
 
     const [message] = await resolveUIMessageFileUrls(
@@ -76,12 +76,8 @@ describe('resolveUIMessageFileUrls', () => {
       async () => undefined,
     );
 
-    expect(message.parts[0]).toEqual(
-      expect.objectContaining({
-        mediaType: 'application/pdf',
-        url: 'data:application/pdf;base64,legacy',
-      }),
-    );
+    expect(message.parts).toEqual([]);
+    expect(testState.reads).toEqual([]);
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.any(String),
       expect.any(String),
@@ -90,7 +86,7 @@ describe('resolveUIMessageFileUrls', () => {
     );
   });
 
-  test('uses the fallback URL after a managed file read fails', async () => {
+  test('does not read the persisted URL after a managed file read fails', async () => {
     testState.contents.set('file:///legacy/brief.pdf', { base64: 'legacy', type: '' });
 
     const [message] = await resolveUIMessageFileUrls(
@@ -98,16 +94,11 @@ describe('resolveUIMessageFileUrls', () => {
       async () => 'file:///new-sandbox/files/missing.pdf',
     );
 
-    expect(message.parts[0]).toEqual(
-      expect.objectContaining({ url: 'data:application/pdf;base64,legacy' }),
-    );
-    expect(testState.reads).toEqual([
-      'file:///new-sandbox/files/missing.pdf',
-      'file:///legacy/brief.pdf',
-    ]);
+    expect(message.parts).toEqual([]);
+    expect(testState.reads).toEqual(['file:///new-sandbox/files/missing.pdf']);
   });
 
-  test('drops only attachments whose managed and fallback files are both unreadable', async () => {
+  test('drops only unreadable managed attachments', async () => {
     const message = createMessage([
       { text: 'keep me', type: 'text' },
       filePart('file:///legacy/missing.pdf', 'entry-1'),
@@ -128,7 +119,7 @@ describe('resolveUIMessageFileUrls', () => {
       { text: 'keep me', type: 'text' },
       expect.objectContaining({ url: 'https://example.com/remote.pdf' }),
     ]);
-    expect(consoleWarnSpy).toHaveBeenCalledTimes(2);
+    expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
   });
 });
 

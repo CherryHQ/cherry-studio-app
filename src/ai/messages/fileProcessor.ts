@@ -18,7 +18,7 @@ const logger = loggerService.withContext('fileProcessor');
 export type ResolveFileEntryUri = (fileEntryId: string) => Promise<string | undefined>;
 
 /**
- * Resolve a managed file before falling back to the wire URL. Local files are
+ * Resolve managed files exclusively by entry ID. Unmanaged local files are
  * rewritten to data URLs because the AI SDK cannot fetch device-only URIs.
  */
 export async function resolveFileUIPart(
@@ -26,41 +26,40 @@ export async function resolveFileUIPart(
   resolveFileEntryUri?: ResolveFileEntryUri,
 ): Promise<FileUIPart | null> {
   const fileEntryId = readCherryMeta(part)?.fileEntryId;
-  let managedUri: string | undefined;
 
-  if (fileEntryId && resolveFileEntryUri) {
+  if (fileEntryId) {
+    if (!resolveFileEntryUri) {
+      logger.warn('Managed file resolver is unavailable', { fileEntryId });
+      return null;
+    }
+
+    let managedUri: string | undefined;
     try {
       managedUri = await resolveFileEntryUri(fileEntryId);
     } catch (error) {
       logger.warn('Failed to resolve managed file entry', toError(error), { fileEntryId });
+      return null;
     }
 
     if (!managedUri) {
       logger.warn('Managed file entry is unavailable', { fileEntryId });
-    } else {
-      const resolved = await readLocalFilePart(part, managedUri, fileEntryId, 'managed');
-      if (resolved) {
-        return resolved;
-      }
+      return null;
     }
-  }
 
-  if (part.url === managedUri) {
-    return null;
+    return readLocalFilePart(part, managedUri, fileEntryId);
   }
 
   if (!isLocalFileUri(part.url)) {
     return part;
   }
 
-  return readLocalFilePart(part, part.url, fileEntryId, 'fallback');
+  return readLocalFilePart(part, part.url);
 }
 
 async function readLocalFilePart(
   part: FileUIPart,
   uri: string,
-  fileEntryId: string | undefined,
-  source: 'fallback' | 'managed',
+  fileEntryId?: string,
 ): Promise<FileUIPart | null> {
   try {
     const file = new File(uri);
@@ -70,7 +69,6 @@ async function readLocalFilePart(
   } catch (error) {
     logger.warn('Failed to read attachment for AI request', toError(error), {
       fileEntryId,
-      source,
     });
     return null;
   }

@@ -40,6 +40,8 @@ export async function resolveFilePartUri(
     } catch (error) {
       logger.warn('Failed to resolve managed file entry', toError(error), { fileEntryId });
     }
+
+    return undefined;
   }
 
   if (!isLocalFileUri(part.url)) {
@@ -49,7 +51,7 @@ export async function resolveFilePartUri(
   try {
     return new File(part.url).exists ? part.url : undefined;
   } catch (error) {
-    logger.warn('Failed to inspect fallback file URI', toError(error), { fileEntryId });
+    logger.warn('Failed to inspect file URI', toError(error));
     return undefined;
   }
 }

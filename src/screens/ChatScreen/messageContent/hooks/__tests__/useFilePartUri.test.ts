@@ -43,17 +43,19 @@ describe('resolveFilePartUri', () => {
     ).resolves.toBe('file:///new-sandbox/files/entry.png');
   });
 
-  test('uses a readable local fallback when the managed entry is unavailable', async () => {
+  test('does not use the persisted URL when the managed entry is unavailable', async () => {
     testState.files.add('file:///legacy/image.png');
 
     await expect(
       resolveFilePartUri(filePart('file:///legacy/image.png'), async () => undefined),
-    ).resolves.toBe('file:///legacy/image.png');
+    ).resolves.toBeUndefined();
   });
 
-  test('returns undefined instead of forwarding an unreadable local URI', async () => {
+  test('returns undefined when the managed entry resolver fails', async () => {
     await expect(
-      resolveFilePartUri(filePart('file:///legacy/missing.png'), async () => undefined),
+      resolveFilePartUri(filePart('file:///legacy/image.png'), async () => {
+        throw new Error('database unavailable');
+      }),
     ).resolves.toBeUndefined();
   });
 });
