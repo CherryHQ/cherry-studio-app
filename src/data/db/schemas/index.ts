@@ -1,6 +1,8 @@
 import { appStateTable } from './appState';
 import { assistantTable } from './assistant';
 import { assistantKnowledgeBaseTable, assistantMcpServerTable } from './assistantRelations';
+import { fileEntryTable } from './file';
+import { chatMessageFileRefTable } from './fileRelations';
 import { groupTable } from './group';
 import { messageTable } from './message';
 import { pinTable } from './pin';
@@ -25,6 +27,10 @@ export {
   assistantKnowledgeBaseTable,
   assistantMcpServerTable,
 } from './assistantRelations';
+export type { FileEntryRow, InsertFileEntryRow } from './file';
+export { fileEntryTable } from './file';
+export type { ChatMessageFileRefRow, InsertChatMessageFileRefRow } from './fileRelations';
+export { chatMessageFileRefTable } from './fileRelations';
 export type { GroupRow, InsertGroupRow } from './group';
 export { groupTable } from './group';
 export type { InsertMessageRow, MessageRow } from './message';
@@ -54,6 +60,8 @@ export const schema = {
   assistantMcpServerTable,
   assistantTable,
   appStateTable,
+  chatMessageFileRefTable,
+  fileEntryTable,
   groupTable,
   messageTable,
   pinTable,

@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
+import { loggerService } from '@/core/logger/LoggerService';
 import type {
   ActiveNodeStrategy,
   CreateMessageDto,
@@ -7,6 +8,7 @@ import type {
   UpdateMessageDto,
 } from '@/data/api/schemas/messages';
 import { DataApiErrorFactory } from '@/data/types/apiTypes';
+import type { PreparedInternalFile } from '@/data/types/file';
 import type {
   BranchMessage,
   BranchMessagesResponse,
@@ -17,14 +19,25 @@ import type {
   TreeResponse,
 } from '@/data/types/message';
 import type { UniqueModelId } from '@/data/types/model';
+import { readCherryMeta } from '@/data/types/uiParts';
 
-import type { DbService } from '../db/DbService';
-import { type MessageRow, messageTable, topicTable } from '../db/schemas';
+import type { Database, DbService } from '../db/DbService';
+import {
+  chatMessageFileRefTable,
+  fileEntryTable,
+  type MessageRow,
+  messageTable,
+  topicTable,
+} from '../db/schemas';
+import type { FileEntryService } from './FileEntryService';
 import type { TopicService } from './TopicService';
 import { timestampToISO } from './utils/rowMappers';
 
 const previewLength = 50;
 const defaultLimit = 20;
+const sqliteInArrayChunk = 500;
+const sqliteInsertChunk = 100;
+const logger = loggerService.withContext('MessageService');
 
 export type BranchMessagesParams = {
   cursor?: string;
@@ -40,6 +53,7 @@ export interface AssistantPlaceholder
 
 export interface CreateUserMessageWithPlaceholdersInput {
   placeholders: AssistantPlaceholder[];
+  preparedFiles?: readonly PreparedInternalFile[];
   siblingsGroupId?: number;
   topicId: string;
   userMessage: { dto: CreateMessageDto; mode: 'create' } | { id: string; mode: 'existing' };
@@ -54,10 +68,81 @@ export type ReserveAssistantTurnPlaceholder = AssistantPlaceholder;
 export type ReserveAssistantTurnInput = CreateUserMessageWithPlaceholdersInput;
 export type ReserveAssistantTurnResult = CreateUserMessageWithPlaceholdersResult;
 
+function extractChatMessageFileEntryIds(data: MessageData | null | undefined): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+
+  for (const part of data?.parts ?? []) {
+    if (part.type !== 'file') {
+      continue;
+    }
+
+    const fileEntryId = readCherryMeta(part)?.fileEntryId;
+    if (!fileEntryId || seen.has(fileEntryId)) {
+      continue;
+    }
+
+    seen.add(fileEntryId);
+    ids.push(fileEntryId);
+  }
+
+  return ids;
+}
+
+async function selectExistingFileEntryIdsTx(
+  tx: Database,
+  ids: readonly string[],
+): Promise<Set<string>> {
+  const existing = new Set<string>();
+
+  for (let index = 0; index < ids.length; index += sqliteInArrayChunk) {
+    const rows = await tx
+      .select({ id: fileEntryTable.id })
+      .from(fileEntryTable)
+      .where(inArray(fileEntryTable.id, ids.slice(index, index + sqliteInArrayChunk)));
+    for (const row of rows) {
+      existing.add(row.id);
+    }
+  }
+
+  return existing;
+}
+
+async function replaceChatMessageFileRefsTx(
+  tx: Database,
+  messageId: string,
+  data: MessageData,
+): Promise<void> {
+  await tx.delete(chatMessageFileRefTable).where(eq(chatMessageFileRefTable.sourceId, messageId));
+
+  const fileEntryIds = extractChatMessageFileEntryIds(data);
+  if (fileEntryIds.length === 0) {
+    return;
+  }
+
+  const existingIds = await selectExistingFileEntryIdsTx(tx, fileEntryIds);
+  const rows = fileEntryIds
+    .filter((fileEntryId) => existingIds.has(fileEntryId))
+    .map((fileEntryId) => ({ fileEntryId, role: 'attachment' as const, sourceId: messageId }));
+
+  if (rows.length !== fileEntryIds.length) {
+    logger.warn('Dropped chat message file refs without matching file_entry', {
+      dropped: fileEntryIds.length - rows.length,
+      messageId,
+      total: fileEntryIds.length,
+    });
+  }
+
+  for (let index = 0; index < rows.length; index += sqliteInsertChunk) {
+    await tx.insert(chatMessageFileRefTable).values(rows.slice(index, index + sqliteInsertChunk));
+  }
+}
+
 export class MessageService {
   constructor(
     private readonly dbService: DbService,
     private readonly topicService: TopicService,
+    private readonly fileEntryService: FileEntryService,
   ) {}
 
   private get db() {
@@ -408,6 +493,7 @@ export class MessageService {
         })
         .returning();
 
+      await replaceChatMessageFileRefsTx(tx, row.id, data);
       await this.topicService.setActiveNodeTx(tx, source.topicId, row.id, { assumeValid: true });
       return rowToMessage(row);
     });
@@ -448,6 +534,7 @@ export class MessageService {
         })
         .returning();
 
+      await replaceChatMessageFileRefsTx(tx, row.id, dto.data);
       if (dto.setAsActive !== false) {
         await this.topicService.setActiveNodeTx(tx, topicId, row.id, { assumeValid: true });
       }
@@ -470,6 +557,13 @@ export class MessageService {
         throw DataApiErrorFactory.notFound('Topic', input.topicId);
       }
 
+      if (input.preparedFiles?.length && input.userMessage.mode !== 'create') {
+        throw DataApiErrorFactory.invalidOperation(
+          'prepare files for an existing message',
+          'prepared files require a newly created user message',
+        );
+      }
+
       let userMessage: Message;
       if (input.userMessage.mode === 'create') {
         const dto = input.userMessage.dto;
@@ -477,6 +571,7 @@ export class MessageService {
           dto.parentId === undefined || dto.parentId === null
             ? await getRootMessageIdTx(tx, input.topicId)
             : await validateParent(tx, input.topicId, dto.parentId);
+        await this.fileEntryService.createPreparedEntriesTx(tx, input.preparedFiles ?? []);
         const [row] = await tx
           .insert(messageTable)
           .values({
@@ -491,6 +586,7 @@ export class MessageService {
             topicId: input.topicId,
           })
           .returning();
+        await replaceChatMessageFileRefsTx(tx, row.id, dto.data);
         userMessage = rowToMessage(row);
       } else {
         const [row] = await tx
@@ -537,6 +633,7 @@ export class MessageService {
             topicId: input.topicId,
           })
           .returning();
+        await replaceChatMessageFileRefsTx(tx, row.id, placeholder.data);
         placeholders.push(rowToMessage(row));
       }
 
@@ -605,6 +702,10 @@ export class MessageService {
         .returning();
       if (!row) {
         throw DataApiErrorFactory.notFound('Message', id);
+      }
+
+      if (dto.data !== undefined) {
+        await replaceChatMessageFileRefsTx(tx, id, dto.data);
       }
 
       return rowToMessage(row);

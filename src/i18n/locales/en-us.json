@@ -76,6 +76,8 @@
   "chat.media.openSettings": "Open Settings",
   "chat.media.takePhoto": "Take photo",
   "chat.media.file": "File",
+  "chat.media.fileUnavailable": "{{name}} is unavailable",
+  "chat.media.unavailable": "Unavailable",
   "chat.media.limitedPhotoAccess": "Limited photo access",
   "chat.media.noPhotos": "No photos available",
   "chat.media.photoPermissionDescription": "Allow Cherry Studio to access photos you want to add to chat.",

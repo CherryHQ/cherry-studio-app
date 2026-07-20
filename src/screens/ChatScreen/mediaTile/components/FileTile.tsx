@@ -1,15 +1,24 @@
 import { cn } from 'heroui-native/utils';
-import { Pressable, Text, View } from 'react-native';
+import { type AccessibilityState, Pressable, Text, View } from 'react-native';
 import { getFileBaseName, getFileExtension } from '../utils/getFileExtension';
 
 type FileTileProps = {
   accessibilityLabel?: string;
+  accessibilityState?: AccessibilityState;
   className?: string;
   name: string;
   onPress?: () => void;
+  statusLabel?: string;
 };
 
-export function FileTile({ accessibilityLabel, className, name, onPress }: FileTileProps) {
+export function FileTile({
+  accessibilityLabel,
+  accessibilityState,
+  className,
+  name,
+  onPress,
+  statusLabel,
+}: FileTileProps) {
   const extension = getFileExtension(name);
   const baseName = getFileBaseName(name);
   const containerClassName = cn(
@@ -19,7 +28,11 @@ export function FileTile({ accessibilityLabel, className, name, onPress }: FileT
   );
   const content = (
     <>
-      {extension ? (
+      {statusLabel ? (
+        <Text className="font-medium text-danger text-xs" numberOfLines={2}>
+          {statusLabel}
+        </Text>
+      ) : extension ? (
         <View className="rounded-md border border-border px-1.5 py-0.5">
           <Text className="font-semibold text-default-foreground text-xs">{extension}</Text>
         </View>
@@ -33,13 +46,23 @@ export function FileTile({ accessibilityLabel, className, name, onPress }: FileT
   );
 
   if (!onPress) {
-    return <View className={containerClassName}>{content}</View>;
+    return (
+      <View
+        accessibilityLabel={accessibilityLabel}
+        accessibilityState={accessibilityState}
+        accessible={Boolean(accessibilityLabel)}
+        className={containerClassName}
+      >
+        {content}
+      </View>
+    );
   }
 
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel ?? name}
       accessibilityRole="button"
+      accessibilityState={accessibilityState}
       className={containerClassName}
       onPress={onPress}
     >
