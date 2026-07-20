@@ -68,20 +68,20 @@ export const homeActivityCalendar = {
 // a ~half-screen full-width photo (`expandedHeightRatio·screen`), pushing the
 // settings list below it down — Telegram-style — instead of overflowing over it.
 export const profileHero = {
-  avatarSize: 130, // resting avatar diameter (small centered circle)
-  avatarRestTop: 96, // resting avatar top inside the box (clears the status bar / dynamic island)
-  restingHeight: 300, // compact resting hero box height
+  avatarSize: 96, // resting avatar diameter (small centered circle)
+  avatarRestTop: 80, // resting avatar top inside the box (clears the status bar / dynamic island)
+  restingHeight: 238, // compact resting hero box height
   expandedHeightRatio: 0.46, // locked photo height as a fraction of the screen height (~half screen)
   barHeight: isIOS ? 44 : 56, // sticky bar content height, matched to the native native-stack header (iOS 44pt / Android 56dp) so it lines up with every other screen's real header; excludes the safe-area top inset
   collapseDistance: 200, // scroll distance over which the hero hands off to the sticky bar
   scrollFadeDistance: 180, // scroll distance over which the resting hero fades out (before the sticky bar fully takes over)
-  nameRestPaddingBottom: 24, // name's inset from the box bottom; the name is bottom-pinned, so this places it just under the resting avatar and near the photo's bottom edge when expanded
+  nameRestPaddingBottom: 12, // name's inset from the box bottom; the name is bottom-pinned, so this places it just under the resting avatar and near the photo's bottom edge when expanded
   nameBaseFontSize: 30,
   nameLineHeight: 38,
   crossFadeStartRatio: 0.75, // small title starts fading in at 0.75·R
   lockTriggerPx: 100, // overscroll distance that snaps the avatar into the locked hero
   unlockScrollPx: 150, // scroll-up distance (from locked) that releases the lock
-  lockTimingMs: 500, // lock / unlock spring-to-rest duration
+  lockTimingMs: 220, // lock / unlock spring-to-rest duration
   expandedRadius: 20, // locked full-width photo bottom-corner radius
   expandedScrimOpacity: 0.18, // dim over the locked photo, so the white name stays legible
   nameOverlayInsetX: 20, // locked name left inset from the photo edge
