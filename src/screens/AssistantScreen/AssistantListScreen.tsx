@@ -1,21 +1,29 @@
 import { useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
-import { BotIcon, ChevronRightIcon, GlobeIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
+import { BotIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
-import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
+import Animated, {
+  runOnJS,
+  type SharedValue,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { useConfirmDialog } from '@/components/confirmDialog';
 import { type HeaderToolbarAction, TabRootHeader } from '@/components/headers';
 
 import type { Assistant } from '@/data/types/assistant';
 import { useAssistantMutations, useAssistantsApi } from '@/hooks/chat';
 
-// Width of the revealed swipe-to-delete panel; keep in sync with `w-20` below.
-const deleteActionWidth = 80;
+// Width of the revealed swipe-to-delete panel; keep in sync with `w-16` below.
+const DELETE_ACTION_WIDTH = 64;
+const ASSISTANT_ROW_MAX_TAP_DISTANCE = 8;
+const ASSISTANT_ROW_ACCESSIBILITY_ACTIONS = [{ name: 'activate' as const }];
 
 export default function AssistantListScreen() {
   const { t } = useTranslation();
@@ -105,13 +113,39 @@ type AssistantListRowProps = {
 
 function AssistantListRow({ assistant, onDelete, onEdit }: AssistantListRowProps) {
   const { t } = useTranslation();
-  const descriptionText = assistant.description || assistant.prompt;
   const swipeableRef = useRef<SwipeableMethods>(null);
+  const pressProgress = useSharedValue(0);
 
   const handleDeletePress = useCallback(() => {
     swipeableRef.current?.close();
     onDelete(assistant);
   }, [assistant, onDelete]);
+  const handleEditPress = useCallback(() => {
+    onEdit(assistant.id);
+  }, [assistant.id, onEdit]);
+  const editTapGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .maxDistance(ASSISTANT_ROW_MAX_TAP_DISTANCE)
+        .onBegin(() => {
+          pressProgress.value = 1;
+        })
+        .onFinalize(() => {
+          pressProgress.value = 0;
+        })
+        .onEnd((_event, success) => {
+          if (success) {
+            runOnJS(handleEditPress)();
+          }
+        }),
+    [handleEditPress, pressProgress],
+  );
+  const pressedBackgroundStyle = useAnimatedStyle(() => ({
+    opacity: pressProgress.value,
+  }));
+  const borderStyle = useAnimatedStyle(() => ({
+    opacity: 1 - pressProgress.value,
+  }));
   const renderRightActions = useCallback(
     (_progress: SharedValue<number>, drag: SharedValue<number>) => (
       <DeleteAction drag={drag} label={t('common.remove')} onPress={handleDeletePress} />
@@ -121,39 +155,47 @@ function AssistantListRow({ assistant, onDelete, onEdit }: AssistantListRowProps
 
   return (
     <ReanimatedSwipeable
-      containerStyle={styles.swipeable}
       friction={2}
       overshootRight={false}
       ref={swipeableRef}
       renderRightActions={renderRightActions}
       rightThreshold={40}
+      simultaneousWithExternalGesture={editTapGesture}
     >
-      <Pressable
-        accessibilityLabel={assistant.name}
-        accessibilityRole="button"
-        className="flex-row items-center gap-3 bg-settings-grouped-surface px-4 py-3 active:opacity-70"
-        onPress={() => onEdit(assistant.id)}
-      >
-        <View className="size-9 items-center justify-center rounded-full bg-surface-secondary">
-          <Text className="text-xl leading-6">{assistant.emoji || '🌟'}</Text>
-        </View>
-        <View className="min-w-0 flex-1 gap-0.5">
-          <Text className="font-semibold text-base text-foreground" numberOfLines={1}>
-            {assistant.name}
-          </Text>
-          {descriptionText ? (
-            <Text className="text-default-foreground text-sm" numberOfLines={1}>
-              {descriptionText}
-            </Text>
-          ) : null}
-          {assistant.settings.enableWebSearch ? (
-            <View className="flex-row flex-wrap gap-1.5 pt-1">
-              <AssistantBadge icon="web" label={t('assistant.list.webBadge')} />
+      <GestureDetector gesture={editTapGesture}>
+        <View
+          accessibilityActions={ASSISTANT_ROW_ACCESSIBILITY_ACTIONS}
+          accessibilityLabel={assistant.name}
+          accessibilityRole="button"
+          accessible
+          className="py-3"
+          onAccessibilityAction={handleEditPress}
+        >
+          <View className="relative min-w-0 flex-1 flex-row items-center gap-2 pl-2">
+            <Animated.View
+              className="absolute inset-x-0 top-px bottom-px bg-settings-grouped-surface"
+              pointerEvents="none"
+              style={pressedBackgroundStyle}
+            />
+            <Text className="size-10 text-center text-4xl leading-10">{assistant.emoji}</Text>
+            <View className="relative min-w-0 flex-1 pr-4">
+              <Animated.View
+                className="absolute inset-0 border-border border-y"
+                pointerEvents="none"
+                style={borderStyle}
+              />
+              <View className="gap-0.5 py-2">
+                <Text className="font-semibold text-foreground text-lg" numberOfLines={1}>
+                  {assistant.name}
+                </Text>
+                <Text className="text-foreground-muted text-xs" numberOfLines={1}>
+                  {assistant.modelName ?? t('assistant.model.none')}
+                </Text>
+              </View>
             </View>
-          ) : null}
+          </View>
         </View>
-        <ChevronRightIcon className="size-5 text-default-foreground" strokeWidth={2.25} />
-      </Pressable>
+      </GestureDetector>
     </ReanimatedSwipeable>
   );
 }
@@ -169,34 +211,20 @@ function DeleteAction({ drag, label, onPress }: DeleteActionProps) {
   // and the panel is pushed one width off-screen; fully open `drag` is
   // `-deleteActionWidth`, landing it flush against the row (per the RNGH docs).
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: drag.value + deleteActionWidth }],
+    transform: [{ translateX: drag.value + DELETE_ACTION_WIDTH }],
   }));
 
   return (
-    <Animated.View style={animatedStyle}>
+    <Animated.View className="h-full w-16 py-3" style={animatedStyle}>
       <Pressable
         accessibilityLabel={label}
         accessibilityRole="button"
-        className="h-full w-20 items-center justify-center gap-1 bg-danger active:opacity-80"
+        className="w-16 flex-1 items-center justify-center bg-danger active:opacity-80"
         onPress={onPress}
       >
-        <Trash2Icon className="size-6 text-danger-foreground" strokeWidth={2} />
-        <Text className="font-medium text-danger-foreground text-xs">{label}</Text>
+        <Trash2Icon className="size-5 text-danger-foreground" strokeWidth={2} />
       </Pressable>
     </Animated.View>
-  );
-}
-
-function AssistantBadge({ icon, label }: { icon?: 'web'; label: string }) {
-  return (
-    <View className="min-h-6 max-w-full flex-row items-center gap-1 rounded-full bg-surface-secondary px-2">
-      {icon === 'web' ? (
-        <GlobeIcon className="size-3.5 text-default-foreground" strokeWidth={2.25} />
-      ) : null}
-      <Text className="font-semibold text-default-foreground text-xs" numberOfLines={1}>
-        {label}
-      </Text>
-    </View>
   );
 }
 
@@ -239,12 +267,3 @@ function AssistantEmptyState({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  // Clip the revealed delete action to the row's rounded card so its right
-  // corners match the surface instead of spilling past it.
-  swipeable: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-});
