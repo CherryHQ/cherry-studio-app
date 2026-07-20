@@ -2,7 +2,6 @@ import {
   type ReactNode,
   type Ref,
   useCallback,
-  useEffect,
   useImperativeHandle,
   useMemo,
   useState,
@@ -52,16 +51,12 @@ export function ModelPickerBottomSheet({
   const { t } = useTranslation();
   // `sheetIndex` is fed by two mutually-exclusive inputs, never both for the
   // same caller: declarative callers pass `isOpen`/`onClose`; the imperative
-  // caller (chat input, now migrated to declarative) uses `present`/`dismiss`
-  // via the ref handle below. On conditional mount `isOpen` is already `true`,
-  // so a render-time comparison against `useState(isOpen)` misses the
-  // transition — use `useEffect` instead.
-  const [sheetIndex, setSheetIndex] = useState(CLOSED_INDEX);
-  useEffect(() => {
-    if (isOpen !== undefined) {
-      setSheetIndex(isOpen ? OPEN_INDEX : CLOSED_INDEX);
-    }
-  }, [isOpen]);
+  // caller uses `present`/`dismiss` via the ref handle below. On conditional
+  // mount `isOpen` is already `true`, so we derive the index during render
+  // from the prop directly, avoiding the need for a `useEffect` or `useRef`.
+  const [imperativeIndex, setImperativeIndex] = useState(CLOSED_INDEX);
+  const isImperative = isOpen === undefined;
+  const sheetIndex = isImperative ? imperativeIndex : isOpen ? OPEN_INDEX : CLOSED_INDEX;
   const [searchText, setSearchText] = useState('');
   const [headerHeight, setHeaderHeight] = useState(0);
   const [footerHeight, setFooterHeight] = useState(0);
@@ -108,7 +103,7 @@ export function ModelPickerBottomSheet({
   const handleSelect = useCallback(
     (item: ModelPickerModelItem) => {
       onSelect(item);
-      setSheetIndex(CLOSED_INDEX);
+      setImperativeIndex(CLOSED_INDEX);
     },
     [onSelect],
   );
@@ -142,8 +137,8 @@ export function ModelPickerBottomSheet({
   useImperativeHandle(
     ref,
     () => ({
-      dismiss: () => setSheetIndex(CLOSED_INDEX),
-      present: () => setSheetIndex(OPEN_INDEX),
+      dismiss: () => setImperativeIndex(CLOSED_INDEX),
+      present: () => setImperativeIndex(OPEN_INDEX),
     }),
     [],
   );
@@ -151,7 +146,7 @@ export function ModelPickerBottomSheet({
   return (
     <SelectionBottomSheet
       index={sheetIndex}
-      onIndexChange={setSheetIndex}
+      onIndexChange={setImperativeIndex}
       onSettle={(nextIndex) => {
         if (nextIndex === CLOSED_INDEX) {
           handleClose();
