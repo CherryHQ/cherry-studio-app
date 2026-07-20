@@ -147,7 +147,7 @@ export const CherryFileMetaSchema: z.ZodType<CherryFileMeta> = z.object({
 });
 
 // Table-driven dispatch — part `type` → schema. First match wins.
-const SCHEMA_BY_PART_TYPE: ReadonlyArray<readonly [(t: string) => boolean, z.ZodTypeAny]> = [
+const SCHEMA_BY_PART_TYPE: readonly (readonly [(t: string) => boolean, z.ZodTypeAny])[] = [
   [(t) => t === 'text', CherryTextMetaSchema],
   [(t) => t === 'reasoning', CherryReasoningMetaSchema],
   [(t) => t === 'dynamic-tool' || t.startsWith('tool-'), CherryToolMetaSchema],

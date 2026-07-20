@@ -4,6 +4,7 @@ import { toCherryUIMessage } from '@/ai/messages/messageConverter';
 import { serializeError } from '@/ai/utils/serializeError';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { DataServices } from '@/data/services/createDataServices';
+import { discardPreparedFiles, prepareMessageParts } from '@/data/services/fileStorage';
 import type {
   CherryMessagePart,
   CherryUIMessage,
@@ -233,17 +234,24 @@ export class ChatRuntime {
     let assistantPlaceholder: Message | undefined;
     let latestAssistantMessage: CherryUIMessage | undefined;
     let terminalAssistantMessage: Message | undefined;
+    let preparedFilesCommitted = false;
+    let preparedFiles: Awaited<ReturnType<typeof prepareMessageParts>>['files'] = [];
+    let turnParts = [...parts];
 
     try {
+      const prepared = await prepareMessageParts(parts);
+      preparedFiles = prepared.files;
+      turnParts = prepared.parts;
       const modelSnapshot = toModelSnapshot(model);
       throwIfAborted(abortController.signal);
       const reservedTurn =
         await this.dependencies.services.message.createUserMessageWithPlaceholders({
+          ...(preparedFiles.length > 0 ? { preparedFiles } : {}),
           topicId,
           userMessage: {
             mode: 'create',
             dto: {
-              data: { parts: parts as CherryMessagePart[] },
+              data: { parts: turnParts },
               modelId: model.id,
               modelSnapshot,
               parentId: topic.activeNodeId ?? null,
@@ -261,6 +269,7 @@ export class ChatRuntime {
             },
           ],
         });
+      preparedFilesCommitted = true;
       if (abortController.signal.aborted) {
         await this.cancelReservedTurn({
           topicId,
@@ -326,7 +335,7 @@ export class ChatRuntime {
           assistantParts: (latestAssistantMessage?.parts ?? []) as CherryMessagePart[],
           defaultModelId: model.id,
           topicId,
-          userParts: parts,
+          userParts: turnParts,
         });
       }
     } catch (error) {
@@ -345,6 +354,10 @@ export class ChatRuntime {
         logger.warn('Chat stream failed', toError(error));
       }
     } finally {
+      if (!preparedFilesCommitted) {
+        discardPreparedFiles(preparedFiles);
+      }
+
       if (terminalAssistantMessage) {
         this.setTurnSnapshot(topicId, {
           overlayMessage: terminalAssistantMessage,

@@ -1,20 +1,41 @@
 import type { AiStreamRequest } from '@/ai/types/requests';
 import type { DataServices } from '@/data/services/createDataServices';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
+import type { PreparedInternalFile } from '@/data/types/file';
 import type { CherryMessagePart, CherryUIMessage, Message } from '@/data/types/message';
 import type { Model, UniqueModelId } from '@/data/types/model';
 
 import { ChatRuntime, newTopicRuntimeId } from '../ChatRuntime';
 
 const mockReadUIMessageStream = jest.fn();
+const mockPrepareMessageParts = jest.fn(
+  async (
+    parts: readonly CherryMessagePart[],
+  ): Promise<{ files: PreparedInternalFile[]; parts: CherryMessagePart[] }> => ({
+    files: [],
+    parts: [...parts],
+  }),
+);
+const mockDiscardPreparedFiles = jest.fn();
 
 jest.mock('ai', () => ({
   readUIMessageStream: (...args: unknown[]) => mockReadUIMessageStream(...args),
 }));
 
+jest.mock('@/data/services/fileStorage', () => ({
+  discardPreparedFiles: (...args: unknown[]) => mockDiscardPreparedFiles(...args),
+  prepareMessageParts: (parts: readonly CherryMessagePart[]) => mockPrepareMessageParts(parts),
+}));
+
 describe('ChatRuntime', () => {
   beforeEach(() => {
     mockReadUIMessageStream.mockReset();
+    mockPrepareMessageParts.mockClear();
+    mockPrepareMessageParts.mockImplementation(async (parts: readonly CherryMessagePart[]) => ({
+      files: [],
+      parts: [...parts],
+    }));
+    mockDiscardPreparedFiles.mockReset();
   });
 
   test('reserves user and assistant messages before streaming and persists terminal assistant parts', async () => {
@@ -325,13 +346,25 @@ describe('ChatRuntime', () => {
     const services = createServices();
     const runtime = createRuntime({ services });
     const partialChunk = createUiMessage('assistant-1', 'partial');
+    const preparedFile = {
+      ext: 'pdf',
+      id: '00000000-0000-7000-8000-000000000001',
+      name: 'brief',
+      size: 12,
+      uri: 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf',
+    };
+    mockPrepareMessageParts.mockResolvedValueOnce({
+      files: [preparedFile],
+      parts: [createFilePart(preparedFile.uri)],
+    });
     mockReadUIMessageStream.mockReturnValue(
       asyncIterableWithFailure([partialChunk], new Error('stream failed')),
     );
 
     await runtime.sendText({
+      parts: [createFilePart('file://brief.pdf')],
       selectedModelId: 'provider::model' as UniqueModelId,
-      text: 'hi',
+      text: '',
       topicId: 'topic-1',
     });
 
@@ -347,6 +380,7 @@ describe('ChatRuntime', () => {
       },
       status: 'error',
     });
+    expect(mockDiscardPreparedFiles).not.toHaveBeenCalled();
   });
 
   test('finalizes a lingering streaming reasoning part when the stream fails after partial output', async () => {
@@ -494,10 +528,29 @@ describe('ChatRuntime', () => {
     const services = createServices();
     const runtime = createRuntime({ services });
     const assistantChunk = createUiMessage('assistant-1', 'hello');
+    const sourcePart = createFilePart('file://brief.pdf');
+    const managedPart = {
+      ...sourcePart,
+      providerMetadata: {
+        cherry: { fileEntryId: '00000000-0000-7000-8000-000000000001' },
+      },
+      url: 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf',
+    } as CherryMessagePart;
+    const preparedFile = {
+      ext: 'pdf',
+      id: '00000000-0000-7000-8000-000000000001',
+      name: 'brief',
+      size: 12,
+      uri: 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf',
+    };
+    mockPrepareMessageParts.mockResolvedValueOnce({
+      files: [preparedFile],
+      parts: [managedPart],
+    });
     mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
 
     await runtime.sendNewTopicText({
-      parts: [createFilePart('file://brief.pdf')],
+      parts: [sourcePart],
       selectedModelId: 'provider::model' as UniqueModelId,
       text: '',
     });
@@ -507,13 +560,15 @@ describe('ChatRuntime', () => {
     });
     expect(services.message.createUserMessageWithPlaceholders).toHaveBeenCalledWith(
       expect.objectContaining({
+        preparedFiles: [preparedFile],
         userMessage: expect.objectContaining({
           dto: expect.objectContaining({
-            data: { parts: [createFilePart('file://brief.pdf')] },
+            data: { parts: [managedPart] },
           }),
         }),
       }),
     );
+    expect(mockDiscardPreparedFiles).not.toHaveBeenCalled();
   });
 
   test('rejects and does not reserve messages when context resolution fails', async () => {
@@ -535,6 +590,17 @@ describe('ChatRuntime', () => {
 
   test('rejects and restores the topic snapshot when reservation fails', async () => {
     const services = createServices();
+    const preparedFile = {
+      ext: 'pdf',
+      id: '00000000-0000-7000-8000-000000000001',
+      name: 'brief',
+      size: 12,
+      uri: 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf',
+    };
+    mockPrepareMessageParts.mockResolvedValueOnce({
+      files: [preparedFile],
+      parts: [createFilePart(preparedFile.uri)],
+    });
     services.message.createUserMessageWithPlaceholders = jest.fn(async () => {
       throw new Error('reservation failed');
     });
@@ -542,13 +608,15 @@ describe('ChatRuntime', () => {
 
     await expect(
       runtime.sendText({
+        parts: [createFilePart('file://brief.pdf')],
         selectedModelId: 'provider::model' as UniqueModelId,
-        text: 'hi',
+        text: '',
         topicId: 'topic-1',
       }),
     ).rejects.toThrow('reservation failed');
 
     expect(services.ai.streamText).not.toHaveBeenCalled();
+    expect(mockDiscardPreparedFiles).toHaveBeenCalledWith([preparedFile]);
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 

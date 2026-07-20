@@ -1,4 +1,5 @@
 export { AssistantService } from './AssistantService';
+export { FileEntryService } from './FileEntryService';
 export { GroupService } from './GroupService';
 export { MessageService } from './MessageService';
 export { ModelService } from './ModelService';

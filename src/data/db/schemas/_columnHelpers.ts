@@ -73,10 +73,9 @@ export const uuidPrimaryKey = () => text().primaryKey().$defaultFn(createRandomU
  * UUID v7 primary key with auto-generation (time-ordered).
  * Use for tables with large datasets that benefit from sequential inserts.
  */
-export const uuidPrimaryKeyOrdered = () =>
-  text()
-    .primaryKey()
-    .$defaultFn(() => uuidv7({ rng: createUuidBytes }));
+export const createOrderedUuid = () => uuidv7({ rng: createUuidBytes });
+
+export const uuidPrimaryKeyOrdered = () => text().primaryKey().$defaultFn(createOrderedUuid);
 
 export const createUpdateTimestamps = {
   createdAt: integer().notNull().$defaultFn(createTimestamp),

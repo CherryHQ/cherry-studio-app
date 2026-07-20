@@ -4,6 +4,7 @@ import type { DbService } from '@/data/db/DbService';
 import { WebSearchService } from '@/services/webSearch/WebSearchService';
 
 import { AssistantService } from './AssistantService';
+import { FileEntryService } from './FileEntryService';
 import { GroupService } from './GroupService';
 import { MessageService } from './MessageService';
 import { ModelService } from './ModelService';
@@ -24,15 +25,17 @@ export function createDataServices(dbService: DbService) {
   const tag = new TagService(dbService);
   const group = new GroupService(dbService);
   const prompt = new PromptService(dbService);
+  const fileEntry = new FileEntryService(dbService);
   const assistant = new AssistantService(dbService, model, preference, tag, pin);
   const topic = new TopicService(dbService, pin, tag);
-  const message = new MessageService(dbService, topic);
+  const message = new MessageService(dbService, topic, fileEntry);
   const webSearch = new WebSearchService(preference);
   const ai = new AiService({ assistant, model, preference, provider, webSearch });
 
   return {
     ai,
     assistant,
+    fileEntry,
     group,
     message,
     model,
