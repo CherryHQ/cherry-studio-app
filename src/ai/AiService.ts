@@ -15,7 +15,6 @@ import {
   type UIMessageChunk,
 } from 'ai';
 import type { AssistantService } from '@/data/services/AssistantService';
-import type { FileEntryService } from '@/data/services/FileEntryService';
 import type { ModelService } from '@/data/services/ModelService';
 import type { PreferenceService } from '@/data/services/PreferenceService';
 import type { ProviderService } from '@/data/services/ProviderService';
@@ -103,7 +102,6 @@ export interface AiImageResult {
 
 export interface AiServiceDependencies {
   assistant: AssistantService;
-  fileEntry: Pick<FileEntryService, 'resolveUri'>;
   model: ModelService;
   preference: PreferenceService;
   provider: ProviderService;

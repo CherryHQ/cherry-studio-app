@@ -16,19 +16,20 @@ jest.mock('expo', () => {
   // Create a stable mock function that always returns the same { extractText }.
   // The extractText reference captured here persists for the test file's lifetime.
   const extractText = jest.fn();
-  const requireNativeModule = jest.fn(() => ({ extractText }));
-  // Expose both on the requireNativeModule fn so tests can find them
-  (requireNativeModule as unknown as Record<string, unknown>)._extractText = extractText;
-  return { requireNativeModule };
+  const nativeModule = jest.fn(() => ({ extractText }));
+  // Expose extractText on the fn so tests can access it
+  (nativeModule as unknown as Record<string, unknown>)._extractText = extractText;
+  return { requireNativeModule: nativeModule, requireOptionalNativeModule: nativeModule };
 });
 
 // Accessors that reach into the hoisted mock closure.
-function getRequireNativeModule(): jest.Mock {
-  return jest.mocked(require('expo').requireNativeModule);
+function getRequireOptionalNativeModule(): jest.Mock {
+  return jest.mocked(require('expo').requireOptionalNativeModule);
 }
 
 function getExtractText(): jest.Mock {
-  return (getRequireNativeModule() as unknown as Record<string, unknown>)._extractText as jest.Mock;
+  return (getRequireOptionalNativeModule() as unknown as Record<string, unknown>)
+    ._extractText as jest.Mock;
 }
 
 // --- Helpers ---

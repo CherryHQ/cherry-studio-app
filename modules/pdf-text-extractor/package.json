@@ -4,5 +4,10 @@
   "description": "Native PDF text extraction module for Cherry Studio (iOS PDFKit + Android PDFBox)",
   "main": "index.ts",
   "license": "UNLICENSED",
-  "private": true
+  "private": true,
+  "expo-module": {
+    "ios": {
+      "podspecPath": "ios/PdfTextExtractor.podspec"
+    }
+  }
 }

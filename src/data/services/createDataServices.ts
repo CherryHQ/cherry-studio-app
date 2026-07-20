@@ -30,7 +30,7 @@ export function createDataServices(dbService: DbService) {
   const topic = new TopicService(dbService, pin, tag);
   const message = new MessageService(dbService, topic, fileEntry);
   const webSearch = new WebSearchService(preference);
-  const ai = new AiService({ assistant, fileEntry, model, preference, provider, webSearch });
+  const ai = new AiService({ assistant, model, preference, provider, webSearch });
 
   return {
     ai,

@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import PDFKit
+import os
 
 public class PdfTextExtractorModule: Module {
   private let defaultMaxPages = 100
@@ -26,6 +27,14 @@ public class PdfTextExtractorModule: Module {
     guard let document = PDFDocument(url: url) else {
       throw FailedToLoadDocumentException()
     }
+
+#if swift(>=5.7)
+    if #available(iOS 16.0, *) {
+      if document.isEncrypted {
+        throw FailedToLoadDocumentException()
+      }
+    }
+#endif
 
     let totalPages = document.pageCount
 
@@ -61,31 +70,50 @@ public class PdfTextExtractorModule: Module {
   }
 
   private func getPageCount(filePath: String) -> Int {
-    guard let url = try? parseFileURL(filePath),
-          let document = PDFDocument(url: url) else {
+    do {
+      let url = try parseFileURL(filePath)
+      guard let document = PDFDocument(url: url) else {
+        os_log("PdfTextExtractor: failed to load PDF at %{public}@", log: .default, type: .error, filePath)
+        return 0
+      }
+      return document.pageCount
+    } catch {
+      os_log("PdfTextExtractor: getPageCount error for %{public}@: %{public}@", log: .default, type: .error, filePath, String(describing: error))
       return 0
     }
-    return document.pageCount
   }
 
   // MARK: - 辅助方法
 
   private func parseFileURL(_ filePath: String) throws -> URL {
+    let url: URL
+
     if filePath.hasPrefix("file://") {
-      let path = String(filePath.dropFirst(7))
-      guard FileManager.default.fileExists(atPath: path) else {
-        throw FileNotFoundException()
+      guard let parsed = URL(string: filePath) else {
+        throw InvalidFilePathException()
       }
-      return URL(fileURLWithPath: path)
+      url = parsed
+    } else {
+      url = URL(fileURLWithPath: filePath)
     }
 
-    let url = URL(fileURLWithPath: filePath)
+    // Security-scoped URLs (e.g. from document picker with copyToCacheDirectory: false)
+    // need explicit access granted before reading. `startAccessingSecurityScopedResource`
+    // returns false for non-scoped URLs, so this guard is safe to call unconditionally.
+    let didAccess = url.startAccessingSecurityScopedResource()
+    defer {
+      if didAccess {
+        url.stopAccessingSecurityScopedResource()
+      }
+    }
+
     guard FileManager.default.fileExists(atPath: url.path) else {
       throw FileNotFoundException()
     }
 
     return url
   }
+
 }
 
 // MARK: - 数据结构

@@ -5,7 +5,6 @@ import android.net.Uri
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
-import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -38,6 +37,7 @@ class FailedToLoadDocumentException(cause: Throwable? = null) : CodedException(
 
 class PdfTextExtractorModule : Module() {
     private val defaultMaxPages = 100
+    @Volatile
     private var isInitialized = false
 
     private val context: Context
@@ -50,15 +50,8 @@ class PdfTextExtractorModule : Module() {
             initializePdfBox()
         }
 
-        AsyncFunction("extractText") { filePath: String, options: ExtractOptions?, promise: Promise ->
-            try {
-                val result = extractTextFromPDF(filePath, options)
-                promise.resolve(result)
-            } catch (e: CodedException) {
-                promise.reject(e)
-            } catch (e: Exception) {
-                promise.reject(FailedToLoadDocumentException(e))
-            }
+        AsyncFunction("extractText") { filePath: String, options: ExtractOptions? ->
+            extractTextFromPDF(filePath, options)
         }
 
         AsyncFunction("getPageCount") { filePath: String ->

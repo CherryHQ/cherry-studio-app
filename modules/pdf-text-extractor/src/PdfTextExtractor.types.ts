@@ -37,7 +37,7 @@ export interface ExtractResult {
    * 文本提取过程中是否发生错误
    * 当为 true 时，text 可能为空或不完整
    */
-  extractionError?: boolean;
+  extractionError: boolean;
 }
 
 /**

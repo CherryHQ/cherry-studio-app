@@ -11,7 +11,7 @@
  */
 
 import * as FileSystem from 'expo-file-system';
-import { requireNativeModule } from 'expo';
+import { requireOptionalNativeModule } from 'expo';
 
 import type { FileUIPart, TextUIPart } from '@/data/types/message';
 
@@ -28,9 +28,12 @@ function capExtractedText(text: string, filename: string): string {
 }
 
 /**
- * Rewrite any `file://` URLs in a `FileUIPart` to base64 data URLs. Leaves
- * `data:` / `https:` / `http:` URLs untouched. If the file can't be read,
- * returns `null` to signal the caller should drop the part.
+ * Rewrite local-file URIs in a `FileUIPart` to either extracted text (PDF) or
+ * base64 data URLs. Leaves `data:` / `https:` / `http:` URLs untouched. If the
+ * file can't be read, returns `null` to signal the caller should drop the part.
+ *
+ * Accepts both `file://` and `content://` (Android) URIs. `content://` URIs
+ * are passed through to the native module, which handles temporary-file copies.
  *
  * PDF files: when `extractPdf !== false`, text is extracted via the native
  * PdfTextExtractor module and returned as a `TextUIPart`. When `extractPdf
@@ -44,7 +47,7 @@ export async function resolveFileUIPart(
 ): Promise<FileUIPart | TextUIPart | null> {
   const url = part.url;
   if (!url) return part;
-  if (!url.startsWith('file://')) return part;
+  if (!url.startsWith('file://') && !url.startsWith('content://')) return part;
 
   const filename = part.filename ?? 'file';
   const mediaType = part.mediaType || FALLBACK_MEDIA_TYPE;
@@ -52,14 +55,23 @@ export async function resolveFileUIPart(
   // PDF text extraction path — only when the model does NOT support native PDF.
   // Models that accept PDF natively get the raw bytes as base64 data URL below.
   if (mediaType === 'application/pdf' && options?.extractPdf !== false) {
-    try {
-      const filePath = url.slice(7);
-      if (!filePath) {
-        return { type: 'text', text: `Attached file "${filename}": [could not read this file].` };
-      }
+    const PdfTextExtractor = requireOptionalNativeModule('PdfTextExtractor');
+    if (!PdfTextExtractor) {
+      // Module not available (Expo Go, web) — return null so the part is dropped.
+      return null;
+    }
 
-      const PdfTextExtractor = requireNativeModule('PdfTextExtractor');
-      const result = await PdfTextExtractor.extractText(filePath, { maxPages: PDF_MAX_PAGES });
+    try {
+      const result = await PdfTextExtractor.extractText(url, { maxPages: PDF_MAX_PAGES });
+
+      // Check extractionError: native modules set this flag when some pages failed.
+      // Even if text is non-empty, partial extraction results should be marked.
+      if (result.extractionError) {
+        return {
+          type: 'text',
+          text: `Attached file "${filename}": [could not read this file].`,
+        };
+      }
 
       const text = result.text?.trim();
       if (!text) {

@@ -59,7 +59,9 @@ export function ChatInputActionSheet() {
   // render (not an effect) per
   // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes.
   const [sheetIndex, setSheetIndex] = useState(CLOSED_INDEX);
-  const [prevIsActionSheetOpen, setPrevIsActionSheetOpen] = useState(isActionSheetOpen);
+  const [prevIsActionSheetOpen, setPrevIsActionSheetOpen] = useState<boolean | undefined>(
+    undefined,
+  );
   if (isActionSheetOpen !== prevIsActionSheetOpen) {
     setPrevIsActionSheetOpen(isActionSheetOpen);
     setSheetIndex(isActionSheetOpen ? OPEN_INDEX : CLOSED_INDEX);
