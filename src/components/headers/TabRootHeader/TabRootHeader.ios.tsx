@@ -6,6 +6,14 @@ import type { HeaderToolbarAction } from '../BackHeader/BackHeader.types';
 import type { TabRootHeaderProps } from './TabRootHeader.types';
 
 function renderHeaderAction(action: HeaderToolbarAction): ReactNode {
+  if (action.element) {
+    return (
+      <Stack.Toolbar.View hidden={action.hidden} key={action.key}>
+        {action.element}
+      </Stack.Toolbar.View>
+    );
+  }
+
   if (action.hidden) {
     return null;
   }

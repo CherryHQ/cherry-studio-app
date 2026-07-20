@@ -13,6 +13,12 @@ export default function SettingsStackLayout() {
         headerTransparent: isLiquidGlassAvailable,
         headerTintColor: foregroundColor,
       }}
-    />
+    >
+      {/* Settings root renders its own animated profile hero + sticky bar
+          (headerShown:false). Declared here at the layout level — not via a
+          runtime <Stack.Screen> inside the screen — so the native header never
+          flashes on first frame. Sub-screens keep the native header. */}
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+    </Stack>
   );
 }

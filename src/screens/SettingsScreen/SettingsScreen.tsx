@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import {
+  CircleUserRoundIcon,
   CloudIcon,
   DatabaseIcon,
   EarthIcon,
@@ -8,31 +9,67 @@ import {
   SparklesIcon,
   SunIcon,
 } from 'lucide-uniwind/png';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
+import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
+import Animated from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { TabRootHeader } from '@/components/headers';
+import { usePreference } from '@/data/hooks';
+
 import { SettingSelect } from './components/SettingSelect';
 import { SettingsSection } from './components/SettingsSection';
 import { usePrefetchProviders } from './hooks/usePrefetchProviders';
 import { useSettingPreferences } from './hooks/useSettingPreferences';
+import { ProfileHero, ProfileStickyBar, useProfileHeaderAnimation } from './profileHero';
 
 export default function SettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+  const [userName] = usePreference('app.user.name');
   const settingPreferences = useSettingPreferences();
   const prefetchProviders = usePrefetchProviders();
+  const { lockProgress, onScroll, scrollY, toggleHeroLock } = useProfileHeaderAnimation();
+
+  const openProfileSettings = useCallback(() => {
+    router.push('/settings/profile');
+  }, [router]);
+
+  // Own the insets explicitly: `never` keeps the scroll-offset zero point stable
+  // (so scrollY reads 0 at rest and negative on iOS overscroll), which the hero
+  // animation depends on. No top padding: the hero box is pinned to content y=0
+  // and draws under the status bar, exactly like the reference header.
+  const contentContainerStyle = useMemo(() => ({ paddingBottom: tabBarHeight }), [tabBarHeight]);
 
   return (
-    <>
-      <TabRootHeader title={t('navigation.settings')} />
-      <ScrollView
-        alwaysBounceVertical={false}
-        className="flex-1"
-        contentInsetAdjustmentBehavior="automatic"
+    <View className="flex-1 bg-background">
+      <Animated.ScrollView
+        alwaysBounceVertical
+        contentContainerStyle={contentContainerStyle}
+        contentInsetAdjustmentBehavior="never"
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-6 px-2">
+        <ProfileHero
+          lockProgress={lockProgress}
+          onPress={toggleHeroLock}
+          scrollY={scrollY}
+          userName={userName}
+        />
+        <View className="gap-6 px-2 pt-6">
+          <SettingsSection
+            items={[
+              {
+                icon: CircleUserRoundIcon,
+                title: t('settings.items.profile'),
+                onPress: openProfileSettings,
+              },
+            ]}
+          />
           <SettingsSection
             items={[
               {
@@ -104,7 +141,8 @@ export default function SettingsScreen() {
             title={t('settings.about.title')}
           />
         </View>
-      </ScrollView>
-    </>
+      </Animated.ScrollView>
+      <ProfileStickyBar scrollY={scrollY} topInset={insets.top} userName={userName} />
+    </View>
   );
 }

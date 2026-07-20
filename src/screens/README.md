@@ -58,11 +58,11 @@ SettingsScreen/
 - `ChatScreen/`: chat topic screen, new-topic screen, message content, message item rows, and
   workspace behavior.
 - `AssistantScreen/`: assistant list and assistant editing flows.
-- `SettingsScreen/`: settings home, about/data/model/provider/web-search settings screens, and
-  settings-specific UI controls.
+- `SettingsScreen/`: settings home (with the animated profile hero at the top), about/data/model/
+  provider/web-search settings screens, and settings-specific UI controls.
 - `TopicListScreen/`: message-tab topic pagination, topic actions, and navigation.
 - `GlobalSearchScreen/`: app-level native search entry and screen shell.
-- `HomeScreen/`: home-tab content and profile entry point.
+- `HomeScreen/`: home-tab content (activity calendar) and the header-right avatar button.
 
 Reusable modules that remain in `src/components` include app shell modules (`headers`, `navigation`),
 shared flows such as `modelPicker`, shared UI behavior such as `confirmDialog`, and native dependency

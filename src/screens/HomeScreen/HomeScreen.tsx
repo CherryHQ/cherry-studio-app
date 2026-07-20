@@ -1,68 +1,44 @@
-import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { useWindowDimensions, View } from 'react-native';
-import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
-import Animated from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ScrollView, useWindowDimensions, View } from 'react-native';
 
-import { usePreference } from '@/data/hooks';
+import { TabRootHeader } from '@/components/headers';
+import type { HeaderToolbarAction } from '@/components/headers/BackHeader/BackHeader.types';
 
 import {
   createPreviewActivityData,
   getPreviewActivityDayCount,
   HomeActivityCard,
 } from './activity';
-import { HomePlaceholderCards } from './components/HomePlaceholderCards';
-import { HomeProfileHero } from './components/HomeProfileHero';
-import { HomeStickyBar } from './components/HomeStickyBar';
-import { useHomeHeaderAnimation } from './hooks/useHomeHeaderAnimation';
+import { HomeHeaderAvatarButton } from './components/HomeHeaderAvatarButton';
 
 export default function HomeScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const tabBarHeight = useBottomTabBarHeight();
+  const { t } = useTranslation();
   const { width: windowWidth } = useWindowDimensions();
-  const [userName] = usePreference('app.user.name');
   const [activityEndDate] = useState(() => new Date());
   const activityData = useMemo(
     () => createPreviewActivityData(activityEndDate, getPreviewActivityDayCount(windowWidth)),
     [activityEndDate, windowWidth],
   );
-  const { lockProgress, lockState, onScroll, scrollY } = useHomeHeaderAnimation();
 
-  const openProfileSettings = useCallback(() => {
-    router.push('/settings/profile');
-  }, [router]);
-
-  // Own the insets explicitly: `never` keeps the scroll-offset zero point stable
-  // (so scrollY reads 0 at rest and negative on iOS overscroll), which the whole
-  // animation depends on. No top padding: the hero box is pinned to content y=0
-  // and draws under the status bar, exactly like the reference header.
-  const contentContainerStyle = useMemo(() => ({ paddingBottom: tabBarHeight }), [tabBarHeight]);
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () => [{ element: <HomeHeaderAvatarButton />, key: 'home-profile-avatar' }],
+    [],
+  );
 
   return (
-    <View className="flex-1 bg-background">
-      <Animated.ScrollView
-        alwaysBounceVertical
-        contentContainerStyle={contentContainerStyle}
-        contentInsetAdjustmentBehavior="never"
-        onScroll={onScroll}
-        scrollEventThrottle={16}
+    <>
+      <TabRootHeader rightActions={rightActions} title={t('navigation.home')} />
+      <ScrollView
+        alwaysBounceVertical={false}
+        className="flex-1"
+        contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <HomeProfileHero
-          lockProgress={lockProgress}
-          lockState={lockState}
-          onPress={openProfileSettings}
-          scrollY={scrollY}
-          userName={userName}
-        />
-        <View className="gap-3 px-2 pt-6">
+        <View className="gap-3 px-2 pt-3">
           <HomeActivityCard data={activityData} />
-          <HomePlaceholderCards />
         </View>
-      </Animated.ScrollView>
-      <HomeStickyBar scrollY={scrollY} topInset={insets.top} userName={userName} />
-    </View>
+      </ScrollView>
+    </>
   );
 }
