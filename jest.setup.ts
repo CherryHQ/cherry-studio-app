@@ -17,6 +17,14 @@ if (expoModules) {
 // undefined), so anything depending on a real id breaks under test.
 jest.mock('expo-crypto', () => ({ randomUUID: mockRandomUUID }));
 
+// expo-glass-effect probes UIKit availability at import time and
+// src/config/constants.ts calls it at module scope, so give Jest a static
+// "no glass" stub.
+jest.mock('expo-glass-effect', () => ({
+  isGlassEffectAPIAvailable: () => false,
+  isLiquidGlassAvailable: () => false,
+}));
+
 // Callstack bottom tabs is a Fabric native view and is unavailable in Jest.
 // Keep its layout context present so tab-owned screens can render normally.
 jest.mock('react-native-bottom-tabs', () => {
