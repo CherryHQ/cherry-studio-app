@@ -227,6 +227,7 @@
   "settings.pages.websearch.placeholder": "网络搜索相关设置即将推出。",
   "settings.pages.websearch.title": "网络搜索",
   "settings.plugin.title": "插件",
+  "settings.profile.avatarSaveError": "头像保存失败",
   "settings.profile.changeAvatar": "更换头像",
   "settings.profile.edit": "编辑个人资料",
   "settings.profile.toggleAvatar": "放大或还原头像",

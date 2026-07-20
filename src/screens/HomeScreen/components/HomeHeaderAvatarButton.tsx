@@ -7,9 +7,9 @@ const avatarButtonSize = 30;
 
 /**
  * The circular user avatar in the Home tab's header-right slot. Display-only
- * for now (no press handling, no real avatar) — it reuses the app icon via
- * ProfileAvatarImage's default source. Wrapped in a fixed-size View so the
- * native toolbar slot can measure it.
+ * for now (no press handling) — shows the persisted user avatar via
+ * ProfileAvatarImage, falling back to the app icon. Wrapped in a fixed-size
+ * View so the native toolbar slot can measure it.
  */
 export function HomeHeaderAvatarButton() {
   return (

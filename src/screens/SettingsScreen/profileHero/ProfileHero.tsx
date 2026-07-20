@@ -13,8 +13,7 @@ import Animated, {
 
 import { Image } from '@/components/nativePrimitives';
 import { profileHero } from '@/config/constants';
-
-const avatarSource = require('@/assets/icon.png');
+import { useAvatar } from '@/hooks/useAvatar';
 
 type ProfileHeroProps = {
   lockProgress: SharedValue<number>;
@@ -41,6 +40,7 @@ export function ProfileHero({ lockProgress, onPress, scrollY, userName }: Profil
   const { t } = useTranslation();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const foregroundColor = useThemeColor('foreground');
+  const avatarSource = useAvatar();
   const nameWidth = useSharedValue(0);
   const measuredNameRef = useRef<string | null>(null);
 

@@ -9,12 +9,13 @@ import {
 describe('preference defaults', () => {
   test('keeps the desktop preference key surface aligned', () => {
     expect(getPreferenceKeys()).toEqual(Object.keys(DefaultPreferences.default));
-    expect(getPreferenceKeys()).toHaveLength(229);
+    expect(getPreferenceKeys()).toHaveLength(230);
 
     expect(getPreferenceKeys()).toEqual(
       expect.arrayContaining([
         'app.developer_mode.enabled',
         'app.language',
+        'app.user.avatar',
         'chat.default_model_id',
         'chat.input.send_message_shortcut',
         'feature.quick_assistant.model_id',
@@ -29,6 +30,7 @@ describe('preference defaults', () => {
 
   test('returns desktop-aligned default values', () => {
     expect(getDefaultValue('app.language')).toBeNull();
+    expect(getDefaultValue('app.user.avatar')).toBe('');
     expect(getDefaultValue('app.user.id')).toBe('uuid()');
     expect(getDefaultValue('app.user.name')).toBe('');
     expect(getDefaultValue('app.dist.auto_update.enabled')).toBe(true);
@@ -62,6 +64,6 @@ describe('preference defaults', () => {
     expect(isPreferenceKey('chat.web_search.max_results')).toBe(true);
     expect(isPreferenceKey('feature.translate.model_prompt')).toBe(true);
     expect(isPreferenceKey('BootConfig.example')).toBe(false);
-    expect(Object.keys(DefaultPreferences.default)).toHaveLength(229);
+    expect(Object.keys(DefaultPreferences.default)).toHaveLength(230);
   });
 });
