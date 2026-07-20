@@ -29,7 +29,7 @@ import {
   SWIRL_RIGHT_CENTERLINE,
   SWIRL_RIGHT_FILL,
 } from '../utils/logoPaths';
-import { centerlineDebugColor, logoBrandColors } from '../utils/logoPalette';
+import { logoBrandColors } from '../utils/logoPalette';
 
 export type LogoDrawAnimationRef = {
   /** (Re)start the draw animation from the beginning. */
@@ -50,8 +50,6 @@ export type LogoDrawAnimationProps = {
   progress?: SharedValue<number>;
   /** Called on the JS thread once the draw reaches the end. */
   onFinish?: () => void;
-  /** Overlay the mask centerlines and keep masks mounted at rest (calibration). */
-  debug?: boolean;
   /** Imperative play/replay handle. */
   ref?: Ref<LogoDrawAnimationRef>;
 };
@@ -69,7 +67,6 @@ export function LogoDrawAnimation({
   autoPlay = true,
   progress,
   onFinish,
-  debug = false,
   ref,
 }: LogoDrawAnimationProps) {
   const internalProgress = useSharedValue(0);
@@ -151,7 +148,7 @@ export function LogoDrawAnimation({
   return (
     <Canvas pointerEvents="none" style={{ height, width }}>
       <Group transform={fitTransform}>
-        {finished && !debug ? (
+        {finished ? (
           <>
             <Path color={logoBrandColors.swirl} path={SWIRL_LEFT_FILL} />
             <Path color={logoBrandColors.swirl} path={SWIRL_RIGHT_FILL} />
@@ -211,37 +208,6 @@ export function LogoDrawAnimation({
             </Group>
           </>
         )}
-        {debug ? (
-          <>
-            <Path
-              color={centerlineDebugColor}
-              end={leftTrim}
-              path={SWIRL_LEFT_CENTERLINE}
-              strokeCap="round"
-              strokeJoin="round"
-              strokeWidth={SWIRL_MASK_STROKE_WIDTH}
-              style="stroke"
-            />
-            <Path
-              color={centerlineDebugColor}
-              end={rightTrim}
-              path={SWIRL_RIGHT_CENTERLINE}
-              strokeCap="round"
-              strokeJoin="round"
-              strokeWidth={SWIRL_MASK_STROKE_WIDTH}
-              style="stroke"
-            />
-            <Path
-              color={centerlineDebugColor}
-              end={checkTrim}
-              path={CHECK_CENTERLINE}
-              strokeCap="round"
-              strokeJoin="round"
-              strokeWidth={CHECK_MASK_STROKE_WIDTH}
-              style="stroke"
-            />
-          </>
-        ) : null}
       </Group>
     </Canvas>
   );

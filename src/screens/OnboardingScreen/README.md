@@ -1,9 +1,8 @@
 # OnboardingScreen
 
 Onboarding entry (route: `/onboarding`, registered headerless in
-`src/app/_layout.tsx`). Currently a skeleton that hosts the brand-logo draw
-animation plus `__DEV__`-only calibration controls (replay / scrub slider /
-debug overlay); the real onboarding content lands later.
+`src/app/_layout.tsx`). Currently a skeleton that centers the brand-logo draw
+animation; the real onboarding content lands later.
 
 ## logoDraw
 
@@ -51,12 +50,13 @@ per-frame work stays on the UI thread via Skia's Reanimated integration.
 
 ### Calibrating after geometry changes
 
-1. Open `/onboarding` (`xcrun simctl openurl booted cherrystudio://onboarding`).
-2. Flip on the dev panel's **Scrub** and **Debug centerlines** switches —
-   debug draws the mask corridors in translucent cyan *with* the same trim,
-   and keeps masks mounted at `progress = 1`.
-3. Walk the slider through ~0.05 steps: no fill may appear outside the cyan
-   corridor's leading edge, and the corridor must fully cover each shape at
-   its segment end. Temporarily rendering a grid of fixed-progress
-   instances (one `useSharedValue(p)` per cell) makes before/after
-   comparison easy in a single screenshot.
+`LogoDrawAnimation` takes a controlled `progress` shared value, which is the
+scrubbing seam for recalibration — drive it from a temporary slider (or a
+grid of fixed-progress instances, one `useSharedValue(p)` per cell, for a
+single before/after screenshot) and step through ~0.05 increments. At every
+step no fill may appear outside the growing mask corridor's leading edge, and
+the corridor must fully cover each shape by its segment end. To see the
+corridor itself, temporarily render each centerline as a translucent
+`<Path style="stroke">` with the matching trim next to the masks. The
+deterministic check for detached slivers is the offline rasteriser described
+above (flatten fill polygon ∩ trimmed thick stroke → count components).

@@ -10,6 +10,3 @@ export const logoBrandColors = {
   /** Check mark — the cherry stem (`.cls-2`). */
   check: '#23af69',
 } as const;
-
-/** Debug-only overlay color for the mask centerlines (40% cyan). */
-export const centerlineDebugColor = 'rgba(0, 200, 255, 0.4)';
