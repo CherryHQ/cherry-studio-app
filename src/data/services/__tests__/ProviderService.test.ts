@@ -1,6 +1,7 @@
+import { CacheService, InMemoryKVStorage } from '@/data/cache';
 import type { DbService } from '@/data/db/DbService';
 import type { UserProviderRow } from '@/data/db/schemas/userProvider';
-import type { ProviderSettings } from '@/data/types/provider';
+import type { ApiKeyEntry, ProviderSettings } from '@/data/types/provider';
 
 import type { PinService } from '../PinService';
 import { providerRegistryService } from '../ProviderRegistryService';
@@ -61,6 +62,7 @@ describe('ProviderService', () => {
         withWriteTx: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
       } as unknown as DbService,
       createPinServiceStub(),
+      createCacheService(),
     );
 
     const provider = await service.update(row.providerId, {
@@ -115,6 +117,64 @@ describe('ProviderService', () => {
     expect(tx.delete).toHaveBeenCalledTimes(1);
   });
 
+  test('rotates enabled API keys round-robin via the cache service', async () => {
+    const service = createRotationService([
+      apiKey('a', 'key-a'),
+      apiKey('b', 'key-b', false),
+      apiKey('c', 'key-c'),
+    ]);
+
+    await expect(service.getRotatedApiKey('custom-provider')).resolves.toBe('key-a');
+    await expect(service.getRotatedApiKey('custom-provider')).resolves.toBe('key-c');
+    await expect(service.getRotatedApiKey('custom-provider')).resolves.toBe('key-a');
+  });
+
+  test('short-circuits rotation for zero or one enabled key', async () => {
+    const cacheService = createCacheService();
+
+    await expect(
+      createRotationService([apiKey('a', 'key-a', false)], cacheService).getRotatedApiKey(
+        'custom-provider',
+      ),
+    ).resolves.toBe('');
+    await expect(
+      createRotationService([apiKey('a', 'key-a')], cacheService).getRotatedApiKey(
+        'custom-provider',
+      ),
+    ).resolves.toBe('key-a');
+    expect(cacheService.get('settings.provider.custom-provider.last_used_key_id')).toBeUndefined();
+  });
+
+  test('rotation state is scoped per provider', async () => {
+    const cacheService = createCacheService();
+    const first = createRotationService([apiKey('a', 'key-a'), apiKey('b', 'key-b')], cacheService);
+
+    await expect(first.getRotatedApiKey('provider-one')).resolves.toBe('key-a');
+    await expect(first.getRotatedApiKey('provider-two')).resolves.toBe('key-a');
+    await expect(first.getRotatedApiKey('provider-one')).resolves.toBe('key-b');
+  });
+
+  test('deleting a provider resets its rotation state', async () => {
+    const cacheService = createCacheService();
+    const rotation = createRotationService(
+      [apiKey('a', 'key-a'), apiKey('b', 'key-b')],
+      cacheService,
+    );
+
+    await rotation.getRotatedApiKey('custom-provider');
+    expect(cacheService.get('settings.provider.custom-provider.last_used_key_id')).toBe('a');
+
+    const tx = createDeleteTransaction({
+      modelIds: [],
+      presetProviderId: null,
+      providerId: 'custom-provider',
+    });
+    await createService(tx, undefined, cacheService).delete('custom-provider');
+
+    expect(cacheService.get('settings.provider.custom-provider.last_used_key_id')).toBeUndefined();
+    await expect(rotation.getRotatedApiKey('custom-provider')).resolves.toBe('key-a');
+  });
+
   test('rejects deleting registry and canonical preset providers', async () => {
     const registryTx = createDeleteTransaction({
       modelIds: [],
@@ -140,13 +200,48 @@ describe('ProviderService', () => {
   });
 });
 
-function createService(tx: object, pinService?: PinService): ProviderService {
+function createService(
+  tx: object,
+  pinService?: PinService,
+  cacheService?: CacheService,
+): ProviderService {
   return new ProviderService(
     {
       getDb: () => ({}),
       withWriteTx: async (callback: (transaction: object) => Promise<unknown>) => callback(tx),
     } as unknown as DbService,
     pinService ?? createPinServiceStub(),
+    cacheService ?? createCacheService(),
+  );
+}
+
+function createCacheService(): CacheService {
+  return new CacheService(new InMemoryKVStorage());
+}
+
+function apiKey(id: string, key: string, isEnabled = true): ApiKeyEntry {
+  return { id, isEnabled, key };
+}
+
+/** Service whose db always resolves one provider row with the given API keys. */
+function createRotationService(apiKeys: ApiKeyEntry[], cacheService?: CacheService) {
+  const db = {
+    select: jest.fn(() => ({
+      from: jest.fn(() => ({
+        where: jest.fn(() => ({
+          limit: jest.fn(async () => [{ apiKeys }]),
+        })),
+      })),
+    })),
+  };
+
+  return new ProviderService(
+    {
+      getDb: () => db,
+      withWriteTx: async () => undefined,
+    } as unknown as DbService,
+    createPinServiceStub(),
+    cacheService ?? createCacheService(),
   );
 }
 
