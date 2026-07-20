@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { useUniwind } from 'uniwind';
 
 import { homeActivityCalendar } from '@/config/constants';
 
 import type { ActivityAnimationControls, ActivityData } from '../types';
-import {
-  activityCalendarRowCount,
-  addCalendarDays,
-  buildActivityCalendarWeeks,
-  normalizeLocalDate,
-} from '../utils/calendarLayout';
+import { buildActivityCalendarWeeks } from '../utils/calendarLayout';
 import { ActivitySquare } from './ActivitySquare';
 
 export type HomeActivityCardProps = {
@@ -19,16 +15,16 @@ export type HomeActivityCardProps = {
 };
 
 export function HomeActivityCard({ data }: HomeActivityCardProps) {
-  const { i18n, t } = useTranslation();
+  const { t } = useTranslation();
   const squareRefs = useRef(new Map<string, ActivityAnimationControls>());
   const isAnimatingRef = useRef(false);
   const pressed = useSharedValue(false);
+  // useUniwind, not useColorScheme: the app theme preference can pin dark/light
+  // independently of the system appearance, and the squares must match the card.
+  const { theme } = useUniwind();
+  const levelColors = homeActivityCalendar.levelColors[theme === 'dark' ? 'dark' : 'light'];
 
   const weeks = useMemo(() => buildActivityCalendarWeeks(data), [data]);
-  const weekdayLabels = useMemo(
-    () => buildWeekdayLabels(i18n.resolvedLanguage ?? i18n.language),
-    [i18n.language, i18n.resolvedLanguage],
-  );
 
   const startAnimation = useCallback(() => {
     isAnimatingRef.current = true;
@@ -82,75 +78,45 @@ export function HomeActivityCard({ data }: HomeActivityCardProps) {
       onPressOut={handlePressOut}
       style={styles.pressable}
     >
-      <Animated.View style={[styles.card, pressAnimatedStyle]}>
-        <View style={styles.dayLabels}>
-          {weekdayLabels.map((label) => (
-            <Text key={label} numberOfLines={1} style={styles.dayLabel}>
-              {label}
-            </Text>
-          ))}
-        </View>
-
-        <View style={styles.grid}>
-          {weeks.map((week, weekIndex) => (
-            <View key={week[0].dateKey} style={styles.week}>
-              {week.map((day, dayIndex) =>
-                day.inRange ? (
-                  <ActivitySquare
-                    dayIndex={dayIndex}
-                    key={day.dateKey}
-                    level={data[day.dateKey] ?? 0}
-                    ref={(square) => {
-                      if (square) {
-                        squareRefs.current.set(day.dateKey, square);
-                        return () => {
-                          squareRefs.current.delete(day.dateKey);
-                        };
-                      }
-                    }}
-                    weekIndex={weekIndex}
-                  />
-                ) : (
-                  <View key={day.dateKey} style={styles.emptySquare} />
-                ),
-              )}
-            </View>
-          ))}
+      <Animated.View style={pressAnimatedStyle}>
+        <View className="rounded-2xl bg-surface p-4" style={styles.card}>
+          <View style={styles.grid}>
+            {weeks.map((week, weekIndex) => (
+              <View key={week[0].dateKey} style={styles.week}>
+                {week.map((day, dayIndex) =>
+                  day.inRange ? (
+                    <ActivitySquare
+                      dayIndex={dayIndex}
+                      key={day.dateKey}
+                      level={data[day.dateKey] ?? 0}
+                      levelColors={levelColors}
+                      ref={(square) => {
+                        if (square) {
+                          squareRefs.current.set(day.dateKey, square);
+                          return () => {
+                            squareRefs.current.delete(day.dateKey);
+                          };
+                        }
+                      }}
+                      weekIndex={weekIndex}
+                    />
+                  ) : (
+                    <View key={day.dateKey} style={styles.emptySquare} />
+                  ),
+                )}
+              </View>
+            ))}
+          </View>
         </View>
       </Animated.View>
     </Pressable>
   );
 }
 
-function buildWeekdayLabels(locale: string): string[] {
-  const formatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
-  const monday = normalizeLocalDate(new Date(2024, 0, 1)); // a known Monday
-
-  return Array.from({ length: activityCalendarRowCount }, (_, dayIndex) =>
-    formatter.format(addCalendarDays(monday, dayIndex)),
-  );
-}
-
 const styles = StyleSheet.create({
   card: {
-    alignItems: 'flex-start',
-    backgroundColor: homeActivityCalendar.cardColor,
     borderCurve: 'continuous',
-    borderRadius: homeActivityCalendar.cardRadius,
     boxShadow: homeActivityCalendar.cardShadow,
-    flexDirection: 'row',
-    padding: homeActivityCalendar.cardPadding,
-  },
-  dayLabel: {
-    color: homeActivityCalendar.dayLabelColor,
-    fontSize: homeActivityCalendar.dayLabelFontSize,
-    height: homeActivityCalendar.cellSize,
-    lineHeight: homeActivityCalendar.cellSize,
-    width: homeActivityCalendar.dayLabelWidth,
-  },
-  dayLabels: {
-    gap: homeActivityCalendar.cellGap,
-    marginRight: homeActivityCalendar.dayLabelGap,
   },
   emptySquare: {
     height: homeActivityCalendar.cellSize,

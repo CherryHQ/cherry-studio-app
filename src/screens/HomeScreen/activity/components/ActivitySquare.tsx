@@ -18,14 +18,21 @@ import { getActivitySweepDelayMs } from '../utils/calendarLayout';
 type ActivitySquareProps = {
   dayIndex: number;
   level: ActivityLevel;
+  levelColors: readonly string[];
   ref: Ref<ActivityAnimationControls>;
   weekIndex: number;
 };
 
-export function ActivitySquare({ dayIndex, level, ref, weekIndex }: ActivitySquareProps) {
+export function ActivitySquare({
+  dayIndex,
+  level,
+  levelColors,
+  ref,
+  weekIndex,
+}: ActivitySquareProps) {
   const progress = useSharedValue(0);
-  const restingColor = homeActivityCalendar.levelColors[0];
-  const activeColor = homeActivityCalendar.levelColors[level];
+  const restingColor = levelColors[0];
+  const activeColor = levelColors[level];
 
   const startAnimation = useCallback(() => {
     cancelAnimation(progress);

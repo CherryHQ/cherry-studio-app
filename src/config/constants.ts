@@ -35,15 +35,13 @@ export const homeActivityCalendar = {
   cellSize: 14,
   cellGap: 3,
   cellRadius: 2,
-  dayLabelWidth: 25,
-  dayLabelGap: 8, // between the weekday-label column and the grid
-  dayLabelFontSize: 11,
-  dayLabelColor: '#656d76',
-  cardColor: '#ffffff',
-  cardRadius: 16,
-  cardPadding: 16,
   cardShadow: '0px 0px 20px 0px rgba(0, 0, 0, 0.05)',
-  levelColors: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'], // no activity → highest, GitHub's green scale
+  // no activity → highest; GitHub's green scales for both themes. Level 0 in
+  // dark sits slightly above the dark surface so empty cells stay visible.
+  levelColors: {
+    light: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'],
+    dark: ['#2c2c2c', '#0e4429', '#006d32', '#26a641', '#39d353'],
+  },
   sweepStepMs: 45, // per-diagonal delay of the bottom-left → top-right entrance wave
   resetMaxDelayMs: 500, // each square rewinds after a random slice of this window
   pressedScale: 0.96, // card press-down feedback
