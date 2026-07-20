@@ -81,16 +81,17 @@ export default function AssistantListScreen() {
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
-        contentContainerClassName="gap-3 px-2"
+        contentContainerClassName="px-2"
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
         {assistants.length > 0 ? (
-          <View className="gap-3">
-            {assistants.map((assistant) => (
+          <View>
+            {assistants.map((assistant, index) => (
               <AssistantListRow
                 key={assistant.id}
                 assistant={assistant}
+                isLast={index === assistants.length - 1}
                 onDelete={requestDeleteAssistant}
                 onEdit={openEditAssistant}
               />
@@ -107,13 +108,15 @@ export default function AssistantListScreen() {
 
 type AssistantListRowProps = {
   assistant: Assistant;
+  isLast: boolean;
   onDelete: (assistant: Assistant) => void;
   onEdit: (assistantId: string) => void;
 };
 
-function AssistantListRow({ assistant, onDelete, onEdit }: AssistantListRowProps) {
+function AssistantListRow({ assistant, isLast, onDelete, onEdit }: AssistantListRowProps) {
   const { t } = useTranslation();
   const swipeableRef = useRef<SwipeableMethods>(null);
+  const isSwipeOpen = useSharedValue(0);
   const pressProgress = useSharedValue(0);
 
   const handleDeletePress = useCallback(() => {
@@ -123,6 +126,12 @@ function AssistantListRow({ assistant, onDelete, onEdit }: AssistantListRowProps
   const handleEditPress = useCallback(() => {
     onEdit(assistant.id);
   }, [assistant.id, onEdit]);
+  const handleSwipeableWillOpen = useCallback(() => {
+    isSwipeOpen.value = 1;
+  }, [isSwipeOpen]);
+  const handleSwipeableClose = useCallback(() => {
+    isSwipeOpen.value = 0;
+  }, [isSwipeOpen]);
   const editTapGesture = useMemo(
     () =>
       Gesture.Tap()
@@ -134,11 +143,11 @@ function AssistantListRow({ assistant, onDelete, onEdit }: AssistantListRowProps
           pressProgress.value = 0;
         })
         .onEnd((_event, success) => {
-          if (success) {
+          if (success && isSwipeOpen.value === 0) {
             runOnJS(handleEditPress)();
           }
         }),
-    [handleEditPress, pressProgress],
+    [handleEditPress, isSwipeOpen, pressProgress],
   );
   const pressedBackgroundStyle = useAnimatedStyle(() => ({
     opacity: pressProgress.value,
@@ -156,6 +165,8 @@ function AssistantListRow({ assistant, onDelete, onEdit }: AssistantListRowProps
   return (
     <ReanimatedSwipeable
       friction={2}
+      onSwipeableClose={handleSwipeableClose}
+      onSwipeableWillOpen={handleSwipeableWillOpen}
       overshootRight={false}
       ref={swipeableRef}
       renderRightActions={renderRightActions}
@@ -168,23 +179,26 @@ function AssistantListRow({ assistant, onDelete, onEdit }: AssistantListRowProps
           accessibilityLabel={assistant.name}
           accessibilityRole="button"
           accessible
-          className="py-3"
           onAccessibilityAction={handleEditPress}
         >
-          <View className="relative min-w-0 flex-1 flex-row items-center gap-2 pl-2">
+          <View className="relative min-w-0 flex-1 flex-row items-center gap-2 py-2 pl-2">
             <Animated.View
-              className="absolute inset-x-0 top-px bottom-px bg-settings-grouped-surface"
+              className="absolute inset-0 bg-settings-grouped-surface"
               pointerEvents="none"
               style={pressedBackgroundStyle}
             />
+            <Animated.View
+              className={
+                isLast
+                  ? 'absolute inset-y-0 right-0 left-14 border-border border-y'
+                  : 'absolute top-0 right-0 left-14 border-border border-t'
+              }
+              pointerEvents="none"
+              style={borderStyle}
+            />
             <Text className="size-10 text-center text-4xl leading-10">{assistant.emoji}</Text>
-            <View className="relative min-w-0 flex-1 pr-4">
-              <Animated.View
-                className="absolute inset-0 border-border border-y"
-                pointerEvents="none"
-                style={borderStyle}
-              />
-              <View className="gap-0.5 py-2">
+            <View className="min-w-0 flex-1 pr-4">
+              <View className="gap-0.5">
                 <Text className="font-semibold text-foreground text-lg" numberOfLines={1}>
                   {assistant.name}
                 </Text>
@@ -215,7 +229,7 @@ function DeleteAction({ drag, label, onPress }: DeleteActionProps) {
   }));
 
   return (
-    <Animated.View className="h-full w-16 py-3" style={animatedStyle}>
+    <Animated.View className="h-full w-16" style={animatedStyle}>
       <Pressable
         accessibilityLabel={label}
         accessibilityRole="button"
