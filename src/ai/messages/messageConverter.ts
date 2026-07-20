@@ -1,7 +1,4 @@
-/**
- * `Message` -> AI SDK `UIMessage`, with unresolved `file://` URLs dropped
- * until the mobile file resolver is wired to Expo FileSystem.
- */
+/** `Message` -> AI SDK `UIMessage`. */
 
 import type { UIMessage } from 'ai';
 import type { CherryMessagePart, CherryUIMessage, Message } from '@/data/types/message';

@@ -14,6 +14,18 @@ function reasoningPart(
   };
 }
 
+function filePart(
+  providerMetadata?: ProviderMetadata,
+): Extract<CherryMessagePart, { type: 'file' }> {
+  return {
+    type: 'file',
+    filename: 'notes.pdf',
+    mediaType: 'application/pdf',
+    url: 'file:///notes.pdf',
+    ...(providerMetadata && { providerMetadata }),
+  };
+}
+
 describe('readCherryMeta', () => {
   test('returns undefined when providerMetadata.cherry is missing', () => {
     expect(readCherryMeta(reasoningPart())).toBeUndefined();
@@ -27,6 +39,28 @@ describe('readCherryMeta', () => {
 
   test('returns undefined for a malformed payload instead of throwing', () => {
     const part = reasoningPart({ cherry: { thinkingMs: 'not-a-number' } });
+
+    expect(readCherryMeta(part)).toBeUndefined();
+  });
+
+  test('parses the complete desktop-compatible file metadata shape', () => {
+    const part = filePart({
+      cherry: {
+        composerFileKind: 'pasted-text',
+        fileEntryId: 'file-entry-1',
+        fileTokenSourceId: 'composer-source-1',
+      },
+    });
+
+    expect(readCherryMeta(part)).toEqual({
+      composerFileKind: 'pasted-text',
+      fileEntryId: 'file-entry-1',
+      fileTokenSourceId: 'composer-source-1',
+    });
+  });
+
+  test('rejects malformed file metadata without throwing', () => {
+    const part = filePart({ cherry: { composerFileKind: 'upload' } });
 
     expect(readCherryMeta(part)).toBeUndefined();
   });
@@ -47,5 +81,16 @@ describe('withCherryMeta', () => {
     const patched = withCherryMeta(part, { thinkingMs: 500 });
 
     expect(readCherryMeta(patched)).toEqual({ startedAt: 42, thinkingMs: 500 });
+  });
+
+  test('merges file identity without replacing composer metadata', () => {
+    const part = filePart({ cherry: { fileTokenSourceId: 'composer-source-1' } });
+
+    const patched = withCherryMeta(part, { fileEntryId: 'file-entry-1' });
+
+    expect(readCherryMeta(patched)).toEqual({
+      fileEntryId: 'file-entry-1',
+      fileTokenSourceId: 'composer-source-1',
+    });
   });
 });
