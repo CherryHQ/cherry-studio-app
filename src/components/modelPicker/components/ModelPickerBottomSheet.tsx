@@ -2,6 +2,7 @@ import {
   type ReactNode,
   type Ref,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useState,
@@ -50,20 +51,21 @@ export function ModelPickerBottomSheet({
 }: ModelPickerBottomSheetProps) {
   const { t } = useTranslation();
   // `sheetIndex` is fed by two mutually-exclusive inputs, never both for the
-  // same caller: declarative callers pass `isOpen`/`onClose` (adjusted during
-  // render below); the imperative caller (chat input) never passes `isOpen`
-  // and drives it purely through the `present`/`dismiss` ref handle.
+  // same caller: declarative callers pass `isOpen`/`onClose`; the imperative
+  // caller (chat input, now migrated to declarative) uses `present`/`dismiss`
+  // via the ref handle below. On conditional mount `isOpen` is already `true`,
+  // so a render-time comparison against `useState(isOpen)` misses the
+  // transition — use `useEffect` instead.
   const [sheetIndex, setSheetIndex] = useState(CLOSED_INDEX);
-  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  useEffect(() => {
+    if (isOpen !== undefined) {
+      setSheetIndex(isOpen ? OPEN_INDEX : CLOSED_INDEX);
+    }
+  }, [isOpen]);
   const [searchText, setSearchText] = useState('');
   const [headerHeight, setHeaderHeight] = useState(0);
   const [footerHeight, setFooterHeight] = useState(0);
   const [visibleListItemCount, setVisibleListItemCount] = useState(initialModelPickerListItemCount);
-
-  if (isOpen !== prevIsOpen) {
-    setPrevIsOpen(isOpen);
-    setSheetIndex(isOpen ? OPEN_INDEX : CLOSED_INDEX);
-  }
   const isSearching = searchText.trim().length > 0;
   const { groups, isLoading, pinnedModelIds } = useModelPickerData({ searchText });
   const totalListItemCount = useMemo(

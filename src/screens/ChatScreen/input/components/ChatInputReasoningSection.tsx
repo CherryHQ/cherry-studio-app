@@ -21,12 +21,34 @@ import {
  * (the sheet reaches the physical screen bottom) so that rendering nothing —
  * when the model has no reasoning stops — leaves no stray chrome.
  */
-export function ChatInputReasoningSection() {
+export function ChatInputReasoningSection({
+  reasoningEffort: reasoningEffortProp,
+  onSelectReasoningEffort: onSelectReasoningEffortProp,
+}: {
+  reasoningEffort?: string;
+  onSelectReasoningEffort?: (value: ChatInputReasoningEffort) => void;
+} = {}) {
   const { t } = useTranslation();
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  const { reasoningEffort } = useChatInputState();
-  const { selectReasoningEffort } = useChatInputActions();
+  // Accept values as props so the component works inside ModalBottomSheet
+  // portals (Android) where ChatInputProvider context is not available.
+  // When props are provided, context hooks are only used as fallback.
+  let stateCtx: { reasoningEffort: string } | null = null;
+  let actionsCtx: { selectReasoningEffort: (value: ChatInputReasoningEffort) => void } | null =
+    null;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    stateCtx = useChatInputState();
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    actionsCtx = useChatInputActions();
+  } catch {
+    // Context not available (e.g. rendered inside ModalBottomSheet portal).
+    // Props from the parent are sufficient.
+  }
+  const reasoningEffort = reasoningEffortProp ?? stateCtx?.reasoningEffort ?? '';
+  const selectReasoningEffort =
+    onSelectReasoningEffortProp ?? actionsCtx?.selectReasoningEffort ?? (() => {});
   const reasoningEfforts = useChatInputReasoningEfforts();
 
   // Keep reasoningEfforts' own order (off → default → minimal → … → max → auto),
