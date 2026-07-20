@@ -1,9 +1,8 @@
 import { resolveIcon } from '@cherrystudio/ui/icons';
-import { useCallback, useRef } from 'react';
+import { useCallback, useState } from 'react';
 import {
   getNextModelSelection,
   ModelPickerBottomSheet,
-  type ModelPickerBottomSheetHandle,
   type ModelPickerModelItem,
   useModelSettingSelections,
   usePrefetchModelPickerData,
@@ -18,6 +17,7 @@ import { useChatInputReasoningEffortSync } from './hooks/useChatInputReasoningEf
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { createChatInputMessageParts } from './utils/chatInputAttachments';
 
+import { useChatInputState } from './context/ChatInputProvider';
 type ChatInputProps = {
   topicId?: string;
 };
@@ -25,7 +25,6 @@ type ChatInputProps = {
 export function ChatInput({ topicId }: ChatInputProps) {
   const modelSettings = useModelSettingSelections();
   usePrefetchModelPickerData();
-  const modelPickerRef = useRef<ModelPickerBottomSheetHandle>(null);
   const selectedModelId = isUniqueModelId(modelSettings.selections.default)
     ? modelSettings.selections.default
     : null;
@@ -47,14 +46,16 @@ export function ChatInput({ topicId }: ChatInputProps) {
   const reasoningEfforts = useChatInputReasoningEfforts();
   useChatInputReasoningEffortSync(reasoningEfforts);
 
-  const openModelPicker = useCallback(() => {
-    modelPickerRef.current?.present();
-  }, []);
+  const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
+  const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
+  const { isActionSheetOpen } = useChatInputState();
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
       const nextModelId = getNextModelSelection(selectedModelId, item.modelId);
 
       modelSettings.onSelectionChange('default', nextModelId);
+      setIsModelPickerOpen(false);
     },
     [modelSettings, selectedModelId],
   );
@@ -84,13 +85,16 @@ export function ChatInput({ topicId }: ChatInputProps) {
         onStopPress={chatRuntime.abort}
         reasoningEfforts={reasoningEfforts}
       />
-      <ChatInputActionSheet />
-      <ModelPickerBottomSheet
-        footer={reasoningEfforts.length > 0 ? <ChatInputReasoningSection /> : undefined}
-        onSelect={handleModelSelect}
-        ref={modelPickerRef}
-        selectedModelId={selectedModelId}
-      />
+      {isActionSheetOpen ? <ChatInputActionSheet /> : null}
+      {isModelPickerOpen ? (
+        <ModelPickerBottomSheet
+          footer={reasoningEfforts.length > 0 ? <ChatInputReasoningSection /> : undefined}
+          isOpen
+          onClose={closeModelPicker}
+          onSelect={handleModelSelect}
+          selectedModelId={selectedModelId}
+        />
+      ) : null}
     </>
   );
 }
