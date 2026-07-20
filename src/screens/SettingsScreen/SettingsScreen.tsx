@@ -84,7 +84,6 @@ export default function SettingsScreen() {
                 onPress: () => router.push('/settings/model'),
               },
             ]}
-            title={t('settings.model.title')}
           />
           <SettingsSection
             items={[
@@ -93,13 +92,16 @@ export default function SettingsScreen() {
                 title: t('settings.items.webSearch'),
                 onPress: () => router.push('/settings/websearch'),
               },
+            ]}
+          />
+          <SettingsSection
+            items={[
               {
                 icon: DatabaseIcon,
                 title: t('settings.items.dataBackup'),
                 onPress: () => router.push('/settings/data'),
               },
             ]}
-            title={t('settings.plugin.title')}
           />
           <SettingsSection
             items={[
@@ -128,7 +130,6 @@ export default function SettingsScreen() {
                 title: t('settings.items.appearance'),
               },
             ]}
-            title={t('settings.app.title')}
           />
           <SettingsSection
             items={[
@@ -138,7 +139,6 @@ export default function SettingsScreen() {
                 onPress: () => router.push('/settings/about'),
               },
             ]}
-            title={t('settings.about.title')}
           />
         </View>
       </Animated.ScrollView>
