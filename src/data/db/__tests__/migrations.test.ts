@@ -29,6 +29,12 @@ describe('bundled SQLite migrations', () => {
       const messageColumns = database.prepare("PRAGMA table_info('message')").all() as {
         name: string;
       }[];
+      const fileEntryColumns = database.prepare("PRAGMA table_info('file_entry')").all() as {
+        name: string;
+      }[];
+      const chatMessageFileRefColumns = database
+        .prepare("PRAGMA table_info('chat_message_file_ref')")
+        .all() as { name: string }[];
       const modelColumns = database.prepare("PRAGMA table_info('user_model')").all() as {
         name: string;
       }[];
@@ -42,18 +48,46 @@ describe('bundled SQLite migrations', () => {
       const modelIndexes = database.prepare("PRAGMA index_list('user_model')").all() as {
         name: string;
       }[];
+      const fileEntryIndexes = database.prepare("PRAGMA index_list('file_entry')").all() as {
+        name: string;
+      }[];
+      const chatMessageFileRefIndexes = database
+        .prepare("PRAGMA index_list('chat_message_file_ref')")
+        .all() as { name: string; unique: number }[];
       const tables = database
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
         .all() as { name: string }[];
       const messageTableSql = getSchemaSql(database, 'table', 'message');
+      const fileEntryTableSql = getSchemaSql(database, 'table', 'file_entry');
+      const chatMessageFileRefTableSql = getSchemaSql(database, 'table', 'chat_message_file_ref');
       const rootIndexSql = getSchemaSql(database, 'index', 'message_topic_root_uniq');
       const assistantKnowledgeBaseFks = getForeignKeys(database, 'assistant_knowledge_base');
       const assistantMcpServerFks = getForeignKeys(database, 'assistant_mcp_server');
       const messageFks = getForeignKeys(database, 'message');
+      const chatMessageFileRefFks = getForeignKeys(database, 'chat_message_file_ref');
 
       expect(topicColumns.map((column) => column.name)).toContain('trace_id');
       expect(messageColumns.map((column) => column.name)).not.toContain('trace_id');
       expect(modelColumns.map((column) => column.name)).not.toContain('owned_by');
+      expect(fileEntryColumns.map((column) => column.name)).toEqual([
+        'id',
+        'origin',
+        'name',
+        'ext',
+        'size',
+        'external_path',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+      ]);
+      expect(chatMessageFileRefColumns.map((column) => column.name)).toEqual([
+        'id',
+        'file_entry_id',
+        'source_id',
+        'role',
+        'created_at',
+        'updated_at',
+      ]);
       expect(messageIndexes.map((index) => index.name)).not.toContain('message_trace_id_idx');
       expect(messageIndexes).toEqual(
         expect.arrayContaining([
@@ -79,7 +113,27 @@ describe('bundled SQLite migrations', () => {
           'user_model_provider_model_unique',
         ]),
       );
+      expect(fileEntryIndexes.map((index) => index.name)).toEqual(
+        expect.arrayContaining([
+          'fe_created_at_idx',
+          'fe_deleted_at_idx',
+          'fe_external_path_idx',
+          'fe_external_path_lower_unique_idx',
+        ]),
+      );
+      expect(chatMessageFileRefIndexes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'cmfr_entry_id_idx', unique: 0 }),
+          expect.objectContaining({ name: 'cmfr_source_id_idx', unique: 0 }),
+          expect.objectContaining({ name: 'cmfr_unique_idx', unique: 1 }),
+        ]),
+      );
       expect(messageTableSql).toContain('message_root_parent_check');
+      expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_origin_check'));
+      expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_origin_consistency'));
+      expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_external_no_delete'));
+      expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_size_internal_only'));
+      expect(chatMessageFileRefTableSql).toContain('cmfr_role_check');
       expect(rootIndexSql).toContain('"deleted_at" is null');
       expect(assistantKnowledgeBaseFks).toContainEqual(
         expect.objectContaining({ from: 'assistant_id', on_delete: 'CASCADE', table: 'assistant' }),
@@ -93,8 +147,27 @@ describe('bundled SQLite migrations', () => {
           expect.objectContaining({ from: 'topic_id', on_delete: 'CASCADE', table: 'topic' }),
         ]),
       );
+      expect(chatMessageFileRefFks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            from: 'file_entry_id',
+            on_delete: 'CASCADE',
+            table: 'file_entry',
+          }),
+          expect.objectContaining({
+            from: 'source_id',
+            on_delete: 'CASCADE',
+            table: 'message',
+          }),
+        ]),
+      );
       expect(tables.map((table) => table.name)).toEqual(
-        expect.arrayContaining(['assistant_knowledge_base', 'assistant_mcp_server']),
+        expect.arrayContaining([
+          'assistant_knowledge_base',
+          'assistant_mcp_server',
+          'chat_message_file_ref',
+          'file_entry',
+        ]),
       );
     } finally {
       database.close();
