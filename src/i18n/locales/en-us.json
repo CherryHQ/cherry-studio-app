@@ -430,5 +430,6 @@
   "topic.rename.placeholder": "Enter topic name",
   "topic.renamePlaceholder": "Enter a name",
   "topic.renameTitle": "Rename chat",
-  "topic.titleFallback": "Chat"
+  "topic.titleFallback": "Chat",
+  "topic.updatedAt.yesterday": "Yesterday"
 }

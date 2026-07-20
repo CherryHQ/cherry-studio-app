@@ -430,5 +430,6 @@
   "topic.rename.placeholder": "输入话题名称",
   "topic.renamePlaceholder": "输入名称",
   "topic.renameTitle": "重命名对话",
-  "topic.titleFallback": "聊天"
+  "topic.titleFallback": "聊天",
+  "topic.updatedAt.yesterday": "昨天"
 }
