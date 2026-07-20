@@ -36,7 +36,6 @@ export const TopicList = memo(function TopicList() {
   const contentContainerStyle = useMemo(
     () => ({
       paddingBottom: tabBarHeight,
-      paddingTop: 2,
     }),
     [tabBarHeight],
   );

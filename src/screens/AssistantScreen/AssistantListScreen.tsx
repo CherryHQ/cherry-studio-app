@@ -73,7 +73,7 @@ export default function AssistantListScreen() {
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
-        contentContainerClassName="gap-3 px-4 py-5"
+        contentContainerClassName="gap-3 px-2"
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >

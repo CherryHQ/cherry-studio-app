@@ -7,29 +7,29 @@ import { Image } from '@/components/nativePrimitives';
 
 const avatarSource = require('@/assets/icon.png');
 
-export type SettingsAvatarEditIcon = 'camera' | 'pencil';
+export type ProfileAvatarEditIcon = 'camera' | 'pencil';
 
-type SettingsEditableAvatarProps = {
-  icon: SettingsAvatarEditIcon;
+type ProfileEditableAvatarProps = {
+  icon: ProfileAvatarEditIcon;
   imageSource?: ImageSource | number;
   size: number;
 };
 
-export function SettingsEditableAvatar({ icon, imageSource, size }: SettingsEditableAvatarProps) {
+export function ProfileEditableAvatar({ icon, imageSource, size }: ProfileEditableAvatarProps) {
   return (
     <View style={{ height: size, width: size }}>
-      <SettingsAvatarImage imageSource={imageSource} size={size} />
-      <SettingsAvatarEditBadge icon={icon} size={size} />
+      <ProfileAvatarImage imageSource={imageSource} size={size} />
+      <ProfileAvatarEditBadge icon={icon} size={size} />
     </View>
   );
 }
 
-type SettingsAvatarImageProps = {
+type ProfileAvatarImageProps = {
   imageSource?: ImageSource | number;
   size: number;
 };
 
-export function SettingsAvatarImage({ imageSource, size }: SettingsAvatarImageProps) {
+export function ProfileAvatarImage({ imageSource, size }: ProfileAvatarImageProps) {
   const source = imageSource ?? avatarSource;
 
   return (
@@ -43,12 +43,12 @@ export function SettingsAvatarImage({ imageSource, size }: SettingsAvatarImagePr
   );
 }
 
-type SettingsAvatarEditBadgeProps = {
-  icon: SettingsAvatarEditIcon;
+type ProfileAvatarEditBadgeProps = {
+  icon: ProfileAvatarEditIcon;
   size: number;
 };
 
-export function SettingsAvatarEditBadge({ icon, size }: SettingsAvatarEditBadgeProps) {
+export function ProfileAvatarEditBadge({ icon, size }: ProfileAvatarEditBadgeProps) {
   const iconColor = useThemeColor('foreground');
   const badgeSize = Math.round(size * 0.32);
   const Icon = icon === 'camera' ? CameraIcon : PencilIcon;
