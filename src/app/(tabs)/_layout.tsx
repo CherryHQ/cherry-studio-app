@@ -4,6 +4,7 @@ import {
   type NativeBottomTabNavigationOptions,
 } from '@bottom-tabs/react-navigation';
 import { withLayoutContext } from 'expo-router';
+import { isAndroid } from '@/config/constants';
 import type { ParamListBase, TabNavigationState } from 'expo-router/react-navigation';
 import { useThemeColor } from 'heroui-native/hooks';
 import { useTranslation } from 'react-i18next';
@@ -64,10 +65,18 @@ export default function TabLayout() {
 function TabNavigator() {
   const { t } = useTranslation();
   const accentColor = useThemeColor('accent');
+  const [tabBarColor] = useThemeColor(['background-secondary']);
   const setScope = useSetSearchScope();
+  const androidTabProps = isAndroid
+    ? {
+        tabBarStyle: { backgroundColor: tabBarColor },
+        activeIndicatorColor: tabBarColor,
+      }
+    : {};
 
   return (
     <Tabs
+      {...androidTabProps}
       backBehavior="history"
       initialRouteName="(messages)"
       screenOptions={{
