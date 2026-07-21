@@ -2,9 +2,10 @@ import { appStateTable } from './appState';
 import { assistantTable } from './assistant';
 import { assistantKnowledgeBaseTable, assistantMcpServerTable } from './assistantRelations';
 import { fileEntryTable } from './file';
-import { chatMessageFileRefTable } from './fileRelations';
+import { chatMessageFileRefTable, paintingFileRefTable } from './fileRelations';
 import { groupTable } from './group';
 import { messageTable } from './message';
+import { paintingTable } from './painting';
 import { pinTable } from './pin';
 import { preferenceTable } from './preference';
 import { promptTable } from './prompt';
@@ -29,12 +30,19 @@ export {
 } from './assistantRelations';
 export type { FileEntryRow, InsertFileEntryRow } from './file';
 export { fileEntryTable } from './file';
-export type { ChatMessageFileRefRow, InsertChatMessageFileRefRow } from './fileRelations';
-export { chatMessageFileRefTable } from './fileRelations';
+export type {
+  ChatMessageFileRefRow,
+  InsertChatMessageFileRefRow,
+  InsertPaintingFileRefRow,
+  PaintingFileRefRow,
+} from './fileRelations';
+export { chatMessageFileRefTable, paintingFileRefTable } from './fileRelations';
 export type { GroupRow, InsertGroupRow } from './group';
 export { groupTable } from './group';
 export type { InsertMessageRow, MessageRow } from './message';
 export { MESSAGE_FTS_STATEMENTS, messageTable } from './message';
+export type { InsertPaintingRow, PaintingRow } from './painting';
+export { paintingTable } from './painting';
 export type { InsertPinRow, PinRow } from './pin';
 export { pinTable } from './pin';
 export type { InsertPreferenceRow, PreferenceRow } from './preference';
@@ -64,6 +72,8 @@ export const schema = {
   fileEntryTable,
   groupTable,
   messageTable,
+  paintingFileRefTable,
+  paintingTable,
   pinTable,
   preferenceTable,
   promptTable,

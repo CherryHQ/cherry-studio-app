@@ -3,6 +3,7 @@ export { FileEntryService } from './FileEntryService';
 export { GroupService } from './GroupService';
 export { MessageService } from './MessageService';
 export { ModelService } from './ModelService';
+export { PaintingService } from './PaintingService';
 export { PinService } from './PinService';
 export { PreferenceService } from './PreferenceService';
 export { PromptService } from './PromptService';

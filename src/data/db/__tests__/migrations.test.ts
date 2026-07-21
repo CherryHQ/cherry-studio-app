@@ -10,6 +10,7 @@ describe('bundled SQLite migrations', () => {
     const database = new DatabaseSync(':memory:');
 
     try {
+      database.exec('PRAGMA foreign_keys = ON');
       const migrationSqlFiles = readMigrationSqlFiles();
       // 0000_release_baseline is frozen; every schema change after it must be a
       // new appended migration (never edit or re-squash shipped entries).
@@ -35,6 +36,12 @@ describe('bundled SQLite migrations', () => {
       const chatMessageFileRefColumns = database
         .prepare("PRAGMA table_info('chat_message_file_ref')")
         .all() as { name: string }[];
+      const paintingColumns = database.prepare("PRAGMA table_info('painting')").all() as {
+        name: string;
+      }[];
+      const paintingFileRefColumns = database
+        .prepare("PRAGMA table_info('painting_file_ref')")
+        .all() as { name: string }[];
       const modelColumns = database.prepare("PRAGMA table_info('user_model')").all() as {
         name: string;
       }[];
@@ -54,17 +61,25 @@ describe('bundled SQLite migrations', () => {
       const chatMessageFileRefIndexes = database
         .prepare("PRAGMA index_list('chat_message_file_ref')")
         .all() as { name: string; unique: number }[];
+      const paintingIndexes = database.prepare("PRAGMA index_list('painting')").all() as {
+        name: string;
+      }[];
+      const paintingFileRefIndexes = database
+        .prepare("PRAGMA index_list('painting_file_ref')")
+        .all() as { name: string; unique: number }[];
       const tables = database
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
         .all() as { name: string }[];
       const messageTableSql = getSchemaSql(database, 'table', 'message');
       const fileEntryTableSql = getSchemaSql(database, 'table', 'file_entry');
       const chatMessageFileRefTableSql = getSchemaSql(database, 'table', 'chat_message_file_ref');
+      const paintingFileRefTableSql = getSchemaSql(database, 'table', 'painting_file_ref');
       const rootIndexSql = getSchemaSql(database, 'index', 'message_topic_root_uniq');
       const assistantKnowledgeBaseFks = getForeignKeys(database, 'assistant_knowledge_base');
       const assistantMcpServerFks = getForeignKeys(database, 'assistant_mcp_server');
       const messageFks = getForeignKeys(database, 'message');
       const chatMessageFileRefFks = getForeignKeys(database, 'chat_message_file_ref');
+      const paintingFileRefFks = getForeignKeys(database, 'painting_file_ref');
 
       expect(topicColumns.map((column) => column.name)).toContain('trace_id');
       expect(messageColumns.map((column) => column.name)).not.toContain('trace_id');
@@ -81,6 +96,23 @@ describe('bundled SQLite migrations', () => {
         'deleted_at',
       ]);
       expect(chatMessageFileRefColumns.map((column) => column.name)).toEqual([
+        'id',
+        'file_entry_id',
+        'source_id',
+        'role',
+        'created_at',
+        'updated_at',
+      ]);
+      expect(paintingColumns.map((column) => column.name)).toEqual([
+        'id',
+        'provider_id',
+        'model_id',
+        'prompt',
+        'order_key',
+        'created_at',
+        'updated_at',
+      ]);
+      expect(paintingFileRefColumns.map((column) => column.name)).toEqual([
         'id',
         'file_entry_id',
         'source_id',
@@ -128,12 +160,22 @@ describe('bundled SQLite migrations', () => {
           expect.objectContaining({ name: 'cmfr_unique_idx', unique: 1 }),
         ]),
       );
+      expect(paintingIndexes.map((index) => index.name)).toContain('painting_order_key_idx');
+      expect(paintingFileRefIndexes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'pfr_entry_id_idx', unique: 0 }),
+          expect.objectContaining({ name: 'pfr_source_id_idx', unique: 0 }),
+          expect.objectContaining({ name: 'pfr_source_role_idx', unique: 0 }),
+          expect.objectContaining({ name: 'pfr_unique_idx', unique: 1 }),
+        ]),
+      );
       expect(messageTableSql).toContain('message_root_parent_check');
       expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_origin_check'));
       expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_origin_consistency'));
       expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_external_no_delete'));
       expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_size_internal_only'));
       expect(chatMessageFileRefTableSql).toContain('cmfr_role_check');
+      expect(paintingFileRefTableSql).toContain('pfr_role_check');
       expect(rootIndexSql).toContain('"deleted_at" is null');
       expect(assistantKnowledgeBaseFks).toContainEqual(
         expect.objectContaining({ from: 'assistant_id', on_delete: 'CASCADE', table: 'assistant' }),
@@ -161,14 +203,68 @@ describe('bundled SQLite migrations', () => {
           }),
         ]),
       );
+      expect(paintingFileRefFks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            from: 'file_entry_id',
+            on_delete: 'CASCADE',
+            table: 'file_entry',
+          }),
+          expect.objectContaining({
+            from: 'source_id',
+            on_delete: 'CASCADE',
+            table: 'painting',
+          }),
+        ]),
+      );
       expect(tables.map((table) => table.name)).toEqual(
         expect.arrayContaining([
           'assistant_knowledge_base',
           'assistant_mcp_server',
           'chat_message_file_ref',
           'file_entry',
+          'painting',
+          'painting_file_ref',
         ]),
       );
+
+      database.exec(`
+        INSERT INTO painting (id, provider_id, model_id, prompt, order_key, created_at, updated_at)
+        VALUES ('painting-1', 'provider', 'provider::model', 'prompt', 'a0', 1, 1);
+        INSERT INTO file_entry (id, origin, name, ext, size, external_path, created_at, updated_at, deleted_at)
+        VALUES ('file-1', 'internal', 'input', 'png', 4, NULL, 1, 1, NULL);
+        INSERT INTO painting_file_ref (id, file_entry_id, source_id, role, created_at, updated_at)
+        VALUES ('ref-1', 'file-1', 'painting-1', 'input', 1, 1);
+      `);
+      expect(() =>
+        database.exec(`
+          INSERT INTO painting_file_ref (id, file_entry_id, source_id, role, created_at, updated_at)
+          VALUES ('ref-duplicate', 'file-1', 'painting-1', 'input', 1, 1);
+        `),
+      ).toThrow();
+      expect(() =>
+        database.exec(`
+          INSERT INTO painting_file_ref (id, file_entry_id, source_id, role, created_at, updated_at)
+          VALUES ('ref-invalid', 'file-1', 'painting-1', 'preview', 1, 1);
+        `),
+      ).toThrow();
+      database.exec("DELETE FROM painting WHERE id = 'painting-1'");
+      expect(database.prepare('SELECT count(*) AS count FROM painting_file_ref').get()).toEqual({
+        count: 0,
+      });
+
+      database.exec(`
+        INSERT INTO painting (id, provider_id, model_id, prompt, order_key, created_at, updated_at)
+        VALUES ('painting-2', 'provider', 'provider::model', 'prompt', 'a1', 2, 2);
+        INSERT INTO file_entry (id, origin, name, ext, size, external_path, created_at, updated_at, deleted_at)
+        VALUES ('file-2', 'internal', 'output', 'png', 4, NULL, 2, 2, NULL);
+        INSERT INTO painting_file_ref (id, file_entry_id, source_id, role, created_at, updated_at)
+        VALUES ('ref-2', 'file-2', 'painting-2', 'output', 2, 2);
+        DELETE FROM file_entry WHERE id = 'file-2';
+      `);
+      expect(database.prepare('SELECT count(*) AS count FROM painting_file_ref').get()).toEqual({
+        count: 0,
+      });
     } finally {
       database.close();
     }

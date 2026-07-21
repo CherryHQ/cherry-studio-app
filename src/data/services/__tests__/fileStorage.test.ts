@@ -1,7 +1,12 @@
 import type { CherryMessagePart } from '@/data/types/message';
 import { readCherryMeta } from '@/data/types/uiParts';
 
-import { prepareMessageParts, resolveInternalFileUri } from '../fileStorage';
+import {
+  imageUriToDataUrl,
+  prepareGeneratedImage,
+  prepareMessageParts,
+  resolveInternalFileUri,
+} from '../fileStorage';
 
 jest.mock('uuid', () => ({
   v7: jest.fn(() => '00000000-0000-7000-8000-000000000001'),
@@ -12,6 +17,8 @@ jest.mock('expo-file-system', () => {
   const files = new Map<string, number>();
   const copies: { destination: string; source: string }[] = [];
   const failures = new Set<string>();
+  const writeFailures = new Set<string>();
+  const writes: { content: string; options?: unknown; uri: string }[] = [];
   const paths = { document: { uri: 'file:///documents/' } };
   const joinUri = (parts: (string | { uri: string })[], isDirectory: boolean) => {
     const [first, ...rest] = parts.map((part) => (typeof part === 'string' ? part : part.uri));
@@ -59,6 +66,14 @@ jest.mock('expo-file-system', () => {
       return files.get(this.uri) ?? 0;
     }
 
+    get type() {
+      return this.uri.endsWith('.jpg') ? 'image/jpeg' : '';
+    }
+
+    async base64() {
+      return 'encoded';
+    }
+
     async copy(destination: MockFile) {
       copies.push({ destination: destination.uri, source: this.uri });
       files.set(destination.uri, files.get(this.uri) ?? 0);
@@ -70,13 +85,21 @@ jest.mock('expo-file-system', () => {
     delete() {
       files.delete(this.uri);
     }
+
+    write(content: string, options?: unknown) {
+      writes.push({ content, options, uri: this.uri });
+      files.set(this.uri, content.length);
+      if (writeFailures.has(this.uri)) {
+        throw new Error(`write failed: ${this.uri}`);
+      }
+    }
   }
 
   return {
     Directory: MockDirectory,
     File: MockFile,
     Paths: paths,
-    testState: { copies, directories, failures, files, paths },
+    testState: { copies, directories, failures, files, paths, writeFailures, writes },
   };
 });
 
@@ -86,6 +109,8 @@ type FileSystemTestState = {
   failures: Set<string>;
   files: Map<string, number>;
   paths: { document: { uri: string } };
+  writeFailures: Set<string>;
+  writes: { content: string; options?: unknown; uri: string }[];
 };
 
 const { testState } = jest.requireMock<{ testState: FileSystemTestState }>('expo-file-system');
@@ -96,6 +121,8 @@ describe('fileStorage', () => {
     testState.directories.clear();
     testState.failures.clear();
     testState.files.clear();
+    testState.writeFailures.clear();
+    testState.writes.length = 0;
     testState.paths.document.uri = 'file:///documents/';
   });
 
@@ -188,6 +215,35 @@ describe('fileStorage', () => {
       'file:///picker/first.txt',
       'file:///picker/second.txt',
     ]);
+  });
+
+  test('writes generated base64 into a managed image file', () => {
+    const prepared = prepareGeneratedImage('data:image/png;base64,AAAA', 'image/png');
+
+    expect(prepared).toEqual(
+      expect.objectContaining({
+        ext: 'png',
+        size: 4,
+        uri: 'file:///documents/files/00000000-0000-7000-8000-000000000001.png',
+      }),
+    );
+    expect(testState.writes).toEqual([
+      expect.objectContaining({ content: 'AAAA', options: { encoding: 'base64' } }),
+    ]);
+  });
+
+  test('removes a partially written generated image on failure', () => {
+    const uri = 'file:///documents/files/00000000-0000-7000-8000-000000000001.png';
+    testState.writeFailures.add(uri);
+
+    expect(() => prepareGeneratedImage('AAAA', 'image/png')).toThrow('write failed');
+    expect(testState.files.has(uri)).toBe(false);
+  });
+
+  test('resolves a local image as a data URL', async () => {
+    await expect(imageUriToDataUrl('file:///picker/photo.jpg', 'image/*')).resolves.toBe(
+      'data:image/jpeg;base64,encoded',
+    );
   });
 });
 

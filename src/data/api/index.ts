@@ -7,6 +7,7 @@
 import { assistantQueryKeys } from './assistants';
 import { messageQueryKeys } from './messages';
 import { modelQueryKeys } from './models';
+import { paintingQueryKeys } from './paintings';
 import { pinQueryKeys } from './pins';
 import { preferenceQueryKeys } from './preferences';
 import { providerQueryKeys } from './providers';
@@ -20,6 +21,7 @@ export const queryKeys = {
   topics: topicQueryKeys,
   messages: messageQueryKeys,
   models: modelQueryKeys,
+  paintings: paintingQueryKeys,
   pins: pinQueryKeys,
   providers: providerQueryKeys,
   preferences: preferenceQueryKeys,
