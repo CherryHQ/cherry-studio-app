@@ -1,6 +1,6 @@
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
-import { memo, useCallback, useMemo, useRef } from 'react';
+import { CheckIcon, PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AccessibilityActionEvent, Pressable, Text, View } from 'react-native';
 import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
@@ -9,25 +9,39 @@ import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, {
+  FadeInLeft,
+  FadeOutLeft,
   runOnJS,
   type SharedValue,
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Assistant } from '@/data/types/assistant';
 import type { Topic } from '@/data/types/topic';
 import { useAssistantsApi } from '@/hooks/chat';
 
 import { useTopicListActions, useTopicListTopics } from '../context/TopicListProvider';
+import {
+  useTopicListSelectionActions,
+  useTopicListSelectionState,
+} from '../context/TopicListSelectionProvider';
 import { useTopicActionDialogs } from './TopicActionDialogs';
+import {
+  topicSelectionToolbarGap,
+  topicSelectionToolbarHeight,
+} from './topicSelectionToolbarLayout';
 
 type TopicRowProps = {
   assistant?: Assistant;
+  isEditing: boolean;
   isLast: boolean;
+  isSelected: boolean;
   onDelete: (topic: Topic) => void;
   onPress: (topicId: string) => void;
   onRename: (topic: Topic) => void;
+  onToggle: (topicId: string) => void;
   topic: Topic;
 };
 
@@ -76,16 +90,25 @@ function formatTopicUpdatedAt(updatedAt: string, locale: string | undefined, yes
 export const TopicList = memo(function TopicList() {
   const { t } = useTranslation();
   const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
   const { isTopicListLoading, topics } = useTopicListTopics();
   const { loadMoreTopics, openTopic } = useTopicListActions();
   const { assistants } = useAssistantsApi();
+  const { toggleTopic } = useTopicListSelectionActions();
+  const { isEditing, selectedTopicIds } = useTopicListSelectionState();
   const { dialogs, requestDelete, requestRename } = useTopicActionDialogs();
   const contentContainerStyle = useMemo(
     () => ({
-      paddingBottom: tabBarHeight,
+      paddingBottom: isEditing
+        ? insets.bottom + topicSelectionToolbarHeight + topicSelectionToolbarGap * 2
+        : tabBarHeight,
       paddingHorizontal: 8,
     }),
-    [tabBarHeight],
+    [insets.bottom, isEditing, tabBarHeight],
+  );
+  const listExtraData = useMemo(
+    () => ({ isEditing, selectedTopicIds }),
+    [isEditing, selectedTopicIds],
   );
   const assistantsById = useMemo(
     () => new Map(assistants.map((assistant) => [assistant.id, assistant])),
@@ -96,14 +119,26 @@ export const TopicList = memo(function TopicList() {
     ({ index, item }: LegendListRenderItemProps<Topic>) => (
       <TopicRow
         assistant={item.assistantId ? assistantsById.get(item.assistantId) : undefined}
+        isEditing={isEditing}
         isLast={index === topics.length - 1}
+        isSelected={selectedTopicIds.has(item.id)}
         onDelete={requestDelete}
         onPress={openTopic}
         onRename={requestRename}
+        onToggle={toggleTopic}
         topic={item}
       />
     ),
-    [assistantsById, openTopic, requestDelete, requestRename, topics.length],
+    [
+      assistantsById,
+      isEditing,
+      openTopic,
+      requestDelete,
+      requestRename,
+      selectedTopicIds,
+      toggleTopic,
+      topics.length,
+    ],
   );
 
   const listEmptyComponent = useCallback(
@@ -118,15 +153,16 @@ export const TopicList = memo(function TopicList() {
     ),
     [isTopicListLoading, t],
   );
+
   return (
     <View className="flex-1">
       <LegendList
-        style={{ flex: 1 }}
-        className="bg-background"
-        contentInsetAdjustmentBehavior="automatic"
+        className="flex-1 bg-background"
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={contentContainerStyle}
         data={topics}
         estimatedItemSize={TOPIC_ITEM_ESTIMATED_HEIGHT}
+        extraData={listExtraData}
         keyExtractor={topicKeyExtractor}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
@@ -143,10 +179,13 @@ export const TopicList = memo(function TopicList() {
 
 const TopicRow = memo(function TopicRow({
   assistant,
+  isEditing,
   isLast,
+  isSelected,
   onDelete,
   onPress,
   onRename,
+  onToggle,
   topic,
 }: TopicRowProps) {
   const { i18n, t } = useTranslation();
@@ -159,9 +198,20 @@ const TopicRow = memo(function TopicRow({
     t('topic.updatedAt.yesterday'),
   );
 
+  useEffect(() => {
+    if (isEditing) {
+      swipeableRef.current?.close();
+    }
+  }, [isEditing]);
+
   const handlePress = useCallback(() => {
+    if (isEditing) {
+      onToggle(topic.id);
+      return;
+    }
+
     onPress(topic.id);
-  }, [onPress, topic.id]);
+  }, [isEditing, onPress, onToggle, topic.id]);
   const handleRenamePress = useCallback(() => {
     swipeableRef.current?.close();
     onRename(topic);
@@ -200,15 +250,23 @@ const TopicRow = memo(function TopicRow({
     opacity: 1 - pressProgress.value,
   }));
   const accessibilityActions = useMemo(
-    () => [
-      { name: 'activate' as const },
-      { label: t('common.rename'), name: 'rename' as const },
-      { label: t('common.delete'), name: 'delete' as const },
-    ],
-    [t],
+    () =>
+      isEditing
+        ? [{ name: 'activate' as const }]
+        : [
+            { name: 'activate' as const },
+            { label: t('common.rename'), name: 'rename' as const },
+            { label: t('common.delete'), name: 'delete' as const },
+          ],
+    [isEditing, t],
   );
   const handleAccessibilityAction = useCallback(
     (event: AccessibilityActionEvent) => {
+      if (isEditing) {
+        handlePress();
+        return;
+      }
+
       switch (event.nativeEvent.actionName) {
         case 'rename':
           handleRenamePress();
@@ -220,7 +278,7 @@ const TopicRow = memo(function TopicRow({
           handlePress();
       }
     },
-    [handleDeletePress, handlePress, handleRenamePress],
+    [handleDeletePress, handlePress, handleRenamePress, isEditing],
   );
   const renderRightActions = useCallback(
     (_progress: SharedValue<number>, drag: SharedValue<number>) => (
@@ -237,6 +295,7 @@ const TopicRow = memo(function TopicRow({
 
   return (
     <ReanimatedSwipeable
+      enabled={!isEditing}
       friction={2}
       onSwipeableClose={handleSwipeableClose}
       onSwipeableWillOpen={handleSwipeableWillOpen}
@@ -250,7 +309,8 @@ const TopicRow = memo(function TopicRow({
         <View
           accessibilityActions={accessibilityActions}
           accessibilityLabel={topic.name || t('navigation.newChat')}
-          accessibilityRole="button"
+          accessibilityRole={isEditing ? 'checkbox' : 'button'}
+          accessibilityState={isEditing ? { checked: isSelected } : undefined}
           accessible
           onAccessibilityAction={handleAccessibilityAction}
         >
@@ -263,12 +323,32 @@ const TopicRow = memo(function TopicRow({
             <Animated.View
               className={
                 isLast
-                  ? 'absolute inset-y-0 right-0 left-14 border-border border-y'
-                  : 'absolute top-0 right-0 left-14 border-border border-t'
+                  ? isEditing
+                    ? 'absolute inset-y-0 right-0 left-22 border-border border-y'
+                    : 'absolute inset-y-0 right-0 left-14 border-border border-y'
+                  : isEditing
+                    ? 'absolute top-0 right-0 left-22 border-border border-t'
+                    : 'absolute top-0 right-0 left-14 border-border border-t'
               }
               pointerEvents="none"
               style={borderStyle}
             />
+            {isEditing ? (
+              <Animated.View
+                entering={FadeInLeft.duration(160)}
+                exiting={FadeOutLeft.duration(120)}
+              >
+                <View
+                  className={
+                    isSelected
+                      ? 'size-6 items-center justify-center rounded-full bg-primary'
+                      : 'size-6 items-center justify-center rounded-full border-2 border-foreground-muted'
+                  }
+                >
+                  {isSelected ? <CheckIcon className="size-4 text-white" strokeWidth={3} /> : null}
+                </View>
+              </Animated.View>
+            ) : null}
             <Text className="min-w-12 h-12 text-center text-3xl leading-12">
               {assistant?.emoji ?? '💬'}
             </Text>

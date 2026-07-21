@@ -1,30 +1,51 @@
-import { useTranslation } from 'react-i18next';
-import { Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { TopicList } from './components/TopicList';
+import { useSetBottomTabBarHidden } from '@/components/navigation';
+
 import { TopicListHeader } from './components/TopicListHeader';
+import { TopicListPager } from './components/TopicListPager';
+import { TopicListScopeTabs } from './components/TopicListScopeTabs';
+import { TopicSelectionControls } from './components/TopicSelectionControls';
 import { TopicListProvider, useTopicListActions } from './context/TopicListProvider';
+import { TopicListScopeProvider, useTopicListScope } from './context/TopicListScopeProvider';
+import {
+  TopicListSelectionProvider,
+  useTopicListSelectionActions,
+  useTopicListSelectionState,
+} from './context/TopicListSelectionProvider';
 
 export function TopicListScreen() {
-  const { t } = useTranslation();
   const { openNewTopic } = useTopicListActions();
+  const { scope } = useTopicListScope();
+  const { enterEditing, exitEditing } = useTopicListSelectionActions();
+  const { isEditing } = useTopicListSelectionState();
+  const isConversationScope = scope === 'conversations';
 
   return (
-    <SafeAreaView className="bg-background" edges={['top']} style={{ flex: 1 }}>
-      <TopicListHeader onNewTopicPress={openNewTopic} />
-      <Text className="px-5 pb-1 pt-3 font-medium text-foreground-secondary text-sm">
-        {t('navigation.recents')}
-      </Text>
-      <TopicList />
+    <SafeAreaView className="flex-1 bg-background" edges={['top']} style={{ flex: 1 }}>
+      <TopicListHeader
+        isEditing={isEditing}
+        isEditVisible={isConversationScope}
+        onEditPress={isEditing ? exitEditing : enterEditing}
+        onNewTopicPress={openNewTopic}
+      />
+      <TopicListScopeTabs isVisible={!isEditing} />
+      <TopicListPager showRecentsHeading />
+      <TopicSelectionControls />
     </SafeAreaView>
   );
 }
 
 export function TopicListRoute() {
+  const setBottomTabBarHidden = useSetBottomTabBarHidden();
+
   return (
     <TopicListProvider>
-      <TopicListScreen />
+      <TopicListScopeProvider>
+        <TopicListSelectionProvider onEditingChange={setBottomTabBarHidden}>
+          <TopicListScreen />
+        </TopicListSelectionProvider>
+      </TopicListScopeProvider>
     </TopicListProvider>
   );
 }

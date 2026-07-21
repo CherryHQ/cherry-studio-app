@@ -60,7 +60,7 @@ describe('TopicService', () => {
     expect(updates).toEqual([{ traceId: expectedTraceId }]);
   });
 
-  test('purges topic tag bindings when deleting a topic', async () => {
+  test('purges topic bindings when deleting topics in one transaction', async () => {
     const operations: string[] = [];
     type Tx = {
       delete: () => {
@@ -78,31 +78,34 @@ describe('TopicService', () => {
       withWriteTx: async (callback: (tx: Tx) => Promise<void>) => callback(tx),
     } as unknown as DbService;
     const pinService = {
-      purgeForEntityTx: jest.fn(async () => {
+      purgeForEntitiesTx: jest.fn(async () => {
         operations.push('pin');
       }),
     } as unknown as PinService;
     const tagService = {
-      purgeForEntityTx: jest.fn(async () => {
+      purgeForEntitiesTx: jest.fn(async () => {
         operations.push('tag');
       }),
     } as unknown as TagService;
     const service = new TopicService(dbService, pinService, tagService);
     jest.spyOn(service, 'getById').mockResolvedValue(createTopic());
+    const ids = ['550e8400-e29b-41d4-a716-446655440000', '650e8400-e29b-41d4-a716-446655440000'];
 
-    await service.delete('550e8400-e29b-41d4-a716-446655440000');
+    await service.deleteMany([...ids, ids[0]]);
 
-    expect(tagService.purgeForEntityTx).toHaveBeenCalledWith(
-      tx,
-      'topic',
-      '550e8400-e29b-41d4-a716-446655440000',
-    );
-    expect(pinService.purgeForEntityTx).toHaveBeenCalledWith(
-      tx,
-      'topic',
-      '550e8400-e29b-41d4-a716-446655440000',
-    );
+    expect(service.getById).toHaveBeenCalledTimes(2);
+    expect(tagService.purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'topic', ids);
+    expect(pinService.purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'topic', ids);
     expect(operations).toEqual(['delete', 'tag', 'pin', 'delete']);
+  });
+
+  test('does not open a transaction for an empty batch delete', async () => {
+    const dbService = { withWriteTx: jest.fn() } as unknown as DbService;
+    const service = new TopicService(dbService, {} as PinService, {} as TagService);
+
+    await service.deleteMany([]);
+
+    expect(dbService.withWriteTx).not.toHaveBeenCalled();
   });
 });
 

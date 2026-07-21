@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "podspecPath": "ios/PdfTextExtractor.podspec",
+    "modules": ["PdfTextExtractorModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.pdftextextractor.PdfTextExtractorModule"]
+  }
+}
