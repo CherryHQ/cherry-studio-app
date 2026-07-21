@@ -85,6 +85,7 @@ export interface AiGenerateResult {
 }
 
 export interface AiImageRequest extends AiBaseRequest {
+  inputImages?: string[];
   prompt: string;
   n?: number;
   size?: `${number}x${number}`;
@@ -207,8 +208,11 @@ export class AiService {
       sdkConfig.providerSettings as never,
       {
         model: model.modelId,
-        prompt: request.prompt,
-        n: request.n,
+        prompt:
+          request.inputImages && request.inputImages.length > 0
+            ? { images: request.inputImages, text: request.prompt }
+            : request.prompt,
+        n: request.n ?? 1,
         size: request.size,
         aspectRatio: request.aspectRatio,
         seed: request.seed,
