@@ -4,7 +4,6 @@ import type { UIMessage } from 'ai';
 import type { Model } from '@/data/types/model';
 
 import { resolveMediaCapabilities, stripUnsupportedMedia } from '../messageCapabilities';
-import type { MediaCapabilities } from '../messageCapabilities';
 
 const model = (inputModalities: string[]): Model =>
   ({ capabilities: [], inputModalities }) as unknown as Model;
@@ -17,38 +16,22 @@ const fileMsg = (mediaType: string): UIMessage =>
   }) as UIMessage;
 
 describe('resolveMediaCapabilities', () => {
-  it('derives modality flags from the model (pdf defaults to false without provider)', () => {
+  it('derives modality flags from the model', () => {
     expect(resolveMediaCapabilities(model([MODALITY.IMAGE]))).toEqual({
       image: true,
       video: false,
       audio: false,
-      pdf: false,
     });
     expect(resolveMediaCapabilities(model([]))).toEqual({
       image: false,
       video: false,
       audio: false,
-      pdf: false,
-    });
-  });
-  it('resolves pdf: true for a first-party provider with a compatible model', () => {
-    jest.isolateModules(() => {
-      jest.mock('../../utils/model', () => ({
-        ...jest.requireActual('../../utils/model'),
-        isOpenAILLMModel: jest.fn().mockReturnValue(true),
-      }));
-
-      const { resolveMediaCapabilities: rmc } = require('../messageCapabilities');
-      const mockModel = model([MODALITY.IMAGE]);
-      const mockProvider = { id: 'my-openai', presetProviderId: undefined } as any;
-
-      expect(rmc(mockModel, mockProvider, 'openai')).toMatchObject({ pdf: true });
     });
   });
 });
 
 describe('stripUnsupportedMedia', () => {
-  const noVision: MediaCapabilities = { image: false, video: true, audio: true, pdf: true };
+  const noVision = { image: false, video: true, audio: true };
 
   it('replaces an image file part with a note when the model has no vision', () => {
     const [out] = stripUnsupportedMedia([fileMsg('image/png')], noVision);
@@ -62,7 +45,6 @@ describe('stripUnsupportedMedia', () => {
       image: true,
       video: false,
       audio: true,
-      pdf: true,
     });
     expect(out.parts).toEqual([
       { type: 'text', text: expect.stringContaining('video attachment omitted') },
@@ -74,7 +56,6 @@ describe('stripUnsupportedMedia', () => {
       image: true,
       video: true,
       audio: false,
-      pdf: true,
     });
     expect(out.parts).toEqual([
       { type: 'text', text: expect.stringContaining('audio attachment omitted') },
@@ -83,9 +64,7 @@ describe('stripUnsupportedMedia', () => {
 
   it('leaves the part untouched when the modality is supported (same reference)', () => {
     const msg = fileMsg('image/png');
-    expect(
-      stripUnsupportedMedia([msg], { image: true, video: true, audio: true, pdf: true })[0],
-    ).toBe(msg);
+    expect(stripUnsupportedMedia([msg], { image: true, video: true, audio: true })[0]).toBe(msg);
   });
 
   it('leaves non-gated files (e.g. PDF) untouched', () => {
