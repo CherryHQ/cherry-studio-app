@@ -110,4 +110,27 @@ describe('usePaintingGeneration', () => {
     expect(mockReplaceOutputs).toHaveBeenNthCalledWith(1, 'receipt-1', [expect.any(Object)]);
     expect(mockReplaceOutputs).toHaveBeenNthCalledWith(2, 'receipt-2', [expect.any(Object)]);
   });
+
+  it('returns the persisted painting and generated output', async () => {
+    mockGenerateImage.mockResolvedValue({
+      images: [{ base64: 'AAAA', mediaType: 'image/png' }],
+    });
+
+    let result: Awaited<ReturnType<GenerationApi['generate']>> | undefined;
+    await act(async () => {
+      result = await api?.generate(request);
+    });
+
+    expect(result).toEqual({
+      output: {
+        fileEntryId: 'output-receipt-1',
+        uri: 'file:///generated.png',
+      },
+      painting: {
+        files: { input: [], output: ['output-receipt-1'] },
+        id: 'receipt-1',
+      },
+    });
+    expect(mockInvalidate).toHaveBeenCalledWith('receipt-1');
+  });
 });

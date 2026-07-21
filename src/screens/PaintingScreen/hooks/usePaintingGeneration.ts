@@ -8,12 +8,24 @@ import {
   prepareInternalFileFromUri,
 } from '@/data/services/fileStorage';
 import { parseUniqueModelId, type UniqueModelId } from '@/data/types/model';
+import type { Painting } from '@/data/types/painting';
 import { usePaintingQueryInvalidation } from '@/hooks/paintings';
 import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
 
 export type PaintingGenerationStatus = 'idle' | 'generating' | 'revealing';
 
-type PaintingOutput = { fileEntryId: string; uri: string };
+export type PaintingOutput = { fileEntryId: string; uri: string };
+
+export type PaintingGenerationInput = {
+  attachments: readonly ChatInputAttachmentDraft[];
+  modelId: UniqueModelId;
+  prompt: string;
+};
+
+export type PaintingGenerationResult = {
+  output: PaintingOutput;
+  painting: Painting;
+};
 
 type IncompleteReceipt = {
   id: string;
@@ -38,13 +50,9 @@ export function usePaintingGeneration({
       attachments,
       modelId,
       prompt,
-    }: {
-      attachments: readonly ChatInputAttachmentDraft[];
-      modelId: UniqueModelId;
-      prompt: string;
-    }) => {
+    }: PaintingGenerationInput): Promise<PaintingGenerationResult> => {
       if (abortControllerRef.current) {
-        return;
+        throw new Error('Painting generation is already in progress');
       }
 
       const imageAttachments = attachments.filter((attachment) => attachment.kind === 'image');
@@ -107,10 +115,16 @@ export function usePaintingGeneration({
 
         const preparedOutput = prepareGeneratedImage(image.base64, image.mediaType);
         const painting = await services.painting.replaceOutputs(receiptId, [preparedOutput]);
+        const fileEntryId = painting.files.output[0];
+        if (!fileEntryId) {
+          throw new Error('Generated painting has no output file');
+        }
+        const output = { fileEntryId, uri: preparedOutput.uri };
         incompleteReceiptRef.current = null;
-        setOutputs([{ fileEntryId: painting.files.output[0], uri: preparedOutput.uri }]);
+        setOutputs([output]);
         setStatus('revealing');
         await invalidatePaintings(painting.id);
+        return { output, painting };
       } catch (generationError) {
         const normalized =
           generationError instanceof Error ? generationError : new Error(String(generationError));

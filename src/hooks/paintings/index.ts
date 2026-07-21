@@ -1,5 +1,6 @@
 export {
   type PaintingGalleryItem,
+  type ResolvedPaintingAttachment,
   type ResolvedPaintingFiles,
   usePainting,
   usePaintingGalleryItems,

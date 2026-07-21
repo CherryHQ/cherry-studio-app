@@ -84,6 +84,15 @@ function RootStack() {
           title: '',
         }}
       />
+      <Stack.Screen
+        name="paintings/[paintingId]/conversation"
+        options={{
+          contentStyle: { backgroundColor: 'transparent' },
+          headerBackButtonDisplayMode: 'minimal',
+          headerStyle: isIOS ? undefined : { backgroundColor: 'transparent' },
+          headerTransparent: isLiquidGlassAvailable,
+        }}
+      />
     </Stack>
   );
 }

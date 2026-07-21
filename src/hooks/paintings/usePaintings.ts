@@ -23,9 +23,11 @@ export type PaintingGalleryItem = {
   uri: string;
 };
 
+export type ResolvedPaintingAttachment = ChatInputAttachmentDraft & { fileEntryId: string };
+
 export type ResolvedPaintingFiles = {
-  inputs: ChatInputAttachmentDraft[];
-  outputs: { fileEntryId: string; uri: string }[];
+  inputs: ResolvedPaintingAttachment[];
+  outputs: ResolvedPaintingAttachment[];
 };
 
 export function usePaintings() {
@@ -80,33 +82,29 @@ export function useResolvedPaintingFiles(painting: Painting | undefined) {
         return { inputs: [], outputs: [] };
       }
 
-      const inputEntries = await Promise.all(
-        painting.files.input.map(async (fileEntryId) => {
-          const [entry, uri] = await Promise.all([
-            services.fileEntry.findById(fileEntryId),
-            services.fileEntry.resolveUri(fileEntryId),
-          ]);
-          if (!entry || !uri) {
-            return null;
-          }
-          const mediaType = imageMediaTypeFromExtension(entry.ext);
-          return {
-            fileEntryId,
-            id: `painting-file:${fileEntryId}`,
-            kind: 'image' as const,
-            mediaType,
-            name: entry.ext ? `${entry.name}.${entry.ext}` : entry.name,
-            size: entry.origin === 'internal' ? entry.size : undefined,
-            uri,
-          };
-        }),
-      );
-      const outputs = await Promise.all(
-        painting.files.output.map(async (fileEntryId) => {
-          const uri = await services.fileEntry.resolveUri(fileEntryId);
-          return uri ? { fileEntryId, uri } : null;
-        }),
-      );
+      const resolveAttachment = async (
+        fileEntryId: string,
+      ): Promise<ResolvedPaintingAttachment | null> => {
+        const [entry, uri] = await Promise.all([
+          services.fileEntry.findById(fileEntryId),
+          services.fileEntry.resolveUri(fileEntryId),
+        ]);
+        if (!entry || !uri) {
+          return null;
+        }
+        const mediaType = imageMediaTypeFromExtension(entry.ext);
+        return {
+          fileEntryId,
+          id: `painting-file:${fileEntryId}`,
+          kind: 'image' as const,
+          mediaType,
+          name: entry.ext ? `${entry.name}.${entry.ext}` : entry.name,
+          size: entry.origin === 'internal' ? entry.size : undefined,
+          uri,
+        };
+      };
+      const inputEntries = await Promise.all(painting.files.input.map(resolveAttachment));
+      const outputs = await Promise.all(painting.files.output.map(resolveAttachment));
 
       return {
         inputs: inputEntries.filter((entry) => entry !== null),

@@ -76,6 +76,7 @@ function PaintingViewerContent({
         onDownload={() => void actions.download()}
         onEdit={actions.edit}
         onResizeSelect={actions.resize}
+        onViewConversation={actions.viewConversation}
       />
       <Link.AppleZoomTarget>
         <View className="flex-1">

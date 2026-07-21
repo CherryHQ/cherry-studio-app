@@ -85,5 +85,12 @@ export function usePaintingViewerActions({
     [openComposer, t],
   );
 
-  return { download, edit, remove, resize };
+  const viewConversation = useCallback(() => {
+    router.push({
+      params: { paintingId: painting.id },
+      pathname: '/paintings/[paintingId]/conversation',
+    });
+  }, [painting.id, router]);
+
+  return { download, edit, remove, resize, viewConversation };
 }

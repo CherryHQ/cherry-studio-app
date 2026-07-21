@@ -21,12 +21,18 @@ export function PaintingViewerChrome({
   onDownload,
   onEdit,
   onResizeSelect,
+  onViewConversation,
 }: PaintingViewerChromeProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
-  const deleteActions = useMemo<MenuAction[]>(
+  const moreActions = useMemo<MenuAction[]>(
     () => [
+      {
+        id: 'view-conversation',
+        image: require('../../../../assets/navigation/messages.png'),
+        title: t('painting.viewer.viewConversation'),
+      },
       {
         attributes: { destructive: true },
         id: 'delete',
@@ -36,7 +42,18 @@ export function PaintingViewerChrome({
     ],
     [t],
   );
-  const handleDeleteAction = useCallback(() => onDelete(), [onDelete]);
+  const handleMoreAction = useCallback(
+    (event: NativeActionEvent) => {
+      if (event.nativeEvent.event === 'view-conversation') {
+        onViewConversation();
+        return;
+      }
+      if (event.nativeEvent.event === 'delete') {
+        onDelete();
+      }
+    },
+    [onDelete, onViewConversation],
+  );
 
   const resizeActions = useMemo<MenuAction[]>(
     () => aspectRatios.map((ratio) => ({ id: ratio, title: ratio })),
@@ -64,7 +81,7 @@ export function PaintingViewerChrome({
               >
                 <DownloadIcon className="size-6 text-white" strokeWidth={2} />
               </HeaderIconButton>
-              <MenuView actions={deleteActions} onPressAction={handleDeleteAction}>
+              <MenuView actions={moreActions} onPressAction={handleMoreAction}>
                 <View
                   accessibilityLabel={t('painting.viewer.more')}
                   accessibilityRole="button"

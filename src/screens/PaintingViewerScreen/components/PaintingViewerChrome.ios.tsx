@@ -25,6 +25,7 @@ export function PaintingViewerChrome({
   onDownload,
   onEdit,
   onResizeSelect,
+  onViewConversation,
 }: PaintingViewerChromeProps) {
   const { t } = useTranslation();
 
@@ -44,6 +45,9 @@ export function PaintingViewerChrome({
           onPress={onDownload}
         />
         <Stack.Toolbar.Menu accessibilityLabel={t('painting.viewer.more')} icon="ellipsis">
+          <Stack.Toolbar.MenuAction icon="message" onPress={onViewConversation}>
+            {t('painting.viewer.viewConversation')}
+          </Stack.Toolbar.MenuAction>
           <Stack.Toolbar.MenuAction destructive icon="trash" onPress={onDelete}>
             {t('painting.viewer.delete')}
           </Stack.Toolbar.MenuAction>

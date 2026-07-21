@@ -5,4 +5,5 @@ export type PaintingViewerChromeProps = {
   onDownload: () => void;
   onEdit: () => void;
   onResizeSelect: (ratio: string) => void;
+  onViewConversation: () => void;
 };
