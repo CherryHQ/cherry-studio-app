@@ -1,54 +1,63 @@
-import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
+import { useCallback, useState } from 'react';
+import { useWindowDimensions, View } from 'react-native';
 
-import { Image } from '@/components/nativePrimitives';
+import { ZoomableImage } from './ZoomableImage';
 
-type ViewerOutput = { fileEntryId: string; uri: string };
+type ViewerItem = { key: string; uri: string };
 
+// Horizontal, virtualized pager across the whole gallery. Each page zooms
+// independently; while any page is zoomed the list stops scrolling so a pan
+// moves the image instead of paging away. `onEndReached` lets the screen load
+// the next gallery page so swiping keeps going past the initially loaded set.
+// `recycleItems` stays off so a zoomed page's transform never bleeds onto a
+// recycled neighbour. A horizontal list won't stretch cells on the cross axis,
+// so the measured height is threaded into each page as a concrete box.
 export function ViewerPager({
   initialIndex,
+  items,
+  onEndReached,
   onPageChange,
-  outputs,
 }: {
   initialIndex: number;
+  items: readonly ViewerItem[];
+  onEndReached: () => void;
   onPageChange: (index: number) => void;
-  outputs: readonly ViewerOutput[];
 }) {
-  const { t } = useTranslation();
   const { width } = useWindowDimensions();
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [height, setHeight] = useState(0);
+
+  const renderItem = useCallback(
+    ({ item }: LegendListRenderItemProps<ViewerItem>) => (
+      <ZoomableImage height={height} onZoomChange={setIsZoomed} uri={item.uri} width={width} />
+    ),
+    [height, width],
+  );
 
   return (
-    <ScrollView
-      contentOffset={{ x: initialIndex * width, y: 0 }}
-      horizontal
-      onMomentumScrollEnd={({ nativeEvent }) => {
-        const index = Math.round(nativeEvent.contentOffset.x / width);
-        onPageChange(Math.max(0, Math.min(outputs.length - 1, index)));
-      }}
-      pagingEnabled
-      showsHorizontalScrollIndicator={false}
-      testID="painting-viewer-pager"
-    >
-      {outputs.map((output) => (
-        <View className="h-full" key={output.fileEntryId} style={{ width }}>
-          <Image
-            accessibilityLabel={t('painting.output')}
-            cachePolicy="memory-disk"
-            contentFit="contain"
-            source={output.uri}
-            style={styles.image}
-            testID={`painting-viewer-output-${output.fileEntryId}`}
-            transition={120}
-          />
-        </View>
-      ))}
-    </ScrollView>
+    <View className="flex-1" onLayout={({ nativeEvent }) => setHeight(nativeEvent.layout.height)}>
+      {height > 0 ? (
+        <LegendList
+          className="flex-1"
+          data={items}
+          estimatedItemSize={width}
+          horizontal
+          initialScrollIndex={initialIndex}
+          keyExtractor={(item) => item.key}
+          onEndReached={onEndReached}
+          onEndReachedThreshold={0.5}
+          onMomentumScrollEnd={({ nativeEvent }) => {
+            const index = Math.round(nativeEvent.contentOffset.x / width);
+            onPageChange(Math.max(0, Math.min(items.length - 1, index)));
+          }}
+          pagingEnabled
+          renderItem={renderItem}
+          scrollEnabled={!isZoomed}
+          showsHorizontalScrollIndicator={false}
+          testID="painting-viewer-pager"
+        />
+      ) : null}
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  image: {
-    height: '100%',
-    width: '100%',
-  },
-});

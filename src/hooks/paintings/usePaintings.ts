@@ -1,4 +1,4 @@
-import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
+import { type InfiniteData, keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
 import { useCallback, useMemo } from 'react';
 
@@ -120,6 +120,11 @@ export function useResolvedPaintingFiles(painting: Painting | undefined) {
 export function usePaintingGalleryItems(paintings: readonly Painting[]) {
   return useDataQuery({
     enabled: paintings.length > 0,
+    // The key embeds every painting's updatedAt, so loading another page (or a
+    // regeneration) mints a fresh key. Keep the previous resolved items visible
+    // until the new set resolves so the masonry — and the fullscreen viewer that
+    // pages across the whole gallery — never blink to empty mid-scroll.
+    placeholderData: keepPreviousData,
     queryFn: async (services): Promise<PaintingGalleryItem[]> => {
       const items = paintings.flatMap((painting) =>
         painting.files.output.map((fileEntryId) => ({ fileEntryId, painting })),

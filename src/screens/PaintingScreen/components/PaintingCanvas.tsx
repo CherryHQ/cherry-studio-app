@@ -1,7 +1,7 @@
 import { useImage } from '@shopify/react-native-skia';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { runOnJS, useDerivedValue, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { Image } from '@/components/nativePrimitives';
@@ -24,13 +24,20 @@ export function PaintingCanvas({
   status: PaintingGenerationStatus;
 }) {
   const { t } = useTranslation();
-  const { width: windowWidth } = useWindowDimensions();
+  const [previewWidth, setPreviewWidth] = useState(0);
   const currentOutput = outputs[0];
-  const outputWidth = windowWidth - 32;
 
   return (
-    <View className="min-h-0 flex-1 px-4 pb-3 pt-2">
-      <View className="min-h-0 flex-1 overflow-hidden">
+    <View className="min-h-0 flex-1 items-center justify-center px-4 pb-3 pt-2">
+      {/* Keep the skeleton / reveal / result in one centered ~half-height square
+          so the loading grid stays a compact preview rather than filling the
+          whole canvas, and the three states never jump in size between each
+          other. */}
+      <View
+        className="overflow-hidden"
+        onLayout={({ nativeEvent }) => setPreviewWidth(nativeEvent.layout.width)}
+        style={styles.preview}
+      >
         {status === 'generating' ? (
           <PaintingSkeleton
             accessibilityLabel={t('painting.status.generating')}
@@ -51,7 +58,7 @@ export function PaintingCanvas({
             testID="painting-output-gallery"
           >
             {outputs.map((output) => (
-              <View className="h-full" key={output.fileEntryId} style={{ width: outputWidth }}>
+              <View className="h-full" key={output.fileEntryId} style={{ width: previewWidth }}>
                 <Image
                   accessibilityLabel={t('painting.output')}
                   cachePolicy="memory-disk"
@@ -121,5 +128,10 @@ const styles = StyleSheet.create({
   },
   outputList: {
     alignItems: 'stretch',
+  },
+  // Half the canvas height, kept square via aspectRatio so the width follows.
+  preview: {
+    aspectRatio: 1,
+    height: '50%',
   },
 });

@@ -4,8 +4,7 @@ import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 import { paintingViewer } from '@/config/constants';
-import type { Painting } from '@/data/types/painting';
-import { usePainting, useResolvedPaintingFiles } from '@/hooks/paintings';
+import { type PaintingGalleryItem, usePaintingGalleryItems, usePaintings } from '@/hooks/paintings';
 
 import { PaintingViewerChrome } from './components/PaintingViewerChrome';
 import { ViewerPager } from './components/ViewerPager';
@@ -17,53 +16,56 @@ export function PaintingViewerScreen() {
     paintingId?: string | string[];
   }>();
   const paintingId = firstParam(params.paintingId);
-  const initialFileEntryId = firstParam(params.fileEntryId);
-  const paintingQuery = usePainting(paintingId);
-  const painting = paintingQuery.data;
-  const filesQuery = useResolvedPaintingFiles(painting);
-  const outputs = filesQuery.data?.outputs ?? [];
+  const fileEntryId = firstParam(params.fileEntryId);
+  const paintings = usePaintings();
+  const gallery = usePaintingGalleryItems(paintings.paintings);
+  const items = gallery.data;
+  const isLoading = paintings.isLoading || gallery.isLoading;
+
+  if (!items || items.length === 0) {
+    return (
+      <View className="flex-1 bg-black">
+        <StatusBar style="light" />
+        <View className="flex-1 items-center justify-center">
+          {isLoading ? <ActivityIndicator color="#ffffff" /> : null}
+        </View>
+      </View>
+    );
+  }
+
   const initialIndex = Math.max(
     0,
-    outputs.findIndex((output) => output.fileEntryId === initialFileEntryId),
+    items.findIndex((item) => item.key === `${paintingId}:${fileEntryId}`),
   );
-  const [pageIndex, setPageIndex] = useState(initialIndex);
-  const isLoading = paintingQuery.isLoading || filesQuery.isLoading;
 
   return (
     <View className="flex-1 bg-black">
       <StatusBar style="light" />
-      {isLoading || !painting || outputs.length === 0 ? (
-        <View className="flex-1 items-center justify-center">
-          {isLoading ? <ActivityIndicator color="#ffffff" /> : null}
-        </View>
-      ) : (
-        <PaintingViewerContent
-          currentOutput={outputs[pageIndex]}
-          initialIndex={initialIndex}
-          onPageChange={setPageIndex}
-          outputs={outputs}
-          painting={painting}
-        />
-      )}
+      <PaintingViewerContent
+        initialIndex={initialIndex}
+        items={items}
+        onLoadMore={paintings.loadMore}
+      />
     </View>
   );
 }
 
 function PaintingViewerContent({
-  currentOutput,
   initialIndex,
-  onPageChange,
-  outputs,
-  painting,
+  items,
+  onLoadMore,
 }: {
-  currentOutput: { fileEntryId: string; uri: string } | undefined;
   initialIndex: number;
-  onPageChange: (index: number) => void;
-  outputs: { fileEntryId: string; uri: string }[];
-  painting: Painting;
+  items: readonly PaintingGalleryItem[];
+  onLoadMore: () => void;
 }) {
   const router = useRouter();
-  const actions = usePaintingViewerActions({ currentOutput, painting });
+  const [pageIndex, setPageIndex] = useState(initialIndex);
+  const current = items[Math.min(pageIndex, items.length - 1)] ?? items[0];
+  const actions = usePaintingViewerActions({
+    currentOutput: { fileEntryId: current.fileEntryId, uri: current.uri },
+    painting: current.painting,
+  });
 
   return (
     <>
@@ -77,7 +79,12 @@ function PaintingViewerContent({
       />
       <Link.AppleZoomTarget>
         <View className="flex-1">
-          <ViewerPager initialIndex={initialIndex} onPageChange={onPageChange} outputs={outputs} />
+          <ViewerPager
+            initialIndex={initialIndex}
+            items={items}
+            onEndReached={onLoadMore}
+            onPageChange={setPageIndex}
+          />
         </View>
       </Link.AppleZoomTarget>
     </>
