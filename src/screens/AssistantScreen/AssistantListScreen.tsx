@@ -19,6 +19,7 @@ import { type HeaderToolbarAction, TabRootHeader } from '@/components/headers';
 
 import type { Assistant } from '@/data/types/assistant';
 import { useAssistantMutations, useAssistantsApi } from '@/hooks/chat';
+import { useExclusiveSwipeable } from '@/hooks/useExclusiveSwipeable';
 
 // Width of the revealed swipe-to-delete panel; keep in sync with `w-16` below.
 const DELETE_ACTION_WIDTH = 64;
@@ -32,6 +33,7 @@ export default function AssistantListScreen() {
   const { assistants, isLoading } = useAssistantsApi();
   const { deleteAssistant } = useAssistantMutations();
   const { confirmDialog, requestConfirm } = useConfirmDialog();
+  const { notifyClose, notifyWillOpen } = useExclusiveSwipeable();
 
   const openCreateAssistant = useCallback(() => {
     router.push('/assistants/edit');
@@ -92,6 +94,8 @@ export default function AssistantListScreen() {
                 key={assistant.id}
                 assistant={assistant}
                 isLast={index === assistants.length - 1}
+                notifyClose={notifyClose}
+                notifyWillOpen={notifyWillOpen}
                 onDelete={requestDeleteAssistant}
                 onEdit={openEditAssistant}
               />
@@ -109,11 +113,20 @@ export default function AssistantListScreen() {
 type AssistantListRowProps = {
   assistant: Assistant;
   isLast: boolean;
+  notifyClose: (swipeable: SwipeableMethods) => void;
+  notifyWillOpen: (swipeable: SwipeableMethods) => void;
   onDelete: (assistant: Assistant) => void;
   onEdit: (assistantId: string) => void;
 };
 
-function AssistantListRow({ assistant, isLast, onDelete, onEdit }: AssistantListRowProps) {
+function AssistantListRow({
+  assistant,
+  isLast,
+  notifyClose,
+  notifyWillOpen,
+  onDelete,
+  onEdit,
+}: AssistantListRowProps) {
   const { t } = useTranslation();
   const swipeableRef = useRef<SwipeableMethods>(null);
   const isSwipeOpen = useSharedValue(0);
@@ -131,7 +144,18 @@ function AssistantListRow({ assistant, isLast, onDelete, onEdit }: AssistantList
   }, [isSwipeOpen]);
   const handleSwipeableClose = useCallback(() => {
     isSwipeOpen.value = 0;
-  }, [isSwipeOpen]);
+    if (swipeableRef.current) {
+      notifyClose(swipeableRef.current);
+    }
+  }, [isSwipeOpen, notifyClose]);
+  // Fires the instant a drag starts opening this row (before release), so the
+  // previously open row starts closing immediately instead of waiting for
+  // this swipe to finish settling.
+  const handleSwipeableOpenStartDrag = useCallback(() => {
+    if (swipeableRef.current) {
+      notifyWillOpen(swipeableRef.current);
+    }
+  }, [notifyWillOpen]);
   const editTapGesture = useMemo(
     () =>
       Gesture.Tap()
@@ -166,6 +190,7 @@ function AssistantListRow({ assistant, isLast, onDelete, onEdit }: AssistantList
     <ReanimatedSwipeable
       friction={2}
       onSwipeableClose={handleSwipeableClose}
+      onSwipeableOpenStartDrag={handleSwipeableOpenStartDrag}
       onSwipeableWillOpen={handleSwipeableWillOpen}
       overshootRight={false}
       ref={swipeableRef}

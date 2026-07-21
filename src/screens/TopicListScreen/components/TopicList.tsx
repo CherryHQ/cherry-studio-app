@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Assistant } from '@/data/types/assistant';
 import type { Topic } from '@/data/types/topic';
 import { useAssistantsApi } from '@/hooks/chat';
+import { useExclusiveSwipeable } from '@/hooks/useExclusiveSwipeable';
 
 import { useTopicListActions, useTopicListTopics } from '../context/TopicListProvider';
 import {
@@ -38,6 +39,8 @@ type TopicRowProps = {
   isEditing: boolean;
   isLast: boolean;
   isSelected: boolean;
+  notifyClose: (swipeable: SwipeableMethods) => void;
+  notifyWillOpen: (swipeable: SwipeableMethods) => void;
   onDelete: (topic: Topic) => void;
   onPress: (topicId: string) => void;
   onRename: (topic: Topic) => void;
@@ -97,6 +100,7 @@ export const TopicList = memo(function TopicList() {
   const { toggleTopic } = useTopicListSelectionActions();
   const { isEditing, selectedTopicIds } = useTopicListSelectionState();
   const { dialogs, requestDelete, requestRename } = useTopicActionDialogs();
+  const { notifyClose, notifyWillOpen } = useExclusiveSwipeable();
   const contentContainerStyle = useMemo(
     () => ({
       paddingBottom: isEditing
@@ -122,6 +126,8 @@ export const TopicList = memo(function TopicList() {
         isEditing={isEditing}
         isLast={index === topics.length - 1}
         isSelected={selectedTopicIds.has(item.id)}
+        notifyClose={notifyClose}
+        notifyWillOpen={notifyWillOpen}
         onDelete={requestDelete}
         onPress={openTopic}
         onRename={requestRename}
@@ -132,6 +138,8 @@ export const TopicList = memo(function TopicList() {
     [
       assistantsById,
       isEditing,
+      notifyClose,
+      notifyWillOpen,
       openTopic,
       requestDelete,
       requestRename,
@@ -182,6 +190,8 @@ const TopicRow = memo(function TopicRow({
   isEditing,
   isLast,
   isSelected,
+  notifyClose,
+  notifyWillOpen,
   onDelete,
   onPress,
   onRename,
@@ -225,7 +235,18 @@ const TopicRow = memo(function TopicRow({
   }, [isSwipeOpen]);
   const handleSwipeableClose = useCallback(() => {
     isSwipeOpen.value = 0;
-  }, [isSwipeOpen]);
+    if (swipeableRef.current) {
+      notifyClose(swipeableRef.current);
+    }
+  }, [isSwipeOpen, notifyClose]);
+  // Fires the instant a drag starts opening this row (before release), so the
+  // previously open row starts closing immediately instead of waiting for
+  // this swipe to finish settling.
+  const handleSwipeableOpenStartDrag = useCallback(() => {
+    if (swipeableRef.current) {
+      notifyWillOpen(swipeableRef.current);
+    }
+  }, [notifyWillOpen]);
   const openTapGesture = useMemo(
     () =>
       Gesture.Tap()
@@ -298,6 +319,7 @@ const TopicRow = memo(function TopicRow({
       enabled={!isEditing}
       friction={2}
       onSwipeableClose={handleSwipeableClose}
+      onSwipeableOpenStartDrag={handleSwipeableOpenStartDrag}
       onSwipeableWillOpen={handleSwipeableWillOpen}
       overshootRight={false}
       ref={swipeableRef}
