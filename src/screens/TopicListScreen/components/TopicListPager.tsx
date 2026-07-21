@@ -4,7 +4,6 @@ import { Text, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
 
 import { useTopicListScope } from '../context/TopicListScopeProvider';
-import { useTopicListSelectionState } from '../context/TopicListSelectionProvider';
 import { getTopicListScopeAtIndex, getTopicListScopeIndex } from '../utils/topicListScope';
 import { DrawingList } from './DrawingList';
 import { TopicList } from './TopicList';
@@ -16,7 +15,6 @@ type TopicListPagerProps = {
 export function TopicListPager({ showRecentsHeading = false }: TopicListPagerProps) {
   const { t } = useTranslation();
   const { scope, setScope } = useTopicListScope();
-  const { isEditing } = useTopicListSelectionState();
   const pagerRef = useRef<PagerView>(null);
   const [initialPage] = useState(() => getTopicListScopeIndex(scope));
   const currentPageRef = useRef(initialPage);
@@ -33,8 +31,9 @@ export function TopicListPager({ showRecentsHeading = false }: TopicListPagerPro
     <PagerView
       ref={pagerRef}
       initialPage={initialPage}
-      overdrag
-      scrollEnabled={!isEditing}
+      // Swipe disabled: horizontal paging collides with the topic rows' own
+      // swipe actions. Tabs switch pages programmatically via setScope instead.
+      scrollEnabled={false}
       style={{ flex: 1 }}
       testID="topic-list-pager"
       onPageSelected={(event) => {
