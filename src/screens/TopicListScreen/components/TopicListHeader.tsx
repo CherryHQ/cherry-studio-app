@@ -1,32 +1,37 @@
 // Android-only: mirrors the native iOS messages-tab header actions.
 import { Menu } from 'heroui-native/menu';
-import { ImageIcon, ListFilterIcon, MessageCircleIcon, SquarePenIcon } from 'lucide-uniwind/png';
-import { memo, type ReactNode } from 'react';
+import { ImageIcon, MessageCircleIcon, SquarePenIcon } from 'lucide-uniwind/png';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
+
+import type { TopicListScope } from '../utils/topicListScope';
+import { TopicListScopeTabs } from './TopicListScopeTabs';
 
 type TopicListHeaderProps = {
   isEditing: boolean;
   isEditVisible: boolean;
   onEditPress: () => void;
-  onFilterPress?: () => void;
   onNewPaintingPress: () => void;
   onNewTopicPress: () => void;
+  onScopeChange: (scope: TopicListScope) => void;
+  scope: TopicListScope;
 };
 
 export const TopicListHeader = memo(function TopicListHeader({
   isEditing,
   isEditVisible,
   onEditPress,
-  onFilterPress,
   onNewPaintingPress,
   onNewTopicPress,
+  onScopeChange,
+  scope,
 }: TopicListHeaderProps) {
   const { t } = useTranslation();
 
   return (
-    <View className="h-14 flex-row items-center px-4">
-      <View className="w-24 items-start">
+    <View className="h-14 flex-row items-center px-2">
+      <View className="w-[88px] items-start">
         {isEditVisible ? (
           <Pressable
             accessibilityRole="button"
@@ -40,18 +45,18 @@ export const TopicListHeader = memo(function TopicListHeader({
           </Pressable>
         ) : null}
       </View>
-      <Text
-        className="min-w-0 flex-1 text-center font-semibold text-lg text-foreground"
-        numberOfLines={1}
-      >
-        {t('navigation.messages')}
-      </Text>
-      <View className="w-24 items-end">
+      <View className="min-w-0 flex-1 items-center">
+        {isEditing ? (
+          <Text className="text-center font-semibold text-lg text-foreground" numberOfLines={1}>
+            {t('navigation.messages')}
+          </Text>
+        ) : (
+          <TopicListScopeTabs scope={scope} onScopeChange={onScopeChange} />
+        )}
+      </View>
+      <View className="w-[88px] items-end">
         {isEditing ? null : (
           <View className="flex-row rounded-3xl bg-field android:shadow-sm">
-            <HeaderIconButton accessibilityLabel={t('common.filter')} onPress={onFilterPress}>
-              <ListFilterIcon className="size-5 text-foreground" strokeWidth={2} />
-            </HeaderIconButton>
             <Menu presentation="popover">
               <Menu.Trigger asChild>
                 <Pressable
@@ -92,23 +97,3 @@ export const TopicListHeader = memo(function TopicListHeader({
     </View>
   );
 });
-
-type HeaderIconButtonProps = {
-  accessibilityLabel: string;
-  children: ReactNode;
-  onPress?: () => void;
-};
-
-function HeaderIconButton({ accessibilityLabel, children, onPress }: HeaderIconButtonProps) {
-  return (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      className="size-11 items-center justify-center rounded-3xl active:opacity-60"
-      hitSlop={8}
-      onPress={onPress}
-    >
-      {children}
-    </Pressable>
-  );
-}

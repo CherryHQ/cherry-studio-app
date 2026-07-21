@@ -1,90 +1,99 @@
 import { GlassView } from 'expo-glass-effect';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PlatformColor, Pressable, Text, View } from 'react-native';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import { PlatformColor, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { useTopicListScope } from '../context/TopicListScopeProvider';
 import { getTopicListScopeIndex, topicListScopes } from '../utils/topicListScope';
 import type { TopicListScopeTabsProps } from './TopicListScopeTabs.types';
 
 const labelKeys = {
-  conversations: 'topic.tabs.conversations',
-  drawings: 'topic.tabs.drawings',
+  conversations: 'topic.tabs.chat',
+  drawings: 'topic.tabs.paint',
 } as const;
 
 const segmentCount = topicListScopes.length;
 const indicatorInset = 3;
-const tabBarHeight = 56;
-const visibilityTransitionDuration = 220;
+const tabHeight = 34;
+const tabWidth = 144;
+const segmentWidth = tabWidth / segmentCount;
+const indicatorWidth = segmentWidth - indicatorInset * 2;
 
-export function TopicListScopeTabs({ isVisible }: TopicListScopeTabsProps) {
-  const { t } = useTranslation();
-  const { scope, setScope } = useTopicListScope();
-  const [width, setWidth] = useState(0);
+export function TopicListScopeTabs({ onScopeChange, scope }: TopicListScopeTabsProps) {
+  const { i18n, t } = useTranslation();
+  const { width: windowWidth } = useWindowDimensions();
+  const titleRef = useRef<View>(null);
+  const [centerOffsetX, setCenterOffsetX] = useState(0);
   const translateX = useSharedValue(0);
-  const segmentWidth = width / segmentCount;
-  const indicatorWidth = Math.max(0, segmentWidth - indicatorInset * 2);
+  const nativeHeaderLayoutKey = `${i18n.resolvedLanguage ?? ''}:${scope}`;
+
+  useEffect(() => {
+    if (!nativeHeaderLayoutKey) {
+      return;
+    }
+
+    setCenterOffsetX(0);
+    let measurementFrame: number | undefined;
+    const layoutFrame = requestAnimationFrame(() => {
+      measurementFrame = requestAnimationFrame(() => {
+        titleRef.current?.measureInWindow((x, _y, measuredWidth) => {
+          const nextOffset = windowWidth / 2 - (x + measuredWidth / 2);
+          setCenterOffsetX(nextOffset);
+        });
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(layoutFrame);
+      if (measurementFrame !== undefined) {
+        cancelAnimationFrame(measurementFrame);
+      }
+    };
+  }, [nativeHeaderLayoutKey, windowWidth]);
 
   useEffect(() => {
     translateX.value = withTiming(getTopicListScopeIndex(scope) * segmentWidth + indicatorInset, {
       duration: 220,
     });
-  }, [scope, segmentWidth, translateX]);
+  }, [scope, translateX]);
 
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
     width: indicatorWidth,
   }));
-  const visibilityStyle = useAnimatedStyle(() => ({
-    height: withTiming(isVisible ? tabBarHeight : 0, {
-      duration: visibilityTransitionDuration,
-      easing: Easing.inOut(Easing.ease),
-    }),
-    opacity: withTiming(isVisible ? 1 : 0, {
-      duration: visibilityTransitionDuration,
-      easing: Easing.inOut(Easing.ease),
-    }),
-  }));
 
   return (
-    <Animated.View
-      accessibilityElementsHidden={!isVisible}
-      className="w-full items-center justify-center overflow-hidden px-4"
-      importantForAccessibility={isVisible ? 'auto' : 'no-hide-descendants'}
-      pointerEvents={isVisible ? 'auto' : 'none'}
-      style={visibilityStyle}
+    <View
+      ref={titleRef}
+      collapsable={false}
+      style={{
+        height: tabHeight,
+        transform: [{ translateX: centerOffsetX }],
+        width: tabWidth,
+      }}
     >
       <GlassView
         glassEffectStyle="regular"
         isInteractive
         style={{
-          borderRadius: 20,
-          height: 40,
+          borderRadius: tabHeight / 2,
+          height: tabHeight,
           overflow: 'hidden',
-          width: '100%',
+          width: tabWidth,
         }}
-        onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
       >
-        {width > 0 ? (
-          <Animated.View
-            className="absolute left-0 rounded-full"
-            pointerEvents="none"
-            style={[
-              {
-                backgroundColor: PlatformColor('tertiarySystemFill'),
-                bottom: indicatorInset,
-                top: indicatorInset,
-              },
-              indicatorStyle,
-            ]}
-          />
-        ) : null}
+        <Animated.View
+          className="absolute left-0 rounded-full"
+          pointerEvents="none"
+          style={[
+            {
+              backgroundColor: PlatformColor('tertiarySystemFill'),
+              bottom: indicatorInset,
+              top: indicatorInset,
+            },
+            indicatorStyle,
+          ]}
+        />
         <View className="h-full flex-row">
           {topicListScopes.map((item) => {
             const isSelected = item === scope;
@@ -94,14 +103,21 @@ export function TopicListScopeTabs({ isVisible }: TopicListScopeTabsProps) {
                 key={item}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isSelected }}
-                className="h-10 flex-1 items-center justify-center"
+                className="h-full flex-1 items-center justify-center"
+                hitSlop={{ bottom: 5, top: 5 }}
                 testID={`topic-list-tab-${item}`}
-                onPress={() => setScope(item)}
+                onPress={() => onScopeChange(item)}
               >
                 <Text
-                  className="font-medium text-sm"
+                  adjustsFontSizeToFit
+                  className="font-medium"
+                  maxFontSizeMultiplier={1.2}
+                  minimumFontScale={0.9}
+                  numberOfLines={1}
                   style={{
                     color: PlatformColor(isSelected ? 'label' : 'secondaryLabel'),
+                    fontSize: 13,
+                    lineHeight: 16,
                   }}
                 >
                   {t(labelKeys[item])}
@@ -111,6 +127,6 @@ export function TopicListScopeTabs({ isVisible }: TopicListScopeTabsProps) {
           })}
         </View>
       </GlassView>
-    </Animated.View>
+    </View>
   );
 }

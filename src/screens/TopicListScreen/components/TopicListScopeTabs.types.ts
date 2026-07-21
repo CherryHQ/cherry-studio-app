@@ -1,3 +1,6 @@
+import type { TopicListScope } from '../utils/topicListScope';
+
 export type TopicListScopeTabsProps = {
-  isVisible: boolean;
+  onScopeChange: (scope: TopicListScope) => void;
+  scope: TopicListScope;
 };

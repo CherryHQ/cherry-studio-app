@@ -20,7 +20,7 @@ import {
 export function TopicListScreen() {
   const { t } = useTranslation();
   const { openNewPainting, openNewTopic } = useTopicListActions();
-  const { scope } = useTopicListScope();
+  const { scope, setScope } = useTopicListScope();
   const { enterEditing, exitEditing } = useTopicListSelectionActions();
   const { isEditing } = useTopicListSelectionState();
   const headerHeight = useHeaderHeight();
@@ -32,16 +32,21 @@ export function TopicListScreen() {
         className="flex-1 bg-background"
         style={{ paddingTop: isLiquidGlassAvailable ? headerHeight : 0 }}
       >
-        <TopicListScopeTabs isVisible={!isEditing} />
         <TopicListPager />
         <TopicSelectionControls />
       </View>
       <Stack.Screen
         options={{
           headerLargeTitle: false,
-          title: t('navigation.messages'),
         }}
       />
+      {isEditing ? (
+        <Stack.Title>{t('navigation.messages')}</Stack.Title>
+      ) : (
+        <Stack.Title asChild>
+          <TopicListScopeTabs scope={scope} onScopeChange={setScope} />
+        </Stack.Title>
+      )}
       <Stack.Toolbar placement="left">
         <Stack.Toolbar.Button
           accessibilityLabel={t(isEditing ? 'common.done' : 'common.edit')}
@@ -52,11 +57,6 @@ export function TopicListScreen() {
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
-          accessibilityLabel={t('common.filter')}
-          hidden={isEditing}
-          icon="line.3.horizontal.decrease"
-        />
         <Stack.Toolbar.Menu
           accessibilityLabel={t('navigation.new')}
           hidden={isEditing}

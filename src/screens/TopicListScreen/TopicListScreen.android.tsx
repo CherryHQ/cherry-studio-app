@@ -4,7 +4,6 @@ import { useSetBottomTabBarHidden } from '@/components/navigation';
 
 import { TopicListHeader } from './components/TopicListHeader';
 import { TopicListPager } from './components/TopicListPager';
-import { TopicListScopeTabs } from './components/TopicListScopeTabs';
 import { TopicSelectionControls } from './components/TopicSelectionControls';
 import { TopicListProvider, useTopicListActions } from './context/TopicListProvider';
 import { TopicListScopeProvider, useTopicListScope } from './context/TopicListScopeProvider';
@@ -16,7 +15,7 @@ import {
 
 export function TopicListScreen() {
   const { openNewPainting, openNewTopic } = useTopicListActions();
-  const { scope } = useTopicListScope();
+  const { scope, setScope } = useTopicListScope();
   const { enterEditing, exitEditing } = useTopicListSelectionActions();
   const { isEditing } = useTopicListSelectionState();
   const isConversationScope = scope === 'conversations';
@@ -29,8 +28,9 @@ export function TopicListScreen() {
         onEditPress={isEditing ? exitEditing : enterEditing}
         onNewPaintingPress={openNewPainting}
         onNewTopicPress={openNewTopic}
+        onScopeChange={setScope}
+        scope={scope}
       />
-      <TopicListScopeTabs isVisible={!isEditing} />
       <TopicListPager showRecentsHeading />
       <TopicSelectionControls />
     </SafeAreaView>
