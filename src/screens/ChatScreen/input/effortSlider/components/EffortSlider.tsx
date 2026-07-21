@@ -10,10 +10,11 @@ import {
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useReducedMotion, withTiming } from 'react-native-reanimated';
 
+import { useShaderClock } from '@/hooks/useShaderClock';
+
 import { useEffortSliderGesture } from '../hooks/useEffortSliderGesture';
-import { useShaderClock } from '../hooks/useShaderClock';
 import { useThinkingReveal } from '../hooks/useThinkingReveal';
-import { effortSliderSnapTiming } from '../utils/constants';
+import { effortSliderSnapTiming, THINKING_CLOCK_WRAP_SECONDS } from '../utils/constants';
 import { stopFraction } from '../utils/effortSliderMath';
 import {
   darkThinkingFallbackGradient,
@@ -111,7 +112,7 @@ export function EffortSlider({
     !reducedMotion,
     valueIndex === pixelStopIndex,
   );
-  const time = useShaderClock(fieldMounted);
+  const time = useShaderClock(fieldMounted, THINKING_CLOCK_WRAP_SECONDS);
   const palette = isDark ? darkThinkingPalette : lightThinkingPalette;
   const fallbackGradient = isDark ? darkThinkingFallbackGradient : lightThinkingFallbackGradient;
   const showStaticField = reducedMotion && valueIndex === pixelStopIndex && pixelStopIndex >= 0;

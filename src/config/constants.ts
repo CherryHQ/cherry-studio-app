@@ -55,6 +55,46 @@ export const homeActivityCalendar = {
   exitSpring: { mass: 0.9, damping: 10, stiffness: 60 },
 } as const;
 
+// Tuning knobs for the painting loading grid skeleton — a 1:1 port of the
+// desktop paintings skeleton (renderer/pages/paintings PaintingSkeletonGrid):
+// a measured cols×rows grid of rounded cells whose brightness peak sweeps
+// diagonally from the bottom-left to the top-right. Adjust here, not in the
+// paintingSkeleton module.
+export const paintingSkeleton = {
+  gap: 5, // gap between cells and outer padding of the grid (dp)
+  basePitch: 38, // starting cell+gap pitch the measurement divides the box by
+  pitchStep: 2, // pitch growth per step while the grid exceeds maxCells
+  maxCells: 100, // cap on cols*rows; larger boxes get a coarser grid instead
+  cellRadius: 2.5,
+  periodSeconds: 1.3, // one full diagonal sweep of the brightness wave (faster than desktop's 1.9)
+  alphaMin: 0.06, // resting (unlit) cell opacity
+  peakMin: 0.35, // dimmest per-cell peak opacity
+  peakMax: 0.85, // brightest per-cell peak opacity
+  afterglow: 0.25, // fraction of the peak still glowing on the falling edge
+  phaseJitter: 0.1, // per-cell phase scatter, as a fraction of periodSeconds
+  keyframeTimes: [0.39, 0.5, 0.68], // rise start / peak / afterglow points of the loop
+  reducedMotionAlpha: 0.66, // static snapshot opacity when Reduce Motion is on
+  // Cell color is foreground × foregroundAlpha × the animated opacity; rgb is
+  // normalized for the shader and matches --cs-foreground (black light / white
+  // dark), whose 0.9 alpha lives in foregroundAlpha.
+  foregroundAlpha: 0.9,
+  foreground: { light: [0, 0, 0], dark: [1, 1, 1] },
+  // Act 2-4 image reveal (desktop parity): once a result image is ready the
+  // grid tints (Act 2), fades in real per-cell slices chasing the tint wave
+  // (Act 3), then a full image heals the gutters (Act 4). All in seconds,
+  // relative to reveal start; per-cell start = (diag / maxDiag) * tintSweep.
+  reveal: {
+    tintSweep: 1.35, // one-shot diagonal color-reveal sweep across the grid
+    tintDur: 0.68, // per-cell tint fade-in
+    tintMax: 0.95, // tint opacity once solid
+    sliceChase: 0.2, // slice wave lags each cell's tint start by this
+    sliceFade: 0.35, // per-cell slice fade-in
+    healStart: 1.9, // Act 4 start = tintSweep + sliceChase + sliceFade
+    healFade: 0.4, // full-image heal fade-in
+    endSeconds: 2.3, // healStart + healFade — reveal fully done
+  },
+} as const;
+
 // Tuning knobs for the animated profile hero on the Settings tab (avatar +
 // name). Single source of truth — adjust the animation feel here rather than
 // scattering magic numbers across SettingsScreen's profileHero module.

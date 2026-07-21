@@ -72,8 +72,10 @@ jest.mock('@shopify/react-native-skia', () => {
     Group: inert('SkiaGroup'),
     Text: inert('SkiaText'),
     BlurMask: inert('SkiaBlurMask'),
+    Rect: inert('SkiaRect'),
     RoundedRect: inert('SkiaRoundedRect'),
     Shader: inert('SkiaShader'),
+    ImageShader: inert('SkiaImageShader'),
     Path: inert('SkiaPath'),
     Mask: inert('SkiaMask'),
     matchFont: () => ({

@@ -22,7 +22,7 @@ model renders 5–6 detents.
 - **Pixel field** — one SkSL runtime effect (`shaders/thinkingPixelField.ts`)
   draws the background gradient sweep and the flickering cell grid per-pixel
   on the GPU. Uniforms are fed from reanimated shared values via
-  `useDerivedValue`; a wrapped clock (`hooks/useShaderClock.ts`) keeps sin()
+  `useDerivedValue`; a wrapped clock (`@/hooks/useShaderClock`) keeps sin()
   arguments small and loops seamlessly every 120 s.
 - **Lifecycle** — `hooks/useThinkingReveal.ts` mounts the canvas only while
   the top stop is active (1 s reveal sweep in, 220 ms fade out, then unmount),
