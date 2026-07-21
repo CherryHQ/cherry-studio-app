@@ -79,7 +79,7 @@ function TabNavigator() {
         activeIndicatorColor: tabBarColor,
       }
     : {};
-  const messagesSceneStyle = isAndroid && isBottomTabBarHidden ? filledSceneStyle : undefined;
+  const sceneStyle = isAndroid ? filledSceneStyle : undefined;
 
   return (
     <Tabs
@@ -88,6 +88,7 @@ function TabNavigator() {
       initialRouteName="(messages)"
       tabBarHidden={isBottomTabBarHidden}
       screenOptions={{
+        sceneStyle,
         // freezeOnBlur 会让冻结中的 tab 错过 uniwind 的免重渲染主题 patch，
         // 解冻后也不补发，导致切主题后整页停留旧主题（见 .context/theme-debug）。
         tabBarActiveTintColor: accentColor,
@@ -115,7 +116,6 @@ function TabNavigator() {
       <Tabs.Screen
         name="(messages)"
         options={{
-          sceneStyle: messagesSceneStyle,
           tabBarIcon: getMessagesIcon,
           tabBarLabel: t('navigation.messages'),
           title: t('navigation.messages'),
