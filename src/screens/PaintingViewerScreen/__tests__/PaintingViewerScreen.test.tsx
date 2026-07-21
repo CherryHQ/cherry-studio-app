@@ -4,16 +4,11 @@ import type { PaintingGalleryItem } from '@/hooks/paintings';
 
 import { PaintingViewerScreen } from '../PaintingViewerScreen';
 
-type ViewerPagerProps = {
-  onPageChange: (index: number) => void;
-};
-
 const mockRouterBack = jest.fn();
-const mockRouterSetParams = jest.fn();
 const mockLoadMore = jest.fn();
 let mockCurrentPaintingId: string | undefined;
 let mockSearchParams = { fileEntryId: 'file-1', paintingId: 'painting-1' };
-let mockViewerPagerProps: ViewerPagerProps | undefined;
+let mockViewerImageProps: { sourceKey: string; uri: string } | undefined;
 
 const mockItems: PaintingGalleryItem[] = [
   createGalleryItem('painting-1', 'file-1'),
@@ -23,15 +18,10 @@ const mockItems: PaintingGalleryItem[] = [
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockSearchParams,
-  useRouter: () => ({ back: mockRouterBack, setParams: mockRouterSetParams }),
+  useRouter: () => ({ back: mockRouterBack, setParams: jest.fn() }),
 }));
 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
-
-jest.mock('@/components/navigation', () => ({
-  getPaintingZoomTransitionSourceId: (sourceKey: string) => `painting-gallery:${sourceKey}`,
-  paintingZoomTransitionSourceIdParam: '__internal_expo_router_zoom_transition_source_id',
-}));
 
 jest.mock('@/config/constants', () => ({
   isIOS: true,
@@ -45,9 +35,9 @@ jest.mock('@/hooks/paintings', () => ({
 
 jest.mock('../components/PaintingViewerChrome', () => ({ PaintingViewerChrome: () => null }));
 
-jest.mock('../components/ViewerPager', () => ({
-  ViewerPager: (props: ViewerPagerProps) => {
-    mockViewerPagerProps = props;
+jest.mock('../components/ViewerImage', () => ({
+  ViewerImage: (props: { sourceKey: string; uri: string }) => {
+    mockViewerImageProps = props;
     return null;
   },
 }));
@@ -72,7 +62,7 @@ describe('PaintingViewerScreen', () => {
     jest.clearAllMocks();
     mockCurrentPaintingId = undefined;
     mockSearchParams = { fileEntryId: 'file-1', paintingId: 'painting-1' };
-    mockViewerPagerProps = undefined;
+    mockViewerImageProps = undefined;
     await act(async () => {
       renderer = create(<PaintingViewerScreen />);
     });
@@ -82,28 +72,25 @@ describe('PaintingViewerScreen', () => {
     await act(async () => renderer?.unmount());
   });
 
-  it('retargets the iOS zoom transition when the visible page changes', async () => {
-    await act(async () => {
-      mockViewerPagerProps?.onPageChange(2);
-    });
-
-    expect(mockRouterSetParams).toHaveBeenCalledWith({
-      __internal_expo_router_zoom_transition_source_id: 'painting-gallery:painting-3:file-3',
+  it('renders the single gallery item matching the route params, with no pager', () => {
+    expect(mockCurrentPaintingId).toBe('painting-1');
+    expect(mockViewerImageProps).toEqual({
+      sourceKey: 'painting-1:file-1',
+      uri: 'file:///file-1.png',
     });
   });
 
-  it('resets the visible page when the same viewer route opens from another gallery item', async () => {
-    await act(async () => {
-      mockViewerPagerProps?.onPageChange(2);
-    });
-    expect(mockCurrentPaintingId).toBe('painting-3');
-
+  it('switches to another gallery item when the route params change, without remounting', async () => {
     mockSearchParams = { fileEntryId: 'file-2', paintingId: 'painting-2' };
     await act(async () => {
       renderer?.update(<PaintingViewerScreen />);
     });
 
     expect(mockCurrentPaintingId).toBe('painting-2');
+    expect(mockViewerImageProps).toEqual({
+      sourceKey: 'painting-2:file-2',
+      uri: 'file:///file-2.png',
+    });
   });
 });
 

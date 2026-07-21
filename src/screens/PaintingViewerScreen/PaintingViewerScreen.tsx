@@ -1,17 +1,12 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-import {
-  getPaintingZoomTransitionSourceId,
-  paintingZoomTransitionSourceIdParam,
-} from '@/components/navigation';
-import { isIOS, paintingViewer } from '@/config/constants';
+import { paintingViewer } from '@/config/constants';
 import { type PaintingGalleryItem, usePaintingGalleryItems, usePaintings } from '@/hooks/paintings';
 
 import { PaintingViewerChrome } from './components/PaintingViewerChrome';
-import { ViewerPager } from './components/ViewerPager';
+import { ViewerImage } from './components/ViewerImage';
 import { usePaintingViewerActions } from './hooks/usePaintingViewerActions';
 
 export function PaintingViewerScreen() {
@@ -25,8 +20,9 @@ export function PaintingViewerScreen() {
   const gallery = usePaintingGalleryItems(paintings.paintings);
   const items = gallery.data;
   const isLoading = paintings.isLoading || gallery.isLoading;
+  const current = items?.find((item) => item.key === `${paintingId}:${fileEntryId}`);
 
-  if (!items || items.length === 0) {
+  if (!current) {
     return (
       <View className="flex-1 bg-black">
         <StatusBar style="light" />
@@ -37,54 +33,20 @@ export function PaintingViewerScreen() {
     );
   }
 
-  const initialIndex = Math.max(
-    0,
-    items.findIndex((item) => item.key === `${paintingId}:${fileEntryId}`),
-  );
-
   return (
     <View className="flex-1 bg-black">
       <StatusBar style="light" />
-      <PaintingViewerContent
-        initialIndex={initialIndex}
-        items={items}
-        key={`${paintingId}:${fileEntryId}`}
-        onLoadMore={paintings.loadMore}
-      />
+      <PaintingViewerContent current={current} />
     </View>
   );
 }
 
-function PaintingViewerContent({
-  initialIndex,
-  items,
-  onLoadMore,
-}: {
-  initialIndex: number;
-  items: readonly PaintingGalleryItem[];
-  onLoadMore: () => void;
-}) {
+function PaintingViewerContent({ current }: { current: PaintingGalleryItem }) {
   const router = useRouter();
-  const [pageIndex, setPageIndex] = useState(initialIndex);
-  const current = items[Math.min(pageIndex, items.length - 1)] ?? items[0];
   const actions = usePaintingViewerActions({
     currentOutput: { fileEntryId: current.fileEntryId, uri: current.uri },
     painting: current.painting,
   });
-  const handlePageChange = useCallback(
-    (index: number) => {
-      const nextIndex = Math.max(0, Math.min(items.length - 1, index));
-      const next = items[nextIndex];
-      setPageIndex(nextIndex);
-
-      if (isIOS && next) {
-        router.setParams({
-          [paintingZoomTransitionSourceIdParam]: getPaintingZoomTransitionSourceId(next.key),
-        });
-      }
-    },
-    [items, router],
-  );
 
   return (
     <>
@@ -98,12 +60,7 @@ function PaintingViewerContent({
         onViewConversation={actions.viewConversation}
       />
       <View className="flex-1">
-        <ViewerPager
-          initialIndex={initialIndex}
-          items={items}
-          onEndReached={onLoadMore}
-          onPageChange={handlePageChange}
-        />
+        <ViewerImage sourceKey={current.key} uri={current.uri} />
       </View>
     </>
   );
