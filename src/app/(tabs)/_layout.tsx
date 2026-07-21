@@ -4,6 +4,7 @@ import {
   type NativeBottomTabNavigationOptions,
 } from '@bottom-tabs/react-navigation';
 import { withLayoutContext } from 'expo-router';
+import { isAndroid } from '@/config/constants';
 import type { ParamListBase, TabNavigationState } from 'expo-router/react-navigation';
 import { useThemeColor } from 'heroui-native/hooks';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +24,8 @@ const Tabs = withLayoutContext<
   TabNavigationState<ParamListBase>,
   NativeBottomTabNavigationEventMap
 >(BottomTabNavigator);
+
+const filledSceneStyle = { height: '100%' } as const;
 
 const homeIcon = require('@/assets/navigation/home.png');
 const assistantsIcon = require('@/assets/navigation/assistants.png');
@@ -67,15 +70,25 @@ export default function TabLayout() {
 function TabNavigator() {
   const { t } = useTranslation();
   const accentColor = useThemeColor('accent');
+  const [tabBarColor] = useThemeColor(['background-secondary']);
   const isBottomTabBarHidden = useBottomTabBarHidden();
   const setScope = useSetSearchScope();
+  const androidTabProps = isAndroid
+    ? {
+        tabBarStyle: { backgroundColor: tabBarColor },
+        activeIndicatorColor: tabBarColor,
+      }
+    : {};
+  const sceneStyle = isAndroid ? filledSceneStyle : undefined;
 
   return (
     <Tabs
+      {...androidTabProps}
       backBehavior="history"
       initialRouteName="(messages)"
       tabBarHidden={isBottomTabBarHidden}
       screenOptions={{
+        sceneStyle,
         // freezeOnBlur 会让冻结中的 tab 错过 uniwind 的免重渲染主题 patch，
         // 解冻后也不补发，导致切主题后整页停留旧主题（见 .context/theme-debug）。
         tabBarActiveTintColor: accentColor,

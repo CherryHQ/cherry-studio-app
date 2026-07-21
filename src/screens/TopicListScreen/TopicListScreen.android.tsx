@@ -22,7 +22,7 @@ export function TopicListScreen() {
   const isConversationScope = scope === 'conversations';
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+    <SafeAreaView className="flex-1 bg-background" edges={['top']} style={{ flex: 1 }}>
       <TopicListHeader
         isEditing={isEditing}
         isEditVisible={isConversationScope}
