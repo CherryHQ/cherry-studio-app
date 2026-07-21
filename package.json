@@ -71,6 +71,7 @@
     "drizzle-orm": "^0.45.2",
     "expo": "~57.0.6",
     "expo-auth-session": "~57.0.3",
+    "expo-blob": "^57.0.1",
     "expo-build-properties": "~57.0.5",
     "expo-camera": "~57.0.3",
     "expo-clipboard": "^57.0.1",

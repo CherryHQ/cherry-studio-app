@@ -14,6 +14,7 @@ import {
   type ToolSet,
   type UIMessageChunk,
 } from 'ai';
+import { fetch as expoFetch } from 'expo/fetch';
 import type { AssistantService } from '@/data/services/AssistantService';
 import type { FileEntryService } from '@/data/services/FileEntryService';
 import type { ModelService } from '@/data/services/ModelService';
@@ -202,16 +203,18 @@ export class AiService {
     const { sdkConfig, model, assistant, options } = await this.buildAgentParamsFor(request);
     const customParams = assistant ? getCustomParameters(assistant) : {};
     const split = extractAiSdkStandardParams(customParams);
+    const inputImages = request.inputImages ?? [];
+    const hasInputImages = inputImages.length > 0;
+    const providerSettings = hasInputImages
+      ? { ...sdkConfig.providerSettings, fetch: expoFetch }
+      : sdkConfig.providerSettings;
 
     const result = await aiCoreGenerateImage<AppProviderSettingsMap>(
       sdkConfig.providerId,
-      sdkConfig.providerSettings as never,
+      providerSettings as never,
       {
         model: model.modelId,
-        prompt:
-          request.inputImages && request.inputImages.length > 0
-            ? { images: request.inputImages, text: request.prompt }
-            : request.prompt,
+        prompt: hasInputImages ? { images: inputImages, text: request.prompt } : request.prompt,
         n: request.n ?? 1,
         size: request.size,
         aspectRatio: request.aspectRatio,

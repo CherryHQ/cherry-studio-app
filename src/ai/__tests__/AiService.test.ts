@@ -84,7 +84,7 @@ describe('AiService.generateImage', () => {
 
     expect(generateImageMock).toHaveBeenCalledWith(
       expect.any(String),
-      expect.anything(),
+      expect.objectContaining({ fetch: expect.any(Function) }),
       expect.objectContaining({
         n: 1,
         prompt: { images: inputImages, text: 'edit these images' },
