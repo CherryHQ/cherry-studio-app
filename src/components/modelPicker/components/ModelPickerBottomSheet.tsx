@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { SelectionBottomSheet, SelectionSheetSearchField } from '@/components/selectionSheet';
 import { useModelPickerData } from '../hooks/useModelPickerData';
-import { type ModelPickerModelItem } from '../utils/modelPickerData';
+import { type ModelPickerModelItem, type ModelPickerTag } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
 import { ModelPickerSheetContent } from './ModelPickerSheetContent';
 
@@ -32,7 +32,9 @@ type ModelPickerBottomSheetProps = {
   onClose?: () => void;
   onSelect: (item: ModelPickerModelItem) => void;
   ref?: Ref<ModelPickerBottomSheetHandle>;
+  selectedTags?: readonly ModelPickerTag[];
   selectedModelId: string | null;
+  showPinnedModels?: boolean;
 };
 
 export type ModelPickerBottomSheetHandle = {
@@ -46,7 +48,9 @@ export function ModelPickerBottomSheet({
   onClose,
   onSelect,
   ref,
+  selectedTags = [],
   selectedModelId,
+  showPinnedModels = true,
 }: ModelPickerBottomSheetProps) {
   const { t } = useTranslation();
   // `sheetIndex` is fed by two mutually-exclusive inputs, never both for the
@@ -62,7 +66,11 @@ export function ModelPickerBottomSheet({
   const [footerHeight, setFooterHeight] = useState(0);
   const [visibleListItemCount, setVisibleListItemCount] = useState(initialModelPickerListItemCount);
   const isSearching = searchText.trim().length > 0;
-  const { groups, isLoading, pinnedModelIds } = useModelPickerData({ searchText });
+  const { groups, isLoading, pinnedModelIds } = useModelPickerData({
+    searchText,
+    selectedTags,
+    showPinnedModels,
+  });
   const totalListItemCount = useMemo(
     () => groups.reduce((total, group) => total + 1 + group.items.length, 0),
     [groups],

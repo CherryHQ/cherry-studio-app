@@ -5,6 +5,7 @@ import type { CherryMessagePart } from '@/data/types/message';
 export type ChatInputAttachmentKind = 'file' | 'image';
 
 export type ChatInputAttachmentDraft = {
+  fileEntryId?: string;
   id: string;
   kind: ChatInputAttachmentKind;
   mediaType: string;

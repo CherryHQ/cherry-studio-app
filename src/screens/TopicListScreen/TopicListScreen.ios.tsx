@@ -19,7 +19,7 @@ import {
 
 export function TopicListScreen() {
   const { t } = useTranslation();
-  const { openNewTopic } = useTopicListActions();
+  const { openNewPainting, openNewTopic } = useTopicListActions();
   const { scope } = useTopicListScope();
   const { enterEditing, exitEditing } = useTopicListSelectionActions();
   const { isEditing } = useTopicListSelectionState();
@@ -57,12 +57,18 @@ export function TopicListScreen() {
           hidden={isEditing}
           icon="line.3.horizontal.decrease"
         />
-        <Stack.Toolbar.Button
-          accessibilityLabel={t('navigation.newChat')}
+        <Stack.Toolbar.Menu
+          accessibilityLabel={t('navigation.new')}
           hidden={isEditing}
           icon="square.and.pencil"
-          onPress={openNewTopic}
-        />
+        >
+          <Stack.Toolbar.MenuAction icon="message" onPress={openNewTopic}>
+            {t('navigation.newChat')}
+          </Stack.Toolbar.MenuAction>
+          <Stack.Toolbar.MenuAction icon="paintbrush" onPress={openNewPainting}>
+            {t('navigation.newPainting')}
+          </Stack.Toolbar.MenuAction>
+        </Stack.Toolbar.Menu>
       </Stack.Toolbar>
     </>
   );

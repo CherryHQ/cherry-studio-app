@@ -19,6 +19,7 @@ type TopicListActionsContextValue = {
   deleteTopic: (topicId: string) => Promise<void>;
   deleteTopics: (topicIds: readonly string[]) => Promise<void>;
   loadMoreTopics: () => void;
+  openNewPainting: () => void;
   openNewTopic: () => void;
   openTopic: (topicId: string) => void;
   renameTopic: (topicId: string, name: string) => Promise<void>;
@@ -49,6 +50,9 @@ export function TopicListProvider({ children }: PropsWithChildren) {
 
   const openNewTopic = useCallback(() => {
     router.push('/topics');
+  }, [router]);
+  const openNewPainting = useCallback(() => {
+    router.push('/paintings');
   }, [router]);
 
   const openTopic = useCallback(
@@ -125,11 +129,20 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       deleteTopic,
       deleteTopics,
       loadMoreTopics: topicList.loadMore,
+      openNewPainting,
       openNewTopic,
       openTopic,
       renameTopic,
     }),
-    [deleteTopic, deleteTopics, openNewTopic, openTopic, renameTopic, topicList.loadMore],
+    [
+      deleteTopic,
+      deleteTopics,
+      openNewPainting,
+      openNewTopic,
+      openTopic,
+      renameTopic,
+      topicList.loadMore,
+    ],
   );
 
   return (

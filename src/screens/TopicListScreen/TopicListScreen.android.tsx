@@ -15,7 +15,7 @@ import {
 } from './context/TopicListSelectionProvider';
 
 export function TopicListScreen() {
-  const { openNewTopic } = useTopicListActions();
+  const { openNewPainting, openNewTopic } = useTopicListActions();
   const { scope } = useTopicListScope();
   const { enterEditing, exitEditing } = useTopicListSelectionActions();
   const { isEditing } = useTopicListSelectionState();
@@ -27,6 +27,7 @@ export function TopicListScreen() {
         isEditing={isEditing}
         isEditVisible={isConversationScope}
         onEditPress={isEditing ? exitEditing : enterEditing}
+        onNewPaintingPress={openNewPainting}
         onNewTopicPress={openNewTopic}
       />
       <TopicListScopeTabs isVisible={!isEditing} />

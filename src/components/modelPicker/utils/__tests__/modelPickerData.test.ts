@@ -287,6 +287,37 @@ describe('model picker data helpers', () => {
     ]);
   });
 
+  test('shows only enabled image-generation models for the painting picker', () => {
+    const imageModels = [
+      ...models,
+      createModel({
+        capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+        modelId: 'gpt-image-2',
+        name: 'GPT Image 2',
+        providerId: 'openai',
+      }),
+      createModel({
+        capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+        isEnabled: false,
+        modelId: 'disabled-image',
+        name: 'Disabled Image',
+        providerId: 'openai',
+      }),
+    ];
+    const groups = buildModelPickerGroups({
+      models: imageModels,
+      pinnedModelIds: [],
+      providers,
+      searchText: '',
+      selectedTags: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      showPinnedModels: false,
+    });
+
+    expect(groups.flatMap((group) => group.items.map((item) => item.modelId))).toEqual([
+      'openai::gpt-image-2',
+    ]);
+  });
+
   test('filters arbitrary model collections by their available tags', () => {
     const pullModels = [
       createModel({

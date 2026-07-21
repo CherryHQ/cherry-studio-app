@@ -66,6 +66,15 @@ function RootStack() {
           headerTransparent: isLiquidGlassAvailable,
         }}
       />
+      <Stack.Screen
+        name="paintings"
+        options={{
+          contentStyle: { backgroundColor: 'transparent' },
+          headerBackButtonDisplayMode: 'minimal',
+          headerStyle: isIOS ? undefined : { backgroundColor: 'transparent' },
+          headerTransparent: isLiquidGlassAvailable,
+        }}
+      />
     </Stack>
   );
 }

@@ -184,4 +184,14 @@ describe('TopicListProvider', () => {
 
     expect(mockRouterPush).toHaveBeenCalledWith('/topics');
   });
+
+  test('pushes the blank painting route from the create menu', async () => {
+    await renderProvider([]);
+
+    await act(async () => {
+      currentActions?.openNewPainting();
+    });
+
+    expect(mockRouterPush).toHaveBeenCalledWith('/paintings');
+  });
 });
