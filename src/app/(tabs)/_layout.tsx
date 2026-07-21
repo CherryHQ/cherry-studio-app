@@ -25,6 +25,8 @@ const Tabs = withLayoutContext<
   NativeBottomTabNavigationEventMap
 >(BottomTabNavigator);
 
+const filledSceneStyle = { height: '100%' } as const;
+
 const homeIcon = require('@/assets/navigation/home.png');
 const assistantsIcon = require('@/assets/navigation/assistants.png');
 const messagesIcon = require('@/assets/navigation/messages.png');
@@ -77,6 +79,7 @@ function TabNavigator() {
         activeIndicatorColor: tabBarColor,
       }
     : {};
+  const messagesSceneStyle = isAndroid && isBottomTabBarHidden ? filledSceneStyle : undefined;
 
   return (
     <Tabs
@@ -112,6 +115,7 @@ function TabNavigator() {
       <Tabs.Screen
         name="(messages)"
         options={{
+          sceneStyle: messagesSceneStyle,
           tabBarIcon: getMessagesIcon,
           tabBarLabel: t('navigation.messages'),
           title: t('navigation.messages'),
