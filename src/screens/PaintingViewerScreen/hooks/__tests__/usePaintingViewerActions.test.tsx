@@ -94,7 +94,7 @@ describe('usePaintingViewerActions', () => {
     });
   });
 
-  it('opens edit with the current output attached', () => {
+  it('opens edit with the current output attached and no prefilled prompt', () => {
     actions?.edit();
 
     expect(mockCreatePaintingOutputAttachmentDraft).toHaveBeenCalledWith({
@@ -103,7 +103,7 @@ describe('usePaintingViewerActions', () => {
     });
     expect(mockCreatePaintingDraftHandoff).toHaveBeenCalledWith({
       attachments: [{ id: 'painting-output' }],
-      draft: painting.prompt,
+      draft: '',
     });
     expect(mockRouterPush).toHaveBeenCalledWith({
       params: { handoff: 'handoff', paintingId: painting.id },

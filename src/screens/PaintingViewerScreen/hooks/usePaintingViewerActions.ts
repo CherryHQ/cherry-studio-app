@@ -61,9 +61,9 @@ export function usePaintingViewerActions({
 
   // Both edit and resize reopen the composer seeded with the current output as an
   // input attachment; paintingId additionally preselects the painting's model.
-  // Resize is a shortcut of the edit state: it seeds the prompt with just the
-  // aspect-ratio directive (not the original prompt), and the user reviews and
-  // sends it manually.
+  // Edit leaves the prompt blank for the user to write fresh. Resize seeds it
+  // with just the aspect-ratio directive, and the user reviews and sends it
+  // manually.
   const openComposer = useCallback(
     (draft: string) => {
       if (!currentOutput) {
@@ -78,7 +78,7 @@ export function usePaintingViewerActions({
     [currentOutput, painting.id, router],
   );
 
-  const edit = useCallback(() => openComposer(painting.prompt), [openComposer, painting.prompt]);
+  const edit = useCallback(() => openComposer(''), [openComposer]);
 
   const resize = useCallback(
     (ratio: string) => openComposer(t('painting.viewer.resizePrompt', { ratio })),
