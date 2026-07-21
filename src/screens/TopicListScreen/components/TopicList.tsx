@@ -1,26 +1,76 @@
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { type AccessibilityActionEvent, Pressable, Text, View } from 'react-native';
 import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import ReanimatedSwipeable, {
+  type SwipeableMethods,
+} from 'react-native-gesture-handler/ReanimatedSwipeable';
+import Animated, {
+  runOnJS,
+  type SharedValue,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 
+import type { Assistant } from '@/data/types/assistant';
 import type { Topic } from '@/data/types/topic';
+import { useAssistantsApi } from '@/hooks/chat';
 
 import { useTopicListActions, useTopicListTopics } from '../context/TopicListProvider';
-import { PopupMenu, type PopupMenuItem } from './PopupMenu';
 import { useTopicActionDialogs } from './TopicActionDialogs';
 
 type TopicRowProps = {
+  assistant?: Assistant;
+  isLast: boolean;
+  onDelete: (topic: Topic) => void;
   onPress: (topicId: string) => void;
-  onLongPress: (ref: React.RefObject<View | null>, topic: Topic) => void;
+  onRename: (topic: Topic) => void;
   topic: Topic;
 };
 
-const topicItemHeight = 44;
+const TOPIC_ITEM_ESTIMATED_HEIGHT = 60;
+const TOPIC_ACTIONS_WIDTH = 128;
+const TOPIC_ROW_MAX_TAP_DISTANCE = 8;
 
 function topicKeyExtractor(item: Topic) {
   return item.id;
+}
+
+function isSameCalendarDay(left: Date, right: Date) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+function formatTopicUpdatedAt(updatedAt: string, locale: string | undefined, yesterday: string) {
+  const updatedDate = new Date(updatedAt);
+  const today = new Date();
+  const yesterdayDate = new Date(today);
+  yesterdayDate.setDate(today.getDate() - 1);
+
+  const time = updatedDate.toLocaleTimeString(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  if (isSameCalendarDay(updatedDate, today)) {
+    return time;
+  }
+
+  if (isSameCalendarDay(updatedDate, yesterdayDate)) {
+    return `${yesterday} ${time}`;
+  }
+
+  return updatedDate.toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'numeric',
+    ...(updatedDate.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
+  });
 }
 
 export const TopicList = memo(function TopicList() {
@@ -28,70 +78,32 @@ export const TopicList = memo(function TopicList() {
   const tabBarHeight = useBottomTabBarHeight();
   const { isTopicListLoading, topics } = useTopicListTopics();
   const { loadMoreTopics, openTopic } = useTopicListActions();
+  const { assistants } = useAssistantsApi();
   const { dialogs, requestDelete, requestRename } = useTopicActionDialogs();
-  const containerRef = useRef<View>(null);
-  const menuAnchorRef = useRef<View | null>(null);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [menuTopic, setMenuTopic] = useState<Topic | null>(null);
   const contentContainerStyle = useMemo(
     () => ({
       paddingBottom: tabBarHeight,
+      paddingHorizontal: 8,
     }),
     [tabBarHeight],
   );
-
-  const handleRowLongPress = useCallback((rowRef: React.RefObject<View | null>, topic: Topic) => {
-    menuAnchorRef.current = rowRef.current;
-    setMenuTopic(topic);
-    setMenuVisible(true);
-  }, []);
-
-  const closeMenu = useCallback(() => {
-    setMenuVisible(false);
-    setMenuTopic(null);
-    menuAnchorRef.current = null;
-  }, []);
-
-  const handleRename = useCallback(() => {
-    const topic = menuTopic;
-    closeMenu();
-    if (topic) {
-      requestRename(topic);
-    }
-  }, [closeMenu, menuTopic, requestRename]);
-
-  const handleDelete = useCallback(() => {
-    const topic = menuTopic;
-    closeMenu();
-    if (topic) {
-      requestDelete(topic);
-    }
-  }, [closeMenu, menuTopic, requestDelete]);
-
-  const menuItems = useMemo<PopupMenuItem[]>(
-    () => [
-      {
-        id: 'rename',
-        icon: <PencilIcon className="size-4 text-foreground" />,
-        label: t('common.rename'),
-        onPress: handleRename,
-      },
-      {
-        id: 'delete',
-        icon: <Trash2Icon className="size-4 text-danger" />,
-        label: t('common.delete'),
-        destructive: true,
-        onPress: handleDelete,
-      },
-    ],
-    [handleDelete, handleRename, t],
+  const assistantsById = useMemo(
+    () => new Map(assistants.map((assistant) => [assistant.id, assistant])),
+    [assistants],
   );
 
   const renderItem = useCallback(
-    ({ item }: LegendListRenderItemProps<Topic>) => (
-      <TopicRow onLongPress={handleRowLongPress} onPress={openTopic} topic={item} />
+    ({ index, item }: LegendListRenderItemProps<Topic>) => (
+      <TopicRow
+        assistant={item.assistantId ? assistantsById.get(item.assistantId) : undefined}
+        isLast={index === topics.length - 1}
+        onDelete={requestDelete}
+        onPress={openTopic}
+        onRename={requestRename}
+        topic={item}
+      />
     ),
-    [handleRowLongPress, openTopic],
+    [assistantsById, openTopic, requestDelete, requestRename, topics.length],
   );
 
   const listEmptyComponent = useCallback(
@@ -113,7 +125,7 @@ export const TopicList = memo(function TopicList() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={contentContainerStyle}
         data={topics}
-        estimatedItemSize={topicItemHeight}
+        estimatedItemSize={TOPIC_ITEM_ESTIMATED_HEIGHT}
         keyExtractor={topicKeyExtractor}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
@@ -123,51 +135,198 @@ export const TopicList = memo(function TopicList() {
         recycleItems
         renderItem={renderItem}
       />
-      <View pointerEvents="box-none" ref={containerRef} style={styles.overlay}>
-        {dialogs}
-        <PopupMenu
-          anchorRef={menuAnchorRef}
-          closeAccessibilityLabel={t('common.close')}
-          containerRef={containerRef}
-          items={menuItems}
-          visible={menuVisible}
-          onClose={closeMenu}
-        />
-      </View>
+      {dialogs}
     </>
   );
 });
 
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFill,
-  },
-});
-
-const TopicRow = memo(function TopicRow({ onPress, onLongPress, topic }: TopicRowProps) {
-  const rowRef = useRef<View>(null);
+const TopicRow = memo(function TopicRow({
+  assistant,
+  isLast,
+  onDelete,
+  onPress,
+  onRename,
+  topic,
+}: TopicRowProps) {
+  const { i18n, t } = useTranslation();
+  const swipeableRef = useRef<SwipeableMethods>(null);
+  const isSwipeOpen = useSharedValue(0);
+  const pressProgress = useSharedValue(0);
+  const updatedAtLabel = formatTopicUpdatedAt(
+    topic.updatedAt,
+    i18n.resolvedLanguage,
+    t('topic.updatedAt.yesterday'),
+  );
 
   const handlePress = useCallback(() => {
     onPress(topic.id);
   }, [onPress, topic.id]);
-
-  const handleLongPress = useCallback(() => {
-    onLongPress(rowRef, topic);
-  }, [onLongPress, topic]);
+  const handleRenamePress = useCallback(() => {
+    swipeableRef.current?.close();
+    onRename(topic);
+  }, [onRename, topic]);
+  const handleDeletePress = useCallback(() => {
+    swipeableRef.current?.close();
+    onDelete(topic);
+  }, [onDelete, topic]);
+  const handleSwipeableWillOpen = useCallback(() => {
+    isSwipeOpen.value = 1;
+  }, [isSwipeOpen]);
+  const handleSwipeableClose = useCallback(() => {
+    isSwipeOpen.value = 0;
+  }, [isSwipeOpen]);
+  const openTapGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .maxDistance(TOPIC_ROW_MAX_TAP_DISTANCE)
+        .onBegin(() => {
+          pressProgress.value = 1;
+        })
+        .onFinalize(() => {
+          pressProgress.value = 0;
+        })
+        .onEnd((_event, success) => {
+          if (success && isSwipeOpen.value === 0) {
+            runOnJS(handlePress)();
+          }
+        }),
+    [handlePress, isSwipeOpen, pressProgress],
+  );
+  const pressedBackgroundStyle = useAnimatedStyle(() => ({
+    opacity: pressProgress.value,
+  }));
+  const borderStyle = useAnimatedStyle(() => ({
+    opacity: 1 - pressProgress.value,
+  }));
+  const accessibilityActions = useMemo(
+    () => [
+      { name: 'activate' as const },
+      { label: t('common.rename'), name: 'rename' as const },
+      { label: t('common.delete'), name: 'delete' as const },
+    ],
+    [t],
+  );
+  const handleAccessibilityAction = useCallback(
+    (event: AccessibilityActionEvent) => {
+      switch (event.nativeEvent.actionName) {
+        case 'rename':
+          handleRenamePress();
+          break;
+        case 'delete':
+          handleDeletePress();
+          break;
+        default:
+          handlePress();
+      }
+    },
+    [handleDeletePress, handlePress, handleRenamePress],
+  );
+  const renderRightActions = useCallback(
+    (_progress: SharedValue<number>, drag: SharedValue<number>) => (
+      <TopicActions
+        deleteLabel={t('common.delete')}
+        drag={drag}
+        onDelete={handleDeletePress}
+        onRename={handleRenamePress}
+        renameLabel={t('common.rename')}
+      />
+    ),
+    [handleDeletePress, handleRenamePress, t],
+  );
 
   return (
-    <Pressable
-      ref={rowRef}
-      accessibilityLabel={topic.name}
-      accessibilityRole="button"
-      className="mx-2 justify-center rounded-lg px-3 active:bg-surface active:opacity-70"
-      onLongPress={handleLongPress}
-      onPress={handlePress}
-      style={{ height: topicItemHeight }}
+    <ReanimatedSwipeable
+      friction={2}
+      onSwipeableClose={handleSwipeableClose}
+      onSwipeableWillOpen={handleSwipeableWillOpen}
+      overshootRight={false}
+      ref={swipeableRef}
+      renderRightActions={renderRightActions}
+      rightThreshold={TOPIC_ACTIONS_WIDTH / 2}
+      simultaneousWithExternalGesture={openTapGesture}
     >
-      <Text className="font-medium text-base text-default-foreground" numberOfLines={1}>
-        {topic.name}
-      </Text>
-    </Pressable>
+      <GestureDetector gesture={openTapGesture}>
+        <View
+          accessibilityActions={accessibilityActions}
+          accessibilityLabel={topic.name || t('navigation.newChat')}
+          accessibilityRole="button"
+          accessible
+          onAccessibilityAction={handleAccessibilityAction}
+        >
+          <View className="relative min-w-0 flex-1 flex-row items-center gap-2 py-2 pl-2">
+            <Animated.View
+              className="absolute inset-0 bg-settings-grouped-surface"
+              pointerEvents="none"
+              style={pressedBackgroundStyle}
+            />
+            <Animated.View
+              className={
+                isLast
+                  ? 'absolute inset-y-0 right-0 left-14 border-border border-y'
+                  : 'absolute top-0 right-0 left-14 border-border border-t'
+              }
+              pointerEvents="none"
+              style={borderStyle}
+            />
+            <Text className="size-10 text-center text-4xl leading-10">
+              {assistant?.emoji ?? '💬'}
+            </Text>
+            <View className="min-w-0 flex-1 pr-4">
+              <View className="gap-0.5">
+                <View className="min-w-0 flex-row items-center gap-2">
+                  <Text
+                    className="min-w-0 flex-1 font-semibold text-foreground text-lg"
+                    numberOfLines={1}
+                  >
+                    {topic.name || t('navigation.newChat')}
+                  </Text>
+                  <Text className="text-foreground-muted text-xs" numberOfLines={1}>
+                    {updatedAtLabel}
+                  </Text>
+                </View>
+                <Text className="text-foreground-muted text-xs" numberOfLines={1}>
+                  {assistant?.modelName ?? t('assistant.model.none')}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </GestureDetector>
+    </ReanimatedSwipeable>
   );
 });
+
+type TopicActionsProps = {
+  deleteLabel: string;
+  drag: SharedValue<number>;
+  onDelete: () => void;
+  onRename: () => void;
+  renameLabel: string;
+};
+
+function TopicActions({ deleteLabel, drag, onDelete, onRename, renameLabel }: TopicActionsProps) {
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: drag.value + TOPIC_ACTIONS_WIDTH }],
+  }));
+
+  return (
+    <Animated.View className="h-full w-32 flex-row" style={animatedStyle}>
+      <Pressable
+        accessibilityLabel={renameLabel}
+        accessibilityRole="button"
+        className="w-16 items-center justify-center bg-surface-secondary active:opacity-80"
+        onPress={onRename}
+      >
+        <PencilIcon className="size-5 text-foreground" strokeWidth={2} />
+      </Pressable>
+      <Pressable
+        accessibilityLabel={deleteLabel}
+        accessibilityRole="button"
+        className="w-16 items-center justify-center bg-danger active:opacity-80"
+        onPress={onDelete}
+      >
+        <Trash2Icon className="size-5 text-danger-foreground" strokeWidth={2} />
+      </Pressable>
+    </Animated.View>
+  );
+}

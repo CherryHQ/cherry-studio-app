@@ -1,9 +1,6 @@
 {
-  "home.emptyDescription": "Open the menu and choose a topic to view its messages.",
-  "home.emptyTitle": "Select a chat from the sidebar",
   "home.activity.toggleHint": "Plays or rewinds the activity animation.",
   "home.activity.title": "Activity",
-  "home.title": "Home",
   "chat.actions.createImage": "Create image",
   "chat.actions.webSearch": "Web search",
   "chat.webSearch.approvalRequested": "Approval requested",
@@ -195,6 +192,7 @@
   "settings.items.dataBackup": "Data backup",
   "settings.items.defaultModel": "Default model",
   "settings.items.modelService": "Model service",
+  "settings.items.profile": "Profile",
   "settings.items.webSearch": "Web search",
   "settings.model.default.title": "Default model",
   "settings.model.fast.title": "Fast model",
@@ -234,6 +232,7 @@
   "settings.profile.avatarSaveError": "Failed to save avatar",
   "settings.profile.changeAvatar": "Change avatar",
   "settings.profile.edit": "Edit profile",
+  "settings.profile.toggleAvatar": "Expand or collapse avatar",
   "settings.profile.userName": "User Name",
   "settings.provider.disabled.title": "Disabled model services",
   "settings.provider.add.title": "Add Provider",
@@ -433,5 +432,6 @@
   "topic.rename.placeholder": "Enter topic name",
   "topic.renamePlaceholder": "Enter a name",
   "topic.renameTitle": "Rename chat",
-  "topic.titleFallback": "Chat"
+  "topic.titleFallback": "Chat",
+  "topic.updatedAt.yesterday": "Yesterday"
 }

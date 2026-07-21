@@ -1,13 +1,20 @@
 import { Stack } from 'expo-router';
-import type { ReactNode } from 'react';
-import { useMemo } from 'react';
+import { Fragment, type ReactNode, useMemo } from 'react';
 
 import type { HeaderToolbarAction } from '../BackHeader/BackHeader.types';
 import { HeaderIconButton } from '../components/HeaderIconButton';
 import type { TabRootHeaderProps } from './TabRootHeader.types';
 
 function renderHeaderAction(action: HeaderToolbarAction): ReactNode {
-  if (action.hidden || !action.androidIcon) {
+  if (action.hidden) {
+    return null;
+  }
+
+  if (action.element) {
+    return <Fragment key={action.key}>{action.element}</Fragment>;
+  }
+
+  if (!action.androidIcon) {
     return null;
   }
 

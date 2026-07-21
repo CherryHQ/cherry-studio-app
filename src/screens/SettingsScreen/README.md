@@ -15,4 +15,7 @@ This module owns settings screens' shared UI and feature-specific settings modul
 - `components/` contains settings-private row, section, select, input, and service-row UI shared by
   nested settings areas through relative imports.
 - `hooks/` contains shared settings preference hooks.
+- `profileHero/` contains the animated avatar + name hero and self-drawn sticky bar shown at the top
+  of the settings home (pull-to-expand on iOS, tap-to-toggle on both platforms). Animation tuning
+  lives in `src/config/constants.ts` under `profileHero`.
 - `ProviderScreen/` and `WebSearchScreen/` contain feature-specific settings modules.

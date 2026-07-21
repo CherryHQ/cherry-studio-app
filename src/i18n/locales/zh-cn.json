@@ -1,9 +1,6 @@
 {
-  "home.emptyDescription": "打开菜单并选择一个话题来查看消息。",
-  "home.emptyTitle": "从侧边栏选择聊天",
   "home.activity.toggleHint": "播放或倒回活跃度动画。",
   "home.activity.title": "活跃度",
-  "home.title": "首页",
   "chat.actions.createImage": "创建图片",
   "chat.actions.webSearch": "网络搜索",
   "chat.webSearch.approvalRequested": "请求审批",
@@ -195,6 +192,7 @@
   "settings.items.dataBackup": "数据备份",
   "settings.items.defaultModel": "默认模型",
   "settings.items.modelService": "模型服务",
+  "settings.items.profile": "个人资料",
   "settings.items.webSearch": "网络搜索",
   "settings.model.default.title": "默认模型",
   "settings.model.fast.title": "快速模型",
@@ -234,6 +232,7 @@
   "settings.profile.avatarSaveError": "头像保存失败",
   "settings.profile.changeAvatar": "更换头像",
   "settings.profile.edit": "编辑个人资料",
+  "settings.profile.toggleAvatar": "放大或还原头像",
   "settings.profile.userName": "用户名",
   "settings.provider.disabled.title": "未开启服务商",
   "settings.provider.add.title": "新建服务商",
@@ -433,5 +432,6 @@
   "topic.rename.placeholder": "输入话题名称",
   "topic.renamePlaceholder": "输入名称",
   "topic.renameTitle": "重命名对话",
-  "topic.titleFallback": "聊天"
+  "topic.titleFallback": "聊天",
+  "topic.updatedAt.yesterday": "昨天"
 }

@@ -1,8 +1,33 @@
+import { DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
 import { type CherryMessagePart, type Message } from '@/data/types/message';
 import type { Topic } from '@/data/types/topic';
 
 const baseDateMs = Date.parse('2026-05-15T00:00:00.000Z');
-const mockAssistantId = 'mock-assistant-default';
+// Must exceed the largest topic's messageCount (1000) * the per-message offset
+// (60_000ms) below, otherwise a topic-index-1000 topic's *last* message could
+// out-date a later topic-index's first message and break the intended
+// oldest-to-newest ordering across topics.
+const topicIndexSpanMs = 100_000_000;
+export const mockAssistantId = 'mock-assistant-default';
+
+export const mockChatModel = {
+  id: 'cherryai::mock-chat-model',
+  modelId: 'mock-chat-model',
+  name: 'Mock Chat Model',
+  orderKey: 'a0',
+  providerId: 'cherryai',
+} as const;
+
+export const mockChatAssistant = {
+  description: 'Assistant for development chat fixtures',
+  emoji: '🍒',
+  id: mockAssistantId,
+  modelId: mockChatModel.id,
+  name: 'Mock Assistant',
+  orderKey: 'a1',
+  prompt: '',
+  settings: DEFAULT_ASSISTANT_SETTINGS,
+} as const;
 
 type BenchmarkMessageKind = 'complex' | 'latex' | 'showcase' | 'text';
 
@@ -168,7 +193,7 @@ function createMessage({
   topicId: string;
   topicIndex: number;
 }): Message {
-  const timestamp = isoAt(topicIndex * 10_000_000 + messageIndex * 60_000);
+  const timestamp = isoAt(topicIndex * topicIndexSpanMs + messageIndex * 60_000);
 
   return {
     createdAt: timestamp,
@@ -604,7 +629,7 @@ function createShowcaseMessages(seed: BenchmarkTopicSeed, topicIndex: number): M
   return messages;
 }
 
-export const mockMessagesByTopicId: Record<string, Message[]> = benchmarkTopicSeeds.reduce(
+const mockBenchmarkMessagesByTopicId: Record<string, Message[]> = benchmarkTopicSeeds.reduce(
   (messagesByTopicId, seed, topicIndex) => {
     messagesByTopicId[seed.id] = createMockMessagesForTopic(seed, topicIndex);
     return messagesByTopicId;
@@ -612,10 +637,10 @@ export const mockMessagesByTopicId: Record<string, Message[]> = benchmarkTopicSe
   {} as Record<string, Message[]>,
 );
 
-export const mockTopics: Topic[] = benchmarkTopicSeeds.map((seed, topicIndex) => {
-  const messages = mockMessagesByTopicId[seed.id] ?? [];
+const mockBenchmarkTopics: Topic[] = benchmarkTopicSeeds.map((seed, topicIndex) => {
+  const messages = mockBenchmarkMessagesByTopicId[seed.id] ?? [];
   const lastMessage = messages[messages.length - 1];
-  const createdAt = isoAt(topicIndex * 10_000_000);
+  const createdAt = isoAt(topicIndex * topicIndexSpanMs);
 
   return {
     ...(lastMessage?.id ? { activeNodeId: lastMessage.id } : {}),
@@ -628,6 +653,358 @@ export const mockTopics: Topic[] = benchmarkTopicSeeds.map((seed, topicIndex) =>
     updatedAt: lastMessage?.updatedAt ?? createdAt,
   };
 });
+
+// --- Persona assistants -----------------------------------------------------
+// Curated assistants of different types (coding, translation, writing, data
+// analysis, travel planning), each with its own model and a short realistic
+// conversation. Unlike the benchmark topics above — which share one assistant
+// on purpose to isolate rendering cost — these exist so the topic list and
+// assistant list show real variety during development instead of every topic
+// pointing at the same assistant.
+
+export const mockPersonaAssistantIdPrefix = 'mock-persona-assistant-';
+export const mockPersonaModelIdPrefix = 'mock-persona-';
+export const mockPersonaTopicIdPrefix = 'mock-persona-topic-';
+export const mockPersonaMessageIdPrefix = 'mock-persona-message-';
+
+type PersonaConversationEntry = {
+  content: string;
+  role: Message['role'];
+};
+
+type PersonaSeed = {
+  assistantDescription: string;
+  assistantEmoji: string;
+  assistantName: string;
+  key: string;
+  messages: PersonaConversationEntry[];
+  modelName: string;
+  topicName: string;
+};
+
+const personaSeedDefinitions: PersonaSeed[] = [
+  {
+    assistantDescription: '协助排查 bug、评审代码、给出性能优化建议',
+    assistantEmoji: '💻',
+    assistantName: '编程助手',
+    key: 'code',
+    messages: [
+      { content: 'FlatList 滚动到 200+ 条数据时明显掉帧，你有什么优化思路？', role: 'user' },
+      {
+        content: [
+          '可以从这几个方向排查：',
+          '',
+          '1. **列表虚拟化**：确认 `windowSize`、`maxToRenderPerBatch` 是否为默认值，数据量大时建议调小。',
+          '2. **item 高度**：如果每行高度可预测，加上 `getItemLayout` 避免测量开销。',
+          '3. **组件记忆化**：确保 `renderItem` 内部组件用 `memo` 包裹，避免无关 re-render。',
+          '',
+          '先说说你现在的行高是固定的还是动态的？',
+        ].join('\n'),
+        role: 'assistant',
+      },
+      { content: '行高不固定，里面有图片和变长文本。', role: 'user' },
+      {
+        content: [
+          '那 `getItemLayout` 用不了，建议换成 `FlashList` 或 `@legendapp/list`，它们都支持动态高度估算 + 回收复用，比 FlatList 在这种场景下表现好很多。',
+          '',
+          '如果想快速验证，可以先加个开关对比两种实现：',
+          '',
+          '```tsx',
+          'const List = useFlashList ? FlashList : FlatList;',
+          '```',
+          '',
+          '线上环境建议直接切 FlashList，长期看维护成本更低。',
+        ].join('\n'),
+        role: 'assistant',
+      },
+    ],
+    modelName: 'GPT-4o mini',
+    topicName: 'RN 列表卡顿排查',
+  },
+  {
+    assistantDescription: '中英文互译，兼顾语气和场景',
+    assistantEmoji: '🌐',
+    assistantName: '翻译助手',
+    key: 'translate',
+    messages: [
+      {
+        content: '帮我把这句翻译成地道的英文文案：「轻如羽毛的性能，如影随形的智能。」',
+        role: 'user',
+      },
+      {
+        content: [
+          'Featherlight performance, intelligence that follows you everywhere.',
+          '',
+          '如果想要更偏营销感，也可以试试：',
+          '',
+          '> Effortlessly light. Effortlessly smart.',
+        ].join('\n'),
+        role: 'assistant',
+      },
+      {
+        content: [
+          '第二个版本不错，反过来帮我看看这句英文口语化怎么翻：',
+          '',
+          '“We shipped it, it broke, we fixed it, we shipped it again.”',
+        ].join('\n'),
+        role: 'user',
+      },
+      {
+        content: [
+          '偏口语、带点自嘲和干脆利落的语气，可以译成：',
+          '',
+          '「上线，出问题，修好，再上线。」',
+          '',
+          '或者更强调反复迭代的节奏感：',
+          '',
+          '「炸了就修，修完接着发。」',
+        ].join('\n'),
+        role: 'assistant',
+      },
+    ],
+    modelName: 'DeepSeek-V3',
+    topicName: '产品文案中英翻译',
+  },
+  {
+    assistantDescription: '邮件、文案与产品文档的写作与润色',
+    assistantEmoji: '✍️',
+    assistantName: '写作助手',
+    key: 'writing',
+    messages: [
+      {
+        content:
+          '帮我写一封给用户的新版本发布邮件开头，语气亲切但专业，提到这次主要优化了启动速度。',
+        role: 'user',
+      },
+      {
+        content: [
+          '## 主题：更快一步的 Cherry Studio 来了 🍒',
+          '',
+          '嗨，',
+          '',
+          '这次更新我们把大部分精力放在了「快」这件事上——启动速度提升了近 40%，从点开图标到能敲下第一行提示词，几乎感觉不到等待。',
+          '',
+          '除此之外，我们还修复了一些你可能已经吐槽很久的小问题……',
+        ].join('\n'),
+        role: 'assistant',
+      },
+      {
+        content: '开头不错，能不能再精简一点，去掉「几乎感觉不到等待」这种略显夸张的说法？',
+        role: 'user',
+      },
+      {
+        content: [
+          '嗨，',
+          '',
+          '这次更新我们把大部分精力放在了「快」这件事上——启动速度提升了近 40%。',
+          '',
+          '除此之外，我们还修复了一些你可能已经吐槽很久的小问题……',
+          '',
+          '这版改动不大，但每一处都是从真实反馈里挑出来的。',
+        ].join('\n'),
+        role: 'assistant',
+      },
+    ],
+    modelName: 'Claude 3.7 Sonnet',
+    topicName: '新版本发布邮件',
+  },
+  {
+    assistantDescription: '整理数据、找规律，给出可执行的分析结论',
+    assistantEmoji: '📊',
+    assistantName: '数据分析助手',
+    key: 'analyst',
+    messages: [
+      {
+        content: [
+          '这是本季度四个城市的销售额（万元），帮我看看趋势：',
+          '',
+          '北京：128、135、142',
+          '上海：156、149、161',
+          '广州：88、95、101',
+          '深圳：102、110、119',
+          '',
+          '分别对应 4 月、5 月、6 月。',
+        ].join('\n'),
+        role: 'user',
+      },
+      {
+        content: [
+          '整理成表格更直观：',
+          '',
+          '| 城市 | 4月 | 5月 | 6月 | 环比（6月/4月） |',
+          '| --- | ---: | ---: | ---: | ---: |',
+          '| 北京 | 128 | 135 | 142 | +10.9% |',
+          '| 上海 | 156 | 149 | 161 | +3.2% |',
+          '| 广州 | 88 | 95 | 101 | +14.8% |',
+          '| 深圳 | 102 | 110 | 119 | +16.7% |',
+          '',
+          '几个观察：',
+          '',
+          '- **深圳、广州增速最快**，两地环比增长都超过 10%，值得追加投放预算。',
+          '- **上海 5 月出现回落**再回升，波动较大，建议排查是否有渠道或促销节奏的问题。',
+          '- 整体四城合计从 474 万增至 523 万，环比 **+10.3%**。',
+        ].join('\n'),
+        role: 'assistant',
+      },
+      { content: '上海那个波动能再具体分析一下可能原因吗？', role: 'user' },
+      {
+        content: [
+          '从数据本身看不出具体原因，但常见的几种可能：',
+          '',
+          '1. 5 月是否有大促活动被提前到 4 月透支了需求？',
+          '2. 是否存在库存或物流问题导致 5 月发货延迟？',
+          '3. 竞对是否在 5 月有明显促销动作？',
+          '',
+          '建议对照一下 5 月的运营日历和竞品价格变化，这类环比小幅波动通常能在这两类因素里找到答案。',
+        ].join('\n'),
+        role: 'assistant',
+      },
+    ],
+    modelName: 'Gemini 2.5 Pro',
+    topicName: '季度销售数据分析',
+  },
+  {
+    assistantDescription: '按预算和偏好规划行程与交通方式',
+    assistantEmoji: '✈️',
+    assistantName: '旅行规划助手',
+    key: 'travel',
+    messages: [
+      {
+        content: '十一月中旬去东京五天四晚，两个人，喜欢逛街和吃，不太想赶景点，帮我排个行程。',
+        role: 'user',
+      },
+      {
+        content: [
+          '十一月中旬东京正好赶上红叶季尾声，五天四晚这样安排比较松弛：',
+          '',
+          '**第一天**：抵达 → 入住新宿 → 晚上逛歌舞伎町和思い出横丁吃串烧',
+          '',
+          '**第二天**：涩谷（SHIBUYA SKY 看夜景）→ 原宿竹下通 → 表参道逛买手店',
+          '',
+          '**第三天**：浅草寺 → 上野公园赏红叶 → 秋叶原',
+          '',
+          '**第四天**：吉祥寺（井之头公园和杂货店）→ 下北泽（古着和小酒馆）',
+          '',
+          '**第五天**：银座免税购物 → 前往机场',
+          '',
+          '要不要我把每天的交通方式也标出来？',
+        ].join('\n'),
+        role: 'assistant',
+      },
+      {
+        content: '麻烦把交通方式标一下，我们打算全程用地铁加步行，尽量不打车。',
+        role: 'user',
+      },
+      {
+        content: [
+          '全程地铁加步行完全可行，建议买一张西瓜卡（Suica）或 PASMO，主要线路如下：',
+          '',
+          '| 天数 | 主要交通 |',
+          '| --- | --- |',
+          "| Day1 | 机场 → 新宿：JR 成田特快 N'EX 或利木津巴士 |",
+          '| Day2 | 新宿 → 涩谷 → 原宿 → 表参道：JR 山手线，站间步行即可串联 |',
+          '| Day3 | 新宿 → 浅草：都营大江户线转银座线；浅草 → 上野：银座线；上野 → 秋叶原：日比谷线 |',
+          '| Day4 | 新宿 → 吉祥寺：JR 中央线；吉祥寺 → 下北泽：京王井之头线 |',
+          '| Day5 | 新宿 → 银座：丸之内线；银座 → 机场：京成或 JR 联程 |',
+          '',
+          '山手线沿线（新宿-涩谷-原宿-上野-秋叶原）基本覆盖了大半行程，非常适合不打车的玩法。',
+        ].join('\n'),
+        role: 'assistant',
+      },
+    ],
+    modelName: 'GLM-4.6',
+    topicName: '东京五日行程规划',
+  },
+];
+
+export const mockPersonaModels = personaSeedDefinitions.map((seed, index) => ({
+  id: `cherryai::${mockPersonaModelIdPrefix}${seed.key}`,
+  modelId: `${mockPersonaModelIdPrefix}${seed.key}`,
+  name: seed.modelName,
+  orderKey: `a${index + 1}`,
+  providerId: 'cherryai',
+}));
+
+export const mockPersonaAssistants = personaSeedDefinitions.map((seed, index) => ({
+  description: seed.assistantDescription,
+  emoji: seed.assistantEmoji,
+  id: `${mockPersonaAssistantIdPrefix}${seed.key}`,
+  modelId: mockPersonaModels[index].id,
+  name: seed.assistantName,
+  orderKey: `a${index + 2}`,
+  prompt: '',
+  settings: DEFAULT_ASSISTANT_SETTINGS,
+}));
+
+function createPersonaMessagesForTopic(
+  seed: PersonaSeed,
+  topicId: string,
+  topicIndex: number,
+): Message[] {
+  const messages: Message[] = [];
+  let parentId: string | null = null;
+
+  seed.messages.forEach((entry, messageIndex) => {
+    const id = `${mockPersonaMessageIdPrefix}${seed.key}-${messageIndex + 1}`;
+
+    messages.push(
+      createMessage({
+        content: entry.content,
+        id,
+        messageIndex,
+        parentId,
+        role: entry.role,
+        topicId,
+        topicIndex,
+      }),
+    );
+
+    parentId = id;
+  });
+
+  return messages;
+}
+
+const mockPersonaMessagesByTopicId: Record<string, Message[]> = personaSeedDefinitions.reduce(
+  (messagesByTopicId, seed, index) => {
+    const topicId = `${mockPersonaTopicIdPrefix}${seed.key}`;
+    // Sequenced after every benchmark/showcase topic so persona topics carry
+    // the newest updatedAt and surface at the top of the topic list.
+    const topicIndex = benchmarkTopicSeeds.length + index;
+    messagesByTopicId[topicId] = createPersonaMessagesForTopic(seed, topicId, topicIndex);
+    return messagesByTopicId;
+  },
+  {} as Record<string, Message[]>,
+);
+
+const mockPersonaTopics: Topic[] = personaSeedDefinitions.map((seed, index) => {
+  const topicId = `${mockPersonaTopicIdPrefix}${seed.key}`;
+  const topicIndex = benchmarkTopicSeeds.length + index;
+  const messages = mockPersonaMessagesByTopicId[topicId] ?? [];
+  const lastMessage = messages[messages.length - 1];
+  const createdAt = isoAt(topicIndex * topicIndexSpanMs);
+
+  return {
+    ...(lastMessage?.id ? { activeNodeId: lastMessage.id } : {}),
+    assistantId: mockPersonaAssistants[index].id,
+    createdAt,
+    id: topicId,
+    isNameManuallyEdited: true,
+    name: seed.topicName,
+    orderKey: `c${index}`,
+    updatedAt: lastMessage?.updatedAt ?? createdAt,
+  };
+});
+
+export const mockChatAssistants = [mockChatAssistant, ...mockPersonaAssistants];
+export const mockChatModels = [mockChatModel, ...mockPersonaModels];
+
+export const mockMessagesByTopicId: Record<string, Message[]> = {
+  ...mockBenchmarkMessagesByTopicId,
+  ...mockPersonaMessagesByTopicId,
+};
+
+export const mockTopics: Topic[] = [...mockBenchmarkTopics, ...mockPersonaTopics];
 
 export const mockTopicMessages = mockTopics.map((topic) => ({
   messages: mockMessagesByTopicId[topic.id] ?? [],

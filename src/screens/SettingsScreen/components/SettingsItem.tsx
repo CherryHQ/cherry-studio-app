@@ -28,7 +28,7 @@ export function SettingsItem({
     <Pressable
       accessibilityLabel={title}
       accessibilityRole={isPressable ? 'button' : undefined}
-      className="flex-row items-center justify-between gap-4 px-4 py-3 active:opacity-60 disabled:active:opacity-100"
+      className="flex-row items-center justify-between gap-4 px-4 py-3 active:opacity-70"
       disabled={!isPressable}
       onPress={onPress}
       onPressIn={onPressIn}
