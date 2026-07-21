@@ -1,9 +1,13 @@
 import { inArray, like, or } from 'drizzle-orm';
 
-import { messageTable, topicTable } from '@/data/db/schemas';
+import { assistantTable, messageTable, topicTable, userModelTable } from '@/data/db/schemas';
 import {
   mockBenchmarkMessageIdPrefix,
   mockBenchmarkTopicIdPrefix,
+  mockChatAssistants,
+  mockChatModels,
+  mockPersonaMessageIdPrefix,
+  mockPersonaTopicIdPrefix,
   mockTopicMessages,
 } from '@/mocks/chat';
 
@@ -29,15 +33,44 @@ export class MockChatSeeder implements DatabaseSeeder {
   readonly version: string;
 
   constructor() {
-    this.version = hashObject(mockTopicMessages);
+    this.version = hashObject({
+      assistants: mockChatAssistants,
+      models: mockChatModels,
+      topics: mockTopicMessages,
+    });
   }
 
   async run(dbService: Parameters<DatabaseSeeder['run']>[0]) {
     await dbService.withWriteTx(async (tx) => {
+      for (const model of mockChatModels) {
+        // react-doctor-disable-next-line async-await-in-loop -- same write tx, small fixed list
+        await tx.insert(userModelTable).values(model).onConflictDoUpdate({
+          target: userModelTable.id,
+          set: model,
+        });
+      }
+      for (const assistant of mockChatAssistants) {
+        // react-doctor-disable-next-line async-await-in-loop -- same write tx, small fixed list
+        await tx
+          .insert(assistantTable)
+          .values(assistant)
+          .onConflictDoUpdate({
+            target: assistantTable.id,
+            set: {
+              ...assistant,
+              deletedAt: null,
+            },
+          });
+      }
+
       await tx.delete(messageTable).where(like(messageTable.id, 'mock-message-%'));
       await tx
         .delete(messageTable)
         .where(like(messageTable.id, `${mockBenchmarkMessageIdPrefix}%`))
+        .run();
+      await tx
+        .delete(messageTable)
+        .where(like(messageTable.id, `${mockPersonaMessageIdPrefix}%`))
         .run();
       await tx
         .delete(topicTable)
@@ -46,6 +79,7 @@ export class MockChatSeeder implements DatabaseSeeder {
             inArray(topicTable.id, previousCuratedMockTopicIds),
             like(topicTable.id, '90000000-0000-4000-8000-%'),
             like(topicTable.id, `${mockBenchmarkTopicIdPrefix}%`),
+            like(topicTable.id, `${mockPersonaTopicIdPrefix}%`),
           ),
         );
 
@@ -55,7 +89,7 @@ export class MockChatSeeder implements DatabaseSeeder {
           .insert(topicTable)
           .values({
             activeNodeId: topic.activeNodeId ?? null,
-            assistantId: null,
+            assistantId: topic.assistantId ?? null,
             createdAt: parseTimestamp(topic.createdAt),
             groupId: null,
             id: topic.id,
