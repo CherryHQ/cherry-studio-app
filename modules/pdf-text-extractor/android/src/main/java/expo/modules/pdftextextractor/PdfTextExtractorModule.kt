@@ -83,6 +83,15 @@ class PdfTextExtractorModule : Module() {
                 val maxPages = options?.maxPages ?: defaultMaxPages
                 val endPage = minOf(maxPages, totalPages)
                 val isTruncated = endPage < totalPages
+                if (totalPages == 0) {
+                    return mapOf(
+                        "text" to "",
+                        "totalPages" to 0,
+                        "extractedPages" to 0,
+                        "isTruncated" to false,
+                        "extractionError" to false
+                    )
+                }
 
                 val stripper = PDFTextStripper().apply {
                     startPage = 1

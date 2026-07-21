@@ -34,13 +34,9 @@ public class PdfTextExtractorModule: Module {
       throw FailedToLoadDocumentException()
     }
 
-#if swift(>=5.7)
-    if #available(iOS 16.0, *) {
-      if document.isEncrypted {
-        throw FailedToLoadDocumentException()
-      }
+    if document.isEncrypted {
+      throw FailedToLoadDocumentException()
     }
-#endif
 
     let totalPages = document.pageCount
 

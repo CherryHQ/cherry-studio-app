@@ -138,6 +138,7 @@ describe('prepareChatMessages — routing', () => {
       expect(result.parts).toEqual([
         { type: 'text', text: 'Attached file "report.pdf":\nHello world\ntest content' },
       ]);
+      expect(mockExtractText).toHaveBeenCalledWith('file:///tmp/doc.pdf', { maxPages: 50 });
     });
 
     it('returns a note when extraction returns empty text', async () => {
@@ -275,7 +276,11 @@ describe('prepareChatMessages — routing', () => {
       );
 
       expect(result.parts).toEqual([
-        expect.objectContaining({ type: 'file', mediaType: 'audio/mp3' }),
+        expect.objectContaining({
+          type: 'file',
+          mediaType: 'audio/mp3',
+          url: 'data:audio/mp3;base64,YXVkaW8=',
+        }),
       ]);
     });
 
@@ -297,7 +302,11 @@ describe('prepareChatMessages — routing', () => {
       );
 
       expect(result.parts).toEqual([
-        expect.objectContaining({ type: 'file', mediaType: 'video/mp4' }),
+        expect.objectContaining({
+          type: 'file',
+          mediaType: 'video/mp4',
+          url: 'data:video/mp4;base64,dmlkZW8=',
+        }),
       ]);
     });
   });
@@ -329,10 +338,16 @@ describe('prepareChatMessages — routing', () => {
         NATIVE_ALL,
       );
 
-      expect(result.parts).toEqual([expect.objectContaining({ type: 'file' })]);
+      expect(result.parts).toEqual([
+        expect.objectContaining({
+          type: 'file',
+          url: 'data:application/pdf;base64,cGRm',
+          mediaType: 'application/pdf',
+        }),
+      ]);
     });
 
-    it('routes a non-native non-PDF file to a note', async () => {
+    it('routes a non-native non-PDF file to an unsupported modal message', async () => {
       const caps: MediaCapabilities = { image: false, video: false, audio: false, pdf: false };
 
       const [result] = await resolveUIMessageFileUrls(
@@ -341,12 +356,15 @@ describe('prepareChatMessages — routing', () => {
       );
 
       expect(result.parts).toEqual([
-        { type: 'text', text: 'Attached file "photo.png": [could not read this file].' },
+        {
+          type: 'text',
+          text: '[image attachment omitted: this model does not accept image input]',
+        },
       ]);
       expect(mockExtractText).not.toHaveBeenCalled();
     });
 
-    it('routes a native-fallback non-PDF file (application/octet-stream) to a note when not native', async () => {
+    it('routes a native-fallback non-PDF file (application/octet-stream) to an unsupported modal message', async () => {
       const caps: MediaCapabilities = { image: false, video: false, audio: false, pdf: false };
 
       const [result] = await resolveUIMessageFileUrls(
@@ -355,7 +373,7 @@ describe('prepareChatMessages — routing', () => {
       );
 
       expect(result.parts).toEqual([
-        { type: 'text', text: 'Attached file "data.bin": [could not read this file].' },
+        { type: 'text', text: '[file attachment omitted: this model does not accept file input]' },
       ]);
       expect(mockExtractText).not.toHaveBeenCalled();
     });

@@ -36,6 +36,20 @@ function noteOf(handle: string): TextUIPart {
   return { type: 'text', text: `Attached file "${handle}": [could not read this file].` };
 }
 
+function unsupportedModalPart(mediaType: string, filename: string): TextUIPart {
+  const modality = mediaType.startsWith('image/')
+    ? 'image'
+    : mediaType.startsWith('audio/')
+      ? 'audio'
+      : mediaType.startsWith('video/')
+        ? 'video'
+        : 'file';
+  return {
+    type: 'text',
+    text: `[${modality} attachment omitted: this model does not accept ${modality} input]`,
+  };
+}
+
 function capExtractedText(text: string, filename: string): string {
   const head = text.length <= PDF_TEXT_CAP ? text : text.slice(0, PDF_TEXT_CAP);
   const truncated =
@@ -113,7 +127,7 @@ async function prepareChatMessage<T extends UIMessage>(
       kept.push(textPart as UIMessage['parts'][number]);
     } else {
       // Non-native, non-PDF file — not supported; skip with a note
-      kept.push(noteOf(filename) as UIMessage['parts'][number]);
+      kept.push(unsupportedModalPart(mediaType, filename) as UIMessage['parts'][number]);
     }
   }
 

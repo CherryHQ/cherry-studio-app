@@ -444,9 +444,6 @@ function createServices({
     assistant: {
       getById: jest.fn(async () => assistant),
     },
-    fileEntry: {
-      resolveUri: jest.fn(async () => undefined),
-    },
     model: {
       getById: jest.fn(async (id: UniqueModelId) => modelsById.get(id)),
     },
