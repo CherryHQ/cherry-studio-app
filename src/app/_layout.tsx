@@ -67,12 +67,21 @@ function RootStack() {
         }}
       />
       <Stack.Screen
-        name="paintings"
+        name="paintings/index"
         options={{
           contentStyle: { backgroundColor: 'transparent' },
           headerBackButtonDisplayMode: 'minimal',
           headerStyle: isIOS ? undefined : { backgroundColor: 'transparent' },
           headerTransparent: isLiquidGlassAvailable,
+        }}
+      />
+      <Stack.Screen
+        name="paintings/[paintingId]"
+        options={{
+          contentStyle: { backgroundColor: '#000000' },
+          headerTintColor: '#ffffff',
+          headerTransparent: true,
+          title: '',
         }}
       />
     </Stack>

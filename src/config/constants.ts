@@ -95,6 +95,11 @@ export const paintingSkeleton = {
   },
 } as const;
 
+// Painting viewer (fullscreen image viewer) tuning knobs.
+export const paintingViewer = {
+  aspectRatios: ['1:1', '2:3', '3:2', '9:16', '16:9'], // resize menu options; each regenerates with the current image as input
+} as const;
+
 // Tuning knobs for the animated profile hero on the Settings tab (avatar +
 // name). Single source of truth — adjust the animation feel here rather than
 // scattering magic numbers across SettingsScreen's profileHero module.

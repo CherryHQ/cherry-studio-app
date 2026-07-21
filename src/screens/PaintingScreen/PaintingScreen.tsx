@@ -14,10 +14,15 @@ export function PaintingScreen() {
   }>();
   const handoffToken = firstParam(params.handoff);
   const paintingId = firstParam(params.paintingId);
-  const [handoffAttachments] = useState(() => consumePaintingDraftHandoff(handoffToken));
+  const [handoff] = useState(() => consumePaintingDraftHandoff(handoffToken));
   const paintingQuery = usePainting(paintingId);
   const painting = paintingQuery.data;
-  const filesQuery = useResolvedPaintingFiles(painting);
+  // A handoff (edit / resize / album) already seeds the composer — the source
+  // image rides in as an input attachment — so the painting's own resolved files
+  // must not surface: the canvas stays blank for the fresh result instead of
+  // echoing the old output back at the user. Skip resolving them entirely then.
+  const filesQuery = useResolvedPaintingFiles(handoff ? undefined : painting);
+  const paintingFiles = filesQuery.data ?? { inputs: [], outputs: [] };
   const insets = useSafeAreaInsets();
   const isLoading = Boolean(paintingId) && (paintingQuery.isLoading || filesQuery.isLoading);
 
@@ -35,13 +40,10 @@ export function PaintingScreen() {
         </View>
       ) : (
         <ChatInputProvider
-          initialAttachments={painting ? (filesQuery.data?.inputs ?? []) : handoffAttachments}
-          initialDraft={painting?.prompt ?? ''}
+          initialAttachments={handoff?.attachments ?? paintingFiles.inputs}
+          initialDraft={handoff?.draft ?? painting?.prompt ?? ''}
         >
-          <PaintingComposer
-            initialFiles={filesQuery.data ?? { inputs: [], outputs: [] }}
-            painting={painting}
-          />
+          <PaintingComposer initialFiles={paintingFiles} painting={painting} />
         </ChatInputProvider>
       )}
     </View>

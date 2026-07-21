@@ -1,26 +1,29 @@
 import { createOrderedUuid } from '@/data/db/schemas/_columnHelpers';
 import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
 
-const handoffs = new Map<string, readonly ChatInputAttachmentDraft[]>();
+export type PaintingDraftHandoff = {
+  attachments: readonly ChatInputAttachmentDraft[];
+  draft?: string;
+};
 
-export function createPaintingDraftHandoff(
-  attachments: readonly ChatInputAttachmentDraft[],
-): string {
+const handoffs = new Map<string, PaintingDraftHandoff>();
+
+export function createPaintingDraftHandoff(payload: PaintingDraftHandoff): string {
   const token = createOrderedUuid();
-  handoffs.set(
-    token,
-    attachments.map((attachment) => ({ ...attachment })),
-  );
+  handoffs.set(token, {
+    ...payload,
+    attachments: payload.attachments.map((attachment) => ({ ...attachment })),
+  });
   return token;
 }
 
 export function consumePaintingDraftHandoff(
   token: string | undefined,
-): readonly ChatInputAttachmentDraft[] {
+): PaintingDraftHandoff | undefined {
   if (!token) {
-    return [];
+    return undefined;
   }
-  const attachments = handoffs.get(token) ?? [];
+  const payload = handoffs.get(token);
   handoffs.delete(token);
-  return attachments;
+  return payload;
 }

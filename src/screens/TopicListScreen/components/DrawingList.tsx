@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
 import { ImageIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -53,7 +53,7 @@ export function DrawingList() {
 
   const openPaintingWithAttachments = useCallback(
     (attachments: readonly ChatInputAttachmentDraft[]) => {
-      const handoff = createPaintingDraftHandoff(attachments);
+      const handoff = createPaintingDraftHandoff({ attachments });
       router.push({ pathname: '/paintings', params: { handoff } });
     },
     [router],
@@ -197,28 +197,32 @@ export function DrawingList() {
           {namedColumns.map((column) => (
             <View className="flex-1 gap-1.5" key={column.key}>
               {column.items.map((item) => (
-                <Pressable
-                  accessibilityLabel={t('painting.history.item')}
-                  accessibilityRole="button"
-                  className="overflow-hidden rounded-md bg-surface-secondary active:opacity-75"
+                <Link
+                  asChild
+                  href={{
+                    pathname: '/paintings/[paintingId]',
+                    params: { fileEntryId: item.fileEntryId, paintingId: item.painting.id },
+                  }}
                   key={item.key}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/paintings',
-                      params: { paintingId: item.painting.id },
-                    })
-                  }
-                  style={{ height: columnWidth / item.aspectRatio }}
-                  testID={`painting-history-${item.key}`}
                 >
-                  <Image
-                    cachePolicy="memory-disk"
-                    contentFit="cover"
-                    source={item.uri}
-                    style={{ height: '100%', width: '100%' }}
-                    transition={120}
-                  />
-                </Pressable>
+                  <Link.AppleZoom>
+                    <Pressable
+                      accessibilityLabel={t('painting.history.item')}
+                      accessibilityRole="button"
+                      className="overflow-hidden rounded-md bg-surface-secondary active:opacity-75"
+                      style={{ height: columnWidth / item.aspectRatio }}
+                      testID={`painting-history-${item.key}`}
+                    >
+                      <Image
+                        cachePolicy="memory-disk"
+                        contentFit="cover"
+                        source={item.uri}
+                        style={{ height: '100%', width: '100%' }}
+                        transition={120}
+                      />
+                    </Pressable>
+                  </Link.AppleZoom>
+                </Link>
               ))}
             </View>
           ))}

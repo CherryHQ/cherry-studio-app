@@ -17,12 +17,29 @@ describe('painting draft handoff', () => {
         uri: 'file:///photo.jpg',
       },
     ];
-    const token = createPaintingDraftHandoff(attachments);
+    const token = createPaintingDraftHandoff({ attachments });
     attachments[0].uri = 'file:///changed.jpg';
 
-    expect(consumePaintingDraftHandoff(token)).toEqual([
+    expect(consumePaintingDraftHandoff(token)?.attachments).toEqual([
       expect.objectContaining({ uri: 'file:///photo.jpg' }),
     ]);
-    expect(consumePaintingDraftHandoff(token)).toEqual([]);
+    expect(consumePaintingDraftHandoff(token)).toBeUndefined();
+  });
+
+  it('carries the draft through the handoff', () => {
+    const token = createPaintingDraftHandoff({
+      attachments: [],
+      draft: 'Change the aspect ratio to 1:1',
+    });
+
+    expect(consumePaintingDraftHandoff(token)).toEqual({
+      attachments: [],
+      draft: 'Change the aspect ratio to 1:1',
+    });
+  });
+
+  it('returns undefined for missing tokens', () => {
+    expect(consumePaintingDraftHandoff(undefined)).toBeUndefined();
+    expect(consumePaintingDraftHandoff('unknown')).toBeUndefined();
   });
 });

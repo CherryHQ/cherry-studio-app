@@ -78,7 +78,6 @@ export function PaintingComposer({
     },
     [generation, isSelectedModelAvailable, selectedModelId],
   );
-
   return (
     <View className="flex-1 bg-background">
       <PaintingCanvas
