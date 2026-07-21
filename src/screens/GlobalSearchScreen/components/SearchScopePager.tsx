@@ -1,6 +1,6 @@
+import PagerView, { type PagerViewRef } from '@expo/ui/community/pager-view';
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import PagerView from 'react-native-pager-view';
 
 import { useSearchScope } from '../context/SearchScopeProvider';
 import { AssistantSearchScreen } from '../screens/AssistantSearchScreen';
@@ -10,7 +10,7 @@ import { getSearchScopeAtIndex, getSearchScopeIndex } from '../utils/searchScope
 
 export function SearchScopePager() {
   const { scope, setScope } = useSearchScope();
-  const pagerRef = useRef<PagerView>(null);
+  const pagerRef = useRef<PagerViewRef>(null);
   const [initialPage] = useState(() => getSearchScopeIndex(scope));
   const currentPageRef = useRef(initialPage);
 
@@ -26,7 +26,6 @@ export function SearchScopePager() {
     <PagerView
       ref={pagerRef}
       initialPage={initialPage}
-      overdrag
       style={{ flex: 1 }}
       testID="search-scope-pager"
       onPageSelected={(event) => {

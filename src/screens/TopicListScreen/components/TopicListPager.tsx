@@ -1,7 +1,7 @@
+import PagerView, { type PagerViewRef } from '@expo/ui/community/pager-view';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-import PagerView from 'react-native-pager-view';
 
 import { useTopicListScope } from '../context/TopicListScopeProvider';
 import { getTopicListScopeAtIndex, getTopicListScopeIndex } from '../utils/topicListScope';
@@ -15,7 +15,7 @@ type TopicListPagerProps = {
 export function TopicListPager({ showRecentsHeading = false }: TopicListPagerProps) {
   const { t } = useTranslation();
   const { scope, setScope } = useTopicListScope();
-  const pagerRef = useRef<PagerView>(null);
+  const pagerRef = useRef<PagerViewRef>(null);
   const [initialPage] = useState(() => getTopicListScopeIndex(scope));
   const currentPageRef = useRef(initialPage);
 
