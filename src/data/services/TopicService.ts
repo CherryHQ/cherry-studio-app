@@ -157,13 +157,22 @@ export class TopicService {
   }
 
   async delete(id: string): Promise<void> {
-    await this.getById(id);
+    await this.deleteMany([id]);
+  }
+
+  async deleteMany(ids: readonly string[]): Promise<void> {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) {
+      return;
+    }
+
+    await Promise.all(uniqueIds.map((id) => this.getById(id)));
 
     await this.dbService.withWriteTx(async (tx) => {
-      await tx.delete(messageTable).where(eq(messageTable.topicId, id));
-      await this.tagService.purgeForEntityTx(tx, 'topic', id);
-      await this.pinService.purgeForEntityTx(tx, 'topic', id);
-      await tx.delete(topicTable).where(eq(topicTable.id, id));
+      await tx.delete(messageTable).where(inArray(messageTable.topicId, uniqueIds));
+      await this.tagService.purgeForEntitiesTx(tx, 'topic', uniqueIds);
+      await this.pinService.purgeForEntitiesTx(tx, 'topic', uniqueIds);
+      await tx.delete(topicTable).where(inArray(topicTable.id, uniqueIds));
     });
   }
 
