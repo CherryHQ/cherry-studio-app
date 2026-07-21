@@ -1,5 +1,6 @@
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { CheckIcon, PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
+import { useToast } from 'heroui-native/toast';
+import { CheckIcon, PencilIcon, PinIcon, PinOffIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AccessibilityActionEvent, Pressable, Text, View } from 'react-native';
@@ -37,6 +38,8 @@ import {
 type TopicRowProps = {
   assistant?: Assistant;
   isEditing: boolean;
+  isPinActionDisabled: boolean;
+  isPinned: boolean;
   isLast: boolean;
   isSelected: boolean;
   notifyClose: (swipeable: SwipeableMethods) => void;
@@ -44,12 +47,14 @@ type TopicRowProps = {
   onDelete: (topic: Topic) => void;
   onPress: (topicId: string) => void;
   onRename: (topic: Topic) => void;
+  onTogglePin: (topicId: string) => void;
   onToggle: (topicId: string) => void;
   topic: Topic;
 };
 
 const TOPIC_ITEM_ESTIMATED_HEIGHT = 60;
-const TOPIC_ACTIONS_WIDTH = 128;
+const TOPIC_LEFT_ACTION_WIDTH = 64;
+const TOPIC_RIGHT_ACTIONS_WIDTH = 128;
 const TOPIC_ROW_MAX_TAP_DISTANCE = 8;
 
 function topicKeyExtractor(item: Topic) {
@@ -92,10 +97,11 @@ function formatTopicUpdatedAt(updatedAt: string, locale: string | undefined, yes
 
 export const TopicList = memo(function TopicList() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
-  const { isTopicListLoading, topics } = useTopicListTopics();
-  const { loadMoreTopics, openTopic } = useTopicListActions();
+  const { isPinActionDisabled, isTopicListLoading, pinnedTopicIds, topics } = useTopicListTopics();
+  const { loadMoreTopics, openTopic, toggleTopicPin } = useTopicListActions();
   const { assistants } = useAssistantsApi();
   const { toggleTopic } = useTopicListSelectionActions();
   const { isEditing, selectedTopicIds } = useTopicListSelectionState();
@@ -111,12 +117,21 @@ export const TopicList = memo(function TopicList() {
     [insets.bottom, isEditing, tabBarHeight],
   );
   const listExtraData = useMemo(
-    () => ({ isEditing, selectedTopicIds }),
-    [isEditing, selectedTopicIds],
+    () => ({ isEditing, isPinActionDisabled, pinnedTopicIds, selectedTopicIds }),
+    [isEditing, isPinActionDisabled, pinnedTopicIds, selectedTopicIds],
   );
   const assistantsById = useMemo(
     () => new Map(assistants.map((assistant) => [assistant.id, assistant])),
     [assistants],
+  );
+  const pinnedTopicIdSet = useMemo(() => new Set(pinnedTopicIds), [pinnedTopicIds]);
+  const handleTogglePin = useCallback(
+    (topicId: string) => {
+      void toggleTopicPin(topicId).catch(() => {
+        toast.show({ label: t('topic.pin.failed'), variant: 'danger' });
+      });
+    },
+    [t, toast, toggleTopicPin],
   );
 
   const renderItem = useCallback(
@@ -124,6 +139,8 @@ export const TopicList = memo(function TopicList() {
       <TopicRow
         assistant={item.assistantId ? assistantsById.get(item.assistantId) : undefined}
         isEditing={isEditing}
+        isPinActionDisabled={isPinActionDisabled}
+        isPinned={pinnedTopicIdSet.has(item.id)}
         isLast={index === topics.length - 1}
         isSelected={selectedTopicIds.has(item.id)}
         notifyClose={notifyClose}
@@ -131,16 +148,20 @@ export const TopicList = memo(function TopicList() {
         onDelete={requestDelete}
         onPress={openTopic}
         onRename={requestRename}
+        onTogglePin={handleTogglePin}
         onToggle={toggleTopic}
         topic={item}
       />
     ),
     [
       assistantsById,
+      handleTogglePin,
       isEditing,
+      isPinActionDisabled,
       notifyClose,
       notifyWillOpen,
       openTopic,
+      pinnedTopicIdSet,
       requestDelete,
       requestRename,
       selectedTopicIds,
@@ -188,6 +209,8 @@ export const TopicList = memo(function TopicList() {
 const TopicRow = memo(function TopicRow({
   assistant,
   isEditing,
+  isPinActionDisabled,
+  isPinned,
   isLast,
   isSelected,
   notifyClose,
@@ -195,6 +218,7 @@ const TopicRow = memo(function TopicRow({
   onDelete,
   onPress,
   onRename,
+  onTogglePin,
   onToggle,
   topic,
 }: TopicRowProps) {
@@ -230,6 +254,14 @@ const TopicRow = memo(function TopicRow({
     swipeableRef.current?.close();
     onDelete(topic);
   }, [onDelete, topic]);
+  const handlePinPress = useCallback(() => {
+    if (isPinActionDisabled) {
+      return;
+    }
+
+    swipeableRef.current?.close();
+    onTogglePin(topic.id);
+  }, [isPinActionDisabled, onTogglePin, topic.id]);
   const handleSwipeableWillOpen = useCallback(() => {
     isSwipeOpen.value = 1;
   }, [isSwipeOpen]);
@@ -270,17 +302,22 @@ const TopicRow = memo(function TopicRow({
   const borderStyle = useAnimatedStyle(() => ({
     opacity: 1 - pressProgress.value,
   }));
-  const accessibilityActions = useMemo(
-    () =>
-      isEditing
-        ? [{ name: 'activate' as const }]
-        : [
-            { name: 'activate' as const },
-            { label: t('common.rename'), name: 'rename' as const },
-            { label: t('common.delete'), name: 'delete' as const },
-          ],
-    [isEditing, t],
-  );
+  const pinActionLabel = t(isPinned ? 'topic.actions.unpin' : 'topic.actions.pin');
+  const accessibilityActions = useMemo(() => {
+    if (isEditing) {
+      return [{ name: 'activate' as const }];
+    }
+
+    const actions = [
+      { name: 'activate' as const },
+      { label: t('common.rename'), name: 'rename' as const },
+      { label: t('common.delete'), name: 'delete' as const },
+    ];
+
+    return isPinActionDisabled
+      ? actions
+      : [...actions, { label: pinActionLabel, name: 'toggle-pin' as const }];
+  }, [isEditing, isPinActionDisabled, pinActionLabel, t]);
   const handleAccessibilityAction = useCallback(
     (event: AccessibilityActionEvent) => {
       if (isEditing) {
@@ -289,6 +326,9 @@ const TopicRow = memo(function TopicRow({
       }
 
       switch (event.nativeEvent.actionName) {
+        case 'toggle-pin':
+          handlePinPress();
+          break;
         case 'rename':
           handleRenamePress();
           break;
@@ -299,7 +339,19 @@ const TopicRow = memo(function TopicRow({
           handlePress();
       }
     },
-    [handleDeletePress, handlePress, handleRenamePress, isEditing],
+    [handleDeletePress, handlePinPress, handlePress, handleRenamePress, isEditing],
+  );
+  const renderLeftActions = useCallback(
+    (_progress: SharedValue<number>, drag: SharedValue<number>) => (
+      <TopicPinAction
+        disabled={isPinActionDisabled}
+        drag={drag}
+        isPinned={isPinned}
+        label={pinActionLabel}
+        onPress={handlePinPress}
+      />
+    ),
+    [handlePinPress, isPinActionDisabled, isPinned, pinActionLabel],
   );
   const renderRightActions = useCallback(
     (_progress: SharedValue<number>, drag: SharedValue<number>) => (
@@ -321,10 +373,13 @@ const TopicRow = memo(function TopicRow({
       onSwipeableClose={handleSwipeableClose}
       onSwipeableOpenStartDrag={handleSwipeableOpenStartDrag}
       onSwipeableWillOpen={handleSwipeableWillOpen}
+      overshootLeft={false}
       overshootRight={false}
       ref={swipeableRef}
+      renderLeftActions={renderLeftActions}
       renderRightActions={renderRightActions}
-      rightThreshold={TOPIC_ACTIONS_WIDTH / 2}
+      leftThreshold={TOPIC_LEFT_ACTION_WIDTH / 2}
+      rightThreshold={TOPIC_RIGHT_ACTIONS_WIDTH / 2}
       simultaneousWithExternalGesture={openTapGesture}
     >
       <GestureDetector gesture={openTapGesture}>
@@ -336,7 +391,13 @@ const TopicRow = memo(function TopicRow({
           accessible
           onAccessibilityAction={handleAccessibilityAction}
         >
-          <View className="relative min-w-0 flex-1 flex-row items-center gap-2 py-2 pl-2">
+          <View
+            className={
+              isPinned
+                ? 'relative min-w-0 flex-1 flex-row items-center gap-2 bg-surface-secondary py-2 pl-2'
+                : 'relative min-w-0 flex-1 flex-row items-center gap-2 bg-transparent py-2 pl-2'
+            }
+          >
             <Animated.View
               className="absolute inset-0 bg-settings-grouped-surface"
               pointerEvents="none"
@@ -409,7 +470,7 @@ type TopicActionsProps = {
 
 function TopicActions({ deleteLabel, drag, onDelete, onRename, renameLabel }: TopicActionsProps) {
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: drag.value + TOPIC_ACTIONS_WIDTH }],
+    transform: [{ translateX: drag.value + TOPIC_RIGHT_ACTIONS_WIDTH }],
   }));
 
   return (
@@ -429,6 +490,38 @@ function TopicActions({ deleteLabel, drag, onDelete, onRename, renameLabel }: To
         onPress={onDelete}
       >
         <Trash2Icon className="size-5 text-danger-foreground" strokeWidth={2} />
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+type TopicPinActionProps = {
+  disabled: boolean;
+  drag: SharedValue<number>;
+  isPinned: boolean;
+  label: string;
+  onPress: () => void;
+};
+
+function TopicPinAction({ disabled, drag, isPinned, label, onPress }: TopicPinActionProps) {
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: drag.value - TOPIC_LEFT_ACTION_WIDTH }],
+  }));
+
+  return (
+    <Animated.View className="h-full w-16" style={animatedStyle}>
+      <Pressable
+        accessibilityLabel={label}
+        accessibilityRole="button"
+        className="h-full items-center justify-center bg-primary active:opacity-80 disabled:opacity-40"
+        disabled={disabled}
+        onPress={onPress}
+      >
+        {isPinned ? (
+          <PinOffIcon className="size-5 text-white" strokeWidth={2} />
+        ) : (
+          <PinIcon className="size-5 text-white" strokeWidth={2} />
+        )}
       </Pressable>
     </Animated.View>
   );

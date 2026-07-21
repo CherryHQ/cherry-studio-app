@@ -6,12 +6,14 @@ import { queryKeys } from '@/data/api';
 import { useDataMutation } from '@/data/hooks';
 import { useDataServices } from '@/data/runtime';
 import type { Topic } from '@/data/types/topic';
-import { useTopics } from '@/hooks/chat';
+import { usePins, useTopics } from '@/hooks/chat';
 import { getMessagesQueryKey, prefetchTopicMessages } from '@/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/hooks/chat/utils/messageWindowPolicy';
 
 type TopicListTopicsContextValue = {
+  isPinActionDisabled: boolean;
   isTopicListLoading: boolean;
+  pinnedTopicIds: readonly string[];
   topics: readonly Topic[];
 };
 
@@ -23,6 +25,7 @@ type TopicListActionsContextValue = {
   openNewTopic: () => void;
   openTopic: (topicId: string) => void;
   renameTopic: (topicId: string, name: string) => Promise<void>;
+  toggleTopicPin: (topicId: string) => Promise<void>;
 };
 
 const TopicListTopicsContext = createContext<TopicListTopicsContextValue | null>(null);
@@ -34,6 +37,8 @@ export function TopicListProvider({ children }: PropsWithChildren) {
   const router = useRouter();
   const services = useDataServices();
   const topicList = useTopics({ q: '' });
+  const topicPins = usePins('topic');
+  const isPinActionDisabled = topicPins.isLoading || topicPins.isRefreshing || topicPins.isMutating;
 
   useEffect(() => {
     if (!isFocused) {
@@ -117,12 +122,26 @@ export function TopicListProvider({ children }: PropsWithChildren) {
     [deleteTopicsMutation],
   );
 
+  const toggleTopicPin = useCallback(
+    async (topicId: string) => {
+      if (isPinActionDisabled) {
+        return;
+      }
+
+      await topicPins.togglePin(topicId);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.topics.all() });
+    },
+    [isPinActionDisabled, queryClient, topicPins.togglePin],
+  );
+
   const topicsValue = useMemo(
     () => ({
+      isPinActionDisabled,
       isTopicListLoading: topicList.isLoadingInitial,
+      pinnedTopicIds: topicPins.pinnedIds,
       topics: topicList.topics,
     }),
-    [topicList.isLoadingInitial, topicList.topics],
+    [isPinActionDisabled, topicList.isLoadingInitial, topicList.topics, topicPins.pinnedIds],
   );
   const actionsValue = useMemo(
     () => ({
@@ -133,6 +152,7 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       openNewTopic,
       openTopic,
       renameTopic,
+      toggleTopicPin,
     }),
     [
       deleteTopic,
@@ -142,6 +162,7 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       openTopic,
       renameTopic,
       topicList.loadMore,
+      toggleTopicPin,
     ],
   );
 
