@@ -1,6 +1,14 @@
 import { useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
-import { BotIcon, ChevronRightIcon, GlobeIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
+
+import {
+  BotIcon,
+  ChevronRightIcon,
+  GlobeIcon,
+  PlusIcon,
+  StoreIcon,
+  Trash2Icon,
+} from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -28,8 +36,20 @@ export default function AssistantListScreen() {
   const openCreateAssistant = useCallback(() => {
     router.push('/assistants/edit');
   }, [router]);
+
+  const openCatalog = useCallback(() => {
+    router.push('/assistants/catalog');
+  }, [router]);
+
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
+      {
+        accessibilityLabel: t('assistant.actions.catalog'),
+        androidIcon: StoreIcon,
+        icon: 'storefront',
+        key: 'open-catalog',
+        onPress: openCatalog,
+      },
       {
         accessibilityLabel: t('assistant.actions.create'),
         androidIcon: PlusIcon,
@@ -38,7 +58,7 @@ export default function AssistantListScreen() {
         onPress: openCreateAssistant,
       },
     ],
-    [openCreateAssistant, t],
+    [openCatalog, openCreateAssistant, t],
   );
   const openEditAssistant = useCallback(
     (assistantId: string) => {
