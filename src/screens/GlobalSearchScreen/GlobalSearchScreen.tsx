@@ -2,6 +2,7 @@ import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { SearchBarCommands } from 'react-native-screens';
@@ -15,6 +16,7 @@ export function GlobalSearchScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const searchBarRef = useRef<SearchBarCommands>(null);
+  const tabBarHeight = useBottomTabBarHeight();
 
   // rn-screens 的 autoFocus 是 Android-only(@platform android),iOS 只能通过
   // ref 命令式 focus,且须等 UISearchController attach 到 navigation bar 之后。
@@ -38,7 +40,7 @@ export function GlobalSearchScreen() {
           {isAndroid ? <SearchScopeTabs /> : null}
           <SearchScopePager />
           {isIOS ? (
-            <View className="pb-16">
+            <View style={{ paddingBottom: tabBarHeight }}>
               <SearchScopeTabs />
             </View>
           ) : null}
