@@ -185,7 +185,12 @@ describe('prepareChatMessages — routing', () => {
       // requireOptionalNativeModule returns a wrapper whose extractText rejects,
       // but if the module itself is null, the camera-roll mock returns a falsy shape.
       // Force the module to return null by making the mock factory return null.
-      jest.mocked(require('expo').requireOptionalNativeModule).mockReturnValueOnce(null);
+      jest
+        .mocked(
+          jest.requireMock<{ requireOptionalNativeModule: jest.Mock }>('expo')
+            .requireOptionalNativeModule,
+        )
+        .mockReturnValueOnce(null);
 
       const [result] = await resolveUIMessageFileUrls([message([filePart()])], NATIVE_NO_PDF);
 
