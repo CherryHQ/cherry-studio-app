@@ -18,7 +18,7 @@ const mockQueryClient = {
 };
 const mockServices = {
   topic: {
-    delete: jest.fn(),
+    deleteMany: jest.fn(),
     update: jest.fn(),
   },
 } as unknown as DataServices;
@@ -54,7 +54,7 @@ const prefetchTopicMessagesMock = prefetchTopicMessages as jest.MockedFunction<
   typeof prefetchTopicMessages
 >;
 const mockRenameTopic = jest.fn(async () => undefined);
-const mockDeleteTopic = jest.fn(async () => undefined);
+const mockDeleteTopics = jest.fn(async () => undefined);
 const mockLoadMoreTopics = jest.fn(async () => undefined);
 
 let mutationHookIndex = 0;
@@ -82,7 +82,7 @@ beforeEach(() => {
   renderer = undefined;
 
   useDataMutationMock.mockImplementation(() => {
-    const mutateAsync = mutationHookIndex % 2 === 0 ? mockRenameTopic : mockDeleteTopic;
+    const mutateAsync = mutationHookIndex % 2 === 0 ? mockRenameTopic : mockDeleteTopics;
     mutationHookIndex += 1;
     return { mutateAsync };
   });
@@ -166,11 +166,13 @@ describe('TopicListProvider', () => {
       await currentActions?.renameTopic('topic-1', '  Renamed  ');
       await currentActions?.renameTopic('topic-1', '   ');
       await currentActions?.deleteTopic('topic-2');
+      await currentActions?.deleteTopics(['topic-3', 'topic-4', 'topic-3']);
     });
 
     expect(mockRenameTopic).toHaveBeenCalledTimes(1);
     expect(mockRenameTopic).toHaveBeenCalledWith({ id: 'topic-1', name: 'Renamed' });
-    expect(mockDeleteTopic).toHaveBeenCalledWith('topic-2');
+    expect(mockDeleteTopics).toHaveBeenNthCalledWith(1, ['topic-2']);
+    expect(mockDeleteTopics).toHaveBeenNthCalledWith(2, ['topic-3', 'topic-4']);
   });
 
   test('pushes the topic-less route for a new chat', async () => {

@@ -7,7 +7,7 @@ import { useDataMutation } from '@/data/hooks';
 import { useDataServices } from '@/data/runtime';
 import type { Topic } from '@/data/types/topic';
 import { useTopics } from '@/hooks/chat';
-import { prefetchTopicMessages } from '@/hooks/chat/utils/messageQueryOptions';
+import { getMessagesQueryKey, prefetchTopicMessages } from '@/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/hooks/chat/utils/messageWindowPolicy';
 
 type TopicListTopicsContextValue = {
@@ -17,6 +17,7 @@ type TopicListTopicsContextValue = {
 
 type TopicListActionsContextValue = {
   deleteTopic: (topicId: string) => Promise<void>;
+  deleteTopics: (topicIds: readonly string[]) => Promise<void>;
   loadMoreTopics: () => void;
   openNewTopic: () => void;
   openTopic: (topicId: string) => void;
@@ -69,11 +70,14 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       queryClient.invalidateQueries({ queryKey: queryKeys.topics.detail(variables.id) }),
   });
 
-  const deleteTopicMutation = useDataMutation({
+  const deleteTopicsMutation = useDataMutation({
     invalidateQueries: [['/topics']],
-    mutationFn: (dataServices, id: string) => dataServices.topic.delete(id),
-    onSuccess: (_result, id) => {
-      queryClient.removeQueries({ queryKey: queryKeys.topics.detail(id) });
+    mutationFn: (dataServices, ids: readonly string[]) => dataServices.topic.deleteMany(ids),
+    onSuccess: (_result, ids) => {
+      for (const id of ids) {
+        queryClient.removeQueries({ queryKey: queryKeys.topics.detail(id) });
+        queryClient.removeQueries({ queryKey: getMessagesQueryKey(id) });
+      }
     },
   });
 
@@ -92,9 +96,21 @@ export function TopicListProvider({ children }: PropsWithChildren) {
 
   const deleteTopic = useCallback(
     async (id: string) => {
-      await deleteTopicMutation.mutateAsync(id);
+      await deleteTopicsMutation.mutateAsync([id]);
     },
-    [deleteTopicMutation],
+    [deleteTopicsMutation],
+  );
+
+  const deleteTopics = useCallback(
+    async (ids: readonly string[]) => {
+      const uniqueIds = [...new Set(ids)];
+      if (uniqueIds.length === 0) {
+        return;
+      }
+
+      await deleteTopicsMutation.mutateAsync(uniqueIds);
+    },
+    [deleteTopicsMutation],
   );
 
   const topicsValue = useMemo(
@@ -107,12 +123,13 @@ export function TopicListProvider({ children }: PropsWithChildren) {
   const actionsValue = useMemo(
     () => ({
       deleteTopic,
+      deleteTopics,
       loadMoreTopics: topicList.loadMore,
       openNewTopic,
       openTopic,
       renameTopic,
     }),
-    [deleteTopic, openNewTopic, openTopic, renameTopic, topicList.loadMore],
+    [deleteTopic, deleteTopics, openNewTopic, openTopic, renameTopic, topicList.loadMore],
   );
 
   return (

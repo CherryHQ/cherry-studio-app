@@ -8,6 +8,7 @@ import type { ParamListBase, TabNavigationState } from 'expo-router/react-naviga
 import { useThemeColor } from 'heroui-native/hooks';
 import { useTranslation } from 'react-i18next';
 
+import { BottomTabBarVisibilityProvider, useBottomTabBarHidden } from '@/components/navigation';
 import {
   SearchScopeProvider,
   useSetSearchScope,
@@ -55,21 +56,25 @@ function getSearchIcon() {
 
 export default function TabLayout() {
   return (
-    <SearchScopeProvider>
-      <TabNavigator />
-    </SearchScopeProvider>
+    <BottomTabBarVisibilityProvider>
+      <SearchScopeProvider>
+        <TabNavigator />
+      </SearchScopeProvider>
+    </BottomTabBarVisibilityProvider>
   );
 }
 
 function TabNavigator() {
   const { t } = useTranslation();
   const accentColor = useThemeColor('accent');
+  const isBottomTabBarHidden = useBottomTabBarHidden();
   const setScope = useSetSearchScope();
 
   return (
     <Tabs
       backBehavior="history"
       initialRouteName="(messages)"
+      tabBarHidden={isBottomTabBarHidden}
       screenOptions={{
         // freezeOnBlur 会让冻结中的 tab 错过 uniwind 的免重渲染主题 patch，
         // 解冻后也不补发，导致切主题后整页停留旧主题（见 .context/theme-debug）。
