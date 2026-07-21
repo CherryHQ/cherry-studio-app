@@ -119,9 +119,10 @@ export const TopicList = memo(function TopicList() {
     [isTopicListLoading, t],
   );
   return (
-    <>
+    <View className="flex-1">
       <LegendList
-        className="flex-1 bg-background"
+        style={{ flex: 1 }}
+        className="bg-background"
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={contentContainerStyle}
         data={topics}
@@ -136,7 +137,7 @@ export const TopicList = memo(function TopicList() {
         renderItem={renderItem}
       />
       {dialogs}
-    </>
+    </View>
   );
 });
 

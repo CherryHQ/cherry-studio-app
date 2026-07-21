@@ -11,7 +11,7 @@ export function TopicListScreen() {
   const { openNewTopic } = useTopicListActions();
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+    <SafeAreaView className="bg-background" edges={['top']} style={{ flex: 1 }}>
       <TopicListHeader onNewTopicPress={openNewTopic} />
       <Text className="px-5 pb-1 pt-3 font-medium text-foreground-secondary text-sm">
         {t('navigation.recents')}
