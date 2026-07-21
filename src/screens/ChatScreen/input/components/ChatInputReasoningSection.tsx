@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SlotText } from '@/components/SlotText';
 
-import { useChatInputActions, useChatInputState } from '../context/ChatInputProvider';
 import { EffortSlider, thinkingAccentColor } from '../effortSlider';
 import { useChatInputReasoningEfforts } from '../hooks/useChatInputReasoningEfforts';
 import {
@@ -21,12 +20,19 @@ import {
  * (the sheet reaches the physical screen bottom) so that rendering nothing —
  * when the model has no reasoning stops — leaves no stray chrome.
  */
-export function ChatInputReasoningSection() {
+export function ChatInputReasoningSection({
+  reasoningEffort,
+  onSelectReasoningEffort,
+}: {
+  reasoningEffort: string;
+  onSelectReasoningEffort: (value: ChatInputReasoningEffort) => void;
+}) {
   const { t } = useTranslation();
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  const { reasoningEffort } = useChatInputState();
-  const { selectReasoningEffort } = useChatInputActions();
+  // The component is rendered inside a ModalBottomSheet portal (Android)
+  // where ChatInputProvider context is unavailable, so all values must come
+  // from props — no fallback to context hooks.
   const reasoningEfforts = useChatInputReasoningEfforts();
 
   // Keep reasoningEfforts' own order (off → default → minimal → … → max → auto),
@@ -43,9 +49,9 @@ export function ChatInputReasoningSection() {
 
   const handleChange = useCallback(
     (value: string) => {
-      selectReasoningEffort(value as ChatInputReasoningEffort);
+      onSelectReasoningEffort(value as ChatInputReasoningEffort);
     },
-    [selectReasoningEffort],
+    [onSelectReasoningEffort],
   );
 
   if (options.length === 0) {
