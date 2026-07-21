@@ -22,8 +22,7 @@ import { canonOf } from '../../scripts/canonicalize';
 import { CREATORS } from '../creators';
 import { PROVIDERS } from '../providers';
 
-const currentFile = import.meta.url ? fileURLToPath(import.meta.url) : __filename;
-const dataDir = join(currentFile, '..', '..', '..', 'data');
+const dataDir = join(fileURLToPath(import.meta.url), '..', '..', '..', 'data');
 const read = (f: string) => JSON.parse(readFileSync(join(dataDir, f), 'utf8'));
 const models = read('models.json').models as Array<{ id: string; name?: string; ownedBy: string }>;
 const providers = read('providers.json').providers as Array<

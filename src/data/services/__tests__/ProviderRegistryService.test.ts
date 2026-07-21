@@ -94,6 +94,7 @@ describe('provider-registry-service', () => {
         providerId === 'login-provider'
           ? {
               authMethods: ['external-cli'],
+              authOptional: true,
               defaultChatEndpoint: null,
               id: 'login-provider',
               metadata: { website: { official: 'https://example.com' } },
@@ -109,6 +110,7 @@ describe('provider-registry-service', () => {
 
     expect(service.getProviderDisplayMetadata('login-provider')).toEqual({
       authMethods: ['external-cli'],
+      authOptional: true,
       description: undefined,
       modelListSource: 'registry',
       websites: { official: 'https://example.com' },

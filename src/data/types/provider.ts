@@ -162,6 +162,7 @@ export type Provider = {
   apiFeatures: RuntimeApiFeatures;
   apiKeys: RuntimeApiKey[];
   authMethods?: ProviderAuthMethod[];
+  authOptional?: boolean;
   authType: AuthType;
   defaultChatEndpoint?: EndpointType;
   description?: string;

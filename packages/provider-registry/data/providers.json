@@ -73,6 +73,7 @@
       "name": "AiHubMix"
     },
     {
+      "authOptional": true,
       "description": "OpenVINO Model Server - AI model provider",
       "endpointConfigs": {
         "openai-chat-completions": {
@@ -401,6 +402,7 @@
       "name": "OpenRouter"
     },
     {
+      "authOptional": true,
       "description": "Ollama - AI model provider",
       "endpointConfigs": {
         "anthropic-messages": {
@@ -450,6 +452,7 @@
       "name": "New API"
     },
     {
+      "authOptional": true,
       "description": "LM Studio - AI model provider",
       "endpointConfigs": {
         "anthropic-messages": {
@@ -490,6 +493,69 @@
         }
       },
       "name": "Anthropic"
+    },
+    {
+      "authMethods": ["external-cli"],
+      "defaultChatEndpoint": "anthropic-messages",
+      "description": "Claude Code - AI model provider",
+      "endpointConfigs": {
+        "anthropic-messages": {
+          "adapterFamily": "anthropic",
+          "baseUrl": "https://api.anthropic.com"
+        }
+      },
+      "id": "claude-code",
+      "metadata": {
+        "website": {
+          "docs": "https://docs.claude.com/en/docs/claude-code/overview",
+          "official": "https://www.anthropic.com/claude-code"
+        }
+      },
+      "modelListSource": "registry",
+      "name": "Claude Code"
+    },
+    {
+      "apiFeatures": {
+        "serviceTier": true
+      },
+      "authMethods": ["oauth"],
+      "defaultChatEndpoint": "openai-responses",
+      "description": "OpenAI Codex - AI model provider",
+      "endpointConfigs": {
+        "openai-responses": {
+          "adapterFamily": "openai",
+          "baseUrl": "https://chatgpt.com/backend-api/codex"
+        }
+      },
+      "id": "openai-codex",
+      "metadata": {
+        "website": {
+          "docs": "https://platform.openai.com/docs/codex",
+          "official": "https://openai.com/codex"
+        }
+      },
+      "modelListSource": "registry",
+      "name": "OpenAI Codex"
+    },
+    {
+      "authMethods": ["oauth"],
+      "defaultChatEndpoint": "openai-responses",
+      "description": "Grok CLI - AI model provider",
+      "endpointConfigs": {
+        "openai-responses": {
+          "adapterFamily": "openai",
+          "baseUrl": "https://cli-chat-proxy.grok.com/v1"
+        }
+      },
+      "id": "grok-cli",
+      "metadata": {
+        "website": {
+          "docs": "https://docs.x.ai",
+          "official": "https://x.ai"
+        }
+      },
+      "modelListSource": "registry",
+      "name": "Grok CLI"
     },
     {
       "apiFeatures": {
@@ -1127,6 +1193,7 @@
           "official": "https://cloud.tencent.com/product/tokenhub"
         }
       },
+      "modelListSource": "registry",
       "name": "TokenHub"
     },
     {
@@ -1150,6 +1217,7 @@
       "name": "Baidu Cloud"
     },
     {
+      "authOptional": true,
       "defaultChatEndpoint": "openai-chat-completions",
       "description": "GPUStack - AI model provider",
       "endpointConfigs": {
@@ -1185,6 +1253,7 @@
           "official": "https://www.voyageai.com/"
         }
       },
+      "modelListSource": "registry",
       "name": "VoyageAI"
     },
     {
@@ -1204,6 +1273,7 @@
           "official": "https://aws.amazon.com/bedrock/"
         }
       },
+      "modelListSource": "registry",
       "name": "AWS Bedrock"
     },
     {
@@ -1389,5 +1459,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "0544e8f799859c83"
+  "version": "6dd76cf1b8f4d058"
 }

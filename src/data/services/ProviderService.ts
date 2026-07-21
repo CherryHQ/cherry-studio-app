@@ -186,6 +186,7 @@ function rowToProvider(row: UserProviderRow): Provider {
     },
     apiKeys,
     authMethods: metadata.authMethods,
+    authOptional: metadata.authOptional,
     authType,
     defaultChatEndpoint: row.defaultChatEndpoint ?? undefined,
     description: metadata.description,
