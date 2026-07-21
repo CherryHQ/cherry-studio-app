@@ -33,7 +33,6 @@ export function SelectionBottomSheet({
     <ModalBottomSheet
       detents={[0, sheetHeight]}
       index={index}
-      nativeOverlay
       onIndexChange={onIndexChange}
       onSettle={onSettle}
       // Dim the background behind the sheet so it reads as a layer above the

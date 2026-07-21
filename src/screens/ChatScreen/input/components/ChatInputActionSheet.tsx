@@ -54,16 +54,12 @@ export function ChatInputActionSheet() {
   const { clearSelectedPhotos } = actions;
   const [isPhotoGridOpen, setIsPhotoGridOpen] = useState(false);
   const [isInlineCameraOpen, setIsInlineCameraOpen] = useState(false);
-  // `sheetIndex` mostly mirrors `isActionSheetOpen`, except while the user has
-  // dragged past `OPEN_INDEX` up to the full-height detent — adjusted during
-  // render (not an effect) per
-  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes.
-  const [sheetIndex, setSheetIndex] = useState(CLOSED_INDEX);
-  const [prevIsActionSheetOpen, setPrevIsActionSheetOpen] = useState(isActionSheetOpen);
-  if (isActionSheetOpen !== prevIsActionSheetOpen) {
-    setPrevIsActionSheetOpen(isActionSheetOpen);
-    setSheetIndex(isActionSheetOpen ? OPEN_INDEX : CLOSED_INDEX);
-  }
+  // `sheetIndex` starts at `OPEN_INDEX` on mount because the parent only
+  // renders this component when `isActionSheetOpen` is `true`. Initialising
+  // from the prop directly avoids any post-mount sync (no useEffect/useRef).
+  // `setSheetIndex(OPEN_INDEX)` is called by back-navigation handlers to
+  // return the sheet to the 50% snap point after full-height subviews.
+  const [sheetIndex, setSheetIndex] = useState(isActionSheetOpen ? OPEN_INDEX : CLOSED_INDEX);
 
   const handleClose = useCallback(() => {
     setIsPhotoGridOpen(false);
