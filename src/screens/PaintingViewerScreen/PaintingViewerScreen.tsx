@@ -1,9 +1,13 @@
-import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-import { paintingViewer } from '@/config/constants';
+import {
+  getPaintingZoomTransitionSourceId,
+  paintingZoomTransitionSourceIdParam,
+} from '@/components/navigation';
+import { isIOS, paintingViewer } from '@/config/constants';
 import { type PaintingGalleryItem, usePaintingGalleryItems, usePaintings } from '@/hooks/paintings';
 
 import { PaintingViewerChrome } from './components/PaintingViewerChrome';
@@ -44,6 +48,7 @@ export function PaintingViewerScreen() {
       <PaintingViewerContent
         initialIndex={initialIndex}
         items={items}
+        key={`${paintingId}:${fileEntryId}`}
         onLoadMore={paintings.loadMore}
       />
     </View>
@@ -66,6 +71,20 @@ function PaintingViewerContent({
     currentOutput: { fileEntryId: current.fileEntryId, uri: current.uri },
     painting: current.painting,
   });
+  const handlePageChange = useCallback(
+    (index: number) => {
+      const nextIndex = Math.max(0, Math.min(items.length - 1, index));
+      const next = items[nextIndex];
+      setPageIndex(nextIndex);
+
+      if (isIOS && next) {
+        router.setParams({
+          [paintingZoomTransitionSourceIdParam]: getPaintingZoomTransitionSourceId(next.key),
+        });
+      }
+    },
+    [items, router],
+  );
 
   return (
     <>
@@ -78,16 +97,14 @@ function PaintingViewerContent({
         onResizeSelect={actions.resize}
         onViewConversation={actions.viewConversation}
       />
-      <Link.AppleZoomTarget>
-        <View className="flex-1">
-          <ViewerPager
-            initialIndex={initialIndex}
-            items={items}
-            onEndReached={onLoadMore}
-            onPageChange={setPageIndex}
-          />
-        </View>
-      </Link.AppleZoomTarget>
+      <View className="flex-1">
+        <ViewerPager
+          initialIndex={initialIndex}
+          items={items}
+          onEndReached={onLoadMore}
+          onPageChange={handlePageChange}
+        />
+      </View>
     </>
   );
 }

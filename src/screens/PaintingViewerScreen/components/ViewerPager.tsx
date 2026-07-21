@@ -2,6 +2,8 @@ import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/reac
 import { useCallback, useState } from 'react';
 import { useWindowDimensions, View } from 'react-native';
 
+import { PaintingZoomTarget } from '@/components/navigation';
+
 import { ZoomableImage } from './ZoomableImage';
 
 type ViewerItem = { key: string; uri: string };
@@ -30,7 +32,11 @@ export function ViewerPager({
 
   const renderItem = useCallback(
     ({ item }: LegendListRenderItemProps<ViewerItem>) => (
-      <ZoomableImage height={height} onZoomChange={setIsZoomed} uri={item.uri} width={width} />
+      <PaintingZoomTarget sourceKey={item.key}>
+        <View collapsable={false} style={{ height, width }}>
+          <ZoomableImage height={height} onZoomChange={setIsZoomed} uri={item.uri} width={width} />
+        </View>
+      </PaintingZoomTarget>
     ),
     [height, width],
   );
