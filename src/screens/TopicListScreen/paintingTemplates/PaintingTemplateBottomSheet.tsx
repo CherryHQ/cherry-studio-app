@@ -42,7 +42,6 @@ export function PaintingTemplateBottomSheet({
   const [isApplying, setIsApplying] = useState(false);
   const closeIntentRef = useRef<CloseIntent | undefined>(undefined);
   const didFinishRef = useRef(false);
-  const prompt = t(template.promptKey);
   const sheetWidth = Math.max(0, windowWidth - SHEET_HORIZONTAL_INSET * 2);
   const previewWidth = Math.max(
     0,
@@ -209,7 +208,7 @@ export function PaintingTemplateBottomSheet({
                 selectable
                 testID="painting-template-prompt"
               >
-                {prompt}
+                {template.prompt}
               </Text>
               <Button
                 accessibilityLabel={t('painting.templates.try')}

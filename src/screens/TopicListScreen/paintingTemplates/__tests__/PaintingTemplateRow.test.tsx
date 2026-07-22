@@ -135,7 +135,7 @@ describe('PaintingTemplateRow', () => {
         .accessibilityRole,
     ).toBeUndefined();
     expect(renderer?.root.findByProps({ testID: 'painting-template-prompt' }).props.children).toBe(
-      paintingTemplates[0].promptKey,
+      paintingTemplates[0].prompt,
     );
 
     expect(renderer?.root.findByProps({ testID: 'painting-template-close' })).toBeTruthy();
