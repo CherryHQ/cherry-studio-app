@@ -28,8 +28,16 @@ import {
   createPhotoAttachmentDraft,
 } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
 import { distributeMasonryItems } from '@/screens/PaintingScreen/utils/masonry';
-import { createPaintingDraftHandoff } from '@/screens/PaintingScreen/utils/paintingDraftHandoff';
+import {
+  createPaintingDraftHandoff,
+  type PaintingDraftHandoff,
+} from '@/screens/PaintingScreen/utils/paintingDraftHandoff';
 import { useTopicListScope } from '../context/TopicListScopeProvider';
+import {
+  type PaintingTemplate,
+  PaintingTemplateRow,
+  toPaintingTemplateDraft,
+} from '../paintingTemplates';
 
 const recentPhotoLimit = 12;
 const galleryGap = 6;
@@ -52,12 +60,24 @@ export function DrawingList() {
     { items: columns[1], key: 'right' },
   ] as const;
 
-  const openPaintingWithAttachments = useCallback(
-    (attachments: readonly ChatInputAttachmentDraft[]) => {
-      const handoff = createPaintingDraftHandoff({ attachments });
+  const openPainting = useCallback(
+    (payload: PaintingDraftHandoff) => {
+      const handoff = createPaintingDraftHandoff(payload);
       router.push({ pathname: '/paintings', params: { handoff } });
     },
     [router],
+  );
+  const openPaintingWithAttachments = useCallback(
+    (attachments: readonly ChatInputAttachmentDraft[]) => {
+      openPainting({ attachments });
+    },
+    [openPainting],
+  );
+  const handleTemplateUse = useCallback(
+    (template: PaintingTemplate) => {
+      openPainting(toPaintingTemplateDraft(template));
+    },
+    [openPainting],
   );
   const handleRecentPhotoPress = useCallback(
     async (photo: ChatInputPhotoPreview) => {
@@ -180,6 +200,8 @@ export function DrawingList() {
           </Pressable>
         )}
       </View>
+
+      <PaintingTemplateRow onUseTemplate={handleTemplateUse} />
 
       <Text className="px-4 pb-3 font-semibold text-foreground text-base">
         {t('painting.history.title')}
