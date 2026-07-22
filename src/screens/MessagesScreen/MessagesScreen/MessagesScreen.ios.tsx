@@ -13,9 +13,9 @@ import {
 import { useSetBottomTabBarHidden } from '@/components/navigation';
 import { isLiquidGlassAvailable } from '@/config/constants';
 
-import { MessagePager } from './components/MessagePager';
-import { MessageScopeTabs } from './components/MessageScopeTabs';
-import { SelectionControls } from './components/SelectionControls';
+import { MessagePager } from '../components/MessagePager';
+import { MessageScopeTabs } from '../components/MessageScopeTabs';
+import { SelectionControls } from '../components/SelectionControls';
 
 export function MessagesScreen() {
   const { t } = useTranslation();

@@ -10,9 +10,9 @@ import {
 } from '@/components/messageTabs';
 import { useSetBottomTabBarHidden } from '@/components/navigation';
 
-import { MessageHeader } from './components/MessageHeader';
-import { MessagePager } from './components/MessagePager';
-import { SelectionControls } from './components/SelectionControls';
+import { MessageHeader } from '../components/MessageHeader';
+import { MessagePager } from '../components/MessagePager';
+import { SelectionControls } from '../components/SelectionControls';
 
 export function MessagesScreen() {
   const router = useRouter();
