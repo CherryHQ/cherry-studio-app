@@ -75,6 +75,7 @@ jest.mock('@/components/nativePrimitives', () => {
 
 jest.mock('@/config/constants', () => ({
   isLiquidGlassAvailable: true,
+  paintingSheetOuterInset: 8,
   sheetScrimColor: '#00000066',
 }));
 
@@ -144,18 +145,20 @@ describe('PaintingTemplateRow', () => {
 
     const surface = renderer?.root.findByProps({ testID: 'painting-template-sheet-surface' });
     expect(StyleSheet.flatten(surface?.props.style)).toMatchObject({
-      borderBottomLeftRadius: 34,
-      borderBottomRightRadius: 34,
-      borderRadius: 28,
+      borderBottomLeftRadius: 42,
+      borderBottomRightRadius: 42,
+      borderTopLeftRadius: 34,
+      borderTopRightRadius: 34,
       bottom: 0,
       left: 0,
       right: 0,
     });
     const sheet = renderer?.root.findByProps({ testID: 'painting-template-sheet' });
     expect(StyleSheet.flatten(sheet?.props.style)).toMatchObject({
-      borderBottomLeftRadius: 34,
-      borderBottomRightRadius: 34,
-      borderRadius: 28,
+      borderBottomLeftRadius: 42,
+      borderBottomRightRadius: 42,
+      borderTopLeftRadius: 34,
+      borderTopRightRadius: 34,
       overflow: 'hidden',
       width: Dimensions.get('window').width - 16,
     });
@@ -163,8 +166,11 @@ describe('PaintingTemplateRow', () => {
     expect(StyleSheet.flatten(bottomGap?.props.style).height).toBe(8);
 
     const header = renderer?.root.findByProps({ testID: 'painting-template-header' });
-    expect(header?.props.className).toContain('px-2');
-    expect(StyleSheet.flatten(header?.props.style).paddingTop).toBe(8);
+    expect(StyleSheet.flatten(header?.props.style)).toMatchObject({
+      height: 60,
+      paddingHorizontal: 12,
+      paddingTop: 12,
+    });
   });
 
   test('truncates the prompt and keeps equal outer panel spacing above the safe area', () => {
@@ -178,7 +184,7 @@ describe('PaintingTemplateRow', () => {
     expect(StyleSheet.flatten(body?.props.style).paddingBottom).toBe(8);
 
     const panel = renderer?.root.findByProps({ testID: 'painting-template-prompt-panel' });
-    expect(StyleSheet.flatten(panel?.props.style).borderRadius).toBe(26);
+    expect(StyleSheet.flatten(panel?.props.style).borderRadius).toBe(34);
     expect(StyleSheet.flatten(panel?.props.style).paddingBottom).toBe(18);
   });
 

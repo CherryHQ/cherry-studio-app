@@ -135,6 +135,7 @@ export const DEFAULT_PROVIDER_SETTINGS: ProviderSettings = {};
 export type ModelsApiUrls = {
   default?: string;
   embedding?: string;
+  image?: string;
   reranker?: string;
 };
 

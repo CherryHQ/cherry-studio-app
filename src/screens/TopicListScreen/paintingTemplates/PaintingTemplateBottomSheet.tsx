@@ -8,7 +8,11 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Image } from '@/components/nativePrimitives';
-import { isLiquidGlassAvailable, sheetScrimColor } from '@/config/constants';
+import {
+  isLiquidGlassAvailable,
+  paintingSheetOuterInset,
+  sheetScrimColor,
+} from '@/config/constants';
 
 import type { PaintingTemplate } from './paintingTemplates';
 
@@ -17,10 +21,7 @@ const OPEN_INDEX = 1;
 const HEADER_HEIGHT = 60;
 const HEADER_SIDE_WIDTH = 44;
 const SHEET_CONTENT_INSET = 8;
-const SHEET_HORIZONTAL_INSET = 8;
-const SHEET_BOTTOM_INSET = 8;
 const SHEET_CORNER_RADIUS = 28;
-const SHEET_MAX_BOTTOM_CORNER_RADIUS = 36;
 
 type CloseIntent = 'dismiss' | 'use';
 
@@ -42,23 +43,35 @@ export function PaintingTemplateBottomSheet({
   const [isApplying, setIsApplying] = useState(false);
   const closeIntentRef = useRef<CloseIntent | undefined>(undefined);
   const didFinishRef = useRef(false);
-  const sheetWidth = Math.max(0, windowWidth - SHEET_HORIZONTAL_INSET * 2);
+  const sheetWidth = Math.max(0, windowWidth - paintingSheetOuterInset * 2);
   const previewWidth = Math.max(
     0,
     Math.min(windowWidth * 0.5, sheetWidth - SHEET_CONTENT_INSET * 2, 220),
   );
   const promptPanelBottomPadding = Math.max(
     SHEET_CONTENT_INSET,
-    insets.bottom - SHEET_BOTTOM_INSET - SHEET_CONTENT_INSET,
+    insets.bottom - paintingSheetOuterInset - SHEET_CONTENT_INSET,
   );
-  const sheetBottomRadius = Math.min(
-    SHEET_MAX_BOTTOM_CORNER_RADIUS,
-    Math.max(SHEET_CORNER_RADIUS, insets.bottom),
+  const sheetBottomCornerRadius = Math.max(
+    SHEET_CORNER_RADIUS,
+    insets.bottom + paintingSheetOuterInset,
   );
-  const promptPanelRadius = sheetBottomRadius - SHEET_CONTENT_INSET;
-  const sheetBottomCornerStyle = {
-    borderBottomLeftRadius: sheetBottomRadius,
-    borderBottomRightRadius: sheetBottomRadius,
+  const sheetTopCornerRadius = Math.max(
+    SHEET_CORNER_RADIUS,
+    sheetBottomCornerRadius - paintingSheetOuterInset,
+  );
+  const promptPanelRadius = sheetBottomCornerRadius - SHEET_CONTENT_INSET;
+  const sheetCornerStyle = {
+    borderBottomLeftRadius: sheetBottomCornerRadius,
+    borderBottomRightRadius: sheetBottomCornerRadius,
+    borderTopLeftRadius: sheetTopCornerRadius,
+    borderTopRightRadius: sheetTopCornerRadius,
+  };
+  const headerInset = Math.max(0, sheetTopCornerRadius - HEADER_SIDE_WIDTH / 2);
+  const headerStyle = {
+    height: Math.max(HEADER_HEIGHT, headerInset + HEADER_SIDE_WIDTH),
+    paddingHorizontal: headerInset,
+    paddingTop: headerInset,
   };
   const requestClose = useCallback(() => {
     if (closeIntentRef.current) {
@@ -123,26 +136,26 @@ export function PaintingTemplateBottomSheet({
     >
       <View style={styles.sheetLayout}>
         <View
-          style={[styles.sheet, sheetBottomCornerStyle, { width: sheetWidth }]}
+          style={[styles.sheet, sheetCornerStyle, { width: sheetWidth }]}
           testID="painting-template-sheet"
         >
           {isLiquidGlassAvailable ? (
             <GlassView
               glassEffectStyle="regular"
-              style={[styles.surface, sheetBottomCornerStyle]}
+              style={[styles.surface, sheetCornerStyle]}
               testID="painting-template-sheet-surface"
             />
           ) : (
             <View
               className="bg-background"
-              style={[styles.surface, sheetBottomCornerStyle]}
+              style={[styles.surface, sheetCornerStyle]}
               testID="painting-template-sheet-surface"
             />
           )}
 
           <View
-            className="flex-row items-center px-2"
-            style={styles.header}
+            className="flex-row items-center"
+            style={headerStyle}
             testID="painting-template-header"
           >
             {isLiquidGlassAvailable ? (
@@ -244,10 +257,6 @@ const styles = StyleSheet.create({
     borderRadius: HEADER_SIDE_WIDTH / 2,
     overflow: 'hidden',
   },
-  header: {
-    height: HEADER_HEIGHT,
-    paddingTop: SHEET_CONTENT_INSET,
-  },
   headerSide: {
     height: HEADER_SIDE_WIDTH,
     width: HEADER_SIDE_WIDTH,
@@ -270,7 +279,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   sheetBottomGap: {
-    height: SHEET_BOTTOM_INSET,
+    height: paintingSheetOuterInset,
   },
   sheetLayout: {
     alignItems: 'center',

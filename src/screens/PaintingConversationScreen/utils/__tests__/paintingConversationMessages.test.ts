@@ -91,7 +91,9 @@ describe('painting conversation messages', () => {
       createdAt: '2026-07-21T11:00:00.000Z',
       input: {
         attachments: files.outputs,
+        mode: 'edit',
         modelId: 'provider::image-model',
+        paramValues: {},
         prompt: 'Make it brighter',
       },
       userMessageId: '00000000-0000-7000-8000-000000000004',

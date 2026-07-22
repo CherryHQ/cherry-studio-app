@@ -55,7 +55,12 @@ describe('AiService.generateImage', () => {
     });
     const service = new AiService(createServices({ model }));
 
-    await service.generateImage({ prompt: 'draw a cherry', uniqueModelId: model.id });
+    await service.generateImage({
+      mode: 'generate',
+      paramValues: {},
+      prompt: 'draw a cherry',
+      uniqueModelId: model.id,
+    });
 
     expect(generateImageMock).toHaveBeenCalledWith(
       expect.any(String),
@@ -78,6 +83,8 @@ describe('AiService.generateImage', () => {
 
     await service.generateImage({
       inputImages,
+      mode: 'edit',
+      paramValues: {},
       prompt: 'edit these images',
       uniqueModelId: model.id,
     });
@@ -88,6 +95,50 @@ describe('AiService.generateImage', () => {
       expect.objectContaining({
         n: 1,
         prompt: { images: inputImages, text: 'edit these images' },
+      }),
+    );
+  });
+
+  it('routes canonical image params into native fields and merged provider options', async () => {
+    const model = createModel('gpt-image-2', {
+      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+    });
+    const assistant = createAssistant(model.id);
+    const service = new AiService(createServices({ assistant, model }));
+
+    await service.generateImage({
+      assistantId: assistant.id,
+      mode: 'generate',
+      paramValues: {
+        aspectRatio: 'ASPECT_16_9',
+        background: 'transparent',
+        numImages: 2,
+        quality: 'high',
+        seed: 42,
+      },
+      prompt: 'draw a cherry',
+      uniqueModelId: model.id,
+    });
+
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      expect.objectContaining({
+        aspectRatio: '16:9',
+        n: 2,
+        providerOptions: expect.objectContaining({
+          'openai-compatible': expect.objectContaining({
+            customFlag: true,
+            reasoningEffort: 'low',
+          }),
+          'test-provider': expect.objectContaining({
+            background: 'transparent',
+            quality: 'high',
+            seed: 42,
+          }),
+        }),
+        seed: 42,
       }),
     );
   });

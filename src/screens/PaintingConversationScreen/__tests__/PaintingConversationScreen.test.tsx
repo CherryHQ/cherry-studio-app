@@ -175,14 +175,18 @@ describe('PaintingConversationScreen', () => {
     );
     const input: PaintingGenerationInput = {
       attachments: [],
+      mode: 'generate',
       modelId: 'provider::image-model',
+      paramValues: {},
       prompt: 'Make it brighter',
     };
     const result = {
-      output: {
-        fileEntryId: '00000000-0000-7000-8000-000000000005',
-        uri: 'file:///brighter.png',
-      },
+      outputs: [
+        {
+          fileEntryId: '00000000-0000-7000-8000-000000000005',
+          uri: 'file:///brighter.png',
+        },
+      ],
       painting: {
         ...mockPainting,
         id: '00000000-0000-7000-8000-000000000004',

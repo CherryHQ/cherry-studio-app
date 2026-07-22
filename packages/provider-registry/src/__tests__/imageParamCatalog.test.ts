@@ -8,6 +8,9 @@ import { buildParamsSchema } from '../utils/buildParamsSchema';
 describe('IMAGE_PARAM_CATALOG', () => {
   it('is exhaustive over CANONICAL_PARAM_KEY (no missing / extra keys)', () => {
     expect([...IMAGE_PARAM_CATALOG_KEYS].sort()).toEqual(Object.values(CANONICAL_PARAM_KEY).sort());
+    expect(IMAGE_PARAM_CATALOG_KEYS).toEqual(
+      expect.arrayContaining(['outputCompression', 'resolution']),
+    );
   });
 });
 

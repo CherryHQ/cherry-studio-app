@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Text, TextInput, type ViewProps } from 'react-native';
+import { KeyboardController } from 'react-native-keyboard-controller';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { ChatInputProvider, useChatInputActions } from '../../context/ChatInputProvider';
 import { thinkingAccentColor } from '../../effortSlider';
@@ -208,6 +209,47 @@ describe('ChatInputSurface', () => {
     });
   });
 
+  test('uses a caller-provided label for known send errors', async () => {
+    const validationError = new Error('invalid painting input');
+    const onSendPress = jest.fn(async () => {
+      throw validationError;
+    });
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <SeedChatInputState attachments={[]} draft="draw" />
+          <ChatInputSurface
+            getSendErrorLabel={(error) =>
+              error === validationError ? 'painting.input.invalidCustomSize' : undefined
+            }
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={onSendPress}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    const sendButton = renderer.root.findByProps({
+      accessibilityLabel: 'chat.input.action.sendMessage',
+    });
+    await act(async () => sendButton.props.onPress());
+
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'painting.input.invalidCustomSize',
+      variant: 'danger',
+    });
+  });
+
   test('keeps a persistent placeholder action button that does not send without content', async () => {
     const onSendPress = jest.fn();
     let renderer: ReactTestRenderer | undefined;
@@ -249,6 +291,78 @@ describe('ChatInputSurface', () => {
         accessibilityLabel: 'chat.input.action.stopGenerating',
       }),
     ).toHaveLength(0);
+  });
+
+  test('can send an empty payload when the caller explicitly allows it', async () => {
+    const onSendPress = jest.fn(async () => undefined);
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            allowEmptySend
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={onSendPress}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    const sendButton = renderer.root.findByProps({
+      accessibilityLabel: 'chat.input.action.sendMessage',
+    });
+    await act(async () => sendButton.props.onPress());
+
+    expect(onSendPress).toHaveBeenCalledWith({ attachments: [], text: '' });
+  });
+
+  test('shows the settings summary and dismisses the keyboard before opening it', async () => {
+    const onSettingsPress = jest.fn();
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <SeedInputFocused />
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            modelSettings={{
+              accessibilityLabel: 'Image settings: 16:9',
+              onPress: onSettingsPress,
+              summary: '16:9',
+            }}
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    const settingsButton = renderer.root.findByProps({
+      testID: 'chat-input-model-settings-button',
+    });
+    expect(findText(renderer, '16:9')).toBe(true);
+
+    await act(async () => settingsButton.props.onPress());
+
+    expect(KeyboardController.dismiss).toHaveBeenCalled();
+    expect(onSettingsPress).toHaveBeenCalledTimes(1);
   });
 
   test('shows the current reasoning effort muted next to the model name', async () => {
@@ -376,6 +490,16 @@ function SeedMaxReasoningEffort() {
   useEffect(() => {
     selectReasoningEffort('max');
   }, [selectReasoningEffort]);
+
+  return null;
+}
+
+function SeedInputFocused() {
+  const { setInputFocused } = useChatInputActions();
+
+  useEffect(() => {
+    setInputFocused(true);
+  }, [setInputFocused]);
 
   return null;
 }

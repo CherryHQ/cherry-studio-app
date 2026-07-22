@@ -2,6 +2,7 @@ import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
 import type { IconPngSource } from '@cherrystudio/ui/icons';
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useToast } from 'heroui-native/toast';
+import { Settings2Icon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, Pressable, Text, View } from 'react-native';
@@ -50,16 +51,25 @@ const emptyReasoningEfforts: readonly ChatInputReasoningEffort[] = [];
 const logger = loggerService.withContext('ChatInputSurface');
 
 type ChatInputSurfaceProps = {
+  allowEmptySend?: boolean;
+  getSendErrorLabel?: (error: unknown) => string | undefined;
   isSendEnabled: boolean;
   isStreaming: boolean;
   /** Themed icon for the selected model; the button falls back to the label's initial. */
   modelIcon?: IconPngSource;
   modelLabel?: string;
+  modelSettings?: ChatInputModelSettings;
   onModelPickerPress: () => void;
   onSendPress: (payload: ChatInputSendPayload) => Promise<void>;
   onStopPress: () => void;
   /** Reasoning stops of the selected model; empty hides the effort label in the model pill. */
   reasoningEfforts?: readonly ChatInputReasoningEffort[];
+};
+
+export type ChatInputModelSettings = {
+  accessibilityLabel: string;
+  onPress: () => void;
+  summary?: string;
 };
 
 export type ChatInputSendPayload = {
@@ -68,10 +78,13 @@ export type ChatInputSendPayload = {
 };
 
 export function ChatInputSurface({
+  allowEmptySend = false,
+  getSendErrorLabel,
   isSendEnabled,
   isStreaming,
   modelIcon,
   modelLabel,
+  modelSettings,
   onModelPickerPress,
   onSendPress,
   onStopPress,
@@ -154,6 +167,13 @@ export function ChatInputSurface({
     dismissInput();
     onModelPickerPress();
   }, [dismissInput, onModelPickerPress]);
+  const handleModelSettingsPress = useCallback(() => {
+    if (!modelSettings) {
+      return;
+    }
+    dismissInput();
+    modelSettings.onPress();
+  }, [dismissInput, modelSettings]);
   const handleSendPress = useCallback(
     async (text: string) => {
       const draftSnapshot = draft;
@@ -167,11 +187,11 @@ export function ChatInputSurface({
 
       try {
         await onSendPress({ attachments: attachmentSnapshot, text });
-      } catch {
+      } catch (error) {
         setDraft(draftSnapshot);
         setAttachments(attachmentSnapshot);
         toast.show({
-          label: t('chat.input.sendFailed'),
+          label: getSendErrorLabel?.(error) ?? t('chat.input.sendFailed'),
           variant: 'danger',
         });
       }
@@ -180,6 +200,7 @@ export function ChatInputSurface({
       attachments,
       clearAttachments,
       draft,
+      getSendErrorLabel,
       inputRef,
       onSendPress,
       setAttachments,
@@ -234,10 +255,18 @@ export function ChatInputSurface({
                     onPress={handleModelPickerPress}
                   />
                 )}
+                {modelSettings ? (
+                  <ChatInputSettingsButton
+                    accessibilityLabel={modelSettings.accessibilityLabel}
+                    onPress={handleModelSettingsPress}
+                    summary={modelSettings.summary}
+                  />
+                ) : null}
               </View>
             </View>
           </View>
           <ChatInputPrimaryActionButton
+            allowEmptySend={allowEmptySend}
             isSendEnabled={isSendEnabled}
             isStreaming={isStreaming}
             onSendPress={handleSendPress}
@@ -246,6 +275,33 @@ export function ChatInputSurface({
         </Animated.View>
       </View>
     </View>
+  );
+}
+
+function ChatInputSettingsButton({
+  accessibilityLabel,
+  onPress,
+  summary,
+}: {
+  accessibilityLabel: string;
+  onPress: () => void;
+  summary?: string;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      className="h-8 min-w-8 shrink-0 flex-row items-center justify-center gap-1.5 rounded-full bg-surface-secondary px-2.5 active:bg-surface-tertiary active:opacity-70"
+      onPress={onPress}
+      testID="chat-input-model-settings-button"
+    >
+      <Settings2Icon className="size-4 text-default-foreground" strokeWidth={2} />
+      {summary ? (
+        <Text className="max-w-24 font-semibold text-default-foreground text-sm" numberOfLines={1}>
+          {summary}
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }
 

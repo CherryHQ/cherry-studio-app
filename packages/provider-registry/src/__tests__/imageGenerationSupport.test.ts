@@ -134,6 +134,24 @@ describe('ImageGenerationSupportSchema', () => {
     });
   });
 
+  it('accepts a positive per-mode input image limit', () => {
+    const parsed = ImageGenerationSupportSchema.parse({
+      modes: {
+        edit: {
+          maxInputImages: 3,
+          supports: {},
+        },
+      },
+    });
+
+    expect(parsed.modes.edit?.maxInputImages).toBe(3);
+    expect(() =>
+      ImageGenerationSupportSchema.parse({
+        modes: { edit: { maxInputImages: 0, supports: {} } },
+      }),
+    ).toThrow();
+  });
+
   it('rejects an unknown mode key', () => {
     expect(() =>
       ImageGenerationSupportSchema.parse({

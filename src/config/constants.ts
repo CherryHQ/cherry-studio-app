@@ -12,6 +12,10 @@ export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassE
 // the background behind them consistently. Single source of truth — tune here.
 export const sheetScrimColor = 'rgba(0, 0, 0, 0.4)';
 
+// Outer spacing shared by floating painting sheets. Width, bottom gap, corner
+// radius, and concentric header placement all derive from this value.
+export const paintingSheetOuterInset = 8;
+
 // Brand accent (ui.theme_user.color_primary default). SlotText tints freshly
 // landed glyphs with it before they fade to the regular text color.
 export const slotTextHighlightColor = '#00b96b';

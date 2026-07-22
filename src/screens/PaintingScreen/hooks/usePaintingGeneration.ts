@@ -1,3 +1,4 @@
+import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import { useCallback, useRef, useState } from 'react';
 
 import { useDataServices } from '@/data/runtime';
@@ -18,12 +19,14 @@ export type PaintingOutput = { fileEntryId: string; uri: string };
 
 export type PaintingGenerationInput = {
   attachments: readonly ChatInputAttachmentDraft[];
+  mode: ImageGenerationMode;
   modelId: UniqueModelId;
+  paramValues: ParamValues;
   prompt: string;
 };
 
 export type PaintingGenerationResult = {
-  output: PaintingOutput;
+  outputs: PaintingOutput[];
   painting: Painting;
 };
 
@@ -48,7 +51,9 @@ export function usePaintingGeneration({
   const generate = useCallback(
     async ({
       attachments,
+      mode,
       modelId,
+      paramValues,
       prompt,
     }: PaintingGenerationInput): Promise<PaintingGenerationResult> => {
       if (abortControllerRef.current) {
@@ -56,7 +61,7 @@ export function usePaintingGeneration({
       }
 
       const imageAttachments = attachments.filter((attachment) => attachment.kind === 'image');
-      const signature = generationSignature(prompt, modelId, imageAttachments);
+      const signature = generationSignature(prompt, modelId, mode, paramValues, imageAttachments);
       const controller = new AbortController();
       abortControllerRef.current = controller;
       setError(null);
@@ -104,27 +109,38 @@ export function usePaintingGeneration({
         );
         const result = await services.ai.generateImage({
           inputImages,
+          mode,
+          paramValues,
           prompt: prompt.trim(),
           requestOptions: { signal: controller.signal },
           uniqueModelId: modelId,
         });
-        const image = result.images[0];
-        if (!image) {
+        if (result.images.length === 0) {
           throw new Error('Image provider returned no image');
         }
 
-        const preparedOutput = prepareGeneratedImage(image.base64, image.mediaType);
-        const painting = await services.painting.replaceOutputs(receiptId, [preparedOutput]);
-        const fileEntryId = painting.files.output[0];
-        if (!fileEntryId) {
-          throw new Error('Generated painting has no output file');
+        const preparedOutputs: ReturnType<typeof prepareGeneratedImage>[] = [];
+        try {
+          for (const image of result.images) {
+            preparedOutputs.push(prepareGeneratedImage(image.base64, image.mediaType));
+          }
+        } catch (prepareError) {
+          discardPreparedFiles(preparedOutputs);
+          throw prepareError;
         }
-        const output = { fileEntryId, uri: preparedOutput.uri };
+        const painting = await services.painting.replaceOutputs(receiptId, preparedOutputs);
+        const persistedOutputIds = new Set(painting.files.output);
+        const generatedOutputs = preparedOutputs.map((preparedOutput) => {
+          if (!persistedOutputIds.has(preparedOutput.id)) {
+            throw new Error('Generated painting has a missing output file');
+          }
+          return { fileEntryId: preparedOutput.id, uri: preparedOutput.uri };
+        });
         incompleteReceiptRef.current = null;
-        setOutputs([output]);
+        setOutputs(generatedOutputs);
         setStatus('revealing');
         await syncPaintingQueries(painting);
-        return { output, painting };
+        return { outputs: generatedOutputs, painting };
       } catch (generationError) {
         const normalized =
           generationError instanceof Error ? generationError : new Error(String(generationError));
@@ -158,13 +174,23 @@ export function usePaintingGeneration({
 function generationSignature(
   prompt: string,
   modelId: UniqueModelId,
+  mode: ImageGenerationMode,
+  paramValues: ParamValues,
   attachments: readonly ChatInputAttachmentDraft[],
 ): string {
   return JSON.stringify({
     attachments: attachments.map(
       (attachment) => attachment.fileEntryId ?? `${attachment.id}:${attachment.uri}`,
     ),
+    mode,
     modelId,
+    paramValues: sortRecord(paramValues),
     prompt: prompt.trim(),
   });
+}
+
+function sortRecord(values: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(values).sort(([left], [right]) => left.localeCompare(right)),
+  );
 }

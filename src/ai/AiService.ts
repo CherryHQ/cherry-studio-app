@@ -6,7 +6,11 @@ import {
 import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
 import { providerToolPlugin } from '@cherrystudio/ai-core/built-in/plugins';
 import { extensionRegistry } from '@cherrystudio/ai-core/provider';
-import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import {
+  type ImageGenerationMode,
+  MODEL_CAPABILITY,
+  type ParamValues,
+} from '@cherrystudio/provider-registry';
 import {
   type LanguageModelUsage,
   type ModelMessage,
@@ -43,6 +47,8 @@ import { createSimulateStreamingPlugin } from './runtime/aiSdk/plugins/simulateS
 import type { AppProviderId, AppProviderSettingsMap } from './types';
 import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/requests';
 import { addAnthropicHeaders } from './utils/anthropicHeaders';
+import { splitImageParamValues } from './utils/imageOptions';
+import { buildImageProviderOptions, mergeImageProviderOptions } from './utils/imageProviderOptions';
 import {
   isAnthropicModel,
   isForcedNativeWebSearchModel,
@@ -87,11 +93,9 @@ export interface AiGenerateResult {
 
 export interface AiImageRequest extends AiBaseRequest {
   inputImages?: string[];
+  mode: ImageGenerationMode;
+  paramValues: ParamValues;
   prompt: string;
-  n?: number;
-  size?: `${number}x${number}`;
-  aspectRatio?: `${number}:${number}`;
-  seed?: number;
 }
 
 export interface AiImageResult {
@@ -200,9 +204,21 @@ export class AiService {
 
   async generateImage(request: AiImageRequest): Promise<AiImageResult> {
     const signal = request.requestOptions?.signal;
-    const { sdkConfig, model, assistant, options } = await this.buildAgentParamsFor(request);
+    const { sdkConfig, model, assistant, options, provider } =
+      await this.buildAgentParamsFor(request);
     const customParams = assistant ? getCustomParameters(assistant) : {};
     const split = extractAiSdkStandardParams(customParams);
+    const { structured, vendorBag } = splitImageParamValues(request.paramValues);
+    const imageProviderOptions = buildImageProviderOptions({
+      aiSdkProviderId: sdkConfig.providerId,
+      paramValues: request.paramValues,
+      provider,
+      vendorBag,
+    });
+    const mergedProviderOptions = mergeImageProviderOptions(
+      options.providerOptions,
+      imageProviderOptions,
+    );
     const inputImages = request.inputImages ?? [];
     const hasInputImages = inputImages.length > 0;
     const providerSettings = hasInputImages
@@ -215,13 +231,13 @@ export class AiService {
       {
         model: model.modelId,
         prompt: hasInputImages ? { images: inputImages, text: request.prompt } : request.prompt,
-        n: request.n ?? 1,
-        size: request.size,
-        aspectRatio: request.aspectRatio,
-        seed: request.seed,
+        n: structured.n ?? 1,
+        size: structured.size as `${number}x${number}` | undefined,
+        aspectRatio: structured.aspectRatio as `${number}:${number}` | undefined,
+        seed: structured.seed,
         maxRetries: request.requestOptions?.maxRetries ?? 0,
         abortSignal: signal,
-        ...(options.providerOptions && { providerOptions: options.providerOptions }),
+        ...(mergedProviderOptions && { providerOptions: mergedProviderOptions }),
         ...(request.requestOptions?.headers && {
           headers: stripUndefinedHeaders(request.requestOptions.headers),
         }),

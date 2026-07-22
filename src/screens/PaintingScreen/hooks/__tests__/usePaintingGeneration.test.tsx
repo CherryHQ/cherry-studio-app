@@ -25,13 +25,16 @@ jest.mock('@/hooks/paintings', () => ({
 jest.mock('@/data/services/fileStorage', () => ({
   discardPreparedFiles: jest.fn(),
   imageUriToDataUrl: jest.fn(),
-  prepareGeneratedImage: jest.fn(() => ({
-    ext: 'png',
-    id: '00000000-0000-7000-8000-000000000009',
-    name: 'generated',
-    size: 4,
-    uri: 'file:///generated.png',
-  })),
+  prepareGeneratedImage: jest.fn((base64: string) => {
+    const suffix = base64 === 'BBBB' ? '10' : '09';
+    return {
+      ext: 'png',
+      id: `00000000-0000-7000-8000-0000000000${suffix}`,
+      name: 'generated',
+      size: 4,
+      uri: `file:///generated-${suffix}.png`,
+    };
+  }),
   prepareInternalFileFromUri: jest.fn(),
 }));
 
@@ -55,8 +58,8 @@ beforeEach(async () => {
     receiptIndex += 1;
     return { id: `receipt-${receiptIndex}` };
   });
-  mockReplaceOutputs.mockImplementation(async (id: string) => ({
-    files: { input: [], output: [`output-${id}`] },
+  mockReplaceOutputs.mockImplementation(async (id: string, outputs: Array<{ id: string }>) => ({
+    files: { input: [], output: outputs.map((output) => output.id) },
     id,
   }));
   await act(async () => {
@@ -70,7 +73,9 @@ afterEach(async () => {
 
 const request = {
   attachments: [],
+  mode: 'generate' as const,
   modelId: 'provider::gpt-image-2' as const,
+  paramValues: {},
   prompt: 'draw a cherry',
 };
 
@@ -111,6 +116,53 @@ describe('usePaintingGeneration', () => {
     expect(mockReplaceOutputs).toHaveBeenNthCalledWith(2, 'receipt-2', [expect.any(Object)]);
   });
 
+  it('creates a new receipt when normalized parameters change after a failure', async () => {
+    mockGenerateImage
+      .mockRejectedValueOnce(new Error('network failed'))
+      .mockResolvedValueOnce({ images: [{ base64: 'AAAA', mediaType: 'image/png' }] });
+
+    await act(async () => {
+      await expect(api?.generate({ ...request, paramValues: { quality: 'low' } })).rejects.toThrow(
+        'network failed',
+      );
+    });
+    await act(async () => {
+      await api?.generate({ ...request, paramValues: { quality: 'high' } });
+    });
+
+    expect(mockCreatePainting).toHaveBeenCalledTimes(2);
+    expect(mockReplaceOutputs).toHaveBeenCalledWith('receipt-2', [expect.any(Object)]);
+  });
+
+  it('persists and returns every generated image in provider order', async () => {
+    mockGenerateImage.mockResolvedValue({
+      images: [
+        { base64: 'AAAA', mediaType: 'image/png' },
+        { base64: 'BBBB', mediaType: 'image/webp' },
+      ],
+    });
+
+    let result: Awaited<ReturnType<GenerationApi['generate']>> | undefined;
+    await act(async () => {
+      result = await api?.generate(request);
+    });
+
+    expect(mockReplaceOutputs).toHaveBeenCalledWith('receipt-1', [
+      expect.objectContaining({ id: '00000000-0000-7000-8000-000000000009' }),
+      expect.objectContaining({ id: '00000000-0000-7000-8000-000000000010' }),
+    ]);
+    expect(result?.outputs).toEqual([
+      {
+        fileEntryId: '00000000-0000-7000-8000-000000000009',
+        uri: 'file:///generated-09.png',
+      },
+      {
+        fileEntryId: '00000000-0000-7000-8000-000000000010',
+        uri: 'file:///generated-10.png',
+      },
+    ]);
+  });
+
   it('returns the persisted painting and generated output', async () => {
     mockGenerateImage.mockResolvedValue({
       images: [{ base64: 'AAAA', mediaType: 'image/png' }],
@@ -122,17 +174,19 @@ describe('usePaintingGeneration', () => {
     });
 
     expect(result).toEqual({
-      output: {
-        fileEntryId: 'output-receipt-1',
-        uri: 'file:///generated.png',
-      },
+      outputs: [
+        {
+          fileEntryId: '00000000-0000-7000-8000-000000000009',
+          uri: 'file:///generated-09.png',
+        },
+      ],
       painting: {
-        files: { input: [], output: ['output-receipt-1'] },
+        files: { input: [], output: ['00000000-0000-7000-8000-000000000009'] },
         id: 'receipt-1',
       },
     });
     expect(mockSyncPaintingQueries).toHaveBeenCalledWith({
-      files: { input: [], output: ['output-receipt-1'] },
+      files: { input: [], output: ['00000000-0000-7000-8000-000000000009'] },
       id: 'receipt-1',
     });
   });

@@ -61,7 +61,7 @@ export function lookupRegistryProvider(
 
 export interface RuntimeEndpointConfig {
   baseUrl?: string;
-  modelsApiUrls?: { default?: string; embedding?: string; reranker?: string };
+  modelsApiUrls?: { default?: string; embedding?: string; image?: string; reranker?: string };
   reasoningFormatType?: string;
   adapterFamily?: string;
 }
