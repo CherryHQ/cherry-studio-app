@@ -29,6 +29,11 @@ import {
   type ChatInputAttachmentDraft,
   createPhotoAttachmentDraft,
 } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+import {
+  type PaintingTemplate,
+  PaintingTemplateRow,
+  toPaintingTemplateDraft,
+} from '@/screens/PaintingScreen/templates';
 import { distributeMasonryItems } from '@/screens/PaintingScreen/utils/masonry';
 import {
   createPaintingDraftHandoff,
@@ -39,11 +44,6 @@ import {
   useTopicListSelectionActions,
   useTopicListSelectionState,
 } from '../context/TopicListSelectionProvider';
-import {
-  type PaintingTemplate,
-  PaintingTemplateRow,
-  toPaintingTemplateDraft,
-} from '../paintingTemplates';
 import {
   topicSelectionToolbarGap,
   topicSelectionToolbarHeight,

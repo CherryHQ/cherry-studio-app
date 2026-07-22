@@ -126,7 +126,7 @@ jest.mock('../../context/TopicListSelectionProvider', () => ({
   useTopicListSelectionState: () => ({ isEditing: mockIsEditing, selectedIds: mockSelectedIds }),
 }));
 
-jest.mock('../../paintingTemplates', () => {
+jest.mock('@/screens/PaintingScreen/templates', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
   return {

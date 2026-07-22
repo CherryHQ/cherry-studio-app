@@ -8,8 +8,8 @@ import { useTranslation } from 'react-i18next';
 import { queryKeys } from '@/data/api';
 import { useDataServices } from '@/data/runtime';
 import type { Painting } from '@/data/types/painting';
-import { createPaintingDraftHandoff } from '@/screens/PaintingScreen/utils/paintingDraftHandoff';
-import { createPaintingOutputAttachmentDraft } from '@/screens/PaintingScreen/utils/paintingOutputAttachment';
+import { createPaintingDraftHandoff } from '../../utils/paintingDraftHandoff';
+import { createPaintingOutputAttachmentDraft } from '../../utils/paintingOutputAttachment';
 
 type ViewerOutput = { fileEntryId: string; uri: string };
 

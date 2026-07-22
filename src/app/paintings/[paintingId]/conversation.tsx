@@ -1,1 +1,1 @@
-export { PaintingConversationScreen as default } from '@/screens/PaintingConversationScreen';
+export { PaintingConversationScreen as default } from '@/screens/PaintingScreen/PaintingConversationScreen';

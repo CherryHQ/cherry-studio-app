@@ -24,12 +24,12 @@ import {
   ScrollToBottomButton,
   useFloatingChatInputLayout,
 } from '@/screens/ChatScreen/workspace';
-import { PaintingInput } from '@/screens/PaintingScreen/components/PaintingInput';
+import { PaintingInput } from '../components/PaintingInput';
 import {
   type PaintingGenerationInput,
   type PaintingGenerationResult,
   usePaintingGeneration,
-} from '@/screens/PaintingScreen/hooks/usePaintingGeneration';
+} from '../hooks/usePaintingGeneration';
 
 import {
   createPaintingConversationMessages,

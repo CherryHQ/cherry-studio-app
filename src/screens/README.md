@@ -60,7 +60,12 @@ SettingsScreen/
 - `AssistantScreen/`: assistant list and assistant editing flows.
 - `SettingsScreen/`: settings home (with the animated profile hero at the top), about/data/model/
   provider/web-search settings screens, and settings-specific UI controls.
-- `TopicListScreen/`: message-tab topic pagination, topic actions, and navigation.
+- `PaintingScreen/`: painting composer (image generation), plus the nested full-screen viewer
+  (`PaintingViewerScreen/`) and conversation (`PaintingConversationScreen/`) screens, bundled prompt
+  templates (`templates/`), and shared generation/handoff/masonry helpers.
+- `TopicListScreen/`: message-tab topic pagination, topic actions, and navigation. Still hosts the
+  drawings tab body (`DrawingList`); Stage 2 of the screens reorg moves that into `PaintingScreen/`
+  and reframes this into a neutral messages shell.
 - `GlobalSearchScreen/`: app-level native search entry and screen shell.
 - `HomeScreen/`: home-tab content (activity calendar) and the header-right avatar button.
 

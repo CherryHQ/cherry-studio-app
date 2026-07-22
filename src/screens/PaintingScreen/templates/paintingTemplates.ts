@@ -1,6 +1,6 @@
 import type { ImageProps } from 'expo-image';
 
-import type { PaintingDraftHandoff } from '@/screens/PaintingScreen/utils/paintingDraftHandoff';
+import type { PaintingDraftHandoff } from '../utils/paintingDraftHandoff';
 
 export type PaintingTemplate = Readonly<{
   author?: string;

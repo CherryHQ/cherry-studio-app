@@ -1,1 +1,1 @@
-export { PaintingViewerScreen as default } from '@/screens/PaintingViewerScreen';
+export { PaintingViewerScreen as default } from '@/screens/PaintingScreen/PaintingViewerScreen';
