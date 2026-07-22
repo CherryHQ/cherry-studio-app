@@ -1,7 +1,7 @@
 import { GlassView } from 'expo-glass-effect';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PlatformColor, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { PlatformColor, Pressable, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { getTopicListScopeIndex, topicListScopes } from '../utils/topicListScope';
@@ -19,37 +19,14 @@ const tabWidth = 144;
 const segmentWidth = tabWidth / segmentCount;
 const indicatorWidth = segmentWidth - indicatorInset * 2;
 
+// The pill sits in the native nav-bar title slot, which UIKit already centers
+// within the current window — measured x=129 on a 402pt window in both scopes
+// (screen-centered), and UIKit re-centers on window resize / iPad split view.
+// So no JS measurement is needed: an earlier measureInWindow → translateX hack
+// fed its own transform back into itself and shoved the pill to the screen edge.
 export function TopicListScopeTabs({ onScopeChange, scope }: TopicListScopeTabsProps) {
-  const { i18n, t } = useTranslation();
-  const { width: windowWidth } = useWindowDimensions();
-  const titleRef = useRef<View>(null);
-  const [centerOffsetX, setCenterOffsetX] = useState(0);
+  const { t } = useTranslation();
   const translateX = useSharedValue(0);
-  const nativeHeaderLayoutKey = `${i18n.resolvedLanguage ?? ''}:${scope}`;
-
-  useEffect(() => {
-    if (!nativeHeaderLayoutKey) {
-      return;
-    }
-
-    setCenterOffsetX(0);
-    let measurementFrame: number | undefined;
-    const layoutFrame = requestAnimationFrame(() => {
-      measurementFrame = requestAnimationFrame(() => {
-        titleRef.current?.measureInWindow((x, _y, measuredWidth) => {
-          const nextOffset = windowWidth / 2 - (x + measuredWidth / 2);
-          setCenterOffsetX(nextOffset);
-        });
-      });
-    });
-
-    return () => {
-      cancelAnimationFrame(layoutFrame);
-      if (measurementFrame !== undefined) {
-        cancelAnimationFrame(measurementFrame);
-      }
-    };
-  }, [nativeHeaderLayoutKey, windowWidth]);
 
   useEffect(() => {
     translateX.value = withTiming(getTopicListScopeIndex(scope) * segmentWidth + indicatorInset, {
@@ -63,15 +40,7 @@ export function TopicListScopeTabs({ onScopeChange, scope }: TopicListScopeTabsP
   }));
 
   return (
-    <View
-      ref={titleRef}
-      collapsable={false}
-      style={{
-        height: tabHeight,
-        transform: [{ translateX: centerOffsetX }],
-        width: tabWidth,
-      }}
-    >
+    <View collapsable={false} style={{ height: tabHeight, width: tabWidth }}>
       <GlassView
         glassEffectStyle="regular"
         isInteractive
