@@ -9,7 +9,7 @@ import {
 } from '@/data/services/fileStorage';
 import { parseUniqueModelId, type UniqueModelId } from '@/data/types/model';
 import type { Painting } from '@/data/types/painting';
-import { usePaintingQueryInvalidation } from '@/hooks/paintings';
+import { useSyncPaintingQueries } from '@/hooks/paintings';
 import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
 
 export type PaintingGenerationStatus = 'idle' | 'generating' | 'revealing';
@@ -38,7 +38,7 @@ export function usePaintingGeneration({
   initialOutputs: readonly PaintingOutput[];
 }) {
   const services = useDataServices();
-  const invalidatePaintings = usePaintingQueryInvalidation();
+  const syncPaintingQueries = useSyncPaintingQueries();
   const abortControllerRef = useRef<AbortController | null>(null);
   const incompleteReceiptRef = useRef<IncompleteReceipt | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -123,7 +123,7 @@ export function usePaintingGeneration({
         incompleteReceiptRef.current = null;
         setOutputs([output]);
         setStatus('revealing');
-        await invalidatePaintings(painting.id);
+        await syncPaintingQueries(painting);
         return { output, painting };
       } catch (generationError) {
         const normalized =
@@ -137,7 +137,7 @@ export function usePaintingGeneration({
         }
       }
     },
-    [invalidatePaintings, services.ai, services.painting],
+    [services.ai, services.painting, syncPaintingQueries],
   );
 
   const cancel = useCallback(() => {

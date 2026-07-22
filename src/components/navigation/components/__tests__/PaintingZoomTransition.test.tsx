@@ -1,12 +1,7 @@
 import { View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import {
-  getPaintingZoomTransitionSourceId,
-  PaintingZoomLink,
-  PaintingZoomTarget,
-  paintingZoomTransitionSourceIdParam,
-} from '../PaintingZoomTransition';
+import { PaintingZoomLink, PaintingZoomTarget } from '../PaintingZoomTransition';
 
 jest.mock('@/config/constants', () => ({ isIOS: true }));
 
@@ -49,7 +44,7 @@ describe('PaintingZoomTransition', () => {
 
   it('uses the same stable identifier for the link, source, and target', async () => {
     const sourceKey = 'painting-1:file-1';
-    const identifier = getPaintingZoomTransitionSourceId(sourceKey);
+    const identifier = 'painting-gallery:painting-1:file-1';
 
     await act(async () => {
       renderer = create(
@@ -64,12 +59,11 @@ describe('PaintingZoomTransition', () => {
       );
     });
 
-    expect(identifier).toBe('painting-gallery:painting-1:file-1');
     expect(renderer?.root.findByType('MockLink').props.href).toEqual({
       params: {
+        __internal_expo_router_zoom_transition_source_id: identifier,
         fileEntryId: 'file-1',
         paintingId: 'painting-1',
-        [paintingZoomTransitionSourceIdParam]: identifier,
       },
       pathname: '/paintings/[paintingId]',
     });

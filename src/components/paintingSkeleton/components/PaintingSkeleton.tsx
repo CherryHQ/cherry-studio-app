@@ -11,18 +11,11 @@ import { paintingSkeletonGridEffect } from '../shaders/paintingSkeletonGrid';
 import { paintingSkeletonRevealEffect } from '../shaders/paintingSkeletonReveal';
 import { measurePaintingSkeletonGrid } from '../utils/gridLayout';
 
-export type RevealCycle = {
-  /** Reveal seconds fed to the shader; < 0 means pure Act 1 loading. */
-  reveal: number;
-  /** Whole-field opacity, e.g. for a cross-fade (1 for a plain reveal). */
-  fieldAlpha: number;
-};
-
 type PaintingSkeletonProps = {
   /** Result image to reveal into; omit for a pure loading grid (Act 1 only). */
   image?: SkImage | null;
-  /** Reveal driver (seconds + field opacity). Required when `image` is set. */
-  reveal?: DerivedValue<RevealCycle>;
+  /** Reveal seconds; < 0 means pure Act 1 loading. Required when `image` is set. */
+  reveal?: DerivedValue<number>;
   accessibilityLabel?: string;
   testID?: string;
 };
@@ -77,8 +70,7 @@ export function PaintingSkeleton({
       uCell: [cellWidth, cellHeight],
       uInner: [innerWidth, innerHeight],
       uColor: foreground,
-      uReveal: reveal ? reveal.value.reveal : -1,
-      uFieldAlpha: reveal ? reveal.value.fieldAlpha : 1,
+      uReveal: reveal?.value ?? -1,
     }),
     [cols, rows, cellWidth, cellHeight, innerWidth, innerHeight, foreground, reveal],
   );

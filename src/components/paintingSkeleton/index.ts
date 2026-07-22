@@ -1,1 +1,1 @@
-export { PaintingSkeleton, type RevealCycle } from './components/PaintingSkeleton';
+export { PaintingSkeleton } from './components/PaintingSkeleton';

@@ -1,24 +1,20 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { PaintingGalleryItem } from '@/hooks/paintings';
+import type { Painting } from '@/data/types/painting';
+import type { ResolvedPaintingFiles } from '@/hooks/paintings';
 
 import { PaintingViewerScreen } from '../PaintingViewerScreen';
 
 const mockRouterBack = jest.fn();
-const mockLoadMore = jest.fn();
-let mockCurrentPaintingId: string | undefined;
+const mockPaintingIds: (string | undefined)[] = [];
+const mockResolvedPaintingIds: (string | undefined)[] = [];
+const mockPaintingById = new Map<string, Painting>();
+const mockFilesByPaintingId = new Map<string, ResolvedPaintingFiles>();
 let mockSearchParams = { fileEntryId: 'file-1', paintingId: 'painting-1' };
-let mockViewerImageProps: { sourceKey: string; uri: string } | undefined;
-
-const mockItems: PaintingGalleryItem[] = [
-  createGalleryItem('painting-1', 'file-1'),
-  createGalleryItem('painting-2', 'file-2'),
-  createGalleryItem('painting-3', 'file-3'),
-];
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockSearchParams,
-  useRouter: () => ({ back: mockRouterBack, setParams: jest.fn() }),
+  useRouter: () => ({ back: mockRouterBack }),
 }));
 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
@@ -29,86 +25,133 @@ jest.mock('@/config/constants', () => ({
 }));
 
 jest.mock('@/hooks/paintings', () => ({
-  usePaintingGalleryItems: () => ({ data: mockItems, isLoading: false }),
-  usePaintings: () => ({ isLoading: false, loadMore: mockLoadMore, paintings: [] }),
-}));
-
-jest.mock('../components/PaintingViewerChrome', () => ({ PaintingViewerChrome: () => null }));
-
-jest.mock('../components/ViewerImage', () => ({
-  ViewerImage: (props: { sourceKey: string; uri: string }) => {
-    mockViewerImageProps = props;
-    return null;
+  usePainting: (paintingId: string | undefined) => {
+    mockPaintingIds.push(paintingId);
+    return { data: paintingId ? mockPaintingById.get(paintingId) : undefined, isLoading: false };
   },
-}));
-
-jest.mock('../hooks/usePaintingViewerActions', () => ({
-  usePaintingViewerActions: ({ painting }: { painting: { id: string } }) => {
-    mockCurrentPaintingId = painting.id;
+  useResolvedPaintingFiles: (painting: Painting | undefined) => {
+    mockResolvedPaintingIds.push(painting?.id);
     return {
-      download: jest.fn(),
-      edit: jest.fn(),
-      remove: jest.fn(),
-      resize: jest.fn(),
-      viewConversation: jest.fn(),
+      data: painting ? mockFilesByPaintingId.get(painting.id) : undefined,
+      isLoading: false,
     };
   },
+}));
+
+jest.mock('../components/PaintingViewerChrome', () => {
+  const React = jest.requireActual('react');
+  return {
+    PaintingViewerChrome: (props: Record<string, unknown>) =>
+      React.createElement('MockPaintingViewerChrome', props),
+  };
+});
+
+jest.mock('../components/ViewerImage', () => {
+  const React = jest.requireActual('react');
+  return {
+    ViewerImage: (props: Record<string, unknown>) => React.createElement('MockViewerImage', props),
+  };
+});
+
+jest.mock('../hooks/usePaintingViewerActions', () => ({
+  usePaintingViewerActions: () => ({
+    download: jest.fn(),
+    edit: jest.fn(),
+    remove: jest.fn(),
+    resize: jest.fn(),
+    viewConversation: jest.fn(),
+  }),
 }));
 
 describe('PaintingViewerScreen', () => {
   let renderer: ReactTestRenderer | undefined;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.clearAllMocks();
-    mockCurrentPaintingId = undefined;
+    mockPaintingIds.length = 0;
+    mockResolvedPaintingIds.length = 0;
+    mockPaintingById.clear();
+    mockFilesByPaintingId.clear();
     mockSearchParams = { fileEntryId: 'file-1', paintingId: 'painting-1' };
-    mockViewerImageProps = undefined;
-    await act(async () => {
-      renderer = create(<PaintingViewerScreen />);
-    });
+    addPainting('painting-1', 'file-1');
   });
 
   afterEach(async () => {
     await act(async () => renderer?.unmount());
+    renderer = undefined;
   });
 
-  it('renders the single gallery item matching the route params, with no pager', () => {
-    expect(mockCurrentPaintingId).toBe('painting-1');
-    expect(mockViewerImageProps).toEqual({
+  it('loads the painting detail and renders the requested output', async () => {
+    await renderViewer();
+
+    expect(mockPaintingIds).toEqual(['painting-1']);
+    expect(mockResolvedPaintingIds).toEqual(['painting-1']);
+    expect(renderer?.root.findByType('MockViewerImage').props).toMatchObject({
       sourceKey: 'painting-1:file-1',
       uri: 'file:///file-1.png',
     });
   });
 
-  it('switches to another gallery item when the route params change, without remounting', async () => {
-    mockSearchParams = { fileEntryId: 'file-2', paintingId: 'painting-2' };
-    await act(async () => {
-      renderer?.update(<PaintingViewerScreen />);
-    });
+  it('switches detail queries when the route params change without remounting', async () => {
+    addPainting('painting-2', 'file-2');
+    await renderViewer();
 
-    expect(mockCurrentPaintingId).toBe('painting-2');
-    expect(mockViewerImageProps).toEqual({
+    mockSearchParams = { fileEntryId: 'file-2', paintingId: 'painting-2' };
+    await act(async () => renderer?.update(<PaintingViewerScreen />));
+
+    expect(mockPaintingIds).toEqual(['painting-1', 'painting-2']);
+    expect(renderer?.root.findByType('MockViewerImage').props).toMatchObject({
       sourceKey: 'painting-2:file-2',
       uri: 'file:///file-2.png',
     });
   });
+
+  it('does not render a viewer when the requested output is missing', async () => {
+    mockSearchParams = { fileEntryId: 'missing-file', paintingId: 'painting-1' };
+    await renderViewer();
+
+    expect(renderer?.root.findAllByType('MockViewerImage')).toHaveLength(0);
+    expect(renderer?.root.findAllByType('MockPaintingViewerChrome')).toHaveLength(0);
+  });
+
+  it('opens an older painting directly without requiring it in a gallery page', async () => {
+    addPainting('older-painting', 'older-file');
+    mockSearchParams = { fileEntryId: 'older-file', paintingId: 'older-painting' };
+    await renderViewer();
+
+    expect(mockPaintingIds).toEqual(['older-painting']);
+    expect(renderer?.root.findByType('MockViewerImage').props.uri).toBe('file:///older-file.png');
+  });
+
+  async function renderViewer() {
+    await act(async () => {
+      renderer = create(<PaintingViewerScreen />);
+    });
+  }
 });
 
-function createGalleryItem(paintingId: string, fileEntryId: string): PaintingGalleryItem {
-  return {
-    aspectRatio: 1,
-    fileEntryId,
-    key: `${paintingId}:${fileEntryId}`,
-    painting: {
-      createdAt: '2026-07-21T00:00:00.000Z',
-      files: { input: [], output: [fileEntryId] },
-      id: paintingId,
-      modelId: 'provider::model',
-      orderKey: paintingId,
-      prompt: paintingId,
-      providerId: 'provider',
-      updatedAt: '2026-07-21T00:00:00.000Z',
-    },
-    uri: `file:///${fileEntryId}.png`,
-  };
+function addPainting(paintingId: string, fileEntryId: string) {
+  mockPaintingById.set(paintingId, {
+    createdAt: '2026-07-21T00:00:00.000Z',
+    files: { input: [], output: [fileEntryId] },
+    id: paintingId,
+    modelId: 'provider::model',
+    orderKey: paintingId,
+    prompt: paintingId,
+    providerId: 'provider',
+    updatedAt: '2026-07-21T00:00:00.000Z',
+  });
+  mockFilesByPaintingId.set(paintingId, {
+    inputs: [],
+    outputs: [
+      {
+        fileEntryId,
+        id: `painting-file:${fileEntryId}`,
+        kind: 'image',
+        mediaType: 'image/png',
+        name: `${fileEntryId}.png`,
+        uri: `file:///${fileEntryId}.png`,
+      },
+    ],
+  });
 }

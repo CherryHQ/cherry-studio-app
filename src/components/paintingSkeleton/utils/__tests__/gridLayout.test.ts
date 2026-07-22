@@ -11,30 +11,29 @@ describe('measurePaintingSkeletonGrid', () => {
     expect(measurePaintingSkeletonGrid(300, 10)).toBeNull();
   });
 
-  it('divides a medium box by the base pitch', () => {
-    // inner 380×280, pitch 38 → 10×7 cells stretched onto the tracks.
+  it('grows the pitch until a medium box fits exactly 48 cells', () => {
     const grid = measurePaintingSkeletonGrid(390, 290);
 
     expect(grid).toEqual({
-      cols: 10,
-      rows: 7,
-      cellWidth: (380 - 9 * gap) / 10,
-      cellHeight: (280 - 6 * gap) / 7,
+      cols: 8,
+      rows: 6,
+      cellWidth: (380 - 7 * gap) / 8,
+      cellHeight: (280 - 5 * gap) / 6,
       innerWidth: 380,
       innerHeight: 280,
     });
   });
 
+  it('uses a 6 by 6 grid for an approximately 300 square box', () => {
+    const grid = measurePaintingSkeletonGrid(300, 300);
+
+    expect(grid).toMatchObject({ cols: 6, rows: 6 });
+  });
+
   it('grows the pitch to keep large boxes under the cell cap', () => {
-    // inner 790×590 would be 20×15=300 cells at pitch 38; the pitch walks up
-    // in steps of 2 until 48 (16×12=192 still over) … 54 → 14×10=140 … 62 →
-    // 12×9=108 … 64 → 12×9 … 66 → 11×8=88 ≤ 100.
     const grid = measurePaintingSkeletonGrid(800, 600);
 
-    expect(grid).not.toBeNull();
-    expect(grid!.cols * grid!.rows).toBeLessThanOrEqual(maxCells);
-    expect(grid!.cols).toBe(Math.floor(790 / 66));
-    expect(grid!.rows).toBe(Math.floor(590 / 66));
+    expect(grid).toMatchObject({ cols: 8, rows: 6 });
   });
 
   it('clamps to a single cell when the inner box is smaller than the pitch', () => {
@@ -60,6 +59,7 @@ describe('measurePaintingSkeletonGrid', () => {
       const grid = measurePaintingSkeletonGrid(width, height);
 
       expect(grid).not.toBeNull();
+      expect(grid!.cols * grid!.rows).toBeLessThanOrEqual(maxCells);
       expect(grid!.cols * grid!.cellWidth + (grid!.cols - 1) * gap).toBeCloseTo(grid!.innerWidth);
       expect(grid!.rows * grid!.cellHeight + (grid!.rows - 1) * gap).toBeCloseTo(grid!.innerHeight);
     }

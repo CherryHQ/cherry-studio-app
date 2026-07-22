@@ -17,7 +17,7 @@ export function usePaintingViewerActions({
   currentOutput,
   painting,
 }: {
-  currentOutput: ViewerOutput | undefined;
+  currentOutput: ViewerOutput;
   painting: Painting;
 }) {
   const { t } = useTranslation();
@@ -27,9 +27,6 @@ export function usePaintingViewerActions({
   const services = useDataServices();
 
   const download = useCallback(async () => {
-    if (!currentOutput) {
-      return;
-    }
     try {
       // Write-only (add-only) access is enough to save; the legacy
       // saveToLibraryAsync throws in SDK 57, so use the class-based Asset.create.
@@ -66,9 +63,6 @@ export function usePaintingViewerActions({
   // manually.
   const openComposer = useCallback(
     (draft: string) => {
-      if (!currentOutput) {
-        return;
-      }
       const handoff = createPaintingDraftHandoff({
         attachments: [createPaintingOutputAttachmentDraft(currentOutput)],
         draft,

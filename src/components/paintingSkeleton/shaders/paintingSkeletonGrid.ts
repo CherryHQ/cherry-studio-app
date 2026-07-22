@@ -31,7 +31,7 @@ const f = (n: number) => (Number.isInteger(n) ? `${n}.0` : `${n}`);
 const k = paintingSkeleton;
 const [t1, t2, t3] = k.keyframeTimes;
 
-export const PAINTING_SKELETON_GRID_SKSL = `
+const PAINTING_SKELETON_GRID_SKSL = `
 uniform float uTime;   // seconds, pre-wrapped to [0, PERIOD)
 uniform float2 uGrid;  // (cols, rows)
 uniform float2 uCell;  // (cellWidth, cellHeight) in dp

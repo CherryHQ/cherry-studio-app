@@ -79,23 +79,11 @@ export function PaintingConversationScreen() {
           </Text>
         </View>
       ) : (
-        <PaintingConversationContent key={painting.id} files={files} painting={painting} />
+        <ChatInputProvider key={painting.id}>
+          <PaintingConversationWorkspace files={files} painting={painting} />
+        </ChatInputProvider>
       )}
     </View>
-  );
-}
-
-function PaintingConversationContent({
-  files,
-  painting,
-}: {
-  files: NonNullable<ReturnType<typeof useResolvedPaintingFiles>['data']>;
-  painting: NonNullable<ReturnType<typeof usePainting>['data']>;
-}) {
-  return (
-    <ChatInputProvider>
-      <PaintingConversationWorkspace files={files} painting={painting} />
-    </ChatInputProvider>
   );
 }
 

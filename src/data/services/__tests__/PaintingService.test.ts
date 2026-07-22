@@ -99,6 +99,24 @@ describe('PaintingService integration', () => {
     );
     expect(regenerated.files.output).toEqual(['00000000-0000-7000-8000-000000000002']);
   });
+
+  it('deletes a painting and its file relationships', async () => {
+    insertPainting(sqlite, 'painting-delete', 'a0', 1);
+    insertFileAndRef(sqlite, 'delete-output', 'painting-delete', 'output', 1);
+
+    await service.delete('painting-delete');
+
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM painting').get()).toEqual({ count: 0 });
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM painting_file_ref').get()).toEqual({
+      count: 0,
+    });
+  });
+
+  it('reports a missing painting when delete returns no row', async () => {
+    await expect(service.delete('missing-painting')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
 });
 
 function applyMigrations(database: DatabaseSync) {

@@ -9,10 +9,9 @@ import type { ViewProps } from 'react-native';
 
 import { isIOS } from '@/config/constants';
 
-export const paintingZoomTransitionSourceIdParam =
-  '__internal_expo_router_zoom_transition_source_id';
+const paintingZoomTransitionSourceIdParam = '__internal_expo_router_zoom_transition_source_id';
 
-export function getPaintingZoomTransitionSourceId(sourceKey: string): string {
+function getPaintingZoomTransitionSourceId(sourceKey: string): string {
   return `painting-gallery:${sourceKey}`;
 }
 

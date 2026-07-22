@@ -2,10 +2,10 @@ import { useImage } from '@shopify/react-native-skia';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { runOnJS, useDerivedValue, useSharedValue, withTiming } from 'react-native-reanimated';
+import { runOnJS, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { Image } from '@/components/nativePrimitives';
-import { PaintingSkeleton, type RevealCycle } from '@/components/paintingSkeleton';
+import { PaintingSkeleton } from '@/components/paintingSkeleton';
 import { paintingSkeleton } from '@/config/constants';
 
 import type { PaintingGenerationStatus } from '../hooks/usePaintingGeneration';
@@ -90,10 +90,6 @@ function PaintingReveal({ onFinish, uri }: { onFinish: () => void; uri: string }
   const { t } = useTranslation();
   const image = useImage(uri);
   const revealSeconds = useSharedValue(-1);
-  const reveal = useDerivedValue<RevealCycle>(() => ({
-    fieldAlpha: 1,
-    reveal: revealSeconds.value,
-  }));
 
   useEffect(() => {
     if (!image) {
@@ -115,7 +111,7 @@ function PaintingReveal({ onFinish, uri }: { onFinish: () => void; uri: string }
     <PaintingSkeleton
       accessibilityLabel={t('painting.status.revealing')}
       image={image}
-      reveal={reveal}
+      reveal={revealSeconds}
       testID="painting-result-reveal"
     />
   );

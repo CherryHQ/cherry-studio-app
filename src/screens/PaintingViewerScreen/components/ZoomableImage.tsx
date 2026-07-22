@@ -14,20 +14,14 @@ import { Image } from '@/components/nativePrimitives';
 const MAX_SCALE = 4;
 const DOUBLE_TAP_SCALE = 2.5;
 
-// A single pannable / pinch- & double-tap-zoomable page. Pan stays disabled at
-// rest so the parent horizontal pager keeps its swipe; it enables once the image
-// is zoomed, and the pager disables its own scroll in tandem (via onZoomChange)
-// so panning a zoomed image never pages away. `width`/`height` are the concrete
-// page box (a horizontal list won't stretch cells on the cross axis, so the size
-// is passed in rather than read from `100%`).
+// A single pannable, pinch- and double-tap-zoomable image. Pan stays disabled at
+// rest so it does not compete with the navigation gesture.
 export function ZoomableImage({
   height,
-  onZoomChange,
   uri,
   width,
 }: {
   height: number;
-  onZoomChange: (zoomed: boolean) => void;
   uri: string;
   width: number;
 }) {
@@ -40,11 +34,6 @@ export function ZoomableImage({
   const translateY = useSharedValue(0);
   const savedX = useSharedValue(0);
   const savedY = useSharedValue(0);
-
-  const setZoomed = (zoomed: boolean) => {
-    setIsZoomed(zoomed);
-    onZoomChange(zoomed);
-  };
 
   const clampTranslate = () => {
     'worklet';
@@ -62,7 +51,7 @@ export function ZoomableImage({
     translateY.value = withTiming(0);
     savedX.value = 0;
     savedY.value = 0;
-    runOnJS(setZoomed)(false);
+    runOnJS(setIsZoomed)(false);
   };
 
   const pinch = Gesture.Pinch()
@@ -80,7 +69,7 @@ export function ZoomableImage({
       clampTranslate();
       savedX.value = translateX.value;
       savedY.value = translateY.value;
-      runOnJS(setZoomed)(true);
+      runOnJS(setIsZoomed)(true);
     });
 
   const pan = Gesture.Pan()
@@ -118,7 +107,7 @@ export function ZoomableImage({
       translateY.value = withTiming(targetY);
       savedX.value = targetX;
       savedY.value = targetY;
-      runOnJS(setZoomed)(true);
+      runOnJS(setIsZoomed)(true);
     });
 
   const gesture = Gesture.Race(doubleTap, Gesture.Simultaneous(pinch, pan));

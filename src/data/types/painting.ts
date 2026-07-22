@@ -10,7 +10,7 @@ export const PaintingSchema = z.strictObject({
   createdAt: z.iso.datetime(),
   files: PaintingFilesSchema,
   id: z.string(),
-  modelId: z.string().nullable().optional(),
+  modelId: z.string().nullable(),
   orderKey: z.string().min(1),
   prompt: z.string(),
   providerId: z.string(),

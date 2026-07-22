@@ -64,7 +64,7 @@ export const paintingSkeleton = {
   gap: 5, // gap between cells and outer padding of the grid (dp)
   basePitch: 38, // starting cell+gap pitch the measurement divides the box by
   pitchStep: 2, // pitch growth per step while the grid exceeds maxCells
-  maxCells: 100, // cap on cols*rows; larger boxes get a coarser grid instead
+  maxCells: 48, // cap on cols*rows; larger boxes get a coarser grid instead
   cellRadius: 2.5,
   periodSeconds: 1.3, // one full diagonal sweep of the brightness wave (faster than desktop's 1.9)
   alphaMin: 0.06, // resting (unlit) cell opacity

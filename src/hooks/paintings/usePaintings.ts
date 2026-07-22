@@ -4,9 +4,8 @@ import { useCallback, useMemo } from 'react';
 
 import { queryKeys } from '@/data/api';
 import { useDataInfiniteQuery, useDataQuery } from '@/data/hooks';
-import { useDataServices } from '@/data/runtime';
-import { imageMediaTypeFromExtension } from '@/data/services/fileStorage';
 import type { CursorPaginationResponse } from '@/data/types/apiTypes';
+import { imageMediaTypeFromExtension } from '@/data/types/file';
 import type { Painting } from '@/data/types/painting';
 import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
 
@@ -120,8 +119,7 @@ export function usePaintingGalleryItems(paintings: readonly Painting[]) {
     enabled: paintings.length > 0,
     // The key embeds every painting's updatedAt, so loading another page (or a
     // regeneration) mints a fresh key. Keep the previous resolved items visible
-    // until the new set resolves so the masonry — and the fullscreen viewer that
-    // pages across the whole gallery — never blink to empty mid-scroll.
+    // until the new set resolves so the masonry never blinks to empty mid-scroll.
     placeholderData: keepPreviousData,
     queryFn: async (services): Promise<PaintingGalleryItem[]> => {
       const items = paintings.flatMap((painting) =>
@@ -160,16 +158,14 @@ export function usePaintingGalleryItems(paintings: readonly Painting[]) {
   });
 }
 
-export function usePaintingQueryInvalidation() {
+export function useSyncPaintingQueries() {
   const queryClient = useQueryClient();
-  const services = useDataServices();
 
   return useCallback(
-    async (paintingId: string) => {
-      const painting = await services.painting.getById(paintingId);
-      queryClient.setQueryData(queryKeys.paintings.detail(paintingId), painting);
+    async (painting: Painting) => {
+      queryClient.setQueryData(queryKeys.paintings.detail(painting.id), painting);
       await queryClient.invalidateQueries({ queryKey: queryKeys.paintings.all() });
     },
-    [queryClient, services.painting],
+    [queryClient],
   );
 }

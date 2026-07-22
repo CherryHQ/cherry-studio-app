@@ -32,12 +32,6 @@ export interface CreatePaintingInput {
   providerId: string;
 }
 
-export interface UpdatePaintingInput {
-  modelId?: string | null;
-  prompt?: string;
-  providerId?: string;
-}
-
 export class PaintingService {
   constructor(
     private readonly dbService: DbService,
@@ -136,40 +130,6 @@ export class PaintingService {
     }
   }
 
-  async update(id: string, input: UpdatePaintingInput): Promise<Painting> {
-    return await this.dbService.withWriteTx(async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(paintingTable)
-        .where(eq(paintingTable.id, id))
-        .limit(1);
-      if (!existing) {
-        throw DataApiErrorFactory.notFound('Painting', id);
-      }
-
-      const providerId = input.providerId ?? existing.providerId;
-      const updates: Partial<typeof paintingTable.$inferInsert> = {};
-      if (input.providerId !== undefined) {
-        updates.providerId = input.providerId;
-      }
-      if (input.prompt !== undefined) {
-        updates.prompt = input.prompt;
-      }
-      if (input.modelId !== undefined) {
-        updates.modelId = normalizeModelId(providerId, input.modelId);
-      } else if (input.providerId !== undefined && input.providerId !== existing.providerId) {
-        updates.modelId = null;
-      }
-
-      const [row] =
-        Object.keys(updates).length > 0
-          ? await tx.update(paintingTable).set(updates).where(eq(paintingTable.id, id)).returning()
-          : [existing];
-      const files = await loadFilesTx(tx, [id]);
-      return rowToPainting(row, files.get(id) ?? emptyFiles);
-    });
-  }
-
   async replaceOutputs(
     id: string,
     preparedOutputs: readonly PreparedInternalFile[],
@@ -213,9 +173,14 @@ export class PaintingService {
   }
 
   async delete(id: string): Promise<void> {
-    await this.getById(id);
     await this.dbService.withWriteTx(async (tx) => {
-      await tx.delete(paintingTable).where(eq(paintingTable.id, id));
+      const deleted = await tx
+        .delete(paintingTable)
+        .where(eq(paintingTable.id, id))
+        .returning({ id: paintingTable.id });
+      if (deleted.length === 0) {
+        throw DataApiErrorFactory.notFound('Painting', id);
+      }
     });
   }
 

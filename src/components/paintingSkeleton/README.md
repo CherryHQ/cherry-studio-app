@@ -17,20 +17,18 @@ The full desktop lifecycle is ported:
 
 ## Ownership
 
-Reserved for the (upcoming) drawing feature — implemented and verified, with no
-mount yet. The feature wires it in by passing a generated `image` and driving
-`reveal` from generation progress. The `reveal` API is controlled, so callers
-own the driver (there is intentionally no built-in loop).
+`PaintingCanvas` mounts the skeleton during generation and drives the reveal
+after the generated image is available. The caller owns the reveal timing.
 
 ## Public interface
 
 - `PaintingSkeleton` — fills its parent (`flex-1`), measures itself via
   `onLayout`, and draws on a muted rounded box. Props: `image?` (result image to
-  reveal into; omit for a pure loading grid), `reveal?` (a `DerivedValue<RevealCycle>`
-  driver — reveal seconds + field opacity — required with `image`),
+  reveal into; omit for a pure loading grid), `reveal?` (reveal seconds as a
+  `DerivedValue<number>`, required with `image`),
   `accessibilityLabel` (defaults to `"Loading"`), `testID`.
-- `RevealCycle` — `{ reveal: number; fieldAlpha: number }`; `reveal < 0` is pure
-  Act 1 loading, `reveal` in seconds advances Acts 2-4.
+
+`reveal < 0` is pure Act 1 loading; non-negative seconds advance Acts 2-4.
 
 ## Organization
 

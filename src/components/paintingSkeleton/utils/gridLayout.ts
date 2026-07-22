@@ -1,6 +1,6 @@
 import { paintingSkeleton } from '@/config/constants';
 
-export type PaintingSkeletonGrid = {
+type PaintingSkeletonGrid = {
   cols: number;
   rows: number;
   cellWidth: number;

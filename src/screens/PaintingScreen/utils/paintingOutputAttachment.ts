@@ -1,4 +1,4 @@
-import { imageMediaTypeFromExtension } from '@/data/services/fileStorage';
+import { imageMediaTypeFromExtension } from '@/data/types/file';
 import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
 
 // Mirrors the draft shape produced by useResolvedPaintingFiles for inputs; the

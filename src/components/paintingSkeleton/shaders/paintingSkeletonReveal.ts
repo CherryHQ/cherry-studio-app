@@ -17,8 +17,8 @@ import { paintingSkeleton } from '@/config/constants';
  * - Act 4 heal: a full-cover image fades in over everything to fill the gutters.
  *
  * Compositing is premultiplied `over`; transparent output shows the muted box
- * behind the Canvas. `uFieldAlpha` fades the whole field for the demo loop.
- * The result image is assumed opaque (alpha ≈ 1), so eval().rgb is its color.
+ * behind the Canvas. The result image is assumed opaque (alpha ≈ 1), so
+ * eval().rgb is its color.
  */
 const f = (n: number) => (Number.isInteger(n) ? `${n}.0` : `${n}`);
 
@@ -26,14 +26,13 @@ const k = paintingSkeleton;
 const [t1, t2, t3] = k.keyframeTimes;
 const r = k.reveal;
 
-export const PAINTING_SKELETON_REVEAL_SKSL = `
+const PAINTING_SKELETON_REVEAL_SKSL = `
 uniform float uTime;      // loading clock, pre-wrapped to [0, PERIOD)
 uniform float2 uGrid;     // (cols, rows)
 uniform float2 uCell;     // (cellWidth, cellHeight) dp
 uniform float2 uInner;    // inner box size dp (canvas covers exactly this)
 uniform float3 uColor;    // foreground rgb, normalized
 uniform float uReveal;    // reveal seconds; < 0 = pure Act 1 loading
-uniform float uFieldAlpha;// whole-field opacity for the demo loop
 uniform shader uImage;    // result image, filled to the inner rect
 
 const float GAP = ${f(k.gap)};
@@ -114,7 +113,7 @@ half4 main(float2 pos) {
     outA = healP + outA * (1.0 - healP);
   }
 
-  return half4(outP * uFieldAlpha, half(outA * uFieldAlpha));
+  return half4(outP, half(outA));
 }
 `;
 

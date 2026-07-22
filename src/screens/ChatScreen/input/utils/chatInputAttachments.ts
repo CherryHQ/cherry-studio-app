@@ -1,6 +1,8 @@
 import type { DocumentPickerAsset } from 'expo-document-picker';
 
+import { imageMediaTypeFromExtension, isImageFileExtension } from '@/data/types/file';
 import type { CherryMessagePart } from '@/data/types/message';
+import { withCherryMeta } from '@/data/types/uiParts';
 
 export type ChatInputAttachmentKind = 'file' | 'image';
 
@@ -24,17 +26,6 @@ const fallbackImageMediaType = 'image/*';
 const fallbackFileMediaType = 'application/octet-stream';
 const fallbackImageName = 'Image';
 const fallbackFileName = 'File';
-const imageFileExtensions = new Set(['avif', 'gif', 'heic', 'heif', 'jpeg', 'jpg', 'png', 'webp']);
-const imageMediaTypeByExtension = new Map([
-  ['avif', 'image/avif'],
-  ['gif', 'image/gif'],
-  ['heic', 'image/heic'],
-  ['heif', 'image/heif'],
-  ['jpeg', 'image/jpeg'],
-  ['jpg', 'image/jpeg'],
-  ['png', 'image/png'],
-  ['webp', 'image/webp'],
-]);
 
 export function isChatInputImageMediaType(mediaType: string | null | undefined) {
   return mediaType?.startsWith('image/') ?? false;
@@ -43,7 +34,7 @@ export function isChatInputImageMediaType(mediaType: string | null | undefined) 
 export function isChatInputImageFileName(name: string | null | undefined) {
   const extension = name?.trim().split('.').pop()?.toLowerCase();
 
-  return extension ? imageFileExtensions.has(extension) : false;
+  return isImageFileExtension(extension);
 }
 
 export function appendChatInputAttachments(
@@ -76,7 +67,7 @@ export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ChatInp
   return {
     id: getPhotoAttachmentId(photo.id),
     kind: 'image',
-    mediaType: (extension && imageMediaTypeByExtension.get(extension)) || fallbackImageMediaType,
+    mediaType: imageMediaTypeFromExtension(extension),
     name: photo.fileName || fallbackImageName,
     uri: photo.uri,
   };
@@ -132,12 +123,17 @@ export function createChatInputMessageParts(
     : [];
 
   for (const attachment of attachments) {
-    parts.push({
+    const filePart = {
       type: 'file',
       filename: attachment.name,
       mediaType: attachment.mediaType,
       url: attachment.uri,
-    } as CherryMessagePart);
+    } as Extract<CherryMessagePart, { type: 'file' }>;
+    parts.push(
+      attachment.fileEntryId
+        ? withCherryMeta(filePart, { fileEntryId: attachment.fileEntryId })
+        : filePart,
+    );
   }
 
   return parts;

@@ -4,6 +4,7 @@ import { loggerService } from '@/core/logger/LoggerService';
 import { createOrderedUuid } from '@/data/db/schemas/_columnHelpers';
 import {
   type FileEntryId,
+  generatedImageExtension,
   type InternalFileEntry,
   type PreparedInternalFile,
   SafeFileExtensionSchema,
@@ -97,26 +98,6 @@ async function prepareFilePart(
     file,
     part: withCherryMeta({ ...part, url: file.uri }, { fileEntryId: file.id }),
   };
-}
-
-const imageExtensions: Record<string, string> = {
-  'image/avif': 'avif',
-  'image/gif': 'gif',
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-};
-
-const imageMediaTypesByExtension: Record<string, string> = Object.fromEntries(
-  Object.entries(imageExtensions).map(([mediaType, extension]) => [extension, mediaType]),
-);
-
-export function imageMediaTypeFromExtension(extension: string | null): string {
-  return extension ? (imageMediaTypesByExtension[extension.toLowerCase()] ?? 'image/*') : 'image/*';
-}
-
-export function generatedImageExtension(mediaType: string): string {
-  return imageExtensions[mediaType.toLowerCase()] ?? 'png';
 }
 
 export function prepareGeneratedImage(base64: string, mediaType: string): PreparedInternalFile {

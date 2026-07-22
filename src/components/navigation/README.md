@@ -5,8 +5,7 @@ This module owns React Navigation integration for the app shell and shared nativ
 ## Public Interface
 
 - `NavigationThemeProvider` is exported from `index.ts`.
-- `PaintingZoomLink` and `PaintingZoomTarget` keep painting gallery zoom transitions aligned with
-  the currently visible viewer page.
+- `PaintingZoomLink` and `PaintingZoomTarget` connect a painting gallery item to its viewer image.
 
 ## Organization
 

@@ -1,4 +1,4 @@
-export type MasonryItem = { aspectRatio: number };
+type MasonryItem = { aspectRatio: number };
 
 export function distributeMasonryItems<TItem extends MasonryItem>(
   items: readonly TItem[],

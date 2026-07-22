@@ -1,8 +1,7 @@
 import type { CherryMessagePart, Message } from '@/data/types/message';
 import type { Painting } from '@/data/types/painting';
-import { withCherryMeta } from '@/data/types/uiParts';
 import type { ResolvedPaintingFiles } from '@/hooks/paintings';
-import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+import { createChatInputMessageParts } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
 import type { PaintingGenerationInput } from '@/screens/PaintingScreen/hooks/usePaintingGeneration';
 
 type PendingPaintingTurn = {
@@ -27,7 +26,7 @@ export function createPaintingConversationMessages(
       id: painting.id,
       modelId: null,
       parentId: null,
-      parts: createParts(painting.prompt, files.inputs),
+      parts: createChatInputMessageParts(painting.prompt, files.inputs),
       role: 'user',
       searchableText: painting.prompt,
       status: 'success',
@@ -39,7 +38,7 @@ export function createPaintingConversationMessages(
       id: assistantMessageId,
       modelId: painting.modelId,
       parentId: painting.id,
-      parts: createParts('', files.outputs),
+      parts: createChatInputMessageParts('', files.outputs),
       role: 'assistant',
       searchableText: '',
       status: 'success',
@@ -56,7 +55,7 @@ export function createPendingPaintingConversationMessages(turn: PendingPaintingT
       id: turn.userMessageId,
       modelId: null,
       parentId: null,
-      parts: createParts(turn.input.prompt, turn.input.attachments),
+      parts: createChatInputMessageParts(turn.input.prompt, turn.input.attachments),
       role: 'user',
       searchableText: turn.input.prompt,
       status: 'success',
@@ -78,34 +77,10 @@ export function createPendingPaintingConversationMessages(turn: PendingPaintingT
   ];
 }
 
-function createParts(
-  text: string,
-  attachments: readonly ChatInputAttachmentDraft[],
-): CherryMessagePart[] {
-  const trimmedText = text.trim();
-  const parts = trimmedText ? ([{ text: trimmedText, type: 'text' }] as CherryMessagePart[]) : [];
-
-  for (const attachment of attachments) {
-    const filePart = {
-      filename: attachment.name,
-      mediaType: attachment.mediaType,
-      type: 'file',
-      url: attachment.uri,
-    } as Extract<CherryMessagePart, { type: 'file' }>;
-    parts.push(
-      attachment.fileEntryId
-        ? withCherryMeta(filePart, { fileEntryId: attachment.fileEntryId })
-        : filePart,
-    );
-  }
-
-  return parts;
-}
-
 function createMessage(input: {
   createdAt: string;
   id: string;
-  modelId: string | null | undefined;
+  modelId: string | null;
   parentId: string | null;
   parts: CherryMessagePart[];
   role: 'assistant' | 'user';

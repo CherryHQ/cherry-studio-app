@@ -6,7 +6,7 @@ import { usePaintingGeneration } from '../usePaintingGeneration';
 const mockGenerateImage = jest.fn();
 const mockCreatePainting = jest.fn();
 const mockReplaceOutputs = jest.fn();
-const mockInvalidate = jest.fn(async () => undefined);
+const mockSyncPaintingQueries = jest.fn(async () => undefined);
 
 jest.mock('@/data/runtime', () => ({
   useDataServices: () => ({
@@ -19,7 +19,7 @@ jest.mock('@/data/runtime', () => ({
 }));
 
 jest.mock('@/hooks/paintings', () => ({
-  usePaintingQueryInvalidation: () => mockInvalidate,
+  useSyncPaintingQueries: () => mockSyncPaintingQueries,
 }));
 
 jest.mock('@/data/services/fileStorage', () => ({
@@ -131,6 +131,9 @@ describe('usePaintingGeneration', () => {
         id: 'receipt-1',
       },
     });
-    expect(mockInvalidate).toHaveBeenCalledWith('receipt-1');
+    expect(mockSyncPaintingQueries).toHaveBeenCalledWith({
+      files: { input: [], output: ['output-receipt-1'] },
+      id: 'receipt-1',
+    });
   });
 });

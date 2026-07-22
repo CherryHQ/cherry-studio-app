@@ -4,7 +4,7 @@ export {
   type ResolvedPaintingFiles,
   usePainting,
   usePaintingGalleryItems,
-  usePaintingQueryInvalidation,
   usePaintings,
   useResolvedPaintingFiles,
+  useSyncPaintingQueries,
 } from './usePaintings';
