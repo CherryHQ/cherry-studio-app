@@ -105,17 +105,19 @@ describe('PaintingTemplateRow', () => {
     renderRow();
     act(() => {
       renderer?.root
-        .findByProps({ testID: 'painting-template-card-cherry-twilight' })
+        .findByProps({ testID: `painting-template-card-${paintingTemplates[0].id}` })
         .props.onPress();
     });
   }
 
-  test('renders the single local template card', () => {
+  test('renders every local template card', () => {
     renderRow();
 
-    expect(
-      renderer?.root.findAllByProps({ testID: 'painting-template-card-cherry-twilight' }),
-    ).not.toHaveLength(0);
+    for (const template of paintingTemplates) {
+      expect(
+        renderer?.root.findAllByProps({ testID: `painting-template-card-${template.id}` }),
+      ).not.toHaveLength(0);
+    }
     expect(renderer?.root.findAllByProps({ testID: 'painting-template-sheet' })).toHaveLength(0);
   });
 

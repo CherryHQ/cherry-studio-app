@@ -12,11 +12,40 @@ export type PaintingTemplate = Readonly<{
 
 export const paintingTemplates: readonly PaintingTemplate[] = [
   {
-    id: 'cherry-twilight',
-    preview: require('../../../../assets/paintings/templates/cherry-twilight.png'),
-    prompt:
-      'A luminous glass teahouse under blooming cherry trees at blue hour, a glossy red teapot on a stone table, cinematic editorial 3D illustration, soft lantern light, crisp details, portrait composition, no text, no watermark.',
-    title: 'Cherry Twilight',
+    id: 'tokyo-map-diorama',
+    preview: require('../../../../assets/paintings/templates/tokyo-map-diorama.webp'),
+    prompt: '',
+    title: 'Tokyo Map Diorama',
+  },
+  {
+    id: 'meta-quest-3-exploded-view',
+    preview: require('../../../../assets/paintings/templates/meta-quest-3-exploded-view.webp'),
+    prompt: '',
+    title: 'Meta Quest 3 Exploded View',
+  },
+  {
+    id: 'crocs-editorial-poster',
+    preview: require('../../../../assets/paintings/templates/crocs-editorial-poster.webp'),
+    prompt: '',
+    title: 'Crocs Editorial Poster',
+  },
+  {
+    id: 'algorithm-fog-city-poster',
+    preview: require('../../../../assets/paintings/templates/algorithm-fog-city-poster.webp'),
+    prompt: '',
+    title: 'Algorithm: Fog City',
+  },
+  {
+    id: 'china-landmark-diorama',
+    preview: require('../../../../assets/paintings/templates/china-landmark-diorama.webp'),
+    prompt: '',
+    title: 'China Landmark Diorama',
+  },
+  {
+    id: 'cyber-rabbit-character',
+    preview: require('../../../../assets/paintings/templates/cyber-rabbit-character.webp'),
+    prompt: '',
+    title: 'Cyber Rabbit Character',
   },
 ];
 
