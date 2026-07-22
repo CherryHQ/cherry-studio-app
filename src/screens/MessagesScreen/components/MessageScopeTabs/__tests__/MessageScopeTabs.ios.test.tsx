@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { TopicListScopeTabs } from '../TopicListScopeTabs.ios';
+import { MessageScopeTabs } from '../MessageScopeTabs.ios';
 
 jest.mock('expo-glass-effect', () => ({
   GlassView: ({ children, ...props }: { children?: ReactNode }) => {
@@ -36,7 +36,7 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-describe('TopicListScopeTabs.ios', () => {
+describe('MessageScopeTabs.ios', () => {
   let renderer: ReactTestRenderer | undefined;
   const onScopeChange = jest.fn();
 
@@ -46,11 +46,11 @@ describe('TopicListScopeTabs.ios', () => {
 
   it('renders a compact controlled tab list and selects a new scope', async () => {
     await act(async () => {
-      renderer = create(<TopicListScopeTabs scope="conversations" onScopeChange={onScopeChange} />);
+      renderer = create(<MessageScopeTabs scope="conversations" onScopeChange={onScopeChange} />);
     });
 
     if (!renderer) {
-      throw new Error('TopicListScopeTabs test renderer was not created.');
+      throw new Error('MessageScopeTabs test renderer was not created.');
     }
 
     const glass = renderer.root.findByProps({ testID: 'topic-list-tabs-glass' });
@@ -72,11 +72,11 @@ describe('TopicListScopeTabs.ios', () => {
 
   it('reflects the controlled selected scope', async () => {
     await act(async () => {
-      renderer = create(<TopicListScopeTabs scope="drawings" onScopeChange={onScopeChange} />);
+      renderer = create(<MessageScopeTabs scope="drawings" onScopeChange={onScopeChange} />);
     });
 
     if (!renderer) {
-      throw new Error('TopicListScopeTabs test renderer was not created.');
+      throw new Error('MessageScopeTabs test renderer was not created.');
     }
 
     const chat = renderer.root.findByProps({ testID: 'topic-list-tab-conversations' });

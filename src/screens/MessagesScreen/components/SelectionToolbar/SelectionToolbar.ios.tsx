@@ -1,14 +1,14 @@
 import { Color, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import type { TopicSelectionToolbarProps } from './TopicSelectionToolbar.types';
+import type { SelectionToolbarProps } from './types';
 
-export function TopicSelectionToolbar({
+export function SelectionToolbar({
   isDeleting,
   onDelete,
   onToggleAll,
   selectedCount,
-}: TopicSelectionToolbarProps) {
+}: SelectionToolbarProps) {
   const { t } = useTranslation();
   const selectionLabel =
     selectedCount === 0

@@ -1,1 +1,1 @@
-export { TopicListRoute } from './TopicListScreen';
+export { TopicList } from './TopicList';

@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -13,14 +13,13 @@ import {
 import { useSetBottomTabBarHidden } from '@/components/navigation';
 import { isLiquidGlassAvailable } from '@/config/constants';
 
-import { TopicListPager } from './components/TopicListPager';
-import { TopicListScopeTabs } from './components/TopicListScopeTabs';
-import { TopicSelectionControls } from './components/TopicSelectionControls';
-import { TopicListProvider, useTopicListActions } from './context/TopicListProvider';
+import { MessagePager } from './components/MessagePager';
+import { MessageScopeTabs } from './components/MessageScopeTabs';
+import { SelectionControls } from './components/SelectionControls';
 
-export function TopicListScreen() {
+export function MessagesScreen() {
   const { t } = useTranslation();
-  const { openNewPainting, openNewTopic } = useTopicListActions();
+  const router = useRouter();
   const { scope, setScope } = useMessageScope();
   const { enterEditing, exitEditing } = useMessageSelectionActions();
   const { isEditing } = useMessageSelectionState();
@@ -33,8 +32,8 @@ export function TopicListScreen() {
         className="flex-1 bg-background"
         style={{ paddingTop: isLiquidGlassAvailable ? headerHeight : 0 }}
       >
-        <TopicListPager />
-        <TopicSelectionControls />
+        <MessagePager />
+        <SelectionControls />
       </View>
       <Stack.Screen
         options={{
@@ -47,7 +46,7 @@ export function TopicListScreen() {
         </Stack.Title>
       ) : (
         <Stack.Title asChild>
-          <TopicListScopeTabs scope={scope} onScopeChange={setScope} />
+          <MessageScopeTabs scope={scope} onScopeChange={setScope} />
         </Stack.Title>
       )}
       <Stack.Toolbar placement="left">
@@ -64,10 +63,10 @@ export function TopicListScreen() {
           hidden={isEditing}
           icon="square.and.pencil"
         >
-          <Stack.Toolbar.MenuAction icon="message" onPress={openNewTopic}>
+          <Stack.Toolbar.MenuAction icon="message" onPress={() => router.push('/topics')}>
             {t('navigation.newChat')}
           </Stack.Toolbar.MenuAction>
-          <Stack.Toolbar.MenuAction icon="paintbrush" onPress={openNewPainting}>
+          <Stack.Toolbar.MenuAction icon="paintbrush" onPress={() => router.push('/paintings')}>
             {t('navigation.newPainting')}
           </Stack.Toolbar.MenuAction>
         </Stack.Toolbar.Menu>
@@ -76,16 +75,14 @@ export function TopicListScreen() {
   );
 }
 
-export function TopicListRoute() {
+export function MessagesRoute() {
   const setBottomTabBarHidden = useSetBottomTabBarHidden();
 
   return (
-    <TopicListProvider>
-      <MessageScopeProvider>
-        <MessageSelectionProvider onEditingChange={setBottomTabBarHidden}>
-          <TopicListScreen />
-        </MessageSelectionProvider>
-      </MessageScopeProvider>
-    </TopicListProvider>
+    <MessageScopeProvider>
+      <MessageSelectionProvider onEditingChange={setBottomTabBarHidden}>
+        <MessagesScreen />
+      </MessageSelectionProvider>
+    </MessageScopeProvider>
   );
 }

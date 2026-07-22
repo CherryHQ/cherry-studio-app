@@ -200,24 +200,4 @@ describe('TopicListProvider', () => {
     expect(mockTogglePin).toHaveBeenCalledWith('topic-1');
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['/topics'] });
   });
-
-  test('pushes the topic-less route for a new chat', async () => {
-    await renderProvider([]);
-
-    await act(async () => {
-      currentActions?.openNewTopic();
-    });
-
-    expect(mockRouterPush).toHaveBeenCalledWith('/topics');
-  });
-
-  test('pushes the blank painting route from the create menu', async () => {
-    await renderProvider([]);
-
-    await act(async () => {
-      currentActions?.openNewPainting();
-    });
-
-    expect(mockRouterPush).toHaveBeenCalledWith('/paintings');
-  });
 });

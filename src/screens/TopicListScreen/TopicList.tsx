@@ -30,10 +30,13 @@ import type { Assistant } from '@/data/types/assistant';
 import type { Topic } from '@/data/types/topic';
 import { useAssistantsApi } from '@/hooks/chat';
 import { useExclusiveSwipeable } from '@/hooks/useExclusiveSwipeable';
-
-import { useTopicListActions, useTopicListTopics } from '../context/TopicListProvider';
-import { useTopicSelectionSource } from '../context/useTopicSelectionSource';
-import { useTopicActionDialogs } from './TopicActionDialogs';
+import { useTopicActionDialogs } from './components/TopicActionDialogs';
+import {
+  TopicListProvider,
+  useTopicListActions,
+  useTopicListTopics,
+} from './context/TopicListProvider';
+import { useTopicSelectionSource } from './context/useTopicSelectionSource';
 
 type TopicRowProps = {
   assistant?: Assistant;
@@ -95,7 +98,7 @@ function formatTopicUpdatedAt(updatedAt: string, locale: string | undefined, yes
   });
 }
 
-export const TopicList = memo(function TopicList() {
+const TopicListView = memo(function TopicListView() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const tabBarHeight = useBottomTabBarHeight();
@@ -207,6 +210,16 @@ export const TopicList = memo(function TopicList() {
     </>
   );
 });
+
+// The topics tab owns its data provider so the messages shell can host it as a
+// pluggable tab without knowing anything about topic state.
+export function TopicList() {
+  return (
+    <TopicListProvider>
+      <TopicListView />
+    </TopicListProvider>
+  );
+}
 
 const TopicRow = memo(function TopicRow({
   assistant,

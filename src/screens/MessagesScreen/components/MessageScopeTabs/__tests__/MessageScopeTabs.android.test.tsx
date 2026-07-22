@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { TopicListScopeTabs } from '../TopicListScopeTabs.android';
+import { MessageScopeTabs } from '../MessageScopeTabs.android';
 
 jest.mock('heroui-native', () => {
   const React = jest.requireActual('react');
@@ -64,7 +64,7 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-describe('TopicListScopeTabs.android', () => {
+describe('MessageScopeTabs.android', () => {
   let renderer: ReactTestRenderer | undefined;
   const onScopeChange = jest.fn();
 
@@ -74,11 +74,11 @@ describe('TopicListScopeTabs.android', () => {
 
   it('renders controlled Chat and Paint tabs and selects a new scope', async () => {
     await act(async () => {
-      renderer = create(<TopicListScopeTabs scope="conversations" onScopeChange={onScopeChange} />);
+      renderer = create(<MessageScopeTabs scope="conversations" onScopeChange={onScopeChange} />);
     });
 
     if (!renderer) {
-      throw new Error('TopicListScopeTabs test renderer was not created.');
+      throw new Error('MessageScopeTabs test renderer was not created.');
     }
 
     const chat = renderer.root.findByProps({ testID: 'topic-list-tab-conversations' });
@@ -105,11 +105,11 @@ describe('TopicListScopeTabs.android', () => {
 
   it('reflects the controlled selected scope', async () => {
     await act(async () => {
-      renderer = create(<TopicListScopeTabs scope="drawings" onScopeChange={onScopeChange} />);
+      renderer = create(<MessageScopeTabs scope="drawings" onScopeChange={onScopeChange} />);
     });
 
     if (!renderer) {
-      throw new Error('TopicListScopeTabs test renderer was not created.');
+      throw new Error('MessageScopeTabs test renderer was not created.');
     }
 
     const chat = renderer.root.findByProps({ testID: 'topic-list-tab-conversations' });

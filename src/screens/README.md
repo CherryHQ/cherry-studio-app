@@ -60,15 +60,21 @@ SettingsScreen/
 - `AssistantScreen/`: assistant list and assistant editing flows.
 - `SettingsScreen/`: settings home (with the animated profile hero at the top), about/data/model/
   provider/web-search settings screens, and settings-specific UI controls.
-- `PaintingScreen/`: painting composer (image generation), plus the nested full-screen viewer
-  (`PaintingViewerScreen/`) and conversation (`PaintingConversationScreen/`) screens, bundled prompt
-  templates (`templates/`), and shared generation/handoff/masonry helpers.
-- `TopicListScreen/`: message-tab topic pagination, topic actions, and navigation. Still hosts the
-  drawings tab body (`DrawingList`); Stage 2 of the screens reorg moves that into `PaintingScreen/`
-  and reframes this into a neutral messages shell.
+- `PaintingScreen/`: painting composer (image generation), the drawings tab body (`DrawingList`)
+  hosted by the messages shell, plus the nested full-screen viewer (`PaintingViewerScreen/`) and
+  conversation (`PaintingConversationScreen/`) screens, bundled prompt templates (`templates/`), and
+  shared generation/handoff/masonry helpers.
+- `MessagesScreen/`: the `(messages)` tab shell — scope tabs (`MessageScopeTabs/`), the two-page
+  `MessagePager`, and the multi-select chrome (`SelectionControls` + `SelectionToolbar/`). It hosts
+  the conversations and drawings tab bodies through their feature `index.ts` and owns no
+  tab-specific data.
+- `TopicListScreen/`: the conversations tab body — the topic list, topic actions/dialogs, the
+  `TopicListProvider` topic data, and `useTopicSelectionSource`. It renders as a tab inside
+  `MessagesScreen/` rather than being a route itself.
 - `GlobalSearchScreen/`: app-level native search entry and screen shell.
 - `HomeScreen/`: home-tab content (activity calendar) and the header-right avatar button.
 
 Reusable modules that remain in `src/components` include app shell modules (`headers`, `navigation`),
-shared flows such as `modelPicker`, shared UI behavior such as `confirmDialog`, and native dependency
-adapters such as `nativePrimitives`.
+shared flows such as `modelPicker`, the neutral `messageTabs` scope/selection/source-registry shared
+by the messages shell and its tab bodies, shared UI behavior such as `confirmDialog`, and native
+dependency adapters such as `nativePrimitives`.

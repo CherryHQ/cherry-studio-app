@@ -21,8 +21,6 @@ type TopicListActionsContextValue = {
   deleteTopic: (topicId: string) => Promise<void>;
   deleteTopics: (topicIds: readonly string[]) => Promise<void>;
   loadMoreTopics: () => void;
-  openNewPainting: () => void;
-  openNewTopic: () => void;
   openTopic: (topicId: string) => void;
   renameTopic: (topicId: string, name: string) => Promise<void>;
   toggleTopicPin: (topicId: string) => Promise<void>;
@@ -52,13 +50,6 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       void prefetchTopicMessages(queryClient, services, topic.id);
     }
   }, [isFocused, queryClient, services, topicList.topics]);
-
-  const openNewTopic = useCallback(() => {
-    router.push('/topics');
-  }, [router]);
-  const openNewPainting = useCallback(() => {
-    router.push('/paintings');
-  }, [router]);
 
   const openTopic = useCallback(
     (topicId: string) => {
@@ -148,22 +139,11 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       deleteTopic,
       deleteTopics,
       loadMoreTopics: topicList.loadMore,
-      openNewPainting,
-      openNewTopic,
       openTopic,
       renameTopic,
       toggleTopicPin,
     }),
-    [
-      deleteTopic,
-      deleteTopics,
-      openNewPainting,
-      openNewTopic,
-      openTopic,
-      renameTopic,
-      topicList.loadMore,
-      toggleTopicPin,
-    ],
+    [deleteTopic, deleteTopics, openTopic, renameTopic, topicList.loadMore, toggleTopicPin],
   );
 
   return (

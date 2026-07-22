@@ -3,14 +3,14 @@ import { useTranslation } from 'react-i18next';
 
 import { type MessageScope, messageScopes } from '@/components/messageTabs';
 
-import type { TopicListScopeTabsProps } from './TopicListScopeTabs.types';
+import type { MessageScopeTabsProps } from './types';
 
 const labelKeys = {
   conversations: 'topic.tabs.chat',
   drawings: 'topic.tabs.paint',
 } as const;
 
-export function TopicListScopeTabs({ onScopeChange, scope }: TopicListScopeTabsProps) {
+export function MessageScopeTabs({ onScopeChange, scope }: MessageScopeTabsProps) {
   const { t } = useTranslation();
 
   return (

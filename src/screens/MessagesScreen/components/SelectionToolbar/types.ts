@@ -1,4 +1,4 @@
-export type TopicSelectionToolbarProps = {
+export type SelectionToolbarProps = {
   isDeleting: boolean;
   onDelete: () => void;
   onToggleAll: () => void;

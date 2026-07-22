@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { TopicListHeader } from '../TopicListHeader';
+import { MessageHeader } from '../MessageHeader';
 
 let mockScopeTabsProps:
   | { onScopeChange: (scope: 'conversations' | 'drawings') => void; scope: string }
@@ -46,8 +46,8 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-jest.mock('../TopicListScopeTabs', () => ({
-  TopicListScopeTabs: (props: typeof mockScopeTabsProps) => {
+jest.mock('../MessageScopeTabs', () => ({
+  MessageScopeTabs: (props: typeof mockScopeTabsProps) => {
     const React = jest.requireActual('react');
     const { View: MockView } = jest.requireActual('react-native');
     mockScopeTabsProps = props;
@@ -55,7 +55,7 @@ jest.mock('../TopicListScopeTabs', () => ({
   },
 }));
 
-describe('TopicListHeader', () => {
+describe('MessageHeader', () => {
   let renderer: ReactTestRenderer | undefined;
   const onScopeChange = jest.fn();
   const defaultProps = {
@@ -78,11 +78,11 @@ describe('TopicListHeader', () => {
 
   it('centers the controlled scope tabs in the normal header', async () => {
     await act(async () => {
-      renderer = create(<TopicListHeader {...defaultProps} />);
+      renderer = create(<MessageHeader {...defaultProps} />);
     });
 
     if (!renderer) {
-      throw new Error('TopicListHeader test renderer was not created.');
+      throw new Error('MessageHeader test renderer was not created.');
     }
 
     expect(renderer.root.findByProps({ testID: 'header-scope-tabs' })).toBeTruthy();
@@ -95,11 +95,11 @@ describe('TopicListHeader', () => {
 
   it('replaces the tabs with the Messages title while editing', async () => {
     await act(async () => {
-      renderer = create(<TopicListHeader {...defaultProps} isEditing />);
+      renderer = create(<MessageHeader {...defaultProps} isEditing />);
     });
 
     if (!renderer) {
-      throw new Error('TopicListHeader test renderer was not created.');
+      throw new Error('MessageHeader test renderer was not created.');
     }
 
     expect(renderer.root.findAllByProps({ testID: 'header-scope-tabs' })).toHaveLength(0);
@@ -111,11 +111,11 @@ describe('TopicListHeader', () => {
 
   it('shows the drawings title while editing in the drawings scope', async () => {
     await act(async () => {
-      renderer = create(<TopicListHeader {...defaultProps} isEditing scope="drawings" />);
+      renderer = create(<MessageHeader {...defaultProps} isEditing scope="drawings" />);
     });
 
     if (!renderer) {
-      throw new Error('TopicListHeader test renderer was not created.');
+      throw new Error('MessageHeader test renderer was not created.');
     }
 
     expect(

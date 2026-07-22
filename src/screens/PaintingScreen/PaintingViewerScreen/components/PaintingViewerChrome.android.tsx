@@ -12,7 +12,7 @@ import type { PaintingViewerChromeProps } from './PaintingViewerChrome.types';
 
 // Android has no native bottom-header slot, so the top row goes through the
 // transparent Stack header (headerLeft/headerRight) and the bottom actions are a
-// custom overlay bar, mirroring TopicSelectionToolbar.android. Menus use the
+// custom overlay bar, mirroring SelectionToolbar.android. Menus use the
 // platform MenuView, matching MainHeader.android.
 export function PaintingViewerChrome({
   aspectRatios,

@@ -6,7 +6,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 
 import { getMessageScopeIndex, messageScopes } from '@/components/messageTabs';
 
-import type { TopicListScopeTabsProps } from './TopicListScopeTabs.types';
+import type { MessageScopeTabsProps } from './types';
 
 const labelKeys = {
   conversations: 'topic.tabs.chat',
@@ -25,7 +25,7 @@ const indicatorWidth = segmentWidth - indicatorInset * 2;
 // (screen-centered), and UIKit re-centers on window resize / iPad split view.
 // So no JS measurement is needed: an earlier measureInWindow → translateX hack
 // fed its own transform back into itself and shoved the pill to the screen edge.
-export function TopicListScopeTabs({ onScopeChange, scope }: TopicListScopeTabsProps) {
+export function MessageScopeTabs({ onScopeChange, scope }: MessageScopeTabsProps) {
   const { t } = useTranslation();
   const translateX = useSharedValue(0);
 

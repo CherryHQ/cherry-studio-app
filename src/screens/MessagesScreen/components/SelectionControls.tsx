@@ -13,9 +13,9 @@ import {
   useMessageSelectionState,
 } from '@/components/messageTabs';
 
-import { TopicSelectionToolbar } from './TopicSelectionToolbar';
+import { SelectionToolbar } from './SelectionToolbar';
 
-export function TopicSelectionControls() {
+export function SelectionControls() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { scope } = useMessageScope();
@@ -64,7 +64,7 @@ export function TopicSelectionControls() {
   return (
     <>
       {isEditing ? (
-        <TopicSelectionToolbar
+        <SelectionToolbar
           isDeleting={isDeleting}
           onDelete={requestDelete}
           onToggleAll={handleToggleAll}

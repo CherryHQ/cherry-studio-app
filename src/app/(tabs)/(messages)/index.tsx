@@ -1,1 +1,1 @@
-export { TopicListRoute as default } from '@/screens/TopicListScreen';
+export { MessagesRoute as default } from '@/screens/MessagesScreen';

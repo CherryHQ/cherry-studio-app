@@ -4,14 +4,14 @@ import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { selectionToolbarGap } from '@/components/messageTabs';
 
-import type { TopicSelectionToolbarProps } from './TopicSelectionToolbar.types';
+import type { SelectionToolbarProps } from './types';
 
-export function TopicSelectionToolbar({
+export function SelectionToolbar({
   isDeleting,
   onDelete,
   onToggleAll,
   selectedCount,
-}: TopicSelectionToolbarProps) {
+}: SelectionToolbarProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const isDeleteDisabled = selectedCount === 0 || isDeleting;

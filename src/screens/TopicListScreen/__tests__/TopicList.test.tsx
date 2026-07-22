@@ -109,7 +109,8 @@ jest.mock('@/hooks/useExclusiveSwipeable', () => ({
   useExclusiveSwipeable: () => ({ notifyClose: jest.fn(), notifyWillOpen: jest.fn() }),
 }));
 
-jest.mock('../../context/TopicListProvider', () => ({
+jest.mock('../context/TopicListProvider', () => ({
+  TopicListProvider: ({ children }: { children: ReactNode }) => children,
   useTopicListActions: () => ({
     loadMoreTopics: jest.fn(),
     openTopic: jest.fn(),
@@ -129,7 +130,7 @@ jest.mock('@/components/messageTabs', () => ({
   useRegisterSelectionSource: () => undefined,
 }));
 
-jest.mock('../TopicActionDialogs', () => ({
+jest.mock('../components/TopicActionDialogs', () => ({
   useTopicActionDialogs: () => ({
     dialogs: null,
     requestDelete: jest.fn(),

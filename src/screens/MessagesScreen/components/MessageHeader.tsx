@@ -7,9 +7,9 @@ import { Pressable, Text, View } from 'react-native';
 
 import type { MessageScope } from '@/components/messageTabs';
 
-import { TopicListScopeTabs } from './TopicListScopeTabs';
+import { MessageScopeTabs } from './MessageScopeTabs';
 
-type TopicListHeaderProps = {
+type MessageHeaderProps = {
   isEditing: boolean;
   onEditPress: () => void;
   onNewPaintingPress: () => void;
@@ -18,14 +18,14 @@ type TopicListHeaderProps = {
   scope: MessageScope;
 };
 
-export const TopicListHeader = memo(function TopicListHeader({
+export const MessageHeader = memo(function MessageHeader({
   isEditing,
   onEditPress,
   onNewPaintingPress,
   onNewTopicPress,
   onScopeChange,
   scope,
-}: TopicListHeaderProps) {
+}: MessageHeaderProps) {
   const { t } = useTranslation();
 
   return (
@@ -48,7 +48,7 @@ export const TopicListHeader = memo(function TopicListHeader({
             {t(scope === 'drawings' ? 'painting.history.title' : 'navigation.messages')}
           </Text>
         ) : (
-          <TopicListScopeTabs scope={scope} onScopeChange={onScopeChange} />
+          <MessageScopeTabs scope={scope} onScopeChange={onScopeChange} />
         )}
       </View>
       <View className="w-[88px] items-end">

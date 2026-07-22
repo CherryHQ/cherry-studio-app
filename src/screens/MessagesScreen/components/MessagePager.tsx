@@ -10,10 +10,9 @@ import Animated, {
 
 import { getMessageScopeIndex, useMessageScope } from '@/components/messageTabs';
 import { DrawingList } from '@/screens/PaintingScreen';
+import { TopicList } from '@/screens/TopicListScreen';
 
-import { TopicList } from './TopicList';
-
-type TopicListPagerProps = {
+type MessagePagerProps = {
   showRecentsHeading?: boolean;
 };
 
@@ -24,7 +23,7 @@ type TopicListPagerProps = {
 // can recover it. Swiping between pages was already disabled (it collides
 // with the topic rows' own swipe actions), so scope-driven translation is
 // all the paging this screen needs.
-export function TopicListPager({ showRecentsHeading = false }: TopicListPagerProps) {
+export function MessagePager({ showRecentsHeading = false }: MessagePagerProps) {
   const { t } = useTranslation();
   const { scope } = useMessageScope();
   const { width: windowWidth } = useWindowDimensions();
