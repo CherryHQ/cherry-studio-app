@@ -3,6 +3,9 @@ declare module 'react-test-renderer' {
 
   export type ReactTestInstance = {
     props: Record<string, any>;
+    type: unknown;
+    find: (predicate: (node: ReactTestInstance) => boolean) => ReactTestInstance;
+    findAll: (predicate: (node: ReactTestInstance) => boolean) => ReactTestInstance[];
     findAllByProps: (props: Record<string, unknown>) => ReactTestInstance[];
     findAllByType: (type: unknown) => ReactTestInstance[];
     findByProps: (props: Record<string, unknown>) => ReactTestInstance;

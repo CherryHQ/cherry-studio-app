@@ -103,8 +103,8 @@ export const TopicList = memo(function TopicList() {
   const { isPinActionDisabled, isTopicListLoading, pinnedTopicIds, topics } = useTopicListTopics();
   const { loadMoreTopics, openTopic, toggleTopicPin } = useTopicListActions();
   const { assistants } = useAssistantsApi();
-  const { toggleTopic } = useTopicListSelectionActions();
-  const { isEditing, selectedTopicIds } = useTopicListSelectionState();
+  const { toggleId } = useTopicListSelectionActions();
+  const { isEditing, selectedIds } = useTopicListSelectionState();
   const { dialogs, requestDelete, requestRename } = useTopicActionDialogs();
   const { notifyClose, notifyWillOpen } = useExclusiveSwipeable();
   const contentContainerStyle = useMemo(
@@ -117,8 +117,8 @@ export const TopicList = memo(function TopicList() {
     [insets.bottom, isEditing, tabBarHeight],
   );
   const listExtraData = useMemo(
-    () => ({ isEditing, isPinActionDisabled, pinnedTopicIds, selectedTopicIds }),
-    [isEditing, isPinActionDisabled, pinnedTopicIds, selectedTopicIds],
+    () => ({ isEditing, isPinActionDisabled, pinnedTopicIds, selectedIds }),
+    [isEditing, isPinActionDisabled, pinnedTopicIds, selectedIds],
   );
   const assistantsById = useMemo(
     () => new Map(assistants.map((assistant) => [assistant.id, assistant])),
@@ -142,14 +142,14 @@ export const TopicList = memo(function TopicList() {
         isPinActionDisabled={isPinActionDisabled}
         isPinned={pinnedTopicIdSet.has(item.id)}
         isLast={index === topics.length - 1}
-        isSelected={selectedTopicIds.has(item.id)}
+        isSelected={selectedIds.has(item.id)}
         notifyClose={notifyClose}
         notifyWillOpen={notifyWillOpen}
         onDelete={requestDelete}
         onPress={openTopic}
         onRename={requestRename}
         onTogglePin={handleTogglePin}
-        onToggle={toggleTopic}
+        onToggle={toggleId}
         topic={item}
       />
     ),
@@ -164,8 +164,8 @@ export const TopicList = memo(function TopicList() {
       pinnedTopicIdSet,
       requestDelete,
       requestRename,
-      selectedTopicIds,
-      toggleTopic,
+      selectedIds,
+      toggleId,
       topics.length,
     ],
   );

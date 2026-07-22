@@ -117,6 +117,52 @@ describe('PaintingService integration', () => {
       code: 'NOT_FOUND',
     });
   });
+
+  it('deletes multiple paintings with their file relationships and ignores duplicate ids', async () => {
+    insertPainting(sqlite, 'painting-a', 'a0', 1);
+    insertPainting(sqlite, 'painting-b', 'a1', 2);
+    insertPainting(sqlite, 'painting-kept', 'a2', 3);
+    insertFileAndRef(sqlite, 'a-output', 'painting-a', 'output', 1);
+    insertFileAndRef(sqlite, 'b-output', 'painting-b', 'output', 2);
+    insertFileAndRef(sqlite, 'kept-output', 'painting-kept', 'output', 3);
+
+    await service.deleteMany(['painting-a', 'painting-b', 'painting-a']);
+
+    expect(sqlite.prepare('SELECT id FROM painting').all()).toEqual([{ id: 'painting-kept' }]);
+    expect(sqlite.prepare('SELECT file_entry_id FROM painting_file_ref').all()).toEqual([
+      { file_entry_id: 'kept-output' },
+    ]);
+  });
+
+  it('rolls back the batch when any selected painting is missing', async () => {
+    insertPainting(sqlite, 'painting-existing', 'a0', 1);
+    insertFileAndRef(sqlite, 'existing-output', 'painting-existing', 'output', 1);
+
+    await expect(
+      service.deleteMany(['painting-existing', 'missing-painting']),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM painting').get()).toEqual({ count: 1 });
+  });
+
+  it('does nothing when deleteMany receives no ids', async () => {
+    insertPainting(sqlite, 'painting-kept', 'a0', 1);
+
+    await service.deleteMany([]);
+
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM painting').get()).toEqual({ count: 1 });
+  });
+
+  it('lists all painting ids with outputs in gallery order', async () => {
+    insertPainting(sqlite, 'painting-first', 'a0', 3);
+    insertPainting(sqlite, 'painting-empty', 'a1', 2);
+    insertPainting(sqlite, 'painting-last', 'a2', 1);
+    insertFileAndRef(sqlite, 'first-output', 'painting-first', 'output', 3);
+    insertFileAndRef(sqlite, 'empty-input', 'painting-empty', 'input', 2);
+    insertFileAndRef(sqlite, 'last-output', 'painting-last', 'output', 1);
+
+    await expect(service.listAllIds()).resolves.toEqual(['painting-first', 'painting-last']);
+  });
 });
 
 function applyMigrations(database: DatabaseSync) {

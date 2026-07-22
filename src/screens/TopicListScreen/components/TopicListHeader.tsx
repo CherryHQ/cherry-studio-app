@@ -10,7 +10,6 @@ import { TopicListScopeTabs } from './TopicListScopeTabs';
 
 type TopicListHeaderProps = {
   isEditing: boolean;
-  isEditVisible: boolean;
   onEditPress: () => void;
   onNewPaintingPress: () => void;
   onNewTopicPress: () => void;
@@ -20,7 +19,6 @@ type TopicListHeaderProps = {
 
 export const TopicListHeader = memo(function TopicListHeader({
   isEditing,
-  isEditVisible,
   onEditPress,
   onNewPaintingPress,
   onNewTopicPress,
@@ -32,23 +30,21 @@ export const TopicListHeader = memo(function TopicListHeader({
   return (
     <View className="h-14 flex-row items-center px-2">
       <View className="w-[88px] items-start">
-        {isEditVisible ? (
-          <Pressable
-            accessibilityRole="button"
-            className="h-11 justify-center pr-3 active:opacity-60"
-            hitSlop={8}
-            onPress={onEditPress}
-          >
-            <Text className="font-medium text-base text-primary">
-              {t(isEditing ? 'common.done' : 'common.edit')}
-            </Text>
-          </Pressable>
-        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          className="h-11 justify-center pr-3 active:opacity-60"
+          hitSlop={8}
+          onPress={onEditPress}
+        >
+          <Text className="font-medium text-base text-primary">
+            {t(isEditing ? 'common.done' : 'common.edit')}
+          </Text>
+        </Pressable>
       </View>
       <View className="min-w-0 flex-1 items-center">
         {isEditing ? (
           <Text className="text-center font-semibold text-lg text-foreground" numberOfLines={1}>
-            {t('navigation.messages')}
+            {t(scope === 'drawings' ? 'painting.history.title' : 'navigation.messages')}
           </Text>
         ) : (
           <TopicListScopeTabs scope={scope} onScopeChange={onScopeChange} />

@@ -1,19 +1,11 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { Topic } from '@/data/types/topic';
-
 import {
   TopicListSelectionProvider,
   useTopicListSelectionActions,
   useTopicListSelectionState,
 } from '../TopicListSelectionProvider';
-
-const mockTopics = [{ id: 'topic-1' }, { id: 'topic-2' }] as Topic[];
-
-jest.mock('../TopicListProvider', () => ({
-  useTopicListTopics: () => ({ topics: mockTopics }),
-}));
 
 let currentActions: ReturnType<typeof useTopicListSelectionActions> | undefined;
 let currentState: ReturnType<typeof useTopicListSelectionState> | undefined;
@@ -67,8 +59,33 @@ describe('TopicListSelectionProvider', () => {
     });
 
     expect(currentState?.isEditing).toBe(false);
-    expect(currentState?.selectedTopicIds).toEqual(new Set());
+    expect(currentState?.selectedIds).toEqual(new Set());
     expect(onEditingChange).toHaveBeenLastCalledWith(false);
+  });
+
+  test('toggles single ids and switches between select-all and clear', async () => {
+    await act(async () => {
+      renderer = create(
+        <TopicListSelectionProvider>
+          <TopicListSelectionProbe />
+        </TopicListSelectionProvider>,
+      );
+    });
+
+    await act(async () => {
+      currentActions?.toggleId('id-1');
+    });
+    expect(currentState?.selectedIds).toEqual(new Set(['id-1']));
+
+    await act(async () => {
+      currentActions?.toggleAll(['id-1', 'id-2']);
+    });
+    expect(currentState?.selectedIds).toEqual(new Set(['id-1', 'id-2']));
+
+    await act(async () => {
+      currentActions?.toggleAll(['id-1', 'id-2']);
+    });
+    expect(currentState?.selectedIds).toEqual(new Set());
   });
 
   test('restores the tab bar when the provider unmounts while editing', async () => {

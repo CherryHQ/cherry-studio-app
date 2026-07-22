@@ -5,7 +5,9 @@ import { useToast } from 'heroui-native/toast';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-import { useTopicListActions } from '../context/TopicListProvider';
+import { useDeletePaintings, usePaintingIds } from '@/hooks/paintings';
+import { useTopicListActions, useTopicListTopics } from '../context/TopicListProvider';
+import { useTopicListScope } from '../context/TopicListScopeProvider';
 import {
   useTopicListSelectionActions,
   useTopicListSelectionState,
@@ -15,18 +17,33 @@ import { TopicSelectionToolbar } from './TopicSelectionToolbar';
 export function TopicSelectionControls() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { scope } = useTopicListScope();
+  const isDrawingsScope = scope === 'drawings';
+  const { topics } = useTopicListTopics();
   const { deleteTopics } = useTopicListActions();
-  const { exitEditing, toggleAllTopics } = useTopicListSelectionActions();
-  const { isEditing, selectedTopicIds } = useTopicListSelectionState();
+  const deletePaintings = useDeletePaintings();
+  const { exitEditing, toggleAll } = useTopicListSelectionActions();
+  const { isEditing, selectedIds } = useTopicListSelectionState();
+  const paintingIds = usePaintingIds({ enabled: isEditing && isDrawingsScope });
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const selectedCount = selectedTopicIds.size;
+  const selectedCount = selectedIds.size;
+
+  const handleToggleAll = useCallback(() => {
+    if (isDrawingsScope) {
+      if (paintingIds.data) {
+        toggleAll(paintingIds.data);
+      }
+      return;
+    }
+    toggleAll(topics.map((topic) => topic.id));
+  }, [isDrawingsScope, paintingIds.data, toggleAll, topics]);
 
   const requestDelete = useCallback(() => {
-    if (selectedTopicIds.size > 0) {
+    if (selectedIds.size > 0) {
       setIsDeleteDialogOpen(true);
     }
-  }, [selectedTopicIds.size]);
+  }, [selectedIds.size]);
 
   const closeDeleteDialog = useCallback(() => {
     if (!isDeleting) {
@@ -35,23 +52,28 @@ export function TopicSelectionControls() {
   }, [isDeleting]);
 
   const confirmDelete = useCallback(async () => {
-    const topicIds = [...selectedTopicIds];
-    if (topicIds.length === 0) {
+    const ids = [...selectedIds];
+    if (ids.length === 0) {
       setIsDeleteDialogOpen(false);
       return;
     }
 
     setIsDeleting(true);
     try {
-      await deleteTopics(topicIds);
+      await (isDrawingsScope ? deletePaintings(ids) : deleteTopics(ids));
       setIsDeleteDialogOpen(false);
       exitEditing();
     } catch {
-      toast.show({ label: t('topic.selection.deleteFailed'), variant: 'danger' });
+      toast.show({
+        label: t(
+          isDrawingsScope ? 'painting.selection.deleteFailed' : 'topic.selection.deleteFailed',
+        ),
+        variant: 'danger',
+      });
     } finally {
       setIsDeleting(false);
     }
-  }, [deleteTopics, exitEditing, selectedTopicIds, t, toast]);
+  }, [deletePaintings, deleteTopics, exitEditing, isDrawingsScope, selectedIds, t, toast]);
 
   return (
     <>
@@ -59,7 +81,7 @@ export function TopicSelectionControls() {
         <TopicSelectionToolbar
           isDeleting={isDeleting}
           onDelete={requestDelete}
-          onToggleAll={toggleAllTopics}
+          onToggleAll={handleToggleAll}
           selectedCount={selectedCount}
         />
       ) : null}
@@ -69,9 +91,20 @@ export function TopicSelectionControls() {
           <Dialog.Overlay isCloseOnPress={!isDeleting} />
           <Dialog.Content className="gap-5 rounded-3xl bg-overlay p-5" isSwipeable={false}>
             <View className="gap-1.5">
-              <Dialog.Title>{t('topic.selection.deleteTitle')}</Dialog.Title>
+              <Dialog.Title>
+                {t(
+                  isDrawingsScope
+                    ? 'painting.selection.deleteTitle'
+                    : 'topic.selection.deleteTitle',
+                )}
+              </Dialog.Title>
               <Dialog.Description>
-                {t('topic.selection.deleteMessage', { count: selectedCount })}
+                {t(
+                  isDrawingsScope
+                    ? 'painting.selection.deleteMessage'
+                    : 'topic.selection.deleteMessage',
+                  { count: selectedCount },
+                )}
               </Dialog.Description>
             </View>
             <View className="flex-row justify-end gap-3">

@@ -7,23 +7,18 @@ import {
   useMemo,
   useState,
 } from 'react';
-import {
-  areAllTopicsSelected,
-  getAllTopicIds,
-  toggleTopicSelection,
-} from '../utils/topicSelection';
-import { useTopicListTopics } from './TopicListProvider';
+import { areAllSelected, toggleSelection } from '../utils/topicSelection';
 
 type TopicListSelectionState = {
   isEditing: boolean;
-  selectedTopicIds: ReadonlySet<string>;
+  selectedIds: ReadonlySet<string>;
 };
 
 type TopicListSelectionActions = {
   enterEditing: () => void;
   exitEditing: () => void;
-  toggleAllTopics: () => void;
-  toggleTopic: (topicId: string) => void;
+  toggleAll: (allIds: readonly string[]) => void;
+  toggleId: (id: string) => void;
 };
 
 const TopicListSelectionStateContext = createContext<TopicListSelectionState | null>(null);
@@ -37,9 +32,8 @@ export function TopicListSelectionProvider({
   children,
   onEditingChange,
 }: TopicListSelectionProviderProps) {
-  const { topics } = useTopicListTopics();
   const [isEditing, setIsEditing] = useState(false);
-  const [selectedTopicIds, setSelectedTopicIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const enterEditing = useCallback(() => {
     setIsEditing(true);
@@ -48,7 +42,7 @@ export function TopicListSelectionProvider({
 
   const exitEditing = useCallback(() => {
     setIsEditing(false);
-    setSelectedTopicIds(new Set());
+    setSelectedIds(new Set());
     onEditingChange?.(false);
   }, [onEditingChange]);
 
@@ -59,23 +53,18 @@ export function TopicListSelectionProvider({
     [onEditingChange],
   );
 
-  const toggleTopic = useCallback((topicId: string) => {
-    setSelectedTopicIds((current) => toggleTopicSelection(current, topicId));
+  const toggleId = useCallback((id: string) => {
+    setSelectedIds((current) => toggleSelection(current, id));
   }, []);
 
-  const toggleAllTopics = useCallback(() => {
-    setSelectedTopicIds((current) =>
-      areAllTopicsSelected(current, topics) ? new Set() : getAllTopicIds(topics),
-    );
-  }, [topics]);
+  const toggleAll = useCallback((allIds: readonly string[]) => {
+    setSelectedIds((current) => (areAllSelected(current, allIds) ? new Set() : new Set(allIds)));
+  }, []);
 
-  const stateValue = useMemo(
-    () => ({ isEditing, selectedTopicIds }),
-    [isEditing, selectedTopicIds],
-  );
+  const stateValue = useMemo(() => ({ isEditing, selectedIds }), [isEditing, selectedIds]);
   const actionsValue = useMemo(
-    () => ({ enterEditing, exitEditing, toggleAllTopics, toggleTopic }),
-    [enterEditing, exitEditing, toggleAllTopics, toggleTopic],
+    () => ({ enterEditing, exitEditing, toggleAll, toggleId }),
+    [enterEditing, exitEditing, toggleAll, toggleId],
   );
 
   return (

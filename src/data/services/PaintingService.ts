@@ -42,12 +42,8 @@ export class PaintingService {
     return this.dbService.getDb();
   }
 
-  async listByCursor(
-    params: { cursor?: string; limit?: number } = {},
-  ): Promise<CursorPaginationResponse<Painting>> {
-    const limit = Math.min(Math.max(params.limit ?? defaultLimit, 1), maxLimit);
-    const cursor = params.cursor ? decodeCursor(params.cursor) : undefined;
-    const hasOutput = exists(
+  private hasOutputFilter() {
+    return exists(
       this.db
         .select({ id: paintingFileRefTable.id })
         .from(paintingFileRefTable)
@@ -58,6 +54,14 @@ export class PaintingService {
           ),
         ),
     );
+  }
+
+  async listByCursor(
+    params: { cursor?: string; limit?: number } = {},
+  ): Promise<CursorPaginationResponse<Painting>> {
+    const limit = Math.min(Math.max(params.limit ?? defaultLimit, 1), maxLimit);
+    const cursor = params.cursor ? decodeCursor(params.cursor) : undefined;
+    const hasOutput = this.hasOutputFilter();
     const afterCursor = cursor
       ? or(
           gt(paintingTable.orderKey, cursor.orderKey),
@@ -81,6 +85,15 @@ export class PaintingService {
         ? { nextCursor: encodeCursor({ id: last.id, orderKey: last.orderKey }) }
         : {}),
     };
+  }
+
+  async listAllIds(): Promise<string[]> {
+    const rows = await this.db
+      .select({ id: paintingTable.id })
+      .from(paintingTable)
+      .where(this.hasOutputFilter())
+      .orderBy(asc(paintingTable.orderKey), asc(paintingTable.id));
+    return rows.map((row) => row.id);
   }
 
   async getById(id: string): Promise<Painting> {
@@ -173,13 +186,25 @@ export class PaintingService {
   }
 
   async delete(id: string): Promise<void> {
+    await this.deleteMany([id]);
+  }
+
+  async deleteMany(ids: readonly string[]): Promise<void> {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) {
+      return;
+    }
+
     await this.dbService.withWriteTx(async (tx) => {
       const deleted = await tx
         .delete(paintingTable)
-        .where(eq(paintingTable.id, id))
+        .where(inArray(paintingTable.id, uniqueIds))
         .returning({ id: paintingTable.id });
-      if (deleted.length === 0) {
-        throw DataApiErrorFactory.notFound('Painting', id);
+      if (deleted.length !== uniqueIds.length) {
+        throw DataApiErrorFactory.notFound(
+          'Painting',
+          uniqueIds.length === 1 ? uniqueIds[0] : 'one or more selected paintings',
+        );
       }
     });
   }

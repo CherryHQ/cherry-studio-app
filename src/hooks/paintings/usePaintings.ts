@@ -3,7 +3,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { useCallback, useMemo } from 'react';
 
 import { queryKeys } from '@/data/api';
-import { useDataInfiniteQuery, useDataQuery } from '@/data/hooks';
+import { useDataInfiniteQuery, useDataMutation, useDataQuery } from '@/data/hooks';
 import type { CursorPaginationResponse } from '@/data/types/apiTypes';
 import { imageMediaTypeFromExtension } from '@/data/types/file';
 import type { Painting } from '@/data/types/painting';
@@ -62,6 +62,40 @@ export function usePaintings() {
     paintings,
     query,
   };
+}
+
+export function usePaintingIds({ enabled }: { enabled: boolean }) {
+  return useDataQuery({
+    enabled,
+    queryFn: (services) => services.painting.listAllIds(),
+    queryKey: queryKeys.paintings.allIds(),
+  });
+}
+
+export function useDeletePaintings() {
+  const queryClient = useQueryClient();
+  const deletePaintingsMutation = useDataMutation({
+    invalidateQueries: [queryKeys.paintings.all()],
+    mutationFn: (dataServices, ids: readonly string[]) => dataServices.painting.deleteMany(ids),
+    onSuccess: (_result, ids) => {
+      for (const id of ids) {
+        // Drop rather than invalidate: refetching a deleted painting would throw.
+        queryClient.removeQueries({ queryKey: queryKeys.paintings.detail(id) });
+      }
+    },
+  });
+
+  return useCallback(
+    async (ids: readonly string[]) => {
+      const uniqueIds = [...new Set(ids)];
+      if (uniqueIds.length === 0) {
+        return;
+      }
+
+      await deletePaintingsMutation.mutateAsync(uniqueIds);
+    },
+    [deletePaintingsMutation],
+  );
 }
 
 export function usePainting(id: string | undefined) {

@@ -2,7 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
-import { ImageIcon } from 'lucide-uniwind/png';
+import { CheckIcon, ImageIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -14,10 +14,12 @@ import {
   View,
 } from 'react-native';
 import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Image } from '@/components/nativePrimitives';
 import { PaintingZoomLink } from '@/components/navigation';
-import { usePaintingGalleryItems, usePaintings } from '@/hooks/paintings';
+import { type PaintingGalleryItem, usePaintingGalleryItems, usePaintings } from '@/hooks/paintings';
 import {
   CHAT_INPUT_PHOTO_SELECTION_LIMIT,
   type ChatInputPhotoPreview,
@@ -34,10 +36,18 @@ import {
 } from '@/screens/PaintingScreen/utils/paintingDraftHandoff';
 import { useTopicListScope } from '../context/TopicListScopeProvider';
 import {
+  useTopicListSelectionActions,
+  useTopicListSelectionState,
+} from '../context/TopicListSelectionProvider';
+import {
   type PaintingTemplate,
   PaintingTemplateRow,
   toPaintingTemplateDraft,
 } from '../paintingTemplates';
+import {
+  topicSelectionToolbarGap,
+  topicSelectionToolbarHeight,
+} from './topicSelectionToolbarLayout';
 
 const recentPhotoLimit = 12;
 const galleryGap = 6;
@@ -48,7 +58,10 @@ export function DrawingList() {
   const { toast } = useToast();
   const router = useRouter();
   const { scope } = useTopicListScope();
+  const { isEditing, selectedIds } = useTopicListSelectionState();
+  const { toggleId } = useTopicListSelectionActions();
   const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const recentPhotos = useRecentPaintingPhotos(scope === 'drawings');
   const paintings = usePaintings();
@@ -133,7 +146,11 @@ export function DrawingList() {
   return (
     <ScrollView
       className="flex-1 bg-background"
-      contentContainerStyle={{ paddingBottom: tabBarHeight + 24 }}
+      contentContainerStyle={{
+        paddingBottom: isEditing
+          ? insets.bottom + topicSelectionToolbarHeight + topicSelectionToolbarGap * 2
+          : tabBarHeight + 24,
+      }}
       onScroll={({ nativeEvent }) => {
         const distanceToEnd =
           nativeEvent.contentSize.height -
@@ -145,63 +162,69 @@ export function DrawingList() {
       scrollEventThrottle={160}
       testID="drawing-home-scroll"
     >
-      <View className="pb-5 pt-2">
-        <View className="h-10 flex-row items-center justify-between px-4">
-          <Text className="font-semibold text-foreground text-base">
-            {t('painting.photos.title')}
-          </Text>
-          <Pressable
-            accessibilityLabel={t('painting.photos.viewAll')}
-            accessibilityRole="button"
-            className="h-10 flex-row items-center px-1 active:opacity-60"
-            onPress={() => void handleViewAllPress()}
-            testID="painting-photos-view-all"
-          >
-            <Text className="font-medium text-primary text-sm">{t('painting.photos.viewAll')}</Text>
-          </Pressable>
-        </View>
-        {recentPhotos.isLoading ? (
-          <View className="h-20 items-center justify-center">
-            <ActivityIndicator />
-          </View>
-        ) : recentPhotos.photos.length > 0 ? (
-          <ScrollView
-            contentContainerClassName="gap-2 px-4"
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            testID="painting-recent-photos"
-          >
-            {recentPhotos.photos.map((photo, index) => (
+      {isEditing ? null : (
+        <>
+          <View className="pb-5 pt-2">
+            <View className="h-10 flex-row items-center justify-between px-4">
+              <Text className="font-semibold text-foreground text-base">
+                {t('painting.photos.title')}
+              </Text>
               <Pressable
-                accessibilityLabel={t('painting.photos.item', { index: index + 1 })}
+                accessibilityLabel={t('painting.photos.viewAll')}
                 accessibilityRole="button"
-                className="size-20 overflow-hidden rounded-md active:opacity-70"
-                key={photo.id}
-                onPress={() => void handleRecentPhotoPress(photo)}
-                testID={`painting-recent-photo-${index}`}
+                className="h-10 flex-row items-center px-1 active:opacity-60"
+                onPress={() => void handleViewAllPress()}
+                testID="painting-photos-view-all"
               >
-                <Image
-                  cachePolicy="memory-disk"
-                  contentFit="cover"
-                  recyclingKey={photo.id}
-                  source={photo.uri}
-                  style={{ height: '100%', width: '100%' }}
-                />
+                <Text className="font-medium text-primary text-sm">
+                  {t('painting.photos.viewAll')}
+                </Text>
               </Pressable>
-            ))}
-          </ScrollView>
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            className="mx-4 h-20 items-center justify-center rounded-md bg-surface-secondary active:opacity-70"
-            onPress={() => void handleViewAllPress()}
-          >
-            <ImageIcon className="size-6 text-foreground-muted" strokeWidth={1.5} />
-          </Pressable>
-        )}
-      </View>
+            </View>
+            {recentPhotos.isLoading ? (
+              <View className="h-20 items-center justify-center">
+                <ActivityIndicator />
+              </View>
+            ) : recentPhotos.photos.length > 0 ? (
+              <ScrollView
+                contentContainerClassName="gap-2 px-4"
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                testID="painting-recent-photos"
+              >
+                {recentPhotos.photos.map((photo, index) => (
+                  <Pressable
+                    accessibilityLabel={t('painting.photos.item', { index: index + 1 })}
+                    accessibilityRole="button"
+                    className="size-20 overflow-hidden rounded-md active:opacity-70"
+                    key={photo.id}
+                    onPress={() => void handleRecentPhotoPress(photo)}
+                    testID={`painting-recent-photo-${index}`}
+                  >
+                    <Image
+                      cachePolicy="memory-disk"
+                      contentFit="cover"
+                      recyclingKey={photo.id}
+                      source={photo.uri}
+                      style={{ height: '100%', width: '100%' }}
+                    />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                className="mx-4 h-20 items-center justify-center rounded-md bg-surface-secondary active:opacity-70"
+                onPress={() => void handleViewAllPress()}
+              >
+                <ImageIcon className="size-6 text-foreground-muted" strokeWidth={1.5} />
+              </Pressable>
+            )}
+          </View>
 
-      <PaintingTemplateRow onUseTemplate={handleTemplateUse} />
+          <PaintingTemplateRow onUseTemplate={handleTemplateUse} />
+        </>
+      )}
 
       <Text className="px-4 pb-3 font-semibold text-foreground text-base">
         {t('painting.history.title')}
@@ -220,27 +243,15 @@ export function DrawingList() {
           {namedColumns.map((column) => (
             <View className="flex-1 gap-1.5" key={column.key}>
               {column.items.map((item) => (
-                <PaintingZoomLink
-                  fileEntryId={item.fileEntryId}
+                <DrawingGridItem
+                  height={columnWidth / item.aspectRatio}
+                  isEditing={isEditing}
+                  isSelected={selectedIds.has(item.painting.id)}
+                  item={item}
                   key={item.key}
-                  paintingId={item.painting.id}
-                >
-                  <Pressable
-                    accessibilityLabel={t('painting.history.item')}
-                    accessibilityRole="button"
-                    className="overflow-hidden rounded-md bg-surface-secondary active:opacity-75"
-                    style={{ height: columnWidth / item.aspectRatio }}
-                    testID={`painting-history-${item.key}`}
-                  >
-                    <Image
-                      cachePolicy="memory-disk"
-                      contentFit="cover"
-                      source={item.uri}
-                      style={{ height: '100%', width: '100%' }}
-                      transition={120}
-                    />
-                  </Pressable>
-                </PaintingZoomLink>
+                  label={t('painting.history.item')}
+                  onToggle={toggleId}
+                />
               ))}
             </View>
           ))}
@@ -252,6 +263,79 @@ export function DrawingList() {
         </View>
       ) : null}
     </ScrollView>
+  );
+}
+
+type DrawingGridItemProps = {
+  height: number;
+  isEditing: boolean;
+  isSelected: boolean;
+  item: PaintingGalleryItem;
+  label: string;
+  onToggle: (paintingId: string) => void;
+};
+
+function DrawingGridItem({
+  height,
+  isEditing,
+  isSelected,
+  item,
+  label,
+  onToggle,
+}: DrawingGridItemProps) {
+  const image = (
+    <Image
+      cachePolicy="memory-disk"
+      contentFit="cover"
+      source={item.uri}
+      style={{ height: '100%', width: '100%' }}
+      transition={120}
+    />
+  );
+
+  // A Link navigates on tap regardless of onPress, so editing mode must drop
+  // the PaintingZoomLink wrapper entirely to turn taps into selection.
+  if (isEditing) {
+    return (
+      <Pressable
+        accessibilityLabel={label}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: isSelected }}
+        className="overflow-hidden rounded-md bg-surface-secondary active:opacity-75"
+        onPress={() => onToggle(item.painting.id)}
+        style={{ height }}
+        testID={`painting-history-${item.key}`}
+      >
+        {image}
+        <Animated.View
+          className="absolute top-1.5 right-1.5"
+          entering={FadeIn.duration(160)}
+          exiting={FadeOut.duration(120)}
+        >
+          {isSelected ? (
+            <View className="size-6 items-center justify-center rounded-full bg-primary">
+              <CheckIcon className="size-4 text-white" strokeWidth={3} />
+            </View>
+          ) : (
+            <View className="size-6 rounded-full border-2 border-foreground-muted bg-black/30" />
+          )}
+        </Animated.View>
+      </Pressable>
+    );
+  }
+
+  return (
+    <PaintingZoomLink fileEntryId={item.fileEntryId} paintingId={item.painting.id}>
+      <Pressable
+        accessibilityLabel={label}
+        accessibilityRole="button"
+        className="overflow-hidden rounded-md bg-surface-secondary active:opacity-75"
+        style={{ height }}
+        testID={`painting-history-${item.key}`}
+      >
+        {image}
+      </Pressable>
+    </PaintingZoomLink>
   );
 }
 

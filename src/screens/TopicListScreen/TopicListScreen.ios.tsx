@@ -41,7 +41,9 @@ export function TopicListScreen() {
         }}
       />
       {isEditing ? (
-        <Stack.Title>{t('navigation.messages')}</Stack.Title>
+        <Stack.Title>
+          {t(isConversationScope ? 'navigation.messages' : 'painting.history.title')}
+        </Stack.Title>
       ) : (
         <Stack.Title asChild>
           <TopicListScopeTabs scope={scope} onScopeChange={setScope} />
@@ -50,7 +52,6 @@ export function TopicListScreen() {
       <Stack.Toolbar placement="left">
         <Stack.Toolbar.Button
           accessibilityLabel={t(isEditing ? 'common.done' : 'common.edit')}
-          hidden={!isConversationScope}
           onPress={isEditing ? exitEditing : enterEditing}
         >
           {t(isEditing ? 'common.done' : 'common.edit')}

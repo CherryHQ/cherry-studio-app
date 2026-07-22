@@ -41,6 +41,7 @@ jest.mock('react-i18next', () => ({
         'navigation.new': 'Create new',
         'navigation.newChat': 'New chat',
         'navigation.newPainting': 'New drawing',
+        'painting.history.title': 'Your drawings',
       })[key] ?? key,
   }),
 }));
@@ -59,7 +60,6 @@ describe('TopicListHeader', () => {
   const onScopeChange = jest.fn();
   const defaultProps = {
     isEditing: false,
-    isEditVisible: true,
     onEditPress: jest.fn(),
     onNewPaintingPress: jest.fn(),
     onNewTopicPress: jest.fn(),
@@ -106,6 +106,20 @@ describe('TopicListHeader', () => {
     expect(renderer.root.findAllByProps({ testID: 'topic-create-menu' })).toHaveLength(0);
     expect(
       renderer.root.findAllByType(Text).some((item) => item.props.children === 'Messages'),
+    ).toBe(true);
+  });
+
+  it('shows the drawings title while editing in the drawings scope', async () => {
+    await act(async () => {
+      renderer = create(<TopicListHeader {...defaultProps} isEditing scope="drawings" />);
+    });
+
+    if (!renderer) {
+      throw new Error('TopicListHeader test renderer was not created.');
+    }
+
+    expect(
+      renderer.root.findAllByType(Text).some((item) => item.props.children === 'Your drawings'),
     ).toBe(true);
   });
 });

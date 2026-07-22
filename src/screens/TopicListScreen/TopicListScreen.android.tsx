@@ -18,13 +18,11 @@ export function TopicListScreen() {
   const { scope, setScope } = useTopicListScope();
   const { enterEditing, exitEditing } = useTopicListSelectionActions();
   const { isEditing } = useTopicListSelectionState();
-  const isConversationScope = scope === 'conversations';
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <TopicListHeader
         isEditing={isEditing}
-        isEditVisible={isConversationScope}
         onEditPress={isEditing ? exitEditing : enterEditing}
         onNewPaintingPress={openNewPainting}
         onNewTopicPress={openNewTopic}
