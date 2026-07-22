@@ -20,6 +20,8 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  selectionToolbarGap,
+  selectionToolbarHeight,
   useMessageSelectionActions,
   useMessageSelectionState,
   useRegisterSelectionSource,
@@ -32,10 +34,6 @@ import { useExclusiveSwipeable } from '@/hooks/useExclusiveSwipeable';
 import { useTopicListActions, useTopicListTopics } from '../context/TopicListProvider';
 import { useTopicSelectionSource } from '../context/useTopicSelectionSource';
 import { useTopicActionDialogs } from './TopicActionDialogs';
-import {
-  topicSelectionToolbarGap,
-  topicSelectionToolbarHeight,
-} from './topicSelectionToolbarLayout';
 
 type TopicRowProps = {
   assistant?: Assistant;
@@ -114,7 +112,7 @@ export const TopicList = memo(function TopicList() {
   const contentContainerStyle = useMemo(
     () => ({
       paddingBottom: isEditing
-        ? insets.bottom + topicSelectionToolbarHeight + topicSelectionToolbarGap * 2
+        ? insets.bottom + selectionToolbarHeight + selectionToolbarGap * 2
         : tabBarHeight,
       paddingHorizontal: 8,
     }),

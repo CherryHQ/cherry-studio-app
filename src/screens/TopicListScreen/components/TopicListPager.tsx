@@ -9,8 +9,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { getMessageScopeIndex, useMessageScope } from '@/components/messageTabs';
+import { DrawingList } from '@/screens/PaintingScreen';
 
-import { DrawingList } from './DrawingList';
 import { TopicList } from './TopicList';
 
 type TopicListPagerProps = {

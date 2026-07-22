@@ -17,6 +17,8 @@ import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  selectionToolbarGap,
+  selectionToolbarHeight,
   useMessageScope,
   useMessageSelectionActions,
   useMessageSelectionState,
@@ -34,22 +36,13 @@ import {
   type ChatInputAttachmentDraft,
   createPhotoAttachmentDraft,
 } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
-import {
-  type PaintingTemplate,
-  PaintingTemplateRow,
-  toPaintingTemplateDraft,
-} from '@/screens/PaintingScreen/templates';
-import { usePaintingSelectionSource } from '@/screens/PaintingScreen/usePaintingSelectionSource';
-import { distributeMasonryItems } from '@/screens/PaintingScreen/utils/masonry';
+import { type PaintingTemplate, PaintingTemplateRow, toPaintingTemplateDraft } from './templates';
+import { usePaintingSelectionSource } from './usePaintingSelectionSource';
+import { distributeMasonryItems } from './utils/masonry';
 import {
   createPaintingDraftHandoff,
   type PaintingDraftHandoff,
-} from '@/screens/PaintingScreen/utils/paintingDraftHandoff';
-
-import {
-  topicSelectionToolbarGap,
-  topicSelectionToolbarHeight,
-} from './topicSelectionToolbarLayout';
+} from './utils/paintingDraftHandoff';
 
 const recentPhotoLimit = 12;
 const galleryGap = 6;
@@ -152,7 +145,7 @@ export function DrawingList() {
       className="flex-1 bg-background"
       contentContainerStyle={{
         paddingBottom: isEditing
-          ? insets.bottom + topicSelectionToolbarHeight + topicSelectionToolbarGap * 2
+          ? insets.bottom + selectionToolbarHeight + selectionToolbarGap * 2
           : tabBarHeight + 24,
       }}
       onScroll={({ nativeEvent }) => {

@@ -2,8 +2,9 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { selectionToolbarGap } from '@/components/messageTabs';
+
 import type { TopicSelectionToolbarProps } from './TopicSelectionToolbar.types';
-import { topicSelectionToolbarGap } from './topicSelectionToolbarLayout';
 
 export function TopicSelectionToolbar({
   isDeleting,
@@ -26,7 +27,7 @@ export function TopicSelectionToolbar({
       pointerEvents="box-none"
       style={[
         styles.container,
-        { paddingBottom: Math.max(insets.bottom - 2, topicSelectionToolbarGap) },
+        { paddingBottom: Math.max(insets.bottom - 2, selectionToolbarGap) },
       ]}
     >
       <View className="bg-background/85" pointerEvents="none" style={styles.backdrop} />
@@ -69,13 +70,13 @@ const styles = StyleSheet.create({
     left: 0,
     position: 'absolute',
     right: 0,
-    top: topicSelectionToolbarGap,
+    top: selectionToolbarGap,
   },
   container: {
     bottom: 0,
     left: 0,
     paddingHorizontal: 12,
-    paddingTop: topicSelectionToolbarGap,
+    paddingTop: selectionToolbarGap,
     position: 'absolute',
     right: 0,
     zIndex: 20,

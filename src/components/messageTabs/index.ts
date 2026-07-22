@@ -15,3 +15,4 @@ export {
   messageScopes,
 } from './scope';
 export { areAllSelected, toggleSelection } from './selection';
+export { selectionToolbarGap, selectionToolbarHeight } from './selectionToolbarLayout';
