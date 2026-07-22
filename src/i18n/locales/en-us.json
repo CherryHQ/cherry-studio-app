@@ -1,6 +1,8 @@
 {
   "home.activity.toggleHint": "Plays or rewinds the activity animation.",
   "home.activity.title": "Activity",
+  "home.activity.weeklyDays": "{{count}} of {{total}} this week",
+  "home.activity.yearlyDays": "{{count}} days this year",
   "chat.actions.createImage": "Create image",
   "chat.actions.webSearch": "Web search",
   "chat.webSearch.approvalRequested": "Approval requested",

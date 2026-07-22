@@ -2,6 +2,7 @@ import { homeActivityCalendar } from '@/config/constants';
 
 import {
   buildActivityCalendarWeeks,
+  getActivitySummary,
   getActivitySweepDelayMs,
   startOfMondayWeek,
   toLocalDateKey,
@@ -53,5 +54,30 @@ describe('activity calendar layout', () => {
     expect(getActivitySweepDelayMs(0, 6)).toBe(0);
     expect(getActivitySweepDelayMs(0, 5)).toBe(getActivitySweepDelayMs(1, 6));
     expect(getActivitySweepDelayMs(1, 0)).toBe(homeActivityCalendar.sweepStepMs * 7);
+  });
+
+  test('summarizes lit days for the current year and Monday-start week', () => {
+    expect(
+      getActivitySummary({
+        '2025-12-31': 4,
+        '2026-01-01': 1,
+        '2026-07-19': 3,
+        '2026-07-20': 2,
+        '2026-07-21': 0,
+        '2026-07-22': 4,
+      }),
+    ).toEqual({
+      weekActiveDays: 2,
+      weekElapsedDays: 3,
+      yearActiveDays: 4,
+    });
+  });
+
+  test('returns zero counts for empty activity data', () => {
+    expect(getActivitySummary({})).toEqual({
+      weekActiveDays: 0,
+      weekElapsedDays: 0,
+      yearActiveDays: 0,
+    });
   });
 });

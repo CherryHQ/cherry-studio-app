@@ -1,6 +1,8 @@
 {
   "home.activity.toggleHint": "播放或倒回活跃度动画。",
   "home.activity.title": "活跃度",
+  "home.activity.weeklyDays": "本周 {{count}} / {{total}} 天",
+  "home.activity.yearlyDays": "今年点亮 {{count}} 天",
   "chat.actions.createImage": "创建图片",
   "chat.actions.webSearch": "网络搜索",
   "chat.webSearch.approvalRequested": "请求审批",
