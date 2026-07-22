@@ -1,23 +1,24 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  MessageScopeProvider,
+  MessageSelectionProvider,
+  useMessageScope,
+  useMessageSelectionActions,
+  useMessageSelectionState,
+} from '@/components/messageTabs';
 import { useSetBottomTabBarHidden } from '@/components/navigation';
 
 import { TopicListHeader } from './components/TopicListHeader';
 import { TopicListPager } from './components/TopicListPager';
 import { TopicSelectionControls } from './components/TopicSelectionControls';
 import { TopicListProvider, useTopicListActions } from './context/TopicListProvider';
-import { TopicListScopeProvider, useTopicListScope } from './context/TopicListScopeProvider';
-import {
-  TopicListSelectionProvider,
-  useTopicListSelectionActions,
-  useTopicListSelectionState,
-} from './context/TopicListSelectionProvider';
 
 export function TopicListScreen() {
   const { openNewPainting, openNewTopic } = useTopicListActions();
-  const { scope, setScope } = useTopicListScope();
-  const { enterEditing, exitEditing } = useTopicListSelectionActions();
-  const { isEditing } = useTopicListSelectionState();
+  const { scope, setScope } = useMessageScope();
+  const { enterEditing, exitEditing } = useMessageSelectionActions();
+  const { isEditing } = useMessageSelectionState();
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -40,11 +41,11 @@ export function TopicListRoute() {
 
   return (
     <TopicListProvider>
-      <TopicListScopeProvider>
-        <TopicListSelectionProvider onEditingChange={setBottomTabBarHidden}>
+      <MessageScopeProvider>
+        <MessageSelectionProvider onEditingChange={setBottomTabBarHidden}>
           <TopicListScreen />
-        </TopicListSelectionProvider>
-      </TopicListScopeProvider>
+        </MessageSelectionProvider>
+      </MessageScopeProvider>
     </TopicListProvider>
   );
 }

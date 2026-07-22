@@ -123,9 +123,10 @@ jest.mock('../../context/TopicListProvider', () => ({
   }),
 }));
 
-jest.mock('../../context/TopicListSelectionProvider', () => ({
-  useTopicListSelectionActions: () => ({ toggleId: jest.fn() }),
-  useTopicListSelectionState: () => ({ isEditing: false, selectedIds: new Set() }),
+jest.mock('@/components/messageTabs', () => ({
+  useMessageSelectionActions: () => ({ toggleId: jest.fn() }),
+  useMessageSelectionState: () => ({ isEditing: false, selectedIds: new Set() }),
+  useRegisterSelectionSource: () => undefined,
 }));
 
 jest.mock('../TopicActionDialogs', () => ({

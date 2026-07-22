@@ -1,6 +1,6 @@
-import { areAllSelected, toggleSelection } from '../topicSelection';
+import { areAllSelected, toggleSelection } from '../selection';
 
-describe('topicSelection', () => {
+describe('selection', () => {
   test('toggles an id without mutating the current selection', () => {
     const current = new Set(['id-1']);
 

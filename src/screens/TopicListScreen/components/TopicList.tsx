@@ -19,16 +19,18 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  useMessageSelectionActions,
+  useMessageSelectionState,
+  useRegisterSelectionSource,
+} from '@/components/messageTabs';
 import type { Assistant } from '@/data/types/assistant';
 import type { Topic } from '@/data/types/topic';
 import { useAssistantsApi } from '@/hooks/chat';
 import { useExclusiveSwipeable } from '@/hooks/useExclusiveSwipeable';
 
 import { useTopicListActions, useTopicListTopics } from '../context/TopicListProvider';
-import {
-  useTopicListSelectionActions,
-  useTopicListSelectionState,
-} from '../context/TopicListSelectionProvider';
+import { useTopicSelectionSource } from '../context/useTopicSelectionSource';
 import { useTopicActionDialogs } from './TopicActionDialogs';
 import {
   topicSelectionToolbarGap,
@@ -103,8 +105,10 @@ export const TopicList = memo(function TopicList() {
   const { isPinActionDisabled, isTopicListLoading, pinnedTopicIds, topics } = useTopicListTopics();
   const { loadMoreTopics, openTopic, toggleTopicPin } = useTopicListActions();
   const { assistants } = useAssistantsApi();
-  const { toggleId } = useTopicListSelectionActions();
-  const { isEditing, selectedIds } = useTopicListSelectionState();
+  const { toggleId } = useMessageSelectionActions();
+  const { isEditing, selectedIds } = useMessageSelectionState();
+  const selectionSource = useTopicSelectionSource();
+  useRegisterSelectionSource('conversations', selectionSource);
   const { dialogs, requestDelete, requestRename } = useTopicActionDialogs();
   const { notifyClose, notifyWillOpen } = useExclusiveSwipeable();
   const contentContainerStyle = useMemo(

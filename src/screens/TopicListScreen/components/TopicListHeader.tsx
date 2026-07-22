@@ -5,7 +5,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 
-import type { TopicListScope } from '../utils/topicListScope';
+import type { MessageScope } from '@/components/messageTabs';
+
 import { TopicListScopeTabs } from './TopicListScopeTabs';
 
 type TopicListHeaderProps = {
@@ -13,8 +14,8 @@ type TopicListHeaderProps = {
   onEditPress: () => void;
   onNewPaintingPress: () => void;
   onNewTopicPress: () => void;
-  onScopeChange: (scope: TopicListScope) => void;
-  scope: TopicListScope;
+  onScopeChange: (scope: MessageScope) => void;
+  scope: MessageScope;
 };
 
 export const TopicListHeader = memo(function TopicListHeader({

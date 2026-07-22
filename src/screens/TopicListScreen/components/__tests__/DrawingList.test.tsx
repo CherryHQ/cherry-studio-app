@@ -117,13 +117,19 @@ jest.mock('@/screens/PaintingScreen/utils/paintingDraftHandoff', () => ({
   createPaintingDraftHandoff: jest.fn(() => 'handoff'),
 }));
 
-jest.mock('../../context/TopicListScopeProvider', () => ({
-  useTopicListScope: () => ({ scope: 'drawings' }),
+jest.mock('@/components/messageTabs', () => ({
+  useMessageScope: () => ({ scope: 'drawings' }),
+  useMessageSelectionActions: () => ({ toggleId: mockToggleId }),
+  useMessageSelectionState: () => ({ isEditing: mockIsEditing, selectedIds: mockSelectedIds }),
+  useRegisterSelectionSource: () => undefined,
 }));
 
-jest.mock('../../context/TopicListSelectionProvider', () => ({
-  useTopicListSelectionActions: () => ({ toggleId: mockToggleId }),
-  useTopicListSelectionState: () => ({ isEditing: mockIsEditing, selectedIds: mockSelectedIds }),
+jest.mock('@/screens/PaintingScreen/usePaintingSelectionSource', () => ({
+  usePaintingSelectionSource: () => ({
+    copy: { deleteFailed: '', deleteMessage: '', deleteTitle: '' },
+    deleteSelected: jest.fn(),
+    getAllIds: () => [],
+  }),
 }));
 
 jest.mock('@/screens/PaintingScreen/templates', () => {

@@ -1,6 +1,6 @@
-import type { TopicListScope } from '../utils/topicListScope';
+import type { MessageScope } from '@/components/messageTabs';
 
 export type TopicListScopeTabsProps = {
-  onScopeChange: (scope: TopicListScope) => void;
-  scope: TopicListScope;
+  onScopeChange: (scope: MessageScope) => void;
+  scope: MessageScope;
 };

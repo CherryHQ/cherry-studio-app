@@ -8,8 +8,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { useTopicListScope } from '../context/TopicListScopeProvider';
-import { getTopicListScopeIndex } from '../utils/topicListScope';
+import { getMessageScopeIndex, useMessageScope } from '@/components/messageTabs';
+
 import { DrawingList } from './DrawingList';
 import { TopicList } from './TopicList';
 
@@ -26,12 +26,12 @@ type TopicListPagerProps = {
 // all the paging this screen needs.
 export function TopicListPager({ showRecentsHeading = false }: TopicListPagerProps) {
   const { t } = useTranslation();
-  const { scope } = useTopicListScope();
+  const { scope } = useMessageScope();
   const { width: windowWidth } = useWindowDimensions();
-  const page = useSharedValue(getTopicListScopeIndex(scope));
+  const page = useSharedValue(getMessageScopeIndex(scope));
 
   useEffect(() => {
-    page.value = withTiming(getTopicListScopeIndex(scope), {
+    page.value = withTiming(getMessageScopeIndex(scope), {
       duration: 220,
       easing: Easing.out(Easing.cubic),
     });

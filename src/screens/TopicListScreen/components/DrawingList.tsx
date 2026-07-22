@@ -16,7 +16,12 @@ import {
 import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import {
+  useMessageScope,
+  useMessageSelectionActions,
+  useMessageSelectionState,
+  useRegisterSelectionSource,
+} from '@/components/messageTabs';
 import { Image } from '@/components/nativePrimitives';
 import { PaintingZoomLink } from '@/components/navigation';
 import { type PaintingGalleryItem, usePaintingGalleryItems, usePaintings } from '@/hooks/paintings';
@@ -34,16 +39,13 @@ import {
   PaintingTemplateRow,
   toPaintingTemplateDraft,
 } from '@/screens/PaintingScreen/templates';
+import { usePaintingSelectionSource } from '@/screens/PaintingScreen/usePaintingSelectionSource';
 import { distributeMasonryItems } from '@/screens/PaintingScreen/utils/masonry';
 import {
   createPaintingDraftHandoff,
   type PaintingDraftHandoff,
 } from '@/screens/PaintingScreen/utils/paintingDraftHandoff';
-import { useTopicListScope } from '../context/TopicListScopeProvider';
-import {
-  useTopicListSelectionActions,
-  useTopicListSelectionState,
-} from '../context/TopicListSelectionProvider';
+
 import {
   topicSelectionToolbarGap,
   topicSelectionToolbarHeight,
@@ -57,9 +59,11 @@ export function DrawingList() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const router = useRouter();
-  const { scope } = useTopicListScope();
-  const { isEditing, selectedIds } = useTopicListSelectionState();
-  const { toggleId } = useTopicListSelectionActions();
+  const { scope } = useMessageScope();
+  const { isEditing, selectedIds } = useMessageSelectionState();
+  const { toggleId } = useMessageSelectionActions();
+  const selectionSource = usePaintingSelectionSource(isEditing && scope === 'drawings');
+  useRegisterSelectionSource('drawings', selectionSource);
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();

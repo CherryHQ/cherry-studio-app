@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { PlatformColor, Pressable, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { getTopicListScopeIndex, topicListScopes } from '../utils/topicListScope';
+import { getMessageScopeIndex, messageScopes } from '@/components/messageTabs';
+
 import type { TopicListScopeTabsProps } from './TopicListScopeTabs.types';
 
 const labelKeys = {
@@ -12,7 +13,7 @@ const labelKeys = {
   drawings: 'topic.tabs.paint',
 } as const;
 
-const segmentCount = topicListScopes.length;
+const segmentCount = messageScopes.length;
 const indicatorInset = 3;
 const tabHeight = 34;
 const tabWidth = 144;
@@ -29,7 +30,7 @@ export function TopicListScopeTabs({ onScopeChange, scope }: TopicListScopeTabsP
   const translateX = useSharedValue(0);
 
   useEffect(() => {
-    translateX.value = withTiming(getTopicListScopeIndex(scope) * segmentWidth + indicatorInset, {
+    translateX.value = withTiming(getMessageScopeIndex(scope) * segmentWidth + indicatorInset, {
       duration: 220,
     });
   }, [scope, translateX]);
@@ -64,7 +65,7 @@ export function TopicListScopeTabs({ onScopeChange, scope }: TopicListScopeTabsP
           ]}
         />
         <View className="h-full flex-row">
-          {topicListScopes.map((item) => {
+          {messageScopes.map((item) => {
             const isSelected = item === scope;
 
             return (

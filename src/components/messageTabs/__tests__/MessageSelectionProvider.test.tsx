@@ -2,18 +2,18 @@ import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import {
-  TopicListSelectionProvider,
-  useTopicListSelectionActions,
-  useTopicListSelectionState,
-} from '../TopicListSelectionProvider';
+  MessageSelectionProvider,
+  useMessageSelectionActions,
+  useMessageSelectionState,
+} from '../MessageSelectionProvider';
 
-let currentActions: ReturnType<typeof useTopicListSelectionActions> | undefined;
-let currentState: ReturnType<typeof useTopicListSelectionState> | undefined;
+let currentActions: ReturnType<typeof useMessageSelectionActions> | undefined;
+let currentState: ReturnType<typeof useMessageSelectionState> | undefined;
 let renderer: ReactTestRenderer | undefined;
 
-function TopicListSelectionProbe() {
-  const actions = useTopicListSelectionActions();
-  const state = useTopicListSelectionState();
+function MessageSelectionProbe() {
+  const actions = useMessageSelectionActions();
+  const state = useMessageSelectionState();
 
   useEffect(() => {
     currentActions = actions;
@@ -35,15 +35,15 @@ afterEach(async () => {
   });
 });
 
-describe('TopicListSelectionProvider', () => {
+describe('MessageSelectionProvider', () => {
   test('notifies the navigator when editing starts and ends', async () => {
     const onEditingChange = jest.fn();
 
     await act(async () => {
       renderer = create(
-        <TopicListSelectionProvider onEditingChange={onEditingChange}>
-          <TopicListSelectionProbe />
-        </TopicListSelectionProvider>,
+        <MessageSelectionProvider onEditingChange={onEditingChange}>
+          <MessageSelectionProbe />
+        </MessageSelectionProvider>,
       );
     });
 
@@ -66,9 +66,9 @@ describe('TopicListSelectionProvider', () => {
   test('toggles single ids and switches between select-all and clear', async () => {
     await act(async () => {
       renderer = create(
-        <TopicListSelectionProvider>
-          <TopicListSelectionProbe />
-        </TopicListSelectionProvider>,
+        <MessageSelectionProvider>
+          <MessageSelectionProbe />
+        </MessageSelectionProvider>,
       );
     });
 
@@ -93,9 +93,9 @@ describe('TopicListSelectionProvider', () => {
 
     await act(async () => {
       renderer = create(
-        <TopicListSelectionProvider onEditingChange={onEditingChange}>
-          <TopicListSelectionProbe />
-        </TopicListSelectionProvider>,
+        <MessageSelectionProvider onEditingChange={onEditingChange}>
+          <MessageSelectionProbe />
+        </MessageSelectionProvider>,
       );
       currentActions?.enterEditing();
     });

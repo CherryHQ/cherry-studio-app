@@ -1,7 +1,8 @@
 import { Tabs } from 'heroui-native';
 import { useTranslation } from 'react-i18next';
 
-import { type TopicListScope, topicListScopes } from '../utils/topicListScope';
+import { type MessageScope, messageScopes } from '@/components/messageTabs';
+
 import type { TopicListScopeTabsProps } from './TopicListScopeTabs.types';
 
 const labelKeys = {
@@ -17,12 +18,12 @@ export function TopicListScopeTabs({ onScopeChange, scope }: TopicListScopeTabsP
       className="w-full max-w-36 gap-0"
       value={scope}
       onValueChange={(value) => {
-        onScopeChange(value as TopicListScope);
+        onScopeChange(value as MessageScope);
       }}
     >
       <Tabs.List className="h-[34px] w-full self-stretch rounded-[17px]">
         <Tabs.Indicator />
-        {topicListScopes.map((item) => (
+        {messageScopes.map((item) => (
           <Tabs.Trigger
             key={item}
             accessibilityRole="tab"

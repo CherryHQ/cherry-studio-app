@@ -3,6 +3,13 @@ import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import {
+  MessageScopeProvider,
+  MessageSelectionProvider,
+  useMessageScope,
+  useMessageSelectionActions,
+  useMessageSelectionState,
+} from '@/components/messageTabs';
 import { useSetBottomTabBarHidden } from '@/components/navigation';
 import { isLiquidGlassAvailable } from '@/config/constants';
 
@@ -10,19 +17,13 @@ import { TopicListPager } from './components/TopicListPager';
 import { TopicListScopeTabs } from './components/TopicListScopeTabs';
 import { TopicSelectionControls } from './components/TopicSelectionControls';
 import { TopicListProvider, useTopicListActions } from './context/TopicListProvider';
-import { TopicListScopeProvider, useTopicListScope } from './context/TopicListScopeProvider';
-import {
-  TopicListSelectionProvider,
-  useTopicListSelectionActions,
-  useTopicListSelectionState,
-} from './context/TopicListSelectionProvider';
 
 export function TopicListScreen() {
   const { t } = useTranslation();
   const { openNewPainting, openNewTopic } = useTopicListActions();
-  const { scope, setScope } = useTopicListScope();
-  const { enterEditing, exitEditing } = useTopicListSelectionActions();
-  const { isEditing } = useTopicListSelectionState();
+  const { scope, setScope } = useMessageScope();
+  const { enterEditing, exitEditing } = useMessageSelectionActions();
+  const { isEditing } = useMessageSelectionState();
   const headerHeight = useHeaderHeight();
   const isConversationScope = scope === 'conversations';
 
@@ -80,11 +81,11 @@ export function TopicListRoute() {
 
   return (
     <TopicListProvider>
-      <TopicListScopeProvider>
-        <TopicListSelectionProvider onEditingChange={setBottomTabBarHidden}>
+      <MessageScopeProvider>
+        <MessageSelectionProvider onEditingChange={setBottomTabBarHidden}>
           <TopicListScreen />
-        </TopicListSelectionProvider>
-      </TopicListScopeProvider>
+        </MessageSelectionProvider>
+      </MessageScopeProvider>
     </TopicListProvider>
   );
 }

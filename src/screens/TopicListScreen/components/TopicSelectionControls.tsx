@@ -5,39 +5,30 @@ import { useToast } from 'heroui-native/toast';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-import { useDeletePaintings, usePaintingIds } from '@/hooks/paintings';
-import { useTopicListActions, useTopicListTopics } from '../context/TopicListProvider';
-import { useTopicListScope } from '../context/TopicListScopeProvider';
+
 import {
-  useTopicListSelectionActions,
-  useTopicListSelectionState,
-} from '../context/TopicListSelectionProvider';
+  useMessageScope,
+  useMessageSelectionActions,
+  useMessageSelectionSource,
+  useMessageSelectionState,
+} from '@/components/messageTabs';
+
 import { TopicSelectionToolbar } from './TopicSelectionToolbar';
 
 export function TopicSelectionControls() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { scope } = useTopicListScope();
-  const isDrawingsScope = scope === 'drawings';
-  const { topics } = useTopicListTopics();
-  const { deleteTopics } = useTopicListActions();
-  const deletePaintings = useDeletePaintings();
-  const { exitEditing, toggleAll } = useTopicListSelectionActions();
-  const { isEditing, selectedIds } = useTopicListSelectionState();
-  const paintingIds = usePaintingIds({ enabled: isEditing && isDrawingsScope });
+  const { scope } = useMessageScope();
+  const source = useMessageSelectionSource(scope);
+  const { exitEditing, toggleAll } = useMessageSelectionActions();
+  const { isEditing, selectedIds } = useMessageSelectionState();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const selectedCount = selectedIds.size;
 
   const handleToggleAll = useCallback(() => {
-    if (isDrawingsScope) {
-      if (paintingIds.data) {
-        toggleAll(paintingIds.data);
-      }
-      return;
-    }
-    toggleAll(topics.map((topic) => topic.id));
-  }, [isDrawingsScope, paintingIds.data, toggleAll, topics]);
+    toggleAll(source?.getAllIds() ?? []);
+  }, [source, toggleAll]);
 
   const requestDelete = useCallback(() => {
     if (selectedIds.size > 0) {
@@ -53,27 +44,22 @@ export function TopicSelectionControls() {
 
   const confirmDelete = useCallback(async () => {
     const ids = [...selectedIds];
-    if (ids.length === 0) {
+    if (ids.length === 0 || !source) {
       setIsDeleteDialogOpen(false);
       return;
     }
 
     setIsDeleting(true);
     try {
-      await (isDrawingsScope ? deletePaintings(ids) : deleteTopics(ids));
+      await source.deleteSelected(ids);
       setIsDeleteDialogOpen(false);
       exitEditing();
     } catch {
-      toast.show({
-        label: t(
-          isDrawingsScope ? 'painting.selection.deleteFailed' : 'topic.selection.deleteFailed',
-        ),
-        variant: 'danger',
-      });
+      toast.show({ label: t(source.copy.deleteFailed), variant: 'danger' });
     } finally {
       setIsDeleting(false);
     }
-  }, [deletePaintings, deleteTopics, exitEditing, isDrawingsScope, selectedIds, t, toast]);
+  }, [exitEditing, selectedIds, source, t, toast]);
 
   return (
     <>
@@ -91,20 +77,9 @@ export function TopicSelectionControls() {
           <Dialog.Overlay isCloseOnPress={!isDeleting} />
           <Dialog.Content className="gap-5 rounded-3xl bg-overlay p-5" isSwipeable={false}>
             <View className="gap-1.5">
-              <Dialog.Title>
-                {t(
-                  isDrawingsScope
-                    ? 'painting.selection.deleteTitle'
-                    : 'topic.selection.deleteTitle',
-                )}
-              </Dialog.Title>
+              <Dialog.Title>{t(source?.copy.deleteTitle ?? '')}</Dialog.Title>
               <Dialog.Description>
-                {t(
-                  isDrawingsScope
-                    ? 'painting.selection.deleteMessage'
-                    : 'topic.selection.deleteMessage',
-                  { count: selectedCount },
-                )}
+                {t(source?.copy.deleteMessage ?? '', { count: selectedCount })}
               </Dialog.Description>
             </View>
             <View className="flex-row justify-end gap-3">
