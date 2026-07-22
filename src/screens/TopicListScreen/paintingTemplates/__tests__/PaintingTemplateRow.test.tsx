@@ -121,21 +121,21 @@ describe('PaintingTemplateRow', () => {
     expect(renderer?.root.findAllByProps({ testID: 'painting-template-sheet' })).toHaveLength(0);
   });
 
-  test('opens a content-sized sheet with blank author and no right action', () => {
+  test('opens a content-sized sheet with the author and localized prompt', () => {
     openSheet();
 
     expect(mockBottomSheetProps.detents).toEqual([0, 'content']);
     expect(mockBottomSheetProps.index).toBe(1);
     expect(mockBottomSheetProps.surface).toBeUndefined();
     expect(renderer?.root.findByProps({ testID: 'painting-template-author' }).props.children).toBe(
-      '',
+      '@0x00_Krypt',
     );
     expect(
       renderer?.root.findByProps({ testID: 'painting-template-header-right-slot' }).props
         .accessibilityRole,
     ).toBeUndefined();
     expect(renderer?.root.findByProps({ testID: 'painting-template-prompt' }).props.children).toBe(
-      paintingTemplates[0].prompt,
+      paintingTemplates[0].promptKey,
     );
 
     expect(renderer?.root.findByProps({ testID: 'painting-template-close' })).toBeTruthy();

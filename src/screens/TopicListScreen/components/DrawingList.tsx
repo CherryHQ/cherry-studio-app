@@ -75,9 +75,9 @@ export function DrawingList() {
   );
   const handleTemplateUse = useCallback(
     (template: PaintingTemplate) => {
-      openPainting(toPaintingTemplateDraft(template));
+      openPainting(toPaintingTemplateDraft(template, t));
     },
-    [openPainting],
+    [openPainting, t],
   );
   const handleRecentPhotoPress = useCallback(
     async (photo: ChatInputPhotoPreview) => {

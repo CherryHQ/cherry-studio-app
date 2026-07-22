@@ -6,52 +6,54 @@ export type PaintingTemplate = Readonly<{
   author?: string;
   id: string;
   preview: ImageProps['source'];
-  prompt: string;
+  promptKey: string;
   title: string;
 }>;
 
 export const paintingTemplates: readonly PaintingTemplate[] = [
   {
-    id: 'tokyo-map-diorama',
-    preview: require('../../../../assets/paintings/templates/tokyo-map-diorama.webp'),
-    prompt: '',
-    title: 'Tokyo Map Diorama',
-  },
-  {
-    id: 'meta-quest-3-exploded-view',
-    preview: require('../../../../assets/paintings/templates/meta-quest-3-exploded-view.webp'),
-    prompt: '',
-    title: 'Meta Quest 3 Exploded View',
-  },
-  {
-    id: 'crocs-editorial-poster',
-    preview: require('../../../../assets/paintings/templates/crocs-editorial-poster.webp'),
-    prompt: '',
-    title: 'Crocs Editorial Poster',
-  },
-  {
-    id: 'algorithm-fog-city-poster',
-    preview: require('../../../../assets/paintings/templates/algorithm-fog-city-poster.webp'),
-    prompt: '',
-    title: 'Algorithm: Fog City',
-  },
-  {
+    author: '@0x00_Krypt',
     id: 'china-landmark-diorama',
     preview: require('../../../../assets/paintings/templates/china-landmark-diorama.webp'),
-    prompt: '',
+    promptKey: 'painting.templates.prompt.landmark',
     title: 'China Landmark Diorama',
   },
   {
+    author: '@wory37303852',
+    id: 'meta-quest-3-exploded-view',
+    preview: require('../../../../assets/paintings/templates/meta-quest-3-exploded-view.webp'),
+    promptKey: 'painting.templates.prompt.quest',
+    title: 'Meta Quest 3 Exploded View',
+  },
+  {
+    author: '@rovvmut_',
+    id: 'crocs-editorial-poster',
+    preview: require('../../../../assets/paintings/templates/crocs-editorial-poster.webp'),
+    promptKey: 'painting.templates.prompt.crocs',
+    title: 'Crocs Editorial Poster',
+  },
+  {
+    author: '@iamaiistudio',
+    id: 'algorithm-fog-city-poster',
+    preview: require('../../../../assets/paintings/templates/algorithm-fog-city-poster.webp'),
+    promptKey: 'painting.templates.prompt.algorithm',
+    title: 'Algorithm: Fog City',
+  },
+  {
+    author: '@aimikoda',
     id: 'cyber-rabbit-character',
     preview: require('../../../../assets/paintings/templates/cyber-rabbit-character.webp'),
-    prompt: '',
+    promptKey: 'painting.templates.prompt.cyberRabbit',
     title: 'Cyber Rabbit Character',
   },
 ];
 
-export function toPaintingTemplateDraft(template: PaintingTemplate): PaintingDraftHandoff {
+export function toPaintingTemplateDraft(
+  template: PaintingTemplate,
+  translate: (key: string) => string,
+): PaintingDraftHandoff {
   return {
     attachments: [],
-    draft: template.prompt,
+    draft: translate(template.promptKey),
   };
 }
