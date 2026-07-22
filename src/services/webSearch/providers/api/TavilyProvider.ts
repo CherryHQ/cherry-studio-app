@@ -12,11 +12,11 @@ type TavilySearchResponse = {
   query: string;
   request_id?: string;
   response_time?: number | string;
-  results: Array<{
+  results: {
     title?: string;
     content?: string;
     url?: string;
-  }>;
+  }[];
 };
 
 type TavilySearchContext = ApiKeyRequestSearchContext<TavilySearchRequest>;

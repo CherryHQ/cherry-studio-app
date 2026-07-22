@@ -11,11 +11,11 @@ type ZhipuWebSearchRequest = {
 };
 
 type ZhipuWebSearchResponse = {
-  search_result: Array<{
+  search_result: {
     title?: string;
     content?: string;
     link?: string;
-  }>;
+  }[];
 };
 
 type ZhipuSearchContext = ApiKeyRequestSearchContext<ZhipuWebSearchRequest>;

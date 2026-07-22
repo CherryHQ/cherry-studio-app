@@ -10,8 +10,8 @@ import {
   CLAUDE_SKILLS_DIR,
   CLAUDE_SKILLS_GITIGNORE,
   listSkillNames,
-  readFileSafe,
   ROOT_DIR,
+  readFileSafe,
 } from './skills-common';
 
 function isAgentsReadmeFile(file: string): boolean {

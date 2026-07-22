@@ -84,6 +84,8 @@ export function SlotGlyph({
   // Faces must mount already posed at their transition start values; seeding them only in
   // the layout effect can paint one native frame at the final pose first, which shows the
   // incoming glyph overlapping the outgoing one.
+
+  /* eslint-disable react-hooks/exhaustive-deps */
   // biome-ignore lint/correctness/useExhaustiveDependencies: Poses re-seed per transition; geometry changes re-seed in the layout effect below.
   const faces = useMemo(
     () => ({
@@ -93,6 +95,7 @@ export function SlotGlyph({
     }),
     [transitionSignature],
   );
+  /* eslint-enable react-hooks/exhaustive-deps */
   const { highlightOpacity, incomingY, outgoingY } = faces;
   const slotTiming = calculateSlotTransitionTiming(
     index,

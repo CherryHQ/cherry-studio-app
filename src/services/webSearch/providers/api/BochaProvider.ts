@@ -25,12 +25,12 @@ type BochaSearchResponse = {
       originalQuery: string;
     };
     webPages: {
-      value: Array<{
+      value: {
         name: string;
         summary?: string;
         snippet?: string;
         url: string;
-      }>;
+      }[];
     };
   };
 };

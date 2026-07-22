@@ -39,7 +39,7 @@ export default function ModelSettingsScreen() {
         title: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
         onPress: () => router.push(`/settings/model/${kind}`),
       })),
-    [modelPickerData.getModelItem, modelSettings.selections, router, t],
+    [modelPickerData, modelSettings.selections, router, t],
   );
 
   return (

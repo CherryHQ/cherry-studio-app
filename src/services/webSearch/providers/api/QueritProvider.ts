@@ -27,11 +27,11 @@ type QueritSearchResponse = {
     query: string;
   };
   results: {
-    result: Array<{
+    result: {
       title: string;
       snippet?: string;
       url: string;
-    }>;
+    }[];
   };
 };
 
