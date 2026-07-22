@@ -69,7 +69,7 @@ function PaintingViewerContent({
         onViewConversation={actions.viewConversation}
       />
       <View className="flex-1">
-        <ViewerImage sourceKey={`${painting.id}:${current.fileEntryId}`} uri={current.uri} />
+        <ViewerImage uri={current.uri} />
       </View>
     </>
   );

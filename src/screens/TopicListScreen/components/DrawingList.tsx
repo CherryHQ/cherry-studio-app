@@ -202,7 +202,6 @@ export function DrawingList() {
                   fileEntryId={item.fileEntryId}
                   key={item.key}
                   paintingId={item.painting.id}
-                  sourceKey={item.key}
                 >
                   <Pressable
                     accessibilityLabel={t('painting.history.item')}

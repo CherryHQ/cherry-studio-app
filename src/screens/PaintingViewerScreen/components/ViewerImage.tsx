@@ -7,12 +7,12 @@ import { ZoomableImage } from './ZoomableImage';
 
 // Use the measured container height because `100%` is not reliable through the
 // shared-element transition wrapper.
-export function ViewerImage({ sourceKey, uri }: { sourceKey: string; uri: string }) {
+export function ViewerImage({ uri }: { uri: string }) {
   const { width } = useWindowDimensions();
   const [height, setHeight] = useState(0);
 
   return (
-    <PaintingZoomTarget sourceKey={sourceKey}>
+    <PaintingZoomTarget>
       <View className="flex-1" onLayout={({ nativeEvent }) => setHeight(nativeEvent.layout.height)}>
         {height > 0 ? <ZoomableImage height={height} uri={uri} width={width} /> : null}
       </View>

@@ -1,39 +1,25 @@
 import { Link } from 'expo-router';
-import {
-  LinkZoomTransitionAlignmentRectDetector,
-  LinkZoomTransitionSource,
-} from 'expo-router/build/link/preview/native';
-import { Slot } from 'expo-router/build/ui/Slot';
-import type { ReactElement } from 'react';
-import type { ViewProps } from 'react-native';
+import type { ReactElement, ReactNode } from 'react';
 
 import { isIOS } from '@/config/constants';
 
-const paintingZoomTransitionSourceIdParam = '__internal_expo_router_zoom_transition_source_id';
-
-function getPaintingZoomTransitionSourceId(sourceKey: string): string {
-  return `painting-gallery:${sourceKey}`;
-}
-
+// Apple zoom transition between a gallery thumbnail and the full-screen viewer,
+// built on expo-router's public `Link.AppleZoom` / `Link.AppleZoomTarget`. The
+// source and target are paired natively — the pushed screen's target binds to
+// the zoom source — so no explicit identifier is needed. iOS only; other
+// platforms fall back to a plain `Link` with no transition.
 export function PaintingZoomLink({
   children,
   fileEntryId,
   paintingId,
-  sourceKey,
 }: {
   children: ReactElement;
   fileEntryId: string;
   paintingId: string;
-  sourceKey: string;
 }) {
-  const identifier = getPaintingZoomTransitionSourceId(sourceKey);
   const href = {
     pathname: '/paintings/[paintingId]' as const,
-    params: {
-      fileEntryId,
-      paintingId,
-      ...(isIOS ? { [paintingZoomTransitionSourceIdParam]: identifier } : {}),
-    },
+    params: { fileEntryId, paintingId },
   };
 
   if (!isIOS) {
@@ -46,38 +32,15 @@ export function PaintingZoomLink({
 
   return (
     <Link asChild href={href}>
-      <PaintingZoomSource identifier={identifier}>{children}</PaintingZoomSource>
+      <Link.AppleZoom>{children}</Link.AppleZoom>
     </Link>
   );
 }
 
-export function PaintingZoomTarget({
-  children,
-  sourceKey,
-}: {
-  children: ReactElement;
-  sourceKey: string;
-}) {
+export function PaintingZoomTarget({ children }: { children: ReactElement }): ReactNode {
   if (!isIOS) {
     return children;
   }
 
-  const identifier = getPaintingZoomTransitionSourceId(sourceKey);
-  return (
-    <LinkZoomTransitionAlignmentRectDetector identifier={identifier}>
-      {children}
-    </LinkZoomTransitionAlignmentRectDetector>
-  );
-}
-
-function PaintingZoomSource({
-  children,
-  identifier,
-  ...linkProps
-}: ViewProps & { children: ReactElement; identifier: string }) {
-  return (
-    <LinkZoomTransitionSource animateAspectRatioChange identifier={identifier}>
-      <Slot {...linkProps}>{children}</Slot>
-    </LinkZoomTransitionSource>
-  );
+  return <Link.AppleZoomTarget>{children}</Link.AppleZoomTarget>;
 }

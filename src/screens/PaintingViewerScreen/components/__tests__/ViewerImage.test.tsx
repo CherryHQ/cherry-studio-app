@@ -5,13 +5,8 @@ import { ViewerImage } from '../ViewerImage';
 jest.mock('@/components/navigation', () => {
   const React = jest.requireActual('react');
   return {
-    PaintingZoomTarget: ({
-      children,
-      sourceKey,
-    }: {
-      children: React.ReactNode;
-      sourceKey: string;
-    }) => React.createElement('MockZoomTarget', { sourceKey }, children),
+    PaintingZoomTarget: ({ children }: { children: React.ReactNode }) =>
+      React.createElement('MockZoomTarget', {}, children),
   };
 });
 
@@ -28,7 +23,7 @@ describe('ViewerImage', () => {
 
   beforeEach(async () => {
     await act(async () => {
-      renderer = create(<ViewerImage sourceKey="painting-1:file-1" uri="file:///file-1.png" />);
+      renderer = create(<ViewerImage uri="file:///file-1.png" />);
     });
   });
 
@@ -36,9 +31,8 @@ describe('ViewerImage', () => {
     await act(async () => renderer?.unmount());
   });
 
-  it('wraps the single image in a zoom target keyed to the gallery item', () => {
-    const target = renderer?.root.findByType('MockZoomTarget');
-    expect(target?.props.sourceKey).toBe('painting-1:file-1');
+  it('wraps the single image in a zoom target before the container is measured', () => {
+    expect(renderer?.root.findAllByType('MockZoomTarget')).toHaveLength(1);
     expect(renderer?.root.findAllByType('MockZoomableImage')).toHaveLength(0);
   });
 

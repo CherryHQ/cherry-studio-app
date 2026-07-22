@@ -87,7 +87,6 @@ describe('PaintingViewerScreen', () => {
     expect(mockPaintingIds).toEqual(['painting-1']);
     expect(mockResolvedPaintingIds).toEqual(['painting-1']);
     expect(renderer?.root.findByType('MockViewerImage').props).toMatchObject({
-      sourceKey: 'painting-1:file-1',
       uri: 'file:///file-1.png',
     });
   });
@@ -101,7 +100,6 @@ describe('PaintingViewerScreen', () => {
 
     expect(mockPaintingIds).toEqual(['painting-1', 'painting-2']);
     expect(renderer?.root.findByType('MockViewerImage').props).toMatchObject({
-      sourceKey: 'painting-2:file-2',
       uri: 'file:///file-2.png',
     });
   });
