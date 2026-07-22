@@ -1,22 +1,16 @@
 import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
-import { ModalBottomSheet } from '@swmansion/react-native-bottom-sheet';
-import { GlassView } from 'expo-glass-effect';
 import { Input } from 'heroui-native/input';
 import { Select } from 'heroui-native/select';
 import { Slider } from 'heroui-native/slider';
 import { Switch } from 'heroui-native/switch';
 import type { TFunction } from 'i18next';
-import { ChevronDownIcon, XIcon } from 'lucide-uniwind/png';
-import { useCallback, useRef, useState } from 'react';
+import { ChevronDownIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomSheet } from '@/components/bottomSheet';
 import { SlotText } from '@/components/SlotText';
-import {
-  isLiquidGlassAvailable,
-  paintingSheetOuterInset,
-  sheetScrimColor,
-} from '@/config/constants';
+import { bottomSheet } from '@/config/constants';
 
 import { imageParamLabel, imageParamOptionLabel } from '../utils/imageGenerationLabels';
 import type {
@@ -26,11 +20,6 @@ import type {
 } from '../utils/imageGenerationParams';
 import { getImageParamFields } from '../utils/imageGenerationParams';
 
-const CLOSED_INDEX = 0;
-const OPEN_INDEX = 1;
-const HEADER_HEIGHT = 60;
-const HEADER_SIDE_WIDTH = 44;
-const SHEET_CORNER_RADIUS = 28;
 const FIELD_GAP = 8;
 // 固定 5 列等宽网格，超出自动换行；cell 恒定方形保证选中态切换时兄弟选项不挪位。
 const RATIO_GRID_COLUMNS = 5;
@@ -54,135 +43,40 @@ export function PaintingSettingsBottomSheet({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
-  const [sheetIndex, setSheetIndex] = useState(OPEN_INDEX);
-  const didDismissRef = useRef(false);
   const fields = getImageParamFields(resolvedMode);
-  const sheetWidth = Math.max(0, windowWidth - paintingSheetOuterInset * 2);
-  const availableHeight = windowHeight - insets.top - insets.bottom - paintingSheetOuterInset * 2;
+  const sheetWidth = Math.max(0, windowWidth - bottomSheet.outerInset * 2);
+  const availableHeight = windowHeight - insets.top - insets.bottom - bottomSheet.outerInset * 2;
   const sheetHeight = Math.min(680, Math.max(360, availableHeight * 0.78));
   const fieldWidth = Math.max(0, sheetWidth - 48);
-  const sheetBottomCornerRadius = Math.max(
-    SHEET_CORNER_RADIUS,
-    insets.bottom + paintingSheetOuterInset,
-  );
-  const sheetTopCornerRadius = Math.max(
-    SHEET_CORNER_RADIUS,
-    sheetBottomCornerRadius - paintingSheetOuterInset,
-  );
-  const sheetCornerStyle = {
-    borderBottomLeftRadius: sheetBottomCornerRadius,
-    borderBottomRightRadius: sheetBottomCornerRadius,
-    borderTopLeftRadius: sheetTopCornerRadius,
-    borderTopRightRadius: sheetTopCornerRadius,
-  };
-  const headerInset = Math.max(0, sheetTopCornerRadius - HEADER_SIDE_WIDTH / 2);
-  const headerStyle = {
-    height: Math.max(HEADER_HEIGHT, headerInset + HEADER_SIDE_WIDTH),
-    paddingHorizontal: headerInset,
-    paddingTop: headerInset,
-  };
-
-  const requestClose = useCallback(() => setSheetIndex(CLOSED_INDEX), []);
-  const handleSettle = useCallback(
-    (nextIndex: number) => {
-      if (nextIndex !== CLOSED_INDEX || didDismissRef.current) {
-        return;
-      }
-      didDismissRef.current = true;
-      onDismiss();
-    },
-    [onDismiss],
-  );
 
   return (
-    <ModalBottomSheet
-      detents={[0, 'content']}
-      index={sheetIndex}
-      onIndexChange={setSheetIndex}
-      onSettle={handleSettle}
-      scrimColor={sheetScrimColor}
+    <BottomSheet
+      closeAccessibilityLabel={t('painting.settings.close')}
+      height={sheetHeight}
+      onClose={onDismiss}
+      testID="painting-settings"
+      title={t('painting.settings.title')}
     >
-      <View style={styles.sheetLayout}>
-        <View
-          style={[styles.sheet, sheetCornerStyle, { height: sheetHeight, width: sheetWidth }]}
-          testID="painting-settings-sheet"
-        >
-          {isLiquidGlassAvailable ? (
-            <GlassView
-              glassEffectStyle="regular"
-              style={[styles.surface, sheetCornerStyle]}
-              testID="painting-settings-sheet-surface"
-            />
-          ) : (
-            <View
-              className="bg-background"
-              style={[styles.surface, sheetCornerStyle]}
-              testID="painting-settings-sheet-surface"
-            />
-          )}
-
-          <View
-            className="flex-row items-center"
-            style={headerStyle}
-            testID="painting-settings-header"
-          >
-            {isLiquidGlassAvailable ? (
-              <GlassView glassEffectStyle="regular" isInteractive style={styles.closeSurface}>
-                <SettingsCloseButton onPress={requestClose} />
-              </GlassView>
-            ) : (
-              <View className="bg-surface-secondary" style={styles.closeSurface}>
-                <SettingsCloseButton onPress={requestClose} />
-              </View>
-            )}
-            <Text
-              className="flex-1 px-3 text-center font-semibold text-foreground text-base"
-              numberOfLines={1}
-            >
-              {t('painting.settings.title')}
-            </Text>
-            <View style={styles.headerSide} />
-          </View>
-
-          <ScrollView
-            contentContainerStyle={[
-              styles.content,
-              { paddingBottom: Math.max(24, insets.bottom + 12) },
-            ]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {fields.map((field) => (
-              <PaintingSettingField
-                field={field}
-                fieldWidth={fieldWidth}
-                fields={fields}
-                key={field.key}
-                onValueChange={onValueChange}
-                values={values}
-              />
-            ))}
-          </ScrollView>
-        </View>
-        <View style={styles.sheetBottomGap} testID="painting-settings-sheet-bottom-gap" />
-      </View>
-    </ModalBottomSheet>
-  );
-}
-
-function SettingsCloseButton({ onPress }: { onPress: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <Pressable
-      accessibilityLabel={t('painting.settings.close')}
-      accessibilityRole="button"
-      className="h-full w-full items-center justify-center rounded-full active:opacity-60"
-      hitSlop={8}
-      onPress={onPress}
-      testID="painting-settings-close"
-    >
-      <XIcon className="size-5 text-foreground" strokeWidth={2.25} />
-    </Pressable>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(24, insets.bottom + 12) },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {fields.map((field) => (
+          <PaintingSettingField
+            field={field}
+            fieldWidth={fieldWidth}
+            fields={fields}
+            key={field.key}
+            onValueChange={onValueChange}
+            values={values}
+          />
+        ))}
+      </ScrollView>
+    </BottomSheet>
   );
 }
 
@@ -685,36 +579,11 @@ const numericTextKeys = new Set<CanonicalParamKey>([
 
 const styles = StyleSheet.create({
   chipGrid: { gap: FIELD_GAP },
-  closeSurface: {
-    borderCurve: 'continuous',
-    borderRadius: HEADER_SIDE_WIDTH / 2,
-    height: HEADER_SIDE_WIDTH,
-    overflow: 'hidden',
-    width: HEADER_SIDE_WIDTH,
-  },
   content: {
     gap: 22,
     paddingHorizontal: 24,
     paddingTop: 12,
   },
-  headerSide: { height: HEADER_SIDE_WIDTH, width: HEADER_SIDE_WIDTH },
   ratioDashedShape: { borderStyle: 'dashed' },
-  sheet: {
-    borderCurve: 'continuous',
-    borderRadius: SHEET_CORNER_RADIUS,
-    overflow: 'hidden',
-  },
-  sheetBottomGap: { height: paintingSheetOuterInset },
-  sheetLayout: { alignItems: 'center' },
-  surface: {
-    borderCurve: 'continuous',
-    borderRadius: SHEET_CORNER_RADIUS,
-    bottom: 0,
-    left: 0,
-    overflow: 'hidden',
-    position: 'absolute',
-    right: 0,
-    top: 0,
-  },
   tabularText: { fontVariant: ['tabular-nums'] },
 });

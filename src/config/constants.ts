@@ -12,9 +12,15 @@ export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassE
 // the background behind them consistently. Single source of truth — tune here.
 export const sheetScrimColor = 'rgba(0, 0, 0, 0.4)';
 
-// Outer spacing shared by floating painting sheets. Width, bottom gap, corner
-// radius, and concentric header placement all derive from this value.
-export const paintingSheetOuterInset = 8;
+// Shared chrome for the floating BottomSheet frame (src/components/bottomSheet).
+// Every sheet derives its inset width, bottom gap, concentric corner radius, and
+// header placement from these values — single source of truth, tune here.
+export const bottomSheet = {
+  outerInset: 8, // gap between the floating card and the screen edges / home indicator
+  cornerRadius: 28, // resting top/bottom corner radius (grows with the bottom safe-area inset)
+  headerHeight: 60, // minimum header row height
+  headerSideWidth: 44, // close button + right-slot square size
+} as const;
 
 // Brand accent (ui.theme_user.color_primary default). SlotText tints freshly
 // landed glyphs with it before they fade to the regular text color.

@@ -1,10 +1,11 @@
 # Selection Sheet
 
-This module owns reusable bottom-sheet chrome for searchable selection flows.
+This module owns the reusable search control for searchable selection flows.
+The sheet frame itself now lives in `@/components/bottomSheet` (`BottomSheet`);
+consumers compose this search field inside that frame.
 
 ## Public Interface
 
-- `SelectionBottomSheet` renders the shared bottom-sheet frame.
 - `SelectionSheetSearchField` renders the shared search control.
 
 ## Organization

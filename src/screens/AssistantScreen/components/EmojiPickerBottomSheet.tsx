@@ -1,11 +1,13 @@
-import { useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { StyleSheet, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EmojiPicker, type EmojiSelection } from 'rn-expo-emoji-picker/legend';
-import { SelectionBottomSheet } from '@/components/selectionSheet';
 
-// Detent indices for the underlying `SelectionBottomSheet`: 0 closed, 1 open.
-const CLOSED_INDEX = 0;
-const OPEN_INDEX = 1;
+import { BottomSheet, useBottomSheet } from '@/components/bottomSheet';
+
+// Fraction of the available height the emoji sheet fills (matches the model
+// picker) so the grid has room to scroll.
+const emojiSheetSnapPointFraction = 0.85;
 
 type EmojiPickerBottomSheetProps = {
   isOpen?: boolean;
@@ -14,48 +16,50 @@ type EmojiPickerBottomSheetProps = {
 };
 
 export function EmojiPickerBottomSheet({ isOpen, onClose, onSelect }: EmojiPickerBottomSheetProps) {
-  const [sheetIndex, setSheetIndex] = useState(CLOSED_INDEX);
-  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetHeight = (windowHeight - insets.top - insets.bottom) * emojiSheetSnapPointFraction;
 
-  // Mirror the declarative `isOpen` prop into the sheet's detent index during
-  // render (same pattern as `ModelPickerBottomSheet`).
-  if (isOpen !== prevIsOpen) {
-    setPrevIsOpen(isOpen);
-    setSheetIndex(isOpen ? OPEN_INDEX : CLOSED_INDEX);
-  }
+  return (
+    <BottomSheet
+      closeAccessibilityLabel={t('common.close')}
+      height={sheetHeight}
+      isOpen={isOpen}
+      onClose={() => onClose?.()}
+      testID="emoji-picker"
+      title={t('assistant.emoji.title')}
+    >
+      <EmojiPickerSheetBody onSelect={onSelect} />
+    </BottomSheet>
+  );
+}
 
+function EmojiPickerSheetBody({ onSelect }: { onSelect: (emoji: string) => void }) {
+  const { requestClose } = useBottomSheet();
+  // Selecting an emoji closes the sheet itself (the owner only updates its form).
   const handleSelect = (selection: EmojiSelection) => {
     onSelect(selection.emoji);
-    setSheetIndex(CLOSED_INDEX);
+    requestClose();
   };
 
   return (
-    <SelectionBottomSheet
-      index={sheetIndex}
-      onIndexChange={setSheetIndex}
-      onSettle={(nextIndex) => {
-        if (nextIndex === CLOSED_INDEX) {
-          onClose?.();
-        }
-      }}
-    >
-      {/* The sheet viewport already bounds the height and the picker is `flex:1`,
-          so it fills the sheet. No `ScrollComponent` is passed: @swmansion's
-          native scroll negotiation drives the list's scroll-vs-dismiss handoff,
-          so the picker's default LegendList scroll view works as-is (that prop
-          only exists for JS sheets like @gorhom that share a gesture context).
-
-          The picker paints its theme `background` (opaque #FFFFFF/#1C1C1E) by
-          default, which would cover the sheet's liquid-glass surface; override
-          it to transparent so the glass shows through like the other sheets. */}
-      <EmojiPicker
-        enableSearch={false}
-        enableSkinToneSelector={false}
-        onEmojiSelected={handleSelect}
-        style={styles.picker}
-        theme={emojiPickerTheme}
-      />
-    </SelectionBottomSheet>
+    // The card bounds the height and the picker is `flex:1`, so it fills the
+    // body. No `ScrollComponent` is passed: @swmansion's native scroll
+    // negotiation drives the list's scroll-vs-dismiss handoff, so the picker's
+    // default LegendList works as-is (that prop only exists for JS sheets like
+    // @gorhom that share a gesture context).
+    //
+    // The picker paints its theme `background` (opaque #FFFFFF/#1C1C1E) by
+    // default, which would cover the sheet's liquid-glass surface; override it
+    // to transparent so the glass shows through like the other sheets.
+    <EmojiPicker
+      enableSearch={false}
+      enableSkinToneSelector={false}
+      onEmojiSelected={handleSelect}
+      style={styles.picker}
+      theme={emojiPickerTheme}
+    />
   );
 }
 

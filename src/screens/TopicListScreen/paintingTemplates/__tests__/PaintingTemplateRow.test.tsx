@@ -74,8 +74,8 @@ jest.mock('@/components/nativePrimitives', () => {
 });
 
 jest.mock('@/config/constants', () => ({
+  bottomSheet: { cornerRadius: 28, headerHeight: 60, headerSideWidth: 44, outerInset: 8 },
   isLiquidGlassAvailable: true,
-  paintingSheetOuterInset: 8,
   sheetScrimColor: '#00000066',
 }));
 
