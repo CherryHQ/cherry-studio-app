@@ -69,7 +69,6 @@ type ChatInputSurfaceProps = {
 export type ChatInputModelSettings = {
   accessibilityLabel: string;
   onPress: () => void;
-  summary?: string;
 };
 
 export type ChatInputSendPayload = {
@@ -238,6 +237,12 @@ export function ChatInputSurface({
                 style={inputBottomToolbarStyle}
               >
                 <ChatInputAddButton />
+                {modelSettings ? (
+                  <ChatInputSettingsButton
+                    accessibilityLabel={modelSettings.accessibilityLabel}
+                    onPress={handleModelSettingsPress}
+                  />
+                ) : null}
                 {modelLabel ? (
                   <ChatInputModelButton
                     accessibilityLabel={modelLabel}
@@ -255,13 +260,6 @@ export function ChatInputSurface({
                     onPress={handleModelPickerPress}
                   />
                 )}
-                {modelSettings ? (
-                  <ChatInputSettingsButton
-                    accessibilityLabel={modelSettings.accessibilityLabel}
-                    onPress={handleModelSettingsPress}
-                    summary={modelSettings.summary}
-                  />
-                ) : null}
               </View>
             </View>
           </View>
@@ -281,26 +279,19 @@ export function ChatInputSurface({
 function ChatInputSettingsButton({
   accessibilityLabel,
   onPress,
-  summary,
 }: {
   accessibilityLabel: string;
   onPress: () => void;
-  summary?: string;
 }) {
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      className="h-8 min-w-8 shrink-0 flex-row items-center justify-center gap-1.5 rounded-full bg-surface-secondary px-2.5 active:bg-surface-tertiary active:opacity-70"
+      className="h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-secondary active:bg-surface-tertiary active:opacity-70"
       onPress={onPress}
       testID="chat-input-model-settings-button"
     >
       <Settings2Icon className="size-4 text-default-foreground" strokeWidth={2} />
-      {summary ? (
-        <Text className="max-w-24 font-semibold text-default-foreground text-sm" numberOfLines={1}>
-          {summary}
-        </Text>
-      ) : null}
     </Pressable>
   );
 }

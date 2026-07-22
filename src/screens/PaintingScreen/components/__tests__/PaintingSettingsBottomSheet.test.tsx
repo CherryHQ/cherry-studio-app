@@ -81,6 +81,13 @@ jest.mock('lucide-uniwind/png', () => {
   return { ChevronDownIcon: MockView, XIcon: MockView };
 });
 
+// SlotText 拖 reanimated 全链，jest 下必崩；这里只关心文本内容。
+jest.mock('@/components/SlotText', () => {
+  const { Text: MockText } = jest.requireActual('react-native');
+
+  return { SlotText: ({ text }: { text: string }) => <MockText>{text}</MockText> };
+});
+
 jest.mock('@/config/constants', () => ({
   isLiquidGlassAvailable: false,
   paintingSheetOuterInset: 8,

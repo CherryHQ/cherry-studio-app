@@ -325,7 +325,7 @@ describe('ChatInputSurface', () => {
     expect(onSendPress).toHaveBeenCalledWith({ attachments: [], text: '' });
   });
 
-  test('shows the settings summary and dismisses the keyboard before opening it', async () => {
+  test('shows the icon-only settings button and dismisses the keyboard before opening it', async () => {
     const onSettingsPress = jest.fn();
     let renderer: ReactTestRenderer | undefined;
 
@@ -340,7 +340,6 @@ describe('ChatInputSurface', () => {
             modelSettings={{
               accessibilityLabel: 'Image settings: 16:9',
               onPress: onSettingsPress,
-              summary: '16:9',
             }}
             onModelPickerPress={jest.fn()}
             onSendPress={jest.fn()}
@@ -357,7 +356,7 @@ describe('ChatInputSurface', () => {
     const settingsButton = renderer.root.findByProps({
       testID: 'chat-input-model-settings-button',
     });
-    expect(findText(renderer, '16:9')).toBe(true);
+    expect(findText(renderer, '16:9')).toBe(false);
 
     await act(async () => settingsButton.props.onPress());
 

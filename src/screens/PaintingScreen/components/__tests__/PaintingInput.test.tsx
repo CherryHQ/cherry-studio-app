@@ -201,7 +201,7 @@ describe('PaintingInput', () => {
     expect(mockSurfaceProps?.allowEmptySend).toBe(true);
     expect(mockSurfaceProps?.isSendEnabled).toBe(true);
     expect(mockSurfaceProps?.modelSettings).toEqual(
-      expect.objectContaining({ summary: '1024x1024' }),
+      expect.objectContaining({ accessibilityLabel: 'painting.settings.open: 1024x1024' }),
     );
 
     await act(async () => {

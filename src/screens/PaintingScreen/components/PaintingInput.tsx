@@ -219,7 +219,6 @@ export function PaintingInput({
                   ? `${t('painting.settings.open')}: ${settingsSummary}`
                   : t('painting.settings.open'),
                 onPress: () => setIsSettingsOpen(true),
-                summary: settingsSummary,
               }
             : undefined
         }

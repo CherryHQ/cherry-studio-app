@@ -5,12 +5,13 @@ import { Input } from 'heroui-native/input';
 import { Select } from 'heroui-native/select';
 import { Slider } from 'heroui-native/slider';
 import { Switch } from 'heroui-native/switch';
+import type { TFunction } from 'i18next';
 import { ChevronDownIcon, XIcon } from 'lucide-uniwind/png';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { SlotText } from '@/components/SlotText';
 import {
   isLiquidGlassAvailable,
   paintingSheetOuterInset,
@@ -31,6 +32,11 @@ const HEADER_HEIGHT = 60;
 const HEADER_SIDE_WIDTH = 44;
 const SHEET_CORNER_RADIUS = 28;
 const FIELD_GAP = 8;
+// 固定 5 列等宽网格，超出自动换行；cell 恒定方形保证选中态切换时兄弟选项不挪位。
+const RATIO_GRID_COLUMNS = 5;
+// 外壳（选中框）固定为正方形，边长 = 单元格宽；1:1 预览方形为其一半，
+// 其它比例按等面积缩放（观感大小一致），并收进外壳内边距。
+const RATIO_SHELL_INSET = 20;
 
 type PaintingSettingsBottomSheetProps = {
   onDismiss: () => void;
@@ -209,8 +215,29 @@ function PaintingSettingField({
           />
         </View>
       );
-    case 'enum':
-      return field.spec.render === 'chips' ? (
+    case 'enum': {
+      if (field.spec.render !== 'chips') {
+        return (
+          <EnumSelectField
+            field={{ key: field.key, spec: field.spec }}
+            fields={fields}
+            onValueChange={onValueChange}
+            values={values}
+          />
+        );
+      }
+      const options = enumOptions(field, fields);
+      // 比例/尺寸型字段（如 2:3、1024x1024）走截图式比例卡片；auto/custom
+      // 等不可解析项在卡片里渲染成虚线占位，纯文字型字段回退普通 chips。
+      return options.filter((option) => parseRatio(option)).length >= 2 ? (
+        <AspectRatioField
+          field={{ key: field.key, spec: field.spec }}
+          fieldWidth={fieldWidth}
+          onValueChange={onValueChange}
+          options={options}
+          values={values}
+        />
+      ) : (
         <EnumChipsField
           field={{ key: field.key, spec: field.spec }}
           fieldWidth={fieldWidth}
@@ -218,14 +245,8 @@ function PaintingSettingField({
           onValueChange={onValueChange}
           values={values}
         />
-      ) : (
-        <EnumSelectField
-          field={{ key: field.key, spec: field.spec }}
-          fields={fields}
-          onValueChange={onValueChange}
-          values={values}
-        />
       );
+    }
     case 'range': {
       const numericValue = typeof value === 'number' ? value : Number(value ?? field.spec.min);
       return (
@@ -285,6 +306,129 @@ function PaintingSettingField({
         />
       );
   }
+}
+
+function AspectRatioField({
+  field,
+  fieldWidth,
+  onValueChange,
+  options,
+  values,
+}: {
+  field: ImageParamField & { spec: Extract<ImageParamField['spec'], { type: 'enum' }> };
+  fieldWidth: number;
+  onValueChange: (key: string, value: unknown) => void;
+  options: readonly string[];
+  values: ImageParamDraft;
+}) {
+  const { t } = useTranslation();
+  const selectedValue = values[field.key];
+  const selectedOption = typeof selectedValue === 'string' ? selectedValue : undefined;
+  // 右侧始终原样显示选中比例（auto/custom 显示选项名）。
+  const headerText = selectedOption ? ratioOptionLabel(t, field.key, selectedOption) : '';
+  const cellWidth = Math.max(
+    48,
+    (fieldWidth - 32 - FIELD_GAP * (RATIO_GRID_COLUMNS - 1)) / RATIO_GRID_COLUMNS,
+  );
+  return (
+    <View className="gap-2">
+      <View className="flex-row items-center justify-between gap-3">
+        <Text className="font-medium text-foreground text-sm">{imageParamLabel(t, field.key)}</Text>
+        <SlotText text={headerText} textClassName="font-medium text-default-foreground text-sm" />
+      </View>
+      <View className="rounded-3xl bg-surface-secondary p-4">
+        <View className="flex-row flex-wrap" style={styles.chipGrid}>
+          {options.map((option) => (
+            <AspectRatioOption
+              cellWidth={cellWidth}
+              isSelected={selectedValue === option}
+              key={option}
+              label={ratioOptionLabel(t, field.key, option)}
+              onPress={() => onValueChange(field.key, option)}
+              value={option}
+            />
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function AspectRatioOption({
+  cellWidth,
+  isSelected,
+  label,
+  onPress,
+  value,
+}: {
+  cellWidth: number;
+  isSelected: boolean;
+  label: string;
+  onPress: () => void;
+  value: string;
+}) {
+  // 外壳固定正方形（边长 = 单元格宽）；1:1 预览方形恰为其一半。
+  const shellSide = cellWidth;
+  const squareSide = shellSide / 2;
+  const ratio = parseRatio(value);
+  const shapeStyle = ratio
+    ? ratioShapeSize(ratio, squareSide * squareSide, shellSide - RATIO_SHELL_INSET)
+    : { height: squareSide, width: squareSide };
+  // auto/custom 等没有固定比例的选项画成虚线方框。
+  const shape = ratio ? (
+    <View
+      className={
+        isSelected
+          ? 'rounded-sm bg-foreground'
+          : 'rounded-sm border border-foreground/25 bg-foreground/10'
+      }
+      style={shapeStyle}
+    />
+  ) : (
+    <View
+      className={
+        isSelected
+          ? 'rounded-sm border-2 border-foreground'
+          : 'rounded-sm border-2 border-foreground/25'
+      }
+      style={[shapeStyle, styles.ratioDashedShape]}
+    />
+  );
+  const shellStyle = { height: shellSide, width: shellSide };
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
+      className="items-center gap-2 active:opacity-70"
+      onPress={onPress}
+      style={{ width: cellWidth }}
+    >
+      <View className="items-center justify-center" style={shellStyle}>
+        {isSelected ? (
+          <View
+            className="items-center justify-center rounded-xl border-2 border-foreground"
+            style={shellStyle}
+          >
+            {shape}
+          </View>
+        ) : (
+          shape
+        )}
+      </View>
+      <Text
+        className={
+          isSelected
+            ? 'font-semibold text-foreground text-sm'
+            : 'font-medium text-default-foreground text-sm'
+        }
+        numberOfLines={1}
+        style={styles.tabularText}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
 }
 
 function EnumChipsField({
@@ -485,6 +629,34 @@ function RatioPreview({ value }: { value: string }) {
   );
 }
 
+/** 1024x1024 这类尺寸值化简成 1:1 展示；化简不出简洁比例或非比例值时保留原标签。 */
+function ratioOptionLabel(t: TFunction, key: CanonicalParamKey, value: string): string {
+  const ratio = parseRatio(value);
+  if (!ratio || !Number.isInteger(ratio.width) || !Number.isInteger(ratio.height)) {
+    return imageParamOptionLabel(t, key, value);
+  }
+  const divisor = greatestCommonDivisor(ratio.width, ratio.height);
+  const width = ratio.width / divisor;
+  const height = ratio.height / divisor;
+  return width <= 32 && height <= 32 ? `${width}:${height}` : imageParamOptionLabel(t, key, value);
+}
+
+function greatestCommonDivisor(a: number, b: number): number {
+  return b === 0 ? a : greatestCommonDivisor(b, a % b);
+}
+
+/** 等面积缩放：给定基准面积，各比例观感大小一致，再收进外壳的最大边长内。 */
+function ratioShapeSize(
+  ratio: { height: number; width: number },
+  area: number,
+  maxSide: number,
+): { height: number; width: number } {
+  const width = Math.sqrt((area * ratio.width) / ratio.height);
+  const height = area / width;
+  const scale = Math.min(1, maxSide / width, maxSide / height);
+  return { height: Math.max(8, height * scale), width: Math.max(8, width * scale) };
+}
+
 function parseRatio(value: string): { height: number; width: number } | undefined {
   const normalized = value
     .replace(/^ASPECT_/i, '')
@@ -526,6 +698,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   headerSide: { height: HEADER_SIDE_WIDTH, width: HEADER_SIDE_WIDTH },
+  ratioDashedShape: { borderStyle: 'dashed' },
   sheet: {
     borderCurve: 'continuous',
     borderRadius: SHEET_CORNER_RADIUS,
