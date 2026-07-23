@@ -4,7 +4,6 @@ import { CheckIcon, PencilIcon, PinIcon, PinOffIcon, Trash2Icon } from 'lucide-u
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AccessibilityActionEvent, Pressable, Text, View } from 'react-native';
-import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import ReanimatedSwipeable, {
   type SwipeableMethods,
@@ -17,11 +16,9 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
-  selectionToolbarGap,
-  selectionToolbarHeight,
+  useMessageListBottomInset,
   useMessageSelectionActions,
   useMessageSelectionState,
   useRegisterSelectionSource,
@@ -101,8 +98,7 @@ function formatTopicUpdatedAt(updatedAt: string, locale: string | undefined, yes
 const TopicListView = memo(function TopicListView() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const tabBarHeight = useBottomTabBarHeight();
-  const insets = useSafeAreaInsets();
+  const bottomInset = useMessageListBottomInset();
   const { isPinActionDisabled, isTopicListLoading, pinnedTopicIds, topics } = useTopicListTopics();
   const { loadMoreTopics, openTopic, toggleTopicPin } = useTopicListActions();
   const { assistants } = useAssistantsApi();
@@ -112,14 +108,11 @@ const TopicListView = memo(function TopicListView() {
   useRegisterSelectionSource('conversations', selectionSource);
   const { dialogs, requestDelete, requestRename } = useTopicActionDialogs();
   const { notifyClose, notifyWillOpen } = useExclusiveSwipeable();
+  // Bottom inset is stable across the edit⇄done flip (see useMessageListBottomInset),
+  // so this style reference stays put and the list never reflows on toggle.
   const contentContainerStyle = useMemo(
-    () => ({
-      paddingBottom: isEditing
-        ? insets.bottom + selectionToolbarHeight + selectionToolbarGap * 2
-        : tabBarHeight,
-      paddingHorizontal: 8,
-    }),
-    [insets.bottom, isEditing, tabBarHeight],
+    () => ({ paddingBottom: bottomInset, paddingHorizontal: 8 }),
+    [bottomInset],
   );
   const listExtraData = useMemo(
     () => ({ isEditing, isPinActionDisabled, pinnedTopicIds, selectedIds }),

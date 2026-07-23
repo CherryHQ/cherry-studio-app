@@ -16,3 +16,4 @@ export {
 } from './scope';
 export { areAllSelected, toggleSelection } from './selection';
 export { selectionToolbarGap, selectionToolbarHeight } from './selectionToolbarLayout';
+export { useMessageListBottomInset } from './useMessageListBottomInset';

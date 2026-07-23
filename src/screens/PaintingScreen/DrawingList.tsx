@@ -13,12 +13,9 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  selectionToolbarGap,
-  selectionToolbarHeight,
+  useMessageListBottomInset,
   useMessageScope,
   useMessageSelectionActions,
   useMessageSelectionState,
@@ -57,8 +54,7 @@ export function DrawingList() {
   const { toggleId } = useMessageSelectionActions();
   const selectionSource = usePaintingSelectionSource(isEditing && scope === 'drawings');
   useRegisterSelectionSource('drawings', selectionSource);
-  const tabBarHeight = useBottomTabBarHeight();
-  const insets = useSafeAreaInsets();
+  const bottomInset = useMessageListBottomInset();
   const { width: windowWidth } = useWindowDimensions();
   const recentPhotos = useRecentPaintingPhotos(scope === 'drawings');
   const paintings = usePaintings();
@@ -143,11 +139,9 @@ export function DrawingList() {
   return (
     <ScrollView
       className="flex-1 bg-background"
-      contentContainerStyle={{
-        paddingBottom: isEditing
-          ? insets.bottom + selectionToolbarHeight + selectionToolbarGap * 2
-          : tabBarHeight + 24,
-      }}
+      // Stable across the edit⇄done flip (see useMessageListBottomInset) so the
+      // gallery never reflows on toggle.
+      contentContainerStyle={{ paddingBottom: bottomInset }}
       onScroll={({ nativeEvent }) => {
         const distanceToEnd =
           nativeEvent.contentSize.height -

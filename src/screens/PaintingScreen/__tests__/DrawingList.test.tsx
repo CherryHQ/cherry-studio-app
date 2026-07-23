@@ -118,6 +118,7 @@ jest.mock('@/screens/PaintingScreen/utils/paintingDraftHandoff', () => ({
 }));
 
 jest.mock('@/components/messageTabs', () => ({
+  useMessageListBottomInset: () => 0,
   useMessageScope: () => ({ scope: 'drawings' }),
   useMessageSelectionActions: () => ({ toggleId: mockToggleId }),
   useMessageSelectionState: () => ({ isEditing: mockIsEditing, selectedIds: mockSelectedIds }),
