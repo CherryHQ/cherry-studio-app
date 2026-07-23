@@ -125,6 +125,7 @@ jest.mock('../context/TopicListProvider', () => ({
 }));
 
 jest.mock('@/components/messageTabs', () => ({
+  useMessageListBottomInset: () => 0,
   useMessageSelectionActions: () => ({ toggleId: jest.fn() }),
   useMessageSelectionState: () => ({ isEditing: false, selectedIds: new Set() }),
   useRegisterSelectionSource: () => undefined,

@@ -38,6 +38,11 @@ export default function SettingsScreen() {
     router.push('/settings/profile');
   }, [router]);
 
+  // With no name set yet, the hero is a call to action: tapping it (avatar or the
+  // prompt) opens profile settings instead of toggling the expand/collapse lock.
+  const hasUserName = userName.trim().length > 0;
+  const onHeroPress = hasUserName ? toggleHeroLock : openProfileSettings;
+
   // Own the insets explicitly: `never` keeps the scroll-offset zero point stable
   // (so scrollY reads 0 at rest and negative on iOS overscroll), which the hero
   // animation depends on. No top padding: the hero box is pinned to content y=0
@@ -56,7 +61,7 @@ export default function SettingsScreen() {
       >
         <ProfileHero
           lockProgress={lockProgress}
-          onPress={toggleHeroLock}
+          onPress={onHeroPress}
           scrollY={scrollY}
           userName={userName}
         />

@@ -1,4 +1,5 @@
 import { useThemeColor } from 'heroui-native/hooks';
+import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
   Extrapolation,
@@ -30,7 +31,10 @@ type ProfileStickyBarProps = {
  * hero underneath always receives taps (a tap on it toggles the expand).
  */
 export function ProfileStickyBar({ scrollY, topInset, userName }: ProfileStickyBarProps) {
+  const { t } = useTranslation();
   const separatorColor = useThemeColor('separator');
+  // Mirror the hero's name slot: fall back to the set-profile prompt when empty.
+  const title = userName.trim().length > 0 ? userName : t('settings.profile.setPrompt');
 
   const backgroundStyle = useAnimatedStyle(() => ({
     opacity: interpolate(scrollY.value, fadeInput, [0, 0, 1], Extrapolation.CLAMP),
@@ -58,7 +62,7 @@ export function ProfileStickyBar({ scrollY, topInset, userName }: ProfileStickyB
             numberOfLines={1}
             style={titleStyle}
           >
-            {userName}
+            {title}
           </Animated.Text>
         </View>
       </View>

@@ -1,7 +1,7 @@
 import { useThemeColor } from 'heroui-native/hooks';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, Pressable, useWindowDimensions } from 'react-native';
+import { type LayoutChangeEvent, Pressable, Text, useWindowDimensions } from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -47,6 +47,7 @@ export function ProfileHero({ lockProgress, onPress, scrollY, userName }: Profil
   const restingHeight = profileHero.restingHeight;
   const expandedHeight = Math.round(screenHeight * profileHero.expandedHeightRatio);
   const avatarRestLeft = (screenWidth - profileHero.avatarSize) / 2;
+  const hasUserName = userName.trim().length > 0;
 
   const handleNameLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -141,24 +142,43 @@ export function ProfileHero({ lockProgress, onPress, scrollY, userName }: Profil
       </Animated.View>
       <Animated.View
         className="absolute right-0 bottom-0 left-0 items-center"
-        pointerEvents="none"
+        pointerEvents={hasUserName ? 'none' : 'box-none'}
         style={{ paddingBottom: profileHero.nameRestPaddingBottom }}
       >
-        <Animated.Text
-          className="font-semibold"
-          numberOfLines={1}
-          onLayout={handleNameLayout}
-          style={[
-            nameStyle,
-            {
-              fontSize: profileHero.nameBaseFontSize,
-              lineHeight: profileHero.nameLineHeight,
-              maxWidth: screenWidth - 2 * profileHero.nameOverlayInsetX,
-            },
-          ]}
-        >
-          {userName}
-        </Animated.Text>
+        {hasUserName ? (
+          <Animated.Text
+            className="font-semibold"
+            numberOfLines={1}
+            onLayout={handleNameLayout}
+            style={[
+              nameStyle,
+              {
+                fontSize: profileHero.nameBaseFontSize,
+                lineHeight: profileHero.nameLineHeight,
+                maxWidth: screenWidth - 2 * profileHero.nameOverlayInsetX,
+              },
+            ]}
+          >
+            {userName}
+          </Animated.Text>
+        ) : (
+          // No name yet: show a tappable prompt in the name slot. Tapping it (or
+          // the avatar) opens profile settings instead of toggling the expand
+          // lock — `onPress` is wired to that by the parent when the name is empty.
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={12}
+            onPress={onPress}
+            style={{ maxWidth: screenWidth - 2 * profileHero.nameOverlayInsetX }}
+          >
+            <Text
+              className="text-center font-medium text-base text-foreground-secondary"
+              numberOfLines={1}
+            >
+              {t('settings.profile.setPrompt')}
+            </Text>
+          </Pressable>
+        )}
       </Animated.View>
     </Animated.View>
   );

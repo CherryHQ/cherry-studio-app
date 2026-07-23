@@ -10,7 +10,6 @@ import {
   useMessageSelectionActions,
   useMessageSelectionState,
 } from '@/components/messageTabs';
-import { useSetBottomTabBarHidden } from '@/components/navigation';
 import { isLiquidGlassAvailable } from '@/config/constants';
 
 import { MessagePager } from '../components/MessagePager';
@@ -57,30 +56,33 @@ export function MessagesScreen() {
           {t(isEditing ? 'common.done' : 'common.edit')}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu
-          accessibilityLabel={t('navigation.new')}
-          hidden={isEditing}
-          icon="square.and.pencil"
-        >
-          <Stack.Toolbar.MenuAction icon="message" onPress={() => router.push('/topics')}>
-            {t('navigation.newChat')}
-          </Stack.Toolbar.MenuAction>
-          <Stack.Toolbar.MenuAction icon="paintbrush" onPress={() => router.push('/paintings')}>
-            {t('navigation.newPainting')}
-          </Stack.Toolbar.MenuAction>
-        </Stack.Toolbar.Menu>
-      </Stack.Toolbar>
+      {/* While editing, the selection actions own the header's right slot (see
+          SelectionToolbar.ios). expo-router lets the last-rendered toolbar of a
+          placement win, so we render the compose menu only when NOT editing to keep a
+          single, unambiguous owner of the right slot. */}
+      {isEditing ? null : (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Menu accessibilityLabel={t('navigation.new')} icon="square.and.pencil">
+            <Stack.Toolbar.MenuAction icon="message" onPress={() => router.push('/topics')}>
+              {t('navigation.newChat')}
+            </Stack.Toolbar.MenuAction>
+            <Stack.Toolbar.MenuAction icon="paintbrush" onPress={() => router.push('/paintings')}>
+              {t('navigation.newPainting')}
+            </Stack.Toolbar.MenuAction>
+          </Stack.Toolbar.Menu>
+        </Stack.Toolbar>
+      )}
     </>
   );
 }
 
 export function MessagesRoute() {
-  const setBottomTabBarHidden = useSetBottomTabBarHidden();
-
+  // iOS keeps the native tab bar visible during editing — the selection actions live
+  // in the header (see SelectionToolbar.ios), so there is no need to hide the tab bar.
+  // Toggling it per edit⇄done flashes and can freeze the scene under rapid taps.
   return (
     <MessageScopeProvider>
-      <MessageSelectionProvider onEditingChange={setBottomTabBarHidden}>
+      <MessageSelectionProvider>
         <MessagesScreen />
       </MessageSelectionProvider>
     </MessageScopeProvider>

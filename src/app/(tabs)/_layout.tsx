@@ -5,10 +5,12 @@ import {
 } from '@bottom-tabs/react-navigation';
 import { withLayoutContext } from 'expo-router';
 import type { ParamListBase, TabNavigationState } from 'expo-router/react-navigation';
+import { useNavigationState } from 'expo-router/react-navigation';
 import { useThemeColor } from 'heroui-native/hooks';
 import { useTranslation } from 'react-i18next';
 
 import { BottomTabBarVisibilityProvider, useBottomTabBarHidden } from '@/components/navigation';
+import { selectIsNestedTabScreen } from '@/components/navigation/tabBarVisibility';
 import { isAndroid } from '@/config/constants';
 import {
   SearchScopeProvider,
@@ -72,6 +74,7 @@ function TabNavigator() {
   const accentColor = useThemeColor('accent');
   const [tabBarColor] = useThemeColor(['background-secondary']);
   const isBottomTabBarHidden = useBottomTabBarHidden();
+  const isNestedScreen = useNavigationState(selectIsNestedTabScreen);
   const setScope = useSetSearchScope();
   const androidTabProps = isAndroid
     ? {
@@ -86,7 +89,7 @@ function TabNavigator() {
       {...androidTabProps}
       backBehavior="history"
       initialRouteName="(messages)"
-      tabBarHidden={isBottomTabBarHidden}
+      tabBarHidden={isBottomTabBarHidden || isNestedScreen}
       screenOptions={{
         sceneStyle,
         // freezeOnBlur 会让冻结中的 tab 错过 uniwind 的免重渲染主题 patch，

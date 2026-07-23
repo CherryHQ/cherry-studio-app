@@ -77,9 +77,14 @@ export function SelectionControls() {
           <Dialog.Overlay isCloseOnPress={!isDeleting} />
           <Dialog.Content className="gap-5 rounded-3xl bg-overlay p-5" isSwipeable={false}>
             <View className="gap-1.5">
-              <Dialog.Title>{t(source?.copy.deleteTitle ?? '')}</Dialog.Title>
+              {/* `source` is registered by the active list on mount, so it can be
+                  undefined on the first frames / right after a scope switch. Guard the
+                  copy lookups so we never call `t('')` (which warns about the missing
+                  empty key and its plural forms). The dialog can only be opened once a
+                  source exists, so this never blanks a visible dialog. */}
+              <Dialog.Title>{source ? t(source.copy.deleteTitle) : null}</Dialog.Title>
               <Dialog.Description>
-                {t(source?.copy.deleteMessage ?? '', { count: selectedCount })}
+                {source ? t(source.copy.deleteMessage, { count: selectedCount }) : null}
               </Dialog.Description>
             </View>
             <View className="flex-row justify-end gap-3">
