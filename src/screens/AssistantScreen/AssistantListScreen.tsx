@@ -215,16 +215,16 @@ function AssistantListRow({
             <Animated.View
               className={
                 isLast
-                  ? 'absolute inset-y-0 right-0 left-14 border-border border-y'
-                  : 'absolute top-0 right-0 left-14 border-border border-t'
+                  ? 'absolute inset-y-0 right-0 left-16 border-border border-y'
+                  : 'absolute top-0 right-0 left-16 border-border border-t'
               }
               pointerEvents="none"
               style={borderStyle}
             />
-            <Text className="size-10 text-center text-4xl leading-10">{assistant.emoji}</Text>
+            <Text className="min-w-12 h-12 text-center text-3xl leading-12">{assistant.emoji}</Text>
             <View className="min-w-0 flex-1 pr-4">
               <View className="gap-0.5">
-                <Text className="font-semibold text-foreground text-lg" numberOfLines={1}>
+                <Text className="font-semibold text-foreground text-md" numberOfLines={1}>
                   {assistant.name}
                 </Text>
                 <Text className="text-foreground-muted text-xs" numberOfLines={1}>

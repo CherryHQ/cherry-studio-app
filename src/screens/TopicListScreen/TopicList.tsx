@@ -189,7 +189,7 @@ const TopicListView = memo(function TopicListView() {
   );
 
   return (
-    <>
+    <View className="flex-1">
       <LegendList
         className="flex-1 bg-background"
         contentInsetAdjustmentBehavior="never"
@@ -207,7 +207,7 @@ const TopicListView = memo(function TopicListView() {
         renderItem={renderItem}
       />
       {dialogs}
-    </>
+    </View>
   );
 });
 
@@ -447,14 +447,14 @@ const TopicRow = memo(function TopicRow({
                 </View>
               </Animated.View>
             ) : null}
-            <Text className="size-10 text-center text-4xl leading-10">
+            <Text className="min-w-12 h-12 text-center text-3xl leading-12">
               {assistant?.emoji ?? '💬'}
             </Text>
             <View className="min-w-0 flex-1 pr-4">
               <View className="gap-0.5">
                 <View className="min-w-0 flex-row items-center gap-2">
                   <Text
-                    className="min-w-0 flex-1 font-semibold text-foreground text-lg"
+                    className="min-w-0 flex-1 font-semibold text-foreground text-md"
                     numberOfLines={1}
                   >
                     {topic.name || t('navigation.newChat')}

@@ -20,8 +20,10 @@ export function MessagesScreen() {
   const { enterEditing, exitEditing } = useMessageSelectionActions();
   const { isEditing } = useMessageSelectionState();
 
+  // The explicit flex:1 style backs up the className so the pager fills the
+  // Android scene height (paired with the navigator's sceneStyle).
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+    <SafeAreaView className="flex-1 bg-background" edges={['top']} style={{ flex: 1 }}>
       <MessageHeader
         isEditing={isEditing}
         onEditPress={isEditing ? exitEditing : enterEditing}
