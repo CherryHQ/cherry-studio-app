@@ -70,7 +70,7 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       queryClient.invalidateQueries({ queryKey: queryKeys.topics.detail(variables.id) }),
   });
 
-  const deleteTopicsMutation = useDataMutation({
+  const { mutateAsync: deleteManyTopics } = useDataMutation({
     invalidateQueries: [['/topics']],
     mutationFn: (dataServices, ids: readonly string[]) => dataServices.topic.deleteMany(ids),
     onSuccess: (_result, ids) => {
@@ -96,9 +96,9 @@ export function TopicListProvider({ children }: PropsWithChildren) {
 
   const deleteTopic = useCallback(
     async (id: string) => {
-      await deleteTopicsMutation.mutateAsync([id]);
+      await deleteManyTopics([id]);
     },
-    [deleteTopicsMutation],
+    [deleteManyTopics],
   );
 
   const deleteTopics = useCallback(
@@ -108,9 +108,9 @@ export function TopicListProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      await deleteTopicsMutation.mutateAsync(uniqueIds);
+      await deleteManyTopics(uniqueIds);
     },
-    [deleteTopicsMutation],
+    [deleteManyTopics],
   );
 
   const toggleTopicPin = useCallback(

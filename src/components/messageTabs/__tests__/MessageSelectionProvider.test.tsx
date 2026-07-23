@@ -3,12 +3,16 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import {
   MessageSelectionProvider,
+  type SelectionSource,
   useMessageSelectionActions,
+  useMessageSelectionSource,
   useMessageSelectionState,
+  useRegisterSelectionSource,
 } from '../MessageSelectionProvider';
 
 let currentActions: ReturnType<typeof useMessageSelectionActions> | undefined;
 let currentState: ReturnType<typeof useMessageSelectionState> | undefined;
+let currentSource: SelectionSource | undefined;
 let renderer: ReactTestRenderer | undefined;
 
 function MessageSelectionProbe() {
@@ -23,9 +27,33 @@ function MessageSelectionProbe() {
   return null;
 }
 
+function UnstableSourceBody() {
+  // A brand-new source object on every render — the exact shape that used to
+  // feed setState back into its own registration effect and loop forever.
+  const source: SelectionSource = {
+    copy: { deleteFailed: 'x', deleteMessage: 'y', deleteTitle: 'z' },
+    deleteSelected: async () => undefined,
+    getAllIds: () => ['a', 'b'],
+  };
+  useRegisterSelectionSource('conversations', source);
+
+  return null;
+}
+
+function SourceProbe() {
+  const source = useMessageSelectionSource('conversations');
+
+  useEffect(() => {
+    currentSource = source;
+  }, [source]);
+
+  return null;
+}
+
 beforeEach(() => {
   currentActions = undefined;
   currentState = undefined;
+  currentSource = undefined;
   renderer = undefined;
 });
 
@@ -86,6 +114,19 @@ describe('MessageSelectionProvider', () => {
       currentActions?.toggleAll(['id-1', 'id-2']);
     });
     expect(currentState?.selectedIds).toEqual(new Set());
+  });
+
+  test('registers an unstable source without hitting maximum update depth', async () => {
+    await act(async () => {
+      renderer = create(
+        <MessageSelectionProvider>
+          <UnstableSourceBody />
+          <SourceProbe />
+        </MessageSelectionProvider>,
+      );
+    });
+
+    expect(currentSource?.getAllIds()).toEqual(['a', 'b']);
   });
 
   test('restores the tab bar when the provider unmounts while editing', async () => {

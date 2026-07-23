@@ -74,7 +74,7 @@ export function usePaintingIds({ enabled }: { enabled: boolean }) {
 
 export function useDeletePaintings() {
   const queryClient = useQueryClient();
-  const deletePaintingsMutation = useDataMutation({
+  const { mutateAsync } = useDataMutation({
     invalidateQueries: [queryKeys.paintings.all()],
     mutationFn: (dataServices, ids: readonly string[]) => dataServices.painting.deleteMany(ids),
     onSuccess: (_result, ids) => {
@@ -92,9 +92,9 @@ export function useDeletePaintings() {
         return;
       }
 
-      await deletePaintingsMutation.mutateAsync(uniqueIds);
+      await mutateAsync(uniqueIds);
     },
-    [deletePaintingsMutation],
+    [mutateAsync],
   );
 }
 

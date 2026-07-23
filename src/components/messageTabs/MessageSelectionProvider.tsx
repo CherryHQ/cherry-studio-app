@@ -33,14 +33,14 @@ type MessageSelectionActions = {
   toggleId: (id: string) => void;
 };
 
-type MessageSelectionSources = {
-  registerSource: (scope: MessageScope, source: SelectionSource | undefined) => void;
-  sources: Partial<Record<MessageScope, SelectionSource>>;
-};
+type RegisterSelectionSource = (scope: MessageScope, source: SelectionSource | undefined) => void;
 
 const MessageSelectionStateContext = createContext<MessageSelectionState | null>(null);
 const MessageSelectionActionsContext = createContext<MessageSelectionActions | null>(null);
-const MessageSelectionSourcesContext = createContext<MessageSelectionSources | null>(null);
+const MessageRegisterSourceContext = createContext<RegisterSelectionSource | null>(null);
+const MessageSelectionSourcesContext = createContext<Partial<
+  Record<MessageScope, SelectionSource>
+> | null>(null);
 
 type MessageSelectionProviderProps = PropsWithChildren<{
   onEditingChange?: (isEditing: boolean) => void;
@@ -101,14 +101,15 @@ export function MessageSelectionProvider({
     () => ({ enterEditing, exitEditing, toggleAll, toggleId }),
     [enterEditing, exitEditing, toggleAll, toggleId],
   );
-  const sourcesValue = useMemo(() => ({ registerSource, sources }), [registerSource, sources]);
 
   return (
     <MessageSelectionActionsContext value={actionsValue}>
       <MessageSelectionStateContext value={stateValue}>
-        <MessageSelectionSourcesContext value={sourcesValue}>
-          {children}
-        </MessageSelectionSourcesContext>
+        <MessageRegisterSourceContext value={registerSource}>
+          <MessageSelectionSourcesContext value={sources}>
+            {children}
+          </MessageSelectionSourcesContext>
+        </MessageRegisterSourceContext>
       </MessageSelectionStateContext>
     </MessageSelectionActionsContext>
   );
@@ -134,11 +135,15 @@ export function useMessageSelectionActions() {
   return context;
 }
 
-function useMessageSelectionSources() {
-  const context = use(MessageSelectionSourcesContext);
+// `registerSource` lives in its own context with a stable reference, so a body
+// registering its source never re-renders the body itself. If it did, an
+// unstable source object would feed setState straight back into its own effect
+// and loop forever ("Maximum update depth exceeded").
+function useRegisterSource() {
+  const context = use(MessageRegisterSourceContext);
 
   if (!context) {
-    throw new Error('useMessageSelectionSources must be used within MessageSelectionProvider');
+    throw new Error('useRegisterSource must be used within MessageSelectionProvider');
   }
 
   return context;
@@ -147,7 +152,7 @@ function useMessageSelectionSources() {
 // A tab body calls this while mounted to expose its selection behavior to the
 // shell. The source is keyed by scope so switching tabs picks the active body's.
 export function useRegisterSelectionSource(scope: MessageScope, source: SelectionSource) {
-  const { registerSource } = useMessageSelectionSources();
+  const registerSource = useRegisterSource();
 
   useEffect(() => {
     registerSource(scope, source);
@@ -156,6 +161,11 @@ export function useRegisterSelectionSource(scope: MessageScope, source: Selectio
 }
 
 export function useMessageSelectionSource(scope: MessageScope): SelectionSource | undefined {
-  const { sources } = useMessageSelectionSources();
-  return sources[scope];
+  const context = use(MessageSelectionSourcesContext);
+
+  if (!context) {
+    throw new Error('useMessageSelectionSource must be used within MessageSelectionProvider');
+  }
+
+  return context[scope];
 }
