@@ -2,7 +2,7 @@
  * Auto-generated provider icon registry
  * Do not edit manually.
  *
- * Total icons: 160
+ * Total icons: 157
  */
 
 import { PROVIDER_ID_ALIASES } from '../provider-aliases';
@@ -94,10 +94,6 @@ export const PROVIDER_ICONS = {
     light: require('./light/bfl.png'),
     dark: require('./dark/bfl.png'),
   },
-  bing: {
-    light: require('./light/bing.png'),
-    dark: require('./light/bing.png'),
-  },
   bocha: {
     light: require('./light/bocha.png'),
     dark: require('./light/bocha.png'),
@@ -113,6 +109,10 @@ export const PROVIDER_ICONS = {
   bytedance: {
     light: require('./light/bytedance.png'),
     dark: require('./light/bytedance.png'),
+  },
+  cephalon: {
+    light: require('./light/cephalon.png'),
+    dark: require('./dark/cephalon.png'),
   },
   cerebras: {
     light: require('./light/cerebras.png'),
@@ -250,10 +250,6 @@ export const PROVIDER_ICONS = {
     light: require('./light/gpustack.png'),
     dark: require('./light/gpustack.png'),
   },
-  'graph-rag': {
-    light: require('./light/graph-rag.png'),
-    dark: require('./light/graph-rag.png'),
-  },
   grok: {
     light: require('./light/grok.png'),
     dark: require('./dark/grok.png'),
@@ -354,10 +350,6 @@ export const PROVIDER_ICONS = {
     light: require('./light/mcp.png'),
     dark: require('./light/mcp.png'),
   },
-  mcprouter: {
-    light: require('./light/mcprouter.png'),
-    dark: require('./light/mcprouter.png'),
-  },
   mcpso: {
     light: require('./light/mcpso.png'),
     dark: require('./light/mcpso.png'),
@@ -433,10 +425,6 @@ export const PROVIDER_ICONS = {
   nvidia: {
     light: require('./light/nvidia.png'),
     dark: require('./light/nvidia.png'),
-  },
-  o3: {
-    light: require('./light/o3.png'),
-    dark: require('./light/o3.png'),
   },
   ocoolai: {
     light: require('./light/ocoolai.png'),

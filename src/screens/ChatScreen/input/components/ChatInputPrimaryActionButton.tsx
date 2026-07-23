@@ -12,6 +12,7 @@ import { hasChatInputSendableContent } from '../utils/chatInputAttachments';
 const buttonSize = 32;
 
 type ChatInputPrimaryActionButtonProps = {
+  allowEmptySend?: boolean;
   isSendEnabled: boolean;
   isStreaming: boolean;
   onSendPress: (text: string) => void | Promise<void>;
@@ -19,6 +20,7 @@ type ChatInputPrimaryActionButtonProps = {
 };
 
 export function ChatInputPrimaryActionButton({
+  allowEmptySend = false,
   isSendEnabled,
   isStreaming,
   onSendPress,
@@ -29,7 +31,8 @@ export function ChatInputPrimaryActionButton({
   const { inputRef } = useChatInputMeta();
   const { attachments, draft } = useChatInputState();
   const trimmedDraft = draft.trim();
-  const shouldShowSend = isSendEnabled && hasChatInputSendableContent(draft, attachments);
+  const shouldShowSend =
+    isSendEnabled && (allowEmptySend || hasChatInputSendableContent(draft, attachments));
   // Persistent button: stays mounted even with no sendable content; tapping it
   // focuses the input to expand the composer.
   const isPlaceholder = !isStreaming && !shouldShowSend;

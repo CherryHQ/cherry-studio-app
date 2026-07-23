@@ -1,4 +1,7 @@
-import { embedMany as aiCoreEmbedMany } from '@cherrystudio/ai-core';
+import {
+  embedMany as aiCoreEmbedMany,
+  generateImage as aiCoreGenerateImage,
+} from '@cherrystudio/ai-core';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { AiService, type AiServiceDependencies } from '@/ai/AiService';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
@@ -34,6 +37,112 @@ jest.mock('@/ai/runtime/aiSdk/Agent', () => ({
 }));
 
 const embedManyMock = aiCoreEmbedMany as jest.MockedFunction<typeof aiCoreEmbedMany>;
+const generateImageMock = aiCoreGenerateImage as jest.MockedFunction<typeof aiCoreGenerateImage>;
+
+describe('AiService.generateImage', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    generateImageMock.mockResolvedValue({
+      images: [{ base64: 'generated', mediaType: 'image/png' }],
+      usage: undefined,
+    } as never);
+  });
+
+  it('uses a string prompt and defaults to one image without attachments', async () => {
+    const model = createModel('gpt-image-2', {
+      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+    });
+    const service = new AiService(createServices({ model }));
+
+    await service.generateImage({
+      mode: 'generate',
+      paramValues: {},
+      prompt: 'draw a cherry',
+      uniqueModelId: model.id,
+    });
+
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      expect.objectContaining({
+        model: 'gpt-image-2',
+        n: 1,
+        prompt: 'draw a cherry',
+      }),
+    );
+  });
+
+  it('maps attachment data URLs to the AI SDK image prompt shape', async () => {
+    const model = createModel('gpt-image-2', {
+      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+    });
+    const service = new AiService(createServices({ model }));
+    const inputImages = ['data:image/png;base64,a', 'data:image/jpeg;base64,b'];
+
+    await service.generateImage({
+      inputImages,
+      mode: 'edit',
+      paramValues: {},
+      prompt: 'edit these images',
+      uniqueModelId: model.id,
+    });
+
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ fetch: expect.any(Function) }),
+      expect.objectContaining({
+        n: 1,
+        prompt: { images: inputImages, text: 'edit these images' },
+      }),
+    );
+  });
+
+  it('routes canonical image params into native fields and merged provider options', async () => {
+    const model = createModel('gpt-image-2', {
+      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+    });
+    const assistant = createAssistant(model.id);
+    const service = new AiService(createServices({ assistant, model }));
+
+    await service.generateImage({
+      assistantId: assistant.id,
+      mode: 'generate',
+      paramValues: {
+        aspectRatio: 'ASPECT_16_9',
+        background: 'transparent',
+        numImages: 2,
+        quality: 'high',
+        seed: 42,
+      },
+      prompt: 'draw a cherry',
+      uniqueModelId: model.id,
+    });
+
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      expect.objectContaining({
+        aspectRatio: '16:9',
+        n: 2,
+        providerOptions: expect.objectContaining({
+          'openai-compatible': expect.objectContaining({
+            customFlag: true,
+            reasoningEffort: 'low',
+          }),
+          'test-provider': expect.objectContaining({
+            background: 'transparent',
+            quality: 'high',
+            seed: 42,
+          }),
+        }),
+        seed: 42,
+      }),
+    );
+  });
+});
 
 describe('AiService.checkModel', () => {
   beforeEach(() => {

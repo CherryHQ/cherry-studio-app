@@ -4,12 +4,12 @@ import {
   type NativeBottomTabNavigationOptions,
 } from '@bottom-tabs/react-navigation';
 import { withLayoutContext } from 'expo-router';
-import { isAndroid } from '@/config/constants';
 import type { ParamListBase, TabNavigationState } from 'expo-router/react-navigation';
 import { useThemeColor } from 'heroui-native/hooks';
 import { useTranslation } from 'react-i18next';
 
 import { BottomTabBarVisibilityProvider, useBottomTabBarHidden } from '@/components/navigation';
+import { isAndroid } from '@/config/constants';
 import {
   SearchScopeProvider,
   useSetSearchScope,
@@ -97,6 +97,8 @@ function TabNavigator() {
       <Tabs.Screen
         name="home"
         options={{
+          // Eagerly mount so the home content is ready without a first-visit flash.
+          lazy: false,
           tabBarIcon: getHomeIcon,
           tabBarLabel: t('navigation.home'),
           title: t('navigation.home'),
@@ -124,6 +126,8 @@ function TabNavigator() {
       <Tabs.Screen
         name="settings"
         options={{
+          // Eagerly mount so settings is ready without a first-visit flash.
+          lazy: false,
           tabBarIcon: getSettingsIcon,
           tabBarLabel: t('navigation.settings'),
           title: t('navigation.settings'),

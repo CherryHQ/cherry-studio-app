@@ -1,3 +1,5 @@
+import { readCherryMeta } from '@/data/types/uiParts';
+
 import {
   appendChatInputAttachments,
   type ChatInputAttachmentDraft,
@@ -138,6 +140,21 @@ describe('chat input attachments', () => {
         url: 'file-a.pdf',
       },
     ]);
+  });
+
+  test('preserves a managed file entry id in message part metadata', () => {
+    const parts = createChatInputMessageParts('', [
+      { ...fileAttachment, fileEntryId: '00000000-0000-7000-8000-000000000001' },
+    ]);
+    const part = parts[0];
+
+    expect(part.type).toBe('file');
+    if (part.type !== 'file') {
+      throw new Error('Expected a file part');
+    }
+    expect(readCherryMeta(part)).toEqual({
+      fileEntryId: '00000000-0000-7000-8000-000000000001',
+    });
   });
 
   test('detects sendable text or attachment content', () => {

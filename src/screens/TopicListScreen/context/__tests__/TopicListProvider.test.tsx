@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useDataMutation } from '@/data/hooks';
 import type { DataServices } from '@/data/services/createDataServices';
 import type { Topic } from '@/data/types/topic';
-import { useTopics } from '@/hooks/chat';
+import { usePins, useTopics } from '@/hooks/chat';
 import { prefetchTopicMessages } from '@/hooks/chat/utils/messageQueryOptions';
 
 import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
@@ -41,6 +41,7 @@ jest.mock('@/data/runtime', () => ({
 }));
 
 jest.mock('@/hooks/chat', () => ({
+  usePins: jest.fn(),
   useTopics: jest.fn(),
 }));
 
@@ -49,6 +50,7 @@ jest.mock('@/hooks/chat/utils/messageQueryOptions', () => ({
 }));
 
 const useDataMutationMock = useDataMutation as jest.Mock;
+const usePinsMock = usePins as jest.MockedFunction<typeof usePins>;
 const useTopicsMock = useTopics as jest.MockedFunction<typeof useTopics>;
 const prefetchTopicMessagesMock = prefetchTopicMessages as jest.MockedFunction<
   typeof prefetchTopicMessages
@@ -56,6 +58,7 @@ const prefetchTopicMessagesMock = prefetchTopicMessages as jest.MockedFunction<
 const mockRenameTopic = jest.fn(async () => undefined);
 const mockDeleteTopics = jest.fn(async () => undefined);
 const mockLoadMoreTopics = jest.fn(async () => undefined);
+const mockTogglePin = jest.fn(async () => undefined);
 
 let mutationHookIndex = 0;
 let currentActions: ReturnType<typeof useTopicListActions> | undefined;
@@ -80,6 +83,18 @@ beforeEach(() => {
   currentActions = undefined;
   mutationHookIndex = 0;
   renderer = undefined;
+
+  usePinsMock.mockReturnValue({
+    error: null,
+    isLoading: false,
+    isMutating: false,
+    isRefreshing: false,
+    pinnedIds: ['topic-1'],
+    pins: [],
+    pinsQuery: {} as ReturnType<typeof usePins>['pinsQuery'],
+    refetch: jest.fn(),
+    togglePin: mockTogglePin,
+  });
 
   useDataMutationMock.mockImplementation(() => {
     const mutateAsync = mutationHookIndex % 2 === 0 ? mockRenameTopic : mockDeleteTopics;
@@ -175,13 +190,14 @@ describe('TopicListProvider', () => {
     expect(mockDeleteTopics).toHaveBeenNthCalledWith(2, ['topic-3', 'topic-4']);
   });
 
-  test('pushes the topic-less route for a new chat', async () => {
-    await renderProvider([]);
+  test('toggles a topic pin and refreshes the ordered topic list', async () => {
+    await renderProvider([makeTopic(1)]);
 
     await act(async () => {
-      currentActions?.openNewTopic();
+      await currentActions?.toggleTopicPin('topic-1');
     });
 
-    expect(mockRouterPush).toHaveBeenCalledWith('/topics');
+    expect(mockTogglePin).toHaveBeenCalledWith('topic-1');
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['/topics'] });
   });
 });

@@ -8,6 +8,7 @@ import { FileEntryService } from './FileEntryService';
 import { GroupService } from './GroupService';
 import { MessageService } from './MessageService';
 import { ModelService } from './ModelService';
+import { PaintingService } from './PaintingService';
 import { PinService } from './PinService';
 import { PreferenceService } from './PreferenceService';
 import { PromptService } from './PromptService';
@@ -26,6 +27,7 @@ export function createDataServices(dbService: DbService) {
   const group = new GroupService(dbService);
   const prompt = new PromptService(dbService);
   const fileEntry = new FileEntryService(dbService);
+  const painting = new PaintingService(dbService, fileEntry);
   const assistant = new AssistantService(dbService, model, preference, tag, pin);
   const topic = new TopicService(dbService, pin, tag);
   const message = new MessageService(dbService, topic, fileEntry);
@@ -39,6 +41,7 @@ export function createDataServices(dbService: DbService) {
     group,
     message,
     model,
+    painting,
     pin,
     preference,
     prompt,

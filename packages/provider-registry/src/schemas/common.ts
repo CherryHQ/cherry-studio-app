@@ -18,6 +18,9 @@ export const ProviderIdSchema = z.string().min(1);
  */
 export const VersionSchema = z.string().min(1);
 
+/** ISO 8601 datetime timestamp */
+export const ISOTimestampSchema = z.iso.datetime();
+
 // Range helper schemas
 export const NumericRangeSchema = z
   .object({
@@ -27,6 +30,11 @@ export const NumericRangeSchema = z
   .refine((r) => r.min <= r.max, {
     message: 'min must be less than or equal to max',
   });
+
+export const StringRangeSchema = z.object({
+  min: z.string(),
+  max: z.string(),
+});
 
 // Supported currencies for pricing
 export const ZodCurrencySchema = z.enum(objectValues(CURRENCY)).optional();
@@ -46,7 +54,9 @@ export const MetadataSchema = z.record(z.string(), z.unknown()).optional();
 export type ModelId = z.infer<typeof ModelIdSchema>;
 export type ProviderId = z.infer<typeof ProviderIdSchema>;
 export type Version = z.infer<typeof VersionSchema>;
+export type ISOTimestamp = z.infer<typeof ISOTimestampSchema>;
 export type NumericRange = z.infer<typeof NumericRangeSchema>;
+export type StringRange = z.infer<typeof StringRangeSchema>;
 export type ZodCurrency = z.infer<typeof ZodCurrencySchema>;
 export type PricePerToken = z.infer<typeof PricePerTokenSchema>;
 export type Metadata = z.infer<typeof MetadataSchema>;

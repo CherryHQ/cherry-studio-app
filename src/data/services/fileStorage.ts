@@ -4,6 +4,7 @@ import { loggerService } from '@/core/logger/LoggerService';
 import { createOrderedUuid } from '@/data/db/schemas/_columnHelpers';
 import {
   type FileEntryId,
+  generatedImageExtension,
   type InternalFileEntry,
   type PreparedInternalFile,
   SafeFileExtensionSchema,
@@ -55,11 +56,12 @@ function basenameForProjection(value: string): string {
   return (value.split(/[\\/]/).pop() ?? value).replace(/[\s.]+$/, '');
 }
 
-async function prepareFilePart(
-  part: Extract<CherryMessagePart, { type: 'file' }>,
-): Promise<{ file: PreparedInternalFile; part: CherryMessagePart }> {
-  const source = new File(part.url);
-  const { ext, name } = projectFileName(part.filename ?? source.name, source.name);
+export async function prepareInternalFileFromUri(
+  uri: string,
+  displayFilename?: string,
+): Promise<PreparedInternalFile> {
+  const source = new File(uri);
+  const { ext, name } = projectFileName(displayFilename ?? source.name, source.name);
   const id = createOrderedUuid();
   const destination = new File(ensureFileDirectory(), `${id}${ext ? `.${ext}` : ''}`);
 
@@ -75,10 +77,7 @@ async function prepareFilePart(
       throw new Error(`Prepared file has an invalid size: ${destination.uri}`);
     }
 
-    return {
-      file: { ext, id, name, size, uri: destination.uri },
-      part: withCherryMeta({ ...part, url: destination.uri }, { fileEntryId: id }),
-    };
+    return { ext, id, name, size, uri: destination.uri };
   } catch (error) {
     try {
       if (destination.exists) {
@@ -86,6 +85,47 @@ async function prepareFilePart(
       }
     } catch (cleanupError) {
       logger.warn('Failed to discard partially prepared file', cleanupError as Error, { id });
+    }
+    throw error;
+  }
+}
+
+async function prepareFilePart(
+  part: Extract<CherryMessagePart, { type: 'file' }>,
+): Promise<{ file: PreparedInternalFile; part: CherryMessagePart }> {
+  const file = await prepareInternalFileFromUri(part.url, part.filename);
+  return {
+    file,
+    part: withCherryMeta({ ...part, url: file.uri }, { fileEntryId: file.id }),
+  };
+}
+
+export function prepareGeneratedImage(base64: string, mediaType: string): PreparedInternalFile {
+  const id = createOrderedUuid();
+  const ext = SafeFileExtensionSchema.parse(generatedImageExtension(mediaType));
+  const name = SafeFileNameSchema.parse(`painting-${id}`);
+  const destination = new File(ensureFileDirectory(), `${id}.${ext}`);
+  const payload = base64.includes(',') ? (base64.split(',', 2)[1] ?? '') : base64;
+
+  try {
+    destination.write(payload, { encoding: 'base64' });
+    if (!destination.exists) {
+      throw new Error(`Generated image does not exist after write: ${destination.uri}`);
+    }
+
+    const size = destination.size;
+    if (!Number.isSafeInteger(size) || size < 0) {
+      throw new Error(`Generated image has an invalid size: ${destination.uri}`);
+    }
+
+    return { ext, id, name, size, uri: destination.uri };
+  } catch (error) {
+    try {
+      if (destination.exists) {
+        destination.delete();
+      }
+    } catch (cleanupError) {
+      logger.warn('Failed to discard partially generated image', cleanupError as Error, { id });
     }
     throw error;
   }
@@ -134,4 +174,14 @@ export function resolveInternalFileUri(
 ): string | undefined {
   const file = managedFile(entry.id, entry.ext);
   return file.exists ? file.uri : undefined;
+}
+
+export async function imageUriToDataUrl(uri: string, mediaType: string): Promise<string> {
+  if (uri.startsWith('data:')) {
+    return uri;
+  }
+  const file = new File(uri);
+  const base64 = await file.base64();
+  const resolvedMediaType = file.type || mediaType || 'image/*';
+  return `data:${resolvedMediaType};base64,${base64}`;
 }

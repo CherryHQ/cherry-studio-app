@@ -13,29 +13,23 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RegistryLoader } from '../registry-loader';
 
 let dir: string;
-let loaders: RegistryLoader[] = [];
 const write = (file: string, data: unknown) => {
   const p = join(dir, file);
   writeFileSync(p, JSON.stringify(data));
   return p;
 };
 
-const newLoader = (overrides: unknown[]) => {
-  const loader = new RegistryLoader({
+const newLoader = (overrides: unknown[]) =>
+  new RegistryLoader({
     models: write('models.json', { version: '2026.01.01', models: [] }),
     providers: write('providers.json', { version: '2026.01.01', providers: [] }),
     providerModels: write('provider-models.json', { version: '2026.01.01', overrides }),
   });
-  loaders.push(loader);
-  return loader;
-};
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'registry-loader-'));
 });
 afterEach(() => {
-  for (const loader of loaders) loader.invalidate();
-  loaders = [];
   rmSync(dir, { recursive: true, force: true });
 });
 

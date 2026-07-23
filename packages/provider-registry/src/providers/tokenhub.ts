@@ -29,6 +29,7 @@ export default defineProvider({
       official: 'https://cloud.tencent.com/product/tokenhub',
     },
   },
+  modelListSource: 'registry',
   overrides: [
     // Tencent-own
     { modelId: 'hy3-preview', apiModelId: 'hy3-preview' },

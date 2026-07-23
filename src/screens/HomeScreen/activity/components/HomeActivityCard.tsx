@@ -1,13 +1,14 @@
+import { FlameIcon } from 'lucide-uniwind';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useUniwind } from 'uniwind';
 
 import { homeActivityCalendar } from '@/config/constants';
 
 import type { ActivityAnimationControls, ActivityData } from '../types';
-import { buildActivityCalendarWeeks } from '../utils/calendarLayout';
+import { buildActivityCalendarWeeks, getActivitySummary } from '../utils/calendarLayout';
 import { ActivitySquare } from './ActivitySquare';
 
 export type HomeActivityCardProps = {
@@ -25,15 +26,20 @@ export function HomeActivityCard({ data }: HomeActivityCardProps) {
   const levelColors = homeActivityCalendar.levelColors[theme === 'dark' ? 'dark' : 'light'];
 
   const weeks = useMemo(() => buildActivityCalendarWeeks(data), [data]);
+  const activitySummary = useMemo(() => getActivitySummary(data), [data]);
 
   const startAnimation = useCallback(() => {
     isAnimatingRef.current = true;
-    squareRefs.current.forEach((square) => square.startAnimation());
+    squareRefs.current.forEach((square) => {
+      square.startAnimation();
+    });
   }, []);
 
   const resetAnimation = useCallback(() => {
     isAnimatingRef.current = false;
-    squareRefs.current.forEach((square) => square.resetAnimation());
+    squareRefs.current.forEach((square) => {
+      square.resetAnimation();
+    });
   }, []);
 
   const toggleAnimation = useCallback(() => {
@@ -47,7 +53,9 @@ export function HomeActivityCard({ data }: HomeActivityCardProps) {
   // The reference demo waits for a tap; auto-playing once on mount (and when
   // the data changes) keeps the card from sitting all-grey on the Home tab.
   useEffect(() => {
-    startAnimation();
+    if (weeks.length > 0) {
+      startAnimation();
+    }
   }, [startAnimation, weeks]);
 
   const handlePressIn = useCallback(() => {
@@ -107,6 +115,30 @@ export function HomeActivityCard({ data }: HomeActivityCardProps) {
               </View>
             ))}
           </View>
+          <View className="mt-4 flex-row items-center justify-between gap-2">
+            <View className="min-w-0 flex-row items-center gap-1.5 rounded-full bg-surface-secondary px-3 py-1">
+              <FlameIcon className="size-4 text-accent" strokeWidth={2.25} />
+              <Text
+                className="shrink text-accent text-sm"
+                numberOfLines={1}
+                style={styles.statText}
+              >
+                {t('home.activity.yearlyDays', { count: activitySummary.yearActiveDays })}
+              </Text>
+            </View>
+            <View className="min-w-0 shrink rounded-full bg-surface-secondary px-3 py-1">
+              <Text
+                className="text-default-foreground text-sm"
+                numberOfLines={1}
+                style={styles.statText}
+              >
+                {t('home.activity.weeklyDays', {
+                  count: activitySummary.weekActiveDays,
+                  total: activitySummary.weekElapsedDays,
+                })}
+              </Text>
+            </View>
+          </View>
         </View>
       </Animated.View>
     </Pressable>
@@ -128,6 +160,9 @@ const styles = StyleSheet.create({
   },
   pressable: {
     alignSelf: 'center',
+  },
+  statText: {
+    fontVariant: ['tabular-nums'],
   },
   week: {
     gap: homeActivityCalendar.cellGap,

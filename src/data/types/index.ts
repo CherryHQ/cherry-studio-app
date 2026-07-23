@@ -5,6 +5,7 @@ export * from './file';
 export * from './group';
 export * from './message';
 export * from './model';
+export * from './painting';
 export * from './pin';
 export * from './prompt';
 export * from './provider';

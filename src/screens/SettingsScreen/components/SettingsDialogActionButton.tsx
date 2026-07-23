@@ -1,8 +1,11 @@
 import { Spinner } from 'heroui-native/spinner';
+import { cn } from 'heroui-native/utils';
 import { Pressable, Text, View } from 'react-native';
 
 type SettingsDialogActionButtonProps = {
   isDisabled?: boolean;
+  // Stretch the button to fill its row — used for the primary CTA in bottom sheets.
+  isFullWidth?: boolean;
   isLoading?: boolean;
   isPrimary?: boolean;
   label: string;
@@ -11,6 +14,7 @@ type SettingsDialogActionButtonProps = {
 
 export function SettingsDialogActionButton({
   isDisabled = false,
+  isFullWidth = false,
   isLoading = false,
   isPrimary = false,
   label,
@@ -21,11 +25,11 @@ export function SettingsDialogActionButton({
       accessibilityLabel={label}
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled }}
-      className={
-        isPrimary
-          ? 'h-9 min-w-20 items-center justify-center rounded-xl bg-primary px-4 active:opacity-80 disabled:opacity-40'
-          : 'h-9 min-w-20 items-center justify-center rounded-xl bg-settings-grouped-surface px-4 active:opacity-80 disabled:opacity-40'
-      }
+      className={cn(
+        'h-9 min-w-20 items-center justify-center rounded-xl px-4 active:opacity-80 disabled:opacity-40',
+        isPrimary ? 'bg-primary' : 'bg-settings-grouped-surface',
+        isFullWidth && 'w-full',
+      )}
       disabled={isDisabled}
       onPress={onPress}
     >

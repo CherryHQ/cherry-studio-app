@@ -1,25 +1,20 @@
-import {
-  type ReactNode,
-  type Ref,
-  useCallback,
-  useImperativeHandle,
-  useMemo,
-  useState,
-} from 'react';
+import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
-import { SelectionBottomSheet, SelectionSheetSearchField } from '@/components/selectionSheet';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { BottomSheet } from '@/components/bottomSheet';
+import { SelectionSheetSearchField } from '@/components/selectionSheet';
+
 import { useModelPickerData } from '../hooks/useModelPickerData';
-import { type ModelPickerModelItem } from '../utils/modelPickerData';
+import { type ModelPickerModelItem, type ModelPickerTag } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
 import { ModelPickerSheetContent } from './ModelPickerSheetContent';
 
-const defaultModelPickerHeaderHeight = 64;
 const initialModelPickerListItemCount = 24;
 const modelPickerListItemBatchSize = 24;
-// Detent indices for the underlying `SelectionBottomSheet`: 0 closed, 1 open.
-const CLOSED_INDEX = 0;
-const OPEN_INDEX = 1;
+// Fraction of the available height the picker fills, giving the list room to scroll.
+const modelPickerSnapPointFraction = 0.85;
 
 type ModelPickerBottomSheetProps = {
   /**
@@ -31,13 +26,9 @@ type ModelPickerBottomSheetProps = {
   isOpen?: boolean;
   onClose?: () => void;
   onSelect: (item: ModelPickerModelItem) => void;
-  ref?: Ref<ModelPickerBottomSheetHandle>;
+  selectedTags?: readonly ModelPickerTag[];
   selectedModelId: string | null;
-};
-
-export type ModelPickerBottomSheetHandle = {
-  dismiss: () => void;
-  present: () => void;
+  showPinnedModels?: boolean;
 };
 
 export function ModelPickerBottomSheet({
@@ -45,24 +36,22 @@ export function ModelPickerBottomSheet({
   isOpen,
   onClose,
   onSelect,
-  ref,
+  selectedTags = [],
   selectedModelId,
+  showPinnedModels = true,
 }: ModelPickerBottomSheetProps) {
   const { t } = useTranslation();
-  // `sheetIndex` is fed by two mutually-exclusive inputs, never both for the
-  // same caller: declarative callers pass `isOpen`/`onClose`; the imperative
-  // caller uses `present`/`dismiss` via the ref handle below. On conditional
-  // mount `isOpen` is already `true`, so we derive the index during render
-  // from the prop directly, avoiding the need for a `useEffect` or `useRef`.
-  const [imperativeIndex, setImperativeIndex] = useState(CLOSED_INDEX);
-  const isImperative = isOpen === undefined;
-  const sheetIndex = isImperative ? imperativeIndex : isOpen ? OPEN_INDEX : CLOSED_INDEX;
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetHeight = (windowHeight - insets.top - insets.bottom) * modelPickerSnapPointFraction;
   const [searchText, setSearchText] = useState('');
-  const [headerHeight, setHeaderHeight] = useState(0);
-  const [footerHeight, setFooterHeight] = useState(0);
   const [visibleListItemCount, setVisibleListItemCount] = useState(initialModelPickerListItemCount);
   const isSearching = searchText.trim().length > 0;
-  const { groups, isLoading, pinnedModelIds } = useModelPickerData({ searchText });
+  const { groups, isLoading, pinnedModelIds } = useModelPickerData({
+    searchText,
+    selectedTags,
+    showPinnedModels,
+  });
   const totalListItemCount = useMemo(
     () => groups.reduce((total, group) => total + 1 + group.items.length, 0),
     [groups],
@@ -100,13 +89,6 @@ export function ModelPickerBottomSheet({
   );
   const hasMoreListItems = listItems.length < totalListItemCount;
 
-  const handleSelect = useCallback(
-    (item: ModelPickerModelItem) => {
-      onSelect(item);
-      setImperativeIndex(CLOSED_INDEX);
-    },
-    [onSelect],
-  );
   const handleSearchTextChange = useCallback((nextSearchText: string) => {
     setSearchText(nextSearchText);
     setVisibleListItemCount(initialModelPickerListItemCount);
@@ -116,14 +98,6 @@ export function ModelPickerBottomSheet({
     setVisibleListItemCount(initialModelPickerListItemCount);
     onClose?.();
   }, [onClose]);
-  const handleHeaderLayout = useCallback((event: LayoutChangeEvent) => {
-    const nextHeight = Math.round(event.nativeEvent.layout.height);
-    setHeaderHeight((currentHeight) => (currentHeight === nextHeight ? currentHeight : nextHeight));
-  }, []);
-  const handleFooterLayout = useCallback((event: LayoutChangeEvent) => {
-    const nextHeight = Math.round(event.nativeEvent.layout.height);
-    setFooterHeight((currentHeight) => (currentHeight === nextHeight ? currentHeight : nextHeight));
-  }, []);
   const handleListEndReached = useCallback(() => {
     setVisibleListItemCount((currentCount) => {
       if (currentCount >= totalListItemCount) {
@@ -134,64 +108,48 @@ export function ModelPickerBottomSheet({
     });
   }, [totalListItemCount]);
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      dismiss: () => setImperativeIndex(CLOSED_INDEX),
-      present: () => setImperativeIndex(OPEN_INDEX),
-    }),
-    [],
-  );
-
   return (
-    <SelectionBottomSheet
-      index={sheetIndex}
-      onIndexChange={setImperativeIndex}
-      onSettle={(nextIndex) => {
-        if (nextIndex === CLOSED_INDEX) {
-          handleClose();
-        }
-      }}
+    <BottomSheet
+      closeAccessibilityLabel={t('common.close')}
+      height={sheetHeight}
+      isOpen={isOpen}
+      onClose={handleClose}
+      testID="model-picker"
+      title={t('modelPicker.title')}
     >
-      {({ sheetHeight }) => {
-        // footerHeight only grows from onLayout; drop it when the slot is empty so
-        // a removed footer stops reserving its old band.
-        const effectiveFooterHeight = footer ? footerHeight : 0;
-        const modelListHeight = Math.max(
-          sheetHeight - (headerHeight || defaultModelPickerHeaderHeight) - effectiveFooterHeight,
-          120,
-        );
-
-        return (
-          <>
-            <View className="px-4 pt-5" onLayout={handleHeaderLayout}>
-              <SelectionSheetSearchField onChange={handleSearchTextChange} value={searchText} />
-            </View>
-            <View style={[styles.modelListViewport, { height: modelListHeight }]}>
-              <ModelPickerSheetContent
-                emptyText={t('settings.provider.models.search.empty')}
-                isLoading={isLoading}
-                isOpen={sheetIndex === OPEN_INDEX}
-                isSearching={isSearching}
-                hasMoreItems={hasMoreListItems}
-                listItems={listItems}
-                loadingText={t('settings.provider.models.loading')}
-                pinnedModelIds={pinnedModelIds}
-                selectedModelId={selectedModelId}
-                onEndReached={handleListEndReached}
-                onSelect={handleSelect}
-              />
-            </View>
-            {footer ? <View onLayout={handleFooterLayout}>{footer}</View> : null}
-          </>
-        );
-      }}
-    </SelectionBottomSheet>
+      {/* The card's fixed height + this flex column bound the list, so
+          LegendList (flex:1) virtualizes without any manual height math. */}
+      <View style={styles.body}>
+        <View className="px-4 pt-5">
+          <SelectionSheetSearchField onChange={handleSearchTextChange} value={searchText} />
+        </View>
+        <View style={styles.modelListViewport}>
+          <ModelPickerSheetContent
+            emptyText={t('settings.provider.models.search.empty')}
+            hasMoreItems={hasMoreListItems}
+            isLoading={isLoading}
+            isOpen={isOpen ?? true}
+            isSearching={isSearching}
+            listItems={listItems}
+            loadingText={t('settings.provider.models.loading')}
+            onEndReached={handleListEndReached}
+            onSelect={onSelect}
+            pinnedModelIds={pinnedModelIds}
+            selectedModelId={selectedModelId}
+          />
+        </View>
+        {footer ? <View>{footer}</View> : null}
+      </View>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
+  body: {
+    flex: 1,
+  },
   modelListViewport: {
+    flex: 1,
     minHeight: 0,
   },
 });

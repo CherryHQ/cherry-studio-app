@@ -64,16 +64,27 @@ const ChatInputActionsContext = createContext<ChatInputActionsContextValue | nul
 const ChatInputMediaContext = createContext<ChatInputMediaContextValue | null>(null);
 const ChatInputMetaContext = createContext<ChatInputMetaContextValue | null>(null);
 
-export function ChatInputProvider({ children }: PropsWithChildren) {
+type ChatInputProviderProps = PropsWithChildren<{
+  initialAttachments?: readonly ChatInputAttachmentDraft[];
+  initialDraft?: string;
+}>;
+
+export function ChatInputProvider({
+  children,
+  initialAttachments = [],
+  initialDraft = '',
+}: ChatInputProviderProps) {
   const inputRef = useRef<TextInput>(null);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(initialDraft);
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [isReasoningEffortSelected, setIsReasoningEffortSelected] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState<ChatInputReasoningEffort>(
     CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   );
-  const [attachments, setAttachments] = useState<ChatInputAttachmentDraft[]>([]);
+  const [attachments, setAttachments] = useState<ChatInputAttachmentDraft[]>(() => [
+    ...initialAttachments,
+  ]);
   const [selectedToolId, setSelectedToolId] = useState<ChatInputActionId | null>(null);
   const addAttachments = useCallback((nextAttachments: ChatInputAttachmentDraft[]) => {
     setAttachments((current) => appendChatInputAttachments(current, nextAttachments));

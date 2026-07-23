@@ -7,7 +7,7 @@
  * catches the regressions a structural check can (underscores, casing, custom SKUs, broken refs).
  */
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -16,8 +16,12 @@ import { canonOf } from '../../scripts/canonicalize';
 import { ModelListSchema } from '../schemas/model';
 import { ProviderModelListSchema } from '../schemas/provider-models';
 
-const currentFile = import.meta.url ? fileURLToPath(import.meta.url) : __filename;
-const dataDir = join(currentFile, '..', '..', '..', 'data');
+// Resolve this module's directory under both runners: vitest runs as ESM
+// (import.meta.url is available, __dirname is not) while the app's root jest
+// transpiles to CJS (__dirname is available, babel turns import.meta.url null).
+const moduleDir =
+  typeof __dirname === 'undefined' ? dirname(fileURLToPath(import.meta.url)) : __dirname;
+const dataDir = join(moduleDir, '..', '..', 'data');
 const modelsRaw = JSON.parse(readFileSync(join(dataDir, 'models.json'), 'utf8'));
 const providerModelsRaw = JSON.parse(readFileSync(join(dataDir, 'provider-models.json'), 'utf8'));
 const models = modelsRaw.models as Array<{
@@ -120,6 +124,33 @@ describe('catalog invariants (data/*.json)', () => {
       )
       .map(([key]) => key);
     expect(orderDependent).toEqual([]);
+  });
+
+  // sequentialImageGeneration is a string enum in the central catalog
+  // (imageParamCatalog.ts) and the Doubao API only accepts 'auto'/'disabled' — a
+  // `switch` support spec here renders a boolean UI control that gets coerced
+  // away before the request, silently no-opping the feature (aihubmix's
+  // doubao-seedream-4-0/4-5 had this; dmxapi's doubao model already declares it
+  // correctly as the reference shape).
+  it('sequentialImageGeneration is never declared as a switch (must be the string enum)', () => {
+    type Row = { id?: string; modelId?: string; providerId?: string; imageGeneration?: unknown };
+    const allRows: Row[] = [
+      ...(modelsRaw.models as Row[]),
+      ...(providerModelsRaw.overrides as Row[]),
+    ];
+    const offenders: string[] = [];
+    for (const row of allRows) {
+      const modes =
+        (row.imageGeneration as { modes?: Record<string, unknown> } | undefined)?.modes ?? {};
+      for (const [modeName, def] of Object.entries(modes)) {
+        const spec = (def as { supports?: Record<string, { type?: string }> }).supports
+          ?.sequentialImageGeneration;
+        if (spec?.type === 'switch') {
+          offenders.push(`${row.providerId ?? 'base'}/${row.modelId ?? row.id}:${modeName}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('maxOutputTokens never exceeds contextWindow', () => {

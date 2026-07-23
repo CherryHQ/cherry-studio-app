@@ -6,12 +6,14 @@ import { queryKeys } from '@/data/api';
 import { useDataMutation } from '@/data/hooks';
 import { useDataServices } from '@/data/runtime';
 import type { Topic } from '@/data/types/topic';
-import { useTopics } from '@/hooks/chat';
+import { usePins, useTopics } from '@/hooks/chat';
 import { getMessagesQueryKey, prefetchTopicMessages } from '@/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/hooks/chat/utils/messageWindowPolicy';
 
 type TopicListTopicsContextValue = {
+  isPinActionDisabled: boolean;
   isTopicListLoading: boolean;
+  pinnedTopicIds: readonly string[];
   topics: readonly Topic[];
 };
 
@@ -19,9 +21,9 @@ type TopicListActionsContextValue = {
   deleteTopic: (topicId: string) => Promise<void>;
   deleteTopics: (topicIds: readonly string[]) => Promise<void>;
   loadMoreTopics: () => void;
-  openNewTopic: () => void;
   openTopic: (topicId: string) => void;
   renameTopic: (topicId: string, name: string) => Promise<void>;
+  toggleTopicPin: (topicId: string) => Promise<void>;
 };
 
 const TopicListTopicsContext = createContext<TopicListTopicsContextValue | null>(null);
@@ -33,6 +35,8 @@ export function TopicListProvider({ children }: PropsWithChildren) {
   const router = useRouter();
   const services = useDataServices();
   const topicList = useTopics({ q: '' });
+  const topicPins = usePins('topic');
+  const isPinActionDisabled = topicPins.isLoading || topicPins.isRefreshing || topicPins.isMutating;
 
   useEffect(() => {
     if (!isFocused) {
@@ -46,10 +50,6 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       void prefetchTopicMessages(queryClient, services, topic.id);
     }
   }, [isFocused, queryClient, services, topicList.topics]);
-
-  const openNewTopic = useCallback(() => {
-    router.push('/topics');
-  }, [router]);
 
   const openTopic = useCallback(
     (topicId: string) => {
@@ -70,7 +70,7 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       queryClient.invalidateQueries({ queryKey: queryKeys.topics.detail(variables.id) }),
   });
 
-  const deleteTopicsMutation = useDataMutation({
+  const { mutateAsync: deleteManyTopics } = useDataMutation({
     invalidateQueries: [['/topics']],
     mutationFn: (dataServices, ids: readonly string[]) => dataServices.topic.deleteMany(ids),
     onSuccess: (_result, ids) => {
@@ -96,9 +96,9 @@ export function TopicListProvider({ children }: PropsWithChildren) {
 
   const deleteTopic = useCallback(
     async (id: string) => {
-      await deleteTopicsMutation.mutateAsync([id]);
+      await deleteManyTopics([id]);
     },
-    [deleteTopicsMutation],
+    [deleteManyTopics],
   );
 
   const deleteTopics = useCallback(
@@ -108,28 +108,42 @@ export function TopicListProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      await deleteTopicsMutation.mutateAsync(uniqueIds);
+      await deleteManyTopics(uniqueIds);
     },
-    [deleteTopicsMutation],
+    [deleteManyTopics],
+  );
+
+  const toggleTopicPin = useCallback(
+    async (topicId: string) => {
+      if (isPinActionDisabled) {
+        return;
+      }
+
+      await topicPins.togglePin(topicId);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.topics.all() });
+    },
+    [isPinActionDisabled, queryClient, topicPins.togglePin],
   );
 
   const topicsValue = useMemo(
     () => ({
+      isPinActionDisabled,
       isTopicListLoading: topicList.isLoadingInitial,
+      pinnedTopicIds: topicPins.pinnedIds,
       topics: topicList.topics,
     }),
-    [topicList.isLoadingInitial, topicList.topics],
+    [isPinActionDisabled, topicList.isLoadingInitial, topicList.topics, topicPins.pinnedIds],
   );
   const actionsValue = useMemo(
     () => ({
       deleteTopic,
       deleteTopics,
       loadMoreTopics: topicList.loadMore,
-      openNewTopic,
       openTopic,
       renameTopic,
+      toggleTopicPin,
     }),
-    [deleteTopic, deleteTopics, openNewTopic, openTopic, renameTopic, topicList.loadMore],
+    [deleteTopic, deleteTopics, openTopic, renameTopic, topicList.loadMore, toggleTopicPin],
   );
 
   return (

@@ -2,10 +2,12 @@ import { type SQLWrapper, sql } from 'drizzle-orm';
 import { check, index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 import { chatMessageRoles } from '@/data/types/file';
+import { paintingFileRoles } from '@/data/types/painting';
 
 import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
 import { fileEntryTable } from './file';
 import { messageTable } from './message';
+import { paintingTable } from './painting';
 
 function sqlStringList(values: readonly string[]) {
   return sql.raw(values.map((value) => `'${value.replaceAll("'", "''")}'`).join(', '));
@@ -38,3 +40,28 @@ export const chatMessageFileRefTable = sqliteTable(
 
 export type ChatMessageFileRefRow = typeof chatMessageFileRefTable.$inferSelect;
 export type InsertChatMessageFileRefRow = typeof chatMessageFileRefTable.$inferInsert;
+
+export const paintingFileRefTable = sqliteTable(
+  'painting_file_ref',
+  {
+    id: uuidPrimaryKey(),
+    fileEntryId: text()
+      .notNull()
+      .references(() => fileEntryTable.id, { onDelete: 'cascade' }),
+    sourceId: text()
+      .notNull()
+      .references(() => paintingTable.id, { onDelete: 'cascade' }),
+    role: text().notNull().$type<(typeof paintingFileRoles)[number]>(),
+    ...createUpdateTimestamps,
+  },
+  (table) => [
+    index('pfr_entry_id_idx').on(table.fileEntryId),
+    index('pfr_source_id_idx').on(table.sourceId),
+    index('pfr_source_role_idx').on(table.sourceId, table.role),
+    uniqueIndex('pfr_unique_idx').on(table.fileEntryId, table.sourceId, table.role),
+    check('pfr_role_check', roleCheck(table.role, paintingFileRoles)),
+  ],
+);
+
+export type PaintingFileRefRow = typeof paintingFileRefTable.$inferSelect;
+export type InsertPaintingFileRefRow = typeof paintingFileRefTable.$inferInsert;

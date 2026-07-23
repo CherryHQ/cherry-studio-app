@@ -1,7 +1,4 @@
-export {
-  ModelPickerBottomSheet,
-  type ModelPickerBottomSheetHandle,
-} from './components/ModelPickerBottomSheet';
+export { ModelPickerBottomSheet } from './components/ModelPickerBottomSheet';
 export { ModelPickerIcon } from './components/ModelPickerIcon';
 export { ModelPickerSheetContent } from './components/ModelPickerSheetContent';
 export { ModelPickerTagChip } from './components/ModelPickerTagChip';

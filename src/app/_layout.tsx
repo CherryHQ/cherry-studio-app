@@ -1,4 +1,5 @@
 import '../styles/global.css';
+import '@/polyfills/blob';
 
 import { BottomSheetProvider } from '@swmansion/react-native-bottom-sheet';
 import { Stack } from 'expo-router';
@@ -58,6 +59,33 @@ function RootStack() {
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen
         name="topics"
+        options={{
+          contentStyle: { backgroundColor: 'transparent' },
+          headerBackButtonDisplayMode: 'minimal',
+          headerStyle: isIOS ? undefined : { backgroundColor: 'transparent' },
+          headerTransparent: isLiquidGlassAvailable,
+        }}
+      />
+      <Stack.Screen
+        name="paintings/index"
+        options={{
+          contentStyle: { backgroundColor: 'transparent' },
+          headerBackButtonDisplayMode: 'minimal',
+          headerStyle: isIOS ? undefined : { backgroundColor: 'transparent' },
+          headerTransparent: isLiquidGlassAvailable,
+        }}
+      />
+      <Stack.Screen
+        name="paintings/[paintingId]"
+        options={{
+          contentStyle: { backgroundColor: '#000000' },
+          headerTintColor: '#ffffff',
+          headerTransparent: true,
+          title: '',
+        }}
+      />
+      <Stack.Screen
+        name="paintings/[paintingId]/conversation"
         options={{
           contentStyle: { backgroundColor: 'transparent' },
           headerBackButtonDisplayMode: 'minimal',

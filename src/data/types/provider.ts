@@ -135,6 +135,7 @@ export const DEFAULT_PROVIDER_SETTINGS: ProviderSettings = {};
 export type ModelsApiUrls = {
   default?: string;
   embedding?: string;
+  image?: string;
   reranker?: string;
 };
 
@@ -162,6 +163,7 @@ export type Provider = {
   apiFeatures: RuntimeApiFeatures;
   apiKeys: RuntimeApiKey[];
   authMethods?: ProviderAuthMethod[];
+  authOptional?: boolean;
   authType: AuthType;
   defaultChatEndpoint?: EndpointType;
   description?: string;

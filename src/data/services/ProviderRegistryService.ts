@@ -76,6 +76,7 @@ const defaultEfforts: Partial<Record<ReasoningFormatType, ReasoningEffort[]>> = 
 
 export type ProviderDisplayMetadata = {
   authMethods?: ProviderAuthMethod[];
+  authOptional?: boolean;
   description?: string;
   modelListSource?: ProviderModelListSource;
   websites?: ProviderWebsites;
@@ -318,6 +319,7 @@ export class ProviderRegistryService {
 
     return {
       authMethods: provider?.authMethods,
+      authOptional: provider?.authOptional,
       description: provider?.description,
       modelListSource: provider?.modelListSource,
       websites: provider?.metadata?.website,
