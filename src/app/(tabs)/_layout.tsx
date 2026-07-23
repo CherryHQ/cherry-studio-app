@@ -84,6 +84,8 @@ function TabNavigator() {
       <Tabs.Screen
         name="home"
         options={{
+          // Eagerly mount so the home content is ready without a first-visit flash.
+          lazy: false,
           tabBarIcon: getHomeIcon,
           tabBarLabel: t('navigation.home'),
           title: t('navigation.home'),
@@ -111,6 +113,8 @@ function TabNavigator() {
       <Tabs.Screen
         name="settings"
         options={{
+          // Eagerly mount so settings is ready without a first-visit flash.
+          lazy: false,
           tabBarIcon: getSettingsIcon,
           tabBarLabel: t('navigation.settings'),
           title: t('navigation.settings'),
