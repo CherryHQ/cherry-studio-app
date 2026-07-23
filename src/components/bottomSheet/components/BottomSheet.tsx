@@ -148,14 +148,17 @@ export function BottomSheet({
   );
 
   return (
-    <BottomSheetContext.Provider value={contextValue}>
-      <ModalBottomSheet
-        detents={[0, 'content']}
-        index={index}
-        onIndexChange={handleIndexChange}
-        onSettle={handleSettle}
-        scrimColor={sheetScrimColor}
-      >
+    // The provider must live *inside* ModalBottomSheet: the sheet hosts its
+    // children in a separate native overlay root, so a provider wrapped around
+    // ModalBottomSheet would not reach the body — `useBottomSheet()` would throw.
+    <ModalBottomSheet
+      detents={[0, 'content']}
+      index={index}
+      onIndexChange={handleIndexChange}
+      onSettle={handleSettle}
+      scrimColor={sheetScrimColor}
+    >
+      <BottomSheetContext.Provider value={contextValue}>
         <View style={[styles.layout, { width: windowWidth }]}>
           <View
             style={[
@@ -220,8 +223,8 @@ export function BottomSheet({
             testID={testID ? `${testID}-sheet-bottom-gap` : undefined}
           />
         </View>
-      </ModalBottomSheet>
-    </BottomSheetContext.Provider>
+      </BottomSheetContext.Provider>
+    </ModalBottomSheet>
   );
 }
 
