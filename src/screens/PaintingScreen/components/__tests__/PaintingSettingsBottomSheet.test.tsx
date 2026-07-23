@@ -46,7 +46,9 @@ jest.mock('heroui-native/slider', () => {
   function MockSlider({ children, ...props }: { children?: ReactNode }) {
     return <MockView {...props}>{children}</MockView>;
   }
-  MockSlider.Track = ({ children }: { children?: ReactNode }) => <MockView>{children}</MockView>;
+  MockSlider.Track = function MockSliderTrack({ children }: { children?: ReactNode }) {
+    return <MockView>{children}</MockView>;
+  };
   MockSlider.Fill = MockView;
   MockSlider.Thumb = MockView;
 

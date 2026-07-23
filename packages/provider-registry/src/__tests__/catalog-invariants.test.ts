@@ -7,7 +7,7 @@
  * catches the regressions a structural check can (underscores, casing, custom SKUs, broken refs).
  */
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -16,7 +16,12 @@ import { canonOf } from '../../scripts/canonicalize';
 import { ModelListSchema } from '../schemas/model';
 import { ProviderModelListSchema } from '../schemas/provider-models';
 
-const dataDir = join(fileURLToPath(import.meta.url), '..', '..', '..', 'data');
+// Resolve this module's directory under both runners: vitest runs as ESM
+// (import.meta.url is available, __dirname is not) while the app's root jest
+// transpiles to CJS (__dirname is available, babel turns import.meta.url null).
+const moduleDir =
+  typeof __dirname === 'undefined' ? dirname(fileURLToPath(import.meta.url)) : __dirname;
+const dataDir = join(moduleDir, '..', '..', 'data');
 const modelsRaw = JSON.parse(readFileSync(join(dataDir, 'models.json'), 'utf8'));
 const providerModelsRaw = JSON.parse(readFileSync(join(dataDir, 'provider-models.json'), 'utf8'));
 const models = modelsRaw.models as Array<{

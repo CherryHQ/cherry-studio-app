@@ -1,7 +1,7 @@
 import { ModalBottomSheet } from '@swmansion/react-native-bottom-sheet';
 import { GlassView } from 'expo-glass-effect';
 import { XIcon } from 'lucide-uniwind/png';
-import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -56,16 +56,22 @@ export function BottomSheet({
   const closedNotifiedRef = useRef(false);
 
   // Mirror the controlled `isOpen` into the detent index during render (the
-  // pattern each sheet hand-rolled before this shared frame existed). Reopening
-  // rearms the one-shot close notification and resets the reason to 'dismiss'.
+  // pattern each sheet hand-rolled before this shared frame existed).
   if (isOpen !== prevIsOpen) {
     setPrevIsOpen(isOpen);
     setIndex(isOpen ? OPEN_INDEX : CLOSED_INDEX);
+  }
+
+  // Rearm the one-shot close notification and reset the reason whenever the
+  // sheet (re)opens. This lives in an effect because refs must not be written
+  // during render; a close can't settle before the reopen commits, so the
+  // rearm still lands before any subsequent close notification.
+  useEffect(() => {
     if (isOpen) {
       closedNotifiedRef.current = false;
       reasonRef.current = 'dismiss';
     }
-  }
+  }, [isOpen]);
 
   const sheetWidth = Math.max(0, windowWidth - bottomSheet.outerInset * 2);
   const bottomCornerRadius = Math.max(

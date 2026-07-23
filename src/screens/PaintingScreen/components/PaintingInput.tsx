@@ -1,6 +1,6 @@
 import { type ImageGenerationMode, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { resolveIcon } from '@cherrystudio/ui/icons';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ModelPickerBottomSheet, type ModelPickerModelItem } from '@/components/modelPicker';
@@ -95,24 +95,23 @@ export function PaintingInput({
   const settingsSummary = imageParamSummary(t, paramFields, paramValues);
   const isPromptValid = resolvedMode?.definition.requirePrompt === false || draft.trim().length > 0;
 
-  useEffect(() => {
-    if (!selectedModelId) {
+  // Adjust the editable param draft during render (not in an effect) whenever
+  // the selected model or derived mode changes, avoiding the cascading
+  // re-render a setState-in-effect would trigger. The equality guard keeps this
+  // safe: reconcileImageParamDraft (already computed above as paramValues) is
+  // idempotent, so once the draft settles the conditions stop matching and
+  // setState is no longer called.
+  if (!selectedModelId) {
+    if (paramState !== null) {
       setParamState(null);
-      return;
     }
-
-    setParamState((current) => {
-      const values = reconcileImageParamDraft(current?.values ?? {}, resolvedMode);
-      if (
-        current?.modelId === selectedModelId &&
-        current.mode === generationMode &&
-        areImageParamDraftsEqual(current.values, values)
-      ) {
-        return current;
-      }
-      return { mode: generationMode, modelId: selectedModelId, values };
-    });
-  }, [generationMode, resolvedMode, selectedModelId]);
+  } else if (
+    paramState?.modelId !== selectedModelId ||
+    paramState.mode !== generationMode ||
+    !areImageParamDraftsEqual(paramState.values, paramValues)
+  ) {
+    setParamState({ mode: generationMode, modelId: selectedModelId, values: paramValues });
+  }
 
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
   const handleModelSelect = useCallback((item: ModelPickerModelItem) => {

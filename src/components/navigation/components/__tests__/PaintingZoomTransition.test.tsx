@@ -10,10 +10,12 @@ jest.mock('expo-router', () => {
   const React = jest.requireActual('react');
   const Link = ({ children, ...props }: { children: ReactNode }) =>
     React.createElement('MockLink', props, children);
-  Link.AppleZoom = ({ children }: { children: ReactNode }) =>
-    React.createElement('MockAppleZoom', {}, children);
-  Link.AppleZoomTarget = ({ children }: { children: ReactNode }) =>
-    React.createElement('MockAppleZoomTarget', {}, children);
+  Link.AppleZoom = function AppleZoom({ children }: { children: ReactNode }) {
+    return React.createElement('MockAppleZoom', {}, children);
+  };
+  Link.AppleZoomTarget = function AppleZoomTarget({ children }: { children: ReactNode }) {
+    return React.createElement('MockAppleZoomTarget', {}, children);
+  };
   return { Link };
 });
 
