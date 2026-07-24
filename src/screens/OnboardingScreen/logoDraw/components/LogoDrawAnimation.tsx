@@ -20,6 +20,7 @@ import {
   SWIRL_MASK_STROKE_WIDTH,
 } from '../utils/constants';
 import { segmentProgress } from '../utils/logoDrawMath';
+import { logoBrandColors } from '../utils/logoPalette';
 import {
   CHECK_CENTERLINE,
   CHECK_FILL,
@@ -29,7 +30,6 @@ import {
   SWIRL_RIGHT_CENTERLINE,
   SWIRL_RIGHT_FILL,
 } from '../utils/logoPaths';
-import { logoBrandColors } from '../utils/logoPalette';
 
 export type LogoDrawAnimationRef = {
   /** (Re)start the draw animation from the beginning. */

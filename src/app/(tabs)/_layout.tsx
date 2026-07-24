@@ -8,7 +8,6 @@ import type { ParamListBase, TabNavigationState } from 'expo-router/react-naviga
 import { useNavigationState } from 'expo-router/react-navigation';
 import { useThemeColor } from 'heroui-native/hooks';
 import { useTranslation } from 'react-i18next';
-
 import { BottomTabBarVisibilityProvider, useBottomTabBarHidden } from '@/components/navigation';
 import { selectIsNestedTabScreen } from '@/components/navigation/tabBarVisibility';
 import { isAndroid } from '@/config/constants';

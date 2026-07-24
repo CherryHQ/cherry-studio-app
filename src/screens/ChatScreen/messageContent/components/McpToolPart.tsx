@@ -18,7 +18,7 @@ type McpToolMetadata = {
 };
 
 type ExtractedMcpOutput = {
-  images: Array<{ data: string; id: string; mimeType: string }>;
+  images: { data: string; id: string; mimeType: string }[];
   text: string;
 };
 
@@ -244,7 +244,7 @@ function getMcpToolStatusText(part: ToolMessagePart, t: ReturnType<typeof useTra
   return t('chat.mcpTool.outputDenied');
 }
 
-function getValueEntries(value: unknown): Array<[string, unknown]> {
+function getValueEntries(value: unknown): [string, unknown][] {
   if (value === undefined || value === null) return [];
   if (Array.isArray(value)) return [['arguments', value]];
   if (isRecord(value)) return Object.entries(value);

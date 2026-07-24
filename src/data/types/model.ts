@@ -117,9 +117,9 @@ export const ThinkingTokenLimitsSchema = z
     },
   );
 
-const ReasoningEffortSchema = z.enum(objectValues(REASONING_EFFORT));
+export const ReasoningEffortSchema = z.enum(objectValues(REASONING_EFFORT));
 
-const ReasoningConfigSchema = z.object({
+export const ReasoningConfigSchema = z.object({
   interleaved: z.boolean().optional(),
   supportedEfforts: z.array(ReasoningEffortSchema).optional(),
   thinkingTokenLimits: ThinkingTokenLimitsSchema.optional(),
@@ -127,12 +127,12 @@ const ReasoningConfigSchema = z.object({
 });
 export type ReasoningConfig = z.infer<typeof ReasoningConfigSchema>;
 
-const NumericRangeSchema = z.object({
+export const NumericRangeSchema = z.object({
   max: z.number(),
   min: z.number(),
 });
 
-const ParameterSupportSchema = z.object({
+export const ParameterSupportSchema = z.object({
   frequencyPenalty: z.boolean().optional(),
   maxTokens: z.boolean().optional(),
   presencePenalty: z.boolean().optional(),
@@ -146,7 +146,7 @@ const ParameterSupportSchema = z.object({
 });
 export type ParameterSupport = z.infer<typeof ParameterSupportSchema>;
 
-const RuntimeModelPricingSchema = z.object({
+export const RuntimeModelPricingSchema = z.object({
   cacheRead: PricePerTokenSchema.optional(),
   cacheWrite: PricePerTokenSchema.optional(),
   input: PricePerTokenSchema,

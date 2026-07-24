@@ -10,14 +10,14 @@ export { coreExtensions, hasProviderConfig } from './core/initialization';
 // ==================== 基础数据和类型 ====================
 
 // 类型定义
-export type { AiSdkModel, ProviderError } from './types';
-
 // 类型提取工具
 export type {
+  AiSdkModel,
   CoreProviderSettingsMap,
   ExtensionConfigToIdResolutionMap,
   ExtensionToSettingsMap,
   ExtractProviderIds,
+  ProviderError,
   StringKeys,
   UnionToIntersection,
 } from './types';
@@ -29,6 +29,8 @@ export { formatPrivateKey, ProviderCreationError } from './core/utils';
 
 // ==================== Provider Extension 系统 ====================
 
+// Extension Registry
+export { ExtensionRegistry, extensionRegistry } from './core/ExtensionRegistry';
 // Extension 核心类和类型
 export {
   type ProviderCreatorFunction,
@@ -36,14 +38,11 @@ export {
   type ProviderExtensionConfig,
   type ProviderModule,
 } from './core/ProviderExtension';
-
-// Extension Registry
-export { ExtensionRegistry, extensionRegistry } from './core/ExtensionRegistry';
-export type { ProviderVariant } from './types';
 export type {
   ExtractToolConfig,
   ExtractToolConfigMap,
   ProviderId,
+  ProviderVariant,
   RegisteredProviderId,
   ToolCapability,
   ToolFactory,

@@ -1,3 +1,9 @@
+export type {
+  GeneralIconKey,
+  IconPngSource,
+  ModelIconKey,
+  ProviderIconKey,
+} from '../icons';
 export {
   resolveGeneralIcon,
   resolveIcon,
@@ -5,12 +11,6 @@ export {
   resolveModelProviderIcon,
   resolveModelToProviderIcon,
   resolveProviderIcon,
-} from '../icons';
-export type {
-  GeneralIconKey,
-  IconPngSource,
-  ModelIconKey,
-  ProviderIconKey,
 } from '../icons';
 export { GENERAL_ICONS } from './general';
 export { MODEL_ICONS } from './models';
