@@ -1,11 +1,13 @@
 import type { LegendListRef } from '@legendapp/list/react-native';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useSharedValue } from 'react-native-reanimated';
 
 import { isIOS } from '@/config/constants';
+import { loggerService } from '@/core/logger/LoggerService';
 import type { Message } from '@/data/types/message';
 import type { MessagesViewModel } from '@/hooks/chat';
+import { MessageSlideInProvider } from '../messageItem';
 import { useChatRuntimeTopic } from '../runtime/ChatRuntimeProvider';
 import { mergeMessagesWithOverlay } from '../runtime/chatRuntimeMessages';
 import { ChatComposer } from './components/ChatComposer';
@@ -20,6 +22,9 @@ import { useMessageListInitialRenderGate } from './hooks/useMessageListInitialRe
 // 「滚动到底部」按钮悬浮在输入框上方的间距：按输入框实测高度定位，
 // 不用含 safe area 的 contentBottomInset，避免出现需要硬抵消的 magic 偏移。
 const SCROLL_BUTTON_GAP_ABOVE_INPUT = 5;
+
+// 诊断埋点：冷/暖首次进入 topic 的数据加载 + 遮罩可见性时序。`[GATE]` 前缀。
+const gateLog = loggerService.withContext('ChatGate');
 
 type ChatWorkspaceProps = {
   messageWindow: Pick<
@@ -51,21 +56,34 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   const { contentBottomInset, handleInputHeightChange, inputHeightShared } =
     useFloatingChatInputLayout();
 
+  // 冷/暖进入差异取证：记录 数据加载态 + 遮罩可见性 + 可见消息数 + 锚点 的每次变化。
+  useEffect(() => {
+    gateLog.debug('[GATE] state', {
+      isLoadingInitial,
+      isCoverVisible,
+      len: visibleMessages.length,
+      anchorIndex,
+      t: Date.now(),
+    });
+  }, [isLoadingInitial, isCoverVisible, visibleMessages.length, anchorIndex]);
+
   return (
     <ChatWorkspaceFrame>
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
-      <ChatMessageList
-        key={listRenderKey}
-        anchorIndex={anchorIndex}
-        contentBottomInset={contentBottomInset}
-        contentTopInset={contentTopInset}
-        isAtBottom={isAtBottom}
-        listRef={listRef}
-        messages={visibleMessages}
-        onLoadOlder={loadOlder}
-        onPrefetchOlder={messageWindow.prefetchOlder}
-        onReady={markListLoaded}
-      />
+      <MessageSlideInProvider slideInMessageId={chatRuntime.pendingUserMessage?.id}>
+        <ChatMessageList
+          key={listRenderKey}
+          anchorIndex={anchorIndex}
+          contentBottomInset={contentBottomInset}
+          contentTopInset={contentTopInset}
+          isAtBottom={isAtBottom}
+          listRef={listRef}
+          messages={visibleMessages}
+          onLoadOlder={loadOlder}
+          onPrefetchOlder={messageWindow.prefetchOlder}
+          onReady={markListLoaded}
+        />
+      </MessageSlideInProvider>
       <ChatComposer onHeightChange={handleInputHeightChange} topicId={topicId} />
       <ScrollToBottomButton
         gap={SCROLL_BUTTON_GAP_ABOVE_INPUT}
@@ -73,20 +91,23 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
         isAtBottom={isAtBottom}
         onPress={handleScrollToEnd}
       />
-      <ChatInitialRenderCover bottomInset={contentBottomInset} isVisible={isCoverVisible} />
+      <ChatInitialRenderCover isVisible={isCoverVisible} />
     </ChatWorkspaceFrame>
   );
 }
 
-// 返回应锚定到顶部的用户消息下标：取最后一条「其后仍有助手消息」的用户消息。
-// 末尾若是孤立的用户消息（尚无回复）则返回 -1，避免在底部撑出整屏空白。
+// 返回应锚定到顶部的用户消息下标：取最后一条用户消息（含刚发送、尚无回复的孤立消息）。
+//
+// 「发送即锚定」——对齐 MargeloChat 博客的做法：消息一发出就锚定到顶部、下方由
+// anchoredEndSpace 预留空白，助手回复流进空白里，全程只发生一次确定性的钉顶滚动。
+// 早先版本对「末尾孤立用户消息」返回 -1（延迟到回复到达才锚定），会导致回复到达时
+// 才迟迟触发 scrollToEnd，与 anchoredEndSpace 的尾部空白测量竞争而「过冲→回弹」。
+// 预留的尾部空白会随回复增高自动收缩至 0，不会长期在底部留整屏空白。
 function getAnchoredUserMessageIndex(messages: readonly Message[]): number {
   for (let index = messages.length - 1; index >= 0; index--) {
-    if (messages[index].role !== 'user') {
-      continue;
+    if (messages[index].role === 'user') {
+      return index;
     }
-
-    return index < messages.length - 1 ? index : -1;
   }
 
   return -1;
