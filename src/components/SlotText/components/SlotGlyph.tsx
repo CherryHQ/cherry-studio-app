@@ -318,6 +318,7 @@ function GlyphText({
       accessible={false}
       allowFontScaling={allowFontScaling}
       className={textClassName}
+      ellipsizeMode="clip"
       maxFontSizeMultiplier={maxFontSizeMultiplier}
       numberOfLines={1}
       style={[textStyle, color ? { color } : undefined]}
