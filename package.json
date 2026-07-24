@@ -135,6 +135,7 @@
     "@babel/generator": "^7.29.7",
     "@babel/preset-typescript": "^7.27.1",
     "@biomejs/biome": "^2.4.15",
+    "@expo/config-plugins": "^57.0.6",
     "@j178/prek": "^0.4.6",
     "@react-native/jest-preset": "0.86.0",
     "@types/jest": "^29.5.14",
