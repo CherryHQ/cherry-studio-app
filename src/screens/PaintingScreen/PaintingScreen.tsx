@@ -33,6 +33,7 @@ export function PaintingScreen() {
       <Stack.Screen
         options={{
           headerBackButtonDisplayMode: 'minimal',
+          title: '',
           headerStyle: { backgroundColor },
         }}
       />
