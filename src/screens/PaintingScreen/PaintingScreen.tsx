@@ -1,4 +1,5 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { useThemeColor } from 'heroui-native/hooks';
 import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,13 +26,14 @@ export function PaintingScreen() {
   const paintingFiles = filesQuery.data ?? { inputs: [], outputs: [] };
   const insets = useSafeAreaInsets();
   const isLoading = Boolean(paintingId) && (paintingQuery.isLoading || filesQuery.isLoading);
+  const backgroundColor = useThemeColor('background');
 
   return (
     <View className="flex-1 bg-background" style={{ paddingBottom: Math.max(insets.bottom, 8) }}>
       <Stack.Screen
         options={{
           headerBackButtonDisplayMode: 'minimal',
-          title: '',
+          headerStyle: { backgroundColor },
         }}
       />
       {isLoading ? (
