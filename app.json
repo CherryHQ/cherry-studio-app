@@ -91,7 +91,8 @@
           }
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      "./plugins/withFileSystemProviderPaths"
     ],
     "experiments": {
       "typedRoutes": true,
