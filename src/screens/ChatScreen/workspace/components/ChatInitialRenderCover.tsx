@@ -1,26 +1,28 @@
 import { useThemeColor } from 'heroui-native/hooks';
-import Animated, { FadeOut } from 'react-native-reanimated';
+import { ActivityIndicator } from 'react-native';
+import Animated, { Easing, FadeOut } from 'react-native-reanimated';
 
 type ChatInitialRenderCoverProps = {
   isVisible: boolean;
 };
 
 export function ChatInitialRenderCover({ isVisible }: ChatInitialRenderCoverProps) {
-  const backgroundColor = useThemeColor('background');
+  const [backgroundColor, indicatorColor] = useThemeColor(['background', 'muted']);
 
   if (!isVisible) {
     return null;
   }
 
-  // 盖满整屏（含浮动输入框那条区域）。此前用 bottom: bottomInset 特意漏出底部输入框，
-  // 但列表滚到底后「消息尾行」正好落在「遮罩下边缘 ↔ 输入框顶部」的缝里露出来 → 揭示时整块
-  // 上跳。冷 markdown 期间输入框本就是空的，整屏盖住再随内容一起淡出，堵住这条缝、消除尾行闪现。
+  // 盖满 workspace，避免消息尾行从遮罩与输入框之间漏出；浮动输入框的 z-10 仍在遮罩之上。
+  // 新列表在遮罩后完成布局，进度指示器提供即时反馈，二者准备好后再一起淡出。
   return (
     <Animated.View
-      className="absolute inset-0"
-      exiting={FadeOut.duration(100)}
+      className="absolute inset-0 items-center justify-center"
+      exiting={FadeOut.duration(180).easing(Easing.out(Easing.cubic))}
       pointerEvents="none"
       style={{ backgroundColor, zIndex: 5 }}
-    />
+    >
+      <ActivityIndicator color={indicatorColor} size="small" />
+    </Animated.View>
   );
 }

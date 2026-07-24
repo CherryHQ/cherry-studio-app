@@ -1,14 +1,20 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useIsFocused, useRouter } from 'expo-router';
 import { createContext, type PropsWithChildren, use, useCallback, useEffect, useMemo } from 'react';
 
+import { MODEL_SETTING_PREFERENCE_KEYS } from '@/components/modelPicker/utils/modelSettings';
+import { loggerService } from '@/core/logger/LoggerService';
 import { queryKeys } from '@/data/api';
 import { useDataMutation } from '@/data/hooks';
 import { useDataServices } from '@/data/runtime';
+import type { DataServices } from '@/data/services/createDataServices';
+import { isUniqueModelId } from '@/data/types/model';
 import type { Topic } from '@/data/types/topic';
 import { usePins, useTopics } from '@/hooks/chat';
 import { getMessagesQueryKey, prefetchTopicMessages } from '@/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/hooks/chat/utils/messageWindowPolicy';
+
+const MODEL_DETAIL_PREFETCH_STALE_TIME_MS = 1000 * 60 * 5;
 
 type TopicListTopicsContextValue = {
   isPinActionDisabled: boolean;
@@ -25,6 +31,9 @@ type TopicListActionsContextValue = {
   renameTopic: (topicId: string, name: string) => Promise<void>;
   toggleTopicPin: (topicId: string) => Promise<void>;
 };
+
+// 诊断埋点：量化「点击 topic → 进入界面 → 渲染」链路耗时。`[PERF]` 前缀。
+const perfLog = loggerService.withContext('ChatPerf');
 
 const TopicListTopicsContext = createContext<TopicListTopicsContextValue | null>(null);
 const TopicListActionsContext = createContext<TopicListActionsContextValue | null>(null);
@@ -43,6 +52,8 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       return;
     }
 
+    void prefetchDefaultModelDetail(queryClient, services);
+
     for (const topic of topicList.topics.slice(
       0,
       messageWindowPolicy.topicListPrefetchTopicCount,
@@ -53,6 +64,8 @@ export function TopicListProvider({ children }: PropsWithChildren) {
 
   const openTopic = useCallback(
     (topicId: string) => {
+      perfLog.debug('[PERF] tap->push', { topicId, t: Date.now() });
+      void prefetchDefaultModelDetail(queryClient, services);
       void prefetchTopicMessages(queryClient, services, topicId);
       router.push({ pathname: '/topics', params: { topicId } });
     },
@@ -151,6 +164,20 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       <TopicListActionsContext value={actionsValue}>{children}</TopicListActionsContext>
     </TopicListTopicsContext>
   );
+}
+
+function prefetchDefaultModelDetail(queryClient: QueryClient, services: DataServices) {
+  const modelId = services.preference.getCachedValue(MODEL_SETTING_PREFERENCE_KEYS.default);
+
+  if (!isUniqueModelId(modelId)) {
+    return;
+  }
+
+  return queryClient.prefetchQuery({
+    queryFn: () => services.model.getById(modelId),
+    queryKey: queryKeys.models.detail(modelId),
+    staleTime: MODEL_DETAIL_PREFETCH_STALE_TIME_MS,
+  });
 }
 
 export function useTopicListTopics() {

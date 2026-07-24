@@ -26,6 +26,7 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
 
   return parts.map((part, index) => (
     <MessagePart
+      isStreaming={message.status === 'pending'}
       key={getMessagePartKey(message, part, index)}
       part={part}
       renderMode={renderMode}

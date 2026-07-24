@@ -10,10 +10,11 @@ import { useThinkingTimerMs } from '../hooks/useThinkingTimerMs';
 import { PartMarkdown } from './PartMarkdown';
 
 type ReasoningPartProps = {
+  isStreaming: boolean;
   part: Extract<CherryMessagePart, { type: 'reasoning' }>;
 };
 
-export function ReasoningPart({ part }: ReasoningPartProps) {
+export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -54,7 +55,7 @@ export function ReasoningPart({ part }: ReasoningPartProps) {
       </Pressable>
       {isExpanded ? (
         <View className="rounded-xl bg-surface-secondary px-3 py-2.5">
-          <PartMarkdown markdown={part.text} />
+          <PartMarkdown isStreaming={isStreaming} markdown={part.text} />
         </View>
       ) : null}
     </View>
