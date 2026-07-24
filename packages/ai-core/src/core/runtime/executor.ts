@@ -5,11 +5,11 @@
 import type { ImageModelV3, LanguageModelV3, ProviderV3 } from '@ai-sdk/provider';
 import type { LanguageModel } from 'ai';
 import {
-  createProviderRegistry,
   embedMany as _embedMany,
   generateImage as _generateImage,
   generateText as _generateText,
   streamText as _streamText,
+  createProviderRegistry,
 } from 'ai';
 
 import { isV3Model } from '../models/utils';

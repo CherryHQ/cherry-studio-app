@@ -9,8 +9,12 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { EndpointType, Model } from '@/data/types/model';
 import type { AuthConfig, Provider } from '@/data/types/provider';
 import { generateSignature } from '@/integration/cherryAi';
-import type { ProviderConfig } from '../types';
-import { type AppProviderId, type AppProviderSettingsMap, appProviderIds } from '../types';
+import {
+  type AppProviderId,
+  type AppProviderSettingsMap,
+  appProviderIds,
+  ProviderConfig,
+} from '../types';
 import {
   defaultAppHeaders,
   formatApiHost,

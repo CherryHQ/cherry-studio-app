@@ -204,7 +204,7 @@ function shouldShowNoDetails(part: ToolMessagePart) {
   );
 }
 
-function getValueEntries(value: unknown): Array<[string, unknown]> {
+function getValueEntries(value: unknown): [string, unknown][] {
   if (value === undefined || value === null) return [];
   if (Array.isArray(value)) return [['value', value]];
   if (isRecord(value)) return Object.entries(value);

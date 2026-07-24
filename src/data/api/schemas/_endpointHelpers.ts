@@ -7,7 +7,7 @@ export const OrderRequestSchema = z.union([
 ]);
 export type OrderRequest = z.infer<typeof OrderRequestSchema>;
 
-const OrderBatchRequestSchema = z.strictObject({
+export const OrderBatchRequestSchema = z.strictObject({
   moves: z
     .array(
       z.strictObject({

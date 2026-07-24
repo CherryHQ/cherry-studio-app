@@ -1,11 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
-
-import { AGENTS_SKILLS_DIR, CLAUDE_SKILLS_DIR } from './skills-common';
 import {
+  AGENTS_SKILLS_DIR,
   AGENTS_SKILLS_GITIGNORE,
   buildAgentsSkillsGitignore,
   buildClaudeSkillsGitignore,
+  CLAUDE_SKILLS_DIR,
   CLAUDE_SKILLS_GITIGNORE,
   listSkillNames,
   writeFileIfChanged,

@@ -8,12 +8,12 @@ const logger = loggerService.withContext('SearxngProvider');
 
 type SearxngSearchResponse = {
   query?: string;
-  results: Array<{
+  results: {
     title?: string;
     content?: string;
     snippet?: string;
     url?: string;
-  }>;
+  }[];
 };
 
 function trimStringList(values: readonly string[]): string[] {

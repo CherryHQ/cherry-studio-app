@@ -15,7 +15,7 @@ type MetaToolName = 'tool_search' | 'tool_inspect' | 'tool_invoke' | 'tool_exec'
 
 type ToolSearchNamespace = {
   namespace: string;
-  tools: Array<{ name: string }>;
+  tools: { name: string }[];
 };
 
 const META_TOOL_NAMES = new Set<MetaToolName>([
@@ -391,7 +391,7 @@ function parseToolSearchNamespaces(output: unknown): ToolSearchNamespace[] {
   });
 }
 
-function getValueEntries(value: unknown): Array<[string, unknown]> {
+function getValueEntries(value: unknown): [string, unknown][] {
   if (value === undefined || value === null) return [];
   if (Array.isArray(value)) return [['arguments', value]];
   if (isRecord(value)) return Object.entries(value);

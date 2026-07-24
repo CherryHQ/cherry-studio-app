@@ -13,9 +13,9 @@ import { useChatRuntimeTopic } from '../runtime';
 import { ChatInputActionSheet } from './components/ChatInputActionSheet';
 import { ChatInputReasoningSection } from './components/ChatInputReasoningSection';
 import { type ChatInputSendPayload, ChatInputSurface } from './components/ChatInputSurface';
+import { useChatInputActions, useChatInputState } from './context/ChatInputProvider';
 import { useChatInputReasoningEffortSync } from './hooks/useChatInputReasoningEffortSync';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
-import { useChatInputActions, useChatInputState } from './context/ChatInputProvider';
 import { createChatInputMessageParts } from './utils/chatInputAttachments';
 
 type ChatInputProps = {
