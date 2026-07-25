@@ -1,4 +1,4 @@
-import { inArray, like, or } from 'drizzle-orm';
+import { inArray, like, or, sql } from 'drizzle-orm';
 
 import { assistantTable, messageTable, topicTable, userModelTable } from '@/data/db/schemas';
 import {
@@ -63,6 +63,31 @@ export class MockChatSeeder implements DatabaseSeeder {
           });
       }
 
+      // Fixture topics are linear parent chains (the largest is 1000 messages) and
+      // `message.parentId` cascades on delete, so deleting the head of a chain
+      // recurses one level per descendant — past SQLITE_MAX_TRIGGER_DEPTH (1000)
+      // SQLite aborts the whole transaction with "too many levels of trigger
+      // recursion", which takes the app down on launch. Re-pointing every fixture
+      // message at its topic's virtual root first keeps the cascade two levels deep
+      // no matter how long the chain was. The `exists` guard keeps the
+      // `message_root_parent_check` invariant if a topic somehow has no root row.
+      await tx.run(sql`
+        update ${messageTable}
+        set parent_id = (
+          select root.id from message root
+          where root.topic_id = message.topic_id and root.parent_id is null
+        )
+        where parent_id is not null
+          and (
+            id like 'mock-message-%'
+            or id like ${`${mockBenchmarkMessageIdPrefix}%`}
+            or id like ${`${mockPersonaMessageIdPrefix}%`}
+          )
+          and exists (
+            select 1 from message root
+            where root.topic_id = message.topic_id and root.parent_id is null
+          )
+      `);
       await tx.delete(messageTable).where(like(messageTable.id, 'mock-message-%'));
       await tx
         .delete(messageTable)

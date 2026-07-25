@@ -1,8 +1,10 @@
 import { Stack, useRouter } from 'expo-router';
+import { cn } from 'heroui-native/utils';
 import { ChevronLeftIcon } from 'lucide-uniwind/png';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Pressable, Text } from 'react-native';
 
 import { HeaderIconButton } from '../components/HeaderIconButton';
 import type { HeaderToolbarAction } from './BackHeader.types';
@@ -14,7 +16,29 @@ export type BackHeaderProps = {
 };
 
 function renderAndroidHeaderAction(action: HeaderToolbarAction): ReactNode {
-  if (action.hidden || !action.androidIcon) {
+  if (action.hidden) {
+    return null;
+  }
+
+  if (action.label) {
+    return (
+      <Pressable
+        accessibilityLabel={action.accessibilityLabel ?? action.label}
+        accessibilityRole="button"
+        className={cn(
+          'min-h-9 items-center justify-center rounded-full px-2 active:opacity-60',
+          action.disabled && 'opacity-50',
+        )}
+        disabled={action.disabled}
+        key={action.key}
+        onPress={action.onPress}
+      >
+        <Text className="font-semibold text-base text-foreground">{action.label}</Text>
+      </Pressable>
+    );
+  }
+
+  if (!action.androidIcon) {
     return null;
   }
 

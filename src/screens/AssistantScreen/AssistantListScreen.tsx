@@ -36,7 +36,7 @@ export default function AssistantListScreen() {
   const { notifyClose, notifyWillOpen } = useExclusiveSwipeable();
 
   const openCreateAssistant = useCallback(() => {
-    router.push('/assistants/edit');
+    router.push('/assistants/new');
   }, [router]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -50,10 +50,10 @@ export default function AssistantListScreen() {
     ],
     [openCreateAssistant, t],
   );
-  const openEditAssistant = useCallback(
+  const openAssistantDetail = useCallback(
     (assistantId: string) => {
       router.push({
-        pathname: '/assistants/edit',
+        pathname: '/assistants/[assistantId]',
         params: { assistantId },
       });
     },
@@ -97,7 +97,7 @@ export default function AssistantListScreen() {
                 notifyClose={notifyClose}
                 notifyWillOpen={notifyWillOpen}
                 onDelete={requestDeleteAssistant}
-                onEdit={openEditAssistant}
+                onOpen={openAssistantDetail}
               />
             ))}
           </View>
@@ -116,7 +116,7 @@ type AssistantListRowProps = {
   notifyClose: (swipeable: SwipeableMethods) => void;
   notifyWillOpen: (swipeable: SwipeableMethods) => void;
   onDelete: (assistant: Assistant) => void;
-  onEdit: (assistantId: string) => void;
+  onOpen: (assistantId: string) => void;
 };
 
 function AssistantListRow({
@@ -125,7 +125,7 @@ function AssistantListRow({
   notifyClose,
   notifyWillOpen,
   onDelete,
-  onEdit,
+  onOpen,
 }: AssistantListRowProps) {
   const { t } = useTranslation();
   const swipeableRef = useRef<SwipeableMethods>(null);
@@ -136,9 +136,9 @@ function AssistantListRow({
     swipeableRef.current?.close();
     onDelete(assistant);
   }, [assistant, onDelete]);
-  const handleEditPress = useCallback(() => {
-    onEdit(assistant.id);
-  }, [assistant.id, onEdit]);
+  const handleOpenPress = useCallback(() => {
+    onOpen(assistant.id);
+  }, [assistant.id, onOpen]);
   const handleSwipeableWillOpen = useCallback(() => {
     isSwipeOpen.value = 1;
   }, [isSwipeOpen]);
@@ -156,7 +156,7 @@ function AssistantListRow({
       notifyWillOpen(swipeableRef.current);
     }
   }, [notifyWillOpen]);
-  const editTapGesture = useMemo(
+  const openTapGesture = useMemo(
     () =>
       Gesture.Tap()
         .maxDistance(ASSISTANT_ROW_MAX_TAP_DISTANCE)
@@ -168,10 +168,10 @@ function AssistantListRow({
         })
         .onEnd((_event, success) => {
           if (success && isSwipeOpen.value === 0) {
-            runOnJS(handleEditPress)();
+            runOnJS(handleOpenPress)();
           }
         }),
-    [handleEditPress, isSwipeOpen, pressProgress],
+    [handleOpenPress, isSwipeOpen, pressProgress],
   );
   const pressedBackgroundStyle = useAnimatedStyle(() => ({
     opacity: pressProgress.value,
@@ -196,15 +196,15 @@ function AssistantListRow({
       ref={swipeableRef}
       renderRightActions={renderRightActions}
       rightThreshold={40}
-      simultaneousWithExternalGesture={editTapGesture}
+      simultaneousWithExternalGesture={openTapGesture}
     >
-      <GestureDetector gesture={editTapGesture}>
+      <GestureDetector gesture={openTapGesture}>
         <View
           accessibilityActions={ASSISTANT_ROW_ACCESSIBILITY_ACTIONS}
           accessibilityLabel={assistant.name}
           accessibilityRole="button"
           accessible
-          onAccessibilityAction={handleEditPress}
+          onAccessibilityAction={handleOpenPress}
         >
           <View className="relative min-w-0 flex-1 flex-row items-center gap-2 py-2 pl-2">
             <Animated.View

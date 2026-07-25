@@ -1,3 +1,5 @@
+import { generateNKeysBetween } from 'fractional-indexing';
+
 import { DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
 import { type CherryMessagePart, type Message } from '@/data/types/message';
 import type { Topic } from '@/data/types/topic';
@@ -917,11 +919,28 @@ const personaSeedDefinitions: PersonaSeed[] = [
   },
 ];
 
+// Order keys are generated, never hand-written: fractional indexing encodes the
+// integer-part length in the first character (an `a` head means two characters, a
+// `c` head means four), so plausible-looking keys like `a10` or `c4` are invalid.
+// `insertWithOrderKey` derives the next key from the largest one already stored,
+// so a single malformed fixture key makes every later insert into that table
+// throw `invalid order key` — which reads as "sending a message is broken".
+const personaOrderKeys = {
+  assistants: generateNKeysBetween(mockChatAssistant.orderKey, null, personaSeedDefinitions.length),
+  models: generateNKeysBetween(mockChatModel.orderKey, null, personaSeedDefinitions.length),
+  // After every benchmark topic, matching the updatedAt ordering below.
+  topics: generateNKeysBetween(
+    benchmarkTopicSeeds[benchmarkTopicSeeds.length - 1].orderKey,
+    null,
+    personaSeedDefinitions.length,
+  ),
+};
+
 export const mockPersonaModels = personaSeedDefinitions.map((seed, index) => ({
   id: `cherryai::${mockPersonaModelIdPrefix}${seed.key}`,
   modelId: `${mockPersonaModelIdPrefix}${seed.key}`,
   name: seed.modelName,
-  orderKey: `a${index + 1}`,
+  orderKey: personaOrderKeys.models[index],
   providerId: 'cherryai',
 }));
 
@@ -931,7 +950,7 @@ export const mockPersonaAssistants = personaSeedDefinitions.map((seed, index) =>
   id: `${mockPersonaAssistantIdPrefix}${seed.key}`,
   modelId: mockPersonaModels[index].id,
   name: seed.assistantName,
-  orderKey: `a${index + 2}`,
+  orderKey: personaOrderKeys.assistants[index],
   prompt: '',
   settings: DEFAULT_ASSISTANT_SETTINGS,
 }));
@@ -991,7 +1010,7 @@ const mockPersonaTopics: Topic[] = personaSeedDefinitions.map((seed, index) => {
     id: topicId,
     isNameManuallyEdited: true,
     name: seed.topicName,
-    orderKey: `c${index}`,
+    orderKey: personaOrderKeys.topics[index],
     updatedAt: lastMessage?.updatedAt ?? createdAt,
   };
 });

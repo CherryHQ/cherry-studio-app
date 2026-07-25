@@ -20,20 +20,28 @@ import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEffor
 import { createChatInputMessageParts } from './utils/chatInputAttachments';
 
 type ChatInputProps = {
+  /**
+   * Assistant to bind a newly created topic to, from the "start chat" entry on
+   * the assistant detail screen. Once `topicId` exists the topic record owns
+   * the binding and this is ignored.
+   */
+  assistantId?: string;
   topicId?: string;
 };
 
 // 诊断埋点：量化输入框「真实 model 名」解析耗时（pref 段 + model DB 段）。`[PERF]` 前缀。
 const perfLog = loggerService.withContext('ChatPerf');
 
-export function ChatInput({ topicId }: ChatInputProps) {
+export function ChatInput({ assistantId, topicId }: ChatInputProps) {
   const modelSettings = useModelSettingSelections();
   usePrefetchModelPickerData();
   const rawDefaultModel = modelSettings.selections.default;
   const selectedModelId = isUniqueModelId(rawDefaultModel) ? rawDefaultModel : null;
   const chatRuntime = useChatRuntimeTopic(topicId);
   const topicQuery = useTopic(topicId);
-  const selectedAssistantId = topicId ? (topicQuery.data?.assistantId ?? null) : null;
+  const selectedAssistantId = topicId
+    ? (topicQuery.data?.assistantId ?? null)
+    : (assistantId ?? null);
   const { model: selectedModel } = useModelById(selectedModelId);
   const selectedModelLabel = selectedModel?.name;
 

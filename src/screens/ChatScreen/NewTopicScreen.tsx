@@ -3,7 +3,8 @@ import { Text, View } from 'react-native';
 
 import { ChatComposer, ChatWorkspaceFrame, useFloatingChatInputLayout } from './workspace';
 
-export function NewTopicScreen() {
+/** `assistantId` binds the topic this screen creates to that assistant. */
+export function NewTopicScreen({ assistantId }: { assistantId?: string }) {
   const { t } = useTranslation();
   const { contentBottomInset, handleInputHeightChange } = useFloatingChatInputLayout();
 
@@ -23,7 +24,7 @@ export function NewTopicScreen() {
           {t('chat.newTopic.description')}
         </Text>
       </View>
-      <ChatComposer onHeightChange={handleInputHeightChange} />
+      <ChatComposer assistantId={assistantId} onHeightChange={handleInputHeightChange} />
     </ChatWorkspaceFrame>
   );
 }

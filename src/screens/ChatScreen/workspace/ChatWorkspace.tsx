@@ -17,7 +17,10 @@ import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndica
 import { ChatWorkspaceFrame } from './components/ChatWorkspaceFrame';
 import { ScrollToBottomButton } from './components/ScrollToBottomButton';
 import { useFloatingChatInputLayout } from './hooks/useFloatingChatInputLayout';
-import { useMessageListInitialRenderGate } from './hooks/useMessageListInitialRenderGate';
+import {
+  shouldWaitForInitialHistoryLayout,
+  useMessageListInitialRenderGate,
+} from './hooks/useMessageListInitialRenderGate';
 
 // 「滚动到底部」按钮悬浮在输入框上方的间距：按输入框实测高度定位，
 // 不用含 safe area 的 contentBottomInset，避免出现需要硬抵消的 magic 偏移。
@@ -47,10 +50,14 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   const messagesWithUser = mergeMessagesWithOverlay(messages, chatRuntime.pendingUserMessage);
   const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatRuntime.overlayMessage);
   const anchorIndex = getAnchoredUserMessageIndex(visibleMessages);
-  const { isCoverVisible, listRenderKey, markListLoaded } = useMessageListInitialRenderGate({
-    hasMessages: visibleMessages.length > 0,
+  const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
+    hasHistoryBeforePendingTurn: chatRuntime.hasHistoryBeforePendingTurn,
     isLoadingInitial,
+    messageCount: messages.length,
+  });
+  const { isCoverVisible, listRenderKey, markListLoaded } = useMessageListInitialRenderGate({
     renderGateKey,
+    requiresInitialHistoryLayout,
   });
   const contentTopInset = isIOS ? headerHeight : 0;
   const { contentBottomInset, handleInputHeightChange, inputHeightShared } =
