@@ -2,6 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import {
   type MessageListInitialRenderGateOptions,
+  shouldWaitForInitialHistoryLayout,
   useMessageListInitialRenderGate,
 } from '../useMessageListInitialRenderGate';
 
@@ -39,11 +40,9 @@ function renderGate(options: MessageListInitialRenderGateOptions) {
   };
 }
 
-const listEntry: MessageListInitialRenderGateOptions = {
-  hasMessages: true,
-  isHandedOverFromNewTopic: false,
-  isLoadingInitial: true,
+const historyEntry: MessageListInitialRenderGateOptions = {
   renderGateKey: 'topic-1',
+  requiresInitialHistoryLayout: true,
 };
 
 describe('useMessageListInitialRenderGate', () => {
@@ -52,42 +51,37 @@ describe('useMessageListInitialRenderGate', () => {
   afterEach(() => {
     gate?.unmount();
     gate = undefined;
+    jest.restoreAllMocks();
   });
 
-  it('covers the list while a topic opened from the list is still loading', () => {
-    gate = renderGate(listEntry);
+  it('covers an entered topic that requires initial history layout', () => {
+    gate = renderGate(historyEntry);
 
     expect(gate.current.isCoverVisible).toBe(true);
   });
 
-  it('keeps covering an entered topic until the list reports it has laid out', () => {
-    gate = renderGate(listEntry);
+  it('does not cover a render that has no initial history to lay out', () => {
+    gate = renderGate({ ...historyEntry, requiresInitialHistoryLayout: false });
 
-    gate.rerender({ ...listEntry, isLoadingInitial: false });
-
-    // Messages arrived, but the list has not called onReady yet — the cover is
-    // what hides the first-frame measurement correction.
-    expect(gate.current.isCoverVisible).toBe(true);
+    expect(gate.current.isCoverVisible).toBe(false);
   });
 
-  it('never covers a topic handed over from the new-topic screen', () => {
-    // The user message is already in the runtime overlay, so `isLoadingInitial`
-    // here only means "the message query key is new".
-    gate = renderGate({ ...listEntry, isHandedOverFromNewTopic: true });
+  it('does not close again after the current render resolves without layout', () => {
+    gate = renderGate({ ...historyEntry, requiresInitialHistoryLayout: false });
+
+    gate.rerender(historyEntry);
 
     expect(gate.current.isCoverVisible).toBe(false);
   });
 
   it('reveals the list one frame after it reports being laid out', () => {
     const frames: (() => void)[] = [];
-    const requestAnimationFrameSpy = jest
-      .spyOn(globalThis, 'requestAnimationFrame')
-      .mockImplementation((callback: FrameRequestCallback) => {
-        frames.push(() => callback(0));
-        return 0 as unknown as ReturnType<typeof requestAnimationFrame>;
-      });
+    jest.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(() => callback(0));
+      return frames.length;
+    });
 
-    gate = renderGate({ ...listEntry, isLoadingInitial: false });
+    gate = renderGate(historyEntry);
     act(() => {
       gate?.current.markListLoaded();
     });
@@ -101,7 +95,90 @@ describe('useMessageListInitialRenderGate', () => {
     });
 
     expect(gate.current.isCoverVisible).toBe(false);
+  });
 
-    requestAnimationFrameSpy.mockRestore();
+  it('resets resolution when the render key changes, including A to B to A', () => {
+    const frames: (() => void)[] = [];
+    jest.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(() => callback(0));
+      return frames.length;
+    });
+    gate = renderGate(historyEntry);
+    act(() => {
+      gate?.current.markListLoaded();
+      frames.shift()?.();
+    });
+    expect(gate.current.isCoverVisible).toBe(false);
+
+    gate.rerender({ ...historyEntry, renderGateKey: 'topic-2' });
+    expect(gate.current.isCoverVisible).toBe(true);
+
+    gate.rerender(historyEntry);
+    expect(gate.current.isCoverVisible).toBe(true);
+  });
+
+  it('cancels a pending ready frame when the render key changes', () => {
+    let pendingFrame: FrameRequestCallback | undefined;
+    const cancelAnimationFrameSpy = jest.spyOn(globalThis, 'cancelAnimationFrame');
+    jest.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((callback) => {
+      pendingFrame = callback;
+      return 42;
+    });
+    gate = renderGate(historyEntry);
+    act(() => {
+      gate?.current.markListLoaded();
+    });
+
+    gate.rerender({ ...historyEntry, renderGateKey: 'topic-2' });
+
+    expect(cancelAnimationFrameSpy).toHaveBeenCalledWith(42);
+    expect(gate.current.isCoverVisible).toBe(true);
+
+    act(() => {
+      pendingFrame?.(0);
+    });
+    expect(gate.current.isCoverVisible).toBe(true);
+  });
+});
+
+describe('shouldWaitForInitialHistoryLayout', () => {
+  it('waits while a normal topic query is loading', () => {
+    expect(
+      shouldWaitForInitialHistoryLayout({
+        hasHistoryBeforePendingTurn: undefined,
+        isLoadingInitial: true,
+        messageCount: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it('waits for loaded history, including an existing topic that is streaming', () => {
+    expect(
+      shouldWaitForInitialHistoryLayout({
+        hasHistoryBeforePendingTurn: true,
+        isLoadingInitial: false,
+        messageCount: 2,
+      }),
+    ).toBe(true);
+  });
+
+  it('does not wait for a first exchange handed over by the runtime', () => {
+    expect(
+      shouldWaitForInitialHistoryLayout({
+        hasHistoryBeforePendingTurn: false,
+        isLoadingInitial: true,
+        messageCount: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it('does not wait after an empty topic query settles', () => {
+    expect(
+      shouldWaitForInitialHistoryLayout({
+        hasHistoryBeforePendingTurn: undefined,
+        isLoadingInitial: false,
+        messageCount: 0,
+      }),
+    ).toBe(false);
   });
 });

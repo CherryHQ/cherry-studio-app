@@ -228,6 +228,7 @@ describe('ChatRuntime', () => {
 
     expect(runtime.getTopicSnapshot('topic-1')).toEqual(
       expect.objectContaining({
+        hasHistoryBeforePendingTurn: true,
         overlayMessage: expect.objectContaining({
           data: { parts: assistantChunk.parts },
           id: 'assistant-1',
@@ -740,6 +741,7 @@ describe('ChatRuntime', () => {
     await waitUntil(() => runtime.getTopicSnapshot(newTopicRuntimeId).status === 'streaming');
     expect(runtime.getTopicSnapshot(newTopicRuntimeId)).toEqual(
       expect.objectContaining({
+        hasHistoryBeforePendingTurn: false,
         overlayMessage: expect.objectContaining({ id: 'assistant-1' }),
         status: 'streaming',
       }),

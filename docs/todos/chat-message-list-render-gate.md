@@ -2,29 +2,48 @@
 
 Status: active
 
-本文记录聊天消息列表首帧遮罩（`ChatInitialRenderCover`）及其 gate 的重构待办。遮罩本身是为了挡住列表首帧的高度修正与钉顶滚动抖动而加的，但它的显示条件已经开始随「进入聊天的方式」增多而叠加否决项，需要在后续梳理时重构。
+本文记录聊天消息列表首帧遮罩（`ChatInitialRenderCover`）判定逻辑的收敛待办。**遮罩本身保留**（已确认的产品行为：进入话题时需要 loading 状态），待办针对的是它的判定条件形态——目前是三个来源不同的布尔量拼出来的，每新增一种进入聊天的方式就要再加一个否决项。
 
 相关文档：`docs/architecture/mobile-chat-streaming-rendering.md`。
 
-## CHATGATE-TODO-001: 重构消息列表首帧遮罩的判定条件
+## CHATGATE-TODO-001: 把遮罩判定收敛为两个各归其位的信号
 
-当前状态：`useMessageListInitialRenderGate` 的判定是三个来源不同的布尔量拼出来的：
+实施状态：代码与自动化回归已完成，待真机对照验证。
 
 ```
+requiresInitialHistoryLayout =
+  hasHistoryBeforePendingTurn !== false &&
+  (isLoadingInitial || queryMessageCount > 0)
+
 isCoverVisible =
-  !isHandedOverFromNewTopic &&                                   // runtime overlay 有没有刚发出的消息
-  (isLoadingInitial ||                                           // messages query 的加载态
-   (hasMessages && readyListRenderKey !== renderGateKey))        // 列表 onReady 回调是否已到
+  requiresInitialHistoryLayout &&
+  !isCurrentRenderGateResolved
 ```
 
-其中 `isHandedOverFromNewTopic` 是为修「从助手详情页点开始聊天、发送后中途闪一层 spinner」补上的否决项：那条路径下 `isLoadingInitial` 为真只是因为 `topicId` 刚出现、messages query key 是全新的，而用户刚发的消息其实已经在 runtime overlay 里可以直接画出来，盖遮罩等于把它藏起来几百毫秒。补丁有效（见 `useMessageListInitialRenderGate.test.tsx` 的四条行为测试），但形态不对：真正要表达的语义只有一个——「列表首帧是否已经有可信内容且布局已 settle」——现在却用三个代理变量近似，每多一种进入聊天的方式就要再加一个否决项。
+`ChatRuntime` 在创建消息前读取发送前的 `topic.activeNodeId`，把 `hasHistoryBeforePendingTurn` 随 runtime overlay 一起交给 workspace：
 
-完成条件：
+- `false` 表示当前是第一轮，没有需要按估算高度铺出的历史消息；runtime overlay 可直接交接，不遮。
+- `true` 表示当前 turn 前已有历史；即使该话题仍在流式，重新进入时也要遮到列表 settle。
+- `undefined` 表示没有 runtime 交接，按 messages query 的加载态和消息量判断。
 
-- 把「有内容可画」与「布局已 settle」拆成两个各自单一来源的信号，遮罩只依赖后者；进入方式不再参与判定。
-- 复核遮罩是否还必要：它挡的是 `estimatedItemSize` 坏估值造成的首帧高度修正。若按 role 分别估值（`getItemType`）后首帧误差已足够小，遮罩连同这个 gate 可以整体删掉，而不是继续维护它的条件。
-- 新增进入方式（deep link、搜索结果跳转、通知打开）不需要再往判定里加分支。
-- 保留或改写现有 gate 测试作为回归基线，至少覆盖：从列表进入有历史消息的话题仍被遮住到 settle、新话题交接不遮、onReady 后揭示。
-- 真机对照两条路径抽帧确认：新话题发送后首帧不闪、从列表进入不露出高度修正。
+`ChatMessageList.onReady` 继续只表示「非空消息列表已完成测量和 settle」。加载期的空列表不能提前上报，否则会在 query 返回历史消息前把一次性 ready 消耗掉。已结算的空话题由 `requiresInitialHistoryLayout = false` 直接打开 gate。
+
+gate 对每个 `renderGateKey` 只有单调的「未解决 → 已解决」转换：
+
+- 列表 `onReady` 到达，下一帧标记为已解决。
+- requirement 变为 `false`，立即标记为已解决；同一代际之后不得重新盖回。
+- key 改变时重置代际并取消旧 key 尚未执行的 ready rAF；A → B → A 不能复用第一次 A 的 ready。
+
+回归覆盖：
+
+- 普通加载和已有历史保持遮罩到 settle。
+- 第一轮 runtime 交接不遮，交接字段清除后也不重新闪遮罩。
+- 已有历史的流式话题重新进入仍遮。
+- 空话题 query 结算后不永久遮罩。
+- key 切换、A → B → A 和旧 rAF 不污染当前代际。
+
+剩余验收：真机对照新话题发送后首帧不闪、从列表进入不露出高度修正，并复核已有历史的流式话题重新进入仍受 gate 保护。
+
+可选的进一步收敛（非本待办前置）：交接时用 `setQueryData` 把已写入 DB 的用户消息种进新 topic 的 messages 缓存。`useMessageHistoryWindow` 走的是 `useDataInfiniteQuery`，需要先确认分页缓存形状是否便于外部写入。
 
 依赖：无。可与 `anchoredEndSpace` 钉顶逻辑的梳理一起做，二者判据同源。

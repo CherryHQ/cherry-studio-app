@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 import { loggerService } from '@/core/logger/LoggerService';
 
@@ -7,38 +7,86 @@ import { loggerService } from '@/core/logger/LoggerService';
 const gateLog = loggerService.withContext('ChatGate');
 
 export type MessageListInitialRenderGateOptions = {
-  hasMessages: boolean;
-  /**
-   * True when the list already has something to draw that did not come from the
-   * message query: the user message handed over from a just-created topic. There
-   * `isLoadingInitial` only reflects the brand-new query key — covering the list
-   * would hide the message the user just sent, right when it should stay put and
-   * let the reply stream into the space below it.
-   */
-  isHandedOverFromNewTopic: boolean;
-  isLoadingInitial: boolean;
+  renderGateKey: string;
+  requiresInitialHistoryLayout: boolean;
+};
+
+type MessageListInitialRenderGateState = {
+  isResolved: boolean;
   renderGateKey: string;
 };
 
-export function useMessageListInitialRenderGate({
-  hasMessages,
-  isHandedOverFromNewTopic,
+type PendingReadyFrame = {
+  id: number;
+  renderGateKey: string;
+};
+
+type InitialHistoryLayoutOptions = {
+  hasHistoryBeforePendingTurn: boolean | undefined;
+  isLoadingInitial: boolean;
+  messageCount: number;
+};
+
+export function shouldWaitForInitialHistoryLayout({
+  hasHistoryBeforePendingTurn,
   isLoadingInitial,
+  messageCount,
+}: InitialHistoryLayoutOptions) {
+  return hasHistoryBeforePendingTurn !== false && (isLoadingInitial || messageCount > 0);
+}
+
+export function useMessageListInitialRenderGate({
   renderGateKey,
+  requiresInitialHistoryLayout,
 }: MessageListInitialRenderGateOptions) {
-  const [readyListRenderKey, setReadyListRenderKey] = useState<string | null>(null);
-  const isCoverVisible =
-    !isHandedOverFromNewTopic &&
-    (isLoadingInitial || (hasMessages && readyListRenderKey !== renderGateKey));
+  const pendingReadyFrameRef = useRef<PendingReadyFrame | null>(null);
+  const [gateState, setGateState] = useState<MessageListInitialRenderGateState>(() => ({
+    isResolved: !requiresInitialHistoryLayout,
+    renderGateKey,
+  }));
+
+  let currentGateState = gateState;
+  if (gateState.renderGateKey !== renderGateKey) {
+    currentGateState = {
+      isResolved: !requiresInitialHistoryLayout,
+      renderGateKey,
+    };
+    setGateState(currentGateState);
+  } else if (!requiresInitialHistoryLayout && !gateState.isResolved) {
+    currentGateState = { ...gateState, isResolved: true };
+    setGateState(currentGateState);
+  }
+
+  const isCoverVisible = requiresInitialHistoryLayout && !currentGateState.isResolved;
+
+  useLayoutEffect(() => {
+    return () => {
+      const pendingReadyFrame = pendingReadyFrameRef.current;
+      if (pendingReadyFrame?.renderGateKey === renderGateKey) {
+        cancelAnimationFrame(pendingReadyFrame.id);
+        pendingReadyFrameRef.current = null;
+      }
+    };
+  }, [renderGateKey]);
 
   const markListLoaded = useCallback(() => {
     const loadedListRenderKey = renderGateKey;
 
     gateLog.debug('[GATE] markListLoaded(onReady)', { t: Date.now() });
-    requestAnimationFrame(() => {
-      gateLog.debug('[GATE] coverKeySet(rAF)->撤遮罩', { t: Date.now() });
-      setReadyListRenderKey(loadedListRenderKey);
+    const readyFrameId = requestAnimationFrame(() => {
+      if (pendingReadyFrameRef.current?.id === readyFrameId) {
+        pendingReadyFrameRef.current = null;
+      }
+      gateLog.debug('[GATE] gateResolved(rAF)->撤遮罩', { t: Date.now() });
+      setGateState((current) => {
+        if (current.renderGateKey !== loadedListRenderKey || current.isResolved) {
+          return current;
+        }
+
+        return { ...current, isResolved: true };
+      });
     });
+    pendingReadyFrameRef.current = { id: readyFrameId, renderGateKey: loadedListRenderKey };
   }, [renderGateKey]);
 
   return {
