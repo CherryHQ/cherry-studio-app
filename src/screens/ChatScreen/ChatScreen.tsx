@@ -13,7 +13,10 @@ import { ChatWorkspace } from './workspace';
 const perfLog = loggerService.withContext('ChatPerf');
 
 export function ChatScreen() {
-  const { topicId } = useLocalSearchParams<{ topicId?: string }>();
+  const { assistantId, topicId } = useLocalSearchParams<{
+    assistantId?: string;
+    topicId?: string;
+  }>();
   const topic = useTopic(topicId);
   const messageWindow = useMessages(topicId, { enabled: Boolean(topicId) });
   const isTopicAvailable =
@@ -47,7 +50,7 @@ export function ChatScreen() {
           <ChatWorkspace messageWindow={messageWindow} renderGateKey={topicId} topicId={topicId} />
         </View>
       ) : (
-        <NewTopicScreen />
+        <NewTopicScreen assistantId={assistantId} />
       )}
     </>
   );

@@ -1,16 +1,20 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Button } from 'heroui-native/button';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { ModelPickerIcon, useModelPickerData } from '@/components/modelPicker';
+import { screenBottomActionInset } from '@/config/constants';
 import type { Assistant } from '@/data/types/assistant';
 import { useAssistantApiById } from '@/hooks/chat';
 
 export default function AssistantDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { assistantId } = useLocalSearchParams<{ assistantId: string }>();
   const { assistant, error, isLoading } = useAssistantApiById(assistantId);
 
@@ -19,6 +23,11 @@ export default function AssistantDetailScreen() {
       params: { assistantId },
       pathname: '/assistants/[assistantId]/edit',
     });
+  }, [assistantId, router]);
+  // Lands on the new-topic screen with the assistant carried along, so the
+  // first message creates a topic already bound to it.
+  const startChat = useCallback(() => {
+    router.push({ params: { assistantId }, pathname: '/topics' });
   }, [assistantId, router]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -54,25 +63,59 @@ export default function AssistantDetailScreen() {
           </Text>
         )}
       </ScrollView>
+      {assistant ? (
+        // The screen sits above the tab bar, so the home indicator is this
+        // button's only neighbour and it has to keep clear of it itself.
+        <View
+          className="px-4 pt-2"
+          style={{ paddingBottom: Math.max(insets.bottom, screenBottomActionInset) }}
+        >
+          <Button
+            accessibilityLabel={t('assistant.actions.startChat')}
+            className="rounded-2xl"
+            variant="primary"
+            onPress={startChat}
+          >
+            <Text className="font-medium text-base text-white">
+              {t('assistant.actions.startChat')}
+            </Text>
+          </Button>
+        </View>
+      ) : null}
     </>
   );
 }
 
 function AssistantSummary({ assistant }: { assistant: Assistant }) {
+  const { t } = useTranslation();
+  const prompt = assistant.prompt.trim();
+
   return (
-    <View className="items-center gap-4">
-      <View className="size-24 items-center justify-center">
-        {/* Apple Color Emoji draws taller than its point size, so a line height
-            equal to the font size (Tailwind's `text-6xl` default) clips the top
-            of the glyph — give it the same ~1.3 slack the list rows use. */}
-        <Text className="text-6xl leading-20">{assistant.emoji}</Text>
+    <View className="items-center gap-6">
+      <View className="items-center gap-4">
+        <View className="size-24 items-center justify-center">
+          {/* Apple Color Emoji draws taller than its point size, so a line height
+              equal to the font size (Tailwind's `text-6xl` default) clips the top
+              of the glyph — give it the same ~1.3 slack the list rows use. */}
+          <Text className="text-6xl leading-20">{assistant.emoji}</Text>
+        </View>
+        <View className="items-center gap-1.5">
+          <Text className="text-center font-semibold text-2xl text-foreground" numberOfLines={2}>
+            {assistant.name}
+          </Text>
+          <AssistantModelLine modelId={assistant.modelId} modelName={assistant.modelName} />
+        </View>
       </View>
-      <View className="items-center gap-1.5">
-        <Text className="text-center font-semibold text-2xl text-foreground" numberOfLines={2}>
-          {assistant.name}
-        </Text>
-        <AssistantModelLine modelId={assistant.modelId} modelName={assistant.modelName} />
-      </View>
+      {prompt ? (
+        <View className="w-full gap-2 rounded-2xl bg-settings-grouped-surface p-4">
+          <Text className="font-medium text-default-foreground text-sm">
+            {t('assistant.form.prompt')}
+          </Text>
+          <Text className="text-base text-foreground leading-6" selectable>
+            {prompt}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }

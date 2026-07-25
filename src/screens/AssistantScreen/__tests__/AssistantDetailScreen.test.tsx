@@ -31,6 +31,16 @@ jest.mock('@/components/headers', () => ({
   },
 }));
 
+jest.mock('heroui-native/button', () => {
+  const { Pressable: MockPressable } = jest.requireActual('react-native');
+
+  return { Button: MockPressable };
+});
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
+}));
+
 jest.mock('@/components/modelPicker', () => ({
   ModelPickerIcon: () => null,
   useModelPickerData: () => ({ getModelItem: () => mockModelItem }),
@@ -48,7 +58,9 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) =>
       ({
+        'assistant.actions.startChat': 'Start chat',
         'assistant.form.loading': 'Loading assistant...',
+        'assistant.form.prompt': 'Prompt',
         'assistant.model.none': 'No model selected',
         'common.edit': 'Edit',
       })[key] ?? key,
@@ -149,6 +161,45 @@ describe('AssistantDetailScreen', () => {
       params: { assistantId: 'assistant-1' },
       pathname: '/assistants/[assistantId]/edit',
     });
+  });
+
+  it('shows the prompt when the assistant has one', async () => {
+    mockAssistant = makeAssistant({ prompt: 'You are a helpful reviewer.' });
+
+    const texts = renderedTexts(await render());
+
+    expect(texts).toContain('Prompt');
+    expect(texts).toContain('You are a helpful reviewer.');
+  });
+
+  it('omits the prompt section when the prompt is blank', async () => {
+    mockAssistant = makeAssistant({ prompt: '   ' });
+
+    expect(renderedTexts(await render())).not.toContain('Prompt');
+  });
+
+  it('starts a chat bound to this assistant', async () => {
+    mockAssistant = makeAssistant();
+
+    const tree = await render();
+    const [startChat] = tree.root.findAll(
+      (node) =>
+        node.props.accessibilityLabel === 'Start chat' && typeof node.props.onPress === 'function',
+    );
+    startChat.props.onPress();
+
+    expect(mockPush).toHaveBeenCalledWith({
+      params: { assistantId: 'assistant-1' },
+      pathname: '/topics',
+    });
+  });
+
+  it('hides the start-chat action until the assistant has loaded', async () => {
+    mockIsLoading = true;
+
+    const tree = await render();
+
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Start chat' })).toHaveLength(0);
   });
 
   it('redirects back to the list when the assistant cannot be loaded', async () => {

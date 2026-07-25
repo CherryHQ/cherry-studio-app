@@ -29,6 +29,11 @@ export const slotTextHighlightColor = '#00b96b';
 // Gap kept between the keyboard and the focused input inside scrollable forms.
 export const keyboardBottomOffset = 16;
 
+// Padding below a screen-bottom action button when the safe-area inset is
+// smaller than this (home-button devices report 0), so the button never sits
+// flush against the screen edge.
+export const screenBottomActionInset = 16;
+
 // Delay before imperatively focusing the native header search bar on iOS.
 // UISearchController attaches to the navigation bar asynchronously, and a
 // focus() call landing before that is silently ignored by UIKit.
