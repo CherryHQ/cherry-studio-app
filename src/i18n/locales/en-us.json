@@ -99,6 +99,7 @@
   "chat.reasoning.title": "Reasoning effort",
   "chat.reasoningStatus.thinking": "Thinking {{seconds}}s",
   "chat.reasoningStatus.thought": "Thought for {{seconds}}s",
+  "chat.reasoningStatus.title": "Deep thinking",
   "chat.tools.createImage": "Image",
   "chat.tools.think": "Think",
   "chat.tools.webSearch": "Search",

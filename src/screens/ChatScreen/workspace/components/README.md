@@ -2,9 +2,9 @@
 
 ## Topic Switch Behavior
 
-When the active topic changes, `ChatWorkspace` remounts `ChatMessageList` with a new render key and shows `ChatInitialRenderCover` over the message list area. The cover does not block touches and does not cover the floating input.
+When the active topic changes, `ChatWorkspace` remounts `ChatMessageList` with a new render key and shows `ChatInitialRenderCover` with a centered loading indicator over the message list area. The cover does not block touches and does not cover the floating input.
 
-The new list renders and measures behind the cover first. After the list reports ready, the cover exits with a short `FadeOut.duration(100)` animation.
+The new list renders and measures behind the cover first. After the list reports ready, the cover and loading indicator exit together with a short eased fade.
 
 ## Short Conversations
 

@@ -1,6 +1,16 @@
 module.exports = {
   preset: 'jest-expo',
   testEnvironment: 'node',
+  // The first mount in a suite that renders a real react-native tree costs
+  // ~0.6-4.9s — loading and JIT-ing those modules — while every later mount in
+  // the same suite is ~3ms. That one-off cost lands inside whichever test runs
+  // first, so jest's 5s default left the slowest suites (ChatInputActionSheet at
+  // 4.9s, PaintingTemplateRow at 4.5s) overrunning it whenever workers contended
+  // for CPU during a full run: the "DrawingList/TopicList is flaky" failures.
+  // Raised here rather than warmed up per suite because the cost is
+  // environmental — every component suite needs the headroom, not just the ones
+  // that have tripped so far.
+  testTimeout: 20_000,
   // `expo prebuild` output: Pods vendor their own test suites, which jest would
   // otherwise collect (hundreds of failing foreign suites drowning real results).
   testPathIgnorePatterns: ['/node_modules/', '/ios/', '/android/'],

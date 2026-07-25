@@ -1,18 +1,20 @@
 import { useThemeColor } from 'heroui-native/hooks';
 import { useColorScheme } from 'react-native';
-import type { MarkdownStyle } from 'react-native-enriched-markdown';
+import { EnrichedMarkdownText, type MarkdownStyle } from 'react-native-enriched-markdown';
 import { StreamdownText } from 'react-native-streamdown';
 
 import { useMarkdownLinkPress } from '../hooks/useMarkdownLinkPress';
 
 type PartMarkdownProps = {
+  isStreaming: boolean;
   markdown: string;
 };
 
-export function PartMarkdown({ markdown }: PartMarkdownProps) {
+export function PartMarkdown({ isStreaming, markdown }: PartMarkdownProps) {
   const { handleLinkPress } = useMarkdownLinkPress();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const MarkdownRenderer = isStreaming ? StreamdownText : EnrichedMarkdownText;
 
   const [foreground, background, muted, accent, border, defaultColor] = useThemeColor([
     'foreground',
@@ -76,7 +78,7 @@ export function PartMarkdown({ markdown }: PartMarkdownProps) {
     : undefined;
 
   return (
-    <StreamdownText
+    <MarkdownRenderer
       allowTrailingMargin={false}
       flavor="github"
       markdown={markdown}
