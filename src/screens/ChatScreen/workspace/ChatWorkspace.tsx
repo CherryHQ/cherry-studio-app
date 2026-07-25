@@ -49,6 +49,7 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   const anchorIndex = getAnchoredUserMessageIndex(visibleMessages);
   const { isCoverVisible, listRenderKey, markListLoaded } = useMessageListInitialRenderGate({
     hasMessages: visibleMessages.length > 0,
+    isHandedOverFromNewTopic: Boolean(chatRuntime.pendingUserMessage),
     isLoadingInitial,
     renderGateKey,
   });

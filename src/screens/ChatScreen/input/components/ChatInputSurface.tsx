@@ -203,6 +203,9 @@ export function ChatInputSurface({
       try {
         await onSendPress({ attachments: attachmentSnapshot, text });
       } catch (error) {
+        // The toast is deliberately vague, so without this the failure leaves no
+        // trace at all and there is nothing to go on when a send breaks on device.
+        logger.error('Message send failed', error instanceof Error ? error : { error });
         setDraft(draftSnapshot);
         setAttachments(attachmentSnapshot);
         toast.show({

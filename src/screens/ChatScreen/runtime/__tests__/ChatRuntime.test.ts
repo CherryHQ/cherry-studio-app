@@ -465,6 +465,44 @@ describe('ChatRuntime', () => {
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
+  test('starts another new topic while the previous one is still streaming', async () => {
+    const services = createServices();
+    const createTopicMock = jest
+      .fn()
+      .mockResolvedValueOnce({ ...createTopic({ id: 'topic-1' }), activeNodeId: undefined })
+      .mockResolvedValueOnce({ ...createTopic({ id: 'topic-2' }), activeNodeId: undefined });
+    services.topic.create = createTopicMock;
+    const runtime = createRuntime({ services });
+    const streamGate = createDeferred();
+    mockReadUIMessageStream
+      .mockReturnValueOnce(
+        gatedAsyncIterable([createUiMessage('assistant-1', 'streaming')], streamGate.promise),
+      )
+      .mockReturnValueOnce(asyncIterable([createUiMessage('assistant-1', 'done')]));
+
+    const firstSend = runtime.sendNewTopicText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'first topic',
+    });
+    await waitUntil(() => runtime.getTopicSnapshot(newTopicRuntimeId).status === 'streaming');
+
+    // The first reply is still streaming, which leaves `newTopicHandoffTopicId`
+    // set — the assistant detail screen's "start chat" must still be able to
+    // open a second new topic instead of failing the send.
+    await expect(
+      runtime.sendNewTopicText({
+        selectedModelId: 'provider::model' as UniqueModelId,
+        text: 'second topic',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(createTopicMock).toHaveBeenCalledTimes(2);
+    expect(createTopicMock).toHaveBeenLastCalledWith({ name: 'second topic' });
+
+    streamGate.resolve();
+    await firstSend;
+  });
+
   test('creates a new topic with an assistant and resolves the assistant model', async () => {
     const services = createServices();
     services.assistant.getById = jest.fn(async () =>
@@ -803,6 +841,17 @@ function asyncIterable<T>(items: T[]) {
     for (const item of items) {
       yield item;
     }
+  })();
+}
+
+/** Yields `items`, then stalls until `gate` settles, keeping the turn streaming. */
+function gatedAsyncIterable<T>(items: T[], gate: Promise<void>) {
+  return (async function* () {
+    for (const item of items) {
+      yield item;
+    }
+
+    await gate;
   })();
 }
 

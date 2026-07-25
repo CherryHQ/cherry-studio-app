@@ -6,19 +6,30 @@ import { loggerService } from '@/core/logger/LoggerService';
 // 「reload 后第一次进入才跳」——差异在遮罩揭示相对内容 settle 的时机。`[GATE]` 前缀。
 const gateLog = loggerService.withContext('ChatGate');
 
-type MessageListInitialRenderGateOptions = {
+export type MessageListInitialRenderGateOptions = {
   hasMessages: boolean;
+  /**
+   * True when the list already has something to draw that did not come from the
+   * message query: the user message handed over from a just-created topic. There
+   * `isLoadingInitial` only reflects the brand-new query key — covering the list
+   * would hide the message the user just sent, right when it should stay put and
+   * let the reply stream into the space below it.
+   */
+  isHandedOverFromNewTopic: boolean;
   isLoadingInitial: boolean;
   renderGateKey: string;
 };
 
 export function useMessageListInitialRenderGate({
   hasMessages,
+  isHandedOverFromNewTopic,
   isLoadingInitial,
   renderGateKey,
 }: MessageListInitialRenderGateOptions) {
   const [readyListRenderKey, setReadyListRenderKey] = useState<string | null>(null);
-  const isCoverVisible = isLoadingInitial || (hasMessages && readyListRenderKey !== renderGateKey);
+  const isCoverVisible =
+    !isHandedOverFromNewTopic &&
+    (isLoadingInitial || (hasMessages && readyListRenderKey !== renderGateKey));
 
   const markListLoaded = useCallback(() => {
     const loadedListRenderKey = renderGateKey;

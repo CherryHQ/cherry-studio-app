@@ -161,10 +161,21 @@ export class ChatRuntime {
       return;
     }
 
-    if (this.activeTurns.has(newTopicRuntimeId) || this.newTopicHandoffTopicId) {
+    // The only real conflict is a previous new topic still being reserved — a
+    // window of a few hundred ms. `newTopicHandoffTopicId` stays set from topic
+    // creation until the stream ends and merely mirrors the created topic's
+    // snapshot onto this screen, so treating it as a mutex rejects a legitimate
+    // send: the assistant detail screen's "start chat" lets the user open
+    // another new topic while the previous reply is still streaming.
+    if (this.activeTurns.has(newTopicRuntimeId)) {
+      // This rejection surfaces as a bare "message was not sent" toast, so it
+      // has to leave a trace of its own.
+      logger.warn('Rejected a new-topic send: the previous new topic is still being created');
       throw new Error('A topic is already being created.');
     }
 
+    // Hand the new-topic snapshot slot over to this turn; the previous topic's
+    // stream keeps writing to its own id.
     this.newTopicHandoffTopicId = undefined;
     const abortController = new AbortController();
     const activeTurn: ActiveTurn = { abortController };
