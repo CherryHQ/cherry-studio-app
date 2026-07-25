@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { bottomSheet, isLiquidGlassAvailable, sheetScrimColor } from '@/config/constants';
+import { useScreenCornerRadius } from '@/modules/screenCornerRadius';
 
 import { type BottomSheetCloseReason, BottomSheetContext } from '../hooks/useBottomSheet';
 
@@ -17,6 +18,18 @@ const OPEN_INDEX = 1;
 // passes extra detents above it (e.g. `[0, medium, 'content']` for a drag-to-expand
 // sheet — the sheet opens at `medium` and can be dragged up to `content`).
 const DEFAULT_DETENTS: Detent[] = [0, 'content'];
+
+// The card's top corners touch no screen edge, so there is nothing for them to
+// be concentric with — they are simply the resting radius. Deriving them from
+// anything device-shaped is what made them wander before: off the safe-area
+// inset they jumped 28 -> 48 when an Android user switched from gesture to
+// three-button navigation, dragging the close button and header height with
+// them; off `bottomCornerRadius` a 62pt display would do the same.
+const TOP_CORNER_RADIUS = bottomSheet.cornerRadius;
+
+// Nudge the round close button into the card's rounded top corner so the two
+// curves sit concentric.
+const HEADER_INSET = Math.max(0, TOP_CORNER_RADIUS - bottomSheet.headerSideWidth / 2);
 
 type BottomSheetProps = {
   children: ReactNode;
@@ -63,6 +76,7 @@ export function BottomSheet({
 }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
+  const screenCornerRadius = useScreenCornerRadius();
   const [index, setIndex] = useState(isOpen ? OPEN_INDEX : CLOSED_INDEX);
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const reasonRef = useRef<BottomSheetCloseReason>('dismiss');
@@ -87,27 +101,26 @@ export function BottomSheet({
   }, [isOpen]);
 
   const sheetWidth = Math.max(0, windowWidth - bottomSheet.outerInset * 2);
+  // The card is inset by `outerInset` from the left, right and bottom screen
+  // edges alike (left/right via `sheetWidth`, bottom via the gap rendered below
+  // the card — the sheet host itself sits flush with the screen bottom). That
+  // uniform inset is what makes the corners concentric: subtracting it from the
+  // display's own radius puts both curves on the same center, so the card's
+  // bottom corners stay parallel to the screen's.
+  //
+  // A display that can't name a radius reports 0, and the clamp resolves that
+  // to the resting radius. There is deliberately no approximation in between:
+  // on a square screen — or one whose radius we simply don't know — no value is
+  // more concentric than another, so guessing one only fakes the alignment.
   const bottomCornerRadius = Math.max(
     bottomSheet.cornerRadius,
-    insets.bottom + bottomSheet.outerInset,
-  );
-  const topCornerRadius = Math.max(
-    bottomSheet.cornerRadius,
-    bottomCornerRadius - bottomSheet.outerInset,
+    screenCornerRadius - bottomSheet.outerInset,
   );
   const cornerStyle = {
     borderBottomLeftRadius: bottomCornerRadius,
     borderBottomRightRadius: bottomCornerRadius,
-    borderTopLeftRadius: topCornerRadius,
-    borderTopRightRadius: topCornerRadius,
-  };
-  // Nudge the round close button into the sheet's rounded top corner so the two
-  // curves sit concentric.
-  const headerInset = Math.max(0, topCornerRadius - bottomSheet.headerSideWidth / 2);
-  const headerStyle = {
-    height: Math.max(bottomSheet.headerHeight, headerInset + bottomSheet.headerSideWidth),
-    paddingHorizontal: headerInset,
-    paddingTop: headerInset,
+    borderTopLeftRadius: TOP_CORNER_RADIUS,
+    borderTopRightRadius: TOP_CORNER_RADIUS,
   };
 
   const requestClose = useCallback(
@@ -150,11 +163,16 @@ export function BottomSheet({
 
   const contextValue = useMemo(
     () => ({
-      geometry: { bottomCornerRadius, insets, sheetWidth, topCornerRadius },
+      geometry: {
+        bottomCornerRadius,
+        insets,
+        sheetWidth,
+        topCornerRadius: TOP_CORNER_RADIUS,
+      },
       isClosing,
       requestClose,
     }),
-    [bottomCornerRadius, insets, isClosing, requestClose, sheetWidth, topCornerRadius],
+    [bottomCornerRadius, insets, isClosing, requestClose, sheetWidth],
   );
 
   const closeButton = (
@@ -203,7 +221,7 @@ export function BottomSheet({
 
             <View
               className="flex-row items-center"
-              style={headerStyle}
+              style={styles.header}
               testID={testID ? `${testID}-header` : undefined}
             >
               {isLiquidGlassAvailable ? (
@@ -281,6 +299,11 @@ const styles = StyleSheet.create({
     height: bottomSheet.headerSideWidth,
     overflow: 'hidden',
     width: bottomSheet.headerSideWidth,
+  },
+  header: {
+    height: Math.max(bottomSheet.headerHeight, HEADER_INSET + bottomSheet.headerSideWidth),
+    paddingHorizontal: HEADER_INSET,
+    paddingTop: HEADER_INSET,
   },
   headerSide: { height: bottomSheet.headerSideWidth, width: bottomSheet.headerSideWidth },
   // Pin the wrapper to the true window width so `alignItems: 'center'` centers

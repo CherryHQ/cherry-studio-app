@@ -74,7 +74,7 @@ jest.mock('@/components/nativePrimitives', () => {
 });
 
 jest.mock('@/config/constants', () => ({
-  bottomSheet: { cornerRadius: 28, headerHeight: 60, headerSideWidth: 44, outerInset: 8 },
+  bottomSheet: { cornerRadius: 28, headerHeight: 60, headerSideWidth: 44, outerInset: 4 },
   isLiquidGlassAvailable: true,
   sheetScrimColor: '#00000066',
 }));
@@ -144,48 +144,55 @@ describe('PaintingTemplateRow', () => {
     expect(renderer?.root.findByProps({ testID: 'painting-template-try' })).toBeTruthy();
 
     const surface = renderer?.root.findByProps({ testID: 'painting-template-sheet-surface' });
+    // No native screen radius under jest, so both corner pairs rest at 28 — the
+    // concentric bottom radius is covered in the BottomSheet suite itself.
     expect(StyleSheet.flatten(surface?.props.style)).toMatchObject({
-      borderBottomLeftRadius: 42,
-      borderBottomRightRadius: 42,
-      borderTopLeftRadius: 34,
-      borderTopRightRadius: 34,
+      borderBottomLeftRadius: 28,
+      borderBottomRightRadius: 28,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
       bottom: 0,
       left: 0,
       right: 0,
     });
     const sheet = renderer?.root.findByProps({ testID: 'painting-template-sheet' });
     expect(StyleSheet.flatten(sheet?.props.style)).toMatchObject({
-      borderBottomLeftRadius: 42,
-      borderBottomRightRadius: 42,
-      borderTopLeftRadius: 34,
-      borderTopRightRadius: 34,
+      borderBottomLeftRadius: 28,
+      borderBottomRightRadius: 28,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
       overflow: 'hidden',
-      width: Dimensions.get('window').width - 16,
+      width: Dimensions.get('window').width - 8,
     });
     const bottomGap = renderer?.root.findByProps({ testID: 'painting-template-sheet-bottom-gap' });
-    expect(StyleSheet.flatten(bottomGap?.props.style).height).toBe(8);
+    expect(StyleSheet.flatten(bottomGap?.props.style).height).toBe(4);
 
     const header = renderer?.root.findByProps({ testID: 'painting-template-header' });
     expect(StyleSheet.flatten(header?.props.style)).toMatchObject({
       height: 60,
-      paddingHorizontal: 12,
-      paddingTop: 12,
+      paddingHorizontal: 6,
+      paddingTop: 6,
     });
   });
 
-  test('truncates the prompt and keeps equal outer panel spacing above the safe area', () => {
+  test('truncates the prompt and keeps the button clear of the safe area', () => {
     openSheet();
 
     const prompt = renderer?.root.findByProps({ testID: 'painting-template-prompt' });
     expect(prompt?.props.ellipsizeMode).toBe('tail');
     expect(prompt?.props.numberOfLines).toBe(2);
 
+    // The button now sits below the panel, so the body's own bottom padding is
+    // what lifts it off the home indicator: insets.bottom (34) - outerInset (4).
     const body = renderer?.root.findByProps({ testID: 'painting-template-sheet-body' });
-    expect(StyleSheet.flatten(body?.props.style).paddingBottom).toBe(8);
+    expect(StyleSheet.flatten(body?.props.style).paddingBottom).toBe(30);
 
+    // The panel touches no card edge, so its radius is a flat utility class
+    // rather than anything derived from the card — asserted on className
+    // because uniwind does not resolve classes to styles under jest.
     const panel = renderer?.root.findByProps({ testID: 'painting-template-prompt-panel' });
-    expect(StyleSheet.flatten(panel?.props.style).borderRadius).toBe(34);
-    expect(StyleSheet.flatten(panel?.props.style).paddingBottom).toBe(18);
+    expect(panel?.props.className).toContain('rounded-xl');
+    expect(StyleSheet.flatten(panel?.props.style).borderRadius).toBeUndefined();
   });
 
   test('dismisses with the close button after the sheet settles', () => {

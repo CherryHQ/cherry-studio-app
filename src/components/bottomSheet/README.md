@@ -1,12 +1,32 @@
 # bottomSheet
 
 Shared "floating card" bottom sheet — the single styled frame every sheet in the
-app uses so they share one silhouette: inset from the screen edges, a concentric
-bottom corner radius that curves around the home indicator, a circular close
-button nested into the top-left corner, a centered title, and a liquid-glass (or
-solid) surface. Built on `@swmansion/react-native-bottom-sheet`'s
-`ModalBottomSheet`. Chrome constants live in `src/config/constants.ts`
-(`bottomSheet`, `sheetScrimColor`, `isLiquidGlassAvailable`).
+app uses so they share one silhouette: inset from the screen edges, bottom
+corners concentric with the display's own corners, a circular close button
+nested into the top-left corner, a centered title, and a liquid-glass (or solid)
+surface. Built on `@swmansion/react-native-bottom-sheet`'s `ModalBottomSheet`.
+Chrome constants live in `src/config/constants.ts` (`bottomSheet`,
+`sheetScrimColor`, `isLiquidGlassAvailable`).
+
+## Concentric bottom corners
+
+The card is inset by `bottomSheet.outerInset` from the left, right and bottom
+screen edges alike, so its bottom corners share a center with the display's
+corners at `screenCornerRadius - outerInset` — the two curves stay parallel
+instead of drifting. The screen radius comes from `@/modules/screenCornerRadius`,
+a thin wrapper over `expo-screen-corner-radius` (device-model lookup on iOS, the
+public `WindowInsets.getRoundedCorner` API on Android 12+).
+
+Anything that can't name a radius — web, Android < 31, an iPhone newer than the
+library's model table, a square-cornered display — arrives as `0` and clamps to
+`bottomSheet.cornerRadius`. There is no approximation in between, by design:
+without the display's radius no value is more concentric than another, so
+anything but the resting radius would only fake the alignment.
+
+The top corners touch no screen edge, so they are simply
+`bottomSheet.cornerRadius` on every device — the close button nested into them
+(`headerInset = topCornerRadius - headerSideWidth / 2`) then sits concentric with
+the card, and neither moves when the display or the navigation mode changes.
 
 ## Usage
 
