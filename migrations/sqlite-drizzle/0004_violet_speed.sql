@@ -25,7 +25,7 @@ CREATE TABLE `__new_assistant_mcp_server` (
 	FOREIGN KEY (`mcp_server_id`) REFERENCES `mcp_server`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-INSERT INTO `__new_assistant_mcp_server`("assistant_id", "mcp_server_id", "created_at", "updated_at") SELECT "assistant_id", "mcp_server_id", "created_at", "updated_at" FROM `assistant_mcp_server`;--> statement-breakpoint
+INSERT INTO `__new_assistant_mcp_server`("assistant_id", "mcp_server_id", "created_at", "updated_at") SELECT "assistant_id", "mcp_server_id", "created_at", "updated_at" FROM `assistant_mcp_server` WHERE "mcp_server_id" IN (SELECT "id" FROM `mcp_server`);--> statement-breakpoint
 DROP TABLE `assistant_mcp_server`;--> statement-breakpoint
 ALTER TABLE `__new_assistant_mcp_server` RENAME TO `assistant_mcp_server`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;

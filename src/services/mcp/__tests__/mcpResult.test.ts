@@ -1,4 +1,4 @@
-import { hasMultimodalContent, mcpResultToTextSummary } from '../mcpResult';
+import { hasMultimodalContent, MISSING_RESULT_SUMMARY, mcpResultToTextSummary } from '../mcpResult';
 
 describe('mcpResultToTextSummary', () => {
   it('returns text content verbatim', () => {
@@ -41,6 +41,13 @@ describe('mcpResultToTextSummary', () => {
   it('JSON-stringifies content-less or unknown results', () => {
     expect(mcpResultToTextSummary({ isError: true })).toBe('{"isError":true}');
     expect(mcpResultToTextSummary({ content: [{ type: 'weird' }] })).toBe('{"type":"weird"}');
+  });
+
+  it('says so when there is no result at all', () => {
+    // `JSON.stringify(undefined)` is undefined, and an empty string would read
+    // to the model as a successful empty answer.
+    expect(mcpResultToTextSummary(undefined)).toBe(MISSING_RESULT_SUMMARY);
+    expect(MISSING_RESULT_SUMMARY).not.toBe('');
   });
 });
 

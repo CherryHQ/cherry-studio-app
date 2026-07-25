@@ -1,3 +1,4 @@
+import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
@@ -6,11 +7,9 @@ import type { Database, DbService } from '@/data/db/DbService';
 import { schema } from '@/data/db/schemas';
 import { McpServerService } from '../McpServerService';
 
-jest.mock('uuid', () => ({ v7: () => require('node:crypto').randomUUID() }));
-jest.mock('expo-crypto', () => ({
-  getRandomValues: (array: Uint8Array) => array,
-  randomUUID: () => require('node:crypto').randomUUID(),
-}));
+// Rows are inserted in bulk here, so unlike the fixed-id mocks elsewhere these
+// have to be distinct. `expo-crypto` is already mocked the same way globally.
+jest.mock('uuid', () => ({ v7: mockRandomUUID }));
 
 type MigrationJournal = { entries: { tag: string }[] };
 

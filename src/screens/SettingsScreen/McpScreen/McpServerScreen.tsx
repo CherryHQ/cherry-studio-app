@@ -7,8 +7,10 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
+import { withMcpToolDisabled, withMcpToolEnabled } from '@/ai/tools/mcpSourcePolicy';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { keyboardBottomOffset } from '@/config/constants';
+import { loggerService } from '@/core/logger/LoggerService';
 import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/data/api/schemas/mcpServers';
 import type { McpServer } from '@/data/types/mcpServer';
 import { useMcpServerApiById, useMcpServerMutations } from '@/hooks/mcp/useMcpServers';
@@ -22,6 +24,8 @@ import {
   recordToHeaderRows,
 } from './components/McpHeadersEditor';
 import { McpToolsSection } from './components/McpToolsSection';
+
+const logger = loggerService.withContext('McpServerScreen');
 
 const NEW_SERVER_SENTINEL = 'new';
 
@@ -93,20 +97,24 @@ export function McpServerScreen() {
       }
       toast.show({ label: t('settings.mcp.toast.saved'), variant: 'success' });
       router.back();
-    } catch {
+    } catch (error) {
+      logger.error('Failed to save MCP server', error as Error);
       toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
     }
   }, [createServer, form, router, serverId, t, toast, updateServer]);
 
   const handleToggleTool = useCallback(
-    (toolName: string, enabled: boolean) => {
+    (toolName: string, enabled: boolean, knownToolNames: string[]) => {
       if (!serverId || !server) {
         return;
       }
+      // The switch renders off for wire ids and wildcards too, so turning it
+      // back on has to clear those forms as well — see `withMcpToolEnabled`.
       const nextDisabled = enabled
-        ? server.disabledTools.filter((name) => name !== toolName)
-        : [...new Set([...server.disabledTools, toolName])];
-      void updateServer(serverId, { disabledTools: nextDisabled }).catch(() => {
+        ? withMcpToolEnabled(server, toolName, knownToolNames)
+        : withMcpToolDisabled(server, toolName);
+      void updateServer(serverId, { disabledTools: nextDisabled }).catch((error: unknown) => {
+        logger.error('Failed to toggle MCP tool', error as Error);
         toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
       });
     },
@@ -121,12 +129,13 @@ export function McpServerScreen() {
       await deleteServer(serverId);
       toast.show({ label: t('settings.mcp.toast.deleted'), variant: 'success' });
       router.back();
-    } catch {
-      toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+    } catch (error) {
+      logger.error('Failed to delete MCP server', error as Error);
+      toast.show({ label: t('settings.mcp.toast.deleteFailed'), variant: 'danger' });
     }
   }, [deleteServer, router, serverId, t, toast]);
 
-  const title = isCreating ? t('settings.mcp.addServer') : t('settings.mcp.deleteServer');
+  const title = isCreating ? t('settings.mcp.addServer') : t('settings.mcp.editServer');
   const isBusy = isSaving || isUpdating;
   const saveActions = useMemo<HeaderToolbarAction[]>(
     () => [

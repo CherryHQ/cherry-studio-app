@@ -13,15 +13,16 @@ import { SettingsDialogActionButton } from '../../components/SettingsDialogActio
 
 type McpToolsSectionProps = {
   disabledTools: string[];
-  onToggleTool: (toolName: string, enabled: boolean) => void;
+  /** `knownToolNames` lets the writer re-expand rules wider than one tool. */
+  onToggleTool: (toolName: string, enabled: boolean, knownToolNames: string[]) => void;
   server: McpServer;
 };
 
 export function McpToolsSection({ disabledTools, onToggleTool, server }: McpToolsSectionProps) {
   const { t } = useTranslation();
   const services = useDataServices();
-  // Matches raw names, wire ids and server wildcards alike — `disabledTools`
-  // here is unsaved form state, so it can't go through the server row.
+  // Matches raw names, wire ids and server wildcards alike, so a tool disabled
+  // by any rule form reads as off here.
   const isDisabled = (toolName: string) =>
     disabledTools.some((value) => matchesMcpSourceToolRule(value, server, { name: toolName }));
 
@@ -48,12 +49,18 @@ export function McpToolsSection({ disabledTools, onToggleTool, server }: McpTool
     return (
       <View className="gap-2">
         <Text className="text-danger-foreground text-sm">{t('settings.mcp.tools.loadFailed')}</Text>
+        {/* The reason is the whole point here — an expired token and a typo'd
+            URL are the same generic failure without it. */}
+        <Text className="text-default-foreground text-xs" selectable>
+          {toolsQuery.error instanceof Error ? toolsQuery.error.message : String(toolsQuery.error)}
+        </Text>
         <SettingsDialogActionButton label={t('settings.mcp.tools.retry')} onPress={refetch} />
       </View>
     );
   }
 
   const tools = toolsQuery.data ?? [];
+  const knownToolNames = tools.map((tool) => tool.name);
 
   if (tools.length === 0) {
     return <Text className="text-default-foreground text-sm">{t('settings.mcp.tools.empty')}</Text>;
@@ -75,7 +82,7 @@ export function McpToolsSection({ disabledTools, onToggleTool, server }: McpTool
           </View>
           <Switch
             isSelected={!isDisabled(tool.name)}
-            onSelectedChange={(enabled) => onToggleTool(tool.name, enabled)}
+            onSelectedChange={(enabled) => onToggleTool(tool.name, enabled, knownToolNames)}
           />
         </View>
       ))}

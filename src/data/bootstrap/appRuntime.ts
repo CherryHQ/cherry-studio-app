@@ -28,6 +28,9 @@ export async function runPostReadyTasks(services: DataServices) {
   // added below without its own handling would become an unhandled rejection.
   try {
     await reconcileStalePendingMessages(services);
+    // The chat path reads MCP tools from cache only, and that cache starts cold
+    // on every launch — warm it here so the first message can already use them.
+    await services.mcp.prewarmActiveServers();
   } catch (error) {
     logger.error('Post-ready tasks failed', error as Error);
   }

@@ -2,10 +2,10 @@
  * MCP per-tool source policy, ported from desktop
  * `src/shared/ai/tools/mcpSourcePolicy.ts` (disabled-tools subset).
  *
- * `disabledTools` rows sync across desktop and mobile, so the matching rules
- * must stay identical: an entry may be a raw tool name, a wire id, or a
- * server-wide wildcard. Matching on the raw name alone would silently let a
- * wildcard-disabled tool through on mobile.
+ * An entry may be a raw tool name, a minted tool id, a wire id, or a
+ * server-wide wildcard. Only raw names are written today — on either end — so
+ * the wider matching is forward compatibility with desktop's shared policy,
+ * kept identical here so the two can't drift apart once rows do sync.
  */
 
 import type { McpServer } from '@/data/types/mcpServer';
@@ -41,4 +41,37 @@ export function matchesMcpSourceToolRule(
 
 export function isMcpToolDisabledBySource(server: McpServer, tool: McpPolicyTool): boolean {
   return server.disabledTools.some((value) => matchesMcpSourceToolRule(value, server, tool));
+}
+
+/**
+ * `disabledTools` after switching one tool back on.
+ *
+ * Dropping every rule that matches the tool is not enough, because a rule can
+ * be wider than the tool it was matched by: a server wildcard covers all of
+ * them. Such a rule is re-expanded into explicit entries for the tools it still
+ * has to cover, so enabling one tool under a wildcard doesn't enable the lot.
+ */
+export function withMcpToolEnabled(
+  server: McpServer,
+  toolName: string,
+  knownToolNames: string[],
+): string[] {
+  const next = new Set<string>();
+  for (const value of server.disabledTools) {
+    if (!matchesMcpSourceToolRule(value, server, { name: toolName })) {
+      next.add(value);
+      continue;
+    }
+    for (const other of knownToolNames) {
+      if (other !== toolName && matchesMcpSourceToolRule(value, server, { name: other })) {
+        next.add(other);
+      }
+    }
+  }
+  return [...next];
+}
+
+/** `disabledTools` after switching one tool off. */
+export function withMcpToolDisabled(server: McpServer, toolName: string): string[] {
+  return [...new Set([...server.disabledTools, toolName])];
 }

@@ -22,6 +22,10 @@ beforeAll(() => {
   globalThis.AbortSignal = LegacyAbortSignal as unknown as typeof AbortSignal;
   globalThis.AbortController = LegacyAbortController as unknown as typeof AbortController;
   jest.isolateModules(() => {
+    // The polyfill only acts at import time, so re-evaluating it needs a
+    // require inside the isolated registry — an ESM import would be hoisted
+    // out of the fake-global window this test sets up.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('../abortSignal');
   });
 });

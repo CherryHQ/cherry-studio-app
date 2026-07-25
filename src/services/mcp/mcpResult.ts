@@ -24,6 +24,10 @@ export type McpCallToolResult = {
   isError?: boolean;
 };
 
+/** Stand-in for a call that produced nothing at all, so the model is not told
+ * an empty answer succeeded. */
+export const MISSING_RESULT_SUMMARY = '[MCP tool returned no result]';
+
 /** True if the call produced any image / audio / binary resource. */
 export function hasMultimodalContent(result: McpCallToolResult): boolean {
   return (
@@ -41,8 +45,14 @@ export function hasMultimodalContent(result: McpCallToolResult): boolean {
  * Flatten for the model's view: text verbatim; image/audio/blob →
  * placeholder; text-backed resource → its `text`; unknown → JSON.
  */
-export function mcpResultToTextSummary(result: McpCallToolResult): string {
-  if (!result?.content || !Array.isArray(result.content)) {
+export function mcpResultToTextSummary(result: McpCallToolResult | undefined): string {
+  if (result === undefined || result === null) {
+    // This goes straight into a model-facing text part, and `JSON.stringify`
+    // would hand back `undefined` here. An empty string is worse than useless:
+    // the model reads it as a successful empty answer and reports "no results".
+    return MISSING_RESULT_SUMMARY;
+  }
+  if (!result.content || !Array.isArray(result.content)) {
     return JSON.stringify(result);
   }
 

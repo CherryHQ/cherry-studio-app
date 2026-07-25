@@ -314,7 +314,26 @@ describe('bundled SQLite migrations', () => {
     }
   });
 
-  test('0004 junction rebuild preserves pre-existing assistant_mcp_server rows', () => {
+  test('foreign_keys pragma inside a transaction is ignored', () => {
+    // The property 0004's orphan guard exists for: drizzle runs migrations in a
+    // transaction, and SQLite silently ignores this pragma mid-transaction, so a
+    // table rebuild cannot turn foreign keys off the way its SQL assumes.
+    const database = new DatabaseSync(':memory:');
+
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      database.exec('BEGIN');
+      database.exec('PRAGMA foreign_keys = OFF');
+
+      expect(database.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
+
+      database.exec('COMMIT');
+    } finally {
+      database.close();
+    }
+  });
+
+  test('0004 junction rebuild drops orphaned rows instead of aborting the upgrade', () => {
     const database = new DatabaseSync(':memory:');
 
     try {
@@ -327,8 +346,9 @@ describe('bundled SQLite migrations', () => {
         applyMigrationSql(database, sql);
       }
 
-      // Before 0004 the junction has no mcp_server FK, so rows can reference
-      // servers that only exist on desktop-synced data.
+      // Before 0004 the junction had no mcp_server FK, so a row could reference
+      // an id that never lands in the table 0004 creates — and since that table
+      // is created empty by this same migration, every carried-over row is one.
       database.exec(`
         INSERT INTO assistant (id, name, emoji, settings, order_key, created_at, updated_at)
         VALUES ('assistant-1', 'Assistant', 'x', '{}', 'a0', 1, 1);
@@ -336,21 +356,67 @@ describe('bundled SQLite migrations', () => {
         VALUES ('assistant-1', 'mcp-legacy', 1, 1);
       `);
 
-      for (const { sql } of entries.slice(rebuildIndex)) {
+      expect(() => {
+        applyMigrationsAsDrizzleWould(database, entries.slice(rebuildIndex));
+      }).not.toThrow();
+
+      expect(database.prepare('SELECT * FROM assistant_mcp_server').all()).toEqual([]);
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test.each(
+    readMigrationEntries().map((entry, index) => [index, entry.tag]),
+  )('upgrading from %i (%s) commits in one transaction with foreign keys intact', (resumeIndex) => {
+    // Every install resumes from wherever it last stopped, and drizzle replays
+    // the whole tail inside one transaction with foreign keys on. Looping over
+    // resume points means the next table-rebuild migration is checked here by
+    // construction, instead of only if someone remembers to add a case.
+    const database = new DatabaseSync(':memory:');
+
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      for (const { sql } of entries.slice(0, resumeIndex)) {
         applyMigrationSql(database, sql);
       }
 
-      expect(database.prepare('SELECT * FROM assistant_mcp_server').all()).toEqual([
-        expect.objectContaining({
-          assistant_id: 'assistant-1',
-          mcp_server_id: 'mcp-legacy',
-        }),
-      ]);
+      expect(() => {
+        applyMigrationsAsDrizzleWould(database, entries.slice(resumeIndex));
+      }).not.toThrow();
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally {
       database.close();
     }
   });
 });
+
+/**
+ * Mirrors drizzle's migrator, which wraps every pending migration in one
+ * transaction (`SQLiteSyncDialect.migrate`). Replaying statements bare instead
+ * lets a migration's `PRAGMA foreign_keys=OFF` take effect, which hides exactly
+ * the constraint violations an upgrade would hit on device.
+ */
+function applyMigrationsAsDrizzleWould(database: DatabaseSync, entries: { sql: string }[]): void {
+  database.exec('BEGIN');
+  try {
+    for (const { sql } of entries) {
+      applyMigrationSql(database, sql);
+    }
+    database.exec('COMMIT');
+  } catch (error) {
+    try {
+      database.exec('ROLLBACK');
+    } catch {
+      // Some errors roll back automatically, and then ROLLBACK itself throws
+      // "no transaction is active" — which would replace the migration failure
+      // this test exists to report.
+    }
+    throw error;
+  }
+}
 
 function applyMigrationSql(database: DatabaseSync, migrationSql: string) {
   for (const statement of migrationSql.split('--> statement-breakpoint')) {

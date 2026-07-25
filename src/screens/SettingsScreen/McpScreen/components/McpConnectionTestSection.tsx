@@ -27,7 +27,7 @@ export function McpConnectionTestSection({ getConfig }: McpConnectionTestSection
   const runTest = useCallback(async () => {
     const config = getConfig();
     if (!config) {
-      setState({ message: t('settings.mcp.fields.baseUrl'), status: 'error' });
+      setState({ message: t('settings.mcp.fields.baseUrlRequired'), status: 'error' });
       return;
     }
 

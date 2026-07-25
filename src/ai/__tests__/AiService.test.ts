@@ -3,6 +3,7 @@ import {
   generateImage as aiCoreGenerateImage,
 } from '@cherrystudio/ai-core';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import type { ToolSet } from 'ai';
 import { AiService, type AiServiceDependencies } from '@/ai/AiService';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/data/types/model';
@@ -523,9 +524,110 @@ describe('AiService web search plugin wiring', () => {
   });
 });
 
+describe('AiService MCP tool injection', () => {
+  const mcpTools = { mcp__serverone__search: { description: 'search' } } as unknown as ToolSet;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  function streamWith(services: AiServiceDependencies, assistant: Assistant) {
+    return new AiService(services).streamText({
+      assistantId: assistant.id,
+      chatId: 'topic-1',
+      messages: [],
+      requestOptions: { signal: new AbortController().signal },
+      trigger: 'submit-message',
+    });
+  }
+
+  it('injects MCP tools with a bounded stopWhen for function-calling models', async () => {
+    const model = createModel('gpt-4o-mini', {
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL],
+    });
+    const assistant = createAssistant(model.id);
+    assistant.settings.enableMaxToolCalls = true;
+    assistant.settings.maxToolCalls = 3;
+
+    await streamWith(createServices({ assistant, mcpTools, model }), assistant);
+
+    const params = mockAgentConstructor.mock.calls.at(-1)?.[0];
+    expect(params.tools).toEqual(
+      expect.objectContaining({ mcp__serverone__search: expect.any(Object) }),
+    );
+    expect(params.options.stopWhen({ steps: Array.from({ length: 2 }, () => ({})) })).toBe(false);
+    expect(params.options.stopWhen({ steps: Array.from({ length: 3 }, () => ({})) })).toBe(true);
+  });
+
+  it('does not even ask for MCP tools when the model cannot call functions', async () => {
+    const model = createModel('gpt-4o-mini', { capabilities: [] });
+    const assistant = createAssistant(model.id);
+    const services = createServices({ assistant, mcpTools, model });
+
+    await streamWith(services, assistant);
+
+    expect(services.mcp.getToolSetForAssistant).not.toHaveBeenCalled();
+    expect(mockAgentConstructor.mock.calls.at(-1)?.[0].tools).toBeUndefined();
+  });
+
+  it('does not inject MCP tools on the generateText path', async () => {
+    const model = createModel('gpt-4o-mini', {
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL],
+    });
+    const assistant = createAssistant(model.id);
+    const services = createServices({ assistant, mcpTools, model });
+
+    await new AiService(services).generateText({
+      assistantId: assistant.id,
+      messages: [],
+      requestOptions: { signal: new AbortController().signal },
+    });
+
+    expect(services.mcp.getToolSetForAssistant).not.toHaveBeenCalled();
+  });
+
+  it('merges MCP tools with the external web-search tool', async () => {
+    const model = createModel('gpt-4o-mini', {
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL, MODEL_CAPABILITY.WEB_SEARCH],
+    });
+    const assistant = createAssistant(model.id);
+    assistant.settings.enableWebSearch = true;
+
+    await streamWith(
+      createServices({ assistant, mcpTools, model, webSearchProviderId: 'tavily' }),
+      assistant,
+    );
+
+    expect(mockAgentConstructor.mock.calls.at(-1)?.[0].tools).toEqual(
+      expect.objectContaining({
+        mcp__serverone__search: expect.any(Object),
+        web_search: expect.any(Object),
+      }),
+    );
+  });
+
+  it('omits tools entirely when the MCP cache has nothing to offer', async () => {
+    // A cold cache is the normal first-message state. `tools: {}` would still
+    // switch on stopWhen and be sent to the provider, so it has to be undefined.
+    const model = createModel('gpt-4o-mini', {
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL],
+    });
+    const assistant = createAssistant(model.id);
+    const services = createServices({ assistant, model });
+
+    await streamWith(services, assistant);
+
+    expect(services.mcp.getToolSetForAssistant).toHaveBeenCalledWith(assistant);
+    const params = mockAgentConstructor.mock.calls.at(-1)?.[0];
+    expect(params.tools).toBeUndefined();
+    expect(params.options.stopWhen).toBeUndefined();
+  });
+});
+
 function createServices({
   assistant,
   defaultModelId,
+  mcpTools,
   model,
   models,
   provider = createProvider(),
@@ -537,6 +639,7 @@ function createServices({
 }: {
   assistant?: Assistant;
   defaultModelId?: UniqueModelId | null;
+  mcpTools?: ToolSet;
   model?: Model;
   models?: Model[];
   provider?: Provider;
@@ -557,7 +660,7 @@ function createServices({
       resolveUri: jest.fn(async () => undefined),
     },
     mcp: {
-      getToolSetForAssistant: jest.fn(async () => undefined),
+      getToolSetForAssistant: jest.fn(async () => mcpTools),
     },
     model: {
       getById: jest.fn(async (id: UniqueModelId) => modelsById.get(id)),

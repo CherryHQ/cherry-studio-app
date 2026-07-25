@@ -59,6 +59,11 @@ export function useMcpServerMutations() {
         await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.detail(serverId) });
         await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.tools(serverId) });
       }
+
+      // The chat path only reads cached tools, and the cache was just cleared
+      // (or, for a brand-new server, never filled). Without this the first
+      // message after saving silently has no tools from it.
+      await services.mcp.prewarmActiveServers();
     },
     [queryClient, services],
   );
