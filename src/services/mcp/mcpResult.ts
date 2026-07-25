@@ -1,0 +1,79 @@
+/**
+ * MCP tool-result formatters, ported from desktop
+ * `src/main/ai/tools/adapters/aiSdk/mcp/utils.ts`.
+ *
+ * Types are structural (not imported from the MCP SDK) so the formatter stays
+ * tolerant of protocol additions.
+ */
+
+export type McpResultContentItem = {
+  data?: string;
+  mimeType?: string;
+  resource?: {
+    blob?: string;
+    mimeType?: string;
+    text?: string;
+    uri?: string;
+  };
+  text?: string;
+  type: string;
+};
+
+export type McpCallToolResult = {
+  content?: McpResultContentItem[];
+  isError?: boolean;
+};
+
+/** True if the call produced any image / audio / binary resource. */
+export function hasMultimodalContent(result: McpCallToolResult): boolean {
+  return (
+    Array.isArray(result?.content) &&
+    result.content.some(
+      (item) =>
+        item.type === 'image' ||
+        item.type === 'audio' ||
+        (item.type === 'resource' && !!item.resource?.blob),
+    )
+  );
+}
+
+/**
+ * Flatten for the model's view: text verbatim; image/audio/blob →
+ * placeholder; text-backed resource → its `text`; unknown → JSON.
+ */
+export function mcpResultToTextSummary(result: McpCallToolResult): string {
+  if (!result?.content || !Array.isArray(result.content)) {
+    return JSON.stringify(result);
+  }
+
+  const parts: string[] = [];
+  for (const item of result.content) {
+    switch (item.type) {
+      case 'text':
+        parts.push(item.text || '');
+        break;
+      case 'image':
+        parts.push(`[Image: ${item.mimeType || 'image/png'}, delivered to user]`);
+        break;
+      case 'audio':
+        parts.push(`[Audio: ${item.mimeType || 'audio/mp3'}, delivered to user]`);
+        break;
+      case 'resource':
+        if (item.resource?.blob) {
+          parts.push(
+            `[Resource: ${item.resource.mimeType || 'application/octet-stream'}, uri=${
+              item.resource.uri || 'unknown'
+            }, delivered to user]`,
+          );
+        } else {
+          parts.push(item.resource?.text || JSON.stringify(item));
+        }
+        break;
+      default:
+        parts.push(JSON.stringify(item));
+        break;
+    }
+  }
+
+  return parts.join('\n');
+}

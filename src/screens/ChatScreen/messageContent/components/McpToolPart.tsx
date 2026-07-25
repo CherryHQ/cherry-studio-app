@@ -4,6 +4,7 @@ import { WrenchIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Text, View } from 'react-native';
 
+import { parseFunctionCallToolName } from '@/ai/tools/mcpToolName';
 import type { CherryMessagePart } from '@/data/types/message';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
@@ -197,7 +198,10 @@ function SectionTitle({ title }: { title: string }) {
 }
 
 export function isMcpToolPart(part: ToolMessagePart) {
-  return getCherryToolMetadata(part)?.type === 'mcp';
+  return (
+    getCherryToolMetadata(part)?.type === 'mcp' ||
+    parseFunctionCallToolName(getToolName(part)) !== null
+  );
 }
 
 function getMcpToolTitle(
@@ -205,8 +209,14 @@ function getMcpToolTitle(
   toolName: string,
   toolMetadata: McpToolMetadata | undefined,
 ) {
+  // Metadata-less fallback: recover `server: tool` from the minted
+  // `mcp__{server}__{tool}` key (mirrors desktop toolResponse.ts).
+  const parsed = parseFunctionCallToolName(toolName);
+
   const serverName = toolMetadata?.serverName?.trim();
-  if (serverName) return `${serverName}: ${toolName}`;
+  if (serverName) return `${serverName}: ${parsed?.toolPart ?? toolName}`;
+
+  if (parsed) return `${parsed.serverPart}: ${parsed.toolPart}`;
 
   const title = part.title?.trim();
   if (title) return title;

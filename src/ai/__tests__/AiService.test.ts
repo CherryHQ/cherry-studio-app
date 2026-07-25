@@ -556,6 +556,9 @@ function createServices({
     fileEntry: {
       resolveUri: jest.fn(async () => undefined),
     },
+    mcp: {
+      getToolSetForAssistant: jest.fn(async () => undefined),
+    },
     model: {
       getById: jest.fn(async (id: UniqueModelId) => modelsById.get(id)),
     },

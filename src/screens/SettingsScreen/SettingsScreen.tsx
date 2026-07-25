@@ -6,6 +6,7 @@ import {
   EarthIcon,
   GlobeIcon,
   InfoIcon,
+  PlugIcon,
   SparklesIcon,
   SunIcon,
 } from 'lucide-uniwind/png';
@@ -96,6 +97,11 @@ export default function SettingsScreen() {
                 icon: EarthIcon,
                 title: t('settings.items.webSearch'),
                 onPress: () => router.push('/settings/websearch'),
+              },
+              {
+                icon: PlugIcon,
+                title: t('settings.items.mcp'),
+                onPress: () => router.push('/settings/mcp'),
               },
             ]}
           />

@@ -1,4 +1,5 @@
 import '../styles/global.css';
+import '@/polyfills/abortSignal';
 import '@/polyfills/blob';
 
 import { BottomSheetProvider } from '@swmansion/react-native-bottom-sheet';

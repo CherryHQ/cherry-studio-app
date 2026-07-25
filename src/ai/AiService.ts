@@ -28,6 +28,7 @@ import type { Assistant } from '@/data/types/assistant';
 import type { Model, UniqueModelId } from '@/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
+import type { McpService } from '@/services/mcp/McpService';
 import type { WebSearchService } from '@/services/webSearch/WebSearchService';
 
 import { createWebSearchTool, WEB_SEARCH_TOOL_NAME } from './createWebSearchTool';
@@ -109,6 +110,7 @@ export interface AiImageResult {
 export interface AiServiceDependencies {
   assistant: AssistantService;
   fileEntry: Pick<FileEntryService, 'resolveUri'>;
+  mcp: Pick<McpService, 'getToolSetForAssistant'>;
   model: ModelService;
   preference: PreferenceService;
   provider: ProviderService;
@@ -420,12 +422,18 @@ export class AiService {
       streamOutput: capabilities?.streamOutput ?? true,
       webSearchPluginConfig: capabilities?.webSearchPluginConfig,
     });
-    const tools =
+    const mcpTools =
+      buildOptions.shouldIncludeExternalTools && assistant && isFunctionCallingModel(model)
+        ? await this.services.mcp.getToolSetForAssistant(assistant)
+        : undefined;
+    const webSearchTools =
       shouldUseExternalWebSearch && assistant?.settings.enableWebSearch
         ? ({
             [WEB_SEARCH_TOOL_NAME]: createWebSearchTool(this.services.webSearch),
           } satisfies ToolSet)
         : undefined;
+    const mergedTools: ToolSet = { ...mcpTools, ...webSearchTools };
+    const tools = Object.keys(mergedTools).length > 0 ? mergedTools : undefined;
     const system = assistant?.prompt
       ? await replacePromptVariables(assistant.prompt, model.name, this.services.preference)
       : undefined;

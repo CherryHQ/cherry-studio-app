@@ -21,6 +21,7 @@ import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assista
 import type { UniqueModelId } from '@/data/types/model';
 import type { Tag } from '@/data/types/tag';
 
+import type { McpServerService } from './McpServerService';
 import type { ModelService } from './ModelService';
 import type { PinService } from './PinService';
 import type { TagService } from './TagService';
@@ -68,6 +69,7 @@ export class AssistantService {
     private readonly preferenceService: PreferenceService,
     private readonly tagService: TagService,
     private readonly pinService: PinService,
+    private readonly mcpServerService: McpServerService,
   ) {}
 
   private get db() {
@@ -177,7 +179,7 @@ export class AssistantService {
 
     const { row, tags } = await this.dbService.withWriteTx(async (tx) => {
       const modelId = await this.resolveCreateModelId(tx, dto.modelId);
-      const { tagIds, ...columnDto } = dto;
+      const { mcpServerIds, tagIds, ...columnDto } = dto;
       const inserted = (await insertWithOrderKey(
         tx,
         assistantTable,
@@ -194,6 +196,10 @@ export class AssistantService {
         await this.tagService.syncEntityTagsTx(tx, 'assistant', inserted.id, tagIds);
       }
 
+      if (mcpServerIds !== undefined) {
+        await this.mcpServerService.syncAssistantServersTx(tx, inserted.id, mcpServerIds);
+      }
+
       const tagMap = await this.tagService.getTagsByEntitiesTx(tx, 'assistant', [inserted.id]);
       return {
         row: inserted,
@@ -203,7 +209,12 @@ export class AssistantService {
 
     const modelName = await this.getModelName(row.modelId);
 
-    return rowToAssistant(row, createEmptyRelations(), tags, modelName);
+    return rowToAssistant(
+      row,
+      { knowledgeBaseIds: [], mcpServerIds: [...new Set(dto.mcpServerIds ?? [])] },
+      tags,
+      modelName,
+    );
   }
 
   async update(id: string, dto: UpdateAssistantDto): Promise<Assistant> {
@@ -213,7 +224,7 @@ export class AssistantService {
       this.validateName(dto.name);
     }
 
-    const { settings: settingsPatch, tagIds, ...columnFields } = dto;
+    const { mcpServerIds, settings: settingsPatch, tagIds, ...columnFields } = dto;
     const updates = Object.fromEntries(
       Object.entries(columnFields).filter(([, value]) => value !== undefined),
     ) as Partial<typeof assistantTable.$inferInsert>;
@@ -224,8 +235,9 @@ export class AssistantService {
 
     const hasColumnUpdates = Object.keys(updates).length > 0;
     const hasTagUpdates = tagIds !== undefined;
+    const hasMcpUpdates = mcpServerIds !== undefined;
 
-    if (!hasColumnUpdates && !hasTagUpdates) {
+    if (!hasColumnUpdates && !hasTagUpdates && !hasMcpUpdates) {
       return current;
     }
 
@@ -262,6 +274,10 @@ export class AssistantService {
         await this.tagService.syncEntityTagsTx(tx, 'assistant', id, tagIds);
       }
 
+      if (hasMcpUpdates) {
+        await this.mcpServerService.syncAssistantServersTx(tx, id, mcpServerIds);
+      }
+
       const nextTags = hasTagUpdates
         ? ((await this.tagService.getTagsByEntitiesTx(tx, 'assistant', [id])).get(id) ?? [])
         : current.tags;
@@ -273,7 +289,15 @@ export class AssistantService {
       return { modelName: nextModelName, row: next, tags: nextTags };
     });
 
-    return rowToAssistant(row, current, tags, modelName);
+    return rowToAssistant(
+      row,
+      {
+        knowledgeBaseIds: current.knowledgeBaseIds,
+        mcpServerIds: hasMcpUpdates ? [...new Set(mcpServerIds)] : current.mcpServerIds,
+      },
+      tags,
+      modelName,
+    );
   }
 
   async delete(id: string): Promise<void> {

@@ -4,6 +4,7 @@ import { assistantKnowledgeBaseTable, assistantMcpServerTable } from './assistan
 import { fileEntryTable } from './file';
 import { chatMessageFileRefTable, paintingFileRefTable } from './fileRelations';
 import { groupTable } from './group';
+import { mcpServerTable } from './mcpServer';
 import { messageTable } from './message';
 import { paintingTable } from './painting';
 import { pinTable } from './pin';
@@ -39,6 +40,8 @@ export type {
 export { chatMessageFileRefTable, paintingFileRefTable } from './fileRelations';
 export type { GroupRow, InsertGroupRow } from './group';
 export { groupTable } from './group';
+export type { InsertMcpServerRow, McpServerRow } from './mcpServer';
+export { mcpServerTable } from './mcpServer';
 export type { InsertMessageRow, MessageRow } from './message';
 export { MESSAGE_FTS_STATEMENTS, messageTable } from './message';
 export type { InsertPaintingRow, PaintingRow } from './painting';
@@ -71,6 +74,7 @@ export const schema = {
   chatMessageFileRefTable,
   fileEntryTable,
   groupTable,
+  mcpServerTable,
   messageTable,
   paintingFileRefTable,
   paintingTable,

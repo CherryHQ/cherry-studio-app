@@ -45,6 +45,12 @@ describe('bundled SQLite migrations', () => {
       const modelColumns = database.prepare("PRAGMA table_info('user_model')").all() as {
         name: string;
       }[];
+      const mcpServerColumns = database.prepare("PRAGMA table_info('mcp_server')").all() as {
+        name: string;
+      }[];
+      const mcpServerIndexes = database.prepare("PRAGMA index_list('mcp_server')").all() as {
+        name: string;
+      }[];
       const messageIndexes = database.prepare("PRAGMA index_list('message')").all() as {
         name: string;
         unique: number;
@@ -120,6 +126,22 @@ describe('bundled SQLite migrations', () => {
         'created_at',
         'updated_at',
       ]);
+      expect(mcpServerColumns.map((column) => column.name)).toEqual([
+        'id',
+        'name',
+        'description',
+        'base_url',
+        'headers',
+        'timeout',
+        'disabled_tools',
+        'disabled_auto_approve_tools',
+        'is_active',
+        'created_at',
+        'updated_at',
+      ]);
+      expect(mcpServerIndexes.map((index) => index.name)).toEqual(
+        expect.arrayContaining(['mcp_server_is_active_idx', 'mcp_server_name_idx']),
+      );
       expect(messageIndexes.map((index) => index.name)).not.toContain('message_trace_id_idx');
       expect(messageIndexes).toEqual(
         expect.arrayContaining([
@@ -183,6 +205,13 @@ describe('bundled SQLite migrations', () => {
       expect(assistantMcpServerFks).toContainEqual(
         expect.objectContaining({ from: 'assistant_id', on_delete: 'CASCADE', table: 'assistant' }),
       );
+      expect(assistantMcpServerFks).toContainEqual(
+        expect.objectContaining({
+          from: 'mcp_server_id',
+          on_delete: 'CASCADE',
+          table: 'mcp_server',
+        }),
+      );
       expect(messageFks).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ from: 'parent_id', on_delete: 'CASCADE', table: 'message' }),
@@ -223,10 +252,25 @@ describe('bundled SQLite migrations', () => {
           'assistant_mcp_server',
           'chat_message_file_ref',
           'file_entry',
+          'mcp_server',
           'painting',
           'painting_file_ref',
         ]),
       );
+
+      database.exec(`
+        INSERT INTO assistant (id, name, emoji, settings, order_key, created_at, updated_at)
+        VALUES ('assistant-mcp', 'Assistant', 'x', '{}', 'a0', 1, 1);
+        INSERT INTO mcp_server (id, name, base_url, created_at, updated_at)
+        VALUES ('mcp-1', 'Server', 'https://example.com/mcp', 1, 1);
+        INSERT INTO assistant_mcp_server (assistant_id, mcp_server_id, created_at, updated_at)
+        VALUES ('assistant-mcp', 'mcp-1', 1, 1);
+      `);
+      database.exec("DELETE FROM mcp_server WHERE id = 'mcp-1'");
+      expect(database.prepare('SELECT count(*) AS count FROM assistant_mcp_server').get()).toEqual({
+        count: 0,
+      });
+      database.exec("DELETE FROM assistant WHERE id = 'assistant-mcp'");
 
       database.exec(`
         INSERT INTO painting (id, provider_id, model_id, prompt, order_key, created_at, updated_at)
@@ -269,7 +313,52 @@ describe('bundled SQLite migrations', () => {
       database.close();
     }
   });
+
+  test('0004 junction rebuild preserves pre-existing assistant_mcp_server rows', () => {
+    const database = new DatabaseSync(':memory:');
+
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      const rebuildIndex = entries.findIndex(({ tag }) => tag === '0004_violet_speed');
+      expect(rebuildIndex).toBeGreaterThan(0);
+
+      for (const { sql } of entries.slice(0, rebuildIndex)) {
+        applyMigrationSql(database, sql);
+      }
+
+      // Before 0004 the junction has no mcp_server FK, so rows can reference
+      // servers that only exist on desktop-synced data.
+      database.exec(`
+        INSERT INTO assistant (id, name, emoji, settings, order_key, created_at, updated_at)
+        VALUES ('assistant-1', 'Assistant', 'x', '{}', 'a0', 1, 1);
+        INSERT INTO assistant_mcp_server (assistant_id, mcp_server_id, created_at, updated_at)
+        VALUES ('assistant-1', 'mcp-legacy', 1, 1);
+      `);
+
+      for (const { sql } of entries.slice(rebuildIndex)) {
+        applyMigrationSql(database, sql);
+      }
+
+      expect(database.prepare('SELECT * FROM assistant_mcp_server').all()).toEqual([
+        expect.objectContaining({
+          assistant_id: 'assistant-1',
+          mcp_server_id: 'mcp-legacy',
+        }),
+      ]);
+    } finally {
+      database.close();
+    }
+  });
 });
+
+function applyMigrationSql(database: DatabaseSync, migrationSql: string) {
+  for (const statement of migrationSql.split('--> statement-breakpoint')) {
+    if (statement.trim()) {
+      database.exec(statement);
+    }
+  }
+}
 
 function getSchemaSql(database: DatabaseSync, type: 'index' | 'table', name: string): string {
   const row = database
@@ -288,10 +377,17 @@ function getForeignKeys(database: DatabaseSync, table: string) {
 }
 
 function readMigrationSqlFiles(): string[] {
+  return readMigrationEntries().map(({ sql }) => sql);
+}
+
+function readMigrationEntries(): { sql: string; tag: string }[] {
   const migrationDirectory = `${process.cwd()}/migrations/sqlite-drizzle`;
   const journal = JSON.parse(
     readFileSync(`${migrationDirectory}/meta/_journal.json`, 'utf8'),
   ) as MigrationJournal;
 
-  return journal.entries.map(({ tag }) => readFileSync(`${migrationDirectory}/${tag}.sql`, 'utf8'));
+  return journal.entries.map(({ tag }) => ({
+    sql: readFileSync(`${migrationDirectory}/${tag}.sql`, 'utf8'),
+    tag,
+  }));
 }
