@@ -49,6 +49,7 @@ export function SlotText({
   colorFadeDurationMs,
   containerStyle,
   durationMs,
+  ellipsizeMode,
   exitOffsetMs,
   maxFontSizeMultiplier,
   maxGraphemes,
@@ -59,6 +60,7 @@ export function SlotText({
   textClassName,
   textStyle,
 }: SlotTextProps) {
+  const resolvedEllipsizeMode = ellipsizeMode ?? 'clip';
   const reducedMotion = useReducedMotion();
   const resolved = resolveSlotTextOptions({
     bounce,
@@ -174,6 +176,7 @@ export function SlotText({
           accessible={false}
           allowFontScaling={allowFontScaling}
           className={textClassName}
+          ellipsizeMode={resolvedEllipsizeMode}
           maxFontSizeMultiplier={maxFontSizeMultiplier}
           numberOfLines={1}
           style={textStyle}
@@ -230,6 +233,7 @@ export function SlotText({
               allowFontScaling={allowFontScaling}
               currentSegment={currentSegment}
               currentWidth={currentMetrics?.width ?? 0}
+              ellipsizeMode={resolvedEllipsizeMode}
               entryPhaseStartMs={transitionPhaseTiming.entryPhaseStartMs}
               exitPhaseDurationMs={transitionPhaseTiming.exitPhaseDurationMs}
               height={height}
@@ -252,6 +256,7 @@ export function SlotText({
           accessible={false}
           allowFontScaling={allowFontScaling}
           className={textClassName}
+          ellipsizeMode={resolvedEllipsizeMode}
           maxFontSizeMultiplier={maxFontSizeMultiplier}
           numberOfLines={1}
           style={textStyle}
@@ -272,6 +277,7 @@ export function SlotText({
             accessible={false}
             allowFontScaling={allowFontScaling}
             className={textClassName}
+            ellipsizeMode={resolvedEllipsizeMode}
             key={segment}
             maxFontSizeMultiplier={maxFontSizeMultiplier}
             numberOfLines={1}
