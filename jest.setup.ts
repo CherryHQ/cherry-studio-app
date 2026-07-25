@@ -25,6 +25,11 @@ jest.mock('expo-glass-effect', () => ({
   isLiquidGlassAvailable: () => false,
 }));
 
+// expo-screen-corner-radius resolves its native module at import time, so any
+// suite reaching BottomSheet throws without this. `null` is the library's own
+// "display radius unknown" answer, which every caller already handles.
+jest.mock('expo-screen-corner-radius', () => ({ getCornerRadiusSync: () => null }));
+
 // Callstack bottom tabs is a Fabric native view and is unavailable in Jest.
 // Keep its layout context present so tab-owned screens can render normally.
 jest.mock('react-native-bottom-tabs', () => {

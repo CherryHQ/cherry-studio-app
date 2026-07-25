@@ -30,13 +30,19 @@ jest.mock('lucide-uniwind/png', () => {
 });
 
 jest.mock('@/config/constants', () => ({
-  bottomSheet: { cornerRadius: 28, headerHeight: 60, headerSideWidth: 44, outerInset: 8 },
+  bottomSheet: { cornerRadius: 28, headerHeight: 60, headerSideWidth: 44, outerInset: 4 },
   isLiquidGlassAvailable: false,
   sheetScrimColor: '#00000066',
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
+}));
+
+let mockScreenCornerRadius = 0;
+
+jest.mock('@/modules/screenCornerRadius', () => ({
+  useScreenCornerRadius: () => mockScreenCornerRadius,
 }));
 
 function BodyCloseButton({ reason }: { reason?: string }) {
@@ -54,6 +60,7 @@ describe('BottomSheet', () => {
 
   beforeEach(() => {
     mockBottomSheetProps = {};
+    mockScreenCornerRadius = 0;
   });
 
   afterEach(() => {
@@ -151,5 +158,42 @@ describe('BottomSheet', () => {
     act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(0));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledWith('use');
+  });
+
+  // The card is inset 4pt from the left, right and bottom screen edges, so it is
+  // concentric with the display at `screenCornerRadius - 4`.
+  test.each([
+    { expected: 51, label: 'a 55pt display (iPhone 15 / 16)', screenCornerRadius: 55 },
+    { expected: 58, label: 'a 62pt display (iPhone 16 Pro)', screenCornerRadius: 62 },
+    {
+      expected: 28,
+      label: 'a squarer display, clamped to the resting radius',
+      screenCornerRadius: 30,
+    },
+    {
+      expected: 28,
+      label: 'a display that reports no radius, resting rather than guessing',
+      screenCornerRadius: 0,
+    },
+  ])('rounds the bottom corners to $expected on $label', ({ expected, screenCornerRadius }) => {
+    mockScreenCornerRadius = screenCornerRadius;
+    act(() => {
+      renderer = create(
+        <BottomSheet onClose={jest.fn()} testID="test-sheet">
+          <Text>body</Text>
+        </BottomSheet>,
+      );
+    });
+
+    expect(renderer?.root.findByProps({ testID: 'test-sheet-sheet' }).props.style).toContainEqual(
+      expect.objectContaining({
+        borderBottomLeftRadius: expected,
+        borderBottomRightRadius: expected,
+        // The top corners touch no screen edge, so they stay at the resting
+        // radius no matter how round the display is.
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+      }),
+    );
   });
 });

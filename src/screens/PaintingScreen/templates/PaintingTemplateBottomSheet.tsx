@@ -72,14 +72,19 @@ function PaintingTemplateSheetBody({ template }: { template: PaintingTemplate })
     0,
     Math.min(windowWidth * 0.5, geometry.sheetWidth - SHEET_CONTENT_INSET * 2, 220),
   );
-  const promptPanelBottomPadding = Math.max(
+  // The button is the last thing in the card, so this padding is what keeps it
+  // clear of the home indicator: `insets.bottom` measured from the screen's
+  // bottom, minus the gap the card already leaves there.
+  const bodyBottomPadding = Math.max(
     SHEET_CONTENT_INSET,
-    geometry.insets.bottom - bottomSheet.outerInset - SHEET_CONTENT_INSET,
+    geometry.insets.bottom - bottomSheet.outerInset,
   );
-  const promptPanelRadius = geometry.bottomCornerRadius - SHEET_CONTENT_INSET;
 
   return (
-    <View style={styles.bodyContent} testID="painting-template-sheet-body">
+    <View
+      style={[styles.bodyContent, { paddingBottom: bodyBottomPadding }]}
+      testID="painting-template-sheet-body"
+    >
       <View style={[styles.preview, { height: (previewWidth * 4) / 3, width: previewWidth }]}>
         <Image
           accessibilityLabel={template.title}
@@ -92,12 +97,12 @@ function PaintingTemplateSheetBody({ template }: { template: PaintingTemplate })
         />
       </View>
 
+      {/* The panel floats between the preview and the button, touching no card
+          edge, so it has nothing to be concentric with and takes a flat radius
+          on all four corners rather than tracking the card's. */}
       <View
-        className="w-full gap-4 bg-surface-secondary px-4 pt-4"
-        style={[
-          styles.promptPanel,
-          { borderRadius: promptPanelRadius, paddingBottom: promptPanelBottomPadding },
-        ]}
+        className="w-full rounded-xl bg-surface-secondary p-4"
+        style={styles.promptPanel}
         testID="painting-template-prompt-panel"
       >
         <Text
@@ -109,19 +114,24 @@ function PaintingTemplateSheetBody({ template }: { template: PaintingTemplate })
         >
           {template.prompt}
         </Text>
-        <Button
-          accessibilityLabel={t('painting.templates.try')}
-          className="w-full rounded-full"
-          isDisabled={isClosing}
-          onPress={() => requestClose('use')}
-          size="sm"
-          testID="painting-template-try"
-        >
-          <Button.Label className="font-semibold text-base">
-            {t('painting.templates.try')}
-          </Button.Label>
-        </Button>
       </View>
+
+      {/* Stretch-minus-margin rather than `w-full`: the margin has to come off
+          the width, and `w-full` would resolve to the body's full content box
+          and overflow by exactly the margin. The 16 matches the panel's own
+          padding, so the button's edges line up with the prompt text above it. */}
+      <Button
+        accessibilityLabel={t('painting.templates.try')}
+        className="mx-4 self-stretch rounded-full"
+        isDisabled={isClosing}
+        onPress={() => requestClose('use')}
+        size="sm"
+        testID="painting-template-try"
+      >
+        <Button.Label className="font-semibold text-base">
+          {t('painting.templates.try')}
+        </Button.Label>
+      </Button>
     </View>
   );
 }
@@ -130,7 +140,6 @@ const styles = StyleSheet.create({
   bodyContent: {
     alignItems: 'center',
     gap: 24,
-    paddingBottom: SHEET_CONTENT_INSET,
     paddingHorizontal: SHEET_CONTENT_INSET,
     paddingTop: 12,
   },

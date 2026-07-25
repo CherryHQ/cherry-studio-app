@@ -91,7 +91,7 @@ jest.mock('@/components/SlotText', () => {
 });
 
 jest.mock('@/config/constants', () => ({
-  bottomSheet: { cornerRadius: 28, headerHeight: 60, headerSideWidth: 44, outerInset: 8 },
+  bottomSheet: { cornerRadius: 28, headerHeight: 60, headerSideWidth: 44, outerInset: 4 },
   isLiquidGlassAvailable: false,
   sheetScrimColor: '#00000066',
 }));
@@ -163,17 +163,17 @@ describe('PaintingSettingsBottomSheet', () => {
       StyleSheet.flatten(
         renderer.root.findByProps({ testID: 'painting-settings-sheet' }).props.style,
       ),
-    ).toMatchObject({ borderBottomLeftRadius: 42, borderTopLeftRadius: 34 });
+    ).toMatchObject({ borderBottomLeftRadius: 28, borderTopLeftRadius: 28 });
     expect(
       StyleSheet.flatten(
         renderer.root.findByProps({ testID: 'painting-settings-sheet-bottom-gap' }).props.style,
       ).height,
-    ).toBe(8);
+    ).toBe(4);
     expect(
       StyleSheet.flatten(
         renderer.root.findByProps({ testID: 'painting-settings-header' }).props.style,
       ),
-    ).toMatchObject({ height: 60, paddingHorizontal: 12, paddingTop: 12 });
+    ).toMatchObject({ height: 60, paddingHorizontal: 6, paddingTop: 6 });
 
     act(() =>
       renderer?.root
