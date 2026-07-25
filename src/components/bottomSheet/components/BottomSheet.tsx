@@ -1,4 +1,4 @@
-import { ModalBottomSheet } from '@swmansion/react-native-bottom-sheet';
+import { type Detent, ModalBottomSheet } from '@swmansion/react-native-bottom-sheet';
 import { GlassView } from 'expo-glass-effect';
 import { XIcon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,10 +12,22 @@ import { type BottomSheetCloseReason, BottomSheetContext } from '../hooks/useBot
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
 
+// Default snap points: closed, then a single content-sized open detent. The open
+// index (1) is the first non-closed detent, so this stays correct when a caller
+// passes extra detents above it (e.g. `[0, medium, 'content']` for a drag-to-expand
+// sheet — the sheet opens at `medium` and can be dragged up to `content`).
+const DEFAULT_DETENTS: Detent[] = [0, 'content'];
+
 type BottomSheetProps = {
   children: ReactNode;
   // Accessibility label for the built-in circular close button.
   closeAccessibilityLabel?: string;
+  // Snap points (ascending by height), defaulting to `[0, 'content']`. Pass extra
+  // detents to make the sheet drag-resizable, e.g. `[0, mediumHeight, 'content']`
+  // opens at `mediumHeight` and can be dragged up to the full content height. When
+  // using numeric detents below `'content'`, also set a fixed `height` so the card
+  // stays a known size and shorter detents crop it predictably.
+  detents?: Detent[];
   // Optional right-header slot; defaults to a balancing spacer so the title
   // stays centered opposite the close button.
   headerRight?: ReactNode;
@@ -40,6 +52,7 @@ type BottomSheetProps = {
 export function BottomSheet({
   children,
   closeAccessibilityLabel,
+  detents = DEFAULT_DETENTS,
   headerRight,
   height,
   isCloseDisabled = false,
@@ -158,7 +171,7 @@ export function BottomSheet({
     // children in a separate native overlay root, so a provider wrapped around
     // ModalBottomSheet would not reach the body — `useBottomSheet()` would throw.
     <ModalBottomSheet
-      detents={[0, 'content']}
+      detents={detents}
       index={index}
       onIndexChange={handleIndexChange}
       onSettle={handleSettle}

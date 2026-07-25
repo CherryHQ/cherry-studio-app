@@ -30,8 +30,6 @@ import { getMessageListScrollSignal } from '../utils/messageListScrollSignals';
 // 输出（生产环境被日志级别过滤），故长期保留无碍。用 `[SCROLL]` 前缀便于从 Metro 日志过滤。
 const scrollLog = loggerService.withContext('ChatScroll');
 
-// 用户气泡计入「锚点下方内容」的最大高度：超长用户消息超出部分会滚出顶部，而非把锚定区占满。
-const USER_ANCHOR_MAX_SIZE = 120;
 // 被锚定的用户消息距内容区顶部（顶部安全区/导航栏之下）的视觉间距。
 const ANCHOR_TOP_GAP = 12;
 // 撤遮罩（onReady）前要求内容高度保持「静默」的窗口：这段时间内没有任何 contentSize 变化才判定
@@ -162,12 +160,15 @@ export function ChatMessageList({
     [listRef],
   );
 
+  // 不设 anchorMaxSize：用被锚定用户消息的**真实完整高度**参与预留空白计算，使其顶部恒钉在
+  // anchorOffset（导航栏之下）、从顶部完整显示。此前用 120 截断会把超长消息「超出的部分滚出屏顶」，
+  // 表现为发送后消息「从中间钉」、顶部钻进 header（空话题首条尤其明显）。代价：比整屏还高的消息，
+  // 其助手回复会落在首屏之下、需向下滚动（对齐 ChatGPT 的行为）。
   const anchoredEndSpace = useMemo(
     () =>
       hasAnchor
         ? {
             anchorIndex,
-            anchorMaxSize: USER_ANCHOR_MAX_SIZE,
             anchorOffset,
             onReady: handleAnchorReady,
           }
