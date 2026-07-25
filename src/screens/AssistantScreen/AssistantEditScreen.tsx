@@ -8,7 +8,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { CloseHeader, type CloseHeaderAction } from '@/components/headers';
+import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import {
   ModelPickerBottomSheet,
   ModelPickerIcon,
@@ -122,7 +122,7 @@ export default function AssistantEditScreen() {
     }
   }, [assistant?.settings, assistantId, createAssistant, form, router, t, toast, updateAssistant]);
   const title = isEditing ? t('assistant.edit.title') : t('assistant.create.title');
-  const saveActions = useMemo<CloseHeaderAction[]>(
+  const saveActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
         accessibilityLabel: t('common.save'),
@@ -139,7 +139,7 @@ export default function AssistantEditScreen() {
 
   return (
     <>
-      <CloseHeader rightActions={saveActions} title={title} />
+      <BackHeader rightActions={saveActions} title={title} />
       <KeyboardAwareScrollView
         alwaysBounceVertical={false}
         bottomOffset={keyboardBottomOffset}

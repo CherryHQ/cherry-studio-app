@@ -22,6 +22,21 @@ function renderHeaderAction(action: HeaderToolbarAction): ReactNode {
     return null;
   }
 
+  if (action.label) {
+    return (
+      <Stack.Toolbar.Button
+        accessibilityLabel={action.accessibilityLabel ?? action.label}
+        disabled={action.disabled}
+        key={action.key}
+        onPress={action.onPress}
+        tintColor={action.tintColor}
+        variant={action.variant}
+      >
+        {action.label}
+      </Stack.Toolbar.Button>
+    );
+  }
+
   return (
     <Stack.Toolbar.Button
       accessibilityLabel={action.accessibilityLabel}
