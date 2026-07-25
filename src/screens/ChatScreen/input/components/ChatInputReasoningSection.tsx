@@ -70,6 +70,7 @@ export function ChatInputReasoningSection({
       <View className="flex-row items-center gap-1.5">
         <Text className="font-medium text-base text-foreground">{t('chat.reasoning.title')}</Text>
         <SlotText
+          ellipsizeMode="clip"
           text={currentOption ? t(currentOption.labelKey) : ''}
           textClassName="font-semibold text-base text-foreground"
           textStyle={

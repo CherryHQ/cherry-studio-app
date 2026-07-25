@@ -35,6 +35,7 @@ type SlotGlyphProps = {
   allowFontScaling?: boolean;
   currentSegment: string;
   currentWidth: number;
+  ellipsizeMode?: 'head' | 'middle' | 'tail' | 'clip';
   entryPhaseStartMs: number;
   exitPhaseDurationMs: number;
   height: number;
@@ -53,7 +54,7 @@ type SlotGlyphProps = {
 
 type GlyphTextProps = Pick<
   SlotGlyphProps,
-  'allowFontScaling' | 'maxFontSizeMultiplier' | 'textClassName' | 'textStyle'
+  'allowFontScaling' | 'ellipsizeMode' | 'maxFontSizeMultiplier' | 'textClassName' | 'textStyle'
 > & {
   color?: string;
   segment: string;
@@ -63,6 +64,7 @@ export function SlotGlyph({
   allowFontScaling,
   currentSegment,
   currentWidth,
+  ellipsizeMode,
   entryPhaseStartMs,
   exitPhaseDurationMs,
   height,
@@ -222,6 +224,7 @@ export function SlotGlyph({
             <Animated.View style={[faceStyle, outgoingStyle]}>
               <GlyphText
                 allowFontScaling={allowFontScaling}
+                ellipsizeMode={ellipsizeMode}
                 maxFontSizeMultiplier={maxFontSizeMultiplier}
                 segment={currentSegment}
                 textClassName={textClassName}
@@ -234,6 +237,7 @@ export function SlotGlyph({
               <Animated.View style={[faceStyle, incomingStyle]}>
                 <GlyphText
                   allowFontScaling={allowFontScaling}
+                  ellipsizeMode={ellipsizeMode}
                   maxFontSizeMultiplier={maxFontSizeMultiplier}
                   segment={targetSegment}
                   textClassName={textClassName}
@@ -247,6 +251,7 @@ export function SlotGlyph({
                   <GlyphText
                     allowFontScaling={allowFontScaling}
                     color={highlightColor}
+                    ellipsizeMode={ellipsizeMode}
                     maxFontSizeMultiplier={maxFontSizeMultiplier}
                     segment={targetSegment}
                     textClassName={textClassName}
@@ -261,6 +266,7 @@ export function SlotGlyph({
         <View style={faceStyle}>
           <GlyphText
             allowFontScaling={allowFontScaling}
+            ellipsizeMode={ellipsizeMode}
             maxFontSizeMultiplier={maxFontSizeMultiplier}
             segment={targetSegment}
             textClassName={textClassName}
@@ -308,6 +314,7 @@ function createFaceAnimationStyle(
 function GlyphText({
   allowFontScaling,
   color,
+  ellipsizeMode,
   maxFontSizeMultiplier,
   segment,
   textClassName,
@@ -318,6 +325,7 @@ function GlyphText({
       accessible={false}
       allowFontScaling={allowFontScaling}
       className={textClassName}
+      ellipsizeMode={ellipsizeMode}
       maxFontSizeMultiplier={maxFontSizeMultiplier}
       numberOfLines={1}
       style={[textStyle, color ? { color } : undefined]}
