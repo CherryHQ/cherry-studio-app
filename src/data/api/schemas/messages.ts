@@ -46,14 +46,14 @@ export interface DeleteMessageResponse {
   reparentedIds?: string[];
 }
 
-const TreeQuerySchema = z.strictObject({
+export const TreeQuerySchema = z.strictObject({
   depth: z.number().int().optional(),
   nodeId: z.string().optional(),
   rootId: z.string().optional(),
 });
 export type TreeQueryParams = z.infer<typeof TreeQuerySchema>;
 
-const BranchMessagesQuerySchema = z.strictObject({
+export const BranchMessagesQuerySchema = z.strictObject({
   cursor: z.string().optional(),
   includeSiblings: z.boolean().optional(),
   limit: z.number().int().positive().optional(),
@@ -62,13 +62,13 @@ const BranchMessagesQuerySchema = z.strictObject({
 export type BranchMessagesQueryParams = z.infer<typeof BranchMessagesQuerySchema> &
   CursorPaginationParams;
 
-const DeleteMessageQuerySchema = z.strictObject({
+export const DeleteMessageQuerySchema = z.strictObject({
   activeNodeStrategy: ActiveNodeStrategySchema.optional(),
   cascade: z.boolean().optional(),
 });
 export type DeleteMessageQuery = z.infer<typeof DeleteMessageQuerySchema>;
 
-const PathThroughQuerySchema = z.strictObject({
+export const PathThroughQuerySchema = z.strictObject({
   nodeId: z.string().min(1),
 });
 export type PathThroughQueryParams = z.infer<typeof PathThroughQuerySchema>;

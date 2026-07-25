@@ -1,11 +1,18 @@
-import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import { Stack, useRouter } from 'expo-router';
 import { useThemeColor } from 'heroui-native/hooks';
-import { ChevronLeftIcon, EllipsisIcon, SquarePenIcon } from 'lucide-uniwind/png';
-import { useCallback, useMemo } from 'react';
+import { Menu } from 'heroui-native/menu';
+import {
+  ChevronLeftIcon,
+  EllipsisIcon,
+  PencilIcon,
+  PinIcon,
+  SquarePenIcon,
+} from 'lucide-uniwind/png';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { HeaderIconButton } from '../components/HeaderIconButton';
 import { useMainHeaderTopicActions } from './useMainHeaderTopicActions';
 
@@ -22,38 +29,6 @@ export function MainHeader() {
   const goBack = useCallback(() => {
     router.back();
   }, [router]);
-  const menuActions = useMemo<MenuAction[]>(
-    () => [
-      {
-        id: 'rename-topic',
-        image: 'pencil',
-        title: t('topic.actions.rename'),
-      },
-      {
-        attributes: { disabled: topicActions.isPinActionDisabled },
-        id: 'toggle-pin-topic',
-        image: topicActions.isTopicPinned ? 'pin.slash' : 'pin',
-        state: topicActions.isTopicPinned ? 'on' : 'off',
-        title: t(topicActions.isTopicPinned ? 'topic.actions.unpin' : 'topic.actions.pin'),
-      },
-    ],
-    [t, topicActions.isPinActionDisabled, topicActions.isTopicPinned],
-  );
-  const handleMenuAction = useCallback(
-    (event: NativeActionEvent) => {
-      const actionId = event.nativeEvent.event;
-
-      if (actionId === 'rename-topic') {
-        topicActions.openRenameTopic();
-        return;
-      }
-
-      if (actionId === 'toggle-pin-topic') {
-        void topicActions.toggleTopicPin();
-      }
-    },
-    [topicActions],
-  );
 
   return (
     <>
@@ -72,15 +47,46 @@ export function MainHeader() {
               <SquarePenIcon className="size-6 text-foreground" strokeWidth={2} />
             </HeaderIconButton>
             {topicActions.isTopicActionsVisible ? (
-              <MenuView actions={menuActions} onPressAction={handleMenuAction}>
-                <View
-                  accessibilityLabel={t('topic.actions.more')}
-                  accessibilityRole="button"
-                  className="size-9 items-center justify-center"
-                >
-                  <EllipsisIcon className="size-6 text-foreground" strokeWidth={2} />
-                </View>
-              </MenuView>
+              <Menu presentation="popover">
+                <Menu.Trigger asChild>
+                  <Pressable
+                    accessibilityLabel={t('topic.actions.more')}
+                    accessibilityRole="button"
+                    className="size-9 items-center justify-center active:opacity-60"
+                    hitSlop={8}
+                    testID="topic-actions-menu"
+                  >
+                    <EllipsisIcon className="size-6 text-foreground" strokeWidth={2} />
+                  </Pressable>
+                </Menu.Trigger>
+                <Menu.Portal>
+                  <Menu.Overlay />
+                  <Menu.Content align="end" placement="bottom" presentation="popover" width={210}>
+                    <Menu.Item
+                      className="flex-row items-center gap-3"
+                      onPress={topicActions.openRenameTopic}
+                      testID="topic-actions-rename"
+                    >
+                      <PencilIcon className="size-5 text-foreground" strokeWidth={2} />
+                      <Menu.ItemTitle>{t('topic.actions.rename')}</Menu.ItemTitle>
+                    </Menu.Item>
+                    <Menu.Item
+                      className="flex-row items-center gap-3"
+                      isDisabled={topicActions.isPinActionDisabled}
+                      isSelected={topicActions.isTopicPinned}
+                      onPress={() => void topicActions.toggleTopicPin()}
+                      testID="topic-actions-toggle-pin"
+                    >
+                      <PinIcon className="size-5 text-foreground" strokeWidth={2} />
+                      <Menu.ItemTitle>
+                        {t(
+                          topicActions.isTopicPinned ? 'topic.actions.unpin' : 'topic.actions.pin',
+                        )}
+                      </Menu.ItemTitle>
+                    </Menu.Item>
+                  </Menu.Content>
+                </Menu.Portal>
+              </Menu>
             ) : null}
           </View>
         </View>

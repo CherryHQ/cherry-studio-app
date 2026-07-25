@@ -64,7 +64,7 @@ export function findMatchingUseCacheSchemaKey(key: string): keyof UseCacheSchema
     return key as keyof UseCacheSchema;
   }
 
-  const schemaKeys = Object.keys(DefaultUseCache) as Array<keyof UseCacheSchema>;
+  const schemaKeys = Object.keys(DefaultUseCache) as (keyof UseCacheSchema)[];
   for (const schemaKey of schemaKeys) {
     if (isTemplateKey(schemaKey as string)) {
       const regex = templateToRegex(schemaKey as string);

@@ -12,11 +12,11 @@ type ExaSearchRequest = {
 };
 
 type ExaSearchResponse = {
-  results: Array<{
+  results: {
     title?: string | null;
     text?: string;
     url?: string;
-  }>;
+  }[];
   autopromptString?: string;
 };
 

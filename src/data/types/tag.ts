@@ -18,7 +18,7 @@ export const CreateTagSchema = TagSchema.pick({ color: true, name: true })
   .required({ name: true });
 export type CreateTagDto = z.infer<typeof CreateTagSchema>;
 
-const UpdateTagSchema = CreateTagSchema.partial();
+export const UpdateTagSchema = CreateTagSchema.partial();
 export type UpdateTagDto = z.infer<typeof UpdateTagSchema>;
 
 export const SyncEntityTagsSchema = z.strictObject({

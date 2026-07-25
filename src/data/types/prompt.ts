@@ -46,7 +46,7 @@ export const CreatePromptSchema = PromptSchema.pick({
 });
 export type CreatePromptDto = z.infer<typeof CreatePromptSchema>;
 
-const UpdatePromptSchema = CreatePromptSchema.partial().refine(
+export const UpdatePromptSchema = CreatePromptSchema.partial().refine(
   (dto) => dto.title !== undefined || dto.content !== undefined,
   { message: 'At least one field is required' },
 );

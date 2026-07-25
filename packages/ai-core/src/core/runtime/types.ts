@@ -3,8 +3,8 @@
  */
 import type { EmbeddingModelV3, ImageModelV3, ProviderV3 } from '@ai-sdk/provider';
 import type {
-  embedMany,
   Experimental_DownloadFunction,
+  embedMany,
   generateImage,
   generateText,
   streamText,

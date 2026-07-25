@@ -15,6 +15,8 @@ export type SlotTextProps = {
   /** Keep a grapheme static only when it is unchanged and its slot offset will not move. */
   skipUnchanged?: boolean;
   staggerMs?: number;
+  /** How a grapheme is truncated when its slot is narrower than the glyph. Defaults to 'clip'. */
+  ellipsizeMode?: 'head' | 'middle' | 'tail' | 'clip';
   testID?: string;
   text: string;
   textClassName?: string;

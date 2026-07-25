@@ -122,7 +122,7 @@ export type AutoDetectionMethod = 'franc' | 'llm' | 'auto';
  *
  * Pattern: 2–3 lowercase letters, optionally followed by `-` and 2–4 lowercase letters.
  */
-const PersistedLangCodeSchema = z
+export const PersistedLangCodeSchema = z
   .string()
   .regex(/^[a-z]{2,3}(-[a-z]{2,4})?$/)
   .brand<'PersistedLangCode'>();
@@ -136,7 +136,10 @@ const TranslateLangCodePatternSchema = z.string().regex(/^[a-z]{2,3}(-[a-z]{2,4}
  * Use in preference/UI state and detection paths where "unknown" is meaningful.
  * Persistence paths should parse with {@link PersistedLangCodeSchema} instead.
  */
-const TranslateLangCodeSchema = z.union([z.literal('unknown'), TranslateLangCodePatternSchema]);
+export const TranslateLangCodeSchema = z.union([
+  z.literal('unknown'),
+  TranslateLangCodePatternSchema,
+]);
 export type TranslateLangCode = z.infer<typeof TranslateLangCodeSchema>;
 export type TranslateSourceLanguage = TranslateLangCode | 'auto';
 export type TranslateBidirectionalPair = [TranslateLangCode, TranslateLangCode];
@@ -145,7 +148,7 @@ export type TranslateBidirectionalPair = [TranslateLangCode, TranslateLangCode];
 // WebSearch Types
 // ============================================================================
 
-const WEB_SEARCH_PROVIDER_TYPES = ['api', 'mcp'] as const;
+export const WEB_SEARCH_PROVIDER_TYPES = ['api', 'mcp'] as const;
 
 export type WebSearchProviderType = (typeof WEB_SEARCH_PROVIDER_TYPES)[number];
 
@@ -164,7 +167,7 @@ export const WEB_SEARCH_PROVIDER_IDS = [
 
 export type WebSearchProviderId = (typeof WEB_SEARCH_PROVIDER_IDS)[number];
 
-const WEB_SEARCH_CAPABILITIES = ['searchKeywords', 'fetchUrls'] as const;
+export const WEB_SEARCH_CAPABILITIES = ['searchKeywords', 'fetchUrls'] as const;
 
 export type WebSearchCapability = (typeof WEB_SEARCH_CAPABILITIES)[number];
 
@@ -202,11 +205,11 @@ export interface WebSearchProvider {
   /** API keys (from user overrides) */
   apiKeys: string[];
   /** Capability API settings (user override merged into preset capabilities) */
-  capabilities: Array<{
+  capabilities: {
     feature: WebSearchCapability;
     /** Can be empty for self-hosted or hostless providers; resolve and validate via resolveProviderApiHost. */
     apiHost?: string;
-  }>;
+  }[];
   /** Search engines (from user overrides) */
   engines: string[];
   /** Basic auth username (from user overrides) */
@@ -230,7 +233,7 @@ export enum codeCLI {
   openCode = 'opencode',
 }
 
-const CODE_CLI_IDS = Object.values(codeCLI) as unknown as readonly [
+export const CODE_CLI_IDS = Object.values(codeCLI) as unknown as readonly [
   'qwen-code',
   'claude-code',
   'gemini-cli',
@@ -269,15 +272,15 @@ export type WebSearchCompressionMethod = 'none' | 'cutoff';
 // File Processor Types
 // ============================================================================
 
-const FILE_PROCESSOR_TYPES = ['api', 'builtin'] as const;
+export const FILE_PROCESSOR_TYPES = ['api', 'builtin'] as const;
 
 export type FileProcessorType = (typeof FILE_PROCESSOR_TYPES)[number];
 
-const FILE_PROCESSOR_FEATURES = ['image_to_text', 'document_to_markdown'] as const;
+export const FILE_PROCESSOR_FEATURES = ['image_to_text', 'document_to_markdown'] as const;
 
 export type FileProcessorFeature = (typeof FILE_PROCESSOR_FEATURES)[number];
 
-const FILE_PROCESSOR_IDS = [
+export const FILE_PROCESSOR_IDS = [
   'tesseract',
   'system',
   'paddleocr',

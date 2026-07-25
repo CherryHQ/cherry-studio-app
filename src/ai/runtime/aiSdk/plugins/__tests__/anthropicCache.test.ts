@@ -97,7 +97,7 @@ describe('anthropicCache middleware', () => {
     expect(result?.prompt?.[0]).toEqual(prompt[0]);
     expect(result?.prompt?.[1]).toEqual(prompt[1]);
     expect(result?.prompt?.[2]).toEqual(prompt[2]);
-    const lastMessage = result?.prompt?.[3] as { content: Array<{ providerOptions?: unknown }> };
+    const lastMessage = result?.prompt?.[3] as { content: { providerOptions?: unknown }[] };
     expect(lastMessage.content.at(-1)?.providerOptions).toEqual({
       anthropic: { cacheControl: { type: 'ephemeral' } },
     });
@@ -114,7 +114,7 @@ describe('anthropicCache middleware', () => {
 
     expect(result?.prompt?.[0]).toEqual(prompt[0]);
     expect(result?.prompt?.[1]).toEqual(prompt[1]);
-    const lastMessage = result?.prompt?.[2] as { content: Array<{ providerOptions?: unknown }> };
+    const lastMessage = result?.prompt?.[2] as { content: { providerOptions?: unknown }[] };
     expect(lastMessage.content.at(-1)?.providerOptions).toEqual({
       anthropic: { cacheControl: { type: 'ephemeral' } },
     });

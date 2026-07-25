@@ -58,7 +58,7 @@ export default function ModelSettingsScreen() {
         title: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
         onPress: () => setOpenKind(kind),
       })),
-    [modelPickerData.getModelItem, modelSettings.selections, t],
+    [modelPickerData, modelSettings.selections, t],
   );
 
   return (

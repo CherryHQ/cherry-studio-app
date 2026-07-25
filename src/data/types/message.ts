@@ -165,7 +165,7 @@ export type MessageRole = z.infer<typeof MessageRoleSchema>;
 export const MessageStatusSchema = z.enum(['pending', 'success', 'error', 'paused']);
 export type MessageStatus = z.infer<typeof MessageStatusSchema>;
 
-const MessageSchema = z.strictObject({
+export const MessageSchema = z.strictObject({
   createdAt: z.iso.datetime(),
   data: MessageDataSchema,
   id: MessageIdSchema,

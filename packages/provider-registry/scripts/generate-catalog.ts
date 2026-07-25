@@ -24,9 +24,9 @@ import { canonOf, prefixHit } from './canonicalize';
 import {
   type CherryMeta,
   finalizeMeta,
-  mergeMeta,
   type ModelsDevApi,
   ModelsDevApiSchema,
+  mergeMeta,
   type OpenRouterApi,
   OpenRouterApiSchema,
   parseMdEntry,

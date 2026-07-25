@@ -35,6 +35,7 @@ type SlotGlyphProps = {
   allowFontScaling?: boolean;
   currentSegment: string;
   currentWidth: number;
+  ellipsizeMode?: 'head' | 'middle' | 'tail' | 'clip';
   entryPhaseStartMs: number;
   exitPhaseDurationMs: number;
   height: number;
@@ -53,7 +54,7 @@ type SlotGlyphProps = {
 
 type GlyphTextProps = Pick<
   SlotGlyphProps,
-  'allowFontScaling' | 'maxFontSizeMultiplier' | 'textClassName' | 'textStyle'
+  'allowFontScaling' | 'ellipsizeMode' | 'maxFontSizeMultiplier' | 'textClassName' | 'textStyle'
 > & {
   color?: string;
   segment: string;
@@ -63,6 +64,7 @@ export function SlotGlyph({
   allowFontScaling,
   currentSegment,
   currentWidth,
+  ellipsizeMode,
   entryPhaseStartMs,
   exitPhaseDurationMs,
   height,
@@ -84,6 +86,8 @@ export function SlotGlyph({
   // Faces must mount already posed at their transition start values; seeding them only in
   // the layout effect can paint one native frame at the final pose first, which shows the
   // incoming glyph overlapping the outgoing one.
+
+  /* eslint-disable react-hooks/exhaustive-deps */
   // biome-ignore lint/correctness/useExhaustiveDependencies: Poses re-seed per transition; geometry changes re-seed in the layout effect below.
   const faces = useMemo(
     () => ({
@@ -93,6 +97,7 @@ export function SlotGlyph({
     }),
     [transitionSignature],
   );
+  /* eslint-enable react-hooks/exhaustive-deps */
   const { highlightOpacity, incomingY, outgoingY } = faces;
   const slotTiming = calculateSlotTransitionTiming(
     index,
@@ -219,6 +224,7 @@ export function SlotGlyph({
             <Animated.View style={[faceStyle, outgoingStyle]}>
               <GlyphText
                 allowFontScaling={allowFontScaling}
+                ellipsizeMode={ellipsizeMode}
                 maxFontSizeMultiplier={maxFontSizeMultiplier}
                 segment={currentSegment}
                 textClassName={textClassName}
@@ -231,6 +237,7 @@ export function SlotGlyph({
               <Animated.View style={[faceStyle, incomingStyle]}>
                 <GlyphText
                   allowFontScaling={allowFontScaling}
+                  ellipsizeMode={ellipsizeMode}
                   maxFontSizeMultiplier={maxFontSizeMultiplier}
                   segment={targetSegment}
                   textClassName={textClassName}
@@ -244,6 +251,7 @@ export function SlotGlyph({
                   <GlyphText
                     allowFontScaling={allowFontScaling}
                     color={highlightColor}
+                    ellipsizeMode={ellipsizeMode}
                     maxFontSizeMultiplier={maxFontSizeMultiplier}
                     segment={targetSegment}
                     textClassName={textClassName}
@@ -258,6 +266,7 @@ export function SlotGlyph({
         <View style={faceStyle}>
           <GlyphText
             allowFontScaling={allowFontScaling}
+            ellipsizeMode={ellipsizeMode}
             maxFontSizeMultiplier={maxFontSizeMultiplier}
             segment={targetSegment}
             textClassName={textClassName}
@@ -305,6 +314,7 @@ function createFaceAnimationStyle(
 function GlyphText({
   allowFontScaling,
   color,
+  ellipsizeMode,
   maxFontSizeMultiplier,
   segment,
   textClassName,
@@ -315,6 +325,7 @@ function GlyphText({
       accessible={false}
       allowFontScaling={allowFontScaling}
       className={textClassName}
+      ellipsizeMode={ellipsizeMode}
       maxFontSizeMultiplier={maxFontSizeMultiplier}
       numberOfLines={1}
       style={[textStyle, color ? { color } : undefined]}

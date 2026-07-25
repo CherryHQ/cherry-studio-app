@@ -23,7 +23,7 @@ export const PROVIDER_TYPES = [
   'ollama',
 ] as const;
 
-const ProviderTypeSchema = z.enum(PROVIDER_TYPES);
+export const ProviderTypeSchema = z.enum(PROVIDER_TYPES);
 export type ProviderType = z.infer<typeof ProviderTypeSchema>;
 
 const PROVIDER_TYPE_ENDPOINTS = {
