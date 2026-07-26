@@ -6,8 +6,7 @@ tags: [settings, provider, legend-list]
 - tapOn: "Settings"
 - tapOn: "Model service"
 - tapOn: "CherryInExpress"
-# 等 API draft 加载完成、布局稳定后再点（同 04：Base URL 区块异步插入
-# 会推挤工具栏，过早点击会用过期坐标点空）
+# 等 provider 详情加载完成后再操作模型工具栏
 - extendedWaitUntil:
     visible: "Base URL"
     timeout: 10000

@@ -21,6 +21,7 @@ import { ENDPOINT_TYPE } from '@/data/types/model';
 import type { ApiKeyEntry, EndpointConfigs } from '@/data/types/provider';
 import { saveProviderAvatar } from '@/services/providerAvatarStorage';
 import { SettingsIconButton } from '../components/SettingsIconButton';
+import { normalizeApiKeySingleLine } from './apiService/utils/providerApiServiceApiKeys';
 import { providerApiServiceStyles } from './apiService/utils/providerApiServiceStyles';
 
 const avatarPreviewSize = 96;
@@ -217,8 +218,13 @@ export default function NewProviderScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   className="h-10 max-h-10 min-h-0 w-full rounded-xl px-3 py-0 text-base leading-5"
-                  onChangeText={setApiKey}
+                  lineBreakModeIOS="clip"
+                  multiline={false}
+                  numberOfLines={1}
+                  onChangeText={(value) => setApiKey(normalizeApiKeySingleLine(value))}
                   placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
+                  returnKeyType="done"
+                  scrollEnabled={false}
                   secureTextEntry={!apiKeyVisible}
                   style={providerApiServiceStyles.input}
                   value={apiKey}

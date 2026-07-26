@@ -17,6 +17,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import type { ApiKeyEntry } from '@/data/types/provider';
 import { SettingsIconButton } from '../../../components/SettingsIconButton';
+import { normalizeApiKeySingleLine } from '../utils/providerApiServiceApiKeys';
 import { providerApiServiceStyles } from '../utils/providerApiServiceStyles';
 
 const apiKeyPreviewMaxLength = 21;
@@ -327,10 +328,6 @@ function clipApiKeyPreviewValue(value: string): string {
   }
 
   return `${value.slice(0, apiKeyPreviewMaxLength)}...`;
-}
-
-function normalizeApiKeySingleLine(value: string): string {
-  return value.replaceAll(/[\r\n]+/g, '');
 }
 
 function normalizeApiKeysInputSingleLine(value: string): string {

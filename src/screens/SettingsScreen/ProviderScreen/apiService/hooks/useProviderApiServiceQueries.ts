@@ -1,7 +1,6 @@
 import { queryKeys } from '@/data/api';
 import { useDataMutation, useDataQuery } from '@/data/hooks';
-import type { EndpointType } from '@/data/types/model';
-import type { ApiKeyEntry, AuthConfig, EndpointConfigs } from '@/data/types/provider';
+import type { ApiKeyEntry, EndpointConfigs } from '@/data/types/provider';
 
 export function useProviderApiServiceQueries(providerId: string) {
   const providerQuery = useDataQuery({
@@ -30,14 +29,8 @@ export function useProviderApiServiceQueries(providerId: string) {
       queryKeys.providers.list({ enabled: false }),
       queryKeys.providers.authConfig(providerId),
     ],
-    mutationFn: (
-      services,
-      updates: {
-        authConfig?: AuthConfig;
-        defaultChatEndpoint?: EndpointType;
-        endpointConfigs?: EndpointConfigs;
-      },
-    ) => services.provider.update(providerId, updates),
+    mutationFn: (services, updates: { endpointConfigs: EndpointConfigs }) =>
+      services.provider.update(providerId, updates),
   });
   const replaceApiKeysMutation = useDataMutation({
     invalidateQueries: [

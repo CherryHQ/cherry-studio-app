@@ -1,4 +1,5 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Spinner } from 'heroui-native/spinner';
 import { SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,9 +8,12 @@ import { View } from 'react-native';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { openExternalUrl } from '@/utils/openExternalUrl';
 import {
+  buildApiKeysInputFromEntries,
   canEditProviderEndpoint,
+  getEffectiveAuthConfig,
+  getProviderPrimaryBaseUrl,
+  normalizeApiKeyEntries,
   shouldShowApiKeys,
-  useProviderApiServiceDraft,
   useProviderApiServiceQueries,
 } from './apiService';
 import { ProviderApiManagementSection } from './components/ProviderApiManagementSection';
@@ -61,14 +65,17 @@ export default function ProviderDetailSettingsScreen() {
     provider,
     providerId: providerId ?? '',
   });
-  const { draft, primaryBaseUrl } = useProviderApiServiceDraft({
-    apiKeys,
-    authConfig,
-    provider,
-  });
   const canEditEndpoint = canEditProviderEndpoint(provider);
-  const showApiKeys = draft ? shouldShowApiKeys(draft.authDraft.type) : false;
-  const isApiDraftLoading = apiKeysQuery.isPending || authConfigQuery.isPending || !draft;
+  const showApiKeys = shouldShowApiKeys(getEffectiveAuthConfig(authConfig, provider).type);
+  const apiKeysInput = useMemo(
+    () => buildApiKeysInputFromEntries(normalizeApiKeyEntries(apiKeys ?? [])),
+    [apiKeys],
+  );
+  // Gate on all three so the content reaches its final structure on the first frame.
+  // Inserting the Base URL / API keys blocks a commit later shifts the model toolbar
+  // under a finger that already aimed at it.
+  const isProviderDetailLoading =
+    providerQuery.isPending || apiKeysQuery.isPending || authConfigQuery.isPending;
   const officialWebsite = provider?.websites?.official;
   const openOfficialWebsite = useCallback(() => {
     if (!officialWebsite) {
@@ -154,6 +161,20 @@ export default function ProviderDetailSettingsScreen() {
     return <Redirect href="/settings/provider" />;
   }
 
+  if (isProviderDetailLoading) {
+    return (
+      <>
+        <BackHeader
+          rightActions={rightActions}
+          title={providerName ?? t('settings.pages.provider.title')}
+        />
+        <View className="flex-1 items-center justify-center">
+          <Spinner accessibilityLabel={t('settings.provider.loading')} />
+        </View>
+      </>
+    );
+  }
+
   return (
     <>
       <BackHeader
@@ -164,13 +185,13 @@ export default function ProviderDetailSettingsScreen() {
         header={
           <View>
             <ProviderApiManagementSection
-              apiKeysInput={draft?.apiKeysInput}
+              apiKeysInput={apiKeysInput}
               apiKeysVisible={apiKeysVisible}
-              baseUrl={primaryBaseUrl}
+              baseUrl={getProviderPrimaryBaseUrl(provider)}
               isUpdatingEnabled={updateProviderEnabledMutation.isPending}
               provider={provider}
-              showApiKeys={!isApiDraftLoading && showApiKeys}
-              showBaseUrl={!isApiDraftLoading && canEditEndpoint}
+              showApiKeys={showApiKeys}
+              showBaseUrl={canEditEndpoint}
               onApiKeysManagePress={openApiKeySettings}
               onApiKeysVisibleToggle={() => setApiKeysVisible((visible) => !visible)}
               onBaseUrlManagePress={openEndpointSettings}

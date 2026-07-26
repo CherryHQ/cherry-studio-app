@@ -5,12 +5,13 @@ import { ScrollView, View } from 'react-native';
 import { BackHeader } from '@/components/headers';
 import type { ApiKeyEntry } from '@/data/types/provider';
 import {
+  getEffectiveAuthConfig,
   getProviderApiServiceApiKeysDirtyState,
   normalizeApiKeyEntries,
   ProviderApiServiceApiKeyForm,
   shouldShowApiKeys,
+  useProviderApiServiceApiKeysDraft,
   useProviderApiServiceConfirmDialog,
-  useProviderApiServiceDraft,
   useProviderApiServiceQueries,
   useProviderApiServiceSheetClose,
 } from './apiService';
@@ -21,45 +22,75 @@ export default function ProviderApiKeySettingsScreen() {
     providerName?: string;
   }>();
   const { t } = useTranslation();
-  const { apiKeys, authConfig, provider, providerQuery, replaceApiKeysMutation } =
+  const { apiKeys, authConfig, authConfigQuery, provider, providerQuery, replaceApiKeysMutation } =
     useProviderApiServiceQueries(providerId ?? '');
+  const saveApiKeys = useCallback(
+    (nextApiKeys: ApiKeyEntry[]) => replaceApiKeysMutation.mutateAsync(nextApiKeys),
+    [replaceApiKeysMutation],
+  );
+
+  if (!providerId || providerQuery.isError) {
+    return <Redirect href="/settings/provider" />;
+  }
+
+  // Wait for the auth config before deciding anything: it is what says whether this
+  // provider has API keys at all, so mounting the form first would show a screen we
+  // then redirect away from — and only on a cold cache, where the keys land first.
+  if (!provider || !apiKeys || authConfigQuery.isPending) {
+    return <BackHeader title={t('settings.provider.apiService.manageApiKeys')} />;
+  }
+
+  if (!shouldShowApiKeys(getEffectiveAuthConfig(authConfig, provider).type)) {
+    return (
+      <Redirect
+        href={{
+          params: {
+            ...(providerName || provider.name
+              ? { providerName: providerName ?? provider.name }
+              : {}),
+            providerId,
+          },
+          pathname: '/settings/provider/[providerId]',
+        }}
+      />
+    );
+  }
+
+  return <ProviderApiKeySettingsForm apiKeys={apiKeys} onSave={saveApiKeys} />;
+}
+
+function ProviderApiKeySettingsForm({
+  apiKeys,
+  onSave,
+}: {
+  apiKeys: readonly ApiKeyEntry[];
+  onSave: (nextApiKeys: ApiKeyEntry[]) => Promise<unknown>;
+}) {
+  const { t } = useTranslation();
   const [apiKeyErrors, setApiKeyErrors] = useState<Record<string, string>>({});
   const [pendingApiKeyIds, setPendingApiKeyIds] = useState<ReadonlySet<string>>(() => new Set());
   const pendingApiKeyIdsRef = useRef<ReadonlySet<string>>(new Set());
-  const {
-    addApiKey,
-    draft,
-    removeApiKey,
-    resetApiKeysDraft,
-    syncApiKeysDraft,
-    updateApiKey,
-    updateApiKeyEnabled,
-  } = useProviderApiServiceDraft({
-    apiKeys,
-    authConfig,
-    provider,
-  });
+  const { addKey, entries, removeKey, updateKey, updateKeyEnabled } =
+    useProviderApiServiceApiKeysDraft(apiKeys);
   const hasUnsavedChanges =
     Object.keys(apiKeyErrors).length > 0 ||
-    getProviderApiServiceApiKeysDirtyState({ apiKeys: apiKeys ?? [], draft });
-  const isSaving = replaceApiKeysMutation.isPending || pendingApiKeyIds.size > 0;
+    getProviderApiServiceApiKeysDirtyState({ apiKeys, entries });
+  const isSaving = pendingApiKeyIds.size > 0;
   const { confirmDialog, requestConfirm } = useProviderApiServiceConfirmDialog();
   const { discardDialog, requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges,
     isSaving,
-    onClose: resetApiKeysDraft,
-    onDiscard: resetApiKeysDraft,
   });
 
-  const saveApiKeys = useCallback(
+  const saveEntries = useCallback(
     async ({
       apiKeyId,
-      nextApiKeys,
+      nextEntries,
     }: {
       apiKeyId: string;
-      nextApiKeys: readonly ApiKeyEntry[];
+      nextEntries: readonly ApiKeyEntry[];
     }): Promise<boolean> => {
-      if (!providerId || pendingApiKeyIdsRef.current.size > 0) {
+      if (pendingApiKeyIdsRef.current.size > 0) {
         return false;
       }
 
@@ -69,9 +100,7 @@ export default function ProviderApiKeySettingsScreen() {
 
       let didSave = false;
       try {
-        const normalizedApiKeys = normalizeApiKeyEntries(nextApiKeys);
-        await replaceApiKeysMutation.mutateAsync(normalizedApiKeys);
-        syncApiKeysDraft(providerId, normalizedApiKeys);
+        await onSave(normalizeApiKeyEntries(nextEntries));
         setApiKeyErrors((current) => removeApiKeyError(current, apiKeyId));
         didSave = true;
       } catch {
@@ -86,38 +115,27 @@ export default function ProviderApiKeySettingsScreen() {
       setPendingApiKeyIds(clearedPendingIds);
       return didSave;
     },
-    [providerId, replaceApiKeysMutation, syncApiKeysDraft, t],
+    [onSave, t],
   );
-
-  const handleAddApiKey = useCallback(() => {
-    addApiKey();
-  }, [addApiKey]);
 
   const handleKeyChange = useCallback(
     (id: string, key: string) => {
-      updateApiKey(id, key);
+      updateKey(id, key);
       setApiKeyErrors((current) => removeApiKeyError(current, id));
     },
-    [updateApiKey],
+    [updateKey],
   );
 
   const handleCommitKey = useCallback(
     (id: string, key: string) => {
-      if (!draft) {
-        return;
-      }
+      const nextEntries = entries.map((entry) => (entry.id === id ? { ...entry, key } : entry));
+      const persistedApiKey = apiKeys.find((entry) => entry.id === id);
 
-      const nextApiKeys = draft.apiKeyEntries.map((entry) =>
-        entry.id === id ? { ...entry, key } : entry,
-      );
-      const persistedApiKey = apiKeys?.find((entry) => entry.id === id);
-      const isPersisted = Boolean(persistedApiKey);
-
-      updateApiKey(id, key);
+      updateKey(id, key);
 
       if (!key.trim()) {
-        if (!isPersisted) {
-          removeApiKey(id);
+        if (!persistedApiKey) {
+          removeKey(id);
           setApiKeyErrors((current) => removeApiKeyError(current, id));
           return;
         }
@@ -134,39 +152,31 @@ export default function ProviderApiKeySettingsScreen() {
         return;
       }
 
-      void saveApiKeys({ apiKeyId: id, nextApiKeys });
+      void saveEntries({ apiKeyId: id, nextEntries });
     },
-    [apiKeys, draft, removeApiKey, saveApiKeys, t, updateApiKey],
+    [apiKeys, entries, removeKey, saveEntries, t, updateKey],
   );
 
   const handleEnabledChange = useCallback(
     (id: string, isEnabled: boolean) => {
-      if (!draft) {
-        return;
-      }
-
-      const nextApiKeys = draft.apiKeyEntries.map((entry) =>
+      const nextEntries = entries.map((entry) =>
         entry.id === id ? { ...entry, isEnabled } : entry,
       );
 
-      updateApiKeyEnabled(id, isEnabled);
+      updateKeyEnabled(id, isEnabled);
       setApiKeyErrors((current) => removeApiKeyError(current, id));
-      void saveApiKeys({ apiKeyId: id, nextApiKeys });
+      void saveEntries({ apiKeyId: id, nextEntries });
     },
-    [draft, saveApiKeys, updateApiKeyEnabled],
+    [entries, saveEntries, updateKeyEnabled],
   );
 
   const handleRemoveApiKey = useCallback(
     (id: string) => {
-      if (!draft) {
-        return;
-      }
+      const entry = entries.find((item) => item.id === id);
+      const isPersisted = apiKeys.some((item) => item.id === id);
 
-      const apiKey = draft.apiKeyEntries.find((entry) => entry.id === id);
-      const isPersisted = apiKeys?.some((entry) => entry.id === id) ?? false;
-
-      if (!apiKey?.key.trim() && !isPersisted) {
-        removeApiKey(id);
+      if (!entry?.key.trim() && !isPersisted) {
+        removeKey(id);
         setApiKeyErrors((current) => removeApiKeyError(current, id));
         return;
       }
@@ -174,13 +184,13 @@ export default function ProviderApiKeySettingsScreen() {
       requestConfirm({
         message: t('settings.provider.apiService.removeApiKeyMessage'),
         onConfirm: () => {
-          const nextApiKeys = draft.apiKeyEntries.filter((entry) => entry.id !== id);
+          const nextEntries = entries.filter((item) => item.id !== id);
 
           void (async () => {
-            const didSave = await saveApiKeys({ apiKeyId: id, nextApiKeys });
+            const didSave = await saveEntries({ apiKeyId: id, nextEntries });
 
             if (didSave) {
-              removeApiKey(id);
+              removeKey(id);
               setApiKeyErrors((current) => removeApiKeyError(current, id));
             }
           })();
@@ -188,28 +198,8 @@ export default function ProviderApiKeySettingsScreen() {
         title: t('settings.provider.apiService.removeApiKeyTitle'),
       });
     },
-    [apiKeys, draft, removeApiKey, requestConfirm, saveApiKeys, t],
+    [apiKeys, entries, removeKey, requestConfirm, saveEntries, t],
   );
-
-  if (!providerId || providerQuery.isError) {
-    return <Redirect href="/settings/provider" />;
-  }
-
-  if (draft && !shouldShowApiKeys(draft.authDraft.type)) {
-    return (
-      <Redirect
-        href={{
-          params: {
-            ...(providerName || provider?.name
-              ? { providerName: providerName ?? provider?.name }
-              : {}),
-            providerId,
-          },
-          pathname: '/settings/provider/[providerId]',
-        }}
-      />
-    );
-  }
 
   return (
     <>
@@ -226,18 +216,16 @@ export default function ProviderApiKeySettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="px-4 py-5">
-          {draft ? (
-            <ProviderApiServiceApiKeyForm
-              apiKeyErrors={apiKeyErrors}
-              apiKeys={draft.apiKeyEntries}
-              pendingApiKeyIds={pendingApiKeyIds}
-              onAdd={handleAddApiKey}
-              onCommitKey={handleCommitKey}
-              onEnabledChange={handleEnabledChange}
-              onKeyChange={handleKeyChange}
-              onRemove={handleRemoveApiKey}
-            />
-          ) : null}
+          <ProviderApiServiceApiKeyForm
+            apiKeyErrors={apiKeyErrors}
+            apiKeys={entries}
+            pendingApiKeyIds={pendingApiKeyIds}
+            onAdd={addKey}
+            onCommitKey={handleCommitKey}
+            onEnabledChange={handleEnabledChange}
+            onKeyChange={handleKeyChange}
+            onRemove={handleRemoveApiKey}
+          />
         </View>
       </ScrollView>
     </>

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { usePreference } from '@/data/hooks';
 import type { WebSearchProviderId } from '@/data/preference';
@@ -9,35 +9,21 @@ import {
   type WebSearchApiKeyEntry,
 } from '../utils/webSearchApiServiceApiKeys';
 
-type ApiKeyEntriesState = {
-  entries: WebSearchApiKeyEntry[];
-  persistedKey: string;
-};
-
+/**
+ * API key rows for one web search provider, owned by the mounted screen.
+ *
+ * Preferences are hydrated before any screen renders, so the persisted keys are already
+ * there on the first frame and the rows never need to be re-derived from the store: they
+ * are seeded once and die with the screen. A row the user is still typing into therefore
+ * cannot be overwritten by an unrelated preference write.
+ */
 export function useWebSearchApiKeySettings(providerId: WebSearchProviderId | undefined) {
   const [providerOverrides, setProviderOverrides] = usePreference(
     'chat.web_search.provider_overrides',
   );
-  const persistedApiKeys = useMemo(
-    () =>
-      normalizeWebSearchApiKeys(providerId ? (providerOverrides[providerId]?.apiKeys ?? []) : []),
-    [providerId, providerOverrides],
+  const [entries, setEntries] = useState<WebSearchApiKeyEntry[]>(() =>
+    buildWebSearchApiKeyEntries(providerId ? (providerOverrides[providerId]?.apiKeys ?? []) : []),
   );
-  const persistedKey = JSON.stringify([providerId, persistedApiKeys]);
-  const [entriesState, setEntriesState] = useState<ApiKeyEntriesState>(() => ({
-    entries: buildWebSearchApiKeyEntries(persistedApiKeys),
-    persistedKey,
-  }));
-
-  if (entriesState.persistedKey !== persistedKey) {
-    const pendingEntries = entriesState.entries.filter((entry) => entry.isNew);
-    setEntriesState({
-      entries: [...buildWebSearchApiKeyEntries(persistedApiKeys), ...pendingEntries],
-      persistedKey,
-    });
-  }
-
-  const entries = entriesState.entries;
 
   const saveApiKeys = useCallback(
     async (nextEntries: readonly WebSearchApiKeyEntry[]) => {
@@ -57,31 +43,33 @@ export function useWebSearchApiKeySettings(providerId: WebSearchProviderId | und
   );
 
   const addApiKey = useCallback(() => {
-    setEntriesState((current) => ({
-      ...current,
-      entries: current.entries.some((entry) => entry.isNew)
-        ? current.entries
-        : [...current.entries, createEmptyWebSearchApiKeyEntry()],
-    }));
+    setEntries((current) =>
+      current.some((entry) => entry.isNew)
+        ? current
+        : [...current, createEmptyWebSearchApiKeyEntry()],
+    );
   }, []);
 
   const removeApiKey = useCallback((id: string) => {
-    setEntriesState((current) => ({
-      ...current,
-      entries: current.entries.filter((entry) => entry.id !== id),
-    }));
+    setEntries((current) => current.filter((entry) => entry.id !== id));
   }, []);
 
   const updateApiKey = useCallback((id: string, key: string) => {
-    setEntriesState((current) => ({
-      ...current,
-      entries: current.entries.map((entry) => (entry.id === id ? { ...entry, key } : entry)),
-    }));
+    setEntries((current) => current.map((entry) => (entry.id === id ? { ...entry, key } : entry)));
+  }, []);
+
+  // A newly added row becomes an ordinary one once its key is stored. Keeping its id
+  // across the transition leaves the field mounted, so it does not lose focus.
+  const promoteApiKey = useCallback((id: string) => {
+    setEntries((current) =>
+      current.map((entry) => (entry.id === id ? { ...entry, isNew: false } : entry)),
+    );
   }, []);
 
   return {
     addApiKey,
     entries,
+    promoteApiKey,
     removeApiKey,
     saveApiKeys,
     updateApiKey,

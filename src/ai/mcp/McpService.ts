@@ -9,6 +9,7 @@ import { DataApiError, ErrorCode } from '@/data/types/apiTypes';
 import type { Assistant } from '@/data/types/assistant';
 import { DEFAULT_MCP_TIMEOUT_SECONDS, type StreamableHttpMcpServer } from '@/data/types/mcpServer';
 
+import { fnv1a32 } from './fnv1a';
 import type { McpCallToolResult } from './mcpResult';
 import { mcpResultToTextSummary } from './mcpResult';
 import { isMcpToolDisabledBySource, isMcpToolForcePromptBySource } from './mcpSourcePolicy';
@@ -405,6 +406,20 @@ export class McpService {
     }));
   }
 
+  /**
+   * Drop every server's runtime. Called when the data layer goes away: without it
+   * the pooled clients stay open and the refresh timers keep firing against a
+   * service nothing will read again.
+   */
+  dispose(): void {
+    for (const state of [...this.runtimeStates.values()]) {
+      this.retireState(state);
+    }
+
+    this.runtimeSnapshots.clear();
+    this.activePrewarmPromise = undefined;
+  }
+
   /** Drop one server's runtime after transport change, disable, or delete. */
   invalidateServer(serverId: string, options: { preserveSnapshot?: boolean } = {}): void {
     const state = this.runtimeStates.get(serverId);
@@ -416,11 +431,21 @@ export class McpService {
     }
   }
 
+  /**
+   * Identifies the transport config so a changed one retires its pooled client.
+   *
+   * The headers are digested rather than kept: they carry bearer tokens, and this
+   * string outlives the connection — `invalidateServer(id, { preserveSnapshot: true })`
+   * leaves a deactivated server's snapshot behind, fingerprint included. It is only
+   * ever compared for equality, so a digest is all it has to be. The base URL is not
+   * a secret and stays readable, which also makes a URL change exactly detected.
+   */
   private transportFingerprint(config: McpConnectionConfig): string {
     const headers = Object.entries(config.headers ?? {}).sort(([left], [right]) =>
       left < right ? -1 : left > right ? 1 : 0,
     );
-    return JSON.stringify([config.baseUrl, headers]);
+    const headersDigest = fnv1a32(JSON.stringify(headers)).toString(16).padStart(8, '0');
+    return JSON.stringify([config.baseUrl, headersDigest]);
   }
 
   private getRuntimeState(server: StreamableHttpMcpServer): ServerRuntimeState {

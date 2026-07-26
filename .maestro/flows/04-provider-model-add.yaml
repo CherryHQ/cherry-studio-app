@@ -6,8 +6,7 @@ tags: [settings, provider]
 - tapOn: "Settings"
 - tapOn: "Model service"
 - tapOn: "CherryInExpress"
-# 等 API draft 加载完成、布局稳定后再点（Base URL 区块异步插入会推挤工具栏，
-# 过早点击会用过期坐标误触「Endpoint settings」）
+# 等 provider 详情加载完成后再操作模型工具栏
 - extendedWaitUntil:
     visible: "Base URL"
     timeout: 10000
