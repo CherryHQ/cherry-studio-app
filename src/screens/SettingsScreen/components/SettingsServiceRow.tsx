@@ -29,10 +29,12 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
   statusTone = 'default',
   subtitle,
 }: SettingsServiceRowProps) {
+  const accessibilityLabel = [name, statusLabel, subtitle].filter(Boolean).join(', ');
+
   return (
     <View>
       <Pressable
-        accessibilityLabel={name}
+        accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
         className="flex-row items-center justify-between active:opacity-60 py-2 px-2"
         onPress={onPress}

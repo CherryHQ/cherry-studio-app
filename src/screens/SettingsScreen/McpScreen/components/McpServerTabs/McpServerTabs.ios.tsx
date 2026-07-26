@@ -17,7 +17,7 @@ const tabWidth = 144;
 const segmentWidth = tabWidth / mcpServerTabs.length;
 const indicatorWidth = segmentWidth - indicatorInset * 2;
 
-export function McpServerTabs({ isDisabled = false, onTabChange, tab }: McpServerTabsProps) {
+export function McpServerTabs({ onTabChange, tab }: McpServerTabsProps) {
   const { t } = useTranslation();
   const translateX = useSharedValue(0);
 
@@ -63,9 +63,8 @@ export function McpServerTabs({ isDisabled = false, onTabChange, tab }: McpServe
             return (
               <Pressable
                 accessibilityRole="tab"
-                accessibilityState={{ disabled: isDisabled, selected: isSelected }}
+                accessibilityState={{ selected: isSelected }}
                 className="h-full flex-1 items-center justify-center"
-                disabled={isDisabled}
                 hitSlop={{ bottom: 5, top: 5 }}
                 key={item}
                 onPress={() => onTabChange(item)}

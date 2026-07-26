@@ -8,7 +8,7 @@ const labelKeys = {
   tools: 'settings.mcp.tools.title',
 } as const;
 
-export function McpServerTabs({ isDisabled = false, onTabChange, tab }: McpServerTabsProps) {
+export function McpServerTabs({ onTabChange, tab }: McpServerTabsProps) {
   const { t } = useTranslation();
 
   return (
@@ -22,11 +22,10 @@ export function McpServerTabs({ isDisabled = false, onTabChange, tab }: McpServe
         {mcpServerTabs.map((item) => (
           <Tabs.Trigger
             accessibilityRole="tab"
-            accessibilityState={{ disabled: isDisabled, selected: item === tab }}
+            accessibilityState={{ selected: item === tab }}
             className="h-7 flex-1 px-1 py-0"
             hitSlop={{ bottom: 5, top: 5 }}
             key={item}
-            isDisabled={isDisabled}
             testID={`mcp-server-tab-${item}`}
             value={item}
           >
