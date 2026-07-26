@@ -5,6 +5,7 @@ import {
   buildApiKeysInputFromEntries,
   formatApiKeysInput,
   normalizeApiKeyEntries,
+  normalizeApiKeySingleLine,
   parseApiKeysInput,
 } from '../apiService/utils/providerApiServiceApiKeys';
 import { parseCredentialsDraft } from '../apiService/utils/providerApiServiceAuthDraft';
@@ -73,6 +74,10 @@ function createTestDraftSnapshot(overrides: Partial<DraftSnapshot> = {}): DraftS
 describe('provider API service form helpers', () => {
   it('parses comma and newline separated API keys', () => {
     expect(parseApiKeysInput(' sk-a,sk-b\n\n sk-c , sk-a ')).toEqual(['sk-a', 'sk-b', 'sk-c']);
+  });
+
+  it('removes line breaks from a single API key', () => {
+    expect(normalizeApiKeySingleLine('sk-a\r\nsk-b\nsk-c')).toBe('sk-ask-bsk-c');
   });
 
   it('formats API keys as comma separated values', () => {

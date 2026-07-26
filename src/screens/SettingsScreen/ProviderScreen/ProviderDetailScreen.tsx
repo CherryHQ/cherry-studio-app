@@ -1,4 +1,5 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Spinner } from 'heroui-native/spinner';
 import { SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -69,6 +70,11 @@ export default function ProviderDetailSettingsScreen() {
   const canEditEndpoint = canEditProviderEndpoint(provider);
   const showApiKeys = draft ? shouldShowApiKeys(draft.authDraft.type) : false;
   const isApiDraftLoading = apiKeysQuery.isPending || authConfigQuery.isPending || !draft;
+  const isProviderDetailLoading =
+    providerQuery.isPending ||
+    apiKeysQuery.isPending ||
+    authConfigQuery.isPending ||
+    (providerQuery.isSuccess && apiKeysQuery.isSuccess && authConfigQuery.isSuccess && !draft);
   const officialWebsite = provider?.websites?.official;
   const openOfficialWebsite = useCallback(() => {
     if (!officialWebsite) {
@@ -152,6 +158,20 @@ export default function ProviderDetailSettingsScreen() {
 
   if (!providerId || providerQuery.isError) {
     return <Redirect href="/settings/provider" />;
+  }
+
+  if (isProviderDetailLoading) {
+    return (
+      <>
+        <BackHeader
+          rightActions={rightActions}
+          title={providerName ?? t('settings.pages.provider.title')}
+        />
+        <View className="flex-1 items-center justify-center">
+          <Spinner accessibilityLabel={t('settings.provider.loading')} />
+        </View>
+      </>
+    );
   }
 
   return (

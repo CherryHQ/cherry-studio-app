@@ -28,6 +28,10 @@ export function parseApiKeysInput(input: string): string[] {
   return keys;
 }
 
+export function normalizeApiKeySingleLine(value: string): string {
+  return value.replaceAll(/[\r\n]+/g, '');
+}
+
 export function buildApiKeyEntriesFromInput(
   input: string,
   existingKeys: readonly ApiKeyEntry[],

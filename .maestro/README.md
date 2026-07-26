@@ -62,10 +62,6 @@ pnpm e2e:ios:flow .maestro/flows/00-smoke-boot.yaml
 - **`back` 是 Android-only**：iOS 上 `- back` 静默 no-op（命令显示 COMPLETED
   但页面不动），后续断言全部错位失败。iOS 返回必须 `tapOn: "Back"`
   （BackHeader 的 accessibilityLabel，i18n key `navigation.back`）。
-- **异步布局期点击会误触**：provider 详情的 Base URL 区块随 API draft
-  加载完成异步插入，推挤下方工具栏；进屏立即 `tapOn: "Add"` 会用过期
-  坐标点到「Endpoint settings」。进屏后先 `extendedWaitUntil` 等异步区块
-  出现 + `waitForAnimationToEnd` 再点。
 - **照片权限**：全新模拟器首次打开照片网格会弹系统权限框，相关 flow 内
   以 `optional: true` 步骤兜底点击。
 - **iOS 26 模拟器**上 dev-client 首次 bundle 需 ~3s，launch 子流已含等待。
