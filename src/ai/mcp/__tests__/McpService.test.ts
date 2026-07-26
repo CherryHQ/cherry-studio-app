@@ -1199,3 +1199,109 @@ describe('invalidateServer', () => {
     expect(stale.close).toHaveBeenCalled();
   });
 });
+
+describe('transport fingerprint', () => {
+  it('reconnects when only a header changes', async () => {
+    const original = makeClient(makeRawTools(['old']));
+    const replacement = makeClient(makeRawTools(['new']));
+    mockCreateMCPClient.mockResolvedValueOnce(original).mockResolvedValue(replacement);
+    const servers = [makeServer({ headers: { Authorization: 'Bearer old-token' } })];
+    const { service } = makeService(servers);
+    await warmedToolSet(service);
+
+    servers[0] = makeServer({ headers: { Authorization: 'Bearer new-token' } });
+
+    expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
+      'mcp__serverone__new',
+    ]);
+    expect(original.close).toHaveBeenCalled();
+  });
+
+  it('does not retain the header values it fingerprints', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer({ headers: { Authorization: 'Bearer super-secret-token' } });
+    const { service } = makeService([server]);
+    await warmedToolSet(service);
+
+    // A deactivated server keeps its snapshot, so the fingerprint outlives the
+    // connection that needed the token.
+    service.invalidateServer(server.id, { preserveSnapshot: true });
+
+    const retained = retainedFingerprints(service);
+    expect(retained).not.toEqual([]);
+    expect(retained.join('|')).not.toContain('super-secret-token');
+    expect(retained.join('|')).toContain(server.baseUrl);
+  });
+});
+
+describe('dispose', () => {
+  it('closes the pooled client', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const { service } = makeService([makeServer()]);
+    await warmedToolSet(service);
+
+    service.dispose();
+
+    expect(client.close).toHaveBeenCalled();
+  });
+
+  it('cancels an in-flight connect and closes the client that lands after it', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    try {
+      let settleConnect: ((client: FakeClient) => void) | undefined;
+      const client = makeClient(makeRawTools(['search']));
+      mockCreateMCPClient.mockReturnValueOnce(
+        new Promise<FakeClient>((resolve) => {
+          settleConnect = resolve;
+        }),
+      );
+      const { service } = makeService([makeServer()]);
+
+      const request = service.getToolSetForAssistant(makeAssistant());
+      await flush();
+      expect(jest.getTimerCount()).toBe(2);
+
+      service.dispose();
+      await request;
+
+      expect(jest.getTimerCount()).toBe(0);
+      settleConnect?.(client);
+      await flush();
+      expect(client.close).toHaveBeenCalled();
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
+  });
+
+  it('drops the snapshots it was keeping for disabled servers', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    await warmedToolSet(service);
+    service.invalidateServer(server.id, { preserveSnapshot: true });
+    expect(retainedFingerprints(service)).not.toEqual([]);
+
+    service.dispose();
+
+    expect(retainedFingerprints(service)).toEqual([]);
+  });
+});
+
+/**
+ * The fingerprint is private and deliberately absent from every public summary, but
+ * "it does not hold the bearer token" is the property worth pinning, so read it back.
+ */
+function retainedFingerprints(service: McpService): string[] {
+  const internals = service as unknown as {
+    runtimeSnapshots: Map<string, { transportFingerprint: string }>;
+    runtimeStates: Map<string, { transportFingerprint: string }>;
+  };
+
+  return [...internals.runtimeStates.values(), ...internals.runtimeSnapshots.values()].map(
+    (entry) => entry.transportFingerprint,
+  );
+}

@@ -3,6 +3,8 @@
  * `src/shared/ai/tools/mcpToolName.ts` (subset used by mobile).
  */
 
+import { fnv1a32 } from './fnv1a';
+
 /**
  * Convert a string to camelCase, ensuring it's a valid JavaScript identifier.
  *
@@ -30,16 +32,11 @@ const FUNCTION_CALL_TOOL_NAME_MAX_LENGTH = 63;
 const SERVER_DISAMBIGUATOR_LENGTH = 7;
 
 /**
- * FNV-1a 32-bit hash of the server name as a fixed-width base36 string.
- * Identifier-safe (`[0-9a-z]`) so it can sit inside a JS-identifier tool name.
+ * Hash of the server name as a fixed-width base36 string. Identifier-safe
+ * (`[0-9a-z]`) so it can sit inside a JS-identifier tool name.
  */
 function hashServerName(serverName: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < serverName.length; i++) {
-    h ^= serverName.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0)
+  return fnv1a32(serverName)
     .toString(36)
     .padStart(SERVER_DISAMBIGUATOR_LENGTH, '0')
     .slice(-SERVER_DISAMBIGUATOR_LENGTH);

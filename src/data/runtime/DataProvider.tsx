@@ -62,6 +62,7 @@ export function DataProvider({ bootstrap, children, createRuntime }: DataProvide
 
     return () => {
       disposed = true;
+      services.mcp.dispose();
       services.webSearch.dispose();
       dbService.dispose();
     };
