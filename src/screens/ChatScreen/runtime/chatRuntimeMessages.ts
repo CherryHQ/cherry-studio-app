@@ -53,14 +53,13 @@ export function finalizeTurnToolApprovals(
 }
 
 /**
- * Pending approvals for the approval sheet. Only the tip assistant message in
- * `paused` state can carry them: streaming overlays force `pending`, so this
- * never fires mid-stream, and terminal `paused` rows survive restarts — which
- * is what makes the sheet reappear after a kill.
+ * Pending approvals for the approval sheet. Only the tip assistant message is
+ * actionable; its persisted status is deliberately irrelevant so current
+ * `success` rows and legacy `paused` rows both recover after a restart.
  */
 export function getPendingToolApprovals(messages: readonly Message[]): PendingToolApproval[] {
   const last = messages.at(-1);
-  if (!last || last.role !== 'assistant' || last.status !== 'paused') {
+  if (!last || last.role !== 'assistant') {
     return [];
   }
 

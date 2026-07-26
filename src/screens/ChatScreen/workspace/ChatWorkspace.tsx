@@ -1,17 +1,15 @@
 import type { LegendListRef } from '@legendapp/list/react-native';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useToast } from 'heroui-native/toast';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSharedValue } from 'react-native-reanimated';
 
-import type { BottomSheetCloseReason } from '@/components/bottomSheet';
 import { isIOS } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
-import { DataApiError, ErrorCode } from '@/data/types/apiTypes';
 import type { Message } from '@/data/types/message';
 import type { MessagesViewModel } from '@/hooks/chat';
-import { McpApprovalReopenProvider, McpApprovalSheet } from '../approval/McpApprovalSheet';
+import { McpApprovalSheet } from '../approval/McpApprovalSheet';
 import { MessageSlideInProvider } from '../messageItem';
 import { useChatRuntime, useChatRuntimeTopic } from '../runtime/ChatRuntimeProvider';
 import { getPendingToolApprovals, mergeMessagesWithOverlay } from '../runtime/chatRuntimeMessages';
@@ -26,7 +24,6 @@ import {
   shouldWaitForInitialHistoryLayout,
   useMessageListInitialRenderGate,
 } from './hooks/useMessageListInitialRenderGate';
-import { nextDismissedApprovalMessageId } from './utils/approvalSheetDismissal';
 
 // 「滚动到底部」按钮悬浮在输入框上方的间距：按输入框实测高度定位，
 // 不用含 safe area 的 contentBottomInset，避免出现需要硬抵消的 magic 偏移。
@@ -60,40 +57,14 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatRuntime.overlayMessage);
   const anchorIndex = getAnchoredUserMessageIndex(visibleMessages);
   const runtime = useChatRuntime();
-  // 待审批检测：数据源就是 react-query 从 DB 读回的 messages（paused tip），
-  // 所以杀 app 重进后 sheet 自动恢复；流式期 overlay 强制 pending 不会误弹。
+  // 待审批检测以活动 tip 的 parts 为准，因此杀 app 重进后 sheet 也会自动恢复。
   const pendingApprovals = getPendingToolApprovals(visibleMessages);
-  const [dismissedApprovalMessageId, setDismissedApprovalMessageId] = useState<string | null>(null);
-  const approvalMessageId = pendingApprovals[0]?.messageId;
-  const isApprovalSheetOpen =
-    approvalMessageId !== undefined &&
-    !chatRuntime.isBusy &&
-    dismissedApprovalMessageId !== approvalMessageId;
-  const reopenApprovalSheet = useCallback(() => {
-    setDismissedApprovalMessageId(null);
-  }, []);
-  const handleApprovalSheetClose = useCallback(
-    (reason: BottomSheetCloseReason) => {
-      setDismissedApprovalMessageId((previous) =>
-        nextDismissedApprovalMessageId({ approvalMessageId, previous, reason }),
-      );
-    },
-    [approvalMessageId],
-  );
+  const isApprovalSheetOpen = pendingApprovals.length > 0 && chatRuntime.status !== 'streaming';
   const handleApprovalRespond = useCallback(
     async (input: { approvalId: string; approved: boolean; messageId: string }) => {
       try {
         await runtime.respondToolApproval({ ...input, topicId });
       } catch (error) {
-        // Double submits and already-settled approvals reject as invalidOperation;
-        // the sheet converges from the refreshed messages, so those stay quiet.
-        // Anything else (the write failed) means the tap did nothing — say so,
-        // or the sheet just re-presents the same approval with no explanation.
-        if (error instanceof DataApiError && error.code === ErrorCode.INVALID_OPERATION) {
-          logger.warn('Tool approval response was already settled', error);
-          return;
-        }
-
         logger.error('Tool approval response failed', error as Error);
         toast.show({ label: t('chat.mcpTool.approval.failed'), variant: 'danger' });
       }
@@ -127,22 +98,20 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   return (
     <ChatWorkspaceFrame>
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
-      <McpApprovalReopenProvider value={reopenApprovalSheet}>
-        <MessageSlideInProvider slideInMessageId={chatRuntime.pendingUserMessage?.id}>
-          <ChatMessageList
-            key={listRenderKey}
-            anchorIndex={anchorIndex}
-            contentBottomInset={contentBottomInset}
-            contentTopInset={contentTopInset}
-            isAtBottom={isAtBottom}
-            listRef={listRef}
-            messages={visibleMessages}
-            onLoadOlder={loadOlder}
-            onPrefetchOlder={messageWindow.prefetchOlder}
-            onReady={markListLoaded}
-          />
-        </MessageSlideInProvider>
-      </McpApprovalReopenProvider>
+      <MessageSlideInProvider slideInMessageId={chatRuntime.pendingUserMessage?.id}>
+        <ChatMessageList
+          key={listRenderKey}
+          anchorIndex={anchorIndex}
+          contentBottomInset={contentBottomInset}
+          contentTopInset={contentTopInset}
+          isAtBottom={isAtBottom}
+          listRef={listRef}
+          messages={visibleMessages}
+          onLoadOlder={loadOlder}
+          onPrefetchOlder={messageWindow.prefetchOlder}
+          onReady={markListLoaded}
+        />
+      </MessageSlideInProvider>
       <ChatComposer onHeightChange={handleInputHeightChange} topicId={topicId} />
       <ScrollToBottomButton
         gap={SCROLL_BUTTON_GAP_ABOVE_INPUT}
@@ -154,7 +123,6 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
       <McpApprovalSheet
         approvals={pendingApprovals}
         isOpen={isApprovalSheetOpen}
-        onClose={handleApprovalSheetClose}
         onRespond={handleApprovalRespond}
       />
     </ChatWorkspaceFrame>

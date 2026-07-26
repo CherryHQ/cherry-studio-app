@@ -195,22 +195,25 @@ describe('MessageService', () => {
       type: 'dynamic-tool',
     });
 
-    function makeApprovalService(row: Record<string, unknown>) {
+    const respondedPart = (approvalId: string) => ({
+      ...requestedPart(approvalId),
+      approval: { approved: true, id: approvalId },
+      state: 'approval-responded',
+    });
+
+    function makeApprovalService(row?: Record<string, unknown>) {
       const updates: Record<string, unknown>[] = [];
       const tx = {
         select: jest.fn(() => ({
           from: jest.fn(() => ({
-            where: jest.fn(() => ({ limit: jest.fn(async () => [row]) })),
+            where: jest.fn(() => ({ limit: jest.fn(async () => (row ? [row] : [])) })),
           })),
         })),
         update: jest.fn(() => ({
           set: jest.fn((values: Record<string, unknown>) => ({
-            where: jest.fn(() => ({
-              returning: jest.fn(async () => {
-                updates.push(values);
-                return [{ ...row, ...values }];
-              }),
-            })),
+            where: jest.fn(async () => {
+              updates.push(values);
+            }),
           })),
         })),
       };
@@ -239,22 +242,25 @@ describe('MessageService', () => {
       updatedAt: 1747267200000,
     };
 
-    test('flips the matching approval and atomically settles the status', async () => {
+    test('applies updated input and atomically marks the final approval pending', async () => {
       const { service, updates } = makeApprovalService({
         ...baseRow,
         data: { parts: [requestedPart('a1')] },
+        status: 'success',
       });
 
-      const result = await service.applyToolApprovalDecisions(
-        'assistant-1',
-        { decisions: [{ approvalId: 'a1', approved: true }] },
-        { statusWhenSettled: 'pending' },
-      );
+      const result = await service.applyToolApprovalDecisions('assistant-1', [
+        { approvalId: 'a1', approved: true, updatedInput: { query: 'revised' } },
+      ]);
 
-      expect(result.pendingApprovalCount).toBe(0);
+      expect(result).toMatchObject({
+        appliedApprovalIds: ['a1'],
+        alreadySettledApprovalIds: [],
+      });
       expect(updates[0]).toMatchObject({ status: 'pending' });
       expect((updates[0]?.data as { parts: unknown[] }).parts[0]).toMatchObject({
         approval: { approved: true, id: 'a1' },
+        input: { query: 'revised' },
         state: 'approval-responded',
       });
     });
@@ -265,59 +271,67 @@ describe('MessageService', () => {
         data: { parts: [requestedPart('a1'), requestedPart('a2')] },
       });
 
-      const result = await service.applyToolApprovalDecisions(
-        'assistant-1',
-        { decisions: [{ approvalId: 'a1', approved: false, reason: 'no' }] },
-        { statusWhenSettled: 'pending' },
-      );
+      const result = await service.applyToolApprovalDecisions('assistant-1', [
+        { approvalId: 'a1', approved: false, reason: 'no' },
+      ]);
 
-      expect(result.pendingApprovalCount).toBe(1);
+      expect(result?.appliedApprovalIds).toEqual(['a1']);
       expect(updates[0]?.status).toBeUndefined();
     });
 
-    test('rejects a decision that matches nothing — the double-submit gate', async () => {
-      const { service } = makeApprovalService({
+    test('reports an already-settled duplicate without writing', async () => {
+      const { service, updates } = makeApprovalService({
         ...baseRow,
-        data: {
-          parts: [
-            {
-              ...requestedPart('a1'),
-              approval: { approved: true, id: 'a1' },
-              state: 'approval-responded',
-            },
-          ],
-        },
+        data: { parts: [respondedPart('a1')] },
       });
 
-      await expect(
-        service.applyToolApprovalDecisions('assistant-1', {
-          decisions: [{ approvalId: 'a1', approved: true }],
-        }),
-      ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+      const result = await service.applyToolApprovalDecisions('assistant-1', [
+        { approvalId: 'a1', approved: false },
+      ]);
+
+      expect(result).toMatchObject({
+        appliedApprovalIds: [],
+        alreadySettledApprovalIds: ['a1'],
+      });
+      expect(updates).toEqual([]);
     });
 
-    test('refuses rows that are not awaiting approval', async () => {
-      const { service } = makeApprovalService({
+    test('leaves the row untouched when no decision matches', async () => {
+      const { service, updates } = makeApprovalService({
         ...baseRow,
         data: { parts: [requestedPart('a1')] },
+      });
+
+      const result = await service.applyToolApprovalDecisions('assistant-1', [
+        { approvalId: 'other', approved: true },
+      ]);
+
+      expect(result).toMatchObject({ appliedApprovalIds: [], alreadySettledApprovalIds: [] });
+      expect(updates).toEqual([]);
+    });
+
+    test('returns null when the message no longer exists', async () => {
+      const { service, updates } = makeApprovalService();
+
+      await expect(
+        service.applyToolApprovalDecisions('missing', [{ approvalId: 'a1', approved: true }]),
+      ).resolves.toBeNull();
+      expect(updates).toEqual([]);
+    });
+
+    test('does not gate decisions by message role or status', async () => {
+      const { service, updates } = makeApprovalService({
+        ...baseRow,
+        data: { parts: [requestedPart('a1')] },
+        role: 'user',
         status: 'success',
       });
 
-      await expect(
-        service.applyToolApprovalDecisions('assistant-1', {
-          decisions: [{ approvalId: 'a1', approved: true }],
-        }),
-      ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
-    });
+      await service.applyToolApprovalDecisions('assistant-1', [
+        { approvalId: 'a1', approved: true },
+      ]);
 
-    test('refuses non-assistant rows', async () => {
-      const { service } = makeApprovalService({ ...baseRow, role: 'user' });
-
-      await expect(
-        service.applyToolApprovalDecisions('assistant-1', {
-          decisions: [{ approvalId: 'a1', approved: true }],
-        }),
-      ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+      expect(updates[0]).toMatchObject({ status: 'pending' });
     });
   });
 

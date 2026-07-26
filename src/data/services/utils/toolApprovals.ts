@@ -6,8 +6,9 @@
  * `convertToModelMessages` then turns the responded part into the
  * `tool-approval-response` model message the next stream run consumes.
  *
- * `approval-responded` is only ever a *transient* state, valid while the turn
- * is about to resume. It must never be a message's terminal state:
+ * `approval-responded` is a transient state while the message is collecting
+ * decisions or about to resume. Once the final request is answered, it must
+ * not become the message's terminal state:
  * `convertToModelMessages` emits a tool result for `output-available`,
  * `output-error` and `output-denied` only, so a responded part leaves a tool
  * call with no result behind. The SDK's own guard misses it — it exempts
@@ -20,13 +21,12 @@
 import type { CherryMessagePart } from '@/data/types/message';
 import { withCherryMeta } from '@/data/types/uiParts';
 
-export type ToolApprovalDecision = {
+export type ApprovalDecision = {
   approvalId: string;
   approved: boolean;
   reason?: string;
+  updatedInput?: Record<string, unknown>;
 };
-
-export type ToolApprovalInput = { decisions: ToolApprovalDecision[] };
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
@@ -34,15 +34,15 @@ function isToolPart(part: CherryMessagePart): part is ToolMessagePart {
   return part.type === 'dynamic-tool' || part.type.startsWith('tool-');
 }
 
-function respondedPart(
-  part: ToolMessagePart,
-  approvalId: string,
-  approved: boolean,
-  reason: string | undefined,
-): CherryMessagePart {
+function respondedPart(part: ToolMessagePart, decision: ApprovalDecision): CherryMessagePart {
   return {
     ...part,
-    approval: { approved, id: approvalId, ...(reason !== undefined && { reason }) },
+    ...(decision.updatedInput !== undefined ? { input: decision.updatedInput } : {}),
+    approval: {
+      approved: decision.approved,
+      id: decision.approvalId,
+      ...(decision.reason !== undefined && { reason: decision.reason }),
+    },
     state: 'approval-responded',
   } as CherryMessagePart;
 }
@@ -128,37 +128,29 @@ export function finalizeDanglingToolApprovals(
 /**
  * Apply approval decisions to a parts array.
  *
- * Returns the transformed parts, how many decisions matched a pending part,
- * and how many approvals are still pending afterwards. Callers own the "did
- * every decision land" check — a decision that matches nothing usually means
- * a double submit.
- *
- * Decisions leave parts in the transient `approval-responded` state, so this is
- * only correct when the caller resumes the turn right after. A caller that
- * abandons the turn instead wants `finalizeDanglingToolApprovals`.
+ * Decisions leave parts in `approval-responded`. Once no request remains, the
+ * caller must resume the turn; a caller that abandons it instead wants
+ * `finalizeDanglingToolApprovals`.
  */
 export function applyToolApprovalDecisionsToParts(
   parts: readonly CherryMessagePart[],
-  input: ToolApprovalInput,
-): { matchedCount: number; parts: CherryMessagePart[]; pendingApprovalCount: number } {
-  let matchedCount = 0;
+  decisions: readonly ApprovalDecision[],
+): CherryMessagePart[] {
+  if (decisions.length === 0) {
+    return [...parts];
+  }
 
-  const nextParts = parts.map((part): CherryMessagePart => {
+  const byApprovalId = new Map(decisions.map((decision) => [decision.approvalId, decision]));
+
+  return parts.map((part): CherryMessagePart => {
     if (!isToolPart(part) || part.state !== 'approval-requested') {
       return part;
     }
 
-    const decision = input.decisions.find((d) => d.approvalId === part.approval.id);
+    const decision = byApprovalId.get(part.approval.id);
     if (!decision) {
       return part;
     }
-    matchedCount += 1;
-    return respondedPart(part, decision.approvalId, decision.approved, decision.reason);
+    return respondedPart(part, decision);
   });
-
-  return {
-    matchedCount,
-    parts: nextParts,
-    pendingApprovalCount: countPendingToolApprovals(nextParts),
-  };
 }

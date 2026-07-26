@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { BottomSheet } from '@/components/bottomSheet';
 import type { PendingToolApproval } from '../../runtime/chatRuntimeMessages';
 import { McpApprovalSheet } from '../McpApprovalSheet';
 
@@ -19,7 +20,9 @@ jest.mock('@/components/bottomSheet', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
   return {
-    BottomSheet: ({ children }: { children: ReactNode }) => <MockView>{children}</MockView>,
+    BottomSheet: ({ children, ...props }: { children: ReactNode }) => (
+      <MockView {...props}>{children}</MockView>
+    ),
   };
 });
 
@@ -60,7 +63,7 @@ describe('McpApprovalSheet', () => {
   ) {
     const onRespond = jest.fn(overrides.onRespond ?? (async () => undefined));
     const element = (approvals: readonly PendingToolApproval[]) => (
-      <McpApprovalSheet approvals={approvals} isOpen onClose={jest.fn()} onRespond={onRespond} />
+      <McpApprovalSheet approvals={approvals} isOpen onRespond={onRespond} />
     );
 
     act(() => {
@@ -111,6 +114,12 @@ describe('McpApprovalSheet', () => {
       approved: true,
       messageId: 'assistant-1',
     });
+  });
+
+  test('cannot be dismissed while an approval is pending', () => {
+    render();
+
+    expect(renderer.root.findByType(BottomSheet).props.isCloseDisabled).toBe(true);
   });
 
   test('denies the call the sheet is showing', async () => {
@@ -174,5 +183,22 @@ describe('McpApprovalSheet', () => {
     });
 
     expect(renderedTexts()).toContain('chat.mcpTool.approval.pendingCount {"count":2}');
+  });
+
+  test('advances to the next approval without closing the sheet', () => {
+    const { rerender } = render({
+      approvals: [makeApproval(), makeApproval({ approvalId: 'approval-2', toolCallId: 'call-2' })],
+    });
+
+    rerender([
+      makeApproval({
+        approvalId: 'approval-2',
+        toolCallId: 'call-2',
+        toolName: 'mcp__serverTwo__createFile',
+      }),
+    ]);
+
+    expect(renderedTexts()).toContain('serverTwo: createFile');
+    expect(renderer.root.findByType(BottomSheet).props.isOpen).toBe(true);
   });
 });

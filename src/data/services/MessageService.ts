@@ -1,3 +1,4 @@
+import { isToolUIPart } from 'ai';
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { loggerService } from '@/core/logger/LoggerService';
@@ -12,6 +13,7 @@ import type { PreparedInternalFile } from '@/data/types/file';
 import type {
   BranchMessage,
   BranchMessagesResponse,
+  CherryMessagePart,
   Message,
   MessageData,
   SiblingsGroup,
@@ -33,9 +35,10 @@ import type { FileEntryService } from './FileEntryService';
 import type { TopicService } from './TopicService';
 import { timestampToISO } from './utils/rowMappers';
 import {
+  type ApprovalDecision,
   applyToolApprovalDecisionsToParts,
+  countPendingToolApprovals,
   finalizeDanglingToolApprovals,
-  type ToolApprovalInput,
 } from './utils/toolApprovals';
 
 const previewLength = 50;
@@ -57,14 +60,6 @@ export interface AssistantPlaceholder
 }
 
 export interface CreateUserMessageWithPlaceholdersInput {
-  /**
-   * Settle any tool approval this message is still waiting on, in the same
-   * transaction that reserves the new turn. Sending instead of deciding
-   * supersedes the approval, and splitting the two writes would leave a
-   * `paused` row whose approvals are all answered when the reservation fails —
-   * a shape no recovery path reaches.
-   */
-  finalizeToolApprovals?: { messageId: string; reason: string };
   placeholders: AssistantPlaceholder[];
   preparedFiles?: readonly PreparedInternalFile[];
   siblingsGroupId?: number;
@@ -577,13 +572,6 @@ export class MessageService {
         );
       }
 
-      if (input.finalizeToolApprovals) {
-        await finalizeToolApprovalsTx(tx, {
-          ...input.finalizeToolApprovals,
-          topicId: input.topicId,
-        });
-      }
-
       let userMessage: Message;
       if (input.userMessage.mode === 'create') {
         const dto = input.userMessage.dto;
@@ -997,76 +985,64 @@ export class MessageService {
   }
 
   /**
-   * Flip pending tool approvals to responded, in one transaction (desktop
-   * `applyToolApprovalDecisions`).
-   *
-   * With `statusWhenSettled`, the status flip happens in the same transaction
-   * the moment no `approval-requested` part remains. Splitting them would open
-   * a window where a kill leaves a zombie row — paused, fully responded,
-   * unreachable by any recovery path; atomically flipped to `pending`, a kill
-   * before the resumed stream starts is cleaned up by the existing cold-start
-   * reconcile like any other crashed stream.
-   *
-   * Throws `invalidOperation` when a decision matches no pending approval —
-   * the final gate against double submits.
+   * Apply tool approval decisions using the desktop contract. Mobile also
+   * flips the final answered row to `pending` in this transaction so a process
+   * kill cannot strand a fully answered turn outside cold-start recovery.
    */
   async applyToolApprovalDecisions(
-    id: string,
-    input: ToolApprovalInput,
-    options?: { statusWhenSettled?: 'pending' },
-  ): Promise<{ message: Message; pendingApprovalCount: number }> {
+    anchorId: string,
+    decisions: ApprovalDecision[],
+  ): Promise<{
+    parts: CherryMessagePart[];
+    appliedApprovalIds: string[];
+    alreadySettledApprovalIds: string[];
+  } | null> {
     return await this.dbService.withWriteTx(async (tx) => {
       const [existing] = await tx
         .select()
         .from(messageTable)
-        .where(and(eq(messageTable.id, id), isNull(messageTable.deletedAt)))
+        .where(and(eq(messageTable.id, anchorId), isNull(messageTable.deletedAt)))
         .limit(1);
 
       if (!existing) {
-        throw DataApiErrorFactory.notFound('Message', id);
-      }
-      if (existing.role !== 'assistant') {
-        throw DataApiErrorFactory.invalidOperation(
-          'apply tool approval decisions',
-          'not an assistant message',
-        );
-      }
-      // Only a paused row can carry a live approval: a streaming turn owns its
-      // parts in memory, and a settled one has nothing left to decide.
-      if (existing.status !== 'paused') {
-        throw DataApiErrorFactory.invalidOperation(
-          'apply tool approval decisions',
-          `message is ${existing.status}, not awaiting approval`,
-        );
+        return null;
       }
 
-      const applied = applyToolApprovalDecisionsToParts(existing.data.parts ?? [], input);
-      if (applied.matchedCount !== input.decisions.length) {
-        throw DataApiErrorFactory.invalidOperation(
-          'apply tool approval decisions',
-          'approval not found or already responded',
-        );
-      }
+      const parts = existing.data.parts ?? [];
+      const nextParts = applyToolApprovalDecisionsToParts(parts, decisions);
+      const requestedIds = new Set(
+        parts
+          .filter((part) => isToolUIPart(part) && part.state === 'approval-requested')
+          .map((part) => part.approval?.id)
+          .filter((id): id is string => typeof id === 'string'),
+      );
+      const settledIds = new Set(
+        parts
+          .filter((part) => isToolUIPart(part) && part.state !== 'approval-requested')
+          .map((part) => part.approval?.id)
+          .filter((id): id is string => typeof id === 'string'),
+      );
+      const appliedApprovalIds = decisions
+        .map((decision) => decision.approvalId)
+        .filter((id) => requestedIds.has(id));
+      const alreadySettledApprovalIds = decisions
+        .map((decision) => decision.approvalId)
+        .filter((id) => settledIds.has(id));
 
-      const updates: Partial<typeof messageTable.$inferInsert> = {
-        data: { ...existing.data, parts: applied.parts },
-      };
-      if (applied.pendingApprovalCount === 0 && options?.statusWhenSettled) {
-        updates.status = options.statusWhenSettled;
-      }
-
-      const [row] = await tx
-        .update(messageTable)
-        .set(updates)
-        .where(eq(messageTable.id, id))
-        .returning();
-      if (!row) {
-        throw DataApiErrorFactory.notFound('Message', id);
+      if (appliedApprovalIds.length > 0) {
+        await tx
+          .update(messageTable)
+          .set({
+            data: { ...existing.data, parts: nextParts },
+            ...(countPendingToolApprovals(nextParts) === 0 ? { status: 'pending' as const } : {}),
+          })
+          .where(eq(messageTable.id, anchorId));
       }
 
       return {
-        message: rowToMessage(row),
-        pendingApprovalCount: applied.pendingApprovalCount,
+        parts: nextParts,
+        appliedApprovalIds,
+        alreadySettledApprovalIds,
       };
     });
   }
@@ -1074,9 +1050,8 @@ export class MessageService {
   /**
    * Assistant messages still `pending` with no in-memory writer — only true
    * right after a cold start, when a crash left them without a terminal
-   * status. `paused` rows are deliberately excluded: those are waiting on the
-   * user (a tool approval), and clearing them would destroy the sheet's only
-   * recovery path.
+   * status. `paused` rows are deliberately excluded because they represent a
+   * user-stopped generation, matching desktop semantics.
    */
   async findPendingAssistantMessageIds(): Promise<string[]> {
     const rows = await this.db
@@ -1242,66 +1217,6 @@ async function getRootMessageIdTx(tx: any, topicId: string): Promise<string> {
   }
 
   return root.id;
-}
-
-/**
- * Close out the approvals a superseded assistant tip still carries. A row that
- * is gone, not an assistant turn, or already settled is a normal outcome, not
- * an error: the tip may have been deleted, resumed, or answered between the
- * read that scheduled this and the transaction that runs it.
- *
- * `pending` counts as much as `paused`: the caller holds the topic's only
- * active turn, so a `pending` tip has no writer left to finish it, and it is
- * exactly the row a failed resume strands — repairing it here is the only
- * thing standing between the branch and a provider rejecting every later
- * request in it.
- */
-async function finalizeToolApprovalsTx(
-  tx: any,
-  input: { messageId: string; reason: string; topicId: string },
-): Promise<void> {
-  const [row] = await tx
-    .select()
-    .from(messageTable)
-    .where(
-      and(
-        eq(messageTable.id, input.messageId),
-        // This is the one write that can force a row terminal, and the message
-        // id arrives from the caller: keep it inside the topic being reserved.
-        eq(messageTable.topicId, input.topicId),
-        isNull(messageTable.deletedAt),
-      ),
-    )
-    .limit(1);
-
-  if (!row || row.role !== 'assistant') {
-    return;
-  }
-
-  const applied = finalizeDanglingToolApprovals(row.data?.parts ?? [], input.reason);
-  if (applied.matchedCount === 0) {
-    return;
-  }
-
-  if (row.status !== 'paused' && row.status !== 'pending') {
-    // A settled row holding an unsettled approval is a shape nothing writes:
-    // leave it alone, but say so — it is the signature of the branch that is
-    // about to start failing.
-    logger.warn('Left an unsettled tool approval on a settled message', {
-      messageId: row.id,
-      status: row.status,
-    });
-    return;
-  }
-
-  await tx
-    .update(messageTable)
-    .set({
-      data: { ...row.data, parts: applied.parts },
-      // A stranded `pending` row has nobody left to give it a terminal status.
-      ...(row.status === 'pending' ? { status: 'error' as const } : {}),
-    })
-    .where(eq(messageTable.id, input.messageId));
 }
 
 async function validateParent(tx: any, topicId: string, parentId: string): Promise<string> {

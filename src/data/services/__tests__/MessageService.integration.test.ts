@@ -67,9 +67,16 @@ describe('MessageService integration', () => {
       undefined as never,
       { casing: 'snake_case', schema },
     ) as unknown as Database;
+    let writeTail: Promise<void> = Promise.resolve();
     const dbService = {
       getDb: () => database,
       withWriteTx: async <T>(callback: (tx: Database) => Promise<T>) => {
+        const previous = writeTail;
+        let release: () => void = () => undefined;
+        writeTail = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        await previous;
         sqlite.exec('BEGIN IMMEDIATE');
         try {
           const result = await callback(database);
@@ -78,6 +85,8 @@ describe('MessageService integration', () => {
         } catch (error) {
           sqlite.exec('ROLLBACK');
           throw error;
+        } finally {
+          release();
         }
       },
     } as unknown as DbService;
@@ -110,8 +119,7 @@ describe('MessageService integration', () => {
   });
 
   // Cold-start reconcile settles whatever this returns to `error`. A `paused`
-  // row is waiting on a human, so matching it here would destroy every tool
-  // approval sheet on app start.
+  // row is a user-stopped generation and must remain terminal.
   test('findPendingAssistantMessageIds returns only live pending assistant rows', async () => {
     const topic = await topicService.create({ name: 'reconcile' });
     const create = (role: 'assistant' | 'user', status: Message['status']) =>
@@ -128,111 +136,55 @@ describe('MessageService integration', () => {
     await expect(service.findPendingAssistantMessageIds()).resolves.toEqual([pending.id]);
   });
 
-  describe('createUserMessageWithPlaceholders finalizeToolApprovals', () => {
-    async function seedTip(status: Message['status'], role: Message['role'] = 'assistant') {
+  describe('applyToolApprovalDecisions', () => {
+    async function seedTip() {
       const topic = await topicService.create({ name: 'approval' });
-      await service.create(topic.id, { data: { parts: [] }, role: 'user' });
+      await service.create(topic.id, { data: { parts: [] }, role: 'user', status: 'success' });
       const tip = await service.create(topic.id, {
-        data: { parts: [requestedPart('a1'), respondedPart('a2')] },
-        role,
-        status,
+        data: { parts: [requestedPart('a1'), requestedPart('a2')] },
+        role: 'assistant',
+        status: 'success',
       });
 
       return { tip, topic };
     }
 
-    function reserve(
-      topicId: string,
-      tipId: string,
-      userMessage: Parameters<
-        MessageService['createUserMessageWithPlaceholders']
-      >[0]['userMessage'],
-    ) {
-      return service.createUserMessageWithPlaceholders({
-        finalizeToolApprovals: { messageId: tipId, reason: 'superseded' },
-        placeholders: [{ data: { parts: [] }, role: 'assistant' }],
-        topicId,
-        userMessage,
-      });
-    }
+    test('serializes concurrent decisions without losing either response', async () => {
+      const { tip } = await seedTip();
 
-    const newUserMessage = {
-      dto: { data: { parts: [{ text: 'next', type: 'text' as const }] }, role: 'user' as const },
-      mode: 'create' as const,
-    };
+      const [first, second] = await Promise.all([
+        service.applyToolApprovalDecisions(tip.id, [
+          { approvalId: 'a1', approved: true, updatedInput: { query: 'revised' } },
+        ]),
+        service.applyToolApprovalDecisions(tip.id, [
+          { approvalId: 'a2', approved: false, reason: 'not now' },
+        ]),
+      ]);
 
-    test('settles the superseded tip terminally in the same transaction', async () => {
-      const { tip, topic } = await seedTip('paused');
-
-      const result = await reserve(topic.id, tip.id, newUserMessage);
-
+      expect(first?.appliedApprovalIds).toEqual(['a1']);
+      expect(second?.appliedApprovalIds).toEqual(['a2']);
       const settled = await service.getById(tip.id);
-      // 'approval-responded' is transient: only terminal states make
-      // convertToModelMessages emit a tool result for the abandoned call.
-      expect(partStates(settled)).toEqual(['output-denied', 'output-error']);
-      expect(settled.data.parts?.[0]).toMatchObject({
-        approval: { approved: false, id: 'a1', reason: 'superseded' },
-      });
-      expect(settled.data.parts?.[1]).toMatchObject({
-        approval: { approved: true, id: 'a2' },
-        errorText: 'superseded',
-      });
-      expect(result.placeholders).toHaveLength(1);
+      expect(settled.status).toBe('pending');
+      expect(settled.data.parts).toEqual([
+        expect.objectContaining({
+          approval: { approved: true, id: 'a1' },
+          input: { query: 'revised' },
+          state: 'approval-responded',
+        }),
+        expect.objectContaining({
+          approval: { approved: false, id: 'a2', reason: 'not now' },
+          state: 'approval-responded',
+        }),
+      ]);
     });
 
-    // Only meaningful next to the test above: on its own it would also pass if
-    // the finalize never ran at all. The pair is what pins the rollback — keep
-    // them together, or this one silently stops covering anything.
-    test('rolls the finalize back when the reservation fails', async () => {
-      const { tip, topic } = await seedTip('paused');
-      const otherTopic = await topicService.create({ name: 'elsewhere' });
-      const foreign = await service.create(otherTopic.id, { data: { parts: [] }, role: 'user' });
+    test('returns null for a deleted approval message', async () => {
+      const { tip } = await seedTip();
+      sqlite.prepare('UPDATE message SET deleted_at = 1 WHERE id = ?').run(tip.id);
 
-      // Rejected by the topic-ownership check, which runs after the finalize.
       await expect(
-        reserve(topic.id, tip.id, { id: foreign.id, mode: 'existing' }),
-      ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
-
-      const untouched = await service.getById(tip.id);
-      expect(partStates(untouched)).toEqual(['approval-requested', 'approval-responded']);
-      expect(untouched.status).toBe('paused');
-    });
-
-    test('settles a stranded pending tip and gives it a terminal status', async () => {
-      // A resume that died before writing leaves the row `pending` with nobody
-      // to finish it. Sending again is its only repair: the branch it belongs
-      // to is about to be replayed with the tool call still unanswered.
-      const { tip, topic } = await seedTip('pending');
-
-      await reserve(topic.id, tip.id, newUserMessage);
-
-      const settled = await service.getById(tip.id);
-      expect(partStates(settled)).toEqual(['output-denied', 'output-error']);
-      expect(settled.status).toBe('error');
-    });
-
-    test('leaves a tip that is no longer paused alone', async () => {
-      const { tip, topic } = await seedTip('success');
-
-      await reserve(topic.id, tip.id, newUserMessage);
-
-      const untouched = await service.getById(tip.id);
-      expect(partStates(untouched)).toEqual(['approval-requested', 'approval-responded']);
-    });
-
-    test('leaves a user tip alone and still reserves the turn', async () => {
-      // The caller names the topic's active node without inspecting it, so the
-      // node it points at is routinely a user row and a send must not fail on
-      // account of it. `pending` is the status that would otherwise force the
-      // rewrite, so the role check is the only thing holding the write off.
-      const { tip, topic } = await seedTip('pending', 'user');
-
-      const result = await reserve(topic.id, tip.id, newUserMessage);
-
-      expect(result.placeholders).toHaveLength(1);
-      const untouched = await service.getById(tip.id);
-      expect(partStates(untouched)).toEqual(['approval-requested', 'approval-responded']);
-      expect(untouched.status).toBe('pending');
+        service.applyToolApprovalDecisions(tip.id, [{ approvalId: 'a1', approved: true }]),
+      ).resolves.toBeNull();
     });
   });
 });
@@ -270,19 +222,4 @@ function requestedPart(approvalId: string): CherryMessagePart {
     toolName: 'search',
     type: 'dynamic-tool',
   } as CherryMessagePart;
-}
-
-function respondedPart(approvalId: string): CherryMessagePart {
-  return {
-    approval: { approved: true, id: approvalId },
-    input: {},
-    state: 'approval-responded',
-    toolCallId: `call-${approvalId}`,
-    toolName: 'search',
-    type: 'dynamic-tool',
-  } as CherryMessagePart;
-}
-
-function partStates(message: Message): (string | undefined)[] {
-  return (message.data.parts ?? []).map((part) => (part as { state?: string }).state);
 }

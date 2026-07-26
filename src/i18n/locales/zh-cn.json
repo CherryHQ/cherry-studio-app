@@ -44,7 +44,6 @@
   "chat.mcpTool.approval.description": "助手请求运行以下工具。",
   "chat.mcpTool.approval.failed": "未能保存你的决定，请重试。",
   "chat.mcpTool.approval.pendingCount": "还有 {{count}} 个待审批",
-  "chat.mcpTool.approval.review": "查看审批请求",
   "chat.mcpTool.approval.title": "工具审批请求",
   "chat.mcpTool.approvalRequested": "请求审批",
   "chat.mcpTool.approved": "已批准",

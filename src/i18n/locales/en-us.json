@@ -44,7 +44,6 @@
   "chat.mcpTool.approval.description": "The assistant wants to run this tool.",
   "chat.mcpTool.approval.failed": "Couldn't save your decision. Please try again.",
   "chat.mcpTool.approval.pendingCount": "{{count}} approvals pending",
-  "chat.mcpTool.approval.review": "Review approval",
   "chat.mcpTool.approval.title": "Tool approval",
   "chat.mcpTool.approvalRequested": "Approval requested",
   "chat.mcpTool.approved": "Approved",

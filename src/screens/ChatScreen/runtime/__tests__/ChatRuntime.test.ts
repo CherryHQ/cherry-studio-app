@@ -813,7 +813,7 @@ describe('ChatRuntime', () => {
     expect(services.ai.generateText).not.toHaveBeenCalled();
   });
 
-  test('parks the turn as paused and skips auto-naming when the stream ends awaiting approval', async () => {
+  test('persists success, enters awaiting-approval, and skips naming while approval is pending', async () => {
     const services = createServices();
     services.ai.generateText = jest.fn(async () => ({ text: 'Should Not Name' }));
     const runtime = createRuntime({ services });
@@ -832,10 +832,10 @@ describe('ChatRuntime', () => {
 
     expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
       data: { parts: approvalChunk.parts },
-      status: 'paused',
+      status: 'success',
     });
     expect(services.ai.generateText).not.toHaveBeenCalled();
-    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('awaiting-approval');
   });
 
   test('settles pending approvals terminally when the turn is aborted mid-stream', async () => {
@@ -889,9 +889,11 @@ describe('ChatRuntime', () => {
       status: 'pending' as const,
     };
     services.message.applyToolApprovalDecisions = jest.fn(async () => ({
-      message: settledMessage,
-      pendingApprovalCount: 0,
+      alreadySettledApprovalIds: [],
+      appliedApprovalIds: ['approval-1'],
+      parts: settledMessage.data.parts ?? [],
     }));
+    services.message.getById = jest.fn(async () => settledMessage);
     services.message.getPathToNode = jest.fn(async () => [
       createMessage('user-1', 'user'),
       settledMessage,
@@ -907,13 +909,12 @@ describe('ChatRuntime', () => {
       approved: true,
       messageId: 'assistant-1',
       topicId: 'topic-1',
+      updatedInput: { query: 'revised' },
     });
 
-    expect(services.message.applyToolApprovalDecisions).toHaveBeenCalledWith(
-      'assistant-1',
-      { decisions: [{ approvalId: 'approval-1', approved: true }] },
-      { statusWhenSettled: 'pending' },
-    );
+    expect(services.message.applyToolApprovalDecisions).toHaveBeenCalledWith('assistant-1', [
+      { approvalId: 'approval-1', approved: true, updatedInput: { query: 'revised' } },
+    ]);
     expect(services.message.getPathToNode).toHaveBeenCalledWith('assistant-1');
     expect(services.ai.streamText).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -932,9 +933,11 @@ describe('ChatRuntime', () => {
 
   test('does not resume while other approvals on the message are still pending', async () => {
     const services = createServices();
+    const pendingPart = createApprovalPart('approval-2');
     services.message.applyToolApprovalDecisions = jest.fn(async () => ({
-      message: createMessage('assistant-1', 'assistant'),
-      pendingApprovalCount: 1,
+      alreadySettledApprovalIds: [],
+      appliedApprovalIds: ['approval-1'],
+      parts: [createRespondedApprovalPart('approval-1'), pendingPart],
     }));
     const runtime = createRuntime({ services });
 
@@ -945,6 +948,27 @@ describe('ChatRuntime', () => {
       topicId: 'topic-1',
     });
 
+    expect(services.ai.streamText).not.toHaveBeenCalled();
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('awaiting-approval');
+  });
+
+  test('treats a duplicate decision as idempotent and does not resume twice', async () => {
+    const services = createServices();
+    services.message.applyToolApprovalDecisions = jest.fn(async () => ({
+      alreadySettledApprovalIds: ['approval-1'],
+      appliedApprovalIds: [],
+      parts: [createRespondedApprovalPart('approval-1')],
+    }));
+    const runtime = createRuntime({ services });
+
+    await runtime.respondToolApproval({
+      approvalId: 'approval-1',
+      approved: true,
+      messageId: 'assistant-1',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.getById).not.toHaveBeenCalled();
     expect(services.ai.streamText).not.toHaveBeenCalled();
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
@@ -982,9 +1006,11 @@ describe('ChatRuntime', () => {
 
   test('rethrows when the approval decision no longer matches a pending request', async () => {
     const services = createServices();
-    services.message.applyToolApprovalDecisions = jest.fn(async () => {
-      throw new Error('approval not found or already responded');
-    });
+    services.message.applyToolApprovalDecisions = jest.fn(async () => ({
+      alreadySettledApprovalIds: [],
+      appliedApprovalIds: [],
+      parts: [createApprovalPart('approval-1')],
+    }));
     const runtime = createRuntime({ services });
 
     await expect(
@@ -994,10 +1020,28 @@ describe('ChatRuntime', () => {
         messageId: 'assistant-1',
         topicId: 'topic-1',
       }),
-    ).rejects.toThrow('approval not found or already responded');
+    ).rejects.toThrow('The tool approval request was not found on the message.');
 
     expect(services.ai.streamText).not.toHaveBeenCalled();
-    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('awaiting-approval');
+  });
+
+  test('reports a deleted approval message without starting a continuation', async () => {
+    const services = createServices();
+    services.message.applyToolApprovalDecisions = jest.fn(async () => null);
+    const runtime = createRuntime({ services });
+
+    await expect(
+      runtime.respondToolApproval({
+        approvalId: 'approval-1',
+        approved: true,
+        messageId: 'assistant-1',
+        topicId: 'topic-1',
+      }),
+    ).rejects.toThrow('The tool approval message no longer exists.');
+
+    expect(services.ai.streamText).not.toHaveBeenCalled();
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('awaiting-approval');
   });
 
   test('persists an error and keeps prior parts when the resumed stream fails before any chunk', async () => {
@@ -1012,9 +1056,11 @@ describe('ChatRuntime', () => {
       status: 'pending' as const,
     };
     services.message.applyToolApprovalDecisions = jest.fn(async () => ({
-      message: settledMessage,
-      pendingApprovalCount: 0,
+      alreadySettledApprovalIds: [],
+      appliedApprovalIds: ['approval-1'],
+      parts: settledMessage.data.parts ?? [],
     }));
+    services.message.getById = jest.fn(async () => settledMessage);
     services.message.getPathToNode = jest.fn(async () => [
       createMessage('user-1', 'user'),
       settledMessage,
@@ -1060,9 +1106,11 @@ describe('ChatRuntime', () => {
       status: 'pending' as const,
     };
     services.message.applyToolApprovalDecisions = jest.fn(async () => ({
-      message: settledMessage,
-      pendingApprovalCount: 0,
+      alreadySettledApprovalIds: [],
+      appliedApprovalIds: ['approval-1'],
+      parts: settledMessage.data.parts ?? [],
     }));
+    services.message.getById = jest.fn(async () => settledMessage);
     services.message.getPathToNode = jest.fn(async () => [
       createMessage('user-1', 'user'),
       settledMessage,
@@ -1104,9 +1152,11 @@ describe('ChatRuntime', () => {
       status: 'pending' as const,
     };
     services.message.applyToolApprovalDecisions = jest.fn(async () => ({
-      message: settledMessage,
-      pendingApprovalCount: 0,
+      alreadySettledApprovalIds: [],
+      appliedApprovalIds: ['approval-1'],
+      parts: settledMessage.data.parts ?? [],
     }));
+    services.message.getById = jest.fn(async () => settledMessage);
     services.message.getPathToNode = jest.fn(async () => [
       {
         ...createMessage('user-1', 'user'),
@@ -1132,25 +1182,26 @@ describe('ChatRuntime', () => {
     });
   });
 
-  test('settles the approvals of a superseded tip in the reservation write', async () => {
+  test('rejects a new message while the active tip is awaiting approval', async () => {
     const services = createServices();
+    services.message.getById = jest.fn(async () => ({
+      ...createMessage('active-node', 'assistant'),
+      data: { parts: [createApprovalPart('approval-1')] },
+      status: 'success' as const,
+    }));
     const runtime = createRuntime({ services });
-    mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
 
-    await runtime.sendText({
-      selectedModelId: 'provider::model' as UniqueModelId,
-      text: 'never mind, new question',
-      topicId: 'topic-1',
-    });
-
-    // Same transaction as the reservation: a separate write would leave the tip
-    // fully answered but still paused if the reservation then failed.
-    expect(services.message.createUserMessageWithPlaceholders).toHaveBeenCalledWith(
-      expect.objectContaining({
-        finalizeToolApprovals: { messageId: 'active-node', reason: expect.any(String) },
+    await expect(
+      runtime.sendText({
+        selectedModelId: 'provider::model' as UniqueModelId,
+        text: 'never mind, new question',
+        topicId: 'topic-1',
       }),
-    );
-    expect(services.message.applyToolApprovalDecisions).not.toHaveBeenCalled();
+    ).rejects.toThrow('Resolve the pending tool approval before sending another message.');
+
+    expect(services.message.createUserMessageWithPlaceholders).not.toHaveBeenCalled();
+    expect(mockPrepareMessageParts).not.toHaveBeenCalled();
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
   test('keeps the streamed answer when teardown fails after the stream took over', async () => {
@@ -1263,9 +1314,11 @@ describe('ChatRuntime', () => {
       status: 'pending' as const,
     };
     services.message.applyToolApprovalDecisions = jest.fn(async () => ({
-      message: settledMessage,
-      pendingApprovalCount: 0,
+      alreadySettledApprovalIds: [],
+      appliedApprovalIds: ['approval-1'],
+      parts: settledMessage.data.parts ?? [],
     }));
+    services.message.getById = jest.fn(async () => settledMessage);
     services.topic.getById = jest.fn(async () => {
       throw new Error('topic lookup failed');
     });
@@ -1312,7 +1365,7 @@ describe('ChatRuntime', () => {
       }),
     ).rejects.toThrow('database is locked');
 
-    // Nothing was written, so the row is still paused and the sheet can retry.
+    // Nothing was written, so the row still carries the request and the sheet can retry.
     expect(services.message.update).not.toHaveBeenCalled();
     // And nothing was attempted either: with no settled message there is no row
     // to write, and a runtime that tried anyway would only look clean because
@@ -1321,6 +1374,7 @@ describe('ChatRuntime', () => {
       expect.stringContaining('Failed to persist the terminal state of a failed turn'),
       expect.anything(),
     );
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('awaiting-approval');
 
     errorSpy.mockRestore();
   });
@@ -1467,8 +1521,9 @@ function createServices() {
     },
     message: {
       applyToolApprovalDecisions: jest.fn(async () => ({
-        message: assistantMessage,
-        pendingApprovalCount: 0,
+        alreadySettledApprovalIds: [],
+        appliedApprovalIds: ['approval-1'],
+        parts: [createRespondedApprovalPart('approval-1')],
       })),
       createUserMessageWithPlaceholders: jest.fn(async () => ({
         placeholders: [assistantMessage],
@@ -1478,7 +1533,7 @@ function createServices() {
         deletedIds: ['user-1', 'assistant-1'],
         newActiveNodeId: 'active-node',
       })),
-      getById: jest.fn(async () => userMessage),
+      getById: jest.fn(async () => assistantMessage),
       getPathToNode: jest.fn(async () => [userMessage]),
       update: jest.fn(async (_id: string, dto: Partial<Message>) => ({
         ...assistantMessage,

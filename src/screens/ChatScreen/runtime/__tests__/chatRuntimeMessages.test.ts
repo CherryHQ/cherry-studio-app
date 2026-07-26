@@ -130,21 +130,21 @@ describe('tool approvals', () => {
     expect(toolMetaOf(parts[3])?.settledByApp).toBeUndefined();
   });
 
-  test('getPendingToolApprovals only reads a paused assistant tip', () => {
-    const paused = {
+  test('getPendingToolApprovals reads the assistant tip regardless of persisted status', () => {
+    const waiting = {
       ...createMessage('assistant-1', 'assistant'),
       data: { parts: [requested('a1'), requested('a2', 'create')] },
-      status: 'paused' as const,
+      status: 'success' as const,
     };
 
-    expect(getPendingToolApprovals([createMessage('user-1', 'user'), paused])).toEqual([
+    expect(getPendingToolApprovals([createMessage('user-1', 'user'), waiting])).toEqual([
       expect.objectContaining({ approvalId: 'a1', messageId: 'assistant-1', toolName: 'search' }),
       expect.objectContaining({ approvalId: 'a2', toolName: 'create' }),
     ]);
-    // Streaming overlays force status pending — must not summon the sheet.
-    expect(getPendingToolApprovals([{ ...paused, status: 'pending' }])).toEqual([]);
-    // Only the tip counts: an older paused row is not actionable.
-    expect(getPendingToolApprovals([paused, createMessage('user-2', 'user')])).toEqual([]);
+    expect(getPendingToolApprovals([{ ...waiting, status: 'paused' }])).toHaveLength(2);
+    expect(getPendingToolApprovals([{ ...waiting, status: 'pending' }])).toHaveLength(2);
+    // Only the active tip counts: an older approval request is not actionable.
+    expect(getPendingToolApprovals([waiting, createMessage('user-2', 'user')])).toEqual([]);
   });
 
   test('mergeMessageStats adds what a resumed segment spends', () => {

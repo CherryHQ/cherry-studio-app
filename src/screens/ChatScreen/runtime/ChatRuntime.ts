@@ -27,7 +27,12 @@ import {
 import { normalizeAssistantMessageCitations } from './normalizeCitations';
 import { extractMainText, maybeRenameTopicFromConversationSummary } from './topicNaming';
 
-export type ChatRuntimeTopicStatus = 'aborting' | 'idle' | 'reserving' | 'streaming';
+export type ChatRuntimeTopicStatus =
+  | 'aborting'
+  | 'awaiting-approval'
+  | 'idle'
+  | 'reserving'
+  | 'streaming';
 
 export type ChatRuntimeTopicSnapshot = {
   error?: Error;
@@ -63,6 +68,7 @@ export type ChatRuntimeToolApprovalInput = {
   messageId: string;
   reason?: string;
   topicId: string;
+  updatedInput?: Record<string, unknown>;
 };
 
 type ChatRuntimeDependencies = {
@@ -86,7 +92,6 @@ const logger = loggerService.withContext('ChatRuntime');
  * shown in the UI — fixed English text, no i18n.
  */
 const interruptedTurnApprovalReason = 'The turn ended before this tool call completed.';
-const supersededApprovalDenyReason = 'The user sent a new message instead of approving.';
 
 export class ChatRuntime {
   private activeTurns = new Map<string, ActiveTurn>();
@@ -262,10 +267,9 @@ export class ChatRuntime {
   /**
    * Record the user's decision on one tool-approval request. Once every
    * request on the message is decided, the turn resumes into the same
-   * assistant row; while some remain, the topic stays idle so the sheet can
-   * collect the rest. Double submits die in three layers: the sheet disables
-   * its buttons, the activeTurns guard throws here, and
-   * `applyToolApprovalDecisions` rejects decisions that match nothing.
+   * assistant row; while some remain, the topic stays awaiting approval so the
+   * sheet can collect the rest. Duplicate decisions are idempotent and never
+   * dispatch a second continuation.
    */
   async respondToolApproval(input: ChatRuntimeToolApprovalInput): Promise<void> {
     const { messageId, topicId } = input;
@@ -280,34 +284,49 @@ export class ChatRuntime {
     this.setTopicSnapshot(topicId, { status: 'reserving' });
 
     let settledMessage: Message | undefined;
+    let shouldRemainAwaitingApproval = true;
 
     try {
       const applied = await this.dependencies.services.message.applyToolApprovalDecisions(
         messageId,
-        {
-          decisions: [
-            {
-              approvalId: input.approvalId,
-              approved: input.approved,
-              ...(input.reason !== undefined && { reason: input.reason }),
-            },
-          ],
-        },
-        { statusWhenSettled: 'pending' },
+        [
+          {
+            approvalId: input.approvalId,
+            approved: input.approved,
+            ...(input.reason !== undefined && { reason: input.reason }),
+            ...(input.updatedInput !== undefined && { updatedInput: input.updatedInput }),
+          },
+        ],
       );
       await this.invalidateTopicMessagesSafely(topicId);
 
-      if (applied.pendingApprovalCount > 0) {
+      if (!applied) {
+        throw new Error('The tool approval message no longer exists.');
+      }
+
+      if (applied.appliedApprovalIds.length === 0) {
         this.activeTurns.delete(topicId);
-        this.setTopicSnapshot(topicId, idleTopicSnapshot);
+        const hasPendingApproval = hasPendingToolApproval(applied.parts);
+        this.setTopicSnapshot(topicId, {
+          status: hasPendingApproval ? 'awaiting-approval' : 'idle',
+        });
+        if (applied.alreadySettledApprovalIds.includes(input.approvalId)) {
+          return;
+        }
+
+        throw new Error('The tool approval request was not found on the message.');
+      }
+
+      if (hasPendingToolApproval(applied.parts)) {
+        this.activeTurns.delete(topicId);
+        this.setTopicSnapshot(topicId, { status: 'awaiting-approval' });
         return;
       }
 
-      // Only a fully answered row flipped to `pending`; one still collecting
-      // decisions stays `paused` and must keep its remaining approvals.
-      settledMessage = applied.message;
+      shouldRemainAwaitingApproval = false;
+      settledMessage = await this.dependencies.services.message.getById(messageId);
       throwIfAborted(abortController.signal);
-      await this.resumeApprovedTurn({ activeTurn, message: applied.message });
+      await this.resumeApprovedTurn({ activeTurn, message: settledMessage });
     } catch (error) {
       // Once the last decision landed the row is `pending` with its approvals
       // answered but unresumed — a state nothing else recovers from. The
@@ -325,7 +344,10 @@ export class ChatRuntime {
 
       this.activeTurns.delete(topicId);
       await this.invalidateTopicMessagesSafely(topicId);
-      this.setTopicSnapshot(topicId, idleTopicSnapshot);
+      this.setTopicSnapshot(
+        topicId,
+        shouldRemainAwaitingApproval ? { status: 'awaiting-approval' } : idleTopicSnapshot,
+      );
 
       if (!abortController.signal.aborted) {
         logger.warn('Tool approval failed before resuming', toError(error));
@@ -349,7 +371,7 @@ export class ChatRuntime {
     const history = await this.dependencies.services.message.getPathToNode(message.id);
     throwIfAborted(signal);
 
-    // A first exchange that paused for approval skipped auto-naming; catch up
+    // A first exchange that waited for approval skipped auto-naming; catch up
     // once the resumed segment succeeds so the topic doesn't stay "New chat".
     const isFirstExchange = history.length === 2 && history[0]?.role === 'user';
     const autoNameUserParts = isFirstExchange ? history[0]?.data.parts : undefined;
@@ -370,7 +392,7 @@ export class ChatRuntime {
   }
 
   /**
-   * Resume with the model that produced the paused segment (row-level
+   * Resume with the model that produced the approval-waiting segment (row-level
    * `modelId`, matching desktop), falling back to the current defaults only
    * when that model has since been removed.
    */
@@ -415,18 +437,6 @@ export class ChatRuntime {
       throwIfAborted(abortController.signal);
       const reservedTurn =
         await this.dependencies.services.message.createUserMessageWithPlaceholders({
-          // The new message chains onto the active node. If that node is an
-          // assistant turn still waiting on a tool approval, sending supersedes
-          // the decision — settle it in the same write, or the model's tool
-          // call goes back out with no result behind it.
-          ...(topic.activeNodeId
-            ? {
-                finalizeToolApprovals: {
-                  messageId: topic.activeNodeId,
-                  reason: supersededApprovalDenyReason,
-                },
-              }
-            : {}),
           ...(preparedFiles.length > 0 ? { preparedFiles } : {}),
           topicId,
           userMessage: {
@@ -557,7 +567,7 @@ export class ChatRuntime {
     await waitForNextPaint();
     // A send that started during the wait owns the topic now; overwriting its
     // snapshot with `idle` would strip the spinner off a live turn.
-    if (!this.activeTurns.has(topicId)) {
+    if (!this.activeTurns.has(topicId) && input.terminalSnapshot?.status !== 'awaiting-approval') {
       this.setTurnSnapshot(topicId, idleTopicSnapshot);
     }
   }
@@ -617,10 +627,9 @@ export class ChatRuntime {
       }
 
       throwIfAborted(abortController.signal);
-      // A clean finish that still carries approval-requested parts means the
-      // model is waiting on the user: park the row as 'paused' so the approval
-      // sheet picks it up (and the pending-reconciler leaves it alone). A
-      // resumed segment that requests approval again lands right back here.
+      // A clean finish can still be waiting on the user's approval. The row is
+      // terminally persisted as `success`; the live topic state carries the
+      // separate awaiting-approval state, matching desktop semantics.
       const finalParts = (latestAssistantMessage?.parts ?? []) as CherryMessagePart[];
       if (hasUnresumedToolApproval(finalParts)) {
         // Settling this as a success would persist a tool call with no result,
@@ -628,14 +637,13 @@ export class ChatRuntime {
         throw new Error('The approved tool was not available to this run.');
       }
 
-      const status = hasPendingToolApproval(finalParts) ? 'paused' : 'success';
-      terminalAssistantMessage = await this.persistTerminalAssistantMessage({
+      const isAwaitingApproval = hasPendingToolApproval(finalParts);
+      terminalAssistantMessage = await this.persistSuccessfulAssistantMessage({
         assistantMessage,
         latestAssistantMessage,
-        status,
       });
 
-      if (status === 'success' && input.autoNameUserParts) {
+      if (!isAwaitingApproval && input.autoNameUserParts) {
         void this.autoNameTopicFromSummary({
           assistantId: topic.assistantId,
           assistantParts: (latestAssistantMessage?.parts ?? []) as CherryMessagePart[],
@@ -662,7 +670,9 @@ export class ChatRuntime {
           hasHistoryBeforePendingTurn: input.hasHistoryBeforePendingTurn,
           overlayMessage: terminalAssistantMessage,
           pendingUserMessage: input.pendingUserMessage,
-          status: 'idle',
+          status: hasPendingToolApproval(terminalAssistantMessage.data.parts ?? [])
+            ? 'awaiting-approval'
+            : 'idle',
         },
         topicId,
       });
@@ -781,15 +791,13 @@ export class ChatRuntime {
     });
   }
 
-  private async persistTerminalAssistantMessage(input: {
+  private async persistSuccessfulAssistantMessage(input: {
     assistantMessage: Message;
     latestAssistantMessage?: CherryUIMessage;
-    status: 'paused' | 'success';
   }): Promise<Message> {
-    const normalizedMessage =
-      input.status === 'success' && input.latestAssistantMessage
-        ? normalizeAssistantMessageCitations(input.latestAssistantMessage)
-        : input.latestAssistantMessage;
+    const normalizedMessage = input.latestAssistantMessage
+      ? normalizeAssistantMessageCitations(input.latestAssistantMessage)
+      : undefined;
     const parts = (normalizedMessage?.parts ??
       input.assistantMessage.data.parts ??
       []) as CherryMessagePart[];
@@ -799,16 +807,21 @@ export class ChatRuntime {
     );
 
     return await this.dependencies.services.message.update(input.assistantMessage.id, {
-      data: {
-        parts: input.status === 'success' ? parts : finalizeInterruptedReasoningParts(parts),
-      },
+      data: { parts },
       ...(stats && { stats }),
-      status: input.status,
+      status: 'success',
     });
   }
 
   private async resolveTurnContext(input: ChatRuntimeSendTextInput) {
     let topic = await this.dependencies.services.topic.getById(input.topicId);
+
+    if (topic.activeNodeId) {
+      const activeMessage = await this.dependencies.services.message.getById(topic.activeNodeId);
+      if (hasPendingToolApproval(activeMessage.data.parts ?? [])) {
+        throw new Error('Resolve the pending tool approval before sending another message.');
+      }
+    }
 
     if (input.assistantId !== undefined && input.assistantId !== (topic.assistantId ?? null)) {
       topic = await this.dependencies.services.topic.update(input.topicId, {

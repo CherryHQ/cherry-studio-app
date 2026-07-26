@@ -2,12 +2,11 @@ import { Image } from 'expo-image';
 import { Accordion } from 'heroui-native/accordion';
 import { WrenchIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 
 import { parseFunctionCallToolName } from '@/ai/mcp';
 import type { CherryMessagePart } from '@/data/types/message';
 import { type CherryToolMeta, readCherryMeta, readCherryToolMetadata } from '@/data/types/uiParts';
-import { useMcpApprovalReopen } from '../../approval/McpApprovalSheet';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
@@ -25,7 +24,6 @@ const MAX_OUTPUT_TEXT_LENGTH = 4000;
 
 export function McpToolPart({ part }: McpToolPartProps) {
   const { t } = useTranslation();
-  const reopenApprovalSheet = useMcpApprovalReopen();
   const toolName = getToolName(part);
   const toolMetadata = readCherryToolMetadata(part)?.tool;
   const title = getMcpToolTitle(part, toolName, toolMetadata);
@@ -77,16 +75,6 @@ export function McpToolPart({ part }: McpToolPartProps) {
           </Accordion.Content>
         </Accordion.Item>
       </Accordion>
-      {isAwaitingApproval && reopenApprovalSheet ? (
-        <Pressable
-          className="self-start rounded-full bg-accent/15 px-3 py-1.5"
-          onPress={reopenApprovalSheet}
-        >
-          <Text className="font-medium text-accent text-xs">
-            {t('chat.mcpTool.approval.review')}
-          </Text>
-        </Pressable>
-      ) : null}
     </View>
   );
 }

@@ -1,24 +1,13 @@
 import { Button } from 'heroui-native/button';
-import { createContext, useContext, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { parseFunctionCallToolName } from '@/ai/mcp';
-import { BottomSheet, type BottomSheetCloseReason } from '@/components/bottomSheet';
+import { BottomSheet } from '@/components/bottomSheet';
 import type { PendingToolApproval } from '../runtime/chatRuntimeMessages';
 
-/**
- * Re-open channel for a manually dismissed approval sheet: ChatWorkspace
- * provides the callback, and a tool part stuck in `approval-requested` renders
- * a "review" entry that calls it.
- */
-const McpApprovalReopenContext = createContext<(() => void) | null>(null);
-
-export const McpApprovalReopenProvider = McpApprovalReopenContext.Provider;
-
-export function useMcpApprovalReopen() {
-  return useContext(McpApprovalReopenContext);
-}
+const ignoreClose = () => undefined;
 
 type McpApprovalRespondInput = {
   approvalId: string;
@@ -29,7 +18,6 @@ type McpApprovalRespondInput = {
 type McpApprovalSheetProps = {
   approvals: readonly PendingToolApproval[];
   isOpen: boolean;
-  onClose: (reason: BottomSheetCloseReason) => void;
   onRespond: (input: McpApprovalRespondInput) => Promise<void>;
 };
 
@@ -39,7 +27,7 @@ type McpApprovalSheetProps = {
  * invalidate) so the next request slides in, and deciding the last one closes
  * the sheet and resumes the turn.
  */
-export function McpApprovalSheet({ approvals, isOpen, onClose, onRespond }: McpApprovalSheetProps) {
+export function McpApprovalSheet({ approvals, isOpen, onRespond }: McpApprovalSheetProps) {
   const { t } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Keep rendering the last request through the close animation so the sheet
@@ -72,7 +60,12 @@ export function McpApprovalSheet({ approvals, isOpen, onClose, onRespond }: McpA
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title={t('chat.mcpTool.approval.title')}>
+    <BottomSheet
+      isCloseDisabled
+      isOpen={isOpen}
+      onClose={ignoreClose}
+      title={t('chat.mcpTool.approval.title')}
+    >
       <View className="gap-4 px-4 pb-4">
         <View className="gap-1">
           <Text className="text-foreground-muted text-sm">
