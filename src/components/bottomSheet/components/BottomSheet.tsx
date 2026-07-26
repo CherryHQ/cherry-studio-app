@@ -8,7 +8,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { bottomSheet, isLiquidGlassAvailable, sheetScrimColor } from '@/config/constants';
 import { useScreenCornerRadius } from '@/modules/screenCornerRadius';
 
-import { type BottomSheetCloseReason, BottomSheetContext } from '../hooks/useBottomSheet';
+import {
+  type BottomSheetCloseReason,
+  BottomSheetContext,
+  controlledCloseReason,
+} from '../hooks/useBottomSheet';
 
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
@@ -97,7 +101,12 @@ export function BottomSheet({
     if (isOpen) {
       closedNotifiedRef.current = false;
       reasonRef.current = 'dismiss';
+      return;
     }
+
+    // Closed from the outside, before the animation settles: the owner hears
+    // back that this was its own doing and not the user's.
+    reasonRef.current = controlledCloseReason;
   }, [isOpen]);
 
   const sheetWidth = Math.max(0, windowWidth - bottomSheet.outerInset * 2);
@@ -220,7 +229,7 @@ export function BottomSheet({
             )}
 
             <View
-              className="flex-row items-center"
+              className="flex-row"
               style={styles.header}
               testID={testID ? `${testID}-header` : undefined}
             >
@@ -294,6 +303,7 @@ function BottomSheetCloseButton({
 const styles = StyleSheet.create({
   bottomGap: { height: bottomSheet.outerInset },
   closeSurface: {
+    alignSelf: 'flex-start',
     borderCurve: 'continuous',
     borderRadius: bottomSheet.headerSideWidth / 2,
     height: bottomSheet.headerSideWidth,
@@ -301,6 +311,7 @@ const styles = StyleSheet.create({
     width: bottomSheet.headerSideWidth,
   },
   header: {
+    alignItems: 'center',
     height: Math.max(bottomSheet.headerHeight, HEADER_INSET + bottomSheet.headerSideWidth),
     paddingHorizontal: HEADER_INSET,
     paddingTop: HEADER_INSET,

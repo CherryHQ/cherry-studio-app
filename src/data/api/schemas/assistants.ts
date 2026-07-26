@@ -16,17 +16,19 @@ const ASSISTANT_MUTABLE_FIELDS = {
 } as const;
 
 const TagIdsField = z.array(TagIdSchema).optional();
+const McpServerIdsField = z.array(z.string()).optional();
 
 export const CreateAssistantSchema = AssistantSchema.pick(ASSISTANT_MUTABLE_FIELDS)
   .partial()
   .required({ name: true })
-  .extend({ tagIds: TagIdsField })
+  .extend({ mcpServerIds: McpServerIdsField, tagIds: TagIdsField })
   .strict();
 export type CreateAssistantDto = z.infer<typeof CreateAssistantSchema>;
 
 export const UpdateAssistantSchema = AssistantSchema.pick(ASSISTANT_MUTABLE_FIELDS)
   .partial()
   .extend({
+    mcpServerIds: McpServerIdsField,
     settings: AssistantSettingsSchema.partial().optional(),
     tagIds: TagIdsField,
   })

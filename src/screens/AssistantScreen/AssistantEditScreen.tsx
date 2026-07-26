@@ -22,9 +22,12 @@ import {
   type Assistant,
   type AssistantSettings,
   DEFAULT_ASSISTANT_SETTINGS,
+  type McpMode,
 } from '@/data/types/assistant';
 import type { UniqueModelId } from '@/data/types/model';
 import { useAssistantApiById, useAssistantMutations } from '@/hooks/chat';
+import { useMcpServersApi } from '@/hooks/mcp/useMcpServers';
+import { SettingSelect } from '../SettingsScreen/components/SettingSelect';
 import { EmojiPickerBottomSheet } from './components/EmojiPickerBottomSheet';
 
 type AssistantFormState = {
@@ -36,6 +39,8 @@ type AssistantFormState = {
   enableTopP: boolean;
   enableWebSearch: boolean;
   maxTokens: string;
+  mcpMode: McpMode;
+  mcpServerIds: string[];
   modelId: UniqueModelId | null;
   name: string;
   prompt: string;
@@ -56,6 +61,7 @@ export default function AssistantEditScreen() {
   const { assistant, isLoading } = useAssistantApiById(assistantId);
   const { createAssistant, isCreating, isUpdating, updateAssistant } = useAssistantMutations();
   const modelPickerData = useModelPickerData();
+  const { servers: mcpServers } = useMcpServersApi();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [defaultModelPreference] = usePreference('chat.default_model_id');
@@ -117,6 +123,22 @@ export default function AssistantEditScreen() {
   const handleEmojiSelect = useCallback((emoji: string) => {
     setForm((current) => ({ ...current, emoji }));
   }, []);
+  const toggleMcpServer = useCallback((serverId: string, selected: boolean) => {
+    setForm((current) => ({
+      ...current,
+      mcpServerIds: selected
+        ? [...new Set([...current.mcpServerIds, serverId])]
+        : current.mcpServerIds.filter((id) => id !== serverId),
+    }));
+  }, []);
+  const mcpModeOptions = useMemo(
+    () => [
+      { label: t('assistant.form.mcpMode.disabled'), value: 'disabled' as McpMode },
+      { label: t('assistant.form.mcpMode.auto'), value: 'auto' as McpMode },
+      { label: t('assistant.form.mcpMode.manual'), value: 'manual' as McpMode },
+    ],
+    [t],
+  );
   const handleSave = useCallback(async () => {
     const dto = buildAssistantDto(form, assistant?.settings);
 
@@ -322,6 +344,37 @@ export default function AssistantEditScreen() {
                 />
               </FormField>
             </FormSection>
+            <FormSection title={t('assistant.form.mcpSection')}>
+              <View className="min-h-10 flex-row items-center justify-between gap-4">
+                <Text className="min-w-0 flex-1 font-medium text-base text-foreground">
+                  {t('assistant.form.mcpMode.label')}
+                </Text>
+                <SettingSelect
+                  label={t('assistant.form.mcpMode.label')}
+                  options={mcpModeOptions}
+                  value={form.mcpMode}
+                  onValueChange={(value) => updateForm('mcpMode', value)}
+                />
+              </View>
+              {form.mcpMode === 'manual' ? (
+                mcpServers.length > 0 ? (
+                  <View className="gap-3">
+                    {mcpServers.map((server) => (
+                      <SwitchRow
+                        key={server.id}
+                        label={server.name}
+                        value={form.mcpServerIds.includes(server.id)}
+                        onValueChange={(selected) => toggleMcpServer(server.id, selected)}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <Text className="text-default-foreground text-xs">
+                    {t('assistant.form.mcpNoServers')}
+                  </Text>
+                )
+              ) : null}
+            </FormSection>
           </>
         )}
       </KeyboardAwareScrollView>
@@ -429,6 +482,8 @@ function createFormState(assistant?: Assistant): AssistantFormState {
     enableTopP: settings.enableTopP,
     enableWebSearch: settings.enableWebSearch,
     maxTokens: String(settings.maxTokens),
+    mcpMode: settings.mcpMode,
+    mcpServerIds: assistant?.mcpServerIds ?? [],
     modelId: assistant?.modelId ?? null,
     name: assistant?.name ?? '',
     prompt: assistant?.prompt ?? '',
@@ -473,6 +528,7 @@ function buildAssistantDto(
     value: {
       description: form.description.trim(),
       emoji: form.emoji.trim() || defaultEmoji,
+      mcpServerIds: form.mcpServerIds,
       modelId: form.modelId,
       name,
       prompt: form.prompt,
@@ -484,6 +540,7 @@ function buildAssistantDto(
         enableTopP: form.enableTopP,
         enableWebSearch: form.enableWebSearch,
         maxTokens,
+        mcpMode: form.mcpMode,
         reasoning_effort: form.reasoningEffort,
         temperature,
         topP,

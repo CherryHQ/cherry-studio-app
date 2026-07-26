@@ -4,7 +4,14 @@ import type { EdgeInsets } from 'react-native-safe-area-context';
 // A close can carry an intent so the owner can act on it once the closing
 // animation settles (e.g. the painting template's "use" flow). `'dismiss'` is
 // the default for the close button and every gesture / scrim collapse.
-export type BottomSheetCloseReason = 'dismiss' | (string & {});
+export type BottomSheetCloseReason = 'controlled' | 'dismiss' | (string & {});
+
+/**
+ * The owner set `isOpen` to false; the user did not close anything. Owners that
+ * remember a dismissal have to tell the two apart, or closing a sheet from code
+ * counts as the user waving it away.
+ */
+export const controlledCloseReason = 'controlled';
 
 export type BottomSheetGeometry = {
   // Bottom corner radius of the floating card, concentric with the display's

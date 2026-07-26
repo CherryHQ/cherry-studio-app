@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BottomSheet, useBottomSheet } from '..';
@@ -121,6 +121,11 @@ describe('BottomSheet', () => {
       );
     });
     expect(mockBottomSheetProps.index).toBe(0);
+
+    // Owners that remember a dismissal need this apart from `'dismiss'`: a
+    // sheet the code closed is not one the user waved away.
+    act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(0));
+    expect(onClose).toHaveBeenCalledWith('controlled');
   });
 
   test('blocks gesture / scrim dismissal and disables the close button while isCloseDisabled', () => {
@@ -158,6 +163,37 @@ describe('BottomSheet', () => {
     act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(0));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledWith('use');
+  });
+
+  test('positions the close circle concentrically inside the top-left corner', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet onClose={jest.fn()} testID="test-sheet">
+          <Text>body</Text>
+        </BottomSheet>,
+      );
+    });
+
+    const sheetStyle = StyleSheet.flatten(
+      renderer?.root.findByProps({ testID: 'test-sheet-sheet' }).props.style,
+    );
+    const headerStyle = StyleSheet.flatten(
+      renderer?.root.findByProps({ testID: 'test-sheet-header' }).props.style,
+    );
+    const closeSurface = renderer?.root.findAll((node) => {
+      const style = StyleSheet.flatten(node.props.style);
+      return style?.height === 44 && style?.width === 44 && style?.borderRadius === 22;
+    })[0];
+    expect(closeSurface).toBeDefined();
+    const closeSurfaceStyle = StyleSheet.flatten(closeSurface?.props.style);
+    const closeCenterX =
+      Number(headerStyle.paddingHorizontal) + Number(closeSurfaceStyle.width) / 2;
+    const closeCenterY = Number(headerStyle.paddingTop) + Number(closeSurfaceStyle.height) / 2;
+
+    expect(headerStyle.alignItems).toBe('center');
+    expect(closeSurfaceStyle.alignSelf).toBe('flex-start');
+    expect(closeCenterX).toBe(sheetStyle.borderTopLeftRadius);
+    expect(closeCenterY).toBe(sheetStyle.borderTopLeftRadius);
   });
 
   // The card is inset 4pt from the left, right and bottom screen edges, so it is

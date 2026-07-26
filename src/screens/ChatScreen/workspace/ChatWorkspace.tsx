@@ -1,15 +1,18 @@
 import type { LegendListRef } from '@legendapp/list/react-native';
 import { useHeaderHeight } from 'expo-router/react-navigation';
+import { useToast } from 'heroui-native/toast';
 import { useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSharedValue } from 'react-native-reanimated';
 
 import { isIOS } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { Message } from '@/data/types/message';
 import type { MessagesViewModel } from '@/hooks/chat';
+import { McpApprovalSheet } from '../approval/McpApprovalSheet';
 import { MessageSlideInProvider } from '../messageItem';
-import { useChatRuntimeTopic } from '../runtime/ChatRuntimeProvider';
-import { mergeMessagesWithOverlay } from '../runtime/chatRuntimeMessages';
+import { useChatRuntime, useChatRuntimeTopic } from '../runtime/ChatRuntimeProvider';
+import { getPendingToolApprovals, mergeMessagesWithOverlay } from '../runtime/chatRuntimeMessages';
 import { ChatComposer } from './components/ChatComposer';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessageList } from './components/ChatMessageList';
@@ -26,6 +29,7 @@ import {
 // 不用含 safe area 的 contentBottomInset，避免出现需要硬抵消的 magic 偏移。
 const SCROLL_BUTTON_GAP_ABOVE_INPUT = 5;
 
+const logger = loggerService.withContext('ChatWorkspace');
 // 诊断埋点：冷/暖首次进入 topic 的数据加载 + 遮罩可见性时序。`[GATE]` 前缀。
 const gateLog = loggerService.withContext('ChatGate');
 
@@ -42,6 +46,8 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   const { isLoadingInitial, isLoadingOlder, loadOlder, messages } = messageWindow;
   const chatRuntime = useChatRuntimeTopic(topicId);
   const headerHeight = useHeaderHeight();
+  const { t } = useTranslation();
+  const { toast } = useToast();
   const listRef = useRef<LegendListRef | null>(null);
   const isAtBottom = useSharedValue(true);
   const handleScrollToEnd = useCallback(() => {
@@ -50,6 +56,21 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   const messagesWithUser = mergeMessagesWithOverlay(messages, chatRuntime.pendingUserMessage);
   const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatRuntime.overlayMessage);
   const anchorIndex = getAnchoredUserMessageIndex(visibleMessages);
+  const runtime = useChatRuntime();
+  // 待审批检测以活动 tip 的 parts 为准，因此杀 app 重进后 sheet 也会自动恢复。
+  const pendingApprovals = getPendingToolApprovals(visibleMessages);
+  const isApprovalSheetOpen = pendingApprovals.length > 0 && chatRuntime.status !== 'streaming';
+  const handleApprovalRespond = useCallback(
+    async (input: { approvalId: string; approved: boolean; messageId: string }) => {
+      try {
+        await runtime.respondToolApproval({ ...input, topicId });
+      } catch (error) {
+        logger.error('Tool approval response failed', error as Error);
+        toast.show({ label: t('chat.mcpTool.approval.failed'), variant: 'danger' });
+      }
+    },
+    [runtime, t, toast, topicId],
+  );
   const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
     hasHistoryBeforePendingTurn: chatRuntime.hasHistoryBeforePendingTurn,
     isLoadingInitial,
@@ -99,6 +120,11 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
         onPress={handleScrollToEnd}
       />
       <ChatInitialRenderCover isVisible={isCoverVisible} />
+      <McpApprovalSheet
+        approvals={pendingApprovals}
+        isOpen={isApprovalSheetOpen}
+        onRespond={handleApprovalRespond}
+      />
     </ChatWorkspaceFrame>
   );
 }

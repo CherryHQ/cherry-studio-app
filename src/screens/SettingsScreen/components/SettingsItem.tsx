@@ -1,6 +1,9 @@
+import type { ImageSource } from 'expo-image';
 import { ChevronRightIcon, type PngIconProps } from 'lucide-uniwind/png';
 import type { ComponentType, ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
+
+import { Image } from '@/components/nativePrimitives';
 
 export type SettingsItemProps = {
   accessory?: ReactNode;
@@ -8,6 +11,7 @@ export type SettingsItemProps = {
   icon?: ComponentType<PngIconProps>;
   iconEmoji?: string;
   id?: string;
+  imageSource?: ImageSource | number;
   onPress?: () => void;
   onPressIn?: () => void;
   title: string;
@@ -18,6 +22,7 @@ export function SettingsItem({
   hideAccessory,
   icon: Icon,
   iconEmoji,
+  imageSource,
   onPress,
   onPressIn,
   title,
@@ -36,6 +41,13 @@ export function SettingsItem({
       <View className="flex-1 flex-row items-center gap-3">
         {iconEmoji ? (
           <Text className="w-6 text-center text-xl leading-6">{iconEmoji}</Text>
+        ) : imageSource ? (
+          <Image
+            cachePolicy="memory-disk"
+            className="size-6"
+            contentFit="contain"
+            source={imageSource}
+          />
         ) : Icon ? (
           <Icon className="size-6 text-default-foreground" strokeWidth={2} />
         ) : null}
