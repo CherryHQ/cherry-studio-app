@@ -106,6 +106,147 @@ describe('MessageService', () => {
     expect(withWriteTx).not.toHaveBeenCalled();
   });
 
+  describe('applyToolApprovalDecisions', () => {
+    const requestedPart = (approvalId: string) => ({
+      approval: { id: approvalId },
+      input: {},
+      state: 'approval-requested',
+      toolCallId: `call-${approvalId}`,
+      toolName: 'search',
+      type: 'dynamic-tool',
+    });
+
+    function makeApprovalService(row: Record<string, unknown>) {
+      const updates: Record<string, unknown>[] = [];
+      const tx = {
+        select: jest.fn(() => ({
+          from: jest.fn(() => ({
+            where: jest.fn(() => ({ limit: jest.fn(async () => [row]) })),
+          })),
+        })),
+        update: jest.fn(() => ({
+          set: jest.fn((values: Record<string, unknown>) => ({
+            where: jest.fn(() => ({
+              returning: jest.fn(async () => {
+                updates.push(values);
+                return [{ ...row, ...values }];
+              }),
+            })),
+          })),
+        })),
+      };
+      const dbService = {
+        withWriteTx: jest.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
+          callback(tx),
+        ),
+      } as unknown as DbService;
+      return { service: new MessageService(dbService, {} as never, {} as never), updates };
+    }
+
+    const baseRow = {
+      createdAt: 1747267200000,
+      data: { parts: [] },
+      deletedAt: null,
+      id: 'assistant-1',
+      modelId: null,
+      modelSnapshot: null,
+      parentId: 'user-1',
+      role: 'assistant',
+      searchableText: '',
+      siblingsGroupId: 0,
+      stats: null,
+      status: 'paused',
+      topicId: 'topic-1',
+      updatedAt: 1747267200000,
+    };
+
+    test('flips the matching approval and atomically settles the status', async () => {
+      const { service, updates } = makeApprovalService({
+        ...baseRow,
+        data: { parts: [requestedPart('a1')] },
+      });
+
+      const result = await service.applyToolApprovalDecisions(
+        'assistant-1',
+        { decisions: [{ approvalId: 'a1', approved: true }] },
+        { statusWhenSettled: 'pending' },
+      );
+
+      expect(result.pendingApprovalCount).toBe(0);
+      expect(updates[0]).toMatchObject({ status: 'pending' });
+      expect((updates[0]?.data as { parts: unknown[] }).parts[0]).toMatchObject({
+        approval: { approved: true, id: 'a1' },
+        state: 'approval-responded',
+      });
+    });
+
+    test('keeps the status while other approvals are still pending', async () => {
+      const { service, updates } = makeApprovalService({
+        ...baseRow,
+        data: { parts: [requestedPart('a1'), requestedPart('a2')] },
+      });
+
+      const result = await service.applyToolApprovalDecisions(
+        'assistant-1',
+        { decisions: [{ approvalId: 'a1', approved: false, reason: 'no' }] },
+        { statusWhenSettled: 'pending' },
+      );
+
+      expect(result.pendingApprovalCount).toBe(1);
+      expect(updates[0]?.status).toBeUndefined();
+    });
+
+    test('rejects a decision that matches nothing — the double-submit gate', async () => {
+      const { service } = makeApprovalService({
+        ...baseRow,
+        data: {
+          parts: [
+            {
+              ...requestedPart('a1'),
+              approval: { approved: true, id: 'a1' },
+              state: 'approval-responded',
+            },
+          ],
+        },
+      });
+
+      await expect(
+        service.applyToolApprovalDecisions('assistant-1', {
+          decisions: [{ approvalId: 'a1', approved: true }],
+        }),
+      ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+    });
+
+    test('denyAll settles every pending approval with the shared reason', async () => {
+      const { service, updates } = makeApprovalService({
+        ...baseRow,
+        data: { parts: [requestedPart('a1'), requestedPart('a2')] },
+      });
+
+      const result = await service.applyToolApprovalDecisions('assistant-1', {
+        denyAll: { reason: 'superseded' },
+      });
+
+      expect(result.pendingApprovalCount).toBe(0);
+      // No statusWhenSettled: the row stays paused, nothing resumes it.
+      expect(updates[0]?.status).toBeUndefined();
+      expect(
+        (updates[0]?.data as { parts: { approval: unknown }[] }).parts.map((p) => p.approval),
+      ).toEqual([
+        { approved: false, id: 'a1', reason: 'superseded' },
+        { approved: false, id: 'a2', reason: 'superseded' },
+      ]);
+    });
+
+    test('refuses non-assistant rows', async () => {
+      const { service } = makeApprovalService({ ...baseRow, role: 'user' });
+
+      await expect(
+        service.applyToolApprovalDecisions('assistant-1', { denyAll: { reason: 'x' } }),
+      ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+    });
+  });
+
   test('clears the active node when deleting the first branch below the virtual root', async () => {
     const topicId = '750e8400-e29b-41d4-a716-446655440000';
     const message = { ...createMessage('message-1', 'user'), parentId: 'root-1', topicId };

@@ -772,6 +772,342 @@ describe('ChatRuntime', () => {
     expect(services.ai.generateText).not.toHaveBeenCalled();
   });
 
+  test('parks the turn as paused and skips auto-naming when the stream ends awaiting approval', async () => {
+    const services = createServices();
+    services.ai.generateText = jest.fn(async () => ({ text: 'Should Not Name' }));
+    const runtime = createRuntime({ services });
+    const approvalChunk = {
+      id: 'assistant-1',
+      parts: [createApprovalPart('approval-1')],
+      role: 'assistant',
+    } as CherryUIMessage;
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([approvalChunk]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
+      data: { parts: approvalChunk.parts },
+      status: 'paused',
+    });
+    expect(services.ai.generateText).not.toHaveBeenCalled();
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  test('denies pending approvals when the turn is aborted mid-stream', async () => {
+    const services = createServices();
+    const runtime = createRuntime({ services });
+    const approvalChunk = {
+      id: 'assistant-1',
+      parts: [
+        { type: 'text', text: 'checking' } as CherryMessagePart,
+        createApprovalPart('approval-1'),
+      ],
+      role: 'assistant',
+    } as CherryUIMessage;
+    mockReadUIMessageStream.mockReturnValue(
+      (async function* () {
+        yield approvalChunk;
+        runtime.abort('topic-1');
+        yield approvalChunk;
+      })(),
+    );
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
+      data: {
+        parts: [
+          { type: 'text', text: 'checking' },
+          expect.objectContaining({
+            approval: expect.objectContaining({ approved: false, id: 'approval-1' }),
+            state: 'approval-responded',
+          }),
+        ],
+      },
+      status: 'paused',
+    });
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  test('respondToolApproval resumes the same assistant message with the pinned row model', async () => {
+    const services = createServices();
+    const settledMessage = {
+      ...createMessage('assistant-1', 'assistant'),
+      data: { parts: [createRespondedApprovalPart('approval-1')] },
+      modelId: 'provider::pinned' as UniqueModelId,
+      status: 'pending' as const,
+    };
+    services.message.applyToolApprovalDecisions = jest.fn(async () => ({
+      message: settledMessage,
+      pendingApprovalCount: 0,
+    }));
+    services.message.getPathToNode = jest.fn(async () => [
+      createMessage('user-1', 'user'),
+      settledMessage,
+    ]);
+    services.model.getById = jest.fn(async (modelId: UniqueModelId) => createModel(modelId));
+    const invalidateTopicMessages = jest.fn(async () => undefined);
+    const runtime = createRuntime({ invalidateTopicMessages, services });
+    const finalChunk = createUiMessage('assistant-1', 'tool ran; here is the answer');
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([finalChunk]));
+
+    await runtime.respondToolApproval({
+      approvalId: 'approval-1',
+      approved: true,
+      messageId: 'assistant-1',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.applyToolApprovalDecisions).toHaveBeenCalledWith(
+      'assistant-1',
+      { decisions: [{ approvalId: 'approval-1', approved: true }] },
+      { statusWhenSettled: 'pending' },
+    );
+    expect(services.message.getPathToNode).toHaveBeenCalledWith('assistant-1');
+    expect(services.ai.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatId: 'topic-1',
+        messageId: 'assistant-1',
+        uniqueModelId: 'provider::pinned',
+      }),
+    );
+    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
+      data: { parts: finalChunk.parts },
+      status: 'success',
+    });
+    expect(invalidateTopicMessages).toHaveBeenCalledWith('topic-1');
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  test('does not resume while other approvals on the message are still pending', async () => {
+    const services = createServices();
+    services.message.applyToolApprovalDecisions = jest.fn(async () => ({
+      message: createMessage('assistant-1', 'assistant'),
+      pendingApprovalCount: 1,
+    }));
+    const runtime = createRuntime({ services });
+
+    await runtime.respondToolApproval({
+      approvalId: 'approval-1',
+      approved: true,
+      messageId: 'assistant-1',
+      topicId: 'topic-1',
+    });
+
+    expect(services.ai.streamText).not.toHaveBeenCalled();
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  test('rejects an approval response while the topic already has an active turn', async () => {
+    const services = createServices();
+    const topicDeferred = createDeferred();
+    services.topic.getById = jest.fn(async () => {
+      await topicDeferred.promise;
+      return createTopic();
+    });
+    const runtime = createRuntime({ services });
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
+
+    const sendPromise = runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+    await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'reserving');
+
+    await expect(
+      runtime.respondToolApproval({
+        approvalId: 'approval-1',
+        approved: true,
+        messageId: 'assistant-1',
+        topicId: 'topic-1',
+      }),
+    ).rejects.toThrow('A response is already streaming for this topic.');
+    expect(services.message.applyToolApprovalDecisions).not.toHaveBeenCalled();
+
+    topicDeferred.resolve();
+    await sendPromise;
+  });
+
+  test('rethrows when the approval decision no longer matches a pending request', async () => {
+    const services = createServices();
+    services.message.applyToolApprovalDecisions = jest.fn(async () => {
+      throw new Error('approval not found or already responded');
+    });
+    const runtime = createRuntime({ services });
+
+    await expect(
+      runtime.respondToolApproval({
+        approvalId: 'approval-1',
+        approved: true,
+        messageId: 'assistant-1',
+        topicId: 'topic-1',
+      }),
+    ).rejects.toThrow('approval not found or already responded');
+
+    expect(services.ai.streamText).not.toHaveBeenCalled();
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  test('persists an error and keeps prior parts when the resumed stream fails before any chunk', async () => {
+    const services = createServices();
+    const priorParts = [
+      { type: 'text', text: 'first segment' } as CherryMessagePart,
+      createRespondedApprovalPart('approval-1'),
+    ];
+    const settledMessage = {
+      ...createMessage('assistant-1', 'assistant'),
+      data: { parts: priorParts },
+      status: 'pending' as const,
+    };
+    services.message.applyToolApprovalDecisions = jest.fn(async () => ({
+      message: settledMessage,
+      pendingApprovalCount: 0,
+    }));
+    services.message.getPathToNode = jest.fn(async () => [
+      createMessage('user-1', 'user'),
+      settledMessage,
+    ]);
+    const runtime = createRuntime({ services });
+    mockReadUIMessageStream.mockReturnValue(failingAsyncIterable(new Error('resume failed')));
+
+    await runtime.respondToolApproval({
+      approvalId: 'approval-1',
+      approved: true,
+      messageId: 'assistant-1',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
+      data: {
+        parts: [
+          ...priorParts,
+          expect.objectContaining({
+            data: expect.objectContaining({ message: 'resume failed' }),
+            type: 'data-error',
+          }),
+        ],
+      },
+      status: 'error',
+    });
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  test('falls back to the default model when the pinned resume model is gone', async () => {
+    const services = createServices();
+    const settledMessage = {
+      ...createMessage('assistant-1', 'assistant'),
+      data: { parts: [createRespondedApprovalPart('approval-1')] },
+      modelId: 'provider::gone' as UniqueModelId,
+      status: 'pending' as const,
+    };
+    services.message.applyToolApprovalDecisions = jest.fn(async () => ({
+      message: settledMessage,
+      pendingApprovalCount: 0,
+    }));
+    services.message.getPathToNode = jest.fn(async () => [
+      createMessage('user-1', 'user'),
+      settledMessage,
+    ]);
+    services.model.getById = jest.fn(async (modelId: UniqueModelId) =>
+      modelId === ('provider::gone' as UniqueModelId) ? null : createModel(modelId),
+    );
+    services.assistant.getById = jest.fn(async () => createAssistant('assistant-1', null));
+    const runtime = createRuntime({ services });
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
+
+    await runtime.respondToolApproval({
+      approvalId: 'approval-1',
+      approved: true,
+      messageId: 'assistant-1',
+      topicId: 'topic-1',
+    });
+
+    expect(services.ai.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({ uniqueModelId: 'provider::model' }),
+    );
+  });
+
+  test('catches up auto-naming after a first-exchange approval resume succeeds', async () => {
+    const services = createServices();
+    const preferences: Record<string, unknown> = {
+      'app.language': 'en-US',
+      'topic.naming.enabled': true,
+      'topic.naming.model_id': null,
+      'topic.naming_prompt': '',
+    };
+    services.preference.get = jest.fn(
+      async (key: string) => preferences[key],
+    ) as typeof services.preference.get;
+    services.ai.generateText = jest.fn(async () => ({ text: 'Named After Resume' }));
+    const settledMessage = {
+      ...createMessage('assistant-1', 'assistant'),
+      data: { parts: [createRespondedApprovalPart('approval-1')] },
+      status: 'pending' as const,
+    };
+    services.message.applyToolApprovalDecisions = jest.fn(async () => ({
+      message: settledMessage,
+      pendingApprovalCount: 0,
+    }));
+    services.message.getPathToNode = jest.fn(async () => [
+      {
+        ...createMessage('user-1', 'user'),
+        data: { parts: [{ type: 'text', text: 'hi' } as CherryMessagePart] },
+      },
+      settledMessage,
+    ]);
+    const invalidateTopics = jest.fn(async () => undefined);
+    const runtime = createRuntime({ invalidateTopics, services });
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
+
+    await runtime.respondToolApproval({
+      approvalId: 'approval-1',
+      approved: true,
+      messageId: 'assistant-1',
+      topicId: 'topic-1',
+    });
+    await waitUntil(() => (services.topic.update as jest.Mock).mock.calls.length > 0);
+
+    expect(services.topic.update).toHaveBeenCalledWith('topic-1', {
+      isNameManuallyEdited: false,
+      name: 'Named After Resume',
+    });
+  });
+
+  test('denies a paused tip still awaiting approval before sending a new message', async () => {
+    const services = createServices();
+    services.message.getById = jest.fn(async () => ({
+      ...createMessage('active-node', 'assistant'),
+      data: { parts: [createApprovalPart('approval-1')] },
+      status: 'paused' as const,
+    }));
+    const runtime = createRuntime({ services });
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'never mind, new question',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.applyToolApprovalDecisions).toHaveBeenCalledWith('active-node', {
+      denyAll: { reason: expect.any(String) },
+    });
+    const denyOrder = (services.message.applyToolApprovalDecisions as jest.Mock).mock
+      .invocationCallOrder[0];
+    const reserveOrder = (services.message.createUserMessageWithPlaceholders as jest.Mock).mock
+      .invocationCallOrder[0];
+    expect(denyOrder).toBeLessThan(reserveOrder);
+  });
+
   test('does not open a new topic when aborted after topic creation', async () => {
     const services = createServices();
     const invalidateTopics = createDeferredInvalidation({ blockOnCall: 1 });
@@ -902,6 +1238,10 @@ function createServices() {
       getById: jest.fn(),
     },
     message: {
+      applyToolApprovalDecisions: jest.fn(async () => ({
+        message: assistantMessage,
+        pendingApprovalCount: 0,
+      })),
       createUserMessageWithPlaceholders: jest.fn(async () => ({
         placeholders: [assistantMessage],
         userMessage,
@@ -910,6 +1250,7 @@ function createServices() {
         deletedIds: ['user-1', 'assistant-1'],
         newActiveNodeId: 'active-node',
       })),
+      getById: jest.fn(async () => userMessage),
       getPathToNode: jest.fn(async () => [userMessage]),
       update: jest.fn(async (_id: string, dto: Partial<Message>) => ({
         ...assistantMessage,
@@ -960,6 +1301,28 @@ function createUiMessage(id: string, text: string): CherryUIMessage {
     parts: [{ type: 'text', text }],
     role: 'assistant',
   } as CherryUIMessage;
+}
+
+function createApprovalPart(approvalId: string): CherryMessagePart {
+  return {
+    approval: { id: approvalId },
+    input: { q: 'x' },
+    state: 'approval-requested',
+    toolCallId: `call-${approvalId}`,
+    toolName: 'search',
+    type: 'dynamic-tool',
+  } as unknown as CherryMessagePart;
+}
+
+function createRespondedApprovalPart(approvalId: string): CherryMessagePart {
+  return {
+    approval: { approved: true, id: approvalId },
+    input: { q: 'x' },
+    state: 'approval-responded',
+    toolCallId: `call-${approvalId}`,
+    toolName: 'search',
+    type: 'dynamic-tool',
+  } as unknown as CherryMessagePart;
 }
 
 function createFilePart(url: string): CherryMessagePart {

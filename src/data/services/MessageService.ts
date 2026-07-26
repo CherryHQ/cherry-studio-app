@@ -32,6 +32,7 @@ import {
 import type { FileEntryService } from './FileEntryService';
 import type { TopicService } from './TopicService';
 import { timestampToISO } from './utils/rowMappers';
+import { applyToolApprovalDecisionsToParts, type ToolApprovalInput } from './utils/toolApprovals';
 
 const previewLength = 50;
 const defaultLimit = 20;
@@ -974,6 +975,74 @@ export class MessageService {
     `);
 
     return result.map((row) => row.id);
+  }
+
+  /**
+   * Flip pending tool approvals to responded, in one transaction (desktop
+   * `applyToolApprovalDecisions`).
+   *
+   * With `statusWhenSettled`, the status flip happens in the same transaction
+   * the moment no `approval-requested` part remains. Splitting them would open
+   * a window where a kill leaves a zombie row — paused, fully responded,
+   * unreachable by any recovery path; atomically flipped to `pending`, a kill
+   * before the resumed stream starts is cleaned up by the existing cold-start
+   * reconcile like any other crashed stream.
+   *
+   * Throws `invalidOperation` when a decision matches no pending approval —
+   * the final gate against double submits.
+   */
+  async applyToolApprovalDecisions(
+    id: string,
+    input: ToolApprovalInput,
+    options?: { statusWhenSettled?: 'pending' },
+  ): Promise<{ message: Message; pendingApprovalCount: number }> {
+    return await this.dbService.withWriteTx(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(messageTable)
+        .where(and(eq(messageTable.id, id), isNull(messageTable.deletedAt)))
+        .limit(1);
+
+      if (!existing) {
+        throw DataApiErrorFactory.notFound('Message', id);
+      }
+      if (existing.role !== 'assistant') {
+        throw DataApiErrorFactory.invalidOperation(
+          'apply tool approval decisions',
+          'not an assistant message',
+        );
+      }
+
+      const applied = applyToolApprovalDecisionsToParts(existing.data.parts ?? [], input);
+      const expectedMatches = 'denyAll' in input ? applied.matchedCount : input.decisions.length;
+      if (applied.matchedCount !== expectedMatches) {
+        throw DataApiErrorFactory.invalidOperation(
+          'apply tool approval decisions',
+          'approval not found or already responded',
+        );
+      }
+
+      const updates: Partial<typeof messageTable.$inferInsert> = {
+        data: { ...existing.data, parts: applied.parts },
+      };
+      if (applied.pendingApprovalCount === 0 && options?.statusWhenSettled) {
+        updates.status = options.statusWhenSettled;
+      }
+
+      const [row] = await tx
+        .update(messageTable)
+        .set(updates)
+        .where(eq(messageTable.id, id))
+        .returning();
+      if (!row) {
+        throw DataApiErrorFactory.notFound('Message', id);
+      }
+
+      return {
+        message: rowToMessage(row),
+        pendingApprovalCount: applied.pendingApprovalCount,
+      };
+    });
   }
 
   /** Assistant messages still `pending` with no in-memory writer — only true

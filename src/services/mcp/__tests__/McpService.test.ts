@@ -298,6 +298,49 @@ describe('disabledTools filtering', () => {
     expect(Object.keys(tools ?? {})).toEqual(['mcp__serverone__keep']);
   });
 
+  it('gates tools listed in disabledAutoApproveTools behind needsApproval', async () => {
+    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['guarded', 'free'])));
+    const { service } = makeService([makeServer({ disabledAutoApproveTools: ['guarded'] })]);
+    const tools = await warmedToolSet(service);
+
+    const needsApproval = async (tool: unknown) =>
+      (tool as { needsApproval: () => Promise<boolean> }).needsApproval();
+
+    await expect(needsApproval(tools?.mcp__serverone__guarded)).resolves.toBe(true);
+    await expect(needsApproval(tools?.mcp__serverone__free)).resolves.toBe(false);
+  });
+
+  it('re-reads the server so an approval toggle mid-turn is honoured', async () => {
+    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const tools = await warmedToolSet(service);
+
+    // The user requires approval after this ToolSet was built.
+    server.disabledAutoApproveTools = ['mcp__serverone__*'];
+
+    const tool = tools?.mcp__serverone__search as unknown as {
+      needsApproval: () => Promise<boolean>;
+    };
+    await expect(tool.needsApproval()).resolves.toBe(true);
+  });
+
+  it('falls back to the wrap-time snapshot when the approval lookup fails', async () => {
+    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
+    const { mcpServer, service } = makeService([
+      makeServer({ disabledAutoApproveTools: ['search'] }),
+    ]);
+    const tools = await warmedToolSet(service);
+
+    mcpServer.getById.mockRejectedValue(new Error('database is locked'));
+
+    // A broken lookup must not fail the turn — and the snapshot still gates.
+    const tool = tools?.mcp__serverone__search as unknown as {
+      needsApproval: () => Promise<boolean>;
+    };
+    await expect(tool.needsApproval()).resolves.toBe(true);
+  });
+
   it('honors wire-id and wildcard entries (desktop rule parity)', async () => {
     // Anchor first: without any rule this server contributes two tools, so the
     // wildcard assertion below can't pass just because the cache stayed cold.

@@ -12,19 +12,33 @@ import type { McpServer } from '@/data/types/mcpServer';
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 
 type McpToolsSectionProps = {
+  disabledAutoApproveTools: string[];
   disabledTools: string[];
   /** `knownToolNames` lets the writer re-expand rules wider than one tool. */
+  onToggleAutoApprove: (toolName: string, autoApprove: boolean, knownToolNames: string[]) => void;
   onToggleTool: (toolName: string, enabled: boolean, knownToolNames: string[]) => void;
   server: McpServer;
 };
 
-export function McpToolsSection({ disabledTools, onToggleTool, server }: McpToolsSectionProps) {
+export function McpToolsSection({
+  disabledAutoApproveTools,
+  disabledTools,
+  onToggleAutoApprove,
+  onToggleTool,
+  server,
+}: McpToolsSectionProps) {
   const { t } = useTranslation();
   const services = useDataServices();
   // Matches raw names, wire ids and server wildcards alike, so a tool disabled
   // by any rule form reads as off here.
   const isDisabled = (toolName: string) =>
     disabledTools.some((value) => matchesMcpSourceToolRule(value, server, { name: toolName }));
+  // Listed = needs manual approval; an empty list means everything runs
+  // without asking (auto-approve is the default, prompting is opt-in).
+  const isAutoApproved = (toolName: string) =>
+    !disabledAutoApproveTools.some((value) =>
+      matchesMcpSourceToolRule(value, server, { name: toolName }),
+    );
 
   const toolsQuery = useQuery({
     queryFn: () => services.mcp.listToolsForServer(server),
@@ -68,24 +82,47 @@ export function McpToolsSection({ disabledTools, onToggleTool, server }: McpTool
 
   return (
     <View className="gap-3">
-      {tools.map((tool) => (
-        <View className="flex-row items-center justify-between gap-4" key={tool.name}>
-          <View className="min-w-0 flex-1 gap-0.5">
-            <Text className="font-mono text-foreground text-sm" numberOfLines={1}>
-              {tool.name}
-            </Text>
-            {tool.description ? (
-              <Text className="text-default-foreground text-xs" numberOfLines={2}>
-                {tool.description}
+      <View className="flex-row items-center justify-end gap-4">
+        <Text className="w-14 text-center text-default-foreground text-[10px]" numberOfLines={1}>
+          {t('settings.mcp.tools.enabledColumn')}
+        </Text>
+        <Text className="w-14 text-center text-default-foreground text-[10px]" numberOfLines={2}>
+          {t('settings.mcp.tools.autoApproveColumn')}
+        </Text>
+      </View>
+      {tools.map((tool) => {
+        const toolDisabled = isDisabled(tool.name);
+
+        return (
+          <View className="flex-row items-center gap-4" key={tool.name}>
+            <View className="min-w-0 flex-1 gap-0.5">
+              <Text className="font-mono text-foreground text-sm" numberOfLines={1}>
+                {tool.name}
               </Text>
-            ) : null}
+              {tool.description ? (
+                <Text className="text-default-foreground text-xs" numberOfLines={2}>
+                  {tool.description}
+                </Text>
+              ) : null}
+            </View>
+            <View className="w-14 items-center">
+              <Switch
+                isSelected={!toolDisabled}
+                onSelectedChange={(enabled) => onToggleTool(tool.name, enabled, knownToolNames)}
+              />
+            </View>
+            <View className="w-14 items-center">
+              <Switch
+                isDisabled={toolDisabled}
+                isSelected={isAutoApproved(tool.name)}
+                onSelectedChange={(autoApprove) =>
+                  onToggleAutoApprove(tool.name, autoApprove, knownToolNames)
+                }
+              />
+            </View>
           </View>
-          <Switch
-            isSelected={!isDisabled(tool.name)}
-            onSelectedChange={(enabled) => onToggleTool(tool.name, enabled, knownToolNames)}
-          />
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }

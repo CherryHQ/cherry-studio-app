@@ -3,16 +3,19 @@ import {
   buildMcpWireToolId,
   buildMcpWireWildcard,
   isMcpToolDisabledBySource,
+  isMcpToolForcePromptBySource,
   withMcpToolDisabled,
   withMcpToolEnabled,
+  withMcpToolRuleAdded,
+  withMcpToolRuleCleared,
 } from '../mcpSourcePolicy';
 
-function makeServer(disabledTools: string[]): McpServer {
+function makeServer(disabledTools: string[], disabledAutoApproveTools: string[] = []): McpServer {
   return {
     baseUrl: 'https://a.example/mcp',
     createdAt: '2026-01-01T00:00:00.000Z',
     description: '',
-    disabledAutoApproveTools: [],
+    disabledAutoApproveTools,
     disabledTools,
     headers: {},
     id: 'server-1',
@@ -61,6 +64,31 @@ describe('isMcpToolDisabledBySource', () => {
   });
 });
 
+describe('isMcpToolForcePromptBySource', () => {
+  it('defaults to auto-approval when the list is empty', () => {
+    expect(isMcpToolForcePromptBySource(makeServer([]), { name: 'search' })).toBe(false);
+  });
+
+  it('prompts for tools matched by raw name, wire id, or wildcard', () => {
+    expect(isMcpToolForcePromptBySource(makeServer([], ['search']), { name: 'search' })).toBe(true);
+    expect(
+      isMcpToolForcePromptBySource(makeServer([], ['mcp__myServer__searchIssues']), {
+        name: 'search_issues',
+      }),
+    ).toBe(true);
+    expect(
+      isMcpToolForcePromptBySource(makeServer([], ['mcp__myServer__*']), { name: 'anything' }),
+    ).toBe(true);
+  });
+
+  it('is independent of disabledTools', () => {
+    // A disabled tool never runs at all — the two lists must not bleed into
+    // each other's semantics.
+    expect(isMcpToolForcePromptBySource(makeServer(['search']), { name: 'search' })).toBe(false);
+    expect(isMcpToolDisabledBySource(makeServer([], ['search']), { name: 'search' })).toBe(false);
+  });
+});
+
 describe('toggling one tool', () => {
   const knownTools = ['search', 'create', 'delete'];
 
@@ -87,5 +115,16 @@ describe('toggling one tool', () => {
   it('disables by raw name without duplicating an existing entry', () => {
     expect(withMcpToolDisabled(makeServer([]), 'search')).toEqual(['search']);
     expect(withMcpToolDisabled(makeServer(['search']), 'search')).toEqual(['search']);
+  });
+
+  it('applies the same clearing rules to any list, e.g. disabledAutoApproveTools', () => {
+    const server = makeServer([], ['mcp__myServer__*']);
+
+    // Turning auto-approve back on for one tool must not auto-approve the lot.
+    expect(
+      withMcpToolRuleCleared(server.disabledAutoApproveTools, server, 'search', knownTools).sort(),
+    ).toEqual(['create', 'delete']);
+    expect(withMcpToolRuleAdded(['create'], 'search').sort()).toEqual(['create', 'search']);
+    expect(withMcpToolRuleAdded(['search'], 'search')).toEqual(['search']);
   });
 });

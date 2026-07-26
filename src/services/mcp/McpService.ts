@@ -3,7 +3,10 @@ import { createMCPClient } from '@ai-sdk/mcp';
 import type { Tool, ToolSet } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
-import { isMcpToolDisabledBySource } from '@/ai/tools/mcpSourcePolicy';
+import {
+  isMcpToolDisabledBySource,
+  isMcpToolForcePromptBySource,
+} from '@/ai/tools/mcpSourcePolicy';
 import { buildFunctionCallToolName } from '@/ai/tools/mcpToolName';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { McpServerService } from '@/data/services/McpServerService';
@@ -520,6 +523,17 @@ export class McpService {
         cherry: {
           tool: { serverId: server.id, serverName: server.name, type: 'mcp' },
         },
+      },
+      // Approval rides on the AI SDK's native gate: when this resolves true the
+      // SDK emits a `tool-approval-request` instead of executing, and the turn
+      // ends cleanly. (ai-core's promptToolUsePlugin would bypass this gate by
+      // pulling tools out of the toolset — it is opt-in and never registered
+      // here; keep it that way.) Re-read the server so flipping the setting
+      // mid-turn is honoured, like `assertToolStillAllowed`; on a failed read,
+      // fall back to the snapshot rather than failing the whole turn.
+      needsApproval: async () => {
+        const current = await this.deps.mcpServer.getById(server.id).catch(() => server);
+        return isMcpToolForcePromptBySource(current, { name: rawToolName });
       },
       execute: wrappedExecute,
       toModelOutput: ({ output }) => ({

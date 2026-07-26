@@ -7,7 +7,12 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { withMcpToolDisabled, withMcpToolEnabled } from '@/ai/tools/mcpSourcePolicy';
+import {
+  withMcpToolDisabled,
+  withMcpToolEnabled,
+  withMcpToolRuleAdded,
+  withMcpToolRuleCleared,
+} from '@/ai/tools/mcpSourcePolicy';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { keyboardBottomOffset } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
@@ -117,6 +122,26 @@ export function McpServerScreen() {
         logger.error('Failed to toggle MCP tool', error as Error);
         toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
       });
+    },
+    [server, serverId, t, toast, updateServer],
+  );
+
+  const handleToggleAutoApprove = useCallback(
+    (toolName: string, autoApprove: boolean, knownToolNames: string[]) => {
+      if (!serverId || !server) {
+        return;
+      }
+      // Listed = force prompt, so auto-approve ON clears the rule (re-expanding
+      // wildcards like the enable toggle) and OFF appends the tool.
+      const nextDisabled = autoApprove
+        ? withMcpToolRuleCleared(server.disabledAutoApproveTools, server, toolName, knownToolNames)
+        : withMcpToolRuleAdded(server.disabledAutoApproveTools, toolName);
+      void updateServer(serverId, { disabledAutoApproveTools: nextDisabled }).catch(
+        (error: unknown) => {
+          logger.error('Failed to toggle MCP tool auto-approve', error as Error);
+          toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+        },
+      );
     },
     [server, serverId, t, toast, updateServer],
   );
@@ -254,7 +279,9 @@ export function McpServerScreen() {
         {serverId && server ? (
           <FormSection title={t('settings.mcp.tools.title')}>
             <McpToolsSection
+              disabledAutoApproveTools={server.disabledAutoApproveTools}
               disabledTools={server.disabledTools}
+              onToggleAutoApprove={handleToggleAutoApprove}
               onToggleTool={handleToggleTool}
               server={server}
             />

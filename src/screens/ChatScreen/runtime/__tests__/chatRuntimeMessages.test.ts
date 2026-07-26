@@ -1,6 +1,13 @@
-import type { Message } from '@/data/types/message';
+import type { CherryMessagePart, Message } from '@/data/types/message';
 
-import { mergeMessagesWithOverlay, statsFromMetadata } from '../chatRuntimeMessages';
+import {
+  denyPendingToolApprovals,
+  getPendingToolApprovals,
+  hasPendingToolApproval,
+  mergeMessageStats,
+  mergeMessagesWithOverlay,
+  statsFromMetadata,
+} from '../chatRuntimeMessages';
 
 describe('statsFromMetadata', () => {
   test('projects present token fields, dropping absent ones', () => {
@@ -49,6 +56,74 @@ describe('chat runtime messages', () => {
     const overlay = createMessage('assistant-1', 'assistant');
 
     expect(mergeMessagesWithOverlay([userMessage], overlay)).toEqual([userMessage, overlay]);
+  });
+});
+
+describe('tool approvals', () => {
+  const requested = (approvalId: string, toolName = 'search'): CherryMessagePart =>
+    ({
+      approval: { id: approvalId },
+      input: { q: 'x' },
+      state: 'approval-requested',
+      toolCallId: `call-${approvalId}`,
+      toolName,
+      type: 'dynamic-tool',
+    }) as unknown as CherryMessagePart;
+  const textPart: CherryMessagePart = { text: 'hello', type: 'text' };
+
+  test('hasPendingToolApproval only fires on approval-requested tool parts', () => {
+    expect(hasPendingToolApproval([textPart])).toBe(false);
+    expect(
+      hasPendingToolApproval([
+        { state: 'output-available', type: 'dynamic-tool' } as unknown as CherryMessagePart,
+      ]),
+    ).toBe(false);
+    expect(hasPendingToolApproval([textPart, requested('a1')])).toBe(true);
+  });
+
+  test('denyPendingToolApprovals flips only requested parts and carries the reason', () => {
+    const responded = {
+      approval: { approved: true, id: 'done' },
+      state: 'approval-responded',
+      type: 'dynamic-tool',
+    } as unknown as CherryMessagePart;
+
+    const parts = denyPendingToolApprovals([textPart, requested('a1'), responded], 'aborted');
+
+    expect(parts[0]).toBe(textPart);
+    expect(parts[1]).toMatchObject({
+      approval: { approved: false, id: 'a1', reason: 'aborted' },
+      state: 'approval-responded',
+    });
+    expect(parts[2]).toBe(responded);
+  });
+
+  test('getPendingToolApprovals only reads a paused assistant tip', () => {
+    const paused = {
+      ...createMessage('assistant-1', 'assistant'),
+      data: { parts: [requested('a1'), requested('a2', 'create')] },
+      status: 'paused' as const,
+    };
+
+    expect(getPendingToolApprovals([createMessage('user-1', 'user'), paused])).toEqual([
+      expect.objectContaining({ approvalId: 'a1', messageId: 'assistant-1', toolName: 'search' }),
+      expect.objectContaining({ approvalId: 'a2', toolName: 'create' }),
+    ]);
+    // Streaming overlays force status pending — must not summon the sheet.
+    expect(getPendingToolApprovals([{ ...paused, status: 'pending' }])).toEqual([]);
+    // Only the tip counts: an older paused row is not actionable.
+    expect(getPendingToolApprovals([paused, createMessage('user-2', 'user')])).toEqual([]);
+  });
+
+  test('mergeMessageStats adds counters and keeps the latest timings', () => {
+    expect(mergeMessageStats(undefined, { totalTokens: 5 })).toEqual({ totalTokens: 5 });
+    expect(mergeMessageStats({ totalTokens: 5 }, undefined)).toEqual({ totalTokens: 5 });
+    expect(
+      mergeMessageStats(
+        { completionTokens: 10, timeFirstTokenMs: 100, totalTokens: 30 },
+        { completionTokens: 7, timeFirstTokenMs: 40, totalTokens: 12 },
+      ),
+    ).toEqual({ completionTokens: 17, timeFirstTokenMs: 40, totalTokens: 42 });
   });
 });
 

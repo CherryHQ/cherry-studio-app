@@ -2,10 +2,11 @@ import { Image } from 'expo-image';
 import { Accordion } from 'heroui-native/accordion';
 import { WrenchIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { parseFunctionCallToolName } from '@/ai/tools/mcpToolName';
 import type { CherryMessagePart } from '@/data/types/message';
+import { useMcpApprovalReopen } from '../../approval/McpApprovalSheet';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
@@ -28,45 +29,63 @@ const MAX_OUTPUT_TEXT_LENGTH = 4000;
 
 export function McpToolPart({ part }: McpToolPartProps) {
   const { t } = useTranslation();
+  const reopenApprovalSheet = useMcpApprovalReopen();
   const toolName = getToolName(part);
   const toolMetadata = getCherryToolMetadata(part);
   const title = getMcpToolTitle(part, toolName, toolMetadata);
   const statusText = getMcpToolStatusText(part, t);
+  const isAwaitingApproval = part.state === 'approval-requested';
   const isRunning =
     part.state === 'input-streaming' ||
     part.state === 'input-available' ||
     (part.state === 'approval-responded' && part.approval.approved);
 
   return (
-    <Accordion
-      className="overflow-hidden rounded-lg border border-border bg-surface-secondary"
-      hideSeparator
-      isCollapsible
-      selectionMode="single"
-    >
-      <Accordion.Item value={`mcp-tool-${toolName}`}>
-        <Accordion.Trigger className="min-h-0 px-3 py-3">
-          <McpToolHeaderContent isRunning={isRunning} statusText={statusText} title={title} />
-          <Accordion.Indicator
-            animation={{ rotation: { value: [-90, 0] } }}
-            iconProps={{ size: 16 }}
-          />
-        </Accordion.Trigger>
-        <Accordion.Content className="px-3 pt-0 pb-3">
-          <View className="gap-2.5 border-border border-t pt-2">
-            <ToolValueSection title={t('chat.mcpTool.arguments')} value={part.input} />
-            {part.state === 'output-available' ? <McpOutputSection output={part.output} /> : null}
-            {part.state === 'output-error' ? (
-              <ToolTextSection
-                tone="error"
-                title={t('chat.mcpTool.response')}
-                value={part.errorText}
-              />
-            ) : null}
-          </View>
-        </Accordion.Content>
-      </Accordion.Item>
-    </Accordion>
+    <View className="gap-2">
+      <Accordion
+        className={
+          isAwaitingApproval
+            ? 'overflow-hidden rounded-lg border border-accent bg-surface-secondary'
+            : 'overflow-hidden rounded-lg border border-border bg-surface-secondary'
+        }
+        hideSeparator
+        isCollapsible
+        selectionMode="single"
+      >
+        <Accordion.Item value={`mcp-tool-${toolName}`}>
+          <Accordion.Trigger className="min-h-0 px-3 py-3">
+            <McpToolHeaderContent isRunning={isRunning} statusText={statusText} title={title} />
+            <Accordion.Indicator
+              animation={{ rotation: { value: [-90, 0] } }}
+              iconProps={{ size: 16 }}
+            />
+          </Accordion.Trigger>
+          <Accordion.Content className="px-3 pt-0 pb-3">
+            <View className="gap-2.5 border-border border-t pt-2">
+              <ToolValueSection title={t('chat.mcpTool.arguments')} value={part.input} />
+              {part.state === 'output-available' ? <McpOutputSection output={part.output} /> : null}
+              {part.state === 'output-error' ? (
+                <ToolTextSection
+                  tone="error"
+                  title={t('chat.mcpTool.response')}
+                  value={part.errorText}
+                />
+              ) : null}
+            </View>
+          </Accordion.Content>
+        </Accordion.Item>
+      </Accordion>
+      {isAwaitingApproval && reopenApprovalSheet ? (
+        <Pressable
+          className="self-start rounded-full bg-accent/15 px-3 py-1.5"
+          onPress={reopenApprovalSheet}
+        >
+          <Text className="font-medium text-accent text-xs">
+            {t('chat.mcpTool.approval.review')}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
