@@ -1,110 +1,49 @@
-import type { Provider } from '@/data/types/provider';
 import {
   apiKeyEntriesSignature,
-  buildApiKeyEntriesFromInput,
   buildApiKeysInputFromEntries,
-  formatApiKeysInput,
   normalizeApiKeyEntries,
   normalizeApiKeySingleLine,
-  parseApiKeysInput,
 } from '../apiService/utils/providerApiServiceApiKeys';
-import { parseCredentialsDraft } from '../apiService/utils/providerApiServiceAuthDraft';
 import {
   getProviderApiServiceApiKeysDirtyState,
   getProviderApiServiceEndpointDirtyState,
 } from '../apiService/utils/providerApiServiceDirtyState';
-import {
-  createDraftSnapshot,
-  type DraftSnapshot,
-} from '../apiService/utils/providerApiServiceDraft';
+import type { EndpointDraft } from '../apiService/utils/providerApiServiceEndpointDraft';
 import {
   buildAddableEndpointOptions,
   canEditProviderEndpoint,
   getConfigurableEndpointTypesForProvider,
+  getProviderPrimaryBaseUrl,
   isConfigurableEndpointType,
   mergeEndpointConfigs,
 } from '../apiService/utils/providerApiServiceEndpointRules';
 import {
-  buildProviderApiServiceApiKeysPayload,
   buildProviderApiServiceEndpointUpdates,
-  buildProviderApiServiceSavePayload,
   ProviderApiServiceSaveError,
 } from '../apiService/utils/providerApiServiceSave';
 
-const DEFAULT_AUTH_DRAFT: DraftSnapshot['authDraft'] = {
-  accessKeyId: '',
-  apiVersion: '',
-  clientId: '',
-  credentials: '',
-  deploymentId: '',
-  location: '',
-  project: '',
-  region: '',
-  secretAccessKey: '',
-  type: 'api-key',
-};
-
-function createTestDraftSnapshot(overrides: Partial<DraftSnapshot> = {}): DraftSnapshot {
-  const {
-    apiKeyEntries = [],
-    apiKeysBaselineSignature,
-    apiKeysInput,
-    authDraft,
-    baseUrlByEndpoint,
-    primaryEndpoint,
-    visibleEndpointTypes,
-    ...rest
-  } = overrides;
-
+function createTestEndpointDraft(overrides: Partial<EndpointDraft> = {}): EndpointDraft {
   return {
-    ...rest,
-    apiKeyEntries,
-    apiKeysBaselineSignature:
-      apiKeysBaselineSignature ?? apiKeyEntriesSignature(normalizeApiKeyEntries(apiKeyEntries)),
-    apiKeysInput: apiKeysInput ?? buildApiKeysInputFromEntries(apiKeyEntries),
-    authDraft: authDraft ?? { ...DEFAULT_AUTH_DRAFT },
-    baseUrlByEndpoint: baseUrlByEndpoint ?? {
+    baseUrlByEndpoint: overrides.baseUrlByEndpoint ?? {
       'openai-chat-completions': 'https://chat.example.com',
     },
-    primaryEndpoint: primaryEndpoint ?? 'openai-chat-completions',
-    visibleEndpointTypes: visibleEndpointTypes ?? ['openai-chat-completions'],
+    primaryEndpoint: overrides.primaryEndpoint ?? 'openai-chat-completions',
+    visibleEndpointTypes: overrides.visibleEndpointTypes ?? ['openai-chat-completions'],
   };
 }
 
 describe('provider API service form helpers', () => {
-  it('parses comma and newline separated API keys', () => {
-    expect(parseApiKeysInput(' sk-a,sk-b\n\n sk-c , sk-a ')).toEqual(['sk-a', 'sk-b', 'sk-c']);
-  });
-
   it('removes line breaks from a single API key', () => {
     expect(normalizeApiKeySingleLine('sk-a\r\nsk-b\nsk-c')).toBe('sk-ask-bsk-c');
   });
 
   it('formats API keys as comma separated values', () => {
     expect(
-      formatApiKeysInput([
+      buildApiKeysInputFromEntries([
         { id: 'key-a', key: 'sk-a', isEnabled: false, label: 'Primary' },
         { id: 'key-b', key: 'sk-b', isEnabled: true },
       ]),
     ).toBe('sk-a,sk-b');
-  });
-
-  it('preserves existing API key metadata when rebuilding entries', () => {
-    const result = buildApiKeyEntriesFromInput('sk-a, sk-new', [
-      { id: 'key-a', key: 'sk-a', isEnabled: false, label: 'Primary' },
-    ]);
-
-    expect(result[0]).toEqual({
-      id: 'key-a',
-      key: 'sk-a',
-      isEnabled: false,
-      label: 'Primary',
-    });
-    expect(result[1]).toMatchObject({
-      key: 'sk-new',
-      isEnabled: true,
-    });
-    expect(result[1]?.id).toEqual(expect.any(String));
   });
 
   it('merges endpoint base URLs without dropping endpoint metadata', () => {
@@ -164,9 +103,23 @@ describe('provider API service form helpers', () => {
     });
   });
 
+  it('reads the primary endpoint base URL straight off the provider', () => {
+    expect(
+      getProviderPrimaryBaseUrl({
+        defaultChatEndpoint: 'anthropic-messages',
+        endpointConfigs: {
+          'anthropic-messages': { baseUrl: 'https://anthropic.example.com' },
+          'openai-chat-completions': { baseUrl: 'https://chat.example.com' },
+        },
+      } as never),
+    ).toBe('https://anthropic.example.com');
+    expect(getProviderPrimaryBaseUrl(undefined)).toBe('');
+    expect(getProviderPrimaryBaseUrl({ endpointConfigs: {} } as never)).toBe('');
+  });
+
   it('allows clearing the primary endpoint base URL', () => {
     const updates = buildProviderApiServiceEndpointUpdates({
-      draft: createTestDraftSnapshot({
+      draft: createTestEndpointDraft({
         baseUrlByEndpoint: {
           'openai-chat-completions': '',
         },
@@ -183,9 +136,8 @@ describe('provider API service form helpers', () => {
   });
 
   it('saves endpoint configs without changing defaultChatEndpoint', () => {
-    const payload = buildProviderApiServiceSavePayload({
-      authConfig: { type: 'api-key' },
-      draft: createTestDraftSnapshot({
+    const updates = buildProviderApiServiceEndpointUpdates({
+      draft: createTestEndpointDraft({
         baseUrlByEndpoint: {
           'openai-chat-completions': 'https://chat.example.com',
           'openai-responses': 'https://responses.example.com',
@@ -201,7 +153,7 @@ describe('provider API service form helpers', () => {
       } as never,
     });
 
-    expect(payload.providerUpdates).toEqual({
+    expect(updates).toEqual({
       endpointConfigs: {
         'openai-chat-completions': { baseUrl: 'https://chat.example.com' },
         'openai-responses': { baseUrl: 'https://responses.example.com' },
@@ -211,8 +163,7 @@ describe('provider API service form helpers', () => {
 
   it('builds endpoint-only updates for the endpoint settings screen', () => {
     const updates = buildProviderApiServiceEndpointUpdates({
-      draft: createTestDraftSnapshot({
-        apiKeyEntries: [{ id: 'key-a', isEnabled: true, key: 'sk-a' }],
+      draft: createTestEndpointDraft({
         baseUrlByEndpoint: {
           'openai-chat-completions': 'https://chat.example.com',
           'openai-responses': '',
@@ -235,28 +186,15 @@ describe('provider API service form helpers', () => {
     });
   });
 
-  it('saves API key entries with enabled state', () => {
-    const payload = buildProviderApiServiceSavePayload({
-      authConfig: { type: 'api-key' },
-      draft: createTestDraftSnapshot({
-        apiKeyEntries: [
-          { id: 'key-a', isEnabled: false, key: 'sk-a' },
-          { id: 'key-b', isEnabled: true, key: 'sk-b' },
-        ],
-        baseUrlByEndpoint: {
-          'openai-chat-completions': 'https://chat.example.com',
-        },
-      }),
-      provider: {
-        authType: 'api-key',
-        defaultChatEndpoint: 'openai-chat-completions',
-        endpointConfigs: {
-          'openai-chat-completions': { baseUrl: 'https://chat.example.com' },
-        },
-      } as never,
-    });
-
-    expect(payload.apiKeys).toEqual([
+  it('normalizes API key entries before they reach the save call', () => {
+    expect(
+      normalizeApiKeyEntries([
+        { id: 'key-a', isEnabled: false, key: ' sk-a ' },
+        { id: 'key-empty', isEnabled: true, key: ' ' },
+        { id: 'key-b', isEnabled: true, key: 'sk-b' },
+        { id: 'key-duplicate', isEnabled: true, key: 'sk-a' },
+      ]),
+    ).toEqual([
       { id: 'key-a', isEnabled: false, key: 'sk-a' },
       { id: 'key-b', isEnabled: true, key: 'sk-b' },
     ]);
@@ -276,44 +214,31 @@ describe('provider API service form helpers', () => {
     );
   });
 
-  it('builds API key-only payload for the API key settings screen', () => {
-    expect(
-      buildProviderApiServiceApiKeysPayload(
-        createTestDraftSnapshot({
-          apiKeyEntries: [
-            { id: 'key-a', isEnabled: false, key: ' sk-a ' },
-            { id: 'key-empty', isEnabled: true, key: ' ' },
-            { id: 'key-b', isEnabled: true, key: 'sk-b' },
-          ],
-        }),
-      ),
-    ).toEqual([
-      { id: 'key-a', isEnabled: false, key: 'sk-a' },
-      { id: 'key-b', isEnabled: true, key: 'sk-b' },
-    ]);
-  });
-
   it('ignores empty new API key rows in dirty state', () => {
     expect(
       getProviderApiServiceApiKeysDirtyState({
         apiKeys: [{ id: 'key-a', isEnabled: true, key: 'sk-a' }],
-        draft: createTestDraftSnapshot({
-          apiKeyEntries: [
-            { id: 'key-a', isEnabled: true, key: 'sk-a' },
-            { id: 'key-empty', isEnabled: true, key: '' },
-          ],
-          apiKeysBaselineSignature: apiKeyEntriesSignature([
-            { id: 'key-a', isEnabled: true, key: 'sk-a' },
-          ]),
-        }),
+        entries: [
+          { id: 'key-a', isEnabled: true, key: 'sk-a' },
+          { id: 'key-empty', isEnabled: true, key: '' },
+        ],
       }),
     ).toBe(false);
+  });
+
+  it('reports API key edits as dirty', () => {
+    expect(
+      getProviderApiServiceApiKeysDirtyState({
+        apiKeys: [{ id: 'key-a', isEnabled: true, key: 'sk-a' }],
+        entries: [{ id: 'key-a', isEnabled: true, key: 'sk-edited' }],
+      }),
+    ).toBe(true);
   });
 
   it('ignores empty new endpoint rows in dirty state', () => {
     expect(
       getProviderApiServiceEndpointDirtyState({
-        draft: createTestDraftSnapshot({
+        draft: createTestEndpointDraft({
           baseUrlByEndpoint: {
             'openai-chat-completions': 'https://chat.example.com',
             'openai-responses': '',
@@ -332,12 +257,26 @@ describe('provider API service form helpers', () => {
 
   it('rejects invalid endpoint base URLs', () => {
     expect(() =>
-      buildProviderApiServiceSavePayload({
-        authConfig: { type: 'api-key' },
-        draft: createTestDraftSnapshot({
+      buildProviderApiServiceEndpointUpdates({
+        draft: createTestEndpointDraft({
           baseUrlByEndpoint: {
             'openai-chat-completions': 'not a url',
           },
+        }),
+        provider: { authType: 'api-key' } as never,
+      }),
+    ).toThrow(new ProviderApiServiceSaveError('invalid-base-url'));
+  });
+
+  it('rejects an invalid base URL on a secondary endpoint', () => {
+    expect(() =>
+      buildProviderApiServiceEndpointUpdates({
+        draft: createTestEndpointDraft({
+          baseUrlByEndpoint: {
+            'openai-chat-completions': 'https://chat.example.com',
+            'openai-responses': 'ftp://responses.example.com',
+          },
+          visibleEndpointTypes: ['openai-chat-completions', 'openai-responses'],
         }),
         provider: { authType: 'api-key' } as never,
       }),
@@ -369,71 +308,5 @@ describe('provider API service form helpers', () => {
     expect(canEditProviderEndpoint({ authType: 'iam-aws' } as never)).toBe(false);
     expect(canEditProviderEndpoint({ authType: 'iam-gcp' } as never)).toBe(false);
     expect(canEditProviderEndpoint({ authType: 'oauth' } as never)).toBe(false);
-  });
-
-  it('requires GCP credentials to be a JSON object when provided', () => {
-    expect(parseCredentialsDraft('{"client_email":"test@example.com"}')).toEqual({
-      client_email: 'test@example.com',
-    });
-    expect(() => parseCredentialsDraft('[]')).toThrow('credentials must be a JSON object');
-  });
-
-  it('does not overwrite dirty API key draft when server keys refetch', () => {
-    const provider = { id: 'p1', authType: 'api-key' } as unknown as Provider;
-    const initialApiKeys = [{ id: 'k1', isEnabled: true, key: 'sk-old' }];
-    const draft = createDraftSnapshot(provider, initialApiKeys, { type: 'api-key' });
-
-    // User modifies a key locally (dirty)
-    draft.apiKeyEntries[0].key = 'sk-local-edit';
-    draft.apiKeysInput = buildApiKeysInputFromEntries(draft.apiKeyEntries);
-
-    const serverApiKeys = [{ id: 'k2', isEnabled: true, key: 'sk-oauth' }];
-    const serverSignature = apiKeyEntriesSignature(normalizeApiKeyEntries(serverApiKeys));
-    const currentDraftSignature = apiKeyEntriesSignature(draft.apiKeyEntries);
-
-    expect(currentDraftSignature).not.toBe(draft.apiKeysBaselineSignature);
-
-    // Simulate the useEffect sync logic
-    const nextDraft =
-      currentDraftSignature !== draft.apiKeysBaselineSignature
-        ? draft
-        : {
-            ...draft,
-            apiKeyEntries: normalizeApiKeyEntries(serverApiKeys).map((entry) => ({ ...entry })),
-            apiKeysInput: buildApiKeysInputFromEntries(normalizeApiKeyEntries(serverApiKeys)),
-            apiKeysBaselineSignature: serverSignature,
-          };
-
-    expect(nextDraft.apiKeyEntries).toEqual([{ id: 'k1', isEnabled: true, key: 'sk-local-edit' }]);
-    expect(nextDraft.apiKeysInput).toBe('sk-local-edit');
-    expect(nextDraft.apiKeysBaselineSignature).toBe(draft.apiKeysBaselineSignature);
-  });
-
-  it('syncs server API keys when draft is not dirty', () => {
-    const provider = { id: 'p1', authType: 'api-key' } as unknown as Provider;
-    const initialApiKeys = [{ id: 'k1', isEnabled: true, key: 'sk-old' }];
-    const draft = createDraftSnapshot(provider, initialApiKeys, { type: 'api-key' });
-
-    const serverApiKeys = [{ id: 'k2', isEnabled: true, key: 'sk-oauth' }];
-    const serverSignature = apiKeyEntriesSignature(normalizeApiKeyEntries(serverApiKeys));
-    const currentDraftSignature = apiKeyEntriesSignature(draft.apiKeyEntries);
-
-    // Draft is not dirty
-    expect(currentDraftSignature).toBe(draft.apiKeysBaselineSignature);
-
-    // Simulate the useEffect sync logic
-    const nextDraft =
-      currentDraftSignature !== draft.apiKeysBaselineSignature
-        ? draft
-        : {
-            ...draft,
-            apiKeyEntries: normalizeApiKeyEntries(serverApiKeys).map((entry) => ({ ...entry })),
-            apiKeysInput: buildApiKeysInputFromEntries(normalizeApiKeyEntries(serverApiKeys)),
-            apiKeysBaselineSignature: serverSignature,
-          };
-
-    expect(nextDraft.apiKeyEntries).toEqual([{ id: 'k2', isEnabled: true, key: 'sk-oauth' }]);
-    expect(nextDraft.apiKeysInput).toBe('sk-oauth');
-    expect(nextDraft.apiKeysBaselineSignature).toBe(serverSignature);
   });
 });

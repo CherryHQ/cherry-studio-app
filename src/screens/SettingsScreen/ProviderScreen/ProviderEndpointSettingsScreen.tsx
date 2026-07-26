@@ -5,18 +5,18 @@ import { ScrollView, View } from 'react-native';
 
 import { BackHeader } from '@/components/headers';
 import type { EndpointType } from '@/data/types/model';
-import type { Provider } from '@/data/types/provider';
+import type { EndpointConfigs, Provider } from '@/data/types/provider';
 import {
   buildAddableEndpointOptions,
   buildProviderApiServiceEndpointUpdates,
   canEditProviderEndpoint,
-  type DraftSnapshot,
+  type EndpointDraft,
   getEndpointLabel,
   getProviderApiServiceEndpointDirtyState,
   ProviderApiServiceEndpointForm,
   ProviderApiServiceSaveError,
   useProviderApiServiceConfirmDialog,
-  useProviderApiServiceDraft,
+  useProviderApiServiceEndpointDraft,
   useProviderApiServiceQueries,
   useProviderApiServiceSheetClose,
 } from './apiService';
@@ -27,27 +27,62 @@ export default function ProviderEndpointSettingsScreen() {
     providerName?: string;
   }>();
   const { t } = useTranslation();
-  const { apiKeys, authConfig, provider, providerQuery, saveProviderMutation } =
-    useProviderApiServiceQueries(providerId ?? '');
+  const { provider, providerQuery, saveProviderMutation } = useProviderApiServiceQueries(
+    providerId ?? '',
+  );
+  const saveEndpointConfigs = useCallback(
+    (updates: { endpointConfigs: EndpointConfigs }) => saveProviderMutation.mutateAsync(updates),
+    [saveProviderMutation],
+  );
+
+  if (!providerId || providerQuery.isError) {
+    return <Redirect href="/settings/provider" />;
+  }
+
+  if (provider && !canEditProviderEndpoint(provider)) {
+    return (
+      <Redirect
+        href={{
+          params: {
+            ...(providerName || provider.name
+              ? { providerName: providerName ?? provider.name }
+              : {}),
+            providerId,
+          },
+          pathname: '/settings/provider/[providerId]',
+        }}
+      />
+    );
+  }
+
+  if (!provider) {
+    return <BackHeader title={t('settings.provider.apiService.manageEndpoints')} />;
+  }
+
+  return <ProviderEndpointSettingsForm onSave={saveEndpointConfigs} provider={provider} />;
+}
+
+function ProviderEndpointSettingsForm({
+  onSave,
+  provider,
+}: {
+  onSave: (updates: { endpointConfigs: EndpointConfigs }) => Promise<unknown>;
+  provider: Provider;
+}) {
+  const { t } = useTranslation();
   const [endpointErrors, setEndpointErrors] = useState<Partial<Record<EndpointType, string>>>({});
   const [pendingEndpoint, setPendingEndpoint] = useState<EndpointType | null>(null);
   const pendingEndpointRef = useRef<EndpointType | null>(null);
-  const { addEndpoint, draft, removeEndpoint, resetEndpointDraft, updateEndpointBaseUrl } =
-    useProviderApiServiceDraft({
-      apiKeys,
-      authConfig,
-      provider,
-    });
+  const { addEndpoint, draft, removeEndpoint, updateBaseUrl } =
+    useProviderApiServiceEndpointDraft(provider);
   const hasUnsavedChanges =
     Object.keys(endpointErrors).length > 0 ||
     getProviderApiServiceEndpointDirtyState({ draft, provider });
-  const isSaving = saveProviderMutation.isPending || pendingEndpoint !== null;
+  const isSaving = pendingEndpoint !== null;
   const { confirmDialog, requestConfirm } = useProviderApiServiceConfirmDialog();
   const { discardDialog, requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges,
     isSaving,
-    onClose: resetEndpointDraft,
-    onDiscard: resetEndpointDraft,
   });
 
   const getEndpointSaveError = useCallback(
@@ -65,13 +100,11 @@ export default function ProviderEndpointSettingsScreen() {
     async ({
       endpoint,
       nextDraft,
-      nextProvider = provider,
     }: {
       endpoint: EndpointType;
-      nextDraft: DraftSnapshot;
-      nextProvider?: Provider;
+      nextDraft: EndpointDraft;
     }): Promise<boolean> => {
-      if (!nextProvider || pendingEndpointRef.current !== null) {
+      if (pendingEndpointRef.current !== null) {
         return false;
       }
 
@@ -79,11 +112,7 @@ export default function ProviderEndpointSettingsScreen() {
       setPendingEndpoint(endpoint);
 
       try {
-        const updates = buildProviderApiServiceEndpointUpdates({
-          draft: nextDraft,
-          provider: nextProvider,
-        });
-        await saveProviderMutation.mutateAsync(updates);
+        await onSave(buildProviderApiServiceEndpointUpdates({ draft: nextDraft, provider }));
         setEndpointErrors((current) => removeEndpointError(current, endpoint));
         return true;
       } catch (error) {
@@ -97,23 +126,19 @@ export default function ProviderEndpointSettingsScreen() {
         setPendingEndpoint(null);
       }
     },
-    [getEndpointSaveError, provider, saveProviderMutation],
+    [getEndpointSaveError, onSave, provider],
   );
 
   const handleBaseUrlChange = useCallback(
     (endpoint: EndpointType, value: string) => {
-      updateEndpointBaseUrl(endpoint, value);
+      updateBaseUrl(endpoint, value);
       setEndpointErrors((current) => removeEndpointError(current, endpoint));
     },
-    [updateEndpointBaseUrl],
+    [updateBaseUrl],
   );
 
   const handleBaseUrlCommit = useCallback(
     (endpoint: EndpointType, value: string) => {
-      if (!draft) {
-        return;
-      }
-
       const nextDraft = {
         ...draft,
         baseUrlByEndpoint: {
@@ -126,7 +151,7 @@ export default function ProviderEndpointSettingsScreen() {
             : draft.visibleEndpointTypes.filter((item) => item !== endpoint),
       };
 
-      updateEndpointBaseUrl(endpoint, value);
+      updateBaseUrl(endpoint, value);
 
       void (async () => {
         const didSave = await saveEndpointDraft({ endpoint, nextDraft });
@@ -136,12 +161,12 @@ export default function ProviderEndpointSettingsScreen() {
         }
       })();
     },
-    [draft, removeEndpoint, saveEndpointDraft, updateEndpointBaseUrl],
+    [draft, removeEndpoint, saveEndpointDraft, updateBaseUrl],
   );
 
   const handleRemoveEndpoint = useCallback(
     (endpoint: EndpointType) => {
-      if (!draft || endpoint === draft.primaryEndpoint) {
+      if (endpoint === draft.primaryEndpoint) {
         return;
       }
 
@@ -180,28 +205,6 @@ export default function ProviderEndpointSettingsScreen() {
     [addEndpoint],
   );
 
-  if (!providerId || providerQuery.isError) {
-    return <Redirect href="/settings/provider" />;
-  }
-
-  if (provider && !canEditProviderEndpoint(provider)) {
-    return (
-      <Redirect
-        href={{
-          params: {
-            ...(providerName || provider.name
-              ? { providerName: providerName ?? provider.name }
-              : {}),
-            providerId,
-          },
-          pathname: '/settings/provider/[providerId]',
-        }}
-      />
-    );
-  }
-
-  const addableEndpointOptions = buildAddableEndpointOptions(provider, draft?.visibleEndpointTypes);
-
   return (
     <>
       <BackHeader title={t('settings.provider.apiService.manageEndpoints')} onBack={requestClose} />
@@ -217,20 +220,21 @@ export default function ProviderEndpointSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="px-4 py-5">
-          {draft ? (
-            <ProviderApiServiceEndpointForm
-              addableEndpointOptions={addableEndpointOptions}
-              baseUrlByEndpoint={draft.baseUrlByEndpoint}
-              endpointErrors={endpointErrors}
-              pendingEndpoint={pendingEndpoint}
-              primaryEndpoint={draft.primaryEndpoint}
-              visibleEndpointTypes={draft.visibleEndpointTypes}
-              onAddEndpoint={handleAddEndpoint}
-              onBaseUrlChange={handleBaseUrlChange}
-              onBaseUrlCommit={handleBaseUrlCommit}
-              onRemoveEndpoint={handleRemoveEndpoint}
-            />
-          ) : null}
+          <ProviderApiServiceEndpointForm
+            addableEndpointOptions={buildAddableEndpointOptions(
+              provider,
+              draft.visibleEndpointTypes,
+            )}
+            baseUrlByEndpoint={draft.baseUrlByEndpoint}
+            endpointErrors={endpointErrors}
+            pendingEndpoint={pendingEndpoint}
+            primaryEndpoint={draft.primaryEndpoint}
+            visibleEndpointTypes={draft.visibleEndpointTypes}
+            onAddEndpoint={handleAddEndpoint}
+            onBaseUrlChange={handleBaseUrlChange}
+            onBaseUrlCommit={handleBaseUrlCommit}
+            onRemoveEndpoint={handleRemoveEndpoint}
+          />
         </View>
       </ScrollView>
     </>

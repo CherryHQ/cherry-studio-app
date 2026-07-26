@@ -6,51 +6,8 @@ function createApiKeyEntryId(): string {
   return Crypto.randomUUID();
 }
 
-export function formatApiKeysInput(apiKeys: readonly ApiKeyEntry[]): string {
-  return buildApiKeysInputFromEntries(apiKeys);
-}
-
-export function parseApiKeysInput(input: string): string[] {
-  const seen = new Set<string>();
-  const keys: string[] = [];
-
-  for (const item of input.split(/[,\n]/)) {
-    const key = item.trim();
-
-    if (!key || seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    keys.push(key);
-  }
-
-  return keys;
-}
-
 export function normalizeApiKeySingleLine(value: string): string {
   return value.replaceAll(/[\r\n]+/g, '');
-}
-
-export function buildApiKeyEntriesFromInput(
-  input: string,
-  existingKeys: readonly ApiKeyEntry[],
-): ApiKeyEntry[] {
-  const existingByKey = new Map(existingKeys.map((entry) => [entry.key.trim(), entry]));
-
-  return parseApiKeysInput(input).map((key) => {
-    const existing = existingByKey.get(key);
-
-    if (existing) {
-      return existing;
-    }
-
-    return {
-      id: createApiKeyEntryId(),
-      isEnabled: true,
-      key,
-    };
-  });
 }
 
 export function buildApiKeysInputFromEntries(apiKeys: readonly ApiKeyEntry[]): string {

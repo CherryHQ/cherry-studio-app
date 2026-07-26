@@ -17,6 +17,10 @@ export function getPrimaryEndpoint(provider?: Provider | null): EndpointType {
   return provider?.defaultChatEndpoint ?? defaultChatEndpoint;
 }
 
+export function getProviderPrimaryBaseUrl(provider?: Provider | null): string {
+  return provider?.endpointConfigs?.[getPrimaryEndpoint(provider)]?.baseUrl ?? '';
+}
+
 export function isConfigurableEndpointType(
   endpoint: EndpointType | null | undefined,
 ): endpoint is EndpointType {

@@ -6,16 +6,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 
+/**
+ * Confirms before leaving an edit screen that still holds uncommitted input. Discarding
+ * needs no reset step: the draft lives in the form's own state and dies with it.
+ */
 export function useProviderApiServiceSheetClose({
   hasUnsavedChanges,
   isSaving,
-  onClose,
-  onDiscard,
 }: {
   hasUnsavedChanges: boolean;
   isSaving: boolean;
-  onClose?: () => void;
-  onDiscard: () => void;
 }) {
   const navigation = useNavigation();
   const { t } = useTranslation();
@@ -25,9 +25,8 @@ export function useProviderApiServiceSheetClose({
 
   const closeWithoutPrompt = useCallback(() => {
     isConfirmedCloseRef.current = true;
-    onClose?.();
     navigation.goBack();
-  }, [navigation, onClose]);
+  }, [navigation]);
 
   const confirmDiscard = useCallback((onConfirm: () => void) => {
     Keyboard.dismiss();
@@ -44,9 +43,8 @@ export function useProviderApiServiceSheetClose({
     const onConfirm = pendingCloseRef.current;
     pendingCloseRef.current = null;
     setIsDiscardDialogOpen(false);
-    onDiscard();
     onConfirm?.();
-  }, [onDiscard]);
+  }, []);
 
   const requestClose = useCallback(() => {
     if (isSaving) {

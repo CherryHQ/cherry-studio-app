@@ -6,28 +6,29 @@ export {
   ProviderApiServiceEndpointField,
   ProviderApiServiceEndpointForm,
 } from './components/ProviderApiServiceEndpointFields';
+export { useProviderApiServiceApiKeysDraft } from './hooks/useProviderApiServiceApiKeysDraft';
 export { useProviderApiServiceConfirmDialog } from './hooks/useProviderApiServiceConfirmDialog';
-export { useProviderApiServiceDraft } from './hooks/useProviderApiServiceDraft';
+export { useProviderApiServiceEndpointDraft } from './hooks/useProviderApiServiceEndpointDraft';
 export { useProviderApiServiceQueries } from './hooks/useProviderApiServiceQueries';
 export { useProviderApiServiceSheetClose } from './hooks/useProviderApiServiceSheetClose';
 export {
-  buildApiKeyEntriesFromInput,
+  buildApiKeysInputFromEntries,
   normalizeApiKeyEntries,
 } from './utils/providerApiServiceApiKeys';
-export { shouldShowApiKeys } from './utils/providerApiServiceAuthDraft';
+export { getEffectiveAuthConfig, shouldShowApiKeys } from './utils/providerApiServiceAuth';
 export {
   getProviderApiServiceApiKeysDirtyState,
   getProviderApiServiceEndpointDirtyState,
 } from './utils/providerApiServiceDirtyState';
-export type { DraftSnapshot } from './utils/providerApiServiceDraft';
+export type { EndpointDraft } from './utils/providerApiServiceEndpointDraft';
 export {
   buildAddableEndpointOptions,
   canEditProviderEndpoint,
   getConfigurableEndpointTypesForProvider,
   getEndpointLabel,
+  getProviderPrimaryBaseUrl,
 } from './utils/providerApiServiceEndpointRules';
 export {
   buildProviderApiServiceEndpointUpdates,
-  buildProviderApiServiceSavePayload,
   ProviderApiServiceSaveError,
 } from './utils/providerApiServiceSave';

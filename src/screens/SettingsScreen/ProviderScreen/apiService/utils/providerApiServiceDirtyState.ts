@@ -2,7 +2,7 @@ import type { EndpointType } from '@/data/types/model';
 import type { ApiKeyEntry, Provider } from '@/data/types/provider';
 
 import { apiKeyEntriesSignature, normalizeApiKeyEntries } from './providerApiServiceApiKeys';
-import type { DraftSnapshot } from './providerApiServiceDraft';
+import type { EndpointDraft } from './providerApiServiceEndpointDraft';
 import {
   canEditProviderEndpoint,
   mergeEndpointConfigs,
@@ -13,7 +13,7 @@ export function getProviderApiServiceEndpointDirtyState({
   draft,
   provider,
 }: {
-  draft: DraftSnapshot | null;
+  draft: EndpointDraft | null;
   provider: Provider | undefined;
 }): boolean {
   if (!provider || !draft || !canEditProviderEndpoint(provider)) {
@@ -36,18 +36,13 @@ export function getProviderApiServiceEndpointDirtyState({
 
 export function getProviderApiServiceApiKeysDirtyState({
   apiKeys,
-  draft,
+  entries,
 }: {
   apiKeys: readonly ApiKeyEntry[];
-  draft: DraftSnapshot | null;
+  entries: readonly ApiKeyEntry[];
 }): boolean {
-  if (!draft) {
-    return false;
-  }
-
   return (
-    apiKeyEntriesSignature(draft.apiKeyEntries) !==
-    apiKeyEntriesSignature(normalizeApiKeyEntries(apiKeys))
+    apiKeyEntriesSignature(entries) !== apiKeyEntriesSignature(normalizeApiKeyEntries(apiKeys))
   );
 }
 
@@ -63,7 +58,7 @@ export function endpointVisibilitySignature(endpointTypes: readonly string[]): s
   return JSON.stringify([...endpointTypes].sort());
 }
 
-function getPersistableEndpointTypes(draft: DraftSnapshot, provider: Provider): EndpointType[] {
+function getPersistableEndpointTypes(draft: EndpointDraft, provider: Provider): EndpointType[] {
   return draft.visibleEndpointTypes.filter((endpoint) => {
     if (endpoint === draft.primaryEndpoint) {
       return true;

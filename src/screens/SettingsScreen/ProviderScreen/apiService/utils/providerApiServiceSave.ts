@@ -1,26 +1,10 @@
-import type { ApiKeyEntry, AuthConfig, EndpointConfigs, Provider } from '@/data/types/provider';
+import type { EndpointConfigs, Provider } from '@/data/types/provider';
 
-import { normalizeApiKeyEntries } from './providerApiServiceApiKeys';
-import { buildAuthConfigFromDraft, needsAuthConfigSave } from './providerApiServiceAuthDraft';
-import type { DraftSnapshot } from './providerApiServiceDraft';
-import {
-  canEditProviderEndpoint,
-  isValidEndpointBaseUrl,
-  mergeEndpointConfigs,
-} from './providerApiServiceEndpointRules';
-
-export type ProviderApiServiceProviderUpdates = {
-  authConfig?: AuthConfig;
-  endpointConfigs?: EndpointConfigs;
-};
-
-export type ProviderApiServiceSavePayload = {
-  apiKeys: ApiKeyEntry[];
-  providerUpdates: ProviderApiServiceProviderUpdates;
-};
+import type { EndpointDraft } from './providerApiServiceEndpointDraft';
+import { isValidEndpointBaseUrl, mergeEndpointConfigs } from './providerApiServiceEndpointRules';
 
 export class ProviderApiServiceSaveError extends Error {
-  constructor(readonly code: 'invalid-base-url' | 'invalid-json') {
+  constructor(readonly code: 'invalid-base-url') {
     super(code);
   }
 }
@@ -29,15 +13,9 @@ export function buildProviderApiServiceEndpointUpdates({
   draft,
   provider,
 }: {
-  draft: DraftSnapshot;
+  draft: EndpointDraft;
   provider: Provider;
-}): Pick<ProviderApiServiceProviderUpdates, 'endpointConfigs'> {
-  if (!canEditProviderEndpoint(provider)) {
-    return {
-      endpointConfigs: provider.endpointConfigs,
-    };
-  }
-
+}): { endpointConfigs: EndpointConfigs } {
   validateEndpointDraft(draft);
 
   return {
@@ -50,61 +28,10 @@ export function buildProviderApiServiceEndpointUpdates({
   };
 }
 
-export function buildProviderApiServiceApiKeysPayload(draft: DraftSnapshot): ApiKeyEntry[] {
-  return normalizeApiKeyEntries(draft.apiKeyEntries);
-}
-
-export function buildProviderApiServiceSavePayload({
-  authConfig,
-  draft,
-  provider,
-}: {
-  authConfig: AuthConfig | null | undefined;
-  draft: DraftSnapshot;
-  provider: Provider;
-}): ProviderApiServiceSavePayload {
-  const shouldSaveEndpoint = canEditProviderEndpoint(provider);
-
-  if (shouldSaveEndpoint) {
-    validateEndpointDraft(draft);
-  }
-
-  let nextAuthConfig: AuthConfig | undefined;
-
-  try {
-    if (needsAuthConfigSave(draft.authDraft.type)) {
-      nextAuthConfig = buildAuthConfigFromDraft(authConfig, provider, draft.authDraft);
-    }
-  } catch {
-    throw new ProviderApiServiceSaveError('invalid-json');
-  }
-
-  const nextEndpointConfigs = shouldSaveEndpoint
-    ? buildProviderApiServiceEndpointUpdates({ draft, provider }).endpointConfigs
-    : provider.endpointConfigs;
-
-  return {
-    apiKeys: buildProviderApiServiceApiKeysPayload(draft),
-    providerUpdates: {
-      ...(nextAuthConfig ? { authConfig: nextAuthConfig } : {}),
-      ...(shouldSaveEndpoint ? { endpointConfigs: nextEndpointConfigs } : {}),
-    },
-  };
-}
-
-function validateEndpointDraft(draft: DraftSnapshot) {
-  const primaryBaseUrl = draft.baseUrlByEndpoint[draft.primaryEndpoint] ?? '';
-
-  if (primaryBaseUrl.trim() && !isValidEndpointBaseUrl(primaryBaseUrl)) {
-    throw new ProviderApiServiceSaveError('invalid-base-url');
-  }
-
-  for (const endpoint of draft.visibleEndpointTypes) {
-    if (endpoint === draft.primaryEndpoint) {
-      continue;
-    }
-
+function validateEndpointDraft(draft: EndpointDraft) {
+  for (const endpoint of new Set([draft.primaryEndpoint, ...draft.visibleEndpointTypes])) {
     const baseUrl = draft.baseUrlByEndpoint[endpoint] ?? '';
+
     if (baseUrl.trim() && !isValidEndpointBaseUrl(baseUrl)) {
       throw new ProviderApiServiceSaveError('invalid-base-url');
     }
