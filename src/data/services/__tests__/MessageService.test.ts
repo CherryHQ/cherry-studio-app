@@ -72,38 +72,267 @@ describe('MessageService', () => {
     await expect(service.findPendingAssistantMessageIds()).resolves.toEqual(['a', 'b']);
   });
 
-  test('markMessagesError updates the given ids to error status', async () => {
-    const updateCalls: { status: string }[] = [];
-    const tx = {
-      update: () => ({
-        set: (values: { status: string }) => ({
-          where: () => {
-            updateCalls.push(values);
-            return Promise.resolve();
-          },
+  describe('settleCrashedMessages', () => {
+    function makeSettleService(rows: Record<string, unknown>[]) {
+      const updates: Record<string, unknown>[] = [];
+      const tx = {
+        select: () => ({ from: () => ({ where: async () => rows }) }),
+        update: () => ({
+          set: (values: Record<string, unknown>) => ({
+            where: () => {
+              updates.push(values);
+              return Promise.resolve();
+            },
+          }),
         }),
-      }),
-    };
-    const withWriteTx = jest.fn(async (callback: (fakeTx: typeof tx) => Promise<unknown>) =>
-      callback(tx),
-    );
-    const dbService = { withWriteTx } as unknown as DbService;
-    const service = new MessageService(dbService, {} as never, {} as never);
+      };
+      const withWriteTx = jest.fn(async (callback: (fakeTx: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      );
+      const dbService = { withWriteTx } as unknown as DbService;
 
-    await service.markMessagesError(['a', 'b']);
+      return {
+        service: new MessageService(dbService, {} as never, {} as never),
+        updates,
+        withWriteTx,
+      };
+    }
 
-    expect(withWriteTx).toHaveBeenCalledTimes(1);
-    expect(updateCalls).toEqual([{ status: 'error' }]);
+    test('flips the given ids to error status', async () => {
+      const { service, updates, withWriteTx } = makeSettleService([]);
+
+      await service.settleCrashedMessages(['a', 'b']);
+
+      expect(withWriteTx).toHaveBeenCalledTimes(1);
+      expect(updates).toEqual([{ status: 'error' }]);
+    });
+
+    test('settles unresolved tool approvals so the branch stays replayable', async () => {
+      const { service, updates } = makeSettleService([
+        {
+          data: {
+            parts: [
+              {
+                approval: { id: 'a1' },
+                state: 'approval-requested',
+                toolCallId: 'call-a1',
+                toolName: 'search',
+                type: 'dynamic-tool',
+              },
+              {
+                approval: { approved: true, id: 'a2' },
+                state: 'approval-responded',
+                toolCallId: 'call-a2',
+                toolName: 'create',
+                type: 'dynamic-tool',
+              },
+            ],
+          },
+          id: 'assistant-1',
+        },
+      ]);
+
+      await service.settleCrashedMessages(['assistant-1']);
+
+      // The status flip is the half that always applies; the per-row catch is
+      // what keeps one bad part from rolling it back with the transaction.
+      expect(updates[0]).toEqual({ status: 'error' });
+      const parts = (updates[1]?.data as { parts: unknown[] }).parts;
+      expect(parts[0]).toMatchObject({
+        approval: { approved: false, id: 'a1' },
+        state: 'output-denied',
+      });
+      expect(parts[1]).toMatchObject({
+        approval: { approved: true, id: 'a2' },
+        state: 'output-error',
+      });
+    });
+
+    test('still settles the status when a row has a part it cannot repair', async () => {
+      // Parts come back as JSON off disk: a shape the types promise can still
+      // be missing in an old or restored row. Losing the status flip over it
+      // would leave the message generating forever, relaunch after relaunch.
+      const { service, updates } = makeSettleService([
+        {
+          data: { parts: [{ state: 'approval-requested', type: 'dynamic-tool' }] },
+          id: 'assistant-1',
+        },
+      ]);
+
+      await expect(service.settleCrashedMessages(['assistant-1'])).resolves.toBeUndefined();
+
+      expect(updates).toEqual([{ status: 'error' }]);
+    });
+
+    test('leaves parts untouched when nothing was awaiting approval', async () => {
+      const { service, updates } = makeSettleService([
+        { data: { parts: [{ text: 'hi', type: 'text' }] }, id: 'assistant-1' },
+      ]);
+
+      await service.settleCrashedMessages(['assistant-1']);
+
+      expect(updates).toEqual([{ status: 'error' }]);
+    });
+
+    test('is a no-op for an empty id list', async () => {
+      const withWriteTx = jest.fn();
+      const dbService = { withWriteTx } as unknown as DbService;
+      const service = new MessageService(dbService, {} as never, {} as never);
+
+      await service.settleCrashedMessages([]);
+
+      expect(withWriteTx).not.toHaveBeenCalled();
+    });
   });
 
-  test('markMessagesError is a no-op for an empty id list', async () => {
-    const withWriteTx = jest.fn();
-    const dbService = { withWriteTx } as unknown as DbService;
-    const service = new MessageService(dbService, {} as never, {} as never);
+  describe('applyToolApprovalDecisions', () => {
+    const requestedPart = (approvalId: string) => ({
+      approval: { id: approvalId },
+      input: {},
+      state: 'approval-requested',
+      toolCallId: `call-${approvalId}`,
+      toolName: 'search',
+      type: 'dynamic-tool',
+    });
 
-    await service.markMessagesError([]);
+    const respondedPart = (approvalId: string) => ({
+      ...requestedPart(approvalId),
+      approval: { approved: true, id: approvalId },
+      state: 'approval-responded',
+    });
 
-    expect(withWriteTx).not.toHaveBeenCalled();
+    function makeApprovalService(row?: Record<string, unknown>) {
+      const updates: Record<string, unknown>[] = [];
+      const tx = {
+        select: jest.fn(() => ({
+          from: jest.fn(() => ({
+            where: jest.fn(() => ({ limit: jest.fn(async () => (row ? [row] : [])) })),
+          })),
+        })),
+        update: jest.fn(() => ({
+          set: jest.fn((values: Record<string, unknown>) => ({
+            where: jest.fn(async () => {
+              updates.push(values);
+            }),
+          })),
+        })),
+      };
+      const dbService = {
+        withWriteTx: jest.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
+          callback(tx),
+        ),
+      } as unknown as DbService;
+      return { service: new MessageService(dbService, {} as never, {} as never), updates };
+    }
+
+    const baseRow = {
+      createdAt: 1747267200000,
+      data: { parts: [] },
+      deletedAt: null,
+      id: 'assistant-1',
+      modelId: null,
+      modelSnapshot: null,
+      parentId: 'user-1',
+      role: 'assistant',
+      searchableText: '',
+      siblingsGroupId: 0,
+      stats: null,
+      status: 'paused',
+      topicId: 'topic-1',
+      updatedAt: 1747267200000,
+    };
+
+    test('applies updated input and atomically marks the final approval pending', async () => {
+      const { service, updates } = makeApprovalService({
+        ...baseRow,
+        data: { parts: [requestedPart('a1')] },
+        status: 'success',
+      });
+
+      const result = await service.applyToolApprovalDecisions('assistant-1', [
+        { approvalId: 'a1', approved: true, updatedInput: { query: 'revised' } },
+      ]);
+
+      expect(result).toMatchObject({
+        appliedApprovalIds: ['a1'],
+        alreadySettledApprovalIds: [],
+      });
+      expect(updates[0]).toMatchObject({ status: 'pending' });
+      expect((updates[0]?.data as { parts: unknown[] }).parts[0]).toMatchObject({
+        approval: { approved: true, id: 'a1' },
+        input: { query: 'revised' },
+        state: 'approval-responded',
+      });
+    });
+
+    test('keeps the status while other approvals are still pending', async () => {
+      const { service, updates } = makeApprovalService({
+        ...baseRow,
+        data: { parts: [requestedPart('a1'), requestedPart('a2')] },
+      });
+
+      const result = await service.applyToolApprovalDecisions('assistant-1', [
+        { approvalId: 'a1', approved: false, reason: 'no' },
+      ]);
+
+      expect(result?.appliedApprovalIds).toEqual(['a1']);
+      expect(updates[0]?.status).toBeUndefined();
+    });
+
+    test('reports an already-settled duplicate without writing', async () => {
+      const { service, updates } = makeApprovalService({
+        ...baseRow,
+        data: { parts: [respondedPart('a1')] },
+      });
+
+      const result = await service.applyToolApprovalDecisions('assistant-1', [
+        { approvalId: 'a1', approved: false },
+      ]);
+
+      expect(result).toMatchObject({
+        appliedApprovalIds: [],
+        alreadySettledApprovalIds: ['a1'],
+      });
+      expect(updates).toEqual([]);
+    });
+
+    test('leaves the row untouched when no decision matches', async () => {
+      const { service, updates } = makeApprovalService({
+        ...baseRow,
+        data: { parts: [requestedPart('a1')] },
+      });
+
+      const result = await service.applyToolApprovalDecisions('assistant-1', [
+        { approvalId: 'other', approved: true },
+      ]);
+
+      expect(result).toMatchObject({ appliedApprovalIds: [], alreadySettledApprovalIds: [] });
+      expect(updates).toEqual([]);
+    });
+
+    test('returns null when the message no longer exists', async () => {
+      const { service, updates } = makeApprovalService();
+
+      await expect(
+        service.applyToolApprovalDecisions('missing', [{ approvalId: 'a1', approved: true }]),
+      ).resolves.toBeNull();
+      expect(updates).toEqual([]);
+    });
+
+    test('does not gate decisions by message role or status', async () => {
+      const { service, updates } = makeApprovalService({
+        ...baseRow,
+        data: { parts: [requestedPart('a1')] },
+        role: 'user',
+        status: 'success',
+      });
+
+      await service.applyToolApprovalDecisions('assistant-1', [
+        { approvalId: 'a1', approved: true },
+      ]);
+
+      expect(updates[0]).toMatchObject({ status: 'pending' });
+    });
   });
 
   test('clears the active node when deleting the first branch below the virtual root', async () => {

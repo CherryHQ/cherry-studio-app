@@ -1,9 +1,9 @@
-import { Accordion } from 'heroui-native/accordion';
-import { WrenchIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { CherryMessagePart } from '@/data/types/message';
+import { formatToolPartValue, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
+import { ToolPartDisclosure } from './ToolPartDisclosure';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
@@ -24,73 +24,34 @@ const META_TOOL_NAMES = new Set<MetaToolName>([
   'tool_invoke',
   'tool_exec',
 ]);
-
-const MAX_VALUE_LENGTH = 4000;
+const META_TOOL_TITLE_KEYS = {
+  tool_exec: 'chat.metaToolExec.title',
+  tool_inspect: 'chat.metaToolInspect.title',
+  tool_invoke: 'chat.metaToolInvoke.title',
+  tool_search: 'chat.metaToolSearch.title',
+};
 
 export function MetaToolPart({ part }: MetaToolPartProps) {
   const { t } = useTranslation();
   const toolName = getToolName(part) as MetaToolName;
   const input = isRecord(part.input) ? part.input : undefined;
   const statusText = getMetaToolStatusText(part, toolName, t);
-  const title = getMetaToolTitle(toolName, input, part.title?.trim());
-  const isRunning = part.state === 'input-streaming' || part.state === 'input-available';
+  const title = t(META_TOOL_TITLE_KEYS[toolName]);
+  const isRunning =
+    part.state === 'input-streaming' ||
+    part.state === 'input-available' ||
+    (part.state === 'approval-responded' && part.approval.approved);
 
   return (
-    <Accordion
-      className="overflow-hidden rounded-lg border border-border bg-surface-secondary"
-      hideSeparator
-      isCollapsible
-      selectionMode="single"
+    <ToolPartDisclosure
+      isRunning={isRunning}
+      statusText={statusText}
+      statusTone={getMetaToolStatusTone(part)}
+      testIDPrefix="meta-tool-part"
+      title={title}
     >
-      <Accordion.Item value={`meta-tool-${toolName}`}>
-        <Accordion.Trigger className="min-h-0 px-3 py-3">
-          <MetaToolHeaderContent isRunning={isRunning} statusText={statusText} title={title} />
-          <Accordion.Indicator
-            animation={{ rotation: { value: [-90, 0] } }}
-            iconProps={{ size: 16 }}
-          />
-        </Accordion.Trigger>
-        <Accordion.Content className="px-3 pt-0 pb-3">
-          <View className="gap-2.5 border-border border-t pt-2">
-            <MetaToolBody input={input} part={part} toolName={toolName} />
-          </View>
-        </Accordion.Content>
-      </Accordion.Item>
-    </Accordion>
-  );
-}
-
-function MetaToolHeaderContent({
-  isRunning,
-  statusText,
-  title,
-}: {
-  isRunning: boolean;
-  statusText: string;
-  title: string;
-}) {
-  return (
-    <View className="min-w-0 flex-1 flex-row items-center gap-2">
-      {isRunning ? (
-        <ActivityIndicator size="small" />
-      ) : (
-        <WrenchIcon className="size-4 text-default-foreground" strokeWidth={2} />
-      )}
-      <Text
-        className="min-w-0 flex-1 font-semibold text-default-foreground text-sm"
-        numberOfLines={1}
-        selectable
-      >
-        {title}
-      </Text>
-      <Text
-        className="max-w-[42%] shrink-0 text-foreground-muted text-xs"
-        numberOfLines={1}
-        selectable
-      >
-        {statusText}
-      </Text>
-    </View>
+      <MetaToolBody input={input} part={part} toolName={toolName} />
+    </ToolPartDisclosure>
   );
 }
 
@@ -131,25 +92,22 @@ function ToolSearchBody({
 
   return (
     <>
-      <ToolValueSection title={t('chat.tool.arguments')} value={input} />
+      <ToolPartValueSection title={t('chat.tool.arguments')} value={input} />
       {part.state === 'output-available' && namespaces.length === 0 ? (
-        <Text className="text-foreground-muted text-xs italic" selectable>
+        <Text className="text-default-foreground text-md italic" selectable>
           {t('chat.metaToolSearch.noResults')}
         </Text>
       ) : null}
       {namespaces.map((group) => (
         <View className="gap-1.5" key={group.namespace}>
-          <Text className="text-foreground-muted text-xs" selectable>
+          <Text className="text-default-foreground text-md" selectable>
             {group.namespace} ({group.tools.length})
           </Text>
           <View className="flex-row flex-wrap gap-1">
             {group.tools.map((tool) => (
-              <View
-                className="max-w-full rounded-md border border-border bg-surface-tertiary px-1.5 py-0.5"
-                key={`${group.namespace}-${tool.name}`}
-              >
+              <View className="max-w-full" key={`${group.namespace}-${tool.name}`}>
                 <Text
-                  className="font-mono text-default-foreground text-xs"
+                  className="font-mono text-default-foreground text-md"
                   numberOfLines={1}
                   selectable
                 >
@@ -160,6 +118,9 @@ function ToolSearchBody({
           </View>
         </View>
       ))}
+      {part.state === 'output-error' ? (
+        <ToolPartTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
+      ) : null}
     </>
   );
 }
@@ -175,15 +136,15 @@ function ToolInspectBody({
 
   return (
     <>
-      <ToolValueSection title={t('chat.tool.arguments')} value={input} />
+      <ToolPartValueSection title={t('chat.tool.arguments')} value={input} />
       {part.state === 'output-available' ? (
-        <ToolTextSection
+        <ToolPartTextSection
           title={t('chat.tool.jsdoc')}
-          value={formatDisplayValue(part.output, true)}
+          value={formatToolPartValue(part.output)}
         />
       ) : null}
       {part.state === 'output-error' ? (
-        <ToolTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
+        <ToolPartTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
       ) : null}
     </>
   );
@@ -201,15 +162,15 @@ function ToolInvokeBody({
 
   return (
     <>
-      <ToolValueSection title={t('chat.tool.arguments')} value={params ?? input} />
+      <ToolPartValueSection title={t('chat.tool.arguments')} value={params ?? input} />
       {part.state === 'output-available' ? (
-        <ToolTextSection
+        <ToolPartTextSection
           title={t('chat.tool.response')}
-          value={formatDisplayValue(part.output, true)}
+          value={formatToolPartValue(part.output)}
         />
       ) : null}
       {part.state === 'output-error' ? (
-        <ToolTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
+        <ToolPartTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
       ) : null}
     </>
   );
@@ -227,110 +188,37 @@ function ToolExecBody({ input, part }: { input?: Record<string, unknown>; part: 
   return (
     <>
       {code ? (
-        <ToolTextSection title={t('chat.tool.code')} value={code} />
+        <ToolPartTextSection title={t('chat.tool.code')} value={code} />
       ) : (
-        <ToolValueSection title={t('chat.tool.arguments')} value={input} />
+        <ToolPartValueSection title={t('chat.tool.arguments')} value={input} />
       )}
       {logs.length > 0 ? (
-        <ToolTextSection title={t('chat.tool.logs')} value={logs.join('\n')} />
+        <ToolPartTextSection title={t('chat.tool.logs')} value={logs.join('\n')} />
       ) : null}
       {typeof output?.error === 'string' ? (
-        <ToolTextSection tone="error" title={t('chat.tool.error')} value={output.error} />
+        <ToolPartTextSection tone="error" title={t('chat.tool.error')} value={output.error} />
       ) : null}
       {output?.result !== undefined ? (
-        <ToolTextSection
+        <ToolPartTextSection
           title={t('chat.tool.result')}
-          value={formatDisplayValue(output.result, true)}
+          value={formatToolPartValue(output.result)}
         />
       ) : null}
       {part.state === 'output-available' && !output ? (
-        <ToolTextSection
+        <ToolPartTextSection
           title={t('chat.tool.response')}
-          value={formatDisplayValue(part.output, true)}
+          value={formatToolPartValue(part.output)}
         />
       ) : null}
       {part.state === 'output-error' ? (
-        <ToolTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
+        <ToolPartTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
       ) : null}
     </>
   );
 }
 
-function ToolValueSection({ title, value }: { title: string; value: unknown }) {
-  const entries = getValueEntries(value);
-
-  if (entries.length === 0) return null;
-
-  return (
-    <View className="gap-1">
-      <SectionTitle title={title} />
-      <View className="gap-1 rounded-md bg-surface-tertiary p-2">
-        {entries.map(([key, entryValue]) => (
-          <View className="flex-row gap-2" key={key}>
-            <Text className="w-20 shrink-0 font-mono text-foreground-muted text-xs" selectable>
-              {key}
-            </Text>
-            <Text className="min-w-0 flex-1 font-mono text-default-foreground text-xs" selectable>
-              {formatDisplayValue(entryValue)}
-            </Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function ToolTextSection({ title, tone, value }: { title: string; tone?: 'error'; value: string }) {
-  return (
-    <View className="gap-1">
-      <SectionTitle title={title} />
-      <View className="rounded-md bg-surface-tertiary p-2">
-        <Text
-          className={
-            tone === 'error'
-              ? 'font-mono text-danger text-xs leading-5'
-              : 'font-mono text-default-foreground text-xs leading-5'
-          }
-          selectable
-        >
-          {value}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <Text className="text-foreground-muted text-xs" selectable>
-      {title}
-    </Text>
-  );
-}
-
 export function isMetaToolPart(part: ToolMessagePart) {
   return META_TOOL_NAMES.has(getToolName(part) as MetaToolName);
-}
-
-function getMetaToolTitle(
-  toolName: MetaToolName,
-  args: Record<string, unknown> | undefined,
-  fallback?: string,
-) {
-  const argName = typeof args?.name === 'string' ? args.name.trim() : '';
-
-  if (toolName === 'tool_search') {
-    const query = typeof args?.query === 'string' ? args.query.trim() : '';
-    const namespace = typeof args?.namespace === 'string' ? args.namespace.trim() : '';
-    const parts = [query ? `"${query}"` : '', namespace ? `ns=${namespace}` : ''].filter(Boolean);
-    return parts.length > 0 ? `${toolName} - ${parts.join(' - ')}` : fallback || toolName;
-  }
-
-  if ((toolName === 'tool_inspect' || toolName === 'tool_invoke') && argName) {
-    return `${toolName} - ${argName}`;
-  }
-
-  return fallback || toolName;
 }
 
 function getMetaToolStatusText(
@@ -347,15 +235,21 @@ function getMetaToolStatusText(
         : t('chat.metaToolSearch.resultCount', { count: toolCount });
     }
 
-    return part.preliminary ? t('chat.tool.preliminaryOutputReady') : t('chat.tool.outputReady');
+    if (toolName === 'tool_inspect' || toolName === 'tool_invoke') {
+      const input = isRecord(part.input) ? part.input : undefined;
+      const targetToolName = typeof input?.name === 'string' ? input.name.trim() : '';
+      return targetToolName || undefined;
+    }
+
+    return undefined;
   }
 
   if (part.state === 'output-error') {
-    return part.errorText;
+    return t('chat.tool.callError');
   }
 
   if (part.state === 'output-denied') {
-    return t('chat.tool.outputDenied');
+    return t('chat.tool.runDenied');
   }
 
   if (part.state === 'approval-requested') {
@@ -363,10 +257,21 @@ function getMetaToolStatusText(
   }
 
   if (part.state === 'approval-responded') {
-    return part.approval.approved ? t('chat.tool.approved') : t('chat.tool.denied');
+    return part.approval.approved ? t('chat.tool.approved') : t('chat.tool.runDenied');
   }
 
   return toolName === 'tool_search' ? t('chat.metaToolSearch.searching') : t('chat.tool.running');
+}
+
+function getMetaToolStatusTone(part: ToolMessagePart): 'danger' | 'default' | 'warning' {
+  if (
+    part.state === 'output-denied' ||
+    (part.state === 'approval-responded' && !part.approval.approved)
+  ) {
+    return 'warning';
+  }
+
+  return part.state === 'output-error' ? 'danger' : 'default';
 }
 
 function parseToolSearchNamespaces(output: unknown): ToolSearchNamespace[] {
@@ -389,32 +294,6 @@ function parseToolSearchNamespaces(output: unknown): ToolSearchNamespace[] {
 
     return [{ namespace: group.namespace, tools }];
   });
-}
-
-function getValueEntries(value: unknown): [string, unknown][] {
-  if (value === undefined || value === null) return [];
-  if (Array.isArray(value)) return [['arguments', value]];
-  if (isRecord(value)) return Object.entries(value);
-  return [['arguments', value]];
-}
-
-function formatDisplayValue(value: unknown, pretty = false) {
-  if (value === null) return 'null';
-  if (value === undefined) return '';
-  if (typeof value === 'string') return truncateText(value);
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (typeof value === 'bigint') return value.toString();
-
-  try {
-    return truncateText(JSON.stringify(value, null, pretty ? 2 : undefined));
-  } catch {
-    return truncateText(String(value));
-  }
-}
-
-function truncateText(text: string) {
-  if (text.length <= MAX_VALUE_LENGTH) return text;
-  return `${text.slice(0, MAX_VALUE_LENGTH)}\n... truncated (${text.length} chars)`;
 }
 
 function getToolName(part: ToolMessagePart) {

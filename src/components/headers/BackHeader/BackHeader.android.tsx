@@ -1,8 +1,7 @@
 import { Stack, useRouter } from 'expo-router';
 import { cn } from 'heroui-native/utils';
 import { ChevronLeftIcon } from 'lucide-uniwind/png';
-import type { ReactNode } from 'react';
-import { useCallback, useMemo } from 'react';
+import { Fragment, type ReactElement, type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text } from 'react-native';
 
@@ -13,11 +12,16 @@ export type BackHeaderProps = {
   onBack?: () => void;
   rightActions?: readonly HeaderToolbarAction[];
   title?: string;
+  titleElement?: ReactElement;
 };
 
 function renderAndroidHeaderAction(action: HeaderToolbarAction): ReactNode {
   if (action.hidden) {
     return null;
+  }
+
+  if (action.element) {
+    return <Fragment key={action.key}>{action.element}</Fragment>;
   }
 
   if (action.label) {
@@ -56,7 +60,7 @@ function renderAndroidHeaderAction(action: HeaderToolbarAction): ReactNode {
   );
 }
 
-export function BackHeader({ onBack, rightActions, title = '' }: BackHeaderProps) {
+export function BackHeader({ onBack, rightActions, title = '', titleElement }: BackHeaderProps) {
   const { t } = useTranslation();
   const router = useRouter();
 
@@ -77,12 +81,14 @@ export function BackHeader({ onBack, rightActions, title = '' }: BackHeaderProps
           <ChevronLeftIcon className="size-6 text-foreground" strokeWidth={2} />
         </HeaderIconButton>
       ),
-      ...(rightActions && rightActions.length > 0
-        ? { headerRight: () => rightActions.map((action) => renderAndroidHeaderAction(action)) }
-        : null),
-      title,
+      headerRight:
+        rightActions && rightActions.length > 0
+          ? () => rightActions.map((action) => renderAndroidHeaderAction(action))
+          : undefined,
+      headerTitle: titleElement ? () => titleElement : undefined,
+      title: titleElement ? '' : title,
     }),
-    [goBack, rightActions, t, title],
+    [goBack, rightActions, t, title, titleElement],
   );
 
   return <Stack.Screen options={options} />;

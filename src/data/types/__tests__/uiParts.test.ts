@@ -1,7 +1,7 @@
 import type { ProviderMetadata } from 'ai';
 
 import type { CherryMessagePart } from '../message';
-import { readCherryMeta, withCherryMeta } from '../uiParts';
+import { readCherryMeta, readCherryToolMetadata, withCherryMeta } from '../uiParts';
 
 function reasoningPart(
   providerMetadata?: ProviderMetadata,
@@ -24,6 +24,17 @@ function filePart(
     url: 'file:///notes.pdf',
     ...(providerMetadata && { providerMetadata }),
   };
+}
+
+function toolPart(toolMetadata?: unknown): Extract<CherryMessagePart, { type: 'dynamic-tool' }> {
+  return {
+    input: {},
+    state: 'input-available',
+    toolCallId: 'call-1',
+    toolName: 'search',
+    type: 'dynamic-tool',
+    ...(toolMetadata !== undefined && { toolMetadata }),
+  } as Extract<CherryMessagePart, { type: 'dynamic-tool' }>;
 }
 
 describe('readCherryMeta', () => {
@@ -92,5 +103,40 @@ describe('withCherryMeta', () => {
       fileEntryId: 'file-entry-1',
       fileTokenSourceId: 'composer-source-1',
     });
+  });
+});
+
+describe('readCherryToolMetadata', () => {
+  test('parses MCP identity copied from a tool definition', () => {
+    const part = toolPart({
+      cherry: {
+        tool: {
+          serverId: 'server-1',
+          serverName: 'Docs',
+          type: 'mcp',
+        },
+      },
+    });
+
+    expect(readCherryToolMetadata(part)).toEqual({
+      tool: {
+        serverId: 'server-1',
+        serverName: 'Docs',
+        type: 'mcp',
+      },
+    });
+  });
+
+  test('returns undefined for malformed tool metadata', () => {
+    // Malform fields the schema still declares. `z.object` strips unknown keys
+    // rather than rejecting them, so a bad value on a field that was since
+    // removed would parse clean and invert this assertion in silence.
+    expect(
+      readCherryToolMetadata(toolPart({ cherry: { tool: { serverName: 42, type: 'mcp' } } })),
+    ).toBeUndefined();
+    // `type` is an enum, so an unknown value can't be stripped away either.
+    expect(
+      readCherryToolMetadata(toolPart({ cherry: { tool: { type: 'unknown' } } })),
+    ).toBeUndefined();
   });
 });

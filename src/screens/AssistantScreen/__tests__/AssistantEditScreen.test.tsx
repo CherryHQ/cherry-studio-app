@@ -85,6 +85,14 @@ jest.mock('@/hooks/chat', () => ({
   }),
 }));
 
+jest.mock('@/hooks/mcp/useMcpServers', () => ({
+  useMcpServersApi: () => ({ servers: [] }),
+}));
+
+jest.mock('../../SettingsScreen/components/SettingSelect', () => ({
+  SettingSelect: () => null,
+}));
+
 jest.mock('../components/EmojiPickerBottomSheet', () => ({
   EmojiPickerBottomSheet: () => null,
 }));

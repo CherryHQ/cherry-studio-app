@@ -1,6 +1,7 @@
 export { AssistantService } from './AssistantService';
 export { FileEntryService } from './FileEntryService';
 export { GroupService } from './GroupService';
+export { McpServerService } from './McpServerService';
 export { MessageService } from './MessageService';
 export { ModelService } from './ModelService';
 export { PaintingService } from './PaintingService';

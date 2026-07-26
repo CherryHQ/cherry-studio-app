@@ -1,5 +1,6 @@
 import { Button } from 'heroui-native/button';
 import { Dialog } from 'heroui-native/dialog';
+import { Spinner } from 'heroui-native/spinner';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
@@ -8,27 +9,49 @@ export function useConfirmDialog() {
   const { t } = useTranslation();
   const [dialog, setDialog] = useState<{
     message: string;
-    onConfirm: () => void;
+    onConfirm: () => Promise<void> | void;
     title: string;
   } | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const requestConfirm = useCallback(
-    ({ message, onConfirm, title }: { message: string; onConfirm: () => void; title: string }) => {
+    ({
+      message,
+      onConfirm,
+      title,
+    }: {
+      message: string;
+      onConfirm: () => Promise<void> | void;
+      title: string;
+    }) => {
       Keyboard.dismiss();
+      setIsConfirming(false);
       setDialog({ message, onConfirm, title });
     },
     [],
   );
 
   const closeDialog = useCallback(() => {
+    if (isConfirming) {
+      return;
+    }
     setDialog(null);
-  }, []);
+  }, [isConfirming]);
 
-  const confirmDialog = useCallback(() => {
+  const confirmDialog = useCallback(async () => {
     const onConfirm = dialog?.onConfirm;
-    setDialog(null);
-    onConfirm?.();
-  }, [dialog]);
+    if (!onConfirm || isConfirming) {
+      return;
+    }
+
+    setIsConfirming(true);
+    try {
+      await onConfirm();
+      setDialog(null);
+    } finally {
+      setIsConfirming(false);
+    }
+  }, [dialog, isConfirming]);
 
   return {
     confirmDialog: (
@@ -43,6 +66,7 @@ export function useConfirmDialog() {
             <View className="flex-row justify-end gap-3">
               <Button
                 className="min-w-20 rounded-xl"
+                isDisabled={isConfirming}
                 size="sm"
                 variant="secondary"
                 onPress={closeDialog}
@@ -51,11 +75,17 @@ export function useConfirmDialog() {
               </Button>
               <Button
                 className="min-w-20 rounded-xl"
+                isDisabled={isConfirming}
                 size="sm"
                 variant="danger"
-                onPress={confirmDialog}
+                onPress={() => {
+                  void confirmDialog();
+                }}
               >
-                <Text className="text-sm text-white">{t('common.remove')}</Text>
+                <View className="min-w-0 flex-row items-center justify-center gap-2">
+                  {isConfirming ? <Spinner size="sm" /> : null}
+                  <Text className="text-sm text-white">{t('common.remove')}</Text>
+                </View>
               </Button>
             </View>
           </Dialog.Content>

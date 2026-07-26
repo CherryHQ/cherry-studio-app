@@ -1,3 +1,4 @@
+import { isToolUIPart } from 'ai';
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { loggerService } from '@/core/logger/LoggerService';
@@ -12,6 +13,7 @@ import type { PreparedInternalFile } from '@/data/types/file';
 import type {
   BranchMessage,
   BranchMessagesResponse,
+  CherryMessagePart,
   Message,
   MessageData,
   SiblingsGroup,
@@ -32,6 +34,12 @@ import {
 import type { FileEntryService } from './FileEntryService';
 import type { TopicService } from './TopicService';
 import { timestampToISO } from './utils/rowMappers';
+import {
+  type ApprovalDecision,
+  applyToolApprovalDecisionsToParts,
+  countPendingToolApprovals,
+  finalizeDanglingToolApprovals,
+} from './utils/toolApprovals';
 
 const previewLength = 50;
 const defaultLimit = 20;
@@ -976,8 +984,75 @@ export class MessageService {
     return result.map((row) => row.id);
   }
 
-  /** Assistant messages still `pending` with no in-memory writer — only true
-   * right after a cold start, when a crash left them without a terminal status. */
+  /**
+   * Apply tool approval decisions using the desktop contract. Mobile also
+   * flips the final answered row to `pending` in this transaction so a process
+   * kill cannot strand a fully answered turn outside cold-start recovery.
+   */
+  async applyToolApprovalDecisions(
+    anchorId: string,
+    decisions: ApprovalDecision[],
+  ): Promise<{
+    parts: CherryMessagePart[];
+    appliedApprovalIds: string[];
+    alreadySettledApprovalIds: string[];
+  } | null> {
+    return await this.dbService.withWriteTx(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(messageTable)
+        .where(and(eq(messageTable.id, anchorId), isNull(messageTable.deletedAt)))
+        .limit(1);
+
+      if (!existing) {
+        return null;
+      }
+
+      const parts = existing.data.parts ?? [];
+      const nextParts = applyToolApprovalDecisionsToParts(parts, decisions);
+      const requestedIds = new Set(
+        parts
+          .filter((part) => isToolUIPart(part) && part.state === 'approval-requested')
+          .map((part) => part.approval?.id)
+          .filter((id): id is string => typeof id === 'string'),
+      );
+      const settledIds = new Set(
+        parts
+          .filter((part) => isToolUIPart(part) && part.state !== 'approval-requested')
+          .map((part) => part.approval?.id)
+          .filter((id): id is string => typeof id === 'string'),
+      );
+      const appliedApprovalIds = decisions
+        .map((decision) => decision.approvalId)
+        .filter((id) => requestedIds.has(id));
+      const alreadySettledApprovalIds = decisions
+        .map((decision) => decision.approvalId)
+        .filter((id) => settledIds.has(id));
+
+      if (appliedApprovalIds.length > 0) {
+        await tx
+          .update(messageTable)
+          .set({
+            data: { ...existing.data, parts: nextParts },
+            ...(countPendingToolApprovals(nextParts) === 0 ? { status: 'pending' as const } : {}),
+          })
+          .where(eq(messageTable.id, anchorId));
+      }
+
+      return {
+        parts: nextParts,
+        appliedApprovalIds,
+        alreadySettledApprovalIds,
+      };
+    });
+  }
+
+  /**
+   * Assistant messages still `pending` with no in-memory writer — only true
+   * right after a cold start, when a crash left them without a terminal
+   * status. `paused` rows are deliberately excluded because they represent a
+   * user-stopped generation, matching desktop semantics.
+   */
   async findPendingAssistantMessageIds(): Promise<string[]> {
     const rows = await this.db
       .select({ id: messageTable.id })
@@ -993,14 +1068,49 @@ export class MessageService {
     return rows.map((row) => row.id);
   }
 
-  async markMessagesError(ids: string[]): Promise<void> {
+  /**
+   * Settle crash-orphaned assistant rows: status to `error`, and any tool
+   * approval still waiting or answered-but-unresumed to a terminal state.
+   * The parts half is not cosmetic — an approval left unsettled means a tool
+   * call with no result, which the provider rejects on every later request in
+   * that branch.
+   */
+  async settleCrashedMessages(ids: string[]): Promise<void> {
     if (ids.length === 0) return;
 
-    await this.dbService.withWriteTx((tx) =>
-      tx.update(messageTable).set({ status: 'error' }).where(inArray(messageTable.id, ids)),
-    );
+    await this.dbService.withWriteTx(async (tx) => {
+      await tx.update(messageTable).set({ status: 'error' }).where(inArray(messageTable.id, ids));
+
+      const rows = await tx.select().from(messageTable).where(inArray(messageTable.id, ids));
+      for (const row of rows) {
+        // Per row, because parts come back as JSON off disk: one shape the
+        // types promise but an old row does not have would otherwise roll the
+        // whole transaction back — including the status flip above, which
+        // always applies. Every crashed row would stay `pending`, and the next
+        // launch would fail the same way.
+        try {
+          const finalized = finalizeDanglingToolApprovals(
+            row.data?.parts ?? [],
+            crashedTurnApprovalReason,
+          );
+          if (finalized.matchedCount === 0) continue;
+
+          await tx
+            .update(messageTable)
+            .set({ data: { ...row.data, parts: finalized.parts } })
+            .where(eq(messageTable.id, row.id));
+        } catch (error) {
+          logger.error('Failed to settle the tool approvals of a crashed message', error as Error, {
+            messageId: row.id,
+          });
+        }
+      }
+    });
   }
 }
+
+/** Fed to the model as a tool result, so it stays untranslated. */
+const crashedTurnApprovalReason = 'The app closed before this tool call completed.';
 
 export function rowToMessage(row: MessageRow): Message {
   return {

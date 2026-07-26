@@ -3,5 +3,6 @@ export {
   type BottomSheetCloseReason,
   type BottomSheetContextValue,
   type BottomSheetGeometry,
+  controlledCloseReason,
   useBottomSheet,
 } from './hooks/useBottomSheet';

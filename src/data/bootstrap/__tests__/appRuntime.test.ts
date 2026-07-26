@@ -16,13 +16,17 @@ jest.mock('@/i18n', () => ({
 function createServices(
   overrides: {
     findPendingAssistantMessageIds?: () => Promise<string[]>;
-    markMessagesError?: (ids: string[]) => Promise<void>;
+    prewarmActiveServers?: () => Promise<void>;
+    settleCrashedMessages?: (ids: string[]) => Promise<void>;
   } = {},
 ): DataServices {
   return {
+    mcp: {
+      prewarmActiveServers: overrides.prewarmActiveServers ?? jest.fn(async () => undefined),
+    },
     message: {
       findPendingAssistantMessageIds: overrides.findPendingAssistantMessageIds ?? (async () => []),
-      markMessagesError: overrides.markMessagesError ?? jest.fn(async () => undefined),
+      settleCrashedMessages: overrides.settleCrashedMessages ?? jest.fn(async () => undefined),
     },
     preference: {
       getMultipleCached: () => ({ language: 'en-US', themeMode: 'system' }),
@@ -44,41 +48,61 @@ describe('bootstrapAppRuntime', () => {
   });
 
   test('does not touch stale-message reconciliation on the startup critical path', async () => {
-    const markMessagesError = jest.fn(async () => undefined);
+    const settleCrashedMessages = jest.fn(async () => undefined);
     const findPendingAssistantMessageIds = jest.fn(async () => ['a']);
 
     await bootstrapAppRuntime(
-      createServices({ findPendingAssistantMessageIds, markMessagesError }),
+      createServices({ findPendingAssistantMessageIds, settleCrashedMessages }),
     );
 
     expect(findPendingAssistantMessageIds).not.toHaveBeenCalled();
-    expect(markMessagesError).not.toHaveBeenCalled();
+    expect(settleCrashedMessages).not.toHaveBeenCalled();
   });
 });
 
 describe('runPostReadyTasks', () => {
   test('marks stale pending assistant messages as error', async () => {
-    const markMessagesError = jest.fn(async () => undefined);
+    const settleCrashedMessages = jest.fn(async () => undefined);
     const services = createServices({
       findPendingAssistantMessageIds: async () => ['a', 'b'],
-      markMessagesError,
+      settleCrashedMessages,
     });
 
     await runPostReadyTasks(services);
 
-    expect(markMessagesError).toHaveBeenCalledWith(['a', 'b']);
+    expect(settleCrashedMessages).toHaveBeenCalledWith(['a', 'b']);
   });
 
-  test('does not call markMessagesError when there are no stale messages', async () => {
-    const markMessagesError = jest.fn(async () => undefined);
+  test('does not call settleCrashedMessages when there are no stale messages', async () => {
+    const settleCrashedMessages = jest.fn(async () => undefined);
     const services = createServices({
       findPendingAssistantMessageIds: async () => [],
-      markMessagesError,
+      settleCrashedMessages,
     });
 
     await runPostReadyTasks(services);
 
-    expect(markMessagesError).not.toHaveBeenCalled();
+    expect(settleCrashedMessages).not.toHaveBeenCalled();
+  });
+
+  test('starts MCP prewarm without waiting for message reconciliation', async () => {
+    let finishReconciliation: (() => void) | undefined;
+    const prewarmActiveServers = jest.fn(async () => undefined);
+    const services = createServices({
+      findPendingAssistantMessageIds: async () => ['a'],
+      prewarmActiveServers,
+      settleCrashedMessages: () =>
+        new Promise<void>((resolve) => {
+          finishReconciliation = resolve;
+        }),
+    });
+
+    const tasks = runPostReadyTasks(services);
+    await Promise.resolve();
+
+    expect(prewarmActiveServers).toHaveBeenCalledTimes(1);
+    finishReconciliation?.();
+    await tasks;
   });
 
   test('does not throw when reconciliation fails', async () => {

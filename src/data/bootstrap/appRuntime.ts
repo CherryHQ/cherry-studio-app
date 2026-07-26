@@ -27,7 +27,11 @@ export async function runPostReadyTasks(services: DataServices) {
   // The catch lives here, not in callers: they `void` this promise, so a task
   // added below without its own handling would become an unhandled rejection.
   try {
-    await reconcileStalePendingMessages(services);
+    await Promise.all([
+      reconcileStalePendingMessages(services),
+      // The chat path is cache-only, so warm tools off the startup critical path.
+      services.mcp.prewarmActiveServers(),
+    ]);
   } catch (error) {
     logger.error('Post-ready tasks failed', error as Error);
   }
@@ -44,7 +48,7 @@ async function reconcileStalePendingMessages(services: DataServices) {
     logger.info('Reconciling crash-orphaned pending assistant messages', {
       count: staleIds.length,
     });
-    await services.message.markMessagesError(staleIds);
+    await services.message.settleCrashedMessages(staleIds);
   } catch (error) {
     logger.error('Failed to reconcile stale pending messages', error as Error);
   }

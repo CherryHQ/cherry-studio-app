@@ -1,3 +1,4 @@
+import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
 import {
   CircleUserRoundIcon,
@@ -15,6 +16,7 @@ import { View } from 'react-native';
 import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useUniwind } from 'uniwind';
 
 import { usePreference } from '@/data/hooks';
 
@@ -28,11 +30,13 @@ export default function SettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { theme } = useUniwind();
   const tabBarHeight = useBottomTabBarHeight();
   const [userName] = usePreference('app.user.name');
   const settingPreferences = useSettingPreferences();
   const prefetchProviders = usePrefetchProviders();
   const { lockProgress, onScroll, scrollY, toggleHeroLock } = useProfileHeaderAnimation();
+  const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
 
   const openProfileSettings = useCallback(() => {
     router.push('/settings/profile');
@@ -96,6 +100,11 @@ export default function SettingsScreen() {
                 icon: EarthIcon,
                 title: t('settings.items.webSearch'),
                 onPress: () => router.push('/settings/websearch'),
+              },
+              {
+                imageSource: mcpIcon,
+                title: t('settings.items.mcp'),
+                onPress: () => router.push('/settings/mcp'),
               },
             ]}
           />
