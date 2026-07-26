@@ -2,7 +2,7 @@ import { Switch } from 'heroui-native/switch';
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { McpServer } from '@/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import { McpToolsSection } from '../McpToolsSection';
 
 type ToolsQueryResult = { data?: { name: string }[]; isError: boolean };
@@ -53,7 +53,7 @@ jest.mock('../../../components/SettingsDialogActionButton', () => {
 
 const serverWildcard = 'mcp__myServer__*';
 
-function makeServer(disabledAutoApproveTools: string[]): McpServer {
+function makeServer(disabledAutoApproveTools: string[]): StreamableHttpMcpServer {
   return {
     baseUrl: 'https://a.example/mcp',
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -64,7 +64,6 @@ function makeServer(disabledAutoApproveTools: string[]): McpServer {
     id: 'server-1',
     isActive: true,
     name: 'My Server',
-    timeout: null,
     type: 'streamableHttp',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
@@ -89,7 +88,7 @@ describe('McpToolsSection auto-approve toggle', () => {
   function render(
     disabledAutoApproveTools: string[],
     disabledTools: string[] = [],
-    serverOverrides: Partial<McpServer> = {},
+    serverOverrides: Partial<StreamableHttpMcpServer> = {},
   ) {
     const server = { ...makeServer(disabledAutoApproveTools), ...serverOverrides, disabledTools };
     const onToggleAutoApprove = jest.fn();

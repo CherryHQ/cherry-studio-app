@@ -1,6 +1,6 @@
 import type { Assistant, McpMode } from '@/data/types/assistant';
 import { DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
-import type { McpServer } from '@/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import { getEffectiveMcpMode, resolveServersForAssistant } from '../resolveAssistantMcpServers';
 
 function makeAssistant(overrides: { mcpMode?: McpMode; mcpServerIds?: string[] }): Assistant {
@@ -25,7 +25,7 @@ function makeAssistant(overrides: { mcpMode?: McpMode; mcpServerIds?: string[] }
   };
 }
 
-function makeServer(id: string): McpServer {
+function makeServer(id: string): StreamableHttpMcpServer {
   return {
     baseUrl: `https://${id}.example/mcp`,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -36,7 +36,6 @@ function makeServer(id: string): McpServer {
     id,
     isActive: true,
     name: id,
-    timeout: null,
     type: 'streamableHttp',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };

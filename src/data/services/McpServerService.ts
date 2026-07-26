@@ -10,25 +10,24 @@ import type { DbService } from '@/data/db/DbService';
 import type { InsertMcpServerRow, McpServerRow } from '@/data/db/schemas';
 import { assistantMcpServerTable, mcpServerTable } from '@/data/db/schemas';
 import { DataApiErrorFactory } from '@/data/types/apiTypes';
-import type { McpServer } from '@/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 
-import { timestampToISO } from './utils/rowMappers';
+import { nullsToUndefined, timestampToISO } from './utils/rowMappers';
 
 type TxLike = any;
 const MOBILE_MCP_SERVER_TYPE = 'streamableHttp' as const;
 
-function rowToMcpServer(row: McpServerRow): McpServer {
+function rowToMcpServer(row: McpServerRow): StreamableHttpMcpServer {
+  const clean = nullsToUndefined(row);
   return {
-    baseUrl: row.baseUrl ?? '',
+    ...clean,
+    baseUrl: clean.baseUrl ?? '',
     createdAt: timestampToISO(row.createdAt),
-    description: row.description ?? '',
-    disabledAutoApproveTools: row.disabledAutoApproveTools ?? [],
-    disabledTools: row.disabledTools ?? [],
-    headers: row.headers ?? {},
-    id: row.id,
-    isActive: row.isActive,
-    name: row.name,
-    timeout: row.timeout,
+    description: clean.description ?? '',
+    disabledAutoApproveTools: clean.disabledAutoApproveTools ?? [],
+    disabledTools: clean.disabledTools ?? [],
+    headers: clean.headers ?? {},
+    installSource: clean.installSource as StreamableHttpMcpServer['installSource'],
     type: MOBILE_MCP_SERVER_TYPE,
     updatedAt: timestampToISO(row.updatedAt),
   };
@@ -41,7 +40,7 @@ export class McpServerService {
     return this.dbService.getDb();
   }
 
-  async getById(id: string): Promise<McpServer> {
+  async getById(id: string): Promise<StreamableHttpMcpServer> {
     const [row] = await this.db
       .select()
       .from(mcpServerTable)
@@ -57,7 +56,7 @@ export class McpServerService {
 
   async list(
     params: ListMcpServersQueryParams = {},
-  ): Promise<{ items: McpServer[]; total: number }> {
+  ): Promise<{ items: StreamableHttpMcpServer[]; total: number }> {
     const query = ListMcpServersQuerySchema.parse(params);
     const conditions = [eq(mcpServerTable.type, MOBILE_MCP_SERVER_TYPE)];
     if (query.isActive !== undefined) {
@@ -72,7 +71,7 @@ export class McpServerService {
     return { items: rows.map(rowToMcpServer), total: rows.length };
   }
 
-  async create(dto: CreateMcpServerDto): Promise<McpServer> {
+  async create(dto: CreateMcpServerDto): Promise<StreamableHttpMcpServer> {
     const name = this.validateName(dto.name);
     await this.assertNameAvailable(name);
 
@@ -87,7 +86,7 @@ export class McpServerService {
     return rowToMcpServer(row);
   }
 
-  async update(id: string, dto: UpdateMcpServerDto): Promise<McpServer> {
+  async update(id: string, dto: UpdateMcpServerDto): Promise<StreamableHttpMcpServer> {
     await this.getById(id);
     const name = dto.name === undefined ? undefined : this.validateName(dto.name);
     if (name !== undefined) {

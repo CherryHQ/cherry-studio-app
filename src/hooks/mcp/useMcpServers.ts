@@ -4,9 +4,9 @@ import { queryKeys } from '@/data/api';
 import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/data/api/schemas/mcpServers';
 import { useDataQuery } from '@/data/hooks';
 import { useDataServices } from '@/data/runtime';
-import type { McpServer } from '@/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 
-const EMPTY_MCP_SERVERS: readonly McpServer[] = Object.freeze([]);
+const EMPTY_MCP_SERVERS: readonly StreamableHttpMcpServer[] = Object.freeze([]);
 
 export function useMcpServersApi() {
   const query = useDataQuery({
@@ -144,7 +144,7 @@ function hasRuntimeRelevantPatch(patch: UpdateMcpServerDto): boolean {
   return patch.baseUrl !== undefined || patch.headers !== undefined || patch.isActive !== undefined;
 }
 
-function hasSameTransport(left: McpServer, right: McpServer): boolean {
+function hasSameTransport(left: StreamableHttpMcpServer, right: StreamableHttpMcpServer): boolean {
   if (left.baseUrl !== right.baseUrl) {
     return false;
   }

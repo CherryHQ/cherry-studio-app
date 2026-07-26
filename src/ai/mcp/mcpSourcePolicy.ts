@@ -51,7 +51,9 @@ export function hasMcpServerWildcardRule(rules: readonly string[], server: McpSe
 }
 
 export function isMcpToolDisabledBySource(server: McpServer, tool: McpPolicyTool): boolean {
-  return server.disabledTools.some((value) => matchesMcpSourceToolRule(value, server, tool));
+  return (server.disabledTools ?? []).some((value) =>
+    matchesMcpSourceToolRule(value, server, tool),
+  );
 }
 
 /**
@@ -60,7 +62,7 @@ export function isMcpToolDisabledBySource(server: McpServer, tool: McpPolicyTool
  * auto-approved — approval is opt-in per tool.
  */
 export function isMcpToolForcePromptBySource(server: McpServer, tool: McpPolicyTool): boolean {
-  return server.disabledAutoApproveTools.some((value) =>
+  return (server.disabledAutoApproveTools ?? []).some((value) =>
     matchesMcpSourceToolRule(value, server, tool),
   );
 }

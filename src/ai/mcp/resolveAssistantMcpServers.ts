@@ -1,5 +1,5 @@
 import type { Assistant, McpMode } from '@/data/types/assistant';
-import type { McpServer } from '@/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 
 /**
  * Effective MCP mode for an assistant, ported from desktop
@@ -20,8 +20,8 @@ export function getEffectiveMcpMode(assistant: Assistant): McpMode {
  */
 export function resolveServersForAssistant(
   assistant: Assistant,
-  activeServers: McpServer[],
-): McpServer[] {
+  activeServers: StreamableHttpMcpServer[],
+): StreamableHttpMcpServer[] {
   const mode = getEffectiveMcpMode(assistant);
 
   if (mode === 'disabled') {

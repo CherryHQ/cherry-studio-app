@@ -12,7 +12,7 @@ import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { keyboardBottomOffset } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/data/api/schemas/mcpServers';
-import type { McpServer } from '@/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import { useMcpServerApiById, useMcpServerMutations } from '@/hooks/mcp/useMcpServers';
 import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { McpConnectionTestSection } from './components/McpConnectionTestSection';
@@ -313,7 +313,7 @@ function FormField({ children, label }: { children: React.ReactNode; label: stri
   );
 }
 
-function createFormState(server?: McpServer): McpServerFormState {
+function createFormState(server?: StreamableHttpMcpServer): McpServerFormState {
   return {
     baseUrl: server?.baseUrl ?? '',
     description: server?.description ?? '',

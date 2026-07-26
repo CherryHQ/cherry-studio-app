@@ -9,14 +9,14 @@ import { Text, View } from 'react-native';
 import { hasMcpServerWildcardRule, matchesMcpSourceToolRule } from '@/ai/mcp';
 import { queryKeys } from '@/data/api';
 import { useDataServices } from '@/data/runtime';
-import type { McpServer } from '@/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 
 type McpToolsSectionProps = {
   /** `knownToolNames` lets the writer re-expand rules wider than one tool. */
   onToggleAutoApprove: (toolName: string, autoApprove: boolean, knownToolNames: string[]) => void;
   onToggleTool: (toolName: string, enabled: boolean, knownToolNames: string[]) => void;
-  server: McpServer;
+  server: StreamableHttpMcpServer;
 };
 
 export function McpToolsSection({

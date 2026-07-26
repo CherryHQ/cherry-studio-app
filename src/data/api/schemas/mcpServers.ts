@@ -1,6 +1,5 @@
 import * as z from 'zod';
-
-import type { McpServer } from '@/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import { McpServerSchema } from '@/data/types/mcpServer';
 
 const MCP_SERVER_MUTABLE_FIELDS = {
@@ -17,13 +16,19 @@ const MCP_SERVER_MUTABLE_FIELDS = {
 export const CreateMcpServerSchema = McpServerSchema.pick(MCP_SERVER_MUTABLE_FIELDS)
   .partial()
   .required({ baseUrl: true, name: true })
-  .extend({ baseUrl: z.url() })
+  .extend({
+    baseUrl: z.url(),
+    timeout: z.number().int().positive().nullable().optional(),
+  })
   .strict();
 export type CreateMcpServerDto = z.infer<typeof CreateMcpServerSchema>;
 
 export const UpdateMcpServerSchema = McpServerSchema.pick(MCP_SERVER_MUTABLE_FIELDS)
   .partial()
-  .extend({ baseUrl: z.url().optional() })
+  .extend({
+    baseUrl: z.url().optional(),
+    timeout: z.number().int().positive().nullable().optional(),
+  })
   .strict();
 export type UpdateMcpServerDto = z.infer<typeof UpdateMcpServerSchema>;
 
@@ -36,11 +41,11 @@ export type McpServerSchemas = {
   '/mcp-servers': {
     GET: {
       query?: ListMcpServersQueryParams;
-      response: { items: McpServer[]; total: number };
+      response: { items: StreamableHttpMcpServer[]; total: number };
     };
     POST: {
       body: CreateMcpServerDto;
-      response: McpServer;
+      response: StreamableHttpMcpServer;
     };
   };
   '/mcp-servers/:id': {
@@ -50,12 +55,12 @@ export type McpServerSchemas = {
     };
     GET: {
       params: { id: string };
-      response: McpServer;
+      response: StreamableHttpMcpServer;
     };
     PATCH: {
       body: UpdateMcpServerDto;
       params: { id: string };
-      response: McpServer;
+      response: StreamableHttpMcpServer;
     };
   };
 };

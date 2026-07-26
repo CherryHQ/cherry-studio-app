@@ -1,10 +1,10 @@
 import type { DataServices } from '@/data/services/createDataServices';
-import type { McpServer } from '@/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import { clearMcpToolAutoApproveRule } from '../mcpAutoApproveRule';
 
 const serverWildcard = 'mcp__myServer__*';
 
-function makeServer(disabledAutoApproveTools: string[]): McpServer {
+function makeServer(disabledAutoApproveTools: string[]): StreamableHttpMcpServer {
   return {
     baseUrl: 'https://a.example/mcp',
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -15,13 +15,12 @@ function makeServer(disabledAutoApproveTools: string[]): McpServer {
     id: 'server-1',
     isActive: true,
     name: 'My Server',
-    timeout: null,
     type: 'streamableHttp',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 }
 
-function createServices(server: McpServer) {
+function createServices(server: StreamableHttpMcpServer) {
   const listToolsForServer = jest.fn(async () => [
     { name: 'search_docs' },
     { name: 'read_file' },

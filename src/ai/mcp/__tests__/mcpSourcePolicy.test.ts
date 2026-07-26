@@ -1,4 +1,4 @@
-import type { McpServer } from '@/data/types/mcpServer';
+import type { McpServer, StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import {
   buildMcpWireToolId,
   buildMcpWireWildcard,
@@ -9,7 +9,10 @@ import {
   withMcpToolRuleCleared,
 } from '../mcpSourcePolicy';
 
-function makeServer(disabledTools: string[], disabledAutoApproveTools: string[] = []): McpServer {
+function makeServer(
+  disabledTools: string[],
+  disabledAutoApproveTools: string[] = [],
+): StreamableHttpMcpServer {
   return {
     baseUrl: 'https://a.example/mcp',
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -20,7 +23,6 @@ function makeServer(disabledTools: string[], disabledAutoApproveTools: string[] 
     id: 'server-1',
     isActive: true,
     name: 'My Server',
-    timeout: null,
     type: 'streamableHttp',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
@@ -44,6 +46,12 @@ describe('hasMcpServerWildcardRule', () => {
 });
 
 describe('isMcpToolDisabledBySource', () => {
+  it('treats an absent desktop rule list as empty', () => {
+    const server: McpServer = { id: 'server-1', isActive: true, name: 'Synced' };
+    expect(isMcpToolDisabledBySource(server, { name: 'search' })).toBe(false);
+    expect(isMcpToolForcePromptBySource(server, { name: 'search' })).toBe(false);
+  });
+
   it('matches a raw tool name', () => {
     expect(isMcpToolDisabledBySource(makeServer(['search']), { name: 'search' })).toBe(true);
   });

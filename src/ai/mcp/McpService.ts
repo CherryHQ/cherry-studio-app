@@ -7,7 +7,7 @@ import { loggerService } from '@/core/logger/LoggerService';
 import type { McpServerService } from '@/data/services/McpServerService';
 import { DataApiError, ErrorCode } from '@/data/types/apiTypes';
 import type { Assistant } from '@/data/types/assistant';
-import { DEFAULT_MCP_TIMEOUT_SECONDS, type McpServer } from '@/data/types/mcpServer';
+import { DEFAULT_MCP_TIMEOUT_SECONDS, type StreamableHttpMcpServer } from '@/data/types/mcpServer';
 
 import type { McpCallToolResult } from './mcpResult';
 import { mcpResultToTextSummary } from './mcpResult';
@@ -98,7 +98,7 @@ function createHttpClient(config: McpConnectionConfig): Promise<MCPClient> {
   });
 }
 
-function hasRunnableUrl(server: McpServer): boolean {
+function hasRunnableUrl(server: StreamableHttpMcpServer): boolean {
   return /^https?:\/\//i.test(server.baseUrl);
 }
 
@@ -183,7 +183,7 @@ export class McpService {
    * Returns undefined when nothing applies. Never throws, never blocks on I/O.
    */
   async getToolSetForAssistant(assistant: Assistant): Promise<ToolSet | undefined> {
-    let activeServers: McpServer[];
+    let activeServers: StreamableHttpMcpServer[];
     try {
       ({ items: activeServers } = await this.deps.mcpServer.list({ isActive: true }));
     } catch (error) {
@@ -236,7 +236,7 @@ export class McpService {
   }
 
   /** Tool list for the server edit screen — connects, unlike the chat path. */
-  async listToolsForServer(server: McpServer): Promise<McpToolSummary[]> {
+  async listToolsForServer(server: StreamableHttpMcpServer): Promise<McpToolSummary[]> {
     if (!hasRunnableUrl(server)) {
       throw new Error(`MCP server ${server.name} has no valid HTTP URL`);
     }
@@ -300,7 +300,7 @@ export class McpService {
     return JSON.stringify([config.baseUrl, headers]);
   }
 
-  private getRuntimeState(server: McpServer): ServerRuntimeState {
+  private getRuntimeState(server: StreamableHttpMcpServer): ServerRuntimeState {
     const transportFingerprint = this.transportFingerprint(server);
     const current = this.runtimeStates.get(server.id);
     if (current?.transportFingerprint === transportFingerprint) {
@@ -324,7 +324,7 @@ export class McpService {
 
   /** Cached tools if we have any, serving stale while a refresh runs. */
   private readCachedTools(
-    server: McpServer,
+    server: StreamableHttpMcpServer,
   ): { rawTools: ToolSet; state: ServerRuntimeState } | undefined {
     const state = this.getRuntimeState(server);
     const entry = state.toolsCache;
@@ -334,7 +334,10 @@ export class McpService {
     return entry ? { rawTools: entry.rawTools, state } : undefined;
   }
 
-  private refreshToolsInBackground(server: McpServer, state = this.getRuntimeState(server)): void {
+  private refreshToolsInBackground(
+    server: StreamableHttpMcpServer,
+    state = this.getRuntimeState(server),
+  ): void {
     if (state.refreshPromise || this.isBackingOff(state)) {
       return;
     }
@@ -381,7 +384,10 @@ export class McpService {
     };
   }
 
-  private async getClient(server: McpServer, state: ServerRuntimeState): Promise<MCPClient> {
+  private async getClient(
+    server: StreamableHttpMcpServer,
+    state: ServerRuntimeState,
+  ): Promise<MCPClient> {
     if (!this.isCurrentState(state)) {
       throw new McpEvictedError(`MCP server ${server.name} was invalidated`);
     }
@@ -460,7 +466,7 @@ export class McpService {
     return this.runtimeStates.get(state.serverId) === state && state.generation === generation;
   }
 
-  private async fetchToolsWithRetry(server: McpServer): Promise<ToolSet> {
+  private async fetchToolsWithRetry(server: StreamableHttpMcpServer): Promise<ToolSet> {
     const state = this.getRuntimeState(server);
     try {
       return await this.fetchRawTools(server, state);
@@ -483,7 +489,10 @@ export class McpService {
     }
   }
 
-  private async fetchRawTools(server: McpServer, state: ServerRuntimeState): Promise<ToolSet> {
+  private async fetchRawTools(
+    server: StreamableHttpMcpServer,
+    state: ServerRuntimeState,
+  ): Promise<ToolSet> {
     const generation = state.generation;
     const rawTools = await withTimeout(
       (async () => {
@@ -509,8 +518,11 @@ export class McpService {
    * was built — one send can run up to 20 tool steps, and the user may disable
    * a tool or the whole server in between.
    */
-  private async assertToolStillAllowed(server: McpServer, rawToolName: string): Promise<McpServer> {
-    let current: McpServer;
+  private async assertToolStillAllowed(
+    server: StreamableHttpMcpServer,
+    rawToolName: string,
+  ): Promise<StreamableHttpMcpServer> {
+    let current: StreamableHttpMcpServer;
     try {
       current = await this.deps.mcpServer.getById(server.id);
     } catch (error) {
@@ -536,7 +548,7 @@ export class McpService {
 
   private wrapTool(
     rawTool: Tool,
-    server: McpServer,
+    server: StreamableHttpMcpServer,
     rawToolName: string,
     state: ServerRuntimeState,
   ): Tool {
@@ -623,7 +635,7 @@ export class McpService {
       // asks rather than assumes: falling back to the wrap-time snapshot would
       // run a tool the user just put behind approval.
       needsApproval: async () => {
-        let current: McpServer;
+        let current: StreamableHttpMcpServer;
         try {
           current = await this.deps.mcpServer.getById(server.id);
         } catch (error) {

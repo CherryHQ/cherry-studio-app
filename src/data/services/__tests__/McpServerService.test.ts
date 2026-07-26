@@ -69,7 +69,7 @@ describe('McpServerService integration', () => {
       headers: {},
       isActive: false,
       name: 'Example',
-      timeout: null,
+      timeout: undefined,
       type: 'streamableHttp',
     });
   });
@@ -134,17 +134,53 @@ describe('McpServerService integration', () => {
   it('updates only mobile fields and preserves synchronized desktop metadata', async () => {
     insertRawServer(sqlite, {
       baseUrl: 'https://example.com/mcp',
+      dxtVersion: '1.2.3',
       id: 'remote',
+      installSource: 'protocol',
+      isTrusted: true,
       name: 'Remote',
       provider: 'Desktop Provider',
+      sortOrder: 7,
+      tags: ['search', 'remote'],
       type: 'streamableHttp',
     });
 
-    await service.update('remote', { description: 'Updated' });
+    const before = await service.getById('remote');
+    expect(before).toMatchObject({
+      dxtVersion: '1.2.3',
+      installSource: 'protocol',
+      isTrusted: true,
+      provider: 'Desktop Provider',
+      sortOrder: 7,
+      tags: ['search', 'remote'],
+    });
+
+    const after = await service.update('remote', { description: 'Updated' });
 
     expect(
-      sqlite.prepare('SELECT description, provider FROM mcp_server WHERE id = ?').get('remote'),
-    ).toEqual({ description: 'Updated', provider: 'Desktop Provider' });
+      sqlite
+        .prepare(
+          `SELECT description, dxt_version, install_source, is_trusted, provider, sort_order, tags
+           FROM mcp_server WHERE id = ?`,
+        )
+        .get('remote'),
+    ).toEqual({
+      description: 'Updated',
+      dxt_version: '1.2.3',
+      install_source: 'protocol',
+      is_trusted: 1,
+      provider: 'Desktop Provider',
+      sort_order: 7,
+      tags: '["search","remote"]',
+    });
+    expect(after).toMatchObject({
+      dxtVersion: '1.2.3',
+      installSource: 'protocol',
+      isTrusted: true,
+      provider: 'Desktop Provider',
+      sortOrder: 7,
+      tags: ['search', 'remote'],
+    });
   });
 
   it('deletes a server and cascades its assistant junction rows', async () => {
@@ -245,18 +281,23 @@ function insertRawServer(
   database: DatabaseSync,
   values: {
     baseUrl?: string | null;
+    dxtVersion?: string;
     id: string;
+    installSource?: 'builtin' | 'manual' | 'protocol' | 'unknown';
+    isTrusted?: boolean;
     name: string;
     provider?: string;
     sortOrder?: number;
+    tags?: string[];
     type: 'inMemory' | 'sse' | 'stdio' | 'streamableHttp' | null;
   },
 ) {
   database
     .prepare(
       `INSERT INTO mcp_server (
-        id, name, type, base_url, provider, sort_order, is_active, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 1, 1, 1)`,
+        id, name, type, base_url, provider, dxt_version, tags, sort_order,
+        install_source, is_trusted, is_active, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1)`,
     )
     .run(
       values.id,
@@ -264,6 +305,10 @@ function insertRawServer(
       values.type,
       values.baseUrl ?? null,
       values.provider ?? null,
+      values.dxtVersion ?? null,
+      values.tags ? JSON.stringify(values.tags) : null,
       values.sortOrder ?? 0,
+      values.installSource ?? null,
+      values.isTrusted === undefined ? null : Number(values.isTrusted),
     );
 }

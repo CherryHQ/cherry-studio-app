@@ -2,7 +2,7 @@ import type { ToolSet } from 'ai';
 import { DataApiErrorFactory } from '@/data/types/apiTypes';
 import type { Assistant } from '@/data/types/assistant';
 import { DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
-import type { McpServer } from '@/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import { McpService } from '../McpService';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
@@ -22,7 +22,7 @@ function flush(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-function makeServer(overrides: Partial<McpServer> = {}): McpServer {
+function makeServer(overrides: Partial<StreamableHttpMcpServer> = {}): StreamableHttpMcpServer {
   return {
     baseUrl: 'https://a.example/mcp',
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -33,7 +33,6 @@ function makeServer(overrides: Partial<McpServer> = {}): McpServer {
     id: 'server-1',
     isActive: true,
     name: 'ServerOne',
-    timeout: null,
     type: 'streamableHttp',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -93,7 +92,7 @@ function makeClient(tools: ToolSet): FakeClient {
   };
 }
 
-function makeService(servers: McpServer[]) {
+function makeService(servers: StreamableHttpMcpServer[]) {
   const mcpServer = {
     // Hand out a copy: sharing the row object with the caller would let a test
     // mutate what production code already captured, and pass without the code

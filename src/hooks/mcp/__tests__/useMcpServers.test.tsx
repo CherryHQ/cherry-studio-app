@@ -1,7 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { queryKeys } from '@/data/api';
-import type { McpServer } from '@/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 
 import { useMcpServerMutations } from '../useMcpServers';
 
@@ -51,7 +51,7 @@ function Probe() {
   return null;
 }
 
-function makeServer(overrides: Partial<McpServer> = {}): McpServer {
+function makeServer(overrides: Partial<StreamableHttpMcpServer> = {}): StreamableHttpMcpServer {
   return {
     baseUrl: 'https://a.example/mcp',
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -62,7 +62,6 @@ function makeServer(overrides: Partial<McpServer> = {}): McpServer {
     id: 'server-1',
     isActive: true,
     name: 'Server',
-    timeout: null,
     type: 'streamableHttp',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
