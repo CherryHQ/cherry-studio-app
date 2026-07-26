@@ -91,11 +91,7 @@ function readMcpSource(part: ToolMessagePart): McpToolSource | undefined {
     return undefined;
   }
 
-  return {
-    rawName: tool.rawName,
-    serverId: tool.serverId,
-    ...(tool.serverName && { serverName: tool.serverName }),
-  };
+  return { rawName: tool.rawName, serverId: tool.serverId };
 }
 
 /** Everything a resumed segment spends on top of the first one. The durations

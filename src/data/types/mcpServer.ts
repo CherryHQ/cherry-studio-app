@@ -97,10 +97,16 @@ export const StreamableHttpMcpServerSchema = McpServerSchema.extend({
 });
 export type StreamableHttpMcpServer = z.infer<typeof StreamableHttpMcpServerSchema>;
 
+/**
+ * What it takes to write an auto-approve rule for one tool: the server row to
+ * update, and the server's own name for the tool — the only form the rule
+ * lists can be matched against, since the minted wire id is camelCased and
+ * can't be reversed. Display names are not carried; the parts that render one
+ * read `serverName` off the part's own metadata.
+ */
 export type McpToolSource = {
   rawName: string;
   serverId: string;
-  serverName?: string;
 };
 
 export const DEFAULT_MCP_TIMEOUT_SECONDS = 60;
