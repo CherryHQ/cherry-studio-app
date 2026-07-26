@@ -32,8 +32,8 @@ function createServices(server: StreamableHttpMcpServer) {
     listToolsForServer,
     services: {
       mcp: { listToolsForServer },
-      mobileMcpServer: { getById: jest.fn(async () => server), update },
-    } as unknown as Pick<DataServices, 'mcp' | 'mobileMcpServer'>,
+      mcpServer: { getById: jest.fn(async () => server), update },
+    } as unknown as Pick<DataServices, 'mcp' | 'mcpServer'>,
     update,
   };
 }
@@ -50,9 +50,13 @@ describe('clearMcpToolAutoApproveRule', () => {
     });
 
     expect(listToolsForServer).not.toHaveBeenCalled();
-    expect(update).toHaveBeenCalledWith('server-1', {
-      disabledAutoApproveTools: ['read_file'],
-    });
+    expect(update).toHaveBeenCalledWith(
+      'server-1',
+      {
+        disabledAutoApproveTools: ['read_file'],
+      },
+      'streamableHttp',
+    );
   });
 
   test('re-expands a server-wide rule over the tools it still has to cover', async () => {
@@ -65,14 +69,18 @@ describe('clearMcpToolAutoApproveRule', () => {
 
     // Clearing the wildcard outright would auto-approve every other tool on
     // this server, which the user never asked for.
-    expect(update).toHaveBeenCalledWith('server-1', {
-      disabledAutoApproveTools: ['read_file', 'write_file'],
-    });
+    expect(update).toHaveBeenCalledWith(
+      'server-1',
+      {
+        disabledAutoApproveTools: ['read_file', 'write_file'],
+      },
+      'streamableHttp',
+    );
   });
 
   test('lets a failed write surface so the caller can report it', async () => {
     const { services } = createServices(makeServer([]));
-    (services.mobileMcpServer.update as jest.Mock).mockRejectedValue(new Error('db is gone'));
+    (services.mcpServer.update as jest.Mock).mockRejectedValue(new Error('db is gone'));
 
     await expect(
       clearMcpToolAutoApproveRule(services, { rawName: 'search_docs', serverId: 'server-1' }),

@@ -188,6 +188,117 @@ describe('McpServerService desktop contract', () => {
     });
     await expect(service.getById(first.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
+
+  it('creates a normalized Streamable HTTP server through the constrained contract', async () => {
+    const server = await service.create(
+      { baseUrl: 'https://example.com/mcp', name: ' Example ' },
+      'streamableHttp',
+    );
+
+    expect(server).toMatchObject({
+      baseUrl: 'https://example.com/mcp',
+      description: '',
+      disabledAutoApproveTools: [],
+      disabledTools: [],
+      headers: {},
+      isActive: false,
+      name: 'Example',
+      timeout: undefined,
+      type: 'streamableHttp',
+    });
+  });
+
+  it('validates constrained creates and updates at runtime', async () => {
+    await expect(
+      service.create({ baseUrl: 'not-a-url', name: 'Invalid' }, 'streamableHttp'),
+    ).rejects.toBeDefined();
+
+    const server = await service.create(
+      { baseUrl: 'https://example.com/mcp', name: 'Valid' },
+      'streamableHttp',
+    );
+    await expect(
+      service.update(server.id, { provider: 'not-mobile-mutable' } as never, 'streamableHttp'),
+    ).rejects.toBeDefined();
+  });
+
+  it('rejects duplicate constrained names on create and update', async () => {
+    await service.create({ baseUrl: 'https://a.example/mcp', name: 'Dup' }, 'streamableHttp');
+    await expect(
+      service.create({ baseUrl: 'https://b.example/mcp', name: 'Dup' }, 'streamableHttp'),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    const other = await service.create(
+      { baseUrl: 'https://c.example/mcp', name: 'Other' },
+      'streamableHttp',
+    );
+    await expect(service.update(other.id, { name: 'Dup' }, 'streamableHttp')).rejects.toMatchObject(
+      { code: 'CONFLICT' },
+    );
+    await expect(
+      service.update(other.id, { name: 'Other', timeout: 30 }, 'streamableHttp'),
+    ).resolves.toMatchObject({ name: 'Other', timeout: 30 });
+  });
+
+  it('narrows reads and mutations to Streamable HTTP rows', async () => {
+    insertRawServer(sqlite, {
+      baseUrl: null,
+      id: 'remote-first',
+      name: 'Remote First',
+      sortOrder: 10,
+      type: 'streamableHttp',
+    });
+    insertRawServer(sqlite, {
+      baseUrl: 'https://later.example/mcp',
+      id: 'remote-later',
+      name: 'Remote Later',
+      sortOrder: 20,
+      type: 'streamableHttp',
+    });
+    insertRawServer(sqlite, { id: 'stdio', name: 'Stdio', type: 'stdio' });
+
+    const result = await service.list({ type: 'streamableHttp' });
+
+    expect(result.items.map(({ baseUrl, name }) => ({ baseUrl, name }))).toEqual([
+      { baseUrl: '', name: 'Remote First' },
+      { baseUrl: 'https://later.example/mcp', name: 'Remote Later' },
+    ]);
+    await expect(service.getById('stdio', 'streamableHttp')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(
+      service.update('stdio', { description: 'Wrong transport' }, 'streamableHttp'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(service.delete('stdio', 'streamableHttp')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('preserves synchronized desktop metadata on constrained updates', async () => {
+    const server = await service.create({
+      baseUrl: 'https://example.com/mcp',
+      dxtVersion: '1.2.3',
+      installSource: 'protocol',
+      isTrusted: true,
+      name: 'Remote',
+      provider: 'Desktop Provider',
+      sortOrder: 7,
+      tags: ['search', 'remote'],
+      type: 'streamableHttp',
+    });
+
+    const updated = await service.update(server.id, { description: 'Updated' }, 'streamableHttp');
+
+    expect(updated).toMatchObject({
+      description: 'Updated',
+      dxtVersion: '1.2.3',
+      installSource: 'protocol',
+      isTrusted: true,
+      provider: 'Desktop Provider',
+      sortOrder: 7,
+      tags: ['search', 'remote'],
+    });
+  });
 });
 
 function applyMigrations(database: DatabaseSync) {
@@ -212,4 +323,23 @@ function insertAssistant(database: DatabaseSync, id: string) {
        VALUES (?, 'Assistant', 'x', '{}', 'a0', 1, 1)`,
     )
     .run(id);
+}
+
+function insertRawServer(
+  database: DatabaseSync,
+  values: {
+    baseUrl?: string | null;
+    id: string;
+    name: string;
+    sortOrder?: number;
+    type: 'stdio' | 'streamableHttp';
+  },
+) {
+  database
+    .prepare(
+      `INSERT INTO mcp_server (
+        id, name, type, base_url, sort_order, is_active, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, 1, 1, 1)`,
+    )
+    .run(values.id, values.name, values.type, values.baseUrl ?? null, values.sortOrder ?? 0);
 }

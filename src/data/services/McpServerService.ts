@@ -2,22 +2,29 @@
  * MCP Server Service - handles complete MCP server entities.
  *
  * Keep this service aligned with desktop
- * `src/main/data/services/McpServerService.ts`. Mobile transport filtering and
- * narrow mutations belong in `MobileMcpServerService`.
+ * `src/main/data/services/McpServerService.ts`. Passing `streamableHttp` to a
+ * transport-aware method applies the narrower mobile contract.
  */
 
-import { and, asc, eq, type SQL, sql } from 'drizzle-orm';
+import { and, asc, eq, ne, type SQL, sql } from 'drizzle-orm';
 
 import { loggerService } from '@/core/logger/LoggerService';
+import {
+  type CreateMcpServerDto,
+  CreateMcpServerSchema,
+  type UpdateMcpServerDto,
+  UpdateMcpServerSchema,
+} from '@/data/api/schemas/mcpServers';
 import type { DbService } from '@/data/db/DbService';
 import type { InsertMcpServerRow, McpServerRow } from '@/data/db/schemas';
-import { assistantMcpServerTable, mcpServerTable } from '@/data/db/schemas';
+import { mcpServerTable } from '@/data/db/schemas';
 import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/data/types/apiTypes';
-import type { McpServer, McpServerType } from '@/data/types/mcpServer';
+import type { McpServer, McpServerType, StreamableHttpMcpServer } from '@/data/types/mcpServer';
 
 import { nullsToUndefined, timestampToISO } from './utils/rowMappers';
 
 const logger = loggerService.withContext('DataApi:McpServerService');
+const STREAMABLE_HTTP_TYPE = 'streamableHttp' as const;
 
 export type CreateMcpServerInput = Omit<
   McpServer,
@@ -34,6 +41,8 @@ export type ListMcpServersQuery = {
   type?: McpServerType;
 };
 
+type StreamableHttpListQuery = ListMcpServersQuery & { type: typeof STREAMABLE_HTTP_TYPE };
+
 function rowToMcpServer(row: McpServerRow): McpServer {
   const clean = nullsToUndefined(row);
   return {
@@ -45,6 +54,27 @@ function rowToMcpServer(row: McpServerRow): McpServer {
   };
 }
 
+function toStreamableHttpServer(server: McpServer): StreamableHttpMcpServer {
+  if (server.type !== STREAMABLE_HTTP_TYPE) {
+    throw DataApiErrorFactory.notFound('McpServer', server.id);
+  }
+  if (!server.createdAt || !server.updatedAt) {
+    throw new Error(`Persisted MCP server ${server.id} is missing timestamps`);
+  }
+
+  return {
+    ...server,
+    baseUrl: server.baseUrl ?? '',
+    createdAt: server.createdAt,
+    description: server.description ?? '',
+    disabledAutoApproveTools: server.disabledAutoApproveTools ?? [],
+    disabledTools: server.disabledTools ?? [],
+    headers: server.headers ?? {},
+    type: STREAMABLE_HTTP_TYPE,
+    updatedAt: server.updatedAt,
+  };
+}
+
 export class McpServerService {
   constructor(private readonly dbService: DbService) {}
 
@@ -52,20 +82,34 @@ export class McpServerService {
     return this.dbService.getDb();
   }
 
-  async getById(id: string): Promise<McpServer> {
+  async getById(
+    id: string,
+    expectedType: typeof STREAMABLE_HTTP_TYPE,
+  ): Promise<StreamableHttpMcpServer>;
+  async getById(id: string, expectedType?: McpServerType): Promise<McpServer>;
+  async getById(id: string, expectedType?: McpServerType): Promise<McpServer> {
+    const conditions = [eq(mcpServerTable.id, id)];
+    if (expectedType !== undefined) {
+      conditions.push(eq(mcpServerTable.type, expectedType));
+    }
     const [row] = await this.db
       .select()
       .from(mcpServerTable)
-      .where(eq(mcpServerTable.id, id))
+      .where(and(...conditions))
       .limit(1);
 
     if (!row) {
       throw DataApiErrorFactory.notFound('McpServer', id);
     }
 
-    return rowToMcpServer(row);
+    const server = rowToMcpServer(row);
+    return expectedType === STREAMABLE_HTTP_TYPE ? toStreamableHttpServer(server) : server;
   }
 
+  async list(
+    query: StreamableHttpListQuery,
+  ): Promise<OffsetPaginationResponse<StreamableHttpMcpServer>>;
+  async list(query?: ListMcpServersQuery): Promise<OffsetPaginationResponse<McpServer>>;
   async list(query: ListMcpServersQuery = {}): Promise<OffsetPaginationResponse<McpServer>> {
     const conditions: SQL[] = [];
     if (query.id !== undefined) {
@@ -84,21 +128,37 @@ export class McpServerService {
         .select()
         .from(mcpServerTable)
         .where(whereClause)
-        .orderBy(asc(mcpServerTable.sortOrder)),
+        .orderBy(asc(mcpServerTable.sortOrder), asc(mcpServerTable.createdAt)),
       this.db.select({ count: sql<number>`count(*)` }).from(mcpServerTable).where(whereClause),
     ]);
+    const items = rows.map(rowToMcpServer);
 
     return {
-      items: rows.map(rowToMcpServer),
+      items: query.type === STREAMABLE_HTTP_TYPE ? items.map(toStreamableHttpServer) : items,
       page: 1,
       total: countRows[0]?.count ?? 0,
     };
   }
 
-  async create(dto: CreateMcpServerInput): Promise<McpServer> {
-    this.validateName(dto.name);
+  async create(
+    dto: CreateMcpServerDto,
+    type: typeof STREAMABLE_HTTP_TYPE,
+  ): Promise<StreamableHttpMcpServer>;
+  async create(dto: CreateMcpServerInput): Promise<McpServer>;
+  async create(
+    dto: CreateMcpServerDto | CreateMcpServerInput,
+    type?: typeof STREAMABLE_HTTP_TYPE,
+  ): Promise<McpServer> {
+    const input: CreateMcpServerInput =
+      type === STREAMABLE_HTTP_TYPE
+        ? this.toStreamableHttpCreateInput(CreateMcpServerSchema.parse(dto))
+        : (dto as CreateMcpServerInput);
+    this.validateName(input.name);
+    if (type === STREAMABLE_HTTP_TYPE) {
+      await this.assertNameAvailable(input.name);
+    }
 
-    const { isActive, sortOrder, ...rest } = dto;
+    const { isActive, sortOrder, ...rest } = input;
     const [row] = await this.db
       .insert(mcpServerTable)
       .values({
@@ -109,26 +169,56 @@ export class McpServerService {
       .returning();
 
     logger.info('Created MCP server', { id: row.id, name: row.name });
-    return rowToMcpServer(row);
+    const server = rowToMcpServer(row);
+    return type === STREAMABLE_HTTP_TYPE ? toStreamableHttpServer(server) : server;
   }
 
-  async update(id: string, dto: UpdateMcpServerInput): Promise<McpServer> {
-    const existing = await this.getById(id);
-    if (dto.name !== undefined) {
-      this.validateName(dto.name);
+  async update(
+    id: string,
+    dto: UpdateMcpServerDto,
+    expectedType: typeof STREAMABLE_HTTP_TYPE,
+  ): Promise<StreamableHttpMcpServer>;
+  async update(id: string, dto: UpdateMcpServerInput): Promise<McpServer>;
+  async update(
+    id: string,
+    dto: UpdateMcpServerDto | UpdateMcpServerInput,
+    expectedType?: typeof STREAMABLE_HTTP_TYPE,
+  ): Promise<McpServer> {
+    const existing = await this.getById(id, expectedType);
+    let updates: Partial<InsertMcpServerRow>;
+
+    if (expectedType === STREAMABLE_HTTP_TYPE) {
+      const parsed = UpdateMcpServerSchema.parse(dto);
+      const name = parsed.name?.trim();
+      if (name !== undefined) {
+        this.validateName(name);
+        await this.assertNameAvailable(name, id);
+      }
+      updates = this.toStreamableHttpColumns({
+        ...parsed,
+        ...(name !== undefined && { name }),
+      });
+    } else {
+      if (dto.name !== undefined) {
+        this.validateName(dto.name);
+      }
+      updates = Object.fromEntries(
+        Object.entries(dto).filter(([, value]) => value !== undefined),
+      ) as Partial<InsertMcpServerRow>;
     }
 
-    const updates = Object.fromEntries(
-      Object.entries(dto).filter(([, value]) => value !== undefined),
-    ) as Partial<InsertMcpServerRow>;
     if (Object.keys(updates).length === 0) {
       return existing;
     }
 
+    const conditions = [eq(mcpServerTable.id, id)];
+    if (expectedType !== undefined) {
+      conditions.push(eq(mcpServerTable.type, expectedType));
+    }
     const [row] = await this.db
       .update(mcpServerTable)
       .set(updates)
-      .where(eq(mcpServerTable.id, id))
+      .where(and(...conditions))
       .returning();
 
     if (!row) {
@@ -136,7 +226,8 @@ export class McpServerService {
     }
 
     logger.info('Updated MCP server', { changes: Object.keys(dto), id });
-    return rowToMcpServer(row);
+    const server = rowToMcpServer(row);
+    return expectedType === STREAMABLE_HTTP_TYPE ? toStreamableHttpServer(server) : server;
   }
 
   async findByIdOrName(idOrName: string): Promise<McpServer | undefined> {
@@ -157,13 +248,18 @@ export class McpServerService {
     return byName ? rowToMcpServer(byName) : undefined;
   }
 
-  async delete(id: string): Promise<void> {
-    await this.getById(id);
-
-    await this.dbService.withWriteTx(async (tx) => {
-      await tx.delete(assistantMcpServerTable).where(eq(assistantMcpServerTable.mcpServerId, id));
-      await tx.delete(mcpServerTable).where(eq(mcpServerTable.id, id));
-    });
+  async delete(id: string, expectedType?: McpServerType): Promise<void> {
+    const conditions = [eq(mcpServerTable.id, id)];
+    if (expectedType !== undefined) {
+      conditions.push(eq(mcpServerTable.type, expectedType));
+    }
+    const [deleted] = await this.db
+      .delete(mcpServerTable)
+      .where(and(...conditions))
+      .returning({ id: mcpServerTable.id });
+    if (!deleted) {
+      throw DataApiErrorFactory.notFound('McpServer', id);
+    }
 
     logger.info('Deleted MCP server', { id });
   }
@@ -176,6 +272,45 @@ export class McpServerService {
     });
 
     logger.info('Reordered MCP servers', { count: orderedIds.length });
+  }
+
+  private toStreamableHttpCreateInput(dto: CreateMcpServerDto): CreateMcpServerInput {
+    return {
+      ...dto,
+      name: dto.name.trim(),
+      timeout: dto.timeout ?? undefined,
+      type: STREAMABLE_HTTP_TYPE,
+    };
+  }
+
+  private toStreamableHttpColumns(dto: UpdateMcpServerDto): Partial<InsertMcpServerRow> {
+    return Object.fromEntries(
+      Object.entries({
+        baseUrl: dto.baseUrl,
+        description: dto.description,
+        disabledAutoApproveTools: dto.disabledAutoApproveTools,
+        disabledTools: dto.disabledTools,
+        headers: dto.headers,
+        isActive: dto.isActive,
+        name: dto.name,
+        timeout: dto.timeout,
+      }).filter(([, value]) => value !== undefined),
+    );
+  }
+
+  private async assertNameAvailable(name: string, excludeId?: string): Promise<void> {
+    const conditions = excludeId
+      ? and(eq(mcpServerTable.name, name), ne(mcpServerTable.id, excludeId))
+      : eq(mcpServerTable.name, name);
+    const [existing] = await this.db
+      .select({ id: mcpServerTable.id })
+      .from(mcpServerTable)
+      .where(conditions)
+      .limit(1);
+
+    if (existing) {
+      throw DataApiErrorFactory.conflict('MCP server name already exists', 'McpServer');
+    }
   }
 
   private validateName(name: string): void {

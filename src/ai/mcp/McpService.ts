@@ -4,7 +4,7 @@ import type { Tool, ToolSet } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import { loggerService } from '@/core/logger/LoggerService';
-import type { MobileMcpServerService } from '@/data/services/MobileMcpServerService';
+import type { McpServerService } from '@/data/services/McpServerService';
 import { DataApiError, ErrorCode } from '@/data/types/apiTypes';
 import type { Assistant } from '@/data/types/assistant';
 import { DEFAULT_MCP_TIMEOUT_SECONDS, type StreamableHttpMcpServer } from '@/data/types/mcpServer';
@@ -174,7 +174,7 @@ function withTimeout<T>(
  * Explicit tool listings reconnect once; tool calls are never replayed.
  */
 export class McpService {
-  constructor(private readonly deps: { mcpServer: MobileMcpServerService }) {}
+  constructor(private readonly deps: { mcpServer: McpServerService }) {}
 
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
   private activePrewarmPromise?: Promise<void>;
@@ -189,7 +189,10 @@ export class McpService {
   async getToolSetForAssistant(assistant: Assistant): Promise<ToolSet | undefined> {
     let activeServers: StreamableHttpMcpServer[];
     try {
-      ({ items: activeServers } = await this.deps.mcpServer.list({ isActive: true }));
+      ({ items: activeServers } = await this.deps.mcpServer.list({
+        isActive: true,
+        type: 'streamableHttp',
+      }));
     } catch (error) {
       logger.warn('Failed to list MCP servers for assistant', { error });
       return undefined;
@@ -270,7 +273,10 @@ export class McpService {
 
   private async prewarmActiveServerTools(): Promise<void> {
     try {
-      const { items } = await this.deps.mcpServer.list({ isActive: true });
+      const { items } = await this.deps.mcpServer.list({
+        isActive: true,
+        type: 'streamableHttp',
+      });
       const servers = items.filter(hasRunnableUrl);
       for (let index = 0; index < servers.length; index += ACTIVE_PREWARM_CONCURRENCY) {
         const batch = servers.slice(index, index + ACTIVE_PREWARM_CONCURRENCY);
@@ -610,7 +616,7 @@ export class McpService {
   ): Promise<StreamableHttpMcpServer> {
     let current: StreamableHttpMcpServer;
     try {
-      current = await this.deps.mcpServer.getById(server.id);
+      current = await this.deps.mcpServer.getById(server.id, 'streamableHttp');
     } catch (error) {
       if (error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND) {
         throw new Error(`MCP server ${server.name} is no longer registered`);
@@ -723,7 +729,7 @@ export class McpService {
       needsApproval: async () => {
         let current: StreamableHttpMcpServer;
         try {
-          current = await this.deps.mcpServer.getById(server.id);
+          current = await this.deps.mcpServer.getById(server.id, 'streamableHttp');
         } catch (error) {
           if (error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND) {
             // No server, no tool: let the call through to `wrappedExecute`,

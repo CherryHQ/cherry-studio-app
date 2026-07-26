@@ -3,7 +3,6 @@ export { FileEntryService } from './FileEntryService';
 export { GroupService } from './GroupService';
 export { McpServerService } from './McpServerService';
 export { MessageService } from './MessageService';
-export { MobileMcpServerService } from './MobileMcpServerService';
 export { ModelService } from './ModelService';
 export { PaintingService } from './PaintingService';
 export { PinService } from './PinService';

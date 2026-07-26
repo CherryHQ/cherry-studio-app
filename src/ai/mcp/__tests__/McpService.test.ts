@@ -428,7 +428,7 @@ describe('disabledTools filtering', () => {
     );
 
     await expect(tool.needsApproval()).resolves.toBe(true);
-    expect(mcpServer.getById).toHaveBeenCalledWith('server-1');
+    expect(mcpServer.getById).toHaveBeenCalledWith('server-1', 'streamableHttp');
   });
 
   it('requires approval when the lookup fails rather than trusting a stale snapshot', async () => {
@@ -604,7 +604,7 @@ describe('tool execution', () => {
     await expect(
       (tool?.execute as (args: unknown, opts: unknown) => Promise<unknown>)({}, {}),
     ).rejects.toThrow('MCP tool ServerOne/search is disabled');
-    expect(mcpServer.getById).toHaveBeenCalledWith('server-1');
+    expect(mcpServer.getById).toHaveBeenCalledWith('server-1', 'streamableHttp');
   });
 
   it('does not blame a deleted server when the lookup itself fails', async () => {
@@ -637,7 +637,7 @@ describe('tool execution', () => {
         {},
       ),
     ).rejects.toThrow('is not active');
-    expect(mcpServer.getById).toHaveBeenCalledWith('server-1');
+    expect(mcpServer.getById).toHaveBeenCalledWith('server-1', 'streamableHttp');
   });
 
   it('throws a server/tool-labelled error when the result isError', async () => {

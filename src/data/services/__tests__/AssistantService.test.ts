@@ -3,7 +3,6 @@ import type { AssistantRow } from '@/data/db/schemas';
 import { DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
 
 import { AssistantService } from '../AssistantService';
-import type { MobileMcpServerService } from '../MobileMcpServerService';
 import type { ModelService } from '../ModelService';
 import type { PinService } from '../PinService';
 import type { PreferenceService } from '../PreferenceService';
@@ -39,7 +38,6 @@ describe('AssistantService', () => {
       {} as PreferenceService,
       tagService,
       {} as PinService,
-      {} as MobileMcpServerService,
     );
 
     const assistant = await service.getById(row.id);
@@ -77,7 +75,6 @@ describe('AssistantService', () => {
       {} as PreferenceService,
       tagService,
       {} as PinService,
-      {} as MobileMcpServerService,
     );
 
     const assistant = await service.update(row.id, { settings: { temperature: 0.7 } });
@@ -123,7 +120,6 @@ describe('AssistantService', () => {
       { get: jest.fn(async () => null) } as unknown as PreferenceService,
       tagService,
       {} as PinService,
-      {} as MobileMcpServerService,
     );
 
     await service.create({ name: 'Assistant' });

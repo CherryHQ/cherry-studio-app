@@ -9,7 +9,6 @@ import { FileEntryService } from './FileEntryService';
 import { GroupService } from './GroupService';
 import { McpServerService } from './McpServerService';
 import { MessageService } from './MessageService';
-import { MobileMcpServerService } from './MobileMcpServerService';
 import { ModelService } from './ModelService';
 import { PaintingService } from './PaintingService';
 import { PinService } from './PinService';
@@ -32,9 +31,8 @@ export function createDataServices(dbService: DbService) {
   const fileEntry = new FileEntryService(dbService);
   const painting = new PaintingService(dbService, fileEntry);
   const mcpServer = new McpServerService(dbService);
-  const mobileMcpServer = new MobileMcpServerService(dbService, mcpServer);
-  const mcp = new McpService({ mcpServer: mobileMcpServer });
-  const assistant = new AssistantService(dbService, model, preference, tag, pin, mobileMcpServer);
+  const mcp = new McpService({ mcpServer });
+  const assistant = new AssistantService(dbService, model, preference, tag, pin);
   const topic = new TopicService(dbService, pin, tag);
   const message = new MessageService(dbService, topic, fileEntry);
   const webSearch = new WebSearchService(preference);
@@ -47,7 +45,6 @@ export function createDataServices(dbService: DbService) {
     group,
     mcp,
     mcpServer,
-    mobileMcpServer,
     message,
     model,
     painting,

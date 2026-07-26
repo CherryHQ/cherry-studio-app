@@ -12,6 +12,7 @@ import {
   assistantKnowledgeBaseTable,
   assistantMcpServerTable,
   assistantTable,
+  mcpServerTable,
   pinTable,
   userModelTable,
 } from '@/data/db/schemas';
@@ -20,7 +21,6 @@ import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/data/types
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
 import type { UniqueModelId } from '@/data/types/model';
 import type { Tag } from '@/data/types/tag';
-import type { MobileMcpServerService } from './MobileMcpServerService';
 import type { ModelService } from './ModelService';
 import type { PinService } from './PinService';
 import type { TagService } from './TagService';
@@ -68,7 +68,6 @@ export class AssistantService {
     private readonly preferenceService: PreferenceService,
     private readonly tagService: TagService,
     private readonly pinService: PinService,
-    private readonly mcpServerService: MobileMcpServerService,
   ) {}
 
   private get db() {
@@ -196,7 +195,7 @@ export class AssistantService {
       }
 
       if (mcpServerIds !== undefined) {
-        await this.mcpServerService.syncAssistantServersTx(tx, inserted.id, mcpServerIds);
+        await this.syncMcpServersTx(tx, inserted.id, mcpServerIds);
       }
 
       const tagMap = await this.tagService.getTagsByEntitiesTx(tx, 'assistant', [inserted.id]);
@@ -274,7 +273,7 @@ export class AssistantService {
       }
 
       if (hasMcpUpdates) {
-        await this.mcpServerService.syncAssistantServersTx(tx, id, mcpServerIds);
+        await this.syncMcpServersTx(tx, id, mcpServerIds);
       }
 
       const nextTags = hasTagUpdates
@@ -415,6 +414,63 @@ export class AssistantService {
       .limit(1);
 
     return Boolean(row);
+  }
+
+  private async syncMcpServersTx(
+    tx: TxLike,
+    assistantId: string,
+    mcpServerIds: string[],
+  ): Promise<void> {
+    const desiredIds = [...new Set(mcpServerIds)];
+    let desiredSupportedIds: string[] = [];
+
+    if (desiredIds.length > 0) {
+      const found = (await tx
+        .select({ id: mcpServerTable.id, type: mcpServerTable.type })
+        .from(mcpServerTable)
+        .where(inArray(mcpServerTable.id, desiredIds))) as { id: string; type: string | null }[];
+      if (found.length !== desiredIds.length) {
+        const foundIds = new Set(found.map((row) => row.id));
+        const missing = desiredIds.find((serverId) => !foundIds.has(serverId));
+        throw DataApiErrorFactory.notFound('McpServer', missing ?? desiredIds[0]);
+      }
+      desiredSupportedIds = found.flatMap((row) => (row.type === 'streamableHttp' ? [row.id] : []));
+    }
+
+    const existing = (await tx
+      .select({
+        mcpServerId: assistantMcpServerTable.mcpServerId,
+        type: mcpServerTable.type,
+      })
+      .from(assistantMcpServerTable)
+      .innerJoin(mcpServerTable, eq(assistantMcpServerTable.mcpServerId, mcpServerTable.id))
+      .where(eq(assistantMcpServerTable.assistantId, assistantId))) as {
+      mcpServerId: string;
+      type: string | null;
+    }[];
+    const existingIds = new Set(existing.map((row) => row.mcpServerId));
+    const desiredIdSet = new Set(desiredSupportedIds);
+    const toRemove = existing.flatMap((row) =>
+      row.type !== 'streamableHttp' || desiredIdSet.has(row.mcpServerId) ? [] : [row.mcpServerId],
+    );
+    const toAdd = desiredSupportedIds.filter((serverId) => !existingIds.has(serverId));
+
+    if (toRemove.length > 0) {
+      await tx
+        .delete(assistantMcpServerTable)
+        .where(
+          and(
+            eq(assistantMcpServerTable.assistantId, assistantId),
+            inArray(assistantMcpServerTable.mcpServerId, toRemove),
+          ),
+        );
+    }
+
+    if (toAdd.length > 0) {
+      await tx
+        .insert(assistantMcpServerTable)
+        .values(toAdd.map((mcpServerId) => ({ assistantId, mcpServerId })));
+    }
   }
 
   private async getRelationIdsByAssistantIds(

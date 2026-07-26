@@ -10,7 +10,7 @@ const EMPTY_MCP_SERVERS: readonly StreamableHttpMcpServer[] = Object.freeze([]);
 
 export function useMcpServersApi() {
   const query = useDataQuery({
-    queryFn: (services) => services.mobileMcpServer.list(),
+    queryFn: (services) => services.mcpServer.list({ type: 'streamableHttp' }),
     queryKey: queryKeys.mcpServers.list(),
   });
 
@@ -29,7 +29,7 @@ export function useMcpServerApiById(id: string | undefined) {
   const queryServerId = id ?? '__missing_mcp_server__';
   const query = useDataQuery({
     enabled,
-    queryFn: (services) => services.mobileMcpServer.getById(id ?? ''),
+    queryFn: (services) => services.mcpServer.getById(id ?? '', 'streamableHttp'),
     queryKey: queryKeys.mcpServers.detail(queryServerId),
   });
 
@@ -63,7 +63,7 @@ export function useMcpServerMutations() {
   );
 
   const createMutation = useMutation({
-    mutationFn: (dto: CreateMcpServerDto) => services.mobileMcpServer.create(dto),
+    mutationFn: (dto: CreateMcpServerDto) => services.mcpServer.create(dto, 'streamableHttp'),
     onSuccess: async (server) => {
       await invalidateServerQueries(server.id);
       if (server.isActive) {
@@ -79,9 +79,9 @@ export function useMcpServerMutations() {
       }
 
       const previous = hasRuntimeRelevantPatch(patch)
-        ? await services.mobileMcpServer.getById(id)
+        ? await services.mcpServer.getById(id, 'streamableHttp')
         : undefined;
-      const server = await services.mobileMcpServer.update(id, patch);
+      const server = await services.mcpServer.update(id, patch, 'streamableHttp');
       return { previous, server };
     },
     onSuccess: async ({ previous, server }) => {
@@ -101,7 +101,7 @@ export function useMcpServerMutations() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => services.mobileMcpServer.delete(id),
+    mutationFn: (id: string) => services.mcpServer.delete(id, 'streamableHttp'),
     onSuccess: async (_data, id) => {
       services.mcp.invalidateServer(id);
       // Junction rows are gone; assistants referencing this server changed too.
