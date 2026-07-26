@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
+import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { CherryMessagePart } from '@/data/types/message';
@@ -11,6 +12,12 @@ type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
+
+jest.mock('expo-image', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+
+  return { Image: (props: Record<string, unknown>) => <MockView {...props} /> };
+});
 
 jest.mock('../ToolPartSheet', () => {
   const { View: MockView } = jest.requireActual('react-native');
@@ -85,10 +92,10 @@ describe('tool message detail sheets', () => {
   });
 
   it.each([
-    ['tool_search', 'Tool Search', 'chat.metaToolSearch.noResults'],
-    ['tool_inspect', 'Tool Inspect', 'browser.open_url'],
-    ['tool_invoke', 'Tool Invoke', 'browser.open_url'],
-    ['tool_exec', 'Tool Exec', undefined],
+    ['tool_search', 'chat.metaToolSearch.title', 'chat.metaToolSearch.noResults'],
+    ['tool_inspect', 'chat.metaToolInspect.title', 'browser.open_url'],
+    ['tool_invoke', 'chat.metaToolInvoke.title', 'browser.open_url'],
+    ['tool_exec', 'chat.metaToolExec.title', undefined],
   ])('shows concise information for %s', async (toolName, expectedTitle, expectedStatus) => {
     await render(
       <MetaToolPart
@@ -108,6 +115,100 @@ describe('tool message detail sheets', () => {
     });
 
     expect(findByTestID('meta-tool-part-detail').props.title).toBe(expectedTitle);
+  });
+
+  it.each([
+    [
+      'audio',
+      { content: [{ data: 'AAAA', mimeType: 'audio/mp3', type: 'audio' }] },
+      'chat.mcpTool.audioUnavailable',
+    ],
+    [
+      'resource text',
+      { content: [{ resource: { text: 'resource body' }, type: 'resource' }] },
+      'resource body',
+    ],
+    [
+      'blob resource',
+      {
+        content: [
+          {
+            resource: { blob: 'AAAA', mimeType: 'application/pdf', uri: 'file://doc' },
+            type: 'resource',
+          },
+        ],
+      },
+      'chat.mcpTool.resourceUnavailable',
+    ],
+    [
+      'resource link',
+      {
+        content: [{ mimeType: 'text/html', type: 'resource_link', uri: 'https://example.com' }],
+      },
+      'chat.mcpTool.resourceLink',
+    ],
+    [
+      'unknown content',
+      { content: [{ payload: { value: 1 }, type: 'future' }] },
+      '{\n  "payload": {\n    "value": 1\n  },\n  "type": "future"\n}',
+    ],
+  ])('renders %s output instead of reporting no output', async (_name, output, expectedText) => {
+    await render(
+      <McpToolPart
+        part={makeToolPart({
+          output,
+          toolName: 'mcp__exa__search',
+        })}
+      />,
+    );
+
+    await act(async () => {
+      findByTestID('mcp-tool-part-trigger').props.onPress();
+    });
+
+    expect(findText(expectedText)).toHaveLength(1);
+    expect(findText('chat.mcpTool.noOutput')).toHaveLength(0);
+  });
+
+  it('renders image output without an empty text body', async () => {
+    await render(
+      <McpToolPart
+        part={makeToolPart({
+          output: { content: [{ data: 'AAAA', mimeType: 'image/png', type: 'image' }] },
+          toolName: 'mcp__exa__search',
+        })}
+      />,
+    );
+
+    await act(async () => {
+      findByTestID('mcp-tool-part-trigger').props.onPress();
+    });
+
+    expect(
+      renderer?.root
+        .findAllByType(View)
+        .filter((node) => node.props.source === 'data:image/png;base64,AAAA'),
+    ).toHaveLength(1);
+    expect(findText('')).toHaveLength(0);
+    expect(findText('chat.mcpTool.response')).toHaveLength(1);
+  });
+
+  it('shows the original tool_search error in details', async () => {
+    await render(
+      <MetaToolPart
+        part={makeToolPart({
+          errorText: 'Registry request timed out',
+          state: 'output-error',
+          toolName: 'tool_search',
+        })}
+      />,
+    );
+
+    await act(async () => {
+      findByTestID('meta-tool-part-trigger').props.onPress();
+    });
+
+    expect(findText('Registry request timed out')).toHaveLength(1);
   });
 
   it('marks failures as dangerous and denials as warnings', async () => {
@@ -215,6 +316,10 @@ describe('tool message detail sheets', () => {
 
   function findAllByTestID(testID: string) {
     return renderer?.root.findAllByProps({ testID }) ?? [];
+  }
+
+  function findText(text: string) {
+    return renderer?.root.findAllByType(Text).filter((node) => node.props.children === text) ?? [];
   }
 });
 
