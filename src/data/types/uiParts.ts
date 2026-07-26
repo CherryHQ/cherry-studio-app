@@ -92,7 +92,6 @@ export interface CherryToolMeta {
   toolName?: string;
   /** MCP / builtin tool identity. */
   tool?: {
-    rawName?: string;
     serverId?: string;
     serverName?: string;
     type?: 'mcp' | 'builtin' | 'provider';
@@ -147,7 +146,6 @@ export const CherryToolMetaSchema: z.ZodType<CherryToolMeta> = z.object({
   toolName: z.string().optional(),
   tool: z
     .object({
-      rawName: z.string().optional(),
       serverId: z.string().optional(),
       serverName: z.string().optional(),
       type: z.enum(['mcp', 'builtin', 'provider']).optional(),

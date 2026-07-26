@@ -1,5 +1,4 @@
 import { finalizeDanglingToolApprovals } from '@/data/services/utils/toolApprovals';
-import type { McpToolSource } from '@/data/types/mcpServer';
 import type {
   CherryMessagePart,
   CherryUIMessage,
@@ -7,7 +6,6 @@ import type {
   Message,
   MessageStats,
 } from '@/data/types/message';
-import { readCherryToolMetadata } from '@/data/types/uiParts';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
@@ -19,8 +17,6 @@ function isToolPart(part: CherryMessagePart): part is ToolMessagePart {
 export type PendingToolApproval = {
   approvalId: string;
   input: unknown;
-  /** Set for MCP tools only: what the sheet needs to write an auto-approve rule. */
-  mcpSource?: McpToolSource;
   messageId: string;
   toolCallId: string;
   toolName: string;
@@ -71,11 +67,9 @@ export function getPendingToolApprovals(messages: readonly Message[]): PendingTo
   const approvals: PendingToolApproval[] = [];
   for (const part of last.data.parts ?? []) {
     if (isToolPart(part) && part.state === 'approval-requested') {
-      const mcpSource = readMcpSource(part);
       approvals.push({
         approvalId: part.approval.id,
         input: part.input,
-        ...(mcpSource && { mcpSource }),
         messageId: last.id,
         toolCallId: part.toolCallId,
         toolName: part.type === 'dynamic-tool' ? part.toolName : part.type.slice('tool-'.length),
@@ -83,15 +77,6 @@ export function getPendingToolApprovals(messages: readonly Message[]): PendingTo
     }
   }
   return approvals;
-}
-
-function readMcpSource(part: ToolMessagePart): McpToolSource | undefined {
-  const tool = readCherryToolMetadata(part)?.tool;
-  if (typeof tool?.rawName !== 'string' || typeof tool.serverId !== 'string') {
-    return undefined;
-  }
-
-  return { rawName: tool.rawName, serverId: tool.serverId };
 }
 
 /** Everything a resumed segment spends on top of the first one. The durations

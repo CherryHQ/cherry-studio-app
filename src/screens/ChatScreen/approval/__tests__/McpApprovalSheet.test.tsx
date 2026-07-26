@@ -1,12 +1,18 @@
 import { Button } from 'heroui-native/button';
 import type { ReactNode } from 'react';
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { PendingToolApproval } from '../../runtime/chatRuntimeMessages';
 import { McpApprovalSheet } from '../McpApprovalSheet';
 
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    // Interpolation values are half of what this sheet gets right or wrong — a
+    // pending count rendered without its count would read as passing.
+    t: (key: string, options?: Record<string, unknown>) =>
+      options ? `${key} ${JSON.stringify(options)}` : key,
+  }),
 }));
 
 jest.mock('@/components/bottomSheet', () => {
@@ -28,13 +34,13 @@ jest.mock('heroui-native/button', () => {
   return { Button: MockButton };
 });
 
-const alwaysAllowLabel = 'chat.mcpTool.approval.alwaysAllow';
+const allowLabel = 'chat.mcpTool.approval.allow';
+const denyLabel = 'chat.mcpTool.approval.deny';
 
 function makeApproval(overrides: Partial<PendingToolApproval> = {}): PendingToolApproval {
   return {
     approvalId: 'approval-1',
     input: { query: 'cherry' },
-    mcpSource: { rawName: 'search_docs', serverId: 'server-1' },
     messageId: 'assistant-1',
     toolCallId: 'call-1',
     toolName: 'mcp__serverOne__searchDocs',
@@ -50,27 +56,24 @@ describe('McpApprovalSheet', () => {
   });
 
   function render(
-    overrides: {
-      approvals?: readonly PendingToolApproval[];
-      onAlwaysAllow?: () => Promise<void>;
-    } = {},
+    overrides: { approvals?: readonly PendingToolApproval[]; onRespond?: () => Promise<void> } = {},
   ) {
-    const onAlwaysAllow = jest.fn(overrides.onAlwaysAllow ?? (async () => undefined));
-    const onRespond = jest.fn(async () => undefined);
+    const onRespond = jest.fn(overrides.onRespond ?? (async () => undefined));
+    const element = (approvals: readonly PendingToolApproval[]) => (
+      <McpApprovalSheet approvals={approvals} isOpen onClose={jest.fn()} onRespond={onRespond} />
+    );
 
     act(() => {
-      renderer = create(
-        <McpApprovalSheet
-          approvals={overrides.approvals ?? [makeApproval()]}
-          isOpen
-          onAlwaysAllow={onAlwaysAllow}
-          onClose={jest.fn()}
-          onRespond={onRespond}
-        />,
-      );
+      renderer = create(element(overrides.approvals ?? [makeApproval()]));
     });
 
-    return { onAlwaysAllow, onRespond };
+    return {
+      onRespond,
+      rerender: (approvals: readonly PendingToolApproval[]) =>
+        act(() => {
+          renderer.update(element(approvals));
+        }),
+    };
   }
 
   function findButton(label: string) {
@@ -88,59 +91,88 @@ describe('McpApprovalSheet', () => {
     await act(async () => button.props.onPress());
   }
 
-  test('waits for the auto-approve rule to be saved before approving the call', async () => {
-    let saveRule!: () => void;
-    const ruleSaved = new Promise<void>((resolve) => {
-      saveRule = resolve;
+  function renderedTexts(): string[] {
+    return renderer.root
+      .findAllByType(Text)
+      .map((node) => node.props.children)
+      .filter((child): child is string => typeof child === 'string');
+  }
+
+  test('approves the call the sheet is showing', async () => {
+    const { onRespond } = render();
+
+    await press(allowLabel);
+
+    // These three ids are the entire payload: the runtime matches the decision
+    // back to the paused message and to the SDK's own approval by them, so a
+    // wrong one settles nothing and the turn stays stuck.
+    expect(onRespond).toHaveBeenCalledWith({
+      approvalId: 'approval-1',
+      approved: true,
+      messageId: 'assistant-1',
     });
-    const { onAlwaysAllow, onRespond } = render({ onAlwaysAllow: () => ruleSaved });
-    const button = findButton(alwaysAllowLabel);
+  });
+
+  test('denies the call the sheet is showing', async () => {
+    const { onRespond } = render();
+
+    await press(denyLabel);
+
+    // Same payload, inverted verdict — the one bit that decides whether the
+    // tool runs, and the easiest thing to write backwards.
+    expect(onRespond).toHaveBeenCalledWith({
+      approvalId: 'approval-1',
+      approved: false,
+      messageId: 'assistant-1',
+    });
+  });
+
+  test('ignores a second decision while the first is still in flight', async () => {
+    let settle!: () => void;
+    const { onRespond } = render({
+      onRespond: () =>
+        new Promise<void>((resolve) => {
+          settle = resolve;
+        }),
+    });
 
     await act(async () => {
-      button?.props.onPress();
+      findButton(allowLabel)?.props.onPress();
       await Promise.resolve();
-
-      // Not merely called first — awaited. The resume starts the moment the
-      // decision lands, and the next call in the same turn re-reads the rule,
-      // so a rule still being written would lose the race.
-      expect(onAlwaysAllow).toHaveBeenCalledWith({
-        rawName: 'search_docs',
-        serverId: 'server-1',
-      });
-      expect(onRespond).not.toHaveBeenCalled();
-
-      saveRule();
     });
 
-    expect(onRespond).toHaveBeenCalledWith({
-      approvalId: 'approval-1',
-      approved: true,
-      messageId: 'assistant-1',
+    expect(findButton(allowLabel)?.props.isDisabled).toBe(true);
+    expect(findButton(denyLabel)?.props.isDisabled).toBe(true);
+
+    // Disabled is what the user sees; the guard in `submit` is what actually
+    // holds. A second response to an approval already being settled comes back
+    // as invalidOperation, and the sheet would re-present it with no
+    // explanation.
+    await press(denyLabel);
+    expect(onRespond).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      settle();
     });
+    expect(findButton(allowLabel)?.props.isDisabled).toBe(false);
   });
 
-  test('approves the call even when the rule could not be saved', async () => {
-    const { onRespond } = render({
-      onAlwaysAllow: async () => {
-        throw new Error('write failed');
-      },
-    });
+  test('keeps the decided request on screen while the sheet closes', () => {
+    const { rerender } = render();
 
-    await press(alwaysAllowLabel);
+    rerender([]);
 
-    // Losing the preference must not also lose the decision — the call the user
-    // approved would otherwise sit unanswered until the turn is torn down.
-    expect(onRespond).toHaveBeenCalledWith({
-      approvalId: 'approval-1',
-      approved: true,
-      messageId: 'assistant-1',
-    });
+    // The list empties the instant the last decision lands, but the sheet is
+    // still animating out — dropping the request here flashes an empty card on
+    // the way off screen.
+    expect(renderedTexts()).toContain('serverOne: searchDocs');
   });
 
-  test('offers no always-allow shortcut for a tool with no MCP rule behind it', () => {
-    render({ approvals: [makeApproval({ mcpSource: undefined })] });
+  test('says how many approvals are still queued behind this one', () => {
+    render({
+      approvals: [makeApproval(), makeApproval({ approvalId: 'approval-2', toolCallId: 'call-2' })],
+    });
 
-    expect(findButton(alwaysAllowLabel)).toBeUndefined();
-    expect(findButton('chat.mcpTool.approval.allow')).toBeDefined();
+    expect(renderedTexts()).toContain('chat.mcpTool.approval.pendingCount {"count":2}');
   });
 });

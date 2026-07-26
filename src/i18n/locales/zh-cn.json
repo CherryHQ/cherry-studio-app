@@ -40,8 +40,6 @@
   "chat.tool.running": "运行中",
   "chat.tool.title": "工具：{{name}}",
   "chat.mcpTool.approval.allow": "允许",
-  "chat.mcpTool.approval.alwaysAllow": "总是允许该工具",
-  "chat.mcpTool.approval.alwaysAllowFailed": "本次已允许，但设置没保存成功。",
   "chat.mcpTool.approval.deny": "拒绝",
   "chat.mcpTool.approval.description": "助手请求运行以下工具。",
   "chat.mcpTool.approval.failed": "未能保存你的决定，请重试。",

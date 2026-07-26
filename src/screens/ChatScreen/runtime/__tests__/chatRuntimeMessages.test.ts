@@ -130,28 +130,6 @@ describe('tool approvals', () => {
     expect(toolMetaOf(parts[3])?.settledByApp).toBeUndefined();
   });
 
-  test('getPendingToolApprovals carries the MCP identity the always-allow action needs', () => {
-    const mcpPart = {
-      ...requested('a1'),
-      toolMetadata: {
-        cherry: { tool: { rawName: 'search_docs', serverId: 'server-1', type: 'mcp' } },
-      },
-    } as unknown as CherryMessagePart;
-    const paused = {
-      ...createMessage('assistant-1', 'assistant'),
-      data: { parts: [mcpPart, requested('a2')] },
-      status: 'paused' as const,
-    };
-
-    const [mcpApproval, plainApproval] = getPendingToolApprovals([paused]);
-
-    // The wire tool name is camelCased and can't be matched against the rule
-    // lists; only the raw name the server reported can.
-    expect(mcpApproval.mcpSource).toEqual({ rawName: 'search_docs', serverId: 'server-1' });
-    // A non-MCP tool has no per-tool setting to write, so it offers none.
-    expect(plainApproval.mcpSource).toBeUndefined();
-  });
-
   test('getPendingToolApprovals only reads a paused assistant tip', () => {
     const paused = {
       ...createMessage('assistant-1', 'assistant'),

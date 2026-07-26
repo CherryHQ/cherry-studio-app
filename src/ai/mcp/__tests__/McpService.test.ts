@@ -380,10 +380,11 @@ describe('assistant tool preparation', () => {
     const tools = await warmedToolSet(service);
 
     expect(tools?.mcp__serverone__search.metadata).toEqual({
-      // `rawName` is the only way back from the camelCased wire key above to a
-      // name the per-tool rule lists can be matched against.
+      // The wire key above lowercased the server name and cannot be reversed,
+      // so the card titles itself from `serverName` and knows the call is MCP
+      // from `type`. Drop either and it falls back to that lossy key.
       cherry: {
-        tool: { rawName: 'search', serverId: 'server-1', serverName: 'ServerOne', type: 'mcp' },
+        tool: { serverId: 'server-1', serverName: 'ServerOne', type: 'mcp' },
       },
     });
   });
@@ -686,6 +687,25 @@ describe('tool execution', () => {
 
     await expect(executeTool(service, 'mcp__serverone__search')).resolves.toEqual({
       content: [{ text: 'ok search', type: 'text' }],
+      metadata: { serverId: 'server-1', serverName: 'ServerOne', type: 'mcp' },
+    });
+  });
+
+  it('stamps the result with its source the way desktop does', async () => {
+    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
+    const { service } = makeService([makeServer()]);
+
+    const result = (await executeTool(service, 'mcp__serverone__search')) as {
+      metadata: unknown;
+    };
+
+    // Desktop stamps the same shape on its own results (`mcpTools.ts`), so a
+    // tool part written by either end carries the same `output.metadata`. The
+    // next test is what keeps this off the model.
+    expect(result.metadata).toEqual({
+      serverId: 'server-1',
+      serverName: 'ServerOne',
+      type: 'mcp',
     });
   });
 
@@ -696,7 +716,13 @@ describe('tool execution', () => {
 
     const modelOutput = tools?.mcp__serverone__search.toModelOutput?.({
       input: {},
-      output: { content: [{ text: 'summary', type: 'text' }] },
+      // The shape `wrappedExecute` actually returns, source stamp included —
+      // summarising anything but `content` would spend tokens on plumbing the
+      // model has no use for.
+      output: {
+        content: [{ text: 'summary', type: 'text' }],
+        metadata: { serverId: 'server-1', serverName: 'ServerOne', type: 'mcp' },
+      },
       toolCallId: 'call-1',
     });
 

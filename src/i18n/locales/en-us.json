@@ -40,8 +40,6 @@
   "chat.tool.running": "Running",
   "chat.tool.title": "Tool: {{name}}",
   "chat.mcpTool.approval.allow": "Allow",
-  "chat.mcpTool.approval.alwaysAllow": "Always allow this tool",
-  "chat.mcpTool.approval.alwaysAllowFailed": "Allowed this time, but the setting could not be saved.",
   "chat.mcpTool.approval.deny": "Deny",
   "chat.mcpTool.approval.description": "The assistant wants to run this tool.",
   "chat.mcpTool.approval.failed": "Couldn't save your decision. Please try again.",

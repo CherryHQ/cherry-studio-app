@@ -111,7 +111,6 @@ describe('readCherryToolMetadata', () => {
     const part = toolPart({
       cherry: {
         tool: {
-          rawName: 'search_docs',
           serverId: 'server-1',
           serverName: 'Docs',
           type: 'mcp',
@@ -121,7 +120,6 @@ describe('readCherryToolMetadata', () => {
 
     expect(readCherryToolMetadata(part)).toEqual({
       tool: {
-        rawName: 'search_docs',
         serverId: 'server-1',
         serverName: 'Docs',
         type: 'mcp',
@@ -130,8 +128,15 @@ describe('readCherryToolMetadata', () => {
   });
 
   test('returns undefined for malformed tool metadata', () => {
+    // Malform fields the schema still declares. `z.object` strips unknown keys
+    // rather than rejecting them, so a bad value on a field that was since
+    // removed would parse clean and invert this assertion in silence.
     expect(
-      readCherryToolMetadata(toolPart({ cherry: { tool: { rawName: 42, type: 'mcp' } } })),
+      readCherryToolMetadata(toolPart({ cherry: { tool: { serverName: 42, type: 'mcp' } } })),
+    ).toBeUndefined();
+    // `type` is an enum, so an unknown value can't be stripped away either.
+    expect(
+      readCherryToolMetadata(toolPart({ cherry: { tool: { type: 'unknown' } } })),
     ).toBeUndefined();
   });
 });

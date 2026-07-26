@@ -46,6 +46,18 @@ type ToolsCacheEntry = {
   rawTools: ToolSet;
 };
 
+/**
+ * Stamped on every MCP result, mirroring what desktop's `mcpTools.ts` puts on
+ * its own — so a tool part persisted by either end carries the same
+ * `output.metadata`. Not the same carrier as the tool definition's `metadata`:
+ * this one only exists once the call has produced a result.
+ */
+type McpResultSource = {
+  serverId: string;
+  serverName: string;
+  type: 'mcp';
+};
+
 /** Refresh-failure streak for a server, kept so `readCachedTools` backs off
  * instead of retrying a dead one on every message. */
 type ToolsRefreshFailure = {
@@ -651,7 +663,7 @@ export class McpService {
 
     const wrappedExecute = async (
       ...callArgs: Parameters<typeof execute>
-    ): Promise<McpCallToolResult> => {
+    ): Promise<McpCallToolResult & { metadata: McpResultSource }> => {
       const current = await this.assertToolStillAllowed(server, rawToolName);
       if (this.getRuntimeState(current) !== state) {
         throw new Error(`MCP server ${current.name} was reconfigured before the tool call`);
@@ -698,7 +710,12 @@ export class McpService {
         throw new Error(`MCP tool ${label} failed: ${mcpResultToTextSummary(result)}`);
       }
 
-      return result;
+      // `toModelOutput` below summarises `content` alone, so this rides along
+      // to the persisted part without ever reaching the model.
+      return {
+        ...result,
+        metadata: { serverId: server.id, serverName: server.name, type: 'mcp' },
+      };
     };
 
     return {
@@ -706,12 +723,11 @@ export class McpService {
       description: rawTool.description || rawToolName,
       metadata: {
         cherry: {
-          // `rawName` is the server's own name for the tool. The key this tool
-          // is registered under is the camelCased wire id, which the rule lists
-          // can't be matched against — so it has to travel with the part for
-          // the approval sheet to be able to write a per-tool rule.
+          // The SDK copies this onto the part as `toolMetadata`, which is the
+          // only way `McpToolPart` can title the card with the server's real
+          // name: the key this tool is registered under is a camelCased,
+          // ASCII-only, length-capped mint of it and cannot be reversed.
           tool: {
-            rawName: rawToolName,
             serverId: server.id,
             serverName: server.name,
             type: 'mcp',

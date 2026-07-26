@@ -32,7 +32,7 @@ const TOOL_INPUT = { path: 'README.md' };
 /** The shape `McpService.wrapTool` puts on a tool definition's `metadata`. */
 const TOOL_METADATA = {
   cherry: {
-    tool: { rawName: 'read_file', serverId: 's1', serverName: 'Files', type: 'mcp' },
+    tool: { serverId: 's1', serverName: 'Files', type: 'mcp' },
   },
 };
 
@@ -159,10 +159,12 @@ describe('streamText tool-approval gate', () => {
 
   test('the tool definition metadata reaches the part as toolMetadata', async () => {
     // The MCP identity travels from `McpService.wrapTool`'s `metadata` to
-    // `readMcpSource`'s `part.toolMetadata` entirely inside the SDK — no code
-    // of ours copies it across. If an `ai` upgrade renames or drops the field,
-    // `mcpSource` goes undefined, the sheet's "Always allow" quietly stops
-    // rendering, and every other test here still passes.
+    // `McpToolPart`'s `part.toolMetadata` entirely inside the SDK — no code of
+    // ours copies it across. If an `ai` upgrade renames or drops the field the
+    // card falls back to parsing the minted `mcp__server__tool` key: it titles
+    // itself with the camelCased mint instead of the server's real name, and a
+    // call whose key does not parse stops being recognised as MCP at all.
+    // Every other test here would still pass.
     const result = streamText({
       model: modelCallingTheTool(),
       prompt: 'read the file',
@@ -177,7 +179,8 @@ describe('streamText tool-approval gate', () => {
     const message = await readLastUIMessage(result.toUIMessageStream());
 
     expect(toolPartsOf(message)).toEqual([
-      // It has to survive as far as the state the sheet reads it in.
+      // The card is on screen while the call still waits on the user, so the
+      // metadata has to survive into that state, not only into a settled one.
       expect.objectContaining({ state: 'approval-requested', toolMetadata: TOOL_METADATA }),
     ]);
   });
