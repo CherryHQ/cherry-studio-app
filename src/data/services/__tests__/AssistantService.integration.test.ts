@@ -72,7 +72,7 @@ describe('AssistantService MCP associations', () => {
 
   afterEach(() => sqlite.close());
 
-  it('replaces visible associations while preserving synchronized hidden transports', async () => {
+  it('replaces all MCP associations regardless of transport', async () => {
     const a = await mcpServerService.create(
       { baseUrl: 'https://a.example/mcp', name: 'A' },
       'streamableHttp',
@@ -95,18 +95,24 @@ describe('AssistantService MCP associations', () => {
     expect(associationIds(sqlite)).toEqual([a.id, b.id, 'hidden-stdio'].sort());
 
     await assistantService.update('assistant-1', { mcpServerIds: [b.id, c.id] });
-    expect(associationIds(sqlite)).toEqual([b.id, c.id, 'hidden-stdio'].sort());
+    expect(associationIds(sqlite)).toEqual([b.id, c.id].sort());
 
     await assistantService.update('assistant-1', { mcpServerIds: [] });
-    expect(associationIds(sqlite)).toEqual(['hidden-stdio']);
+    expect(associationIds(sqlite)).toEqual([]);
   });
 
-  it('rejects unknown MCP server ids', async () => {
+  it('rolls back relation changes when an MCP server id does not exist', async () => {
+    const existing = await mcpServerService.create(
+      { baseUrl: 'https://existing.example/mcp', name: 'Existing' },
+      'streamableHttp',
+    );
     insertAssistant(sqlite, 'assistant-1');
+    insertAssociation(sqlite, 'assistant-1', existing.id);
 
     await expect(
       assistantService.update('assistant-1', { mcpServerIds: ['missing-server'] }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    ).rejects.toBeDefined();
+    expect(associationIds(sqlite)).toEqual([existing.id]);
   });
 });
 
