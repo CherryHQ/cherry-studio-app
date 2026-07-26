@@ -1,34 +1,46 @@
-import { and, asc, eq, inArray, ne } from 'drizzle-orm';
+/**
+ * MCP Server Service - handles complete MCP server entities.
+ *
+ * Keep this service aligned with desktop
+ * `src/main/data/services/McpServerService.ts`. Mobile transport filtering and
+ * narrow mutations belong in `MobileMcpServerService`.
+ */
 
-import type {
-  CreateMcpServerDto,
-  ListMcpServersQueryParams,
-  UpdateMcpServerDto,
-} from '@/data/api/schemas/mcpServers';
-import { ListMcpServersQuerySchema } from '@/data/api/schemas/mcpServers';
+import { and, asc, eq, type SQL, sql } from 'drizzle-orm';
+
+import { loggerService } from '@/core/logger/LoggerService';
 import type { DbService } from '@/data/db/DbService';
 import type { InsertMcpServerRow, McpServerRow } from '@/data/db/schemas';
 import { assistantMcpServerTable, mcpServerTable } from '@/data/db/schemas';
-import { DataApiErrorFactory } from '@/data/types/apiTypes';
-import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
+import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/data/types/apiTypes';
+import type { McpServer, McpServerType } from '@/data/types/mcpServer';
 
 import { nullsToUndefined, timestampToISO } from './utils/rowMappers';
 
-type TxLike = any;
-const MOBILE_MCP_SERVER_TYPE = 'streamableHttp' as const;
+const logger = loggerService.withContext('DataApi:McpServerService');
 
-function rowToMcpServer(row: McpServerRow): StreamableHttpMcpServer {
+export type CreateMcpServerInput = Omit<
+  McpServer,
+  'createdAt' | 'id' | 'isActive' | 'updatedAt'
+> & {
+  isActive?: boolean;
+};
+
+export type UpdateMcpServerInput = Partial<CreateMcpServerInput>;
+
+export type ListMcpServersQuery = {
+  id?: string;
+  isActive?: boolean;
+  type?: McpServerType;
+};
+
+function rowToMcpServer(row: McpServerRow): McpServer {
   const clean = nullsToUndefined(row);
   return {
     ...clean,
-    baseUrl: clean.baseUrl ?? '',
+    type: clean.type as McpServer['type'],
+    installSource: clean.installSource as McpServer['installSource'],
     createdAt: timestampToISO(row.createdAt),
-    description: clean.description ?? '',
-    disabledAutoApproveTools: clean.disabledAutoApproveTools ?? [],
-    disabledTools: clean.disabledTools ?? [],
-    headers: clean.headers ?? {},
-    installSource: clean.installSource as StreamableHttpMcpServer['installSource'],
-    type: MOBILE_MCP_SERVER_TYPE,
     updatedAt: timestampToISO(row.updatedAt),
   };
 }
@@ -40,11 +52,11 @@ export class McpServerService {
     return this.dbService.getDb();
   }
 
-  async getById(id: string): Promise<StreamableHttpMcpServer> {
+  async getById(id: string): Promise<McpServer> {
     const [row] = await this.db
       .select()
       .from(mcpServerTable)
-      .where(and(eq(mcpServerTable.id, id), eq(mcpServerTable.type, MOBILE_MCP_SERVER_TYPE)))
+      .where(eq(mcpServerTable.id, id))
       .limit(1);
 
     if (!row) {
@@ -54,173 +66,121 @@ export class McpServerService {
     return rowToMcpServer(row);
   }
 
-  async list(
-    params: ListMcpServersQueryParams = {},
-  ): Promise<{ items: StreamableHttpMcpServer[]; total: number }> {
-    const query = ListMcpServersQuerySchema.parse(params);
-    const conditions = [eq(mcpServerTable.type, MOBILE_MCP_SERVER_TYPE)];
+  async list(query: ListMcpServersQuery = {}): Promise<OffsetPaginationResponse<McpServer>> {
+    const conditions: SQL[] = [];
+    if (query.id !== undefined) {
+      conditions.push(eq(mcpServerTable.id, query.id));
+    }
     if (query.isActive !== undefined) {
       conditions.push(eq(mcpServerTable.isActive, query.isActive));
     }
-    const rows = await this.db
-      .select()
-      .from(mcpServerTable)
-      .where(and(...conditions))
-      .orderBy(asc(mcpServerTable.sortOrder), asc(mcpServerTable.createdAt));
+    if (query.type !== undefined) {
+      conditions.push(eq(mcpServerTable.type, query.type));
+    }
 
-    return { items: rows.map(rowToMcpServer), total: rows.length };
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const [rows, countRows] = await Promise.all([
+      this.db
+        .select()
+        .from(mcpServerTable)
+        .where(whereClause)
+        .orderBy(asc(mcpServerTable.sortOrder)),
+      this.db.select({ count: sql<number>`count(*)` }).from(mcpServerTable).where(whereClause),
+    ]);
+
+    return {
+      items: rows.map(rowToMcpServer),
+      page: 1,
+      total: countRows[0]?.count ?? 0,
+    };
   }
 
-  async create(dto: CreateMcpServerDto): Promise<StreamableHttpMcpServer> {
-    const name = this.validateName(dto.name);
-    await this.assertNameAvailable(name);
+  async create(dto: CreateMcpServerInput): Promise<McpServer> {
+    this.validateName(dto.name);
 
+    const { isActive, sortOrder, ...rest } = dto;
     const [row] = await this.db
       .insert(mcpServerTable)
       .values({
-        ...this.toColumns({ ...dto, name }),
-        type: MOBILE_MCP_SERVER_TYPE,
+        ...rest,
+        isActive: isActive ?? false,
+        sortOrder: sortOrder ?? 0,
       } as InsertMcpServerRow)
       .returning();
 
+    logger.info('Created MCP server', { id: row.id, name: row.name });
     return rowToMcpServer(row);
   }
 
-  async update(id: string, dto: UpdateMcpServerDto): Promise<StreamableHttpMcpServer> {
-    await this.getById(id);
-    const name = dto.name === undefined ? undefined : this.validateName(dto.name);
-    if (name !== undefined) {
-      await this.assertNameAvailable(name, id);
+  async update(id: string, dto: UpdateMcpServerInput): Promise<McpServer> {
+    const existing = await this.getById(id);
+    if (dto.name !== undefined) {
+      this.validateName(dto.name);
     }
 
-    const updates = this.toColumns({ ...dto, ...(name !== undefined && { name }) });
+    const updates = Object.fromEntries(
+      Object.entries(dto).filter(([, value]) => value !== undefined),
+    ) as Partial<InsertMcpServerRow>;
     if (Object.keys(updates).length === 0) {
-      return this.getById(id);
+      return existing;
     }
 
     const [row] = await this.db
       .update(mcpServerTable)
       .set(updates)
-      .where(and(eq(mcpServerTable.id, id), eq(mcpServerTable.type, MOBILE_MCP_SERVER_TYPE)))
+      .where(eq(mcpServerTable.id, id))
       .returning();
 
     if (!row) {
       throw DataApiErrorFactory.notFound('McpServer', id);
     }
 
+    logger.info('Updated MCP server', { changes: Object.keys(dto), id });
     return rowToMcpServer(row);
+  }
+
+  async findByIdOrName(idOrName: string): Promise<McpServer | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(mcpServerTable)
+      .where(eq(mcpServerTable.id, idOrName))
+      .limit(1);
+    if (row) {
+      return rowToMcpServer(row);
+    }
+
+    const [byName] = await this.db
+      .select()
+      .from(mcpServerTable)
+      .where(eq(mcpServerTable.name, idOrName))
+      .limit(1);
+    return byName ? rowToMcpServer(byName) : undefined;
   }
 
   async delete(id: string): Promise<void> {
     await this.getById(id);
 
-    // Explicit junction cleanup; the ON DELETE CASCADE FK is the safety net.
     await this.dbService.withWriteTx(async (tx) => {
       await tx.delete(assistantMcpServerTable).where(eq(assistantMcpServerTable.mcpServerId, id));
       await tx.delete(mcpServerTable).where(eq(mcpServerTable.id, id));
     });
+
+    logger.info('Deleted MCP server', { id });
   }
 
-  /**
-   * Replace an assistant's mobile-supported MCP associations inside a write tx.
-   * Existing associations to unsupported synchronized transports are retained.
-   */
-  async syncAssistantServersTx(
-    tx: TxLike,
-    assistantId: string,
-    mcpServerIds: string[],
-  ): Promise<void> {
-    const desiredIds = [...new Set(mcpServerIds)];
-    let desiredSupportedIds: string[] = [];
-
-    if (desiredIds.length > 0) {
-      const found = (await tx
-        .select({ id: mcpServerTable.id, type: mcpServerTable.type })
-        .from(mcpServerTable)
-        .where(inArray(mcpServerTable.id, desiredIds))) as { id: string; type: string | null }[];
-      if (found.length !== desiredIds.length) {
-        const foundIds = new Set(found.map((row) => row.id));
-        const missing = desiredIds.find((serverId) => !foundIds.has(serverId));
-        throw DataApiErrorFactory.notFound('McpServer', missing ?? desiredIds[0]);
+  async reorder(orderedIds: string[]): Promise<void> {
+    await this.dbService.withWriteTx(async (tx) => {
+      for (const [sortOrder, id] of orderedIds.entries()) {
+        await tx.update(mcpServerTable).set({ sortOrder }).where(eq(mcpServerTable.id, id));
       }
-      desiredSupportedIds = found.flatMap((row) =>
-        row.type === MOBILE_MCP_SERVER_TYPE ? [row.id] : [],
-      );
-    }
+    });
 
-    const existing = (await tx
-      .select({
-        mcpServerId: assistantMcpServerTable.mcpServerId,
-        type: mcpServerTable.type,
-      })
-      .from(assistantMcpServerTable)
-      .innerJoin(mcpServerTable, eq(assistantMcpServerTable.mcpServerId, mcpServerTable.id))
-      .where(eq(assistantMcpServerTable.assistantId, assistantId))) as {
-      mcpServerId: string;
-      type: string | null;
-    }[];
-    const existingIds = new Set(existing.map((row) => row.mcpServerId));
-    const desiredIdSet = new Set(desiredSupportedIds);
-    const toRemove = existing.flatMap((row) =>
-      row.type !== MOBILE_MCP_SERVER_TYPE || desiredIdSet.has(row.mcpServerId)
-        ? []
-        : [row.mcpServerId],
-    );
-    const toAdd = desiredSupportedIds.filter((serverId) => !existingIds.has(serverId));
-
-    if (toRemove.length > 0) {
-      await tx
-        .delete(assistantMcpServerTable)
-        .where(
-          and(
-            eq(assistantMcpServerTable.assistantId, assistantId),
-            inArray(assistantMcpServerTable.mcpServerId, toRemove),
-          ),
-        );
-    }
-
-    if (toAdd.length > 0) {
-      await tx
-        .insert(assistantMcpServerTable)
-        .values(toAdd.map((mcpServerId) => ({ assistantId, mcpServerId })));
-    }
+    logger.info('Reordered MCP servers', { count: orderedIds.length });
   }
 
-  private toColumns(dto: Partial<CreateMcpServerDto>): Partial<typeof mcpServerTable.$inferInsert> {
-    return Object.fromEntries(
-      Object.entries({
-        baseUrl: dto.baseUrl,
-        description: dto.description,
-        disabledAutoApproveTools: dto.disabledAutoApproveTools,
-        disabledTools: dto.disabledTools,
-        headers: dto.headers,
-        isActive: dto.isActive,
-        name: dto.name,
-        timeout: dto.timeout,
-      }).filter(([, value]) => value !== undefined),
-    );
-  }
-
-  private async assertNameAvailable(name: string, excludeId?: string): Promise<void> {
-    const conditions = excludeId
-      ? and(eq(mcpServerTable.name, name), ne(mcpServerTable.id, excludeId))
-      : eq(mcpServerTable.name, name);
-    const [existing] = await this.db
-      .select({ id: mcpServerTable.id })
-      .from(mcpServerTable)
-      .where(conditions)
-      .limit(1);
-
-    if (existing) {
-      throw DataApiErrorFactory.conflict('MCP server name already exists', 'McpServer');
-    }
-  }
-
-  private validateName(name: string): string {
-    const trimmed = name.trim();
-    if (!trimmed) {
+  private validateName(name: string): void {
+    if (!name?.trim()) {
       throw DataApiErrorFactory.validation({ name: ['Name is required'] });
     }
-    return trimmed;
   }
 }

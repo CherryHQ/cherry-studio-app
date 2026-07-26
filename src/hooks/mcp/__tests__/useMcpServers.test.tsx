@@ -34,7 +34,7 @@ jest.mock('@/data/runtime', () => ({
       invalidateServer: mockInvalidateServer,
       prewarmActiveServers: mockPrewarmActiveServers,
     },
-    mcpServer: {
+    mobileMcpServer: {
       create: mockCreateServer,
       delete: mockDeleteServer,
       getById: mockGetServer,

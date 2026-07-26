@@ -32,8 +32,8 @@ function createServices(server: StreamableHttpMcpServer) {
     listToolsForServer,
     services: {
       mcp: { listToolsForServer },
-      mcpServer: { getById: jest.fn(async () => server), update },
-    } as unknown as Pick<DataServices, 'mcp' | 'mcpServer'>,
+      mobileMcpServer: { getById: jest.fn(async () => server), update },
+    } as unknown as Pick<DataServices, 'mcp' | 'mobileMcpServer'>,
     update,
   };
 }
@@ -72,7 +72,7 @@ describe('clearMcpToolAutoApproveRule', () => {
 
   test('lets a failed write surface so the caller can report it', async () => {
     const { services } = createServices(makeServer([]));
-    (services.mcpServer.update as jest.Mock).mockRejectedValue(new Error('db is gone'));
+    (services.mobileMcpServer.update as jest.Mock).mockRejectedValue(new Error('db is gone'));
 
     await expect(
       clearMcpToolAutoApproveRule(services, { rawName: 'search_docs', serverId: 'server-1' }),

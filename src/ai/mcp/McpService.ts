@@ -4,7 +4,7 @@ import type { Tool, ToolSet } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import { loggerService } from '@/core/logger/LoggerService';
-import type { McpServerService } from '@/data/services/McpServerService';
+import type { MobileMcpServerService } from '@/data/services/MobileMcpServerService';
 import { DataApiError, ErrorCode } from '@/data/types/apiTypes';
 import type { Assistant } from '@/data/types/assistant';
 import { DEFAULT_MCP_TIMEOUT_SECONDS, type StreamableHttpMcpServer } from '@/data/types/mcpServer';
@@ -171,7 +171,7 @@ function withTimeout<T>(
  * Explicit tool listings reconnect once; tool calls are never replayed.
  */
 export class McpService {
-  constructor(private readonly deps: { mcpServer: McpServerService }) {}
+  constructor(private readonly deps: { mcpServer: MobileMcpServerService }) {}
 
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
 

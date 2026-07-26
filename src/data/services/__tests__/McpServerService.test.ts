@@ -5,18 +5,16 @@ import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import type { Database, DbService } from '@/data/db/DbService';
 import { schema } from '@/data/db/schemas';
+
 import { McpServerService } from '../McpServerService';
 
-// Rows are inserted in bulk here, so unlike the fixed-id mocks elsewhere these
-// have to be distinct. `expo-crypto` is already mocked the same way globally.
 jest.mock('uuid', () => ({ v7: mockRandomUUID }));
 
 type MigrationJournal = { entries: { tag: string }[] };
 
-describe('McpServerService integration', () => {
+describe('McpServerService desktop contract', () => {
   let sqlite: DatabaseSync;
   let service: McpServerService;
-  let dbService: DbService;
 
   beforeEach(() => {
     sqlite = new DatabaseSync(':memory:');
@@ -39,7 +37,7 @@ describe('McpServerService integration', () => {
       undefined as never,
       { casing: 'snake_case', schema },
     ) as unknown as Database;
-    dbService = {
+    const dbService = {
       getDb: () => database,
       withWriteTx: async <T>(callback: (tx: Database) => Promise<T>) => {
         sqlite.exec('BEGIN IMMEDIATE');
@@ -58,180 +56,137 @@ describe('McpServerService integration', () => {
 
   afterEach(() => sqlite.close());
 
-  it('creates an inactive Streamable HTTP server with normalized optional fields', async () => {
-    const server = await service.create({ baseUrl: 'https://example.com/mcp', name: 'Example' });
+  it('creates and returns a complete desktop-compatible entity', async () => {
+    const server = await service.create({
+      args: ['server.js'],
+      baseUrl: 'https://example.com/mcp',
+      command: 'node',
+      configSample: { args: ['server.js'], command: 'node', env: { TOKEN: 'value' } },
+      description: 'Desktop metadata',
+      disabledAutoApproveTools: ['write'],
+      disabledTools: ['delete'],
+      dxtPath: '/packages/example',
+      dxtVersion: '1.2.3',
+      env: { NODE_ENV: 'production' },
+      headers: { Authorization: 'Bearer token' },
+      installSource: 'protocol',
+      installedAt: 1_700_000_000_000,
+      isTrusted: true,
+      logoUrl: 'https://example.com/logo.png',
+      longRunning: true,
+      name: 'Desktop server',
+      provider: 'Desktop Provider',
+      providerUrl: 'https://provider.example',
+      reference: 'https://example.com/docs',
+      registryUrl: 'https://registry.example',
+      searchKey: 'example',
+      shouldConfig: true,
+      sortOrder: 7,
+      tags: ['search'],
+      timeout: 30,
+      trustedAt: 1_700_000_000_001,
+      type: 'stdio',
+    });
 
     expect(server).toMatchObject({
+      args: ['server.js'],
       baseUrl: 'https://example.com/mcp',
-      description: '',
-      disabledAutoApproveTools: [],
-      disabledTools: [],
-      headers: {},
+      command: 'node',
+      configSample: { args: ['server.js'], command: 'node', env: { TOKEN: 'value' } },
+      description: 'Desktop metadata',
+      disabledAutoApproveTools: ['write'],
+      disabledTools: ['delete'],
+      dxtPath: '/packages/example',
+      dxtVersion: '1.2.3',
+      env: { NODE_ENV: 'production' },
+      headers: { Authorization: 'Bearer token' },
+      installSource: 'protocol',
+      installedAt: 1_700_000_000_000,
       isActive: false,
-      name: 'Example',
-      timeout: undefined,
-      type: 'streamableHttp',
+      isTrusted: true,
+      logoUrl: 'https://example.com/logo.png',
+      longRunning: true,
+      name: 'Desktop server',
+      provider: 'Desktop Provider',
+      providerUrl: 'https://provider.example',
+      reference: 'https://example.com/docs',
+      registryUrl: 'https://registry.example',
+      searchKey: 'example',
+      shouldConfig: true,
+      sortOrder: 7,
+      tags: ['search'],
+      timeout: 30,
+      trustedAt: 1_700_000_000_001,
+      type: 'stdio',
     });
+    expect(server.createdAt).toEqual(expect.any(String));
+    expect(server.updatedAt).toEqual(expect.any(String));
+    await expect(service.getById(server.id)).resolves.toEqual(server);
   });
 
-  it('rejects duplicate names on create and update', async () => {
-    await service.create({ baseUrl: 'https://a.example/mcp', name: 'Dup' });
-    await expect(
-      service.create({ baseUrl: 'https://b.example/mcp', name: 'Dup' }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' });
-
-    const other = await service.create({ baseUrl: 'https://c.example/mcp', name: 'Other' });
-    await expect(service.update(other.id, { name: 'Dup' })).rejects.toMatchObject({
-      code: 'CONFLICT',
-    });
-  });
-
-  it('allows updating a server to its own name', async () => {
-    const server = await service.create({ baseUrl: 'https://a.example/mcp', name: 'Same' });
-    const updated = await service.update(server.id, { name: 'Same', timeout: 30 });
-    expect(updated.timeout).toBe(30);
-  });
-
-  it('filters by isActive', async () => {
-    await service.create({ baseUrl: 'https://a.example/mcp', isActive: true, name: 'Active' });
-    await service.create({ baseUrl: 'https://b.example/mcp', isActive: false, name: 'Inactive' });
-
-    const active = await service.list({ isActive: true });
-    expect(active.items.map((s) => s.name)).toEqual(['Active']);
-    const all = await service.list();
-    expect(all.total).toBe(2);
-  });
-
-  it('hides unsupported transports and orders visible servers by sort order', async () => {
-    insertRawServer(sqlite, {
-      baseUrl: 'https://later.example/mcp',
-      id: 'remote-later',
-      name: 'Remote Later',
-      sortOrder: 20,
-      type: 'streamableHttp',
-    });
-    insertRawServer(sqlite, {
-      baseUrl: null,
-      id: 'remote-first',
-      name: 'Remote First',
-      sortOrder: 10,
-      type: 'streamableHttp',
-    });
-    insertRawServer(sqlite, { id: 'stdio', name: 'Stdio', type: 'stdio' });
-    insertRawServer(sqlite, { id: 'sse', name: 'SSE', type: 'sse' });
-    insertRawServer(sqlite, { id: 'memory', name: 'Memory', type: 'inMemory' });
-    insertRawServer(sqlite, { id: 'legacy', name: 'Legacy', type: null });
-
-    const result = await service.list();
-
-    expect(result.items.map(({ baseUrl, name }) => ({ baseUrl, name }))).toEqual([
-      { baseUrl: '', name: 'Remote First' },
-      { baseUrl: 'https://later.example/mcp', name: 'Remote Later' },
-    ]);
-    await expect(service.getById('stdio')).rejects.toMatchObject({ code: 'NOT_FOUND' });
-  });
-
-  it('updates only mobile fields and preserves synchronized desktop metadata', async () => {
-    insertRawServer(sqlite, {
+  it('lists every transport and applies desktop id, active, and type filters', async () => {
+    const stdio = await service.create({ isActive: true, name: 'Stdio', type: 'stdio' });
+    await service.create({
       baseUrl: 'https://example.com/mcp',
-      dxtVersion: '1.2.3',
-      id: 'remote',
-      installSource: 'protocol',
-      isTrusted: true,
-      name: 'Remote',
-      provider: 'Desktop Provider',
-      sortOrder: 7,
-      tags: ['search', 'remote'],
+      isActive: true,
+      name: 'HTTP',
       type: 'streamableHttp',
     });
+    await service.create({ isActive: false, name: 'Legacy' });
 
-    const before = await service.getById('remote');
-    expect(before).toMatchObject({
-      dxtVersion: '1.2.3',
-      installSource: 'protocol',
-      isTrusted: true,
-      provider: 'Desktop Provider',
-      sortOrder: 7,
-      tags: ['search', 'remote'],
-    });
+    const all = await service.list();
+    expect(all).toMatchObject({ page: 1, total: 3 });
+    expect(all.items.map((server) => server.type)).toEqual(['stdio', 'streamableHttp', undefined]);
 
-    const after = await service.update('remote', { description: 'Updated' });
-
-    expect(
-      sqlite
-        .prepare(
-          `SELECT description, dxt_version, install_source, is_trusted, provider, sort_order, tags
-           FROM mcp_server WHERE id = ?`,
-        )
-        .get('remote'),
-    ).toEqual({
-      description: 'Updated',
-      dxt_version: '1.2.3',
-      install_source: 'protocol',
-      is_trusted: 1,
-      provider: 'Desktop Provider',
-      sort_order: 7,
-      tags: '["search","remote"]',
-    });
-    expect(after).toMatchObject({
-      dxtVersion: '1.2.3',
-      installSource: 'protocol',
-      isTrusted: true,
-      provider: 'Desktop Provider',
-      sortOrder: 7,
-      tags: ['search', 'remote'],
-    });
+    const byType = await service.list({ isActive: true, type: 'stdio' });
+    expect(byType.items.map((server) => server.id)).toEqual([stdio.id]);
+    const byId = await service.list({ id: stdio.id });
+    expect(byId.items.map((server) => server.id)).toEqual([stdio.id]);
   });
 
-  it('deletes a server and cascades its assistant junction rows', async () => {
-    const server = await service.create({ baseUrl: 'https://a.example/mcp', name: 'Linked' });
-    insertAssistant(sqlite, 'assistant-1');
-    await dbService.withWriteTx((tx) =>
-      service.syncAssistantServersTx(tx, 'assistant-1', [server.id]),
-    );
-    expect(countJunction(sqlite)).toBe(1);
+  it('updates desktop metadata and finds servers by id or name', async () => {
+    const server = await service.create({ name: 'Original', type: 'sse' });
+    const updated = await service.update(server.id, {
+      installSource: 'builtin',
+      name: 'Renamed',
+      provider: 'Provider',
+      sortOrder: 9,
+    });
 
-    await service.delete(server.id);
-
-    expect(countJunction(sqlite)).toBe(0);
-    await expect(service.getById(server.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(updated).toMatchObject({
+      installSource: 'builtin',
+      name: 'Renamed',
+      provider: 'Provider',
+      sortOrder: 9,
+      type: 'sse',
+    });
+    await expect(service.findByIdOrName(server.id)).resolves.toMatchObject({ id: server.id });
+    await expect(service.findByIdOrName('Renamed')).resolves.toMatchObject({ id: server.id });
+    await expect(service.findByIdOrName('missing')).resolves.toBeUndefined();
   });
 
-  it('syncs visible assistant associations as a diff and preserves hidden transports', async () => {
-    const a = await service.create({ baseUrl: 'https://a.example/mcp', name: 'A' });
-    const b = await service.create({ baseUrl: 'https://b.example/mcp', name: 'B' });
-    const c = await service.create({ baseUrl: 'https://c.example/mcp', name: 'C' });
-    insertRawServer(sqlite, { id: 'hidden-stdio', name: 'Hidden', type: 'stdio' });
+  it('reorders all transports and deletes their assistant associations', async () => {
+    const first = await service.create({ name: 'First', type: 'stdio' });
+    const second = await service.create({ name: 'Second', type: 'inMemory' });
+
+    await service.reorder([second.id, first.id]);
+    const reordered = await service.list();
+    expect(reordered.items.map((server) => server.id)).toEqual([second.id, first.id]);
+
     insertAssistant(sqlite, 'assistant-1');
     sqlite
       .prepare(
         `INSERT INTO assistant_mcp_server (
           assistant_id, mcp_server_id, created_at, updated_at
-        ) VALUES ('assistant-1', 'hidden-stdio', 1, 1)`,
+        ) VALUES ('assistant-1', ?, 1, 1)`,
       )
-      .run();
+      .run(first.id);
 
-    await dbService.withWriteTx((tx) =>
-      service.syncAssistantServersTx(tx, 'assistant-1', [a.id, b.id, 'hidden-stdio']),
-    );
-    expect(junctionServerIds(sqlite)).toEqual([a.id, b.id, 'hidden-stdio'].sort());
-
-    await dbService.withWriteTx((tx) =>
-      service.syncAssistantServersTx(tx, 'assistant-1', [b.id, c.id]),
-    );
-    expect(junctionServerIds(sqlite)).toEqual([b.id, c.id, 'hidden-stdio'].sort());
-
-    await dbService.withWriteTx((tx) => service.syncAssistantServersTx(tx, 'assistant-1', []));
-    expect(junctionServerIds(sqlite)).toEqual(['hidden-stdio']);
-  });
-
-  it('rejects syncing unknown server ids', async () => {
-    insertAssistant(sqlite, 'assistant-1');
-    await expect(
-      dbService.withWriteTx((tx) =>
-        service.syncAssistantServersTx(tx, 'assistant-1', ['missing-server']),
-      ),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await service.delete(first.id);
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM assistant_mcp_server').get()).toEqual({
+      count: 0,
+    });
+    await expect(service.getById(first.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });
 
@@ -257,58 +212,4 @@ function insertAssistant(database: DatabaseSync, id: string) {
        VALUES (?, 'Assistant', 'x', '{}', 'a0', 1, 1)`,
     )
     .run(id);
-}
-
-function countJunction(database: DatabaseSync): number {
-  return (
-    database.prepare('SELECT COUNT(*) AS count FROM assistant_mcp_server').get() as {
-      count: number;
-    }
-  ).count;
-}
-
-function junctionServerIds(database: DatabaseSync): string[] {
-  return (
-    database.prepare('SELECT mcp_server_id FROM assistant_mcp_server').all() as {
-      mcp_server_id: string;
-    }[]
-  )
-    .map((row) => row.mcp_server_id)
-    .sort();
-}
-
-function insertRawServer(
-  database: DatabaseSync,
-  values: {
-    baseUrl?: string | null;
-    dxtVersion?: string;
-    id: string;
-    installSource?: 'builtin' | 'manual' | 'protocol' | 'unknown';
-    isTrusted?: boolean;
-    name: string;
-    provider?: string;
-    sortOrder?: number;
-    tags?: string[];
-    type: 'inMemory' | 'sse' | 'stdio' | 'streamableHttp' | null;
-  },
-) {
-  database
-    .prepare(
-      `INSERT INTO mcp_server (
-        id, name, type, base_url, provider, dxt_version, tags, sort_order,
-        install_source, is_trusted, is_active, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1)`,
-    )
-    .run(
-      values.id,
-      values.name,
-      values.type,
-      values.baseUrl ?? null,
-      values.provider ?? null,
-      values.dxtVersion ?? null,
-      values.tags ? JSON.stringify(values.tags) : null,
-      values.sortOrder ?? 0,
-      values.installSource ?? null,
-      values.isTrusted === undefined ? null : Number(values.isTrusted),
-    );
 }

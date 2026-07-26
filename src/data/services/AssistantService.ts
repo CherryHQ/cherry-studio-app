@@ -20,8 +20,7 @@ import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/data/types
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
 import type { UniqueModelId } from '@/data/types/model';
 import type { Tag } from '@/data/types/tag';
-
-import type { McpServerService } from './McpServerService';
+import type { MobileMcpServerService } from './MobileMcpServerService';
 import type { ModelService } from './ModelService';
 import type { PinService } from './PinService';
 import type { TagService } from './TagService';
@@ -69,7 +68,7 @@ export class AssistantService {
     private readonly preferenceService: PreferenceService,
     private readonly tagService: TagService,
     private readonly pinService: PinService,
-    private readonly mcpServerService: McpServerService,
+    private readonly mcpServerService: MobileMcpServerService,
   ) {}
 
   private get db() {
