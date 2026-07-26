@@ -13,6 +13,9 @@ export type SettingsServiceRowProps = {
   isEnabled: boolean;
   name: string;
   onPress: () => void;
+  statusLabel?: string;
+  statusTone?: 'danger' | 'default' | 'success';
+  subtitle?: string;
 };
 
 export const SettingsServiceRow = memo(function SettingsServiceRow({
@@ -22,6 +25,9 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
   isEnabled,
   name,
   onPress,
+  statusLabel,
+  statusTone = 'default',
+  subtitle,
 }: SettingsServiceRowProps) {
   return (
     <View>
@@ -31,7 +37,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
         className="flex-row items-center justify-between active:opacity-60 py-2 px-2"
         onPress={onPress}
       >
-        <View className="flex-1 flex-row items-center gap-2">
+        <View className="min-w-0 flex-1 flex-row items-center gap-2">
           {avatar ??
             (imageSource ? (
               <Image
@@ -42,17 +48,49 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
                 source={imageSource}
               />
             ) : null)}
-          <Text
-            className={cn(
-              'flex-1 text-base',
-              isEnabled ? 'text-foreground' : 'text-default-foreground',
-            )}
-            numberOfLines={1}
-          >
-            {name}
-          </Text>
+          <View className="min-w-0 flex-1 gap-0.5">
+            <Text
+              className={cn(
+                'min-w-0 text-base',
+                isEnabled ? 'text-foreground' : 'text-default-foreground',
+              )}
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
+            {subtitle ? (
+              <Text className="text-foreground-muted text-sm" numberOfLines={1}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
         </View>
-        <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
+        <View className="ml-2 flex-row items-center gap-2">
+          {statusLabel && statusTone === 'success' ? (
+            <View
+              className="h-5 shrink-0 items-center justify-center rounded-lg border px-1.5"
+              style={{
+                backgroundColor: '#00b96b20',
+                borderColor: '#00b96b66',
+              }}
+            >
+              <Text className="font-medium text-xs" numberOfLines={1} style={{ color: '#00b96b' }}>
+                {statusLabel}
+              </Text>
+            </View>
+          ) : statusLabel ? (
+            <Text
+              className={cn(
+                'shrink-0 text-xs',
+                statusTone === 'danger' ? 'text-danger' : 'text-default-foreground',
+              )}
+              numberOfLines={1}
+            >
+              {statusLabel}
+            </Text>
+          ) : null}
+          <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
+        </View>
       </Pressable>
     </View>
   );

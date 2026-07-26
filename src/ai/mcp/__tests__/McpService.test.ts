@@ -14,7 +14,11 @@ jest.mock('@ai-sdk/mcp', () => ({
 
 type FakeClient = {
   close: jest.Mock;
+  instructions?: string;
+  listTools: jest.Mock;
+  serverInfo: { name: string; title?: string; version: string };
   tools: jest.Mock;
+  toolsFromDefinitions: jest.Mock;
 };
 
 /** Let queued microtasks and the fire-and-forget refresh chain settle. */
@@ -93,11 +97,32 @@ function makeRawTool(name: string, execute: () => Promise<unknown>): ToolSet {
   } as unknown as ToolSet;
 }
 
+function makeToolDefinitions(tools: ToolSet) {
+  return Object.entries(tools).map(([name, rawTool]) => ({
+    description: typeof rawTool.description === 'string' ? rawTool.description : undefined,
+    inputSchema: { properties: {}, type: 'object' as const },
+    name,
+    rawTool,
+  }));
+}
+
 function makeClient(tools: ToolSet): FakeClient {
-  return {
+  const client: FakeClient = {
     close: jest.fn(async () => undefined),
+    instructions: 'Use this server to search documentation.',
+    listTools: jest.fn(),
+    serverInfo: { name: 'test-server', title: 'Test MCP', version: '1.2.3' },
     tools: jest.fn(async () => tools),
+    toolsFromDefinitions: jest.fn(),
   };
+  client.listTools.mockImplementation(async () => ({
+    tools: makeToolDefinitions(await client.tools()),
+  }));
+  client.toolsFromDefinitions.mockImplementation(
+    ({ tools: definitions }: { tools: ReturnType<typeof makeToolDefinitions> }) =>
+      Object.fromEntries(definitions.map((definition) => [definition.name, definition.rawTool])),
+  );
+  return client;
 }
 
 function makeService(servers: StreamableHttpMcpServer[]) {
@@ -517,9 +542,9 @@ describe('prewarmActiveServers', () => {
     const releases: Array<() => void> = [];
     let active = 0;
     let maxActive = 0;
-    mockCreateMCPClient.mockImplementation(async () => ({
-      close: jest.fn(async () => undefined),
-      tools: jest.fn(
+    mockCreateMCPClient.mockImplementation(async () => {
+      const client = makeClient(makeRawTools(['search']));
+      client.tools.mockImplementation(
         () =>
           new Promise<ToolSet>((resolve) => {
             active += 1;
@@ -529,8 +554,9 @@ describe('prewarmActiveServers', () => {
               resolve(makeRawTools(['search']));
             });
           }),
-      ),
-    }));
+      );
+      return client;
+    });
     const servers = Array.from({ length: 6 }, (_, index) =>
       makeServer({
         baseUrl: `https://${index}.example/mcp`,
@@ -808,6 +834,49 @@ describe('tool execution', () => {
   });
 });
 
+describe('getServerInfo', () => {
+  it('returns initialization metadata and closes the throwaway client', async () => {
+    const client = makeClient(makeRawTools(['a']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const { service } = makeService([]);
+
+    await expect(service.getServerInfo({ baseUrl: 'https://x.example/mcp' })).resolves.toEqual({
+      instructions: 'Use this server to search documentation.',
+      name: 'test-server',
+      title: 'Test MCP',
+      version: '1.2.3',
+    });
+    expect(client.close).toHaveBeenCalled();
+    expect(client.tools).not.toHaveBeenCalled();
+  });
+
+  it('times out initialization and closes a client that connects late', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    try {
+      let settleConnect: ((client: FakeClient) => void) | undefined;
+      const client = makeClient(makeRawTools(['a']));
+      mockCreateMCPClient.mockReturnValue(
+        new Promise<FakeClient>((resolve) => {
+          settleConnect = resolve;
+        }),
+      );
+      const { service } = makeService([]);
+
+      const request = service.getServerInfo({ baseUrl: 'https://x.example/mcp' });
+      const assertion = expect(request).rejects.toThrow('MCP server info timed out after 15000ms');
+      jest.advanceTimersByTime(15 * 1000);
+      await assertion;
+
+      settleConnect?.(client);
+      await flush();
+      expect(client.close).toHaveBeenCalled();
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
+  });
+});
+
 describe('testConnection', () => {
   it('returns tool summaries and always closes the throwaway client', async () => {
     const client = makeClient(makeRawTools(['a', 'b']));
@@ -888,6 +957,34 @@ describe('listToolsForServer', () => {
     expect(mockCreateMCPClient).toHaveBeenCalledTimes(2);
   });
 
+  it('loads every tools/list page before caching tools and counting them', async () => {
+    const client = makeClient(makeRawTools([]));
+    const firstPage = makeToolDefinitions(makeRawTools(['search']));
+    const secondPage = makeToolDefinitions(makeRawTools(['open']));
+    client.listTools
+      .mockResolvedValueOnce({ nextCursor: 'page-2', tools: firstPage })
+      .mockResolvedValueOnce({ tools: secondPage });
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+
+    await expect(service.listToolsForServer(server)).resolves.toEqual([
+      { description: 'desc search', name: 'search' },
+      { description: 'desc open', name: 'open' },
+    ]);
+    await expect(service.getRuntimeSummaries([server])).resolves.toMatchObject({
+      [server.id]: {
+        serverName: 'test-server',
+        serverTitle: 'Test MCP',
+        serverVersion: '1.2.3',
+        state: 'connected',
+        toolCount: 2,
+      },
+    });
+    expect(client.listTools).toHaveBeenNthCalledWith(1, undefined);
+    expect(client.listTools).toHaveBeenNthCalledWith(2, { params: { cursor: 'page-2' } });
+  });
+
   it('shares an in-flight warm with an explicit settings listing', async () => {
     const tools = deferred<ToolSet>();
     const client = makeClient(makeRawTools(['search']));
@@ -951,6 +1048,45 @@ describe('listToolsForServer', () => {
     await assertion;
     expect(client.close).toHaveBeenCalled();
     expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('runtime summaries', () => {
+  it('reports connection failures without rejecting the list query', async () => {
+    const client = makeClient(makeRawTools([]));
+    client.tools.mockRejectedValue(new Error('401 unauthorized'));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+
+    await expect(service.getRuntimeSummaries([server])).resolves.toEqual({
+      [server.id]: {
+        lastError: '401 unauthorized',
+        state: 'error',
+      },
+    });
+  });
+
+  it('keeps the last successful metadata when a server is disabled', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+
+    await service.getRuntimeSummaries([server]);
+    service.invalidateServer(server.id, { preserveSnapshot: true });
+
+    await expect(
+      service.getRuntimeSummaries([{ ...server, isActive: false }]),
+    ).resolves.toMatchObject({
+      [server.id]: {
+        serverName: 'test-server',
+        serverTitle: 'Test MCP',
+        serverVersion: '1.2.3',
+        state: 'disabled',
+        toolCount: 1,
+      },
+    });
   });
 });
 

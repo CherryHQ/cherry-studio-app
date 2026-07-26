@@ -13,6 +13,7 @@ import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 
 type McpToolsSectionProps = {
+  isReadOnly?: boolean;
   /** `knownToolNames` lets the writer re-expand rules wider than one tool. */
   onToggleAutoApprove: (toolName: string, autoApprove: boolean, knownToolNames: string[]) => void;
   onToggleTool: (toolName: string, enabled: boolean, knownToolNames: string[]) => void;
@@ -20,6 +21,7 @@ type McpToolsSectionProps = {
 };
 
 export function McpToolsSection({
+  isReadOnly = false,
   onToggleAutoApprove,
   onToggleTool,
   server,
@@ -154,13 +156,14 @@ export function McpToolsSection({
             </View>
             <View className="w-14 items-center">
               <Switch
+                isDisabled={isReadOnly}
                 isSelected={!toolDisabled}
                 onSelectedChange={(enabled) => void handleToggleTool(tool.name, enabled)}
               />
             </View>
             <View className="w-14 items-center">
               <Switch
-                isDisabled={toolDisabled}
+                isDisabled={isReadOnly || toolDisabled}
                 isSelected={isAutoApproved(tool.name)}
                 onSelectedChange={(autoApprove) =>
                   void handleToggleAutoApprove(tool.name, autoApprove)

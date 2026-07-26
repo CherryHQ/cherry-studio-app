@@ -1,4 +1,9 @@
-export type { McpConnectionConfig, McpToolSummary } from './McpService';
+export type {
+  McpConnectionConfig,
+  McpServerInfo,
+  McpServerRuntimeSummary,
+  McpToolSummary,
+} from './McpService';
 export { McpService } from './McpService';
 export {
   hasMcpServerWildcardRule,

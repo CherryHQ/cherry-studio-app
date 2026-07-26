@@ -136,6 +136,13 @@ describe('McpApprovalSheet', () => {
     });
   });
 
+  test('uses a solid danger action for denial', () => {
+    render();
+
+    expect(findButton(denyLabel)?.props.variant).toBe('danger');
+    expect(findButton(allowLabel)?.props.variant).toBe('primary');
+  });
+
   test('ignores a second decision while the first is still in flight', async () => {
     let settle!: () => void;
     const { onRespond } = render({

@@ -86,7 +86,7 @@ export function McpApprovalSheet({ approvals, isOpen, onRespond }: McpApprovalSh
             className="flex-1"
             isDisabled={isSubmitting}
             onPress={() => void submit(false)}
-            variant="danger-soft"
+            variant="danger"
           >
             <Button.Label>{t('chat.mcpTool.approval.deny')}</Button.Label>
           </Button>

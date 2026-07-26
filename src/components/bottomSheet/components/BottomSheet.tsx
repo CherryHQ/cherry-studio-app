@@ -229,7 +229,7 @@ export function BottomSheet({
             )}
 
             <View
-              className="flex-row items-center"
+              className="flex-row"
               style={styles.header}
               testID={testID ? `${testID}-header` : undefined}
             >
@@ -303,6 +303,7 @@ function BottomSheetCloseButton({
 const styles = StyleSheet.create({
   bottomGap: { height: bottomSheet.outerInset },
   closeSurface: {
+    alignSelf: 'flex-start',
     borderCurve: 'continuous',
     borderRadius: bottomSheet.headerSideWidth / 2,
     height: bottomSheet.headerSideWidth,
@@ -310,6 +311,7 @@ const styles = StyleSheet.create({
     width: bottomSheet.headerSideWidth,
   },
   header: {
+    alignItems: 'center',
     height: Math.max(bottomSheet.headerHeight, HEADER_INSET + bottomSheet.headerSideWidth),
     paddingHorizontal: HEADER_INSET,
     paddingTop: HEADER_INSET,

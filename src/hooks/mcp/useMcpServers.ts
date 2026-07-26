@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
+import type { McpServerRuntimeSummary } from '@/ai/mcp';
 import { queryKeys } from '@/data/api';
 import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/data/api/schemas/mcpServers';
 import { useDataQuery } from '@/data/hooks';
@@ -7,6 +8,8 @@ import { useDataServices } from '@/data/runtime';
 import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 
 const EMPTY_MCP_SERVERS: readonly StreamableHttpMcpServer[] = Object.freeze([]);
+const EMPTY_MCP_RUNTIME_SUMMARIES: Readonly<Record<string, McpServerRuntimeSummary>> =
+  Object.freeze({});
 
 export function useMcpServersApi() {
   const query = useDataQuery({
@@ -42,15 +45,36 @@ export function useMcpServerApiById(id: string | undefined) {
   };
 }
 
+export function useMcpServerRuntimeSummaries(servers: readonly StreamableHttpMcpServer[]) {
+  const query = useDataQuery({
+    enabled: servers.length > 0,
+    queryFn: (services) => services.mcp.getRuntimeSummaries(servers),
+    queryKey: queryKeys.mcpServers.runtimeSummaries(servers),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  return {
+    error: query.error,
+    isLoading: query.isLoading,
+    query,
+    summaries: query.data ?? EMPTY_MCP_RUNTIME_SUMMARIES,
+  };
+}
+
 export function useMcpServerMutations() {
   const services = useDataServices();
   const queryClient = useQueryClient();
 
   const invalidateServerQueries = useCallback(
-    async (serverId: string, includeTools = false) => {
+    async (serverId: string, options: { includeTools?: boolean; refetchDetail?: boolean } = {}) => {
+      const { includeTools = false, refetchDetail = true } = options;
       const invalidations = [
         queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.detail(serverId) }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.mcpServers.detail(serverId),
+          refetchType: refetchDetail ? 'active' : 'none',
+        }),
       ];
       if (includeTools) {
         invalidations.push(
@@ -65,7 +89,8 @@ export function useMcpServerMutations() {
   const createMutation = useMutation({
     mutationFn: (dto: CreateMcpServerDto) => services.mcpServer.create(dto, 'streamableHttp'),
     onSuccess: async (server) => {
-      await invalidateServerQueries(server.id);
+      queryClient.setQueryData(queryKeys.mcpServers.detail(server.id), server);
+      await invalidateServerQueries(server.id, { refetchDetail: false });
       if (server.isActive) {
         void services.mcp.warmToolsCache(server);
       }
@@ -89,11 +114,17 @@ export function useMcpServerMutations() {
       const becameActive = previous ? !previous.isActive && server.isActive : false;
       const becameInactive = previous ? previous.isActive && !server.isActive : false;
 
-      if (transportChanged || becameInactive) {
+      if (transportChanged) {
         services.mcp.invalidateServer(server.id);
+      } else if (becameInactive) {
+        services.mcp.invalidateServer(server.id, { preserveSnapshot: true });
       }
 
-      await invalidateServerQueries(server.id, transportChanged);
+      queryClient.setQueryData(queryKeys.mcpServers.detail(server.id), server);
+      await invalidateServerQueries(server.id, {
+        includeTools: transportChanged,
+        refetchDetail: false,
+      });
       if (server.isActive && (transportChanged || becameActive)) {
         void services.mcp.warmToolsCache(server);
       }
@@ -102,11 +133,10 @@ export function useMcpServerMutations() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => services.mcpServer.delete(id, 'streamableHttp'),
-    onSuccess: async (_data, id) => {
+    onSuccess: (_data, id) => {
       services.mcp.invalidateServer(id);
-      // Junction rows are gone; assistants referencing this server changed too.
-      await Promise.all([
-        invalidateServerQueries(id),
+      void Promise.allSettled([
+        invalidateServerQueries(id, { refetchDetail: false }),
         queryClient.invalidateQueries({ queryKey: queryKeys.assistants.all() }),
       ]);
     },

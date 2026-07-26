@@ -89,6 +89,7 @@ describe('McpToolsSection auto-approve toggle', () => {
     disabledAutoApproveTools: string[],
     disabledTools: string[] = [],
     serverOverrides: Partial<StreamableHttpMcpServer> = {},
+    isReadOnly = false,
   ) {
     const server = { ...makeServer(disabledAutoApproveTools), ...serverOverrides, disabledTools };
     const onToggleAutoApprove = jest.fn();
@@ -97,6 +98,7 @@ describe('McpToolsSection auto-approve toggle', () => {
     act(() => {
       renderer = create(
         <McpToolsSection
+          isReadOnly={isReadOnly}
           onToggleAutoApprove={onToggleAutoApprove}
           onToggleTool={onToggleTool}
           server={server}
@@ -121,6 +123,17 @@ describe('McpToolsSection auto-approve toggle', () => {
     render([], [], { baseUrl: '' });
 
     expect(mockUseQuery).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
+  });
+
+  test('disables both tool controls in read-only mode', () => {
+    render([], [], {}, true);
+
+    expect(renderer.root.findAllByType(Switch).map((toggle) => toggle.props.isDisabled)).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
   });
 
   test('needs no tool list when no rule is wider than one tool', async () => {

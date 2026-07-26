@@ -5,8 +5,9 @@ import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 
 import { useMcpServerMutations } from '../useMcpServers';
 
-const mockInvalidateQueries = jest.fn(async () => undefined);
+const mockInvalidateQueries = jest.fn<Promise<void>, []>(async () => undefined);
 const mockInvalidateServer = jest.fn();
+const mockSetQueryData = jest.fn();
 const mockWarmToolsCache = jest.fn(async (): Promise<void> => undefined);
 const mockCreateServer = jest.fn();
 const mockDeleteServer = jest.fn(async () => undefined);
@@ -25,7 +26,10 @@ jest.mock('@tanstack/react-query', () => ({
       return data;
     },
   }),
-  useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
+  useQueryClient: () => ({
+    invalidateQueries: mockInvalidateQueries,
+    setQueryData: mockSetQueryData,
+  }),
 }));
 
 jest.mock('@/data/runtime', () => ({
@@ -145,6 +149,10 @@ describe('useMcpServerMutations runtime effects', () => {
     expect(mockWarmToolsCache).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'server-1', isActive: true }),
     );
+    expect(mockSetQueryData).toHaveBeenCalledWith(
+      queryKeys.mcpServers.detail('server-1'),
+      expect.objectContaining({ id: 'server-1' }),
+    );
     expect(mockInvalidateServer).not.toHaveBeenCalled();
 
     jest.clearAllMocks();
@@ -155,7 +163,7 @@ describe('useMcpServerMutations runtime effects', () => {
       await actions?.updateServer('server-1', { isActive: false });
     });
 
-    expect(mockInvalidateServer).toHaveBeenCalledWith('server-1');
+    expect(mockInvalidateServer).toHaveBeenCalledWith('server-1', { preserveSnapshot: true });
     expect(mockWarmToolsCache).not.toHaveBeenCalled();
     expect(mockInvalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.mcpServers.tools('server-1'),
@@ -181,8 +189,27 @@ describe('useMcpServerMutations runtime effects', () => {
 
     expect(mockInvalidateServer).toHaveBeenCalledWith('server-1');
     expect(mockWarmToolsCache).not.toHaveBeenCalled();
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.mcpServers.detail('server-1'),
+      refetchType: 'none',
+    });
     expect(mockInvalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.mcpServers.tools('server-1'),
+    });
+  });
+
+  it('does not keep a delete mutation pending while cache invalidation runs', async () => {
+    const invalidation = deferred<void>();
+    mockInvalidateQueries.mockReturnValue(invalidation.promise);
+
+    await act(async () => {
+      await actions?.deleteServer('server-1');
+    });
+
+    expect(mockDeleteServer).toHaveBeenCalledWith('server-1', 'streamableHttp');
+    invalidation.resolve();
+    await act(async () => {
+      await Promise.resolve();
     });
   });
 

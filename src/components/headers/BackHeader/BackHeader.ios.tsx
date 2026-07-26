@@ -1,5 +1,5 @@
 import { Stack, useRouter } from 'expo-router';
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,6 +9,7 @@ export type BackHeaderProps = {
   onBack?: () => void;
   rightActions?: readonly HeaderToolbarAction[];
   title?: string;
+  titleElement?: ReactElement;
 };
 
 // react-native-screens embeds JS-rendered `headerLeft`/`headerRight` views into the
@@ -18,6 +19,14 @@ export type BackHeaderProps = {
 // the back and right-action buttons render through the native Stack.Toolbar API instead,
 // matching CloseHeader's approach.
 function renderHeaderAction(action: HeaderToolbarAction): ReactNode {
+  if (action.element) {
+    return (
+      <Stack.Toolbar.View hidden={action.hidden} key={action.key}>
+        {action.element}
+      </Stack.Toolbar.View>
+    );
+  }
+
   if (action.hidden) {
     return null;
   }
@@ -50,7 +59,7 @@ function renderHeaderAction(action: HeaderToolbarAction): ReactNode {
   );
 }
 
-export function BackHeader({ onBack, rightActions, title = '' }: BackHeaderProps) {
+export function BackHeader({ onBack, rightActions, title = '', titleElement }: BackHeaderProps) {
   const { t } = useTranslation();
   const router = useRouter();
 
@@ -63,11 +72,16 @@ export function BackHeader({ onBack, rightActions, title = '' }: BackHeaderProps
     router.back();
   }, [onBack, router]);
 
-  const options = useMemo(() => ({ headerBackVisible: false, title }), [title]);
+  const hasTitleElement = Boolean(titleElement);
+  const options = useMemo(
+    () => ({ headerBackVisible: false, title: hasTitleElement ? '' : title }),
+    [hasTitleElement, title],
+  );
 
   return (
     <>
       <Stack.Screen options={options} />
+      {titleElement ? <Stack.Title asChild>{titleElement}</Stack.Title> : null}
       <Stack.Toolbar placement="left">
         <Stack.Toolbar.Button
           accessibilityLabel={t('navigation.back')}

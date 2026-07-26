@@ -1,4 +1,4 @@
-import type { MCPClient } from '@ai-sdk/mcp';
+import type { ListToolsResult, MCPClient } from '@ai-sdk/mcp';
 import { createMCPClient } from '@ai-sdk/mcp';
 import type { Tool, ToolSet } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
@@ -41,6 +41,23 @@ export type McpToolSummary = {
   name: string;
 };
 
+export type McpServerInfo = {
+  instructions?: string;
+  name: string;
+  title?: string;
+  version: string;
+};
+
+export type McpServerRuntimeSummary = {
+  lastConnectedAt?: number;
+  lastError?: string;
+  serverName?: string;
+  serverTitle?: string;
+  serverVersion?: string;
+  state: 'connected' | 'connecting' | 'disabled' | 'error';
+  toolCount?: number;
+};
+
 type ToolsCacheEntry = {
   fetchedAt: number;
   rawTools: ToolSet;
@@ -65,12 +82,17 @@ type ToolsRefreshFailure = {
   failedAt: number;
 };
 
+type McpServerRuntimeSnapshot = Omit<McpServerRuntimeSummary, 'lastError' | 'state'> & {
+  transportFingerprint: string;
+};
+
 type ServerRuntimeState = {
   client?: MCPClient;
   connectionPromise?: Promise<MCPClient>;
   failure?: ToolsRefreshFailure;
   generation: number;
   refreshPromise?: Promise<void>;
+  runtimeError?: string;
   serverId: string;
   timeoutCancellations: Set<() => void>;
   toolsCache?: ToolsCacheEntry;
@@ -98,6 +120,28 @@ function castMcpToolSet(tools: Awaited<ReturnType<MCPClient['tools']>>): ToolSet
 /** Tool.description may be a lazy function in ai v6 — summaries only take strings. */
 function toolDescription(tool: Tool): string | undefined {
   return typeof tool.description === 'string' ? tool.description : undefined;
+}
+
+async function listAllTools(client: MCPClient): Promise<ToolSet> {
+  const definitions: ListToolsResult['tools'] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | undefined;
+
+  while (true) {
+    const page = await client.listTools(cursor ? { params: { cursor } } : undefined);
+    definitions.push(...page.tools);
+
+    if (!page.nextCursor) {
+      break;
+    }
+    if (seenCursors.has(page.nextCursor)) {
+      throw new Error(`MCP tools/list returned a repeated cursor: ${page.nextCursor}`);
+    }
+    seenCursors.add(page.nextCursor);
+    cursor = page.nextCursor;
+  }
+
+  return castMcpToolSet(client.toolsFromDefinitions({ tools: definitions }));
 }
 
 function createHttpClient(config: McpConnectionConfig): Promise<MCPClient> {
@@ -189,6 +233,7 @@ export class McpService {
   constructor(private readonly deps: { mcpServer: McpServerService }) {}
 
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
+  private readonly runtimeSnapshots = new Map<string, McpServerRuntimeSnapshot>();
   private activePrewarmPromise?: Promise<void>;
 
   /**
@@ -268,6 +313,18 @@ export class McpService {
     return task;
   }
 
+  /** Runtime metadata for the settings list. Active servers share the existing
+   * concurrency-limited prewarm instead of opening one connection per row. */
+  async getRuntimeSummaries(
+    servers: readonly StreamableHttpMcpServer[],
+  ): Promise<Record<string, McpServerRuntimeSummary>> {
+    if (servers.some((server) => server.isActive && hasRunnableUrl(server))) {
+      await this.prewarmActiveServers();
+    }
+
+    return Object.fromEntries(servers.map((server) => [server.id, this.getRuntimeSummary(server)]));
+  }
+
   /** Warm one stored server without exposing transport failures to callers. */
   async warmToolsCache(server: StreamableHttpMcpServer): Promise<void> {
     if (!server.isActive || !hasRunnableUrl(server)) {
@@ -331,43 +388,31 @@ export class McpService {
    * enters the pool.
    */
   async testConnection(config: McpConnectionConfig): Promise<McpToolSummary[]> {
-    let client: MCPClient | undefined;
-    let acceptClient = true;
-    const request = createHttpClient(config).then(async (createdClient) => {
-      if (!acceptClient) {
-        this.closeQuietly(createdClient);
-        throw new McpEvictedError('MCP connection test already ended');
-      }
-      client = createdClient;
-      return castMcpToolSet(await createdClient.tools());
-    });
+    const rawTools = await this.withTemporaryClient(config, 'MCP connection test', listAllTools);
+    return Object.entries(rawTools).map(([name, tool]) => ({
+      description: toolDescription(tool),
+      name,
+    }));
+  }
 
-    try {
-      const rawTools = await withTimeout(
-        request,
-        TOOLS_FETCH_TIMEOUT_MS,
-        'MCP connection test',
-        () => {
-          acceptClient = false;
-        },
-      );
-      return Object.entries(rawTools).map(([name, tool]) => ({
-        description: toolDescription(tool),
-        name,
-      }));
-    } finally {
-      acceptClient = false;
-      if (client) {
-        this.closeQuietly(client);
-      }
-    }
+  /** Initialization metadata used to name a server before its first save. */
+  async getServerInfo(config: McpConnectionConfig): Promise<McpServerInfo> {
+    return this.withTemporaryClient(config, 'MCP server info', (client) => ({
+      ...(client.instructions && { instructions: client.instructions }),
+      name: client.serverInfo.name,
+      title: client.serverInfo.title,
+      version: client.serverInfo.version,
+    }));
   }
 
   /** Drop one server's runtime after transport change, disable, or delete. */
-  invalidateServer(serverId: string): void {
+  invalidateServer(serverId: string, options: { preserveSnapshot?: boolean } = {}): void {
     const state = this.runtimeStates.get(serverId);
     if (state) {
       this.retireState(state);
+    }
+    if (!options.preserveSnapshot) {
+      this.runtimeSnapshots.delete(serverId);
     }
   }
 
@@ -380,6 +425,9 @@ export class McpService {
 
   private getRuntimeState(server: StreamableHttpMcpServer): ServerRuntimeState {
     const transportFingerprint = this.transportFingerprint(server);
+    if (this.runtimeSnapshots.get(server.id)?.transportFingerprint !== transportFingerprint) {
+      this.runtimeSnapshots.delete(server.id);
+    }
     const current = this.runtimeStates.get(server.id);
     if (current?.transportFingerprint === transportFingerprint) {
       return current;
@@ -398,6 +446,37 @@ export class McpService {
     };
     this.runtimeStates.set(server.id, state);
     return state;
+  }
+
+  private getRuntimeSummary(server: StreamableHttpMcpServer): McpServerRuntimeSummary {
+    const transportFingerprint = this.transportFingerprint(server);
+    const storedSnapshot = this.runtimeSnapshots.get(server.id);
+    const snapshot =
+      storedSnapshot?.transportFingerprint === transportFingerprint
+        ? {
+            lastConnectedAt: storedSnapshot.lastConnectedAt,
+            serverName: storedSnapshot.serverName,
+            serverTitle: storedSnapshot.serverTitle,
+            serverVersion: storedSnapshot.serverVersion,
+            toolCount: storedSnapshot.toolCount,
+          }
+        : {};
+
+    if (!server.isActive) {
+      return { ...snapshot, state: 'disabled' };
+    }
+    if (!hasRunnableUrl(server)) {
+      return { ...snapshot, lastError: 'Invalid MCP server URL', state: 'error' };
+    }
+
+    const state = this.runtimeStates.get(server.id);
+    if (state?.runtimeError) {
+      return { ...snapshot, lastError: state.runtimeError, state: 'error' };
+    }
+    if (state?.toolsCache) {
+      return { ...snapshot, state: 'connected' };
+    }
+    return { ...snapshot, state: 'connecting' };
   }
 
   /** Cached tools if we have any, serving stale while a refresh runs. */
@@ -454,7 +533,7 @@ export class McpService {
         if (!this.isCurrentState(state)) {
           return;
         }
-        this.recordFailure(state);
+        this.recordFailure(state, error);
         logger.warn('MCP tools refresh failed', { error, server: server.name });
         // Keep the last good cache and its client through transient refresh
         // failures; tool-call failures and timeouts reset both.
@@ -481,11 +560,16 @@ export class McpService {
     return Date.now() - failure.failedAt < wait;
   }
 
-  private recordFailure(state: ServerRuntimeState): void {
+  private recordFailure(state: ServerRuntimeState, error: unknown): void {
     state.failure = {
       consecutive: (state.failure?.consecutive ?? 0) + 1,
       failedAt: Date.now(),
     };
+    state.runtimeError = errorMessage(error);
+  }
+
+  private recordRuntimeError(state: ServerRuntimeState, error: unknown): void {
+    state.runtimeError = errorMessage(error);
   }
 
   private async getClient(
@@ -525,6 +609,34 @@ export class McpService {
 
   private closeQuietly(client: MCPClient): void {
     client.close().catch(() => undefined);
+  }
+
+  private async withTemporaryClient<TValue>(
+    config: McpConnectionConfig,
+    label: string,
+    operation: (client: MCPClient) => Promise<TValue> | TValue,
+  ): Promise<TValue> {
+    let client: MCPClient | undefined;
+    let acceptClient = true;
+    const request = createHttpClient(config).then(async (createdClient) => {
+      if (!acceptClient) {
+        this.closeQuietly(createdClient);
+        throw new McpEvictedError(`${label} already ended`);
+      }
+      client = createdClient;
+      return operation(createdClient);
+    });
+
+    try {
+      return await withTimeout(request, TOOLS_FETCH_TIMEOUT_MS, label, () => {
+        acceptClient = false;
+      });
+    } finally {
+      acceptClient = false;
+      if (client) {
+        this.closeQuietly(client);
+      }
+    }
   }
 
   private cancelTimeouts(state: ServerRuntimeState): void {
@@ -587,6 +699,7 @@ export class McpService {
       } catch (retryError) {
         if (!(retryError instanceof McpEvictedError)) {
           this.resetConnection(state);
+          this.recordRuntimeError(state, retryError);
         }
         throw retryError;
       }
@@ -601,7 +714,7 @@ export class McpService {
     const rawTools = await withTimeout(
       (async () => {
         const client = await this.getClient(server, state);
-        return castMcpToolSet(await client.tools());
+        return listAllTools(client);
       })(),
       TOOLS_FETCH_TIMEOUT_MS,
       `MCP server ${server.name}`,
@@ -612,8 +725,19 @@ export class McpService {
       throw new McpEvictedError(`MCP server ${server.name} was invalidated while listing tools`);
     }
 
+    const fetchedAt = Date.now();
+    const client = state.client;
     state.failure = undefined;
-    state.toolsCache = { fetchedAt: Date.now(), rawTools };
+    state.runtimeError = undefined;
+    state.toolsCache = { fetchedAt, rawTools };
+    this.runtimeSnapshots.set(server.id, {
+      lastConnectedAt: fetchedAt,
+      serverName: client?.serverInfo.name,
+      serverTitle: client?.serverInfo.title,
+      serverVersion: client?.serverInfo.version,
+      toolCount: Object.keys(rawTools).length,
+      transportFingerprint: state.transportFingerprint,
+    });
     return rawTools;
   }
 
@@ -690,6 +814,7 @@ export class McpService {
         // the rest of the cache TTL. The call itself is not retried — MCP tool
         // calls are not guaranteed idempotent.
         this.resetConnection(state);
+        this.recordRuntimeError(state, error);
         if (error instanceof McpTimeoutError) {
           // Nothing was cancelled: no signal reaches the server, so the work may
           // still be running. Say so, or the model retries a write it already made.

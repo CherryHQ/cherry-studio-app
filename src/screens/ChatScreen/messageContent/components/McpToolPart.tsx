@@ -1,12 +1,12 @@
 import { Image } from 'expo-image';
-import { Accordion } from 'heroui-native/accordion';
-import { WrenchIcon } from 'lucide-uniwind/png';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { parseFunctionCallToolName } from '@/ai/mcp';
 import type { CherryMessagePart } from '@/data/types/message';
 import { type CherryToolMeta, readCherryMeta, readCherryToolMetadata } from '@/data/types/uiParts';
+import { ToolPartSheet, ToolPartTrigger } from './ToolPartSheet';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
@@ -24,91 +24,49 @@ const MAX_OUTPUT_TEXT_LENGTH = 4000;
 
 export function McpToolPart({ part }: McpToolPartProps) {
   const { t } = useTranslation();
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const toolName = getToolName(part);
   const toolMetadata = readCherryToolMetadata(part)?.tool;
   const title = getMcpToolTitle(part, toolName, toolMetadata);
   const statusText = getMcpToolStatusText(part, t);
-  const isAwaitingApproval = part.state === 'approval-requested';
   const isRunning =
     part.state === 'input-streaming' ||
     part.state === 'input-available' ||
     (part.state === 'approval-responded' && part.approval.approved);
 
   return (
-    <View className="gap-2">
-      <Accordion
-        className={
-          isAwaitingApproval
-            ? 'overflow-hidden rounded-lg border border-accent bg-surface-secondary'
-            : 'overflow-hidden rounded-lg border border-border bg-surface-secondary'
-        }
-        hideSeparator
-        isCollapsible
-        selectionMode="single"
-      >
-        <Accordion.Item value={`mcp-tool-${toolName}`}>
-          <Accordion.Trigger className="min-h-0 px-3 py-3">
-            <McpToolHeaderContent isRunning={isRunning} statusText={statusText} title={title} />
-            <Accordion.Indicator
-              animation={{ rotation: { value: [-90, 0] } }}
-              iconProps={{ size: 16 }}
+    <View className="gap-1.5">
+      <ToolPartTrigger
+        isRunning={isRunning}
+        onPress={() => setIsSheetOpen(true)}
+        statusText={statusText}
+        statusTone={getMcpToolStatusTone(part)}
+        testID="mcp-tool-part-trigger"
+        title={title}
+      />
+      {isSheetOpen ? (
+        <ToolPartSheet
+          onClose={() => setIsSheetOpen(false)}
+          testID="mcp-tool-part-detail"
+          title={title}
+        >
+          <ToolValueSection title={t('chat.mcpTool.arguments')} value={part.input} />
+          {part.state === 'output-available' ? <McpOutputSection output={part.output} /> : null}
+          {readCherryMeta(part)?.settledByApp ? (
+            <ToolTextSection
+              tone="error"
+              title={t('chat.mcpTool.response')}
+              value={t('chat.mcpTool.unfinishedDetail')}
             />
-          </Accordion.Trigger>
-          <Accordion.Content className="px-3 pt-0 pb-3">
-            <View className="gap-2.5 border-border border-t pt-2">
-              <ToolValueSection title={t('chat.mcpTool.arguments')} value={part.input} />
-              {part.state === 'output-available' ? <McpOutputSection output={part.output} /> : null}
-              {readCherryMeta(part)?.settledByApp ? (
-                <ToolTextSection
-                  tone="error"
-                  title={t('chat.mcpTool.response')}
-                  value={t('chat.mcpTool.unfinishedDetail')}
-                />
-              ) : part.state === 'output-error' ? (
-                <ToolTextSection
-                  tone="error"
-                  title={t('chat.mcpTool.response')}
-                  value={part.errorText}
-                />
-              ) : null}
-            </View>
-          </Accordion.Content>
-        </Accordion.Item>
-      </Accordion>
-    </View>
-  );
-}
-
-function McpToolHeaderContent({
-  isRunning,
-  statusText,
-  title,
-}: {
-  isRunning: boolean;
-  statusText: string;
-  title: string;
-}) {
-  return (
-    <View className="min-w-0 flex-1 flex-row items-center gap-2">
-      {isRunning ? (
-        <ActivityIndicator size="small" />
-      ) : (
-        <WrenchIcon className="size-4 text-default-foreground" strokeWidth={2} />
-      )}
-      <Text
-        className="min-w-0 flex-1 font-semibold text-default-foreground text-sm"
-        numberOfLines={1}
-        selectable
-      >
-        {title}
-      </Text>
-      <Text
-        className="max-w-[42%] shrink-0 text-foreground-muted text-xs"
-        numberOfLines={1}
-        selectable
-      >
-        {statusText}
-      </Text>
+          ) : part.state === 'output-error' ? (
+            <ToolTextSection
+              tone="error"
+              title={t('chat.mcpTool.response')}
+              value={part.errorText}
+            />
+          ) : null}
+        </ToolPartSheet>
+      ) : null}
     </View>
   );
 }
@@ -121,13 +79,13 @@ function ToolValueSection({ title, value }: { title: string; value: unknown }) {
   return (
     <View className="gap-1">
       <SectionTitle title={title} />
-      <View className="gap-1 rounded-md bg-surface-tertiary p-2">
+      <View className="gap-1">
         {entries.map(([key, entryValue]) => (
           <View className="flex-row gap-2" key={key}>
-            <Text className="w-20 shrink-0 font-mono text-foreground-muted text-xs" selectable>
+            <Text className="w-20 shrink-0 font-mono text-default-foreground text-md" selectable>
               {key}
             </Text>
-            <Text className="min-w-0 flex-1 font-mono text-default-foreground text-xs" selectable>
+            <Text className="min-w-0 flex-1 font-mono text-default-foreground text-md" selectable>
               {formatArgValue(entryValue)}
             </Text>
           </View>
@@ -150,7 +108,7 @@ function McpOutputSection({ output }: { output: unknown }) {
 
   if (!hasText && !hasImages) {
     return (
-      <Text className="text-foreground-muted text-xs italic" selectable>
+      <Text className="text-default-foreground text-md italic" selectable>
         {t('chat.mcpTool.noOutput')}
       </Text>
     );
@@ -160,15 +118,13 @@ function McpOutputSection({ output }: { output: unknown }) {
     <View className="gap-1">
       <SectionTitle title={t('chat.mcpTool.response')} />
       {hasText ? (
-        <View className="rounded-md bg-surface-tertiary p-2">
-          <Text className="font-mono text-default-foreground text-xs leading-5" selectable>
-            {text}
-          </Text>
-        </View>
+        <Text className="font-mono text-default-foreground text-md leading-5" selectable>
+          {text}
+        </Text>
       ) : null}
       {extractedOutput.images.map((image) => (
         <Image
-          className="h-44 w-full rounded-md bg-surface-tertiary"
+          className="h-44 w-full rounded-md"
           contentFit="contain"
           key={image.id}
           source={`data:${image.mimeType};base64,${image.data}`}
@@ -182,25 +138,23 @@ function ToolTextSection({ title, tone, value }: { title: string; tone?: 'error'
   return (
     <View className="gap-1">
       <SectionTitle title={title} />
-      <View className="rounded-md bg-surface-tertiary p-2">
-        <Text
-          className={
-            tone === 'error'
-              ? 'font-mono text-danger text-xs leading-5'
-              : 'font-mono text-default-foreground text-xs leading-5'
-          }
-          selectable
-        >
-          {value}
-        </Text>
-      </View>
+      <Text
+        className={
+          tone === 'error'
+            ? 'font-mono text-danger text-md leading-5'
+            : 'font-mono text-default-foreground text-md leading-5'
+        }
+        selectable
+      >
+        {value}
+      </Text>
     </View>
   );
 }
 
 function SectionTitle({ title }: { title: string }) {
   return (
-    <Text className="text-foreground-muted text-xs" selectable>
+    <Text className="text-default-foreground text-md" selectable>
       {title}
     </Text>
   );
@@ -247,13 +201,11 @@ function getMcpToolStatusText(part: ToolMessagePart, t: ReturnType<typeof useTra
   }
 
   if (part.state === 'approval-responded') {
-    return part.approval.approved ? t('chat.mcpTool.approved') : t('chat.mcpTool.denied');
+    return part.approval.approved ? t('chat.mcpTool.approved') : t('chat.mcpTool.runDenied');
   }
 
   if (part.state === 'output-available') {
-    return part.preliminary
-      ? t('chat.mcpTool.preliminaryOutputReady')
-      : t('chat.mcpTool.outputReady');
+    return undefined;
   }
 
   // Whatever the app wrote to close out an abandoned call is addressed to the
@@ -263,17 +215,28 @@ function getMcpToolStatusText(part: ToolMessagePart, t: ReturnType<typeof useTra
   }
 
   if (part.state === 'output-error') {
-    return part.errorText;
+    return t('chat.mcpTool.callError');
   }
 
   if (part.state === 'output-denied') {
-    return t('chat.mcpTool.outputDenied');
+    return t('chat.mcpTool.runDenied');
   }
 
   // An `ai` upgrade added a state. Falling through to "denied" would put words
   // in the user's mouth, so say nothing until this switch is taught about it.
   assertHandled(part);
   return '';
+}
+
+function getMcpToolStatusTone(part: ToolMessagePart): 'danger' | 'default' | 'warning' {
+  if (
+    part.state === 'output-denied' ||
+    (part.state === 'approval-responded' && !part.approval.approved)
+  ) {
+    return 'warning';
+  }
+
+  return readCherryMeta(part)?.settledByApp || part.state === 'output-error' ? 'danger' : 'default';
 }
 
 /** Compile-time canary: a new tool part state makes this call a type error. */

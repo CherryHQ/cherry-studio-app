@@ -348,7 +348,7 @@ export const PROVIDER_ICONS = {
   },
   mcp: {
     light: require('./light/mcp.png'),
-    dark: require('./light/mcp.png'),
+    dark: require('./dark/mcp.png'),
   },
   mcpso: {
     light: require('./light/mcpso.png'),

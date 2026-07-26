@@ -1,9 +1,9 @@
-import { Accordion } from 'heroui-native/accordion';
-import { WrenchIcon } from 'lucide-uniwind/png';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { CherryMessagePart } from '@/data/types/message';
+import { ToolPartSheet, ToolPartTrigger } from './ToolPartSheet';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
@@ -15,7 +15,7 @@ const MAX_VALUE_LENGTH = 4000;
 
 export function ToolPart({ part }: ToolPartProps) {
   const { t } = useTranslation();
-  const toolName = getToolName(part);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const title = getToolLabel(part, t);
   const statusText = getToolStatusText(part, t);
   const isRunning =
@@ -24,69 +24,33 @@ export function ToolPart({ part }: ToolPartProps) {
     (part.state === 'approval-responded' && part.approval.approved);
 
   return (
-    <Accordion
-      className="overflow-hidden rounded-lg border border-border bg-surface-secondary"
-      hideSeparator
-      isCollapsible
-      selectionMode="single"
-    >
-      <Accordion.Item value={`tool-${toolName}`}>
-        <Accordion.Trigger className="min-h-0 px-3 py-3">
-          <ToolHeaderContent isRunning={isRunning} statusText={statusText} title={title} />
-          <Accordion.Indicator
-            animation={{ rotation: { value: [-90, 0] } }}
-            iconProps={{ size: 16 }}
-          />
-        </Accordion.Trigger>
-        <Accordion.Content className="px-3 pt-0 pb-3">
-          <View className="gap-2.5 border-border border-t pt-2">
-            <ToolValueSection title={t('chat.tool.arguments')} value={part.input} />
-            {part.state === 'output-available' ? <ToolOutputSection output={part.output} /> : null}
-            {part.state === 'output-error' ? (
-              <ToolTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
-            ) : null}
-            {shouldShowNoDetails(part) ? (
-              <Text className="text-foreground-muted text-xs italic" selectable>
-                {t('chat.tool.noOutput')}
-              </Text>
-            ) : null}
-          </View>
-        </Accordion.Content>
-      </Accordion.Item>
-    </Accordion>
-  );
-}
-
-function ToolHeaderContent({
-  isRunning,
-  statusText,
-  title,
-}: {
-  isRunning: boolean;
-  statusText: string;
-  title: string;
-}) {
-  return (
-    <View className="min-w-0 flex-1 flex-row items-center gap-2">
-      {isRunning ? (
-        <ActivityIndicator size="small" />
-      ) : (
-        <WrenchIcon className="size-4 text-default-foreground" strokeWidth={2} />
-      )}
-      <Text
-        className="min-w-0 flex-1 font-semibold text-default-foreground text-sm"
-        numberOfLines={1}
-        selectable
-      >
-        {title}
-      </Text>
-      <Text
-        className="max-w-[42%] shrink-0 text-foreground-muted text-xs"
-        numberOfLines={1}
-        selectable
-      >
-        {statusText}
-      </Text>
+    <View className="gap-1.5">
+      <ToolPartTrigger
+        isRunning={isRunning}
+        onPress={() => setIsSheetOpen(true)}
+        statusText={statusText}
+        statusTone={getToolStatusTone(part)}
+        testID="tool-part-trigger"
+        title={title}
+      />
+      {isSheetOpen ? (
+        <ToolPartSheet
+          onClose={() => setIsSheetOpen(false)}
+          testID="tool-part-detail"
+          title={title}
+        >
+          <ToolValueSection title={t('chat.tool.arguments')} value={part.input} />
+          {part.state === 'output-available' ? <ToolOutputSection output={part.output} /> : null}
+          {part.state === 'output-error' ? (
+            <ToolTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
+          ) : null}
+          {shouldShowNoDetails(part) ? (
+            <Text className="text-default-foreground text-md italic" selectable>
+              {t('chat.tool.noOutput')}
+            </Text>
+          ) : null}
+        </ToolPartSheet>
+      ) : null}
     </View>
   );
 }
@@ -100,7 +64,7 @@ function ToolOutputSection({ output }: { output: unknown }) {
     (isRecord(output) && Object.keys(output).length === 0)
   ) {
     return (
-      <Text className="text-foreground-muted text-xs italic" selectable>
+      <Text className="text-default-foreground text-md italic" selectable>
         {t('chat.tool.noOutput')}
       </Text>
     );
@@ -117,13 +81,13 @@ function ToolValueSection({ title, value }: { title: string; value: unknown }) {
   return (
     <View className="gap-1">
       <SectionTitle title={title} />
-      <View className="gap-1 rounded-md bg-surface-tertiary p-2">
+      <View className="gap-1">
         {entries.map(([key, entryValue]) => (
           <View className="flex-row gap-2" key={key}>
-            <Text className="w-20 shrink-0 font-mono text-foreground-muted text-xs" selectable>
+            <Text className="w-20 shrink-0 font-mono text-default-foreground text-md" selectable>
               {key}
             </Text>
-            <Text className="min-w-0 flex-1 font-mono text-default-foreground text-xs" selectable>
+            <Text className="min-w-0 flex-1 font-mono text-default-foreground text-md" selectable>
               {formatDisplayValue(entryValue)}
             </Text>
           </View>
@@ -137,25 +101,23 @@ function ToolTextSection({ title, tone, value }: { title: string; tone?: 'error'
   return (
     <View className="gap-1">
       <SectionTitle title={title} />
-      <View className="rounded-md bg-surface-tertiary p-2">
-        <Text
-          className={
-            tone === 'error'
-              ? 'font-mono text-danger text-xs leading-5'
-              : 'font-mono text-default-foreground text-xs leading-5'
-          }
-          selectable
-        >
-          {value}
-        </Text>
-      </View>
+      <Text
+        className={
+          tone === 'error'
+            ? 'font-mono text-danger text-md leading-5'
+            : 'font-mono text-default-foreground text-md leading-5'
+        }
+        selectable
+      >
+        {value}
+      </Text>
     </View>
   );
 }
 
 function SectionTitle({ title }: { title: string }) {
   return (
-    <Text className="text-foreground-muted text-xs" selectable>
+    <Text className="text-default-foreground text-md" selectable>
       {title}
     </Text>
   );
@@ -182,18 +144,29 @@ function getToolStatusText(part: ToolMessagePart, t: ReturnType<typeof useTransl
   }
 
   if (part.state === 'approval-responded') {
-    return part.approval.approved ? t('chat.tool.approved') : t('chat.tool.denied');
+    return part.approval.approved ? t('chat.tool.approved') : t('chat.tool.runDenied');
   }
 
   if (part.state === 'output-available') {
-    return part.preliminary ? t('chat.tool.preliminaryOutputReady') : t('chat.tool.outputReady');
+    return undefined;
   }
 
   if (part.state === 'output-error') {
-    return part.errorText;
+    return t('chat.tool.callError');
   }
 
-  return t('chat.tool.outputDenied');
+  return t('chat.tool.runDenied');
+}
+
+function getToolStatusTone(part: ToolMessagePart): 'danger' | 'default' | 'warning' {
+  if (
+    part.state === 'output-denied' ||
+    (part.state === 'approval-responded' && !part.approval.approved)
+  ) {
+    return 'warning';
+  }
+
+  return part.state === 'output-error' ? 'danger' : 'default';
 }
 
 function shouldShowNoDetails(part: ToolMessagePart) {
