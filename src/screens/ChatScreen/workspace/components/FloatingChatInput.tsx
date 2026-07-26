@@ -10,11 +10,16 @@ import {
 } from '../../input/chatInputLayout';
 
 type FloatingChatInputProps = {
+  assistantId?: string;
   onHeightChange: (height: number) => void;
   topicId?: string;
 };
 
-export function FloatingChatInput({ onHeightChange, topicId }: FloatingChatInputProps) {
+export function FloatingChatInput({
+  assistantId,
+  onHeightChange,
+  topicId,
+}: FloatingChatInputProps) {
   const { bottom } = useSafeAreaInsets();
   const bottomPadding = Math.max(bottom, chatInputMinBottomPadding);
   const keyboardInputOffset = getChatInputKeyboardStickyOffset(bottom);
@@ -37,7 +42,7 @@ export function FloatingChatInput({ onHeightChange, topicId }: FloatingChatInput
       onLayout={handleLayout}
     >
       <KeyboardStickyView offset={{ opened: keyboardInputOffset }}>
-        <ChatInput topicId={topicId} />
+        <ChatInput assistantId={assistantId} topicId={topicId} />
       </KeyboardStickyView>
     </View>
   );

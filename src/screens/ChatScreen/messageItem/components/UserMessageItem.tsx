@@ -1,10 +1,13 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import type { Message } from '@/data/types/message';
 
 import { MessageParts } from '../../messageContent';
+import { useShouldSlideIn } from '../slideIn/MessageSlideInProvider';
+import { useUserMessageSlideInStyle } from '../slideIn/useUserMessageSlideInStyle';
 import { ContextMenu, type ContextMenuAction } from './contextMenu';
 
 type UserMessageItemProps = {
@@ -13,6 +16,8 @@ type UserMessageItemProps = {
 
 export function UserMessageItem({ message }: UserMessageItemProps) {
   const { t } = useTranslation();
+  const shouldSlideIn = useShouldSlideIn(message.id);
+  const slideInStyle = useUserMessageSlideInStyle(shouldSlideIn);
   const menuActions = useMemo<ContextMenuAction[]>(
     () => [
       { id: 'copy-message', image: 'doc.on.doc', title: t('common.copy') },
@@ -22,7 +27,7 @@ export function UserMessageItem({ message }: UserMessageItemProps) {
   );
 
   return (
-    <View className="w-full items-end px-4 py-2">
+    <Animated.View className="w-full items-end px-4 py-2" style={slideInStyle}>
       <View className="max-w-[86%]">
         <ContextMenu actions={menuActions}>
           <View className="gap-2 rounded-xl bg-settings-grouped-surface p-2">
@@ -30,6 +35,6 @@ export function UserMessageItem({ message }: UserMessageItemProps) {
           </View>
         </ContextMenu>
       </View>
-    </View>
+    </Animated.View>
   );
 }

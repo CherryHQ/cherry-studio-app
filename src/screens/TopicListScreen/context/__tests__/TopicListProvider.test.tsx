@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { queryKeys } from '@/data/api';
 import { useDataMutation } from '@/data/hooks';
 import type { DataServices } from '@/data/services/createDataServices';
 import type { Topic } from '@/data/types/topic';
@@ -11,12 +12,23 @@ import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
 
 const mockRouterPush = jest.fn();
 const mockInvalidateQueries = jest.fn();
+const mockPrefetchQuery = jest.fn(async (_options: unknown) => undefined);
 const mockRemoveQueries = jest.fn();
 const mockQueryClient = {
   invalidateQueries: mockInvalidateQueries,
+  prefetchQuery: mockPrefetchQuery,
   removeQueries: mockRemoveQueries,
 };
+const defaultModelId = 'provider::default-model';
+const mockGetCachedPreferenceValue = jest.fn((): string | null => defaultModelId);
+const mockGetModelById = jest.fn(async (_modelId: string) => null);
 const mockServices = {
+  model: {
+    getById: mockGetModelById,
+  },
+  preference: {
+    getCachedValue: mockGetCachedPreferenceValue,
+  },
   topic: {
     deleteMany: jest.fn(),
     update: jest.fn(),
@@ -83,6 +95,7 @@ beforeEach(() => {
   currentActions = undefined;
   mutationHookIndex = 0;
   renderer = undefined;
+  mockGetCachedPreferenceValue.mockReturnValue(defaultModelId);
 
   usePinsMock.mockReturnValue({
     error: null,
@@ -130,6 +143,23 @@ describe('TopicListProvider', () => {
     const topics = Array.from({ length: 14 }, (_, index) => makeTopic(index + 1));
     await renderProvider(topics);
 
+    expect(mockPrefetchQuery).toHaveBeenCalledTimes(1);
+    expect(mockPrefetchQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: queryKeys.models.detail(defaultModelId),
+        staleTime: 1000 * 60 * 5,
+      }),
+    );
+    expect(mockPrefetchQuery.mock.invocationCallOrder[0]).toBeLessThan(
+      prefetchTopicMessagesMock.mock.invocationCallOrder[0],
+    );
+
+    const modelQueryFn = (
+      mockPrefetchQuery.mock.calls[0]?.[0] as { queryFn: () => Promise<unknown> }
+    ).queryFn;
+    await expect(modelQueryFn()).resolves.toBeNull();
+    expect(mockGetModelById).toHaveBeenCalledWith(defaultModelId);
+
     expect(prefetchTopicMessagesMock).toHaveBeenCalledTimes(12);
     expect(prefetchTopicMessagesMock).not.toHaveBeenCalledWith(
       mockQueryClient,
@@ -141,6 +171,7 @@ describe('TopicListProvider', () => {
       currentActions?.openTopic('topic-13');
     });
 
+    expect(mockPrefetchQuery).toHaveBeenCalledTimes(2);
     expect(prefetchTopicMessagesMock).toHaveBeenCalledWith(
       mockQueryClient,
       mockServices,
@@ -150,6 +181,14 @@ describe('TopicListProvider', () => {
       params: { topicId: 'topic-13' },
       pathname: '/topics',
     });
+  });
+
+  test.each([null, 'legacy-model-id'])('skips default model prefetch for %p', async (modelId) => {
+    mockGetCachedPreferenceValue.mockReturnValue(modelId);
+
+    await renderProvider([makeTopic(1)]);
+
+    expect(mockPrefetchQuery).not.toHaveBeenCalled();
   });
 
   test('passes pagination through while preserving topic mutations', async () => {

@@ -2,6 +2,8 @@ import { ChatInputProvider } from '../../input/context/ChatInputProvider';
 import { FloatingChatInput } from './FloatingChatInput';
 
 type ChatComposerProps = {
+  /** Assistant to bind a newly created topic to; ignored once `topicId` exists. */
+  assistantId?: string;
   onHeightChange: (height: number) => void;
   topicId?: string;
 };
@@ -12,10 +14,14 @@ type ChatComposerProps = {
  * The reasoning-effort control lives inside the model picker sheet
  * (ChatInputReasoningSection), not as a separate floating panel.
  */
-export function ChatComposer({ onHeightChange, topicId }: ChatComposerProps) {
+export function ChatComposer({ assistantId, onHeightChange, topicId }: ChatComposerProps) {
   return (
     <ChatInputProvider>
-      <FloatingChatInput onHeightChange={onHeightChange} topicId={topicId} />
+      <FloatingChatInput
+        assistantId={assistantId}
+        onHeightChange={onHeightChange}
+        topicId={topicId}
+      />
     </ChatInputProvider>
   );
 }

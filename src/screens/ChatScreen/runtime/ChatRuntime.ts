@@ -31,6 +31,12 @@ export type ChatRuntimeTopicStatus = 'aborting' | 'idle' | 'reserving' | 'stream
 
 export type ChatRuntimeTopicSnapshot = {
   error?: Error;
+  /**
+   * Whether the topic had content before the pending user turn. Defined only
+   * while that turn is overlaid so initial rendering can distinguish a true
+   * first exchange from an existing topic that is still streaming.
+   */
+  hasHistoryBeforePendingTurn?: boolean;
   overlayMessage?: Message;
   pendingUserMessage?: Message;
   status: ChatRuntimeTopicStatus;
@@ -183,10 +189,21 @@ export class ChatRuntime {
       return;
     }
 
-    if (this.activeTurns.has(newTopicRuntimeId) || this.newTopicHandoffTopicId) {
+    // The only real conflict is a previous new topic still being reserved — a
+    // window of a few hundred ms. `newTopicHandoffTopicId` stays set from topic
+    // creation until the stream ends and merely mirrors the created topic's
+    // snapshot onto this screen, so treating it as a mutex rejects a legitimate
+    // send: the assistant detail screen's "start chat" lets the user open
+    // another new topic while the previous reply is still streaming.
+    if (this.activeTurns.has(newTopicRuntimeId)) {
+      // This rejection surfaces as a bare "message was not sent" toast, so it
+      // has to leave a trace of its own.
+      logger.warn('Rejected a new-topic send: the previous new topic is still being created');
       throw new Error('A topic is already being created.');
     }
 
+    // Hand the new-topic snapshot slot over to this turn; the previous topic's
+    // stream keeps writing to its own id.
     this.newTopicHandoffTopicId = undefined;
     const abortController = new AbortController();
     const activeTurn: ActiveTurn = { abortController };
@@ -381,6 +398,7 @@ export class ChatRuntime {
   }): Promise<void> {
     const { activeTurn, model, parts, topic } = input;
     const topicId = topic.id;
+    const hasHistoryBeforePendingTurn = Boolean(topic.activeNodeId);
     const { abortController } = activeTurn;
     let userMessage: Message | undefined;
     let assistantPlaceholder: Message | undefined;
@@ -449,6 +467,7 @@ export class ChatRuntime {
       // Overlay the freshly created user message immediately so it renders
       // without waiting for the invalidate -> refetch round trip below.
       this.setTurnSnapshot(topicId, {
+        hasHistoryBeforePendingTurn,
         overlayMessage: assistantPlaceholder,
         pendingUserMessage: userMessage,
         status: 'streaming',
@@ -467,6 +486,7 @@ export class ChatRuntime {
         activeTurn,
         assistantMessage: assistantPlaceholder,
         ...(isFirstExchange ? { autoNameUserParts: turnParts } : {}),
+        hasHistoryBeforePendingTurn,
         history,
         model,
         pendingUserMessage: userMessage,
@@ -558,6 +578,8 @@ export class ChatRuntime {
     activeTurn: ActiveTurn;
     assistantMessage: Message;
     autoNameUserParts?: readonly CherryMessagePart[];
+    /** Rides with `pendingUserMessage`: only meaningful while it is overlaid. */
+    hasHistoryBeforePendingTurn?: boolean;
     history: readonly Message[];
     model: Model;
     pendingUserMessage?: Message;
@@ -589,6 +611,7 @@ export class ChatRuntime {
         latestAssistantMessage = nextAssistantMessage;
         throwIfAborted(abortController.signal);
         this.setTurnSnapshot(topicId, {
+          hasHistoryBeforePendingTurn: input.hasHistoryBeforePendingTurn,
           overlayMessage: applyStreamingMessage(assistantMessage, nextAssistantMessage),
           pendingUserMessage: input.pendingUserMessage,
           status: 'streaming',
@@ -638,6 +661,7 @@ export class ChatRuntime {
       await this.releaseTurn({
         activeTurn,
         terminalSnapshot: terminalAssistantMessage && {
+          hasHistoryBeforePendingTurn: input.hasHistoryBeforePendingTurn,
           overlayMessage: terminalAssistantMessage,
           pendingUserMessage: input.pendingUserMessage,
           status: 'idle',

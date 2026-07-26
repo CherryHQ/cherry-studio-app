@@ -16,8 +16,11 @@ export const sheetScrimColor = 'rgba(0, 0, 0, 0.4)';
 // Every sheet derives its inset width, bottom gap, concentric corner radius, and
 // header placement from these values — single source of truth, tune here.
 export const bottomSheet = {
-  outerInset: 8, // gap between the floating card and the screen edges / home indicator
-  cornerRadius: 28, // resting top/bottom corner radius (grows with the bottom safe-area inset)
+  // Gap between the floating card and the screen edges, uniform on the left,
+  // right and bottom — that uniformity is what lets the bottom corners be
+  // concentric with the display's own corners.
+  outerInset: 4,
+  cornerRadius: 28, // the top corners exactly; a floor for the concentric bottom ones
   headerHeight: 60, // minimum header row height
   headerSideWidth: 44, // close button + right-slot square size
 } as const;
@@ -28,6 +31,11 @@ export const slotTextHighlightColor = '#00b96b';
 
 // Gap kept between the keyboard and the focused input inside scrollable forms.
 export const keyboardBottomOffset = 16;
+
+// Padding below a screen-bottom action button when the safe-area inset is
+// smaller than this (home-button devices report 0), so the button never sits
+// flush against the screen edge.
+export const screenBottomActionInset = 16;
 
 // Delay before imperatively focusing the native header search bar on iOS.
 // UISearchController attaches to the navigation bar asynchronously, and a

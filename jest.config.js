@@ -1,6 +1,16 @@
 module.exports = {
   preset: 'jest-expo',
   testEnvironment: 'node',
+  // The first mount in a suite that renders a real react-native tree costs
+  // ~0.6-4.9s — loading and JIT-ing those modules — while every later mount in
+  // the same suite is ~3ms. That one-off cost lands inside whichever test runs
+  // first, so jest's 5s default left the slowest suites (ChatInputActionSheet at
+  // 4.9s, PaintingTemplateRow at 4.5s) overrunning it whenever workers contended
+  // for CPU during a full run: the "DrawingList/TopicList is flaky" failures.
+  // Raised here rather than warmed up per suite because the cost is
+  // environmental — every component suite needs the headroom, not just the ones
+  // that have tripped so far.
+  testTimeout: 20_000,
   // `expo prebuild` output: Pods vendor their own test suites, which jest would
   // otherwise collect (hundreds of failing foreign suites drowning real results).
   testPathIgnorePatterns: ['/node_modules/', '/ios/', '/android/'],
@@ -19,7 +29,9 @@ module.exports = {
     '\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
-    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|tokenx)))',
+    // `fractional-indexing` is ESM-only (`"type": "module"`, no CJS build), so it
+    // needs transforming for any suite that imports it directly.
+    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|tokenx|fractional-indexing)))',
     '/node_modules/react-native-reanimated/plugin/',
   ],
 };

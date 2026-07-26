@@ -111,10 +111,10 @@ export async function insertManyWithOrderKey<
 
   if (position === 'last') {
     const largest = await selectBoundaryKey(tx, table, 'last', scope);
-    orderKeys = generateOrderKeySequenceBetween(largest, null, valuesList.length);
+    orderKeys = allocateOrderKeys(table, largest, null, valuesList.length);
   } else {
     const smallest = await selectBoundaryKey(tx, table, 'first', scope);
-    orderKeys = generateOrderKeySequenceBetween(null, smallest, valuesList.length);
+    orderKeys = allocateOrderKeys(table, null, smallest, valuesList.length);
   }
 
   const rows = await tx
@@ -278,6 +278,29 @@ export async function computeNewOrderKey(
   const anchorKey = await requireOrderKey(tx, table, pkColumn, request.after, scope);
   const successor = await selectAdjacentKey(tx, table, 'successor', anchorKey, exclusion);
   return generateOrderKeyBetween(anchorKey, successor);
+}
+
+/**
+ * The neighbour keys come from the table, so when one of them is malformed
+ * `fractional-indexing` reports only the offending key ("invalid order key: c4")
+ * with nothing to tie it to a table or a row — the failure then surfaces wherever
+ * the insert happened to be (e.g. "message was not sent"). Name the table here.
+ */
+function allocateOrderKeys(
+  table: TableWithOrderKey,
+  before: string | null,
+  after: string | null,
+  count: number,
+): string[] {
+  try {
+    return generateOrderKeySequenceBetween(before, after, count);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+
+    throw new Error(
+      `Cannot allocate order keys in "${getTableName(table)}" between ${String(before)} and ${String(after)}: ${reason}`,
+    );
+  }
 }
 
 function dedupMoves(moves: { anchor: OrderRequest; id: string }[]): {

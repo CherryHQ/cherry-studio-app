@@ -19,4 +19,9 @@ export type HeaderToolbarAction = Pick<
    */
   element?: ReactElement;
   key: string;
+  /**
+   * Text rendered in place of the icon, for system-style word buttons such as
+   * "Edit". Takes precedence over `icon`/`androidIcon` when set.
+   */
+  label?: string;
 };

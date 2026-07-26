@@ -14,12 +14,15 @@ export type BottomSheetCloseReason = 'controlled' | 'dismiss' | (string & {});
 export const controlledCloseReason = 'controlled';
 
 export type BottomSheetGeometry = {
-  // Concentric bottom corner radius of the floating card (grows with the bottom
-  // safe-area inset); bodies align their own bottom panels to it.
+  // Bottom corner radius of the floating card, concentric with the display's
+  // own corner; bodies align their own bottom panels to it by subtracting their
+  // inset from the card (`bottomCornerRadius - inset`).
   bottomCornerRadius: number;
   insets: EdgeInsets;
   // Card width = window width minus the outer inset on both sides.
   sheetWidth: number;
+  // Top corner radius of the floating card — the resting radius on every
+  // device, since the top corners touch no screen edge.
   topCornerRadius: number;
 };
 

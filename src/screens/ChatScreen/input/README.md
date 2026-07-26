@@ -1,8 +1,9 @@
 # Chat Input Behavior
 
 This directory owns the floating chat input shown at the bottom of chat workspaces.
-`ChatInput` stays prop-less and is exported through `index.ts`; callers should not reach into the
-internal provider or leaf components.
+`ChatInput` is exported through `index.ts` and takes only routing identity (`topicId`, plus
+`assistantId` for a topic that does not exist yet); callers should not reach into the internal
+provider or leaf components.
 
 ## Current Behavior Contract
 

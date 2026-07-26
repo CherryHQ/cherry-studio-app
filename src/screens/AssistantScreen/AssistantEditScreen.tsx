@@ -8,7 +8,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { CloseHeader, type CloseHeaderAction } from '@/components/headers';
+import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import {
   ModelPickerBottomSheet,
   ModelPickerIcon,
@@ -17,6 +17,7 @@ import {
 } from '@/components/modelPicker';
 import { keyboardBottomOffset } from '@/config/constants';
 import type { CreateAssistantDto } from '@/data/api/schemas/assistants';
+import { usePreference } from '@/data/hooks';
 import {
   type Assistant,
   type AssistantSettings,
@@ -63,9 +64,16 @@ export default function AssistantEditScreen() {
   const { servers: mcpServers } = useMcpServersApi();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+  const [defaultModelPreference] = usePreference('chat.default_model_id');
   const [form, setForm] = useState<AssistantFormState>(() => createFormState(assistant));
   const [syncedAssistant, setSyncedAssistant] = useState(assistant);
+  const [hasPickedModel, setHasPickedModel] = useState(false);
+  const [seededModelId, setSeededModelId] = useState<UniqueModelId | null>(null);
   const selectedModel = modelPickerData.getModelItem(form.modelId);
+  // Resolving through the picker catalog keeps a stale preference (a model the
+  // user has since removed) from being seeded, which the create endpoint would
+  // reject as an unregistered model.
+  const defaultModelId = modelPickerData.getModelItem(defaultModelPreference)?.modelId ?? null;
   const isSaving = isCreating || isUpdating;
 
   // Re-seed the form from the async assistant record when it first arrives (or
@@ -76,6 +84,16 @@ export default function AssistantEditScreen() {
     if (assistant) {
       setForm(createFormState(assistant));
     }
+  }
+
+  // New assistants start on the global default model, like the desktop create
+  // wizard. Both the preference and the model catalog load asynchronously, so
+  // keep following them until the user picks a model themselves — after that a
+  // late-arriving default must not overwrite the deliberate choice. Editing an
+  // existing assistant never seeds: its empty `modelId` is a real stored state.
+  if (!isEditing && !hasPickedModel && defaultModelId !== seededModelId) {
+    setSeededModelId(defaultModelId);
+    setForm((current) => ({ ...current, modelId: defaultModelId }));
   }
 
   const updateForm = useCallback(
@@ -92,6 +110,7 @@ export default function AssistantEditScreen() {
     setIsModelPickerOpen(false);
   }, []);
   const handleModelSelect = useCallback((item: ModelPickerModelItem) => {
+    setHasPickedModel(true);
     setForm((current) => ({ ...current, modelId: item.modelId }));
   }, []);
   const openEmojiPicker = useCallback(() => {
@@ -144,7 +163,7 @@ export default function AssistantEditScreen() {
     }
   }, [assistant?.settings, assistantId, createAssistant, form, router, t, toast, updateAssistant]);
   const title = isEditing ? t('assistant.edit.title') : t('assistant.create.title');
-  const saveActions = useMemo<CloseHeaderAction[]>(
+  const saveActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
         accessibilityLabel: t('common.save'),
@@ -161,7 +180,7 @@ export default function AssistantEditScreen() {
 
   return (
     <>
-      <CloseHeader rightActions={saveActions} title={title} />
+      <BackHeader rightActions={saveActions} title={title} />
       <KeyboardAwareScrollView
         alwaysBounceVertical={false}
         bottomOffset={keyboardBottomOffset}

@@ -93,6 +93,7 @@
     "expo-localization": "~57.0.1",
     "expo-media-library": "~57.0.2",
     "expo-router": "~57.0.6",
+    "expo-screen-corner-radius": "^1.1.0",
     "expo-splash-screen": "~57.0.4",
     "expo-sqlite": "~57.0.1",
     "expo-status-bar": "~57.0.1",

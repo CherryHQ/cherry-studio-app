@@ -1,13 +1,14 @@
-import { useRouter } from 'expo-router';
 import { ChevronRightIcon } from 'lucide-uniwind/png';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/components/headers';
 import {
+  getNextModelSelection,
   MODEL_SETTING_KIND_TITLE_KEYS,
   MODEL_SETTING_KINDS,
+  ModelPickerBottomSheet,
   type ModelPickerModelItem,
   type ModelSettingKind,
   useModelPickerData,
@@ -23,9 +24,27 @@ const MODEL_SETTING_ICONS = {
 
 export default function ModelSettingsScreen() {
   const { t } = useTranslation();
-  const router = useRouter();
   const modelSettings = useModelSettingSelections();
   const modelPickerData = useModelPickerData();
+  // Which kind's picker sheet is open (null = none). Each row opens the shared
+  // model-picker sheet in place instead of pushing a dedicated selection screen,
+  // matching the chat input's picker.
+  const [openKind, setOpenKind] = useState<ModelSettingKind | null>(null);
+
+  const closePicker = useCallback(() => setOpenKind(null), []);
+  const handleSelect = useCallback(
+    (item: ModelPickerModelItem) => {
+      if (!openKind) {
+        return;
+      }
+
+      const nextModelId = getNextModelSelection(modelSettings.selections[openKind], item.modelId);
+      modelSettings.onSelectionChange(openKind, nextModelId);
+      setOpenKind(null);
+    },
+    [modelSettings, openKind],
+  );
+
   const items = useMemo(
     () =>
       MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => ({
@@ -37,9 +56,9 @@ export default function ModelSettingsScreen() {
         ),
         iconEmoji: MODEL_SETTING_ICONS[kind],
         title: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
-        onPress: () => router.push(`/settings/model/${kind}`),
+        onPress: () => setOpenKind(kind),
       })),
-    [modelPickerData, modelSettings.selections, router, t],
+    [modelPickerData, modelSettings.selections, t],
   );
 
   return (
@@ -57,6 +76,15 @@ export default function ModelSettingsScreen() {
           ))}
         </View>
       </ScrollView>
+      {openKind ? (
+        <ModelPickerBottomSheet
+          isOpen
+          onClose={closePicker}
+          onSelect={handleSelect}
+          selectedModelId={modelSettings.selections[openKind]}
+          title={t(MODEL_SETTING_KIND_TITLE_KEYS[openKind])}
+        />
+      ) : null}
     </>
   );
 }

@@ -1,6 +1,5 @@
 export { default as AboutScreen } from './AboutScreen';
 export { default as DataScreen } from './DataScreen';
-export { default as ModelSelectionScreen } from './ModelSelectionScreen';
 export { default as ModelSettingsScreen } from './ModelSettingsScreen';
 export { default as ProfileSettingsScreen } from './ProfileSettingsScreen';
 export { default as ProviderListScreen } from './ProviderListScreen';

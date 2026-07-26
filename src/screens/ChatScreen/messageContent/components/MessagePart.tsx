@@ -22,11 +22,12 @@ import {
 } from './WebSearchToolPart';
 
 type MessagePartProps = {
+  isStreaming: boolean;
   part: CherryMessagePart;
   renderMode?: MessagePartRenderMode;
 };
 
-export function MessagePart({ part, renderMode = 'markdown' }: MessagePartProps) {
+export function MessagePart({ isStreaming, part, renderMode = 'markdown' }: MessagePartProps) {
   const partType = part.type;
 
   if (isToolMessagePart(part)) {
@@ -51,17 +52,17 @@ export function MessagePart({ part, renderMode = 'markdown' }: MessagePartProps)
 
   switch (part.type) {
     case 'text':
-      return <TextPart part={part} renderMode={renderMode} />;
+      return <TextPart isStreaming={isStreaming} part={part} renderMode={renderMode} />;
     case 'reasoning':
-      return <ReasoningPart part={part} />;
+      return <ReasoningPart isStreaming={isStreaming} part={part} />;
     case 'data-code':
-      return <CodePart part={part} />;
+      return <CodePart isStreaming={isStreaming} part={part} />;
     case 'data-compact':
-      return <CompactPart part={part} />;
+      return <CompactPart isStreaming={isStreaming} part={part} />;
     case 'data-error':
       return <ErrorPart part={part} />;
     case 'data-translation':
-      return <TranslationPart part={part} />;
+      return <TranslationPart isStreaming={isStreaming} part={part} />;
     case 'data-video':
       return <VideoPart part={part} />;
     case 'file':

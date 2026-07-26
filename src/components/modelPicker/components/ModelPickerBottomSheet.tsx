@@ -29,6 +29,9 @@ type ModelPickerBottomSheetProps = {
   selectedTags?: readonly ModelPickerTag[];
   selectedModelId: string | null;
   showPinnedModels?: boolean;
+  // Header title; defaults to the generic "Select model". Pass a context-specific
+  // title (e.g. the model-setting kind) when the picker isn't the chat default.
+  title?: string;
 };
 
 export function ModelPickerBottomSheet({
@@ -39,6 +42,7 @@ export function ModelPickerBottomSheet({
   selectedTags = [],
   selectedModelId,
   showPinnedModels = true,
+  title,
 }: ModelPickerBottomSheetProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -115,7 +119,7 @@ export function ModelPickerBottomSheet({
       isOpen={isOpen}
       onClose={handleClose}
       testID="model-picker"
-      title={t('modelPicker.title')}
+      title={title ?? t('modelPicker.title')}
     >
       {/* The card's fixed height + this flex column bound the list, so
           LegendList (flex:1) virtualizes without any manual height math. */}
