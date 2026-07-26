@@ -65,10 +65,10 @@ export function useMcpServerMutations() {
   const createMutation = useMutation({
     mutationFn: (dto: CreateMcpServerDto) => services.mobileMcpServer.create(dto),
     onSuccess: async (server) => {
-      await Promise.all([
-        invalidateServerQueries(server.id),
-        ...(server.isActive ? [services.mcp.prewarmActiveServers()] : []),
-      ]);
+      await invalidateServerQueries(server.id);
+      if (server.isActive) {
+        void services.mcp.warmToolsCache(server);
+      }
     },
   });
 
@@ -93,12 +93,10 @@ export function useMcpServerMutations() {
         services.mcp.invalidateServer(server.id);
       }
 
-      await Promise.all([
-        invalidateServerQueries(server.id, transportChanged),
-        ...(server.isActive && (transportChanged || becameActive)
-          ? [services.mcp.prewarmActiveServers()]
-          : []),
-      ]);
+      await invalidateServerQueries(server.id, transportChanged);
+      if (server.isActive && (transportChanged || becameActive)) {
+        void services.mcp.warmToolsCache(server);
+      }
     },
   });
 

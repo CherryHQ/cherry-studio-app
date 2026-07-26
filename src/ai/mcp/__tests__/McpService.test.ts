@@ -22,6 +22,14 @@ function flush(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
 function makeServer(overrides: Partial<StreamableHttpMcpServer> = {}): StreamableHttpMcpServer {
   return {
     baseUrl: 'https://a.example/mcp',
@@ -119,7 +127,7 @@ beforeEach(() => {
   mockCreateMCPClient.mockReset();
 });
 
-describe('chat hot path is cache-only', () => {
+describe('assistant tool preparation', () => {
   it('ignores a synchronized server without a URL', async () => {
     const { service } = makeService([makeServer({ baseUrl: '' })]);
 
@@ -128,7 +136,7 @@ describe('chat hot path is cache-only', () => {
     expect(mockCreateMCPClient).not.toHaveBeenCalled();
   });
 
-  it('returns nothing on a cold cache and never awaits the connect', async () => {
+  it('waits at most three seconds for a cold server', async () => {
     // Fake timers so the refresh's 15s guard doesn't outlive the test.
     jest.useFakeTimers({ doNotFake: ['setImmediate'] });
     try {
@@ -137,20 +145,62 @@ describe('chat hot path is cache-only', () => {
       mockCreateMCPClient.mockReturnValue(new Promise(() => undefined));
       const { service } = makeService([makeServer()]);
 
-      await expect(service.getToolSetForAssistant(makeAssistant())).resolves.toBeUndefined();
+      let settled = false;
+      const request = service.getToolSetForAssistant(makeAssistant());
+      void request.then(() => {
+        settled = true;
+      });
+      await flush();
+
+      jest.advanceTimersByTime(2999);
+      await Promise.resolve();
+      expect(settled).toBe(false);
+
+      jest.advanceTimersByTime(1);
+      await expect(request).resolves.toBeUndefined();
     } finally {
       jest.clearAllTimers();
       jest.useRealTimers();
     }
   });
 
-  it('serves tools once a background refresh has completed', async () => {
+  it('includes tools in the first request when the cold warm completes in time', async () => {
     mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
     const { service } = makeService([makeServer()]);
 
-    const tools = await warmedToolSet(service);
+    const tools = await service.getToolSetForAssistant(makeAssistant());
 
     expect(Object.keys(tools ?? {})).toEqual(['mcp__serverone__search']);
+  });
+
+  it('uses one three-second budget for all servers and keeps late refreshes for the next request', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    try {
+      const slowConnect = deferred<FakeClient>();
+      mockCreateMCPClient
+        .mockReturnValueOnce(slowConnect.promise)
+        .mockResolvedValueOnce(makeClient(makeRawTools(['fast'])));
+      const { service } = makeService([
+        makeServer({ id: 'slow', name: 'Slow' }),
+        makeServer({ baseUrl: 'https://fast.example/mcp', id: 'fast', name: 'Fast' }),
+      ]);
+
+      const request = service.getToolSetForAssistant(makeAssistant());
+      await flush();
+      jest.advanceTimersByTime(3 * 1000);
+
+      expect(Object.keys((await request) ?? {})).toEqual(['mcp__fast__fast']);
+
+      slowConnect.resolve(makeClient(makeRawTools(['late'])));
+      await flush();
+      expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
+        'mcp__slow__late',
+        'mcp__fast__fast',
+      ]);
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
   });
 
   it('reuses the cache instead of reconnecting', async () => {
@@ -193,9 +243,6 @@ describe('chat hot path is cache-only', () => {
     await warmedToolSet(service);
 
     servers[0] = makeServer({ baseUrl: 'https://new.example/mcp' });
-    expect(await service.getToolSetForAssistant(makeAssistant())).toBeUndefined();
-    await flush();
-
     expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
       'mcp__serverone__new',
     ]);
@@ -289,9 +336,11 @@ describe('chat hot path is cache-only', () => {
       mockCreateMCPClient.mockResolvedValue(client);
       const { service } = makeService([makeServer()]);
 
-      await service.getToolSetForAssistant(makeAssistant());
+      const request = service.getToolSetForAssistant(makeAssistant());
       await flush();
-      jest.advanceTimersByTime(15 * 1000);
+      jest.advanceTimersByTime(3 * 1000);
+      await expect(request).resolves.toBeUndefined();
+      jest.advanceTimersByTime(12 * 1000);
       await flush();
 
       // The wedged client is closed rather than pinning the pool slot forever.
@@ -461,6 +510,68 @@ describe('prewarmActiveServers', () => {
     expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
       'mcp__serverone__search',
     ]);
+  });
+
+  it('warms active servers in batches of three', async () => {
+    const releases: Array<() => void> = [];
+    let active = 0;
+    let maxActive = 0;
+    mockCreateMCPClient.mockImplementation(async () => ({
+      close: jest.fn(async () => undefined),
+      tools: jest.fn(
+        () =>
+          new Promise<ToolSet>((resolve) => {
+            active += 1;
+            maxActive = Math.max(maxActive, active);
+            releases.push(() => {
+              active -= 1;
+              resolve(makeRawTools(['search']));
+            });
+          }),
+      ),
+    }));
+    const servers = Array.from({ length: 6 }, (_, index) =>
+      makeServer({
+        baseUrl: `https://${index}.example/mcp`,
+        id: `server-${index}`,
+        name: `Server${index}`,
+      }),
+    );
+    const { service } = makeService(servers);
+
+    const prewarm = service.prewarmActiveServers();
+    await flush();
+    expect(releases).toHaveLength(3);
+
+    releases.slice(0, 3).forEach((release) => {
+      release();
+    });
+    await flush();
+    expect(releases).toHaveLength(6);
+    expect(maxActive).toBe(3);
+
+    releases.slice(3).forEach((release) => {
+      release();
+    });
+    await prewarm;
+  });
+
+  it('shares one active prewarm run across concurrent callers', async () => {
+    const tools = deferred<ToolSet>();
+    const client = makeClient(makeRawTools(['search']));
+    client.tools.mockReturnValue(tools.promise);
+    mockCreateMCPClient.mockResolvedValue(client);
+    const { service } = makeService([makeServer()]);
+
+    const first = service.prewarmActiveServers();
+    const second = service.prewarmActiveServers();
+    expect(second).toBe(first);
+    await flush();
+
+    tools.resolve(makeRawTools(['search']));
+    await Promise.all([first, second]);
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+    expect(client.tools).toHaveBeenCalledTimes(1);
   });
 
   it('never rejects when listing servers fails', async () => {
@@ -751,6 +862,42 @@ describe('listToolsForServer', () => {
     expect(mockCreateMCPClient).toHaveBeenCalledTimes(2);
   });
 
+  it('shares an in-flight warm with an explicit settings listing', async () => {
+    const tools = deferred<ToolSet>();
+    const client = makeClient(makeRawTools(['search']));
+    client.tools.mockReturnValue(tools.promise);
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+
+    const warm = service.warmToolsCache(server);
+    await flush();
+    const listing = service.listToolsForServer(server);
+    tools.resolve(makeRawTools(['search']));
+
+    await expect(warm).resolves.toBeUndefined();
+    await expect(listing).resolves.toEqual([{ description: 'desc search', name: 'search' }]);
+    expect(client.tools).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not restart an old transport when a shared warm is invalidated', async () => {
+    const tools = deferred<ToolSet>();
+    const client = makeClient(makeRawTools(['search']));
+    client.tools.mockReturnValue(tools.promise);
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+
+    const warm = service.warmToolsCache(server);
+    await flush();
+    const listing = service.listToolsForServer(server);
+    service.invalidateServer(server.id);
+
+    await expect(warm).resolves.toBeUndefined();
+    await expect(listing).rejects.toThrow('was invalidated while listing tools');
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+  });
+
   it('surfaces the failure when the reconnect fails too', async () => {
     const client = makeClient(makeRawTools(['search']));
     client.tools.mockRejectedValue(new Error('401 unauthorized'));
@@ -794,9 +941,11 @@ describe('invalidateServer', () => {
       );
       const { service } = makeService([makeServer()]);
 
-      await service.getToolSetForAssistant(makeAssistant());
-      expect(jest.getTimerCount()).toBe(1);
+      const request = service.getToolSetForAssistant(makeAssistant());
+      await flush();
+      expect(jest.getTimerCount()).toBe(2);
       service.invalidateServer('server-1');
+      await request;
       expect(jest.getTimerCount()).toBe(0);
       settleConnect?.(client);
       await flush();
@@ -823,10 +972,12 @@ describe('invalidateServer', () => {
       makeServer({ baseUrl: 'https://b.example/mcp', id: 'other', name: 'Other' }),
     ]);
 
-    await service.getToolSetForAssistant(makeAssistant());
+    const request = service.getToolSetForAssistant(makeAssistant());
+    await flush();
     // Saving one server must not throw away every other server's warm-up.
     service.invalidateServer('server-1');
     settleOther?.(other);
+    await request;
     await flush();
 
     expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
@@ -844,11 +995,12 @@ describe('invalidateServer', () => {
     mockCreateMCPClient.mockResolvedValueOnce(stalled).mockResolvedValue(replacement);
     const { service } = makeService([makeServer()]);
 
-    await service.getToolSetForAssistant(makeAssistant());
+    const firstRequest = service.getToolSetForAssistant(makeAssistant());
     await flush();
     expect(stalled.tools).toHaveBeenCalled();
 
     service.invalidateServer('server-1');
+    await firstRequest;
     await service.getToolSetForAssistant(makeAssistant());
     await flush();
 
@@ -870,9 +1022,10 @@ describe('invalidateServer', () => {
     mockCreateMCPClient.mockResolvedValueOnce(stale).mockResolvedValue(replacement);
     const { service } = makeService([makeServer()]);
 
-    await service.getToolSetForAssistant(makeAssistant());
+    const firstRequest = service.getToolSetForAssistant(makeAssistant());
     await flush();
     service.invalidateServer('server-1');
+    await firstRequest;
     await service.getToolSetForAssistant(makeAssistant());
     await flush();
     settleOldTools?.(makeRawTools(['old']));

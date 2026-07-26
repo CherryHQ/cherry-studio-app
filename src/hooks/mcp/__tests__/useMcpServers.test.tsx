@@ -7,7 +7,7 @@ import { useMcpServerMutations } from '../useMcpServers';
 
 const mockInvalidateQueries = jest.fn(async () => undefined);
 const mockInvalidateServer = jest.fn();
-const mockPrewarmActiveServers = jest.fn(async () => undefined);
+const mockWarmToolsCache = jest.fn(async (): Promise<void> => undefined);
 const mockCreateServer = jest.fn();
 const mockDeleteServer = jest.fn(async () => undefined);
 const mockGetServer = jest.fn();
@@ -32,7 +32,7 @@ jest.mock('@/data/runtime', () => ({
   useDataServices: () => ({
     mcp: {
       invalidateServer: mockInvalidateServer,
-      prewarmActiveServers: mockPrewarmActiveServers,
+      warmToolsCache: mockWarmToolsCache,
     },
     mobileMcpServer: {
       create: mockCreateServer,
@@ -90,7 +90,7 @@ describe('useMcpServerMutations runtime effects', () => {
 
     expect(mockGetServer).not.toHaveBeenCalled();
     expect(mockInvalidateServer).not.toHaveBeenCalled();
-    expect(mockPrewarmActiveServers).not.toHaveBeenCalled();
+    expect(mockWarmToolsCache).not.toHaveBeenCalled();
     expect(mockInvalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.mcpServers.tools('server-1'),
     });
@@ -111,13 +111,13 @@ describe('useMcpServerMutations runtime effects', () => {
     });
 
     expect(mockInvalidateServer).not.toHaveBeenCalled();
-    expect(mockPrewarmActiveServers).not.toHaveBeenCalled();
+    expect(mockWarmToolsCache).not.toHaveBeenCalled();
     expect(mockInvalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.mcpServers.tools('server-1'),
     });
   });
 
-  it('invalidates, refreshes tools, and prewarms after a transport change', async () => {
+  it('invalidates, refreshes tools, and warms only the changed server', async () => {
     mockGetServer.mockResolvedValue(makeServer());
     mockUpdateServer.mockResolvedValue(makeServer({ baseUrl: 'https://b.example/mcp' }));
 
@@ -129,10 +129,12 @@ describe('useMcpServerMutations runtime effects', () => {
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.mcpServers.tools('server-1'),
     });
-    expect(mockPrewarmActiveServers).toHaveBeenCalledTimes(1);
+    expect(mockWarmToolsCache).toHaveBeenCalledWith(
+      expect.objectContaining({ baseUrl: 'https://b.example/mcp', id: 'server-1' }),
+    );
   });
 
-  it('prewarms on enable and invalidates on disable', async () => {
+  it('warms the enabled server and invalidates on disable', async () => {
     mockGetServer.mockResolvedValueOnce(makeServer({ isActive: false }));
     mockUpdateServer.mockResolvedValueOnce(makeServer({ isActive: true }));
 
@@ -140,7 +142,9 @@ describe('useMcpServerMutations runtime effects', () => {
       await actions?.updateServer('server-1', { isActive: true });
     });
 
-    expect(mockPrewarmActiveServers).toHaveBeenCalledTimes(1);
+    expect(mockWarmToolsCache).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'server-1', isActive: true }),
+    );
     expect(mockInvalidateServer).not.toHaveBeenCalled();
 
     jest.clearAllMocks();
@@ -152,20 +156,22 @@ describe('useMcpServerMutations runtime effects', () => {
     });
 
     expect(mockInvalidateServer).toHaveBeenCalledWith('server-1');
-    expect(mockPrewarmActiveServers).not.toHaveBeenCalled();
+    expect(mockWarmToolsCache).not.toHaveBeenCalled();
     expect(mockInvalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.mcpServers.tools('server-1'),
     });
   });
 
-  it('prewarms an active create and only invalidates runtime on delete', async () => {
+  it('warms an active create and only invalidates runtime on delete', async () => {
     mockCreateServer.mockResolvedValue(makeServer());
 
     await act(async () => {
       await actions?.createServer({ baseUrl: 'https://a.example/mcp', name: 'Server' });
     });
 
-    expect(mockPrewarmActiveServers).toHaveBeenCalledTimes(1);
+    expect(mockWarmToolsCache).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'server-1', isActive: true }),
+    );
     expect(mockInvalidateServer).not.toHaveBeenCalled();
 
     jest.clearAllMocks();
@@ -174,9 +180,30 @@ describe('useMcpServerMutations runtime effects', () => {
     });
 
     expect(mockInvalidateServer).toHaveBeenCalledWith('server-1');
-    expect(mockPrewarmActiveServers).not.toHaveBeenCalled();
+    expect(mockWarmToolsCache).not.toHaveBeenCalled();
     expect(mockInvalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.mcpServers.tools('server-1'),
     });
   });
+
+  it('does not keep a create mutation pending while the server warms', async () => {
+    const warm = deferred<void>();
+    mockWarmToolsCache.mockReturnValueOnce(warm.promise);
+    mockCreateServer.mockResolvedValue(makeServer());
+
+    await act(async () => {
+      await actions?.createServer({ baseUrl: 'https://a.example/mcp', name: 'Server' });
+    });
+
+    expect(mockWarmToolsCache).toHaveBeenCalledTimes(1);
+    warm.resolve();
+  });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
