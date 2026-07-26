@@ -81,10 +81,12 @@ export function BackHeader({ onBack, rightActions, title = '', titleElement }: B
           <ChevronLeftIcon className="size-6 text-foreground" strokeWidth={2} />
         </HeaderIconButton>
       ),
-      ...(rightActions && rightActions.length > 0
-        ? { headerRight: () => rightActions.map((action) => renderAndroidHeaderAction(action)) }
-        : null),
-      ...(titleElement ? { headerTitle: () => titleElement, title: '' } : { title }),
+      headerRight:
+        rightActions && rightActions.length > 0
+          ? () => rightActions.map((action) => renderAndroidHeaderAction(action))
+          : undefined,
+      headerTitle: titleElement ? () => titleElement : undefined,
+      title: titleElement ? '' : title,
     }),
     [goBack, rightActions, t, title, titleElement],
   );

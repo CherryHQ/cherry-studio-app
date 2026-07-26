@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { PlusIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
 import type { McpServerRuntimeSummary } from '@/ai/mcp';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
@@ -14,7 +14,7 @@ import { SettingsServiceRow } from '../components/SettingsServiceRow';
 export function McpScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { servers } = useMcpServersApi();
+  const { error, isLoading, refetch, servers } = useMcpServersApi();
   const { summaries } = useMcpServerRuntimeSummaries(servers);
 
   const openCreate = useCallback(() => {
@@ -44,7 +44,27 @@ export function McpScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        {servers.length === 0 ? (
+        {isLoading ? (
+          <View className="items-center gap-2 px-1 py-8">
+            <ActivityIndicator size="small" />
+            <Text className="text-default-foreground text-sm">
+              {t('settings.mcp.list.loading')}
+            </Text>
+          </View>
+        ) : error ? (
+          <View className="items-center gap-3 px-1 py-8">
+            <Text className="text-danger-foreground text-sm">
+              {t('settings.mcp.list.loadFailed')}
+            </Text>
+            <Text className="text-center text-default-foreground text-xs" selectable>
+              {error instanceof Error ? error.message : String(error)}
+            </Text>
+            <SettingsDialogActionButton
+              label={t('settings.mcp.retry')}
+              onPress={() => void refetch()}
+            />
+          </View>
+        ) : servers.length === 0 ? (
           <View className="items-center px-1">
             <SettingsDialogActionButton
               isPrimary

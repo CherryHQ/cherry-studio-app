@@ -7,6 +7,9 @@ import { McpScreen } from '../McpScreen';
 type HeaderAction = { key: string; onPress?: () => void };
 
 const mockPush = jest.fn();
+const mockRefetch = jest.fn();
+let mockListError: unknown;
+let mockListLoading = false;
 let mockRightActions: readonly HeaderAction[] = [];
 let mockServers: StreamableHttpMcpServer[] = [];
 let mockSummaries: Record<string, McpServerRuntimeSummary> = {};
@@ -26,7 +29,12 @@ jest.mock('@/components/headers', () => ({
 
 jest.mock('@/hooks/mcp/useMcpServers', () => ({
   useMcpServerRuntimeSummaries: () => ({ summaries: mockSummaries }),
-  useMcpServersApi: () => ({ servers: mockServers }),
+  useMcpServersApi: () => ({
+    error: mockListError,
+    isLoading: mockListLoading,
+    refetch: mockRefetch,
+    servers: mockServers,
+  }),
 }));
 
 jest.mock('@/screens/SettingsScreen/components/SettingsDialogActionButton', () => {
@@ -58,7 +66,10 @@ jest.mock('react-i18next', () => ({
         'settings.mcp.list.status.connecting': 'Connecting',
         'settings.mcp.list.status.disabled': 'Disabled',
         'settings.mcp.list.status.error': 'Connection failed',
+        'settings.mcp.list.loadFailed': 'Failed to load MCP servers.',
+        'settings.mcp.list.loading': 'Loading MCP servers...',
         'settings.mcp.list.toolCount': `${options?.count} tools`,
+        'settings.mcp.retry': 'Retry',
         'settings.pages.mcp.title': 'MCP',
       })[key] ?? key,
   }),
@@ -70,6 +81,8 @@ describe('McpScreen empty state', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockRightActions = [];
+    mockListError = undefined;
+    mockListLoading = false;
     mockServers = [];
     mockSummaries = {};
   });
@@ -107,6 +120,35 @@ describe('McpScreen empty state', () => {
       params: { serverId: 'new' },
       pathname: './mcp/[serverId]',
     });
+  });
+
+  it('shows loading without the empty-state action', async () => {
+    mockListLoading = true;
+
+    await act(async () => {
+      renderer = create(<McpScreen />);
+    });
+
+    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'Add MCP server' })).toHaveLength(0);
+    expect(
+      renderer?.root.findAll((node) => node.props.children === 'Loading MCP servers...'),
+    ).not.toHaveLength(0);
+  });
+
+  it('shows the list error and retries without rendering an empty state', async () => {
+    mockListError = new Error('database unavailable');
+
+    await act(async () => {
+      renderer = create(<McpScreen />);
+    });
+
+    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'Add MCP server' })).toHaveLength(0);
+    expect(
+      renderer?.root.findAll((node) => node.props.children === 'database unavailable'),
+    ).not.toHaveLength(0);
+
+    renderer?.root.findByProps({ accessibilityLabel: 'Retry' }).props.onPress();
+    expect(mockRefetch).toHaveBeenCalledTimes(1);
   });
 
   it('renders saved servers without a leading icon', async () => {
