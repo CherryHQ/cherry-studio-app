@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { queryKeys } from '@/data/api';
@@ -51,7 +52,12 @@ let actions: ReturnType<typeof useMcpServerMutations> | undefined;
 let renderer: ReactTestRenderer | undefined;
 
 function Probe() {
-  actions = useMcpServerMutations();
+  const result = useMcpServerMutations();
+
+  useEffect(() => {
+    actions = result;
+  }, [result]);
+
   return null;
 }
 
