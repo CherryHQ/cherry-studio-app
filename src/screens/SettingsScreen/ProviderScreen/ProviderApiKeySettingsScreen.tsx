@@ -33,11 +33,14 @@ export default function ProviderApiKeySettingsScreen() {
     return <Redirect href="/settings/provider" />;
   }
 
-  if (
-    provider &&
-    authConfigQuery.isSuccess &&
-    !shouldShowApiKeys(getEffectiveAuthConfig(authConfig, provider).type)
-  ) {
+  // Wait for the auth config before deciding anything: it is what says whether this
+  // provider has API keys at all, so mounting the form first would show a screen we
+  // then redirect away from — and only on a cold cache, where the keys land first.
+  if (!provider || !apiKeys || authConfigQuery.isPending) {
+    return <BackHeader title={t('settings.provider.apiService.manageApiKeys')} />;
+  }
+
+  if (!shouldShowApiKeys(getEffectiveAuthConfig(authConfig, provider).type)) {
     return (
       <Redirect
         href={{
@@ -51,10 +54,6 @@ export default function ProviderApiKeySettingsScreen() {
         }}
       />
     );
-  }
-
-  if (!apiKeys) {
-    return <BackHeader title={t('settings.provider.apiService.manageApiKeys')} />;
   }
 
   return <ProviderApiKeySettingsForm apiKeys={apiKeys} onSave={saveApiKeys} />;

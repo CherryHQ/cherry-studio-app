@@ -17,12 +17,17 @@ import {
   splitProviderModelIds,
 } from '../utils/providerModelAdd';
 
+/**
+ * Add-model form state. Takes a loaded provider because the provider decides the form's
+ * shape (`showEndpointTypes`) and the default group name — reading those off a provider
+ * that is still loading would render the form without its endpoint-type block and then
+ * grow it a commit later, on top of computing the group name from `undefined`.
+ */
 type UseProviderModelAddOptions = {
-  provider: Provider | undefined;
-  providerId: string;
+  provider: Provider;
 };
 
-export function useProviderModelAdd({ provider, providerId }: UseProviderModelAddOptions) {
+export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const services = useDataServices();
@@ -37,7 +42,7 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
   const showEndpointTypes = isNewApiLikeProvider(provider);
   const isModelIdValid = splitProviderModelIds(formState.modelId).length > 0;
   const isEndpointTypesValid = !showEndpointTypes || formState.endpointTypes.length > 0;
-  const canSubmit = Boolean(provider && providerId && isModelIdValid && isEndpointTypesValid);
+  const canSubmit = isModelIdValid && isEndpointTypesValid;
   const modelIdError =
     modelIdTouched && !isModelIdValid
       ? t('settings.provider.models.addModelIdRequired')
@@ -49,10 +54,10 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
 
   const providerConfig = useMemo(
     () => ({
-      defaultChatEndpoint: provider?.defaultChatEndpoint,
-      endpointConfigs: provider?.endpointConfigs,
+      defaultChatEndpoint: provider.defaultChatEndpoint,
+      endpointConfigs: provider.endpointConfigs,
     }),
-    [provider?.defaultChatEndpoint, provider?.endpointConfigs],
+    [provider.defaultChatEndpoint, provider.endpointConfigs],
   );
 
   const resetForm = useCallback(() => {
@@ -79,12 +84,12 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
       setModelIdTouched(true);
       setFormState((current) => ({
         ...current,
-        group: getDefaultProviderModelGroupName(value, provider?.id),
+        group: getDefaultProviderModelGroupName(value, provider.id),
         modelId: value,
         name: value,
       }));
     },
-    [provider?.id],
+    [provider.id],
   );
 
   const updateName = useCallback(
@@ -132,20 +137,18 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
 
   const refreshModelQueries = useCallback(async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.models.list({ providerId }) }),
       queryClient.invalidateQueries({
-        queryKey: queryKeys.models.list({ enabled: true, providerId }),
+        queryKey: queryKeys.models.list({ providerId: provider.id }),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.models.list({ enabled: true, providerId: provider.id }),
       }),
       queryClient.invalidateQueries({ queryKey: queryKeys.models.list() }),
     ]);
-  }, [providerId, queryClient]);
+  }, [provider.id, queryClient]);
 
   const submitAddModel = useCallback(async () => {
     if (isSubmitting) {
-      return false;
-    }
-
-    if (!provider || !providerId) {
       return false;
     }
 
@@ -161,12 +164,12 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
 
     setIsSubmitting(true);
     const submit = async (): Promise<boolean> => {
-      const existingModels = await services.model.list({ providerId });
+      const existingModels = await services.model.list({ providerId: provider.id });
       const { duplicateIds, inputs } = buildProviderModelAddInputs({
         existingModels,
         formState,
         provider,
-        providerId,
+        providerId: provider.id,
       });
 
       if (duplicateIds.length > 0) {
@@ -210,7 +213,6 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
     isSubmitting,
     provider,
     providerConfig,
-    providerId,
     refreshModelQueries,
     resetForm,
     services.model,
@@ -224,7 +226,6 @@ export function useProviderModelAdd({ provider, providerId }: UseProviderModelAd
     formState,
     isSubmitting,
     modelIdError,
-    resetForm,
     showEndpointTypes,
     submitAddModel,
     updateContextWindow,

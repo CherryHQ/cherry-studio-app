@@ -12,12 +12,10 @@ import {
 
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import type { EndpointType } from '@/data/types/model';
+import type { Provider } from '@/data/types/provider';
 import { useProviderDetailSettings } from './detail';
 import { useProviderModelAdd } from './models/hooks/useProviderModelAdd';
-import {
-  type ProviderModelAddFormState,
-  providerModelAddEndpointOptions,
-} from './models/utils/providerModelAdd';
+import { providerModelAddEndpointOptions } from './models/utils/providerModelAdd';
 
 const advancedSettingsScrollTopPadding = 16;
 const defaultKeyboardBottomOffset = 0;
@@ -28,8 +26,25 @@ const selectedEndpointTypeColor = '#00b96b';
 export default function ProviderModelAddScreen() {
   const { providerId } = useLocalSearchParams<{ providerId?: string; providerName?: string }>();
   const { t } = useTranslation();
-  const router = useRouter();
   const { provider, providerQuery } = useProviderDetailSettings(providerId ?? '');
+
+  if (!providerId || providerQuery.isError) {
+    return <Redirect href="/settings/provider" />;
+  }
+
+  // Mount the form only once the provider is loaded: it is what decides whether the
+  // endpoint-type block exists at all, and that block sits directly above the
+  // "More settings" control — growing it a commit later moves a live tap target.
+  if (!provider) {
+    return <BackHeader title={t('settings.provider.models.addTitle')} />;
+  }
+
+  return <ProviderModelAddForm provider={provider} />;
+}
+
+function ProviderModelAddForm({ provider }: { provider: Provider }) {
+  const { t } = useTranslation();
+  const router = useRouter();
   const {
     canSubmit,
     endpointTypeError,
@@ -45,81 +60,7 @@ export default function ProviderModelAddScreen() {
     updateMaxOutputTokens,
     updateModelId,
     updateName,
-  } = useProviderModelAdd({ provider, providerId: providerId ?? '' });
-
-  const handleSubmit = useCallback(async () => {
-    const didAdd = await submitAddModel();
-    if (didAdd) {
-      router.back();
-    }
-  }, [router, submitAddModel]);
-  const rightActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('common.save'),
-        androidIcon: SaveIcon,
-        disabled: isSubmitting || !canSubmit,
-        icon: 'checkmark',
-        key: 'save-model',
-        onPress: () => void handleSubmit(),
-      },
-    ],
-    [canSubmit, handleSubmit, isSubmitting, t],
-  );
-
-  if (!providerId || providerQuery.isError) {
-    return <Redirect href="/settings/provider" />;
-  }
-
-  return (
-    <>
-      <BackHeader rightActions={rightActions} title={t('settings.provider.models.addTitle')} />
-      <ProviderModelAddForm
-        endpointTypeError={endpointTypeError}
-        formState={formState}
-        isSubmitting={isSubmitting}
-        modelIdError={modelIdError}
-        showEndpointTypes={showEndpointTypes}
-        onContextWindowChange={updateContextWindow}
-        onEndpointTypesChange={updateEndpointTypes}
-        onGroupChange={updateGroup}
-        onMaxInputTokensChange={updateMaxInputTokens}
-        onMaxOutputTokensChange={updateMaxOutputTokens}
-        onModelIdChange={updateModelId}
-        onNameChange={updateName}
-      />
-    </>
-  );
-}
-
-function ProviderModelAddForm({
-  endpointTypeError,
-  formState,
-  isSubmitting,
-  modelIdError,
-  onContextWindowChange,
-  onEndpointTypesChange,
-  onGroupChange,
-  onMaxInputTokensChange,
-  onMaxOutputTokensChange,
-  onModelIdChange,
-  onNameChange,
-  showEndpointTypes,
-}: {
-  endpointTypeError?: string;
-  formState: ProviderModelAddFormState;
-  isSubmitting: boolean;
-  modelIdError?: string;
-  onContextWindowChange: (value: string) => void;
-  onEndpointTypesChange: (endpointTypes: EndpointType[]) => void;
-  onGroupChange: (value: string) => void;
-  onMaxInputTokensChange: (value: string) => void;
-  onMaxOutputTokensChange: (value: string) => void;
-  onModelIdChange: (value: string) => void;
-  onNameChange: (value: string) => void;
-  showEndpointTypes: boolean;
-}) {
-  const { t } = useTranslation();
+  } = useProviderModelAdd({ provider });
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const advancedSettingsScrollYRef = useRef(0);
   const advancedFieldScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -172,131 +113,153 @@ function ProviderModelAddForm({
         currentTypes.add(endpointType);
       }
 
-      onEndpointTypesChange([...currentTypes]);
+      updateEndpointTypes([...currentTypes]);
     },
-    [onEndpointTypesChange, selectedEndpointTypes],
+    [selectedEndpointTypes, updateEndpointTypes],
+  );
+  const handleSubmit = useCallback(async () => {
+    const didAdd = await submitAddModel();
+    if (didAdd) {
+      router.back();
+    }
+  }, [router, submitAddModel]);
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('common.save'),
+        androidIcon: SaveIcon,
+        disabled: isSubmitting || !canSubmit,
+        icon: 'checkmark',
+        key: 'save-model',
+        onPress: () => void handleSubmit(),
+      },
+    ],
+    [canSubmit, handleSubmit, isSubmitting, t],
   );
 
   useEffect(() => clearAdvancedFieldScrollTimer, [clearAdvancedFieldScrollTimer]);
 
   return (
-    <View className="flex-1">
-      <KeyboardAwareScrollView
-        bottomOffset={
-          showMoreSettings ? advancedSettingsKeyboardBottomOffset : defaultKeyboardBottomOffset
-        }
-        contentContainerStyle={[
-          styles.scrollContent,
-          showMoreSettings ? styles.expandedScrollContent : null,
-        ]}
-        contentInsetAdjustmentBehavior="automatic"
-        disableScrollOnKeyboardHide
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        mode="layout"
-        ref={scrollRef}
-        showsVerticalScrollIndicator={false}
-      >
-        <ProviderModelAddTextField
-          accessibilityLabel={t('settings.provider.models.addModelIdLabel')}
-          errorMessage={modelIdError}
-          isDisabled={isSubmitting}
-          label={t('settings.provider.models.addModelIdLabel')}
-          placeholder={t('settings.provider.models.addModelIdPlaceholder')}
-          value={formState.modelId}
-          onChangeText={onModelIdChange}
-        />
-
-        <ProviderModelAddTextField
-          accessibilityLabel={t('settings.provider.models.addModelNameLabel')}
-          isDisabled={isSubmitting}
-          label={t('settings.provider.models.addModelNameLabel')}
-          placeholder={t('settings.provider.models.addModelNamePlaceholder')}
-          value={formState.name}
-          onChangeText={onNameChange}
-        />
-
-        <ProviderModelAddTextField
-          accessibilityLabel={t('settings.provider.models.addGroupNameLabel')}
-          isDisabled={isSubmitting}
-          label={t('settings.provider.models.addGroupNameLabel')}
-          placeholder={t('settings.provider.models.addGroupNamePlaceholder')}
-          value={formState.group}
-          onChangeText={onGroupChange}
-        />
-
-        {showEndpointTypes ? (
-          <View className="gap-2">
-            <Text className="font-medium text-default-foreground text-sm">
-              {t('settings.provider.models.addEndpointTypeLabel')}
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {providerModelAddEndpointOptions.map((option) => (
-                <EndpointTypeChip
-                  key={option.id}
-                  isDisabled={isSubmitting}
-                  isSelected={selectedEndpointTypes.has(option.id)}
-                  label={t(option.labelKey)}
-                  onPress={() => toggleEndpointType(option.id)}
-                />
-              ))}
-            </View>
-            {endpointTypeError ? (
-              <Text className="text-danger text-xs">{endpointTypeError}</Text>
-            ) : null}
-          </View>
-        ) : null}
-
-        <Pressable
-          accessibilityLabel={t('settings.provider.models.addMoreSettings')}
-          accessibilityRole="button"
-          className="h-10 flex-row items-center justify-center gap-2 rounded-xl bg-settings-grouped-surface px-3 active:opacity-70 disabled:opacity-40"
-          disabled={isSubmitting}
-          onPress={toggleMoreSettings}
+    <>
+      <BackHeader rightActions={rightActions} title={t('settings.provider.models.addTitle')} />
+      <View className="flex-1">
+        <KeyboardAwareScrollView
+          bottomOffset={
+            showMoreSettings ? advancedSettingsKeyboardBottomOffset : defaultKeyboardBottomOffset
+          }
+          contentContainerStyle={[
+            styles.scrollContent,
+            showMoreSettings ? styles.expandedScrollContent : null,
+          ]}
+          contentInsetAdjustmentBehavior="automatic"
+          disableScrollOnKeyboardHide
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          mode="layout"
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
         >
-          <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
-            {t('settings.provider.models.addMoreSettings')}
-          </Text>
-          {showMoreSettings ? (
-            <ChevronUpIcon className="size-4 text-default-foreground" strokeWidth={2} />
-          ) : (
-            <ChevronDownIcon className="size-4 text-default-foreground" strokeWidth={2} />
-          )}
-        </Pressable>
+          <ProviderModelAddTextField
+            accessibilityLabel={t('settings.provider.models.addModelIdLabel')}
+            errorMessage={modelIdError}
+            isDisabled={isSubmitting}
+            label={t('settings.provider.models.addModelIdLabel')}
+            placeholder={t('settings.provider.models.addModelIdPlaceholder')}
+            value={formState.modelId}
+            onChangeText={updateModelId}
+          />
 
-        {showMoreSettings ? (
-          <View className="gap-3" onLayout={handleAdvancedSettingsLayout}>
-            <ProviderModelAddNumberField
-              accessibilityLabel={t('settings.provider.models.addContextWindowLabel')}
-              isDisabled={isSubmitting}
-              label={t('settings.provider.models.addContextWindowLabel')}
-              placeholder={t('settings.provider.models.addContextWindowPlaceholder')}
-              value={formState.contextWindow}
-              onChangeText={onContextWindowChange}
-              onFocus={handleAdvancedFieldFocus}
-            />
-            <ProviderModelAddNumberField
-              accessibilityLabel={t('settings.provider.models.addMaxInputTokensLabel')}
-              isDisabled={isSubmitting}
-              label={t('settings.provider.models.addMaxInputTokensLabel')}
-              placeholder={t('settings.provider.models.addMaxInputTokensPlaceholder')}
-              value={formState.maxInputTokens}
-              onChangeText={onMaxInputTokensChange}
-              onFocus={handleAdvancedFieldFocus}
-            />
-            <ProviderModelAddNumberField
-              accessibilityLabel={t('settings.provider.models.addMaxOutputTokensLabel')}
-              isDisabled={isSubmitting}
-              label={t('settings.provider.models.addMaxOutputTokensLabel')}
-              placeholder={t('settings.provider.models.addMaxOutputTokensPlaceholder')}
-              value={formState.maxOutputTokens}
-              onChangeText={onMaxOutputTokensChange}
-              onFocus={handleAdvancedFieldFocus}
-            />
-          </View>
-        ) : null}
-      </KeyboardAwareScrollView>
-    </View>
+          <ProviderModelAddTextField
+            accessibilityLabel={t('settings.provider.models.addModelNameLabel')}
+            isDisabled={isSubmitting}
+            label={t('settings.provider.models.addModelNameLabel')}
+            placeholder={t('settings.provider.models.addModelNamePlaceholder')}
+            value={formState.name}
+            onChangeText={updateName}
+          />
+
+          <ProviderModelAddTextField
+            accessibilityLabel={t('settings.provider.models.addGroupNameLabel')}
+            isDisabled={isSubmitting}
+            label={t('settings.provider.models.addGroupNameLabel')}
+            placeholder={t('settings.provider.models.addGroupNamePlaceholder')}
+            value={formState.group}
+            onChangeText={updateGroup}
+          />
+
+          {showEndpointTypes ? (
+            <View className="gap-2">
+              <Text className="font-medium text-default-foreground text-sm">
+                {t('settings.provider.models.addEndpointTypeLabel')}
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {providerModelAddEndpointOptions.map((option) => (
+                  <EndpointTypeChip
+                    key={option.id}
+                    isDisabled={isSubmitting}
+                    isSelected={selectedEndpointTypes.has(option.id)}
+                    label={t(option.labelKey)}
+                    onPress={() => toggleEndpointType(option.id)}
+                  />
+                ))}
+              </View>
+              {endpointTypeError ? (
+                <Text className="text-danger text-xs">{endpointTypeError}</Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          <Pressable
+            accessibilityLabel={t('settings.provider.models.addMoreSettings')}
+            accessibilityRole="button"
+            className="h-10 flex-row items-center justify-center gap-2 rounded-xl bg-settings-grouped-surface px-3 active:opacity-70 disabled:opacity-40"
+            disabled={isSubmitting}
+            onPress={toggleMoreSettings}
+          >
+            <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
+              {t('settings.provider.models.addMoreSettings')}
+            </Text>
+            {showMoreSettings ? (
+              <ChevronUpIcon className="size-4 text-default-foreground" strokeWidth={2} />
+            ) : (
+              <ChevronDownIcon className="size-4 text-default-foreground" strokeWidth={2} />
+            )}
+          </Pressable>
+
+          {showMoreSettings ? (
+            <View className="gap-3" onLayout={handleAdvancedSettingsLayout}>
+              <ProviderModelAddNumberField
+                accessibilityLabel={t('settings.provider.models.addContextWindowLabel')}
+                isDisabled={isSubmitting}
+                label={t('settings.provider.models.addContextWindowLabel')}
+                placeholder={t('settings.provider.models.addContextWindowPlaceholder')}
+                value={formState.contextWindow}
+                onChangeText={updateContextWindow}
+                onFocus={handleAdvancedFieldFocus}
+              />
+              <ProviderModelAddNumberField
+                accessibilityLabel={t('settings.provider.models.addMaxInputTokensLabel')}
+                isDisabled={isSubmitting}
+                label={t('settings.provider.models.addMaxInputTokensLabel')}
+                placeholder={t('settings.provider.models.addMaxInputTokensPlaceholder')}
+                value={formState.maxInputTokens}
+                onChangeText={updateMaxInputTokens}
+                onFocus={handleAdvancedFieldFocus}
+              />
+              <ProviderModelAddNumberField
+                accessibilityLabel={t('settings.provider.models.addMaxOutputTokensLabel')}
+                isDisabled={isSubmitting}
+                label={t('settings.provider.models.addMaxOutputTokensLabel')}
+                placeholder={t('settings.provider.models.addMaxOutputTokensPlaceholder')}
+                value={formState.maxOutputTokens}
+                onChangeText={updateMaxOutputTokens}
+                onFocus={handleAdvancedFieldFocus}
+              />
+            </View>
+          ) : null}
+        </KeyboardAwareScrollView>
+      </View>
+    </>
   );
 }
 
