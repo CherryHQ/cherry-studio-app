@@ -38,8 +38,7 @@ describe('McpServerChrome.android', () => {
       renderer = create(
         <McpServerChrome
           isActive={false}
-          isDeleting={false}
-          isUpdating={false}
+          isDisabled={false}
           onDelete={onDelete}
           onToggleActive={onToggleActive}
         />,

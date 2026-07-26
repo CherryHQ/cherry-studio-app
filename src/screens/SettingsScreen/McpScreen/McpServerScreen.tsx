@@ -11,13 +11,15 @@ import { useConfirmDialog } from '@/components/confirmDialog';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { keyboardBottomOffset } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
-import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/data/api/schemas/mcpServers';
 import { useDataServices } from '@/data/runtime';
+import { DataApiError, ErrorCode } from '@/data/types/apiTypes';
 import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import { useMcpServerApiById, useMcpServerMutations } from '@/hooks/mcp/useMcpServers';
+import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { McpHeadersEditor } from './components/McpHeadersEditor';
-import { McpServerChrome } from './components/McpServerChrome';
-import { type McpServerTab, McpServerTabs } from './components/McpServerTabs';
+import { McpServerChrome } from './components/McpServerChrome/McpServerChrome';
+import { McpServerTabs } from './components/McpServerTabs/McpServerTabs';
+import type { McpServerTab } from './components/McpServerTabs/types';
 import { McpToolsSection } from './components/McpToolsSection';
 import { parseHeaderText, serializeHeaders } from './utils/headerText';
 
@@ -29,7 +31,6 @@ type McpServerFormState = {
   baseUrl: string;
   description: string;
   headerText: string;
-  isActive: boolean;
   name: string;
   timeout: string;
 };
@@ -37,14 +38,89 @@ type McpServerFormState = {
 export function McpServerScreen() {
   const { serverId: rawServerId } = useLocalSearchParams<{ serverId?: string }>();
   const { t } = useTranslation();
+
+  const isCreating = !rawServerId || rawServerId === NEW_SERVER_SENTINEL;
+  const serverId = isCreating ? undefined : rawServerId;
+  const { error, isLoading, refetch, server } = useMcpServerApiById(serverId);
+
+  if (!isCreating && isLoading) {
+    return <McpServerLoadState isLoading message={t('settings.mcp.detail.loading')} />;
+  }
+
+  if (!isCreating && error) {
+    const isNotFound = error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND;
+    return (
+      <McpServerLoadState
+        detail={isNotFound ? undefined : error instanceof Error ? error.message : String(error)}
+        message={t(isNotFound ? 'settings.mcp.detail.notFound' : 'settings.mcp.detail.loadFailed')}
+        onRetry={isNotFound ? undefined : () => void refetch()}
+      />
+    );
+  }
+
+  if (!isCreating && !server) {
+    return <McpServerLoadState message={t('settings.mcp.detail.notFound')} />;
+  }
+
+  return (
+    <McpServerEditor key={server?.id ?? NEW_SERVER_SENTINEL} server={server} serverId={serverId} />
+  );
+}
+
+function McpServerLoadState({
+  detail,
+  isLoading = false,
+  message,
+  onRetry,
+}: {
+  detail?: string;
+  isLoading?: boolean;
+  message: string;
+  onRetry?: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      <BackHeader title={t('settings.mcp.tabs.configuration')} />
+      <View className="flex-1 items-center justify-center gap-3 px-6">
+        {isLoading ? <ActivityIndicator size="small" /> : null}
+        <Text
+          className={
+            onRetry
+              ? 'text-center text-danger-foreground text-sm'
+              : 'text-center text-default-foreground text-sm'
+          }
+        >
+          {message}
+        </Text>
+        {detail ? (
+          <Text className="text-center text-default-foreground text-xs" selectable>
+            {detail}
+          </Text>
+        ) : null}
+        {onRetry ? (
+          <SettingsDialogActionButton label={t('settings.mcp.retry')} onPress={onRetry} />
+        ) : null}
+      </View>
+    </>
+  );
+}
+
+function McpServerEditor({
+  server,
+  serverId,
+}: {
+  server?: StreamableHttpMcpServer;
+  serverId?: string;
+}) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
   const { mcp: mcpService } = useDataServices();
   const { confirmDialog, requestConfirm } = useConfirmDialog();
 
-  const isCreating = !rawServerId || rawServerId === NEW_SERVER_SENTINEL;
-  const serverId = isCreating ? undefined : rawServerId;
-  const { server } = useMcpServerApiById(serverId);
+  const isCreating = !serverId;
   const {
     createServer,
     deleteServer,
@@ -55,18 +131,9 @@ export function McpServerScreen() {
   } = useMcpServerMutations();
 
   const [form, setForm] = useState<McpServerFormState>(() => createFormState(server));
-  const [syncedServer, setSyncedServer] = useState(server);
   const [activeTab, setActiveTab] = useState<McpServerTab>('configuration');
   const [isEditing, setIsEditing] = useState(isCreating);
   const [isSaving, setIsSaving] = useState(false);
-
-  // Re-seed the form once the async record arrives (render-time, no effect).
-  if (server !== syncedServer) {
-    setSyncedServer(server);
-    if (server) {
-      setForm(createFormState(server));
-    }
-  }
 
   const updateField = useCallback(
     <TKey extends keyof McpServerFormState>(key: TKey, value: McpServerFormState[TKey]) => {
@@ -78,15 +145,14 @@ export function McpServerScreen() {
   const handleSave = useCallback(async () => {
     const dto = buildDto(form, t('settings.mcp.defaultName'));
     if (!dto.ok) {
-      toast.show({ label: t(dto.errorKey), variant: 'danger' });
+      toast.show({ label: t(dto.errorKey, dto.errorOptions), variant: 'danger' });
       return;
     }
 
     try {
       setIsSaving(true);
       if (serverId) {
-        const updatedServer = await updateServer(serverId, dto.value);
-        setForm(createFormState(updatedServer));
+        await updateServer(serverId, dto.value);
         setIsEditing(false);
       } else {
         const serverInfo = await mcpService.getServerInfo({
@@ -95,8 +161,12 @@ export function McpServerScreen() {
         });
         const name = serverInfo.title?.trim() || serverInfo.name.trim() || dto.value.name;
         const description = serverInfo.instructions?.trim() || dto.value.description;
-        const createdServer = await createServer({ ...dto.value, description, name });
-        setForm(createFormState(createdServer));
+        const createdServer = await createServer({
+          ...dto.value,
+          description,
+          isActive: true,
+          name,
+        });
         setIsEditing(false);
         router.replace({
           params: { serverId: createdServer.id },
@@ -112,7 +182,7 @@ export function McpServerScreen() {
   }, [createServer, form, mcpService, router, serverId, t, toast, updateServer]);
 
   const handleToggleTool = useCallback(
-    (toolName: string, enabled: boolean, knownToolNames: string[]) => {
+    async (toolName: string, enabled: boolean, knownToolNames: string[]) => {
       if (!serverId || !server) {
         return;
       }
@@ -121,16 +191,18 @@ export function McpServerScreen() {
       const nextDisabled = enabled
         ? withMcpToolRuleCleared(server.disabledTools, server, toolName, knownToolNames)
         : withMcpToolRuleAdded(server.disabledTools, toolName);
-      void updateServer(serverId, { disabledTools: nextDisabled }).catch((error: unknown) => {
+      try {
+        await updateServer(serverId, { disabledTools: nextDisabled });
+      } catch (error) {
         logger.error('Failed to toggle MCP tool', error as Error);
         toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
-      });
+      }
     },
     [server, serverId, t, toast, updateServer],
   );
 
   const handleToggleAutoApprove = useCallback(
-    (toolName: string, autoApprove: boolean, knownToolNames: string[]) => {
+    async (toolName: string, autoApprove: boolean, knownToolNames: string[]) => {
       if (!serverId || !server) {
         return;
       }
@@ -139,30 +211,29 @@ export function McpServerScreen() {
       const nextDisabled = autoApprove
         ? withMcpToolRuleCleared(server.disabledAutoApproveTools, server, toolName, knownToolNames)
         : withMcpToolRuleAdded(server.disabledAutoApproveTools, toolName);
-      void updateServer(serverId, { disabledAutoApproveTools: nextDisabled }).catch(
-        (error: unknown) => {
-          logger.error('Failed to toggle MCP tool auto-approve', error as Error);
-          toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
-        },
-      );
+      try {
+        await updateServer(serverId, { disabledAutoApproveTools: nextDisabled });
+      } catch (error) {
+        logger.error('Failed to toggle MCP tool auto-approve', error as Error);
+        toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+      }
     },
     [server, serverId, t, toast, updateServer],
   );
 
   const handleToggleServer = useCallback(async () => {
-    if (!serverId) {
+    if (!serverId || !server) {
       return;
     }
 
-    const nextIsActive = !form.isActive;
+    const nextIsActive = !server.isActive;
     try {
       await updateServer(serverId, { isActive: nextIsActive });
-      updateField('isActive', nextIsActive);
     } catch (error) {
       logger.error('Failed to toggle MCP server', error as Error);
       toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
     }
-  }, [form.isActive, serverId, t, toast, updateField, updateServer]);
+  }, [server, serverId, t, toast, updateServer]);
 
   const handleDelete = useCallback(async () => {
     if (!serverId) {
@@ -218,13 +289,17 @@ export function McpServerScreen() {
         accessibilityLabel: t('common.edit'),
         key: 'edit',
         label: t('common.edit'),
-        onPress: () => setIsEditing(true),
+        onPress: () => {
+          setForm(createFormState(server));
+          setIsEditing(true);
+        },
       },
     ],
-    [t],
+    [server, t],
   );
 
-  const showHttpWarning = form.baseUrl.trim().toLowerCase().startsWith('http://');
+  const displayedForm = isEditing ? form : createFormState(server);
+  const showHttpWarning = displayedForm.baseUrl.trim().toLowerCase().startsWith('http://');
   const canShowTools = Boolean(serverId && server);
   const visibleTab = canShowTools ? activeTab : 'configuration';
 
@@ -266,7 +341,7 @@ export function McpServerScreen() {
                 placeholder={t('settings.mcp.fields.name')}
                 placeholderColorClassName="accent-muted"
                 style={styles.textInput}
-                value={form.name}
+                value={displayedForm.name}
                 variant="secondary"
               />
             </FormField>
@@ -284,7 +359,7 @@ export function McpServerScreen() {
               placeholderColorClassName="accent-muted"
               spellCheck={false}
               style={styles.textInput}
-              value={form.baseUrl}
+              value={displayedForm.baseUrl}
               variant="secondary"
             />
             {showHttpWarning ? (
@@ -303,7 +378,7 @@ export function McpServerScreen() {
                 placeholder={t('settings.mcp.fields.description')}
                 placeholderColorClassName="accent-muted"
                 style={styles.textInput}
-                value={form.description}
+                value={displayedForm.description}
                 variant="secondary"
               />
             </FormField>
@@ -312,7 +387,7 @@ export function McpServerScreen() {
             <McpHeadersEditor
               isDisabled={!isEditing}
               onChangeText={(value) => updateField('headerText', value)}
-              value={form.headerText}
+              value={displayedForm.headerText}
             />
           </FormField>
           <FormField label={t('settings.mcp.fields.timeout')}>
@@ -326,7 +401,7 @@ export function McpServerScreen() {
               placeholder="60"
               placeholderColorClassName="accent-muted"
               style={styles.textInput}
-              value={form.timeout}
+              value={displayedForm.timeout}
               variant="secondary"
             />
           </FormField>
@@ -341,6 +416,7 @@ export function McpServerScreen() {
         >
           <View className="rounded-2xl bg-settings-grouped-surface p-4">
             <McpToolsSection
+              isReadOnly={isUpdating}
               onToggleAutoApprove={handleToggleAutoApprove}
               onToggleTool={handleToggleTool}
               server={server}
@@ -348,11 +424,10 @@ export function McpServerScreen() {
           </View>
         </ScrollView>
       ) : null}
-      {serverId ? (
+      {serverId && server ? (
         <McpServerChrome
-          isActive={form.isActive}
-          isDeleting={isDeleting}
-          isUpdating={isUpdating}
+          isActive={server.isActive}
+          isDisabled={isEditing || isBusy || isDeleting}
           onDelete={requestDelete}
           onToggleActive={() => {
             void handleToggleServer();
@@ -378,7 +453,6 @@ function createFormState(server?: StreamableHttpMcpServer): McpServerFormState {
     baseUrl: server?.baseUrl ?? '',
     description: server?.description ?? '',
     headerText: serializeHeaders(server?.headers),
-    isActive: server?.isActive ?? true,
     name: server?.name ?? '',
     timeout: server?.timeout != null ? String(server.timeout) : '',
   };
@@ -387,9 +461,16 @@ function createFormState(server?: StreamableHttpMcpServer): McpServerFormState {
 function buildDto(
   form: McpServerFormState,
   defaultName: string,
-): { errorKey: string; ok: false } | { ok: true; value: CreateMcpServerDto & UpdateMcpServerDto } {
+):
+  | { errorKey: string; errorOptions?: { line: number }; ok: false }
+  | { ok: true; value: McpServerConfigurationDto } {
   const baseUrl = form.baseUrl.trim();
-  if (!baseUrl || !/^https?:\/\//i.test(baseUrl)) {
+  try {
+    const parsedUrl = new URL(baseUrl);
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      return { errorKey: 'settings.mcp.fields.baseUrlInvalid', ok: false };
+    }
+  } catch {
     return { errorKey: 'settings.mcp.fields.baseUrlInvalid', ok: false };
   }
 
@@ -403,18 +484,34 @@ function buildDto(
     timeout = parsed;
   }
 
+  const parsedHeaders = parseHeaderText(form.headerText);
+  if (!parsedHeaders.ok) {
+    return {
+      errorKey: 'settings.mcp.headers.invalidLine',
+      errorOptions: { line: parsedHeaders.line },
+      ok: false,
+    };
+  }
+
   return {
     ok: true,
     value: {
       baseUrl,
       description: form.description.trim(),
-      headers: parseHeaderText(form.headerText),
-      isActive: form.isActive,
+      headers: parsedHeaders.headers,
       name: form.name.trim() || getFallbackServerName(baseUrl, defaultName),
       timeout,
     },
   };
 }
+
+type McpServerConfigurationDto = {
+  baseUrl: string;
+  description: string;
+  headers: Record<string, string>;
+  name: string;
+  timeout: number | null;
+};
 
 function getFallbackServerName(baseUrl: string, defaultName: string): string {
   try {

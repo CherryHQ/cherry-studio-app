@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { DataApiError, ErrorCode } from '@/data/types/apiTypes';
 import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import { McpServerScreen } from '../McpServerScreen';
 
@@ -12,7 +13,6 @@ type HeaderAction = {
   onPress?: () => void;
 };
 type McpTabsElementProps = {
-  isDisabled?: boolean;
   onTabChange: (tab: 'configuration' | 'tools') => void;
   tab: 'configuration' | 'tools';
 };
@@ -23,14 +23,21 @@ type HeaderProps = {
 };
 
 let mockHeaderProps: HeaderProps = {};
+let mockIsCreating = false;
+let mockIsDeleting = false;
+let mockIsUpdating = false;
 let mockServer: StreamableHttpMcpServer | undefined;
+let mockServerError: unknown;
 let mockServerId = 'new';
+let mockServerLoading = false;
 const mockCreateServer = jest.fn();
 const mockDeleteServer = jest.fn();
 const mockGetServerInfo = jest.fn();
 const mockRequestConfirm = jest.fn();
 const mockRouterBack = jest.fn();
 const mockRouterReplace = jest.fn();
+const mockServerRefetch = jest.fn();
+const mockToastShow = jest.fn();
 const mockUpdateServer = jest.fn();
 
 jest.mock('expo-router', () => ({
@@ -45,7 +52,7 @@ jest.mock('heroui-native/input', () => {
 });
 
 jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: jest.fn() } }),
+  useToast: () => ({ toast: { show: mockToastShow } }),
 }));
 
 jest.mock('react-native-keyboard-controller', () => {
@@ -83,16 +90,31 @@ jest.mock('@/data/runtime', () => ({
 }));
 
 jest.mock('@/hooks/mcp/useMcpServers', () => ({
-  useMcpServerApiById: () => ({ server: mockServer }),
+  useMcpServerApiById: () => ({
+    error: mockServerError,
+    isLoading: mockServerLoading,
+    refetch: mockServerRefetch,
+    server: mockServer,
+  }),
   useMcpServerMutations: () => ({
     createServer: mockCreateServer,
     deleteServer: mockDeleteServer,
-    isCreating: false,
-    isDeleting: false,
-    isUpdating: false,
+    isCreating: mockIsCreating,
+    isDeleting: mockIsDeleting,
+    isUpdating: mockIsUpdating,
     updateServer: mockUpdateServer,
   }),
 }));
+
+jest.mock('@/screens/SettingsScreen/components/SettingsDialogActionButton', () => {
+  const { Pressable: MockPressable } = jest.requireActual('react-native');
+
+  return {
+    SettingsDialogActionButton: ({ label, onPress }: { label: string; onPress: () => void }) => (
+      <MockPressable accessibilityLabel={label} accessibilityRole="button" onPress={onPress} />
+    ),
+  };
+});
 
 jest.mock('../components/McpHeadersEditor', () => {
   const { View: MockView } = jest.requireActual('react-native');
@@ -100,7 +122,7 @@ jest.mock('../components/McpHeadersEditor', () => {
   return { McpHeadersEditor: (props: Record<string, unknown>) => <MockView {...props} /> };
 });
 
-jest.mock('../components/McpServerChrome', () => {
+jest.mock('../components/McpServerChrome/McpServerChrome', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
   return {
@@ -110,7 +132,7 @@ jest.mock('../components/McpServerChrome', () => {
   };
 });
 
-jest.mock('../components/McpServerTabs', () => ({
+jest.mock('../components/McpServerTabs/McpServerTabs', () => ({
   McpServerTabs: () => null,
 }));
 
@@ -126,13 +148,19 @@ jest.mock('../components/McpToolsSection', () => {
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) =>
-      ({
-        'common.edit': 'Edit',
-        'common.save': 'Save',
-        'settings.mcp.defaultName': 'MCP Server',
-        'settings.mcp.tabs.configuration': 'Config',
-      })[key] ?? key,
+    t: (key: string, options?: { line?: number }) =>
+      options?.line
+        ? `${key}:${options.line}`
+        : ({
+            'common.edit': 'Edit',
+            'common.save': 'Save',
+            'settings.mcp.defaultName': 'MCP Server',
+            'settings.mcp.detail.loadFailed': 'Failed to load this MCP server.',
+            'settings.mcp.detail.loading': 'Loading MCP server...',
+            'settings.mcp.detail.notFound': 'This MCP server no longer exists.',
+            'settings.mcp.retry': 'Retry',
+            'settings.mcp.tabs.configuration': 'Config',
+          }[key] ?? key),
   }),
 }));
 
@@ -159,8 +187,13 @@ describe('McpServerScreen tabs', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockHeaderProps = {};
+    mockIsCreating = false;
+    mockIsDeleting = false;
+    mockIsUpdating = false;
     mockServer = undefined;
+    mockServerError = undefined;
     mockServerId = 'new';
+    mockServerLoading = false;
     mockGetServerInfo.mockResolvedValue({
       instructions: 'Remote instructions',
       name: 'remote-name',
@@ -209,6 +242,101 @@ describe('McpServerScreen tabs', () => {
           node.props.accessibilityLabel === 'settings.mcp.fields.description',
       ),
     ).toHaveLength(0);
+  });
+
+  it('does not mount the editor or operations while loading an existing server', async () => {
+    mockServerId = 'server-1';
+    mockServerLoading = true;
+    const tree = await render();
+
+    expect(mockHeaderProps.rightActions).toBeUndefined();
+    expect(tree.root.findAllByProps({ testID: 'mcp-server-chrome' })).toHaveLength(0);
+    expect(
+      tree.root.findAll(
+        (node) =>
+          typeof node.type === 'string' &&
+          node.props.accessibilityLabel === 'settings.mcp.fields.name',
+      ),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAll((node) => node.props.children === 'Loading MCP server...'),
+    ).not.toHaveLength(0);
+  });
+
+  it('shows a retriable detail error without editor operations', async () => {
+    mockServerId = 'server-1';
+    mockServerError = new Error('database unavailable');
+    const tree = await render();
+
+    expect(mockHeaderProps.rightActions).toBeUndefined();
+    expect(tree.root.findAllByProps({ testID: 'mcp-server-chrome' })).toHaveLength(0);
+    tree.root.findByProps({ accessibilityLabel: 'Retry' }).props.onPress();
+    expect(mockServerRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows not-found without retry or editor operations', async () => {
+    mockServerId = 'server-1';
+    mockServerError = new DataApiError(ErrorCode.NOT_FOUND, 'missing');
+    const tree = await render();
+
+    expect(mockHeaderProps.rightActions).toBeUndefined();
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Retry' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ testID: 'mcp-server-chrome' })).toHaveLength(0);
+    expect(
+      tree.root.findAll((node) => node.props.children === 'This MCP server no longer exists.'),
+    ).not.toHaveLength(0);
+  });
+
+  it('rejects structurally invalid URLs before server discovery', async () => {
+    const tree = await render();
+    const urlInput = tree.root.find(
+      (node) =>
+        typeof node.type === 'string' &&
+        node.props.accessibilityLabel === 'settings.mcp.fields.baseUrl',
+    );
+
+    await act(async () => {
+      urlInput.props.onChangeText('https://');
+    });
+    await act(async () => {
+      mockHeaderProps.rightActions?.find((action) => action.key === 'save')?.onPress?.();
+    });
+
+    expect(mockGetServerInfo).not.toHaveBeenCalled();
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'settings.mcp.fields.baseUrlInvalid',
+      variant: 'danger',
+    });
+  });
+
+  it('reports the malformed header line before server discovery', async () => {
+    const tree = await render();
+    const urlInput = tree.root.find(
+      (node) =>
+        typeof node.type === 'string' &&
+        node.props.accessibilityLabel === 'settings.mcp.fields.baseUrl',
+    );
+    const headerInput = tree.root.find(
+      (node) =>
+        typeof node.type === 'string' &&
+        typeof node.props.onChangeText === 'function' &&
+        node.props.placeholder === undefined &&
+        node.props.value === '',
+    );
+
+    await act(async () => {
+      urlInput.props.onChangeText('https://example.com/mcp');
+      headerInput.props.onChangeText('Authorization=Bearer token\nmalformed');
+    });
+    await act(async () => {
+      mockHeaderProps.rightActions?.find((action) => action.key === 'save')?.onPress?.();
+    });
+
+    expect(mockGetServerInfo).not.toHaveBeenCalled();
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'settings.mcp.headers.invalidLine:2',
+      variant: 'danger',
+    });
   });
 
   it('uses the remote server title as the persisted name when creating a server', async () => {
@@ -331,7 +459,6 @@ describe('McpServerScreen tabs', () => {
 
     expect(mockHeaderProps.titleElement).toBeDefined();
     expect(mockHeaderProps.titleElement?.props.tab).toBe('configuration');
-    expect(mockHeaderProps.titleElement?.props.isDisabled).toBeUndefined();
     expect(mockHeaderProps.rightActions?.map((action) => action.key)).toEqual(['edit']);
     expect(mockHeaderProps.rightActions?.[0]?.label).toBe('Edit');
     expect(
@@ -349,7 +476,7 @@ describe('McpServerScreen tabs', () => {
     const [tools] = tree.root.findAll(
       (node) => typeof node.type === 'string' && node.props.testID === 'mcp-tools-section',
     );
-    expect(tools.props.isReadOnly).toBeUndefined();
+    expect(tools.props.isReadOnly).toBe(false);
   });
 
   it('keeps configuration read-only until Edit is pressed', async () => {
@@ -403,6 +530,45 @@ describe('McpServerScreen tabs', () => {
       expect.objectContaining({ name: 'Custom name' }),
     );
     expect(mockGetServerInfo).not.toHaveBeenCalled();
+  });
+
+  it('preserves the edit draft across server cache updates and omits active state from save', async () => {
+    mockServerId = 'server-1';
+    mockServer = makeServer();
+    mockUpdateServer.mockResolvedValue(makeServer({ isActive: false, name: 'Draft name' }));
+    const tree = await render();
+    const findNameInput = () =>
+      tree.root.find(
+        (node) =>
+          typeof node.type === 'string' &&
+          node.props.accessibilityLabel === 'settings.mcp.fields.name',
+      );
+
+    await act(async () => {
+      mockHeaderProps.rightActions?.find((action) => action.key === 'edit')?.onPress?.();
+      findNameInput().props.onChangeText('Draft name');
+    });
+
+    mockServer = makeServer({ isActive: false });
+    await act(async () => {
+      tree.update(<McpServerScreen />);
+    });
+
+    expect(findNameInput().props.value).toBe('Draft name');
+    expect(tree.root.findByProps({ testID: 'mcp-server-chrome' }).props.isDisabled).toBe(true);
+
+    await act(async () => {
+      mockHeaderProps.rightActions?.find((action) => action.key === 'save')?.onPress?.();
+    });
+
+    expect(mockUpdateServer).toHaveBeenCalledWith(
+      'server-1',
+      expect.not.objectContaining({ isActive: expect.anything() }),
+    );
+    expect(mockUpdateServer).toHaveBeenCalledWith(
+      'server-1',
+      expect.objectContaining({ name: 'Draft name' }),
+    );
   });
 
   it('requests confirmation before deleting a saved server', async () => {

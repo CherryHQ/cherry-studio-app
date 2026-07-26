@@ -8,15 +8,23 @@ describe('MCP header text', () => {
           ' Content-Type = application/json ',
           'Authorization=Bearer first=token',
           '# ignored comment',
-          'invalid line',
-          '=missing-name',
           'Authorization=Bearer replacement',
         ].join('\n'),
       ),
     ).toEqual({
-      Authorization: 'Bearer replacement',
-      'Content-Type': 'application/json',
+      headers: {
+        Authorization: 'Bearer replacement',
+        'Content-Type': 'application/json',
+      },
+      ok: true,
     });
+  });
+
+  it.each([
+    ['missing separator', 'Authorization=Bearer token\ninvalid line', 2],
+    ['missing name', '# comment\n\n=value', 3],
+  ])('reports the first %s with its one-based line number', (_case, value, line) => {
+    expect(parseHeaderText(value)).toEqual({ line, ok: false });
   });
 
   it('serializes saved headers in the desktop NAME=VALUE format', () => {
@@ -32,6 +40,6 @@ describe('MCP header text', () => {
   it('round-trips values containing equals signs', () => {
     const headers = { Authorization: 'Bearer abc=def==' };
 
-    expect(parseHeaderText(serializeHeaders(headers))).toEqual(headers);
+    expect(parseHeaderText(serializeHeaders(headers))).toEqual({ headers, ok: true });
   });
 });

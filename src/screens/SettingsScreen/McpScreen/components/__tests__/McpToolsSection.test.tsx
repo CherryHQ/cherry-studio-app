@@ -24,7 +24,10 @@ jest.mock('@/data/runtime', () => ({
 }));
 
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, options?: { tool?: string }) =>
+      options?.tool ? `${options.tool}: ${key}` : key,
+  }),
 }));
 
 jest.mock('heroui-native/spinner', () => {
@@ -90,10 +93,14 @@ describe('McpToolsSection auto-approve toggle', () => {
     disabledTools: string[] = [],
     serverOverrides: Partial<StreamableHttpMcpServer> = {},
     isReadOnly = false,
+    callbacks: {
+      onToggleAutoApprove?: jest.Mock<Promise<void>, [string, boolean, string[]]>;
+      onToggleTool?: jest.Mock<Promise<void>, [string, boolean, string[]]>;
+    } = {},
   ) {
     const server = { ...makeServer(disabledAutoApproveTools), ...serverOverrides, disabledTools };
-    const onToggleAutoApprove = jest.fn();
-    const onToggleTool = jest.fn();
+    const onToggleAutoApprove = callbacks.onToggleAutoApprove ?? jest.fn(async () => undefined);
+    const onToggleTool = callbacks.onToggleTool ?? jest.fn(async () => undefined);
 
     act(() => {
       renderer = create(
@@ -134,6 +141,53 @@ describe('McpToolsSection auto-approve toggle', () => {
       true,
       true,
     ]);
+  });
+
+  test('labels each control with the tool name and permission column', () => {
+    render([]);
+
+    expect(
+      renderer.root.findAllByType(Switch).map((toggle) => toggle.props.accessibilityLabel),
+    ).toEqual([
+      'search_docs: settings.mcp.tools.enabledAccessibilityLabel',
+      'search_docs: settings.mcp.tools.autoApproveAccessibilityLabel',
+      'read_file: settings.mcp.tools.enabledAccessibilityLabel',
+      'read_file: settings.mcp.tools.autoApproveAccessibilityLabel',
+    ]);
+  });
+
+  test('serializes toggle work from refresh through mutation completion', async () => {
+    const mutation = deferred<void>();
+    const onToggleTool = jest.fn<Promise<void>, [string, boolean, string[]]>(
+      () => mutation.promise,
+    );
+    render([], [], {}, false, { onToggleTool });
+    const toggles = renderer.root.findAllByType(Switch);
+
+    await act(async () => {
+      toggles[0].props.onSelectedChange(false);
+      await Promise.resolve();
+    });
+
+    expect(renderer.root.findAllByType(Switch).every((toggle) => toggle.props.isDisabled)).toBe(
+      true,
+    );
+
+    await act(async () => {
+      toggles[2].props.onSelectedChange(false);
+      await Promise.resolve();
+    });
+    expect(onToggleTool).toHaveBeenCalledTimes(1);
+
+    mutation.resolve();
+    await act(async () => {
+      await mutation.promise;
+      await Promise.resolve();
+    });
+
+    expect(renderer.root.findAllByType(Switch).some((toggle) => toggle.props.isDisabled)).toBe(
+      false,
+    );
   });
 
   test('needs no tool list when no rule is wider than one tool', async () => {
@@ -212,3 +266,11 @@ describe('McpToolsSection auto-approve toggle', () => {
     ]);
   });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}

@@ -5,8 +5,7 @@ import type { McpServerChromeProps } from './McpServerChrome.types';
 
 export function McpServerChrome({
   isActive,
-  isDeleting,
-  isUpdating,
+  isDisabled,
   onDelete,
   onToggleActive,
 }: McpServerChromeProps) {
@@ -17,13 +16,13 @@ export function McpServerChrome({
     <Stack.Toolbar placement="bottom">
       <Stack.Toolbar.Button
         accessibilityLabel={toggleLabel}
-        disabled={isDeleting || isUpdating}
+        disabled={isDisabled}
         icon={isActive ? 'pause' : 'play'}
         onPress={onToggleActive}
       />
       <Stack.Toolbar.Button
         accessibilityLabel={t('settings.mcp.deleteServer')}
-        disabled={isDeleting || isUpdating}
+        disabled={isDisabled}
         icon="trash"
         onPress={onDelete}
         tintColor={Color.ios.systemRed}

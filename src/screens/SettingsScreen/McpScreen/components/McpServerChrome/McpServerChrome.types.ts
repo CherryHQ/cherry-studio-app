@@ -1,7 +1,6 @@
 export type McpServerChromeProps = {
   isActive: boolean;
-  isDeleting: boolean;
-  isUpdating: boolean;
+  isDisabled: boolean;
   onDelete: () => void;
   onToggleActive: () => void;
 };

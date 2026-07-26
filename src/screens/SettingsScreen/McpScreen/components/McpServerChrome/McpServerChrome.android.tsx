@@ -7,14 +7,12 @@ import type { McpServerChromeProps } from './McpServerChrome.types';
 
 export function McpServerChrome({
   isActive,
-  isDeleting,
-  isUpdating,
+  isDisabled,
   onDelete,
   onToggleActive,
 }: McpServerChromeProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const isDisabled = isDeleting || isUpdating;
   const toggleLabel = t(isActive ? 'settings.mcp.disableServer' : 'settings.mcp.enableServer');
 
   return (

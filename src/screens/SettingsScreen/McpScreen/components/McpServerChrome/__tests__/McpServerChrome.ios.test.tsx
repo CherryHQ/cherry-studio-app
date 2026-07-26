@@ -41,8 +41,7 @@ describe('McpServerChrome.ios', () => {
       renderer = create(
         <McpServerChrome
           isActive={false}
-          isDeleting={false}
-          isUpdating={false}
+          isDisabled={false}
           onDelete={onDelete}
           onToggleActive={onToggleActive}
         />,
@@ -76,8 +75,7 @@ describe('McpServerChrome.ios', () => {
       renderer = create(
         <McpServerChrome
           isActive
-          isDeleting={false}
-          isUpdating={false}
+          isDisabled={false}
           onDelete={onDelete}
           onToggleActive={onToggleActive}
         />,

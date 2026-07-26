@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Spinner } from 'heroui-native/spinner';
 import { Switch } from 'heroui-native/switch';
 import { useToast } from 'heroui-native/toast';
-import { useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -15,8 +15,12 @@ import { SettingsDialogActionButton } from '../../components/SettingsDialogActio
 type McpToolsSectionProps = {
   isReadOnly?: boolean;
   /** `knownToolNames` lets the writer re-expand rules wider than one tool. */
-  onToggleAutoApprove: (toolName: string, autoApprove: boolean, knownToolNames: string[]) => void;
-  onToggleTool: (toolName: string, enabled: boolean, knownToolNames: string[]) => void;
+  onToggleAutoApprove: (
+    toolName: string,
+    autoApprove: boolean,
+    knownToolNames: string[],
+  ) => Promise<void>;
+  onToggleTool: (toolName: string, enabled: boolean, knownToolNames: string[]) => Promise<void>;
   server: StreamableHttpMcpServer;
 };
 
@@ -29,6 +33,8 @@ export function McpToolsSection({
   const { t } = useTranslation();
   const { toast } = useToast();
   const services = useDataServices();
+  const isToggleInFlight = useRef(false);
+  const [isTogglePending, setIsTogglePending] = useState(false);
   // Matches raw names, wire ids and server wildcards alike, so a tool disabled
   // by any rule form reads as off here.
   const isDisabled = (toolName: string) =>
@@ -76,28 +82,47 @@ export function McpToolsSection({
     [server, t, toast, toolsQuery],
   );
 
+  const runToggle = useCallback(async (toggle: () => Promise<void>) => {
+    if (isToggleInFlight.current) {
+      return;
+    }
+
+    isToggleInFlight.current = true;
+    setIsTogglePending(true);
+    try {
+      await toggle();
+    } finally {
+      isToggleInFlight.current = false;
+      setIsTogglePending(false);
+    }
+  }, []);
+
   const handleToggleTool = useCallback(
     async (toolName: string, enabled: boolean) => {
-      const knownToolNames = enabled
-        ? await resolveKnownToolNames(server.disabledTools, toolName)
-        : [];
-      if (knownToolNames) {
-        onToggleTool(toolName, enabled, knownToolNames);
-      }
+      await runToggle(async () => {
+        const knownToolNames = enabled
+          ? await resolveKnownToolNames(server.disabledTools, toolName)
+          : [];
+        if (knownToolNames) {
+          await onToggleTool(toolName, enabled, knownToolNames);
+        }
+      });
     },
-    [onToggleTool, resolveKnownToolNames, server.disabledTools],
+    [onToggleTool, resolveKnownToolNames, runToggle, server.disabledTools],
   );
 
   const handleToggleAutoApprove = useCallback(
     async (toolName: string, autoApprove: boolean) => {
-      const knownToolNames = autoApprove
-        ? await resolveKnownToolNames(server.disabledAutoApproveTools, toolName)
-        : [];
-      if (knownToolNames) {
-        onToggleAutoApprove(toolName, autoApprove, knownToolNames);
-      }
+      await runToggle(async () => {
+        const knownToolNames = autoApprove
+          ? await resolveKnownToolNames(server.disabledAutoApproveTools, toolName)
+          : [];
+        if (knownToolNames) {
+          await onToggleAutoApprove(toolName, autoApprove, knownToolNames);
+        }
+      });
     },
-    [onToggleAutoApprove, resolveKnownToolNames, server.disabledAutoApproveTools],
+    [onToggleAutoApprove, resolveKnownToolNames, runToggle, server.disabledAutoApproveTools],
   );
 
   if (toolsQuery.isLoading) {
@@ -124,6 +149,7 @@ export function McpToolsSection({
   }
 
   const tools = toolsQuery.data ?? [];
+  const controlsAreReadOnly = isReadOnly || isTogglePending;
 
   if (tools.length === 0) {
     return <Text className="text-default-foreground text-sm">{t('settings.mcp.tools.empty')}</Text>;
@@ -156,14 +182,20 @@ export function McpToolsSection({
             </View>
             <View className="w-14 items-center">
               <Switch
-                isDisabled={isReadOnly}
+                accessibilityLabel={t('settings.mcp.tools.enabledAccessibilityLabel', {
+                  tool: tool.name,
+                })}
+                isDisabled={controlsAreReadOnly}
                 isSelected={!toolDisabled}
                 onSelectedChange={(enabled) => void handleToggleTool(tool.name, enabled)}
               />
             </View>
             <View className="w-14 items-center">
               <Switch
-                isDisabled={isReadOnly || toolDisabled}
+                accessibilityLabel={t('settings.mcp.tools.autoApproveAccessibilityLabel', {
+                  tool: tool.name,
+                })}
+                isDisabled={controlsAreReadOnly || toolDisabled}
                 isSelected={isAutoApproved(tool.name)}
                 onSelectedChange={(autoApprove) =>
                   void handleToggleAutoApprove(tool.name, autoApprove)
