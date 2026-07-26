@@ -114,6 +114,11 @@ describe('BottomSheet', () => {
       );
     });
     expect(mockBottomSheetProps.index).toBe(0);
+
+    // Owners that remember a dismissal need this apart from `'dismiss'`: a
+    // sheet the code closed is not one the user waved away.
+    act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(0));
+    expect(onClose).toHaveBeenCalledWith('controlled');
   });
 
   test('blocks gesture / scrim dismissal and disables the close button while isCloseDisabled', () => {

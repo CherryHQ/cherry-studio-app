@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Spinner } from 'heroui-native/spinner';
 import { Switch } from 'heroui-native/switch';
+import { useToast } from 'heroui-native/toast';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { matchesMcpSourceToolRule } from '@/ai/tools/mcpSourcePolicy';
+import { hasMcpServerWildcardRule, matchesMcpSourceToolRule } from '@/ai/tools/mcpSourcePolicy';
 import { queryKeys } from '@/data/api';
 import { useDataServices } from '@/data/runtime';
 import type { McpServer } from '@/data/types/mcpServer';
@@ -28,6 +29,7 @@ export function McpToolsSection({
   server,
 }: McpToolsSectionProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const services = useDataServices();
   // Matches raw names, wire ids and server wildcards alike, so a tool disabled
   // by any rule form reads as off here.
@@ -49,6 +51,51 @@ export function McpToolsSection({
   const refetch = useCallback(() => {
     void toolsQuery.refetch();
   }, [toolsQuery]);
+
+  /**
+   * Clearing a server-wide rule rewrites it as one explicit entry per tool it
+   * still has to cover, so the list it expands against must be complete — a
+   * tool missing from a stale render would silently lose its rule. Every other
+   * rule form covers one tool, and needs no round trip.
+   */
+  const resolveKnownToolNames = useCallback(
+    async (rules: readonly string[], toolName: string): Promise<string[] | undefined> => {
+      if (!hasMcpServerWildcardRule(rules, server)) {
+        return [toolName];
+      }
+
+      const fresh = await toolsQuery.refetch();
+      if (fresh.isError || !fresh.data) {
+        toast.show({ label: t('settings.mcp.tools.refreshFailed'), variant: 'danger' });
+        return undefined;
+      }
+
+      return fresh.data.map((tool) => tool.name);
+    },
+    [server, t, toast, toolsQuery],
+  );
+
+  const handleToggleTool = useCallback(
+    async (toolName: string, enabled: boolean) => {
+      const knownToolNames = enabled ? await resolveKnownToolNames(disabledTools, toolName) : [];
+      if (knownToolNames) {
+        onToggleTool(toolName, enabled, knownToolNames);
+      }
+    },
+    [disabledTools, onToggleTool, resolveKnownToolNames],
+  );
+
+  const handleToggleAutoApprove = useCallback(
+    async (toolName: string, autoApprove: boolean) => {
+      const knownToolNames = autoApprove
+        ? await resolveKnownToolNames(disabledAutoApproveTools, toolName)
+        : [];
+      if (knownToolNames) {
+        onToggleAutoApprove(toolName, autoApprove, knownToolNames);
+      }
+    },
+    [disabledAutoApproveTools, onToggleAutoApprove, resolveKnownToolNames],
+  );
 
   if (toolsQuery.isLoading) {
     return (
@@ -74,7 +121,6 @@ export function McpToolsSection({
   }
 
   const tools = toolsQuery.data ?? [];
-  const knownToolNames = tools.map((tool) => tool.name);
 
   if (tools.length === 0) {
     return <Text className="text-default-foreground text-sm">{t('settings.mcp.tools.empty')}</Text>;
@@ -108,7 +154,7 @@ export function McpToolsSection({
             <View className="w-14 items-center">
               <Switch
                 isSelected={!toolDisabled}
-                onSelectedChange={(enabled) => onToggleTool(tool.name, enabled, knownToolNames)}
+                onSelectedChange={(enabled) => void handleToggleTool(tool.name, enabled)}
               />
             </View>
             <View className="w-14 items-center">
@@ -116,7 +162,7 @@ export function McpToolsSection({
                 isDisabled={toolDisabled}
                 isSelected={isAutoApproved(tool.name)}
                 onSelectedChange={(autoApprove) =>
-                  onToggleAutoApprove(tool.name, autoApprove, knownToolNames)
+                  void handleToggleAutoApprove(tool.name, autoApprove)
                 }
               />
             </View>

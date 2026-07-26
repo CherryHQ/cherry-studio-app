@@ -7,7 +7,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { bottomSheet, isLiquidGlassAvailable, sheetScrimColor } from '@/config/constants';
 
-import { type BottomSheetCloseReason, BottomSheetContext } from '../hooks/useBottomSheet';
+import {
+  type BottomSheetCloseReason,
+  BottomSheetContext,
+  controlledCloseReason,
+} from '../hooks/useBottomSheet';
 
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
@@ -70,7 +74,12 @@ export function BottomSheet({
     if (isOpen) {
       closedNotifiedRef.current = false;
       reasonRef.current = 'dismiss';
+      return;
     }
+
+    // Closed from the outside, before the animation settles: the owner hears
+    // back that this was its own doing and not the user's.
+    reasonRef.current = controlledCloseReason;
   }, [isOpen]);
 
   const sheetWidth = Math.max(0, windowWidth - bottomSheet.outerInset * 2);

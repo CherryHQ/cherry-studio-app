@@ -1,10 +1,17 @@
 import type { LegendListRef } from '@legendapp/list/react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useHeaderHeight } from 'expo-router/react-navigation';
+import { useToast } from 'heroui-native/toast';
 import { useCallback, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSharedValue } from 'react-native-reanimated';
 
+import type { BottomSheetCloseReason } from '@/components/bottomSheet';
 import { isIOS } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
+import { queryKeys } from '@/data/api';
+import { useDataServices } from '@/data/runtime';
+import { DataApiError, ErrorCode } from '@/data/types/apiTypes';
 import type { Message } from '@/data/types/message';
 import type { MessagesViewModel } from '@/hooks/chat';
 import { McpApprovalReopenProvider, McpApprovalSheet } from '../approval/McpApprovalSheet';
@@ -18,6 +25,8 @@ import { ChatWorkspaceFrame } from './components/ChatWorkspaceFrame';
 import { ScrollToBottomButton } from './components/ScrollToBottomButton';
 import { useFloatingChatInputLayout } from './hooks/useFloatingChatInputLayout';
 import { useMessageListInitialRenderGate } from './hooks/useMessageListInitialRenderGate';
+import { nextDismissedApprovalMessageId } from './utils/approvalSheetDismissal';
+import { clearMcpToolAutoApproveRule } from './utils/mcpAutoApproveRule';
 
 // 「滚动到底部」按钮悬浮在输入框上方的间距：按输入框实测高度定位，
 // 不用含 safe area 的 contentBottomInset，避免出现需要硬抵消的 magic 偏移。
@@ -38,6 +47,10 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   const { isLoadingInitial, isLoadingOlder, loadOlder, messages } = messageWindow;
   const chatRuntime = useChatRuntimeTopic(topicId);
   const headerHeight = useHeaderHeight();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const services = useDataServices();
+  const queryClient = useQueryClient();
   const listRef = useRef<LegendListRef | null>(null);
   const isAtBottom = useSharedValue(true);
   const handleScrollToEnd = useCallback(() => {
@@ -59,20 +72,47 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   const reopenApprovalSheet = useCallback(() => {
     setDismissedApprovalMessageId(null);
   }, []);
-  const handleApprovalSheetClose = useCallback(() => {
-    setDismissedApprovalMessageId(approvalMessageId ?? null);
-  }, [approvalMessageId]);
+  const handleApprovalSheetClose = useCallback(
+    (reason: BottomSheetCloseReason) => {
+      setDismissedApprovalMessageId((previous) =>
+        nextDismissedApprovalMessageId({ approvalMessageId, previous, reason }),
+      );
+    },
+    [approvalMessageId],
+  );
   const handleApprovalRespond = useCallback(
     async (input: { approvalId: string; approved: boolean; messageId: string }) => {
       try {
         await runtime.respondToolApproval({ ...input, topicId });
       } catch (error) {
-        // Double submits and already-settled approvals reject here; the sheet
-        // converges from the refreshed messages, so log instead of surfacing.
-        logger.warn('Tool approval response failed', error as Error);
+        // Double submits and already-settled approvals reject as invalidOperation;
+        // the sheet converges from the refreshed messages, so those stay quiet.
+        // Anything else (the write failed) means the tap did nothing — say so,
+        // or the sheet just re-presents the same approval with no explanation.
+        if (error instanceof DataApiError && error.code === ErrorCode.INVALID_OPERATION) {
+          logger.warn('Tool approval response was already settled', error);
+          return;
+        }
+
+        logger.error('Tool approval response failed', error as Error);
+        toast.show({ label: t('chat.mcpTool.approval.failed'), variant: 'danger' });
       }
     },
-    [runtime, topicId],
+    [runtime, t, toast, topicId],
+  );
+  const handleAlwaysAllow = useCallback(
+    async (source: { rawToolName: string; serverId: string }) => {
+      try {
+        await clearMcpToolAutoApproveRule(services, source);
+        await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() });
+      } catch (error) {
+        // The call itself is still approved below — only the "stop asking"
+        // half failed, and silently forgetting it would be the surprise.
+        logger.error('Failed to save the auto-approve rule', error as Error);
+        toast.show({ label: t('chat.mcpTool.approval.alwaysAllowFailed'), variant: 'danger' });
+      }
+    },
+    [queryClient, services, t, toast],
   );
   const { isCoverVisible, listRenderKey, markListLoaded } = useMessageListInitialRenderGate({
     hasMessages: visibleMessages.length > 0,
@@ -111,6 +151,7 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
       <McpApprovalSheet
         approvals={pendingApprovals}
         isOpen={isApprovalSheetOpen}
+        onAlwaysAllow={handleAlwaysAllow}
         onClose={handleApprovalSheetClose}
         onRespond={handleApprovalRespond}
       />

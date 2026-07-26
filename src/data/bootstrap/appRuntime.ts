@@ -47,7 +47,7 @@ async function reconcileStalePendingMessages(services: DataServices) {
     logger.info('Reconciling crash-orphaned pending assistant messages', {
       count: staleIds.length,
     });
-    await services.message.markMessagesError(staleIds);
+    await services.message.settleCrashedMessages(staleIds);
   } catch (error) {
     logger.error('Failed to reconcile stale pending messages', error as Error);
   }

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { parseFunctionCallToolName } from '@/ai/tools/mcpToolName';
-import { BottomSheet } from '@/components/bottomSheet';
+import { BottomSheet, type BottomSheetCloseReason } from '@/components/bottomSheet';
 import type { PendingToolApproval } from '../runtime/chatRuntimeMessages';
 
 /**
@@ -29,7 +29,13 @@ type McpApprovalRespondInput = {
 type McpApprovalSheetProps = {
   approvals: readonly PendingToolApproval[];
   isOpen: boolean;
-  onClose: () => void;
+  /**
+   * Stop asking for this tool. Only offered for MCP tools, which own the
+   * setting. Reports its own failures — losing the preference still approves
+   * the call.
+   */
+  onAlwaysAllow: (source: NonNullable<PendingToolApproval['mcpSource']>) => Promise<void>;
+  onClose: (reason: BottomSheetCloseReason) => void;
   onRespond: (input: McpApprovalRespondInput) => Promise<void>;
 };
 
@@ -39,7 +45,13 @@ type McpApprovalSheetProps = {
  * invalidate) so the next request slides in, and deciding the last one closes
  * the sheet and resumes the turn.
  */
-export function McpApprovalSheet({ approvals, isOpen, onClose, onRespond }: McpApprovalSheetProps) {
+export function McpApprovalSheet({
+  approvals,
+  isOpen,
+  onAlwaysAllow,
+  onClose,
+  onRespond,
+}: McpApprovalSheetProps) {
   const { t } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Keep rendering the last request through the close animation so the sheet
@@ -50,13 +62,23 @@ export function McpApprovalSheet({ approvals, isOpen, onClose, onRespond }: McpA
   }
   const approval = approvals[0] ?? lastApprovalRef.current;
 
-  const submit = async (approved: boolean) => {
+  const submit = async (approved: boolean, alwaysAllow = false) => {
     if (!approval || isSubmitting) {
       return;
     }
 
     setIsSubmitting(true);
     try {
+      // Save the preference before approving: the resume starts as soon as the
+      // decision lands, and the next call in the same turn re-reads the server.
+      // The caller reports a write it could not make; swallowing it here only
+      // keeps it from taking down the decision the user pressed for.
+      if (alwaysAllow && approval.mcpSource) {
+        try {
+          await onAlwaysAllow(approval.mcpSource);
+        } catch {}
+      }
+
       await onRespond({
         approvalId: approval.approvalId,
         approved,
@@ -102,6 +124,15 @@ export function McpApprovalSheet({ approvals, isOpen, onClose, onRespond }: McpA
             <Button.Label>{t('chat.mcpTool.approval.allow')}</Button.Label>
           </Button>
         </View>
+        {approval?.mcpSource ? (
+          <Button
+            isDisabled={isSubmitting}
+            onPress={() => void submit(true, true)}
+            variant="tertiary"
+          >
+            <Button.Label>{t('chat.mcpTool.approval.alwaysAllow')}</Button.Label>
+          </Button>
+        ) : null}
       </View>
     </BottomSheet>
   );

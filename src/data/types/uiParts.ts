@@ -77,7 +77,16 @@ export interface CherryReasoningMeta {
   startedAt?: number;
 }
 
-/** Cherry metadata on a ToolUIPart / DynamicToolUIPart. */
+/**
+ * Cherry metadata on a ToolUIPart / DynamicToolUIPart.
+ *
+ * Two carriers end up here. `settledByApp` is ours, written through
+ * `withCherryMeta` into `providerMetadata.cherry` like every other part type.
+ * `transport` / `toolName` / `tool` come from the tool *definition*'s
+ * `metadata`, which the SDK copies onto the part as `toolMetadata.cherry` — a
+ * different object, which is why their readers hand-roll the access instead of
+ * calling `readCherryMeta`.
+ */
 export interface CherryToolMeta {
   /** Approval bridge transport. */
   transport?: string;
@@ -89,6 +98,12 @@ export interface CherryToolMeta {
     serverName?: string;
     type?: 'mcp' | 'builtin' | 'provider';
   };
+  /**
+   * The turn ended before this tool call resolved, so the app closed the call
+   * out itself. Its terminal state and reason are addressed to the model; the
+   * UI reads this to avoid reporting a decision the user never made.
+   */
+  settledByApp?: boolean;
 }
 
 /** Cherry metadata on a FileUIPart. */
@@ -138,6 +153,7 @@ export const CherryToolMetaSchema: z.ZodType<CherryToolMeta> = z.object({
       type: z.enum(['mcp', 'builtin', 'provider']).optional(),
     })
     .optional(),
+  settledByApp: z.boolean().optional(),
 });
 
 export const CherryFileMetaSchema: z.ZodType<CherryFileMeta> = z.object({

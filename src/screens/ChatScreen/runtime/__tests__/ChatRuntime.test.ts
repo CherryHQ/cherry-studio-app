@@ -1,4 +1,5 @@
 import type { AiStreamRequest } from '@/ai/types/requests';
+import { loggerService } from '@/core/logger/LoggerService';
 import type { DataServices } from '@/data/services/createDataServices';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
 import type { PreparedInternalFile } from '@/data/types/file';
@@ -797,7 +798,7 @@ describe('ChatRuntime', () => {
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
-  test('denies pending approvals when the turn is aborted mid-stream', async () => {
+  test('settles pending approvals terminally when the turn is aborted mid-stream', async () => {
     const services = createServices();
     const runtime = createRuntime({ services });
     const approvalChunk = {
@@ -826,9 +827,11 @@ describe('ChatRuntime', () => {
       data: {
         parts: [
           { type: 'text', text: 'checking' },
+          // Terminal, not merely responded: an unanswered tool call would make
+          // every later request on this branch fail at the provider.
           expect.objectContaining({
             approval: expect.objectContaining({ approved: false, id: 'approval-1' }),
-            state: 'approval-responded',
+            state: 'output-denied',
           }),
         ],
       },
@@ -989,7 +992,14 @@ describe('ChatRuntime', () => {
     expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
       data: {
         parts: [
-          ...priorParts,
+          priorParts[0],
+          // Approved, but the resume never delivered an output — the row must
+          // not keep a tool call the model can never see a result for.
+          expect.objectContaining({
+            approval: { approved: true, id: 'approval-1' },
+            errorText: expect.any(String),
+            state: 'output-error',
+          }),
           expect.objectContaining({
             data: expect.objectContaining({ message: 'resume failed' }),
             type: 'data-error',
@@ -1082,13 +1092,8 @@ describe('ChatRuntime', () => {
     });
   });
 
-  test('denies a paused tip still awaiting approval before sending a new message', async () => {
+  test('settles the approvals of a superseded tip in the reservation write', async () => {
     const services = createServices();
-    services.message.getById = jest.fn(async () => ({
-      ...createMessage('active-node', 'assistant'),
-      data: { parts: [createApprovalPart('approval-1')] },
-      status: 'paused' as const,
-    }));
     const runtime = createRuntime({ services });
     mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
 
@@ -1098,14 +1103,186 @@ describe('ChatRuntime', () => {
       topicId: 'topic-1',
     });
 
-    expect(services.message.applyToolApprovalDecisions).toHaveBeenCalledWith('active-node', {
-      denyAll: { reason: expect.any(String) },
+    // Same transaction as the reservation: a separate write would leave the tip
+    // fully answered but still paused if the reservation then failed.
+    expect(services.message.createUserMessageWithPlaceholders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        finalizeToolApprovals: { messageId: 'active-node', reason: expect.any(String) },
+      }),
+    );
+    expect(services.message.applyToolApprovalDecisions).not.toHaveBeenCalled();
+  });
+
+  test('keeps the streamed answer when teardown fails after the stream took over', async () => {
+    const services = createServices();
+    const runtime = createRuntime({ services });
+    const assistantChunk = createUiMessage('assistant-1', 'the whole answer');
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
+    // A subscriber that blows up during teardown: the error escapes the stream
+    // helper only after it has already persisted the streamed answer.
+    runtime.subscribe(() => {
+      if ((services.message.update as jest.Mock).mock.calls.length > 0) {
+        throw new Error('subscriber blew up');
+      }
     });
-    const denyOrder = (services.message.applyToolApprovalDecisions as jest.Mock).mock
-      .invocationCallOrder[0];
-    const reserveOrder = (services.message.createUserMessageWithPlaceholders as jest.Mock).mock
-      .invocationCallOrder[0];
-    expect(denyOrder).toBeLessThan(reserveOrder);
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    // The placeholder's parts are empty; a second persist from runTopicTurn
+    // would overwrite the streamed answer with them.
+    expect(services.message.update).toHaveBeenCalledTimes(1);
+    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
+      data: { parts: assistantChunk.parts },
+      status: 'success',
+    });
+  });
+
+  test('releases the topic when the refetch throws before the stream starts', async () => {
+    const services = createServices();
+    const invalidateTopicMessages = jest.fn(async () => {
+      throw new Error('refetch failed');
+    });
+    const runtime = createRuntime({ invalidateTopicMessages, services });
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    // The pre-stream invalidate is deliberately unguarded, so the turn dies
+    // there: what is under test is the teardown that runs afterwards.
+    expect(services.ai.streamText).not.toHaveBeenCalled();
+
+    // A stranded activeTurns entry would make every later send throw.
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterable([createUiMessage('assistant-1', 'second')]),
+    );
+    await expect(
+      runtime.sendText({
+        selectedModelId: 'provider::model' as UniqueModelId,
+        text: 'again',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  test('keeps the streamed answer and releases the topic when the post-turn refetch throws', async () => {
+    const services = createServices();
+    // Only the second call — the one in releaseTurn — goes through the safe
+    // invalidate; throwing on the first would kill the turn before it streams.
+    const invalidateTopicMessages = jest
+      .fn(async () => undefined)
+      .mockImplementationOnce(async () => undefined)
+      .mockImplementationOnce(async () => {
+        throw new Error('refetch failed');
+      });
+    const runtime = createRuntime({ invalidateTopicMessages, services });
+    const assistantChunk = createUiMessage('assistant-1', 'the whole answer');
+    mockReadUIMessageStream.mockReturnValueOnce(asyncIterable([assistantChunk]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    // Teardown failing must not cost the turn its answer: the row keeps what
+    // streamed in, with no second persist falling back to empty parts.
+    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
+      data: { parts: assistantChunk.parts },
+      status: 'success',
+    });
+    // And the rest of the teardown still ran: the terminal overlay is dropped,
+    // which a refetch failure taking the cleanup with it would skip.
+    expect(runtime.getTopicSnapshot('topic-1')).toEqual({ status: 'idle' });
+
+    // A stranded activeTurns entry would make every later send throw.
+    mockReadUIMessageStream.mockReturnValueOnce(
+      asyncIterable([createUiMessage('assistant-1', 'second')]),
+    );
+    await expect(
+      runtime.sendText({
+        selectedModelId: 'provider::model' as UniqueModelId,
+        text: 'again',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  test('settles the row when the approval resume fails before the stream starts', async () => {
+    const services = createServices();
+    const settledMessage = {
+      ...createMessage('assistant-1', 'assistant'),
+      data: { parts: [createRespondedApprovalPart('approval-1')] },
+      status: 'pending' as const,
+    };
+    services.message.applyToolApprovalDecisions = jest.fn(async () => ({
+      message: settledMessage,
+      pendingApprovalCount: 0,
+    }));
+    services.topic.getById = jest.fn(async () => {
+      throw new Error('topic lookup failed');
+    });
+    const runtime = createRuntime({ services });
+
+    await expect(
+      runtime.respondToolApproval({
+        approvalId: 'approval-1',
+        approved: true,
+        messageId: 'assistant-1',
+        topicId: 'topic-1',
+      }),
+    ).rejects.toThrow('topic lookup failed');
+
+    // The decision already flipped the row to 'pending'; leaving it there
+    // would strand it with no writer, no sheet and no recovery path.
+    expect(services.message.update).toHaveBeenCalledWith('assistant-1', {
+      data: {
+        parts: [
+          expect.objectContaining({ state: 'output-error' }),
+          expect.objectContaining({ type: 'data-error' }),
+        ],
+      },
+      status: 'error',
+    });
+    expect(services.ai.streamText).not.toHaveBeenCalled();
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  test('does not settle the row when the decision itself failed', async () => {
+    const services = createServices();
+    services.message.applyToolApprovalDecisions = jest.fn(async () => {
+      throw new Error('database is locked');
+    });
+    const runtime = createRuntime({ services });
+    const errorSpy = jest.spyOn(loggerService, 'error').mockImplementation(() => undefined);
+
+    await expect(
+      runtime.respondToolApproval({
+        approvalId: 'approval-1',
+        approved: true,
+        messageId: 'assistant-1',
+        topicId: 'topic-1',
+      }),
+    ).rejects.toThrow('database is locked');
+
+    // Nothing was written, so the row is still paused and the sheet can retry.
+    expect(services.message.update).not.toHaveBeenCalled();
+    // And nothing was attempted either: with no settled message there is no row
+    // to write, and a runtime that tried anyway would only look clean because
+    // settleFailedTurn swallows the resulting crash into this log line.
+    expect(errorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('Failed to persist the terminal state of a failed turn'),
+      expect.anything(),
+    );
+
+    errorSpy.mockRestore();
   });
 
   test('does not open a new topic when aborted after topic creation', async () => {

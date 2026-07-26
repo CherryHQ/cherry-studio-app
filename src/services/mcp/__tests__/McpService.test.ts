@@ -95,10 +95,13 @@ function makeClient(tools: ToolSet): FakeClient {
 
 function makeService(servers: McpServer[]) {
   const mcpServer = {
+    // Hand out a copy: sharing the row object with the caller would let a test
+    // mutate what production code already captured, and pass without the code
+    // ever re-reading anything.
     getById: jest.fn(async (id: string) => {
       const found = servers.find((server) => server.id === id);
       if (!found) throw DataApiErrorFactory.notFound('McpServer', id);
-      return found;
+      return { ...found };
     }),
     list: jest.fn(async () => ({ items: servers, total: servers.length })),
   };
@@ -283,7 +286,11 @@ describe('chat hot path is cache-only', () => {
     const tools = await warmedToolSet(service);
 
     expect(tools?.mcp__serverone__search.metadata).toEqual({
-      cherry: { tool: { serverId: 'server-1', serverName: 'ServerOne', type: 'mcp' } },
+      // `rawName` is the only way back from the camelCased wire key above to a
+      // name the per-tool rule lists can be matched against.
+      cherry: {
+        tool: { rawName: 'search', serverId: 'server-1', serverName: 'ServerOne', type: 'mcp' },
+      },
     });
   });
 });
@@ -312,33 +319,59 @@ describe('disabledTools filtering', () => {
 
   it('re-reads the server so an approval toggle mid-turn is honoured', async () => {
     mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
-    const server = makeServer();
-    const { service } = makeService([server]);
+    const { mcpServer, service } = makeService([makeServer()]);
+    const tools = await warmedToolSet(service);
+    const tool = tools?.mcp__serverone__search as unknown as {
+      needsApproval: () => Promise<boolean>;
+    };
+    await expect(tool.needsApproval()).resolves.toBe(false);
+
+    // The user requires approval after this ToolSet was built. A fresh object,
+    // not a mutation of the wrap-time one — otherwise reading the stale
+    // snapshot would pass this test too.
+    mcpServer.getById.mockResolvedValue(
+      makeServer({ disabledAutoApproveTools: ['mcp__serverone__*'] }),
+    );
+
+    await expect(tool.needsApproval()).resolves.toBe(true);
+    expect(mcpServer.getById).toHaveBeenCalledWith('server-1');
+  });
+
+  it('requires approval when the lookup fails rather than trusting a stale snapshot', async () => {
+    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
+    const { mcpServer, service } = makeService([makeServer()]);
     const tools = await warmedToolSet(service);
 
-    // The user requires approval after this ToolSet was built.
-    server.disabledAutoApproveTools = ['mcp__serverone__*'];
+    mcpServer.getById.mockRejectedValue(new Error('database is locked'));
 
+    // The snapshot says "auto-approve", but it may simply predate the rule the
+    // user just added — a security gate that cannot read its rules must ask.
     const tool = tools?.mcp__serverone__search as unknown as {
       needsApproval: () => Promise<boolean>;
     };
     await expect(tool.needsApproval()).resolves.toBe(true);
   });
 
-  it('falls back to the wrap-time snapshot when the approval lookup fails', async () => {
+  it('does not ask to approve a deleted server, leaving execute to report it', async () => {
     mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
-    const { mcpServer, service } = makeService([
-      makeServer({ disabledAutoApproveTools: ['search'] }),
-    ]);
+    const { mcpServer, service } = makeService([makeServer()]);
     const tools = await warmedToolSet(service);
 
-    mcpServer.getById.mockRejectedValue(new Error('database is locked'));
+    mcpServer.getById.mockRejectedValue(DataApiErrorFactory.notFound('McpServer', 'server-1'));
 
-    // A broken lookup must not fail the turn — and the snapshot still gates.
     const tool = tools?.mcp__serverone__search as unknown as {
+      execute: (args: unknown, opts: unknown) => Promise<unknown>;
       needsApproval: () => Promise<boolean>;
     };
-    await expect(tool.needsApproval()).resolves.toBe(true);
+
+    // The mirror image of the test above, and swapping the two is a security
+    // regression: NOT_FOUND must pass the gate so the user sees why the call
+    // really failed instead of approving something that cannot run, while any
+    // other read failure must still fail closed.
+    await expect(tool.needsApproval()).resolves.toBe(false);
+    await expect(tool.execute({}, {})).rejects.toThrow(
+      'MCP server ServerOne is no longer registered',
+    );
   });
 
   it('honors wire-id and wildcard entries (desktop rule parity)', async () => {
@@ -395,17 +428,19 @@ describe('tool execution', () => {
 
   it('re-checks the server before running, so a mid-turn disable is honored', async () => {
     mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
-    const server = makeServer();
-    const { service } = makeService([server]);
+    const { mcpServer, service } = makeService([makeServer()]);
     const tools = await warmedToolSet(service);
 
-    // The user disables the tool after this ToolSet was built.
-    server.disabledTools = ['search'];
+    // The user disables the tool after this ToolSet was built. A fresh object,
+    // not a mutation of the wrap-time one — otherwise reading the stale
+    // snapshot would pass this test too.
+    mcpServer.getById.mockResolvedValue(makeServer({ disabledTools: ['search'] }));
     const tool = tools?.mcp__serverone__search;
 
     await expect(
       (tool?.execute as (args: unknown, opts: unknown) => Promise<unknown>)({}, {}),
     ).rejects.toThrow('MCP tool ServerOne/search is disabled');
+    expect(mcpServer.getById).toHaveBeenCalledWith('server-1');
   });
 
   it('does not blame a deleted server when the lookup itself fails', async () => {
@@ -425,11 +460,12 @@ describe('tool execution', () => {
 
   it('refuses to run against a deactivated server', async () => {
     mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
-    const server = makeServer();
-    const { service } = makeService([server]);
+    const { mcpServer, service } = makeService([makeServer()]);
     const tools = await warmedToolSet(service);
 
-    server.isActive = false;
+    // Deactivated through the mock rather than by mutating the wrap-time row,
+    // so only a genuine re-read can observe it.
+    mcpServer.getById.mockResolvedValue(makeServer({ isActive: false }));
 
     await expect(
       (tools?.mcp__serverone__search.execute as (a: unknown, o: unknown) => Promise<unknown>)(
@@ -437,6 +473,7 @@ describe('tool execution', () => {
         {},
       ),
     ).rejects.toThrow('is not active');
+    expect(mcpServer.getById).toHaveBeenCalledWith('server-1');
   });
 
   it('throws a server/tool-labelled error when the result isError', async () => {

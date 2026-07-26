@@ -2,6 +2,7 @@ import type { McpServer } from '@/data/types/mcpServer';
 import {
   buildMcpWireToolId,
   buildMcpWireWildcard,
+  hasMcpServerWildcardRule,
   isMcpToolDisabledBySource,
   isMcpToolForcePromptBySource,
   withMcpToolDisabled,
@@ -30,6 +31,16 @@ describe('mcp wire identifiers', () => {
   it('builds the wire id and wildcard from the camelCased server name', () => {
     expect(buildMcpWireToolId('My Server', 'search_issues')).toBe('mcp__myServer__searchIssues');
     expect(buildMcpWireWildcard('My Server')).toBe('mcp__myServer__*');
+  });
+});
+
+describe('hasMcpServerWildcardRule', () => {
+  it('only fires on the wildcard, the one rule that covers unnamed tools', () => {
+    const server = makeServer([]);
+    expect(hasMcpServerWildcardRule(['mcp__myServer__*'], server)).toBe(true);
+    // Both name a single tool, so clearing them needs no tool list.
+    expect(hasMcpServerWildcardRule(['search', 'mcp__myServer__search'], server)).toBe(false);
+    expect(hasMcpServerWildcardRule([], server)).toBe(false);
   });
 });
 

@@ -1,6 +1,8 @@
 /**
- * MCP per-tool source policy, ported from desktop
- * `src/shared/ai/tools/mcpSourcePolicy.ts` (disabled-tools subset).
+ * MCP per-tool source policy. The read side (`matches…`, `isMcpTool…`) is
+ * ported from desktop `src/shared/ai/tools/mcpSourcePolicy.ts`; the write side
+ * (`with…`) has no desktop counterpart — desktop mutates its rule lists inline
+ * at each call site — so it is ours, written to keep the same rule vocabulary.
  *
  * An entry may be a raw tool name, a minted tool id, a wire id, or a
  * server-wide wildcard. Only raw names are written today — on either end — so
@@ -37,6 +39,15 @@ export function matchesMcpSourceToolRule(
     value === buildMcpWireToolId(server.name, tool.name) ||
     value === buildMcpWireWildcard(server.name)
   );
+}
+
+/**
+ * True when a rule list holds this server's wildcard — the one entry that
+ * covers tools it does not name, and so the one whose removal has to be
+ * re-expanded against a complete tool list.
+ */
+export function hasMcpServerWildcardRule(rules: readonly string[], server: McpServer): boolean {
+  return rules.includes(buildMcpWireWildcard(server.name));
 }
 
 export function isMcpToolDisabledBySource(server: McpServer, tool: McpPolicyTool): boolean {

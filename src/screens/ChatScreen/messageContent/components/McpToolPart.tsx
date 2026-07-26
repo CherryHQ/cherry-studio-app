@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { parseFunctionCallToolName } from '@/ai/tools/mcpToolName';
 import type { CherryMessagePart } from '@/data/types/message';
+import { readCherryMeta } from '@/data/types/uiParts';
 import { useMcpApprovalReopen } from '../../approval/McpApprovalSheet';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
@@ -64,7 +65,13 @@ export function McpToolPart({ part }: McpToolPartProps) {
             <View className="gap-2.5 border-border border-t pt-2">
               <ToolValueSection title={t('chat.mcpTool.arguments')} value={part.input} />
               {part.state === 'output-available' ? <McpOutputSection output={part.output} /> : null}
-              {part.state === 'output-error' ? (
+              {readCherryMeta(part)?.settledByApp ? (
+                <ToolTextSection
+                  tone="error"
+                  title={t('chat.mcpTool.response')}
+                  value={t('chat.mcpTool.unfinishedDetail')}
+                />
+              ) : part.state === 'output-error' ? (
                 <ToolTextSection
                   tone="error"
                   title={t('chat.mcpTool.response')}
@@ -266,12 +273,28 @@ function getMcpToolStatusText(part: ToolMessagePart, t: ReturnType<typeof useTra
       : t('chat.mcpTool.outputReady');
   }
 
+  // Whatever the app wrote to close out an abandoned call is addressed to the
+  // model, in English: report what happened instead of quoting it.
+  if (readCherryMeta(part)?.settledByApp) {
+    return t('chat.mcpTool.unfinished');
+  }
+
   if (part.state === 'output-error') {
     return part.errorText;
   }
 
-  return t('chat.mcpTool.outputDenied');
+  if (part.state === 'output-denied') {
+    return t('chat.mcpTool.outputDenied');
+  }
+
+  // An `ai` upgrade added a state. Falling through to "denied" would put words
+  // in the user's mouth, so say nothing until this switch is taught about it.
+  assertHandled(part);
+  return '';
 }
+
+/** Compile-time canary: a new tool part state makes this call a type error. */
+function assertHandled(_part: never): void {}
 
 function getValueEntries(value: unknown): [string, unknown][] {
   if (value === undefined || value === null) return [];

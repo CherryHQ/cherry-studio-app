@@ -127,8 +127,11 @@ function withTimeout<T>(
  *
  * The chat hot path is **cache-only**: `getToolSetForAssistant` never connects,
  * so a dead or slow server cannot delay sending a message. Connecting is owned
- * by the background refresh and by the explicit settings-screen calls, both of
- * which are timeout-bounded.
+ * by the background refresh and by `listToolsForServer`, which the settings
+ * screen calls — and, for the one case that cannot be answered from cache, the
+ * approval sheet: clearing a server-wide auto-approve rule rewrites it as one
+ * entry per remaining tool, so it needs the full list or it silently drops the
+ * rules of the tools it is missing. Both are timeout-bounded.
  *
  * There is no ping API, so staleness is handled fail-and-drop: any failure from
  * `tools()` or from a tool call closes the client and the next use reconnects.
@@ -521,7 +524,16 @@ export class McpService {
       description: rawTool.description || rawToolName,
       metadata: {
         cherry: {
-          tool: { serverId: server.id, serverName: server.name, type: 'mcp' },
+          // `rawName` is the server's own name for the tool. The key this tool
+          // is registered under is the camelCased wire id, which the rule lists
+          // can't be matched against — so it has to travel with the part for
+          // the approval sheet to be able to write a per-tool rule.
+          tool: {
+            rawName: rawToolName,
+            serverId: server.id,
+            serverName: server.name,
+            type: 'mcp',
+          },
         },
       },
       // Approval rides on the AI SDK's native gate: when this resolves true the
@@ -529,10 +541,29 @@ export class McpService {
       // ends cleanly. (ai-core's promptToolUsePlugin would bypass this gate by
       // pulling tools out of the toolset — it is opt-in and never registered
       // here; keep it that way.) Re-read the server so flipping the setting
-      // mid-turn is honoured, like `assertToolStillAllowed`; on a failed read,
-      // fall back to the snapshot rather than failing the whole turn.
+      // mid-turn is honoured, like `assertToolStillAllowed`. A failed read
+      // asks rather than assumes: falling back to the wrap-time snapshot would
+      // run a tool the user just put behind approval.
       needsApproval: async () => {
-        const current = await this.deps.mcpServer.getById(server.id).catch(() => server);
+        let current: McpServer;
+        try {
+          current = await this.deps.mcpServer.getById(server.id);
+        } catch (error) {
+          if (error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND) {
+            // No server, no tool: let the call through to `wrappedExecute`,
+            // which fails with the real reason instead of asking the user to
+            // approve something that cannot run.
+            return false;
+          }
+
+          logger.warn('Approval lookup failed; requiring approval for this call', {
+            cause: error,
+            serverId: server.id,
+            tool: rawToolName,
+          });
+          return true;
+        }
+
         return isMcpToolForcePromptBySource(current, { name: rawToolName });
       },
       execute: wrappedExecute,

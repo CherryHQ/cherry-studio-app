@@ -72,38 +72,117 @@ describe('MessageService', () => {
     await expect(service.findPendingAssistantMessageIds()).resolves.toEqual(['a', 'b']);
   });
 
-  test('markMessagesError updates the given ids to error status', async () => {
-    const updateCalls: { status: string }[] = [];
-    const tx = {
-      update: () => ({
-        set: (values: { status: string }) => ({
-          where: () => {
-            updateCalls.push(values);
-            return Promise.resolve();
-          },
+  describe('settleCrashedMessages', () => {
+    function makeSettleService(rows: Record<string, unknown>[]) {
+      const updates: Record<string, unknown>[] = [];
+      const tx = {
+        select: () => ({ from: () => ({ where: async () => rows }) }),
+        update: () => ({
+          set: (values: Record<string, unknown>) => ({
+            where: () => {
+              updates.push(values);
+              return Promise.resolve();
+            },
+          }),
         }),
-      }),
-    };
-    const withWriteTx = jest.fn(async (callback: (fakeTx: typeof tx) => Promise<unknown>) =>
-      callback(tx),
-    );
-    const dbService = { withWriteTx } as unknown as DbService;
-    const service = new MessageService(dbService, {} as never, {} as never);
+      };
+      const withWriteTx = jest.fn(async (callback: (fakeTx: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      );
+      const dbService = { withWriteTx } as unknown as DbService;
 
-    await service.markMessagesError(['a', 'b']);
+      return {
+        service: new MessageService(dbService, {} as never, {} as never),
+        updates,
+        withWriteTx,
+      };
+    }
 
-    expect(withWriteTx).toHaveBeenCalledTimes(1);
-    expect(updateCalls).toEqual([{ status: 'error' }]);
-  });
+    test('flips the given ids to error status', async () => {
+      const { service, updates, withWriteTx } = makeSettleService([]);
 
-  test('markMessagesError is a no-op for an empty id list', async () => {
-    const withWriteTx = jest.fn();
-    const dbService = { withWriteTx } as unknown as DbService;
-    const service = new MessageService(dbService, {} as never, {} as never);
+      await service.settleCrashedMessages(['a', 'b']);
 
-    await service.markMessagesError([]);
+      expect(withWriteTx).toHaveBeenCalledTimes(1);
+      expect(updates).toEqual([{ status: 'error' }]);
+    });
 
-    expect(withWriteTx).not.toHaveBeenCalled();
+    test('settles unresolved tool approvals so the branch stays replayable', async () => {
+      const { service, updates } = makeSettleService([
+        {
+          data: {
+            parts: [
+              {
+                approval: { id: 'a1' },
+                state: 'approval-requested',
+                toolCallId: 'call-a1',
+                toolName: 'search',
+                type: 'dynamic-tool',
+              },
+              {
+                approval: { approved: true, id: 'a2' },
+                state: 'approval-responded',
+                toolCallId: 'call-a2',
+                toolName: 'create',
+                type: 'dynamic-tool',
+              },
+            ],
+          },
+          id: 'assistant-1',
+        },
+      ]);
+
+      await service.settleCrashedMessages(['assistant-1']);
+
+      // The status flip is the half that always applies; the per-row catch is
+      // what keeps one bad part from rolling it back with the transaction.
+      expect(updates[0]).toEqual({ status: 'error' });
+      const parts = (updates[1]?.data as { parts: unknown[] }).parts;
+      expect(parts[0]).toMatchObject({
+        approval: { approved: false, id: 'a1' },
+        state: 'output-denied',
+      });
+      expect(parts[1]).toMatchObject({
+        approval: { approved: true, id: 'a2' },
+        state: 'output-error',
+      });
+    });
+
+    test('still settles the status when a row has a part it cannot repair', async () => {
+      // Parts come back as JSON off disk: a shape the types promise can still
+      // be missing in an old or restored row. Losing the status flip over it
+      // would leave the message generating forever, relaunch after relaunch.
+      const { service, updates } = makeSettleService([
+        {
+          data: { parts: [{ state: 'approval-requested', type: 'dynamic-tool' }] },
+          id: 'assistant-1',
+        },
+      ]);
+
+      await expect(service.settleCrashedMessages(['assistant-1'])).resolves.toBeUndefined();
+
+      expect(updates).toEqual([{ status: 'error' }]);
+    });
+
+    test('leaves parts untouched when nothing was awaiting approval', async () => {
+      const { service, updates } = makeSettleService([
+        { data: { parts: [{ text: 'hi', type: 'text' }] }, id: 'assistant-1' },
+      ]);
+
+      await service.settleCrashedMessages(['assistant-1']);
+
+      expect(updates).toEqual([{ status: 'error' }]);
+    });
+
+    test('is a no-op for an empty id list', async () => {
+      const withWriteTx = jest.fn();
+      const dbService = { withWriteTx } as unknown as DbService;
+      const service = new MessageService(dbService, {} as never, {} as never);
+
+      await service.settleCrashedMessages([]);
+
+      expect(withWriteTx).not.toHaveBeenCalled();
+    });
   });
 
   describe('applyToolApprovalDecisions', () => {
@@ -217,32 +296,27 @@ describe('MessageService', () => {
       ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
     });
 
-    test('denyAll settles every pending approval with the shared reason', async () => {
-      const { service, updates } = makeApprovalService({
+    test('refuses rows that are not awaiting approval', async () => {
+      const { service } = makeApprovalService({
         ...baseRow,
-        data: { parts: [requestedPart('a1'), requestedPart('a2')] },
+        data: { parts: [requestedPart('a1')] },
+        status: 'success',
       });
 
-      const result = await service.applyToolApprovalDecisions('assistant-1', {
-        denyAll: { reason: 'superseded' },
-      });
-
-      expect(result.pendingApprovalCount).toBe(0);
-      // No statusWhenSettled: the row stays paused, nothing resumes it.
-      expect(updates[0]?.status).toBeUndefined();
-      expect(
-        (updates[0]?.data as { parts: { approval: unknown }[] }).parts.map((p) => p.approval),
-      ).toEqual([
-        { approved: false, id: 'a1', reason: 'superseded' },
-        { approved: false, id: 'a2', reason: 'superseded' },
-      ]);
+      await expect(
+        service.applyToolApprovalDecisions('assistant-1', {
+          decisions: [{ approvalId: 'a1', approved: true }],
+        }),
+      ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
     });
 
     test('refuses non-assistant rows', async () => {
       const { service } = makeApprovalService({ ...baseRow, role: 'user' });
 
       await expect(
-        service.applyToolApprovalDecisions('assistant-1', { denyAll: { reason: 'x' } }),
+        service.applyToolApprovalDecisions('assistant-1', {
+          decisions: [{ approvalId: 'a1', approved: true }],
+        }),
       ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
     });
   });

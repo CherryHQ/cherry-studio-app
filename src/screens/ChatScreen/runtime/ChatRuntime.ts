@@ -18,8 +18,9 @@ import { type CherryReasoningMeta, readCherryMeta, withCherryMeta } from '@/data
 
 import {
   applyStreamingMessage,
-  denyPendingToolApprovals,
+  finalizeTurnToolApprovals,
   hasPendingToolApproval,
+  hasUnresumedToolApproval,
   mergeMessageStats,
   statsFromMetadata,
 } from './chatRuntimeMessages';
@@ -76,10 +77,10 @@ const idleTopicSnapshot: ChatRuntimeTopicSnapshot = Object.freeze({ status: 'idl
 const logger = loggerService.withContext('ChatRuntime');
 
 /**
- * Deny reasons fed back to the model as tool results (via
- * `convertToModelMessages`), not shown in the UI — fixed English text, no i18n.
+ * Fed back to the model as tool results (via `convertToModelMessages`), never
+ * shown in the UI — fixed English text, no i18n.
  */
-const abortedApprovalDenyReason = 'The tool call was not approved before the turn ended.';
+const interruptedTurnApprovalReason = 'The turn ended before this tool call completed.';
 const supersededApprovalDenyReason = 'The user sent a new message instead of approving.';
 
 export class ChatRuntime {
@@ -164,7 +165,7 @@ export class ChatRuntime {
       });
     } catch (error) {
       this.activeTurns.delete(input.topicId);
-      await this.dependencies.invalidateTopicMessages(input.topicId);
+      await this.invalidateTopicMessagesSafely(input.topicId);
       this.setTopicSnapshot(input.topicId, idleTopicSnapshot);
 
       if (!abortController.signal.aborted) {
@@ -227,7 +228,7 @@ export class ChatRuntime {
       this.activeTurns.delete(newTopicRuntimeId);
       if (createdTopicId) {
         this.activeTurns.delete(createdTopicId);
-        await this.dependencies.invalidateTopicMessages(createdTopicId);
+        await this.invalidateTopicMessagesSafely(createdTopicId);
         this.setTopicSnapshot(createdTopicId, idleTopicSnapshot);
       }
       if (createdTopicId && this.newTopicHandoffTopicId === createdTopicId) {
@@ -262,6 +263,8 @@ export class ChatRuntime {
     this.activeTurns.set(topicId, activeTurn);
     this.setTopicSnapshot(topicId, { status: 'reserving' });
 
+    let settledMessage: Message | undefined;
+
     try {
       const applied = await this.dependencies.services.message.applyToolApprovalDecisions(
         messageId,
@@ -276,7 +279,7 @@ export class ChatRuntime {
         },
         { statusWhenSettled: 'pending' },
       );
-      await this.dependencies.invalidateTopicMessages(topicId);
+      await this.invalidateTopicMessagesSafely(topicId);
 
       if (applied.pendingApprovalCount > 0) {
         this.activeTurns.delete(topicId);
@@ -284,11 +287,28 @@ export class ChatRuntime {
         return;
       }
 
+      // Only a fully answered row flipped to `pending`; one still collecting
+      // decisions stays `paused` and must keep its remaining approvals.
+      settledMessage = applied.message;
       throwIfAborted(abortController.signal);
       await this.resumeApprovedTurn({ activeTurn, message: applied.message });
     } catch (error) {
+      // Once the last decision landed the row is `pending` with its approvals
+      // answered but unresumed — a state nothing else recovers from. The
+      // failures that reach here with it still unsettled are `resumeApprovedTurn`'s
+      // prelude (topic read, model resolve, history read), which persist
+      // nothing. Past that, `streamAssistantTurn` owns the row and has already
+      // released the turn, which is what the identity check below detects.
+      if (settledMessage && this.activeTurns.get(topicId) === activeTurn) {
+        await this.settleFailedTurn({
+          assistantMessage: settledMessage,
+          error,
+          wasAborted: abortController.signal.aborted,
+        });
+      }
+
       this.activeTurns.delete(topicId);
-      await this.dependencies.invalidateTopicMessages(topicId);
+      await this.invalidateTopicMessagesSafely(topicId);
       this.setTopicSnapshot(topicId, idleTopicSnapshot);
 
       if (!abortController.signal.aborted) {
@@ -353,34 +373,6 @@ export class ChatRuntime {
     return await this.resolveModel(undefined, topic);
   }
 
-  /**
-   * A new user message chains onto the topic's active node. If that node is
-   * an assistant turn still waiting on tool approvals, settle them as denied
-   * first: the sheet's target is about to stop being the tip, and the denied
-   * results let the next turn's history close the model's tool calls.
-   */
-  private async denyStaleApprovalsBeforeSend(topic: Topic): Promise<void> {
-    if (!topic.activeNodeId) {
-      return;
-    }
-
-    const tip = await this.dependencies.services.message
-      .getById(topic.activeNodeId)
-      .catch(() => undefined);
-    if (
-      !tip ||
-      tip.role !== 'assistant' ||
-      tip.status !== 'paused' ||
-      !hasPendingToolApproval(tip.data.parts ?? [])
-    ) {
-      return;
-    }
-
-    await this.dependencies.services.message.applyToolApprovalDecisions(tip.id, {
-      denyAll: { reason: supersededApprovalDenyReason },
-    });
-  }
-
   private async runTopicTurn(input: {
     activeTurn: ActiveTurn;
     model: Model;
@@ -404,10 +396,20 @@ export class ChatRuntime {
       turnParts = prepared.parts;
       const modelSnapshot = toModelSnapshot(model);
       throwIfAborted(abortController.signal);
-      await this.denyStaleApprovalsBeforeSend(topic);
-      throwIfAborted(abortController.signal);
       const reservedTurn =
         await this.dependencies.services.message.createUserMessageWithPlaceholders({
+          // The new message chains onto the active node. If that node is an
+          // assistant turn still waiting on a tool approval, sending supersedes
+          // the decision — settle it in the same write, or the model's tool
+          // call goes back out with no result behind it.
+          ...(topic.activeNodeId
+            ? {
+                finalizeToolApprovals: {
+                  messageId: topic.activeNodeId,
+                  reason: supersededApprovalDenyReason,
+                },
+              }
+            : {}),
           ...(preparedFiles.length > 0 ? { preparedFiles } : {}),
           topicId,
           userMessage: {
@@ -471,10 +473,14 @@ export class ChatRuntime {
         topic,
       });
     } catch (error) {
-      // streamAssistantTurn handles its own failures, so reaching here means
-      // the reservation window failed (or was aborted) before the stream.
-      if (assistantPlaceholder) {
-        terminalAssistantMessage = await this.persistFailedAssistantMessage({
+      // Past the handoff the stream owns the row: it has already persisted its
+      // own terminal state and released the turn. Persisting again from here
+      // would fall back to the placeholder's empty parts and overwrite
+      // everything that streamed in.
+      if (handedOffToStream) {
+        logger.warn('Chat turn failed after the stream took over', toError(error));
+      } else if (assistantPlaceholder) {
+        terminalAssistantMessage = await this.settleFailedTurn({
           assistantMessage: assistantPlaceholder,
           error,
           wasAborted: abortController.signal.aborted,
@@ -492,23 +498,49 @@ export class ChatRuntime {
       }
 
       if (!handedOffToStream) {
-        if (terminalAssistantMessage) {
-          this.setTurnSnapshot(topicId, {
+        await this.releaseTurn({
+          activeTurn,
+          terminalSnapshot: terminalAssistantMessage && {
             overlayMessage: terminalAssistantMessage,
             pendingUserMessage: userMessage,
             status: 'idle',
-          });
-        }
-
-        await this.dependencies.invalidateTopicMessages(topicId);
-        await waitForNextPaint();
-        this.activeTurns.delete(topicId);
-        this.setTurnSnapshot(topicId, idleTopicSnapshot);
-        if (this.newTopicHandoffTopicId === topicId) {
-          this.newTopicHandoffTopicId = undefined;
-          this.setTopicSnapshot(newTopicRuntimeId, idleTopicSnapshot);
-        }
+          },
+          topicId,
+        });
       }
+    }
+  }
+
+  /**
+   * Hand the topic back: drop the turn, then show the terminal overlay until
+   * the refetch lands. The turn goes first because nothing after it is
+   * guaranteed to run — a subscriber or a refetch can fail — and a stranded
+   * `activeTurns` entry answers "already streaming" to every later send.
+   */
+  private async releaseTurn(input: {
+    activeTurn: ActiveTurn;
+    terminalSnapshot?: ChatRuntimeTopicSnapshot;
+    topicId: string;
+  }): Promise<void> {
+    const { activeTurn, topicId } = input;
+
+    if (this.activeTurns.get(topicId) === activeTurn) {
+      this.activeTurns.delete(topicId);
+    }
+    if (this.newTopicHandoffTopicId === topicId) {
+      this.newTopicHandoffTopicId = undefined;
+      this.setTopicSnapshot(newTopicRuntimeId, idleTopicSnapshot);
+    }
+    if (input.terminalSnapshot) {
+      this.setTurnSnapshot(topicId, input.terminalSnapshot);
+    }
+
+    await this.invalidateTopicMessagesSafely(topicId);
+    await waitForNextPaint();
+    // A send that started during the wait owns the topic now; overwriting its
+    // snapshot with `idle` would strip the spinner off a live turn.
+    if (!this.activeTurns.has(topicId)) {
+      this.setTurnSnapshot(topicId, idleTopicSnapshot);
     }
   }
 
@@ -568,11 +600,14 @@ export class ChatRuntime {
       // model is waiting on the user: park the row as 'paused' so the approval
       // sheet picks it up (and the pending-reconciler leaves it alone). A
       // resumed segment that requests approval again lands right back here.
-      const status = hasPendingToolApproval(
-        (latestAssistantMessage?.parts ?? []) as CherryMessagePart[],
-      )
-        ? 'paused'
-        : 'success';
+      const finalParts = (latestAssistantMessage?.parts ?? []) as CherryMessagePart[];
+      if (hasUnresumedToolApproval(finalParts)) {
+        // Settling this as a success would persist a tool call with no result,
+        // and every later request on the branch would carry it.
+        throw new Error('The approved tool was not available to this run.');
+      }
+
+      const status = hasPendingToolApproval(finalParts) ? 'paused' : 'success';
       terminalAssistantMessage = await this.persistTerminalAssistantMessage({
         assistantMessage,
         latestAssistantMessage,
@@ -589,7 +624,7 @@ export class ChatRuntime {
         });
       }
     } catch (error) {
-      terminalAssistantMessage = await this.persistFailedAssistantMessage({
+      terminalAssistantMessage = await this.settleFailedTurn({
         assistantMessage,
         error,
         latestAssistantMessage,
@@ -600,22 +635,15 @@ export class ChatRuntime {
         logger.warn('Chat stream failed', toError(error));
       }
     } finally {
-      if (terminalAssistantMessage) {
-        this.setTurnSnapshot(topicId, {
+      await this.releaseTurn({
+        activeTurn,
+        terminalSnapshot: terminalAssistantMessage && {
           overlayMessage: terminalAssistantMessage,
           pendingUserMessage: input.pendingUserMessage,
           status: 'idle',
-        });
-      }
-
-      await this.dependencies.invalidateTopicMessages(topicId);
-      await waitForNextPaint();
-      this.activeTurns.delete(topicId);
-      this.setTurnSnapshot(topicId, idleTopicSnapshot);
-      if (this.newTopicHandoffTopicId === topicId) {
-        this.newTopicHandoffTopicId = undefined;
-        this.setTopicSnapshot(newTopicRuntimeId, idleTopicSnapshot);
-      }
+        },
+        topicId,
+      });
     }
   }
 
@@ -660,7 +688,46 @@ export class ChatRuntime {
 
   private emit(): void {
     for (const listener of this.listeners) {
-      listener();
+      // One bad subscriber must not take the notification — or the teardown
+      // that is often driving it — down with it.
+      try {
+        listener();
+      } catch (error) {
+        logger.error('Chat runtime listener failed', toError(error));
+      }
+    }
+  }
+
+  /**
+   * Persist the terminal state of a turn that died. Failures are logged, never
+   * rethrown: the caller is already unwinding one error, and letting a second
+   * one escape strands the row mid-flight — `pending` forever, with its tool
+   * approvals unsettled.
+   */
+  private async settleFailedTurn(input: {
+    assistantMessage: Message;
+    error: unknown;
+    latestAssistantMessage?: CherryUIMessage;
+    wasAborted: boolean;
+  }): Promise<Message | undefined> {
+    try {
+      return await this.persistFailedAssistantMessage(input);
+    } catch (error) {
+      logger.error('Failed to persist the terminal state of a failed turn', toError(error));
+      return undefined;
+    }
+  }
+
+  /**
+   * Refetch after a failure or during teardown. A throwing invalidate must not
+   * take the rest of the cleanup with it — that would leave the topic's
+   * `activeTurns` entry behind and lock it out of every future send.
+   */
+  private async invalidateTopicMessagesSafely(topicId: string): Promise<void> {
+    try {
+      await this.dependencies.invalidateTopicMessages(topicId);
+    } catch (error) {
+      logger.error('Failed to refresh messages after a turn ended', toError(error));
     }
   }
 
@@ -673,14 +740,11 @@ export class ChatRuntime {
     // Fall back to the row's own parts when the stream died before its first
     // chunk — on a resume that row already holds the first segment, and an
     // empty-parts update would wipe it.
-    const latestParts = denyPendingToolApprovals(
+    const latestParts = finalizeTurnToolApprovals(
       (input.latestAssistantMessage?.parts ??
         input.assistantMessage.data.parts ??
         []) as CherryMessagePart[],
-      // A dangling approval-requested part would re-summon the approval sheet
-      // (aborted turns land on 'paused') or leave the model's tool call
-      // unclosable in the next turn's history — settle it as denied either way.
-      abortedApprovalDenyReason,
+      interruptedTurnApprovalReason,
     );
     const dataParts = input.wasAborted ? latestParts : appendErrorPart(latestParts, input.error);
     const stats = mergeMessageStats(
