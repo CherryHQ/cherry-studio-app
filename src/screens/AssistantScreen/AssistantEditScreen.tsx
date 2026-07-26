@@ -48,19 +48,46 @@ const defaultEmoji = '🌟';
 
 export default function AssistantEditScreen() {
   const { t } = useTranslation();
-  const router = useRouter();
-  const { toast } = useToast();
   const params = useLocalSearchParams<{ assistantId?: string | string[] }>();
   const assistantId = getSingleParamValue(params.assistantId);
-  const isEditing = Boolean(assistantId);
   const { assistant, isLoading } = useAssistantApiById(assistantId);
+
+  // The form seeds its fields from the record when it mounts, so it must not mount
+  // before the record is there — an empty form that reseeds a commit later would throw
+  // away whatever the user had already typed into it.
+  if (assistantId && isLoading) {
+    return (
+      <>
+        <BackHeader title={t('assistant.edit.title')} />
+        <View className="p-4">
+          <Text className="text-center text-default-foreground text-sm">
+            {t('assistant.form.loading')}
+          </Text>
+        </View>
+      </>
+    );
+  }
+
+  return <AssistantEditForm assistant={assistant} assistantId={assistantId} />;
+}
+
+function AssistantEditForm({
+  assistant,
+  assistantId,
+}: {
+  assistant: Assistant | undefined;
+  assistantId: string | undefined;
+}) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const { toast } = useToast();
+  const isEditing = Boolean(assistantId);
   const { createAssistant, isCreating, isUpdating, updateAssistant } = useAssistantMutations();
   const modelPickerData = useModelPickerData();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [defaultModelPreference] = usePreference('chat.default_model_id');
   const [form, setForm] = useState<AssistantFormState>(() => createFormState(assistant));
-  const [syncedAssistant, setSyncedAssistant] = useState(assistant);
   const [hasPickedModel, setHasPickedModel] = useState(false);
   const [seededModelId, setSeededModelId] = useState<UniqueModelId | null>(null);
   const selectedModel = modelPickerData.getModelItem(form.modelId);
@@ -69,16 +96,6 @@ export default function AssistantEditScreen() {
   // reject as an unregistered model.
   const defaultModelId = modelPickerData.getModelItem(defaultModelPreference)?.modelId ?? null;
   const isSaving = isCreating || isUpdating;
-
-  // Re-seed the form from the async assistant record when it first arrives (or
-  // is swapped). Done during render — not in an effect — so React collapses it
-  // into the same commit instead of triggering a cascading re-render.
-  if (assistant !== syncedAssistant) {
-    setSyncedAssistant(assistant);
-    if (assistant) {
-      setForm(createFormState(assistant));
-    }
-  }
 
   // New assistants start on the global default model, like the desktop create
   // wizard. Both the preference and the model catalog load asynchronously, so
@@ -170,160 +187,149 @@ export default function AssistantEditScreen() {
         showsVerticalScrollIndicator={false}
         style={styles.scroll}
       >
-        {isLoading && isEditing ? (
-          <Text className="text-center text-default-foreground text-sm">
-            {t('assistant.form.loading')}
-          </Text>
-        ) : (
-          <>
-            <FormSection title={t('assistant.form.basicSection')}>
-              <View className="flex-row items-center gap-3">
-                <Pressable
-                  accessibilityLabel={t('assistant.form.emoji')}
-                  accessibilityRole="button"
-                  className="size-12 items-center justify-center rounded-2xl border border-border active:opacity-70"
-                  onPress={openEmojiPicker}
-                >
-                  <Text className="text-2xl" style={styles.emojiGlyph}>
-                    {form.emoji.trim() || defaultEmoji}
-                  </Text>
-                </Pressable>
-                <View className="min-w-0 flex-1">
-                  <Input
-                    accessibilityLabel={t('assistant.form.name')}
-                    autoCorrect={false}
-                    variant="secondary"
-                    className="rounded-2xl px-4 text-base text-foreground leading-5"
-                    onChangeText={(value) => updateForm('name', value)}
-                    placeholder={t('assistant.form.namePlaceholder')}
-                    placeholderColorClassName="accent-muted"
-                    returnKeyType="next"
-                    style={styles.textInput}
-                    value={form.name}
-                  />
-                </View>
-              </View>
-              <FormField label={t('assistant.form.description')}>
-                <Input
-                  accessibilityLabel={t('assistant.form.description')}
-                  autoCorrect
-                  variant="secondary"
-                  className="rounded-2xl px-4 text-base text-foreground leading-5"
-                  onChangeText={(value) => updateForm('description', value)}
-                  placeholder={t('assistant.form.descriptionPlaceholder')}
-                  placeholderColorClassName="accent-muted"
-                  style={styles.textInput}
-                  value={form.description}
-                />
-              </FormField>
-              <FormField label={t('assistant.form.prompt')}>
-                <TextArea
-                  accessibilityLabel={t('assistant.form.prompt')}
-                  autoCorrect
-                  variant="secondary"
-                  className="min-h-32 rounded-2xl px-4 text-base text-foreground leading-5"
-                  multiline
-                  onChangeText={(value) => updateForm('prompt', value)}
-                  placeholder={t('assistant.form.promptPlaceholder')}
-                  placeholderColorClassName="accent-muted"
-                  style={styles.textArea}
-                  value={form.prompt}
-                />
-              </FormField>
-            </FormSection>
-            <FormSection title={t('assistant.form.generationSection')}>
-              <Pressable
-                accessibilityLabel={t('assistant.form.model')}
-                accessibilityRole="button"
-                className="min-h-12 flex-row items-center justify-between gap-3 rounded-2xl border border-border px-4 py-2 active:opacity-70"
-                onPress={openModelPicker}
-              >
-                {selectedModel ? (
-                  <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={1}>
-                    {selectedModel.provider.name}
-                  </Text>
-                ) : (
+        <FormSection title={t('assistant.form.basicSection')}>
+          <View className="flex-row items-center gap-3">
+            <Pressable
+              accessibilityLabel={t('assistant.form.emoji')}
+              accessibilityRole="button"
+              className="size-12 items-center justify-center rounded-2xl border border-border active:opacity-70"
+              onPress={openEmojiPicker}
+            >
+              <Text className="text-2xl" style={styles.emojiGlyph}>
+                {form.emoji.trim() || defaultEmoji}
+              </Text>
+            </Pressable>
+            <View className="min-w-0 flex-1">
+              <Input
+                accessibilityLabel={t('assistant.form.name')}
+                autoCorrect={false}
+                variant="secondary"
+                className="rounded-2xl px-4 text-base text-foreground leading-5"
+                onChangeText={(value) => updateForm('name', value)}
+                placeholder={t('assistant.form.namePlaceholder')}
+                placeholderColorClassName="accent-muted"
+                returnKeyType="next"
+                style={styles.textInput}
+                value={form.name}
+              />
+            </View>
+          </View>
+          <FormField label={t('assistant.form.description')}>
+            <Input
+              accessibilityLabel={t('assistant.form.description')}
+              autoCorrect
+              variant="secondary"
+              className="rounded-2xl px-4 text-base text-foreground leading-5"
+              onChangeText={(value) => updateForm('description', value)}
+              placeholder={t('assistant.form.descriptionPlaceholder')}
+              placeholderColorClassName="accent-muted"
+              style={styles.textInput}
+              value={form.description}
+            />
+          </FormField>
+          <FormField label={t('assistant.form.prompt')}>
+            <TextArea
+              accessibilityLabel={t('assistant.form.prompt')}
+              autoCorrect
+              variant="secondary"
+              className="min-h-32 rounded-2xl px-4 text-base text-foreground leading-5"
+              multiline
+              onChangeText={(value) => updateForm('prompt', value)}
+              placeholder={t('assistant.form.promptPlaceholder')}
+              placeholderColorClassName="accent-muted"
+              style={styles.textArea}
+              value={form.prompt}
+            />
+          </FormField>
+        </FormSection>
+        <FormSection title={t('assistant.form.generationSection')}>
+          <Pressable
+            accessibilityLabel={t('assistant.form.model')}
+            accessibilityRole="button"
+            className="min-h-12 flex-row items-center justify-between gap-3 rounded-2xl border border-border px-4 py-2 active:opacity-70"
+            onPress={openModelPicker}
+          >
+            {selectedModel ? (
+              <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={1}>
+                {selectedModel.provider.name}
+              </Text>
+            ) : (
+              <Text className="min-w-0 flex-1 text-base text-default-foreground" numberOfLines={1}>
+                {t('assistant.model.none')}
+              </Text>
+            )}
+            <View className="max-w-[60%] flex-row items-center justify-end gap-2">
+              {selectedModel ? (
+                <>
+                  <ModelPickerIcon item={selectedModel} size={20} />
                   <Text
-                    className="min-w-0 flex-1 text-base text-default-foreground"
+                    className="min-w-0 shrink text-right text-default-foreground text-sm"
                     numberOfLines={1}
                   >
-                    {t('assistant.model.none')}
+                    {selectedModel.model.name}
                   </Text>
-                )}
-                <View className="max-w-[60%] flex-row items-center justify-end gap-2">
-                  {selectedModel ? (
-                    <>
-                      <ModelPickerIcon item={selectedModel} size={20} />
-                      <Text
-                        className="min-w-0 shrink text-right text-default-foreground text-sm"
-                        numberOfLines={1}
-                      >
-                        {selectedModel.model.name}
-                      </Text>
-                    </>
-                  ) : null}
-                  <ChevronDownIcon className="size-6 text-default-foreground" strokeWidth={2} />
-                </View>
-              </Pressable>
-              <SwitchRow
-                label={t('assistant.form.enableTemperature')}
-                value={form.enableTemperature}
-                onValueChange={(value) => updateForm('enableTemperature', value)}
-              />
-              {form.enableTemperature ? (
-                <NumberField
-                  accessibilityLabel={t('assistant.form.temperature')}
-                  value={form.temperature}
-                  onChangeText={(value) => updateForm('temperature', value)}
-                />
+                </>
               ) : null}
-              <SwitchRow
-                label={t('assistant.form.enableTopP')}
-                value={form.enableTopP}
-                onValueChange={(value) => updateForm('enableTopP', value)}
-              />
-              {form.enableTopP ? (
-                <NumberField
-                  accessibilityLabel={t('assistant.form.topP')}
-                  value={form.topP}
-                  onChangeText={(value) => updateForm('topP', value)}
-                />
-              ) : null}
-              <SwitchRow
-                label={t('assistant.form.enableMaxTokens')}
-                value={form.enableMaxTokens}
-                onValueChange={(value) => updateForm('enableMaxTokens', value)}
-              />
-              {form.enableMaxTokens ? (
-                <NumberField
-                  accessibilityLabel={t('assistant.form.maxTokens')}
-                  inputMode="numeric"
-                  value={form.maxTokens}
-                  onChangeText={(value) => updateForm('maxTokens', value)}
-                />
-              ) : null}
-              <FormField
-                label={t('assistant.form.customParameters')}
-                description={t('assistant.form.customParametersDescription')}
-              >
-                <TextArea
-                  accessibilityLabel={t('assistant.form.customParameters')}
-                  autoCapitalize="none"
-                  variant="secondary"
-                  autoCorrect={false}
-                  className="min-h-28 rounded-2xl px-4 font-mono text-sm text-foreground leading-5"
-                  multiline
-                  onChangeText={(value) => updateForm('customParametersJson', value)}
-                  placeholder="[]"
-                  placeholderColorClassName="accent-muted"
-                  spellCheck={false}
-                  style={styles.textArea}
-                  value={form.customParametersJson}
-                />
-              </FormField>
-            </FormSection>
-          </>
-        )}
+              <ChevronDownIcon className="size-6 text-default-foreground" strokeWidth={2} />
+            </View>
+          </Pressable>
+          <SwitchRow
+            label={t('assistant.form.enableTemperature')}
+            value={form.enableTemperature}
+            onValueChange={(value) => updateForm('enableTemperature', value)}
+          />
+          {form.enableTemperature ? (
+            <NumberField
+              accessibilityLabel={t('assistant.form.temperature')}
+              value={form.temperature}
+              onChangeText={(value) => updateForm('temperature', value)}
+            />
+          ) : null}
+          <SwitchRow
+            label={t('assistant.form.enableTopP')}
+            value={form.enableTopP}
+            onValueChange={(value) => updateForm('enableTopP', value)}
+          />
+          {form.enableTopP ? (
+            <NumberField
+              accessibilityLabel={t('assistant.form.topP')}
+              value={form.topP}
+              onChangeText={(value) => updateForm('topP', value)}
+            />
+          ) : null}
+          <SwitchRow
+            label={t('assistant.form.enableMaxTokens')}
+            value={form.enableMaxTokens}
+            onValueChange={(value) => updateForm('enableMaxTokens', value)}
+          />
+          {form.enableMaxTokens ? (
+            <NumberField
+              accessibilityLabel={t('assistant.form.maxTokens')}
+              inputMode="numeric"
+              value={form.maxTokens}
+              onChangeText={(value) => updateForm('maxTokens', value)}
+            />
+          ) : null}
+          <FormField
+            label={t('assistant.form.customParameters')}
+            description={t('assistant.form.customParametersDescription')}
+          >
+            <TextArea
+              accessibilityLabel={t('assistant.form.customParameters')}
+              autoCapitalize="none"
+              variant="secondary"
+              autoCorrect={false}
+              className="min-h-28 rounded-2xl px-4 font-mono text-sm text-foreground leading-5"
+              multiline
+              onChangeText={(value) => updateForm('customParametersJson', value)}
+              placeholder="[]"
+              placeholderColorClassName="accent-muted"
+              spellCheck={false}
+              style={styles.textArea}
+              value={form.customParametersJson}
+            />
+          </FormField>
+        </FormSection>
       </KeyboardAwareScrollView>
       <ModelPickerBottomSheet
         isOpen={isModelPickerOpen}
