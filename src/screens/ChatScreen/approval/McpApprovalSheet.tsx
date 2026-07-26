@@ -3,7 +3,7 @@ import { createContext, useContext, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { parseFunctionCallToolName } from '@/ai/tools/mcpToolName';
+import { parseFunctionCallToolName } from '@/ai/mcp';
 import { BottomSheet, type BottomSheetCloseReason } from '@/components/bottomSheet';
 import type { PendingToolApproval } from '../runtime/chatRuntimeMessages';
 

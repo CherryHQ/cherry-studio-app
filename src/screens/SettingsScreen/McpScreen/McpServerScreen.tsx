@@ -7,14 +7,13 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { withMcpToolRuleAdded, withMcpToolRuleCleared } from '@/ai/tools/mcpSourcePolicy';
+import { type McpConnectionConfig, withMcpToolRuleAdded, withMcpToolRuleCleared } from '@/ai/mcp';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { keyboardBottomOffset } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/data/api/schemas/mcpServers';
 import type { McpServer } from '@/data/types/mcpServer';
 import { useMcpServerApiById, useMcpServerMutations } from '@/hooks/mcp/useMcpServers';
-import type { McpConnectionConfig } from '@/services/mcp/McpService';
 import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { McpConnectionTestSection } from './components/McpConnectionTestSection';
 import {

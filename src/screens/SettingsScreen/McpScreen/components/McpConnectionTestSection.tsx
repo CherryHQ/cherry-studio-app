@@ -4,8 +4,8 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import type { McpConnectionConfig, McpToolSummary } from '@/ai/mcp';
 import { useDataServices } from '@/data/runtime';
-import type { McpConnectionConfig, McpToolSummary } from '@/services/mcp/McpService';
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 
 type TestState =

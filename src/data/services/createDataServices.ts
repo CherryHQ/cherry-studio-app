@@ -1,7 +1,7 @@
 import { AiService } from '@/ai/AiService';
+import { McpService } from '@/ai/mcp';
 import { cacheService } from '@/data/cache';
 import type { DbService } from '@/data/db/DbService';
-import { McpService } from '@/services/mcp/McpService';
 import { WebSearchService } from '@/services/webSearch/WebSearchService';
 
 import { AssistantService } from './AssistantService';

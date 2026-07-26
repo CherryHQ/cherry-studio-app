@@ -6,7 +6,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { hasMcpServerWildcardRule, matchesMcpSourceToolRule } from '@/ai/tools/mcpSourcePolicy';
+import { hasMcpServerWildcardRule, matchesMcpSourceToolRule } from '@/ai/mcp';
 import { queryKeys } from '@/data/api';
 import { useDataServices } from '@/data/runtime';
 import type { McpServer } from '@/data/types/mcpServer';

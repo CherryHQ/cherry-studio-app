@@ -3,11 +3,6 @@ import { createMCPClient } from '@ai-sdk/mcp';
 import type { Tool, ToolSet } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
-import {
-  isMcpToolDisabledBySource,
-  isMcpToolForcePromptBySource,
-} from '@/ai/tools/mcpSourcePolicy';
-import { buildFunctionCallToolName } from '@/ai/tools/mcpToolName';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { McpServerService } from '@/data/services/McpServerService';
 import { DataApiError, ErrorCode } from '@/data/types/apiTypes';
@@ -16,6 +11,8 @@ import { DEFAULT_MCP_TIMEOUT_SECONDS, type McpServer } from '@/data/types/mcpSer
 
 import type { McpCallToolResult } from './mcpResult';
 import { mcpResultToTextSummary } from './mcpResult';
+import { isMcpToolDisabledBySource, isMcpToolForcePromptBySource } from './mcpSourcePolicy';
+import { buildFunctionCallToolName } from './mcpToolName';
 import { resolveServersForAssistant } from './resolveAssistantMcpServers';
 
 const logger = loggerService.withContext('McpService');

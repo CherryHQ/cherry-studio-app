@@ -1,4 +1,4 @@
-import { hasMcpServerWildcardRule, withMcpToolRuleCleared } from '@/ai/tools/mcpSourcePolicy';
+import { hasMcpServerWildcardRule, withMcpToolRuleCleared } from '@/ai/mcp';
 import type { DataServices } from '@/data/services/createDataServices';
 import type { McpToolSource } from '@/data/types/mcpServer';
 

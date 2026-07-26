@@ -28,10 +28,10 @@ import type { Assistant } from '@/data/types/assistant';
 import type { Model, UniqueModelId } from '@/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
-import type { McpService } from '@/services/mcp/McpService';
 import type { WebSearchService } from '@/services/webSearch/WebSearchService';
 
 import { createWebSearchTool, WEB_SEARCH_TOOL_NAME } from './createWebSearchTool';
+import type { McpService } from './mcp';
 import { resolveMediaCapabilities } from './messages/messageCapabilities';
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { providerToAiSdkConfig } from './provider/config';

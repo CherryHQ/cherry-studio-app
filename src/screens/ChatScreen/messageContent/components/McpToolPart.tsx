@@ -4,7 +4,7 @@ import { WrenchIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
-import { parseFunctionCallToolName } from '@/ai/tools/mcpToolName';
+import { parseFunctionCallToolName } from '@/ai/mcp';
 import type { CherryMessagePart } from '@/data/types/message';
 import { type CherryToolMeta, readCherryMeta, readCherryToolMetadata } from '@/data/types/uiParts';
 import { useMcpApprovalReopen } from '../../approval/McpApprovalSheet';
