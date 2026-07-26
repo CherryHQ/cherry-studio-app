@@ -38,7 +38,7 @@ export default function WebSearchApiKeySettingsScreen() {
   const canManageApiKeys =
     provider &&
     getWebSearchProviderDetailSections(provider.id).some((section) => section.type === 'apiKeys');
-  const { addApiKey, entries, removeApiKey, saveApiKeys, updateApiKey } =
+  const { addApiKey, entries, promoteApiKey, removeApiKey, saveApiKeys, updateApiKey } =
     useWebSearchApiKeySettings(validProviderId);
   const [apiKeyErrors, setApiKeyErrors] = useState<Record<string, string>>({});
   const [pendingApiKeyIds, setPendingApiKeyIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -134,11 +134,11 @@ export default function WebSearchApiKeySettingsScreen() {
         const didSave = await saveEntries({ apiKeyId: id, nextEntries });
 
         if (didSave && entry.isNew) {
-          removeApiKey(id);
+          promoteApiKey(id);
         }
       })();
     },
-    [entries, removeApiKey, saveEntries, t, updateApiKey],
+    [entries, promoteApiKey, removeApiKey, saveEntries, t, updateApiKey],
   );
 
   const handleRemoveApiKey = useCallback(
