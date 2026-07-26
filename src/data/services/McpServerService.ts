@@ -15,12 +15,13 @@ import type { McpServer } from '@/data/types/mcpServer';
 import { timestampToISO } from './utils/rowMappers';
 
 type TxLike = any;
+const MOBILE_MCP_SERVER_TYPE = 'streamableHttp' as const;
 
 function rowToMcpServer(row: McpServerRow): McpServer {
   return {
-    baseUrl: row.baseUrl,
+    baseUrl: row.baseUrl ?? '',
     createdAt: timestampToISO(row.createdAt),
-    description: row.description,
+    description: row.description ?? '',
     disabledAutoApproveTools: row.disabledAutoApproveTools ?? [],
     disabledTools: row.disabledTools ?? [],
     headers: row.headers ?? {},
@@ -28,6 +29,7 @@ function rowToMcpServer(row: McpServerRow): McpServer {
     isActive: row.isActive,
     name: row.name,
     timeout: row.timeout,
+    type: MOBILE_MCP_SERVER_TYPE,
     updatedAt: timestampToISO(row.updatedAt),
   };
 }
@@ -43,7 +45,7 @@ export class McpServerService {
     const [row] = await this.db
       .select()
       .from(mcpServerTable)
-      .where(eq(mcpServerTable.id, id))
+      .where(and(eq(mcpServerTable.id, id), eq(mcpServerTable.type, MOBILE_MCP_SERVER_TYPE)))
       .limit(1);
 
     if (!row) {
@@ -57,14 +59,15 @@ export class McpServerService {
     params: ListMcpServersQueryParams = {},
   ): Promise<{ items: McpServer[]; total: number }> {
     const query = ListMcpServersQuerySchema.parse(params);
-    const rows =
-      query.isActive === undefined
-        ? await this.db.select().from(mcpServerTable).orderBy(asc(mcpServerTable.createdAt))
-        : await this.db
-            .select()
-            .from(mcpServerTable)
-            .where(eq(mcpServerTable.isActive, query.isActive))
-            .orderBy(asc(mcpServerTable.createdAt));
+    const conditions = [eq(mcpServerTable.type, MOBILE_MCP_SERVER_TYPE)];
+    if (query.isActive !== undefined) {
+      conditions.push(eq(mcpServerTable.isActive, query.isActive));
+    }
+    const rows = await this.db
+      .select()
+      .from(mcpServerTable)
+      .where(and(...conditions))
+      .orderBy(asc(mcpServerTable.sortOrder), asc(mcpServerTable.createdAt));
 
     return { items: rows.map(rowToMcpServer), total: rows.length };
   }
@@ -75,13 +78,17 @@ export class McpServerService {
 
     const [row] = await this.db
       .insert(mcpServerTable)
-      .values(this.toColumns({ ...dto, name }) as InsertMcpServerRow)
+      .values({
+        ...this.toColumns({ ...dto, name }),
+        type: MOBILE_MCP_SERVER_TYPE,
+      } as InsertMcpServerRow)
       .returning();
 
     return rowToMcpServer(row);
   }
 
   async update(id: string, dto: UpdateMcpServerDto): Promise<McpServer> {
+    await this.getById(id);
     const name = dto.name === undefined ? undefined : this.validateName(dto.name);
     if (name !== undefined) {
       await this.assertNameAvailable(name, id);
@@ -95,7 +102,7 @@ export class McpServerService {
     const [row] = await this.db
       .update(mcpServerTable)
       .set(updates)
-      .where(eq(mcpServerTable.id, id))
+      .where(and(eq(mcpServerTable.id, id), eq(mcpServerTable.type, MOBILE_MCP_SERVER_TYPE)))
       .returning();
 
     if (!row) {
@@ -116,8 +123,8 @@ export class McpServerService {
   }
 
   /**
-   * Replace an assistant's MCP server associations inside an existing write tx.
-   * Mirrors `TagService.syncEntityTagsTx`.
+   * Replace an assistant's mobile-supported MCP associations inside a write tx.
+   * Existing associations to unsupported synchronized transports are retained.
    */
   async syncAssistantServersTx(
     tx: TxLike,
@@ -125,31 +132,42 @@ export class McpServerService {
     mcpServerIds: string[],
   ): Promise<void> {
     const desiredIds = [...new Set(mcpServerIds)];
+    let desiredSupportedIds: string[] = [];
 
     if (desiredIds.length > 0) {
       const found = (await tx
-        .select({ id: mcpServerTable.id })
+        .select({ id: mcpServerTable.id, type: mcpServerTable.type })
         .from(mcpServerTable)
-        .where(inArray(mcpServerTable.id, desiredIds))) as { id: string }[];
+        .where(inArray(mcpServerTable.id, desiredIds))) as { id: string; type: string | null }[];
       if (found.length !== desiredIds.length) {
         const foundIds = new Set(found.map((row) => row.id));
         const missing = desiredIds.find((serverId) => !foundIds.has(serverId));
         throw DataApiErrorFactory.notFound('McpServer', missing ?? desiredIds[0]);
       }
+      desiredSupportedIds = found.flatMap((row) =>
+        row.type === MOBILE_MCP_SERVER_TYPE ? [row.id] : [],
+      );
     }
 
     const existing = (await tx
-      .select({ mcpServerId: assistantMcpServerTable.mcpServerId })
+      .select({
+        mcpServerId: assistantMcpServerTable.mcpServerId,
+        type: mcpServerTable.type,
+      })
       .from(assistantMcpServerTable)
+      .innerJoin(mcpServerTable, eq(assistantMcpServerTable.mcpServerId, mcpServerTable.id))
       .where(eq(assistantMcpServerTable.assistantId, assistantId))) as {
       mcpServerId: string;
+      type: string | null;
     }[];
     const existingIds = new Set(existing.map((row) => row.mcpServerId));
-    const desiredIdSet = new Set(desiredIds);
+    const desiredIdSet = new Set(desiredSupportedIds);
     const toRemove = existing.flatMap((row) =>
-      desiredIdSet.has(row.mcpServerId) ? [] : [row.mcpServerId],
+      row.type !== MOBILE_MCP_SERVER_TYPE || desiredIdSet.has(row.mcpServerId)
+        ? []
+        : [row.mcpServerId],
     );
-    const toAdd = desiredIds.filter((serverId) => !existingIds.has(serverId));
+    const toAdd = desiredSupportedIds.filter((serverId) => !existingIds.has(serverId));
 
     if (toRemove.length > 0) {
       await tx

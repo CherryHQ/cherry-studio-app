@@ -58,7 +58,7 @@ describe('McpServerService integration', () => {
 
   afterEach(() => sqlite.close());
 
-  it('creates a server with defaulted json/boolean fields', async () => {
+  it('creates an inactive Streamable HTTP server with normalized optional fields', async () => {
     const server = await service.create({ baseUrl: 'https://example.com/mcp', name: 'Example' });
 
     expect(server).toMatchObject({
@@ -67,9 +67,10 @@ describe('McpServerService integration', () => {
       disabledAutoApproveTools: [],
       disabledTools: [],
       headers: {},
-      isActive: true,
+      isActive: false,
       name: 'Example',
       timeout: null,
+      type: 'streamableHttp',
     });
   });
 
@@ -101,6 +102,51 @@ describe('McpServerService integration', () => {
     expect(all.total).toBe(2);
   });
 
+  it('hides unsupported transports and orders visible servers by sort order', async () => {
+    insertRawServer(sqlite, {
+      baseUrl: 'https://later.example/mcp',
+      id: 'remote-later',
+      name: 'Remote Later',
+      sortOrder: 20,
+      type: 'streamableHttp',
+    });
+    insertRawServer(sqlite, {
+      baseUrl: null,
+      id: 'remote-first',
+      name: 'Remote First',
+      sortOrder: 10,
+      type: 'streamableHttp',
+    });
+    insertRawServer(sqlite, { id: 'stdio', name: 'Stdio', type: 'stdio' });
+    insertRawServer(sqlite, { id: 'sse', name: 'SSE', type: 'sse' });
+    insertRawServer(sqlite, { id: 'memory', name: 'Memory', type: 'inMemory' });
+    insertRawServer(sqlite, { id: 'legacy', name: 'Legacy', type: null });
+
+    const result = await service.list();
+
+    expect(result.items.map(({ baseUrl, name }) => ({ baseUrl, name }))).toEqual([
+      { baseUrl: '', name: 'Remote First' },
+      { baseUrl: 'https://later.example/mcp', name: 'Remote Later' },
+    ]);
+    await expect(service.getById('stdio')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('updates only mobile fields and preserves synchronized desktop metadata', async () => {
+    insertRawServer(sqlite, {
+      baseUrl: 'https://example.com/mcp',
+      id: 'remote',
+      name: 'Remote',
+      provider: 'Desktop Provider',
+      type: 'streamableHttp',
+    });
+
+    await service.update('remote', { description: 'Updated' });
+
+    expect(
+      sqlite.prepare('SELECT description, provider FROM mcp_server WHERE id = ?').get('remote'),
+    ).toEqual({ description: 'Updated', provider: 'Desktop Provider' });
+  });
+
   it('deletes a server and cascades its assistant junction rows', async () => {
     const server = await service.create({ baseUrl: 'https://a.example/mcp', name: 'Linked' });
     insertAssistant(sqlite, 'assistant-1');
@@ -115,24 +161,32 @@ describe('McpServerService integration', () => {
     await expect(service.getById(server.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
-  it('syncs assistant associations as a diff', async () => {
+  it('syncs visible assistant associations as a diff and preserves hidden transports', async () => {
     const a = await service.create({ baseUrl: 'https://a.example/mcp', name: 'A' });
     const b = await service.create({ baseUrl: 'https://b.example/mcp', name: 'B' });
     const c = await service.create({ baseUrl: 'https://c.example/mcp', name: 'C' });
+    insertRawServer(sqlite, { id: 'hidden-stdio', name: 'Hidden', type: 'stdio' });
     insertAssistant(sqlite, 'assistant-1');
+    sqlite
+      .prepare(
+        `INSERT INTO assistant_mcp_server (
+          assistant_id, mcp_server_id, created_at, updated_at
+        ) VALUES ('assistant-1', 'hidden-stdio', 1, 1)`,
+      )
+      .run();
 
     await dbService.withWriteTx((tx) =>
-      service.syncAssistantServersTx(tx, 'assistant-1', [a.id, b.id]),
+      service.syncAssistantServersTx(tx, 'assistant-1', [a.id, b.id, 'hidden-stdio']),
     );
-    expect(junctionServerIds(sqlite)).toEqual([a.id, b.id].sort());
+    expect(junctionServerIds(sqlite)).toEqual([a.id, b.id, 'hidden-stdio'].sort());
 
     await dbService.withWriteTx((tx) =>
       service.syncAssistantServersTx(tx, 'assistant-1', [b.id, c.id]),
     );
-    expect(junctionServerIds(sqlite)).toEqual([b.id, c.id].sort());
+    expect(junctionServerIds(sqlite)).toEqual([b.id, c.id, 'hidden-stdio'].sort());
 
     await dbService.withWriteTx((tx) => service.syncAssistantServersTx(tx, 'assistant-1', []));
-    expect(countJunction(sqlite)).toBe(0);
+    expect(junctionServerIds(sqlite)).toEqual(['hidden-stdio']);
   });
 
   it('rejects syncing unknown server ids', async () => {
@@ -185,4 +239,31 @@ function junctionServerIds(database: DatabaseSync): string[] {
   )
     .map((row) => row.mcp_server_id)
     .sort();
+}
+
+function insertRawServer(
+  database: DatabaseSync,
+  values: {
+    baseUrl?: string | null;
+    id: string;
+    name: string;
+    provider?: string;
+    sortOrder?: number;
+    type: 'inMemory' | 'sse' | 'stdio' | 'streamableHttp' | null;
+  },
+) {
+  database
+    .prepare(
+      `INSERT INTO mcp_server (
+        id, name, type, base_url, provider, sort_order, is_active, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 1, 1, 1)`,
+    )
+    .run(
+      values.id,
+      values.name,
+      values.type,
+      values.baseUrl ?? null,
+      values.provider ?? null,
+      values.sortOrder ?? 0,
+    );
 }

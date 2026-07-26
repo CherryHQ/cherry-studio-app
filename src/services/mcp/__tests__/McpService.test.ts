@@ -34,6 +34,7 @@ function makeServer(overrides: Partial<McpServer> = {}): McpServer {
     isActive: true,
     name: 'ServerOne',
     timeout: null,
+    type: 'streamableHttp',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
@@ -120,6 +121,14 @@ beforeEach(() => {
 });
 
 describe('chat hot path is cache-only', () => {
+  it('ignores a synchronized server without a URL', async () => {
+    const { service } = makeService([makeServer({ baseUrl: '' })]);
+
+    await expect(service.getToolSetForAssistant(makeAssistant())).resolves.toBeUndefined();
+
+    expect(mockCreateMCPClient).not.toHaveBeenCalled();
+  });
+
   it('returns nothing on a cold cache and never awaits the connect', async () => {
     // Fake timers so the refresh's 15s guard doesn't outlive the test.
     jest.useFakeTimers({ doNotFake: ['setImmediate'] });
@@ -435,6 +444,14 @@ describe('disabledTools filtering', () => {
 });
 
 describe('prewarmActiveServers', () => {
+  it('does not connect to a synchronized server without a URL', async () => {
+    const { service } = makeService([makeServer({ baseUrl: '' })]);
+
+    await service.prewarmActiveServers();
+
+    expect(mockCreateMCPClient).not.toHaveBeenCalled();
+  });
+
   it('fills the cache so the first chat request already has tools', async () => {
     mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
     const { service } = makeService([makeServer()]);
@@ -712,6 +729,14 @@ describe('testConnection', () => {
 });
 
 describe('listToolsForServer', () => {
+  it('rejects a server without a URL before opening a connection', async () => {
+    const server = makeServer({ baseUrl: '' });
+    const { service } = makeService([server]);
+
+    await expect(service.listToolsForServer(server)).rejects.toThrow('has no valid HTTP URL');
+    expect(mockCreateMCPClient).not.toHaveBeenCalled();
+  });
+
   it('reconnects once when the pooled client has gone stale', async () => {
     const stale = makeClient(makeRawTools(['search']));
     stale.tools.mockRejectedValue(new Error('session expired'));

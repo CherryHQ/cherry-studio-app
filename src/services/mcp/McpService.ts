@@ -101,6 +101,10 @@ function createHttpClient(config: McpConnectionConfig): Promise<MCPClient> {
   });
 }
 
+function hasRunnableUrl(server: McpServer): boolean {
+  return /^https?:\/\//i.test(server.baseUrl);
+}
+
 /**
  * Race a promise against a wall clock, running `onTimeout` when it wins.
  *
@@ -192,7 +196,7 @@ export class McpService {
 
     // Outside the try: this is a pure filter over what we just read, so a throw
     // from it is a bug, not an unreachable server, and must not be swallowed.
-    const servers = resolveServersForAssistant(assistant, activeServers);
+    const servers = resolveServersForAssistant(assistant, activeServers).filter(hasRunnableUrl);
 
     const result: ToolSet = {};
     for (const server of servers) {
@@ -226,7 +230,7 @@ export class McpService {
   async prewarmActiveServers(): Promise<void> {
     try {
       const { items } = await this.deps.mcpServer.list({ isActive: true });
-      for (const server of items) {
+      for (const server of items.filter(hasRunnableUrl)) {
         this.refreshToolsInBackground(server);
       }
     } catch (error) {
@@ -236,6 +240,9 @@ export class McpService {
 
   /** Tool list for the server edit screen — connects, unlike the chat path. */
   async listToolsForServer(server: McpServer): Promise<McpToolSummary[]> {
+    if (!hasRunnableUrl(server)) {
+      throw new Error(`MCP server ${server.name} has no valid HTTP URL`);
+    }
     const rawTools = await this.fetchToolsWithRetry(server);
 
     return Object.entries(rawTools).map(([name, tool]) => ({

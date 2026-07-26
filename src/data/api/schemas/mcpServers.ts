@@ -17,11 +17,13 @@ const MCP_SERVER_MUTABLE_FIELDS = {
 export const CreateMcpServerSchema = McpServerSchema.pick(MCP_SERVER_MUTABLE_FIELDS)
   .partial()
   .required({ baseUrl: true, name: true })
+  .extend({ baseUrl: z.url() })
   .strict();
 export type CreateMcpServerDto = z.infer<typeof CreateMcpServerSchema>;
 
 export const UpdateMcpServerSchema = McpServerSchema.pick(MCP_SERVER_MUTABLE_FIELDS)
   .partial()
+  .extend({ baseUrl: z.url().optional() })
   .strict();
 export type UpdateMcpServerDto = z.infer<typeof UpdateMcpServerSchema>;
 

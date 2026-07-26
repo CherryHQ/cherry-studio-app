@@ -21,6 +21,7 @@ function makeServer(disabledTools: string[], disabledAutoApproveTools: string[] 
     isActive: true,
     name: 'My Server',
     timeout: null,
+    type: 'streamableHttp',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 }

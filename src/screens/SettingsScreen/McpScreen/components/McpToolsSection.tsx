@@ -41,6 +41,7 @@ export function McpToolsSection({
     );
 
   const toolsQuery = useQuery({
+    enabled: /^https?:\/\//i.test(server.baseUrl),
     queryFn: () => services.mcp.listToolsForServer(server),
     queryKey: queryKeys.mcpServers.tools(server.id),
     retry: false,

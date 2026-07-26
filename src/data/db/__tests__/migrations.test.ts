@@ -46,7 +46,11 @@ describe('bundled SQLite migrations', () => {
         name: string;
       }[];
       const mcpServerColumns = database.prepare("PRAGMA table_info('mcp_server')").all() as {
+        dflt_value: string | null;
         name: string;
+        notnull: number;
+        pk: number;
+        type: string;
       }[];
       const mcpServerIndexes = database.prepare("PRAGMA index_list('mcp_server')").all() as {
         name: string;
@@ -79,6 +83,7 @@ describe('bundled SQLite migrations', () => {
       const messageTableSql = getSchemaSql(database, 'table', 'message');
       const fileEntryTableSql = getSchemaSql(database, 'table', 'file_entry');
       const chatMessageFileRefTableSql = getSchemaSql(database, 'table', 'chat_message_file_ref');
+      const mcpServerTableSql = getSchemaSql(database, 'table', 'mcp_server');
       const paintingFileRefTableSql = getSchemaSql(database, 'table', 'painting_file_ref');
       const rootIndexSql = getSchemaSql(database, 'index', 'message_topic_root_uniq');
       const assistantKnowledgeBaseFks = getForeignKeys(database, 'assistant_knowledge_base');
@@ -129,19 +134,94 @@ describe('bundled SQLite migrations', () => {
       expect(mcpServerColumns.map((column) => column.name)).toEqual([
         'id',
         'name',
+        'type',
         'description',
         'base_url',
+        'command',
+        'registry_url',
+        'args',
+        'env',
         'headers',
+        'provider',
+        'provider_url',
+        'logo_url',
+        'tags',
+        'long_running',
         'timeout',
+        'dxt_version',
+        'dxt_path',
+        'reference',
+        'search_key',
+        'config_sample',
         'disabled_tools',
         'disabled_auto_approve_tools',
+        'should_config',
+        'sort_order',
         'is_active',
+        'install_source',
+        'is_trusted',
+        'trusted_at',
+        'installed_at',
         'created_at',
         'updated_at',
       ]);
+      expect(
+        Object.fromEntries(
+          mcpServerColumns.map(({ dflt_value, name, notnull, pk, type }) => [
+            name,
+            { dflt_value, notnull, pk, type },
+          ]),
+        ),
+      ).toEqual({
+        args: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        base_url: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        command: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        config_sample: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        created_at: { dflt_value: null, notnull: 1, pk: 0, type: 'INTEGER' },
+        description: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        disabled_auto_approve_tools: {
+          dflt_value: null,
+          notnull: 0,
+          pk: 0,
+          type: 'TEXT',
+        },
+        disabled_tools: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        dxt_path: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        dxt_version: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        env: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        headers: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        id: { dflt_value: null, notnull: 1, pk: 1, type: 'TEXT' },
+        install_source: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        installed_at: { dflt_value: null, notnull: 0, pk: 0, type: 'INTEGER' },
+        is_active: { dflt_value: 'false', notnull: 1, pk: 0, type: 'INTEGER' },
+        is_trusted: { dflt_value: null, notnull: 0, pk: 0, type: 'INTEGER' },
+        logo_url: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        long_running: { dflt_value: null, notnull: 0, pk: 0, type: 'INTEGER' },
+        name: { dflt_value: null, notnull: 1, pk: 0, type: 'TEXT' },
+        provider: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        provider_url: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        reference: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        registry_url: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        search_key: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        should_config: { dflt_value: null, notnull: 0, pk: 0, type: 'INTEGER' },
+        sort_order: { dflt_value: '0', notnull: 0, pk: 0, type: 'INTEGER' },
+        tags: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        timeout: { dflt_value: null, notnull: 0, pk: 0, type: 'INTEGER' },
+        trusted_at: { dflt_value: null, notnull: 0, pk: 0, type: 'INTEGER' },
+        type: { dflt_value: null, notnull: 0, pk: 0, type: 'TEXT' },
+        updated_at: { dflt_value: null, notnull: 1, pk: 0, type: 'INTEGER' },
+      });
       expect(mcpServerIndexes.map((index) => index.name)).toEqual(
-        expect.arrayContaining(['mcp_server_is_active_idx', 'mcp_server_name_idx']),
+        expect.arrayContaining([
+          'mcp_server_is_active_idx',
+          'mcp_server_name_idx',
+          'mcp_server_sort_order_idx',
+        ]),
       );
+      expect(mcpServerTableSql).toContain('mcp_server_type_check');
+      expect(mcpServerTableSql).toContain("'stdio', 'sse', 'streamableHttp', 'inMemory'");
+      expect(mcpServerTableSql).toContain('mcp_server_install_source_check');
+      expect(mcpServerTableSql).toContain("'builtin', 'manual', 'protocol', 'unknown'");
       expect(messageIndexes.map((index) => index.name)).not.toContain('message_trace_id_idx');
       expect(messageIndexes).toEqual(
         expect.arrayContaining([
@@ -271,6 +351,18 @@ describe('bundled SQLite migrations', () => {
         count: 0,
       });
       database.exec("DELETE FROM assistant WHERE id = 'assistant-mcp'");
+      expect(() =>
+        database.exec(`
+          INSERT INTO mcp_server (id, name, type, created_at, updated_at)
+          VALUES ('mcp-bad-type', 'Bad type', 'websocket', 1, 1);
+        `),
+      ).toThrow();
+      expect(() =>
+        database.exec(`
+          INSERT INTO mcp_server (id, name, install_source, created_at, updated_at)
+          VALUES ('mcp-bad-source', 'Bad source', 'sync', 1, 1);
+        `),
+      ).toThrow();
 
       database.exec(`
         INSERT INTO painting (id, provider_id, model_id, prompt, order_key, created_at, updated_at)
@@ -339,7 +431,7 @@ describe('bundled SQLite migrations', () => {
     try {
       database.exec('PRAGMA foreign_keys = ON');
       const entries = readMigrationEntries();
-      const rebuildIndex = entries.findIndex(({ tag }) => tag === '0004_violet_speed');
+      const rebuildIndex = entries.findIndex(({ tag }) => tag === '0004_tidy_killraven');
       expect(rebuildIndex).toBeGreaterThan(0);
 
       for (const { sql } of entries.slice(0, rebuildIndex)) {

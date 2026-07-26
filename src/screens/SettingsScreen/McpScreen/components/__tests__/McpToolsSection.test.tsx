@@ -9,10 +9,14 @@ type ToolsQueryResult = { data?: { name: string }[]; isError: boolean };
 
 const mockRefetch = jest.fn<Promise<ToolsQueryResult>, []>();
 const mockToastShow = jest.fn();
+const mockUseQuery = jest.fn((_options: unknown) => ({
+  ...mockToolsQuery,
+  refetch: mockRefetch,
+}));
 let mockToolsQuery: ToolsQueryResult & { isLoading: boolean };
 
 jest.mock('@tanstack/react-query', () => ({
-  useQuery: () => ({ ...mockToolsQuery, refetch: mockRefetch }),
+  useQuery: (options: unknown) => mockUseQuery(options),
 }));
 
 jest.mock('@/data/runtime', () => ({
@@ -61,6 +65,7 @@ function makeServer(disabledAutoApproveTools: string[]): McpServer {
     isActive: true,
     name: 'My Server',
     timeout: null,
+    type: 'streamableHttp',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 }
@@ -81,8 +86,12 @@ describe('McpToolsSection auto-approve toggle', () => {
     await act(() => renderer.unmount());
   });
 
-  function render(disabledAutoApproveTools: string[], disabledTools: string[] = []) {
-    const server = { ...makeServer(disabledAutoApproveTools), disabledTools };
+  function render(
+    disabledAutoApproveTools: string[],
+    disabledTools: string[] = [],
+    serverOverrides: Partial<McpServer> = {},
+  ) {
+    const server = { ...makeServer(disabledAutoApproveTools), ...serverOverrides, disabledTools };
     const onToggleAutoApprove = jest.fn();
     const onToggleTool = jest.fn();
 
@@ -108,6 +117,12 @@ describe('McpToolsSection auto-approve toggle', () => {
   async function toggleFirstToolAutoApprove(autoApprove: boolean) {
     await toggleFirstTool('autoApprove', autoApprove);
   }
+
+  test('does not query tools until a synchronized server has an HTTP URL', () => {
+    render([], [], { baseUrl: '' });
+
+    expect(mockUseQuery).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
+  });
 
   test('needs no tool list when no rule is wider than one tool', async () => {
     const { onToggleAutoApprove } = render(['search_docs']);

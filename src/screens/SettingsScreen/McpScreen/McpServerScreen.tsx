@@ -319,7 +319,7 @@ function createFormState(server?: McpServer): McpServerFormState {
     baseUrl: server?.baseUrl ?? '',
     description: server?.description ?? '',
     headerRows: recordToHeaderRows(server?.headers),
-    isActive: server?.isActive ?? true,
+    isActive: server?.isActive ?? false,
     name: server?.name ?? '',
     timeout: server?.timeout != null ? String(server.timeout) : '',
   };
