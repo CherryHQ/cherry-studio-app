@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { useConfirmDialog } from '../useConfirmDialog';
@@ -25,10 +25,14 @@ jest.mock('heroui-native/dialog', () => {
   MockDialog.Portal = MockDialog;
   MockDialog.Overlay = MockView;
   MockDialog.Content = MockDialog;
-  MockDialog.Title = ({ children }: { children?: ReactNode }) => <MockText>{children}</MockText>;
-  MockDialog.Description = ({ children }: { children?: ReactNode }) => (
+  const MockDialogTitle = ({ children }: { children?: ReactNode }) => (
     <MockText>{children}</MockText>
   );
+  const MockDialogDescription = ({ children }: { children?: ReactNode }) => (
+    <MockText>{children}</MockText>
+  );
+  MockDialog.Title = MockDialogTitle;
+  MockDialog.Description = MockDialogDescription;
 
   return { Dialog: MockDialog };
 });
@@ -46,8 +50,13 @@ jest.mock('react-i18next', () => ({
 }));
 
 function Probe() {
-  hookResult = useConfirmDialog();
-  return hookResult.confirmDialog;
+  const result = useConfirmDialog();
+
+  useEffect(() => {
+    hookResult = result;
+  }, [result]);
+
+  return result.confirmDialog;
 }
 
 describe('useConfirmDialog', () => {
