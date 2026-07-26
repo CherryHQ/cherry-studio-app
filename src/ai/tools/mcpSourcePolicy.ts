@@ -13,7 +13,7 @@
 import type { McpServer } from '@/data/types/mcpServer';
 import { buildFunctionCallToolName, toCamelCase } from './mcpToolName';
 
-export type McpPolicyTool = {
+type McpPolicyTool = {
   /** The minted `mcp__server__tool` id, when the caller already has one. */
   id?: string;
   name: string;
@@ -98,18 +98,4 @@ export function withMcpToolRuleCleared(
 /** A rule list after adding one tool to it. */
 export function withMcpToolRuleAdded(rules: readonly string[], toolName: string): string[] {
   return [...new Set([...rules, toolName])];
-}
-
-/** `disabledTools` after switching one tool back on. */
-export function withMcpToolEnabled(
-  server: McpServer,
-  toolName: string,
-  knownToolNames: string[],
-): string[] {
-  return withMcpToolRuleCleared(server.disabledTools, server, toolName, knownToolNames);
-}
-
-/** `disabledTools` after switching one tool off. */
-export function withMcpToolDisabled(server: McpServer, toolName: string): string[] {
-  return withMcpToolRuleAdded(server.disabledTools, toolName);
 }

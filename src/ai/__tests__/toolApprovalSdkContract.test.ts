@@ -30,7 +30,11 @@ const TOOL_CALL_ID = 'call-1';
 const APPROVAL_ID = 'approval-1';
 const TOOL_INPUT = { path: 'README.md' };
 /** The shape `McpService.wrapTool` puts on a tool definition's `metadata`. */
-const TOOL_METADATA = { cherry: { tool: { rawName: 'read_file', serverId: 's1' } } };
+const TOOL_METADATA = {
+  cherry: {
+    tool: { rawName: 'read_file', serverId: 's1', serverName: 'Files', type: 'mcp' },
+  },
+};
 
 type DynamicToolUIPart = Extract<UIMessage['parts'][number], { type: 'dynamic-tool' }>;
 

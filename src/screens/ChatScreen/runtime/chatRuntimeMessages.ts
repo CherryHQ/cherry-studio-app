@@ -1,4 +1,5 @@
 import { finalizeDanglingToolApprovals } from '@/data/services/utils/toolApprovals';
+import type { McpToolSource } from '@/data/types/mcpServer';
 import type {
   CherryMessagePart,
   CherryUIMessage,
@@ -6,6 +7,7 @@ import type {
   Message,
   MessageStats,
 } from '@/data/types/message';
+import { readCherryToolMetadata } from '@/data/types/uiParts';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
@@ -18,7 +20,7 @@ export type PendingToolApproval = {
   approvalId: string;
   input: unknown;
   /** Set for MCP tools only: what the sheet needs to write an auto-approve rule. */
-  mcpSource?: { rawToolName: string; serverId: string };
+  mcpSource?: McpToolSource;
   messageId: string;
   toolCallId: string;
   toolName: string;
@@ -83,16 +85,17 @@ export function getPendingToolApprovals(messages: readonly Message[]): PendingTo
   return approvals;
 }
 
-/** The identity `McpService.wrapTool` stamps on every tool it hands the SDK. */
-function readMcpSource(part: ToolMessagePart): PendingToolApproval['mcpSource'] {
-  const cherry = (part.toolMetadata as { cherry?: { tool?: Record<string, unknown> } } | undefined)
-    ?.cherry;
-  const tool = cherry?.tool;
+function readMcpSource(part: ToolMessagePart): McpToolSource | undefined {
+  const tool = readCherryToolMetadata(part)?.tool;
   if (typeof tool?.rawName !== 'string' || typeof tool.serverId !== 'string') {
     return undefined;
   }
 
-  return { rawToolName: tool.rawName, serverId: tool.serverId };
+  return {
+    rawName: tool.rawName,
+    serverId: tool.serverId,
+    ...(tool.serverName && { serverName: tool.serverName }),
+  };
 }
 
 /** Everything a resumed segment spends on top of the first one. The durations

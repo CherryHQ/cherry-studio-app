@@ -5,8 +5,6 @@ import {
   hasMcpServerWildcardRule,
   isMcpToolDisabledBySource,
   isMcpToolForcePromptBySource,
-  withMcpToolDisabled,
-  withMcpToolEnabled,
   withMcpToolRuleAdded,
   withMcpToolRuleCleared,
 } from '../mcpSourcePolicy';
@@ -106,26 +104,33 @@ describe('toggling one tool', () => {
   it('drops every rule form that targeted the tool', () => {
     const server = makeServer(['search', 'mcp__myServer__search', 'other']);
 
-    expect(withMcpToolEnabled(server, 'search', knownTools)).toEqual(['other']);
+    expect(withMcpToolRuleCleared(server.disabledTools, server, 'search', knownTools)).toEqual([
+      'other',
+    ]);
   });
 
   it('expands a server wildcard so the other tools stay disabled', () => {
     const server = makeServer(['mcp__myServer__*']);
 
     // Filtering the wildcard out wholesale would enable every tool at once.
-    expect(withMcpToolEnabled(server, 'search', knownTools).sort()).toEqual(['create', 'delete']);
+    expect(
+      withMcpToolRuleCleared(server.disabledTools, server, 'search', knownTools).sort(),
+    ).toEqual(['create', 'delete']);
     expect(isMcpToolDisabledBySource(makeServer(['create', 'delete']), { name: 'search' })).toBe(
       false,
     );
   });
 
   it('is a no-op when the tool was already enabled', () => {
-    expect(withMcpToolEnabled(makeServer(['other']), 'search', knownTools)).toEqual(['other']);
+    const server = makeServer(['other']);
+    expect(withMcpToolRuleCleared(server.disabledTools, server, 'search', knownTools)).toEqual([
+      'other',
+    ]);
   });
 
   it('disables by raw name without duplicating an existing entry', () => {
-    expect(withMcpToolDisabled(makeServer([]), 'search')).toEqual(['search']);
-    expect(withMcpToolDisabled(makeServer(['search']), 'search')).toEqual(['search']);
+    expect(withMcpToolRuleAdded([], 'search')).toEqual(['search']);
+    expect(withMcpToolRuleAdded(['search'], 'search')).toEqual(['search']);
   });
 
   it('applies the same clearing rules to any list, e.g. disabledAutoApproveTools', () => {

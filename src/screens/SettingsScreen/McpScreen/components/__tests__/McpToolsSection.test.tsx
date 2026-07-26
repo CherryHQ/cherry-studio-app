@@ -82,15 +82,13 @@ describe('McpToolsSection auto-approve toggle', () => {
   });
 
   function render(disabledAutoApproveTools: string[], disabledTools: string[] = []) {
-    const server = makeServer(disabledAutoApproveTools);
+    const server = { ...makeServer(disabledAutoApproveTools), disabledTools };
     const onToggleAutoApprove = jest.fn();
     const onToggleTool = jest.fn();
 
     act(() => {
       renderer = create(
         <McpToolsSection
-          disabledAutoApproveTools={disabledAutoApproveTools}
-          disabledTools={disabledTools}
           onToggleAutoApprove={onToggleAutoApprove}
           onToggleTool={onToggleTool}
           server={server}

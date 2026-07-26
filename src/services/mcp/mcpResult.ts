@@ -6,7 +6,7 @@
  * tolerant of protocol additions.
  */
 
-export type McpResultContentItem = {
+type McpResultContentItem = {
   data?: string;
   mimeType?: string;
   resource?: {
@@ -26,20 +26,7 @@ export type McpCallToolResult = {
 
 /** Stand-in for a call that produced nothing at all, so the model is not told
  * an empty answer succeeded. */
-export const MISSING_RESULT_SUMMARY = '[MCP tool returned no result]';
-
-/** True if the call produced any image / audio / binary resource. */
-export function hasMultimodalContent(result: McpCallToolResult): boolean {
-  return (
-    Array.isArray(result?.content) &&
-    result.content.some(
-      (item) =>
-        item.type === 'image' ||
-        item.type === 'audio' ||
-        (item.type === 'resource' && !!item.resource?.blob),
-    )
-  );
-}
+const MISSING_RESULT_SUMMARY = '[MCP tool returned no result]';
 
 /**
  * Flatten for the model's view: text verbatim; image/audio/blob →

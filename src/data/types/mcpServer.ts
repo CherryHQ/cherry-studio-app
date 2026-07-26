@@ -6,7 +6,7 @@ export const McpServerIdSchema = z.uuidv4();
  * Remote MCP server (Streamable HTTP transport only on mobile).
  *
  * `disabledTools` excludes tools from chat injection; `disabledAutoApproveTools`
- * is reserved for the upcoming approval flow and has no runtime behavior yet.
+ * requires an approval prompt before matched tools run.
  */
 export const McpServerSchema = z.strictObject({
   baseUrl: z.url(),
@@ -23,5 +23,11 @@ export const McpServerSchema = z.strictObject({
   updatedAt: z.iso.datetime(),
 });
 export type McpServer = z.infer<typeof McpServerSchema>;
+
+export type McpToolSource = {
+  rawName: string;
+  serverId: string;
+  serverName?: string;
+};
 
 export const DEFAULT_MCP_TIMEOUT_SECONDS = 60;

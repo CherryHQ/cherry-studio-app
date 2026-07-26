@@ -74,7 +74,6 @@ type ChatRuntimeDependencies = {
 
 type ActiveTurn = {
   abortController: AbortController;
-  assistantMessageId?: string;
 };
 
 export const newTopicRuntimeId = '__new_topic__';
@@ -276,7 +275,7 @@ export class ChatRuntime {
     }
 
     const abortController = new AbortController();
-    const activeTurn: ActiveTurn = { abortController, assistantMessageId: messageId };
+    const activeTurn: ActiveTurn = { abortController };
     this.activeTurns.set(topicId, activeTurn);
     this.setTopicSnapshot(topicId, { status: 'reserving' });
 
@@ -462,7 +461,6 @@ export class ChatRuntime {
 
       userMessage = reservedTurn.userMessage;
       assistantPlaceholder = reservedTurn.placeholders[0];
-      activeTurn.assistantMessageId = assistantPlaceholder.id;
       throwIfAborted(abortController.signal);
       // Overlay the freshly created user message immediately so it renders
       // without waiting for the invalidate -> refetch round trip below.

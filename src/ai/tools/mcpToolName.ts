@@ -74,7 +74,7 @@ export function buildFunctionCallToolName(serverName: string, toolName: string):
   return `${body}${suffix}`;
 }
 
-export type McpFunctionCallToolNameParts = {
+type McpFunctionCallToolNameParts = {
   serverPart: string;
   toolPart: string;
 };
@@ -91,19 +91,4 @@ export function parseFunctionCallToolName(toolName: string): McpFunctionCallTool
     serverPart: rest.slice(0, delimiterIndex),
     toolPart: rest.slice(delimiterIndex + 2),
   };
-}
-
-/**
- * Test whether a minted MCP function-call tool id (a `buildFunctionCallToolName`
- * output) belongs to `serverName`. Untruncated ids match by prefix; truncated
- * ids are matched via the server-derived hash suffix.
- */
-export function isFunctionCallToolNameForServer(serverName: string, toolId: string): boolean {
-  const serverPart = toCamelCase(serverName);
-  if (toolId.startsWith(`mcp__${serverPart}__`)) return true;
-  const suffix = `_${hashServerName(serverName)}`;
-  if (!toolId.endsWith(suffix)) return false;
-  const body = toolId.slice(0, toolId.length - suffix.length);
-  const serverCore = `mcp__${serverPart}`;
-  return serverCore.startsWith(body) || body.startsWith(serverCore);
 }

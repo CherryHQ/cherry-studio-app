@@ -34,7 +34,7 @@ function makeApproval(overrides: Partial<PendingToolApproval> = {}): PendingTool
   return {
     approvalId: 'approval-1',
     input: { query: 'cherry' },
-    mcpSource: { rawToolName: 'search_docs', serverId: 'server-1' },
+    mcpSource: { rawName: 'search_docs', serverId: 'server-1' },
     messageId: 'assistant-1',
     toolCallId: 'call-1',
     toolName: 'mcp__serverOne__searchDocs',
@@ -104,7 +104,7 @@ describe('McpApprovalSheet', () => {
       // decision lands, and the next call in the same turn re-reads the rule,
       // so a rule still being written would lose the race.
       expect(onAlwaysAllow).toHaveBeenCalledWith({
-        rawToolName: 'search_docs',
+        rawName: 'search_docs',
         serverId: 'server-1',
       });
       expect(onRespond).not.toHaveBeenCalled();

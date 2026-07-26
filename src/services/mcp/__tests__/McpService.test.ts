@@ -4,7 +4,6 @@ import type { Assistant } from '@/data/types/assistant';
 import { DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
 import type { McpServer } from '@/data/types/mcpServer';
 import { McpService } from '../McpService';
-import { MISSING_RESULT_SUMMARY } from '../mcpResult';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
@@ -156,6 +155,44 @@ describe('chat hot path is cache-only', () => {
 
     expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
     expect(client.tools).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses policy and display updates without reconnecting or relisting tools', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const servers = [makeServer()];
+    const { service } = makeService(servers);
+    await warmedToolSet(service);
+
+    servers[0] = makeServer({ disabledTools: ['search'], name: 'Renamed', timeout: 5 });
+    expect(await service.getToolSetForAssistant(makeAssistant())).toBeUndefined();
+
+    servers[0] = makeServer({ name: 'Renamed', timeout: 5 });
+    expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
+      'mcp__renamed__search',
+    ]);
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+    expect(client.tools).toHaveBeenCalledTimes(1);
+    expect(client.close).not.toHaveBeenCalled();
+  });
+
+  it('reconnects and refetches when the transport changes', async () => {
+    const original = makeClient(makeRawTools(['old']));
+    const replacement = makeClient(makeRawTools(['new']));
+    mockCreateMCPClient.mockResolvedValueOnce(original).mockResolvedValue(replacement);
+    const servers = [makeServer()];
+    const { service } = makeService(servers);
+    await warmedToolSet(service);
+
+    servers[0] = makeServer({ baseUrl: 'https://new.example/mcp' });
+    expect(await service.getToolSetForAssistant(makeAssistant())).toBeUndefined();
+    await flush();
+
+    expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
+      'mcp__serverone__new',
+    ]);
+    expect(original.close).toHaveBeenCalled();
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(2);
   });
 
   it('keeps serving stale tools while revalidating past the TTL', async () => {
@@ -551,7 +588,7 @@ describe('tool execution', () => {
     });
 
     // Not '': an empty string reads to the model as a successful empty answer.
-    expect(modelOutput).toEqual({ type: 'text', value: MISSING_RESULT_SUMMARY });
+    expect(modelOutput).toEqual({ type: 'text', value: '[MCP tool returned no result]' });
   });
 
   it('fails instead of reporting an empty success when the call returns nothing', async () => {
@@ -589,6 +626,33 @@ describe('tool execution', () => {
       jest.useRealTimers();
     }
   });
+
+  it('uses the latest stored timeout without rebuilding the tool cache', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    try {
+      const client = makeClient(makeRawTool('slow', () => new Promise(() => undefined)));
+      mockCreateMCPClient.mockResolvedValue(client);
+      const { mcpServer, service } = makeService([makeServer({ timeout: 60 })]);
+      const tools = await warmedToolSet(service);
+      mcpServer.getById.mockResolvedValue(makeServer({ name: 'Renamed', timeout: 1 }));
+
+      const call = (
+        tools?.mcp__serverone__slow.execute as (a: unknown, o: unknown) => Promise<unknown>
+      )({}, {});
+      const assertion = expect(call).rejects.toThrow(
+        /MCP tool Renamed\/slow timed out after 1000ms/,
+      );
+      await flush();
+      jest.advanceTimersByTime(1000);
+
+      await assertion;
+      expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+      expect(client.tools).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('testConnection', () => {
@@ -599,7 +663,7 @@ describe('testConnection', () => {
 
     const result = await service.testConnection({ baseUrl: 'https://x.example/mcp' });
 
-    expect(result.tools.map((t) => t.name)).toEqual(['a', 'b']);
+    expect(result.map((t) => t.name)).toEqual(['a', 'b']);
     expect(client.close).toHaveBeenCalled();
     // Testing an unsaved form must not leave anything behind in the pool.
     expect(await service.getToolSetForAssistant(makeAssistant())).toBeUndefined();
@@ -616,6 +680,35 @@ describe('testConnection', () => {
     );
     expect(client.close).toHaveBeenCalled();
   });
+
+  it('times out client initialization and closes a client that connects late', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    try {
+      let settleConnect: ((client: FakeClient) => void) | undefined;
+      const client = makeClient(makeRawTools(['a']));
+      mockCreateMCPClient.mockReturnValue(
+        new Promise<FakeClient>((resolve) => {
+          settleConnect = resolve;
+        }),
+      );
+      const { service } = makeService([]);
+
+      const request = service.testConnection({ baseUrl: 'https://x.example/mcp' });
+      const assertion = expect(request).rejects.toThrow(
+        'MCP connection test timed out after 15000ms',
+      );
+      jest.advanceTimersByTime(15 * 1000);
+      await assertion;
+
+      settleConnect?.(client);
+      await flush();
+      expect(client.close).toHaveBeenCalled();
+      expect(client.tools).not.toHaveBeenCalled();
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('listToolsForServer', () => {
@@ -629,7 +722,7 @@ describe('listToolsForServer', () => {
 
     const tools = await service.listToolsForServer(server);
 
-    expect(tools).toEqual([{ description: 'desc search', enabled: true, name: 'search' }]);
+    expect(tools).toEqual([{ description: 'desc search', name: 'search' }]);
     expect(stale.close).toHaveBeenCalled();
     expect(mockCreateMCPClient).toHaveBeenCalledTimes(2);
   });
@@ -646,38 +739,52 @@ describe('listToolsForServer', () => {
     await expect(service.listToolsForServer(server)).rejects.toThrow('401 unauthorized');
   });
 
-  it('reports the per-tool switch state from disabledTools', async () => {
-    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['keep', 'drop'])));
-    const server = makeServer({ disabledTools: ['drop'] });
+  it('does not retry a tools listing invalidated by a configuration change', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    client.tools.mockReturnValue(new Promise(() => undefined));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
     const { service } = makeService([server]);
 
-    expect((await service.listToolsForServer(server)).map((t) => [t.name, t.enabled])).toEqual([
-      ['keep', true],
-      ['drop', false],
-    ]);
+    const listing = service.listToolsForServer(server);
+    const assertion = expect(listing).rejects.toThrow('was invalidated');
+    await flush();
+    service.invalidateServer(server.id);
+
+    await assertion;
+    expect(client.close).toHaveBeenCalled();
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('invalidateServer', () => {
   it('does not let an in-flight connect repopulate the pool', async () => {
-    let settleConnect: ((client: FakeClient) => void) | undefined;
-    const client = makeClient(makeRawTools(['search']));
-    mockCreateMCPClient.mockReturnValueOnce(
-      new Promise<FakeClient>((resolve) => {
-        settleConnect = resolve;
-      }),
-    );
-    const { service } = makeService([makeServer()]);
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    try {
+      let settleConnect: ((client: FakeClient) => void) | undefined;
+      const client = makeClient(makeRawTools(['search']));
+      mockCreateMCPClient.mockReturnValueOnce(
+        new Promise<FakeClient>((resolve) => {
+          settleConnect = resolve;
+        }),
+      );
+      const { service } = makeService([makeServer()]);
 
-    await service.getToolSetForAssistant(makeAssistant());
-    service.invalidateServer('server-1');
-    settleConnect?.(client);
-    await flush();
+      await service.getToolSetForAssistant(makeAssistant());
+      expect(jest.getTimerCount()).toBe(1);
+      service.invalidateServer('server-1');
+      expect(jest.getTimerCount()).toBe(0);
+      settleConnect?.(client);
+      await flush();
 
-    // The evicted connect closed itself instead of landing in the pool, and it
-    // was never asked for tools, so nothing could refill the cleared cache.
-    expect(client.close).toHaveBeenCalled();
-    expect(client.tools).not.toHaveBeenCalled();
+      // The evicted connect closed itself instead of landing in the pool, and it
+      // was never asked for tools, so nothing could refill the cleared cache.
+      expect(client.close).toHaveBeenCalled();
+      expect(client.tools).not.toHaveBeenCalled();
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
   });
 
   it('does not discard an unrelated server’s in-flight refresh', async () => {
@@ -725,5 +832,31 @@ describe('invalidateServer', () => {
       'mcp__serverone__search',
     ]);
     expect(replacement.tools).toHaveBeenCalled();
+  });
+
+  it('does not let a late tools response overwrite the replacement cache', async () => {
+    let settleOldTools: ((tools: ToolSet) => void) | undefined;
+    const stale = makeClient(makeRawTools(['old']));
+    stale.tools.mockReturnValue(
+      new Promise<ToolSet>((resolve) => {
+        settleOldTools = resolve;
+      }),
+    );
+    const replacement = makeClient(makeRawTools(['new']));
+    mockCreateMCPClient.mockResolvedValueOnce(stale).mockResolvedValue(replacement);
+    const { service } = makeService([makeServer()]);
+
+    await service.getToolSetForAssistant(makeAssistant());
+    await flush();
+    service.invalidateServer('server-1');
+    await service.getToolSetForAssistant(makeAssistant());
+    await flush();
+    settleOldTools?.(makeRawTools(['old']));
+    await flush();
+
+    expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
+      'mcp__serverone__new',
+    ]);
+    expect(stale.close).toHaveBeenCalled();
   });
 });

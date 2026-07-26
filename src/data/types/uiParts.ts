@@ -83,9 +83,7 @@ export interface CherryReasoningMeta {
  * Two carriers end up here. `settledByApp` is ours, written through
  * `withCherryMeta` into `providerMetadata.cherry` like every other part type.
  * `transport` / `toolName` / `tool` come from the tool *definition*'s
- * `metadata`, which the SDK copies onto the part as `toolMetadata.cherry` — a
- * different object, which is why their readers hand-roll the access instead of
- * calling `readCherryMeta`.
+ * `metadata`, which the SDK copies onto the part as `toolMetadata.cherry`.
  */
 export interface CherryToolMeta {
   /** Approval bridge transport. */
@@ -94,6 +92,7 @@ export interface CherryToolMeta {
   toolName?: string;
   /** MCP / builtin tool identity. */
   tool?: {
+    rawName?: string;
     serverId?: string;
     serverName?: string;
     type?: 'mcp' | 'builtin' | 'provider';
@@ -148,6 +147,7 @@ export const CherryToolMetaSchema: z.ZodType<CherryToolMeta> = z.object({
   toolName: z.string().optional(),
   tool: z
     .object({
+      rawName: z.string().optional(),
       serverId: z.string().optional(),
       serverName: z.string().optional(),
       type: z.enum(['mcp', 'builtin', 'provider']).optional(),
@@ -195,6 +195,13 @@ export function readCherryMeta<P extends CherryMessagePart>(
   const result = schema.safeParse(raw);
   if (!result.success) return undefined;
   return result.data as CherryMetaForPartType<P['type']>;
+}
+
+/** Read tool-definition metadata copied by the SDK onto `toolMetadata.cherry`. */
+export function readCherryToolMetadata(part: CherryMessagePart): CherryToolMeta | undefined {
+  const raw = (part as { toolMetadata?: Record<string, unknown> }).toolMetadata?.cherry;
+  const result = CherryToolMetaSchema.safeParse(raw);
+  return result.success ? result.data : undefined;
 }
 
 /**

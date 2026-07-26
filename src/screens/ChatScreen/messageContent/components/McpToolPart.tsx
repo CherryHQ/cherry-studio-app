@@ -6,18 +6,13 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { parseFunctionCallToolName } from '@/ai/tools/mcpToolName';
 import type { CherryMessagePart } from '@/data/types/message';
-import { readCherryMeta } from '@/data/types/uiParts';
+import { type CherryToolMeta, readCherryMeta, readCherryToolMetadata } from '@/data/types/uiParts';
 import { useMcpApprovalReopen } from '../../approval/McpApprovalSheet';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
 type McpToolPartProps = {
   part: ToolMessagePart;
-};
-
-type McpToolMetadata = {
-  serverName?: string;
-  type?: string;
 };
 
 type ExtractedMcpOutput = {
@@ -32,7 +27,7 @@ export function McpToolPart({ part }: McpToolPartProps) {
   const { t } = useTranslation();
   const reopenApprovalSheet = useMcpApprovalReopen();
   const toolName = getToolName(part);
-  const toolMetadata = getCherryToolMetadata(part);
+  const toolMetadata = readCherryToolMetadata(part)?.tool;
   const title = getMcpToolTitle(part, toolName, toolMetadata);
   const statusText = getMcpToolStatusText(part, t);
   const isAwaitingApproval = part.state === 'approval-requested';
@@ -225,7 +220,7 @@ function SectionTitle({ title }: { title: string }) {
 
 export function isMcpToolPart(part: ToolMessagePart) {
   return (
-    getCherryToolMetadata(part)?.type === 'mcp' ||
+    readCherryToolMetadata(part)?.tool?.type === 'mcp' ||
     parseFunctionCallToolName(getToolName(part)) !== null
   );
 }
@@ -233,7 +228,7 @@ export function isMcpToolPart(part: ToolMessagePart) {
 function getMcpToolTitle(
   part: ToolMessagePart,
   toolName: string,
-  toolMetadata: McpToolMetadata | undefined,
+  toolMetadata: CherryToolMeta['tool'],
 ) {
   // Metadata-less fallback: recover `server: tool` from the minted
   // `mcp__{server}__{tool}` key (mirrors desktop toolResponse.ts).
@@ -398,18 +393,6 @@ function truncateText(text: string, maxLength: number, message?: string) {
 
 function getToolName(part: ToolMessagePart) {
   return part.type === 'dynamic-tool' ? part.toolName : part.type.slice('tool-'.length);
-}
-
-function getCherryToolMetadata(part: ToolMessagePart): McpToolMetadata | undefined {
-  const metadata = part.toolMetadata;
-  const cherry = isRecord(metadata?.cherry) ? metadata.cherry : undefined;
-  const tool = isRecord(cherry?.tool) ? cherry.tool : undefined;
-  if (!tool) return undefined;
-
-  return {
-    serverName: typeof tool.serverName === 'string' ? tool.serverName : undefined,
-    type: typeof tool.type === 'string' ? tool.type : undefined,
-  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

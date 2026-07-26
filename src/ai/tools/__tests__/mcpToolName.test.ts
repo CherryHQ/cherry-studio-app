@@ -1,9 +1,4 @@
-import {
-  buildFunctionCallToolName,
-  isFunctionCallToolNameForServer,
-  parseFunctionCallToolName,
-  toCamelCase,
-} from '../mcpToolName';
+import { buildFunctionCallToolName, parseFunctionCallToolName, toCamelCase } from '../mcpToolName';
 
 describe('mcpToolName', () => {
   describe('toCamelCase', () => {
@@ -29,7 +24,6 @@ describe('mcpToolName', () => {
       const longServer = 'a'.repeat(60);
       const name = buildFunctionCallToolName(longServer, 'someToolWithLongName');
       expect(name.length).toBeLessThanOrEqual(63);
-      expect(isFunctionCallToolNameForServer(longServer, name)).toBe(true);
     });
 
     it('distinct long servers do not collide after truncation', () => {
@@ -54,14 +48,6 @@ describe('mcpToolName', () => {
     it('returns null for non-mcp names', () => {
       expect(parseFunctionCallToolName('web_search')).toBeNull();
       expect(parseFunctionCallToolName('mcp__onlyserver')).toBeNull();
-    });
-  });
-
-  describe('isFunctionCallToolNameForServer', () => {
-    it('matches untruncated names by prefix', () => {
-      const name = buildFunctionCallToolName('github', 'searchIssues');
-      expect(isFunctionCallToolNameForServer('github', name)).toBe(true);
-      expect(isFunctionCallToolNameForServer('gitlab', name)).toBe(false);
     });
   });
 });

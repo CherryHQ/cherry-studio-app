@@ -1,5 +1,6 @@
 import { hasMcpServerWildcardRule, withMcpToolRuleCleared } from '@/ai/tools/mcpSourcePolicy';
 import type { DataServices } from '@/data/services/createDataServices';
+import type { McpToolSource } from '@/data/types/mcpServer';
 
 /**
  * Stop asking before running one MCP tool.
@@ -13,20 +14,20 @@ import type { DataServices } from '@/data/services/createDataServices';
  */
 export async function clearMcpToolAutoApproveRule(
   services: Pick<DataServices, 'mcp' | 'mcpServer'>,
-  source: { rawToolName: string; serverId: string },
+  source: McpToolSource,
 ): Promise<void> {
   const server = await services.mcpServer.getById(source.serverId);
   // Clearing a server-wide rule re-expands it per tool, which needs the full
   // list; every other rule form covers this tool alone.
   const knownToolNames = hasMcpServerWildcardRule(server.disabledAutoApproveTools, server)
     ? (await services.mcp.listToolsForServer(server)).map((tool) => tool.name)
-    : [source.rawToolName];
+    : [source.rawName];
 
   await services.mcpServer.update(server.id, {
     disabledAutoApproveTools: withMcpToolRuleCleared(
       server.disabledAutoApproveTools,
       server,
-      source.rawToolName,
+      source.rawName,
       knownToolNames,
     ),
   });

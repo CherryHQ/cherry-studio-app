@@ -147,7 +147,7 @@ describe('tool approvals', () => {
 
     // The wire tool name is camelCased and can't be matched against the rule
     // lists; only the raw name the server reported can.
-    expect(mcpApproval.mcpSource).toEqual({ rawToolName: 'search_docs', serverId: 'server-1' });
+    expect(mcpApproval.mcpSource).toEqual({ rawName: 'search_docs', serverId: 'server-1' });
     // A non-MCP tool has no per-tool setting to write, so it offers none.
     expect(plainApproval.mcpSource).toBeUndefined();
   });

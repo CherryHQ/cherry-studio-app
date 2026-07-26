@@ -33,7 +33,7 @@ export function McpConnectionTestSection({ getConfig }: McpConnectionTestSection
 
     setState({ status: 'testing' });
     try {
-      const { tools } = await services.mcp.testConnection(config);
+      const tools = await services.mcp.testConnection(config);
       setState({ status: 'success', tools });
     } catch (error) {
       setState({

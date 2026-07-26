@@ -45,7 +45,7 @@ describe('clearMcpToolAutoApproveRule', () => {
     );
 
     await clearMcpToolAutoApproveRule(services, {
-      rawToolName: 'search_docs',
+      rawName: 'search_docs',
       serverId: 'server-1',
     });
 
@@ -59,7 +59,7 @@ describe('clearMcpToolAutoApproveRule', () => {
     const { services, update } = createServices(makeServer([serverWildcard]));
 
     await clearMcpToolAutoApproveRule(services, {
-      rawToolName: 'search_docs',
+      rawName: 'search_docs',
       serverId: 'server-1',
     });
 
@@ -75,7 +75,7 @@ describe('clearMcpToolAutoApproveRule', () => {
     (services.mcpServer.update as jest.Mock).mockRejectedValue(new Error('db is gone'));
 
     await expect(
-      clearMcpToolAutoApproveRule(services, { rawToolName: 'search_docs', serverId: 'server-1' }),
+      clearMcpToolAutoApproveRule(services, { rawName: 'search_docs', serverId: 'server-1' }),
     ).rejects.toThrow('db is gone');
   });
 });

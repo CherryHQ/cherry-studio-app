@@ -7,12 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import {
-  withMcpToolDisabled,
-  withMcpToolEnabled,
-  withMcpToolRuleAdded,
-  withMcpToolRuleCleared,
-} from '@/ai/tools/mcpSourcePolicy';
+import { withMcpToolRuleAdded, withMcpToolRuleCleared } from '@/ai/tools/mcpSourcePolicy';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { keyboardBottomOffset } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
@@ -114,10 +109,10 @@ export function McpServerScreen() {
         return;
       }
       // The switch renders off for wire ids and wildcards too, so turning it
-      // back on has to clear those forms as well — see `withMcpToolEnabled`.
+      // back on has to clear those forms as well.
       const nextDisabled = enabled
-        ? withMcpToolEnabled(server, toolName, knownToolNames)
-        : withMcpToolDisabled(server, toolName);
+        ? withMcpToolRuleCleared(server.disabledTools, server, toolName, knownToolNames)
+        : withMcpToolRuleAdded(server.disabledTools, toolName);
       void updateServer(serverId, { disabledTools: nextDisabled }).catch((error: unknown) => {
         logger.error('Failed to toggle MCP tool', error as Error);
         toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
@@ -279,8 +274,6 @@ export function McpServerScreen() {
         {serverId && server ? (
           <FormSection title={t('settings.mcp.tools.title')}>
             <McpToolsSection
-              disabledAutoApproveTools={server.disabledAutoApproveTools}
-              disabledTools={server.disabledTools}
               onToggleAutoApprove={handleToggleAutoApprove}
               onToggleTool={handleToggleTool}
               server={server}

@@ -12,6 +12,7 @@ import { loggerService } from '@/core/logger/LoggerService';
 import { queryKeys } from '@/data/api';
 import { useDataServices } from '@/data/runtime';
 import { DataApiError, ErrorCode } from '@/data/types/apiTypes';
+import type { McpToolSource } from '@/data/types/mcpServer';
 import type { Message } from '@/data/types/message';
 import type { MessagesViewModel } from '@/hooks/chat';
 import { McpApprovalReopenProvider, McpApprovalSheet } from '../approval/McpApprovalSheet';
@@ -107,7 +108,7 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
     [runtime, t, toast, topicId],
   );
   const handleAlwaysAllow = useCallback(
-    async (source: { rawToolName: string; serverId: string }) => {
+    async (source: McpToolSource) => {
       try {
         await clearMcpToolAutoApproveRule(services, source);
         await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() });

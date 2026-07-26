@@ -30,7 +30,7 @@ export const mcpServerTable = sqliteTable(
     /** Tool names excluded from injection (blacklist) */
     disabledTools: text({ mode: 'json' }).$type<string[]>(),
 
-    /** Tool names requiring user approval — reserved until the approval flow lands */
+    /** Tool rules requiring user approval before execution. */
     disabledAutoApproveTools: text({ mode: 'json' }).$type<string[]>(),
 
     isActive: integer({ mode: 'boolean' }).notNull().default(true),

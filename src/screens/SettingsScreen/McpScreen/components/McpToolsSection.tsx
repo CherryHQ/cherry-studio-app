@@ -13,8 +13,6 @@ import type { McpServer } from '@/data/types/mcpServer';
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 
 type McpToolsSectionProps = {
-  disabledAutoApproveTools: string[];
-  disabledTools: string[];
   /** `knownToolNames` lets the writer re-expand rules wider than one tool. */
   onToggleAutoApprove: (toolName: string, autoApprove: boolean, knownToolNames: string[]) => void;
   onToggleTool: (toolName: string, enabled: boolean, knownToolNames: string[]) => void;
@@ -22,8 +20,6 @@ type McpToolsSectionProps = {
 };
 
 export function McpToolsSection({
-  disabledAutoApproveTools,
-  disabledTools,
   onToggleAutoApprove,
   onToggleTool,
   server,
@@ -34,11 +30,13 @@ export function McpToolsSection({
   // Matches raw names, wire ids and server wildcards alike, so a tool disabled
   // by any rule form reads as off here.
   const isDisabled = (toolName: string) =>
-    disabledTools.some((value) => matchesMcpSourceToolRule(value, server, { name: toolName }));
+    server.disabledTools.some((value) =>
+      matchesMcpSourceToolRule(value, server, { name: toolName }),
+    );
   // Listed = needs manual approval; an empty list means everything runs
   // without asking (auto-approve is the default, prompting is opt-in).
   const isAutoApproved = (toolName: string) =>
-    !disabledAutoApproveTools.some((value) =>
+    !server.disabledAutoApproveTools.some((value) =>
       matchesMcpSourceToolRule(value, server, { name: toolName }),
     );
 
@@ -77,24 +75,26 @@ export function McpToolsSection({
 
   const handleToggleTool = useCallback(
     async (toolName: string, enabled: boolean) => {
-      const knownToolNames = enabled ? await resolveKnownToolNames(disabledTools, toolName) : [];
+      const knownToolNames = enabled
+        ? await resolveKnownToolNames(server.disabledTools, toolName)
+        : [];
       if (knownToolNames) {
         onToggleTool(toolName, enabled, knownToolNames);
       }
     },
-    [disabledTools, onToggleTool, resolveKnownToolNames],
+    [onToggleTool, resolveKnownToolNames, server.disabledTools],
   );
 
   const handleToggleAutoApprove = useCallback(
     async (toolName: string, autoApprove: boolean) => {
       const knownToolNames = autoApprove
-        ? await resolveKnownToolNames(disabledAutoApproveTools, toolName)
+        ? await resolveKnownToolNames(server.disabledAutoApproveTools, toolName)
         : [];
       if (knownToolNames) {
         onToggleAutoApprove(toolName, autoApprove, knownToolNames);
       }
     },
-    [disabledAutoApproveTools, onToggleAutoApprove, resolveKnownToolNames],
+    [onToggleAutoApprove, resolveKnownToolNames, server.disabledAutoApproveTools],
   );
 
   if (toolsQuery.isLoading) {

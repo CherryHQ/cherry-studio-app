@@ -16,10 +16,14 @@ jest.mock('@/i18n', () => ({
 function createServices(
   overrides: {
     findPendingAssistantMessageIds?: () => Promise<string[]>;
+    prewarmActiveServers?: () => Promise<void>;
     settleCrashedMessages?: (ids: string[]) => Promise<void>;
   } = {},
 ): DataServices {
   return {
+    mcp: {
+      prewarmActiveServers: overrides.prewarmActiveServers ?? jest.fn(async () => undefined),
+    },
     message: {
       findPendingAssistantMessageIds: overrides.findPendingAssistantMessageIds ?? (async () => []),
       settleCrashedMessages: overrides.settleCrashedMessages ?? jest.fn(async () => undefined),
@@ -79,6 +83,26 @@ describe('runPostReadyTasks', () => {
     await runPostReadyTasks(services);
 
     expect(settleCrashedMessages).not.toHaveBeenCalled();
+  });
+
+  test('starts MCP prewarm without waiting for message reconciliation', async () => {
+    let finishReconciliation: (() => void) | undefined;
+    const prewarmActiveServers = jest.fn(async () => undefined);
+    const services = createServices({
+      findPendingAssistantMessageIds: async () => ['a'],
+      prewarmActiveServers,
+      settleCrashedMessages: () =>
+        new Promise<void>((resolve) => {
+          finishReconciliation = resolve;
+        }),
+    });
+
+    const tasks = runPostReadyTasks(services);
+    await Promise.resolve();
+
+    expect(prewarmActiveServers).toHaveBeenCalledTimes(1);
+    finishReconciliation?.();
+    await tasks;
   });
 
   test('does not throw when reconciliation fails', async () => {

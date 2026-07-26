@@ -39,7 +39,6 @@ export type McpConnectionConfig = {
 
 export type McpToolSummary = {
   description?: string;
-  enabled: boolean;
   name: string;
 };
 
@@ -55,12 +54,23 @@ type ToolsRefreshFailure = {
   failedAt: number;
 };
 
+type ServerRuntimeState = {
+  client?: MCPClient;
+  connectionPromise?: Promise<MCPClient>;
+  failure?: ToolsRefreshFailure;
+  generation: number;
+  refreshPromise?: Promise<void>;
+  serverId: string;
+  timeoutCancellations: Set<() => void>;
+  toolsCache?: ToolsCacheEntry;
+  transportFingerprint: string;
+};
+
 /** Distinguishes "we gave up waiting" from a real transport error, so the
  * message reaching the model can warn that the call may still be running. */
 class McpTimeoutError extends Error {}
 
-/** Thrown when a connect is superseded by `invalidateServer` mid-flight. Not a
- * server failure, so it must not count towards the refresh backoff. */
+/** Runtime work superseded by invalidation; it must not count as a server failure. */
 class McpEvictedError extends Error {}
 
 /**
@@ -103,19 +113,42 @@ function withTimeout<T>(
   timeoutMs: number,
   label: string,
   onTimeout: () => void,
+  cancellations?: Set<() => void>,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const handle = setTimeout(() => {
+    let settled = false;
+    let handle: ReturnType<typeof setTimeout>;
+    const cleanup = () => {
+      clearTimeout(handle);
+      cancellations?.delete(cancel);
+    };
+    const cancel = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new McpEvictedError(`${label} was invalidated`));
+    };
+
+    handle = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
       onTimeout();
       reject(new McpTimeoutError(`${label} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
+    cancellations?.add(cancel);
+
     promise.then(
       (value) => {
-        clearTimeout(handle);
+        if (settled) return;
+        settled = true;
+        cleanup();
         resolve(value);
       },
       (error) => {
-        clearTimeout(handle);
+        if (settled) return;
+        settled = true;
+        cleanup();
         reject(error);
       },
     );
@@ -133,23 +166,13 @@ function withTimeout<T>(
  * entry per remaining tool, so it needs the full list or it silently drops the
  * rules of the tools it is missing. Both are timeout-bounded.
  *
- * There is no ping API, so staleness is handled fail-and-drop: any failure from
- * `tools()` or from a tool call closes the client and the next use reconnects.
- * `invalidateServer` must be called after config changes.
+ * Background refresh preserves the last good cache and backs off after failure.
+ * Explicit tool listings reconnect once; tool calls are never replayed.
  */
 export class McpService {
   constructor(private readonly deps: { mcpServer: McpServerService }) {}
 
-  private readonly clients = new Map<string, MCPClient>();
-  private readonly pendingClients = new Map<string, Promise<MCPClient>>();
-  private readonly pendingRefreshes = new Map<string, Promise<void>>();
-  private readonly toolsCache = new Map<string, ToolsCacheEntry>();
-  private readonly failures = new Map<string, ToolsRefreshFailure>();
-  /** Per-server, bumped by `invalidateServer` so a fetch already in flight
-   * cannot write its pre-invalidation tool list back into the cache that was
-   * just cleared. Per-server rather than global: invalidating one server must
-   * not discard the prewarm results of every other one. */
-  private readonly epochs = new Map<string, number>();
+  private readonly runtimeStates = new Map<string, ServerRuntimeState>();
 
   /**
    * AI SDK ToolSet for one chat request, keyed `mcp__{server}__{tool}`.
@@ -173,12 +196,12 @@ export class McpService {
 
     const result: ToolSet = {};
     for (const server of servers) {
-      const rawTools = this.readCachedTools(server);
-      if (!rawTools) {
+      const cached = this.readCachedTools(server);
+      if (!cached) {
         continue;
       }
 
-      for (const [rawName, rawTool] of Object.entries(rawTools)) {
+      for (const [rawName, rawTool] of Object.entries(cached.rawTools)) {
         if (isMcpToolDisabledBySource(server, { name: rawName })) {
           continue;
         }
@@ -189,7 +212,7 @@ export class McpService {
           continue;
         }
 
-        result[key] = this.wrapTool(rawTool, server, rawName);
+        result[key] = this.wrapTool(rawTool, server, rawName, cached.state);
       }
     }
 
@@ -217,7 +240,6 @@ export class McpService {
 
     return Object.entries(rawTools).map(([name, tool]) => ({
       description: toolDescription(tool),
-      enabled: !isMcpToolDisabledBySource(server, { name }),
       name,
     }));
   }
@@ -226,116 +248,118 @@ export class McpService {
    * Connection test against unsaved form values: a throwaway client that never
    * enters the pool.
    */
-  async testConnection(config: McpConnectionConfig): Promise<{ tools: McpToolSummary[] }> {
-    const client = await createHttpClient(config);
+  async testConnection(config: McpConnectionConfig): Promise<McpToolSummary[]> {
+    let client: MCPClient | undefined;
+    let acceptClient = true;
+    const request = createHttpClient(config).then(async (createdClient) => {
+      if (!acceptClient) {
+        this.closeQuietly(createdClient);
+        throw new McpEvictedError('MCP connection test already ended');
+      }
+      client = createdClient;
+      return castMcpToolSet(await createdClient.tools());
+    });
+
     try {
       const rawTools = await withTimeout(
-        client.tools().then(castMcpToolSet),
+        request,
         TOOLS_FETCH_TIMEOUT_MS,
         'MCP connection test',
-        () => undefined,
+        () => {
+          acceptClient = false;
+        },
       );
-      return {
-        tools: Object.entries(rawTools).map(([name, tool]) => ({
-          description: toolDescription(tool),
-          enabled: true,
-          name,
-        })),
-      };
+      return Object.entries(rawTools).map(([name, tool]) => ({
+        description: toolDescription(tool),
+        name,
+      }));
     } finally {
-      client.close().catch(() => undefined);
+      acceptClient = false;
+      if (client) {
+        this.closeQuietly(client);
+      }
     }
   }
 
-  /** Drop the pooled client and tools cache after config change/delete. */
+  /** Drop one server's runtime after transport change, disable, or delete. */
   invalidateServer(serverId: string): void {
-    // An in-flight connect or tools fetch would otherwise repopulate the pool
-    // and the cache moments after this call, from the superseded config.
-    this.epochs.set(serverId, (this.epochs.get(serverId) ?? 0) + 1);
-    for (const key of [...this.clients.keys()]) {
-      if (key.startsWith(`${serverId}:`)) {
-        this.closeQuietly(key);
-      }
-    }
-    for (const key of [...this.pendingClients.keys()]) {
-      if (key.startsWith(`${serverId}:`)) {
-        this.pendingClients.delete(key);
-      }
-    }
-    for (const key of [...this.pendingRefreshes.keys()]) {
-      // Leaving this entry in place would make the dedupe guard swallow every
-      // new refresh until the superseded one finishes — whose result the epoch
-      // check then discards, so nothing would refill the cache at all.
-      if (key.startsWith(`${serverId}:`)) {
-        this.pendingRefreshes.delete(key);
-      }
-    }
-    for (const key of [...this.toolsCache.keys()]) {
-      if (key.startsWith(`${serverId}:`)) {
-        this.toolsCache.delete(key);
-      }
-    }
-    for (const key of [...this.failures.keys()]) {
-      // Reconfiguring is the user's way of saying "try again now".
-      if (key.startsWith(`${serverId}:`)) {
-        this.failures.delete(key);
-      }
+    const state = this.runtimeStates.get(serverId);
+    if (state) {
+      this.retireState(state);
     }
   }
 
-  private serverKey(server: McpServer): string {
-    // Config changes naturally mint a new key; invalidateServer matches on the
-    // id prefix so stale-config entries are dropped too.
-    return `${server.id}:${JSON.stringify([server.baseUrl, server.headers, server.timeout])}`;
+  private transportFingerprint(config: McpConnectionConfig): string {
+    const headers = Object.entries(config.headers ?? {}).sort(([left], [right]) =>
+      left < right ? -1 : left > right ? 1 : 0,
+    );
+    return JSON.stringify([config.baseUrl, headers]);
+  }
+
+  private getRuntimeState(server: McpServer): ServerRuntimeState {
+    const transportFingerprint = this.transportFingerprint(server);
+    const current = this.runtimeStates.get(server.id);
+    if (current?.transportFingerprint === transportFingerprint) {
+      return current;
+    }
+
+    const generation = current ? current.generation + 1 : 0;
+    if (current) {
+      this.retireState(current);
+    }
+
+    const state: ServerRuntimeState = {
+      generation,
+      serverId: server.id,
+      timeoutCancellations: new Set(),
+      transportFingerprint,
+    };
+    this.runtimeStates.set(server.id, state);
+    return state;
   }
 
   /** Cached tools if we have any, serving stale while a refresh runs. */
-  private readCachedTools(server: McpServer): ToolSet | undefined {
-    const entry = this.toolsCache.get(this.serverKey(server));
+  private readCachedTools(
+    server: McpServer,
+  ): { rawTools: ToolSet; state: ServerRuntimeState } | undefined {
+    const state = this.getRuntimeState(server);
+    const entry = state.toolsCache;
     if (!entry || Date.now() - entry.fetchedAt >= TOOLS_CACHE_TTL_MS) {
-      this.refreshToolsInBackground(server);
+      this.refreshToolsInBackground(server, state);
     }
-    return entry?.rawTools;
+    return entry ? { rawTools: entry.rawTools, state } : undefined;
   }
 
-  private refreshToolsInBackground(server: McpServer): void {
-    const key = this.serverKey(server);
-    if (this.pendingRefreshes.has(key) || this.isBackingOff(key)) {
+  private refreshToolsInBackground(server: McpServer, state = this.getRuntimeState(server)): void {
+    if (state.refreshPromise || this.isBackingOff(state)) {
       return;
     }
 
-    const refresh: Promise<void> = this.fetchRawTools(server, key)
-      .then(() => {
-        this.failures.delete(key);
-      })
+    const refresh = this.fetchRawTools(server, state)
+      .then(() => undefined)
       .catch((error: unknown) => {
         if (error instanceof McpEvictedError) {
-          // The user changed the config; backing off would punish them for it.
           return;
         }
-        this.recordFailure(key);
+        if (!this.isCurrentState(state)) {
+          return;
+        }
+        this.recordFailure(state);
         logger.warn('MCP tools refresh failed', { error, server: server.name });
-        // Deliberately neither closes the client nor drops the cache. Every
-        // cached tool's `execute` closes over its client, and `@ai-sdk/mcp`
-        // rejects any request on a closed one, so evicting the client alone
-        // would leave the model holding handles that cannot succeed. Keeping
-        // both means a transient blip doesn't strip a working server's tools;
-        // a session that is really dead gets dropped by the tool call itself,
-        // and a wedged one by `withTimeout`'s `dropClient`.
+        // Keep the last good cache and its client through transient refresh
+        // failures; tool-call failures and timeouts reset both.
       })
       .finally(() => {
-        // `invalidateServer` may have evicted this entry and a newer refresh
-        // taken the slot — don't unregister someone else's.
-        if (this.pendingRefreshes.get(key) === refresh) {
-          this.pendingRefreshes.delete(key);
+        if (state.refreshPromise === refresh) {
+          state.refreshPromise = undefined;
         }
       });
 
-    this.pendingRefreshes.set(key, refresh);
+    state.refreshPromise = refresh;
   }
 
-  private isBackingOff(key: string): boolean {
-    const failure = this.failures.get(key);
+  private isBackingOff(state: ServerRuntimeState): boolean {
+    const failure = state.failure;
     if (!failure) {
       return false;
     }
@@ -346,90 +370,133 @@ export class McpService {
     return Date.now() - failure.failedAt < wait;
   }
 
-  private recordFailure(key: string): void {
-    this.failures.set(key, {
-      consecutive: (this.failures.get(key)?.consecutive ?? 0) + 1,
+  private recordFailure(state: ServerRuntimeState): void {
+    state.failure = {
+      consecutive: (state.failure?.consecutive ?? 0) + 1,
       failedAt: Date.now(),
-    });
+    };
   }
 
-  private async getClient(server: McpServer): Promise<MCPClient> {
-    const key = this.serverKey(server);
-
-    const existing = this.clients.get(key);
-    if (existing) {
-      return existing;
+  private async getClient(server: McpServer, state: ServerRuntimeState): Promise<MCPClient> {
+    if (!this.isCurrentState(state)) {
+      throw new McpEvictedError(`MCP server ${server.name} was invalidated`);
     }
 
-    const pending = this.pendingClients.get(key);
-    if (pending) {
-      return pending;
+    if (state.client) {
+      return state.client;
+    }
+    if (state.connectionPromise) {
+      return state.connectionPromise;
     }
 
+    const generation = state.generation;
     const initPromise: Promise<MCPClient> = createHttpClient(server)
       .then((client) => {
-        if (this.pendingClients.get(key) !== initPromise) {
-          // Invalidated mid-connect — don't resurrect the evicted entry. Fail
-          // rather than hand back the closed client: every request on it would
-          // reject anyway, just with a misleading transport error.
-          client.close().catch(() => undefined);
+        if (state.connectionPromise !== initPromise || !this.isCurrentState(state, generation)) {
+          this.closeQuietly(client);
           throw new McpEvictedError(`MCP server ${server.name} was reconfigured while connecting`);
         }
-        this.clients.set(key, client);
+        state.client = client;
         return client;
       })
       .finally(() => {
-        if (this.pendingClients.get(key) === initPromise) {
-          this.pendingClients.delete(key);
+        if (state.connectionPromise === initPromise) {
+          state.connectionPromise = undefined;
         }
       });
 
-    this.pendingClients.set(key, initPromise);
+    state.connectionPromise = initPromise;
     return initPromise;
   }
 
-  private closeQuietly(key: string): void {
-    this.clients
-      .get(key)
-      ?.close()
-      .catch(() => undefined);
-    this.clients.delete(key);
+  private closeQuietly(client: MCPClient): void {
+    client.close().catch(() => undefined);
   }
 
-  private dropClient(server: McpServer): void {
-    const key = this.serverKey(server);
-    this.closeQuietly(key);
-    this.pendingClients.delete(key);
-    this.toolsCache.delete(key);
-  }
-
-  private async fetchToolsWithRetry(server: McpServer): Promise<ToolSet> {
-    const key = this.serverKey(server);
-    try {
-      return await this.fetchRawTools(server, key);
-    } catch (error) {
-      // Fail-and-drop: the pooled client may be stale (backgrounded socket,
-      // expired session) — rebuild once before giving up.
-      logger.warn('MCP tools() failed, reconnecting once', { error, server: server.name });
-      this.dropClient(server);
-      return this.fetchRawTools(server, key);
+  private cancelTimeouts(state: ServerRuntimeState): void {
+    const cancellations = [...state.timeoutCancellations];
+    state.timeoutCancellations.clear();
+    for (const cancel of cancellations) {
+      cancel();
     }
   }
 
-  private async fetchRawTools(server: McpServer, key: string): Promise<ToolSet> {
-    const epoch = this.epochs.get(server.id) ?? 0;
+  private resetConnection(state: ServerRuntimeState): void {
+    if (!this.isCurrentState(state)) {
+      return;
+    }
+
+    state.generation += 1;
+    this.cancelTimeouts(state);
+    state.connectionPromise = undefined;
+    state.toolsCache = undefined;
+    if (state.client) {
+      this.closeQuietly(state.client);
+      state.client = undefined;
+    }
+  }
+
+  private retireState(state: ServerRuntimeState): void {
+    if (this.runtimeStates.get(state.serverId) === state) {
+      this.runtimeStates.delete(state.serverId);
+    }
+    state.generation += 1;
+    this.cancelTimeouts(state);
+    state.connectionPromise = undefined;
+    state.refreshPromise = undefined;
+    state.failure = undefined;
+    state.toolsCache = undefined;
+    if (state.client) {
+      this.closeQuietly(state.client);
+      state.client = undefined;
+    }
+  }
+
+  private isCurrentState(state: ServerRuntimeState, generation = state.generation): boolean {
+    return this.runtimeStates.get(state.serverId) === state && state.generation === generation;
+  }
+
+  private async fetchToolsWithRetry(server: McpServer): Promise<ToolSet> {
+    const state = this.getRuntimeState(server);
+    try {
+      return await this.fetchRawTools(server, state);
+    } catch (error) {
+      if (error instanceof McpEvictedError) {
+        throw error;
+      }
+      // Fail-and-drop: the pooled client may be stale (backgrounded socket,
+      // expired session) — rebuild once before giving up.
+      logger.warn('MCP tools() failed, reconnecting once', { error, server: server.name });
+      this.resetConnection(state);
+      try {
+        return await this.fetchRawTools(server, state);
+      } catch (retryError) {
+        if (!(retryError instanceof McpEvictedError)) {
+          this.resetConnection(state);
+        }
+        throw retryError;
+      }
+    }
+  }
+
+  private async fetchRawTools(server: McpServer, state: ServerRuntimeState): Promise<ToolSet> {
+    const generation = state.generation;
     const rawTools = await withTimeout(
       (async () => {
-        const client = await this.getClient(server);
+        const client = await this.getClient(server, state);
         return castMcpToolSet(await client.tools());
       })(),
       TOOLS_FETCH_TIMEOUT_MS,
       `MCP server ${server.name}`,
-      () => this.dropClient(server),
+      () => this.resetConnection(state),
+      state.timeoutCancellations,
     );
-    if ((this.epochs.get(server.id) ?? 0) === epoch) {
-      this.toolsCache.set(key, { fetchedAt: Date.now(), rawTools });
+    if (!this.isCurrentState(state, generation)) {
+      throw new McpEvictedError(`MCP server ${server.name} was invalidated while listing tools`);
     }
+
+    state.failure = undefined;
+    state.toolsCache = { fetchedAt: Date.now(), rawTools };
     return rawTools;
   }
 
@@ -438,11 +505,7 @@ export class McpService {
    * was built — one send can run up to 20 tool steps, and the user may disable
    * a tool or the whole server in between.
    */
-  private async assertToolStillAllowed(
-    server: McpServer,
-    rawToolName: string,
-    label: string,
-  ): Promise<void> {
+  private async assertToolStillAllowed(server: McpServer, rawToolName: string): Promise<McpServer> {
     let current: McpServer;
     try {
       current = await this.deps.mcpServer.getById(server.id);
@@ -452,34 +515,44 @@ export class McpService {
       }
       // A locked or broken database is not a deleted server — saying so would
       // send the model, and the user, looking in the wrong place.
-      throw new Error(`MCP tool ${label} could not verify its server: ${errorMessage(error)}`, {
-        cause: error,
-      });
+      throw new Error(
+        `MCP tool ${server.name}/${rawToolName} could not verify its server: ${errorMessage(error)}`,
+        { cause: error },
+      );
     }
 
     if (!current.isActive) {
-      throw new Error(`MCP server ${server.name} is not active`);
+      throw new Error(`MCP server ${current.name} is not active`);
     }
     if (isMcpToolDisabledBySource(current, { name: rawToolName })) {
-      throw new Error(`MCP tool ${label} is disabled`);
+      throw new Error(`MCP tool ${current.name}/${rawToolName} is disabled`);
     }
+    return current;
   }
 
-  private wrapTool(rawTool: Tool, server: McpServer, rawToolName: string): Tool {
-    // `|| DEFAULT` rather than `??`: a stored 0 means "unset" here, matching
-    // desktop. Treating it as a real timeout would fail every call instantly.
-    const timeoutMs = (server.timeout || DEFAULT_MCP_TIMEOUT_SECONDS) * 1000;
+  private wrapTool(
+    rawTool: Tool,
+    server: McpServer,
+    rawToolName: string,
+    state: ServerRuntimeState,
+  ): Tool {
     const execute = rawTool.execute;
     if (!execute) {
       return rawTool;
     }
 
-    const label = `${server.name}/${rawToolName}`;
-
     const wrappedExecute = async (
       ...callArgs: Parameters<typeof execute>
     ): Promise<McpCallToolResult> => {
-      await this.assertToolStillAllowed(server, rawToolName, label);
+      const current = await this.assertToolStillAllowed(server, rawToolName);
+      if (this.getRuntimeState(current) !== state) {
+        throw new Error(`MCP server ${current.name} was reconfigured before the tool call`);
+      }
+
+      const label = `${current.name}/${rawToolName}`;
+      // `|| DEFAULT` rather than `??`: a stored 0 means "unset" here, matching
+      // desktop. Treating it as a real timeout would fail every call instantly.
+      const timeoutMs = (current.timeout || DEFAULT_MCP_TIMEOUT_SECONDS) * 1000;
 
       let result: McpCallToolResult;
       try {
@@ -488,14 +561,15 @@ export class McpService {
           timeoutMs,
           `MCP tool ${label}`,
           // A timed-out connection may be wedged — don't let later calls reuse it.
-          () => this.dropClient(server),
+          () => this.resetConnection(state),
+          state.timeoutCancellations,
         )) as McpCallToolResult;
       } catch (error) {
         // Any transport/protocol failure means the pooled client is suspect;
         // dropping here is what keeps a dead session from sticking around for
         // the rest of the cache TTL. The call itself is not retried — MCP tool
         // calls are not guaranteed idempotent.
-        this.dropClient(server);
+        this.resetConnection(state);
         if (error instanceof McpTimeoutError) {
           // Nothing was cancelled: no signal reaches the server, so the work may
           // still be running. Say so, or the model retries a write it already made.
@@ -509,7 +583,7 @@ export class McpService {
       if (result === undefined || result === null) {
         // Returning this would be reported to the model as an empty success,
         // which reads as a confident "nothing found".
-        this.dropClient(server);
+        this.resetConnection(state);
         throw new Error(`MCP tool ${label} returned no result`);
       }
       if (result.isError) {

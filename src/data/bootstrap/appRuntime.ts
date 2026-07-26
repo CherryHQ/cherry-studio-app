@@ -27,10 +27,11 @@ export async function runPostReadyTasks(services: DataServices) {
   // The catch lives here, not in callers: they `void` this promise, so a task
   // added below without its own handling would become an unhandled rejection.
   try {
-    await reconcileStalePendingMessages(services);
-    // The chat path reads MCP tools from cache only, and that cache starts cold
-    // on every launch — warm it here so the first message can already use them.
-    await services.mcp.prewarmActiveServers();
+    await Promise.all([
+      reconcileStalePendingMessages(services),
+      // The chat path is cache-only, so warm tools off the startup critical path.
+      services.mcp.prewarmActiveServers(),
+    ]);
   } catch (error) {
     logger.error('Post-ready tasks failed', error as Error);
   }

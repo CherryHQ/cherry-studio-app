@@ -46,50 +46,71 @@ export function useMcpServerMutations() {
   const services = useDataServices();
   const queryClient = useQueryClient();
 
-  const invalidateServers = useCallback(
-    async (serverId?: string) => {
-      // Config changed — drop the runtime client/tools cache before refetching.
-      if (serverId) {
-        services.mcp.invalidateServer(serverId);
+  const invalidateServerQueries = useCallback(
+    async (serverId: string, includeTools = false) => {
+      const invalidations = [
+        queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.detail(serverId) }),
+      ];
+      if (includeTools) {
+        invalidations.push(
+          queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.tools(serverId) }),
+        );
       }
-
-      await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() });
-
-      if (serverId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.detail(serverId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.tools(serverId) });
-      }
-
-      // The chat path only reads cached tools, and the cache was just cleared
-      // (or, for a brand-new server, never filled). Without this the first
-      // message after saving silently has no tools from it.
-      await services.mcp.prewarmActiveServers();
+      await Promise.all(invalidations);
     },
-    [queryClient, services],
+    [queryClient],
   );
 
   const createMutation = useMutation({
     mutationFn: (dto: CreateMcpServerDto) => services.mcpServer.create(dto),
-    onSuccess: (server) => invalidateServers(server.id),
+    onSuccess: async (server) => {
+      await Promise.all([
+        invalidateServerQueries(server.id),
+        ...(server.isActive ? [services.mcp.prewarmActiveServers()] : []),
+      ]);
+    },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: UpdateMcpServerDto }) => {
+    mutationFn: async ({ id, patch }: { id: string; patch: UpdateMcpServerDto }) => {
       if (!id) {
         throw new Error('updateMcpServer called with empty id');
       }
 
-      return services.mcpServer.update(id, patch);
+      const previous = hasRuntimeRelevantPatch(patch)
+        ? await services.mcpServer.getById(id)
+        : undefined;
+      const server = await services.mcpServer.update(id, patch);
+      return { previous, server };
     },
-    onSuccess: (server) => invalidateServers(server.id),
+    onSuccess: async ({ previous, server }) => {
+      const transportChanged = previous ? !hasSameTransport(previous, server) : false;
+      const becameActive = previous ? !previous.isActive && server.isActive : false;
+      const becameInactive = previous ? previous.isActive && !server.isActive : false;
+
+      if (transportChanged || becameInactive) {
+        services.mcp.invalidateServer(server.id);
+      }
+
+      await Promise.all([
+        invalidateServerQueries(server.id, transportChanged),
+        ...(server.isActive && (transportChanged || becameActive)
+          ? [services.mcp.prewarmActiveServers()]
+          : []),
+      ]);
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => services.mcpServer.delete(id),
     onSuccess: async (_data, id) => {
-      await invalidateServers(id);
+      services.mcp.invalidateServer(id);
       // Junction rows are gone; assistants referencing this server changed too.
-      await queryClient.invalidateQueries({ queryKey: queryKeys.assistants.all() });
+      await Promise.all([
+        invalidateServerQueries(id),
+        queryClient.invalidateQueries({ queryKey: queryKeys.assistants.all() }),
+      ]);
     },
   });
 
@@ -99,7 +120,8 @@ export function useMcpServerMutations() {
   );
 
   const updateServer = useCallback(
-    (id: string, patch: UpdateMcpServerDto) => updateMutation.mutateAsync({ id, patch }),
+    async (id: string, patch: UpdateMcpServerDto) =>
+      (await updateMutation.mutateAsync({ id, patch })).server,
     [updateMutation],
   );
 
@@ -115,8 +137,21 @@ export function useMcpServerMutations() {
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
-    createMutation,
-    updateMutation,
-    deleteMutation,
   };
+}
+
+function hasRuntimeRelevantPatch(patch: UpdateMcpServerDto): boolean {
+  return patch.baseUrl !== undefined || patch.headers !== undefined || patch.isActive !== undefined;
+}
+
+function hasSameTransport(left: McpServer, right: McpServer): boolean {
+  if (left.baseUrl !== right.baseUrl) {
+    return false;
+  }
+
+  const leftHeaders = Object.entries(left.headers);
+  return (
+    leftHeaders.length === Object.keys(right.headers).length &&
+    leftHeaders.every(([name, value]) => right.headers[name] === value)
+  );
 }
