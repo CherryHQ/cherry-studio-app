@@ -315,6 +315,9 @@ importers:
       '@babel/preset-typescript':
         specifier: ^7.27.1
         version: 7.29.7(@babel/core@7.29.7)
+      '@babel/traverse':
+        specifier: ^7.29.7
+        version: 7.29.7
       '@biomejs/biome':
         specifier: ^2.4.15
         version: 2.4.15
