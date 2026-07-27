@@ -6,7 +6,7 @@ import { useThemeColor } from 'heroui-native/hooks';
 import { Input } from 'heroui-native/input';
 import { useToast } from 'heroui-native/toast';
 import { SaveIcon } from 'lucide-uniwind/png';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
@@ -27,6 +27,7 @@ export default function ProfileSettingsScreen() {
   const inputRef = useRef<TextInput>(null);
   const [userName, setUserName] = usePreference('app.user.name');
   const [avatar, setAvatar] = usePreference('app.user.avatar');
+  const [nameDraft, setNameDraft] = useState(userName);
   const avatarActions = useMemo<MenuAction[]>(
     () => [
       {
@@ -128,14 +129,11 @@ export default function ProfileSettingsScreen() {
   }, []);
   const finishEditing = useCallback(() => {
     blurInput();
+    if (nameDraft !== userName) {
+      void setUserName(nameDraft, { optimistic: true });
+    }
     router.back();
-  }, [blurInput, router]);
-  const handleNameChange = useCallback(
-    (nextName: string) => {
-      void setUserName(nextName, { optimistic: true });
-    },
-    [setUserName],
-  );
+  }, [blurInput, nameDraft, router, setUserName, userName]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
@@ -177,14 +175,14 @@ export default function ProfileSettingsScreen() {
               accessibilityLabel={t('settings.profile.userName')}
               autoCorrect={false}
               className="rounded-2xl px-4 text-base text-foreground leading-5"
-              onChangeText={handleNameChange}
+              onChangeText={setNameDraft}
               onSubmitEditing={blurInput}
               placeholderColorClassName="accent-muted"
               ref={inputRef}
               returnKeyLabel="done"
               returnKeyType="done"
               style={[styles.input, { borderColor }]}
-              value={userName}
+              value={nameDraft}
             />
           </View>
         </View>
