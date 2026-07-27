@@ -6,7 +6,7 @@ import { Accordion } from 'heroui-native/accordion';
 import { Button } from 'heroui-native/button';
 import { Input } from 'heroui-native/input';
 import { useToast } from 'heroui-native/toast';
-import { EyeIcon, EyeOffIcon, ImageUpIcon, RotateCcwIcon, SaveIcon } from 'lucide-uniwind/png';
+import { EyeIcon, EyeOffIcon, ImageUpIcon, RotateCcwIcon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
@@ -128,8 +128,12 @@ export default function NewProviderScreen() {
         },
         onSuccess: (providerId) => {
           router.replace({
-            params: { providerId, providerName: trimmedName },
-            pathname: '/settings/provider/[providerId]',
+            params: {
+              providerId,
+              providerName: trimmedName,
+              returnToConfiguration: 'true',
+            },
+            pathname: '/settings/provider/[providerId]/model-pull',
           });
         },
       },
@@ -153,10 +157,9 @@ export default function NewProviderScreen() {
     () => [
       {
         accessibilityLabel: t('common.save'),
-        androidIcon: SaveIcon,
         disabled: !canSubmit || createProviderMutation.isPending,
-        icon: 'checkmark',
         key: 'finish-new-provider',
+        label: t('common.save'),
         onPress: handleFinish,
       },
     ],

@@ -7,12 +7,16 @@ import AssistantDetailScreen from '../AssistantDetailScreen';
 type HeaderAction = { key: string; label?: string; onPress?: () => void };
 
 const mockPush = jest.fn();
+const mockDismissTo = jest.fn();
+const mockSetBottomTabBarHidden = jest.fn();
 let mockAssistantId: string | undefined;
 let mockAssistant: Assistant | undefined;
 let mockError: Error | undefined;
 let mockIsLoading = false;
 let mockModelItem: { model: { name: string } } | null = null;
+let mockOnBack: (() => void) | undefined;
 let mockRedirectHref: string | undefined;
+let mockReturnTopicId: string | undefined;
 let mockRightActions: readonly HeaderAction[] = [];
 
 jest.mock('expo-router', () => ({
@@ -20,12 +24,22 @@ jest.mock('expo-router', () => ({
     mockRedirectHref = href;
     return null;
   },
-  useLocalSearchParams: () => ({ assistantId: mockAssistantId }),
-  useRouter: () => ({ push: mockPush }),
+  useLocalSearchParams: () => ({
+    assistantId: mockAssistantId,
+    returnTopicId: mockReturnTopicId,
+  }),
+  useRouter: () => ({ dismissTo: mockDismissTo, push: mockPush }),
 }));
 
 jest.mock('@/components/headers', () => ({
-  BackHeader: ({ rightActions }: { rightActions?: readonly HeaderAction[] }) => {
+  BackHeader: ({
+    onBack,
+    rightActions,
+  }: {
+    onBack?: () => void;
+    rightActions?: readonly HeaderAction[];
+  }) => {
+    mockOnBack = onBack;
     mockRightActions = rightActions ?? [];
     return null;
   },
@@ -44,6 +58,10 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@/components/modelPicker', () => ({
   ModelPickerIcon: () => null,
   useModelPickerData: () => ({ getModelItem: () => mockModelItem }),
+}));
+
+jest.mock('@/components/navigation', () => ({
+  useSetBottomTabBarHidden: () => mockSetBottomTabBarHidden,
 }));
 
 jest.mock('@/hooks/chat', () => ({
@@ -113,7 +131,9 @@ describe('AssistantDetailScreen', () => {
     mockError = undefined;
     mockIsLoading = false;
     mockModelItem = null;
+    mockOnBack = undefined;
     mockRedirectHref = undefined;
+    mockReturnTopicId = undefined;
     mockRightActions = [];
   });
 
@@ -132,6 +152,18 @@ describe('AssistantDetailScreen', () => {
     expect(texts).toContain('Peanut');
     // The live catalog entry wins over the denormalized `modelName` snapshot.
     expect(texts).toContain('GPT-5 Pro');
+  });
+
+  it('hides the bottom tabs while the detail screen is mounted', async () => {
+    mockAssistant = makeAssistant();
+
+    await render();
+    expect(mockSetBottomTabBarHidden).toHaveBeenCalledWith(true);
+
+    await act(async () => renderer?.unmount());
+    renderer = undefined;
+
+    expect(mockSetBottomTabBarHidden).toHaveBeenLastCalledWith(false);
   });
 
   it('falls back to the stored model name when the model left the catalog', async () => {
@@ -190,6 +222,19 @@ describe('AssistantDetailScreen', () => {
 
     expect(mockPush).toHaveBeenCalledWith({
       params: { assistantId: 'assistant-1' },
+      pathname: '/topics',
+    });
+  });
+
+  it('returns directly to the originating chat when opened from a topic', async () => {
+    mockAssistant = makeAssistant();
+    mockReturnTopicId = 'topic-1';
+
+    await render();
+    mockOnBack?.();
+
+    expect(mockDismissTo).toHaveBeenCalledWith({
+      params: { topicId: 'topic-1' },
       pathname: '/topics',
     });
   });

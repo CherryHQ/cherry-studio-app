@@ -2,12 +2,12 @@ import { Stack, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useMainHeaderTopicActions } from './useMainHeaderTopicActions';
+import { MainHeaderAssistantButton, useMainHeaderAssistant } from './MainHeaderAssistantButton';
 
 export function MainHeader() {
   const { t } = useTranslation();
   const router = useRouter();
-  const topicActions = useMainHeaderTopicActions();
+  const { assistant, openAssistant } = useMainHeaderAssistant();
 
   const openNewTopic = useCallback(() => {
     router.setParams({ topicId: undefined });
@@ -28,25 +28,12 @@ export function MainHeader() {
           icon="square.and.pencil"
           onPress={openNewTopic}
         />
-        <Stack.Toolbar.Menu
-          accessibilityLabel={t('topic.actions.more')}
-          hidden={!topicActions.isTopicActionsVisible}
-          icon="ellipsis.circle"
-        >
-          <Stack.Toolbar.MenuAction icon="pencil" onPress={topicActions.openRenameTopic}>
-            {t('topic.actions.rename')}
-          </Stack.Toolbar.MenuAction>
-          <Stack.Toolbar.MenuAction
-            disabled={topicActions.isPinActionDisabled}
-            icon={topicActions.isTopicPinned ? 'pin.slash' : 'pin'}
-            isOn={topicActions.isTopicPinned}
-            onPress={() => void topicActions.toggleTopicPin()}
-          >
-            {t(topicActions.isTopicPinned ? 'topic.actions.unpin' : 'topic.actions.pin')}
-          </Stack.Toolbar.MenuAction>
-        </Stack.Toolbar.Menu>
+        {assistant ? (
+          <Stack.Toolbar.View>
+            <MainHeaderAssistantButton assistant={assistant} onPress={openAssistant} />
+          </Stack.Toolbar.View>
+        ) : null}
       </Stack.Toolbar>
-      {topicActions.renameTopicDialog}
     </>
   );
 }

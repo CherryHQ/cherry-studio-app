@@ -74,7 +74,7 @@ export function useConfirmDialog() {
                 <Text className="text-foreground text-sm">{t('common.cancel')}</Text>
               </Button>
               <Button
-                className="min-w-20 rounded-xl"
+                className="min-w-20 rounded-xl disabled:opacity-100"
                 isDisabled={isConfirming}
                 size="sm"
                 variant="danger"
@@ -83,7 +83,7 @@ export function useConfirmDialog() {
                 }}
               >
                 <View className="min-w-0 flex-row items-center justify-center gap-2">
-                  {isConfirming ? <Spinner size="sm" /> : null}
+                  {isConfirming ? <Spinner color="white" size="sm" /> : null}
                   <Text className="text-sm text-white">{t('common.remove')}</Text>
                 </View>
               </Button>

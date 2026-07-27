@@ -1,11 +1,16 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Spinner } from 'heroui-native/spinner';
-import { SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
+import { useToast } from 'heroui-native/toast';
+import { PlusIcon, SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
+import { useConfirmDialog } from '@/components/confirmDialog';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
+import { queryKeys } from '@/data/api';
+import { useDataMutation } from '@/data/hooks';
+import { canDeleteProvider } from '@/data/services/ProviderService';
 import { openExternalUrl } from '@/utils/openExternalUrl';
 import {
   buildApiKeysInputFromEntries,
@@ -19,6 +24,9 @@ import {
 import { ProviderApiManagementSection } from './components/ProviderApiManagementSection';
 import { ProviderModelList } from './components/ProviderModelList';
 import { useProviderDetailSettings } from './detail';
+import { ProviderDetailChrome } from './detail/components/ProviderDetailChrome/ProviderDetailChrome';
+import { ProviderDetailTabs } from './detail/components/ProviderDetailTabs/ProviderDetailTabs';
+import type { ProviderDetailTab } from './detail/components/ProviderDetailTabs/types';
 import { ProviderModelCheckSheet } from './models/components/ProviderModelCheckSheet';
 import { useProviderModelCheck } from './models/hooks/useProviderModelCheck';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
@@ -31,9 +39,20 @@ export default function ProviderDetailSettingsScreen() {
   }>();
   const { t } = useTranslation();
   const router = useRouter();
+  const { toast } = useToast();
+  const { confirmDialog, requestConfirm } = useConfirmDialog();
   const [apiKeysVisible, setApiKeysVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
+  const deleteProviderMutation = useDataMutation({
+    invalidateQueries: [
+      queryKeys.providers.list(),
+      queryKeys.providers.list({ enabled: true }),
+      queryKeys.providers.list({ enabled: false }),
+    ],
+    mutationFn: (services, id: string) => services.provider.delete(id),
+  });
   const { apiKeys, apiKeysQuery, authConfig, authConfigQuery } = useProviderApiServiceQueries(
     providerId ?? '',
   );
@@ -84,22 +103,7 @@ export default function ProviderDetailSettingsScreen() {
 
     void openExternalUrl(officialWebsite);
   }, [officialWebsite]);
-  const rightActions = useMemo<HeaderToolbarAction[]>(
-    () =>
-      officialWebsite
-        ? [
-            {
-              accessibilityLabel: t('common.officialWebsite'),
-              androidIcon: SquareArrowOutUpRightIcon,
-              icon: 'arrow.up.right.square',
-              key: 'official-website',
-              onPress: openOfficialWebsite,
-            },
-          ]
-        : [],
-    [officialWebsite, openOfficialWebsite, t],
-  );
-  const openEndpointSettings = () => {
+  const openEndpointSettings = useCallback(() => {
     if (!providerId) {
       return;
     }
@@ -111,8 +115,8 @@ export default function ProviderDetailSettingsScreen() {
       },
       pathname: '/settings/provider/[providerId]/endpoint-settings',
     });
-  };
-  const openApiKeySettings = () => {
+  }, [provider, providerId, router]);
+  const openApiKeySettings = useCallback(() => {
     if (!providerId) {
       return;
     }
@@ -124,8 +128,8 @@ export default function ProviderDetailSettingsScreen() {
       },
       pathname: '/settings/provider/[providerId]/api-key-settings',
     });
-  };
-  const openModelAddSettings = () => {
+  }, [provider, providerId, router]);
+  const openModelAddSettings = useCallback(() => {
     if (!providerId) {
       return;
     }
@@ -137,8 +141,8 @@ export default function ProviderDetailSettingsScreen() {
       },
       pathname: '/settings/provider/[providerId]/model-add',
     });
-  };
-  const openModelPullSettings = async () => {
+  }, [provider, providerId, router]);
+  const openModelPullSettings = useCallback(async () => {
     if (!providerId) {
       return;
     }
@@ -155,7 +159,66 @@ export default function ProviderDetailSettingsScreen() {
       },
       pathname: '/settings/provider/[providerId]/model-pull',
     });
-  };
+  }, [loadPullPreview, provider, providerId, router]);
+  const configurationActions = useMemo<HeaderToolbarAction[]>(
+    () =>
+      officialWebsite
+        ? [
+            {
+              accessibilityLabel: t('common.officialWebsite'),
+              androidIcon: SquareArrowOutUpRightIcon,
+              icon: 'arrow.up.right.square',
+              key: 'official-website',
+              onPress: openOfficialWebsite,
+            },
+          ]
+        : [],
+    [officialWebsite, openOfficialWebsite, t],
+  );
+  const modelActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('settings.provider.models.add'),
+        androidIcon: PlusIcon,
+        disabled: !provider,
+        icon: 'plus',
+        key: 'add-model',
+        onPress: openModelAddSettings,
+      },
+    ],
+    [openModelAddSettings, provider, t],
+  );
+  const handleToggleProvider = useCallback(() => {
+    if (!provider) {
+      return;
+    }
+
+    updateProviderEnabledMutation.mutate(!provider.isEnabled);
+  }, [provider, updateProviderEnabledMutation]);
+  const handleDeleteProvider = useCallback(async () => {
+    if (!providerId) {
+      return;
+    }
+
+    try {
+      await deleteProviderMutation.mutateAsync(providerId);
+      toast.show({ label: t('settings.provider.toast.deleted'), variant: 'success' });
+      router.back();
+    } catch {
+      toast.show({ label: t('settings.provider.toast.deleteFailed'), variant: 'danger' });
+    }
+  }, [deleteProviderMutation, providerId, router, t, toast]);
+  const requestDeleteProvider = useCallback(() => {
+    if (!provider || !canDeleteProvider(provider)) {
+      return;
+    }
+
+    requestConfirm({
+      message: t('settings.provider.delete.message', { name: provider.name }),
+      onConfirm: handleDeleteProvider,
+      title: t('settings.provider.delete.title'),
+    });
+  }, [handleDeleteProvider, provider, requestConfirm, t]);
 
   if (!providerId || providerQuery.isError) {
     return <Redirect href="/settings/provider" />;
@@ -165,7 +228,7 @@ export default function ProviderDetailSettingsScreen() {
     return (
       <>
         <BackHeader
-          rightActions={rightActions}
+          rightActions={configurationActions}
           title={providerName ?? t('settings.pages.provider.title')}
         />
         <View className="flex-1 items-center justify-center">
@@ -178,44 +241,51 @@ export default function ProviderDetailSettingsScreen() {
   return (
     <>
       <BackHeader
-        rightActions={rightActions}
-        title={providerName ?? t('settings.pages.provider.title')}
-      />
-      <ProviderModelList
-        header={
-          <View>
-            <ProviderApiManagementSection
-              apiKeysInput={apiKeysInput}
-              apiKeysVisible={apiKeysVisible}
-              baseUrl={getProviderPrimaryBaseUrl(provider)}
-              isUpdatingEnabled={updateProviderEnabledMutation.isPending}
-              provider={provider}
-              showApiKeys={showApiKeys}
-              showBaseUrl={canEditEndpoint}
-              onApiKeysManagePress={openApiKeySettings}
-              onApiKeysVisibleToggle={() => setApiKeysVisible((visible) => !visible)}
-              onBaseUrlManagePress={openEndpointSettings}
-              onEnabledChange={(enabled) => updateProviderEnabledMutation.mutate(enabled)}
-            />
-          </View>
+        rightActions={activeTab === 'models' ? modelActions : configurationActions}
+        title={providerName ?? t('settings.provider.tabs.configuration')}
+        titleElement={
+          provider ? <ProviderDetailTabs onTabChange={setActiveTab} tab={activeTab} /> : undefined
         }
-        isLoading={modelsQuery.isPending}
-        models={models}
-        provider={provider}
-        toolbarActions={{
-          add: { isDisabled: !provider, onPress: openModelAddSettings },
-          check: {
-            isDisabled: models.length === 0,
-            isLoading: isModelChecking,
-            onPress: openCheckSheet,
-          },
-          pull: {
-            isDisabled: !provider || isModelPullLoading,
-            isLoading: isModelPullLoading,
-            onPress: () => void openModelPullSettings(),
-          },
-        }}
       />
+      {activeTab === 'configuration' ? (
+        <ScrollView
+          alwaysBounceVertical={false}
+          contentContainerStyle={styles.configurationContent}
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
+          style={styles.screen}
+        >
+          <ProviderApiManagementSection
+            apiKeysInput={apiKeysInput}
+            apiKeysVisible={apiKeysVisible}
+            baseUrl={getProviderPrimaryBaseUrl(provider)}
+            provider={provider}
+            showApiKeys={showApiKeys}
+            showBaseUrl={canEditEndpoint}
+            onApiKeysManagePress={openApiKeySettings}
+            onApiKeysVisibleToggle={() => setApiKeysVisible((visible) => !visible)}
+            onBaseUrlManagePress={openEndpointSettings}
+          />
+        </ScrollView>
+      ) : (
+        <ProviderModelList
+          isLoading={modelsQuery.isPending}
+          models={models}
+          provider={provider}
+          toolbarActions={{
+            check: {
+              isDisabled: models.length === 0,
+              isLoading: isModelChecking,
+              onPress: openCheckSheet,
+            },
+            pull: {
+              isDisabled: !provider || isModelPullLoading,
+              isLoading: isModelPullLoading,
+              onPress: () => void openModelPullSettings(),
+            },
+          }}
+        />
+      )}
       <ProviderModelCheckSheet
         apiKeyOptions={checkApiKeyOptions}
         isChecking={isModelChecking}
@@ -228,6 +298,28 @@ export default function ProviderDetailSettingsScreen() {
         onModelChange={setSelectedCheckModelId}
         onStart={startModelCheck}
       />
+      {provider ? (
+        <ProviderDetailChrome
+          canDelete={canDeleteProvider(provider)}
+          isActive={provider.isEnabled}
+          isDisabled={updateProviderEnabledMutation.isPending || deleteProviderMutation.isPending}
+          onDelete={requestDeleteProvider}
+          onToggleActive={handleToggleProvider}
+        />
+      ) : null}
+      {confirmDialog}
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  configurationContent: {
+    gap: 20,
+    paddingBottom: 96,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+  },
+  screen: {
+    flex: 1,
+  },
+});

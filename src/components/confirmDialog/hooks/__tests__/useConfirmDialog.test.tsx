@@ -41,7 +41,9 @@ jest.mock('heroui-native/spinner', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
   return {
-    Spinner: () => <MockView testID="confirm-dialog-spinner" />,
+    Spinner: (props: Record<string, unknown>) => (
+      <MockView {...props} testID="confirm-dialog-spinner" />
+    ),
   };
 });
 
@@ -93,6 +95,10 @@ describe('useConfirmDialog', () => {
     });
 
     expect(renderer?.root.findByProps({ testID: 'confirm-dialog-spinner' })).toBeDefined();
+    expect(renderer?.root.findByProps({ testID: 'confirm-dialog-spinner' }).props.color).toBe(
+      'white',
+    );
+    expect(findDangerButton()?.props.className).toContain('disabled:opacity-100');
     expect(findDangerButton()?.props.isDisabled).toBe(true);
     expect(findCancelButton()?.props.isDisabled).toBe(true);
 

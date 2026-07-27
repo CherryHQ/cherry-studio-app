@@ -1,12 +1,13 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Button } from 'heroui-native/button';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { ModelPickerIcon, useModelPickerData } from '@/components/modelPicker';
+import { useSetBottomTabBarHidden } from '@/components/navigation';
 import { screenBottomActionInset } from '@/config/constants';
 import type { Assistant } from '@/data/types/assistant';
 import { useAssistantApiById } from '@/hooks/chat';
@@ -15,9 +16,28 @@ export default function AssistantDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { assistantId } = useLocalSearchParams<{ assistantId: string }>();
+  const setBottomTabBarHidden = useSetBottomTabBarHidden();
+  const { assistantId, returnTopicId } = useLocalSearchParams<{
+    assistantId: string;
+    returnTopicId?: string;
+  }>();
   const { assistant, error, isLoading } = useAssistantApiById(assistantId);
 
+  useEffect(() => {
+    setBottomTabBarHidden(true);
+    return () => setBottomTabBarHidden(false);
+  }, [setBottomTabBarHidden]);
+
+  const returnToTopic = useCallback(() => {
+    if (!returnTopicId) {
+      return;
+    }
+
+    router.dismissTo({
+      params: { topicId: returnTopicId },
+      pathname: '/topics',
+    });
+  }, [returnTopicId, router]);
   const openEditAssistant = useCallback(() => {
     router.push({
       params: { assistantId },
@@ -47,7 +67,7 @@ export default function AssistantDetailScreen() {
 
   return (
     <>
-      <BackHeader rightActions={rightActions} />
+      <BackHeader onBack={returnTopicId ? returnToTopic : undefined} rightActions={rightActions} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

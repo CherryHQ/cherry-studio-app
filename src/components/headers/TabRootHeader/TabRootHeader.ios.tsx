@@ -18,6 +18,21 @@ function renderHeaderAction(action: HeaderToolbarAction): ReactNode {
     return null;
   }
 
+  if (action.label) {
+    return (
+      <Stack.Toolbar.Button
+        accessibilityLabel={action.accessibilityLabel ?? action.label}
+        disabled={action.disabled}
+        key={action.key}
+        onPress={action.onPress}
+        tintColor={action.tintColor}
+        variant={action.variant}
+      >
+        {action.label}
+      </Stack.Toolbar.Button>
+    );
+  }
+
   return (
     <Stack.Toolbar.Button
       accessibilityLabel={action.accessibilityLabel}
@@ -31,12 +46,17 @@ function renderHeaderAction(action: HeaderToolbarAction): ReactNode {
   );
 }
 
-export function TabRootHeader({ rightActions, title }: TabRootHeaderProps) {
+export function TabRootHeader({ leftActions, rightActions, title }: TabRootHeaderProps) {
   const options = useMemo(() => ({ headerBackVisible: false, title }), [title]);
 
   return (
     <>
       <Stack.Screen options={options} />
+      {leftActions && leftActions.length > 0 ? (
+        <Stack.Toolbar placement="left">
+          {leftActions.map((action) => renderHeaderAction(action))}
+        </Stack.Toolbar>
+      ) : null}
       {rightActions && rightActions.length > 0 ? (
         <Stack.Toolbar placement="right">
           {rightActions.map((action) => renderHeaderAction(action))}

@@ -65,7 +65,11 @@ type PullListExtraData = {
 const pullModelEstimatedRowHeight = 58;
 
 export default function ProviderModelPullScreen() {
-  const { providerId } = useLocalSearchParams<{ providerId?: string; providerName?: string }>();
+  const { providerId, providerName, returnToConfiguration } = useLocalSearchParams<{
+    providerId?: string;
+    providerName?: string;
+    returnToConfiguration?: string;
+  }>();
   const { t } = useTranslation();
   const router = useRouter();
   const [initialPreview] = useState(() =>
@@ -79,6 +83,20 @@ export default function ProviderModelPullScreen() {
       provider,
       providerId: providerId ?? '',
     });
+  const leavePullScreen = useCallback(() => {
+    if (providerId && returnToConfiguration === 'true') {
+      router.replace({
+        params: {
+          ...(providerName ? { providerName } : {}),
+          providerId,
+        },
+        pathname: '/settings/provider/[providerId]',
+      });
+      return;
+    }
+
+    router.back();
+  }, [providerId, providerName, returnToConfiguration, router]);
 
   useEffect(() => {
     if (!provider || !providerId || loadStartedRef.current) {
@@ -93,14 +111,14 @@ export default function ProviderModelPullScreen() {
       }
 
       if (result !== 'ready') {
-        router.back();
+        leavePullScreen();
       }
     });
 
     return () => {
       isActive = false;
     };
-  }, [loadPullPreview, provider, providerId, router]);
+  }, [leavePullScreen, loadPullPreview, provider, providerId]);
 
   if (!providerId || providerQuery.isError) {
     return <Redirect href="/settings/provider" />;
@@ -117,7 +135,7 @@ export default function ProviderModelPullScreen() {
           onApply={async (payload) => {
             const didApply = await applyPullPreview(payload);
             if (didApply) {
-              router.back();
+              leavePullScreen();
             }
           }}
         />
@@ -502,7 +520,7 @@ function PullApplyFooter({
         <View className="min-w-0 flex-row items-center justify-center gap-2">
           {applyingSection === 'added' ? <Spinner size="sm" /> : null}
           <Text className="font-medium text-sm text-white" numberOfLines={1}>
-            {t('settings.provider.models.pullAddSelected', { count: selectedAddedCount })}
+            {t('settings.provider.models.pullApplySelected')}
           </Text>
         </View>
       </Button>

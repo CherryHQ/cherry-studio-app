@@ -1,7 +1,7 @@
 import { useThemeColor } from 'heroui-native/hooks';
 import { Spinner } from 'heroui-native/spinner';
 import { cn } from 'heroui-native/utils';
-import { ActivityIcon, DownloadIcon, PlusIcon } from 'lucide-uniwind/png';
+import { ActivityIcon, DownloadIcon } from 'lucide-uniwind/png';
 import type { ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
@@ -13,7 +13,6 @@ export type ProviderModelToolbarActionState = {
 };
 
 export type ProviderModelToolbarActions = {
-  add?: ProviderModelToolbarActionState;
   check?: ProviderModelToolbarActionState;
   pull?: ProviderModelToolbarActionState;
 };
@@ -33,35 +32,29 @@ const toolbarActionDefs: readonly {
     showLabel: false,
   },
   { icon: DownloadIcon, key: 'pull', labelKey: 'settings.provider.models.pull', showLabel: true },
-  { icon: PlusIcon, key: 'add', labelKey: 'settings.provider.models.add', showLabel: true },
 ];
 
 export function ProviderModelToolbar({ actions }: { actions: ProviderModelToolbarActions }) {
   const { t } = useTranslation();
 
   return (
-    <View className="flex-row items-center justify-between gap-3 px-1">
-      <Text className="font-medium text-default-foreground text-sm">
-        {t('settings.provider.models.title')}
-      </Text>
-      <View className="flex-row items-center gap-2">
-        {toolbarActionDefs.map((actionDef) => {
-          const label = t(actionDef.labelKey);
-          const state = actions[actionDef.key];
+    <View className="flex-row items-center justify-end gap-2 px-1">
+      {toolbarActionDefs.map((actionDef) => {
+        const label = t(actionDef.labelKey);
+        const state = actions[actionDef.key];
 
-          return (
-            <ModelActionButton
-              key={actionDef.key}
-              accessibilityLabel={label}
-              icon={actionDef.icon}
-              isDisabled={state?.isDisabled ?? false}
-              isLoading={state?.isLoading ?? false}
-              label={actionDef.showLabel ? label : undefined}
-              onPress={state?.onPress}
-            />
-          );
-        })}
-      </View>
+        return (
+          <ModelActionButton
+            key={actionDef.key}
+            accessibilityLabel={label}
+            icon={actionDef.icon}
+            isDisabled={state?.isDisabled ?? false}
+            isLoading={state?.isLoading ?? false}
+            label={actionDef.showLabel ? label : undefined}
+            onPress={state?.onPress}
+          />
+        );
+      })}
     </View>
   );
 }

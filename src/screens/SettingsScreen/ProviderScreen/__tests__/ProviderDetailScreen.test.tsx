@@ -42,11 +42,29 @@ jest.mock('expo-router', () => ({
     return null;
   },
   useLocalSearchParams: () => ({ providerId: mockProviderId }),
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
+}));
+
+jest.mock('@/components/confirmDialog', () => ({
+  useConfirmDialog: () => ({ confirmDialog: null, requestConfirm: jest.fn() }),
 }));
 
 jest.mock('@/components/headers', () => ({
   BackHeader: () => null,
+}));
+
+jest.mock('@/data/api', () => ({
+  queryKeys: {
+    providers: { list: jest.fn(() => ['providers']) },
+  },
+}));
+
+jest.mock('@/data/hooks', () => ({
+  useDataMutation: () => ({ isPending: false, mutateAsync: jest.fn() }),
+}));
+
+jest.mock('@/data/services/ProviderService', () => ({
+  canDeleteProvider: () => true,
 }));
 
 jest.mock('heroui-native/spinner', () => ({
@@ -56,7 +74,12 @@ jest.mock('heroui-native/spinner', () => ({
   },
 }));
 
+jest.mock('heroui-native/toast', () => ({
+  useToast: () => ({ toast: { show: jest.fn() } }),
+}));
+
 jest.mock('lucide-uniwind/png', () => ({
+  PlusIcon: () => null,
   SquareArrowOutUpRightIcon: () => null,
 }));
 
@@ -86,6 +109,14 @@ jest.mock('../detail', () => ({
     providerQuery: mockProviderQuery,
     updateProviderEnabledMutation: { isPending: false, mutate: jest.fn() },
   }),
+}));
+
+jest.mock('../detail/components/ProviderDetailChrome/ProviderDetailChrome', () => ({
+  ProviderDetailChrome: () => null,
+}));
+
+jest.mock('../detail/components/ProviderDetailTabs/ProviderDetailTabs', () => ({
+  ProviderDetailTabs: () => null,
 }));
 
 jest.mock('../components/ProviderApiManagementSection', () => ({

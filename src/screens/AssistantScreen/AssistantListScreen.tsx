@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
-import { BotIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
-import { useCallback, useMemo, useRef } from 'react';
+import { BotIcon, CheckIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -9,6 +9,8 @@ import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, {
+  FadeInLeft,
+  FadeOutLeft,
   runOnJS,
   type SharedValue,
   useAnimatedStyle,
@@ -16,6 +18,13 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useConfirmDialog } from '@/components/confirmDialog';
 import { type HeaderToolbarAction, TabRootHeader } from '@/components/headers';
+import {
+  areAllSelected,
+  toggleSelection,
+  useMessageListBottomInset,
+} from '@/components/messageTabs';
+import { SelectionToolbar } from '@/components/messageTabs/SelectionToolbar/SelectionToolbar';
+import { useSetBottomTabBarHidden } from '@/components/navigation';
 
 import type { Assistant } from '@/data/types/assistant';
 import { useAssistantMutations, useAssistantsApi } from '@/hooks/chat';
@@ -34,6 +43,37 @@ export default function AssistantListScreen() {
   const { deleteAssistant } = useAssistantMutations();
   const { confirmDialog, requestConfirm } = useConfirmDialog();
   const { notifyClose, notifyWillOpen } = useExclusiveSwipeable();
+  const setBottomTabBarHidden = useSetBottomTabBarHidden();
+  const bottomInset = useMessageListBottomInset();
+  const [isEditing, setIsEditing] = useState(false);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
+
+  useEffect(() => {
+    if (process.env.EXPO_OS !== 'android') {
+      return;
+    }
+
+    setBottomTabBarHidden(isEditing);
+    return () => setBottomTabBarHidden(false);
+  }, [isEditing, setBottomTabBarHidden]);
+
+  const enterEditing = useCallback(() => {
+    setIsEditing(true);
+  }, []);
+  const exitEditing = useCallback(() => {
+    setIsEditing(false);
+    setSelectedIds(new Set());
+  }, []);
+  const toggleAssistant = useCallback((assistantId: string) => {
+    setSelectedIds((current) => toggleSelection(current, assistantId));
+  }, []);
+  const toggleAllAssistants = useCallback(() => {
+    const assistantIds = assistants.map((assistant) => assistant.id);
+    setSelectedIds((current) =>
+      areAllSelected(current, assistantIds) ? new Set() : new Set(assistantIds),
+    );
+  }, [assistants]);
 
   const openCreateAssistant = useCallback(() => {
     router.push('/assistants/new');
@@ -49,6 +89,18 @@ export default function AssistantListScreen() {
       },
     ],
     [openCreateAssistant, t],
+  );
+  const leftActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t(isEditing ? 'common.done' : 'common.edit'),
+        disabled: assistants.length === 0 || isBatchDeleting,
+        key: 'edit-assistants',
+        label: t(isEditing ? 'common.done' : 'common.edit'),
+        onPress: isEditing ? exitEditing : enterEditing,
+      },
+    ],
+    [assistants.length, enterEditing, exitEditing, isBatchDeleting, isEditing, t],
   );
   const openAssistantDetail = useCallback(
     (assistantId: string) => {
@@ -76,14 +128,52 @@ export default function AssistantListScreen() {
     },
     [deleteAssistant, requestConfirm, t, toast],
   );
+  const deleteSelectedAssistants = useCallback(async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) {
+      return;
+    }
+
+    setIsBatchDeleting(true);
+    try {
+      await Promise.all(ids.map((assistantId) => deleteAssistant(assistantId)));
+      exitEditing();
+    } catch {
+      toast.show({
+        label: t('assistant.selection.deleteFailed'),
+        variant: 'danger',
+      });
+    } finally {
+      setIsBatchDeleting(false);
+    }
+  }, [deleteAssistant, exitEditing, selectedIds, t, toast]);
+  const requestDeleteSelectedAssistants = useCallback(() => {
+    if (selectedIds.size === 0) {
+      return;
+    }
+
+    requestConfirm({
+      message: t('assistant.selection.deleteMessage', { count: selectedIds.size }),
+      onConfirm: deleteSelectedAssistants,
+      title: t('assistant.selection.deleteTitle'),
+    });
+  }, [deleteSelectedAssistants, requestConfirm, selectedIds.size, t]);
+  const scrollContentStyle = useMemo(
+    () => ({ paddingBottom: bottomInset, paddingHorizontal: 8 }),
+    [bottomInset],
+  );
 
   return (
     <>
-      <TabRootHeader rightActions={rightActions} title={t('assistant.list.title')} />
+      <TabRootHeader
+        leftActions={leftActions}
+        rightActions={isEditing ? undefined : rightActions}
+        title={t('assistant.list.title')}
+      />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
-        contentContainerClassName="px-2"
+        contentContainerStyle={scrollContentStyle}
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
@@ -93,11 +183,14 @@ export default function AssistantListScreen() {
               <AssistantListRow
                 key={assistant.id}
                 assistant={assistant}
+                isEditing={isEditing}
                 isLast={index === assistants.length - 1}
+                isSelected={selectedIds.has(assistant.id)}
                 notifyClose={notifyClose}
                 notifyWillOpen={notifyWillOpen}
                 onDelete={requestDeleteAssistant}
                 onOpen={openAssistantDetail}
+                onToggle={toggleAssistant}
               />
             ))}
           </View>
@@ -105,6 +198,14 @@ export default function AssistantListScreen() {
           <AssistantEmptyState isLoading={isLoading} onCreate={openCreateAssistant} />
         )}
       </ScrollView>
+      {isEditing ? (
+        <SelectionToolbar
+          isDeleting={isBatchDeleting}
+          onDelete={requestDeleteSelectedAssistants}
+          onToggleAll={toggleAllAssistants}
+          selectedCount={selectedIds.size}
+        />
+      ) : null}
       {confirmDialog}
     </>
   );
@@ -112,33 +213,50 @@ export default function AssistantListScreen() {
 
 type AssistantListRowProps = {
   assistant: Assistant;
+  isEditing: boolean;
   isLast: boolean;
+  isSelected: boolean;
   notifyClose: (swipeable: SwipeableMethods) => void;
   notifyWillOpen: (swipeable: SwipeableMethods) => void;
   onDelete: (assistant: Assistant) => void;
   onOpen: (assistantId: string) => void;
+  onToggle: (assistantId: string) => void;
 };
 
 function AssistantListRow({
   assistant,
+  isEditing,
   isLast,
+  isSelected,
   notifyClose,
   notifyWillOpen,
   onDelete,
   onOpen,
+  onToggle,
 }: AssistantListRowProps) {
   const { t } = useTranslation();
   const swipeableRef = useRef<SwipeableMethods>(null);
   const isSwipeOpen = useSharedValue(0);
   const pressProgress = useSharedValue(0);
 
+  useEffect(() => {
+    if (isEditing) {
+      swipeableRef.current?.close();
+    }
+  }, [isEditing]);
+
   const handleDeletePress = useCallback(() => {
     swipeableRef.current?.close();
     onDelete(assistant);
   }, [assistant, onDelete]);
-  const handleOpenPress = useCallback(() => {
+  const handlePress = useCallback(() => {
+    if (isEditing) {
+      onToggle(assistant.id);
+      return;
+    }
+
     onOpen(assistant.id);
-  }, [assistant.id, onOpen]);
+  }, [assistant.id, isEditing, onOpen, onToggle]);
   const handleSwipeableWillOpen = useCallback(() => {
     isSwipeOpen.value = 1;
   }, [isSwipeOpen]);
@@ -168,10 +286,10 @@ function AssistantListRow({
         })
         .onEnd((_event, success) => {
           if (success && isSwipeOpen.value === 0) {
-            runOnJS(handleOpenPress)();
+            runOnJS(handlePress)();
           }
         }),
-    [handleOpenPress, isSwipeOpen, pressProgress],
+    [handlePress, isSwipeOpen, pressProgress],
   );
   const pressedBackgroundStyle = useAnimatedStyle(() => ({
     opacity: pressProgress.value,
@@ -188,6 +306,7 @@ function AssistantListRow({
 
   return (
     <ReanimatedSwipeable
+      enabled={!isEditing}
       friction={2}
       onSwipeableClose={handleSwipeableClose}
       onSwipeableOpenStartDrag={handleSwipeableOpenStartDrag}
@@ -202,9 +321,10 @@ function AssistantListRow({
         <View
           accessibilityActions={ASSISTANT_ROW_ACCESSIBILITY_ACTIONS}
           accessibilityLabel={assistant.name}
-          accessibilityRole="button"
+          accessibilityRole={isEditing ? 'checkbox' : 'button'}
+          accessibilityState={isEditing ? { checked: isSelected } : undefined}
           accessible
-          onAccessibilityAction={handleOpenPress}
+          onAccessibilityAction={handlePress}
         >
           <View className="relative min-w-0 flex-1 flex-row items-center gap-2 py-2 pl-2">
             <Animated.View
@@ -215,12 +335,32 @@ function AssistantListRow({
             <Animated.View
               className={
                 isLast
-                  ? 'absolute inset-y-0 right-0 left-16 border-border border-y'
-                  : 'absolute top-0 right-0 left-16 border-border border-t'
+                  ? isEditing
+                    ? 'absolute inset-y-0 right-0 left-24 border-border border-y'
+                    : 'absolute inset-y-0 right-0 left-16 border-border border-y'
+                  : isEditing
+                    ? 'absolute top-0 right-0 left-24 border-border border-t'
+                    : 'absolute top-0 right-0 left-16 border-border border-t'
               }
               pointerEvents="none"
               style={borderStyle}
             />
+            {isEditing ? (
+              <Animated.View
+                entering={FadeInLeft.duration(160)}
+                exiting={FadeOutLeft.duration(120)}
+              >
+                <View
+                  className={
+                    isSelected
+                      ? 'size-6 items-center justify-center rounded-full bg-primary'
+                      : 'size-6 items-center justify-center rounded-full border-2 border-foreground-muted'
+                  }
+                >
+                  {isSelected ? <CheckIcon className="size-4 text-white" strokeWidth={3} /> : null}
+                </View>
+              </Animated.View>
+            ) : null}
             <Text className="min-w-12 h-12 text-center text-3xl leading-12">{assistant.emoji}</Text>
             <View className="min-w-0 flex-1 pr-4">
               <View className="gap-0.5">

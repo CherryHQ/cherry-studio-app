@@ -79,6 +79,9 @@ export function DrawingList() {
     },
     [openPainting],
   );
+  const handleCreatePainting = useCallback(() => {
+    router.push('/paintings');
+  }, [router]);
   const handleTemplateUse = useCallback(
     (template: PaintingTemplate) => {
       openPainting(toPaintingTemplateDraft(template));
@@ -225,9 +228,18 @@ export function DrawingList() {
           <ActivityIndicator />
         </View>
       ) : (gallery.data?.length ?? 0) === 0 ? (
-        <View className="h-32 items-center justify-center gap-2 px-6">
-          <ImageIcon className="size-7 text-foreground-muted" strokeWidth={1.5} />
-          <Text className="text-default-foreground text-sm">{t('topic.drawings.empty')}</Text>
+        <View className="h-32 items-center justify-center px-6">
+          <Pressable
+            accessibilityLabel={t('painting.history.create')}
+            accessibilityRole="button"
+            className="h-9 min-w-20 items-center justify-center rounded-xl bg-primary px-4 active:opacity-80"
+            onPress={handleCreatePainting}
+            testID="painting-history-create"
+          >
+            <Text className="font-medium text-sm text-white" numberOfLines={1}>
+              {t('painting.history.create')}
+            </Text>
+          </Pressable>
         </View>
       ) : (
         <View className="flex-row gap-1.5 px-4" testID="painting-history-masonry">

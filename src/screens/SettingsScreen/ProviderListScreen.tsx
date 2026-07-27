@@ -62,8 +62,10 @@ export default function ProviderSettingsScreen() {
             params: { providerId: provider.id, providerName: provider.name },
           });
         },
+        statusLabel: provider.isEnabled ? t('settings.provider.status.enabled') : undefined,
+        statusTone: 'success',
       })),
-    [providersQuery.data, router],
+    [providersQuery.data, router, t],
   );
   const enabledProviderItems = useMemo(
     () => providerItems.filter((item) => item.isEnabled),

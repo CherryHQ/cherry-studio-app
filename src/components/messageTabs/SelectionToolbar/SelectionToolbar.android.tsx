@@ -2,8 +2,8 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { selectionToolbarGap } from '@/components/messageTabs';
 
+import { selectionToolbarGap } from '../selectionToolbarLayout';
 import type { SelectionToolbarProps } from './types';
 
 export function SelectionToolbar({
@@ -31,11 +31,7 @@ export function SelectionToolbar({
       ]}
     >
       <View className="bg-background/85" pointerEvents="none" style={styles.backdrop} />
-      <View
-        className="flex-row justify-between"
-        style={styles.controls}
-        testID="topic-selection-toolbar"
-      >
+      <View className="flex-row justify-between" style={styles.controls} testID="selection-toolbar">
         <Pressable
           accessibilityLabel={selectionLabel}
           accessibilityRole="button"
