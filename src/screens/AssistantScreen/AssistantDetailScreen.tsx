@@ -15,9 +15,22 @@ export default function AssistantDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { assistantId } = useLocalSearchParams<{ assistantId: string }>();
+  const { assistantId, returnTopicId } = useLocalSearchParams<{
+    assistantId: string;
+    returnTopicId?: string;
+  }>();
   const { assistant, error, isLoading } = useAssistantApiById(assistantId);
 
+  const returnToTopic = useCallback(() => {
+    if (!returnTopicId) {
+      return;
+    }
+
+    router.dismissTo({
+      params: { topicId: returnTopicId },
+      pathname: '/topics',
+    });
+  }, [returnTopicId, router]);
   const openEditAssistant = useCallback(() => {
     router.push({
       params: { assistantId },
@@ -47,7 +60,7 @@ export default function AssistantDetailScreen() {
 
   return (
     <>
-      <BackHeader rightActions={rightActions} />
+      <BackHeader onBack={returnTopicId ? returnToTopic : undefined} rightActions={rightActions} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

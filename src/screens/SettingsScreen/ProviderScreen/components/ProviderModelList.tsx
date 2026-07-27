@@ -1,4 +1,4 @@
-import { type ReactElement, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, View } from 'react-native';
 
@@ -13,7 +13,6 @@ import {
 import { useProviderModelGroups } from '../models/hooks/useProviderModelGroups';
 
 type ProviderModelListProps = {
-  header?: ReactElement;
   isLoading: boolean;
   models: Model[];
   provider: Provider | undefined;
@@ -21,7 +20,6 @@ type ProviderModelListProps = {
 };
 
 export function ProviderModelList({
-  header,
   isLoading,
   models,
   provider,
@@ -44,12 +42,9 @@ export function ProviderModelList({
       emptyTitle={emptyTitle}
       groups={groups}
       ListHeaderComponent={
-        <View className="gap-6 px-4 py-5">
-          {header}
-          <View className="gap-3">
-            <ProviderModelToolbar actions={toolbarActions} />
-            <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-          </View>
+        <View className="gap-3 px-4 py-5">
+          <ProviderModelToolbar actions={toolbarActions} />
+          <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
         </View>
       }
       provider={provider}

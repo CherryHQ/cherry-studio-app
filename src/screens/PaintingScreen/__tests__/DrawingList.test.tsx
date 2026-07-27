@@ -5,12 +5,13 @@ import type { Painting } from '@/data/types/painting';
 import { DrawingList } from '../DrawingList';
 
 const mockToggleId = jest.fn();
+const mockPush = jest.fn();
 let mockIsEditing = false;
 let mockSelectedIds: ReadonlySet<string> = new Set();
 
 const mockPaintingOne = { id: 'painting-1' } as Painting;
 const mockPaintingTwo = { id: 'painting-2' } as Painting;
-const mockGalleryItems = [
+const defaultGalleryItems = [
   {
     aspectRatio: 1,
     fileEntryId: 'file-1',
@@ -33,6 +34,7 @@ const mockGalleryItems = [
     uri: 'file:///file-3.png',
   },
 ];
+let mockGalleryItems = defaultGalleryItems;
 
 jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
@@ -47,7 +49,7 @@ jest.mock('expo-media-library', () => ({
 }));
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 jest.mock('heroui-native/toast', () => ({
@@ -147,6 +149,7 @@ describe('DrawingList', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGalleryItems = defaultGalleryItems;
     mockIsEditing = false;
     mockSelectedIds = new Set();
   });
@@ -217,5 +220,19 @@ describe('DrawingList', () => {
     ]);
     const [otherItem] = findHostsByTestID(tree, 'painting-history-painting-2:file-3');
     expect(otherItem.props.accessibilityState).toEqual({ checked: false });
+  });
+
+  it('offers the same create action when the drawing history is empty', async () => {
+    mockGalleryItems = [];
+
+    const tree = await render();
+    const [createButton] = tree.root.findAll(
+      (node) =>
+        node.props.testID === 'painting-history-create' && typeof node.props.onPress === 'function',
+    );
+    await act(async () => createButton.props.onPress());
+
+    expect(createButton.props.accessibilityLabel).toBe('painting.history.create');
+    expect(mockPush).toHaveBeenCalledWith('/paintings');
   });
 });

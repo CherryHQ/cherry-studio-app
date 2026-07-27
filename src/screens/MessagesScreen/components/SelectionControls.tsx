@@ -12,8 +12,7 @@ import {
   useMessageSelectionSource,
   useMessageSelectionState,
 } from '@/components/messageTabs';
-
-import { SelectionToolbar } from './SelectionToolbar';
+import { SelectionToolbar } from '@/components/messageTabs/SelectionToolbar/SelectionToolbar';
 
 export function SelectionControls() {
   const { t } = useTranslation();
@@ -98,14 +97,14 @@ export function SelectionControls() {
                 <Text className="text-foreground text-sm">{t('common.cancel')}</Text>
               </Button>
               <Button
-                className="min-w-20 rounded-xl"
+                className="min-w-20 rounded-xl disabled:opacity-100"
                 isDisabled={isDeleting}
                 onPress={() => void confirmDelete()}
                 size="sm"
                 variant="danger"
               >
                 <View className="min-w-0 flex-row items-center justify-center gap-2">
-                  {isDeleting ? <Spinner size="sm" /> : null}
+                  {isDeleting ? <Spinner color="white" size="sm" /> : null}
                   <Text className="text-sm text-white">{t('common.delete')}</Text>
                 </View>
               </Button>

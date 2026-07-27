@@ -304,7 +304,7 @@ function getSurfaceRadiusClassName(index: number, total: number): string {
 
 const styles = StyleSheet.create({
   contentContainer: {
-    paddingBottom: 24,
+    paddingBottom: 96,
   },
   groupHeader: {
     height: groupHeaderHeight,
