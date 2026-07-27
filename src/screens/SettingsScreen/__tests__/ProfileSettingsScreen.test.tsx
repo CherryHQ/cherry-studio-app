@@ -43,11 +43,12 @@ jest.mock('heroui-native/input', () => {
   const { TextInput: MockTextInput } = jest.requireActual('react-native');
 
   return {
-    Input: React.forwardRef(
-      (props: React.ComponentProps<typeof MockTextInput>, ref: React.Ref<typeof MockTextInput>) => (
-        <MockTextInput {...props} ref={ref} />
-      ),
-    ),
+    Input: React.forwardRef(function MockInput(
+      props: React.ComponentProps<typeof MockTextInput>,
+      ref: React.Ref<typeof MockTextInput>,
+    ) {
+      return <MockTextInput {...props} ref={ref} />;
+    }),
   };
 });
 
