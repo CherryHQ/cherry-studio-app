@@ -20,6 +20,7 @@ import {
 } from '@/components/modelPicker';
 import type { Model, UniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
+import { SettingsGroupedSurface } from '../components/SettingsGroupedSurface';
 import { useProviderDetailSettings } from './detail';
 import { ProviderModelSearchField } from './models/components/ProviderModelSearchField';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
@@ -254,7 +255,9 @@ function ProviderModelPullPreviewPage({
           ) : null
         }
         ListHeaderComponent={
-          <View className="gap-3 pb-3">
+          // Same `py-5` breathing room the provider's own model list gives its
+          // search field.
+          <View className="gap-3 pb-5">
             <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
             {availableFilterTags.length > 0 ? (
               <ProviderModelPullFilterBar
@@ -433,19 +436,20 @@ function PullSectionHeader({
       onValueChange={(value: string | undefined) => onExpandedChange(section, value === section)}
     >
       <Accordion.Item value={section}>
+        {/* Padded like a row so the title lines up with the model names below it. */}
         <View className="relative min-h-11 w-full">
-          <Accordion.Trigger className="min-h-11 w-full px-1 py-2 pr-32">
+          <Accordion.Trigger className="min-h-11 w-full px-4 py-2 pr-32">
             <View className="min-w-0 flex-1">
               <Text className="font-medium text-default-foreground text-sm" numberOfLines={1}>
                 {title} ({count})
               </Text>
             </View>
-            <Accordion.Indicator className="absolute right-1" iconProps={{ size: 18 }} />
+            <Accordion.Indicator className="absolute right-4" iconProps={{ size: 18 }} />
           </Accordion.Trigger>
           <Pressable
             accessibilityLabel={actionLabel}
             accessibilityRole="button"
-            className="absolute top-0 right-9 bottom-0 z-10 justify-center px-1 active:opacity-60 disabled:opacity-40"
+            className="absolute top-0 right-11 bottom-0 z-10 justify-center px-1 active:opacity-60 disabled:opacity-40"
             disabled={count === 0}
             hitSlop={6}
             onPress={onActionPress}
@@ -500,49 +504,50 @@ const PullModelRow = memo(function PullModelRow({
   }, [model, provider]);
 
   return (
-    <Pressable
-      accessibilityLabel={model.name}
-      accessibilityRole="button"
-      accessibilityState={{ busy: isPending, disabled: isPending }}
-      className={cn(
-        'flex-row items-center gap-3 px-3 py-2 active:opacity-60 disabled:opacity-40',
-        // Desktop tints the whole row once the model is in the provider.
-        isApplied && !isMissing ? 'bg-success/10' : 'bg-settings-grouped-surface',
-        (position === 'first' || position === 'only') && 'rounded-t-xl',
-        (position === 'last' || position === 'only') && 'rounded-b-xl',
-      )}
-      disabled={isPending}
-      onPress={handleToggle}
+    <SettingsGroupedSurface
+      // Desktop tints the whole row once the model is in the provider.
+      className={isApplied && !isMissing ? 'bg-success/10' : undefined}
+      isFirst={position === 'first' || position === 'only'}
+      isLast={position === 'last' || position === 'only'}
     >
-      {modelPickerItem ? (
-        <ModelPickerIcon item={modelPickerItem} />
-      ) : (
-        <PullModelFallbackIcon model={model} />
-      )}
-      <Text
-        className={cn(
-          'min-w-0 flex-1 text-sm',
-          isMissing && !isApplied ? 'text-default-foreground line-through' : 'text-foreground',
-        )}
-        numberOfLines={1}
+      <Pressable
+        accessibilityLabel={model.name}
+        accessibilityRole="button"
+        accessibilityState={{ busy: isPending, disabled: isPending }}
+        className="flex-row items-center gap-3 px-4 py-2 active:opacity-60 disabled:opacity-40"
+        disabled={isPending}
+        onPress={handleToggle}
       >
-        {model.name}
-      </Text>
-      {tags.length > 0 ? (
-        <View className="shrink-0 flex-row items-center gap-1">
-          {tags.slice(0, pullModelMaxTags).map((tag) => (
-            <ModelPickerTagChip key={`${model.id}:${tag}`} tag={tag} />
-          ))}
-        </View>
-      ) : null}
-      <View className="size-7 shrink-0 items-center justify-center rounded-lg">
-        {showsMinus ? (
-          <MinusIcon className="size-4 text-danger" strokeWidth={2} />
+        {modelPickerItem ? (
+          <ModelPickerIcon item={modelPickerItem} />
         ) : (
-          <PlusIcon className="size-4 text-primary" strokeWidth={2} />
+          <PullModelFallbackIcon model={model} />
         )}
-      </View>
-    </Pressable>
+        <Text
+          className={cn(
+            'min-w-0 flex-1 text-sm',
+            isMissing && !isApplied ? 'text-default-foreground line-through' : 'text-foreground',
+          )}
+          numberOfLines={1}
+        >
+          {model.name}
+        </Text>
+        {tags.length > 0 ? (
+          <View className="shrink-0 flex-row items-center gap-1">
+            {tags.slice(0, pullModelMaxTags).map((tag) => (
+              <ModelPickerTagChip key={`${model.id}:${tag}`} tag={tag} />
+            ))}
+          </View>
+        ) : null}
+        <View className="size-7 shrink-0 items-center justify-center rounded-lg">
+          {showsMinus ? (
+            <MinusIcon className="size-4 text-danger" strokeWidth={2} />
+          ) : (
+            <PlusIcon className="size-4 text-primary" strokeWidth={2} />
+          )}
+        </View>
+      </Pressable>
+    </SettingsGroupedSurface>
   );
 });
 

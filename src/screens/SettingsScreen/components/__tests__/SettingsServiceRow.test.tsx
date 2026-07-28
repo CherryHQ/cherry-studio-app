@@ -51,8 +51,10 @@ describe('SettingsServiceRow', () => {
     });
 
     const separators =
-      renderer?.root.findAllByProps({ testID: 'settings-service-row-separator' }) ?? [];
+      renderer?.root
+        .findAllByProps({ testID: 'settings-grouped-separator' })
+        .filter((node) => typeof node.type === 'string') ?? [];
 
-    expect(separators.length > 0).toBe(showSeparator);
+    expect(separators).toHaveLength(showSeparator ? 1 : 0);
   });
 });

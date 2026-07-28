@@ -4,6 +4,7 @@ import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { memo, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Image } from '@/components/nativePrimitives';
+import { SettingsGroupedSeparator } from './SettingsGroupedSeparator';
 
 export type SettingsServiceRowProps = {
   /** Custom leading visual; takes precedence over `imageSource` when provided. */
@@ -13,12 +14,7 @@ export type SettingsServiceRowProps = {
   isEnabled: boolean;
   name: string;
   onPress: () => void;
-  /**
-   * Draws an inset hairline *above* the row, separating it from the previous one
-   * inside a grouped card. Anchoring to the row above (rather than below) lets a
-   * caller express the rule as "every row but the first", which needs no
-   * knowledge of the list length.
-   */
+  /** Draws {@link SettingsGroupedSeparator} above the row. */
   showSeparator?: boolean;
   statusLabel?: string;
   statusTone?: 'danger' | 'default' | 'success';
@@ -41,9 +37,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
 
   return (
     <View>
-      {showSeparator ? (
-        <View className="mx-4 h-px bg-border" testID="settings-service-row-separator" />
-      ) : null}
+      {showSeparator ? <SettingsGroupedSeparator /> : null}
       <Pressable
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
