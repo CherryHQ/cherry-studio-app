@@ -56,9 +56,9 @@ export function ProviderModelList({
       // mounted, so its automatic content inset survives the transition.
       ListHeaderComponent={
         hasNoModels ? undefined : (
-          // `pb-3` rather than `py-5`: the gap down to the list is the same one
-          // the pull screen keeps between every control and the list below it.
-          <View className="px-4 pt-5 pb-3">
+          // 12 all round, the one gap the pull screen uses between every
+          // control and the list below it.
+          <View className="px-4 py-3">
             <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
           </View>
         )

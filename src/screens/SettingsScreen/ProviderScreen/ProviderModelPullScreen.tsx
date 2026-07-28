@@ -257,8 +257,8 @@ function ProviderModelPullPreviewPage({
         }
         ListHeaderComponent={
           // One gap for the whole screen: the search field, the filter bar and
-          // the first section are all `gap-3` apart, the same distance two
-          // sections keep from each other.
+          // the first section are all 12 apart, the same distance two sections
+          // keep from each other and the same the content keeps from the header.
           <View className="gap-3 pb-3">
             <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
             <ProviderModelTypeFilterBar
@@ -522,6 +522,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingVertical: 20,
+    paddingVertical: 12,
   },
 });
