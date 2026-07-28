@@ -283,7 +283,11 @@ function AssistantEditForm({
             <View className="max-w-[60%] flex-row items-center justify-end gap-2">
               {selectedModel ? (
                 <>
-                  <ModelPickerIcon item={selectedModel} size={20} />
+                  <ModelPickerIcon
+                    model={selectedModel.model}
+                    provider={selectedModel.provider}
+                    size={20}
+                  />
                   <Text
                     className="min-w-0 shrink text-right text-default-foreground text-sm"
                     numberOfLines={1}

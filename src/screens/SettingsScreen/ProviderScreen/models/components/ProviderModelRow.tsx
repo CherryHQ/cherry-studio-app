@@ -1,12 +1,11 @@
 import { cn } from 'heroui-native/utils';
 import type { ReactNode } from 'react';
-import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   getModelPickerTags,
+  isFreeModel,
   ModelPickerIcon,
-  type ModelPickerModelItem,
   type ModelPickerTag,
   ModelPickerTagChip,
 } from '@/components/modelPicker';
@@ -51,31 +50,11 @@ export function ProviderModelRow({
   /** `struck` reads as "on its way out", the way the pull screen marks a model the provider no longer serves. */
   tone?: 'default' | 'struck';
 }) {
-  const tags = useMemo(() => getProviderModelRowTags(model), [model]);
-  const modelPickerItem = useMemo<ModelPickerModelItem | null>(() => {
-    if (!provider) {
-      return null;
-    }
-
-    return {
-      isPinned: false,
-      key: `${model.id}:provider-model-row`,
-      model,
-      modelId: model.id,
-      modelIdentifier: model.modelId,
-      provider,
-      // The name carries the row on its own here, the way it does on desktop.
-      showIdentifier: false,
-    };
-  }, [model, provider]);
+  const tags = getProviderModelRowTags(model);
 
   const content = (
     <>
-      {modelPickerItem ? (
-        <ModelPickerIcon item={modelPickerItem} />
-      ) : (
-        <ProviderModelRowFallbackIcon model={model} />
-      )}
+      <ModelPickerIcon model={model} provider={provider} />
       <Text
         className={cn(
           'min-w-0 flex-1 text-sm',
@@ -119,27 +98,11 @@ export function ProviderModelRow({
   );
 }
 
-function ProviderModelRowFallbackIcon({ model }: { model: Model }) {
-  const initial = model.name.trim().charAt(0).toUpperCase() || 'M';
-
-  return (
-    <View className="size-8 items-center justify-center rounded-full">
-      <Text className="font-medium text-default-foreground text-xs">{initial}</Text>
-    </View>
-  );
-}
-
+// `getModelPickerTags` only covers capabilities; free is inferred, so it is not
+// among them.
 function getProviderModelRowTags(model: Model): ModelPickerTag[] {
   const tags = getModelPickerTags(model);
-  return isFreeProviderModel(model) && !tags.includes('free') ? [...tags, 'free'] : tags;
-}
-
-function isFreeProviderModel(model: Model) {
-  return [model.id, model.modelId, model.name, model.presetModelId]
-    .filter(Boolean)
-    .join(' ')
-    .toLocaleLowerCase()
-    .includes('free');
+  return isFreeModel(model) ? [...tags, 'free'] : tags;
 }
 
 const styles = StyleSheet.create({

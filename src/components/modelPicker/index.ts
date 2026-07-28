@@ -9,6 +9,7 @@ export {
   filterModelsByModelPickerTags,
   getAvailableModelPickerFilterTagsForModels,
   getModelPickerTags,
+  isFreeModel,
   type ModelPickerModelItem,
   type ModelPickerTag,
 } from './utils/modelPickerData';

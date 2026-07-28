@@ -158,7 +158,7 @@ function AssistantModelLine({ modelId, modelName }: Pick<Assistant, 'modelId' | 
 
   return (
     <View className="max-w-full flex-row items-center gap-1.5">
-      <ModelPickerIcon item={model} size={20} />
+      <ModelPickerIcon model={model.model} provider={model.provider} size={20} />
       <Text className="min-w-0 shrink text-base text-default-foreground" numberOfLines={1}>
         {model.model.name}
       </Text>
