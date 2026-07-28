@@ -1,5 +1,24 @@
 import { DefaultPreferences } from './preferenceSchemas';
-import type { PreferenceDefaultScopeType, PreferenceKeyType } from './preferenceTypes';
+import type {
+  PreferenceAppKeyType,
+  PreferenceAppScopeType,
+  PreferenceDefaultScopeType,
+  PreferenceKeyType,
+} from './preferenceTypes';
+
+export function isAppPreferenceKey(key: string): key is PreferenceAppKeyType {
+  return key in DefaultPreferences.app;
+}
+
+export function getAppDefaultValue<K extends PreferenceAppKeyType>(
+  key: K,
+): PreferenceAppScopeType[K] {
+  return DefaultPreferences.app[key];
+}
+
+export function getAppPreferenceKeys(): PreferenceAppKeyType[] {
+  return Object.keys(DefaultPreferences.app) as PreferenceAppKeyType[];
+}
 
 /**
  * Type guard: narrow a string to DB-backed preference keys.

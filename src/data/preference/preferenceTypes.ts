@@ -5,10 +5,15 @@ import type { PreferenceSchemas } from './preferenceSchemas';
 /** DB-backed preferences only (stored in SQLite) */
 export type PreferenceDefaultScopeType = PreferenceSchemas['default'];
 export type PreferenceKeyType = keyof PreferenceDefaultScopeType;
+export type PreferenceAppScopeType = PreferenceSchemas['app'];
+export type PreferenceAppKeyType = keyof PreferenceAppScopeType;
 
 export type PreferenceUpdateOptions = {
   optimistic: boolean;
 };
+
+export const PermissionModeSchema = z.enum(['never', 'ask', 'always']);
+export type PermissionMode = z.infer<typeof PermissionModeSchema>;
 
 export type PreferenceShortcutType = {
   binding: string[];

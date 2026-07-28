@@ -25,6 +25,9 @@ export type {
   MultiModelGridPopoverTrigger,
   MultiModelMessageStyle,
   PersistedLangCode,
+  PermissionMode,
+  PreferenceAppKeyType,
+  PreferenceAppScopeType,
   PreferenceDefaultScopeType,
   PreferenceKeyType,
   PreferenceShortcutType,
@@ -49,6 +52,7 @@ export type {
 } from './preferenceTypes';
 export {
   codeCLI,
+  PermissionModeSchema,
   SelectionFilterMode,
   SelectionTriggerMode,
   ThemeMode,
@@ -56,7 +60,10 @@ export {
   WEB_SEARCH_PROVIDER_IDS,
 } from './preferenceTypes';
 export {
+  getAppDefaultValue,
+  getAppPreferenceKeys,
   getDefaultValue,
   getPreferenceKeys,
+  isAppPreferenceKey,
   isPreferenceKey,
 } from './preferenceUtils';

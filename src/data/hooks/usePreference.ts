@@ -1,14 +1,20 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import type {
+  PreferenceAppKeyType,
+  PreferenceAppScopeType,
   PreferenceDefaultScopeType,
   PreferenceKeyType,
   PreferenceUpdateOptions,
 } from '@/data/preference';
-import { getDefaultValue } from '@/data/preference';
+import { getAppDefaultValue, getDefaultValue } from '@/data/preference';
 import { useDataServices } from '@/data/runtime';
 
 type PreferenceSetter<K extends PreferenceKeyType> = (
   value: PreferenceDefaultScopeType[K],
+  options?: PreferenceUpdateOptions,
+) => Promise<void>;
+type AppPreferenceSetter<K extends PreferenceAppKeyType> = (
+  value: PreferenceAppScopeType[K],
   options?: PreferenceUpdateOptions,
 ) => Promise<void>;
 
@@ -40,6 +46,25 @@ export function usePreference<K extends PreferenceKeyType>(
   );
 
   const setValue = useCallback<PreferenceSetter<K>>(
+    (nextValue, options) => service.set(key, nextValue, options),
+    [key, service],
+  );
+
+  return [value, setValue];
+}
+
+export function useAppPreference<K extends PreferenceAppKeyType>(
+  key: K,
+): [PreferenceAppScopeType[K], AppPreferenceSetter<K>] {
+  const service = useDataServices().preference.app;
+
+  const value = useSyncExternalStore(
+    service.subscribeChange(key),
+    () => service.getCachedValue(key) ?? getAppDefaultValue(key),
+    () => getAppDefaultValue(key),
+  );
+
+  const setValue = useCallback<AppPreferenceSetter<K>>(
     (nextValue, options) => service.set(key, nextValue, options),
     [key, service],
   );

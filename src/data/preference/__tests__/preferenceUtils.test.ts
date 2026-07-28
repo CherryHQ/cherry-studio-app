@@ -1,8 +1,11 @@
 import {
   DefaultPreferences,
+  getAppDefaultValue,
+  getAppPreferenceKeys,
   getDefaultValue,
   getPreferenceKeys,
   isPreferenceKey,
+  isAppPreferenceKey,
   ThemeMode,
 } from '..';
 
@@ -64,6 +67,16 @@ describe('preference defaults', () => {
     expect(isPreferenceKey('chat.web_search.max_results')).toBe(true);
     expect(isPreferenceKey('feature.translate.model_prompt')).toBe(true);
     expect(isPreferenceKey('BootConfig.example')).toBe(false);
+    expect(Object.keys(DefaultPreferences.default)).toHaveLength(230);
+  });
+
+  test('keeps app-scoped permission preferences separate and safe by default', () => {
+    expect(getAppPreferenceKeys()).toHaveLength(6);
+    expect(getAppPreferenceKeys()).toEqual(Object.keys(DefaultPreferences.app));
+    expect(getAppDefaultValue('permissions.health_read')).toBe('never');
+    expect(getAppDefaultValue('permissions.calendar_write')).toBe('never');
+    expect(isAppPreferenceKey('permissions.location_read')).toBe(true);
+    expect(isAppPreferenceKey('app.language')).toBe(false);
     expect(Object.keys(DefaultPreferences.default)).toHaveLength(230);
   });
 });

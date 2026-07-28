@@ -1,5 +1,5 @@
 import type { DbService } from '@/data/db/DbService';
-import type { PreferenceKeyType } from '@/data/preference';
+import type { PreferenceAppKeyType, PreferenceKeyType } from '@/data/preference';
 import { PreferenceService } from '@/data/services/PreferenceService';
 
 jest.mock('@logger', () => ({
@@ -16,7 +16,7 @@ jest.mock('@/data/db/schemas', () => ({
 }));
 
 type PreferenceRow = {
-  key: PreferenceKeyType;
+  key: PreferenceAppKeyType | PreferenceKeyType;
   scope: string;
   value: unknown;
 };
@@ -62,6 +62,38 @@ describe('PreferenceService', () => {
     await service.init();
 
     await expect(service.get('chat.web_search.provider_overrides')).resolves.toEqual({});
+  });
+
+  test('loads and validates app-scoped permission modes', async () => {
+    const dbService = createFakeDbService([
+      { key: 'permissions.location_read', scope: 'app', value: 'always' },
+      { key: 'permissions.health_read', scope: 'app', value: 'invalid' },
+    ]);
+    const service = new PreferenceService(dbService);
+
+    await service.init();
+
+    await expect(service.app.get('permissions.location_read')).resolves.toBe('always');
+    await expect(service.app.get('permissions.health_read')).resolves.toBe('never');
+  });
+
+  test('writes app preferences without changing the default scope', async () => {
+    const dbService = createFakeDbService();
+    const service = new PreferenceService(dbService);
+    const listener = jest.fn();
+
+    await service.init();
+    service.app.subscribeChange('permissions.calendar_write')(listener);
+
+    await service.app.set('permissions.calendar_write', 'ask');
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(dbService.rows.get('app.permissions.calendar_write')).toMatchObject({
+      key: 'permissions.calendar_write',
+      scope: 'app',
+      value: 'ask',
+    });
+    expect(Object.keys(service.getAll())).toHaveLength(230);
   });
 
   test('returns mapped and full cached preferences', async () => {
@@ -241,6 +273,6 @@ function createFakeDbService(rows: PreferenceRow[] = []) {
   return service;
 }
 
-function rowKey(scope: string, key: PreferenceKeyType) {
+function rowKey(scope: string, key: PreferenceAppKeyType | PreferenceKeyType) {
   return `${scope}.${key}`;
 }

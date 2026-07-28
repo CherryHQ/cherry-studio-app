@@ -37,6 +37,14 @@ const TRANSLATE_PROMPT =
 }] */
 
 export interface PreferenceSchemas {
+  app: {
+    'permissions.calendar_read': PreferenceTypes.PermissionMode;
+    'permissions.calendar_write': PreferenceTypes.PermissionMode;
+    'permissions.health_read': PreferenceTypes.PermissionMode;
+    'permissions.location_read': PreferenceTypes.PermissionMode;
+    'permissions.reminders_read': PreferenceTypes.PermissionMode;
+    'permissions.reminders_write': PreferenceTypes.PermissionMode;
+  };
   default: {
     // redux/settings/enableDeveloperMode
     'app.developer_mode.enabled': boolean;
@@ -503,6 +511,14 @@ export interface PreferenceSchemas {
 
 /* eslint sort-keys: ["error", "asc", {"caseSensitive": true, "natural": false}] */
 export const DefaultPreferences: PreferenceSchemas = {
+  app: {
+    'permissions.calendar_read': 'never',
+    'permissions.calendar_write': 'never',
+    'permissions.health_read': 'never',
+    'permissions.location_read': 'never',
+    'permissions.reminders_read': 'never',
+    'permissions.reminders_write': 'never',
+  },
   default: {
     'app.developer_mode.enabled': false,
     'app.dist.auto_update.enabled': true,
