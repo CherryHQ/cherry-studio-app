@@ -13,6 +13,8 @@ export type SettingsServiceRowProps = {
   isEnabled: boolean;
   name: string;
   onPress: () => void;
+  /** Inset hairline that separates this row from the next one inside a grouped card. */
+  showSeparator?: boolean;
   statusLabel?: string;
   statusTone?: 'danger' | 'default' | 'success';
   subtitle?: string;
@@ -25,6 +27,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
   isEnabled,
   name,
   onPress,
+  showSeparator = false,
   statusLabel,
   statusTone = 'default',
   subtitle,
@@ -36,10 +39,10 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
       <Pressable
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
-        className="flex-row items-center justify-between active:opacity-60 py-2 px-2"
+        className="min-h-11 flex-row items-center justify-between px-4 py-2.5 active:opacity-60"
         onPress={onPress}
       >
-        <View className="min-w-0 flex-1 flex-row items-center gap-2">
+        <View className="min-w-0 flex-1 flex-row items-center gap-2.5">
           {avatar ??
             (imageSource ? (
               <Image
@@ -94,6 +97,9 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
           <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
         </View>
       </Pressable>
+      {showSeparator ? (
+        <View className="mx-4 h-px bg-border" testID="settings-service-row-separator" />
+      ) : null}
     </View>
   );
 });

@@ -135,8 +135,12 @@ export default function ProviderSettingsScreen() {
         >
           {filteredProviderItems.length > 0 ? (
             <View className="overflow-hidden rounded-xl bg-settings-grouped-surface">
-              {filteredProviderItems.map((item) => (
-                <SettingsServiceRow key={item.id} {...item} />
+              {filteredProviderItems.map((item, index) => (
+                <SettingsServiceRow
+                  key={item.id}
+                  {...item}
+                  showSeparator={index < filteredProviderItems.length - 1}
+                />
               ))}
             </View>
           ) : (
@@ -171,7 +175,7 @@ function DisabledProvidersAccordion({ items }: { items: SettingsServiceRowProps[
       selectionMode="single"
     >
       <Accordion.Item value="disabled-providers">
-        <Accordion.Trigger className="min-h-11 px-3 py-3">
+        <Accordion.Trigger className="min-h-11 px-4 py-3">
           <View className="flex-1 flex-row items-center gap-2">
             <Text className="font-medium text-default-foreground text-sm">
               {t('settings.provider.disabled.title')}
@@ -181,8 +185,9 @@ function DisabledProvidersAccordion({ items }: { items: SettingsServiceRowProps[
           <Accordion.Indicator iconProps={{ size: 18 }} />
         </Accordion.Trigger>
         <Accordion.Content className="px-0 pb-0">
-          {items.map((item) => (
-            <SettingsServiceRow key={item.id} {...item} />
+          <View className="mx-4 h-px bg-border" />
+          {items.map((item, index) => (
+            <SettingsServiceRow key={item.id} {...item} showSeparator={index < items.length - 1} />
           ))}
         </Accordion.Content>
       </Accordion.Item>
