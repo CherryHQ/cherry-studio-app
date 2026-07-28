@@ -25,7 +25,6 @@ import {
   filterProviderModelPullPreview,
   type ProviderModelPullListItem,
   type ProviderModelPullPreview,
-  type ProviderModelPullRowPosition,
   type ProviderModelPullSectionKey,
 } from './models/utils/providerModelPullPreview';
 import { consumeProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
@@ -39,8 +38,6 @@ type PullTranslator = ReturnType<typeof useTranslation>['t'];
 
 type PullListExtraData = {
   appliedIds: ReadonlySet<UniqueModelId>;
-  displayedAddedCount: number;
-  displayedMissingCount: number;
   displayedPreview: ProviderModelPullPreview;
   expandedSections: readonly ProviderModelPullSectionKey[];
   onSectionExpandedChange: (section: ProviderModelPullSectionKey, isExpanded: boolean) => void;
@@ -172,8 +169,6 @@ function ProviderModelPullPreviewPage({
     applyModelChange,
     preview,
   });
-  const displayedAddedCount = displayedPreview.added.length;
-  const displayedMissingCount = displayedPreview.missing.length;
   const visibleSections = useMemo<ProviderModelPullSectionKey[]>(
     () => (missingCount > 0 ? ['added', 'missing'] : ['added']),
     [missingCount],
@@ -197,8 +192,6 @@ function ProviderModelPullPreviewPage({
   const listExtraData = useMemo<PullListExtraData>(
     () => ({
       appliedIds,
-      displayedAddedCount,
-      displayedMissingCount,
       displayedPreview,
       expandedSections,
       onSectionExpandedChange: handleSectionExpandedChange,
@@ -210,8 +203,6 @@ function ProviderModelPullPreviewPage({
     }),
     [
       appliedIds,
-      displayedAddedCount,
-      displayedMissingCount,
       displayedPreview,
       expandedSections,
       handleSectionExpandedChange,
@@ -222,47 +213,49 @@ function ProviderModelPullPreviewPage({
       toggleSection,
     ],
   );
-  const isSearchEmpty = displayedAddedCount + displayedMissingCount === 0;
+  const isSearchEmpty = displayedPreview.added.length + displayedPreview.missing.length === 0;
 
   return (
-    <View className="flex-1">
-      <LegendList
-        alwaysBounceVertical={false}
-        contentContainerStyle={styles.listContent}
-        contentInsetAdjustmentBehavior="automatic"
-        data={listItems}
-        drawDistance={320}
-        estimatedItemSize={providerModelRowHeight}
-        extraData={listExtraData}
-        getItemType={getPullListItemType}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        keyExtractor={pullListKeyExtractor}
-        ListFooterComponent={
-          isSearchEmpty ? (
-            <PullSearchEmptyState title={t('settings.provider.models.search.empty')} />
-          ) : null
-        }
-        ListHeaderComponent={
-          // One gap for the whole screen: the search field, the filter bar and
-          // the first section are all 12 apart, the same distance two sections
-          // keep from each other and the same the content keeps from the header.
-          <View className="gap-3 pb-3">
-            <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-            <ProviderModelTypeFilterBar
-              counts={typeCounts}
-              selectedFilter={typeFilter}
-              onSelect={setTypeFilter}
-            />
+    <LegendList
+      alwaysBounceVertical={false}
+      contentContainerStyle={styles.listContent}
+      contentInsetAdjustmentBehavior="automatic"
+      data={listItems}
+      drawDistance={320}
+      estimatedItemSize={providerModelRowHeight}
+      extraData={listExtraData}
+      getItemType={getPullListItemType}
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
+      keyExtractor={pullListKeyExtractor}
+      ListFooterComponent={
+        isSearchEmpty ? (
+          <View className="items-center justify-center px-4 py-10">
+            <Text className="text-center text-base text-default-foreground">
+              {t('settings.provider.models.search.empty')}
+            </Text>
           </View>
-        }
-        maintainVisibleContentPosition={false}
-        recycleItems
-        renderItem={renderPullListItem}
-        showsVerticalScrollIndicator={false}
-        style={styles.list}
-      />
-    </View>
+        ) : null
+      }
+      ListHeaderComponent={
+        // One gap for the whole screen: the search field, the filter bar and
+        // the first section are all 12 apart, the same distance two sections
+        // keep from each other and the same the content keeps from the header.
+        <View className="gap-3 pb-3">
+          <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
+          <ProviderModelTypeFilterBar
+            counts={typeCounts}
+            selectedFilter={typeFilter}
+            onSelect={setTypeFilter}
+          />
+        </View>
+      }
+      maintainVisibleContentPosition={false}
+      recycleItems
+      renderItem={renderPullListItem}
+      showsVerticalScrollIndicator={false}
+      style={styles.list}
+    />
   );
 }
 
@@ -282,25 +275,24 @@ function renderPullListItem({
 
   if (item.type === 'section') {
     const isAddedSection = item.section === 'added';
-    const count = isAddedSection ? listData.displayedAddedCount : listData.displayedMissingCount;
     const sectionModels = isAddedSection
       ? listData.displayedPreview.added
       : listData.displayedPreview.missing;
     const isEverythingApplied =
       sectionModels.length > 0 && sectionModels.every((model) => listData.appliedIds.has(model.id));
+    // Both sections offer the same undo, they just start from opposite ends.
+    const actionLabelKey = isAddedSection
+      ? isEverythingApplied
+        ? 'settings.provider.models.pullRemoveAll'
+        : 'settings.provider.models.pullAddAll'
+      : isEverythingApplied
+        ? 'settings.provider.models.pullRestoreAll'
+        : 'settings.provider.models.pullRemoveAll';
 
     return (
       <PullSectionHeader
-        actionLabel={listData.t(
-          isEverythingApplied
-            ? isAddedSection
-              ? 'settings.provider.models.pullRemoveAll'
-              : 'settings.provider.models.pullRestoreAll'
-            : isAddedSection
-              ? 'settings.provider.models.pullAddAll'
-              : 'settings.provider.models.pullRemoveAll',
-        )}
-        count={count}
+        actionLabel={listData.t(actionLabelKey)}
+        count={sectionModels.length}
         isExpanded={listData.expandedSections.includes(item.section)}
         isFirstSection={item.isFirstSection}
         section={item.section}
@@ -318,21 +310,14 @@ function renderPullListItem({
   return (
     <PullModelRow
       isApplied={listData.appliedIds.has(item.model.id)}
+      isFirst={item.isFirst}
+      isLast={item.isLast}
       isPending={listData.pendingIds.has(item.model.id)}
       model={item.model}
-      position={item.position}
       provider={listData.provider}
       section={item.section}
       onToggleModel={listData.onToggleModel}
     />
-  );
-}
-
-function PullSearchEmptyState({ title }: { title: string }) {
-  return (
-    <View className="items-center justify-center px-4 py-10">
-      <Text className="text-center text-base text-default-foreground">{title}</Text>
-    </View>
   );
 }
 
@@ -394,18 +379,20 @@ function PullSectionHeader({
 
 const PullModelRow = memo(function PullModelRow({
   isApplied,
+  isFirst,
+  isLast,
   isPending,
   model,
   onToggleModel,
-  position,
   provider,
   section,
 }: {
   isApplied: boolean;
+  isFirst: boolean;
+  isLast: boolean;
   isPending: boolean;
   model: Model;
   onToggleModel: (model: Model, section: ProviderModelPullSectionKey) => void;
-  position: ProviderModelPullRowPosition;
   provider: Provider | undefined;
   section: ProviderModelPullSectionKey;
 }) {
@@ -420,8 +407,8 @@ const PullModelRow = memo(function PullModelRow({
   return (
     <ProviderModelRow
       isDisabled={isPending}
-      isFirst={position === 'first' || position === 'only'}
-      isLast={position === 'last' || position === 'only'}
+      isFirst={isFirst}
+      isLast={isLast}
       model={model}
       provider={provider}
       // Desktop tints the whole row once the model is in the provider.

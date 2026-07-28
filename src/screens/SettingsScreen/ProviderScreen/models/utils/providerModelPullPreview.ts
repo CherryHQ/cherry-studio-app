@@ -12,8 +12,6 @@ export type ProviderModelPullPreview = {
 
 export type ProviderModelPullSectionKey = keyof ProviderModelPullPreview;
 
-export type ProviderModelPullRowPosition = 'first' | 'middle' | 'last' | 'only';
-
 export type ProviderModelPullListItem =
   | {
       isFirstSection: boolean;
@@ -22,9 +20,11 @@ export type ProviderModelPullListItem =
       type: 'section';
     }
   | {
+      /** Where the row sits in its section's grouped card. */
+      isFirst: boolean;
+      isLast: boolean;
       key: string;
       model: Model;
-      position: ProviderModelPullRowPosition;
       section: ProviderModelPullSectionKey;
       type: 'model';
     };
@@ -117,9 +117,10 @@ export function buildProviderModelPullListItems(
 
     for (const [index, model] of models.entries()) {
       items.push({
+        isFirst: index === 0,
+        isLast: index === models.length - 1,
         key: `model:${section}:${model.id}`,
         model,
-        position: getModelRowPosition(index, models.length),
         section,
         type: 'model',
       });
@@ -127,16 +128,6 @@ export function buildProviderModelPullListItems(
   }
 
   return items;
-}
-
-function getModelRowPosition(index: number, count: number): ProviderModelPullRowPosition {
-  if (count === 1) {
-    return 'only';
-  }
-  if (index === 0) {
-    return 'first';
-  }
-  return index === count - 1 ? 'last' : 'middle';
 }
 
 function normalizeRemoteModels(

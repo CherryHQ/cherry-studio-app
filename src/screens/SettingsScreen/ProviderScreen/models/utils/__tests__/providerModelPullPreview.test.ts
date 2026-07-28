@@ -117,6 +117,25 @@ describe('provider model pull preview helpers', () => {
     ).toEqual(['section:added', 'section:missing']);
   });
 
+  // Each section draws its own card, so the placement restarts rather than
+  // running across the whole list.
+  test('marks the first and last row of every section', () => {
+    const preview = {
+      added: [model({ modelId: 'new-model' }), model({ modelId: 'other-new-model' })],
+      missing: [model({ modelId: 'old-model' })],
+    };
+
+    expect(
+      buildProviderModelPullListItems(preview, ['added', 'missing'], ['added', 'missing'])
+        .filter((item) => item.type === 'model')
+        .map((item) => [item.key, item.isFirst, item.isLast]),
+    ).toEqual([
+      ['model:added:openai::new-model', true, false],
+      ['model:added:openai::other-new-model', false, true],
+      ['model:missing:openai::old-model', true, true],
+    ]);
+  });
+
   test('only includes section headers that are configured as visible', () => {
     expect(
       buildProviderModelPullListItems({ added: [], missing: [] }, ['added', 'missing'], ['added']),

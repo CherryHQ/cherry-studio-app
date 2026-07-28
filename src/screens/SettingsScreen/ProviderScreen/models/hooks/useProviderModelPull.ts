@@ -43,15 +43,6 @@ export function useProviderModelPull({
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [preview, setPreview] = useState<ProviderModelPullPreview | null>(initialPreview);
 
-  const resetPreview = useCallback(() => {
-    setPreview(null);
-  }, []);
-
-  const refreshModelQueries = useCallback(
-    () => refreshProviderModelQueries(queryClient, providerId),
-    [providerId, queryClient],
-  );
-
   const loadPullPreview = useCallback(async (): Promise<ProviderModelPullLoadResult> => {
     if (!provider || !providerId) {
       return 'error';
@@ -152,14 +143,14 @@ export function useProviderModelPull({
           toAdd.length,
           'pull_reconcile_row',
         );
-        await refreshModelQueries();
+        await refreshProviderModelQueries(queryClient, providerId);
         return true;
       } catch {
         toast.show({ label: t('settings.provider.models.pullApplyFailed'), variant: 'danger' });
         return false;
       }
     },
-    [provider, providerId, refreshModelQueries, services.model, services.provider, t, toast],
+    [provider, providerId, queryClient, services.model, services.provider, t, toast],
   );
 
   return {
@@ -167,6 +158,5 @@ export function useProviderModelPull({
     isPreviewLoading,
     loadPullPreview,
     preview,
-    resetPreview,
   };
 }
