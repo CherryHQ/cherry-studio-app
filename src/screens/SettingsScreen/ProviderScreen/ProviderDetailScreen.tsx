@@ -188,6 +188,34 @@ export default function ProviderDetailSettingsScreen() {
     ],
     [openModelAddSettings, provider, t],
   );
+  // Pull and check act on the model list, so they only belong in the bottom
+  // toolbar while that tab is up; `undefined` drops them from the toolbar.
+  const modelActionsForTab = useMemo(
+    () =>
+      activeTab === 'models'
+        ? {
+            check: {
+              isDisabled: models.length === 0,
+              isLoading: isModelChecking,
+              onPress: openCheckSheet,
+            },
+            pull: {
+              isDisabled: !provider || isModelPullLoading,
+              isLoading: isModelPullLoading,
+              onPress: () => void openModelPullSettings(),
+            },
+          }
+        : undefined,
+    [
+      activeTab,
+      isModelChecking,
+      isModelPullLoading,
+      models.length,
+      openCheckSheet,
+      openModelPullSettings,
+      provider,
+    ],
+  );
   const handleToggleProvider = useCallback(() => {
     if (!provider) {
       return;
@@ -269,23 +297,7 @@ export default function ProviderDetailSettingsScreen() {
           )}
         </ScrollView>
       ) : (
-        <ProviderModelList
-          isLoading={modelsQuery.isPending}
-          models={models}
-          provider={provider}
-          toolbarActions={{
-            check: {
-              isDisabled: models.length === 0,
-              isLoading: isModelChecking,
-              onPress: openCheckSheet,
-            },
-            pull: {
-              isDisabled: !provider || isModelPullLoading,
-              isLoading: isModelPullLoading,
-              onPress: () => void openModelPullSettings(),
-            },
-          }}
-        />
+        <ProviderModelList isLoading={modelsQuery.isPending} models={models} provider={provider} />
       )}
       <ProviderModelCheckSheet
         apiKeyOptions={checkApiKeyOptions}
@@ -303,12 +315,14 @@ export default function ProviderDetailSettingsScreen() {
           native nav-item change, which is what the loading branch used to do. */}
       <ProviderDetailChrome
         canDelete={provider ? canDeleteProvider(provider) : false}
+        checkAction={modelActionsForTab?.check}
         isActive={provider?.isEnabled ?? false}
         isDisabled={
           !provider || updateProviderEnabledMutation.isPending || deleteProviderMutation.isPending
         }
         onDelete={requestDeleteProvider}
         onToggleActive={handleToggleProvider}
+        pullAction={modelActionsForTab?.pull}
       />
       {confirmDialog}
     </>

@@ -6,25 +6,15 @@ import type { Model } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 import { ProviderModelAccordion } from '../models/components/ProviderModelAccordion';
 import { ProviderModelSearchField } from '../models/components/ProviderModelSearchField';
-import {
-  ProviderModelToolbar,
-  type ProviderModelToolbarActions,
-} from '../models/components/ProviderModelToolbar';
 import { useProviderModelGroups } from '../models/hooks/useProviderModelGroups';
 
 type ProviderModelListProps = {
   isLoading: boolean;
   models: Model[];
   provider: Provider | undefined;
-  toolbarActions: ProviderModelToolbarActions;
 };
 
-export function ProviderModelList({
-  isLoading,
-  models,
-  provider,
-  toolbarActions,
-}: ProviderModelListProps) {
+export function ProviderModelList({ isLoading, models, provider }: ProviderModelListProps) {
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
   const { displayedExpandedValues, groups, isSearching, setExpandedValues } =
@@ -42,8 +32,7 @@ export function ProviderModelList({
       emptyTitle={emptyTitle}
       groups={groups}
       ListHeaderComponent={
-        <View className="gap-3 px-4 py-5">
-          <ProviderModelToolbar actions={toolbarActions} />
+        <View className="px-4 py-5">
           <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
         </View>
       }
