@@ -12,6 +12,7 @@ export { isVendor, matchVendor, VENDOR_PATTERNS } from './patterns/vendor-patter
 export type { ModelLookupResult, RuntimeEndpointConfig } from './registry-utils';
 export {
   buildRuntimeEndpointConfigs,
+  endpointImpliedCapability,
   inferAdapterFamily,
   lookupRegistryModel,
   lookupRegistryProvider,
@@ -41,6 +42,16 @@ export {
   objectValues,
   REASONING_EFFORT,
 } from './schemas/enums';
+// Image generation param catalog — schema, wire names, and param types
+// export type { ImageParamCatalogEntry, ParamValue, ParamValues } from './schemas/imageParamCatalog';
+export type { ParamValue, ParamValues } from './schemas/imageParamCatalog';
+export {
+  IMAGE_PARAM_CATALOG,
+  IMAGE_PARAM_CATALOG_KEYS,
+  imageParamsSchema,
+  paramCatalogEntry,
+  wireName,
+} from './schemas/imageParamCatalog';
 // Schema-inferred types (replaces proto types)
 export type {
   ImageGenerationMode,
@@ -67,19 +78,7 @@ export type {
   ProviderModelOverride as ProtoProviderModelOverride,
   ProviderModelOverride,
 } from './schemas/provider-models';
-// Model ID normalization utilities
-export { normalizeModelId } from './utils/normalize';
-
-// Image generation param catalog — schema, wire names, and param types
-// export type { ImageParamCatalogEntry, ParamValue, ParamValues } from './schemas/imageParamCatalog';
-export type { ParamValue, ParamValues } from './schemas/imageParamCatalog';
-export {
-  imageParamsSchema,
-  paramCatalogEntry,
-  wireName,
-  IMAGE_PARAM_CATALOG,
-  IMAGE_PARAM_CATALOG_KEYS,
-} from './schemas/imageParamCatalog';
-
 // Image generation param schema builder
 export { buildParamsSchema } from './utils/buildParamsSchema';
+// Model ID normalization utilities
+export { normalizeModelId } from './utils/normalize';

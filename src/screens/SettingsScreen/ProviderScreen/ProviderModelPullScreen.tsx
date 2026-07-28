@@ -10,8 +10,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BackHeader } from '@/components/headers';
 import {
-  filterModelsByModelPickerTags,
-  getAvailableModelPickerFilterTagsForModels,
   getModelPickerTags,
   ModelPickerIcon,
   type ModelPickerModelItem,
@@ -23,6 +21,7 @@ import type { Provider } from '@/data/types/provider';
 import { SettingsGroupedSurface } from '../components/SettingsGroupedSurface';
 import { useProviderDetailSettings } from './detail';
 import { ProviderModelSearchField } from './models/components/ProviderModelSearchField';
+import { ProviderModelTypeFilterBar } from './models/components/ProviderModelTypeFilterBar';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import {
   type ProviderModelPullApplyChange,
@@ -37,6 +36,11 @@ import {
   type ProviderModelPullSectionKey,
 } from './models/utils/providerModelPullPreview';
 import { consumeProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
+import {
+  filterModelsByProviderModelType,
+  getProviderModelTypeCounts,
+  type ProviderModelTypeFilter,
+} from './models/utils/providerModelTypeFilter';
 
 type PullTranslator = ReturnType<typeof useTranslation>['t'];
 
@@ -157,7 +161,7 @@ function ProviderModelPullPreviewPage({
     'added',
     'missing',
   ]);
-  const [selectedFilterTags, setSelectedFilterTags] = useState<ModelPickerTag[]>([]);
+  const [typeFilter, setTypeFilter] = useState<ProviderModelTypeFilter>('all');
   const missingCount = preview.missing.length;
   const searchedPreview = useMemo(
     () => filterProviderModelPullPreview(preview, deferredSearchText),
@@ -165,14 +169,16 @@ function ProviderModelPullPreviewPage({
   );
   const displayedPreview = useMemo(
     () => ({
-      added: filterModelsByModelPickerTags(searchedPreview.added, selectedFilterTags),
-      missing: filterModelsByModelPickerTags(searchedPreview.missing, selectedFilterTags),
+      added: filterModelsByProviderModelType(searchedPreview.added, typeFilter),
+      missing: filterModelsByProviderModelType(searchedPreview.missing, typeFilter),
     }),
-    [searchedPreview, selectedFilterTags],
+    [searchedPreview, typeFilter],
   );
-  const availableFilterTags = useMemo(
-    () => getAvailableModelPickerFilterTagsForModels([...preview.added, ...preview.missing]),
-    [preview],
+  // Counted over what the search left behind but before the type filter, so a
+  // tab's number says how many models picking it would show.
+  const typeCounts = useMemo(
+    () => getProviderModelTypeCounts([...searchedPreview.added, ...searchedPreview.missing]),
+    [searchedPreview],
   );
   const { appliedIds, pendingIds, toggleModel, toggleSection } = useProviderModelPullApply({
     applyModelChange,
@@ -200,11 +206,6 @@ function ProviderModelPullPreviewPage({
     },
     [],
   );
-  const toggleFilterTag = useCallback((tag: ModelPickerTag) => {
-    setSelectedFilterTags((current) =>
-      current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag],
-    );
-  }, []);
   const listExtraData = useMemo<PullListExtraData>(
     () => ({
       appliedIds,
@@ -259,13 +260,11 @@ function ProviderModelPullPreviewPage({
           // search field.
           <View className="gap-3 pb-5">
             <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-            {availableFilterTags.length > 0 ? (
-              <ProviderModelPullFilterBar
-                availableTags={availableFilterTags}
-                selectedTags={selectedFilterTags}
-                onToggleTag={toggleFilterTag}
-              />
-            ) : null}
+            <ProviderModelTypeFilterBar
+              counts={typeCounts}
+              selectedFilter={typeFilter}
+              onSelect={setTypeFilter}
+            />
           </View>
         }
         maintainVisibleContentPosition={false}
@@ -336,64 +335,6 @@ function renderPullListItem({
       provider={listData.provider}
       section={item.section}
       onToggleModel={listData.onToggleModel}
-    />
-  );
-}
-
-type PullFilterBarExtraData = {
-  onToggleTag: (tag: ModelPickerTag) => void;
-  selectedTags: ReadonlySet<ModelPickerTag>;
-};
-
-function filterTagKeyExtractor(tag: ModelPickerTag) {
-  return tag;
-}
-
-function renderPullFilterTag({ extraData, item }: LegendListRenderItemProps<ModelPickerTag>) {
-  const { onToggleTag, selectedTags } = extraData as PullFilterBarExtraData;
-
-  return (
-    <ModelPickerTagChip
-      isActive={selectedTags.has(item)}
-      showLabel
-      size="md"
-      tag={item}
-      onPress={() => onToggleTag(item)}
-    />
-  );
-}
-
-function PullFilterTagSeparator() {
-  return <View className="w-2" />;
-}
-
-function ProviderModelPullFilterBar({
-  availableTags,
-  onToggleTag,
-  selectedTags,
-}: {
-  availableTags: readonly ModelPickerTag[];
-  onToggleTag: (tag: ModelPickerTag) => void;
-  selectedTags: readonly ModelPickerTag[];
-}) {
-  const selectedTagSet = useMemo(() => new Set(selectedTags), [selectedTags]);
-  const extraData = useMemo<PullFilterBarExtraData>(
-    () => ({ onToggleTag, selectedTags: selectedTagSet }),
-    [onToggleTag, selectedTagSet],
-  );
-
-  return (
-    <LegendList
-      data={availableTags}
-      extraData={extraData}
-      horizontal
-      ItemSeparatorComponent={PullFilterTagSeparator}
-      keyboardShouldPersistTaps="handled"
-      keyExtractor={filterTagKeyExtractor}
-      recycleItems
-      renderItem={renderPullFilterTag}
-      showsHorizontalScrollIndicator={false}
-      style={styles.filterBar}
     />
   );
 }
@@ -575,9 +516,6 @@ function isFreePullModel(model: Model) {
 }
 
 const styles = StyleSheet.create({
-  filterBar: {
-    height: 32,
-  },
   list: {
     flex: 1,
   },
