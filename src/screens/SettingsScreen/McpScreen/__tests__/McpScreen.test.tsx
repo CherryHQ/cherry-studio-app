@@ -190,6 +190,32 @@ describe('McpScreen empty state', () => {
     expect(row?.props.subtitle).toBe('2 tools · v1.2.3');
   });
 
+  it('separates every server row but the first', async () => {
+    mockServers = ['server-1', 'server-2', 'server-3'].map((id) => ({
+      baseUrl: 'https://example.com/mcp',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      description: '',
+      disabledAutoApproveTools: [],
+      disabledTools: [],
+      headers: {},
+      id,
+      isActive: true,
+      name: id,
+      type: 'streamableHttp',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }));
+
+    await act(async () => {
+      renderer = create(<McpScreen />);
+    });
+
+    const rows = renderer?.root.findAllByProps({ testID: 'mcp-server-row' }) ?? [];
+    // `findAllByProps` matches the composite `View` and the host node it renders,
+    // so keep the host nodes to get one entry per row.
+    const hostRows = rows.filter((row) => typeof row.type === 'string');
+    expect(hostRows.map((row) => row.props.showSeparator)).toEqual([false, true, true]);
+  });
+
   it('renders a connecting server as a single line', async () => {
     mockServers = [
       {
