@@ -297,7 +297,12 @@ export default function ProviderDetailSettingsScreen() {
           )}
         </ScrollView>
       ) : (
-        <ProviderModelList isLoading={modelsQuery.isPending} models={models} provider={provider} />
+        <ProviderModelList
+          isLoading={modelsQuery.isPending}
+          models={models}
+          provider={provider}
+          pullAction={modelActionsForTab?.pull}
+        />
       )}
       <ProviderModelCheckSheet
         apiKeyOptions={checkApiKeyOptions}

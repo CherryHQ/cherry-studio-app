@@ -36,16 +36,16 @@ type ProviderModelAccordionExtraData = {
 
 export function ProviderModelAccordion({
   displayedExpandedValues,
-  emptyTitle,
   groups,
+  ListEmptyComponent,
   ListHeaderComponent,
   onExpandedValuesChange,
   onScrollBeginDrag,
   provider,
 }: {
   displayedExpandedValues: string[];
-  emptyTitle?: string;
   groups: ProviderModelGroup[];
+  ListEmptyComponent?: ReactElement;
   ListHeaderComponent?: ReactElement;
   onExpandedValuesChange: (values: string[]) => void;
   onScrollBeginDrag?: () => void;
@@ -131,7 +131,7 @@ export function ProviderModelAccordion({
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       keyExtractor={keyExtractor}
-      ListEmptyComponent={<ProviderModelEmptyState title={emptyTitle} />}
+      ListEmptyComponent={ListEmptyComponent}
       ListHeaderComponent={ListHeaderComponent}
       maintainVisibleContentPosition={false}
       onScrollBeginDrag={onScrollBeginDrag}
@@ -263,18 +263,6 @@ const ModelRow = memo(function ModelRow({
     </Pressable>
   );
 });
-
-function ProviderModelEmptyState({ title }: { title: string | undefined }) {
-  if (!title) {
-    return null;
-  }
-
-  return (
-    <View className="mx-4 min-h-12 justify-center rounded-2xl bg-settings-grouped-surface px-4 py-4">
-      <Text className="text-base text-default-foreground">{title}</Text>
-    </View>
-  );
-}
 
 function ModelFallbackIcon({ model }: { model: Model }) {
   const initial = model.name.trim().charAt(0).toUpperCase() || 'M';

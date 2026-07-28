@@ -419,6 +419,7 @@
   "settings.provider.models.checkSuccess": "连接成功",
   "settings.provider.models.checkTitle": "检查模型",
   "settings.provider.models.empty": "暂无已启用模型。",
+  "settings.provider.models.emptyAction": "拉取模型",
   "settings.provider.models.loading": "正在加载模型...",
   "settings.provider.models.pull": "拉取",
   "settings.provider.models.pullAddedSection": "新增模型",

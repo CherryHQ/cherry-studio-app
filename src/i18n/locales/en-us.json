@@ -419,6 +419,7 @@
   "settings.provider.models.checkSuccess": "Connected",
   "settings.provider.models.checkTitle": "Check model",
   "settings.provider.models.empty": "No enabled models.",
+  "settings.provider.models.emptyAction": "Pull models",
   "settings.provider.models.loading": "Loading models...",
   "settings.provider.models.pull": "Pull",
   "settings.provider.models.pullAddedSection": "New models",
