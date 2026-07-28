@@ -8,7 +8,11 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
-import { isLiquidGlassAvailable, settingsServiceRow } from '@/config/constants';
+import {
+  hiddenProviderListIds,
+  isLiquidGlassAvailable,
+  settingsServiceRow,
+} from '@/config/constants';
 import { queryKeys } from '@/data/api';
 import { useDataQuery } from '@/data/hooks';
 import { ProviderAvatar } from './components/ProviderAvatar';
@@ -46,7 +50,8 @@ export default function ProviderSettingsScreen() {
   });
   const providerItems = useMemo<SettingsServiceRowProps[]>(
     () =>
-      [...(providersQuery.data ?? [])]
+      (providersQuery.data ?? [])
+        .filter((provider) => !hiddenProviderListIds.includes(provider.id))
         // Enabled providers float to the top; the sort is stable, so each group
         // keeps the `orderKey` order the service already applied.
         .sort((a, b) => Number(b.isEnabled) - Number(a.isEnabled))
