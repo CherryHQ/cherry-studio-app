@@ -14,6 +14,21 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 24 }),
 }));
 
+// The real module reaches for the worklets native binding and throws on import.
+jest.mock('react-native-reanimated', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+
+  return {
+    __esModule: true,
+    default: { View: MockView },
+    Easing: { linear: 'linear' },
+    useAnimatedStyle: (factory: () => object) => factory(),
+    useSharedValue: (value: number) => ({ value }),
+    withRepeat: (value: number) => value,
+    withTiming: (value: number) => value,
+  };
+});
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) =>

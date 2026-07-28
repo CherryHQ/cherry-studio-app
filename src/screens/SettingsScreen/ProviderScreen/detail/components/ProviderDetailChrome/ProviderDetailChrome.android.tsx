@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ProviderDetailChromeProps } from './ProviderDetailChrome.types';
+import { PullSpinner } from './PullSpinner';
 
 export function ProviderDetailChrome({
   canDelete,
@@ -43,19 +44,6 @@ export function ProviderDetailChrome({
             )}
           </Pressable>
 
-          {canDelete ? (
-            <Pressable
-              accessibilityLabel={t('settings.provider.deleteProvider')}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isDisabled }}
-              className="size-12 items-center justify-center border-border border-l active:opacity-60 disabled:opacity-35"
-              disabled={isDisabled}
-              onPress={onDelete}
-            >
-              <Trash2Icon className="size-5 text-danger" strokeWidth={2} />
-            </Pressable>
-          ) : null}
-
           {pullAction ? (
             <Pressable
               accessibilityLabel={t('settings.provider.models.pull')}
@@ -68,7 +56,24 @@ export function ProviderDetailChrome({
               disabled={pullAction.isDisabled || pullAction.isLoading}
               onPress={pullAction.onPress}
             >
-              <RefreshCcwIcon className="size-5 text-foreground" strokeWidth={2} />
+              {pullAction.isLoading ? (
+                <PullSpinner className="size-5 text-foreground" />
+              ) : (
+                <RefreshCcwIcon className="size-5 text-foreground" strokeWidth={2} />
+              )}
+            </Pressable>
+          ) : null}
+
+          {canDelete ? (
+            <Pressable
+              accessibilityLabel={t('settings.provider.deleteProvider')}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isDisabled }}
+              className="size-12 items-center justify-center border-border border-l active:opacity-60 disabled:opacity-35"
+              disabled={isDisabled}
+              onPress={onDelete}
+            >
+              <Trash2Icon className="size-5 text-danger" strokeWidth={2} />
             </Pressable>
           ) : null}
         </View>

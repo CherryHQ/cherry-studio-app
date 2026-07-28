@@ -1,7 +1,9 @@
 import { Color, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { View } from 'react-native';
 
 import type { ProviderDetailChromeProps } from './ProviderDetailChrome.types';
+import { PullSpinner } from './PullSpinner';
 
 export function ProviderDetailChrome({
   canDelete,
@@ -25,6 +27,30 @@ export function ProviderDetailChrome({
         icon={isActive ? 'pause' : 'play'}
         onPress={onToggleActive}
       />
+      {pullAction ? (
+        pullAction.isLoading ? (
+          // A native bar button item cannot animate its SF Symbol, so an in-flight
+          // pull swaps in a custom view that can. It is inert by design — the
+          // button it replaces would have been disabled anyway.
+          <Stack.Toolbar.View>
+            <View
+              accessible
+              accessibilityLabel={t('settings.provider.models.pull')}
+              accessibilityState={{ busy: true }}
+              className="size-6"
+            >
+              <PullSpinner className="size-6 text-foreground" />
+            </View>
+          </Stack.Toolbar.View>
+        ) : (
+          <Stack.Toolbar.Button
+            accessibilityLabel={t('settings.provider.models.pull')}
+            disabled={pullAction.isDisabled}
+            icon="arrow.trianglehead.2.clockwise.rotate.90"
+            onPress={pullAction.onPress}
+          />
+        )
+      ) : null}
       {canDelete ? (
         <Stack.Toolbar.Button
           accessibilityLabel={t('settings.provider.deleteProvider')}
@@ -32,16 +58,6 @@ export function ProviderDetailChrome({
           icon="trash"
           onPress={onDelete}
           tintColor={Color.ios.systemRed}
-        />
-      ) : null}
-      {pullAction ? (
-        <Stack.Toolbar.Button
-          accessibilityLabel={t('settings.provider.models.pull')}
-          // A bottom toolbar button has no busy state, so an in-flight pull reads
-          // as disabled rather than spinning.
-          disabled={pullAction.isDisabled || pullAction.isLoading}
-          icon="arrow.trianglehead.2.clockwise.rotate.90"
-          onPress={pullAction.onPress}
         />
       ) : null}
       <Stack.Toolbar.Spacer />
