@@ -1,14 +1,12 @@
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Accordion } from 'heroui-native/accordion';
-import { Button } from 'heroui-native/button';
 import { Spinner } from 'heroui-native/spinner';
 import { cn } from 'heroui-native/utils';
 import { MinusIcon, PlusIcon } from 'lucide-uniwind/png';
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackHeader } from '@/components/headers';
 import {
@@ -26,39 +24,32 @@ import { useProviderDetailSettings } from './detail';
 import { ProviderModelSearchField } from './models/components/ProviderModelSearchField';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import {
-  buildProviderModelPullApplyPayload,
+  type ProviderModelPullApplyChange,
+  useProviderModelPullApply,
+} from './models/hooks/useProviderModelPullApply';
+import {
   buildProviderModelPullListItems,
-  createDefaultProviderModelPullSelection,
   filterProviderModelPullPreview,
   type ProviderModelPullListItem,
   type ProviderModelPullPreview,
   type ProviderModelPullRowPosition,
   type ProviderModelPullSectionKey,
-  type ProviderModelPullSelection,
 } from './models/utils/providerModelPullPreview';
 import { consumeProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
-
-type ProviderModelPullSelectionOverride = ProviderModelPullSelection & {
-  previewKey: string;
-};
 
 type PullTranslator = ReturnType<typeof useTranslation>['t'];
 
 type PullListExtraData = {
-  allDisplayedAddedSelected: boolean;
-  allDisplayedMissingSelected: boolean;
+  appliedIds: ReadonlySet<UniqueModelId>;
   displayedAddedCount: number;
   displayedMissingCount: number;
+  displayedPreview: ProviderModelPullPreview;
   expandedSections: readonly ProviderModelPullSectionKey[];
-  isApplying: boolean;
   onSectionExpandedChange: (section: ProviderModelPullSectionKey, isExpanded: boolean) => void;
-  onToggleAddedModel: (modelId: UniqueModelId) => void;
-  onToggleAllAdded: () => void;
-  onToggleAllMissing: () => void;
-  onToggleMissingModel: (modelId: UniqueModelId) => void;
+  onToggleModel: (model: Model, section: ProviderModelPullSectionKey) => void;
+  onToggleSection: (models: readonly Model[], section: ProviderModelPullSectionKey) => void;
+  pendingIds: ReadonlySet<UniqueModelId>;
   provider: Provider | undefined;
-  selectedAddedIds: Set<UniqueModelId>;
-  selectedMissingIds: Set<UniqueModelId>;
   t: PullTranslator;
 };
 
@@ -80,12 +71,11 @@ export default function ProviderModelPullScreen() {
   );
   const loadStartedRef = useRef(Boolean(initialPreview));
   const { provider, providerQuery } = useProviderDetailSettings(providerId ?? '');
-  const { applyPullPreview, isApplying, isPreviewLoading, loadPullPreview, preview } =
-    useProviderModelPull({
-      initialPreview,
-      provider,
-      providerId: providerId ?? '',
-    });
+  const { applyModelChange, isPreviewLoading, loadPullPreview, preview } = useProviderModelPull({
+    initialPreview,
+    provider,
+    providerId: providerId ?? '',
+  });
   const leavePullScreen = useCallback(() => {
     if (providerId && returnToConfiguration === 'true') {
       router.replace({
@@ -132,15 +122,9 @@ export default function ProviderModelPullScreen() {
       <BackHeader title={t('settings.provider.models.pullPreviewTitle')} />
       {preview ? (
         <ProviderModelPullPreviewPage
-          isApplying={isApplying}
+          applyModelChange={applyModelChange}
           preview={preview}
           provider={provider}
-          onApply={async (payload) => {
-            const didApply = await applyPullPreview(payload);
-            if (didApply) {
-              leavePullScreen();
-            }
-          }}
         />
       ) : (
         <View className="flex-1 items-center justify-center gap-3 px-4">
@@ -157,15 +141,11 @@ export default function ProviderModelPullScreen() {
 }
 
 function ProviderModelPullPreviewPage({
-  isApplying,
-  onApply,
+  applyModelChange,
   preview,
   provider,
 }: {
-  isApplying: boolean;
-  onApply: (
-    payload: NonNullable<ReturnType<typeof buildProviderModelPullApplyPayload>>,
-  ) => Promise<void> | void;
+  applyModelChange: ProviderModelPullApplyChange;
   preview: ProviderModelPullPreview;
   provider: Provider | undefined;
 }) {
@@ -176,7 +156,6 @@ function ProviderModelPullPreviewPage({
     'added',
     'missing',
   ]);
-  const [applyingSection, setApplyingSection] = useState<ProviderModelPullSectionKey | null>(null);
   const [selectedFilterTags, setSelectedFilterTags] = useState<ModelPickerTag[]>([]);
   const missingCount = preview.missing.length;
   const searchedPreview = useMemo(
@@ -194,14 +173,10 @@ function ProviderModelPullPreviewPage({
     () => getAvailableModelPickerFilterTagsForModels([...preview.added, ...preview.missing]),
     [preview],
   );
-  const {
-    selectedAddedIds,
-    selectedMissingIds,
-    toggleAddedSelection,
-    toggleAllAdded,
-    toggleAllMissing,
-    toggleMissingSelection,
-  } = useProviderModelPullSelection({ displayedPreview, preview });
+  const { appliedIds, pendingIds, toggleModel, toggleSection } = useProviderModelPullApply({
+    applyModelChange,
+    preview,
+  });
   const displayedAddedCount = displayedPreview.added.length;
   const displayedMissingCount = displayedPreview.missing.length;
   const visibleSections = useMemo<ProviderModelPullSectionKey[]>(
@@ -212,28 +187,6 @@ function ProviderModelPullPreviewPage({
     () => buildProviderModelPullListItems(displayedPreview, expandedSections, visibleSections),
     [displayedPreview, expandedSections, visibleSections],
   );
-  const applySection = useCallback(
-    async (section: ProviderModelPullSectionKey) => {
-      const isAddedSection = section === 'added';
-      const payload = buildProviderModelPullApplyPayload(preview, {
-        addedIds: isAddedSection ? selectedAddedIds : new Set<UniqueModelId>(),
-        missingIds: isAddedSection ? new Set<UniqueModelId>() : selectedMissingIds,
-      });
-      if (!payload) {
-        return;
-      }
-
-      setApplyingSection(section);
-      await Promise.resolve(onApply(payload)).finally(() => setApplyingSection(null));
-    },
-    [onApply, preview, selectedAddedIds, selectedMissingIds],
-  );
-  const handleAddModels = useCallback(() => {
-    void applySection('added');
-  }, [applySection]);
-  const handleCleanMissingModels = useCallback(() => {
-    void applySection('missing');
-  }, [applySection]);
   const handleSectionExpandedChange = useCallback(
     (section: ProviderModelPullSectionKey, isExpanded: boolean) => {
       setExpandedSections((current) => {
@@ -253,40 +206,30 @@ function ProviderModelPullPreviewPage({
   }, []);
   const listExtraData = useMemo<PullListExtraData>(
     () => ({
-      allDisplayedAddedSelected: areAllModelsSelected(displayedPreview.added, selectedAddedIds),
-      allDisplayedMissingSelected: areAllModelsSelected(
-        displayedPreview.missing,
-        selectedMissingIds,
-      ),
+      appliedIds,
       displayedAddedCount,
       displayedMissingCount,
+      displayedPreview,
       expandedSections,
-      isApplying,
       onSectionExpandedChange: handleSectionExpandedChange,
-      onToggleAddedModel: toggleAddedSelection,
-      onToggleAllAdded: toggleAllAdded,
-      onToggleAllMissing: toggleAllMissing,
-      onToggleMissingModel: toggleMissingSelection,
+      onToggleModel: toggleModel,
+      onToggleSection: toggleSection,
+      pendingIds,
       provider,
-      selectedAddedIds,
-      selectedMissingIds,
       t,
     }),
     [
+      appliedIds,
       displayedAddedCount,
       displayedMissingCount,
       displayedPreview,
       expandedSections,
       handleSectionExpandedChange,
-      isApplying,
+      pendingIds,
       provider,
-      selectedAddedIds,
-      selectedMissingIds,
       t,
-      toggleAddedSelection,
-      toggleAllAdded,
-      toggleAllMissing,
-      toggleMissingSelection,
+      toggleModel,
+      toggleSection,
     ],
   );
   const isSearchEmpty = displayedAddedCount + displayedMissingCount === 0;
@@ -328,88 +271,8 @@ function ProviderModelPullPreviewPage({
         showsVerticalScrollIndicator={false}
         style={styles.list}
       />
-
-      <PullApplyFooter
-        applyingSection={applyingSection}
-        isApplying={isApplying}
-        missingCount={missingCount}
-        selectedAddedCount={selectedAddedIds.size}
-        selectedMissingCount={selectedMissingIds.size}
-        onAddModels={handleAddModels}
-        onCleanMissingModels={handleCleanMissingModels}
-      />
     </View>
   );
-}
-
-function useProviderModelPullSelection({
-  displayedPreview,
-  preview,
-}: {
-  displayedPreview: ProviderModelPullPreview;
-  preview: ProviderModelPullPreview;
-}) {
-  const [selectionOverride, setSelectionOverride] =
-    useState<ProviderModelPullSelectionOverride | null>(null);
-  const previewKey = useMemo(() => getPreviewKey(preview), [preview]);
-  const defaultSelection = useMemo(
-    () => createDefaultProviderModelPullSelection(preview),
-    [preview],
-  );
-  const selection =
-    selectionOverride?.previewKey === previewKey ? selectionOverride : defaultSelection;
-
-  const toggleAddedSelection = useCallback(
-    (modelId: UniqueModelId) => {
-      setSelectionOverride((current) => {
-        const baseSelection = getSelectionForUpdate(current, previewKey, defaultSelection);
-        return {
-          ...baseSelection,
-          addedIds: toggleSetItem(baseSelection.addedIds, modelId),
-        };
-      });
-    },
-    [defaultSelection, previewKey],
-  );
-  const toggleMissingSelection = useCallback(
-    (modelId: UniqueModelId) => {
-      setSelectionOverride((current) => {
-        const baseSelection = getSelectionForUpdate(current, previewKey, defaultSelection);
-        return {
-          ...baseSelection,
-          missingIds: toggleSetItem(baseSelection.missingIds, modelId),
-        };
-      });
-    },
-    [defaultSelection, previewKey],
-  );
-  const toggleAllAdded = useCallback(() => {
-    setSelectionOverride((current) => {
-      const baseSelection = getSelectionForUpdate(current, previewKey, defaultSelection);
-      return {
-        ...baseSelection,
-        addedIds: toggleModelsSelection(baseSelection.addedIds, displayedPreview.added),
-      };
-    });
-  }, [defaultSelection, displayedPreview.added, previewKey]);
-  const toggleAllMissing = useCallback(() => {
-    setSelectionOverride((current) => {
-      const baseSelection = getSelectionForUpdate(current, previewKey, defaultSelection);
-      return {
-        ...baseSelection,
-        missingIds: toggleModelsSelection(baseSelection.missingIds, displayedPreview.missing),
-      };
-    });
-  }, [defaultSelection, displayedPreview.missing, previewKey]);
-
-  return {
-    selectedAddedIds: selection.addedIds,
-    selectedMissingIds: selection.missingIds,
-    toggleAddedSelection,
-    toggleAllAdded,
-    toggleAllMissing,
-    toggleMissingSelection,
-  };
 }
 
 function pullListKeyExtractor(item: ProviderModelPullListItem) {
@@ -429,19 +292,24 @@ function renderPullListItem({
   if (item.type === 'section') {
     const isAddedSection = item.section === 'added';
     const count = isAddedSection ? listData.displayedAddedCount : listData.displayedMissingCount;
-    const isAllSectionSelected = isAddedSection
-      ? listData.allDisplayedAddedSelected
-      : listData.allDisplayedMissingSelected;
+    const sectionModels = isAddedSection
+      ? listData.displayedPreview.added
+      : listData.displayedPreview.missing;
+    const isEverythingApplied =
+      sectionModels.length > 0 && sectionModels.every((model) => listData.appliedIds.has(model.id));
 
     return (
       <PullSectionHeader
         actionLabel={listData.t(
-          isAllSectionSelected
-            ? 'settings.provider.models.pullDeselectAll'
-            : 'settings.provider.models.pullSelectAll',
+          isEverythingApplied
+            ? isAddedSection
+              ? 'settings.provider.models.pullRemoveAll'
+              : 'settings.provider.models.pullRestoreAll'
+            : isAddedSection
+              ? 'settings.provider.models.pullAddAll'
+              : 'settings.provider.models.pullRemoveAll',
         )}
         count={count}
-        isApplying={listData.isApplying}
         isExpanded={listData.expandedSections.includes(item.section)}
         isFirstSection={item.isFirstSection}
         section={item.section}
@@ -450,84 +318,22 @@ function renderPullListItem({
             ? 'settings.provider.models.pullAddedSection'
             : 'settings.provider.models.pullMissingSection',
         )}
-        onActionPress={isAddedSection ? listData.onToggleAllAdded : listData.onToggleAllMissing}
+        onActionPress={() => listData.onToggleSection(sectionModels, item.section)}
         onExpandedChange={listData.onSectionExpandedChange}
       />
     );
   }
 
-  const isAddedSection = item.section === 'added';
-  const selectedIds = isAddedSection ? listData.selectedAddedIds : listData.selectedMissingIds;
-
   return (
     <PullModelRow
-      isDisabled={listData.isApplying}
-      isSelected={selectedIds.has(item.model.id)}
+      isApplied={listData.appliedIds.has(item.model.id)}
+      isPending={listData.pendingIds.has(item.model.id)}
       model={item.model}
       position={item.position}
       provider={listData.provider}
       section={item.section}
-      onToggleModel={isAddedSection ? listData.onToggleAddedModel : listData.onToggleMissingModel}
+      onToggleModel={listData.onToggleModel}
     />
-  );
-}
-
-function PullApplyFooter({
-  applyingSection,
-  isApplying,
-  missingCount,
-  onAddModels,
-  onCleanMissingModels,
-  selectedAddedCount,
-  selectedMissingCount,
-}: {
-  applyingSection: ProviderModelPullSectionKey | null;
-  isApplying: boolean;
-  missingCount: number;
-  onAddModels: () => void;
-  onCleanMissingModels: () => void;
-  selectedAddedCount: number;
-  selectedMissingCount: number;
-}) {
-  const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-
-  return (
-    <View
-      className="flex-row gap-2 border-border border-t px-4 pt-3"
-      style={{ paddingBottom: Math.max(insets.bottom, 12) }}
-    >
-      {missingCount > 0 ? (
-        <Button
-          className="h-10 min-h-0 flex-1 rounded-xl"
-          isDisabled={isApplying || selectedMissingCount === 0}
-          variant="danger-soft"
-          onPress={onCleanMissingModels}
-        >
-          <View className="min-w-0 flex-row items-center justify-center gap-2">
-            {applyingSection === 'missing' ? <Spinner size="sm" /> : null}
-            <Text className="font-medium text-danger text-sm" numberOfLines={1}>
-              {t('settings.provider.models.pullCleanMissing', {
-                count: selectedMissingCount,
-              })}
-            </Text>
-          </View>
-        </Button>
-      ) : null}
-      <Button
-        className="h-10 min-h-0 flex-1 rounded-xl"
-        isDisabled={isApplying || selectedAddedCount === 0}
-        variant="primary"
-        onPress={onAddModels}
-      >
-        <View className="min-w-0 flex-row items-center justify-center gap-2">
-          {applyingSection === 'added' ? <Spinner size="sm" /> : null}
-          <Text className="font-medium text-sm text-white" numberOfLines={1}>
-            {t('settings.provider.models.pullApplySelected')}
-          </Text>
-        </View>
-      </Button>
-    </View>
   );
 }
 
@@ -600,7 +406,6 @@ function PullSearchEmptyState({ title }: { title: string }) {
 function PullSectionHeader({
   actionLabel,
   count,
-  isApplying,
   isExpanded,
   isFirstSection,
   onActionPress,
@@ -610,7 +415,6 @@ function PullSectionHeader({
 }: {
   actionLabel: string;
   count: number;
-  isApplying: boolean;
   isExpanded: boolean;
   isFirstSection: boolean;
   onActionPress: () => void;
@@ -624,7 +428,6 @@ function PullSectionHeader({
       className={cn('w-full', !isFirstSection && 'pt-3')}
       hideSeparator
       isCollapsible
-      isDisabled={isApplying}
       selectionMode="single"
       value={isExpanded ? section : undefined}
       onValueChange={(value: string | undefined) => onExpandedChange(section, value === section)}
@@ -643,7 +446,7 @@ function PullSectionHeader({
             accessibilityLabel={actionLabel}
             accessibilityRole="button"
             className="absolute top-0 right-9 bottom-0 z-10 justify-center px-1 active:opacity-60 disabled:opacity-40"
-            disabled={isApplying || count === 0}
+            disabled={count === 0}
             hitSlop={6}
             onPress={onActionPress}
           >
@@ -656,18 +459,18 @@ function PullSectionHeader({
 }
 
 const PullModelRow = memo(function PullModelRow({
-  isDisabled,
-  isSelected,
+  isApplied,
+  isPending,
   model,
   onToggleModel,
   position,
   provider,
   section,
 }: {
-  isDisabled: boolean;
-  isSelected: boolean;
+  isApplied: boolean;
+  isPending: boolean;
   model: Model;
-  onToggleModel: (modelId: UniqueModelId) => void;
+  onToggleModel: (model: Model, section: ProviderModelPullSectionKey) => void;
   position: ProviderModelPullRowPosition;
   provider: Provider | undefined;
   section: ProviderModelPullSectionKey;
@@ -675,8 +478,11 @@ const PullModelRow = memo(function PullModelRow({
   const isMissing = section === 'missing';
   const tags = useMemo(() => getPullModelTags(model), [model]);
   const handleToggle = useCallback(() => {
-    onToggleModel(model.id);
-  }, [model.id, onToggleModel]);
+    onToggleModel(model, section);
+  }, [model, onToggleModel, section]);
+  // `added` rows start out absent and gain a model; `missing` rows start out
+  // present and lose one. Either way "applied" means the tap already landed.
+  const showsMinus = isMissing ? !isApplied : isApplied;
   const modelPickerItem = useMemo<ModelPickerModelItem | null>(() => {
     if (!provider) {
       return null;
@@ -696,14 +502,16 @@ const PullModelRow = memo(function PullModelRow({
   return (
     <Pressable
       accessibilityLabel={model.name}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: isSelected, disabled: isDisabled }}
+      accessibilityRole="button"
+      accessibilityState={{ busy: isPending, disabled: isPending }}
       className={cn(
-        'flex-row items-center gap-3 bg-settings-grouped-surface px-3 py-2 active:opacity-60 disabled:opacity-40',
+        'flex-row items-center gap-3 px-3 py-2 active:opacity-60 disabled:opacity-40',
+        // Desktop tints the whole row once the model is in the provider.
+        isApplied && !isMissing ? 'bg-success/10' : 'bg-settings-grouped-surface',
         (position === 'first' || position === 'only') && 'rounded-t-xl',
         (position === 'last' || position === 'only') && 'rounded-b-xl',
       )}
-      disabled={isDisabled}
+      disabled={isPending}
       onPress={handleToggle}
     >
       {modelPickerItem ? (
@@ -714,7 +522,7 @@ const PullModelRow = memo(function PullModelRow({
       <Text
         className={cn(
           'min-w-0 flex-1 text-sm',
-          isMissing ? 'text-default-foreground line-through' : 'text-foreground',
+          isMissing && !isApplied ? 'text-default-foreground line-through' : 'text-foreground',
         )}
         numberOfLines={1}
       >
@@ -727,24 +535,11 @@ const PullModelRow = memo(function PullModelRow({
           ))}
         </View>
       ) : null}
-      {/* The row itself is the hit target, so this only reports what the tap will
-          do: add the model, or drop one the provider no longer serves. */}
-      <View
-        className={cn(
-          'size-7 shrink-0 items-center justify-center rounded-lg',
-          isSelected ? (isMissing ? 'bg-danger/15' : 'bg-primary/15') : null,
-        )}
-      >
-        {isMissing ? (
-          <MinusIcon
-            className={cn('size-4', isSelected ? 'text-danger' : 'text-default-foreground')}
-            strokeWidth={2}
-          />
+      <View className="size-7 shrink-0 items-center justify-center rounded-lg">
+        {showsMinus ? (
+          <MinusIcon className="size-4 text-danger" strokeWidth={2} />
         ) : (
-          <PlusIcon
-            className={cn('size-4', isSelected ? 'text-primary' : 'text-default-foreground')}
-            strokeWidth={2}
-          />
+          <PlusIcon className="size-4 text-primary" strokeWidth={2} />
         )}
       </View>
     </Pressable>
@@ -772,63 +567,6 @@ function isFreePullModel(model: Model) {
     .join(' ')
     .toLocaleLowerCase()
     .includes('free');
-}
-
-function toggleSetItem<TItem>(items: Set<TItem>, item: TItem): Set<TItem> {
-  const next = new Set(items);
-  if (next.has(item)) {
-    next.delete(item);
-  } else {
-    next.add(item);
-  }
-  return next;
-}
-
-function areAllModelsSelected(
-  models: readonly Model[],
-  selectedIds: ReadonlySet<UniqueModelId>,
-): boolean {
-  return models.length > 0 && models.every((model) => selectedIds.has(model.id));
-}
-
-function toggleModelsSelection(
-  selectedIds: Set<UniqueModelId>,
-  models: readonly Model[],
-): Set<UniqueModelId> {
-  const next = new Set(selectedIds);
-  const shouldDeselect = areAllModelsSelected(models, selectedIds);
-
-  for (const model of models) {
-    if (shouldDeselect) {
-      next.delete(model.id);
-    } else {
-      next.add(model.id);
-    }
-  }
-
-  return next;
-}
-
-function getPreviewKey(preview: ProviderModelPullPreview): string {
-  return [
-    ...preview.added.map((model) => `added:${model.id}`),
-    ...preview.missing.map((model) => `missing:${model.id}`),
-  ].join('|');
-}
-
-function getSelectionForUpdate(
-  current: ProviderModelPullSelectionOverride | null,
-  previewKey: string,
-  fallback: ProviderModelPullSelection,
-): ProviderModelPullSelectionOverride {
-  if (current?.previewKey === previewKey) {
-    return current;
-  }
-
-  return {
-    ...fallback,
-    previewKey,
-  };
 }
 
 const styles = StyleSheet.create({
