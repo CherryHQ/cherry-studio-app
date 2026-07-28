@@ -2,9 +2,9 @@ import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/reac
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Accordion } from 'heroui-native/accordion';
 import { Button } from 'heroui-native/button';
-import { Checkbox } from 'heroui-native/checkbox';
 import { Spinner } from 'heroui-native/spinner';
 import { cn } from 'heroui-native/utils';
+import { MinusIcon, PlusIcon } from 'lucide-uniwind/png';
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -62,7 +62,10 @@ type PullListExtraData = {
   t: PullTranslator;
 };
 
-const pullModelEstimatedRowHeight = 58;
+// One line of text against a 32pt avatar, plus the row's vertical padding.
+const pullModelEstimatedRowHeight = 48;
+// Past this the capability strip starts squeezing the model name off the row.
+const pullModelMaxTags = 4;
 
 export default function ProviderModelPullScreen() {
   const { providerId, providerName, returnToConfiguration } = useLocalSearchParams<{
@@ -708,41 +711,41 @@ const PullModelRow = memo(function PullModelRow({
       ) : (
         <PullModelFallbackIcon model={model} />
       )}
-      <View className="min-w-0 flex-1 gap-0.5">
-        <Text
-          className={cn(
-            'min-w-0 shrink text-base',
-            isMissing ? 'text-default-foreground line-through' : 'text-foreground',
-          )}
-          numberOfLines={1}
-        >
-          {model.name}
-        </Text>
-        <Text
-          className={cn(
-            'min-w-0 shrink text-default-foreground text-xs',
-            isMissing ? 'line-through' : null,
-          )}
-          numberOfLines={1}
-        >
-          {model.modelId}
-        </Text>
-      </View>
+      <Text
+        className={cn(
+          'min-w-0 flex-1 text-sm',
+          isMissing ? 'text-default-foreground line-through' : 'text-foreground',
+        )}
+        numberOfLines={1}
+      >
+        {model.name}
+      </Text>
       {tags.length > 0 ? (
-        <View className="min-h-5 max-w-28 shrink-0 flex-row items-center justify-end gap-1 overflow-hidden">
-          {tags.slice(0, 4).map((tag) => (
+        <View className="shrink-0 flex-row items-center gap-1">
+          {tags.slice(0, pullModelMaxTags).map((tag) => (
             <ModelPickerTagChip key={`${model.id}:${tag}`} tag={tag} />
           ))}
         </View>
       ) : null}
-      <View className="size-8 items-center justify-center">
-        <Checkbox
-          isDisabled={isDisabled}
-          isSelected={isSelected}
-          variant="secondary"
-          onPress={(event) => event.stopPropagation()}
-          onSelectedChange={handleToggle}
-        />
+      {/* The row itself is the hit target, so this only reports what the tap will
+          do: add the model, or drop one the provider no longer serves. */}
+      <View
+        className={cn(
+          'size-7 shrink-0 items-center justify-center rounded-lg',
+          isSelected ? (isMissing ? 'bg-danger/15' : 'bg-primary/15') : null,
+        )}
+      >
+        {isMissing ? (
+          <MinusIcon
+            className={cn('size-4', isSelected ? 'text-danger' : 'text-default-foreground')}
+            strokeWidth={2}
+          />
+        ) : (
+          <PlusIcon
+            className={cn('size-4', isSelected ? 'text-primary' : 'text-default-foreground')}
+            strokeWidth={2}
+          />
+        )}
       </View>
     </Pressable>
   );
