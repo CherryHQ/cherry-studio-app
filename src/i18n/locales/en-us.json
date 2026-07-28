@@ -443,6 +443,8 @@
   "settings.provider.models.pullRestoreAll": "Restore all",
   "settings.provider.models.pullTimedOut": "Pull timed out. Try again later.",
   "settings.provider.models.pullUpToDate": "Model list is up to date",
+  "settings.provider.models.remove": "Remove model",
+  "settings.provider.models.removeFailed": "Failed to remove the model",
   "settings.provider.models.search.empty": "No matching models.",
   "settings.provider.models.ungrouped": "Ungrouped",
   "settings.provider.search.empty": "No matching model services.",

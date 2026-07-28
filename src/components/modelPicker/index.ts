@@ -6,6 +6,7 @@ export { useModelPickerData } from './hooks/useModelPickerData';
 export { useModelSettingSelections } from './hooks/useModelSettingSelections';
 export { usePrefetchModelPickerData } from './hooks/usePrefetchModelPickerData';
 export {
+  createAmbiguousModelNameTest,
   filterModelsByModelPickerTags,
   getAvailableModelPickerFilterTagsForModels,
   getModelPickerTags,

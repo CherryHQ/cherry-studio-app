@@ -443,6 +443,8 @@
   "settings.provider.models.pullRestoreAll": "全部恢复",
   "settings.provider.models.pullTimedOut": "拉取模型超时，请稍后重试",
   "settings.provider.models.pullUpToDate": "模型列表已是最新",
+  "settings.provider.models.remove": "移除模型",
+  "settings.provider.models.removeFailed": "移除模型失败",
   "settings.provider.models.search.empty": "没有匹配的模型。",
   "settings.provider.models.ungrouped": "未分组",
   "settings.provider.search.empty": "没有匹配的模型服务。",

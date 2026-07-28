@@ -3,7 +3,6 @@ import { useToast } from 'heroui-native/toast';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { queryKeys } from '@/data/api';
 import { useDataServices } from '@/data/runtime';
 import { providerRegistryService } from '@/data/services/ProviderRegistryService';
 import type { UpdateProviderInput } from '@/data/services/ProviderService';
@@ -20,6 +19,7 @@ import {
   isProviderModelPullTimeoutError,
   withProviderModelPullTimeout,
 } from '../utils/providerModelPullTimeout';
+import { refreshProviderModelQueries } from '../utils/refreshProviderModelQueries';
 
 type UseProviderModelPullOptions = {
   initialPreview?: ProviderModelPullPreview | null;
@@ -47,15 +47,10 @@ export function useProviderModelPull({
     setPreview(null);
   }, []);
 
-  const refreshModelQueries = useCallback(async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.models.list({ providerId }) }),
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.models.list({ enabled: true, providerId }),
-      }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.models.list() }),
-    ]);
-  }, [providerId, queryClient]);
+  const refreshModelQueries = useCallback(
+    () => refreshProviderModelQueries(queryClient, providerId),
+    [providerId, queryClient],
+  );
 
   const loadPullPreview = useCallback(async (): Promise<ProviderModelPullLoadResult> => {
     if (!provider || !providerId) {

@@ -8,12 +8,14 @@ import { SettingsDialogActionButton } from '../../components/SettingsDialogActio
 import { ProviderModelAccordion } from '../models/components/ProviderModelAccordion';
 import { ProviderModelSearchField } from '../models/components/ProviderModelSearchField';
 import { useProviderModelGroups } from '../models/hooks/useProviderModelGroups';
+import { useProviderModelRemove } from '../models/hooks/useProviderModelRemove';
 import type { ProviderModelAction } from '../models/types';
 
 type ProviderModelListProps = {
   isLoading: boolean;
   models: Model[];
   provider: Provider | undefined;
+  providerId: string;
   /** The bottom toolbar's pull, surfaced again as the empty list's call to action. */
   pullAction?: ProviderModelAction;
 };
@@ -22,12 +24,14 @@ export function ProviderModelList({
   isLoading,
   models,
   provider,
+  providerId,
   pullAction,
 }: ProviderModelListProps) {
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
   const { displayedExpandedValues, groups, isSearching, setExpandedValues } =
     useProviderModelGroups({ models, searchText });
+  const { isDefaultModel, removeModel, removingIds } = useProviderModelRemove(providerId);
 
   // A provider with no models at all has nothing to search and nothing to say, so
   // the search field and the "no models" line both give way to the pull itself.
@@ -37,6 +41,7 @@ export function ProviderModelList({
     <ProviderModelAccordion
       displayedExpandedValues={displayedExpandedValues}
       groups={groups}
+      isDefaultModel={isDefaultModel}
       ListEmptyComponent={
         hasNoModels && pullAction ? (
           <ProviderModelPullCta action={pullAction} />
@@ -64,7 +69,9 @@ export function ProviderModelList({
         )
       }
       provider={provider}
+      removingIds={removingIds}
       onExpandedValuesChange={setExpandedValues}
+      onRemoveModel={removeModel}
       onScrollBeginDrag={Keyboard.dismiss}
     />
   );

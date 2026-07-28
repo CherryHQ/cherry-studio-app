@@ -101,6 +101,18 @@ export function getModelPickerTagLabelKey(tag: ModelPickerTag) {
   return MODEL_PICKER_TAG_LABEL_KEYS[tag];
 }
 
+/**
+ * The picker's rule for when a row has to spell out its model id: only when
+ * another model in the same list answers to the same name. Returns a test
+ * rather than the name set so callers never have to know how a name is
+ * normalized.
+ */
+export function createAmbiguousModelNameTest(models: readonly Model[]): (model: Model) => boolean {
+  const counts = countModelNames(models);
+
+  return (model) => (counts.get(normalizeModelName(model.name)) ?? 0) > 1;
+}
+
 export function getModelPickerTags(model: Model): ModelPickerTag[] {
   return MODEL_PICKER_TAGS.filter((tag) => matchesModelPickerTag(model, tag));
 }

@@ -1,23 +1,22 @@
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { ChevronRightIcon } from 'lucide-uniwind/png';
+import { ChevronRightIcon, MinusIcon } from 'lucide-uniwind/png';
 import { memo, type ReactElement, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import {
-  getModelPickerTags,
-  ModelPickerIcon,
-  type ModelPickerModelItem,
-  ModelPickerTagChip,
-} from '@/components/modelPicker';
-import type { Model } from '@/data/types/model';
+import { createAmbiguousModelNameTest } from '@/components/modelPicker';
+import type { Model, UniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 import { SettingsGroupedSurface } from '../../../components/SettingsGroupedSurface';
 
 import { getModelGroupLabel, type ProviderModelGroup } from '../utils/providerModelGroups';
+import {
+  ProviderModelRow,
+  providerModelRowHeight,
+  providerModelRowWithIdentifierHeight,
+} from './ProviderModelRow';
 
 const groupHeaderHeight = 48;
-const modelRowHeight = 56;
 const separatorHeight = 1;
 
 /**
@@ -31,39 +30,55 @@ type ProviderModelRowPlacement = {
   isLast: boolean;
 };
 
-type ProviderModelRow =
+type ProviderModelListEntry =
   | {
       group: ProviderModelGroup;
       type: 'group';
     }
   | {
       model: Model;
+      /**
+       * Whether the row spells out the model id underneath the name. Only worth
+       * the second line when another model answers to the same name, which is
+       * the rule the model picker already follows. Stamped onto the data
+       * because the row's height depends on it.
+       */
+      showIdentifier: boolean;
       type: 'model';
     };
 
-type ProviderModelListItem = ProviderModelRow & ProviderModelRowPlacement;
+type ProviderModelListItem = ProviderModelListEntry & ProviderModelRowPlacement;
 
 type ProviderModelAccordionExtraData = {
   expandedGroupNames: Set<string>;
+  isDefaultModel: (model: Model) => boolean;
+  onRemoveModel: (model: Model) => void;
   provider: Provider | undefined;
+  removingIds: ReadonlySet<UniqueModelId>;
 };
 
 export function ProviderModelAccordion({
   displayedExpandedValues,
   groups,
+  isDefaultModel,
   ListEmptyComponent,
   ListHeaderComponent,
   onExpandedValuesChange,
+  onRemoveModel,
   onScrollBeginDrag,
   provider,
+  removingIds,
 }: {
   displayedExpandedValues: string[];
   groups: ProviderModelGroup[];
+  isDefaultModel: (model: Model) => boolean;
   ListEmptyComponent?: ReactElement;
   ListHeaderComponent?: ReactElement;
   onExpandedValuesChange: (values: string[]) => void;
+  onRemoveModel: (model: Model) => void;
   onScrollBeginDrag?: () => void;
   provider: Provider | undefined;
+  removingIds: ReadonlySet<UniqueModelId>;
 }) {
   const { t } = useTranslation();
   const expandedGroupNames = useMemo(
@@ -77,9 +92,12 @@ export function ProviderModelAccordion({
   const extraData = useMemo<ProviderModelAccordionExtraData>(
     () => ({
       expandedGroupNames,
+      isDefaultModel,
+      onRemoveModel,
       provider,
+      removingIds,
     }),
-    [expandedGroupNames, provider],
+    [expandedGroupNames, isDefaultModel, onRemoveModel, provider, removingIds],
   );
 
   const handleToggleGroup = useCallback(
@@ -110,10 +128,14 @@ export function ProviderModelAccordion({
 
       return (
         <ModelRow
+          canRemove={!itemExtraData.isDefaultModel(item.model)}
           isFirst={item.isFirst}
           isLast={item.isLast}
+          isRemoving={itemExtraData.removingIds.has(item.model.id)}
           model={item.model}
           provider={itemExtraData.provider}
+          showIdentifier={item.showIdentifier}
+          onRemove={itemExtraData.onRemoveModel}
         />
       );
     },
@@ -124,7 +146,12 @@ export function ProviderModelAccordion({
   }, []);
   const getItemType = useCallback((item: ProviderModelListItem) => item.type, []);
   const getFixedItemSize = useCallback((item: ProviderModelListItem) => {
-    const rowHeight = item.type === 'group' ? groupHeaderHeight : modelRowHeight;
+    const rowHeight =
+      item.type === 'group'
+        ? groupHeaderHeight
+        : item.showIdentifier
+          ? providerModelRowWithIdentifierHeight
+          : providerModelRowHeight;
     return item.isFirst ? rowHeight : rowHeight + separatorHeight;
   }, []);
 
@@ -134,7 +161,7 @@ export function ProviderModelAccordion({
       contentContainerStyle={styles.contentContainer}
       contentInsetAdjustmentBehavior="automatic"
       data={listItems}
-      estimatedItemSize={modelRowHeight}
+      estimatedItemSize={providerModelRowHeight}
       extraData={extraData}
       getFixedItemSize={getFixedItemSize}
       getItemType={getItemType}
@@ -157,13 +184,22 @@ function buildProviderModelListItems(
   groups: ProviderModelGroup[],
   expandedGroupNames: Set<string>,
 ): ProviderModelListItem[] {
-  const rows: ProviderModelRow[] = [];
+  // Taken across every group, not just the expanded ones: two models can share
+  // a name from opposite ends of the list.
+  const isAmbiguousName = createAmbiguousModelNameTest(groups.flatMap((group) => group.models));
+  const rows: ProviderModelListEntry[] = [];
 
   for (const group of groups) {
     rows.push({ group, type: 'group' });
 
     if (expandedGroupNames.has(group.groupName)) {
-      rows.push(...group.models.map((model) => ({ model, type: 'model' as const })));
+      rows.push(
+        ...group.models.map((model) => ({
+          model,
+          showIdentifier: isAmbiguousName(model),
+          type: 'model' as const,
+        })),
+      );
     }
   }
 
@@ -220,75 +256,54 @@ const ModelGroupHeader = memo(function ModelGroupHeader({
 });
 
 const ModelRow = memo(function ModelRow({
+  canRemove,
   isFirst,
   isLast,
+  isRemoving,
   model,
+  onRemove,
   provider,
+  showIdentifier,
 }: {
+  canRemove: boolean;
   isFirst: boolean;
   isLast: boolean;
+  isRemoving: boolean;
   model: Model;
+  onRemove: (model: Model) => void;
   provider: Provider | undefined;
+  showIdentifier: boolean;
 }) {
-  const tags = useMemo(() => getModelPickerTags(model), [model]);
-  const modelPickerItem = useMemo<ModelPickerModelItem | null>(() => {
-    if (!provider) {
-      return null;
-    }
-
-    return {
-      isPinned: false,
-      key: `${model.id}:provider-list`,
-      model,
-      modelId: model.id,
-      modelIdentifier: model.modelId,
-      provider,
-      showIdentifier: model.modelId !== model.name,
-    };
-  }, [model, provider]);
+  const { t } = useTranslation();
+  const handleRemove = useCallback(() => {
+    onRemove(model);
+  }, [model, onRemove]);
 
   return (
-    <SettingsGroupedSurface className="mx-4" isFirst={isFirst} isLast={isLast}>
+    <ProviderModelRow
+      isFirst={isFirst}
+      isLast={isLast}
+      model={model}
+      provider={provider}
+      showIdentifier={showIdentifier}
+      surfaceClassName="mx-4"
+    >
+      {/* The pull screen's `-`, doing the same thing from the other side: one
+          tap, no dialog, and the pull itself is the way back. */}
       <Pressable
-        accessibilityLabel={model.name}
+        accessibilityLabel={t('settings.provider.models.remove')}
         accessibilityRole="button"
-        className="flex-row items-center gap-3 px-4 py-2 active:opacity-60"
-        style={styles.row}
+        accessibilityState={{ busy: isRemoving, disabled: !canRemove || isRemoving }}
+        className="size-7 shrink-0 items-center justify-center rounded-lg active:opacity-60 disabled:opacity-40"
+        disabled={!canRemove || isRemoving}
+        hitSlop={6}
+        onPress={handleRemove}
       >
-        {modelPickerItem ? (
-          <ModelPickerIcon item={modelPickerItem} />
-        ) : (
-          <ModelFallbackIcon model={model} />
-        )}
-        <View className="min-w-0 flex-1 gap-0.5">
-          <Text className="min-w-0 shrink text-base text-foreground" numberOfLines={1}>
-            {model.name}
-          </Text>
-          <Text className="min-w-0 shrink text-default-foreground text-xs" numberOfLines={1}>
-            {model.modelId}
-          </Text>
-        </View>
-        {tags.length > 0 ? (
-          <View className="min-h-5 max-w-28 shrink-0 flex-row items-center justify-end gap-1 overflow-hidden">
-            {tags.slice(0, 4).map((tag) => (
-              <ModelPickerTagChip key={`${model.id}:${tag}`} tag={tag} />
-            ))}
-          </View>
-        ) : null}
+        <MinusIcon className="size-4 text-danger" strokeWidth={2} />
       </Pressable>
-    </SettingsGroupedSurface>
+    </ProviderModelRow>
   );
 });
-
-function ModelFallbackIcon({ model }: { model: Model }) {
-  const initial = model.name.trim().charAt(0).toUpperCase() || 'M';
-
-  return (
-    <View className="size-8 items-center justify-center rounded-full">
-      <Text className="font-medium text-default-foreground text-xs">{initial}</Text>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   contentContainer: {
@@ -299,8 +314,5 @@ const styles = StyleSheet.create({
   },
   list: {
     flex: 1,
-  },
-  row: {
-    height: modelRowHeight,
   },
 });

@@ -117,6 +117,30 @@ describe('provider model pull preview helpers', () => {
     ).toEqual(['section:added', 'section:missing']);
   });
 
+  // A row costs a second line only when the name alone cannot tell two models
+  // apart — including across the two sections.
+  test('spells out the model id only for rows whose name is shared', () => {
+    const preview = {
+      added: [
+        model({ modelId: 'kimi-k2-0905', name: 'Kimi K2 Thinking' }),
+        model({ modelId: 'glm-5', name: 'GLM-5' }),
+      ],
+      missing: [model({ modelId: 'kimi-k2-thinking', name: 'Kimi K2 Thinking' })],
+    };
+
+    const identifiers = buildProviderModelPullListItems(
+      preview,
+      ['added', 'missing'],
+      ['added', 'missing'],
+    ).flatMap((item) => (item.type === 'model' ? [[item.model.modelId, item.showIdentifier]] : []));
+
+    expect(identifiers).toEqual([
+      ['kimi-k2-0905', true],
+      ['glm-5', false],
+      ['kimi-k2-thinking', true],
+    ]);
+  });
+
   test('only includes section headers that are configured as visible', () => {
     expect(
       buildProviderModelPullListItems({ added: [], missing: [] }, ['added', 'missing'], ['added']),

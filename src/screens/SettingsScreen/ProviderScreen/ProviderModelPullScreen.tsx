@@ -9,17 +9,10 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BackHeader } from '@/components/headers';
-import {
-  getModelPickerTags,
-  ModelPickerIcon,
-  type ModelPickerModelItem,
-  type ModelPickerTag,
-  ModelPickerTagChip,
-} from '@/components/modelPicker';
 import type { Model, UniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
-import { SettingsGroupedSurface } from '../components/SettingsGroupedSurface';
 import { useProviderDetailSettings } from './detail';
+import { ProviderModelRow, providerModelRowHeight } from './models/components/ProviderModelRow';
 import { ProviderModelSearchField } from './models/components/ProviderModelSearchField';
 import { ProviderModelTypeFilterBar } from './models/components/ProviderModelTypeFilterBar';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
@@ -57,11 +50,6 @@ type PullListExtraData = {
   provider: Provider | undefined;
   t: PullTranslator;
 };
-
-// One line of text against a 32pt avatar, plus the row's vertical padding.
-const pullModelEstimatedRowHeight = 48;
-// Past this the capability strip starts squeezing the model name off the row.
-const pullModelMaxTags = 4;
 
 export default function ProviderModelPullScreen() {
   const { providerId, providerName, returnToConfiguration } = useLocalSearchParams<{
@@ -244,7 +232,7 @@ function ProviderModelPullPreviewPage({
         contentInsetAdjustmentBehavior="automatic"
         data={listItems}
         drawDistance={320}
-        estimatedItemSize={pullModelEstimatedRowHeight}
+        estimatedItemSize={providerModelRowHeight}
         extraData={listExtraData}
         getItemType={getPullListItemType}
         keyboardDismissMode="on-drag"
@@ -335,6 +323,7 @@ function renderPullListItem({
       position={item.position}
       provider={listData.provider}
       section={item.section}
+      showIdentifier={item.showIdentifier}
       onToggleModel={listData.onToggleModel}
     />
   );
@@ -412,6 +401,7 @@ const PullModelRow = memo(function PullModelRow({
   position,
   provider,
   section,
+  showIdentifier,
 }: {
   isApplied: boolean;
   isPending: boolean;
@@ -420,101 +410,41 @@ const PullModelRow = memo(function PullModelRow({
   position: ProviderModelPullRowPosition;
   provider: Provider | undefined;
   section: ProviderModelPullSectionKey;
+  showIdentifier: boolean;
 }) {
   const isMissing = section === 'missing';
-  const tags = useMemo(() => getPullModelTags(model), [model]);
   const handleToggle = useCallback(() => {
     onToggleModel(model, section);
   }, [model, onToggleModel, section]);
   // `added` rows start out absent and gain a model; `missing` rows start out
   // present and lose one. Either way "applied" means the tap already landed.
   const showsMinus = isMissing ? !isApplied : isApplied;
-  const modelPickerItem = useMemo<ModelPickerModelItem | null>(() => {
-    if (!provider) {
-      return null;
-    }
-
-    return {
-      isPinned: false,
-      key: `${model.id}:pull`,
-      model,
-      modelId: model.id,
-      modelIdentifier: model.modelId,
-      provider,
-      showIdentifier: model.modelId !== model.name,
-    };
-  }, [model, provider]);
 
   return (
-    <SettingsGroupedSurface
-      // Desktop tints the whole row once the model is in the provider.
-      className={isApplied && !isMissing ? 'bg-success/10' : undefined}
+    <ProviderModelRow
+      isDisabled={isPending}
       isFirst={position === 'first' || position === 'only'}
       isLast={position === 'last' || position === 'only'}
+      model={model}
+      provider={provider}
+      showIdentifier={showIdentifier}
+      // Desktop tints the whole row once the model is in the provider.
+      surfaceClassName={isApplied && !isMissing ? 'bg-success/10' : undefined}
+      tone={isMissing && !isApplied ? 'struck' : 'default'}
+      onPress={handleToggle}
     >
-      <Pressable
-        accessibilityLabel={model.name}
-        accessibilityRole="button"
-        accessibilityState={{ busy: isPending, disabled: isPending }}
-        className="flex-row items-center gap-3 px-4 py-2 active:opacity-60 disabled:opacity-40"
-        disabled={isPending}
-        onPress={handleToggle}
-      >
-        {modelPickerItem ? (
-          <ModelPickerIcon item={modelPickerItem} />
+      {/* Not a button of its own: the row is the target, so this only pictures
+          which way the next tap goes. */}
+      <View className="size-7 shrink-0 items-center justify-center rounded-lg">
+        {showsMinus ? (
+          <MinusIcon className="size-4 text-danger" strokeWidth={2} />
         ) : (
-          <PullModelFallbackIcon model={model} />
+          <PlusIcon className="size-4 text-primary" strokeWidth={2} />
         )}
-        <Text
-          className={cn(
-            'min-w-0 flex-1 text-sm',
-            isMissing && !isApplied ? 'text-default-foreground line-through' : 'text-foreground',
-          )}
-          numberOfLines={1}
-        >
-          {model.name}
-        </Text>
-        {tags.length > 0 ? (
-          <View className="shrink-0 flex-row items-center gap-1">
-            {tags.slice(0, pullModelMaxTags).map((tag) => (
-              <ModelPickerTagChip key={`${model.id}:${tag}`} tag={tag} />
-            ))}
-          </View>
-        ) : null}
-        <View className="size-7 shrink-0 items-center justify-center rounded-lg">
-          {showsMinus ? (
-            <MinusIcon className="size-4 text-danger" strokeWidth={2} />
-          ) : (
-            <PlusIcon className="size-4 text-primary" strokeWidth={2} />
-          )}
-        </View>
-      </Pressable>
-    </SettingsGroupedSurface>
+      </View>
+    </ProviderModelRow>
   );
 });
-
-function PullModelFallbackIcon({ model }: { model: Model }) {
-  const initial = model.name.trim().charAt(0).toUpperCase() || 'M';
-
-  return (
-    <View className="size-8 items-center justify-center rounded-full">
-      <Text className="font-medium text-default-foreground text-xs">{initial}</Text>
-    </View>
-  );
-}
-
-function getPullModelTags(model: Model): ModelPickerTag[] {
-  const tags = getModelPickerTags(model);
-  return isFreePullModel(model) && !tags.includes('free') ? [...tags, 'free'] : tags;
-}
-
-function isFreePullModel(model: Model) {
-  return [model.id, model.modelId, model.name, model.presetModelId]
-    .filter(Boolean)
-    .join(' ')
-    .toLocaleLowerCase()
-    .includes('free');
-}
 
 const styles = StyleSheet.create({
   list: {

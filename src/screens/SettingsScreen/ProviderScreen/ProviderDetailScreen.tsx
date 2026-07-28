@@ -301,6 +301,7 @@ export default function ProviderDetailSettingsScreen() {
           isLoading={modelsQuery.isPending}
           models={models}
           provider={provider}
+          providerId={providerId}
           pullAction={modelActionsForTab?.pull}
         />
       )}
