@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { ScrollView } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/data/types/provider';
@@ -34,6 +35,7 @@ let mockAuthConfig: AuthConfig | null | undefined;
 let mockAuthConfigQuery: QueryState;
 let mockRedirectHref: unknown;
 let mockSpinnerRenderCount: number;
+let mockChromeRenderCount: number;
 let mockSectionRenders: SectionProps[];
 
 jest.mock('expo-router', () => ({
@@ -112,7 +114,10 @@ jest.mock('../detail', () => ({
 }));
 
 jest.mock('../detail/components/ProviderDetailChrome/ProviderDetailChrome', () => ({
-  ProviderDetailChrome: () => null,
+  ProviderDetailChrome: () => {
+    mockChromeRenderCount += 1;
+    return null;
+  },
 }));
 
 jest.mock('../detail/components/ProviderDetailTabs/ProviderDetailTabs', () => ({
@@ -189,6 +194,7 @@ describe('ProviderDetailScreen', () => {
     mockAuthConfigQuery = pendingQuery;
     mockRedirectHref = undefined;
     mockSpinnerRenderCount = 0;
+    mockChromeRenderCount = 0;
     mockSectionRenders = [];
   });
 
@@ -202,6 +208,17 @@ describe('ProviderDetailScreen', () => {
 
     expect(mockSpinnerRenderCount).toBe(1);
     expect(mockSectionRenders).toEqual([]);
+  });
+
+  // The spinner used to replace the whole screen, so the scroll view and the bottom
+  // toolbar only mounted once the queries landed — after the push had settled. On a
+  // first visit that left the scroll view with a zero top content inset and the
+  // content rendered underneath the native header.
+  it('mounts the scroll view and the bottom chrome before the queries land', () => {
+    render();
+
+    expect(renderer?.root.findAllByType(ScrollView)).not.toHaveLength(0);
+    expect(mockChromeRenderCount).toBe(1);
   });
 
   // The section used to mount without its Base URL / API keys blocks and gain them a

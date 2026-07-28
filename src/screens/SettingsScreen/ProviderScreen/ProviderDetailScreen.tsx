@@ -224,28 +224,20 @@ export default function ProviderDetailSettingsScreen() {
     return <Redirect href="/settings/provider" />;
   }
 
-  if (isProviderDetailLoading) {
-    return (
-      <>
-        <BackHeader
-          rightActions={configurationActions}
-          title={providerName ?? t('settings.pages.provider.title')}
-        />
-        <View className="flex-1 items-center justify-center">
-          <Spinner accessibilityLabel={t('settings.provider.loading')} />
-        </View>
-      </>
-    );
-  }
-
+  // Everything below renders the same tree whether or not the data has landed:
+  // only the ScrollView's children swap. Branching on `isProviderDetailLoading`
+  // one level higher used to reconfigure the native header (string title ->
+  // `headerTitle` element), mount the ScrollView, and install the bottom
+  // `Stack.Toolbar` *after* the push had settled — which on a first visit (nothing
+  // in the query cache) left the scroll view with a zero top content inset, so the
+  // content rendered underneath the header. A second visit read from cache, took
+  // this exact tree on the first frame, and looked fine.
   return (
     <>
       <BackHeader
         rightActions={activeTab === 'models' ? modelActions : configurationActions}
         title={providerName ?? t('settings.provider.tabs.configuration')}
-        titleElement={
-          provider ? <ProviderDetailTabs onTabChange={setActiveTab} tab={activeTab} /> : undefined
-        }
+        titleElement={<ProviderDetailTabs onTabChange={setActiveTab} tab={activeTab} />}
       />
       {activeTab === 'configuration' ? (
         <ScrollView
@@ -255,17 +247,26 @@ export default function ProviderDetailSettingsScreen() {
           showsVerticalScrollIndicator={false}
           style={styles.screen}
         >
-          <ProviderApiManagementSection
-            apiKeysInput={apiKeysInput}
-            apiKeysVisible={apiKeysVisible}
-            baseUrl={getProviderPrimaryBaseUrl(provider)}
-            provider={provider}
-            showApiKeys={showApiKeys}
-            showBaseUrl={canEditEndpoint}
-            onApiKeysManagePress={openApiKeySettings}
-            onApiKeysVisibleToggle={() => setApiKeysVisible((visible) => !visible)}
-            onBaseUrlManagePress={openEndpointSettings}
-          />
+          {isProviderDetailLoading ? (
+            <View className="items-center py-10">
+              <Spinner accessibilityLabel={t('settings.provider.loading')} />
+            </View>
+          ) : (
+            // Still gated as one commit: #467 kept the Base URL / API keys blocks
+            // out until all three queries land so the content never grows under a
+            // finger that already aimed at the toolbar.
+            <ProviderApiManagementSection
+              apiKeysInput={apiKeysInput}
+              apiKeysVisible={apiKeysVisible}
+              baseUrl={getProviderPrimaryBaseUrl(provider)}
+              provider={provider}
+              showApiKeys={showApiKeys}
+              showBaseUrl={canEditEndpoint}
+              onApiKeysManagePress={openApiKeySettings}
+              onApiKeysVisibleToggle={() => setApiKeysVisible((visible) => !visible)}
+              onBaseUrlManagePress={openEndpointSettings}
+            />
+          )}
         </ScrollView>
       ) : (
         <ProviderModelList
@@ -298,15 +299,17 @@ export default function ProviderDetailSettingsScreen() {
         onModelChange={setSelectedCheckModelId}
         onStart={startModelCheck}
       />
-      {provider ? (
-        <ProviderDetailChrome
-          canDelete={canDeleteProvider(provider)}
-          isActive={provider.isEnabled}
-          isDisabled={updateProviderEnabledMutation.isPending || deleteProviderMutation.isPending}
-          onDelete={requestDeleteProvider}
-          onToggleActive={handleToggleProvider}
-        />
-      ) : null}
+      {/* Mounted from the first frame — installing a bottom toolbar later is a
+          native nav-item change, which is what the loading branch used to do. */}
+      <ProviderDetailChrome
+        canDelete={provider ? canDeleteProvider(provider) : false}
+        isActive={provider?.isEnabled ?? false}
+        isDisabled={
+          !provider || updateProviderEnabledMutation.isPending || deleteProviderMutation.isPending
+        }
+        onDelete={requestDeleteProvider}
+        onToggleActive={handleToggleProvider}
+      />
       {confirmDialog}
     </>
   );
