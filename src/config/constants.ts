@@ -152,3 +152,9 @@ export const profileHero = {
   expandedScrimOpacity: 0.18, // dim over the locked photo, so the white name stays legible
   nameOverlayInsetX: 20, // locked name left inset from the photo edge
 } as const;
+
+// `SettingsServiceRow` geometry, shared with the virtualized lists that render
+// it (`estimatedItemSize`). Keep in sync with the row's `min-h-11` class.
+export const settingsServiceRow = {
+  rowHeight: 44,
+} as const;

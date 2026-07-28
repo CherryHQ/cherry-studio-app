@@ -13,7 +13,12 @@ export type SettingsServiceRowProps = {
   isEnabled: boolean;
   name: string;
   onPress: () => void;
-  /** Inset hairline that separates this row from the next one inside a grouped card. */
+  /**
+   * Draws an inset hairline *above* the row, separating it from the previous one
+   * inside a grouped card. Anchoring to the row above (rather than below) lets a
+   * caller express the rule as "every row but the first", which needs no
+   * knowledge of the list length.
+   */
   showSeparator?: boolean;
   statusLabel?: string;
   statusTone?: 'danger' | 'default' | 'success';
@@ -36,6 +41,9 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
 
   return (
     <View>
+      {showSeparator ? (
+        <View className="mx-4 h-px bg-border" testID="settings-service-row-separator" />
+      ) : null}
       <Pressable
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
@@ -97,9 +105,6 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
           <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
         </View>
       </Pressable>
-      {showSeparator ? (
-        <View className="mx-4 h-px bg-border" testID="settings-service-row-separator" />
-      ) : null}
     </View>
   );
 });

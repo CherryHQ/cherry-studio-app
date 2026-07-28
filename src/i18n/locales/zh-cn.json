@@ -302,7 +302,6 @@
   "settings.profile.setPrompt": "点击设置头像和用户名",
   "settings.profile.toggleAvatar": "放大或还原头像",
   "settings.profile.userName": "用户名",
-  "settings.provider.disabled.title": "未开启服务商",
   "settings.provider.add.title": "新建服务商",
   "settings.provider.add.name": "提供商名称",
   "settings.provider.add.namePlaceholder": "例如 OpenAI",

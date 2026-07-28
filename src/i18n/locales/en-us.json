@@ -302,7 +302,6 @@
   "settings.profile.setPrompt": "Tap to set avatar and name",
   "settings.profile.toggleAvatar": "Expand or collapse avatar",
   "settings.profile.userName": "User Name",
-  "settings.provider.disabled.title": "Disabled model services",
   "settings.provider.add.title": "Add Provider",
   "settings.provider.add.name": "Provider Name",
   "settings.provider.add.namePlaceholder": "e.g. OpenAI",
