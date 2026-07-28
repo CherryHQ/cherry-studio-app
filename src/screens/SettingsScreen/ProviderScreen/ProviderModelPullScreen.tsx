@@ -256,9 +256,10 @@ function ProviderModelPullPreviewPage({
           ) : null
         }
         ListHeaderComponent={
-          // Same `py-5` breathing room the provider's own model list gives its
-          // search field.
-          <View className="gap-3 pb-5">
+          // One gap for the whole screen: the search field, the filter bar and
+          // the first section are all `gap-3` apart, the same distance two
+          // sections keep from each other.
+          <View className="gap-3 pb-3">
             <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
             <ProviderModelTypeFilterBar
               counts={typeCounts}
