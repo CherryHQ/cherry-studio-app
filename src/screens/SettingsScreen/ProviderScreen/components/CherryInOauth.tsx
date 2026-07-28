@@ -100,7 +100,7 @@ export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProp
               <Text className="text-sm font-medium text-foreground">
                 {t('settings.provider.oauth.cherryIn.account_title')}
               </Text>
-              <Text className="mt-0.5 text-xs text-default-400">
+              <Text className="mt-0.5 text-foreground text-xs">
                 {t('settings.provider.oauth.cherryIn.tagline')}
               </Text>
             </View>
