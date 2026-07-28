@@ -92,6 +92,22 @@ export default function ProviderSettingsScreen() {
     // when the list shrinks, which resurrects the separator above the first row.
     return matches.map((item, index) => ({ ...item, showSeparator: index > 0 }));
   }, [providerItems, searchText]);
+  // Rows are a fixed `rowHeight` plus the 1px separator above every row but the
+  // first, so the card can be sized on the very first frame instead of flashing
+  // full-height. `onContentSizeChange` then corrects it, because Dynamic Type can
+  // make rows taller than the estimate; keying the measurement to the row count
+  // discards it as soon as the data changes, so a search never renders one frame
+  // at the previous result's height.
+  const [measuredList, setMeasuredList] = useState<{ height: number; rowCount: number }>();
+  const handleContentSizeChange = useCallback(
+    (_width: number, height: number) =>
+      setMeasuredList({ height, rowCount: filteredProviderItems.length }),
+    [filteredProviderItems.length],
+  );
+  const cardHeight =
+    measuredList?.rowCount === filteredProviderItems.length
+      ? measuredList.height
+      : filteredProviderItems.length * (settingsServiceRow.rowHeight + 1) - 1;
   const openCreateProvider = useCallback(() => {
     router.push('/settings/provider/new');
   }, [router]);
@@ -135,18 +151,29 @@ export default function ProviderSettingsScreen() {
           </SearchField.Group>
         </SearchField>
         {filteredProviderItems.length > 0 ? (
-          <View className="flex-1 overflow-hidden rounded-xl bg-settings-grouped-surface">
-            <LegendList
-              alwaysBounceVertical={false}
-              data={filteredProviderItems}
-              estimatedItemSize={settingsServiceRow.rowHeight}
-              keyboardDismissMode="on-drag"
-              keyboardShouldPersistTaps="handled"
-              keyExtractor={keyExtractor}
-              recycleItems
-              renderItem={renderProviderRow}
-              showsVerticalScrollIndicator={false}
-            />
+          // The card hugs its rows instead of filling the screen: `height` tracks
+          // the list's content, capped at the space left below the search field by
+          // `maxHeight: 100%`, which the `flex-1` wrapper resolves for us. The list
+          // still gets a bounded height either way, so virtualization keeps working.
+          <View className="min-h-0 flex-1">
+            <View
+              className="overflow-hidden rounded-xl bg-settings-grouped-surface"
+              style={{ height: cardHeight, maxHeight: '100%' }}
+            >
+              <LegendList
+                alwaysBounceVertical={false}
+                data={filteredProviderItems}
+                estimatedItemSize={settingsServiceRow.rowHeight}
+                keyboardDismissMode="on-drag"
+                keyboardShouldPersistTaps="handled"
+                keyExtractor={keyExtractor}
+                onContentSizeChange={handleContentSizeChange}
+                recycleItems
+                renderItem={renderProviderRow}
+                showsVerticalScrollIndicator={false}
+                style={styles.list}
+              />
+            </View>
           </View>
         ) : (
           <SettingsSection
@@ -166,6 +193,9 @@ export default function ProviderSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  list: {
+    flex: 1,
+  },
   searchInput: {
     includeFontPadding: false,
     textAlignVertical: 'center',
