@@ -4,17 +4,12 @@ import { memo, type ReactElement, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { createAmbiguousModelNameTest } from '@/components/modelPicker';
 import type { Model, UniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 import { SettingsGroupedSurface } from '../../../components/SettingsGroupedSurface';
 
 import { getModelGroupLabel, type ProviderModelGroup } from '../utils/providerModelGroups';
-import {
-  ProviderModelRow,
-  providerModelRowHeight,
-  providerModelRowWithIdentifierHeight,
-} from './ProviderModelRow';
+import { ProviderModelRow, providerModelRowHeight } from './ProviderModelRow';
 
 const groupHeaderHeight = 48;
 const separatorHeight = 1;
@@ -37,13 +32,6 @@ type ProviderModelListEntry =
     }
   | {
       model: Model;
-      /**
-       * Whether the row spells out the model id underneath the name. Only worth
-       * the second line when another model answers to the same name, which is
-       * the rule the model picker already follows. Stamped onto the data
-       * because the row's height depends on it.
-       */
-      showIdentifier: boolean;
       type: 'model';
     };
 
@@ -134,7 +122,6 @@ export function ProviderModelAccordion({
           isRemoving={itemExtraData.removingIds.has(item.model.id)}
           model={item.model}
           provider={itemExtraData.provider}
-          showIdentifier={item.showIdentifier}
           onRemove={itemExtraData.onRemoveModel}
         />
       );
@@ -146,12 +133,7 @@ export function ProviderModelAccordion({
   }, []);
   const getItemType = useCallback((item: ProviderModelListItem) => item.type, []);
   const getFixedItemSize = useCallback((item: ProviderModelListItem) => {
-    const rowHeight =
-      item.type === 'group'
-        ? groupHeaderHeight
-        : item.showIdentifier
-          ? providerModelRowWithIdentifierHeight
-          : providerModelRowHeight;
+    const rowHeight = item.type === 'group' ? groupHeaderHeight : providerModelRowHeight;
     return item.isFirst ? rowHeight : rowHeight + separatorHeight;
   }, []);
 
@@ -184,22 +166,13 @@ function buildProviderModelListItems(
   groups: ProviderModelGroup[],
   expandedGroupNames: Set<string>,
 ): ProviderModelListItem[] {
-  // Taken across every group, not just the expanded ones: two models can share
-  // a name from opposite ends of the list.
-  const isAmbiguousName = createAmbiguousModelNameTest(groups.flatMap((group) => group.models));
   const rows: ProviderModelListEntry[] = [];
 
   for (const group of groups) {
     rows.push({ group, type: 'group' });
 
     if (expandedGroupNames.has(group.groupName)) {
-      rows.push(
-        ...group.models.map((model) => ({
-          model,
-          showIdentifier: isAmbiguousName(model),
-          type: 'model' as const,
-        })),
-      );
+      rows.push(...group.models.map((model) => ({ model, type: 'model' as const })));
     }
   }
 
@@ -263,7 +236,6 @@ const ModelRow = memo(function ModelRow({
   model,
   onRemove,
   provider,
-  showIdentifier,
 }: {
   canRemove: boolean;
   isFirst: boolean;
@@ -272,7 +244,6 @@ const ModelRow = memo(function ModelRow({
   model: Model;
   onRemove: (model: Model) => void;
   provider: Provider | undefined;
-  showIdentifier: boolean;
 }) {
   const { t } = useTranslation();
   const handleRemove = useCallback(() => {
@@ -285,7 +256,6 @@ const ModelRow = memo(function ModelRow({
       isLast={isLast}
       model={model}
       provider={provider}
-      showIdentifier={showIdentifier}
       surfaceClassName="mx-4"
     >
       {/* The pull screen's `-`, doing the same thing from the other side: one

@@ -15,10 +15,8 @@ import type { Provider } from '@/data/types/provider';
 
 import { SettingsGroupedSurface } from '../../../components/SettingsGroupedSurface';
 
-// One line of text against a 32pt avatar, plus the row's vertical padding. The
-// model id, when a row needs it, adds a second line.
+// One line of text against a 32pt avatar, plus the row's vertical padding.
 export const providerModelRowHeight = 48;
-export const providerModelRowWithIdentifierHeight = 56;
 // Past this the capability strip starts squeezing the model name off the row.
 const providerModelRowMaxTags = 4;
 
@@ -36,7 +34,6 @@ export function ProviderModelRow({
   model,
   onPress,
   provider,
-  showIdentifier,
   surfaceClassName,
   tone = 'default',
 }: {
@@ -49,12 +46,6 @@ export function ProviderModelRow({
   /** Given only when the row itself is the action. */
   onPress?: () => void;
   provider: Provider | undefined;
-  /**
-   * Whether to spell out the model id under the name. Worth the second line
-   * only when another model in the same list answers to the same name — see
-   * `createAmbiguousModelNameTest`.
-   */
-  showIdentifier: boolean;
   /** Applied last, so a row can tint its own surface. */
   surfaceClassName?: string;
   /** `struck` reads as "on its way out", the way the pull screen marks a model the provider no longer serves. */
@@ -73,11 +64,11 @@ export function ProviderModelRow({
       modelId: model.id,
       modelIdentifier: model.modelId,
       provider,
-      showIdentifier,
+      // The name carries the row on its own here, the way it does on desktop.
+      showIdentifier: false,
     };
-  }, [model, provider, showIdentifier]);
+  }, [model, provider]);
 
-  const rowStyle = showIdentifier ? styles.rowWithIdentifier : styles.row;
   const content = (
     <>
       {modelPickerItem ? (
@@ -85,22 +76,15 @@ export function ProviderModelRow({
       ) : (
         <ProviderModelRowFallbackIcon model={model} />
       )}
-      <View className="min-w-0 flex-1 gap-0.5">
-        <Text
-          className={cn(
-            'min-w-0 shrink text-sm',
-            tone === 'struck' ? 'text-default-foreground line-through' : 'text-foreground',
-          )}
-          numberOfLines={1}
-        >
-          {model.name}
-        </Text>
-        {showIdentifier ? (
-          <Text className="min-w-0 shrink text-default-foreground text-xs" numberOfLines={1}>
-            {model.modelId}
-          </Text>
-        ) : null}
-      </View>
+      <Text
+        className={cn(
+          'min-w-0 flex-1 text-sm',
+          tone === 'struck' ? 'text-default-foreground line-through' : 'text-foreground',
+        )}
+        numberOfLines={1}
+      >
+        {model.name}
+      </Text>
       {tags.length > 0 ? (
         <View className="shrink-0 flex-row items-center gap-1">
           {tags.slice(0, providerModelRowMaxTags).map((tag) => (
@@ -122,12 +106,12 @@ export function ProviderModelRow({
           className="flex-row items-center gap-3 px-4 py-2 active:opacity-60 disabled:opacity-40"
           disabled={isDisabled}
           onPress={onPress}
-          style={rowStyle}
+          style={styles.row}
         >
           {content}
         </Pressable>
       ) : (
-        <View className="flex-row items-center gap-3 px-4 py-2" style={rowStyle}>
+        <View className="flex-row items-center gap-3 px-4 py-2" style={styles.row}>
           {content}
         </View>
       )}
@@ -161,8 +145,5 @@ function isFreeProviderModel(model: Model) {
 const styles = StyleSheet.create({
   row: {
     height: providerModelRowHeight,
-  },
-  rowWithIdentifier: {
-    height: providerModelRowWithIdentifierHeight,
   },
 });

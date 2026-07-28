@@ -1,6 +1,3 @@
-// Reached for past the barrel on purpose: that one re-exports the picker's
-// bottom sheet, which would drag a native module into this pure module.
-import { createAmbiguousModelNameTest } from '@/components/modelPicker/utils/modelPickerData';
 import type { CreateModelInput } from '@/data/services/ModelService';
 import {
   type ModelRegistryLookup,
@@ -29,12 +26,6 @@ export type ProviderModelPullListItem =
       model: Model;
       position: ProviderModelPullRowPosition;
       section: ProviderModelPullSectionKey;
-      /**
-       * Whether the row spells out the model id underneath the name. Only worth
-       * the second line when another model in the preview answers to the same
-       * name, which is the rule the model picker already follows.
-       */
-      showIdentifier: boolean;
       type: 'model';
     };
 
@@ -100,9 +91,6 @@ export function buildProviderModelPullListItems(
 ): ProviderModelPullListItem[] {
   const expandedSectionSet = new Set(expandedSections);
   const visibleSectionSet = new Set(visibleSections);
-  // Taken across both sections: the same name can turn up as a new model and as
-  // a missing one.
-  const isAmbiguousName = createAmbiguousModelNameTest([...preview.added, ...preview.missing]);
   const items: ProviderModelPullListItem[] = [];
   const sections: { models: Model[]; section: ProviderModelPullSectionKey }[] = [
     { models: preview.added, section: 'added' },
@@ -133,7 +121,6 @@ export function buildProviderModelPullListItems(
         model,
         position: getModelRowPosition(index, models.length),
         section,
-        showIdentifier: isAmbiguousName(model),
         type: 'model',
       });
     }

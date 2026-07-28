@@ -323,7 +323,6 @@ function renderPullListItem({
       position={item.position}
       provider={listData.provider}
       section={item.section}
-      showIdentifier={item.showIdentifier}
       onToggleModel={listData.onToggleModel}
     />
   );
@@ -401,7 +400,6 @@ const PullModelRow = memo(function PullModelRow({
   position,
   provider,
   section,
-  showIdentifier,
 }: {
   isApplied: boolean;
   isPending: boolean;
@@ -410,7 +408,6 @@ const PullModelRow = memo(function PullModelRow({
   position: ProviderModelPullRowPosition;
   provider: Provider | undefined;
   section: ProviderModelPullSectionKey;
-  showIdentifier: boolean;
 }) {
   const isMissing = section === 'missing';
   const handleToggle = useCallback(() => {
@@ -427,7 +424,6 @@ const PullModelRow = memo(function PullModelRow({
       isLast={position === 'last' || position === 'only'}
       model={model}
       provider={provider}
-      showIdentifier={showIdentifier}
       // Desktop tints the whole row once the model is in the provider.
       surfaceClassName={isApplied && !isMissing ? 'bg-success/10' : undefined}
       tone={isMissing && !isApplied ? 'struck' : 'default'}
