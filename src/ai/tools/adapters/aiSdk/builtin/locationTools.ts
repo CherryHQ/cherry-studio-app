@@ -1,7 +1,7 @@
 import { tool } from 'ai';
 import * as z from 'zod';
 
-import { getCurrentLocation } from '../device/location';
+import { getCurrentLocation } from '../../../device/location';
 import {
   createDeviceToolEntry,
   type DeviceToolDependencies,

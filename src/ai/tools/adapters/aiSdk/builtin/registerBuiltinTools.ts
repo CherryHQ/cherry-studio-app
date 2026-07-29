@@ -1,10 +1,10 @@
 import type { WebSearchService } from '@/services/webSearch/WebSearchService';
-import type { ToolRegistry } from '../ToolRegistry';
+import type { ToolRegistry } from '../registry';
 import { createCalendarToolEntries, createReminderToolEntries } from './calendarTools';
 import type { DeviceToolDependencies } from './deviceToolSupport';
 import { createHealthToolEntries } from './healthTools';
 import { createLocationToolEntry } from './locationTools';
-import { createWebSearchToolEntry } from './webSearchTool';
+import { createWebSearchToolEntry } from './WebSearchTool';
 
 export function registerBuiltinTools(
   registry: ToolRegistry,

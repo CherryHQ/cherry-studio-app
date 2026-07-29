@@ -1,7 +1,7 @@
 import { type Tool, tool } from 'ai';
 import * as z from 'zod';
 
-import type { ToolRegistry } from '../ToolRegistry';
+import type { ToolRegistry } from '../registry';
 import { buildToolStub } from './schemaStub';
 
 export const TOOL_INSPECT_TOOL_NAME = 'tool_inspect';

@@ -13,10 +13,9 @@ import type { Provider } from '@/data/types/provider';
 
 import { providerToAiSdkConfig } from '../../../provider/config';
 import type { ToolService } from '../../../tools';
-import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/meta/toolSearch';
-import { getDeferredToolsSystemPrompt } from '../../../tools/prompts/deferredTools';
-import { createAiRepair } from '../../../tools/repair';
-import type { RequestContext } from '../../../tools/types';
+import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/adapters/aiSdk/meta/toolSearch';
+import { createAiRepair } from '../../../tools/adapters/aiSdk/repair';
+import type { RequestContext } from '../../../tools/adapters/aiSdk/types';
 import type { ProviderConfig } from '../../../types';
 import type { AiBaseRequest } from '../../../types/requests';
 import { addAnthropicHeaders } from '../../../utils/anthropicHeaders';
@@ -39,6 +38,7 @@ import {
 } from '../../../utils/options';
 import { replacePromptVariables } from '../../../utils/promptVariables';
 import type { AgentOptions } from '../Agent';
+import { getDeferredToolsSystemPrompt } from '../prompts/deferredTools';
 import { buildAgentPlugins } from './buildAgentPlugins';
 import { resolveCapabilities } from './capabilities';
 

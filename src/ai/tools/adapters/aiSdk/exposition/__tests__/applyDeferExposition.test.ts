@@ -1,13 +1,13 @@
 import { type Tool, type ToolSet, tool } from 'ai';
 import * as z from 'zod';
 
-import { applyDeferExposition } from '../exposition/applyDeferExposition';
-import { shouldDefer } from '../exposition/shouldDefer';
-import { TOOL_INSPECT_TOOL_NAME } from '../meta/toolInspect';
-import { TOOL_INVOKE_TOOL_NAME } from '../meta/toolInvoke';
-import { TOOL_SEARCH_TOOL_NAME } from '../meta/toolSearch';
-import { ToolRegistry } from '../ToolRegistry';
-import type { RequestContext, ToolEntry } from '../types';
+import { TOOL_INSPECT_TOOL_NAME } from '../../meta/toolInspect';
+import { TOOL_INVOKE_TOOL_NAME } from '../../meta/toolInvoke';
+import { TOOL_SEARCH_TOOL_NAME } from '../../meta/toolSearch';
+import { ToolRegistry } from '../../registry';
+import type { RequestContext, ToolEntry } from '../../types';
+import { applyDeferExposition } from '../applyDeferExposition';
+import { shouldDefer } from '../shouldDefer';
 
 const context: RequestContext = { requestId: 'request-1' };
 

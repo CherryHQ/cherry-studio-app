@@ -14,7 +14,7 @@ import {
   type UpdateReminderDetails,
   updateCalendarEvent,
   updateReminderItem,
-} from '../device/calendar';
+} from '../../../device/calendar';
 import {
   createDeviceToolEntry,
   type DeviceToolDependencies,

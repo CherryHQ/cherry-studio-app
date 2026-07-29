@@ -2,7 +2,7 @@ import { asSchema, type Tool, tool } from 'ai';
 import * as z from 'zod';
 
 import { isApprovalGated } from '../isApprovalGated';
-import type { ToolRegistry } from '../ToolRegistry';
+import type { ToolRegistry } from '../registry';
 import type { ToolEntry } from '../types';
 import { buildToolStub } from './schemaStub';
 

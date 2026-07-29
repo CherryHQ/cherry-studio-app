@@ -8,10 +8,10 @@ import type { DevicePermissionService } from '@/services/devicePermissions';
 import type { WebSearchService } from '@/services/webSearch/WebSearchService';
 
 import type { McpService } from '../mcp';
-import { registerBuiltinTools } from './builtin/registerBuiltinTools';
-import { applyDeferExposition } from './exposition/applyDeferExposition';
-import { ToolRegistry } from './ToolRegistry';
-import type { DeviceToolAccess, ToolEntry } from './types';
+import { registerBuiltinTools } from './adapters/aiSdk/builtin/registerBuiltinTools';
+import { applyDeferExposition } from './adapters/aiSdk/exposition/applyDeferExposition';
+import { ToolRegistry } from './adapters/aiSdk/registry';
+import type { DeviceToolAccess, ToolEntry } from './adapters/aiSdk/types';
 
 const logger = loggerService.withContext('ToolService');
 const DEVICE_PREFERENCE_KEYS = [

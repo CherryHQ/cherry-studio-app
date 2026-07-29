@@ -6,7 +6,7 @@ import {
   type HealthKitLoader,
   healthMetricNames,
   listHealthWorkouts,
-} from '../device/health';
+} from '../../../device/health';
 import {
   createDeviceToolEntry,
   type DeviceToolDependencies,

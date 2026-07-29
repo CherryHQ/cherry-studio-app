@@ -10,7 +10,7 @@ import {
 } from 'ai';
 import { loggerService } from '@/core/logger/LoggerService';
 
-import type { AppProviderSettingsMap } from '../types';
+import type { AppProviderSettingsMap } from '../../../types';
 
 const logger = loggerService.withContext('ToolCallRepair');
 type AppProviderId = StringKeys<AppProviderSettingsMap>;

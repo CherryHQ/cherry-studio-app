@@ -8,7 +8,7 @@ This document maps where future feature domains — drawing/canvas and cloud age
 
 Mobile deliberately omits the desktop feature/plugin registries. AI tools and request plugins are assembled inline (see the "no feature registry here" notes in `src/ai/AiService.ts` and `src/ai/runtime/aiSdk/Agent.ts`), settings sections are hardcoded JSX, and services are wired by plain constructor injection with no DI container. Extending a feature means adding to these existing seams. Reintroducing the desktop `RequestFeature`-style registry is the sanctioned move only once inline assembly stops scaling — not a prerequisite for the first version of a new feature.
 
-The `web_search` subsystem (`src/services/webSearch/`) is the best full-stack precedent to mirror: it spans a driver registry (`providers/registry.ts`), a factory (`providers/factory.ts`), a service in the graph (`WebSearchService`, wired in `createDataServices.ts`), an AI-layer tool (`src/ai/createWebSearchTool.ts`), a message-part renderer, and settings screens/routes under `src/app/settings/websearch/`.
+The `web_search` subsystem (`src/services/webSearch/`) is the best full-stack precedent to mirror: it spans a driver registry (`providers/registry.ts`), a factory (`providers/factory.ts`), a service in the graph (`WebSearchService`, wired in `createDataServices.ts`), an AI SDK adapter (`src/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts`), a message-part renderer, and settings screens/routes under `src/app/settings/websearch/`.
 
 ## Data Layer (`src/data`)
 

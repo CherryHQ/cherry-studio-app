@@ -1,10 +1,6 @@
 import type { WebSearchService } from '@/services/webSearch/WebSearchService';
 
-import {
-  createWebSearchTool,
-  WEB_LOOKUP_ERROR_NOTE,
-  webSearchInputSchema,
-} from '../createWebSearchTool';
+import { createWebSearchTool, WEB_LOOKUP_ERROR_NOTE, webSearchInputSchema } from '../WebSearchTool';
 
 jest.mock('@/core/logger/LoggerService', () => ({
   loggerService: {

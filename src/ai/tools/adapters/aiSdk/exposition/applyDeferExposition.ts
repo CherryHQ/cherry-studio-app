@@ -3,7 +3,7 @@ import type { ToolSet } from 'ai';
 import { createToolInspectTool, TOOL_INSPECT_TOOL_NAME } from '../meta/toolInspect';
 import { createToolInvokeTool, TOOL_INVOKE_TOOL_NAME } from '../meta/toolInvoke';
 import { createToolSearchTool, TOOL_SEARCH_TOOL_NAME } from '../meta/toolSearch';
-import type { ToolRegistry } from '../ToolRegistry';
+import type { ToolRegistry } from '../registry';
 import type { ToolEntry } from '../types';
 import { shouldDefer } from './shouldDefer';
 

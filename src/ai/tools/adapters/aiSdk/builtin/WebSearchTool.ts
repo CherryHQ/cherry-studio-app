@@ -5,6 +5,8 @@ import { loggerService } from '@/core/logger/LoggerService';
 import { isAbortError, isPermanentWebSearchConfigError } from '@/services/webSearch/utils/errors';
 import type { WebSearchService } from '@/services/webSearch/WebSearchService';
 
+import type { ToolEntry } from '../types';
+
 const logger = loggerService.withContext('WebSearchTool');
 
 export const WEB_SEARCH_TOOL_NAME = 'web_search';
@@ -90,4 +92,15 @@ export function createWebSearchTool(webSearchService: WebSearchService) {
         ? { type: 'json', value: output }
         : { type: 'text', value: output.error },
   });
+}
+
+export function createWebSearchToolEntry(webSearch: WebSearchService): ToolEntry {
+  return {
+    applies: (scope) => scope.externalWebSearchEnabled,
+    defer: 'auto',
+    description: WEB_SEARCH_DESCRIPTION,
+    name: WEB_SEARCH_TOOL_NAME,
+    namespace: 'web',
+    tool: createWebSearchTool(webSearch),
+  };
 }

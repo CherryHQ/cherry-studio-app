@@ -5,7 +5,7 @@ import {
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import type { ToolSet } from 'ai';
 import { AiService, type AiServiceDependencies } from '@/ai/AiService';
-import { createWebSearchTool } from '@/ai/createWebSearchTool';
+import { createWebSearchTool } from '@/ai/tools/adapters/aiSdk/builtin/WebSearchTool';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';

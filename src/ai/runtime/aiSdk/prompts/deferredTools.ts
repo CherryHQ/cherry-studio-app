@@ -1,4 +1,4 @@
-import type { ToolEntry } from '../types';
+import type { ToolEntry } from '../../../tools/adapters/aiSdk/types';
 
 const HEADER = `<deferred-tools>
 Some tools are not loaded inline. Discover and call them through the meta-tools.

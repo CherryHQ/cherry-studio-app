@@ -2,8 +2,8 @@ import { tool } from 'ai';
 import * as z from 'zod';
 
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
+import type { ToolEntry } from '../adapters/aiSdk/types';
 import { ToolService } from '../ToolService';
-import type { ToolEntry } from '../types';
 
 describe('ToolService', () => {
   test('merges active built-ins, web search, and assistant MCP entries', async () => {

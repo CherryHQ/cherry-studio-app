@@ -39,7 +39,7 @@ Abort errors are propagated when the caller's signal is aborted.
 
 ## Web Search In AI Requests
 
-External web search reaches the model as an AI-SDK tool, not as provider options. `src/ai/createWebSearchTool.ts` wraps `WebSearchService.searchKeywords` in a `web_search` tool (id `WEB_SEARCH_TOOL_NAME`) with a `2..200` self-contained query schema. Its `execute` classifies failures: permanent configuration errors return a do-not-retry message, transient errors return a retryable note, and abort errors are rethrown.
+External web search reaches the model as an AI-SDK tool, not as provider options. `src/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts` wraps `WebSearchService.searchKeywords` in a `web_search` tool (id `WEB_SEARCH_TOOL_NAME`) with a `2..200` self-contained query schema. Its `execute` classifies failures: permanent configuration errors return a do-not-retry message, transient errors return a retryable note, and abort errors are rethrown.
 
 `AiService.buildAgentParamsFor` (`src/ai/AiService.ts`) arbitrates the external tool against provider-native web search — they are mutually exclusive within one request:
 

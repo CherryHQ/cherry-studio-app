@@ -1,6 +1,6 @@
 import { asSchema, type Tool } from 'ai';
 
-import { ToolRegistry } from '../../ToolRegistry';
+import { ToolRegistry } from '../../registry';
 import type { DeviceToolAccess, ToolApplyScope, ToolEntry } from '../../types';
 import { registerBuiltinTools } from '../registerBuiltinTools';
 import { DEVICE_TOOL_NAMES } from '../toolNames';

@@ -1,7 +1,7 @@
 import { type Tool, tool } from 'ai';
 import * as z from 'zod';
 
-import type { ToolRegistry } from '../ToolRegistry';
+import type { ToolRegistry } from '../registry';
 import { serializeToolSchema } from './schemaStub';
 
 export const TOOL_SEARCH_TOOL_NAME = 'tool_search';
