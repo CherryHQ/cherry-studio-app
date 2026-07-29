@@ -1,16 +1,18 @@
-import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
+import { LegendListRenderItemProps } from '@legendapp/list/react-native';
+import { AnimatedLegendList } from '@legendapp/list/reanimated';
 import { useToast } from 'heroui-native/toast';
 import { CheckIcon, PencilIcon, PinIcon, PinOffIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AccessibilityActionEvent, Pressable, Text, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, RectButton } from 'react-native-gesture-handler';
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, {
   FadeInLeft,
   FadeOutLeft,
+  LinearTransition,
   runOnJS,
   type SharedValue,
   useAnimatedStyle,
@@ -183,7 +185,7 @@ const TopicListView = memo(function TopicListView() {
 
   return (
     <View className="flex-1">
-      <LegendList
+      <AnimatedLegendList
         className="flex-1 bg-background"
         contentInsetAdjustmentBehavior="never"
         contentContainerStyle={contentContainerStyle}
@@ -193,6 +195,7 @@ const TopicListView = memo(function TopicListView() {
         keyExtractor={topicKeyExtractor}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
+        itemLayoutAnimation={LinearTransition.duration(280)}
         ListEmptyComponent={listEmptyComponent}
         onEndReached={loadMoreTopics}
         onEndReachedThreshold={0.7}
@@ -518,19 +521,22 @@ function TopicPinAction({ disabled, drag, isPinned, label, onPress }: TopicPinAc
 
   return (
     <Animated.View className="h-full w-16" style={animatedStyle}>
-      <Pressable
+      <RectButton
         accessibilityLabel={label}
         accessibilityRole="button"
-        className="h-full items-center justify-center bg-primary active:opacity-80 disabled:opacity-40"
-        disabled={disabled}
+        activeOpacity={0.8}
+        enabled={!disabled}
         onPress={onPress}
+        style={disabled ? { opacity: 0.4 } : undefined}
       >
-        {isPinned ? (
-          <PinOffIcon className="size-5 text-white" strokeWidth={2} />
-        ) : (
-          <PinIcon className="size-5 text-white" strokeWidth={2} />
-        )}
-      </Pressable>
+        <View className="h-full w-full items-center justify-center bg-primary">
+          {isPinned ? (
+            <PinOffIcon className="size-5 text-white" strokeWidth={2} />
+          ) : (
+            <PinIcon className="size-5 text-white" strokeWidth={2} />
+          )}
+        </View>
+      </RectButton>
     </Animated.View>
   );
 }

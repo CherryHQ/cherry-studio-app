@@ -35,6 +35,27 @@ jest.mock('@legendapp/list/react-native', () => {
   };
 });
 
+jest.mock('@legendapp/list/reanimated', () => {
+  const React = jest.requireActual('react');
+  const { View: MockView } = jest.requireActual('react-native');
+
+  return {
+    AnimatedLegendList: ({
+      data,
+      renderItem,
+    }: {
+      data: readonly Topic[];
+      renderItem: (info: { index: number; item: Topic }) => ReactNode;
+    }) => (
+      <MockView testID="topic-list">
+        {data.map((item, index) => (
+          <React.Fragment key={item.id}>{renderItem({ index, item })}</React.Fragment>
+        ))}
+      </MockView>
+    ),
+  };
+});
+
 jest.mock('heroui-native/toast', () => ({
   useToast: () => ({ toast: { show: mockToastShow } }),
 }));
@@ -62,6 +83,41 @@ jest.mock('react-i18next', () => ({
       })[key] ?? key,
   }),
 }));
+
+jest.mock('react-native-gesture-handler', () => {
+  const { TouchableOpacity } = jest.requireActual('react-native');
+
+  return {
+    RectButton: TouchableOpacity,
+    Gesture: {
+      Tap: () => {
+        const tap = {
+          enabled: () => tap,
+          maxDistance: () => tap,
+          onBegin: () => tap,
+          onEnd: () => tap,
+          onFinalize: () => tap,
+        };
+        return tap;
+      },
+      Pan: () => {
+        const pan = {
+          enabled: () => pan,
+          activeOffsetX: () => pan,
+          enableTrackpadTwoFingerGesture: () => pan,
+          hitSlop: () => pan,
+          onStart: () => pan,
+          onUpdate: () => pan,
+          onEnd: () => pan,
+          onFinalize: () => pan,
+        };
+        return pan;
+      },
+    },
+    GestureDetector: ({ children }: { children: ReactNode }) => children,
+    Swipeable: () => null,
+  };
+});
 
 jest.mock('react-native-gesture-handler/ReanimatedSwipeable', () => {
   const { View: MockView } = jest.requireActual('react-native');
@@ -91,6 +147,7 @@ jest.mock('react-native-reanimated', () => {
     default: { View: MockView },
     FadeInLeft: { duration: () => undefined },
     FadeOutLeft: { duration: () => undefined },
+    LinearTransition: { duration: () => undefined },
     runOnJS: (callback: (...args: unknown[]) => unknown) => callback,
     useAnimatedStyle: (factory: () => unknown) => factory(),
     useSharedValue: (value: number) => ({ value }),
