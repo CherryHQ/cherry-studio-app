@@ -12,8 +12,6 @@ export type ProviderModelPullPreview = {
 
 export type ProviderModelPullSectionKey = keyof ProviderModelPullPreview;
 
-export type ProviderModelPullRowPosition = 'first' | 'middle' | 'last' | 'only';
-
 export type ProviderModelPullListItem =
   | {
       isFirstSection: boolean;
@@ -22,22 +20,14 @@ export type ProviderModelPullListItem =
       type: 'section';
     }
   | {
+      /** Where the row sits in its section's grouped card. */
+      isFirst: boolean;
+      isLast: boolean;
       key: string;
       model: Model;
-      position: ProviderModelPullRowPosition;
       section: ProviderModelPullSectionKey;
       type: 'model';
     };
-
-export type ProviderModelPullSelection = {
-  addedIds: Set<UniqueModelId>;
-  missingIds: Set<UniqueModelId>;
-};
-
-export type ProviderModelPullApplyPayload = {
-  toAdd: CreateModelInput[];
-  toRemove: UniqueModelId[];
-};
 
 type RemoteModelInput = Partial<Model>;
 type ProviderModelPullRegistryResolver = (modelId: string) => ModelRegistryLookup;
@@ -66,15 +56,6 @@ export function buildProviderModelPullPreview({
         model.presetModelId != null &&
         model.presetModelId !== '',
     ),
-  };
-}
-
-export function createDefaultProviderModelPullSelection(
-  preview: ProviderModelPullPreview,
-): ProviderModelPullSelection {
-  return {
-    addedIds: new Set(preview.added.map((model) => model.id)),
-    missingIds: new Set(preview.missing.map((model) => model.id)),
   };
 }
 
@@ -136,9 +117,10 @@ export function buildProviderModelPullListItems(
 
     for (const [index, model] of models.entries()) {
       items.push({
+        isFirst: index === 0,
+        isLast: index === models.length - 1,
         key: `model:${section}:${model.id}`,
         model,
-        position: getModelRowPosition(index, models.length),
         section,
         type: 'model',
       });
@@ -146,34 +128,6 @@ export function buildProviderModelPullListItems(
   }
 
   return items;
-}
-
-function getModelRowPosition(index: number, count: number): ProviderModelPullRowPosition {
-  if (count === 1) {
-    return 'only';
-  }
-  if (index === 0) {
-    return 'first';
-  }
-  return index === count - 1 ? 'last' : 'middle';
-}
-
-export function buildProviderModelPullApplyPayload(
-  preview: ProviderModelPullPreview,
-  selection: ProviderModelPullSelection,
-): ProviderModelPullApplyPayload | null {
-  const toAdd = preview.added.flatMap((model) =>
-    selection.addedIds.has(model.id) ? [modelToCreateModelInput(model)] : [],
-  );
-  const toRemove = preview.missing.flatMap((model) =>
-    selection.missingIds.has(model.id) ? [model.id] : [],
-  );
-
-  if (toAdd.length === 0 && toRemove.length === 0) {
-    return null;
-  }
-
-  return { toAdd, toRemove };
 }
 
 function normalizeRemoteModels(
@@ -280,7 +234,7 @@ function preferRegistryArray<TItem>(
   return registryValue && registryValue.length > 0 ? registryValue : fallbackValue;
 }
 
-function modelToCreateModelInput(model: Model): CreateModelInput {
+export function modelToCreateModelInput(model: Model): CreateModelInput {
   return {
     capabilities: model.capabilities,
     contextWindow: model.contextWindow,

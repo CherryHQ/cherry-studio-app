@@ -2,23 +2,29 @@ import { resolveIcon } from '@cherrystudio/ui/icons';
 import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 import { Image } from '@/components/nativePrimitives';
-
-import type { ModelPickerModelItem } from '../utils/modelPickerData';
+import type { Model } from '@/data/types/model';
+import type { Provider } from '@/data/types/provider';
 
 type ModelPickerIconProps = {
-  item: ModelPickerModelItem;
+  model: Model;
+  /** Absent while the model's provider is still loading; the initial stands in. */
+  provider: Provider | undefined;
   providerIconSize?: number;
   size?: number;
 };
 
-export function ModelPickerIcon({ item, providerIconSize, size = 32 }: ModelPickerIconProps) {
+export function ModelPickerIcon({
+  model,
+  provider,
+  providerIconSize,
+  size = 32,
+}: ModelPickerIconProps) {
   const { theme } = useUniwind();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
-  const iconSource = resolveIcon(
-    item.modelIdentifier,
-    item.provider.presetProviderId ?? item.provider.id,
-  );
-  const avatarInitial = item.model.name.trim().charAt(0).toUpperCase() || 'M';
+  const iconSource = provider
+    ? resolveIcon(model.modelId, provider.presetProviderId ?? provider.id)
+    : null;
+  const avatarInitial = model.name.trim().charAt(0).toUpperCase() || 'M';
   const frameStyle = {
     borderRadius: size / 2,
     height: size,
@@ -35,7 +41,7 @@ export function ModelPickerIcon({ item, providerIconSize, size = 32 }: ModelPick
         <Image
           cachePolicy="memory-disk"
           contentFit="contain"
-          recyclingKey={item.modelId}
+          recyclingKey={model.id}
           source={iconSource[iconTheme]}
           style={{
             height: imageSize,

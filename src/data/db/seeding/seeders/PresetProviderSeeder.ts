@@ -8,6 +8,8 @@ import type { ApiFeatures, AuthConfig } from '@/data/types/provider';
 
 import type { DatabaseSeeder } from '../types';
 
+const cherryAiProviderId = 'cherryai';
+
 function getSeedDefaultChatEndpoint(
   providerId: string,
   presetDefault: ProtoProviderConfig['defaultChatEndpoint'],
@@ -70,7 +72,7 @@ export class PresetProviderSeeder implements DatabaseSeeder {
   readonly description = 'Insert preset provider configurations';
 
   get version() {
-    return `${providerRegistryService.getProvidersVersion()}+adapter-family.1`;
+    return `${providerRegistryService.getProvidersVersion()}+adapter-family.1+cherryai-enabled.1`;
   }
 
   async run(dbService: Parameters<DatabaseSeeder['run']>[0]) {
@@ -84,10 +86,21 @@ export class PresetProviderSeeder implements DatabaseSeeder {
         },
       },
       name: 'CherryAI',
-      presetProviderId: 'cherryai',
-      providerId: 'cherryai',
+      presetProviderId: cherryAiProviderId,
+      providerId: cherryAiProviderId,
     });
 
-    await new ProviderService(dbService, new PinService(dbService), cacheService).batchUpsert(rows);
+    const providerService = new ProviderService(dbService, new PinService(dbService), cacheService);
+    await providerService.batchUpsert(rows);
+
+    // CherryAI is Cherry's own built-in service rather than something the user
+    // configures: it is hidden from the provider list (`hiddenProviderListIds`)
+    // and exposes no Base URL or API key, so the "new providers start disabled
+    // until a flow confirms usable models" rule baked into `toInsert` would
+    // strand its free models forever. Desktop ships `CHERRYAI_PROVIDER` with
+    // `enabled: true` unconditionally, so force it on here — this also repairs
+    // installs seeded before this version, where `batchUpsert` deliberately
+    // leaves an existing row's `isEnabled` alone.
+    await providerService.update(cherryAiProviderId, { isEnabled: true });
   }
 }

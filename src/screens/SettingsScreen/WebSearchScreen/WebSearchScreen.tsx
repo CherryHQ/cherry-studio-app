@@ -115,8 +115,8 @@ export default function WebSearchSettingsScreen() {
             {t('settings.websearch.apiProviders.title')}
           </Text>
           <View className="overflow-hidden rounded-xl bg-settings-grouped-surface">
-            {apiWebSearchProviderItems.map((item) => (
-              <SettingsServiceRow key={item.id} {...item} />
+            {apiWebSearchProviderItems.map((item, index) => (
+              <SettingsServiceRow key={item.id} {...item} showSeparator={index > 0} />
             ))}
           </View>
         </View>

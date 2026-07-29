@@ -33,4 +33,28 @@ describe('SettingsServiceRow', () => {
       renderer?.root.findByProps({ accessibilityRole: 'button' }).props.accessibilityLabel,
     ).toBe('Docs server, Connected, 3 tools');
   });
+
+  it.each([
+    ['renders', true],
+    ['omits', false],
+  ])('%s the separator when showSeparator is %s', async (_label, showSeparator) => {
+    await act(async () => {
+      renderer = create(
+        <SettingsServiceRow
+          id="server-1"
+          isEnabled
+          name="Docs server"
+          onPress={jest.fn()}
+          showSeparator={showSeparator}
+        />,
+      );
+    });
+
+    const separators =
+      renderer?.root
+        .findAllByProps({ testID: 'settings-grouped-separator' })
+        .filter((node) => typeof node.type === 'string') ?? [];
+
+    expect(separators).toHaveLength(showSeparator ? 1 : 0);
+  });
 });

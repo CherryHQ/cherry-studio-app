@@ -71,9 +71,9 @@ export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProp
   if (authConfigQuery.isPending || providerQuery.isPending) {
     return (
       <Fragment>
-        <View className="gap-2 rounded-2xl border border-default-200 bg-background px-4 py-4">
-          <View className="h-5 w-55 rounded bg-default-100" />
-          <View className="mt-2 h-4 w-full rounded bg-default-100" />
+        <View className="gap-2 rounded-2xl border border-border bg-background px-4 py-4">
+          <View className="h-5 w-55 rounded bg-settings-grouped-surface" />
+          <View className="mt-2 h-4 w-full rounded bg-settings-grouped-surface" />
         </View>
         {confirmDialog}
       </Fragment>
@@ -100,7 +100,7 @@ export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProp
               <Text className="text-sm font-medium text-foreground">
                 {t('settings.provider.oauth.cherryIn.account_title')}
               </Text>
-              <Text className="mt-0.5 text-xs text-default-400">
+              <Text className="mt-0.5 text-foreground text-xs">
                 {t('settings.provider.oauth.cherryIn.tagline')}
               </Text>
             </View>

@@ -10,9 +10,7 @@ export type ModelPickerModelItem = {
   key: string;
   model: Model;
   modelId: UniqueModelId;
-  modelIdentifier: string;
   provider: Provider;
-  showIdentifier: boolean;
 };
 
 export type ModelPickerGroup = {
@@ -91,7 +89,6 @@ export function getModelPickerModelItem(
   return createModelPickerItem({
     isPinned: pinnedModelIds.includes(model.id),
     model,
-    modelNameCounts: countModelNames(selectableModels),
     provider,
     suffix: 'selected',
   });
@@ -163,7 +160,6 @@ export function buildModelPickerGroups({
           matchesModelPickerSelectedTags(model, selectedTags)
       : false;
   });
-  const modelNameCounts = countModelNames(filteredModels);
   const modelById = new Map(filteredModels.map((model) => [model.id, model]));
   const pinnedIdSet = new Set(pinnedModelIds);
   const groups: ModelPickerGroup[] = [];
@@ -178,7 +174,6 @@ export function buildModelPickerGroups({
             createModelPickerItem({
               isPinned: true,
               model,
-              modelNameCounts,
               provider,
               suffix: 'pinned',
             }),
@@ -217,7 +212,6 @@ export function buildModelPickerGroups({
         createModelPickerItem({
           isPinned: pinnedIdSet.has(model.id),
           model,
-          modelNameCounts,
           provider,
           suffix: 'provider',
         }),
@@ -234,13 +228,11 @@ export function buildModelPickerGroups({
 function createModelPickerItem({
   isPinned,
   model,
-  modelNameCounts,
   provider,
   suffix,
 }: {
   isPinned: boolean;
   model: Model;
-  modelNameCounts: ReadonlyMap<string, number>;
   provider: Provider;
   suffix: string;
 }): ModelPickerModelItem {
@@ -249,15 +241,25 @@ function createModelPickerItem({
     key: `${model.id}:${suffix}`,
     model,
     modelId: model.id,
-    modelIdentifier: model.modelId,
     provider,
-    showIdentifier: (modelNameCounts.get(normalizeModelName(model.name)) ?? 0) > 1,
   };
+}
+
+export function isFreeModel(model: Model): boolean {
+  if (model.providerId === 'cherryai') {
+    return true;
+  }
+
+  return [model.id, model.modelId, model.name, model.presetModelId]
+    .filter(Boolean)
+    .join(' ')
+    .toLocaleLowerCase()
+    .includes('free');
 }
 
 function matchesModelPickerTag(model: Model, tag: ModelPickerTag): boolean {
   if (tag === 'free') {
-    return isFreeModelPickerModel(model);
+    return isFreeModel(model);
   }
 
   switch (tag) {
@@ -309,18 +311,6 @@ function getSelectableModelPickerModels(models: readonly Model[], providers: rea
   );
 }
 
-function isFreeModelPickerModel(model: Model) {
-  if (model.providerId === 'cherryai') {
-    return true;
-  }
-
-  return [model.id, model.modelId, model.name, model.presetModelId]
-    .filter(Boolean)
-    .join(' ')
-    .toLocaleLowerCase()
-    .includes('free');
-}
-
 function getSearchKeywords(searchText: string): string[] {
   return searchText
     .toLocaleLowerCase()
@@ -353,19 +343,4 @@ function matchesModelPickerKeywords(
     .toLocaleLowerCase();
 
   return keywords.every((keyword) => haystack.includes(keyword));
-}
-
-function countModelNames(models: readonly Model[]) {
-  const counts = new Map<string, number>();
-
-  for (const model of models) {
-    const name = normalizeModelName(model.name);
-    counts.set(name, (counts.get(name) ?? 0) + 1);
-  }
-
-  return counts;
-}
-
-function normalizeModelName(name: string) {
-  return name.trim().toLocaleLowerCase();
 }

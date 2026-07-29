@@ -1,11 +1,10 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { createUniqueModelId, type Model } from '@/data/types/model';
 import {
-  buildProviderModelPullApplyPayload,
   buildProviderModelPullListItems,
   buildProviderModelPullPreview,
-  createDefaultProviderModelPullSelection,
   filterProviderModelPullPreview,
+  modelToCreateModelInput,
 } from '../providerModelPullPreview';
 
 describe('provider model pull preview helpers', () => {
@@ -49,17 +48,10 @@ describe('provider model pull preview helpers', () => {
       name: 'DeepSeek-V3.2-Thinking',
       presetModelId: 'deepseek-v3-2',
     });
-    expect(
-      buildProviderModelPullApplyPayload(preview, createDefaultProviderModelPullSelection(preview)),
-    ).toEqual({
-      toAdd: [
-        expect.objectContaining({
-          capabilities: [MODEL_CAPABILITY.REASONING, MODEL_CAPABILITY.FUNCTION_CALL],
-          modelId: 'agent/deepseek-v3.2',
-          presetModelId: 'deepseek-v3-2',
-        }),
-      ],
-      toRemove: [],
+    expect(modelToCreateModelInput(preview.added[0])).toMatchObject({
+      capabilities: [MODEL_CAPABILITY.REASONING, MODEL_CAPABILITY.FUNCTION_CALL],
+      modelId: 'agent/deepseek-v3.2',
+      presetModelId: 'deepseek-v3-2',
     });
   });
 
@@ -82,59 +74,11 @@ describe('provider model pull preview helpers', () => {
       modelId: 'anthropic/claude-sonnet-4-5',
       ownedBy: 'custom',
     });
-    expect(
-      buildProviderModelPullApplyPayload(preview, createDefaultProviderModelPullSelection(preview)),
-    ).toEqual({
-      toAdd: [
-        expect.objectContaining({
-          group: 'anthropic',
-          modelId: 'anthropic/claude-sonnet-4-5',
-          ownedBy: 'custom',
-        }),
-      ],
-      toRemove: [],
+    expect(modelToCreateModelInput(preview.added[0])).toMatchObject({
+      group: 'anthropic',
+      modelId: 'anthropic/claude-sonnet-4-5',
+      ownedBy: 'custom',
     });
-  });
-
-  test('default selection includes all diff rows and payload only includes selected rows', () => {
-    const preview = buildProviderModelPullPreview({
-      localModels: [model({ modelId: 'old-model', presetModelId: 'old-model' })],
-      providerId: 'openai',
-      remoteModels: [{ modelId: 'gpt-4o', name: 'GPT-4o' }],
-    });
-    const selection = createDefaultProviderModelPullSelection(preview);
-
-    expect(selection.addedIds).toEqual(new Set(['openai::gpt-4o']));
-    expect(selection.missingIds).toEqual(new Set(['openai::old-model']));
-
-    selection.missingIds.clear();
-    const payload = buildProviderModelPullApplyPayload(preview, selection);
-
-    expect(payload).toEqual({
-      toAdd: [
-        expect.objectContaining({
-          modelId: 'gpt-4o',
-          name: 'GPT-4o',
-          providerId: 'openai',
-        }),
-      ],
-      toRemove: [],
-    });
-  });
-
-  test('returns null apply payload when no rows are selected', () => {
-    const preview = buildProviderModelPullPreview({
-      localModels: [model({ modelId: 'old-model', presetModelId: 'old-model' })],
-      providerId: 'openai',
-      remoteModels: [{ modelId: 'gpt-4o' }],
-    });
-
-    expect(
-      buildProviderModelPullApplyPayload(preview, {
-        addedIds: new Set(),
-        missingIds: new Set(),
-      }),
-    ).toBeNull();
   });
 
   test('filters pull rows by model id and name', () => {
@@ -171,6 +115,25 @@ describe('provider model pull preview helpers', () => {
     expect(
       buildProviderModelPullListItems(preview, [], ['added', 'missing']).map((item) => item.key),
     ).toEqual(['section:added', 'section:missing']);
+  });
+
+  // Each section draws its own card, so the placement restarts rather than
+  // running across the whole list.
+  test('marks the first and last row of every section', () => {
+    const preview = {
+      added: [model({ modelId: 'new-model' }), model({ modelId: 'other-new-model' })],
+      missing: [model({ modelId: 'old-model' })],
+    };
+
+    expect(
+      buildProviderModelPullListItems(preview, ['added', 'missing'], ['added', 'missing'])
+        .filter((item) => item.type === 'model')
+        .map((item) => [item.key, item.isFirst, item.isLast]),
+    ).toEqual([
+      ['model:added:openai::new-model', true, false],
+      ['model:added:openai::other-new-model', false, true],
+      ['model:missing:openai::old-model', true, true],
+    ]);
   });
 
   test('only includes section headers that are configured as visible', () => {

@@ -152,3 +152,18 @@ export const profileHero = {
   expandedScrimOpacity: 0.18, // dim over the locked photo, so the white name stays legible
   nameOverlayInsetX: 20, // locked name left inset from the photo edge
 } as const;
+
+// `SettingsServiceRow` geometry, shared with the virtualized lists that render
+// it (`estimatedItemSize`). Keep in sync with the row's `min-h-11` class.
+export const settingsServiceRow = {
+  rowHeight: 44,
+} as const;
+
+// Providers that exist as rows but must never appear in the provider settings
+// list. `cherryai` is Cherry's own built-in service (api.cherry-ai.com): it is
+// seeded as a row only so the AI SDK can build a client for its free models
+// (`PresetProviderSeeder` appends it after the registry providers), and it has
+// no user-configurable Base URL or API key. Desktop hides it the same way —
+// `CHERRYAI_PROVIDER` lives outside `SYSTEM_PROVIDERS_CONFIG` and the settings
+// list reads `selectAllProviders`, which excludes it.
+export const hiddenProviderListIds: readonly string[] = ['cherryai'];
