@@ -21,67 +21,67 @@ const iosSystemImages = {
 } as const;
 
 const builtInToolPresentations: Record<string, BuiltInToolPresentation> = {
-  builtin_create_calendar_event: {
+  calendar_create_event: {
     androidIcon: CalendarIcon,
     iosImageSource: iosSystemImages.calendar,
     titleKey: 'chat.builtinTool.calendar.createEvent',
   },
-  builtin_create_reminder: {
+  reminder_create_item: {
     androidIcon: BellRingIcon,
     iosImageSource: iosSystemImages.reminders,
     titleKey: 'chat.builtinTool.reminders.create',
   },
-  builtin_delete_calendar_event: {
+  calendar_delete_event: {
     androidIcon: CalendarIcon,
     iosImageSource: iosSystemImages.calendar,
     titleKey: 'chat.builtinTool.calendar.deleteEvent',
   },
-  builtin_delete_reminder: {
+  reminder_delete_item: {
     androidIcon: BellRingIcon,
     iosImageSource: iosSystemImages.reminders,
     titleKey: 'chat.builtinTool.reminders.delete',
   },
-  builtin_get_current_location: {
+  location_get_current: {
     androidIcon: MapPinIcon,
     iosImageSource: iosSystemImages.location,
     titleKey: 'chat.builtinTool.location.current',
   },
-  builtin_get_health_summary: {
+  health_get_summary: {
     androidIcon: HeartPulseIcon,
     iosImageSource: iosSystemImages.health,
     titleKey: 'chat.builtinTool.health.summary',
   },
-  builtin_list_calendar_events: {
+  calendar_list_events: {
     androidIcon: CalendarIcon,
     iosImageSource: iosSystemImages.calendar,
     titleKey: 'chat.builtinTool.calendar.listEvents',
   },
-  builtin_list_calendars: {
+  calendar_list_collections: {
     androidIcon: CalendarIcon,
     iosImageSource: iosSystemImages.calendar,
     titleKey: 'chat.builtinTool.calendar.listCalendars',
   },
-  builtin_list_reminder_lists: {
+  reminder_list_collections: {
     androidIcon: BellRingIcon,
     iosImageSource: iosSystemImages.reminders,
     titleKey: 'chat.builtinTool.reminders.listLists',
   },
-  builtin_list_reminders: {
+  reminder_list_items: {
     androidIcon: BellRingIcon,
     iosImageSource: iosSystemImages.reminders,
     titleKey: 'chat.builtinTool.reminders.list',
   },
-  builtin_list_workouts: {
+  health_list_workouts: {
     androidIcon: HeartPulseIcon,
     iosImageSource: iosSystemImages.health,
     titleKey: 'chat.builtinTool.health.listWorkouts',
   },
-  builtin_update_calendar_event: {
+  calendar_update_event: {
     androidIcon: CalendarIcon,
     iosImageSource: iosSystemImages.calendar,
     titleKey: 'chat.builtinTool.calendar.updateEvent',
   },
-  builtin_update_reminder: {
+  reminder_update_item: {
     androidIcon: BellRingIcon,
     iosImageSource: iosSystemImages.reminders,
     titleKey: 'chat.builtinTool.reminders.update',

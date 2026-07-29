@@ -1,15 +1,13 @@
-import { type ToolSet, tool } from 'ai';
 import type {
   CategoryDataPoint,
   HealthKit,
   QuantityDataPoint,
   WorkoutDataPoint,
 } from 'react-native-nitro-healthkit';
-import * as z from 'zod';
 
-import { normalizeOptionalDateRange, toIso, withNativeToolTimeout } from './toolUtils';
+import { normalizeOptionalDateRange, toIso, withNativeToolTimeout } from './utils';
 
-const healthMetricNames = [
+export const healthMetricNames = [
   'steps',
   'activeEnergy',
   'distance',
@@ -18,8 +16,8 @@ const healthMetricNames = [
   'hrv',
   'sleep',
 ] as const;
-type HealthMetricName = (typeof healthMetricNames)[number];
-type HealthKitLoader = () => Promise<HealthKit>;
+export type HealthMetricName = (typeof healthMetricNames)[number];
+export type HealthKitLoader = () => Promise<HealthKit>;
 
 const quantityMetrics: Record<
   Exclude<HealthMetricName, 'sleep'>,
@@ -57,61 +55,41 @@ const quantityMetrics: Record<
   },
 };
 
-const healthSummaryInput = z
-  .object({
-    endDate: z.string().datetime({ offset: true }).optional(),
-    granularity: z.enum(['summary', 'day']).default('summary'),
-    metrics: z.array(z.enum(healthMetricNames)).min(1).max(healthMetricNames.length).optional(),
-    startDate: z.string().datetime({ offset: true }).optional(),
-  })
-  .strict();
-
-const workoutsInput = z
-  .object({
-    endDate: z.string().datetime({ offset: true }).optional(),
-    limit: z.number().int().min(1).max(50).default(20),
-    startDate: z.string().datetime({ offset: true }).optional(),
-  })
-  .strict();
-
-export function createHealthTools(loadHealthKit: HealthKitLoader = loadHealthKitModule): ToolSet {
+export async function getHealthSummary(
+  input: {
+    endDate?: string;
+    granularity: 'summary' | 'day';
+    metrics?: HealthMetricName[];
+    startDate?: string;
+  },
+  loadHealthKit: HealthKitLoader = loadHealthKitModule,
+) {
+  const range = normalizeOptionalDateRange(input.startDate, input.endDate);
+  const healthKit = await loadHealthKit();
+  const metrics = input.metrics?.length ? input.metrics : [...healthMetricNames];
+  const data =
+    input.granularity === 'day'
+      ? await getDailyHealthData(healthKit, metrics, range.start, range.end)
+      : await getRangeHealthSummary(healthKit, metrics, range.start, range.end);
   return {
-    builtin_get_health_summary: tool({
-      description:
-        'Read selected health metrics as a range summary or daily aggregates, for at most 90 days.',
-      inputSchema: healthSummaryInput,
-      strict: true,
-      execute: async ({ endDate, granularity, metrics, startDate }) => {
-        const range = normalizeOptionalDateRange(startDate, endDate);
-        const healthKit = await loadHealthKit();
-        const selectedMetrics = metrics ?? [...healthMetricNames];
-        const data =
-          granularity === 'day'
-            ? await getDailyHealthData(healthKit, selectedMetrics, range.start, range.end)
-            : await getHealthSummary(healthKit, selectedMetrics, range.start, range.end);
-        return {
-          data,
-          endDate: range.end.toISOString(),
-          granularity,
-          startDate: range.start.toISOString(),
-        };
-      },
-    }),
-    builtin_list_workouts: tool({
-      description: 'List up to 50 workouts from a date range of at most 90 days.',
-      inputSchema: workoutsInput,
-      strict: true,
-      execute: async ({ endDate, limit, startDate }) => {
-        const range = normalizeOptionalDateRange(startDate, endDate);
-        const healthKit = await loadHealthKit();
-        const workouts = await withNativeToolTimeout(
-          healthKit.getWorkouts(range.start, range.end, false),
-          'Workout query',
-        );
-        return workouts.slice(0, limit).map(serializeWorkout);
-      },
-    }),
+    data,
+    endDate: range.end.toISOString(),
+    granularity: input.granularity,
+    startDate: range.start.toISOString(),
   };
+}
+
+export async function listHealthWorkouts(
+  input: { endDate?: string; limit?: number; startDate?: string },
+  loadHealthKit: HealthKitLoader = loadHealthKitModule,
+) {
+  const range = normalizeOptionalDateRange(input.startDate, input.endDate);
+  const healthKit = await loadHealthKit();
+  const workouts = await withNativeToolTimeout(
+    healthKit.getWorkouts(range.start, range.end, false),
+    'Workout query',
+  );
+  return workouts.slice(0, input.limit ?? 20).map(serializeWorkout);
 }
 
 async function loadHealthKitModule(): Promise<HealthKit> {
@@ -119,7 +97,7 @@ async function loadHealthKitModule(): Promise<HealthKit> {
   return getHealthKit();
 }
 
-async function getHealthSummary(
+async function getRangeHealthSummary(
   healthKit: HealthKit,
   metrics: HealthMetricName[],
   start: Date,
@@ -134,7 +112,6 @@ async function getHealthSummary(
         );
         return [metric, { unit: 'hours', value: sumSleepHours(samples) }] as const;
       }
-
       const config = quantityMetrics[metric];
       const value = await withNativeToolTimeout(
         healthKit.getAggregatedQuantity(config.identifier, start, end, config.aggregation, false),
@@ -156,26 +133,30 @@ async function getDailyHealthData(
   await Promise.all(
     metrics.map(async (metric) => {
       if (metric === 'sleep') {
-        const samples = await withNativeToolTimeout(
-          healthKit.getCategoryData('HKCategoryTypeIdentifierSleepAnalysis', start, end, false),
-          'Sleep query',
+        applyDailySleep(
+          daily,
+          await withNativeToolTimeout(
+            healthKit.getCategoryData('HKCategoryTypeIdentifierSleepAnalysis', start, end, false),
+            'Sleep query',
+          ),
         );
-        applyDailySleep(daily, samples);
         return;
       }
-
       const config = quantityMetrics[metric];
-      const samples = await withNativeToolTimeout(
-        healthKit.getQuantityData(config.identifier, start, end, null, false),
-        `${metric} query`,
+      applyDailyQuantity(
+        daily,
+        metric,
+        config,
+        await withNativeToolTimeout(
+          healthKit.getQuantityData(config.identifier, start, end, null, false),
+          `${metric} query`,
+        ),
       );
-      applyDailyQuantity(daily, metric, config, samples);
     }),
   );
-
   return [...daily.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([date, metricsForDay]) => ({ date, metrics: metricsForDay }));
+    .map(([date, metrics]) => ({ date, metrics }));
 }
 
 function applyDailyQuantity(
@@ -187,18 +168,15 @@ function applyDailyQuantity(
   const buckets = new Map<string, number[]>();
   for (const sample of samples) {
     const date = new Date(sample.startDate).toISOString().slice(0, 10);
-    const values = buckets.get(date) ?? [];
-    values.push(sample.value);
-    buckets.set(date, values);
+    buckets.set(date, [...(buckets.get(date) ?? []), sample.value]);
   }
-
   for (const [date, values] of buckets) {
-    const value =
-      config.aggregation === 'sum'
-        ? values.reduce((total, item) => total + item, 0)
-        : values.reduce((total, item) => total + item, 0) / values.length;
+    const sum = values.reduce((total, value) => total + value, 0);
     const day = daily.get(date) ?? {};
-    day[metric] = { unit: config.unit, value };
+    day[metric] = {
+      unit: config.unit,
+      value: config.aggregation === 'sum' ? sum : sum / values.length,
+    };
     daily.set(date, day);
   }
 }
@@ -208,16 +186,13 @@ function applyDailySleep(
   samples: CategoryDataPoint[],
 ) {
   for (const sample of samples) {
-    if (!isAsleepSample(sample)) {
-      continue;
-    }
+    if (!isAsleepSample(sample)) continue;
     const date = new Date(sample.startDate).toISOString().slice(0, 10);
     const day = daily.get(date) ?? {};
-    const current = day.sleep?.value ?? 0;
     day.sleep = {
       unit: 'hours',
       value:
-        current +
+        (day.sleep?.value ?? 0) +
         (new Date(sample.endDate).getTime() - new Date(sample.startDate).getTime()) / 3_600_000,
     };
     daily.set(date, day);
@@ -244,8 +219,8 @@ function serializeWorkout(workout: WorkoutDataPoint) {
     activityName: workout.workoutActivityName,
     activityType: workout.workoutActivityType,
     durationSeconds: workout.duration,
-    endDate: toIso(workout.endDate),
-    startDate: toIso(workout.startDate),
+    endDate: toIso(workout.endDate) ?? null,
+    startDate: toIso(workout.startDate) ?? null,
     totalDistanceMeters: workout.totalDistance ?? null,
     totalEnergyKilocalories: workout.totalEnergyBurned ?? null,
   };

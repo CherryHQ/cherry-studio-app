@@ -5,8 +5,8 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { parseFunctionCallToolName } from '@/ai/mcp';
 import { BottomSheet } from '@/components/bottomSheet';
-import { getBuiltInToolPresentation } from '../utils/builtInToolPresentation';
 import type { PendingToolApproval } from '../runtime/chatRuntimeMessages';
+import { getBuiltInToolPresentation } from '../utils/builtInToolPresentation';
 
 const ignoreClose = () => undefined;
 
@@ -119,13 +119,13 @@ function formatApprovalTitle(
   approval: PendingToolApproval,
   t: ReturnType<typeof useTranslation>['t'],
 ): string {
-  if (approval.toolType === 'builtin' || approval.toolName.startsWith('builtin_')) {
-    const presentation = getBuiltInToolPresentation(approval.toolName);
+  const presentation = getBuiltInToolPresentation(approval.toolName);
+  if (presentation || approval.toolType === 'builtin') {
     if (presentation) {
       return t(presentation.titleKey);
     }
 
-    const words = approval.toolName.replace(/^builtin_/, '').replaceAll('_', ' ');
+    const words = approval.toolName.replaceAll('_', ' ');
     return words ? `${words[0].toUpperCase()}${words.slice(1)}` : approval.toolName;
   }
 

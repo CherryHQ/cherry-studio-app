@@ -1,5 +1,5 @@
-import type { PngIconProps } from 'lucide-uniwind/png';
 import type { ImageSource } from 'expo-image';
+import type { PngIconProps } from 'lucide-uniwind/png';
 import { type ComponentType, type ReactNode, useState } from 'react';
 import { View } from 'react-native';
 
