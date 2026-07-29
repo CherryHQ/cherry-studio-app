@@ -11,8 +11,7 @@ export type PreferenceUpdateOptions = {
   optimistic: boolean;
 };
 
-export const PermissionModeSchema = z.enum(['never', 'ask', 'always']);
-export type PermissionMode = z.infer<typeof PermissionModeSchema>;
+export type PermissionMode = 'never' | 'ask' | 'always';
 
 export type PreferenceShortcutType = {
   binding: string[];

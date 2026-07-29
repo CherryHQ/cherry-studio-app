@@ -2,7 +2,6 @@ import {
   DefaultPreferences,
   getDefaultValue,
   getPreferenceKeys,
-  isPermissionPreferenceKey,
   isPreferenceKey,
   ThemeMode,
 } from '..';
@@ -74,7 +73,5 @@ describe('preference defaults', () => {
   test('keeps permission preferences safe by default', () => {
     expect(getDefaultValue('permissions.health_read')).toBe('never');
     expect(getDefaultValue('permissions.calendar_write')).toBe('never');
-    expect(isPermissionPreferenceKey('permissions.location_read')).toBe(true);
-    expect(isPermissionPreferenceKey('app.language')).toBe(false);
   });
 });

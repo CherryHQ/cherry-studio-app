@@ -51,7 +51,6 @@ export type {
 } from './preferenceTypes';
 export {
   codeCLI,
-  PermissionModeSchema,
   SelectionFilterMode,
   SelectionTriggerMode,
   ThemeMode,
@@ -61,6 +60,5 @@ export {
 export {
   getDefaultValue,
   getPreferenceKeys,
-  isPermissionPreferenceKey,
   isPreferenceKey,
 } from './preferenceUtils';

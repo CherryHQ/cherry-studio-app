@@ -2,11 +2,6 @@ import type { DbService } from '@/data/db/DbService';
 import type { PreferenceKeyType } from '@/data/preference';
 import { PreferenceService } from '@/data/services/PreferenceService';
 
-jest.mock('@logger', () => ({
-  loggerService: {
-    withContext: () => ({ warn: jest.fn() }),
-  },
-}));
 jest.mock('@/data/db/schemas', () => ({
   preferenceTable: {
     key: 'key',
@@ -45,7 +40,7 @@ describe('PreferenceService', () => {
     await expect(service.get('app.language')).resolves.toBeNull();
   });
 
-  test('ignores malformed persisted web search provider overrides', async () => {
+  test('loads known persisted values without key-specific parsing', async () => {
     const dbService = createFakeDbService([
       {
         key: 'chat.web_search.provider_overrides',
@@ -56,16 +51,6 @@ describe('PreferenceService', () => {
           },
         },
       },
-    ]);
-    const service = new PreferenceService(dbService);
-
-    await service.init();
-
-    await expect(service.get('chat.web_search.provider_overrides')).resolves.toEqual({});
-  });
-
-  test('loads and validates permission modes', async () => {
-    const dbService = createFakeDbService([
       { key: 'permissions.location_read', scope: 'default', value: 'always' },
       { key: 'permissions.health_read', scope: 'default', value: 'invalid' },
     ]);
@@ -73,8 +58,13 @@ describe('PreferenceService', () => {
 
     await service.init();
 
+    await expect(service.get('chat.web_search.provider_overrides')).resolves.toEqual({
+      tavily: {
+        capabilities: { searchKeywords: { apiHost: 42 } },
+      },
+    });
     await expect(service.get('permissions.location_read')).resolves.toBe('always');
-    await expect(service.get('permissions.health_read')).resolves.toBe('never');
+    await expect(service.get('permissions.health_read')).resolves.toBe('invalid');
   });
 
   test('writes permission preferences through the default scope', async () => {
