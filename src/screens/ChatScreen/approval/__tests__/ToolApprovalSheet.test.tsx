@@ -5,7 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BottomSheet } from '@/components/bottomSheet';
 import type { PendingToolApproval } from '../../runtime/chatRuntimeMessages';
-import { McpApprovalSheet } from '../McpApprovalSheet';
+import { ToolApprovalSheet } from '../ToolApprovalSheet';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -37,8 +37,8 @@ jest.mock('heroui-native/button', () => {
   return { Button: MockButton };
 });
 
-const allowLabel = 'chat.mcpTool.approval.allow';
-const denyLabel = 'chat.mcpTool.approval.deny';
+const allowLabel = 'chat.tool.approval.allow';
+const denyLabel = 'chat.tool.approval.deny';
 
 function makeApproval(overrides: Partial<PendingToolApproval> = {}): PendingToolApproval {
   return {
@@ -51,7 +51,7 @@ function makeApproval(overrides: Partial<PendingToolApproval> = {}): PendingTool
   };
 }
 
-describe('McpApprovalSheet', () => {
+describe('ToolApprovalSheet', () => {
   let renderer: ReactTestRenderer;
 
   afterEach(async () => {
@@ -63,7 +63,7 @@ describe('McpApprovalSheet', () => {
   ) {
     const onRespond = jest.fn(overrides.onRespond ?? (async () => undefined));
     const element = (approvals: readonly PendingToolApproval[]) => (
-      <McpApprovalSheet approvals={approvals} isOpen onRespond={onRespond} />
+      <ToolApprovalSheet approvals={approvals} isOpen onRespond={onRespond} />
     );
 
     act(() => {
@@ -189,7 +189,7 @@ describe('McpApprovalSheet', () => {
       approvals: [makeApproval(), makeApproval({ approvalId: 'approval-2', toolCallId: 'call-2' })],
     });
 
-    expect(renderedTexts()).toContain('chat.mcpTool.approval.pendingCount {"count":2}');
+    expect(renderedTexts()).toContain('chat.tool.approval.pendingCount {"count":2}');
   });
 
   test('advances to the next approval without closing the sheet', () => {
@@ -207,5 +207,19 @@ describe('McpApprovalSheet', () => {
 
     expect(renderedTexts()).toContain('serverTwo: createFile');
     expect(renderer.root.findByType(BottomSheet).props.isOpen).toBe(true);
+  });
+
+  test('formats built-in tool names without exposing the internal prefix', () => {
+    render({
+      approvals: [
+        makeApproval({
+          toolName: 'builtin_get_current_location',
+          toolType: 'builtin',
+        }),
+      ],
+    });
+
+    expect(renderedTexts()).toContain('chat.builtinTool.location.current');
+    expect(renderedTexts()).not.toContain('builtin_get_current_location');
   });
 });

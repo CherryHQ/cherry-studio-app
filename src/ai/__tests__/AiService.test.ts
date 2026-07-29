@@ -525,6 +525,9 @@ describe('AiService web search plugin wiring', () => {
 });
 
 describe('AiService MCP tool injection', () => {
+  const builtInTools = {
+    builtin_get_current_location: { description: 'location' },
+  } as unknown as ToolSet;
   const mcpTools = { mcp__serverone__search: { description: 'search' } } as unknown as ToolSet;
 
   beforeEach(() => {
@@ -567,6 +570,7 @@ describe('AiService MCP tool injection', () => {
     await streamWith(services, assistant);
 
     expect(services.mcp.getToolSetForAssistant).not.toHaveBeenCalled();
+    expect(services.builtin.getToolSet).not.toHaveBeenCalled();
     expect(mockAgentConstructor.mock.calls.at(-1)?.[0].tools).toBeUndefined();
   });
 
@@ -584,9 +588,10 @@ describe('AiService MCP tool injection', () => {
     });
 
     expect(services.mcp.getToolSetForAssistant).not.toHaveBeenCalled();
+    expect(services.builtin.getToolSet).not.toHaveBeenCalled();
   });
 
-  it('merges MCP tools with the external web-search tool', async () => {
+  it('merges built-in, MCP, and external web-search tools', async () => {
     const model = createModel('gpt-4o-mini', {
       capabilities: [MODEL_CAPABILITY.FUNCTION_CALL, MODEL_CAPABILITY.WEB_SEARCH],
     });
@@ -594,12 +599,19 @@ describe('AiService MCP tool injection', () => {
     assistant.settings.enableWebSearch = true;
 
     await streamWith(
-      createServices({ assistant, mcpTools, model, webSearchProviderId: 'tavily' }),
+      createServices({
+        assistant,
+        builtInTools,
+        mcpTools,
+        model,
+        webSearchProviderId: 'tavily',
+      }),
       assistant,
     );
 
     expect(mockAgentConstructor.mock.calls.at(-1)?.[0].tools).toEqual(
       expect.objectContaining({
+        builtin_get_current_location: expect.any(Object),
         mcp__serverone__search: expect.any(Object),
         web_search: expect.any(Object),
       }),
@@ -626,6 +638,7 @@ describe('AiService MCP tool injection', () => {
 
 function createServices({
   assistant,
+  builtInTools,
   defaultModelId,
   mcpTools,
   model,
@@ -638,6 +651,7 @@ function createServices({
   },
 }: {
   assistant?: Assistant;
+  builtInTools?: ToolSet;
   defaultModelId?: UniqueModelId | null;
   mcpTools?: ToolSet;
   model?: Model;
@@ -655,6 +669,9 @@ function createServices({
   return {
     assistant: {
       getById: jest.fn(async () => assistant),
+    },
+    builtin: {
+      getToolSet: jest.fn(async () => builtInTools),
     },
     fileEntry: {
       resolveUri: jest.fn(async () => undefined),

@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 
 import type { CherryMessagePart } from '@/data/types/message';
+import { getBuiltInToolPresentation } from '../../utils/builtInToolPresentation';
 import { hasToolPartValue, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';
 
@@ -13,7 +14,8 @@ type ToolPartProps = {
 
 export function ToolPart({ part }: ToolPartProps) {
   const { t } = useTranslation();
-  const title = getToolLabel(part, t);
+  const toolPresentation = getBuiltInToolPresentation(getToolName(part));
+  const title = getToolLabel(part, toolPresentation?.titleKey, t);
   const statusText = getToolStatusText(part, t);
   const isRunning =
     part.state === 'input-streaming' ||
@@ -22,6 +24,8 @@ export function ToolPart({ part }: ToolPartProps) {
 
   return (
     <ToolPartDisclosure
+      icon={Platform.OS === 'android' ? toolPresentation?.androidIcon : undefined}
+      imageSource={Platform.OS === 'ios' ? toolPresentation?.iosImageSource : undefined}
       isRunning={isRunning}
       statusText={statusText}
       statusTone={getToolStatusTone(part)}
@@ -56,11 +60,19 @@ function ToolOutputSection({ output }: { output: unknown }) {
   return <ToolPartValueSection title={t('chat.tool.output')} value={output} />;
 }
 
-function getToolLabel(part: ToolMessagePart, t: ReturnType<typeof useTranslation>['t']) {
+function getToolLabel(
+  part: ToolMessagePart,
+  builtInTitleKey: string | undefined,
+  t: ReturnType<typeof useTranslation>['t'],
+) {
+  if (builtInTitleKey) {
+    return t(builtInTitleKey);
+  }
+
   const title = part.title?.trim();
   if (title) return title;
 
-  return t('chat.tool.title', { name: getToolName(part) });
+  return getToolName(part);
 }
 
 function getToolStatusText(part: ToolMessagePart, t: ReturnType<typeof useTranslation>['t']) {

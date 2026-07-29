@@ -1,10 +1,14 @@
-import { type ReactNode, useState } from 'react';
+import type { PngIconProps } from 'lucide-uniwind/png';
+import type { ImageSource } from 'expo-image';
+import { type ComponentType, type ReactNode, useState } from 'react';
 import { View } from 'react-native';
 
 import { ToolPartSheet, ToolPartTrigger } from './ToolPartSheet';
 
 type ToolPartDisclosureProps = {
   children: ReactNode;
+  icon?: ComponentType<PngIconProps>;
+  imageSource?: ImageSource | number;
   isRunning: boolean;
   statusText?: string;
   statusTone?: 'danger' | 'default' | 'warning';
@@ -14,6 +18,8 @@ type ToolPartDisclosureProps = {
 
 export function ToolPartDisclosure({
   children,
+  icon,
+  imageSource,
   isRunning,
   statusText,
   statusTone,
@@ -25,6 +31,8 @@ export function ToolPartDisclosure({
   return (
     <View className="gap-1.5">
       <ToolPartTrigger
+        icon={icon}
+        imageSource={imageSource}
         isRunning={isRunning}
         onPress={() => setIsOpen(true)}
         statusText={statusText}

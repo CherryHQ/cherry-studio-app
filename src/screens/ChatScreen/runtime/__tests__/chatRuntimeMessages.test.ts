@@ -147,6 +147,24 @@ describe('tool approvals', () => {
     expect(getPendingToolApprovals([waiting, createMessage('user-2', 'user')])).toEqual([]);
   });
 
+  test('getPendingToolApprovals carries built-in identity from tool metadata', () => {
+    const builtin = {
+      ...requested('a1', 'builtin_get_current_location'),
+      toolMetadata: { cherry: { tool: { type: 'builtin' } } },
+    } as CherryMessagePart;
+    const waiting = {
+      ...createMessage('assistant-1', 'assistant'),
+      data: { parts: [builtin] },
+    };
+
+    expect(getPendingToolApprovals([waiting])).toEqual([
+      expect.objectContaining({
+        toolName: 'builtin_get_current_location',
+        toolType: 'builtin',
+      }),
+    ]);
+  });
+
   test('mergeMessageStats adds what a resumed segment spends', () => {
     expect(mergeMessageStats(undefined, { totalTokens: 5 })).toEqual({ totalTokens: 5 });
     expect(mergeMessageStats({ totalTokens: 5 }, undefined)).toEqual({ totalTokens: 5 });

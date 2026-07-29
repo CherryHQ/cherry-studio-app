@@ -1,7 +1,9 @@
 import { AiService } from '@/ai/AiService';
+import { BuiltInToolService } from '@/ai/builtin';
 import { McpService } from '@/ai/mcp';
 import { cacheService } from '@/data/cache';
 import type { DbService } from '@/data/db/DbService';
+import { DevicePermissionService } from '@/services/devicePermissions';
 import { WebSearchService } from '@/services/webSearch/WebSearchService';
 
 import { AssistantService } from './AssistantService';
@@ -22,6 +24,7 @@ export type DataServices = ReturnType<typeof createDataServices>;
 
 export function createDataServices(dbService: DbService) {
   const preference = new PreferenceService(dbService);
+  const devicePermission = new DevicePermissionService();
   const pin = new PinService(dbService);
   const provider = new ProviderService(dbService, pin, cacheService);
   const model = new ModelService(dbService, preference, pin);
@@ -36,11 +39,23 @@ export function createDataServices(dbService: DbService) {
   const topic = new TopicService(dbService, pin, tag);
   const message = new MessageService(dbService, topic, fileEntry);
   const webSearch = new WebSearchService(preference);
-  const ai = new AiService({ assistant, fileEntry, mcp, model, preference, provider, webSearch });
+  const builtin = new BuiltInToolService({ devicePermission, preference });
+  const ai = new AiService({
+    assistant,
+    builtin,
+    fileEntry,
+    mcp,
+    model,
+    preference,
+    provider,
+    webSearch,
+  });
 
   return {
     ai,
     assistant,
+    builtin,
+    devicePermission,
     fileEntry,
     group,
     mcp,
