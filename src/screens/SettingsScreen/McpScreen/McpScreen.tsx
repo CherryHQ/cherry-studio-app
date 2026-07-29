@@ -74,7 +74,7 @@ export function McpScreen() {
           </View>
         ) : (
           <View className="overflow-hidden rounded-xl bg-settings-grouped-surface">
-            {servers.map((server) => {
+            {servers.map((server, index) => {
               const summary = summaries[server.id];
               const status = getServerStatus(server, summary);
 
@@ -84,6 +84,7 @@ export function McpScreen() {
                   isEnabled={server.isActive}
                   key={server.id}
                   name={server.name}
+                  showSeparator={index > 0}
                   onPress={() =>
                     router.push({
                       pathname: './mcp/[serverId]',

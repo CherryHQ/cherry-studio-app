@@ -13,6 +13,7 @@ import {
   MODEL_CAPABILITY,
   type Model,
   type ModelCapability,
+  type UniqueModelId,
 } from '@/data/types/model';
 import type { EndpointConfigs } from '@/data/types/provider';
 import type { PinService } from './PinService';
@@ -316,6 +317,40 @@ export class ModelService {
     )) as UserModelRow;
 
     return rowToModel(row);
+  }
+
+  /**
+   * Removes one model from its provider.
+   *
+   * Unlike {@link reconcileProviderModels} this deletes a hand-added model too:
+   * there the absence of a `presetModelId` means "the remote list cannot speak
+   * for this one", while here the user is pointing at the row. The chat default
+   * is still refused — dropping it would leave the preference dangling — and the
+   * caller is expected to have disabled the affordance, so `false` is the
+   * backstop rather than the message.
+   *
+   * Rows that reference the model (`assistant.modelId`, `message.modelId`) are
+   * `ON DELETE SET NULL`, so only pins need purging by hand.
+   */
+  async delete(id: UniqueModelId): Promise<boolean> {
+    const defaultModelId = await this.preferenceService.get('chat.default_model_id');
+    if (id === defaultModelId) {
+      return false;
+    }
+
+    return await this.dbService.withWriteTx(async (tx) => {
+      const deletedRows = await tx
+        .delete(userModelTable)
+        .where(eq(userModelTable.id, id))
+        .returning({ id: userModelTable.id });
+
+      if (deletedRows.length === 0) {
+        return false;
+      }
+
+      await this.pinService.purgeForEntitiesTx(tx, 'model', [id]);
+      return true;
+    });
   }
 
   async batchCreate(inputs: CreateModelInput[]): Promise<Model[]> {

@@ -207,7 +207,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
       onPress={handleSelect}
     >
       <View className="min-w-0 flex-1 flex-row items-center gap-2">
-        <ModelPickerIcon item={item} size={24} />
+        <ModelPickerIcon model={item.model} provider={item.provider} size={24} />
         <Text className="min-w-0 shrink text-base text-foreground" numberOfLines={1}>
           {item.model.name}
         </Text>

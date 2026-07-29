@@ -1,14 +1,18 @@
 import { Color, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { View } from 'react-native';
 
 import type { ProviderDetailChromeProps } from './ProviderDetailChrome.types';
+import { PullSpinner } from './PullSpinner';
 
 export function ProviderDetailChrome({
   canDelete,
+  checkAction,
   isActive,
   isDisabled,
   onDelete,
   onToggleActive,
+  pullAction,
 }: ProviderDetailChromeProps) {
   const { t } = useTranslation();
   const toggleLabel = t(
@@ -23,6 +27,30 @@ export function ProviderDetailChrome({
         icon={isActive ? 'pause' : 'play'}
         onPress={onToggleActive}
       />
+      {pullAction ? (
+        pullAction.isLoading ? (
+          // A native bar button item cannot animate its SF Symbol, so an in-flight
+          // pull swaps in a custom view that can. It is inert by design — the
+          // button it replaces would have been disabled anyway.
+          <Stack.Toolbar.View>
+            <View
+              accessible
+              accessibilityLabel={t('settings.provider.models.pull')}
+              accessibilityState={{ busy: true }}
+              className="size-6"
+            >
+              <PullSpinner className="size-6 text-foreground" />
+            </View>
+          </Stack.Toolbar.View>
+        ) : (
+          <Stack.Toolbar.Button
+            accessibilityLabel={t('settings.provider.models.pull')}
+            disabled={pullAction.isDisabled}
+            icon="arrow.trianglehead.2.clockwise.rotate.90"
+            onPress={pullAction.onPress}
+          />
+        )
+      ) : null}
       {canDelete ? (
         <Stack.Toolbar.Button
           accessibilityLabel={t('settings.provider.deleteProvider')}
@@ -33,6 +61,14 @@ export function ProviderDetailChrome({
         />
       ) : null}
       <Stack.Toolbar.Spacer />
+      {checkAction ? (
+        <Stack.Toolbar.Button
+          accessibilityLabel={t('settings.provider.models.check')}
+          disabled={checkAction.isDisabled || checkAction.isLoading}
+          icon="waveform.path.ecg"
+          onPress={checkAction.onPress}
+        />
+      ) : null}
     </Stack.Toolbar>
   );
 }

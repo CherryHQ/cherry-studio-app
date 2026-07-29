@@ -3,22 +3,23 @@ import { useToast } from 'heroui-native/toast';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { queryKeys } from '@/data/api';
 import { useDataServices } from '@/data/runtime';
 import { providerRegistryService } from '@/data/services/ProviderRegistryService';
 import type { UpdateProviderInput } from '@/data/services/ProviderService';
+import type { Model, UniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 
 import { enableProviderWhenModelsAvailable } from '../../utils/providerEnablement';
 import {
   buildProviderModelPullPreview,
-  type ProviderModelPullApplyPayload,
+  modelToCreateModelInput,
   type ProviderModelPullPreview,
 } from '../utils/providerModelPullPreview';
 import {
   isProviderModelPullTimeoutError,
   withProviderModelPullTimeout,
 } from '../utils/providerModelPullTimeout';
+import { refreshProviderModelQueries } from '../utils/refreshProviderModelQueries';
 
 type UseProviderModelPullOptions = {
   initialPreview?: ProviderModelPullPreview | null;
@@ -40,22 +41,7 @@ export function useProviderModelPull({
   const services = useDataServices();
   const queryClient = useQueryClient();
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  const [isApplying, setIsApplying] = useState(false);
   const [preview, setPreview] = useState<ProviderModelPullPreview | null>(initialPreview);
-
-  const resetPreview = useCallback(() => {
-    setPreview(null);
-  }, []);
-
-  const refreshModelQueries = useCallback(async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.models.list({ providerId }) }),
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.models.list({ enabled: true, providerId }),
-      }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.models.list() }),
-    ]);
-  }, [providerId, queryClient]);
 
   const loadPullPreview = useCallback(async (): Promise<ProviderModelPullLoadResult> => {
     if (!provider || !providerId) {
@@ -129,66 +115,48 @@ export function useProviderModelPull({
     toast,
   ]);
 
-  const applyPullPreview = useCallback(
-    async (payload: ProviderModelPullApplyPayload) => {
-      if (!provider) {
+  /**
+   * Commits one row's worth of change immediately, the way desktop's pull dialog
+   * does. There is no submit step: the preview stays on screen and the row just
+   * flips its glyph. Success is silent, since a toast per tap would be unusable
+   * when adding models one after another.
+   */
+  const applyModelChange = useCallback(
+    async ({ toAdd = [], toRemove = [] }: { toAdd?: Model[]; toRemove?: UniqueModelId[] }) => {
+      if (!provider || (toAdd.length === 0 && toRemove.length === 0)) {
         return false;
       }
 
-      setIsApplying(true);
-      const apply = async () => {
-        const result = await services.model.reconcileProviderModels(providerId, payload, {
-          defaultChatEndpoint: provider.defaultChatEndpoint,
-          endpointConfigs: provider.endpointConfigs,
-        });
-        // react-doctor-disable-next-line server-sequential-independent-await -- list 必须读 reconcile 落库后的结果，两个 await 有先后依赖
-        const remainingModels = await services.model.list({ providerId });
+      try {
+        await services.model.reconcileProviderModels(
+          providerId,
+          { toAdd: toAdd.map(modelToCreateModelInput), toRemove },
+          {
+            defaultChatEndpoint: provider.defaultChatEndpoint,
+            endpointConfigs: provider.endpointConfigs,
+          },
+        );
+        // The models just landed, so the count is known without re-reading the table.
         await enableProviderWhenModelsAvailable(
           provider,
           (updates: UpdateProviderInput) => services.provider.update(providerId, updates),
-          remainingModels.length,
-          'pull_reconcile_apply',
+          toAdd.length,
+          'pull_reconcile_row',
         );
-        await refreshModelQueries();
-        toast.show({
-          label: t('settings.provider.models.pullApplyResult', {
-            added: result.added.length,
-            removed: result.removedIds.length,
-          }),
-          variant: 'success',
-        });
-        resetPreview();
+        await refreshProviderModelQueries(queryClient, providerId);
         return true;
-      };
-      return await apply()
-        .catch(() => {
-          toast.show({
-            label: t('settings.provider.models.pullApplyFailed'),
-            variant: 'danger',
-          });
-          return false;
-        })
-        .finally(() => setIsApplying(false));
+      } catch {
+        toast.show({ label: t('settings.provider.models.pullApplyFailed'), variant: 'danger' });
+        return false;
+      }
     },
-    [
-      provider,
-      providerId,
-      refreshModelQueries,
-      resetPreview,
-      services.model,
-      services.provider,
-      t,
-      toast,
-    ],
+    [provider, providerId, queryClient, services.model, services.provider, t, toast],
   );
 
   return {
-    applyPullPreview,
-    isApplying,
-    isBusy: isPreviewLoading || isApplying,
+    applyModelChange,
     isPreviewLoading,
     loadPullPreview,
     preview,
-    resetPreview,
   };
 }

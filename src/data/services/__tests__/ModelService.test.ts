@@ -293,6 +293,56 @@ describe('ModelService', () => {
     });
     expect(dbService.withWriteTx).not.toHaveBeenCalled();
   });
+
+  // Unlike reconcile, an explicit delete reaches a hand-added model: the user is
+  // pointing at the row rather than the remote list failing to mention it.
+  test('deletes a model without a preset and purges its pins', async () => {
+    const tx = {
+      delete: jest.fn(() => ({
+        where: jest.fn(() => ({ returning: jest.fn(async () => [{ id: 'openai::custom' }]) })),
+      })),
+    };
+    const pinService = {
+      purgeForEntitiesTx: jest.fn(async () => undefined),
+    } as unknown as PinService;
+    const service = new ModelService(
+      { withWriteTx: jest.fn(async (callback) => callback(tx)) } as unknown as DbService,
+      { get: jest.fn(async () => null) } as unknown as PreferenceService,
+      pinService,
+    );
+
+    await expect(service.delete('openai::custom')).resolves.toBe(true);
+    expect(pinService.purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', ['openai::custom']);
+  });
+
+  test('refuses to delete the chat default and never opens a transaction for it', async () => {
+    const dbService = { withWriteTx: jest.fn() } as unknown as DbService;
+    const service = new ModelService(
+      dbService,
+      { get: jest.fn(async () => 'openai::default') } as unknown as PreferenceService,
+      { purgeForEntitiesTx: jest.fn() } as unknown as PinService,
+    );
+
+    await expect(service.delete('openai::default')).resolves.toBe(false);
+    expect(dbService.withWriteTx).not.toHaveBeenCalled();
+  });
+
+  test('leaves pins alone when the model was already gone', async () => {
+    const tx = {
+      delete: jest.fn(() => ({
+        where: jest.fn(() => ({ returning: jest.fn(async () => []) })),
+      })),
+    };
+    const pinService = { purgeForEntitiesTx: jest.fn() } as unknown as PinService;
+    const service = new ModelService(
+      { withWriteTx: jest.fn(async (callback) => callback(tx)) } as unknown as DbService,
+      { get: jest.fn(async () => null) } as unknown as PreferenceService,
+      pinService,
+    );
+
+    await expect(service.delete('openai::missing')).resolves.toBe(false);
+    expect(pinService.purgeForEntitiesTx).not.toHaveBeenCalled();
+  });
 });
 
 function createService(dbService: DbService) {
