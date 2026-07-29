@@ -1,8 +1,29 @@
 type PropertySchema = Record<string, unknown>;
 type InputSchema = {
+  type?: string;
   properties?: Record<string, PropertySchema>;
   required?: string[];
 };
+
+function jsonSchemaTypeToJs(schemaType: unknown): string {
+  if (typeof schemaType !== 'string') return '*';
+  if (schemaType === 'integer' || schemaType === 'number') return 'number';
+  if (schemaType === 'array') return 'Array';
+  if (schemaType === 'object') return 'Object';
+  if (schemaType === 'boolean') return 'boolean';
+  if (schemaType === 'string') return 'string';
+  return '*';
+}
+
+function schemaToParamType(property: PropertySchema): string {
+  if (Array.isArray(property.enum) && property.enum.length > 0) {
+    return property.enum.map((value) => JSON.stringify(value)).join('|');
+  }
+  if (Array.isArray(property.type)) {
+    return property.type.map(jsonSchemaTypeToJs).join('|');
+  }
+  return jsonSchemaTypeToJs(property.type);
+}
 
 const MAX_NESTING_DEPTH = 5;
 
@@ -44,8 +65,8 @@ function appendPropertyParams(
       : description;
     lines.push(
       suffix
-        ? ` * @param {${schemaType(property)}} ${path} - ${suffix}`
-        : ` * @param {${schemaType(property)}} ${path}`,
+        ? ` * @param {${schemaToParamType(property)}} ${path} - ${suffix}`
+        : ` * @param {${schemaToParamType(property)}} ${path}`,
     );
 
     if (property.type === 'object' && property.properties) {
@@ -57,17 +78,18 @@ function appendPropertyParams(
         depth + 1,
       );
     }
-  }
-}
 
-function schemaType(property: PropertySchema): string {
-  if (Array.isArray(property.enum) && property.enum.length > 0) {
-    return property.enum.map((value) => JSON.stringify(value)).join('|');
+    if (property.type === 'array' && property.items) {
+      const items = property.items as PropertySchema;
+      if (items.type === 'object' && items.properties) {
+        appendPropertyParams(
+          lines,
+          items.properties as Record<string, PropertySchema>,
+          new Set(Array.isArray(items.required) ? (items.required as string[]) : []),
+          `${prefix}.${name}[]`,
+          depth + 1,
+        );
+      }
+    }
   }
-  if (property.type === 'integer' || property.type === 'number') return 'number';
-  if (property.type === 'array') return 'Array';
-  if (property.type === 'object') return 'Object';
-  if (property.type === 'boolean') return 'boolean';
-  if (property.type === 'string') return 'string';
-  return '*';
 }

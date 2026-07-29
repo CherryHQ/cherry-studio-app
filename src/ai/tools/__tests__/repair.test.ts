@@ -39,10 +39,32 @@ describe('createAiRepair', () => {
     expect(await callRepair(new NoSuchToolError({ toolName: 'missing' }))).toBeNull();
     expect(mockGenerateText).not.toHaveBeenCalled();
   });
+
+  test('only injects plugins supplied by the usage plugin factory', async () => {
+    const usagePlugins = [{ name: 'usage' }];
+    const repairWithUsage = createAiRepair({
+      getUsagePlugins: () => usagePlugins as never,
+      modelId: 'deepseek-flash',
+      providerId: 'openai-compatible',
+      providerSettings: { apiKey: 'test', baseURL: 'https://example.com', name: 'CherryExpress' },
+    });
+    mockGenerateText.mockResolvedValue({ output: { query: 'fixed' } } as never);
+
+    await callRepair(
+      new InvalidToolInputError({
+        cause: new Error('query required'),
+        toolInput: '{}',
+        toolName: 'web_search',
+      }),
+      repairWithUsage,
+    );
+
+    expect(mockGenerateText.mock.calls[0]?.[3]).toBe(usagePlugins);
+  });
 });
 
-function callRepair(error: InvalidToolInputError | NoSuchToolError) {
-  return repair({
+function callRepair(error: InvalidToolInputError | NoSuchToolError, repairToolCall = repair) {
+  return repairToolCall({
     error,
     inputSchema: async () => ({ properties: { query: { type: 'string' } }, type: 'object' }),
     messages: [],

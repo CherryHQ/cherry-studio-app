@@ -456,7 +456,6 @@ export class AiService {
     };
     const repairToolCall = createAiRepair({
       modelId: model.modelId,
-      plugins,
       providerId: sdkConfig.providerId,
       providerSettings: sdkConfig.providerSettings,
     });

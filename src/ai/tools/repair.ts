@@ -15,12 +15,16 @@ import type { AppProviderSettingsMap } from '../types';
 const logger = loggerService.withContext('ToolCallRepair');
 type AppProviderId = StringKeys<AppProviderSettingsMap>;
 
-export function createAiRepair<T extends AppProviderId>(context: {
+export interface AiRepairContext<T extends AppProviderId = AppProviderId> {
   providerId: T;
   providerSettings: AppProviderSettingsMap[T];
   modelId: string;
-  plugins?: AiPlugin[];
-}): ToolCallRepairFunction<ToolSet> {
+  getUsagePlugins?: () => AiPlugin[];
+}
+
+export function createAiRepair<T extends AppProviderId>(
+  context: AiRepairContext<T>,
+): ToolCallRepairFunction<ToolSet> {
   return async ({ error, inputSchema, toolCall }) => {
     if (!InvalidToolInputError.isInstance(error)) {
       return null;
@@ -49,7 +53,7 @@ export function createAiRepair<T extends AppProviderId>(context: {
             `Validation error: ${error.message}`,
           ].join('\n'),
         },
-        context.plugins,
+        context.getUsagePlugins?.(),
       );
       if (result.output === undefined || result.output === null) {
         return null;
