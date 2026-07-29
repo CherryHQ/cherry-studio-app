@@ -1,6 +1,6 @@
 import type { LanguageModelUsage } from 'ai';
 
-import { mergeUsage, toMessageMetadataPatch, ZERO_USAGE } from '../usageMetadata';
+import { mergeUsage, toMessageMetadataPatch, ZERO_USAGE } from '../usage';
 
 function usage(overrides: Partial<LanguageModelUsage> = {}): LanguageModelUsage {
   return { ...ZERO_USAGE, ...overrides };

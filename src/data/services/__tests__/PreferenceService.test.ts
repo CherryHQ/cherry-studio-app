@@ -2,11 +2,6 @@ import type { DbService } from '@/data/db/DbService';
 import type { PreferenceKeyType } from '@/data/preference';
 import { PreferenceService } from '@/data/services/PreferenceService';
 
-jest.mock('@logger', () => ({
-  loggerService: {
-    withContext: () => ({ warn: jest.fn() }),
-  },
-}));
 jest.mock('@/data/db/schemas', () => ({
   preferenceTable: {
     key: 'key',
@@ -45,7 +40,7 @@ describe('PreferenceService', () => {
     await expect(service.get('app.language')).resolves.toBeNull();
   });
 
-  test('ignores malformed persisted web search provider overrides', async () => {
+  test('loads known persisted values without key-specific parsing', async () => {
     const dbService = createFakeDbService([
       {
         key: 'chat.web_search.provider_overrides',
@@ -56,12 +51,39 @@ describe('PreferenceService', () => {
           },
         },
       },
+      { key: 'permissions.location_read', scope: 'default', value: 'always' },
+      { key: 'permissions.health_read', scope: 'default', value: 'invalid' },
     ]);
     const service = new PreferenceService(dbService);
 
     await service.init();
 
-    await expect(service.get('chat.web_search.provider_overrides')).resolves.toEqual({});
+    await expect(service.get('chat.web_search.provider_overrides')).resolves.toEqual({
+      tavily: {
+        capabilities: { searchKeywords: { apiHost: 42 } },
+      },
+    });
+    await expect(service.get('permissions.location_read')).resolves.toBe('always');
+    await expect(service.get('permissions.health_read')).resolves.toBe('invalid');
+  });
+
+  test('writes permission preferences through the default scope', async () => {
+    const dbService = createFakeDbService();
+    const service = new PreferenceService(dbService);
+    const listener = jest.fn();
+
+    await service.init();
+    service.subscribeChange('permissions.calendar_write')(listener);
+
+    await service.set('permissions.calendar_write', 'ask');
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(dbService.rows.get('default.permissions.calendar_write')).toMatchObject({
+      key: 'permissions.calendar_write',
+      scope: 'default',
+      value: 'ask',
+    });
+    expect(Object.keys(service.getAll())).toHaveLength(236);
   });
 
   test('returns mapped and full cached preferences', async () => {

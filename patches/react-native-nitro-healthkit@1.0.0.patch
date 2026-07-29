@@ -1,0 +1,508 @@
+diff --git a/android/src/main/AndroidManifest.xml b/android/src/main/AndroidManifest.xml
+index f216728a40c8deda4bb5b74d8c665f9889a704f2..e3cf9d3607bfb4e3fc5a6ad693825faea1467e02 100644
+--- a/android/src/main/AndroidManifest.xml
++++ b/android/src/main/AndroidManifest.xml
+@@ -10,25 +10,10 @@
+   <uses-permission android:name="android.permission.INTERNET" />
+   <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+   <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+-  <uses-permission android:name="android.permission.health.WRITE_DISTANCE" />
+-  <uses-permission android:name="android.permission.health.READ_FLOORS_CLIMBED" />
+-  <uses-permission android:name="android.permission.health.WRITE_FLOORS_CLIMBED" />
+   <uses-permission android:name="android.permission.health.READ_STEPS" />
+-  <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+-  <uses-permission android:name="android.permission.health.WRITE_TOTAL_CALORIES_BURNED" />
+-  <uses-permission android:name="android.permission.health.WRITE_STEPS" />
+   <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+-  <uses-permission android:name="android.permission.health.WRITE_HEART_RATE" />
+   <uses-permission android:name="android.permission.health.READ_SLEEP" />
+-  <uses-permission android:name="android.permission.health.WRITE_SLEEP" />
+   <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+-  <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
+-  <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+-  <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+-  <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS" />
+-  <uses-permission android:name="android.permission.health.READ_HEIGHT" />
+-  <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
+-  <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+   <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
+   <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+ 
+diff --git a/android/src/main/kotlin/io/github/n0ku/nitrohealthkit/HealthKitModule.kt b/android/src/main/kotlin/io/github/n0ku/nitrohealthkit/HealthKitModule.kt
+index 1f769abc3ad053b16fa600d6ce4607cea0a5cf42..78181a9f8cbceffa9bc9dd9e9e8fc1d3f01393be 100644
+--- a/android/src/main/kotlin/io/github/n0ku/nitrohealthkit/HealthKitModule.kt
++++ b/android/src/main/kotlin/io/github/n0ku/nitrohealthkit/HealthKitModule.kt
+@@ -6,22 +6,14 @@ import android.util.Log
+ import androidx.health.connect.client.HealthConnectClient
+ import androidx.health.connect.client.aggregate.AggregateMetric
+ import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+-import androidx.health.connect.client.records.BloodPressureRecord
+-import androidx.health.connect.client.records.BodyFatRecord
+ import androidx.health.connect.client.records.DistanceRecord
+ import androidx.health.connect.client.records.ExerciseSessionRecord
+-import androidx.health.connect.client.records.FloorsClimbedRecord
+ import androidx.health.connect.client.records.HeartRateRecord
+ import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
+-import androidx.health.connect.client.records.HeightRecord
+-import androidx.health.connect.client.records.LeanBodyMassRecord
+-import androidx.health.connect.client.records.OxygenSaturationRecord
+ import androidx.health.connect.client.records.Record
+ import androidx.health.connect.client.records.RestingHeartRateRecord
+ import androidx.health.connect.client.records.SleepSessionRecord
+ import androidx.health.connect.client.records.StepsRecord
+-import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
+-import androidx.health.connect.client.records.WeightRecord
+ import androidx.health.connect.client.request.AggregateGroupByDurationRequest
+ import androidx.health.connect.client.request.AggregateRequest
+ import androidx.health.connect.client.request.ReadRecordsRequest
+@@ -129,7 +121,12 @@ class HealthKitModule : HybridHealthKitSpec() {
+     override fun checkAuthorizationStatus(type: String): Promise<String> = Promise.async {
+         val quantityPerm = QuantityMapper.readPermissionFor(type)
+         val categoryPerm = CategoryMapper.readPermissionFor(type)
+-        val permission = quantityPerm ?: categoryPerm ?: return@async NOT_DETERMINED
++        val workoutPerm = if (type == "HKWorkoutTypeIdentifier") {
++            androidx.health.connect.client.permission.HealthPermission.getReadPermission(ExerciseSessionRecord::class)
++        } else {
++            null
++        }
++        val permission = quantityPerm ?: categoryPerm ?: workoutPerm ?: return@async NOT_DETERMINED
+         val granted = client.permissionController.getGrantedPermissions()
+         if (granted.contains(permission)) AUTHORIZED else DENIED
+     }
+@@ -177,9 +174,6 @@ class HealthKitModule : HybridHealthKitSpec() {
+             val response = readChunkWithRetry(recordType, chunkStart, chunkEnd)
+             if (response != null) {
+                 accumulated += response.records
+-                if (response.pageToken != null) {
+-                    Log.w(TAG, "readAllRecords ${recordType.simpleName}: chunk $chunkStart→$chunkEnd hit pageSize cap (${response.records.size}); window has more records that won't be returned")
+-                }
+             }
+             chunkStart = chunkEnd
+             chunks++
+@@ -258,7 +252,6 @@ class HealthKitModule : HybridHealthKitSpec() {
+                     val isQuotaError = (t.message ?: "").contains("quota", ignoreCase = true) ||
+                         (t.cause?.message ?: "").contains("quota", ignoreCase = true)
+                     if (!isQuotaError || attempt >= QUOTA_RETRY_MAX_ATTEMPTS) {
+-                        Log.w(TAG, "readAllRecords ${recordType.simpleName} chunk failed [$start→$end] (attempt $attempt): ${t.javaClass.simpleName}: ${t.message}")
+                         return null
+                     }
+                     kotlinx.coroutines.delay(backoffMs)
+@@ -311,7 +304,6 @@ class HealthKitModule : HybridHealthKitSpec() {
+ 
+         val records = readAllRecords(recordType, startDate, endDate)
+         val flattened = QuantityMapper.flatten(type, records).toTypedArray()
+-        Log.d(TAG, "getQuantityData $type [$startDate→$endDate]: ${records.size} raw records → ${flattened.size} samples")
+ 
+         if (useCacheValue) cache.set(key, flattened, ttl)
+         flattened
+@@ -414,7 +406,6 @@ class HealthKitModule : HybridHealthKitSpec() {
+                 )
+             }
+         }
+-        Log.d(TAG, "readDailyAggregates $iosType [$alignedStart→$alignedEnd]: ${buckets.size} buckets → ${out.size} non-empty days")
+         out.toTypedArray()
+     }
+ 
+@@ -459,12 +450,10 @@ class HealthKitModule : HybridHealthKitSpec() {
+                         ),
+                     )
+                 } catch (t: Throwable) {
+-                    Log.w(TAG, "aggregate $iosType: failed [$startDate→$endDate]: ${t.javaClass.simpleName}: ${t.message}")
+                     null
+                 }
+             }
+             val v = if (response != null) QuantityMapper.coerceAggregateToDouble(iosType, response[metric]) else 0.0
+-            Log.d(TAG, "aggregate $iosType [$startDate→$endDate] sum=$v")
+             return v
+         }
+ 
+@@ -503,7 +492,6 @@ class HealthKitModule : HybridHealthKitSpec() {
+         }
+         val records = readAllRecords(recordType, startDate, endDate)
+         val flattened = CategoryMapper.flatten(type, records).toTypedArray()
+-        Log.d(TAG, "getCategoryData $type [$startDate→$endDate]: ${records.size} raw records → ${flattened.size} samples")
+         if (useCacheValue) cache.set(key, flattened, ttl)
+         flattened
+     }
+@@ -754,23 +742,9 @@ class HealthKitModule : HybridHealthKitSpec() {
+         StepsRecord::class,
+         HeartRateRecord::class,
+         DistanceRecord::class,
+-        FloorsClimbedRecord::class,
+         ActiveCaloriesBurnedRecord::class,
+-        TotalCaloriesBurnedRecord::class,
+         SleepSessionRecord::class,
+         ExerciseSessionRecord::class,
+-        // Body composition — added in 5.1.0 so the BodyComposition
+-        // widget/screen works for users without a Withings account but
+-        // with a Samsung Health / Google Fit / Fitbit scale.
+-        WeightRecord::class,
+-        BodyFatRecord::class,
+-        LeanBodyMassRecord::class,
+-        HeightRecord::class,
+-        // Cardio vitals — same rationale. SpO2/HRV/BP/RestingHR are all
+-        // recorded by Galaxy Watches and similar wearables and exposed
+-        // via HC, no Withings required.
+-        BloodPressureRecord::class,
+-        OxygenSaturationRecord::class,
+         HeartRateVariabilityRmssdRecord::class,
+         RestingHeartRateRecord::class,
+     ).map { androidx.health.connect.client.permission.HealthPermission.getReadPermission(it) }.toSet()
+diff --git a/ios/HealthKitModule.swift b/ios/HealthKitModule.swift
+index 677ddcb4cd714e63d330d7540b50e5d896e6db42..4e81157546afb49806f7ed54a73f2fd9ca70c7b1 100644
+--- a/ios/HealthKitModule.swift
++++ b/ios/HealthKitModule.swift
+@@ -1,6 +1,5 @@
+ import NitroModules
+ import HealthKit
+-import os.log
+ 
+ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+   private let healthStore = HKHealthStore()
+@@ -10,7 +9,7 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+   // Default cache configuration
+   private let defaultCacheTTL: TimeInterval = 60 // 1 minute
+   
+-  // Data types to authorize (extended)
++  // Read-only data types used by Cherry Studio's built-in health tools.
+   private let readTypes: Set<HKObjectType> = {
+     var types: Set<HKObjectType> = []
+     
+@@ -19,13 +18,8 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     
+     // Quantity types
+     let quantityIdentifiers: [HKQuantityTypeIdentifier] = [
+-      .stepCount, .heartRate, .activeEnergyBurned, .basalEnergyBurned,
+-      .distanceWalkingRunning, .distanceCycling, .distanceSwimming,
+-      .flightsClimbed, .restingHeartRate, .heartRateVariabilitySDNN,
+-      .oxygenSaturation, .bodyTemperature, .bloodPressureSystolic,
+-      .bloodPressureDiastolic, .respiratoryRate, .bodyMass, .height,
+-      .bodyMassIndex, .bodyFatPercentage, .leanBodyMass, .vo2Max,
+-      .walkingSpeed, .walkingStepLength
++      .stepCount, .heartRate, .activeEnergyBurned,
++      .distanceWalkingRunning, .restingHeartRate, .heartRateVariabilitySDNN
+     ]
+     
+     for identifier in quantityIdentifiers {
+@@ -36,9 +30,7 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     
+     // Category types
+     let categoryIdentifiers: [HKCategoryTypeIdentifier] = [
+-      .sleepAnalysis, .appleStandHour, .mindfulSession,
+-      .menstrualFlow, .sexualActivity, .lowHeartRateEvent,
+-      .highHeartRateEvent, .irregularHeartRhythmEvent
++      .sleepAnalysis
+     ]
+     
+     for identifier in categoryIdentifiers {
+@@ -58,10 +50,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     return Promise.async { [weak self] in
+       guard let self = self else { return false }
+ 
+-      NSLog("🔍 [HealthKit] requestAuthorization - Start")
+-      os_log("🔍 [HealthKit] requestAuthorization - Start", log: .default, type: .info)
+-      
+-      
+       guard HKHealthStore.isHealthDataAvailable() else {
+         throw NSError(domain: "HealthKit", code: 1, userInfo: [NSLocalizedDescriptionKey: "HealthKit not available"])
+       }
+@@ -82,12 +70,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     return Promise.async { [weak self] in
+       guard let self = self else { return 0 }
+       
+-      // Log dates
+-      let formatter = DateFormatter()
+-      formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+-      NSLog("🔍 [HealthKit] getSteps - Start: %@, End: %@", formatter.string(from: startDate), formatter.string(from: endDate))
+-      os_log("🔍 [HealthKit] getSteps - Start: %{public}@, End: %{public}@", log: .default, type: .info, formatter.string(from: startDate), formatter.string(from: endDate))
+-      
+       guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
+         throw NSError(domain: "HealthKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "stepCount type unavailable"])
+       }
+@@ -102,8 +84,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+           }
+           
+           let steps = result?.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0
+-          NSLog("✅ [HealthKit] getSteps - Result: %.0f pas", steps)
+-          os_log("✅ [HealthKit] getSteps - Result: %.0f pas", log: .default, type: .info, steps)
+           continuation.resume(returning: steps)
+         }
+         
+@@ -116,12 +96,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     return Promise.async { [weak self] in
+       guard let self = self else { return 0 }
+       
+-      // Log dates
+-      let formatter: DateFormatter = DateFormatter()
+-      formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+-      NSLog("🔍 [HealthKit] getHeartRate - Start: %@, End: %@", formatter.string(from: startDate), formatter.string(from: endDate))
+-      os_log("🔍 [HealthKit] getHeartRate - Start: %{public}@, End: %{public}@", log: .default, type: .info, formatter.string(from: startDate), formatter.string(from: endDate))
+-      
+       guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
+         throw NSError(domain: "HealthKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "heartRate type unavailable"])
+       }
+@@ -131,16 +105,11 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       return try await withCheckedThrowingContinuation { continuation in
+         let query = HKStatisticsQuery(quantityType: heartRateType, quantitySamplePredicate: predicate, options: .discreteAverage) { _, result, error in
+           if let error = error {
+-            NSLog("❌ [HealthKit] getHeartRate - Error: %@", error.localizedDescription)
+             continuation.resume(throwing: error)
+             return
+           }
+           
+-          NSLog("🔍 [HealthKit] getHeartRate - Query completed, result: %@", result?.description ?? "nil")
+-          
+           let bpm = result?.averageQuantity()?.doubleValue(for: HKUnit.count().unitDivided(by: .minute())) ?? 0
+-          NSLog("✅ [HealthKit] getHeartRate - Result: %.1f bpm", bpm)
+-          os_log("✅ [HealthKit] getHeartRate - Result: %.1f bpm", log: .default, type: .info, bpm)
+           continuation.resume(returning: bpm)
+         }
+         
+@@ -155,12 +124,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+         return HealthData(steps: nil, heartRate: nil, activeEnergy: nil, distance: nil, sleepAnalysis: nil)
+       }
+       
+-      // Log dates
+-      let formatter = DateFormatter()
+-      formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+-      NSLog("🔍 [HealthKit] getHealthData - Start: %@, End: %@", formatter.string(from: startDate), formatter.string(from: endDate))
+-      os_log("🔍 [HealthKit] getHealthData - Start: %{public}@, End: %{public}@", log: .default, type: .info, formatter.string(from: startDate), formatter.string(from: endDate))
+-      
+       // Fetch data in parallel with individual error handling
+       var steps: Double? = nil
+       var heartRate: Double? = nil
+@@ -170,7 +133,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+         let stepsValue = try await self.getSteps(startDate: startDate, endDate: endDate).await()
+         steps = stepsValue > 0 ? stepsValue : nil
+       } catch {
+-        NSLog("⚠️ [HealthKit] getHealthData - Error getting steps: %@", error.localizedDescription)
+       }
+       
+       // Fetch heart rate (with error handling)
+@@ -178,13 +140,8 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+         let heartRateValue = try await self.getHeartRate(startDate: startDate, endDate: endDate).await()
+         heartRate = heartRateValue > 0 ? heartRateValue : nil
+       } catch {
+-        NSLog("⚠️ [HealthKit] getHealthData - Error getting heart rate: %@", error.localizedDescription)
+       }
+       
+-      NSLog("✅ [HealthKit] getHealthData - Steps: %@, HeartRate: %@", 
+-            steps != nil ? String(format: "%.0f", steps!) : "nil",
+-            heartRate != nil ? String(format: "%.1f", heartRate!) : "nil")
+-      
+       return HealthData(
+         steps: steps,
+         heartRate: heartRate,
+@@ -207,43 +164,30 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     cacheTTL: Double?
+   ) throws -> Promise<[QuantityDataPoint]> {
+     return Promise.async { [weak self] in
+-      guard let self = self else { 
+-        NSLog("❌ [HealthKit] getQuantityData - self is nil")
+-        return [] 
+-      }
++      guard let self = self else { return [] }
+       
+       let useCacheValue = useCache ?? true
+       let cacheTTLValue = cacheTTL ?? self.defaultCacheTTL
+       
+-      NSLog("🔍 [HealthKit] getQuantityData - Type: %@, Start: %@, End: %@, Cache: %@", type, startDate as CVarArg, endDate as CVarArg, useCacheValue ? "enabled" : "disabled")
+-      
+       // Check cache
+       let cacheKey = CacheManager.generateKey(type: type, startDate: startDate, endDate: endDate, options: aggregationType ?? "")
+       if useCacheValue, let cached: [QuantityDataPoint] = self.cacheManager.get(cacheKey) {
+-        NSLog("✅ [HealthKit] Cache hit for %@", type)
+         return cached
+       }
+       
+       // Convert string type to HKQuantityTypeIdentifier
+-      NSLog("🔍 [HealthKit] Converting type identifier: %@", type)
+       guard let identifier = HKQuantityTypeIdentifier.from(type) else {
+-        NSLog("❌ [HealthKit] Failed to convert type identifier: %@", type)
+         throw NSError(domain: "HealthKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid quantity type identifier: \(type)"])
+       }
+       
+       guard let quantityType = HKObjectType.quantityType(forIdentifier: identifier) else {
+-        NSLog("❌ [HealthKit] Failed to create quantity type for: %@", type)
+         throw NSError(domain: "HealthKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid quantity type: \(type)"])
+       }
+       
+-      NSLog("✅ [HealthKit] Created quantity type successfully")
+-      
+       let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: [])
+       let unit = identifier.defaultUnit()
+       let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+       
+-      NSLog("🔍 [HealthKit] Executing query...")
+-      
+       return try await withCheckedThrowingContinuation { continuation in
+         let query = HKSampleQuery(
+           sampleType: quantityType,
+@@ -252,19 +196,15 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+           sortDescriptors: [sortDescriptor]
+         ) { _, samples, error in
+           if let error = error {
+-            NSLog("❌ [HealthKit] Query error: %@", error.localizedDescription)
+             continuation.resume(throwing: error)
+             return
+           }
+           
+           guard let samples = samples as? [HKQuantitySample] else {
+-            NSLog("⚠️ [HealthKit] No samples found or wrong type")
+             continuation.resume(returning: [])
+             return
+           }
+           
+-          NSLog("📊 [HealthKit] Found %d samples", samples.count)
+-          
+           let dataPoints = samples.map { sample -> QuantityDataPoint in
+             let value = sample.quantity.doubleValue(for: unit)
+             // Convert metadata from [String: Any] to [String: String]
+@@ -278,8 +218,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+             )
+           }
+           
+-          NSLog("✅ [HealthKit] Retrieved %d data points for %@", dataPoints.count, type)
+-          
+           // Save to cache
+           if useCacheValue {
+             self.cacheManager.set(cacheKey, value: dataPoints, ttl: cacheTTLValue)
+@@ -311,7 +249,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       // Check cache
+       let cacheKey = CacheManager.generateKey(type: type, startDate: startDate, endDate: endDate, options: "agg_\(aggregationType)")
+       if useCacheValue, let cached: Double = self.cacheManager.get(cacheKey) {
+-        NSLog("✅ [HealthKit] Cache hit for aggregated %@", type)
+         return cached
+       }
+       
+@@ -369,8 +306,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+             }
+           }
+           
+-          NSLog("✅ [HealthKit] Aggregated %@ for %@: %.2f", aggregationType, type, value)
+-          
+           // Save to cache
+           if useCacheValue {
+             self.cacheManager.set(cacheKey, value: value, ttl: cacheTTLValue)
+@@ -400,12 +335,9 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       let useCacheValue = useCache ?? true
+       let cacheTTLValue = cacheTTL ?? self.defaultCacheTTL
+       
+-      NSLog("🔍 [HealthKit] getCategoryData - Type: %@", type)
+-      
+       // Check cache
+       let cacheKey = CacheManager.generateKey(type: type, startDate: startDate, endDate: endDate)
+       if useCacheValue, let cached: [CategoryDataPoint] = self.cacheManager.get(cacheKey) {
+-        NSLog("✅ [HealthKit] Cache hit for category %@", type)
+         return cached
+       }
+       
+@@ -445,8 +377,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+             )
+           }
+           
+-          NSLog("✅ [HealthKit] Retrieved %d category data points for %@", dataPoints.count, type)
+-          
+           // Save to cache
+           if useCacheValue {
+             self.cacheManager.set(cacheKey, value: dataPoints, ttl: cacheTTLValue)
+@@ -479,8 +409,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       }
+       
+       let dates = TimeRangeHelper.getDates(for: range, customStart: customStartDate, customEnd: customEndDate)
+-      NSLog("🔍 [HealthKit] Time range: %@ (%@ to %@)", timeRange, dates.start.description, dates.end.description)
+-      
+       // Fetch data
+       return try await self.getHealthData(startDate: dates.start, endDate: dates.end).await()
+     }
+@@ -505,12 +433,9 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       let useCacheValue = useCache ?? true
+       let cacheTTLValue = cacheTTL ?? self.defaultCacheTTL
+       
+-      NSLog("🔍 [HealthKit] getWorkouts - Start")
+-      
+       // Check cache
+       let cacheKey = CacheManager.generateKey(type: "workouts", startDate: startDate, endDate: endDate)
+       if useCacheValue, let cached: [WorkoutDataPoint] = self.cacheManager.get(cacheKey) {
+-        NSLog("✅ [HealthKit] Cache hit for workouts")
+         return cached
+       }
+       
+@@ -563,8 +488,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+             )
+           }
+           
+-          NSLog("✅ [HealthKit] Retrieved %d workouts", dataPoints.count)
+-          
+           // Save to cache
+           if useCacheValue {
+             self.cacheManager.set(cacheKey, value: dataPoints, ttl: cacheTTLValue)
+@@ -637,7 +560,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     return Promise.async { [weak self] in
+       guard let self = self else { return }
+       self.cacheManager.clear()
+-      NSLog("✅ [HealthKit] Cache cleared")
+     }
+   }
+   
+@@ -647,7 +569,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+   public func isHealthKitAvailable() throws -> Promise<Bool> {
+     return Promise.async {
+       let available = HKHealthStore.isHealthDataAvailable()
+-      NSLog("✅ [HealthKit] HealthKit available: %@", available ? "yes" : "no")
+       return available
+     }
+   }
+@@ -667,22 +588,25 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       else if let identifier = HKCategoryTypeIdentifier.from(type) {
+         objectType = HKObjectType.categoryType(forIdentifier: identifier)
+       }
++      else if type == "HKWorkoutTypeIdentifier" {
++        objectType = HKObjectType.workoutType()
++      }
+       
+       guard let type = objectType else {
+         throw NSError(domain: "HealthKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid type: \(type)"])
+       }
+       
+-      let status = self.healthStore.authorizationStatus(for: type)
+-      
+-      switch status {
+-      case .notDetermined:
+-        return "notDetermined"
+-      case .sharingDenied:
+-        return "sharingDenied"
+-      case .sharingAuthorized:
+-        return "sharingAuthorized"
+-      @unknown default:
+-        return "notDetermined"
++      return await withCheckedContinuation { continuation in
++        self.healthStore.getRequestStatusForAuthorization(toShare: [], read: [type]) { status, _ in
++          switch status {
++          case .unnecessary:
++            continuation.resume(returning: "sharingAuthorized")
++          case .shouldRequest, .unknown:
++            continuation.resume(returning: "notDetermined")
++          @unknown default:
++            continuation.resume(returning: "notDetermined")
++          }
++        }
+       }
+     }
+   }
+@@ -712,7 +636,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       guard let self = self else { return false }
+       guard let identifier = HKQuantityTypeIdentifier.from(type),
+             let quantityType = HKObjectType.quantityType(forIdentifier: identifier) else {
+-        NSLog("❌ [HealthKit] writeQuantityData - unknown type %@", type)
+         return false
+       }
+       let hkUnit = HKUnit(from: unit.isEmpty ? identifier.defaultUnit().unitString : unit)
+@@ -741,7 +664,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       guard let self = self else { return false }
+       guard let identifier = HKCategoryTypeIdentifier.from(type),
+             let categoryType = HKObjectType.categoryType(forIdentifier: identifier) else {
+-        NSLog("❌ [HealthKit] writeCategoryData - unknown type %@", type)
+         return false
+       }
+       let sample = HKCategorySample(type: categoryType, value: Int(value), start: startDate, end: endDate, metadata: metadata)

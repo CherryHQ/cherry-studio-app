@@ -9,7 +9,7 @@ import { isIOS } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { Message } from '@/data/types/message';
 import type { MessagesViewModel } from '@/hooks/chat';
-import { McpApprovalSheet } from '../approval/McpApprovalSheet';
+import { ToolApprovalSheet } from '../approval/ToolApprovalSheet';
 import { MessageSlideInProvider } from '../messageItem';
 import { useChatRuntime, useChatRuntimeTopic } from '../runtime/ChatRuntimeProvider';
 import { getPendingToolApprovals, mergeMessagesWithOverlay } from '../runtime/chatRuntimeMessages';
@@ -66,7 +66,7 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
         await runtime.respondToolApproval({ ...input, topicId });
       } catch (error) {
         logger.error('Tool approval response failed', error as Error);
-        toast.show({ label: t('chat.mcpTool.approval.failed'), variant: 'danger' });
+        toast.show({ label: t('chat.tool.approval.failed'), variant: 'danger' });
       }
     },
     [runtime, t, toast, topicId],
@@ -120,7 +120,7 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
         onPress={handleScrollToEnd}
       />
       <ChatInitialRenderCover isVisible={isCoverVisible} />
-      <McpApprovalSheet
+      <ToolApprovalSheet
         approvals={pendingApprovals}
         isOpen={isApprovalSheetOpen}
         onRespond={handleApprovalRespond}

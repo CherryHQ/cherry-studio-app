@@ -6,6 +6,7 @@ import type {
   Message,
   MessageStats,
 } from '@/data/types/message';
+import { readCherryToolMetadata } from '@/data/types/uiParts';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
@@ -20,6 +21,7 @@ export type PendingToolApproval = {
   messageId: string;
   toolCallId: string;
   toolName: string;
+  toolType?: 'builtin' | 'mcp' | 'provider';
 };
 
 export function hasPendingToolApproval(parts: readonly CherryMessagePart[]): boolean {
@@ -66,12 +68,14 @@ export function getPendingToolApprovals(messages: readonly Message[]): PendingTo
   const approvals: PendingToolApproval[] = [];
   for (const part of last.data.parts ?? []) {
     if (isToolPart(part) && part.state === 'approval-requested') {
+      const toolType = readCherryToolMetadata(part)?.tool?.type;
       approvals.push({
         approvalId: part.approval.id,
         input: part.input,
         messageId: last.id,
         toolCallId: part.toolCallId,
         toolName: part.type === 'dynamic-tool' ? part.toolName : part.type.slice('tool-'.length),
+        ...(toolType && { toolType }),
       });
     }
   }

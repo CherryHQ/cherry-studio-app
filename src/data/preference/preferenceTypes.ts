@@ -5,10 +5,13 @@ import type { PreferenceSchemas } from './preferenceSchemas';
 /** DB-backed preferences only (stored in SQLite) */
 export type PreferenceDefaultScopeType = PreferenceSchemas['default'];
 export type PreferenceKeyType = keyof PreferenceDefaultScopeType;
+export type PermissionPreferenceKey = Extract<PreferenceKeyType, `permissions.${string}`>;
 
 export type PreferenceUpdateOptions = {
   optimistic: boolean;
 };
+
+export type PermissionMode = 'never' | 'ask' | 'always';
 
 export type PreferenceShortcutType = {
   binding: string[];

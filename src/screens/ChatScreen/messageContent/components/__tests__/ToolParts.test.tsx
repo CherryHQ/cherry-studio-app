@@ -1,5 +1,6 @@
+import { BellRingIcon } from 'lucide-uniwind/png';
 import type { ReactElement, ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { CherryMessagePart } from '@/data/types/message';
@@ -32,10 +33,12 @@ jest.mock('../ToolPartSheet', () => {
 
 describe('tool message detail sheets', () => {
   let renderer: ReactTestRenderer | undefined;
+  const originalPlatform = Platform.OS;
 
   afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = undefined;
+    setPlatform(originalPlatform);
   });
 
   it('opens generic tool details from the message status row', async () => {
@@ -65,6 +68,45 @@ describe('tool message detail sheets', () => {
     });
 
     expect(findAllByTestID('tool-part-detail')).toHaveLength(0);
+  });
+
+  it('uses the uploaded system image for a built-in tool on iOS', async () => {
+    setPlatform('ios');
+    await render(
+      <ToolPart
+        part={makeToolPart({
+          toolMetadata: { cherry: { tool: { type: 'builtin' } } },
+          toolName: 'reminder_list_collections',
+        })}
+      />,
+    );
+
+    const trigger = findByTestID('tool-part-trigger');
+    expect(trigger.props.icon).toBeUndefined();
+    expect(trigger.props.imageSource).toBeDefined();
+    expect(trigger.props.title).toBe('chat.builtinTool.reminders.listLists');
+  });
+
+  it('uses the matching Lucide icon for a built-in tool on Android', async () => {
+    setPlatform('android');
+    await render(
+      <ToolPart
+        part={makeToolPart({
+          toolMetadata: { cherry: { tool: { type: 'builtin' } } },
+          toolName: 'reminder_list_collections',
+        })}
+      />,
+    );
+
+    const trigger = findByTestID('tool-part-trigger');
+    expect(trigger.props.icon).toBe(BellRingIcon);
+    expect(trigger.props.imageSource).toBeUndefined();
+  });
+
+  it('shows a generic tool name without a tool prefix', async () => {
+    await render(<ToolPart part={makeToolPart({ toolName: 'calculator' })} />);
+
+    expect(findByTestID('tool-part-trigger').props.title).toBe('calculator');
   });
 
   it('opens MCP tool details with the server and tool name', async () => {
@@ -332,4 +374,8 @@ function makeToolPart(overrides: Record<string, unknown>): ToolMessagePart {
     type: 'dynamic-tool',
     ...overrides,
   } as unknown as ToolMessagePart;
+}
+
+function setPlatform(platform: string) {
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
 }

@@ -7,9 +7,9 @@ import {
 } from '..';
 
 describe('preference defaults', () => {
-  test('keeps the desktop preference key surface aligned', () => {
+  test('keeps the desktop preference surface and mobile permission policies', () => {
     expect(getPreferenceKeys()).toEqual(Object.keys(DefaultPreferences.default));
-    expect(getPreferenceKeys()).toHaveLength(230);
+    expect(getPreferenceKeys()).toHaveLength(236);
 
     expect(getPreferenceKeys()).toEqual(
       expect.arrayContaining([
@@ -20,6 +20,8 @@ describe('preference defaults', () => {
         'chat.input.send_message_shortcut',
         'feature.quick_assistant.model_id',
         'feature.translate.model_prompt',
+        'permissions.calendar_read',
+        'permissions.reminders_write',
         'shortcut.chat.clear',
         'topic.naming.enabled',
         'ui.theme_mode',
@@ -63,7 +65,13 @@ describe('preference defaults', () => {
     expect(isPreferenceKey('chat.default_model_id')).toBe(true);
     expect(isPreferenceKey('chat.web_search.max_results')).toBe(true);
     expect(isPreferenceKey('feature.translate.model_prompt')).toBe(true);
+    expect(isPreferenceKey('permissions.location_read')).toBe(true);
     expect(isPreferenceKey('BootConfig.example')).toBe(false);
-    expect(Object.keys(DefaultPreferences.default)).toHaveLength(230);
+    expect(Object.keys(DefaultPreferences.default)).toHaveLength(236);
+  });
+
+  test('keeps permission preferences safe by default', () => {
+    expect(getDefaultValue('permissions.health_read')).toBe('never');
+    expect(getDefaultValue('permissions.calendar_write')).toBe('never');
   });
 });

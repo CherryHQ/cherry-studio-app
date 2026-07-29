@@ -143,9 +143,16 @@ function makeService(servers: StreamableHttpMcpServer[]) {
 
 /** Cold cache → warm it the way the chat path does, then read it back. */
 async function warmedToolSet(service: McpService, assistant = makeAssistant()) {
-  await service.getToolSetForAssistant(assistant);
+  await getProjectedToolSet(service, assistant);
   await flush();
-  return service.getToolSetForAssistant(assistant);
+  return getProjectedToolSet(service, assistant);
+}
+
+async function getProjectedToolSet(service: McpService, assistant: Assistant) {
+  const entries = await service.getToolEntriesForAssistant(assistant);
+  return entries.length
+    ? Object.fromEntries(entries.map((entry) => [entry.name, entry.tool]))
+    : undefined;
 }
 
 beforeEach(() => {
@@ -156,7 +163,7 @@ describe('assistant tool preparation', () => {
   it('ignores a synchronized server without a URL', async () => {
     const { service } = makeService([makeServer({ baseUrl: '' })]);
 
-    await expect(service.getToolSetForAssistant(makeAssistant())).resolves.toBeUndefined();
+    await expect(getProjectedToolSet(service, makeAssistant())).resolves.toBeUndefined();
 
     expect(mockCreateMCPClient).not.toHaveBeenCalled();
   });
@@ -171,7 +178,7 @@ describe('assistant tool preparation', () => {
       const { service } = makeService([makeServer()]);
 
       let settled = false;
-      const request = service.getToolSetForAssistant(makeAssistant());
+      const request = getProjectedToolSet(service, makeAssistant());
       void request.then(() => {
         settled = true;
       });
@@ -193,7 +200,7 @@ describe('assistant tool preparation', () => {
     mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
     const { service } = makeService([makeServer()]);
 
-    const tools = await service.getToolSetForAssistant(makeAssistant());
+    const tools = await getProjectedToolSet(service, makeAssistant());
 
     expect(Object.keys(tools ?? {})).toEqual(['mcp__serverone__search']);
   });
@@ -210,7 +217,7 @@ describe('assistant tool preparation', () => {
         makeServer({ baseUrl: 'https://fast.example/mcp', id: 'fast', name: 'Fast' }),
       ]);
 
-      const request = service.getToolSetForAssistant(makeAssistant());
+      const request = getProjectedToolSet(service, makeAssistant());
       await flush();
       jest.advanceTimersByTime(3 * 1000);
 
@@ -218,7 +225,7 @@ describe('assistant tool preparation', () => {
 
       slowConnect.resolve(makeClient(makeRawTools(['late'])));
       await flush();
-      expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
+      expect(Object.keys((await getProjectedToolSet(service, makeAssistant())) ?? {})).toEqual([
         'mcp__slow__late',
         'mcp__fast__fast',
       ]);
@@ -234,7 +241,7 @@ describe('assistant tool preparation', () => {
     const { service } = makeService([makeServer()]);
 
     await warmedToolSet(service);
-    await service.getToolSetForAssistant(makeAssistant());
+    await getProjectedToolSet(service, makeAssistant());
 
     expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
     expect(client.tools).toHaveBeenCalledTimes(1);
@@ -248,10 +255,10 @@ describe('assistant tool preparation', () => {
     await warmedToolSet(service);
 
     servers[0] = makeServer({ disabledTools: ['search'], name: 'Renamed', timeout: 5 });
-    expect(await service.getToolSetForAssistant(makeAssistant())).toBeUndefined();
+    expect(await getProjectedToolSet(service, makeAssistant())).toBeUndefined();
 
     servers[0] = makeServer({ name: 'Renamed', timeout: 5 });
-    expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
+    expect(Object.keys((await getProjectedToolSet(service, makeAssistant())) ?? {})).toEqual([
       'mcp__renamed__search',
     ]);
     expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
@@ -268,7 +275,7 @@ describe('assistant tool preparation', () => {
     await warmedToolSet(service);
 
     servers[0] = makeServer({ baseUrl: 'https://new.example/mcp' });
-    expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
+    expect(Object.keys((await getProjectedToolSet(service, makeAssistant())) ?? {})).toEqual([
       'mcp__serverone__new',
     ]);
     expect(original.close).toHaveBeenCalled();
@@ -285,7 +292,7 @@ describe('assistant tool preparation', () => {
       expect(client.tools).toHaveBeenCalledTimes(1);
 
       jest.advanceTimersByTime(6 * 60 * 1000);
-      const tools = await service.getToolSetForAssistant(makeAssistant());
+      const tools = await getProjectedToolSet(service, makeAssistant());
       await flush();
 
       expect(Object.keys(tools ?? {})).toEqual(['mcp__serverone__search']);
@@ -303,8 +310,8 @@ describe('assistant tool preparation', () => {
     const { service } = makeService([makeServer()]);
 
     await Promise.all([
-      service.getToolSetForAssistant(makeAssistant()),
-      service.getToolSetForAssistant(makeAssistant()),
+      getProjectedToolSet(service, makeAssistant()),
+      getProjectedToolSet(service, makeAssistant()),
     ]);
     await flush();
 
@@ -319,7 +326,7 @@ describe('assistant tool preparation', () => {
       mcpServer: { list: jest.fn(async () => Promise.reject(new Error('db locked'))) } as never,
     });
 
-    await expect(service.getToolSetForAssistant(makeAssistant())).resolves.toBeUndefined();
+    await expect(getProjectedToolSet(service, makeAssistant())).resolves.toBeUndefined();
   });
 
   it('keeps the last good tools when a refresh fails, and backs off', async () => {
@@ -332,20 +339,20 @@ describe('assistant tool preparation', () => {
 
       client.tools.mockRejectedValue(new Error('401 unauthorized'));
       jest.advanceTimersByTime(6 * 60 * 1000);
-      await service.getToolSetForAssistant(makeAssistant());
+      await getProjectedToolSet(service, makeAssistant());
       await flush();
       expect(client.tools).toHaveBeenCalledTimes(2);
 
       // Read *after* the failure has landed: a blip must not silently strip a
       // working server's tools, and the cached handles are bound to a client
       // that is still open.
-      const tools = await service.getToolSetForAssistant(makeAssistant());
+      const tools = await getProjectedToolSet(service, makeAssistant());
       expect(Object.keys(tools ?? {})).toEqual(['mcp__serverone__search']);
       expect(client.close).not.toHaveBeenCalled();
 
       // Still inside the backoff window: no third attempt.
       jest.advanceTimersByTime(10 * 1000);
-      await service.getToolSetForAssistant(makeAssistant());
+      await getProjectedToolSet(service, makeAssistant());
       await flush();
       expect(client.tools).toHaveBeenCalledTimes(2);
     } finally {
@@ -361,7 +368,7 @@ describe('assistant tool preparation', () => {
       mockCreateMCPClient.mockResolvedValue(client);
       const { service } = makeService([makeServer()]);
 
-      const request = service.getToolSetForAssistant(makeAssistant());
+      const request = getProjectedToolSet(service, makeAssistant());
       await flush();
       jest.advanceTimersByTime(3 * 1000);
       await expect(request).resolves.toBeUndefined();
@@ -370,7 +377,7 @@ describe('assistant tool preparation', () => {
 
       // The wedged client is closed rather than pinning the pool slot forever.
       expect(client.close).toHaveBeenCalled();
-      expect(await service.getToolSetForAssistant(makeAssistant())).toBeUndefined();
+      expect(await getProjectedToolSet(service, makeAssistant())).toBeUndefined();
     } finally {
       jest.clearAllTimers();
       jest.useRealTimers();
@@ -394,7 +401,7 @@ describe('assistant tool preparation', () => {
   it('returns undefined when no active servers apply', async () => {
     const { service } = makeService([]);
 
-    expect(await service.getToolSetForAssistant(makeAssistant())).toBeUndefined();
+    expect(await getProjectedToolSet(service, makeAssistant())).toBeUndefined();
     expect(mockCreateMCPClient).not.toHaveBeenCalled();
   });
 
@@ -435,6 +442,22 @@ describe('disabledTools filtering', () => {
 
     await expect(needsApproval(tools?.mcp__serverone__guarded)).resolves.toBe(true);
     await expect(needsApproval(tools?.mcp__serverone__free)).resolves.toBe(false);
+
+    const entries = await service.getToolEntriesForAssistant(makeAssistant());
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          defer: 'never',
+          name: 'mcp__serverone__guarded',
+          namespace: 'mcp:ServerOne',
+        }),
+        expect.objectContaining({
+          defer: 'auto',
+          name: 'mcp__serverone__free',
+          namespace: 'mcp:ServerOne',
+        }),
+      ]),
+    );
   });
 
   it('re-reads the server so an approval toggle mid-turn is honoured', async () => {
@@ -533,13 +556,13 @@ describe('prewarmActiveServers', () => {
     await service.prewarmActiveServers();
     await flush();
 
-    expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
+    expect(Object.keys((await getProjectedToolSet(service, makeAssistant())) ?? {})).toEqual([
       'mcp__serverone__search',
     ]);
   });
 
   it('warms active servers in batches of three', async () => {
-    const releases: Array<() => void> = [];
+    const releases: (() => void)[] = [];
     let active = 0;
     let maxActive = 0;
     mockCreateMCPClient.mockImplementation(async () => {
@@ -702,7 +725,7 @@ describe('tool execution', () => {
     expect(client.close).toHaveBeenCalled();
 
     // Cache was dropped alongside the client, so the next turn refetches.
-    await service.getToolSetForAssistant(makeAssistant());
+    await getProjectedToolSet(service, makeAssistant());
     await flush();
     expect(mockCreateMCPClient).toHaveBeenCalledTimes(2);
   });
@@ -888,7 +911,7 @@ describe('testConnection', () => {
     expect(result.map((t) => t.name)).toEqual(['a', 'b']);
     expect(client.close).toHaveBeenCalled();
     // Testing an unsaved form must not leave anything behind in the pool.
-    expect(await service.getToolSetForAssistant(makeAssistant())).toBeUndefined();
+    expect(await getProjectedToolSet(service, makeAssistant())).toBeUndefined();
   });
 
   it('closes the client when the connected server then rejects the listing', async () => {
@@ -1103,7 +1126,7 @@ describe('invalidateServer', () => {
       );
       const { service } = makeService([makeServer()]);
 
-      const request = service.getToolSetForAssistant(makeAssistant());
+      const request = getProjectedToolSet(service, makeAssistant());
       await flush();
       expect(jest.getTimerCount()).toBe(2);
       service.invalidateServer('server-1');
@@ -1134,7 +1157,7 @@ describe('invalidateServer', () => {
       makeServer({ baseUrl: 'https://b.example/mcp', id: 'other', name: 'Other' }),
     ]);
 
-    const request = service.getToolSetForAssistant(makeAssistant());
+    const request = getProjectedToolSet(service, makeAssistant());
     await flush();
     // Saving one server must not throw away every other server's warm-up.
     service.invalidateServer('server-1');
@@ -1142,7 +1165,7 @@ describe('invalidateServer', () => {
     await request;
     await flush();
 
-    expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
+    expect(Object.keys((await getProjectedToolSet(service, makeAssistant())) ?? {})).toEqual([
       'mcp__other__ping',
     ]);
   });
@@ -1157,16 +1180,16 @@ describe('invalidateServer', () => {
     mockCreateMCPClient.mockResolvedValueOnce(stalled).mockResolvedValue(replacement);
     const { service } = makeService([makeServer()]);
 
-    const firstRequest = service.getToolSetForAssistant(makeAssistant());
+    const firstRequest = getProjectedToolSet(service, makeAssistant());
     await flush();
     expect(stalled.tools).toHaveBeenCalled();
 
     service.invalidateServer('server-1');
     await firstRequest;
-    await service.getToolSetForAssistant(makeAssistant());
+    await getProjectedToolSet(service, makeAssistant());
     await flush();
 
-    expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
+    expect(Object.keys((await getProjectedToolSet(service, makeAssistant())) ?? {})).toEqual([
       'mcp__serverone__search',
     ]);
     expect(replacement.tools).toHaveBeenCalled();
@@ -1184,16 +1207,16 @@ describe('invalidateServer', () => {
     mockCreateMCPClient.mockResolvedValueOnce(stale).mockResolvedValue(replacement);
     const { service } = makeService([makeServer()]);
 
-    const firstRequest = service.getToolSetForAssistant(makeAssistant());
+    const firstRequest = getProjectedToolSet(service, makeAssistant());
     await flush();
     service.invalidateServer('server-1');
     await firstRequest;
-    await service.getToolSetForAssistant(makeAssistant());
+    await getProjectedToolSet(service, makeAssistant());
     await flush();
     settleOldTools?.(makeRawTools(['old']));
     await flush();
 
-    expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
+    expect(Object.keys((await getProjectedToolSet(service, makeAssistant())) ?? {})).toEqual([
       'mcp__serverone__new',
     ]);
     expect(stale.close).toHaveBeenCalled();
@@ -1211,7 +1234,7 @@ describe('transport fingerprint', () => {
 
     servers[0] = makeServer({ headers: { Authorization: 'Bearer new-token' } });
 
-    expect(Object.keys((await service.getToolSetForAssistant(makeAssistant())) ?? {})).toEqual([
+    expect(Object.keys((await getProjectedToolSet(service, makeAssistant())) ?? {})).toEqual([
       'mcp__serverone__new',
     ]);
     expect(original.close).toHaveBeenCalled();
@@ -1259,7 +1282,7 @@ describe('dispose', () => {
       );
       const { service } = makeService([makeServer()]);
 
-      const request = service.getToolSetForAssistant(makeAssistant());
+      const request = getProjectedToolSet(service, makeAssistant());
       await flush();
       expect(jest.getTimerCount()).toBe(2);
 

@@ -1,6 +1,7 @@
 import type { Detent } from '@swmansion/react-native-bottom-sheet';
-import { ChevronRightIcon, WrenchIcon } from 'lucide-uniwind/png';
-import { type ReactNode, useMemo } from 'react';
+import type { ImageSource } from 'expo-image';
+import { ChevronRightIcon, type PngIconProps, WrenchIcon } from 'lucide-uniwind/png';
+import { type ComponentType, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -13,11 +14,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/bottomSheet';
+import { Image } from '@/components/nativePrimitives';
 
 const toolSheetMediumFraction = 0.6;
 const toolSheetFullFraction = 0.94;
 
 type ToolPartTriggerProps = {
+  icon?: ComponentType<PngIconProps>;
+  imageSource?: ImageSource | number;
   isRunning: boolean;
   onPress: () => void;
   statusText?: string;
@@ -27,6 +31,8 @@ type ToolPartTriggerProps = {
 };
 
 export function ToolPartTrigger({
+  icon: Icon = WrenchIcon,
+  imageSource,
   isRunning,
   onPress,
   statusText,
@@ -47,8 +53,15 @@ export function ToolPartTrigger({
     >
       {isRunning ? (
         <ActivityIndicator size="small" />
+      ) : imageSource ? (
+        <Image
+          cachePolicy="memory-disk"
+          className="size-5 shrink-0"
+          contentFit="contain"
+          source={imageSource}
+        />
       ) : (
-        <WrenchIcon
+        <Icon
           className={
             isDanger
               ? 'size-4 text-danger'

@@ -7,6 +7,7 @@ import {
   EarthIcon,
   GlobeIcon,
   InfoIcon,
+  ShieldCheckIcon,
   SparklesIcon,
   SunIcon,
 } from 'lucide-uniwind/png';
@@ -114,6 +115,11 @@ export default function SettingsScreen() {
                 icon: DatabaseIcon,
                 title: t('settings.items.dataBackup'),
                 onPress: () => router.push('/settings/data'),
+              },
+              {
+                icon: ShieldCheckIcon,
+                title: t('settings.items.permissions'),
+                onPress: () => router.push('/settings/permissions'),
               },
             ]}
           />

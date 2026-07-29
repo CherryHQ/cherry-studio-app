@@ -426,6 +426,12 @@ export interface PreferenceSchemas {
     'feature.translate.page.source_language': PreferenceTypes.TranslateSourceLanguage;
     // target-key-definitions/complex/complex
     'feature.translate.page.target_language': PreferenceTypes.TranslateLangCode;
+    'permissions.calendar_read': PreferenceTypes.PermissionMode;
+    'permissions.calendar_write': PreferenceTypes.PermissionMode;
+    'permissions.health_read': PreferenceTypes.PermissionMode;
+    'permissions.location_read': PreferenceTypes.PermissionMode;
+    'permissions.reminders_read': PreferenceTypes.PermissionMode;
+    'permissions.reminders_write': PreferenceTypes.PermissionMode;
     // redux/shortcuts/shortcuts.clear_topic
     'shortcut.chat.clear': PreferenceTypes.PreferenceShortcutType;
     // redux/shortcuts/shortcuts.copy_last_message
@@ -749,6 +755,12 @@ export const DefaultPreferences: PreferenceSchemas = {
     'feature.translate.page.scroll_sync': false,
     'feature.translate.page.source_language': 'auto',
     'feature.translate.page.target_language': 'zh-cn',
+    'permissions.calendar_read': 'never',
+    'permissions.calendar_write': 'never',
+    'permissions.health_read': 'never',
+    'permissions.location_read': 'never',
+    'permissions.reminders_read': 'never',
+    'permissions.reminders_write': 'never',
     'shortcut.chat.clear': { binding: ['CommandOrControl', 'L'], enabled: true },
     'shortcut.chat.copy_last_message': {
       binding: ['CommandOrControl', 'Shift', 'C'],

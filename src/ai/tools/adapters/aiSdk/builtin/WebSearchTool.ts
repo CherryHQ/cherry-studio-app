@@ -5,6 +5,8 @@ import { loggerService } from '@/core/logger/LoggerService';
 import { isAbortError, isPermanentWebSearchConfigError } from '@/services/webSearch/utils/errors';
 import type { WebSearchService } from '@/services/webSearch/WebSearchService';
 
+import type { ToolEntry } from '../types';
+
 const logger = loggerService.withContext('WebSearchTool');
 
 export const WEB_SEARCH_TOOL_NAME = 'web_search';
@@ -12,7 +14,7 @@ export const WEB_SEARCH_TOOL_NAME = 'web_search';
 export const WEB_SEARCH_PROVIDER_NOT_CONFIGURED_MESSAGE =
   'No usable web search provider is configured. Tell the user to configure one in Settings (Web Search); do not retry because it cannot succeed until the configuration is fixed.';
 
-const WEB_SEARCH_DESCRIPTION = `Search the web for current information, news, and real-time data.
+export const WEB_SEARCH_DESCRIPTION = `Search the web for current information, news, and real-time data.
 
 Use this when:
 - The user asks about recent events, current prices, or live data
@@ -85,5 +87,20 @@ export function createWebSearchTool(webSearchService: WebSearchService) {
         };
       }
     },
+    toModelOutput: ({ output }) =>
+      Array.isArray(output)
+        ? { type: 'json', value: output }
+        : { type: 'text', value: output.error },
   });
+}
+
+export function createWebSearchToolEntry(webSearch: WebSearchService): ToolEntry {
+  return {
+    applies: (scope) => scope.externalWebSearchEnabled,
+    defer: 'auto',
+    description: WEB_SEARCH_DESCRIPTION,
+    name: WEB_SEARCH_TOOL_NAME,
+    namespace: 'web',
+    tool: createWebSearchTool(webSearch),
+  };
 }

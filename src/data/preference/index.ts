@@ -24,6 +24,8 @@ export type {
   MultiModelFoldDisplayMode,
   MultiModelGridPopoverTrigger,
   MultiModelMessageStyle,
+  PermissionMode,
+  PermissionPreferenceKey,
   PersistedLangCode,
   PreferenceDefaultScopeType,
   PreferenceKeyType,

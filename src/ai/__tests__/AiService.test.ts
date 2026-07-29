@@ -5,6 +5,7 @@ import {
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import type { ToolSet } from 'ai';
 import { AiService, type AiServiceDependencies } from '@/ai/AiService';
+import { createWebSearchTool } from '@/ai/tools/adapters/aiSdk/builtin/WebSearchTool';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
@@ -398,8 +399,15 @@ describe('AiService web search plugin wiring', () => {
     const params = mockAgentConstructor.mock.calls.at(-1)?.[0];
     expect(params).toEqual(
       expect.objectContaining({
+        context: expect.objectContaining({
+          abortSignal: controller.signal,
+          assistant,
+          chatId: 'topic-1',
+          requestId: expect.any(String),
+        }),
         options: expect.objectContaining({ stopWhen: expect.any(Function) }),
         plugins: expect.not.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+        repairToolCall: expect.any(Function),
         tools: expect.objectContaining({ web_search: expect.any(Object) }),
       }),
     );
@@ -525,6 +533,9 @@ describe('AiService web search plugin wiring', () => {
 });
 
 describe('AiService MCP tool injection', () => {
+  const builtInTools = {
+    location_get_current: { description: 'location' },
+  } as unknown as ToolSet;
   const mcpTools = { mcp__serverone__search: { description: 'search' } } as unknown as ToolSet;
 
   beforeEach(() => {
@@ -566,7 +577,7 @@ describe('AiService MCP tool injection', () => {
 
     await streamWith(services, assistant);
 
-    expect(services.mcp.getToolSetForAssistant).not.toHaveBeenCalled();
+    expect(services.tools.resolveForRequest).not.toHaveBeenCalled();
     expect(mockAgentConstructor.mock.calls.at(-1)?.[0].tools).toBeUndefined();
   });
 
@@ -583,10 +594,10 @@ describe('AiService MCP tool injection', () => {
       requestOptions: { signal: new AbortController().signal },
     });
 
-    expect(services.mcp.getToolSetForAssistant).not.toHaveBeenCalled();
+    expect(services.tools.resolveForRequest).not.toHaveBeenCalled();
   });
 
-  it('merges MCP tools with the external web-search tool', async () => {
+  it('merges built-in, MCP, and external web-search tools', async () => {
     const model = createModel('gpt-4o-mini', {
       capabilities: [MODEL_CAPABILITY.FUNCTION_CALL, MODEL_CAPABILITY.WEB_SEARCH],
     });
@@ -594,12 +605,19 @@ describe('AiService MCP tool injection', () => {
     assistant.settings.enableWebSearch = true;
 
     await streamWith(
-      createServices({ assistant, mcpTools, model, webSearchProviderId: 'tavily' }),
+      createServices({
+        assistant,
+        builtInTools,
+        mcpTools,
+        model,
+        webSearchProviderId: 'tavily',
+      }),
       assistant,
     );
 
     expect(mockAgentConstructor.mock.calls.at(-1)?.[0].tools).toEqual(
       expect.objectContaining({
+        location_get_current: expect.any(Object),
         mcp__serverone__search: expect.any(Object),
         web_search: expect.any(Object),
       }),
@@ -617,15 +635,52 @@ describe('AiService MCP tool injection', () => {
 
     await streamWith(services, assistant);
 
-    expect(services.mcp.getToolSetForAssistant).toHaveBeenCalledWith(assistant);
+    expect(services.tools.resolveForRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ assistant }),
+    );
     const params = mockAgentConstructor.mock.calls.at(-1)?.[0];
     expect(params.tools).toBeUndefined();
     expect(params.options.stopWhen).toBeUndefined();
   });
+
+  it('appends deferred-tool guidance only when tool_search is exposed', async () => {
+    const model = createModel('gpt-4o-mini', {
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL],
+    });
+    const assistant = createAssistant(model.id);
+    const services = createServices({ assistant, model });
+    services.tools.resolveForRequest.mockResolvedValueOnce({
+      deferredEntries: [
+        {
+          defer: 'auto',
+          description: 'Search docs',
+          name: 'mcp__server__search',
+          namespace: 'mcp:Server',
+          tool: {} as never,
+        },
+      ],
+      tools: { tool_search: {} as never },
+    });
+
+    await streamWith(services, assistant);
+
+    expect(mockAgentConstructor.mock.calls.at(-1)?.[0].system).toContain('<deferred-tools>');
+    expect(mockAgentConstructor.mock.calls.at(-1)?.[0].system).toContain('mcp:Server');
+  });
 });
+
+type TestAiServices = Omit<AiServiceDependencies, 'tools'> & {
+  tools: {
+    resolveForRequest: jest.Mock;
+  };
+  webSearch: {
+    searchKeywords: jest.Mock;
+  };
+};
 
 function createServices({
   assistant,
+  builtInTools,
   defaultModelId,
   mcpTools,
   model,
@@ -638,6 +693,7 @@ function createServices({
   },
 }: {
   assistant?: Assistant;
+  builtInTools?: ToolSet;
   defaultModelId?: UniqueModelId | null;
   mcpTools?: ToolSet;
   model?: Model;
@@ -648,9 +704,41 @@ function createServices({
     'chat.web_search.max_results': number;
     'chat.web_search.exclude_domains': string[];
   };
-}) {
+}): TestAiServices {
   const modelList = models ?? (model ? [model] : []);
   const modelsById = new Map(modelList.map((item) => [item.id, item]));
+
+  const webSearch = {
+    searchKeywords: jest.fn(async () => ({
+      capability: 'searchKeywords',
+      inputs: ['Cherry Studio mobile'],
+      providerId: 'tavily',
+      query: 'Cherry Studio mobile',
+      results: [
+        {
+          content: 'Mobile result',
+          sourceInput: 'Cherry Studio mobile',
+          title: 'Cherry Studio',
+          url: 'https://example.com/cherry',
+        },
+      ],
+    })),
+  };
+  const tools = {
+    resolveForRequest: jest.fn(async ({ externalWebSearchEnabled }) => {
+      const resolved = {
+        ...builtInTools,
+        ...mcpTools,
+        ...(externalWebSearchEnabled
+          ? { web_search: createWebSearchTool(webSearch as never) }
+          : {}),
+      };
+      return {
+        deferredEntries: [],
+        tools: Object.keys(resolved).length > 0 ? resolved : undefined,
+      };
+    }),
+  };
 
   return {
     assistant: {
@@ -658,9 +746,6 @@ function createServices({
     },
     fileEntry: {
       resolveUri: jest.fn(async () => undefined),
-    },
-    mcp: {
-      getToolSetForAssistant: jest.fn(async () => mcpTools),
     },
     model: {
       getById: jest.fn(async (id: UniqueModelId) => modelsById.get(id)),
@@ -676,23 +761,9 @@ function createServices({
       getByProviderId: jest.fn(async () => provider),
       getRotatedApiKey: jest.fn(async () => 'rotated-key'),
     },
-    webSearch: {
-      searchKeywords: jest.fn(async () => ({
-        capability: 'searchKeywords',
-        inputs: ['Cherry Studio mobile'],
-        providerId: 'tavily',
-        query: 'Cherry Studio mobile',
-        results: [
-          {
-            content: 'Mobile result',
-            sourceInput: 'Cherry Studio mobile',
-            title: 'Cherry Studio',
-            url: 'https://example.com/cherry',
-          },
-        ],
-      })),
-    },
-  } as unknown as AiServiceDependencies;
+    tools,
+    webSearch,
+  } as unknown as TestAiServices;
 }
 
 function createProvider(overrides: Partial<Provider> = {}): Provider {

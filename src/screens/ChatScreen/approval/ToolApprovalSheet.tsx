@@ -6,36 +6,27 @@ import { ScrollView, Text, View } from 'react-native';
 import { parseFunctionCallToolName } from '@/ai/mcp';
 import { BottomSheet } from '@/components/bottomSheet';
 import type { PendingToolApproval } from '../runtime/chatRuntimeMessages';
+import { getBuiltInToolPresentation } from '../utils/builtInToolPresentation';
 
 const ignoreClose = () => undefined;
 
-type McpApprovalRespondInput = {
+type ToolApprovalRespondInput = {
   approvalId: string;
   approved: boolean;
   messageId: string;
 };
 
-type McpApprovalSheetProps = {
+type ToolApprovalSheetProps = {
   approvals: readonly PendingToolApproval[];
   isOpen: boolean;
-  onRespond: (input: McpApprovalRespondInput) => Promise<void>;
+  onRespond: (input: ToolApprovalRespondInput) => Promise<void>;
 };
 
-/**
- * Bottom-sheet approval prompt for MCP tool calls. Shows one pending approval
- * at a time; responding shrinks the pending list (via the runtime's
- * invalidate) so the next request slides in, and deciding the last one closes
- * the sheet and resumes the turn.
- */
-export function McpApprovalSheet({ approvals, isOpen, onRespond }: McpApprovalSheetProps) {
+/** Shows one AI SDK tool approval at a time, regardless of the tool's source. */
+export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApprovalSheetProps) {
   const { t } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Keep rendering the last request through the close animation so the sheet
-  // does not flash empty after the final decision. Adjusted during render
-  // rather than in an effect: the empty list and the close arrive in the same
-  // commit, so an effect would repaint the gap before it could fill it.
-  // Compared by id — the runtime rebuilds these objects on every read, and
-  // identity alone would re-render once more for every parent render.
+  // Keep the last request mounted during the sheet's close animation.
   const [lastApproval, setLastApproval] = useState<PendingToolApproval | undefined>(approvals[0]);
   if (approvals[0] && approvals[0].approvalId !== lastApproval?.approvalId) {
     setLastApproval(approvals[0]);
@@ -64,19 +55,19 @@ export function McpApprovalSheet({ approvals, isOpen, onRespond }: McpApprovalSh
       isCloseDisabled
       isOpen={isOpen}
       onClose={ignoreClose}
-      title={t('chat.mcpTool.approval.title')}
+      title={t('chat.tool.approval.title')}
     >
       <View className="gap-4 px-4 pb-4">
         <View className="gap-1">
           <Text className="text-foreground-muted text-sm">
-            {t('chat.mcpTool.approval.description')}
+            {t('chat.tool.approval.description')}
           </Text>
           <Text className="font-semibold text-base text-default-foreground" selectable>
-            {approval ? formatApprovalTitle(approval) : ''}
+            {approval ? formatApprovalTitle(approval, t) : ''}
           </Text>
           {approvals.length > 1 ? (
             <Text className="text-foreground-muted text-xs">
-              {t('chat.mcpTool.approval.pendingCount', { count: approvals.length })}
+              {t('chat.tool.approval.pendingCount', { count: approvals.length })}
             </Text>
           ) : null}
         </View>
@@ -88,7 +79,7 @@ export function McpApprovalSheet({ approvals, isOpen, onRespond }: McpApprovalSh
             onPress={() => void submit(false)}
             variant="danger"
           >
-            <Button.Label>{t('chat.mcpTool.approval.deny')}</Button.Label>
+            <Button.Label>{t('chat.tool.approval.deny')}</Button.Label>
           </Button>
           <Button
             className="flex-1"
@@ -96,7 +87,7 @@ export function McpApprovalSheet({ approvals, isOpen, onRespond }: McpApprovalSh
             onPress={() => void submit(true)}
             variant="primary"
           >
-            <Button.Label>{t('chat.mcpTool.approval.allow')}</Button.Label>
+            <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
           </Button>
         </View>
       </View>
@@ -114,7 +105,7 @@ function ApprovalArgumentsPreview({ input }: { input: unknown }) {
 
   return (
     <View className="gap-1">
-      <Text className="text-foreground-muted text-xs">{t('chat.mcpTool.arguments')}</Text>
+      <Text className="text-foreground-muted text-xs">{t('chat.tool.arguments')}</Text>
       <ScrollView className="max-h-48 rounded-md bg-surface-tertiary" nestedScrollEnabled>
         <Text className="p-2 font-mono text-default-foreground text-xs leading-5" selectable>
           {preview}
@@ -124,7 +115,20 @@ function ApprovalArgumentsPreview({ input }: { input: unknown }) {
   );
 }
 
-function formatApprovalTitle(approval: PendingToolApproval): string {
+function formatApprovalTitle(
+  approval: PendingToolApproval,
+  t: ReturnType<typeof useTranslation>['t'],
+): string {
+  const presentation = getBuiltInToolPresentation(approval.toolName);
+  if (presentation || approval.toolType === 'builtin') {
+    if (presentation) {
+      return t(presentation.titleKey);
+    }
+
+    const words = approval.toolName.replaceAll('_', ' ');
+    return words ? `${words[0].toUpperCase()}${words.slice(1)}` : approval.toolName;
+  }
+
   const parsed = parseFunctionCallToolName(approval.toolName);
   return parsed ? `${parsed.serverPart}: ${parsed.toolPart}` : approval.toolName;
 }
