@@ -17,6 +17,7 @@ import type {
   LanguageModelUsage,
   ModelMessage,
   StopCondition,
+  ToolCallRepairFunction,
   ToolSet,
   UIMessage,
   UIMessageChunk,
@@ -25,6 +26,7 @@ import * as Crypto from 'expo-crypto';
 
 import type { MediaCapabilities } from '../../messages/messageCapabilities';
 import { toModelMessages } from '../../messages/messageRules';
+import type { RequestContext } from '../../tools';
 import type { AppProviderSettingsMap } from '../../types';
 import { mergeUsage, toMessageMetadataPatch, ZERO_USAGE } from './usageMetadata';
 import { withReasoningTimingMetadata } from './withReasoningTimingMetadata';
@@ -54,6 +56,8 @@ export interface AgentParams<T extends AppProviderKey = AppProviderKey> {
   messageId?: string;
   mediaCapabilities?: MediaCapabilities;
   plugins?: AiPlugin[];
+  context?: RequestContext;
+  repairToolCall?: ToolCallRepairFunction<ToolSet>;
   system?: string;
   tools?: ToolSet;
   options?: AgentOptions;
@@ -71,6 +75,8 @@ export class Agent<T extends AppProviderKey = AppProviderKey> {
       modelId: params.modelId,
       plugins: params.plugins,
       agentSettings: {
+        experimental_context: params.context,
+        experimental_repairToolCall: params.repairToolCall,
         tools: params.tools,
         // System
         instructions: params.system,

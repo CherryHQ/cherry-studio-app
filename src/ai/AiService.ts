@@ -11,14 +11,9 @@ import {
   MODEL_CAPABILITY,
   type ParamValues,
 } from '@cherrystudio/provider-registry';
-import {
-  type LanguageModelUsage,
-  type ModelMessage,
-  stepCountIs,
-  type ToolSet,
-  type UIMessageChunk,
-} from 'ai';
+import { type LanguageModelUsage, type ModelMessage, stepCountIs, type UIMessageChunk } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
+import * as Crypto from 'expo-crypto';
 import type { AssistantService } from '@/data/services/AssistantService';
 import type { FileEntryService } from '@/data/services/FileEntryService';
 import type { ModelService } from '@/data/services/ModelService';
@@ -28,11 +23,6 @@ import type { Assistant } from '@/data/types/assistant';
 import type { Model, UniqueModelId } from '@/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
-import type { WebSearchService } from '@/services/webSearch/WebSearchService';
-
-import type { BuiltInToolService } from './builtin';
-import { createWebSearchTool, WEB_SEARCH_TOOL_NAME } from './createWebSearchTool';
-import type { McpService } from './mcp';
 import { resolveMediaCapabilities } from './messages/messageCapabilities';
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { providerToAiSdkConfig } from './provider/config';
@@ -46,6 +36,11 @@ import {
   INLINE_REASONING_SDK_PROVIDER_IDS,
 } from './runtime/aiSdk/plugins/reasoningExtraction';
 import { createSimulateStreamingPlugin } from './runtime/aiSdk/plugins/simulateStreaming';
+import type { ToolService } from './tools';
+import { TOOL_SEARCH_TOOL_NAME } from './tools/meta/toolSearch';
+import { getDeferredToolsSystemPrompt } from './tools/prompts/deferredTools';
+import { createAiRepair } from './tools/repair';
+import type { RequestContext } from './tools/types';
 import type { AppProviderId, AppProviderSettingsMap } from './types';
 import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/requests';
 import { addAnthropicHeaders } from './utils/anthropicHeaders';
@@ -110,13 +105,11 @@ export interface AiImageResult {
 
 export interface AiServiceDependencies {
   assistant: AssistantService;
-  builtin: Pick<BuiltInToolService, 'getToolSet'>;
   fileEntry: Pick<FileEntryService, 'resolveUri'>;
-  mcp: Pick<McpService, 'getToolSetForAssistant'>;
   model: ModelService;
   preference: PreferenceService;
   provider: ProviderService;
-  webSearch: WebSearchService;
+  tools: Pick<ToolService, 'resolveForRequest'>;
 }
 
 /**
@@ -144,13 +137,15 @@ export class AiService {
       );
     }
 
-    const [{ sdkConfig, model, system, tools, plugins, options }, preparedMessages] =
-      await Promise.all([
-        this.buildAgentParamsFor(request, { shouldIncludeExternalTools: true }),
-        resolveUIMessageFileUrls(request.messages ?? [], (fileEntryId) =>
-          this.services.fileEntry.resolveUri(fileEntryId),
-        ),
-      ]);
+    const [
+      { context, sdkConfig, model, repairToolCall, system, tools, plugins, options },
+      preparedMessages,
+    ] = await Promise.all([
+      this.buildAgentParamsFor(request, { shouldIncludeExternalTools: true }),
+      resolveUIMessageFileUrls(request.messages ?? [], (fileEntryId) =>
+        this.services.fileEntry.resolveUri(fileEntryId),
+      ),
+    ]);
 
     const agent = new Agent({
       providerId: sdkConfig.providerId,
@@ -159,6 +154,8 @@ export class AiService {
       messageId: request.messageId,
       mediaCapabilities: resolveMediaCapabilities(model),
       plugins,
+      context,
+      repairToolCall,
       system,
       tools,
       options,
@@ -172,13 +169,16 @@ export class AiService {
   async generateText(request: AiGenerateRequest): Promise<AiGenerateResult> {
     const signal = request.requestOptions?.signal;
 
-    const { sdkConfig, system, plugins, options } = await this.buildAgentParamsFor(request);
+    const { context, sdkConfig, system, plugins, repairToolCall, options } =
+      await this.buildAgentParamsFor(request);
 
     const agent = new Agent({
       providerId: sdkConfig.providerId,
       providerSettings: sdkConfig.providerSettings,
       modelId: sdkConfig.modelId,
       plugins,
+      context,
+      repairToolCall,
       system: request.system ?? system,
       options,
     });
@@ -322,7 +322,8 @@ export class AiService {
     request: AiBaseRequest & { apiKeyOverride?: string },
     signal: AbortSignal,
   ): Promise<unknown> {
-    const { sdkConfig, model, plugins, options } = await this.buildAgentParamsFor(request);
+    const { context, sdkConfig, model, plugins, repairToolCall, options } =
+      await this.buildAgentParamsFor(request);
 
     if (isEmbeddingModel(model)) {
       return aiCoreEmbedMany<AppProviderSettingsMap>(
@@ -344,6 +345,8 @@ export class AiService {
       providerSettings: sdkConfig.providerSettings,
       modelId: sdkConfig.modelId,
       plugins,
+      context,
+      repairToolCall,
       system: 'test',
       options,
     });
@@ -426,23 +429,37 @@ export class AiService {
     });
     const shouldLoadTools =
       buildOptions.shouldIncludeExternalTools && assistant && isFunctionCallingModel(model);
-    const [builtInTools, mcpTools] = shouldLoadTools
-      ? await Promise.all([
-          this.services.builtin.getToolSet(),
-          this.services.mcp.getToolSetForAssistant(assistant),
-        ])
-      : [undefined, undefined];
-    const webSearchTools =
-      shouldUseExternalWebSearch && assistant?.settings.enableWebSearch
-        ? ({
-            [WEB_SEARCH_TOOL_NAME]: createWebSearchTool(this.services.webSearch),
-          } satisfies ToolSet)
-        : undefined;
-    const mergedTools: ToolSet = { ...builtInTools, ...mcpTools, ...webSearchTools };
-    const tools = Object.keys(mergedTools).length > 0 ? mergedTools : undefined;
-    const system = assistant?.prompt
+    const resolvedTools = shouldLoadTools
+      ? await this.services.tools.resolveForRequest({
+          assistant,
+          contextWindow: model.contextWindow,
+          externalWebSearchEnabled: shouldUseExternalWebSearch,
+        })
+      : { deferredEntries: [], tools: undefined };
+    const tools = resolvedTools.tools;
+    const baseSystem = assistant?.prompt
       ? await replacePromptVariables(assistant.prompt, model.name, this.services.preference)
       : undefined;
+    const deferredSystem =
+      tools && TOOL_SEARCH_TOOL_NAME in tools
+        ? getDeferredToolsSystemPrompt(resolvedTools.deferredEntries)
+        : undefined;
+    const system = [baseSystem, deferredSystem].filter(Boolean).join('\n\n') || undefined;
+    const context: RequestContext = {
+      abortSignal: request.requestOptions?.signal,
+      assistant,
+      chatId: request.chatId,
+      requestId:
+        'messageId' in request && typeof request.messageId === 'string'
+          ? request.messageId
+          : Crypto.randomUUID(),
+    };
+    const repairToolCall = createAiRepair({
+      modelId: model.modelId,
+      plugins,
+      providerId: sdkConfig.providerId,
+      providerSettings: sdkConfig.providerSettings,
+    });
 
     return {
       sdkConfig: {
@@ -452,8 +469,10 @@ export class AiService {
       provider,
       model,
       assistant,
+      context,
       system,
       plugins,
+      repairToolCall,
       tools,
       options: {
         maxRetries: request.requestOptions?.maxRetries ?? 0,
