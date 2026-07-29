@@ -10,8 +10,8 @@ import type { ProviderV3 } from '@ai-sdk/provider';
 import { createTogetherAI, type TogetherAIProviderSettings } from '@ai-sdk/togetherai';
 import { ProviderExtension, type ProviderExtensionConfig } from '@cherrystudio/ai-core/provider';
 
-import { type AihubmixProviderSettings, createAihubmix } from '../custom/aihubmixProvider';
-import { createNewApi, type NewApiProviderSettings } from '../custom/newapiProvider';
+import { type AihubmixProviderSettings, createAihubmix } from './custom/aihubmix/aihubmixProvider';
+import { createNewApi, type NewApiProviderSettings } from './custom/newapiProvider';
 
 export const PerplexityExtension = ProviderExtension.create({
   name: 'perplexity',
