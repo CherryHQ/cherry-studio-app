@@ -213,13 +213,13 @@ describe('ToolApprovalSheet', () => {
     render({
       approvals: [
         makeApproval({
-          toolName: 'builtin_get_current_location',
+          toolName: 'location_get_current',
           toolType: 'builtin',
         }),
       ],
     });
 
     expect(renderedTexts()).toContain('chat.builtinTool.location.current');
-    expect(renderedTexts()).not.toContain('builtin_get_current_location');
+    expect(renderedTexts()).not.toContain('location_get_current');
   });
 });

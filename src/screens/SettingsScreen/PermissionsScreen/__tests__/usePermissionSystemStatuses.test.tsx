@@ -1,3 +1,4 @@
+import type { EffectCallback } from 'react';
 import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -7,7 +8,7 @@ const mockGetStatus = jest.fn(async () => 'granted');
 const mockDevicePermission = { getStatusForPreference: mockGetStatus };
 
 jest.mock('expo-router', () => ({
-  useFocusEffect: (effect: () => void | (() => void)) => {
+  useFocusEffect: (effect: EffectCallback) => {
     const { useEffect } = jest.requireActual('react');
     useEffect(effect, [effect]);
   },

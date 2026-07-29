@@ -149,7 +149,7 @@ describe('tool approvals', () => {
 
   test('getPendingToolApprovals carries built-in identity from tool metadata', () => {
     const builtin = {
-      ...requested('a1', 'builtin_get_current_location'),
+      ...requested('a1', 'location_get_current'),
       toolMetadata: { cherry: { tool: { type: 'builtin' } } },
     } as CherryMessagePart;
     const waiting = {
@@ -159,7 +159,7 @@ describe('tool approvals', () => {
 
     expect(getPendingToolApprovals([waiting])).toEqual([
       expect.objectContaining({
-        toolName: 'builtin_get_current_location',
+        toolName: 'location_get_current',
         toolType: 'builtin',
       }),
     ]);

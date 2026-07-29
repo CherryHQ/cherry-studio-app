@@ -1,7 +1,7 @@
+import { BellRingIcon } from 'lucide-uniwind/png';
 import type { ReactElement, ReactNode } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { BellRingIcon } from 'lucide-uniwind/png';
 
 import type { CherryMessagePart } from '@/data/types/message';
 import { McpToolPart } from '../McpToolPart';
@@ -76,7 +76,7 @@ describe('tool message detail sheets', () => {
       <ToolPart
         part={makeToolPart({
           toolMetadata: { cherry: { tool: { type: 'builtin' } } },
-          toolName: 'builtin_list_reminder_lists',
+          toolName: 'reminder_list_collections',
         })}
       />,
     );
@@ -93,7 +93,7 @@ describe('tool message detail sheets', () => {
       <ToolPart
         part={makeToolPart({
           toolMetadata: { cherry: { tool: { type: 'builtin' } } },
-          toolName: 'builtin_list_reminder_lists',
+          toolName: 'reminder_list_collections',
         })}
       />,
     );

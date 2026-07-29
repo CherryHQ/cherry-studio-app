@@ -4,8 +4,8 @@ import {
   getAppPreferenceKeys,
   getDefaultValue,
   getPreferenceKeys,
-  isPreferenceKey,
   isAppPreferenceKey,
+  isPreferenceKey,
   ThemeMode,
 } from '..';
 
