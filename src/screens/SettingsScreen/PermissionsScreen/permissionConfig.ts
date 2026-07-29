@@ -1,17 +1,17 @@
-import type { PermissionMode, PreferenceAppKeyType } from '@/data/preference';
+import type { PermissionMode, PermissionPreferenceKey } from '@/data/preference';
 import type { DevicePermission } from '@/services/devicePermissions';
 
 export const permissionKinds = ['location', 'calendar', 'reminders', 'health'] as const;
 export type PermissionKind = (typeof permissionKinds)[number];
 
-export type PermissionPolicySnapshot = Record<PreferenceAppKeyType, PermissionMode>;
+export type PermissionPolicySnapshot = Record<PermissionPreferenceKey, PermissionMode>;
 
 export const permissionConfig: Record<
   PermissionKind,
   {
     permission: DevicePermission;
-    readKey: PreferenceAppKeyType;
-    writeKey?: PreferenceAppKeyType;
+    readKey: PermissionPreferenceKey;
+    writeKey?: PermissionPreferenceKey;
   }
 > = {
   calendar: {

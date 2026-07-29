@@ -5,15 +5,11 @@ import type { DbService } from '@/data/db/DbService';
 import { preferenceTable } from '@/data/db/schemas';
 import {
   DefaultPreferences,
-  getAppDefaultValue,
-  getAppPreferenceKeys,
   getDefaultValue,
   getPreferenceKeys,
-  isAppPreferenceKey,
+  isPermissionPreferenceKey,
   isPreferenceKey,
   PermissionModeSchema,
-  type PreferenceAppKeyType,
-  type PreferenceAppScopeType,
   type PreferenceDefaultScopeType,
   type PreferenceKeyType,
   type PreferenceUpdateOptions,
@@ -35,13 +31,7 @@ type PreferenceMappedResult<T extends PreferenceMapping> = {
   [P in keyof T]: PreferenceDefaultScopeType[T[P]];
 };
 type PreferenceUpdateMap = Partial<Record<PreferenceKeyType, PreferenceValue>>;
-type AppPreferenceValue = PreferenceAppScopeType[PreferenceAppKeyType];
-type AppPreferenceUpdates<K extends PreferenceAppKeyType = PreferenceAppKeyType> = Partial<
-  Pick<PreferenceAppScopeType, K>
->;
-type AppPreferenceUpdateMap = Partial<Record<PreferenceAppKeyType, AppPreferenceValue>>;
 
-const appScope = 'app';
 const defaultScope = 'default';
 const defaultUpdateOptions: PreferenceUpdateOptions = {
   optimistic: true,
@@ -57,21 +47,17 @@ const defaultUpdateOptions: PreferenceUpdateOptions = {
  * - Integration with React's useSyncExternalStore
  */
 export class PreferenceService {
-  readonly app: AppPreferenceFacade;
   private cache: PreferenceUpdateMap = { ...DefaultPreferences.default };
   private listeners = new Map<PreferenceKeyType, Set<PreferenceListener>>();
   private updateTail: Promise<void> = Promise.resolve();
 
-  constructor(private readonly dbService: DbService) {
-    this.app = new AppPreferenceFacade(dbService);
-  }
+  constructor(private readonly dbService: DbService) {}
 
   private get db() {
     return this.dbService.getDb();
   }
 
   async init() {
-    await this.app.init();
     this.cache = { ...DefaultPreferences.default };
 
     const rows = await this.db
@@ -281,177 +267,23 @@ export class PreferenceService {
   }
 }
 
-export class AppPreferenceFacade {
-  private cache: AppPreferenceUpdateMap = { ...DefaultPreferences.app };
-  private listeners = new Map<PreferenceAppKeyType, Set<PreferenceListener>>();
-  private updateTail: Promise<void> = Promise.resolve();
-
-  constructor(private readonly dbService: DbService) {}
-
-  private get db() {
-    return this.dbService.getDb();
-  }
-
-  async init() {
-    this.cache = { ...DefaultPreferences.app };
-
-    const rows = await this.db
-      .select({
-        key: preferenceTable.key,
-        value: preferenceTable.value,
-      })
-      .from(preferenceTable)
-      .where(eq(preferenceTable.scope, appScope));
-
-    for (const row of rows) {
-      if (!isAppPreferenceKey(row.key)) {
-        continue;
-      }
-
-      const parsed = PermissionModeSchema.safeParse(row.value);
-      if (parsed.success) {
-        this.cache[row.key] = parsed.data;
-      } else {
-        logger.warn('Ignoring malformed app permission preference', {
-          issues: parsed.error.issues,
-          key: row.key,
-        });
-      }
-    }
-  }
-
-  async get<K extends PreferenceAppKeyType>(key: K): Promise<PreferenceAppScopeType[K]> {
-    return this.getCachedValue(key) ?? getAppDefaultValue(key);
-  }
-
-  getCachedValue<K extends PreferenceAppKeyType>(key: K): PreferenceAppScopeType[K] | undefined {
-    return this.cache[key] as PreferenceAppScopeType[K] | undefined;
-  }
-
-  getMultipleRawCached<K extends PreferenceAppKeyType>(
-    keys: readonly K[],
-  ): { [P in K]: PreferenceAppScopeType[P] } {
-    const result = {} as { [P in K]: PreferenceAppScopeType[P] };
-
-    for (const key of keys) {
-      result[key] = this.getCachedValue(key) ?? getAppDefaultValue(key);
-    }
-
-    return result;
-  }
-
-  getAll(): PreferenceAppScopeType {
-    return {
-      ...DefaultPreferences.app,
-      ...this.cache,
-    };
-  }
-
-  async set<K extends PreferenceAppKeyType>(
-    key: K,
-    value: PreferenceAppScopeType[K],
-    options: PreferenceUpdateOptions = defaultUpdateOptions,
-  ) {
-    await this.setMultiple({ [key]: value } as AppPreferenceUpdates<K>, options);
-  }
-
-  async setMultiple<K extends PreferenceAppKeyType>(
-    updates: AppPreferenceUpdates<K>,
-    options: PreferenceUpdateOptions = defaultUpdateOptions,
-  ) {
-    const run = this.updateTail.then(() =>
-      this.runUpdate(updates as AppPreferenceUpdateMap, options),
-    );
-    this.updateTail = run.catch(() => {});
-    await run;
-  }
-
-  subscribeChange<K extends PreferenceAppKeyType>(key: K) {
-    return (listener: PreferenceListener) => {
-      const listeners = this.listeners.get(key) ?? new Set<PreferenceListener>();
-      listeners.add(listener);
-      this.listeners.set(key, listeners);
-
-      return () => {
-        listeners.delete(listener);
-        if (listeners.size === 0) {
-          this.listeners.delete(key);
-        }
-      };
-    };
-  }
-
-  private async runUpdate(updates: AppPreferenceUpdateMap, options: PreferenceUpdateOptions) {
-    const keys = getAppPreferenceKeys().filter((key) => {
-      if (!(key in updates) || updates[key] === undefined) {
-        return false;
-      }
-
-      const currentValue = this.getCachedValue(key) ?? getAppDefaultValue(key);
-      return !Object.is(currentValue, updates[key]);
-    });
-
-    if (keys.length === 0) {
-      return;
-    }
-
-    const previousValues: AppPreferenceUpdateMap = {};
-    for (const key of keys) {
-      previousValues[key] = this.getCachedValue(key) ?? getAppDefaultValue(key);
-    }
-
-    if (options.optimistic) {
-      this.applyUpdates(updates, keys);
-    }
-
-    try {
-      await this.persistUpdates(updates, keys);
-      if (!options.optimistic) {
-        this.applyUpdates(updates, keys);
-      }
-    } catch (error) {
-      if (options.optimistic) {
-        this.applyUpdates(previousValues, keys);
-      }
-      throw error;
-    }
-  }
-
-  private applyUpdates(updates: AppPreferenceUpdateMap, keys: PreferenceAppKeyType[]) {
-    for (const key of keys) {
-      this.cache[key] = updates[key];
-      const listeners = this.listeners.get(key);
-      if (!listeners) {
-        continue;
-      }
-      for (const listener of listeners) {
-        listener();
-      }
-    }
-  }
-
-  private async persistUpdates(updates: AppPreferenceUpdateMap, keys: PreferenceAppKeyType[]) {
-    await this.dbService.withWriteTx(async (tx) => {
-      for (const key of keys) {
-        const value = updates[key] as AppPreferenceValue;
-
-        // react-doctor-disable-next-line async-await-in-loop -- expo-sqlite transactions are serial
-        await tx
-          .insert(preferenceTable)
-          .values({ key, scope: appScope, value })
-          .onConflictDoUpdate({
-            target: [preferenceTable.scope, preferenceTable.key],
-            set: { value },
-          });
-      }
-    });
-  }
-}
-
 function parsePersistedPreference(
   key: PreferenceKeyType,
   value: unknown,
 ): PreferenceValue | undefined {
+  if (isPermissionPreferenceKey(key)) {
+    const parsed = PermissionModeSchema.safeParse(value);
+    if (parsed.success) {
+      return parsed.data;
+    }
+
+    logger.warn('Ignoring malformed permission preference', {
+      issues: parsed.error.issues,
+      key,
+    });
+    return undefined;
+  }
+
   if (key !== 'chat.web_search.provider_overrides') {
     return value as PreferenceValue;
   }

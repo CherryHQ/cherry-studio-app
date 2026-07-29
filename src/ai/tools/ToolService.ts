@@ -1,7 +1,7 @@
 import type { ToolSet } from 'ai';
 import { Platform } from 'react-native';
 import { loggerService } from '@/core/logger/LoggerService';
-import type { PreferenceAppKeyType } from '@/data/preference';
+import type { PermissionPreferenceKey } from '@/data/preference';
 import type { PreferenceService } from '@/data/services/PreferenceService';
 import type { Assistant } from '@/data/types/assistant';
 import type { DevicePermissionService } from '@/services/devicePermissions';
@@ -21,12 +21,12 @@ const DEVICE_PREFERENCE_KEYS = [
   'permissions.location_read',
   'permissions.reminders_read',
   'permissions.reminders_write',
-] as const satisfies readonly PreferenceAppKeyType[];
+] as const satisfies readonly PermissionPreferenceKey[];
 
 export type ToolServiceDependencies = {
   devicePermission: Pick<DevicePermissionService, 'getStatusForPreference'>;
   mcp: Pick<McpService, 'getToolEntriesForAssistant'>;
-  preference: Pick<PreferenceService, 'app'>;
+  preference: Pick<PreferenceService, 'get'>;
   webSearch: WebSearchService;
 };
 
@@ -63,7 +63,7 @@ export class ToolService {
     const entries = await Promise.all(
       DEVICE_PREFERENCE_KEYS.map(async (key) => {
         try {
-          const mode = await this.deps.preference.app.get(key);
+          const mode = await this.deps.preference.get(key);
           if (mode === 'never') {
             return [key, { mode, status: 'unavailable' as const }] as const;
           }

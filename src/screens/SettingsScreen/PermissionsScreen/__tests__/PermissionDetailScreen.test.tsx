@@ -30,7 +30,7 @@ jest.mock('lucide-uniwind/png', () => ({
 }));
 jest.mock('@/components/headers', () => ({ BackHeader: () => null }));
 jest.mock('@/data/hooks', () => ({
-  useAppPreference: () => [mockMode, mockSetMode],
+  usePreference: () => [mockMode, mockSetMode],
 }));
 jest.mock('@/data/runtime', () => ({
   useDataServices: () => ({

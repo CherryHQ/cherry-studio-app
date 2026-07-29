@@ -3,7 +3,7 @@ import * as Location from 'expo-location';
 import { AppState, Linking, Platform } from 'react-native';
 import type { HealthKit } from 'react-native-nitro-healthkit';
 
-import type { PreferenceAppKeyType } from '@/data/preference';
+import type { PermissionPreferenceKey } from '@/data/preference';
 
 export type DevicePermission = 'calendar' | 'health' | 'location' | 'reminders';
 export type DevicePermissionAccess = 'read' | 'write';
@@ -23,7 +23,7 @@ const ANDROID_HEALTH_RETURN_TIMEOUT_MS = 2 * 60 * 1000;
 type HealthKitLoader = () => Promise<HealthKit>;
 
 const permissionByPreference: Record<
-  PreferenceAppKeyType,
+  PermissionPreferenceKey,
   { access: DevicePermissionAccess; permission: DevicePermission }
 > = {
   'permissions.calendar_read': { access: 'read', permission: 'calendar' },
@@ -62,7 +62,7 @@ export class DevicePermissionService {
     }
   }
 
-  async getStatusForPreference(key: PreferenceAppKeyType): Promise<SystemPermissionState> {
+  async getStatusForPreference(key: PermissionPreferenceKey): Promise<SystemPermissionState> {
     const target = permissionByPreference[key];
     return this.getStatus(target.permission, target.access);
   }
@@ -94,7 +94,7 @@ export class DevicePermissionService {
     }
   }
 
-  async requestForPreference(key: PreferenceAppKeyType): Promise<SystemPermissionState> {
+  async requestForPreference(key: PermissionPreferenceKey): Promise<SystemPermissionState> {
     const target = permissionByPreference[key];
     return this.request(target.permission, target.access);
   }

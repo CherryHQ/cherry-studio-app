@@ -1,12 +1,12 @@
-import { useAppPreference } from '@/data/hooks';
+import { usePreference } from '@/data/hooks';
 
 export function usePermissionPolicies() {
-  const [calendarRead] = useAppPreference('permissions.calendar_read');
-  const [calendarWrite] = useAppPreference('permissions.calendar_write');
-  const [healthRead] = useAppPreference('permissions.health_read');
-  const [locationRead] = useAppPreference('permissions.location_read');
-  const [remindersRead] = useAppPreference('permissions.reminders_read');
-  const [remindersWrite] = useAppPreference('permissions.reminders_write');
+  const [calendarRead] = usePreference('permissions.calendar_read');
+  const [calendarWrite] = usePreference('permissions.calendar_write');
+  const [healthRead] = usePreference('permissions.health_read');
+  const [locationRead] = usePreference('permissions.location_read');
+  const [remindersRead] = usePreference('permissions.reminders_read');
+  const [remindersWrite] = usePreference('permissions.reminders_write');
 
   return {
     'permissions.calendar_read': calendarRead,

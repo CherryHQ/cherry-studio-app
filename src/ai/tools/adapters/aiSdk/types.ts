@@ -1,5 +1,5 @@
 import type { Tool } from 'ai';
-import type { PreferenceAppKeyType } from '@/data/preference';
+import type { PermissionPreferenceKey } from '@/data/preference';
 import type { Assistant } from '@/data/types/assistant';
 import type { SystemPermissionState } from '@/services/devicePermissions';
 
@@ -7,7 +7,7 @@ export type ToolDefer = 'never' | 'always' | 'auto';
 
 export type DeviceToolAccess = Readonly<
   Record<
-    PreferenceAppKeyType,
+    PermissionPreferenceKey,
     {
       mode: 'never' | 'ask' | 'always';
       status: SystemPermissionState;

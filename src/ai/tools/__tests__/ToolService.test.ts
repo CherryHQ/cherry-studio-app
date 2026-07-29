@@ -89,13 +89,11 @@ function createService(options: {
     },
     mcp: { getToolEntriesForAssistant: jest.fn(async () => options.mcpEntries ?? []) },
     preference: {
-      app: {
-        get: jest.fn(async (key: string) => {
-          if (key === options.failingKey) throw new Error('db unavailable');
-          if (key === options.neverKey) return 'never';
-          return 'always';
-        }),
-      },
+      get: jest.fn(async (key: string) => {
+        if (key === options.failingKey) throw new Error('db unavailable');
+        if (key === options.neverKey) return 'never';
+        return 'always';
+      }),
     },
     webSearch: { searchKeywords: jest.fn() },
   } as never);

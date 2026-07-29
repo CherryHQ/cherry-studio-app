@@ -1,13 +1,15 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { AppState } from 'react-native';
-import type { PreferenceAppKeyType } from '@/data/preference';
+import type { PermissionPreferenceKey } from '@/data/preference';
 import { useDataServices } from '@/data/runtime';
 import type { SystemPermissionState } from '@/services/devicePermissions';
 
 import { permissionConfig, permissionKinds } from './permissionConfig';
 
-export type PermissionSystemStatuses = Partial<Record<PreferenceAppKeyType, SystemPermissionState>>;
+export type PermissionSystemStatuses = Partial<
+  Record<PermissionPreferenceKey, SystemPermissionState>
+>;
 
 export function usePermissionSystemStatuses() {
   const service = useDataServices().devicePermission;

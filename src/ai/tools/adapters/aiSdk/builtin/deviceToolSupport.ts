@@ -2,7 +2,7 @@ import type { ToolResultOutput } from '@ai-sdk/provider-utils';
 import type { JSONValue, Tool, ToolExecutionOptions } from 'ai';
 import * as z from 'zod';
 import { loggerService } from '@/core/logger/LoggerService';
-import type { PreferenceAppKeyType } from '@/data/preference';
+import type { PermissionPreferenceKey } from '@/data/preference';
 import type { PreferenceService } from '@/data/services/PreferenceService';
 import type { DevicePermissionService } from '@/services/devicePermissions';
 import { isAbortError } from '@/services/webSearch/utils/errors';
@@ -14,7 +14,7 @@ const logger = loggerService.withContext('DeviceTool');
 
 export type DeviceToolDependencies = {
   devicePermission: Pick<DevicePermissionService, 'getStatusForPreference'>;
-  preference: Pick<PreferenceService, 'app'>;
+  preference: Pick<PreferenceService, 'get'>;
 };
 
 export const deviceToolErrorSchema = z
@@ -28,7 +28,7 @@ export function createDeviceToolEntry(input: {
   name: string;
   namespace: string;
   platforms?: readonly string[];
-  preferenceKeys: readonly PreferenceAppKeyType[];
+  preferenceKeys: readonly PermissionPreferenceKey[];
   tool: Tool;
 }): ToolEntry {
   return {
@@ -82,7 +82,7 @@ export function deviceToolModelOutput(output: unknown): ToolResultOutput {
 function guardDeviceTool(input: {
   deps: DeviceToolDependencies;
   name: string;
-  preferenceKeys: readonly PreferenceAppKeyType[];
+  preferenceKeys: readonly PermissionPreferenceKey[];
   tool: Tool;
 }): Tool {
   if (!input.tool.execute) return input.tool;
@@ -93,7 +93,7 @@ function guardDeviceTool(input: {
     needsApproval: async () => {
       try {
         const modes = await Promise.all(
-          input.preferenceKeys.map((key) => input.deps.preference.app.get(key)),
+          input.preferenceKeys.map((key) => input.deps.preference.get(key)),
         );
         if (modes.some((mode) => mode === 'never')) return false;
         return modes.some((mode) => mode === 'ask');
@@ -104,7 +104,7 @@ function guardDeviceTool(input: {
     },
     execute: async (...args: Parameters<typeof execute>) => {
       const modes = await Promise.all(
-        input.preferenceKeys.map((key) => input.deps.preference.app.get(key)),
+        input.preferenceKeys.map((key) => input.deps.preference.get(key)),
       );
       if (modes.some((mode) => mode === 'never')) {
         throw new Error(`Device tool is disabled: ${input.name}`);

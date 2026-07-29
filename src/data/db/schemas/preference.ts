@@ -5,7 +5,7 @@ import { createUpdateTimestamps } from './_columnHelpers';
 export const preferenceTable = sqliteTable(
   'preference',
   {
-    scope: text().notNull().default('default'),
+    scope: text().notNull().default('default'), // scope is reserved for future use, now only 'default' is supported
     key: text().notNull(),
     value: text({ mode: 'json' }),
     ...createUpdateTimestamps,

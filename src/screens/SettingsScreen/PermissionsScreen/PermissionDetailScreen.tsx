@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/components/headers';
-import { useAppPreference } from '@/data/hooks';
-import type { PermissionMode, PreferenceAppKeyType } from '@/data/preference';
+import { usePreference } from '@/data/hooks';
+import type { PermissionMode, PermissionPreferenceKey } from '@/data/preference';
 import { useDataServices } from '@/data/runtime';
 import type { SystemPermissionState } from '@/services/devicePermissions';
 
@@ -77,11 +77,11 @@ function PermissionModeGroup({
   title,
 }: {
   onSystemStatusChange: () => Promise<void>;
-  preferenceKey: PreferenceAppKeyType;
+  preferenceKey: PermissionPreferenceKey;
   title: string;
 }) {
   const { t } = useTranslation();
-  const [mode, setMode] = useAppPreference(preferenceKey);
+  const [mode, setMode] = usePreference(preferenceKey);
   const permissionService = useDataServices().devicePermission;
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -149,10 +149,10 @@ function OpenSettingsSection({
   onSystemStatusChange,
   statuses,
 }: {
-  configuredKeys: PreferenceAppKeyType[];
+  configuredKeys: PermissionPreferenceKey[];
   kind: PermissionKind;
   onSystemStatusChange: () => Promise<void>;
-  statuses: Partial<Record<PreferenceAppKeyType, SystemPermissionState>>;
+  statuses: Partial<Record<PermissionPreferenceKey, SystemPermissionState>>;
 }) {
   const { t } = useTranslation();
   const permissionService = useDataServices().devicePermission;

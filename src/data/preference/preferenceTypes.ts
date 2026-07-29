@@ -5,8 +5,7 @@ import type { PreferenceSchemas } from './preferenceSchemas';
 /** DB-backed preferences only (stored in SQLite) */
 export type PreferenceDefaultScopeType = PreferenceSchemas['default'];
 export type PreferenceKeyType = keyof PreferenceDefaultScopeType;
-export type PreferenceAppScopeType = PreferenceSchemas['app'];
-export type PreferenceAppKeyType = keyof PreferenceAppScopeType;
+export type PermissionPreferenceKey = Extract<PreferenceKeyType, `permissions.${string}`>;
 
 export type PreferenceUpdateOptions = {
   optimistic: boolean;
