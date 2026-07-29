@@ -2,7 +2,7 @@ import type { ListToolsResult, MCPClient } from '@ai-sdk/mcp';
 import { createMCPClient } from '@ai-sdk/mcp';
 import type { Tool, ToolSet } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
-
+import type { ToolEntry } from '@/ai/tools';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { McpServerService } from '@/data/services/McpServerService';
 import { DataApiError, ErrorCode } from '@/data/types/apiTypes';
@@ -238,13 +238,13 @@ export class McpService {
   private activePrewarmPromise?: Promise<void>;
 
   /**
-   * AI SDK ToolSet for one chat request, keyed `mcp__{server}__{tool}`.
+   * Request-scoped registry entries keyed `mcp__{server}__{tool}`.
    *
    * Gives cold servers one shared, bounded warm before reading the cache. Stale
    * tools are returned immediately while they refresh in the background.
-   * Returns undefined when nothing applies and never surfaces MCP failures.
+   * Returns an empty list when nothing applies and never surfaces MCP failures.
    */
-  async getToolSetForAssistant(assistant: Assistant): Promise<ToolSet | undefined> {
+  async getToolEntriesForAssistant(assistant: Assistant): Promise<ToolEntry[]> {
     let activeServers: StreamableHttpMcpServer[];
     try {
       ({ items: activeServers } = await this.deps.mcpServer.list({
@@ -253,7 +253,7 @@ export class McpService {
       }));
     } catch (error) {
       logger.warn('Failed to list MCP servers for assistant', { error });
-      return undefined;
+      return [];
     }
 
     // Outside the try: this is a pure filter over what we just read, so a throw
@@ -265,7 +265,8 @@ export class McpService {
     }));
     await this.warmColdToolCaches(preparedServers);
 
-    const result: ToolSet = {};
+    const entries: ToolEntry[] = [];
+    const registeredNames = new Set<string>();
     for (const { server, state } of preparedServers) {
       // A save/disable while the bounded warm was running invalidates this
       // request's transport snapshot. The next request will read the new row.
@@ -283,16 +284,23 @@ export class McpService {
         }
 
         const key = buildFunctionCallToolName(server.name, rawName);
-        if (result[key]) {
+        if (registeredNames.has(key)) {
           logger.warn('Duplicate MCP tool key, skipping', { key, server: server.name });
           continue;
         }
 
-        result[key] = this.wrapTool(rawTool, server, rawName, cached.state);
+        registeredNames.add(key);
+        entries.push({
+          defer: isMcpToolForcePromptBySource(server, { name: rawName }) ? 'never' : 'auto',
+          description: toolDescription(rawTool) ?? rawName,
+          name: key,
+          namespace: `mcp:${server.name}`,
+          tool: this.wrapTool(rawTool, server, rawName, cached.state),
+        });
       }
     }
 
-    return Object.keys(result).length > 0 ? result : undefined;
+    return entries;
   }
 
   /**
