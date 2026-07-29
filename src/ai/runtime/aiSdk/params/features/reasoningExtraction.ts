@@ -11,7 +11,7 @@
 import { definePlugin } from '@cherrystudio/ai-core';
 import { extractReasoningMiddleware } from 'ai';
 
-import type { AppProviderId } from '../../../types';
+import type { AppProviderId } from '../../../../types';
 
 export const INLINE_REASONING_SDK_PROVIDER_IDS: ReadonlySet<AppProviderId> = new Set([
   'openai',

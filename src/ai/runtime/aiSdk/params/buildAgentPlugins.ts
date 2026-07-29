@@ -8,14 +8,14 @@ import type { Provider } from '@/data/types/provider';
 import { isAnthropicModel } from '../../../utils/model';
 import { SystemProviderIds } from '../../../utils/providerIds';
 import { getReasoningTagName } from '../../../utils/reasoning';
-import { createAnthropicCachePlugin } from '../plugins/anthropicCache';
-import { createGatewayUsageNormalizePlugin } from '../plugins/gatewayUsageNormalize';
-import { createOpenrouterReasoningPlugin } from '../plugins/openrouterReasoning';
+import { createAnthropicCachePlugin } from './features/anthropicCache';
+import { createGatewayUsageNormalizePlugin } from './features/gatewayUsageNormalize';
+import { createOpenrouterReasoningPlugin } from './features/openrouterReasoning';
 import {
   createReasoningExtractionPlugin,
   INLINE_REASONING_SDK_PROVIDER_IDS,
-} from '../plugins/reasoningExtraction';
-import { createSimulateStreamingPlugin } from '../plugins/simulateStreaming';
+} from './features/reasoningExtraction';
+import { createSimulateStreamingPlugin } from './features/simulateStreaming';
 
 interface BuildAgentPluginsInput {
   aiSdkProviderId: string;

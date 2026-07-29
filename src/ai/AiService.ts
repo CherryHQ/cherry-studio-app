@@ -16,10 +16,9 @@ import type { Provider } from '@/data/types/provider';
 import { resolveMediaCapabilities } from './messages/messageCapabilities';
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { listModels as listProviderModels } from './provider/listModels';
-import { Agent } from './runtime/aiSdk/Agent';
+import { Agent, buildAgentParams } from './runtime/aiSdk';
 import {
   type BuildAgentParamsDependencies,
-  buildAgentParams,
   getCustomParameters,
 } from './runtime/aiSdk/params/buildAgentParams';
 import type { AppProviderSettingsMap } from './types';

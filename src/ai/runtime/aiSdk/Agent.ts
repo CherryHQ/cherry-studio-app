@@ -26,10 +26,10 @@ import * as Crypto from 'expo-crypto';
 
 import type { MediaCapabilities } from '../../messages/messageCapabilities';
 import { toModelMessages } from '../../messages/messageRules';
+import { withReasoningTimingMetadata } from '../../streamManager/withReasoningTimingMetadata';
 import type { RequestContext } from '../../tools';
 import type { AppProviderSettingsMap } from '../../types';
-import { mergeUsage, toMessageMetadataPatch, ZERO_USAGE } from './usageMetadata';
-import { withReasoningTimingMetadata } from './withReasoningTimingMetadata';
+import { mergeUsage, toMessageMetadataPatch, ZERO_USAGE } from './observers/usage';
 
 type AppProviderKey = StringKeys<AppProviderSettingsMap>;
 
