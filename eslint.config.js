@@ -1,52 +1,84 @@
 const expoConfig = require('eslint-config-expo/flat');
 const { defineConfig } = require('eslint/config');
 
-// ── Layer boundaries (ADR 0010) ──
-// Dependency direction: app → features → {runtime, components, hooks} →
-// {ai, services} → data → {core, utils}. The blocks below make the
-// upward edges lint errors so the layering cannot silently regress.
+// Layer dependency direction (ADR 0011):
+// app -> {bootstrap, frontend, shared}
+// bootstrap -> {backend, frontend, shared}
+// frontend -> {frontend, shared}
+// backend -> {backend, shared}
+// shared -> shared
 
-// Retired module paths. These exist so a stale branch or muscle memory gets a
-// pointer to the new home instead of a bare "module not found".
+const retiredRootPatterns = [
+  'ai',
+  'components',
+  'core',
+  'data',
+  'features',
+  'hooks',
+  'i18n',
+  'mocks',
+  'polyfills',
+  'runtime',
+  'services',
+  'styles',
+  'types',
+  'utils',
+].flatMap((root) => [`@/${root}`, `@/${root}/*`, `@/${root}/*/**`]);
+
 const tombstonePatterns = [
-  { group: ['@/config/constants'], message: 'Moved to @/utils/constants.' },
+  {
+    group: retiredRootPatterns,
+    message:
+      'This root path was retired by ADR 0011. Import from @/frontend, @/backend, @/shared, or @/bootstrap.',
+  },
+  {
+    group: ['@/config/constants'],
+    message: 'Constants now live in the owning layer under its utils directory.',
+  },
   {
     group: ['@/screens', '@/screens/*', '@/screens/*/**'],
-    message: 'Screens moved to @/frontend/features/<name> (ADR 0010).',
-  },
-  { group: ['@/data/runtime', '@/data/runtime/*'], message: 'Moved to @/runtime.' },
-  {
-    group: ['@/data/services/createDataServices'],
-    message: 'Moved to @/runtime/createDataServices.',
-  },
-  { group: ['@/data/bootstrap', '@/data/bootstrap/*'], message: 'Moved to @/runtime/appRuntime.' },
-  { group: ['@/data/hooks', '@/data/hooks/*'], message: 'Moved to @/frontend/data/hooks.' },
-  {
-    group: ['@/integration', '@/integration/*', '@/integration/*/**'],
-    message: 'cherryAi moved to @/services/cherryin/signature.',
+    message: 'Screens moved to @/frontend/features/<name>.',
   },
   {
-    group: ['@/hooks/paintings', '@/hooks/paintings/*'],
-    message: 'Moved into @/frontend/features/paintings/hooks/usePaintings.',
+    group: [
+      '@/bootstrap/DataProvider',
+      '@/bootstrap/InitialDataGate',
+      '@/bootstrap/createDataServices',
+    ],
+    message: 'Use AppBootstrapProvider/AppBootstrapGate; the concrete backend graph is private.',
+  },
+  {
+    group: [
+      '@/backend/infrastructure/ai/utils/model',
+      '@/backend/infrastructure/cache',
+      '@/backend/infrastructure/cache/*',
+      '@/backend/infrastructure/cache/*/**',
+    ],
+    message: 'This module moved to its frontend or shared owner under ADR 0011.',
   },
 ];
 
-const noUpwardImport = (layer, groups) => ({
-  files: [`src/${layer}/**/*.{ts,tsx}`],
+const aliasRoots = (roots) =>
+  roots.flatMap((root) => [`@/${root}`, `@/${root}/*`, `@/${root}/*/**`]);
+
+const restrictedImports = (files, patterns) => ({
+  files,
   rules: {
-    '@typescript-eslint/no-restricted-imports': ['error', { patterns: groups }],
+    '@typescript-eslint/no-restricted-imports': ['error', { patterns }],
   },
 });
 
-const uiLayerMessage = (layer) => `src/${layer} must not depend on UI or app layers.`;
+const layerPattern = (roots, message) => ({
+  group: aliasRoots(roots),
+  message,
+});
 
 module.exports = defineConfig([
   expoConfig,
   {
     rules: {
-      // react-hooks/immutability is a React Compiler rule that doesn't understand
-      // react-native-reanimated's SharedValue.value mutation pattern, which is the
-      // idiomatic way to update shared values from worklets and gesture callbacks.
+      // Reanimated SharedValue.value mutation is idiomatic inside worklets and
+      // gesture callbacks, but the React Compiler rule cannot distinguish it.
       'react-hooks/immutability': 'off',
     },
   },
@@ -56,135 +88,131 @@ module.exports = defineConfig([
       'no-restricted-imports': ['error', { patterns: tombstonePatterns }],
     },
   },
-  noUpwardImport('data', [
-    {
-      group: [
-        '@/frontend/features/*',
-        '@/frontend/components/*',
-        '@/app/*',
-        '@/ai',
-        '@/ai/*',
-        '@/frontend/hooks/*',
-      ],
-      message: `${uiLayerMessage('data')} The data layer is the bottom tier.`,
-    },
-    {
-      group: ['@/runtime', '@/runtime/*'],
-      allowTypeImports: true,
-      message:
-        'src/data must not reach the runtime tier at runtime; only type-only imports (e.g. DataServices) are allowed.',
-    },
-  ]),
-  noUpwardImport('ai', [
-    {
-      group: ['@/frontend/features/*', '@/frontend/components/*', '@/app/*', '@/frontend/hooks/*'],
-      message: uiLayerMessage('ai'),
-    },
-    {
-      group: ['@/runtime', '@/runtime/*'],
-      allowTypeImports: true,
-      message:
-        'src/ai is constructed by the runtime tier, never the reverse; type-only imports allowed.',
-    },
-    {
-      group: ['@/data/*', '@/data/*/*', '@/data/*/*/**', '!@/data/types', '!@/data/types/*'],
-      allowTypeImports: true,
-      message:
-        'src/ai may value-import only @/data/types; services and other data modules are injected, so import their types only.',
-    },
-  ]),
-  noUpwardImport('services', [
-    {
-      group: ['@/ai', '@/ai/*'],
-      message:
-        'src/services must not import src/ai — this direction was a cycle (ADR 0010); shared constants live in @/utils.',
-    },
-    {
-      group: [
-        '@/frontend/features/*',
-        '@/frontend/components/*',
-        '@/app/*',
-        '@/frontend/hooks/*',
-        '@/runtime',
-        '@/runtime/*',
-      ],
-      message: uiLayerMessage('services'),
-    },
-  ]),
-  noUpwardImport('runtime', [
-    {
-      group: ['@/frontend/features/*', '@/frontend/components/*', '@/app/*', '@/frontend/hooks/*'],
-      message:
-        'The runtime tier only wires ai/services/data together; feature-owned runtime owners (e.g. ChatRuntime) stay in their feature (ADR 0001).',
-    },
-  ]),
-  {
-    files: [
+  restrictedImports(
+    ['src/frontend/**/*.{ts,tsx}'],
+    [
+      layerPattern(
+        ['app', 'backend', 'bootstrap'],
+        'Frontend may depend only on frontend and shared modules. Cross the backend seam through useBackendModule().',
+      ),
+    ],
+  ),
+  restrictedImports(
+    ['src/backend/**/*.{ts,tsx}'],
+    [
+      layerPattern(
+        ['app', 'bootstrap', 'frontend'],
+        'Backend may depend only on backend and shared modules. Bootstrap owns cross-layer assembly.',
+      ),
+    ],
+  ),
+  restrictedImports(
+    ['src/backend/application/**/*.{ts,tsx}'],
+    [
+      {
+        group: [
+          '@/backend/infrastructure',
+          '@/backend/infrastructure/*',
+          '@/backend/infrastructure/*/**',
+          '../infrastructure',
+          '../infrastructure/**',
+          '../../infrastructure',
+          '../../infrastructure/**',
+          '../../../infrastructure',
+          '../../../infrastructure/**',
+          '../../../../infrastructure',
+          '../../../../infrastructure/**',
+          '../../../../../infrastructure',
+          '../../../../../infrastructure/**',
+        ],
+        message:
+          'Backend application modules receive infrastructure dependencies through their constructor interface.',
+      },
+    ],
+  ),
+  restrictedImports(
+    ['src/shared/**/*.{ts,tsx}'],
+    [
+      layerPattern(
+        ['app', 'backend', 'bootstrap', 'frontend'],
+        'Shared modules must not depend on an upper layer.',
+      ),
+    ],
+  ),
+  restrictedImports(
+    ['src/shared/contracts/**/*.{ts,tsx}', 'src/shared/domain/**/*.{ts,tsx}'],
+    [
+      {
+        group: [
+          'react',
+          'react/*',
+          'react-native',
+          'react-native/*',
+          'react-native-*',
+          'react-native-*/*',
+          'expo',
+          'expo-*',
+          'expo-*/*',
+          '@expo/*',
+          '@expo/*/**',
+        ],
+        message: 'Shared contracts and domain modules must remain platform- and React-independent.',
+      },
+    ],
+  ),
+  restrictedImports(
+    ['src/app/**/*.{ts,tsx}'],
+    [
+      layerPattern(
+        ['app', 'backend'],
+        'Expo Router files may depend only on bootstrap, frontend, and shared modules.',
+      ),
+    ],
+  ),
+  restrictedImports(
+    [
       'src/frontend/components/**/*.{ts,tsx}',
       'src/frontend/data/**/*.{ts,tsx}',
       'src/frontend/hooks/**/*.{ts,tsx}',
-      'src/utils/**/*.{ts,tsx}',
+      'src/frontend/i18n/**/*.{ts,tsx}',
+      'src/frontend/types/**/*.{ts,tsx}',
+      'src/frontend/utils/**/*.{ts,tsx}',
     ],
-    rules: {
-      '@typescript-eslint/no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['@/frontend/features/*', '@/app/*'],
-              message:
-                'Shared UI layers must not depend on features or routes; move the shared piece down instead.',
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    files: ['src/frontend/features/**/*.{ts,tsx}'],
-    rules: {
-      '@typescript-eslint/no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['@/app/*'],
-              message: 'Features must not import route files; routes import features.',
-            },
-            {
-              // Cross-feature imports go through a feature's public surface:
-              // `@/frontend/features/<f>` or `@/frontend/features/<f>/<area>` (two levels). The
-              // exceptions are the sanctioned pure-logic modules documented in
-              // features/chat/input/index.ts, plus the shared SettingSelect
-              // row. Same-feature files use relative paths, which this alias
-              // pattern never matches. Type-only deep imports are allowed.
-              // Gitignore semantics: a `!` exception cannot resurrect a path
-              // whose ancestor directory is banned, so each sanctioned module
-              // needs the classic dance — unban its directory, ban the
-              // directory's children, unban the one module.
-              group: [
-                '@/frontend/features/*/*/*',
-                '@/frontend/features/*/*/*/*',
-                '@/frontend/features/*/*/*/*/*',
-                '@/frontend/features/*/*/*/*/*/*',
-                '!@/frontend/features/chat/input/chatInputLayout',
-                '!@/frontend/features/chat/input/utils',
-                '@/frontend/features/chat/input/utils/*',
-                '!@/frontend/features/chat/input/utils/chatInputAttachments',
-                '!@/frontend/features/chat/input/hooks',
-                '@/frontend/features/chat/input/hooks/*',
-                '!@/frontend/features/chat/input/hooks/useChatInputPhotoPicker',
-                '!@/frontend/features/settings/components',
-                '@/frontend/features/settings/components/*',
-                '!@/frontend/features/settings/components/SettingSelect',
-              ],
-              allowTypeImports: true,
-              message:
-                "Deep cross-feature import: use the feature's public surface (@/frontend/features/<f> or @/frontend/features/<f>/<area>), or add the module to the sanctioned surface deliberately.",
-            },
-          ],
-        },
-      ],
-    },
-  },
+    [
+      {
+        group: ['@/frontend/features/*', '@/frontend/features/*/**'],
+        message:
+          'Shared frontend modules must not depend on features; move the shared capability down instead.',
+      },
+    ],
+  ),
+  restrictedImports(
+    ['src/frontend/features/**/*.{ts,tsx}'],
+    [
+      {
+        // Cross-feature imports go through a feature's public surface:
+        // `@/frontend/features/<feature>` or one documented area below it.
+        // Gitignore-style negations must first unban each ancestor directory.
+        group: [
+          '@/frontend/features/*/*/*',
+          '@/frontend/features/*/*/*/*',
+          '@/frontend/features/*/*/*/*/*',
+          '@/frontend/features/*/*/*/*/*/*',
+          '!@/frontend/features/chat/input/chatInputLayout',
+          '!@/frontend/features/chat/input/utils',
+          '@/frontend/features/chat/input/utils/*',
+          '!@/frontend/features/chat/input/utils/chatInputAttachments',
+          '!@/frontend/features/chat/input/hooks',
+          '@/frontend/features/chat/input/hooks/*',
+          '!@/frontend/features/chat/input/hooks/useChatInputPhotoPicker',
+          '!@/frontend/features/settings/components',
+          '@/frontend/features/settings/components/*',
+          '!@/frontend/features/settings/components/SettingSelect',
+        ],
+        allowTypeImports: true,
+        message:
+          "Deep cross-feature import: use the feature's public surface or add a deliberate sanctioned export.",
+      },
+    ],
+  ),
 ]);
