@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { selectionToolbarGap, selectionToolbarHeight } from './selectionToolbarLayout';
+import { selectionToolbarGap, selectionToolbarHeight } from '../selectionToolbarLayout';
 
 // The message-tab lists (topics + drawings) sit above two mutually-exclusive
 // bottom bars: the app tab bar at rest, and the selection toolbar in edit mode.

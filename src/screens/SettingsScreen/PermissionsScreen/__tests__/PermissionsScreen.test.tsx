@@ -22,10 +22,10 @@ jest.mock('lucide-uniwind/png', () => ({
   MapPinIcon: () => null,
 }));
 jest.mock('@/components/headers', () => ({ BackHeader: () => null }));
-jest.mock('../usePermissionPolicies', () => ({
+jest.mock('../hooks/usePermissionPolicies', () => ({
   usePermissionPolicies: () => mockPolicies,
 }));
-jest.mock('../usePermissionSystemStatuses', () => ({
+jest.mock('../hooks/usePermissionSystemStatuses', () => ({
   usePermissionSystemStatuses: () => ({ statuses: mockStatuses }),
 }));
 jest.mock('../../components/SettingsSection', () => ({

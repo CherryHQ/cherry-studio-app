@@ -14,9 +14,9 @@ import { Platform, ScrollView, Text, View } from 'react-native';
 import { BackHeader } from '@/components/headers';
 
 import { SettingsSection } from '../components/SettingsSection';
+import { usePermissionPolicies } from './hooks/usePermissionPolicies';
+import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
 import { getPermissionSummaryKey, type PermissionKind, permissionConfig } from './permissionConfig';
-import { usePermissionPolicies } from './usePermissionPolicies';
-import { usePermissionSystemStatuses } from './usePermissionSystemStatuses';
 
 const permissionIcons: Record<PermissionKind, ComponentType<PngIconProps>> = {
   calendar: CalendarIcon,

@@ -33,7 +33,7 @@ import {
   useTopicListActions,
   useTopicListTopics,
 } from './context/TopicListProvider';
-import { useTopicSelectionSource } from './context/useTopicSelectionSource';
+import { useTopicSelectionSource } from './hooks/useTopicSelectionSource';
 
 type TopicRowProps = {
   assistant?: Assistant;

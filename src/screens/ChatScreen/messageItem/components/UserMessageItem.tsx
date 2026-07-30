@@ -6,8 +6,8 @@ import Animated from 'react-native-reanimated';
 import type { Message } from '@/data/types/message';
 
 import { MessageParts } from '../../messageContent';
+import { useUserMessageSlideInStyle } from '../slideIn/hooks/useUserMessageSlideInStyle';
 import { useShouldSlideIn } from '../slideIn/MessageSlideInProvider';
-import { useUserMessageSlideInStyle } from '../slideIn/useUserMessageSlideInStyle';
 import { ContextMenu, type ContextMenuAction } from './contextMenu';
 
 type UserMessageItemProps = {

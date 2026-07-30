@@ -127,7 +127,7 @@ jest.mock('@/components/messageTabs', () => ({
   useRegisterSelectionSource: () => undefined,
 }));
 
-jest.mock('@/screens/PaintingScreen/usePaintingSelectionSource', () => ({
+jest.mock('@/screens/PaintingScreen/hooks/usePaintingSelectionSource', () => ({
   usePaintingSelectionSource: () => ({
     copy: { deleteFailed: '', deleteMessage: '', deleteTitle: '' },
     deleteSelected: jest.fn(),

@@ -5,7 +5,7 @@ import type { PermissionPreferenceKey } from '@/data/preference';
 import { useDataServices } from '@/runtime';
 import type { SystemPermissionState } from '@/services/devicePermissions';
 
-import { permissionConfig, permissionKinds } from './permissionConfig';
+import { permissionConfig, permissionKinds } from '../permissionConfig';
 
 export type PermissionSystemStatuses = Partial<
   Record<PermissionPreferenceKey, SystemPermissionState>

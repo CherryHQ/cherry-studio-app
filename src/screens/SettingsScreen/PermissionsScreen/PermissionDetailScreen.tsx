@@ -12,9 +12,9 @@ import { useDataServices } from '@/runtime';
 import type { SystemPermissionState } from '@/services/devicePermissions';
 
 import { SettingsSection } from '../components/SettingsSection';
+import { usePermissionPolicies } from './hooks/usePermissionPolicies';
+import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
 import { isPermissionKind, type PermissionKind, permissionConfig } from './permissionConfig';
-import { usePermissionPolicies } from './usePermissionPolicies';
-import { usePermissionSystemStatuses } from './usePermissionSystemStatuses';
 
 const permissionModes = ['never', 'ask', 'always'] as const satisfies readonly PermissionMode[];
 

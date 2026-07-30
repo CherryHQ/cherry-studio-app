@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 
 import type { SelectionSource } from '@/components/messageTabs';
 
-import { useTopicListActions, useTopicListTopics } from './TopicListProvider';
+import { useTopicListActions, useTopicListTopics } from '../context/TopicListProvider';
 
 // Selection behavior the shared toolbar uses for the topics tab. Built from
 // TopicListProvider data, so this must be called within that provider.

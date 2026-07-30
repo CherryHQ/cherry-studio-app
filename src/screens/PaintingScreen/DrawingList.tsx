@@ -33,8 +33,8 @@ import {
   type ChatInputAttachmentDraft,
   createPhotoAttachmentDraft,
 } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+import { usePaintingSelectionSource } from './hooks/usePaintingSelectionSource';
 import { type PaintingTemplate, PaintingTemplateRow, toPaintingTemplateDraft } from './templates';
-import { usePaintingSelectionSource } from './usePaintingSelectionSource';
 import { distributeMasonryItems } from './utils/masonry';
 import {
   createPaintingDraftHandoff,

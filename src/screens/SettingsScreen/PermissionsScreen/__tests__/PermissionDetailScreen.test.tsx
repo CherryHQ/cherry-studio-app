@@ -41,10 +41,10 @@ jest.mock('@/runtime', () => ({
     },
   }),
 }));
-jest.mock('../usePermissionPolicies', () => ({
+jest.mock('../hooks/usePermissionPolicies', () => ({
   usePermissionPolicies: () => mockPolicies,
 }));
-jest.mock('../usePermissionSystemStatuses', () => ({
+jest.mock('../hooks/usePermissionSystemStatuses', () => ({
   usePermissionSystemStatuses: () => ({ refresh: mockRefresh, statuses: mockStatuses }),
 }));
 jest.mock('../../components/SettingsSection', () => ({

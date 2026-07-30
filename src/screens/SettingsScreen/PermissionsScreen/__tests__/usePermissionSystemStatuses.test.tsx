@@ -2,7 +2,7 @@ import type { EffectCallback } from 'react';
 import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { usePermissionSystemStatuses } from '../usePermissionSystemStatuses';
+import { usePermissionSystemStatuses } from '../hooks/usePermissionSystemStatuses';
 
 const mockGetStatus = jest.fn(async () => 'granted');
 const mockDevicePermission = { getStatusForPreference: mockGetStatus };
