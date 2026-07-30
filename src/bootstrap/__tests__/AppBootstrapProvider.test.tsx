@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { AppBootstrapRuntime } from '@/bootstrap/createAppBootstrapRuntime';
 import type { MobileBackend } from '@/shared/contracts';
+import type { ApiClient } from '@/shared/data/api/types';
 
 import { AppBootstrapGate } from '../AppBootstrapGate';
 import { AppBootstrapProvider, useAppBootstrapState } from '../AppBootstrapProvider';
@@ -37,6 +38,7 @@ function makeRuntime(initializeImplementation: () => Promise<void>): {
     runPostReadyTasks,
     runtime: {
       backend: {} as MobileBackend,
+      dataApi: {} as ApiClient,
       dispose,
       initialize,
       runPostReadyTasks,

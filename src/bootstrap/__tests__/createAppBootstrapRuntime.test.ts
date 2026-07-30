@@ -1,6 +1,8 @@
 import { createAppBootstrapRuntime } from '@/bootstrap/createAppBootstrapRuntime';
 
 const mockBackend = { kind: 'backend' };
+const mockDataApi = { kind: 'data-api' };
+const mockDataApiHandlers = { kind: 'handlers' };
 const mockCache = {
   dispose: jest.fn(),
   init: jest.fn(),
@@ -25,6 +27,12 @@ const mockCreateMobileBackend = jest.fn((_services: unknown) => mockBackend);
 
 jest.mock('@/backend/data/CacheService', () => ({
   CacheService: jest.fn(() => mockCache),
+}));
+jest.mock('@/backend/data/DataApiService', () => ({
+  DataApiService: jest.fn(() => mockDataApi),
+}));
+jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
+  createDataApiHandlers: jest.fn(() => mockDataApiHandlers),
 }));
 jest.mock('@/backend/data/db/DbService', () => ({
   DbService: jest.fn(() => mockDb),
@@ -59,6 +67,7 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockPreference.init).toHaveBeenCalledTimes(1);
     expect(mockBootstrapAppRuntime).toHaveBeenCalledWith(mockServices);
     expect(runtime.backend).toBe(mockBackend);
+    expect(runtime.dataApi).toBe(mockDataApi);
   });
 
   test('disposes backend cache with the concrete service graph', () => {
