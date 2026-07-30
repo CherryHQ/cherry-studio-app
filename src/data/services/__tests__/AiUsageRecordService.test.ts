@@ -1,4 +1,5 @@
 import type { DbService } from '@/data/db/DbService';
+import { aiUsageRecordTable } from '@/data/db/schemas';
 import type { AiUsageCaptureContext, RecordAiInvocationInput } from '../AiUsageRecordService';
 import { AiUsageRecordService } from '../AiUsageRecordService';
 
@@ -168,12 +169,14 @@ function createDatabase() {
       }),
     })),
     select: jest.fn(() => ({
-      from: jest.fn(() => ({
-        where: jest.fn(() => ({
-          limit: jest.fn(async () =>
-            rows.filter(({ requestId }) => requestId === pendingRow?.requestId),
-          ),
-        })),
+      from: jest.fn((table: unknown) => ({
+        where: jest.fn(() => {
+          const matchingRows = rows.filter(({ requestId }) => requestId === pendingRow?.requestId);
+          if (table !== aiUsageRecordTable) return { limit: jest.fn(async () => []) };
+          return Object.assign(Promise.resolve(rows), {
+            limit: jest.fn(async () => matchingRows),
+          });
+        }),
       })),
     })),
   };

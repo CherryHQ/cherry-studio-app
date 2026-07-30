@@ -21,8 +21,6 @@ import {
   finalizeTurnToolApprovals,
   hasPendingToolApproval,
   hasUnresumedToolApproval,
-  mergeMessageStats,
-  statsFromMetadata,
 } from './chatRuntimeMessages';
 import { normalizeAssistantMessageCitations } from './normalizeCitations';
 import { extractMainText, maybeRenameTopicFromConversationSummary } from './topicNaming';
@@ -779,14 +777,8 @@ export class ChatRuntime {
       interruptedTurnApprovalReason,
     );
     const dataParts = input.wasAborted ? latestParts : appendErrorPart(latestParts, input.error);
-    const stats = mergeMessageStats(
-      input.assistantMessage.stats,
-      statsFromMetadata(input.latestAssistantMessage?.metadata),
-    );
-
     return await this.dependencies.services.message.update(input.assistantMessage.id, {
       data: { parts: finalizeInterruptedReasoningParts(dataParts as CherryMessagePart[]) },
-      ...(stats && { stats }),
       status: input.wasAborted ? 'paused' : 'error',
     });
   }
@@ -801,14 +793,8 @@ export class ChatRuntime {
     const parts = (normalizedMessage?.parts ??
       input.assistantMessage.data.parts ??
       []) as CherryMessagePart[];
-    const stats = mergeMessageStats(
-      input.assistantMessage.stats,
-      statsFromMetadata(input.latestAssistantMessage?.metadata),
-    );
-
     return await this.dependencies.services.message.update(input.assistantMessage.id, {
       data: { parts },
-      ...(stats && { stats }),
       status: 'success',
     });
   }

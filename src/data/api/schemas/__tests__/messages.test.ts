@@ -15,4 +15,11 @@ describe('message API schemas', () => {
       }).success,
     ).toBe(false);
   });
+
+  test('rejects caller-owned message stats', () => {
+    expect(
+      CreateMessageSchema.safeParse({ data: { parts: [] }, role: 'assistant', stats: {} }).success,
+    ).toBe(false);
+    expect(UpdateMessageSchema.safeParse({ stats: {} }).success).toBe(false);
+  });
 });

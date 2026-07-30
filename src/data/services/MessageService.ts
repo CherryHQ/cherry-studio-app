@@ -536,7 +536,6 @@ export class MessageService {
           parentId: resolvedParentId,
           role: dto.role,
           siblingsGroupId: dto.siblingsGroupId ?? 0,
-          stats: dto.stats ?? null,
           status: dto.status ?? 'pending',
           topicId,
         })
@@ -589,7 +588,6 @@ export class MessageService {
             parentId: resolvedParentId,
             role: dto.role,
             siblingsGroupId: dto.siblingsGroupId ?? 0,
-            stats: dto.stats ?? null,
             status: dto.status ?? 'pending',
             topicId: input.topicId,
           })
@@ -636,7 +634,6 @@ export class MessageService {
             parentId: userMessage.id,
             role: placeholder.role,
             siblingsGroupId: input.siblingsGroupId ?? 0,
-            stats: placeholder.stats ?? null,
             status: placeholder.status ?? 'pending',
             topicId: input.topicId,
           })
@@ -696,9 +693,6 @@ export class MessageService {
       }
       if (dto.siblingsGroupId !== undefined) {
         updates.siblingsGroupId = dto.siblingsGroupId;
-      }
-      if (dto.stats !== undefined) {
-        updates.stats = dto.stats;
       }
       if (dto.status !== undefined) {
         updates.status = dto.status;

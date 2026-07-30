@@ -5,37 +5,8 @@ import {
   finalizeTurnToolApprovals,
   getPendingToolApprovals,
   hasPendingToolApproval,
-  mergeMessageStats,
   mergeMessagesWithOverlay,
-  statsFromMetadata,
 } from '../chatRuntimeMessages';
-
-describe('statsFromMetadata', () => {
-  test('projects present token fields, dropping absent ones', () => {
-    expect(
-      statsFromMetadata({ totalTokens: 150, promptTokens: 100, completionTokens: 50 }),
-    ).toEqual({
-      totalTokens: 150,
-      promptTokens: 100,
-      completionTokens: 50,
-    });
-  });
-
-  test('includes thoughtsTokens when present', () => {
-    expect(statsFromMetadata({ totalTokens: 10, thoughtsTokens: 4 })).toEqual({
-      totalTokens: 10,
-      thoughtsTokens: 4,
-    });
-  });
-
-  test('returns undefined for undefined metadata', () => {
-    expect(statsFromMetadata(undefined)).toBeUndefined();
-  });
-
-  test('returns undefined when metadata has no token fields', () => {
-    expect(statsFromMetadata({ modelId: 'gpt-5' })).toBeUndefined();
-  });
-});
 
 describe('chat runtime messages', () => {
   test('replaces a persisted placeholder with the streaming overlay', () => {
@@ -163,28 +134,6 @@ describe('tool approvals', () => {
         toolType: 'builtin',
       }),
     ]);
-  });
-
-  test('mergeMessageStats adds what a resumed segment spends', () => {
-    expect(mergeMessageStats(undefined, { totalTokens: 5 })).toEqual({ totalTokens: 5 });
-    expect(mergeMessageStats({ totalTokens: 5 }, undefined)).toEqual({ totalTokens: 5 });
-    expect(
-      mergeMessageStats(
-        { completionTokens: 10, timeCompletionMs: 900, totalTokens: 30 },
-        { completionTokens: 7, timeCompletionMs: 400, totalTokens: 12 },
-      ),
-    ).toEqual({ completionTokens: 17, timeCompletionMs: 1300, totalTokens: 42 });
-  });
-
-  test('mergeMessageStats keeps the first segment time to first token', () => {
-    expect(mergeMessageStats({ timeFirstTokenMs: 100 }, { timeFirstTokenMs: 40 })).toEqual({
-      timeFirstTokenMs: 100,
-    });
-    // The first segment died before its first token: the resumed one owns it.
-    expect(mergeMessageStats({ totalTokens: 1 }, { timeFirstTokenMs: 40 })).toEqual({
-      timeFirstTokenMs: 40,
-      totalTokens: 1,
-    });
   });
 });
 

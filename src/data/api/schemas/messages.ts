@@ -10,7 +10,6 @@ import type {
 import {
   MessageDataSchema,
   MessageRoleSchema,
-  MessageStatsSchema,
   MessageStatusSchema,
   ModelSnapshotSchema,
 } from '@/data/types/message';
@@ -23,7 +22,6 @@ export const CreateMessageSchema = z.strictObject({
   role: MessageRoleSchema,
   setAsActive: z.boolean().optional(),
   siblingsGroupId: z.number().optional(),
-  stats: MessageStatsSchema.optional(),
   status: MessageStatusSchema.optional(),
 });
 export type CreateMessageDto = z.infer<typeof CreateMessageSchema>;
@@ -32,7 +30,6 @@ export const UpdateMessageSchema = z.strictObject({
   data: MessageDataSchema.optional(),
   parentId: z.string().nullable().optional(),
   siblingsGroupId: z.number().optional(),
-  stats: MessageStatsSchema.nullable().optional(),
   status: MessageStatusSchema.optional(),
 });
 export type UpdateMessageDto = z.infer<typeof UpdateMessageSchema>;

@@ -107,7 +107,7 @@ describe('ChatRuntime', () => {
     );
   });
 
-  test('persists token usage stats projected from the final assistant metadata', async () => {
+  test('does not persist stream metadata usage over the durable ledger projection', async () => {
     const services = createServices();
     const runtime = createRuntime({ services });
     const assistantChunk = {
@@ -124,7 +124,6 @@ describe('ChatRuntime', () => {
 
     expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
       data: { parts: assistantChunk.parts },
-      stats: { totalTokens: 150, promptTokens: 100, completionTokens: 50 },
       status: 'success',
     });
   });

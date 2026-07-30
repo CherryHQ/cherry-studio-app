@@ -6,6 +6,7 @@ import { drizzle } from 'drizzle-orm/sqlite-proxy';
 import type { Database, DbService } from '@/data/db/DbService';
 import { schema } from '@/data/db/schemas';
 import type { CherryMessagePart, Message } from '@/data/types/message';
+import { AiUsageRecordService } from '../AiUsageRecordService';
 import { FileEntryService } from '../FileEntryService';
 import { MessageService } from '../MessageService';
 import { PinService } from '../PinService';
@@ -43,6 +44,7 @@ type MigrationJournal = { entries: { tag: string }[] };
  */
 describe('MessageService integration', () => {
   let sqlite: DatabaseSync;
+  let dbService: DbService;
   let service: MessageService;
   let topicService: TopicService;
 
@@ -68,7 +70,7 @@ describe('MessageService integration', () => {
       { casing: 'snake_case', schema },
     ) as unknown as Database;
     let writeTail: Promise<void> = Promise.resolve();
-    const dbService = {
+    dbService = {
       getDb: () => database,
       withWriteTx: async <T>(callback: (tx: Database) => Promise<T>) => {
         const previous = writeTail;
@@ -134,6 +136,97 @@ describe('MessageService integration', () => {
     sqlite.prepare('UPDATE message SET deleted_at = 1 WHERE id = ?').run(softDeleted.id);
 
     await expect(service.findPendingAssistantMessageIds()).resolves.toEqual([pending.id]);
+  });
+
+  test('materializes assistant usage stats from durable invocation records', async () => {
+    const topic = await topicService.create({ name: 'usage projection' });
+    const message = await service.create(topic.id, {
+      data: { parts: [] },
+      role: 'assistant',
+      status: 'pending',
+    });
+    sqlite
+      .prepare('UPDATE message SET stats = ? WHERE id = ?')
+      .run(JSON.stringify({ promptTokens: 999, cost: 9, timeFirstTokenMs: 12 }), message.id);
+    const usageService = new AiUsageRecordService(dbService);
+    const context = {
+      providerId: 'openrouter',
+      providerName: 'OpenRouter',
+      modelId: 'openai/gpt-5',
+      modelName: 'GPT-5',
+      pricingSnapshot: {
+        currency: 'USD' as const,
+        inputPerMillionTokens: 1,
+        outputPerMillionTokens: 2,
+        cacheReadPerMillionTokens: 0.5,
+        capturedAt: '2026-07-30T00:00:00.000Z',
+      },
+      trustProviderReportedCost: true,
+      reportedCostCurrency: 'USD' as const,
+      credentialReceipt: { attribution: 'unknown' as const },
+      source: null,
+      messageRef: { kind: 'chat' as const, id: message.id },
+    };
+
+    await usageService.recordInvocation({
+      requestId: 'request-1',
+      context,
+      modality: 'language',
+      usage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        totalTokens: 120,
+        reasoningTokens: 5,
+        noCacheTokens: 80,
+        cacheReadTokens: 20,
+      },
+      metrics: { timeFirstTokenMs: 100, timeCompletionMs: 900 },
+      completedAt: 1_785_427_200_000,
+    });
+    await usageService.recordInvocation({
+      requestId: 'request-2',
+      context,
+      modality: 'language',
+      usage: { inputTokens: 50, outputTokens: 10, reasoningTokens: 2 },
+      providerCost: { amount: 0.2, currency: 'CNY' },
+      metrics: { timeCompletionMs: 400 },
+      completedAt: 1_785_427_201_000,
+    });
+    await service.update(message.id, { data: { parts: [] }, status: 'success' });
+
+    await expect(service.getById(message.id)).resolves.toMatchObject({
+      stats: {
+        inputTokens: 150,
+        outputTokens: 30,
+        totalTokens: 180,
+        inputTokenDetails: { noCacheTokens: 80, cacheReadTokens: 20 },
+        outputTokenDetails: { textTokens: 23, reasoningTokens: 7 },
+        requestCount: 2,
+        estimatedRequestCount: 0,
+        unpricedRequestCount: 0,
+        costs: [
+          {
+            currency: 'CNY',
+            amount: 0.2,
+            providerReportedRequestCount: 1,
+            computedRequestCount: 0,
+          },
+          {
+            currency: 'USD',
+            amount: 0.00013000000000000002,
+            providerReportedRequestCount: 0,
+            computedRequestCount: 1,
+          },
+        ],
+        providerPerformance: { measuredOutputTokens: 30, generationDurationMs: 1200 },
+        timeFirstTokenMs: 12,
+      },
+    });
+    const persistedStats = JSON.parse(
+      sqlite.prepare('SELECT stats FROM message WHERE id = ?').get(message.id)?.stats as string,
+    ) as Record<string, unknown>;
+    expect(persistedStats).not.toHaveProperty('promptTokens');
+    expect(persistedStats).not.toHaveProperty('cost');
   });
 
   describe('applyToolApprovalDecisions', () => {
