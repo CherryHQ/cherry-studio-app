@@ -8,7 +8,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { BackHeader } from '@/components/headers';
 import { usePreference } from '@/data/hooks';
 import type { PermissionMode, PermissionPreferenceKey } from '@/data/preference';
-import { useDataServices } from '@/data/runtime';
+import { useDataServices } from '@/runtime';
 import type { SystemPermissionState } from '@/services/devicePermissions';
 
 import { SettingsSection } from '../components/SettingsSection';

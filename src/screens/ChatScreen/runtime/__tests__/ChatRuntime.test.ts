@@ -1,10 +1,10 @@
 import type { AiStreamRequest } from '@/ai/types/requests';
 import { loggerService } from '@/core/logger/LoggerService';
-import type { DataServices } from '@/data/services/createDataServices';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
 import type { PreparedInternalFile } from '@/data/types/file';
 import type { CherryMessagePart, CherryUIMessage, Message } from '@/data/types/message';
 import type { Model, UniqueModelId } from '@/data/types/model';
+import type { DataServices } from '@/runtime/createDataServices';
 
 import { ChatRuntime, newTopicRuntimeId } from '../ChatRuntime';
 

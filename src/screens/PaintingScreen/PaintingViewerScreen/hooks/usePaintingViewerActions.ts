@@ -6,8 +6,8 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { queryKeys } from '@/data/api';
-import { useDataServices } from '@/data/runtime';
 import type { Painting } from '@/data/types/painting';
+import { useDataServices } from '@/runtime';
 import { createPaintingDraftHandoff } from '../../utils/paintingDraftHandoff';
 import { createPaintingOutputAttachmentDraft } from '../../utils/paintingOutputAttachment';
 

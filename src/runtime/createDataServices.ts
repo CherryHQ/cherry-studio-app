@@ -3,22 +3,21 @@ import { McpService } from '@/ai/mcp';
 import { ToolService } from '@/ai/tools';
 import { cacheService } from '@/data/cache';
 import type { DbService } from '@/data/db/DbService';
+import { AssistantService } from '@/data/services/AssistantService';
+import { FileEntryService } from '@/data/services/FileEntryService';
+import { GroupService } from '@/data/services/GroupService';
+import { McpServerService } from '@/data/services/McpServerService';
+import { MessageService } from '@/data/services/MessageService';
+import { ModelService } from '@/data/services/ModelService';
+import { PaintingService } from '@/data/services/PaintingService';
+import { PinService } from '@/data/services/PinService';
+import { PreferenceService } from '@/data/services/PreferenceService';
+import { PromptService } from '@/data/services/PromptService';
+import { ProviderService } from '@/data/services/ProviderService';
+import { TagService } from '@/data/services/TagService';
+import { TopicService } from '@/data/services/TopicService';
 import { DevicePermissionService } from '@/services/devicePermissions';
 import { WebSearchService } from '@/services/webSearch/WebSearchService';
-
-import { AssistantService } from './AssistantService';
-import { FileEntryService } from './FileEntryService';
-import { GroupService } from './GroupService';
-import { McpServerService } from './McpServerService';
-import { MessageService } from './MessageService';
-import { ModelService } from './ModelService';
-import { PaintingService } from './PaintingService';
-import { PinService } from './PinService';
-import { PreferenceService } from './PreferenceService';
-import { PromptService } from './PromptService';
-import { ProviderService } from './ProviderService';
-import { TagService } from './TagService';
-import { TopicService } from './TopicService';
 
 export type DataServices = ReturnType<typeof createDataServices>;
 

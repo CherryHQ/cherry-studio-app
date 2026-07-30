@@ -1,8 +1,8 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { runPostReadyTasks } from '@/data/bootstrap/appRuntime';
-import type { DataServices } from '@/data/services/createDataServices';
+import { runPostReadyTasks } from '@/runtime/appRuntime';
+import type { DataServices } from '@/runtime/createDataServices';
 
 import { DataProvider, type DataRuntime, useDataState } from '../DataProvider';
 import { InitialDataGate } from '../InitialDataGate';
@@ -24,11 +24,11 @@ jest.mock('@/data/db/DbService', () => ({
   },
 }));
 
-jest.mock('@/data/services/createDataServices', () => ({
+jest.mock('@/runtime/createDataServices', () => ({
   createDataServices: jest.fn(),
 }));
 
-jest.mock('@/data/bootstrap/appRuntime', () => ({
+jest.mock('@/runtime/appRuntime', () => ({
   runPostReadyTasks: jest.fn(async () => undefined),
 }));
 

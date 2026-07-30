@@ -13,7 +13,7 @@ jest.mock('expo-router', () => ({
     useEffect(effect, [effect]);
   },
 }));
-jest.mock('@/data/runtime', () => ({
+jest.mock('@/runtime', () => ({
   useDataServices: () => ({
     devicePermission: mockDevicePermission,
   }),

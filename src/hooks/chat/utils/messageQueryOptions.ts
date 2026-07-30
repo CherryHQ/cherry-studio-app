@@ -1,8 +1,8 @@
 import type { InfiniteData, QueryClient, QueryFunctionContext } from '@tanstack/react-query';
 
 import { queryKeys } from '@/data/api';
-import type { DataServices } from '@/data/services/createDataServices';
 import type { BranchMessagesResponse } from '@/data/types/message';
+import type { DataServices } from '@/runtime/createDataServices';
 import { messageWindowPolicy } from './messageWindowPolicy';
 
 export const initialMessagesPageSize = messageWindowPolicy.initialFetchCount;

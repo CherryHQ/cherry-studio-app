@@ -35,7 +35,7 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('@/data/runtime', () => ({
+jest.mock('@/runtime', () => ({
   useDataServices: () => ({ painting: { delete: jest.fn() } }),
 }));
 

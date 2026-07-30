@@ -3,7 +3,6 @@ import { readUIMessageStream } from 'ai';
 import { toCherryUIMessage } from '@/ai/messages/messageConverter';
 import { serializeError } from '@/ai/utils/serializeError';
 import { loggerService } from '@/core/logger/LoggerService';
-import type { DataServices } from '@/data/services/createDataServices';
 import { discardPreparedFiles, prepareMessageParts } from '@/data/services/fileStorage';
 import type {
   CherryMessagePart,
@@ -15,6 +14,7 @@ import type { Model, UniqueModelId } from '@/data/types/model';
 import { isUniqueModelId } from '@/data/types/model';
 import type { Topic } from '@/data/types/topic';
 import { type CherryReasoningMeta, readCherryMeta, withCherryMeta } from '@/data/types/uiParts';
+import type { DataServices } from '@/runtime/createDataServices';
 
 import {
   applyStreamingMessage,

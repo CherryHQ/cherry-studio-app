@@ -9,8 +9,8 @@ import {
   useInfiniteQuery,
   useQuery,
 } from '@tanstack/react-query';
-import { useDataServices } from '@/data/runtime';
-import type { DataServices } from '@/data/services/createDataServices';
+import { useDataServices } from '@/runtime';
+import type { DataServices } from '@/runtime/createDataServices';
 
 type DataQueryFunction<TData, TQueryKey extends QueryKey> = (
   services: DataServices,

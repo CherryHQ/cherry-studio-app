@@ -1,8 +1,8 @@
 import { loggerService } from '@logger';
 import { Uniwind } from 'uniwind';
 import { ThemeMode } from '@/data/preference';
-import type { DataServices } from '@/data/services/createDataServices';
 import { initI18n } from '@/i18n';
+import type { DataServices } from '@/runtime/createDataServices';
 
 const logger = loggerService.withContext('bootstrapAppRuntime');
 

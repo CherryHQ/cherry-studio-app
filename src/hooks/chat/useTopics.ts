@@ -3,9 +3,9 @@ import { useCallback, useMemo } from 'react';
 import { queryKeys } from '@/data/api';
 import type { UpdateTopicDto } from '@/data/api/schemas/topics';
 import { useDataInfiniteQuery, useDataQuery } from '@/data/hooks/useDataQuery';
-import { useDataServices } from '@/data/runtime';
 import type { CursorPaginationResponse } from '@/data/types/apiTypes';
 import type { Topic } from '@/data/types/topic';
+import { useDataServices } from '@/runtime';
 import { useHydrateTopicDetails } from './useHydrateTopicDetails';
 import { getMessagesQueryKey } from './utils/messageQueryOptions';
 

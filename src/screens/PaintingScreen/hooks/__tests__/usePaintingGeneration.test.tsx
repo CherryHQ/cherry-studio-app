@@ -8,7 +8,7 @@ const mockCreatePainting = jest.fn();
 const mockReplaceOutputs = jest.fn();
 const mockSyncPaintingQueries = jest.fn(async () => undefined);
 
-jest.mock('@/data/runtime', () => ({
+jest.mock('@/runtime', () => ({
   useDataServices: () => ({
     ai: { generateImage: mockGenerateImage },
     painting: {

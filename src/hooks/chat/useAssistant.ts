@@ -3,8 +3,8 @@ import { useCallback } from 'react';
 import { queryKeys } from '@/data/api';
 import type { CreateAssistantDto, UpdateAssistantDto } from '@/data/api/schemas/assistants';
 import { useDataQuery } from '@/data/hooks';
-import { useDataServices } from '@/data/runtime';
 import { type Assistant } from '@/data/types/assistant';
+import { useDataServices } from '@/runtime';
 
 const ASSISTANTS_LIST_LIMIT = 500;
 const EMPTY_ASSISTANTS: readonly Assistant[] = Object.freeze([]);

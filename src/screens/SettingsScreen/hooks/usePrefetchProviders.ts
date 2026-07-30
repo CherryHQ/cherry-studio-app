@@ -3,8 +3,8 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 
 import { queryKeys } from '@/data/api';
-import { useDataServices } from '@/data/runtime';
-import type { DataServices } from '@/data/services/createDataServices';
+import { useDataServices } from '@/runtime';
+import type { DataServices } from '@/runtime/createDataServices';
 
 export function prefetchProviders(services: DataServices, queryClient: QueryClient) {
   return queryClient.prefetchQuery({

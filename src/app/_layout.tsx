@@ -13,8 +13,9 @@ import { withUniwind } from 'uniwind';
 
 import { NavigationThemeProvider } from '@/components/navigation';
 import { isIOS, isLiquidGlassAvailable } from '@/config/constants';
-import { DataProvider, InitialDataGate, QueryProvider } from '@/data';
-import { bootstrapAppRuntime } from '@/data/bootstrap/appRuntime';
+import { QueryProvider } from '@/data';
+import { DataProvider, InitialDataGate } from '@/runtime';
+import { bootstrapAppRuntime } from '@/runtime/appRuntime';
 
 // Hold the native splash across data-runtime init so the gate never exposes a
 // blank frame. `DataProvider` calls `SplashScreen.hideAsync()` once init settles.

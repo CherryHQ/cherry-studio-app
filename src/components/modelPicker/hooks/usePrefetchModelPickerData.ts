@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { queryKeys } from '@/data/api';
-import { useDataServices } from '@/data/runtime';
+import { useDataServices } from '@/runtime';
 
 const modelPickerPrefetchStaleTime = 1000 * 60 * 5;
 

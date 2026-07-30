@@ -1,4 +1,4 @@
-import type { DataServices } from '@/data/services/createDataServices';
+import type { DataServices } from '@/runtime/createDataServices';
 
 import { bootstrapAppRuntime, runPostReadyTasks } from '../appRuntime';
 

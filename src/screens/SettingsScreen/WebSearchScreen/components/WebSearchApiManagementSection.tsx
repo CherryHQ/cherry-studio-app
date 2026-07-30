@@ -11,7 +11,7 @@ import type {
   WebSearchProviderOverrides,
 } from '@/data/preference';
 import type { WebSearchProviderPreset } from '@/data/presets/webSearchProviders';
-import { useDataServices } from '@/data/runtime';
+import { useDataServices } from '@/runtime';
 import { WebSearchApiServiceFieldGroup } from '../apiService/components/WebSearchApiServiceFields';
 import {
   WebSearchApiManagementContext,

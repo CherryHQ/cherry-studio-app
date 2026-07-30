@@ -9,9 +9,9 @@
  */
 
 import { loggerService } from '@/core/logger/LoggerService';
-import type { DataServices } from '@/data/services/createDataServices';
 import type { CherryMessagePart } from '@/data/types/message';
 import { isUniqueModelId, type UniqueModelId } from '@/data/types/model';
+import type { DataServices } from '@/runtime/createDataServices';
 
 const logger = loggerService.withContext('topicNaming');
 

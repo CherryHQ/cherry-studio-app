@@ -4,8 +4,8 @@ import type { McpServerRuntimeSummary } from '@/ai/mcp';
 import { queryKeys } from '@/data/api';
 import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/data/api/schemas/mcpServers';
 import { useDataQuery } from '@/data/hooks';
-import { useDataServices } from '@/data/runtime';
 import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
+import { useDataServices } from '@/runtime';
 
 const EMPTY_MCP_SERVERS: readonly StreamableHttpMcpServer[] = Object.freeze([]);
 const EMPTY_MCP_RUNTIME_SUMMARIES: Readonly<Record<string, McpServerRuntimeSummary>> =

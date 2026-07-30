@@ -3,10 +3,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { queryKeys } from '@/data/api';
 import { useDataMutation } from '@/data/hooks';
-import type { DataServices } from '@/data/services/createDataServices';
 import type { Topic } from '@/data/types/topic';
 import { usePins, useTopics } from '@/hooks/chat';
 import { prefetchTopicMessages } from '@/hooks/chat/utils/messageQueryOptions';
+import type { DataServices } from '@/runtime/createDataServices';
 
 import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
 
@@ -48,7 +48,7 @@ jest.mock('@/data/hooks', () => ({
   useDataMutation: jest.fn(),
 }));
 
-jest.mock('@/data/runtime', () => ({
+jest.mock('@/runtime', () => ({
   useDataServices: () => mockServices,
 }));
 

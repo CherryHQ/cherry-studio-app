@@ -1,7 +1,5 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import { useCallback, useRef, useState } from 'react';
-
-import { useDataServices } from '@/data/runtime';
 import {
   discardPreparedFiles,
   imageUriToDataUrl,
@@ -11,6 +9,7 @@ import {
 import { parseUniqueModelId, type UniqueModelId } from '@/data/types/model';
 import type { Painting } from '@/data/types/painting';
 import { useSyncPaintingQueries } from '@/hooks/paintings';
+import { useDataServices } from '@/runtime';
 import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
 
 export type PaintingGenerationStatus = 'idle' | 'generating' | 'revealing';

@@ -33,7 +33,7 @@ jest.mock('@tanstack/react-query', () => ({
   }),
 }));
 
-jest.mock('@/data/runtime', () => ({
+jest.mock('@/runtime', () => ({
   useDataServices: () => ({
     mcp: {
       invalidateServer: mockInvalidateServer,

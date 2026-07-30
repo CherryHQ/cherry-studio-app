@@ -1,9 +1,8 @@
 import * as SplashScreen from 'expo-splash-screen';
 import { createContext, type PropsWithChildren, use, useEffect, useMemo, useState } from 'react';
-
-import { runPostReadyTasks } from '@/data/bootstrap/appRuntime';
 import { DbService } from '@/data/db/DbService';
-import { createDataServices, type DataServices } from '@/data/services/createDataServices';
+import { runPostReadyTasks } from '@/runtime/appRuntime';
+import { createDataServices, type DataServices } from '@/runtime/createDataServices';
 
 /** The long-lived resources owned by `DataProvider`. Injectable so tests can
  * drive the startup sequence without opening a real SQLite database. */

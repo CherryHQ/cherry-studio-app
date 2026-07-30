@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { CHERRYIN_CONFIG } from '@/config/constants';
 import { queryKeys } from '@/data/api';
 import { useDataMutation, useDataQuery } from '@/data/hooks';
-import { useDataServices } from '@/data/runtime';
+import { useDataServices } from '@/runtime';
 import { CherryInOauthService } from '@/services/CherryInOauthService';
 
 const { makeRedirectUri, useAuthRequest, ResponseType } = AuthSession;

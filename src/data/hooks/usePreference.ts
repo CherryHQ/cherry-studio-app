@@ -5,7 +5,7 @@ import type {
   PreferenceUpdateOptions,
 } from '@/data/preference';
 import { getDefaultValue } from '@/data/preference';
-import { useDataServices } from '@/data/runtime';
+import { useDataServices } from '@/runtime';
 
 type PreferenceSetter<K extends PreferenceKeyType> = (
   value: PreferenceDefaultScopeType[K],

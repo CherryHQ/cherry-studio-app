@@ -6,13 +6,13 @@ import { MODEL_SETTING_PREFERENCE_KEYS } from '@/components/modelPicker/utils/mo
 import { loggerService } from '@/core/logger/LoggerService';
 import { queryKeys } from '@/data/api';
 import { useDataMutation } from '@/data/hooks';
-import { useDataServices } from '@/data/runtime';
-import type { DataServices } from '@/data/services/createDataServices';
 import { isUniqueModelId } from '@/data/types/model';
 import type { Topic } from '@/data/types/topic';
 import { usePins, useTopics } from '@/hooks/chat';
 import { getMessagesQueryKey, prefetchTopicMessages } from '@/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/hooks/chat/utils/messageWindowPolicy';
+import { useDataServices } from '@/runtime';
+import type { DataServices } from '@/runtime/createDataServices';
 
 const MODEL_DETAIL_PREFETCH_STALE_TIME_MS = 1000 * 60 * 5;
 

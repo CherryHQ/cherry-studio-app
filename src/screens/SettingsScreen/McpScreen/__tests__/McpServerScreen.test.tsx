@@ -85,7 +85,7 @@ jest.mock('@/core/logger/LoggerService', () => ({
   loggerService: { withContext: () => ({ error: jest.fn() }) },
 }));
 
-jest.mock('@/data/runtime', () => ({
+jest.mock('@/runtime', () => ({
   useDataServices: () => ({ mcp: { getServerInfo: mockGetServerInfo } }),
 }));
 

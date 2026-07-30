@@ -4,9 +4,9 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { queryKeys } from '@/data/api';
-import { useDataServices } from '@/data/runtime';
 import type { EndpointType } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
+import { useDataServices } from '@/runtime';
 
 import {
   buildProviderModelAddInputs,

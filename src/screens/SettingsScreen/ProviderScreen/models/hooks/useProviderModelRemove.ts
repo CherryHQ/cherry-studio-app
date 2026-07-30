@@ -4,8 +4,8 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePreference } from '@/data/hooks';
-import { useDataServices } from '@/data/runtime';
 import type { Model, UniqueModelId } from '@/data/types/model';
+import { useDataServices } from '@/runtime';
 
 import { refreshProviderModelQueries } from '../utils/refreshProviderModelQueries';
 
