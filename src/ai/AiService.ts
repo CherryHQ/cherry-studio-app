@@ -21,7 +21,6 @@ import {
   type BuildAgentParamsDependencies,
   getCustomParameters,
 } from './runtime/aiSdk/params/buildAgentParams';
-import { instrumentBackgroundStreamTest } from './streamManager/instrumentBackgroundStreamTest';
 import type { AppProviderSettingsMap } from './types';
 import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/requests';
 import { splitImageParamValues } from './utils/imageOptions';
@@ -117,10 +116,7 @@ export class AiService {
       options,
     });
 
-    return instrumentBackgroundStreamTest(agent.stream(preparedMessages, signal), {
-      messageId: request.messageId,
-      modelId: model.id,
-    });
+    return agent.stream(preparedMessages, signal);
   }
 
   // ── Non-streaming text generation (agent.generate) ──

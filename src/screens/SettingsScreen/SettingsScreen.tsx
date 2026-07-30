@@ -1,5 +1,6 @@
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
+import { Switch } from 'heroui-native/switch';
 import {
   CircleUserRoundIcon,
   CloudIcon,
@@ -7,13 +8,14 @@ import {
   EarthIcon,
   GlobeIcon,
   InfoIcon,
+  RadioIcon,
   ShieldCheckIcon,
   SparklesIcon,
   SunIcon,
 } from 'lucide-uniwind/png';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,6 +36,9 @@ export default function SettingsScreen() {
   const { theme } = useUniwind();
   const tabBarHeight = useBottomTabBarHeight();
   const [userName] = usePreference('app.user.name');
+  const [backgroundReplyEnabled, setBackgroundReplyEnabled] = usePreference(
+    'chat.background_reply.enabled',
+  );
   const settingPreferences = useSettingPreferences();
   const prefetchProviders = usePrefetchProviders();
   const { lockProgress, onScroll, scrollY, toggleHeroLock } = useProfileHeaderAnimation();
@@ -80,6 +85,24 @@ export default function SettingsScreen() {
               },
             ]}
           />
+          {Platform.OS === 'ios' ? (
+            <SettingsSection
+              items={[
+                {
+                  accessory: (
+                    <Switch
+                      accessibilityLabel={t('settings.items.backgroundReply')}
+                      isSelected={backgroundReplyEnabled}
+                      onSelectedChange={(enabled) => void setBackgroundReplyEnabled(enabled)}
+                    />
+                  ),
+                  icon: RadioIcon,
+                  onPress: () => void setBackgroundReplyEnabled(!backgroundReplyEnabled),
+                  title: t('settings.items.backgroundReply'),
+                },
+              ]}
+            />
+          ) : null}
           <SettingsSection
             items={[
               {

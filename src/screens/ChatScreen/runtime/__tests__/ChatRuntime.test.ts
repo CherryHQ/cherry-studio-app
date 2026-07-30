@@ -5,6 +5,7 @@ import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assista
 import type { PreparedInternalFile } from '@/data/types/file';
 import type { CherryMessagePart, CherryUIMessage, Message } from '@/data/types/message';
 import type { Model, UniqueModelId } from '@/data/types/model';
+import type { BackgroundReplyLifecycle, BackgroundReplyTurn } from '@/services/backgroundReply';
 
 import { ChatRuntime, newTopicRuntimeId } from '../ChatRuntime';
 
@@ -26,6 +27,11 @@ jest.mock('ai', () => ({
 jest.mock('@/data/services/fileStorage', () => ({
   discardPreparedFiles: (...args: unknown[]) => mockDiscardPreparedFiles(...args),
   prepareMessageParts: (parts: readonly CherryMessagePart[]) => mockPrepareMessageParts(parts),
+}));
+
+jest.mock('@/i18n', () => ({
+  __esModule: true,
+  default: { t: (key: string) => key },
 }));
 
 describe('ChatRuntime', () => {
@@ -78,6 +84,63 @@ describe('ChatRuntime', () => {
     });
     expect(invalidateTopicMessages).toHaveBeenCalledWith('topic-1');
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  test('drives the background reply lifecycle from the assembled assistant stream', async () => {
+    const services = createServices();
+    const turn = createBackgroundReplyTurn();
+    const backgroundReply: BackgroundReplyLifecycle = {
+      startTurn: jest.fn(() => turn),
+    };
+    const runtime = createRuntime({ backgroundReply, services });
+    const firstChunk = createUiMessage('assistant-1', 'hello');
+    const secondChunk = createUiMessage('assistant-1', 'hello world');
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([firstChunk, secondChunk]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(backgroundReply.startTurn).toHaveBeenCalledWith({
+      assistantName: 'Assistant',
+      topicId: 'topic-1',
+    });
+    expect(turn.update).toHaveBeenNthCalledWith(1, firstChunk);
+    expect(turn.update).toHaveBeenNthCalledWith(2, secondChunk);
+    expect(turn.finish).toHaveBeenCalledWith('completed');
+    expect(turn.awaitApproval).not.toHaveBeenCalled();
+  });
+
+  test('falls back to the localized assistant name when assistant and model names are empty', async () => {
+    const services = createServices();
+    services.assistant.getById = jest.fn(async () => ({
+      ...createAssistant('assistant-1', 'provider::model' as UniqueModelId),
+      name: '',
+    }));
+    services.model.getById = jest.fn(async () => ({
+      ...createModel(),
+      name: ' ',
+    }));
+    const backgroundReply: BackgroundReplyLifecycle = {
+      startTurn: jest.fn(() => createBackgroundReplyTurn()),
+    };
+    const runtime = createRuntime({ backgroundReply, services });
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterable([createUiMessage('assistant-1', 'hello')]),
+    );
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(backgroundReply.startTurn).toHaveBeenCalledWith({
+      assistantName: 'chat.backgroundReply.assistant',
+      topicId: 'topic-1',
+    });
   });
 
   test('persists file parts from the send payload', async () => {
@@ -816,7 +879,11 @@ describe('ChatRuntime', () => {
   test('persists success, enters awaiting-approval, and skips naming while approval is pending', async () => {
     const services = createServices();
     services.ai.generateText = jest.fn(async () => ({ text: 'Should Not Name' }));
-    const runtime = createRuntime({ services });
+    const turn = createBackgroundReplyTurn();
+    const runtime = createRuntime({
+      backgroundReply: { startTurn: jest.fn(() => turn) },
+      services,
+    });
     const approvalChunk = {
       id: 'assistant-1',
       parts: [createApprovalPart('approval-1')],
@@ -835,12 +902,18 @@ describe('ChatRuntime', () => {
       status: 'success',
     });
     expect(services.ai.generateText).not.toHaveBeenCalled();
+    expect(turn.awaitApproval).toHaveBeenCalledWith(approvalChunk);
+    expect(turn.finish).not.toHaveBeenCalled();
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('awaiting-approval');
   });
 
   test('settles pending approvals terminally when the turn is aborted mid-stream', async () => {
     const services = createServices();
-    const runtime = createRuntime({ services });
+    const turn = createBackgroundReplyTurn();
+    const runtime = createRuntime({
+      backgroundReply: { startTurn: jest.fn(() => turn) },
+      services,
+    });
     const approvalChunk = {
       id: 'assistant-1',
       parts: [
@@ -878,6 +951,7 @@ describe('ChatRuntime', () => {
       status: 'paused',
     });
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+    expect(turn.finish).toHaveBeenCalledWith('cancelled');
   });
 
   test('respondToolApproval resumes the same assistant message with the pinned row model', async () => {
@@ -1493,18 +1567,35 @@ async function waitUntil(predicate: () => boolean) {
 }
 
 function createRuntime(input: {
+  backgroundReply?: BackgroundReplyLifecycle;
   invalidateTopicMessages?: (topicId: string) => Promise<void>;
   invalidateTopics?: () => Promise<void>;
   openTopic?: (topicId: string) => void;
   services: DataServices;
 }) {
   return new ChatRuntime({
+    backgroundReply: input.backgroundReply ?? createBackgroundReplyLifecycle(),
     services: input.services,
     invalidateTopics: input.invalidateTopics ?? jest.fn(async () => undefined),
     invalidateTopicMessages:
       input.invalidateTopicMessages ?? jest.fn(async (_topicId: string) => undefined),
     openTopic: input.openTopic ?? jest.fn(),
   });
+}
+
+function createBackgroundReplyLifecycle(): BackgroundReplyLifecycle {
+  return {
+    startTurn: jest.fn(() => createBackgroundReplyTurn()),
+  };
+}
+
+function createBackgroundReplyTurn(): BackgroundReplyTurn {
+  return {
+    ready: Promise.resolve(),
+    awaitApproval: jest.fn(),
+    finish: jest.fn(),
+    update: jest.fn(),
+  };
 }
 
 function createServices() {
@@ -1517,7 +1608,7 @@ function createServices() {
       streamText: jest.fn(async () => new ReadableStream()),
     },
     assistant: {
-      getById: jest.fn(),
+      getById: jest.fn(async () => createAssistant('assistant-1', model.id)),
     },
     message: {
       applyToolApprovalDecisions: jest.fn(async () => ({

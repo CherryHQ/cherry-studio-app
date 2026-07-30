@@ -9,7 +9,7 @@ import {
 describe('preference defaults', () => {
   test('keeps the desktop preference surface and mobile permission policies', () => {
     expect(getPreferenceKeys()).toEqual(Object.keys(DefaultPreferences.default));
-    expect(getPreferenceKeys()).toHaveLength(236);
+    expect(getPreferenceKeys()).toHaveLength(237);
 
     expect(getPreferenceKeys()).toEqual(
       expect.arrayContaining([
@@ -67,7 +67,7 @@ describe('preference defaults', () => {
     expect(isPreferenceKey('feature.translate.model_prompt')).toBe(true);
     expect(isPreferenceKey('permissions.location_read')).toBe(true);
     expect(isPreferenceKey('BootConfig.example')).toBe(false);
-    expect(Object.keys(DefaultPreferences.default)).toHaveLength(236);
+    expect(Object.keys(DefaultPreferences.default)).toHaveLength(237);
   });
 
   test('keeps permission preferences safe by default', () => {

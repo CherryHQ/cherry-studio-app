@@ -15,6 +15,8 @@ import type { Model, UniqueModelId } from '@/data/types/model';
 import { isUniqueModelId } from '@/data/types/model';
 import type { Topic } from '@/data/types/topic';
 import { type CherryReasoningMeta, readCherryMeta, withCherryMeta } from '@/data/types/uiParts';
+import i18n from '@/i18n';
+import type { BackgroundReplyLifecycle } from '@/services/backgroundReply';
 
 import {
   applyStreamingMessage,
@@ -72,6 +74,7 @@ export type ChatRuntimeToolApprovalInput = {
 };
 
 type ChatRuntimeDependencies = {
+  backgroundReply: BackgroundReplyLifecycle;
   invalidateTopicMessages: (topicId: string) => Promise<void>;
   invalidateTopics: () => Promise<void>;
   openTopic: (topicId: string) => void;
@@ -598,8 +601,13 @@ export class ChatRuntime {
     const { abortController } = activeTurn;
     let latestAssistantMessage: CherryUIMessage | undefined;
     let terminalAssistantMessage: Message | undefined;
+    const backgroundReply = this.dependencies.backgroundReply.startTurn({
+      assistantName: await this.resolveBackgroundAssistantName(topic, model),
+      topicId,
+    });
 
     try {
+      await backgroundReply.ready;
       const stream = await this.dependencies.services.ai.streamText({
         assistantId: topic.assistantId,
         chatId: topicId,
@@ -617,6 +625,7 @@ export class ChatRuntime {
         terminateOnError: true,
       })) {
         latestAssistantMessage = nextAssistantMessage;
+        backgroundReply.update(nextAssistantMessage);
         throwIfAborted(abortController.signal);
         this.setTurnSnapshot(topicId, {
           hasHistoryBeforePendingTurn: input.hasHistoryBeforePendingTurn,
@@ -638,6 +647,11 @@ export class ChatRuntime {
       }
 
       const isAwaitingApproval = hasPendingToolApproval(finalParts);
+      if (isAwaitingApproval) {
+        backgroundReply.awaitApproval(latestAssistantMessage);
+      } else {
+        backgroundReply.finish('completed');
+      }
       terminalAssistantMessage = await this.persistSuccessfulAssistantMessage({
         assistantMessage,
         latestAssistantMessage,
@@ -653,6 +667,7 @@ export class ChatRuntime {
         });
       }
     } catch (error) {
+      backgroundReply.finish(abortController.signal.aborted ? 'cancelled' : 'failed');
       terminalAssistantMessage = await this.settleFailedTurn({
         assistantMessage,
         error,
@@ -864,6 +879,24 @@ export class ChatRuntime {
     }
 
     return model;
+  }
+
+  private async resolveBackgroundAssistantName(topic: Topic, model: Model): Promise<string> {
+    const fallbackName = model.name.trim() || i18n.t('chat.backgroundReply.assistant');
+    if (!topic.assistantId) return fallbackName;
+
+    try {
+      return (
+        (await this.dependencies.services.assistant.getById(topic.assistantId)).name.trim() ||
+        fallbackName
+      );
+    } catch (error) {
+      logger.warn('Failed to resolve assistant name for background reply', toError(error), {
+        assistantId: topic.assistantId,
+        topicId: topic.id,
+      });
+      return fallbackName;
+    }
   }
 
   private async resolveModelId(

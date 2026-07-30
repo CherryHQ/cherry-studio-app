@@ -52,6 +52,12 @@
       "react-native-bottom-tabs",
       "expo-dev-client",
       [
+        "expo-widgets",
+        {
+          "enablePushNotifications": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#FFFFFF",

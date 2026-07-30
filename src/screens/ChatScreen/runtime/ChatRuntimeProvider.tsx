@@ -13,6 +13,7 @@ import {
 
 import { useDataServices } from '@/data/runtime';
 import { getMessagesQueryKey } from '@/hooks/chat/utils/messageQueryOptions';
+import { BackgroundReplyService } from '@/services/backgroundReply';
 
 import {
   ChatRuntime,
@@ -39,9 +40,13 @@ export function ChatRuntimeProvider({ children }: PropsWithChildren) {
   const pathname = usePathname();
   const router = useRouter();
   const [navigation] = useState(() => createChatRuntimeNavigation({ pathname, router }));
+  const [backgroundReply] = useState(
+    () => new BackgroundReplyService({ preference: services.preference }),
+  );
   const [runtime] = useState(
     () =>
       new ChatRuntime({
+        backgroundReply,
         services,
         invalidateTopics: async () => {
           await queryClient.invalidateQueries({ queryKey: ['/topics'] });
@@ -57,7 +62,13 @@ export function ChatRuntimeProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     navigation.update({ pathname, router });
   }, [navigation, pathname, router]);
-  useEffect(() => () => runtime.dispose(), [runtime]);
+  useEffect(
+    () => () => {
+      runtime.dispose();
+      backgroundReply.dispose();
+    },
+    [backgroundReply, runtime],
+  );
 
   return <ChatRuntimeContext value={contextValue}>{children}</ChatRuntimeContext>;
 }
