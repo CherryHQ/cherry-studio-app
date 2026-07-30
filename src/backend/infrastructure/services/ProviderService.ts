@@ -2,7 +2,6 @@ import { inferAdapterFamily } from '@cherrystudio/provider-registry';
 import { asc, eq, inArray } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
-import type { CacheService } from '@/backend/infrastructure/cache';
 import type { DbService } from '@/backend/infrastructure/db/DbService';
 import { userModelTable } from '@/backend/infrastructure/db/schemas/userModel';
 import type {
@@ -225,10 +224,11 @@ function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
 }
 
 export class ProviderService {
+  private readonly lastUsedApiKeyIds = new Map<string, string>();
+
   constructor(
     private readonly dbService: DbService,
     private readonly pinService: PinService,
-    private readonly cacheService: CacheService,
   ) {}
 
   private get db() {
@@ -319,21 +319,17 @@ export class ProviderService {
       return enabledKeys[0].key;
     }
 
-    // Round-robin via the CacheService memory tier, same key as the desktop
-    // main-process ProviderService. The schema default is '' so a fresh
-    // provider falls into the falsy branch.
-    const cacheKey = `settings.provider.${providerId}.last_used_key_id` as const;
-    const lastUsedKeyId = this.cacheService.get(cacheKey);
+    const lastUsedKeyId = this.lastUsedApiKeyIds.get(providerId);
 
     if (!lastUsedKeyId) {
-      this.cacheService.set(cacheKey, enabledKeys[0].id);
+      this.lastUsedApiKeyIds.set(providerId, enabledKeys[0].id);
       return enabledKeys[0].key;
     }
 
     const currentIndex = enabledKeys.findIndex((key) => key.id === lastUsedKeyId);
     const nextIndex = (currentIndex + 1) % enabledKeys.length;
     const nextKey = enabledKeys[nextIndex];
-    this.cacheService.set(cacheKey, nextKey.id);
+    this.lastUsedApiKeyIds.set(providerId, nextKey.id);
 
     return nextKey.key;
   }
@@ -498,7 +494,7 @@ export class ProviderService {
       }
     });
 
-    this.cacheService.delete(`settings.provider.${providerId}.last_used_key_id` as const);
+    this.lastUsedApiKeyIds.delete(providerId);
   }
 
   async batchUpsert(inputs: CreateProviderInput[]): Promise<void> {

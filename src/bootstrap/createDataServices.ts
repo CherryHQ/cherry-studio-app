@@ -1,7 +1,6 @@
 import { AiService } from '@/backend/infrastructure/ai/AiService';
 import { McpService } from '@/backend/infrastructure/ai/mcp';
 import { ToolService } from '@/backend/infrastructure/ai/tools';
-import { cacheService } from '@/backend/infrastructure/cache';
 import type { DbService } from '@/backend/infrastructure/db/DbService';
 import { DevicePermissionService } from '@/backend/infrastructure/integrations/devicePermissions';
 import { WebSearchService } from '@/backend/infrastructure/integrations/webSearch/WebSearchService';
@@ -25,7 +24,7 @@ export function createDataServices(dbService: DbService) {
   const preference = new PreferenceService(dbService);
   const devicePermission = new DevicePermissionService();
   const pin = new PinService(dbService);
-  const provider = new ProviderService(dbService, pin, cacheService);
+  const provider = new ProviderService(dbService, pin);
   const model = new ModelService(dbService, preference, pin);
   const tag = new TagService(dbService);
   const group = new GroupService(dbService);

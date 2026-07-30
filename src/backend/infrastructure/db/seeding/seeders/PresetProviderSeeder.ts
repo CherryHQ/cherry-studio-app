@@ -1,6 +1,5 @@
 import type { ProtoProviderConfig } from '@cherrystudio/provider-registry';
 import { buildRuntimeEndpointConfigs, ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import { cacheService } from '@/backend/infrastructure/cache';
 import { PinService } from '@/backend/infrastructure/services/PinService';
 import { providerRegistryService } from '@/backend/infrastructure/services/ProviderRegistryService';
 import {
@@ -93,7 +92,7 @@ export class PresetProviderSeeder implements DatabaseSeeder {
       providerId: cherryAiProviderId,
     });
 
-    const providerService = new ProviderService(dbService, new PinService(dbService), cacheService);
+    const providerService = new ProviderService(dbService, new PinService(dbService));
     await providerService.batchUpsert(rows);
 
     // CherryAI is Cherry's own built-in service rather than something the user
