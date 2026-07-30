@@ -20,7 +20,7 @@ that the messages shell hosts, plus the nested viewer and conversation screens.
   imports as screen-private modules within this one tree.
 - `templates/` holds the bundled image-generation prompt templates and their preview row/sheet.
 - `DrawingList.tsx` is the drawings tab body; `usePaintingSelectionSource.ts` wraps
-  `src/hooks/paintings` into the `messageTabs` selection-source shape the shell consumes.
+  `hooks/usePaintings` into the `messageTabs` selection-source shape the shell consumes.
 - `PaintingViewerScreen/` and `PaintingConversationScreen/` are nested screen areas.
-- App-level painting state lives outside this module in `src/hooks/paintings` (queries, delete,
+- Painting data state lives in `hooks/usePaintings` (queries, delete,
   gallery items) and is consumed here.

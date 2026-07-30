@@ -15,4 +15,5 @@ Mobile DB services migrated from the desktop `src/main/data/services` directory.
 ## Runtime
 
 Services that are part of the mobile data layer are instantiated by
-`src/data/services/createDataServices.ts` and exposed through `useDataServices()`.
+`src/runtime/createDataServices.ts` (the app composition root) and exposed through
+`useDataServices()` from `@/runtime`.
