@@ -1,15 +1,21 @@
-import { type QueryClient, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useIsFocused, useRouter } from 'expo-router';
 import { createContext, type PropsWithChildren, use, useCallback, useEffect, useMemo } from 'react';
 import { MODEL_SETTING_PREFERENCE_KEYS } from '@/frontend/components/modelPicker/utils/modelSettings';
-import { queryKeys, useBackendModule, useMutation } from '@/frontend/data';
+import {
+  queryKeys,
+  useBackendModule,
+  useMutation,
+  usePrefetch,
+  usePrefetchInfiniteQuery,
+} from '@/frontend/data';
 import { usePins, useTopics } from '@/frontend/hooks/chat';
 import {
   getMessagesQueryKey,
-  prefetchTopicMessages,
+  initialMessagesPageSize,
 } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPolicy';
-import type { ModelsBackend, PreferencesBackend } from '@/shared/contracts';
+import type { PreferencesBackend } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isUniqueModelId } from '@/shared/data/types/model';
 import type { Topic } from '@/shared/data/types/topic';
@@ -42,9 +48,9 @@ export function TopicListProvider({ children }: PropsWithChildren) {
   const isFocused = useIsFocused();
   const queryClient = useQueryClient();
   const router = useRouter();
-  const chat = useBackendModule('chat');
-  const models = useBackendModule('models');
   const preferences = useBackendModule('preferences');
+  const prefetch = usePrefetch();
+  const prefetchInfiniteQuery = usePrefetchInfiniteQuery();
   const topicList = useTopics({ q: '' });
   const topicPins = usePins('topic');
   const isPinActionDisabled = topicPins.isLoading || topicPins.isRefreshing || topicPins.isMutating;
@@ -54,24 +60,32 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    void prefetchDefaultModelDetail(queryClient, models, preferences);
+    void prefetchDefaultModelDetail(prefetch, preferences);
 
     for (const topic of topicList.topics.slice(
       0,
       messageWindowPolicy.topicListPrefetchTopicCount,
     )) {
-      void prefetchTopicMessages(queryClient, chat, topic.id);
+      void prefetchInfiniteQuery('/topics/:topicId/messages', {
+        limit: initialMessagesPageSize,
+        params: { topicId: topic.id },
+        staleTime: messageWindowPolicy.prefetchStaleTimeMs,
+      });
     }
-  }, [chat, isFocused, models, preferences, queryClient, topicList.topics]);
+  }, [isFocused, prefetch, prefetchInfiniteQuery, preferences, topicList.topics]);
 
   const openTopic = useCallback(
     (topicId: string) => {
       perfLog.debug('[PERF] tap->push', { topicId, t: Date.now() });
-      void prefetchDefaultModelDetail(queryClient, models, preferences);
-      void prefetchTopicMessages(queryClient, chat, topicId);
+      void prefetchDefaultModelDetail(prefetch, preferences);
+      void prefetchInfiniteQuery('/topics/:topicId/messages', {
+        limit: initialMessagesPageSize,
+        params: { topicId },
+        staleTime: messageWindowPolicy.prefetchStaleTimeMs,
+      });
       router.push({ pathname: '/topics', params: { topicId } });
     },
-    [chat, models, preferences, queryClient, router],
+    [prefetch, prefetchInfiniteQuery, preferences, router],
   );
 
   const renameTopicMutation = useMutation('PATCH', '/topics/:id', {
@@ -81,6 +95,8 @@ export function TopicListProvider({ children }: PropsWithChildren) {
   const deleteTopicsMutation = useMutation('DELETE', '/topics', {
     refresh: ['/topics'],
   });
+  const updateTopic = renameTopicMutation.trigger;
+  const removeTopics = deleteTopicsMutation.trigger;
 
   const renameTopic = useCallback(
     async (id: string, name: string) => {
@@ -90,21 +106,21 @@ export function TopicListProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      await renameTopicMutation.trigger({
+      await updateTopic({
         body: { isNameManuallyEdited: true, name: trimmedName },
         params: { id },
       });
     },
-    [renameTopicMutation.trigger],
+    [updateTopic],
   );
 
   const deleteTopic = useCallback(
     async (id: string) => {
-      await deleteTopicsMutation.trigger({ query: { ids: [id] } });
+      await removeTopics({ query: { ids: [id] } });
       queryClient.removeQueries({ queryKey: queryKeys.topics.detail(id) });
       queryClient.removeQueries({ queryKey: getMessagesQueryKey(id) });
     },
-    [deleteTopicsMutation.trigger, queryClient],
+    [queryClient, removeTopics],
   );
 
   const deleteTopics = useCallback(
@@ -114,13 +130,13 @@ export function TopicListProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      await deleteTopicsMutation.trigger({ query: { ids: uniqueIds } });
+      await removeTopics({ query: { ids: uniqueIds } });
       for (const id of uniqueIds) {
         queryClient.removeQueries({ queryKey: queryKeys.topics.detail(id) });
         queryClient.removeQueries({ queryKey: getMessagesQueryKey(id) });
       }
     },
-    [deleteTopicsMutation.trigger, queryClient],
+    [queryClient, removeTopics],
   );
 
   const toggleTopicPin = useCallback(
@@ -164,8 +180,7 @@ export function TopicListProvider({ children }: PropsWithChildren) {
 }
 
 function prefetchDefaultModelDetail(
-  queryClient: QueryClient,
-  models: ModelsBackend,
+  prefetch: ReturnType<typeof usePrefetch>,
   preferences: PreferencesBackend,
 ) {
   const modelId = preferences.readCached(MODEL_SETTING_PREFERENCE_KEYS.default);
@@ -174,9 +189,8 @@ function prefetchDefaultModelDetail(
     return;
   }
 
-  return queryClient.prefetchQuery({
-    queryFn: () => models.get(modelId),
-    queryKey: queryKeys.models.detail(modelId),
+  return prefetch('/models/:id', {
+    params: { id: modelId },
     staleTime: MODEL_DETAIL_PREFETCH_STALE_TIME_MS,
   });
 }

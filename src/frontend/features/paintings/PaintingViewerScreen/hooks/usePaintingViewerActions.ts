@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { queryKeys, useMutation } from '@/frontend/data';
 import type { Painting } from '@/shared/data/types/painting';
 import { createPaintingDraftHandoff } from '../../utils/paintingDraftHandoff';
 import { createPaintingOutputAttachmentDraft } from '../../utils/paintingOutputAttachment';
@@ -22,7 +22,10 @@ export function usePaintingViewerActions({
   const { toast } = useToast();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const paintings = useBackendModule('paintings');
+  const deletePaintingMutation = useMutation('DELETE', '/paintings', {
+    refresh: ['/paintings'],
+  });
+  const deletePainting = deletePaintingMutation.trigger;
 
   const download = useCallback(async () => {
     try {
@@ -42,7 +45,7 @@ export function usePaintingViewerActions({
 
   const remove = useCallback(async () => {
     try {
-      await paintings.removeMany([painting.id]);
+      await deletePainting({ query: { ids: [painting.id] } });
       router.back();
       // Drop (not invalidate) the detail entry: a refetch would getById a
       // deleted row and throw. The masonry's gallery query keys derive from
@@ -52,7 +55,7 @@ export function usePaintingViewerActions({
     } catch {
       toast.show({ label: t('painting.viewer.deleteFailed'), variant: 'danger' });
     }
-  }, [painting.id, paintings, queryClient, router, t, toast]);
+  }, [deletePainting, painting.id, queryClient, router, t, toast]);
 
   // Both edit and resize reopen the composer seeded with the current output as an
   // input attachment; paintingId additionally preselects the painting's model.

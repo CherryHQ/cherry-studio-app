@@ -15,7 +15,6 @@ type ProviderModelListProps = {
   isLoading: boolean;
   models: Model[];
   provider: Provider | undefined;
-  providerId: string;
   /** The bottom toolbar's pull, surfaced again as the empty list's call to action. */
   pullAction?: ProviderModelAction;
 };
@@ -24,14 +23,13 @@ export function ProviderModelList({
   isLoading,
   models,
   provider,
-  providerId,
   pullAction,
 }: ProviderModelListProps) {
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
   const { displayedExpandedValues, groups, isSearching, setExpandedValues } =
     useProviderModelGroups({ models, searchText });
-  const { isDefaultModel, removeModel, removingIds } = useProviderModelRemove(providerId);
+  const { isDefaultModel, removeModel, removingIds } = useProviderModelRemove();
 
   // A provider with no models at all has nothing to search and nothing to say, so
   // the search field and the "no models" line both give way to the pull itself.

@@ -1,5 +1,4 @@
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -14,7 +13,7 @@ import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { Image } from '@/frontend/components/nativePrimitives';
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { useBackendModule, useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { ENDPOINT_TYPE } from '@/shared/data/types/model';
 import type { ApiKeyEntry, EndpointConfigs } from '@/shared/data/types/provider';
@@ -41,7 +40,6 @@ export default function NewProviderScreen() {
   const router = useRouter();
   const { toast } = useToast();
   const providers = useBackendModule('providers');
-  const queryClient = useQueryClient();
 
   const [name, setName] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
@@ -52,8 +50,18 @@ export default function NewProviderScreen() {
   const [geminiUrl, setGeminiUrl] = useState('');
   const [openaiResponsesUrl, setOpenaiResponsesUrl] = useState('');
 
-  const createProviderMutation = useMutation({
-    mutationFn: async (values: CreateProviderFormValues) => {
+  const createProviderMutation = useMutation('POST', '/providers', {
+    refresh: ['/providers'],
+  });
+  const enableProviderMutation = useMutation('PATCH', '/providers/:id', {
+    refresh: ['/providers'],
+  });
+  const createProvider = createProviderMutation.trigger;
+  const enableProvider = enableProviderMutation.trigger;
+  const isCreating = createProviderMutation.isLoading || enableProviderMutation.isLoading;
+
+  const submitProvider = useCallback(
+    async (values: CreateProviderFormValues) => {
       const providerId = Crypto.randomUUID();
       const trimmedApiKey = values.apiKey.trim();
 
@@ -80,13 +88,15 @@ export default function NewProviderScreen() {
         ? [{ id: Crypto.randomUUID(), isEnabled: true, key: trimmedApiKey }]
         : undefined;
 
-      await providers.create({
-        apiKeys,
-        authConfig: { type: 'api-key' },
-        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-        endpointConfigs,
-        name: values.name.trim(),
-        providerId,
+      await createProvider({
+        body: {
+          apiKeys,
+          authConfig: { type: 'api-key' },
+          defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+          endpointConfigs,
+          name: values.name.trim(),
+          providerId,
+        },
       });
 
       if (values.avatarUri) {
@@ -95,60 +105,60 @@ export default function NewProviderScreen() {
 
       // Providers are created disabled; the user asked for new custom providers to
       // land already enabled, so flip it on before navigating to the detail page.
-      await providers.update(providerId, { isEnabled: true });
+      await enableProvider({
+        body: { isEnabled: true },
+        params: { id: providerId },
+      });
 
       return providerId;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() }),
-  });
+    [createProvider, enableProvider, providers],
+  );
 
   const canSubmit = name.trim().length > 0 && baseUrl.trim().length > 0;
   const handleFinish = useCallback(() => {
-    if (!canSubmit || createProviderMutation.isPending) {
+    if (!canSubmit || isCreating) {
       return;
     }
     Keyboard.dismiss();
 
     const trimmedName = name.trim();
-    createProviderMutation.mutate(
-      {
-        apiKey,
-        avatarUri: avatarDraftUri,
-        baseUrl,
-        endpoints: {
-          anthropic: anthropicUrl,
-          gemini: geminiUrl,
-          openaiResponses: openaiResponsesUrl,
-        },
-        name,
+    void submitProvider({
+      apiKey,
+      avatarUri: avatarDraftUri,
+      baseUrl,
+      endpoints: {
+        anthropic: anthropicUrl,
+        gemini: geminiUrl,
+        openaiResponses: openaiResponsesUrl,
       },
-      {
-        onError: () => {
-          toast.show({ label: t('settings.provider.add.error'), variant: 'danger' });
-        },
-        onSuccess: (providerId) => {
-          router.replace({
-            params: {
-              providerId,
-              providerName: trimmedName,
-              returnToConfiguration: 'true',
-            },
-            pathname: '/settings/provider/[providerId]/model-pull',
-          });
-        },
-      },
-    );
+      name,
+    })
+      .then((providerId) => {
+        router.replace({
+          params: {
+            providerId,
+            providerName: trimmedName,
+            returnToConfiguration: 'true',
+          },
+          pathname: '/settings/provider/[providerId]/model-pull',
+        });
+      })
+      .catch(() => {
+        toast.show({ label: t('settings.provider.add.error'), variant: 'danger' });
+      });
   }, [
     anthropicUrl,
     apiKey,
     avatarDraftUri,
     baseUrl,
     canSubmit,
-    createProviderMutation,
     geminiUrl,
+    isCreating,
     name,
     openaiResponsesUrl,
     router,
+    submitProvider,
     t,
     toast,
   ]);
@@ -157,13 +167,13 @@ export default function NewProviderScreen() {
     () => [
       {
         accessibilityLabel: t('common.save'),
-        disabled: !canSubmit || createProviderMutation.isPending,
+        disabled: !canSubmit || isCreating,
         key: 'finish-new-provider',
         label: t('common.save'),
         onPress: handleFinish,
       },
     ],
-    [canSubmit, createProviderMutation.isPending, handleFinish, t],
+    [canSubmit, handleFinish, isCreating, t],
   );
 
   return (

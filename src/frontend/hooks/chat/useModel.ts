@@ -1,5 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { useQuery } from '@/frontend/data';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
 const EMPTY_MODELS: readonly Model[] = Object.freeze([]);
@@ -7,10 +6,8 @@ const EMPTY_MODELS: readonly Model[] = Object.freeze([]);
 export function useModels(
   query: { capability?: string; enabled?: boolean; providerId?: string } = {},
 ) {
-  const models = useBackendModule('models');
-  const modelsQuery = useQuery({
-    queryFn: () => models.list(query),
-    queryKey: queryKeys.models.list(query),
+  const modelsQuery = useQuery('/models', {
+    query,
   });
 
   return {
@@ -22,18 +19,10 @@ export function useModels(
 }
 
 export function useModelById(uniqueModelId: UniqueModelId | null | undefined) {
-  const models = useBackendModule('models');
   const modelKey = uniqueModelId ?? '';
-  const modelQuery = useQuery({
+  const modelQuery = useQuery('/models/:id', {
     enabled: Boolean(modelKey),
-    queryFn: () => {
-      if (!uniqueModelId) {
-        throw new Error('Cannot load a model without an id.');
-      }
-
-      return models.get(uniqueModelId);
-    },
-    queryKey: queryKeys.models.detail(modelKey),
+    params: { id: modelKey as UniqueModelId },
   });
 
   return {

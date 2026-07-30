@@ -1,23 +1,22 @@
 import {
-  type InfiniteData,
   keepPreviousData,
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
   useQueryClient,
+  useQuery as useTanStackQuery,
 } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
 import { useCallback, useMemo } from 'react';
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import {
+  queryKeys,
+  useBackendModule,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+} from '@/frontend/data';
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
-import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import { imageMediaTypeFromExtension } from '@/shared/data/types/file';
 import type { Painting } from '@/shared/data/types/painting';
 
 const pageSize = 20;
-
-type PaintingListQueryKey = ReturnType<typeof queryKeys.paintings.list>;
-type PaintingDetailQueryKey = ReturnType<typeof queryKeys.paintings.detail>;
 
 export type PaintingGalleryItem = {
   aspectRatio: number;
@@ -35,62 +34,30 @@ export type ResolvedPaintingFiles = {
 };
 
 export function usePaintings() {
-  const paintingsBackend = useBackendModule('paintings');
-  const query = useInfiniteQuery<
-    CursorPaginationResponse<Painting>,
-    Error,
-    InfiniteData<CursorPaginationResponse<Painting>, string | undefined>,
-    PaintingListQueryKey,
-    string | undefined
-  >({
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
-    initialPageParam: undefined,
-    queryFn: ({ pageParam }) => paintingsBackend.listPage({ cursor: pageParam, limit: pageSize }),
-    queryKey: queryKeys.paintings.list({ limit: pageSize }),
-  });
-  const paintings = useMemo(
-    () => (query.data?.pages ?? []).flatMap((page) => page.items),
-    [query.data?.pages],
-  );
-  const { fetchNextPage, hasNextPage, isFetchingNextPage } = query;
-  const loadMore = useCallback(async () => {
-    if (!hasNextPage || isFetchingNextPage) {
-      return;
-    }
-    await fetchNextPage();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+  const query = useInfiniteQuery('/paintings', { limit: pageSize });
+  const paintings = useMemo(() => query.pages.flatMap((page) => page.items), [query.pages]);
 
   return {
     isLoading: query.isLoading,
-    isLoadingMore: isFetchingNextPage,
-    loadMore,
+    isLoadingMore: query.isLoadingMore,
+    loadMore: query.loadNext,
     paintings,
     query,
   };
 }
 
 export function usePaintingIds({ enabled }: { enabled: boolean }) {
-  const paintings = useBackendModule('paintings');
-  return useQuery({
+  return useQuery('/paintings/ids', {
     enabled,
-    queryFn: () => paintings.listIds(),
-    queryKey: queryKeys.paintings.allIds(),
   });
 }
 
 export function useDeletePaintings() {
-  const paintings = useBackendModule('paintings');
   const queryClient = useQueryClient();
-  const { mutateAsync } = useMutation({
-    mutationFn: (ids: readonly string[]) => paintings.removeMany(ids),
-    onSuccess: async (_result, ids) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.paintings.all() });
-      for (const id of ids) {
-        // Drop rather than invalidate: refetching a deleted painting would throw.
-        queryClient.removeQueries({ queryKey: queryKeys.paintings.detail(id) });
-      }
-    },
+  const mutation = useMutation('DELETE', '/paintings', {
+    refresh: ['/paintings'],
   });
+  const deletePaintings = mutation.trigger;
 
   return useCallback(
     async (ids: readonly string[]) => {
@@ -99,25 +66,26 @@ export function useDeletePaintings() {
         return;
       }
 
-      await mutateAsync(uniqueIds);
+      await deletePaintings({ query: { ids: uniqueIds } });
+      for (const id of uniqueIds) {
+        // Drop rather than invalidate: refetching a deleted painting would throw.
+        queryClient.removeQueries({ queryKey: queryKeys.paintings.detail(id) });
+      }
     },
-    [mutateAsync],
+    [deletePaintings, queryClient],
   );
 }
 
 export function usePainting(id: string | undefined) {
-  const paintings = useBackendModule('paintings');
-  const queryId = id ?? '__new_painting__';
-  return useQuery<Painting, Error, Painting, PaintingDetailQueryKey>({
+  return useQuery('/paintings/:id', {
     enabled: Boolean(id),
-    queryFn: () => paintings.get(id ?? ''),
-    queryKey: queryKeys.paintings.detail(queryId),
+    params: { id: id ?? '' },
   });
 }
 
 export function useResolvedPaintingFiles(painting: Painting | undefined) {
   const paintings = useBackendModule('paintings');
-  return useQuery({
+  return useTanStackQuery({
     enabled: Boolean(painting),
     queryFn: async (): Promise<ResolvedPaintingFiles> => {
       if (!painting) {
@@ -148,45 +116,50 @@ export function useResolvedPaintingFiles(painting: Painting | undefined) {
 }
 
 export function usePaintingGalleryItems(paintings: readonly Painting[]) {
-  const files = useBackendModule('files');
-  return useQuery({
+  const paintingsBackend = useBackendModule('paintings');
+  return useTanStackQuery({
     enabled: paintings.length > 0,
     // The key embeds every painting's updatedAt, so loading another page (or a
     // regeneration) mints a fresh key. Keep the previous resolved items visible
     // until the new set resolves so the masonry never blinks to empty mid-scroll.
     placeholderData: keepPreviousData,
     queryFn: async (): Promise<PaintingGalleryItem[]> => {
-      const items = paintings.flatMap((painting) =>
-        painting.files.output.map((fileEntryId) => ({ fileEntryId, painting })),
-      );
-      return (
+      const items = (
         await Promise.all(
-          items.map(async ({ fileEntryId, painting }) => {
-            const uri = await files.resolveRenderableUri(fileEntryId);
-            if (!uri) {
-              return null;
-            }
-            try {
-              const image = await ExpoImage.loadAsync(uri);
-              return {
-                aspectRatio: image.width > 0 && image.height > 0 ? image.width / image.height : 1,
-                fileEntryId,
-                key: `${painting.id}:${fileEntryId}`,
-                painting,
-                uri,
-              };
-            } catch {
-              return {
-                aspectRatio: 1,
-                fileEntryId,
-                key: `${painting.id}:${fileEntryId}`,
-                painting,
-                uri,
-              };
-            }
-          }),
+          paintings.map(async (painting) => ({
+            painting,
+            resolved: await paintingsBackend.resolveFiles(painting),
+          })),
         )
-      ).filter((item) => item !== null);
+      ).flatMap(({ painting, resolved }) =>
+        resolved.outputs.map(({ entry, uri }) => ({
+          fileEntryId: entry.id,
+          painting,
+          uri,
+        })),
+      );
+      return await Promise.all(
+        items.map(async ({ fileEntryId, painting, uri }) => {
+          try {
+            const image = await ExpoImage.loadAsync(uri);
+            return {
+              aspectRatio: image.width > 0 && image.height > 0 ? image.width / image.height : 1,
+              fileEntryId,
+              key: `${painting.id}:${fileEntryId}`,
+              painting,
+              uri,
+            };
+          } catch {
+            return {
+              aspectRatio: 1,
+              fileEntryId,
+              key: `${painting.id}:${fileEntryId}`,
+              painting,
+              uri,
+            };
+          }
+        }),
+      );
     },
     queryKey: ['painting-gallery-files', ...paintings.map((painting) => painting.updatedAt)],
   });

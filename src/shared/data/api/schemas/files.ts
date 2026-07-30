@@ -15,7 +15,7 @@ export type FileSchemas = {
   '/files/:id/renderable-uri': {
     GET: {
       params: { id: FileEntryId };
-      response: string | undefined;
+      response: string | null;
     };
   };
   '/files/:id/resolved': {

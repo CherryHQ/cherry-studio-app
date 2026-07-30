@@ -1,56 +1,47 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery as useTanStackQuery } from '@tanstack/react-query';
 import { File } from 'expo-file-system';
-import { useBackendModule } from '@/frontend/data';
+import { useEffect } from 'react';
+import { useQuery } from '@/frontend/data';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { FileEntryId } from '@/shared/data/types/file';
 import type { FileUIPart } from '@/shared/data/types/message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 const logger = loggerService.withContext('useFilePartUri');
 
-type ResolveFileEntryUri = (fileEntryId: string) => Promise<string | undefined>;
-
 export function useFilePartUri(part: FileUIPart) {
-  const files = useBackendModule('files');
   const fileEntryId = readCherryMeta(part)?.fileEntryId;
-  const requiresLookup = Boolean(fileEntryId) || isLocalFileUri(part.url);
-  const query = useQuery({
-    enabled: requiresLookup,
-    queryFn: () => resolveFilePartUri(part, (id) => files.resolveRenderableUri(id)),
+  const managedQuery = useQuery('/files/:id/renderable-uri', {
+    enabled: Boolean(fileEntryId),
+    params: { id: (fileEntryId ?? '') as FileEntryId },
+    retry: false,
+  });
+  const requiresLocalLookup = !fileEntryId && isLocalFileUri(part.url);
+  const localQuery = useTanStackQuery({
+    enabled: requiresLocalLookup,
+    queryFn: () => resolveLocalFileUri(part.url),
     queryKey: ['file-part-uri', fileEntryId ?? null, part.url],
   });
 
+  useEffect(() => {
+    if (managedQuery.error && fileEntryId) {
+      logger.warn('Failed to resolve managed file entry', managedQuery.error, { fileEntryId });
+    }
+  }, [fileEntryId, managedQuery.error]);
+
+  if (fileEntryId) {
+    return { isLoading: managedQuery.isLoading, uri: managedQuery.data ?? undefined };
+  }
+
   return {
-    isLoading: requiresLookup && query.isPending,
-    uri: requiresLookup ? query.data : part.url,
+    isLoading: requiresLocalLookup && localQuery.isPending,
+    uri: requiresLocalLookup ? localQuery.data : part.url,
   };
 }
 
-export async function resolveFilePartUri(
-  part: FileUIPart,
-  resolveFileEntryUri: ResolveFileEntryUri,
-): Promise<string | undefined> {
-  const fileEntryId = readCherryMeta(part)?.fileEntryId;
-
-  if (fileEntryId) {
-    try {
-      const managedUri = await resolveFileEntryUri(fileEntryId);
-      if (managedUri) {
-        return managedUri;
-      }
-      logger.warn('Managed file entry is unavailable', { fileEntryId });
-    } catch (error) {
-      logger.warn('Failed to resolve managed file entry', toError(error), { fileEntryId });
-    }
-
-    return undefined;
-  }
-
-  if (!isLocalFileUri(part.url)) {
-    return part.url;
-  }
-
+function resolveLocalFileUri(uri: string): string | undefined {
   try {
-    return new File(part.url).exists ? part.url : undefined;
+    return new File(uri).exists ? uri : undefined;
   } catch (error) {
     logger.warn('Failed to inspect file URI', toError(error));
     return undefined;

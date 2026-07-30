@@ -1,4 +1,3 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Spinner } from 'heroui-native/spinner';
 import { useToast } from 'heroui-native/toast';
@@ -8,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useConfirmDialog } from '@/frontend/components/confirmDialog';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { useBackendModule, useMutation } from '@/frontend/data';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import {
   buildApiKeysInputFromEntries,
@@ -40,20 +39,12 @@ export default function ProviderDetailSettingsScreen() {
   const { toast } = useToast();
   const { confirmDialog, requestConfirm } = useConfirmDialog();
   const providers = useBackendModule('providers');
-  const queryClient = useQueryClient();
   const [apiKeysVisible, setApiKeysVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
-  const deleteProviderMutation = useMutation({
-    mutationFn: (id: string) => providers.remove(id),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.providers.list({ enabled: true }) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.providers.list({ enabled: false }) }),
-      ]);
-    },
+  const deleteProviderMutation = useMutation('DELETE', '/providers/:id', {
+    refresh: ['/providers'],
   });
   const { apiKeys, apiKeysQuery, authConfig, authConfigQuery } = useProviderApiServiceQueries(
     providerId ?? '',
@@ -229,7 +220,7 @@ export default function ProviderDetailSettingsScreen() {
     }
 
     try {
-      await deleteProviderMutation.mutateAsync(providerId);
+      await deleteProviderMutation.trigger({ params: { id: providerId } });
       toast.show({ label: t('settings.provider.toast.deleted'), variant: 'success' });
       router.back();
     } catch {
@@ -301,7 +292,6 @@ export default function ProviderDetailSettingsScreen() {
           isLoading={modelsQuery.isPending}
           models={models}
           provider={provider}
-          providerId={providerId}
           pullAction={modelActionsForTab?.pull}
         />
       )}
@@ -324,7 +314,7 @@ export default function ProviderDetailSettingsScreen() {
         checkAction={modelActionsForTab?.check}
         isActive={provider?.isEnabled ?? false}
         isDisabled={
-          !provider || updateProviderEnabledMutation.isPending || deleteProviderMutation.isPending
+          !provider || updateProviderEnabledMutation.isPending || deleteProviderMutation.isLoading
         }
         onDelete={requestDeleteProvider}
         onToggleActive={handleToggleProvider}

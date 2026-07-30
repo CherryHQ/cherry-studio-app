@@ -10,7 +10,7 @@ export function createFileHandlers(service: FileData): HandlersFor<FileSchemas> 
       GET: ({ params }) => service.get(params.id),
     },
     '/files/:id/renderable-uri': {
-      GET: ({ params }) => service.resolveRenderableUri(params.id),
+      GET: async ({ params }) => (await service.resolveRenderableUri(params.id)) ?? null,
     },
     '/files/:id/resolved': {
       GET: ({ params }) => service.resolve(params.id),

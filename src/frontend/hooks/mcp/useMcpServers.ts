@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery as useTanStackQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { queryKeys, useBackendModule, useMutation, useQuery } from '@/frontend/data';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
 import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/shared/data/api/schemas/mcpServers';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
@@ -10,11 +10,7 @@ const EMPTY_MCP_RUNTIME_SUMMARIES: Readonly<Record<string, McpServerRuntimeSumma
   Object.freeze({});
 
 export function useMcpServersApi() {
-  const mcp = useBackendModule('mcp');
-  const query = useQuery({
-    queryFn: () => mcp.listServers(),
-    queryKey: queryKeys.mcpServers.list(),
-  });
+  const query = useQuery('/mcp-servers');
 
   return {
     servers: query.data?.items ?? EMPTY_MCP_SERVERS,
@@ -27,13 +23,9 @@ export function useMcpServersApi() {
 }
 
 export function useMcpServerApiById(id: string | undefined) {
-  const mcp = useBackendModule('mcp');
-  const enabled = Boolean(id);
-  const queryServerId = id ?? '__missing_mcp_server__';
-  const query = useQuery({
-    enabled,
-    queryFn: () => mcp.getServer(id ?? ''),
-    queryKey: queryKeys.mcpServers.detail(queryServerId),
+  const query = useQuery('/mcp-servers/:id', {
+    enabled: Boolean(id),
+    params: { id: id ?? '' },
   });
 
   return {
@@ -47,7 +39,7 @@ export function useMcpServerApiById(id: string | undefined) {
 
 export function useMcpServerRuntimeSummaries(servers: readonly StreamableHttpMcpServer[]) {
   const mcp = useBackendModule('mcp');
-  const query = useQuery({
+  const query = useTanStackQuery({
     enabled: servers.length > 0,
     queryFn: () => mcp.getRuntimeSummaries(servers),
     queryKey: queryKeys.mcpServers.runtimeSummaries(servers),
@@ -64,79 +56,54 @@ export function useMcpServerRuntimeSummaries(servers: readonly StreamableHttpMcp
 }
 
 export function useMcpServerMutations() {
-  const mcp = useBackendModule('mcp');
   const queryClient = useQueryClient();
-
-  const invalidateServerQueries = useCallback(
-    async (serverId: string, options: { includeTools?: boolean; refetchDetail?: boolean } = {}) => {
-      const { includeTools = false, refetchDetail = true } = options;
-      const invalidations = [
-        queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.mcpServers.detail(serverId),
-          refetchType: refetchDetail ? 'active' : 'none',
-        }),
-      ];
-      if (includeTools) {
-        invalidations.push(
-          queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.tools(serverId) }),
-        );
+  const createMutation = useMutation('POST', '/mcp-servers', {
+    refresh: ['/mcp-servers'],
+    onSuccess: (server) => {
+      queryClient.setQueryData(queryKeys.mcpServers.detail(server.id), server);
+    },
+  });
+  const updateMutation = useMutation('PATCH', '/mcp-servers/:id', {
+    refresh: ['/mcp-servers'],
+    onSuccess: ({ server, toolsChanged }) => {
+      queryClient.setQueryData(queryKeys.mcpServers.detail(server.id), server);
+      if (toolsChanged) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.tools(server.id) });
       }
-      await Promise.all(invalidations);
-    },
-    [queryClient],
-  );
-
-  const createMutation = useMutation({
-    mutationFn: (dto: CreateMcpServerDto) => mcp.createServer(dto),
-    onSuccess: async (server) => {
-      queryClient.setQueryData(queryKeys.mcpServers.detail(server.id), server);
-      await invalidateServerQueries(server.id, { refetchDetail: false });
     },
   });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: UpdateMcpServerDto }) =>
-      mcp.updateServer(id, patch),
-    onSuccess: async ({ server, toolsChanged }) => {
-      queryClient.setQueryData(queryKeys.mcpServers.detail(server.id), server);
-      await invalidateServerQueries(server.id, {
-        includeTools: toolsChanged,
-        refetchDetail: false,
-      });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => mcp.removeServer(id),
-    onSuccess: (_data, id) => {
-      void Promise.allSettled([
-        invalidateServerQueries(id, { refetchDetail: false }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.assistants.all() }),
-      ]);
-    },
-  });
+  const deleteMutation = useMutation('DELETE', '/mcp-servers/:id');
+  const createServerRequest = createMutation.trigger;
+  const updateServerRequest = updateMutation.trigger;
+  const deleteServerRequest = deleteMutation.trigger;
 
   const createServer = useCallback(
-    (dto: CreateMcpServerDto) => createMutation.mutateAsync(dto),
-    [createMutation],
+    (dto: CreateMcpServerDto) => createServerRequest({ body: dto }),
+    [createServerRequest],
   );
   const updateServer = useCallback(
     async (id: string, patch: UpdateMcpServerDto) =>
-      (await updateMutation.mutateAsync({ id, patch })).server,
-    [updateMutation],
+      (await updateServerRequest({ body: patch, params: { id } })).server,
+    [updateServerRequest],
   );
   const deleteServer = useCallback(
-    (id: string) => deleteMutation.mutateAsync(id),
-    [deleteMutation],
+    async (id: string) => {
+      await deleteServerRequest({ params: { id } });
+      queryClient.removeQueries({ queryKey: queryKeys.mcpServers.detail(id) });
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.assistants.all() }),
+      ]);
+    },
+    [deleteServerRequest, queryClient],
   );
 
   return {
     createServer,
     updateServer,
     deleteServer,
-    isCreating: createMutation.isPending,
-    isUpdating: updateMutation.isPending,
-    isDeleting: deleteMutation.isPending,
+    isCreating: createMutation.isLoading,
+    isUpdating: updateMutation.isLoading,
+    isDeleting: deleteMutation.isLoading,
   };
 }

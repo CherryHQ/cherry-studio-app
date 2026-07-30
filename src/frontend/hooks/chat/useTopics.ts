@@ -48,15 +48,16 @@ export function useTopicMutations() {
       ...(args ? [`/topics/${args.params.id}`, `/topics/${args.params.id}/messages`] : []),
     ],
   });
+  const updateTopicRequest = updateMutation.trigger;
 
   const updateTopic = useCallback(
     (id: string, patch: UpdateTopicDto) => {
       if (!id) {
         throw new Error('updateTopic called with empty id');
       }
-      return updateMutation.trigger({ body: patch, params: { id } });
+      return updateTopicRequest({ body: patch, params: { id } });
     },
-    [updateMutation.trigger],
+    [updateTopicRequest],
   );
 
   return {

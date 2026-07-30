@@ -1,8 +1,7 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { useMutation, useQuery } from '@/frontend/data';
 import type { EndpointType } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -28,8 +27,11 @@ type UseProviderModelAddOptions = {
 export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const models = useBackendModule('models');
-  const queryClient = useQueryClient();
+  const modelsQuery = useQuery('/models', { query: { providerId: provider.id } });
+  const addModelsMutation = useMutation('POST', '/models', { refresh: ['/models'] });
+  const addModels = addModelsMutation.trigger;
+  const existingModels = modelsQuery.data;
+  const refetchModels = modelsQuery.refetch;
   const [formState, setFormState] = useState<ProviderModelAddFormState>(() =>
     createInitialProviderModelAddFormState(),
   );
@@ -125,18 +127,6 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
     }));
   }, []);
 
-  const refreshModelQueries = useCallback(async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.models.list({ providerId: provider.id }),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.models.list({ enabled: true, providerId: provider.id }),
-      }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.models.list() }),
-    ]);
-  }, [provider.id, queryClient]);
-
   const submitAddModel = useCallback(async () => {
     if (isSubmitting) {
       return false;
@@ -154,9 +144,9 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
 
     setIsSubmitting(true);
     const submit = async (): Promise<boolean> => {
-      const existingModels = await models.list({ providerId: provider.id });
+      const currentModels = existingModels ?? (await refetchModels()).data ?? [];
       const { duplicateIds, inputs } = buildProviderModelAddInputs({
-        existingModels,
+        existingModels: currentModels,
         formState,
         provider,
         providerId: provider.id,
@@ -175,8 +165,7 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
         return false;
       }
 
-      await models.add(inputs);
-      await refreshModelQueries();
+      await addModels({ body: inputs });
       toast.show({
         label: t('settings.provider.models.addSuccess', { count: inputs.length }),
         variant: 'success',
@@ -195,12 +184,13 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
       .finally(() => setIsSubmitting(false));
   }, [
     formState,
+    addModels,
+    existingModels,
     isEndpointTypesValid,
     isModelIdValid,
     isSubmitting,
-    models,
+    refetchModels,
     provider,
-    refreshModelQueries,
     resetForm,
     t,
     toast,

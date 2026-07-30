@@ -1,18 +1,12 @@
-import { type InfiniteData, useInfiniteQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useBackendModule } from '@/frontend/data';
+import { useInfiniteQuery } from '@/frontend/data';
 import type { BranchMessagesResponse, Message } from '@/shared/data/types/message';
 import { useMessageRenderWindow } from './useMessageRenderWindow';
 import {
   getOlderLoadAction,
   shouldPrefetchOlderMessages,
 } from './utils/messageHistoryWindowStrategy';
-import {
-  fetchTopicMessagesPage,
-  getMessagesQueryKey,
-  getNextMessagesPageParam,
-  type MessagesQueryKey,
-} from './utils/messageQueryOptions';
+import { initialMessagesPageSize } from './utils/messageQueryOptions';
 
 export type MessageHistoryWindowOptions = {
   enabled: boolean;
@@ -30,10 +24,7 @@ type OlderFetchOptions = {
   showLoading: boolean;
 };
 
-function flattenMessagePages(
-  data: InfiniteData<BranchMessagesResponse, string | undefined> | undefined,
-) {
-  const pages = data?.pages ?? [];
+function flattenMessagePages(pages: readonly BranchMessagesResponse[]) {
   const messages: Message[] = [];
 
   for (let pageIndex = pages.length - 1; pageIndex >= 0; pageIndex -= 1) {
@@ -51,28 +42,19 @@ export function useMessageHistoryWindow(
   topicId: string | undefined,
   options: MessageHistoryWindowOptions,
 ): MessageHistoryWindow {
-  const chat = useBackendModule('chat');
   const enabled = options.enabled && Boolean(topicId);
   const queryTopicId = topicId ?? '__missing_topic__';
 
-  const query = useInfiniteQuery<
-    BranchMessagesResponse,
-    Error,
-    InfiniteData<BranchMessagesResponse, string | undefined>,
-    MessagesQueryKey,
-    string | undefined
-  >({
+  const query = useInfiniteQuery('/topics/:topicId/messages', {
     enabled,
-    getNextPageParam: getNextMessagesPageParam,
-    initialPageParam: undefined,
-    queryFn: (context) => fetchTopicMessagesPage(chat, queryTopicId, context),
-    queryKey: getMessagesQueryKey(queryTopicId),
+    limit: initialMessagesPageSize,
+    params: { topicId: queryTopicId },
   });
 
-  const allMessages = useMemo(() => flattenMessagePages(query.data), [query.data]);
+  const allMessages = useMemo(() => flattenMessagePages(query.pages), [query.pages]);
   const { hasHiddenMessages, hiddenMessageCount, revealMore, visibleMessages } =
     useMessageRenderWindow(allMessages);
-  const { fetchNextPage, hasNextPage, isFetchingNextPage } = query;
+  const { hasNext, isLoadingMore, loadNext } = query;
   const activeOlderFetchRef = useRef<Promise<void> | null>(null);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
@@ -87,11 +69,11 @@ export function useMessageHistoryWindow(
         return;
       }
 
-      if (!hasNextPage || isFetchingNextPage) {
+      if (!hasNext || isLoadingMore) {
         return;
       }
 
-      const fetchPromise = fetchNextPage().then(() => undefined);
+      const fetchPromise = loadNext();
       activeOlderFetchRef.current = fetchPromise;
       if (fetchOptions.showLoading) {
         setIsLoadingOlder(true);
@@ -106,7 +88,7 @@ export function useMessageHistoryWindow(
         }
       });
     },
-    [fetchNextPage, hasNextPage, isFetchingNextPage],
+    [hasNext, isLoadingMore, loadNext],
   );
 
   const loadOlder = useCallback(async () => {

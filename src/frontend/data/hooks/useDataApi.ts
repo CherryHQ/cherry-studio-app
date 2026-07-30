@@ -84,9 +84,40 @@ export function useQuery<TPath extends ApiPath>(
     error: result.error ?? undefined,
     isError: result.isError,
     isLoading: result.isLoading,
+    isPending: result.isPending,
     isRefreshing: result.isFetching && !result.isLoading,
     refetch: result.refetch,
   };
+}
+
+export function usePrefetch() {
+  const dataApi = useApiClient();
+  const queryClient = useQueryClient();
+
+  return useCallback(
+    <TPath extends ApiPath>(
+      path: TPath,
+      options?: ParamsOption<TPath, 'GET'> & {
+        query?: QueryParamsForPath<TPath, 'GET'>;
+        staleTime?: number;
+      },
+    ) => {
+      const resolvedPath = resolveTemplate(
+        path,
+        options?.params as Record<string, string | number> | undefined,
+      );
+      const query = options?.query;
+      return queryClient.prefetchQuery({
+        queryFn: () =>
+          dataApi.get(resolvedPath as ConcreteApiPaths, {
+            query: query as QueryParamsForPath<ConcreteApiPaths, 'GET'>,
+          }) as Promise<ResponseForPath<TPath, 'GET'>>,
+        queryKey: buildQueryKey(resolvedPath, query),
+        staleTime: options?.staleTime,
+      });
+    },
+    [dataApi, queryClient],
+  );
 }
 
 export function useMutation<TPath extends ApiPath, TMethod extends MutationMethod>(
@@ -198,12 +229,59 @@ export function useInfiniteQuery<TPath extends ApiPath>(
     error: result.error ?? undefined,
     hasNext: Boolean(result.hasNextPage),
     isLoading: result.isLoading,
+    isLoadingMore: result.isFetchingNextPage,
     isRefreshing: result.isFetching && !result.isLoading,
     loadNext,
     pages,
     refresh: result.refetch,
     reset,
   };
+}
+
+export function usePrefetchInfiniteQuery() {
+  const dataApi = useApiClient();
+  const queryClient = useQueryClient();
+
+  return useCallback(
+    <TPath extends ApiPath>(
+      path: CursorPaginatedPath<TPath>,
+      options?: ParamsOption<TPath, 'GET'> & {
+        limit?: number;
+        query?: Omit<QueryParamsForPath<TPath, 'GET'>, 'cursor' | 'limit'>;
+        staleTime?: number;
+      },
+    ) => {
+      const limit = options?.limit ?? 10;
+      const resolvedPath = resolveTemplate(
+        path,
+        options?.params as Record<string, string | number> | undefined,
+      );
+      const query = options?.query;
+
+      return queryClient.prefetchInfiniteQuery<
+        ResponseForPath<TPath, 'GET'>,
+        Error,
+        InfiniteData<ResponseForPath<TPath, 'GET'>, string | undefined>,
+        DataApiQueryKey,
+        string | undefined
+      >({
+        getNextPageParam: (lastPage: ResponseForPath<TPath, 'GET'>) =>
+          (lastPage as CursorPaginationResponse<unknown>).nextCursor,
+        initialPageParam: undefined,
+        queryFn: ({ pageParam }) =>
+          dataApi.get(resolvedPath as ConcreteApiPaths, {
+            query: {
+              ...query,
+              cursor: pageParam,
+              limit,
+            } as QueryParamsForPath<ConcreteApiPaths, 'GET'>,
+          }) as Promise<ResponseForPath<TPath, 'GET'>>,
+        queryKey: buildQueryKey(resolvedPath, { ...query, limit }),
+        staleTime: options?.staleTime,
+      });
+    },
+    [dataApi, queryClient],
+  );
 }
 
 function request<TPath extends ApiPath, TMethod extends MutationMethod>(

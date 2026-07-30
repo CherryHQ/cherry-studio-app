@@ -1,51 +1,27 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { BackendProvider, queryKeys } from '@/frontend/data';
-import type { McpBackend, MobileBackend } from '@/shared/contracts';
+import { queryKeys } from '@/frontend/data';
+import { DataApiProvider } from '@/frontend/data/DataApiProvider';
+import type { ApiClient } from '@/shared/data/api/types';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 import { useMcpServerMutations } from '../useMcpServers';
 
 const mockInvalidateQueries = jest.fn<Promise<void>, [unknown]>(async () => undefined);
 const mockSetQueryData = jest.fn();
-const mockCreateServer = jest.fn<
-  ReturnType<McpBackend['createServer']>,
-  Parameters<McpBackend['createServer']>
->();
-const mockRemoveServer = jest.fn<
-  ReturnType<McpBackend['removeServer']>,
-  Parameters<McpBackend['removeServer']>
->();
-const mockUpdateServer = jest.fn<
-  ReturnType<McpBackend['updateServer']>,
-  Parameters<McpBackend['updateServer']>
->();
-const backend = {
-  mcp: {
-    createServer: mockCreateServer,
-    removeServer: mockRemoveServer,
-    updateServer: mockUpdateServer,
-  },
-} as unknown as MobileBackend;
-
-jest.mock('@tanstack/react-query', () => ({
-  useMutation: (config: {
-    mutationFn: (variables: unknown) => Promise<unknown>;
-    onSuccess?: (data: unknown, variables: unknown) => Promise<void> | void;
-  }) => ({
-    isPending: false,
-    mutateAsync: async (variables: unknown) => {
-      const data = await config.mutationFn(variables);
-      await config.onSuccess?.(data, variables);
-      return data;
-    },
-  }),
-  useQueryClient: () => ({
-    invalidateQueries: mockInvalidateQueries,
-    setQueryData: mockSetQueryData,
-  }),
-}));
+const mockDelete = jest.fn(async () => undefined);
+const mockPatch = jest.fn();
+const mockPost = jest.fn();
+const dataApi = {
+  delete: mockDelete,
+  get: jest.fn(),
+  patch: mockPatch,
+  post: mockPost,
+  put: jest.fn(),
+} as unknown as ApiClient;
 
 let actions: ReturnType<typeof useMcpServerMutations> | undefined;
+let queryClient: QueryClient;
 let renderer: ReactTestRenderer | undefined;
 
 function Probe() {
@@ -77,29 +53,40 @@ describe('useMcpServerMutations', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     actions = undefined;
-    mockRemoveServer.mockResolvedValue(undefined);
+    queryClient = new QueryClient({
+      defaultOptions: { mutations: { retry: false }, queries: { gcTime: Infinity, retry: false } },
+    });
+    jest.spyOn(queryClient, 'invalidateQueries').mockImplementation(mockInvalidateQueries);
+    jest.spyOn(queryClient, 'setQueryData').mockImplementation(mockSetQueryData);
     await act(async () => {
       renderer = create(
-        <BackendProvider backend={backend}>
-          <Probe />
-        </BackendProvider>,
+        <QueryClientProvider client={queryClient}>
+          <DataApiProvider dataApi={dataApi}>
+            <Probe />
+          </DataApiProvider>
+        </QueryClientProvider>,
       );
     });
   });
 
   afterEach(async () => {
     await act(async () => renderer?.unmount());
+    queryClient.clear();
   });
 
   it('keeps the tools cache when the backend reports unchanged tools', async () => {
     const server = makeServer({ disabledTools: ['search'] });
-    mockUpdateServer.mockResolvedValue({ server, toolsChanged: false });
+    mockPatch.mockResolvedValue({ server, toolsChanged: false });
 
     await act(async () => {
       await actions?.updateServer(server.id, { disabledTools: ['search'] });
     });
 
     expect(mockSetQueryData).toHaveBeenCalledWith(queryKeys.mcpServers.detail(server.id), server);
+    expect(mockPatch).toHaveBeenCalledWith(`/mcp-servers/${server.id}`, {
+      body: { disabledTools: ['search'] },
+      query: undefined,
+    });
     expect(mockInvalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.mcpServers.tools(server.id),
     });
@@ -107,7 +94,7 @@ describe('useMcpServerMutations', () => {
 
   it('invalidates the tools cache when the backend reports a transport change', async () => {
     const server = makeServer({ baseUrl: 'https://b.example/mcp' });
-    mockUpdateServer.mockResolvedValue({ server, toolsChanged: true });
+    mockPatch.mockResolvedValue({ server, toolsChanged: true });
 
     await act(async () => {
       await actions?.updateServer(server.id, { baseUrl: server.baseUrl });
@@ -118,15 +105,18 @@ describe('useMcpServerMutations', () => {
     });
   });
 
-  it('hydrates a created server and delegates runtime effects to the backend', async () => {
+  it('hydrates a server created through the data endpoint', async () => {
     const server = makeServer();
-    mockCreateServer.mockResolvedValue(server);
+    mockPost.mockResolvedValue(server);
 
     await act(async () => {
       await actions?.createServer({ baseUrl: server.baseUrl, name: server.name });
     });
 
-    expect(mockCreateServer).toHaveBeenCalledWith({ baseUrl: server.baseUrl, name: server.name });
+    expect(mockPost).toHaveBeenCalledWith('/mcp-servers', {
+      body: { baseUrl: server.baseUrl, name: server.name },
+      query: undefined,
+    });
     expect(mockSetQueryData).toHaveBeenCalledWith(queryKeys.mcpServers.detail(server.id), server);
   });
 
@@ -136,7 +126,7 @@ describe('useMcpServerMutations', () => {
 
     const deletion = actions?.deleteServer('server-1');
     await expect(deletion).resolves.toBeUndefined();
-    expect(mockRemoveServer).toHaveBeenCalledWith('server-1');
+    expect(mockDelete).toHaveBeenCalledWith('/mcp-servers/server-1', { query: undefined });
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.assistants.all(),
     });

@@ -1,9 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as AuthSession from 'expo-auth-session';
 import { useToast } from 'heroui-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
 import { CHERRYIN_CONFIG } from '@/shared/utils/cherryInOauth';
 
 const { makeRedirectUri, useAuthRequest, ResponseType } = AuthSession;
@@ -32,18 +32,16 @@ export function useCherryInOauth(options: UseCherryInOauthOptions) {
 
   // Provider & auth config queries
 
-  const providerQuery = useQuery({
+  const providerQuery = useQuery('/providers/:id', {
     enabled: Boolean(providerId),
-    queryFn: () => providers.get(providerId),
-    queryKey: queryKeys.providers.detail(providerId),
+    params: { id: providerId },
     retry: false,
   });
   const provider = providerQuery.data;
 
-  const authConfigQuery = useQuery({
+  const authConfigQuery = useQuery('/providers/:id/auth', {
     enabled: Boolean(providerId),
-    queryFn: () => providers.getAuth(providerId),
-    queryKey: queryKeys.providers.authConfig(providerId),
+    params: { id: providerId },
     retry: false,
   });
   const hasOAuthToken =

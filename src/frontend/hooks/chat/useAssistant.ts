@@ -47,10 +47,13 @@ export function useAssistantMutations() {
   const deleteMutation = useMutation('DELETE', '/assistants/:id', {
     refresh: ({ args }) => ['/assistants', ...(args ? [`/assistants/${args.params.id}`] : [])],
   });
+  const createAssistantRequest = createMutation.trigger;
+  const updateAssistantRequest = updateMutation.trigger;
+  const deleteAssistantRequest = deleteMutation.trigger;
 
   const createAssistant = useCallback(
-    (dto: CreateAssistantDto) => createMutation.trigger({ body: dto }),
-    [createMutation.trigger],
+    (dto: CreateAssistantDto) => createAssistantRequest({ body: dto }),
+    [createAssistantRequest],
   );
 
   const updateAssistant = useCallback(
@@ -58,14 +61,14 @@ export function useAssistantMutations() {
       if (!id) {
         throw new Error('updateAssistant called with empty id');
       }
-      return updateMutation.trigger({ body: patch, params: { id } });
+      return updateAssistantRequest({ body: patch, params: { id } });
     },
-    [updateMutation.trigger],
+    [updateAssistantRequest],
   );
 
   const deleteAssistant = useCallback(
-    (id: string) => deleteMutation.trigger({ params: { id } }),
-    [deleteMutation.trigger],
+    (id: string) => deleteAssistantRequest({ params: { id } }),
+    [deleteAssistantRequest],
   );
 
   return {

@@ -1,5 +1,4 @@
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { SearchField } from 'heroui-native/search-field';
@@ -9,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { useQuery } from '@/frontend/data';
 import {
   hiddenProviderListIds,
   isLiquidGlassAvailable,
@@ -34,7 +33,6 @@ export default function ProviderSettingsScreen() {
   const [searchText, setSearchText] = useState('');
   const isNavigatingRef = useRef(false);
   const hasFocusedOnceRef = useRef(false);
-  const providers = useBackendModule('providers');
 
   useFocusEffect(() => {
     if (!hasFocusedOnceRef.current) {
@@ -44,9 +42,7 @@ export default function ProviderSettingsScreen() {
     isNavigatingRef.current = false;
   });
 
-  const providersQuery = useQuery({
-    queryKey: queryKeys.providers.list(),
-    queryFn: () => providers.list(),
+  const providersQuery = useQuery('/providers', {
     staleTime: providerListStaleTime,
   });
   const providerItems = useMemo<SettingsServiceRowProps[]>(

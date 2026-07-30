@@ -4,7 +4,9 @@ import { ScrollView } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
+import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import type { MobileBackend } from '@/shared/contracts';
+import type { ApiClient } from '@/shared/data/api/types';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
 import ProviderDetailScreen from '../ProviderDetailScreen';
 
@@ -47,6 +49,13 @@ const providersBackend = {
   remove: jest.fn(async () => undefined),
 } as unknown as MobileBackend['providers'];
 const backend = { providers: providersBackend } as MobileBackend;
+const dataApi = {
+  delete: jest.fn(async () => undefined),
+  get: jest.fn(),
+  patch: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+} as unknown as ApiClient;
 
 jest.mock('expo-router', () => ({
   Redirect: ({ href }: { href: unknown }) => {
@@ -184,7 +193,9 @@ describe('ProviderDetailScreen', () => {
     return (
       <QueryClientProvider client={queryClient}>
         <BackendProvider backend={backend}>
-          <ProviderDetailScreen />
+          <DataApiProvider dataApi={dataApi}>
+            <ProviderDetailScreen />
+          </DataApiProvider>
         </BackendProvider>
       </QueryClientProvider>
     );

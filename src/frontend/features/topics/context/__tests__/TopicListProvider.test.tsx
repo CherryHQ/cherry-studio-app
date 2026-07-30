@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { BackendProvider, queryKeys } from '@/frontend/data';
+import { BackendProvider } from '@/frontend/data';
 import { usePins, useTopics } from '@/frontend/hooks/chat';
-import { prefetchTopicMessages } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 import type { MobileBackend } from '@/shared/contracts';
 import type { Topic } from '@/shared/data/types/topic';
 
@@ -10,22 +9,16 @@ import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
 
 const mockRouterPush = jest.fn();
 const mockInvalidateQueries = jest.fn();
-const mockPrefetchQuery = jest.fn(async (_options: unknown) => undefined);
+const mockPrefetch = jest.fn(async (_path: string, _options?: unknown) => undefined);
+const mockPrefetchInfinite = jest.fn(async (_path: string, _options?: unknown) => undefined);
 const mockRemoveQueries = jest.fn();
 const mockQueryClient = {
   invalidateQueries: mockInvalidateQueries,
-  prefetchQuery: mockPrefetchQuery,
   removeQueries: mockRemoveQueries,
 };
 const defaultModelId = 'provider::default-model';
 const mockGetCachedPreferenceValue = jest.fn((): string | null => defaultModelId);
-const mockGetModelById = jest.fn(async (_modelId: string) => null);
-const mockChat = {} as MobileBackend['chat'];
 const mockBackend = {
-  chat: mockChat,
-  models: {
-    get: mockGetModelById,
-  },
   preferences: {
     readCached: mockGetCachedPreferenceValue,
   },
@@ -47,6 +40,8 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('@/frontend/data', () => ({
   ...jest.requireActual('@/frontend/data'),
   useMutation: jest.fn(),
+  usePrefetch: () => mockPrefetch,
+  usePrefetchInfiniteQuery: () => mockPrefetchInfinite,
 }));
 
 jest.mock('@/frontend/hooks/chat', () => ({
@@ -56,15 +51,12 @@ jest.mock('@/frontend/hooks/chat', () => ({
 
 jest.mock('@/frontend/hooks/chat/utils/messageQueryOptions', () => ({
   getMessagesQueryKey: (topicId: string) => [`/topics/${topicId}/messages`],
-  prefetchTopicMessages: jest.fn(async () => undefined),
+  initialMessagesPageSize: 12,
 }));
 
 const useMutationMock = jest.requireMock<{ useMutation: jest.Mock }>('@/frontend/data').useMutation;
 const usePinsMock = usePins as jest.MockedFunction<typeof usePins>;
 const useTopicsMock = useTopics as jest.MockedFunction<typeof useTopics>;
-const prefetchTopicMessagesMock = prefetchTopicMessages as jest.MockedFunction<
-  typeof prefetchTopicMessages
->;
 const mockRenameTopic = jest.fn(async () => undefined);
 const mockDeleteTopics = jest.fn(async () => undefined);
 const mockLoadMoreTopics = jest.fn(async () => undefined);
@@ -143,36 +135,31 @@ describe('TopicListProvider', () => {
     const topics = Array.from({ length: 14 }, (_, index) => makeTopic(index + 1));
     await renderProvider(topics);
 
-    expect(mockPrefetchQuery).toHaveBeenCalledTimes(1);
-    expect(mockPrefetchQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        queryKey: queryKeys.models.detail(defaultModelId),
-        staleTime: 1000 * 60 * 5,
-      }),
-    );
-    expect(mockPrefetchQuery.mock.invocationCallOrder[0]).toBeLessThan(
-      prefetchTopicMessagesMock.mock.invocationCallOrder[0],
+    expect(mockPrefetch).toHaveBeenCalledTimes(1);
+    expect(mockPrefetch).toHaveBeenCalledWith('/models/:id', {
+      params: { id: defaultModelId },
+      staleTime: 1000 * 60 * 5,
+    });
+    expect(mockPrefetch.mock.invocationCallOrder[0]).toBeLessThan(
+      mockPrefetchInfinite.mock.invocationCallOrder[0],
     );
 
-    const modelQueryFn = (
-      mockPrefetchQuery.mock.calls[0]?.[0] as { queryFn: () => Promise<unknown> }
-    ).queryFn;
-    await expect(modelQueryFn()).resolves.toBeNull();
-    expect(mockGetModelById).toHaveBeenCalledWith(defaultModelId);
-
-    expect(prefetchTopicMessagesMock).toHaveBeenCalledTimes(12);
-    expect(prefetchTopicMessagesMock).not.toHaveBeenCalledWith(
-      mockQueryClient,
-      mockChat,
-      'topic-13',
+    expect(mockPrefetchInfinite).toHaveBeenCalledTimes(12);
+    expect(mockPrefetchInfinite).not.toHaveBeenCalledWith(
+      '/topics/:topicId/messages',
+      expect.objectContaining({ params: { topicId: 'topic-13' } }),
     );
 
     await act(async () => {
       currentActions?.openTopic('topic-13');
     });
 
-    expect(mockPrefetchQuery).toHaveBeenCalledTimes(2);
-    expect(prefetchTopicMessagesMock).toHaveBeenCalledWith(mockQueryClient, mockChat, 'topic-13');
+    expect(mockPrefetch).toHaveBeenCalledTimes(2);
+    expect(mockPrefetchInfinite).toHaveBeenCalledWith('/topics/:topicId/messages', {
+      limit: 12,
+      params: { topicId: 'topic-13' },
+      staleTime: 30_000,
+    });
     expect(mockRouterPush).toHaveBeenCalledWith({
       params: { topicId: 'topic-13' },
       pathname: '/topics',
@@ -184,7 +171,7 @@ describe('TopicListProvider', () => {
 
     await renderProvider([makeTopic(1)]);
 
-    expect(mockPrefetchQuery).not.toHaveBeenCalled();
+    expect(mockPrefetch).not.toHaveBeenCalled();
   });
 
   test('passes pagination through while preserving topic mutations', async () => {
