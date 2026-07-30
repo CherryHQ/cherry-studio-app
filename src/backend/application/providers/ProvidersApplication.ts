@@ -11,6 +11,7 @@ import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/prov
 const cherryInProviderId = 'cherryin';
 
 type ProviderRepository = {
+  canRemove(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean;
   create(input: CreateProviderInput): Promise<Provider>;
   get(id: string): Promise<Provider>;
   getAuth(id: string): Promise<AuthConfig | null>;
@@ -43,6 +44,10 @@ export type ProvidersApplicationDependencies = {
 
 export class ProvidersApplication implements ProvidersBackend {
   constructor(private readonly dependencies: ProvidersApplicationDependencies) {}
+
+  canRemove(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean {
+    return this.dependencies.providers.canRemove(provider);
+  }
 
   async completeCherryInOAuth(input: CompleteCherryInOAuthInput): Promise<void> {
     const apiKeys = await this.dependencies.oauth.complete(input);

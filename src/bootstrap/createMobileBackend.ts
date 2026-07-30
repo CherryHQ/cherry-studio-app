@@ -23,6 +23,7 @@ import {
   prepareMessageParts,
 } from '@/backend/infrastructure/services/fileStorage';
 import { materializeRemoteModels } from '@/backend/infrastructure/services/materializeRemoteModels';
+import { canDeleteProvider } from '@/backend/infrastructure/services/ProviderService';
 import type { DataServices } from '@/bootstrap/createDataServices';
 import type { MobileBackend } from '@/shared/contracts';
 import type { CherryUIMessage } from '@/shared/data/types/message';
@@ -124,6 +125,7 @@ export function createMobileBackend(services: DataServices): MobileBackend {
       saveResult: (providerId, apiKeys) => oauth.saveOAuthResult(providerId, apiKeys),
     },
     providers: {
+      canRemove: canDeleteProvider,
       create: (input) => services.provider.create(input),
       get: (id) => services.provider.getByProviderId(id),
       getAuth: (id) => services.provider.getAuthConfig(id),

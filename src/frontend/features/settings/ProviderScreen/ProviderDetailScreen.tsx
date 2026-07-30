@@ -1,3 +1,4 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Spinner } from 'heroui-native/spinner';
 import { useToast } from 'heroui-native/toast';
@@ -5,11 +6,9 @@ import { PlusIcon, SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { canDeleteProvider } from '@/backend/infrastructure/services/ProviderService';
 import { useConfirmDialog } from '@/frontend/components/confirmDialog';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import { queryKeys } from '@/frontend/data';
-import { useDataMutation } from '@/frontend/data/hooks';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import { openExternalUrl } from '@/utils/openExternalUrl';
 import {
   buildApiKeysInputFromEntries,
@@ -40,17 +39,21 @@ export default function ProviderDetailSettingsScreen() {
   const router = useRouter();
   const { toast } = useToast();
   const { confirmDialog, requestConfirm } = useConfirmDialog();
+  const providers = useBackendModule('providers');
+  const queryClient = useQueryClient();
   const [apiKeysVisible, setApiKeysVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
-  const deleteProviderMutation = useDataMutation({
-    invalidateQueries: [
-      queryKeys.providers.list(),
-      queryKeys.providers.list({ enabled: true }),
-      queryKeys.providers.list({ enabled: false }),
-    ],
-    mutationFn: (services, id: string) => services.provider.delete(id),
+  const deleteProviderMutation = useMutation({
+    mutationFn: (id: string) => providers.remove(id),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.providers.list({ enabled: true }) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.providers.list({ enabled: false }) }),
+      ]);
+    },
   });
   const { apiKeys, apiKeysQuery, authConfig, authConfigQuery } = useProviderApiServiceQueries(
     providerId ?? '',
@@ -69,7 +72,6 @@ export default function ProviderDetailSettingsScreen() {
   } = useProviderModelCheck({
     apiKeys,
     models,
-    provider,
     providerId: providerId ?? '',
   });
   const { isPreviewLoading: isModelPullLoading, loadPullPreview } = useProviderModelPull({
@@ -80,7 +82,6 @@ export default function ProviderDetailSettingsScreen() {
 
       stashProviderModelPullPreview(providerId, preview);
     },
-    provider,
     providerId: providerId ?? '',
   });
   const canEditEndpoint = canEditProviderEndpoint(provider);
@@ -236,7 +237,7 @@ export default function ProviderDetailSettingsScreen() {
     }
   }, [deleteProviderMutation, providerId, router, t, toast]);
   const requestDeleteProvider = useCallback(() => {
-    if (!provider || !canDeleteProvider(provider)) {
+    if (!provider || !providers.canRemove(provider)) {
       return;
     }
 
@@ -245,7 +246,7 @@ export default function ProviderDetailSettingsScreen() {
       onConfirm: handleDeleteProvider,
       title: t('settings.provider.delete.title'),
     });
-  }, [handleDeleteProvider, provider, requestConfirm, t]);
+  }, [handleDeleteProvider, provider, providers, requestConfirm, t]);
 
   if (!providerId || providerQuery.isError) {
     return <Redirect href="/settings/provider" />;
@@ -319,7 +320,7 @@ export default function ProviderDetailSettingsScreen() {
       {/* Mounted from the first frame — installing a bottom toolbar later is a
           native nav-item change, which is what the loading branch used to do. */}
       <ProviderDetailChrome
-        canDelete={provider ? canDeleteProvider(provider) : false}
+        canDelete={provider ? providers.canRemove(provider) : false}
         checkAction={modelActionsForTab?.check}
         isActive={provider?.isEnabled ?? false}
         isDisabled={

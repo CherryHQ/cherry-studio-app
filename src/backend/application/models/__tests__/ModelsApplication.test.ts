@@ -104,6 +104,53 @@ describe('ModelsApplication', () => {
     expect(dependencies.providers.update).toHaveBeenCalled();
   });
 
+  it('continues after a failed health check and does not enable the provider', async () => {
+    const first = model('first');
+    const second = model('second');
+    const onResult = jest.fn();
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.models.get).mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    jest
+      .mocked(dependencies.ai.checkModel)
+      .mockRejectedValueOnce(new Error('Invalid API key'))
+      .mockResolvedValueOnce({ latency: 18 });
+
+    await expect(
+      backend.checkHealth({
+        modelIds: [first.id, second.id],
+        onResult,
+        providerId: 'openai',
+      }),
+    ).resolves.toEqual([
+      { error: 'Invalid API key', model: first, status: 'failed' },
+      { latency: 18, model: second, status: 'success' },
+    ]);
+    expect(onResult).toHaveBeenCalledTimes(2);
+    expect(dependencies.providers.update).not.toHaveBeenCalled();
+  });
+
+  it('stops a health check when its external signal aborts', async () => {
+    const first = model('first');
+    const second = model('second');
+    const controller = new AbortController();
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.models.get).mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    jest.mocked(dependencies.ai.checkModel).mockImplementationOnce(async () => {
+      controller.abort(new Error('cancelled'));
+      return { latency: 12 };
+    });
+
+    await expect(
+      backend.checkHealth({
+        modelIds: [first.id, second.id],
+        providerId: 'openai',
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow('cancelled');
+    expect(dependencies.ai.checkModel).toHaveBeenCalledTimes(1);
+    expect(dependencies.providers.update).not.toHaveBeenCalled();
+  });
+
   it('rejects a stalled pull with the stable contract error', async () => {
     const { backend } = createSubject({
       ai: {

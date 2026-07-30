@@ -1,86 +1,10 @@
-import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import {
   buildProviderModelPullListItems,
-  buildProviderModelPullPreview,
   filterProviderModelPullPreview,
-  modelToCreateModelInput,
 } from '../providerModelPullPreview';
 
 describe('provider model pull preview helpers', () => {
-  test('diffs added remote models and missing preset local models', () => {
-    const preview = buildProviderModelPullPreview({
-      localModels: [
-        model({ modelId: 'gpt-4o', presetModelId: 'gpt-4o' }),
-        model({ modelId: 'old-model', presetModelId: 'old-model' }),
-        model({ modelId: 'custom-local' }),
-      ],
-      providerId: 'openai',
-      remoteModels: [
-        model({ modelId: 'gpt-4o', presetModelId: 'gpt-4o' }),
-        { modelId: 'gpt-4o-mini', name: 'GPT-4o mini' },
-      ],
-    });
-
-    expect(preview.added.map((item) => item.id)).toEqual(['openai::gpt-4o-mini']);
-    expect(preview.missing.map((item) => item.id)).toEqual(['openai::old-model']);
-  });
-
-  test('enriches added remote models with registry metadata', () => {
-    const preview = buildProviderModelPullPreview({
-      localModels: [],
-      providerId: 'cherryin',
-      registryResolver: () => ({
-        presetModel: {
-          capabilities: [MODEL_CAPABILITY.REASONING, MODEL_CAPABILITY.FUNCTION_CALL],
-          id: 'deepseek-v3-2',
-          metadata: {},
-          name: 'DeepSeek-V3.2-Thinking',
-        },
-        registryOverride: null,
-      }),
-      remoteModels: [{ modelId: 'agent/deepseek-v3.2' }],
-    });
-
-    expect(preview.added[0]).toMatchObject({
-      capabilities: [MODEL_CAPABILITY.REASONING, MODEL_CAPABILITY.FUNCTION_CALL],
-      modelId: 'agent/deepseek-v3.2',
-      name: 'DeepSeek-V3.2-Thinking',
-      presetModelId: 'deepseek-v3-2',
-    });
-    expect(modelToCreateModelInput(preview.added[0])).toMatchObject({
-      capabilities: [MODEL_CAPABILITY.REASONING, MODEL_CAPABILITY.FUNCTION_CALL],
-      modelId: 'agent/deepseek-v3.2',
-      presetModelId: 'deepseek-v3-2',
-    });
-  });
-
-  test('keeps remote ownedBy separate from group in pull preview payload', () => {
-    const preview = buildProviderModelPullPreview({
-      localModels: [],
-      providerId: 'cherryin',
-      remoteModels: [
-        {
-          group: 'anthropic',
-          modelId: 'anthropic/claude-sonnet-4-5',
-          name: 'Claude Sonnet 4.5',
-          ownedBy: 'custom',
-        },
-      ],
-    });
-
-    expect(preview.added[0]).toMatchObject({
-      group: 'anthropic',
-      modelId: 'anthropic/claude-sonnet-4-5',
-      ownedBy: 'custom',
-    });
-    expect(modelToCreateModelInput(preview.added[0])).toMatchObject({
-      group: 'anthropic',
-      modelId: 'anthropic/claude-sonnet-4-5',
-      ownedBy: 'custom',
-    });
-  });
-
   test('filters pull rows by model id and name', () => {
     const preview = {
       added: [

@@ -1,49 +1,40 @@
-import { queryKeys } from '@/frontend/data';
-import { useDataMutation, useDataQuery } from '@/frontend/data/hooks';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { ApiKeyEntry, EndpointConfigs } from '@/shared/data/types/provider';
 
 export function useProviderApiServiceQueries(providerId: string) {
-  const providerQuery = useDataQuery({
+  const providers = useBackendModule('providers');
+  const queryClient = useQueryClient();
+  const providerQuery = useQuery({
     enabled: Boolean(providerId),
-    queryFn: (services) => services.provider.getByProviderId(providerId),
+    queryFn: () => providers.get(providerId),
     queryKey: queryKeys.providers.detail(providerId),
     retry: false,
   });
-  const apiKeysQuery = useDataQuery({
+  const apiKeysQuery = useQuery({
     enabled: Boolean(providerId),
-    queryFn: (services) => services.provider.listApiKeys(providerId),
+    queryFn: () => providers.listApiKeys(providerId),
     queryKey: queryKeys.providers.apiKeys(providerId),
     retry: false,
   });
-  const authConfigQuery = useDataQuery({
+  const authConfigQuery = useQuery({
     enabled: Boolean(providerId),
-    queryFn: (services) => services.provider.getAuthConfig(providerId),
+    queryFn: () => providers.getAuth(providerId),
     queryKey: queryKeys.providers.authConfig(providerId),
     retry: false,
   });
-  const saveProviderMutation = useDataMutation({
-    invalidateQueries: [
-      queryKeys.providers.detail(providerId),
-      queryKeys.providers.list(),
-      queryKeys.providers.list({ enabled: true }),
-      queryKeys.providers.list({ enabled: false }),
-      queryKeys.providers.authConfig(providerId),
-    ],
-    mutationFn: (services, updates: { endpointConfigs: EndpointConfigs }) =>
-      services.provider.update(providerId, updates),
+  const saveProviderMutation = useMutation({
+    mutationFn: (updates: { endpointConfigs: EndpointConfigs }) =>
+      providers.update(providerId, updates),
+    onSuccess: () => invalidateProviderQueries(queryClient, providerId, { authConfig: true }),
   });
-  const replaceApiKeysMutation = useDataMutation({
-    invalidateQueries: [
-      queryKeys.providers.detail(providerId),
-      queryKeys.providers.list(),
-      queryKeys.providers.apiKeys(providerId),
-    ],
-    mutationFn: (services, apiKeys: ApiKeyEntry[]) =>
-      services.provider.replaceApiKeys(providerId, apiKeys),
+  const replaceApiKeysMutation = useMutation({
+    mutationFn: (apiKeys: ApiKeyEntry[]) => providers.replaceApiKeys(providerId, apiKeys),
+    onSuccess: () => invalidateProviderQueries(queryClient, providerId, { apiKeys: true }),
   });
 
   return {
-    apiKeys: apiKeysQuery.data?.keys,
+    apiKeys: apiKeysQuery.data,
     apiKeysQuery,
     authConfig: authConfigQuery.data,
     authConfigQuery,
@@ -53,4 +44,23 @@ export function useProviderApiServiceQueries(providerId: string) {
     replaceApiKeysMutation,
     saveProviderMutation,
   };
+}
+
+async function invalidateProviderQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  providerId: string,
+  options: { apiKeys?: boolean; authConfig?: boolean },
+) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.providers.detail(providerId) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.providers.list({ enabled: true }) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.providers.list({ enabled: false }) }),
+    ...(options.apiKeys
+      ? [queryClient.invalidateQueries({ queryKey: queryKeys.providers.apiKeys(providerId) })]
+      : []),
+    ...(options.authConfig
+      ? [queryClient.invalidateQueries({ queryKey: queryKeys.providers.authConfig(providerId) })]
+      : []),
+  ]);
 }

@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useDataServices } from '@/bootstrap';
+import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
@@ -22,7 +22,7 @@ const emptyModelIdSet: ReadonlySet<UniqueModelId> = new Set();
 export function useProviderModelRemove(providerId: string) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const services = useDataServices();
+  const models = useBackendModule('models');
   const queryClient = useQueryClient();
   const [defaultModelId] = usePreference('chat.default_model_id');
   const [removingIds, setRemovingIds] = useState<ReadonlySet<UniqueModelId>>(emptyModelIdSet);
@@ -35,7 +35,7 @@ export function useProviderModelRemove(providerId: string) {
 
       setRemovingIds((current) => new Set(current).add(model.id));
       try {
-        const didRemove = await services.model.delete(model.id);
+        const didRemove = await models.remove(model.id);
         if (!didRemove) {
           toast.show({ label: t('settings.provider.models.removeFailed'), variant: 'danger' });
           return;
@@ -52,7 +52,7 @@ export function useProviderModelRemove(providerId: string) {
         });
       }
     },
-    [providerId, queryClient, removingIds, services.model, t, toast],
+    [models, providerId, queryClient, removingIds, t, toast],
   );
 
   return {

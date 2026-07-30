@@ -1,9 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from 'heroui-native/toast';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useDataServices } from '@/bootstrap';
-import { queryKeys } from '@/frontend/data';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { EndpointType } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -29,7 +28,7 @@ type UseProviderModelAddOptions = {
 export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const services = useDataServices();
+  const models = useBackendModule('models');
   const queryClient = useQueryClient();
   const [formState, setFormState] = useState<ProviderModelAddFormState>(() =>
     createInitialProviderModelAddFormState(),
@@ -50,14 +49,6 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
     endpointTypeTouched && !isEndpointTypesValid
       ? t('settings.provider.models.addEndpointTypeRequired')
       : undefined;
-
-  const providerConfig = useMemo(
-    () => ({
-      defaultChatEndpoint: provider.defaultChatEndpoint,
-      endpointConfigs: provider.endpointConfigs,
-    }),
-    [provider.defaultChatEndpoint, provider.endpointConfigs],
-  );
 
   const resetForm = useCallback(() => {
     setFormState(createInitialProviderModelAddFormState());
@@ -163,7 +154,7 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
 
     setIsSubmitting(true);
     const submit = async (): Promise<boolean> => {
-      const existingModels = await services.model.list({ providerId: provider.id });
+      const existingModels = await models.list({ providerId: provider.id });
       const { duplicateIds, inputs } = buildProviderModelAddInputs({
         existingModels,
         formState,
@@ -184,10 +175,7 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
         return false;
       }
 
-      for (const input of inputs) {
-        // react-doctor-disable-next-line async-await-in-loop -- 每次创建的 orderKey 依赖前一条已插入的模型，并行会生成重复 key
-        await services.model.createFromRegistry(input, providerConfig);
-      }
+      await models.add(inputs);
       await refreshModelQueries();
       toast.show({
         label: t('settings.provider.models.addSuccess', { count: inputs.length }),
@@ -210,11 +198,10 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
     isEndpointTypesValid,
     isModelIdValid,
     isSubmitting,
+    models,
     provider,
-    providerConfig,
     refreshModelQueries,
     resetForm,
-    services.model,
     t,
     toast,
   ]);

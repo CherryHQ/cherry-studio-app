@@ -1,4 +1,5 @@
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -11,11 +12,9 @@ import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { saveProviderAvatar } from '@/backend/infrastructure/integrations/avatars/providerAvatarStorage';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { Image } from '@/frontend/components/nativePrimitives';
-import { queryKeys } from '@/frontend/data';
-import { useDataMutation } from '@/frontend/data/hooks';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import { ENDPOINT_TYPE } from '@/shared/data/types/model';
 import type { ApiKeyEntry, EndpointConfigs } from '@/shared/data/types/provider';
 import { keyboardBottomOffset } from '@/utils/constants';
@@ -41,6 +40,8 @@ export default function NewProviderScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
+  const providers = useBackendModule('providers');
+  const queryClient = useQueryClient();
 
   const [name, setName] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
@@ -51,9 +52,8 @@ export default function NewProviderScreen() {
   const [geminiUrl, setGeminiUrl] = useState('');
   const [openaiResponsesUrl, setOpenaiResponsesUrl] = useState('');
 
-  const createProviderMutation = useDataMutation({
-    invalidateQueries: [queryKeys.providers.list()],
-    mutationFn: async (services, values: CreateProviderFormValues) => {
+  const createProviderMutation = useMutation({
+    mutationFn: async (values: CreateProviderFormValues) => {
       const providerId = Crypto.randomUUID();
       const trimmedApiKey = values.apiKey.trim();
 
@@ -80,7 +80,7 @@ export default function NewProviderScreen() {
         ? [{ id: Crypto.randomUUID(), isEnabled: true, key: trimmedApiKey }]
         : undefined;
 
-      await services.provider.create({
+      await providers.create({
         apiKeys,
         authConfig: { type: 'api-key' },
         defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
@@ -90,15 +90,16 @@ export default function NewProviderScreen() {
       });
 
       if (values.avatarUri) {
-        await saveProviderAvatar(providerId, values.avatarUri);
+        await providers.persistAvatar(providerId, values.avatarUri);
       }
 
       // Providers are created disabled; the user asked for new custom providers to
       // land already enabled, so flip it on before navigating to the detail page.
-      await services.provider.update(providerId, { isEnabled: true });
+      await providers.update(providerId, { isEnabled: true });
 
       return providerId;
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() }),
   });
 
   const canSubmit = name.trim().length > 0 && baseUrl.trim().length > 0;

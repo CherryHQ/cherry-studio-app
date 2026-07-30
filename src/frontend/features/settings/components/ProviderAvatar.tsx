@@ -2,8 +2,8 @@ import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
-import { getProviderAvatarUri } from '@/backend/infrastructure/integrations/avatars/providerAvatarStorage';
 import { Image } from '@/frontend/components/nativePrimitives';
+import { useBackendModule } from '@/frontend/data';
 
 /**
  * Reads a provider's stored custom avatar uri (see `providerAvatarStorage`).
@@ -11,7 +11,8 @@ import { Image } from '@/frontend/components/nativePrimitives';
  * the avatar is available on first render without a cascading re-render.
  */
 export function useProviderAvatar(providerId: string): string | undefined {
-  return useMemo(() => getProviderAvatarUri(providerId), [providerId]);
+  const providers = useBackendModule('providers');
+  return useMemo(() => providers.resolveAvatar(providerId), [providerId, providers]);
 }
 
 type ProviderAvatarProps = {

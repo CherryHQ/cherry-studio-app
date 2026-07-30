@@ -1,7 +1,10 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { ScrollView } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { BackendProvider } from '@/frontend/data';
+import type { MobileBackend } from '@/shared/contracts';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
 import ProviderDetailScreen from '../ProviderDetailScreen';
 
@@ -37,6 +40,13 @@ let mockRedirectHref: unknown;
 let mockSpinnerRenderCount: number;
 let mockChromeRenderCount: number;
 let mockSectionRenders: SectionProps[];
+let queryClient: QueryClient;
+
+const providersBackend = {
+  canRemove: jest.fn(() => true),
+  remove: jest.fn(async () => undefined),
+} as unknown as MobileBackend['providers'];
+const backend = { providers: providersBackend } as MobileBackend;
 
 jest.mock('expo-router', () => ({
   Redirect: ({ href }: { href: unknown }) => {
@@ -53,20 +63,6 @@ jest.mock('@/frontend/components/confirmDialog', () => ({
 
 jest.mock('@/frontend/components/headers', () => ({
   BackHeader: () => null,
-}));
-
-jest.mock('@/frontend/data', () => ({
-  queryKeys: {
-    providers: { list: jest.fn(() => ['providers']) },
-  },
-}));
-
-jest.mock('@/frontend/data/hooks', () => ({
-  useDataMutation: () => ({ isPending: false, mutateAsync: jest.fn() }),
-}));
-
-jest.mock('@/backend/infrastructure/services/ProviderService', () => ({
-  canDeleteProvider: () => true,
 }));
 
 jest.mock('heroui-native/spinner', () => ({
@@ -174,14 +170,24 @@ describe('ProviderDetailScreen', () => {
 
   function render() {
     act(() => {
-      renderer = create(<ProviderDetailScreen />);
+      renderer = create(renderSubject());
     });
   }
 
   function rerender() {
     act(() => {
-      renderer?.update(<ProviderDetailScreen />);
+      renderer?.update(renderSubject());
     });
+  }
+
+  function renderSubject() {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <BackendProvider backend={backend}>
+          <ProviderDetailScreen />
+        </BackendProvider>
+      </QueryClientProvider>
+    );
   }
 
   beforeEach(() => {
@@ -196,6 +202,7 @@ describe('ProviderDetailScreen', () => {
     mockSpinnerRenderCount = 0;
     mockChromeRenderCount = 0;
     mockSectionRenders = [];
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   });
 
   afterEach(() => {

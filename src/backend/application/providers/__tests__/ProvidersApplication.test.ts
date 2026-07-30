@@ -28,6 +28,7 @@ function createSubject() {
       saveResult: jest.fn(async () => undefined),
     },
     providers: {
+      canRemove: jest.fn(() => true),
       create: jest.fn(async () => provider),
       get: jest.fn(async () => provider),
       getAuth: jest.fn(async () => ({
@@ -48,6 +49,13 @@ function createSubject() {
 }
 
 describe('ProvidersApplication', () => {
+  it('delegates provider removal policy to its repository port', () => {
+    const { backend, dependencies } = createSubject();
+
+    expect(backend.canRemove(provider)).toBe(true);
+    expect(dependencies.providers.canRemove).toHaveBeenCalledWith(provider);
+  });
+
   it('persists the OAuth result after completing the CherryIN exchange', async () => {
     const { backend, dependencies } = createSubject();
     const input = {

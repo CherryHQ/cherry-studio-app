@@ -1,6 +1,6 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
-import type { CreateModelInput } from '@/backend/infrastructure/services/ModelService';
+import type { AddModelInput } from '@/shared/contracts';
 import {
   createUniqueModelId,
   type EndpointType,
@@ -21,7 +21,7 @@ export type ProviderModelAddFormState = {
 
 export type ProviderModelAddBuildResult = {
   duplicateIds: string[];
-  inputs: CreateModelInput[];
+  inputs: AddModelInput[];
 };
 
 export const providerModelAddDefaultEndpointType = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
@@ -114,7 +114,7 @@ export function buildProviderModelAddInputs({
   const existingIds = new Set(existingModels.map((model) => model.id));
   const seenIds = new Set<UniqueModelId>();
   const duplicateIds: string[] = [];
-  const inputs: CreateModelInput[] = [];
+  const inputs: AddModelInput[] = [];
   const isBatch = modelIds.length > 1;
   const shouldIncludeEndpointTypes =
     isNewApiLikeProvider(provider) && formState.endpointTypes.length > 0;
@@ -156,7 +156,7 @@ function buildSingleProviderModelAddInput({
   formState: ProviderModelAddFormState;
   modelId: string;
   providerId: string;
-}): CreateModelInput {
+}): AddModelInput {
   return removeUndefinedCreateModelFields({
     contextWindow: parseOptionalNumber(formState.contextWindow),
     endpointTypes: endpointTypes ? [...endpointTypes] : undefined,
@@ -177,7 +177,7 @@ function buildBatchProviderModelAddInput({
   endpointTypes: EndpointType[] | undefined;
   modelId: string;
   providerId: string;
-}): CreateModelInput {
+}): AddModelInput {
   return removeUndefinedCreateModelFields({
     endpointTypes: endpointTypes ? [...endpointTypes] : undefined,
     group: getDefaultProviderModelGroupName(modelId),
@@ -197,8 +197,8 @@ function parseOptionalNumber(value: string): number | undefined {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-function removeUndefinedCreateModelFields(input: CreateModelInput): CreateModelInput {
+function removeUndefinedCreateModelFields(input: AddModelInput): AddModelInput {
   return Object.fromEntries(
     Object.entries(input).filter((entry) => entry[1] !== undefined),
-  ) as CreateModelInput;
+  ) as AddModelInput;
 }

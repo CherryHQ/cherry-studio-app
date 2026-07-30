@@ -60,6 +60,7 @@ export type CherryInAccount = {
 };
 
 export interface ProvidersBackend {
+  canRemove(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean;
   completeCherryInOAuth(input: CompleteCherryInOAuthInput): Promise<void>;
   create(input: CreateProviderInput): Promise<Provider>;
   get(id: string): Promise<Provider>;

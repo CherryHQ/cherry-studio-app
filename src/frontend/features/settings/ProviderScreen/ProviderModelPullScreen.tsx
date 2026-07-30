@@ -63,7 +63,6 @@ export default function ProviderModelPullScreen() {
   const { provider, providerQuery } = useProviderDetailSettings(providerId ?? '');
   const { applyModelChange, isPreviewLoading, loadPullPreview, preview } = useProviderModelPull({
     initialPreview,
-    provider,
     providerId: providerId ?? '',
   });
   const leavePullScreen = useCallback(() => {

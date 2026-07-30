@@ -1,13 +1,11 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { UpdateProviderInput } from '@/backend/infrastructure/services/ProviderService';
-import { useDataServices } from '@/bootstrap';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
-import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
-import { enableProviderWhenModelsAvailable } from '../../utils/providerEnablement';
+import type { ApiKeyEntry } from '@/shared/data/types/provider';
 import {
-  checkProviderModelsHealth,
   createProviderModelHealthPendingStatuses,
   type ProviderModelHealthCheckStatus,
   providerModelCheckTimeoutMs,
@@ -18,7 +16,6 @@ const defaultApiKeySelectValue = '__default__';
 type UseProviderModelCheckOptions = {
   apiKeys: readonly ApiKeyEntry[] | undefined;
   models: readonly Model[];
-  provider: Provider | undefined;
   providerId: string;
 };
 
@@ -39,12 +36,12 @@ type ProviderModelCheckState = {
 export function useProviderModelCheck({
   apiKeys,
   models,
-  provider,
   providerId,
 }: UseProviderModelCheckOptions) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const services = useDataServices();
+  const modelsBackend = useBackendModule('models');
+  const queryClient = useQueryClient();
   const [checkState, setCheckState] = useState<ProviderModelCheckState>(() =>
     createProviderModelCheckState(providerId),
   );
@@ -152,21 +149,10 @@ export function useProviderModelCheck({
     });
 
     const runCheck = async () => {
-      const results = await checkProviderModelsHealth(
-        {
-          apiKey: selectedApiKey,
-          checkModel: ({ apiKey, modelId, signal, timeout }) =>
-            services.ai.checkModel({
-              ...(apiKey !== undefined && { apiKeyOverride: apiKey }),
-              ...(signal && { requestOptions: { signal } }),
-              timeout,
-              uniqueModelId: modelId,
-            }),
-          models: [selectedModel],
-          signal: abortController.signal,
-          timeout: providerModelCheckTimeoutMs,
-        },
-        (result, index) => {
+      const results = await modelsBackend.checkHealth({
+        ...(selectedApiKey?.key !== undefined && { apiKey: selectedApiKey.key }),
+        modelIds: [selectedModel.id],
+        onResult: (result, index) => {
           if (runIdRef.current !== runId) {
             return;
           }
@@ -181,7 +167,10 @@ export function useProviderModelCheck({
             return { ...current, modelStatuses: updated };
           });
         },
-      );
+        providerId,
+        signal: abortController.signal,
+        timeoutMs: providerModelCheckTimeoutMs,
+      });
 
       if (runIdRef.current !== runId) {
         return;
@@ -191,12 +180,10 @@ export function useProviderModelCheck({
         setCheckState((current) =>
           current.providerId === providerId ? { ...current, isSheetOpen: false } : current,
         );
-        await enableProviderWhenModelsAvailable(
-          provider,
-          (updates: UpdateProviderInput) => services.provider.update(providerId, updates),
-          models.length,
-          'connection_check',
-        );
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: queryKeys.providers.detail(providerId) }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() }),
+        ]);
         toast.show({
           label: t('settings.provider.models.checkSuccess'),
           variant: 'success',
@@ -227,17 +214,7 @@ export function useProviderModelCheck({
           );
         }
       });
-  }, [
-    models.length,
-    provider,
-    providerId,
-    selectedApiKey,
-    selectedModel,
-    services.ai,
-    services.provider,
-    t,
-    toast,
-  ]);
+  }, [modelsBackend, providerId, queryClient, selectedApiKey, selectedModel, t, toast]);
 
   const updateSelectedModelId = useCallback((modelId: UniqueModelId) => {
     setSelectedModelId(modelId);
