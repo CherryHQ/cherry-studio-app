@@ -1,6 +1,6 @@
-import { useDataMutation, useDataQuery } from '@/frontend/data/hooks';
 import { queryKeys } from '@/frontend/data';
-import type { ApiKeyEntry, EndpointConfigs } from '@/shared/domain/provider';
+import { useDataMutation, useDataQuery } from '@/frontend/data/hooks';
+import type { ApiKeyEntry, EndpointConfigs } from '@/shared/data/types/provider';
 
 export function useProviderApiServiceQueries(providerId: string) {
   const providerQuery = useDataQuery({

@@ -9,7 +9,7 @@ import { BackHeader } from '@/frontend/components/headers';
 import { usePreference } from '@/frontend/data/hooks';
 import { useDataServices } from '@/runtime';
 import type { SystemPermissionState } from '@/services/devicePermissions';
-import type { PermissionMode, PermissionPreferenceKey } from '@/shared/domain/preferences';
+import type { PermissionMode, PermissionPreferenceKey } from '@/shared/data/preference';
 
 import { SettingsSection } from '../components/SettingsSection';
 import { usePermissionPolicies } from './hooks/usePermissionPolicies';

@@ -1,4 +1,4 @@
-import type { WebSearchCapability, WebSearchProvider } from '@/shared/domain/preferences';
+import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/preference';
 
 export function resolveProviderApiHost(
   provider: WebSearchProvider,

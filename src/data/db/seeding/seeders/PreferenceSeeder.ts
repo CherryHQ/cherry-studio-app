@@ -1,5 +1,5 @@
 import { preferenceTable } from '@/data/db/schemas';
-import { DefaultPreferences } from '@/shared/domain/preferences';
+import { DefaultPreferences } from '@/shared/data/preference';
 
 import { hashObject } from '../hashObject';
 import type { DatabaseSeeder } from '../types';

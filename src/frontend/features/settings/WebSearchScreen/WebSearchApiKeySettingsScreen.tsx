@@ -5,7 +5,7 @@ import { ScrollView, View } from 'react-native';
 import { isMobileSupportedWebSearchProviderId } from '@/data/presets/webSearchProviders';
 import { useConfirmDialog } from '@/frontend/components/confirmDialog';
 import { BackHeader } from '@/frontend/components/headers';
-import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/shared/domain/preferences';
+import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/shared/data/preference';
 import {
   normalizeWebSearchApiKeys,
   useWebSearchApiKeySettings,

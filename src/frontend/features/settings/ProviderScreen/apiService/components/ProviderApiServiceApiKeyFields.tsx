@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
 import { Pressable, Text, View } from 'react-native';
 
-import type { ApiKeyEntry } from '@/shared/domain/provider';
+import type { ApiKeyEntry } from '@/shared/data/types/provider';
 import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import { normalizeApiKeySingleLine } from '../utils/providerApiServiceApiKeys';
 import { providerApiServiceStyles } from '../utils/providerApiServiceStyles';

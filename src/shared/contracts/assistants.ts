@@ -1,10 +1,10 @@
-import type { Assistant } from '@/shared/domain/assistant';
-import type { OffsetPaginationResponse } from './dataTypes';
 import type {
   CreateAssistantDto,
   ListAssistantsQueryParams,
   UpdateAssistantDto,
-} from './schemas/assistants';
+} from '@/shared/data/api/schemas/assistants';
+import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+import type { Assistant } from '@/shared/data/types/assistant';
 
 export interface AssistantsBackend {
   create(input: CreateAssistantDto): Promise<Assistant>;

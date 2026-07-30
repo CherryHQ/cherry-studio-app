@@ -9,7 +9,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
-import type { MessageData, MessageStats, ModelSnapshot } from '@/shared/domain/message';
+import type { MessageData, MessageStats, ModelSnapshot } from '@/shared/data/types/message';
 
 import { createUpdateDeleteTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
 import { topicTable } from './topic';

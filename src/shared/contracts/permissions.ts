@@ -1,4 +1,4 @@
-import type { PermissionMode, PermissionPreferenceKey } from '@/shared/domain/preferences';
+import type { PermissionMode, PermissionPreferenceKey } from '@/shared/data/preference';
 
 export type DevicePermission = 'calendar' | 'health' | 'location' | 'reminders';
 export type DevicePermissionAccess = 'read' | 'write';

@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { queryKeys } from '@/frontend/data';
 import { useDataServices } from '@/runtime';
-import type { Painting } from '@/shared/domain/painting';
+import type { Painting } from '@/shared/data/types/painting';
 import { createPaintingDraftHandoff } from '../../utils/paintingDraftHandoff';
 import { createPaintingOutputAttachmentDraft } from '../../utils/paintingOutputAttachment';
 

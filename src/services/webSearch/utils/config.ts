@@ -8,9 +8,9 @@ import type {
   WebSearchCapability,
   WebSearchProvider,
   WebSearchProviderOverrides,
-} from '@/shared/domain/preferences';
-import type { WebSearchExecutionConfig } from '@/shared/domain/webSearch';
-import { normalizeWebSearchCutoffLimit } from '@/shared/domain/webSearch';
+} from '@/shared/data/preference';
+import type { WebSearchExecutionConfig } from '@/shared/data/types/webSearch';
+import { normalizeWebSearchCutoffLimit } from '@/shared/data/types/webSearch';
 
 export interface WebSearchPreferenceReader {
   get<K extends PreferenceKeyType>(

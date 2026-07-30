@@ -1,4 +1,4 @@
-import type { EndpointType } from '@/shared/domain/model';
+import type { EndpointType } from '@/shared/data/types/model';
 import type {
   ApiFeatures,
   ApiKeyEntry,
@@ -7,7 +7,7 @@ import type {
   Provider,
   ProviderSettings,
   RuntimeApiFeatures,
-} from '@/shared/domain/provider';
+} from '@/shared/data/types/provider';
 
 export type CreateProviderInput = {
   apiFeatures?: ApiFeatures | null;

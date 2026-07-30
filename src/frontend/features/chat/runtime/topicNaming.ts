@@ -10,8 +10,8 @@
 
 import { loggerService } from '@/core/logger/LoggerService';
 import type { DataServices } from '@/runtime/createDataServices';
-import type { CherryMessagePart } from '@/shared/domain/message';
-import { isUniqueModelId, type UniqueModelId } from '@/shared/domain/model';
+import type { CherryMessagePart } from '@/shared/data/types/message';
+import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 
 const logger = loggerService.withContext('topicNaming');
 

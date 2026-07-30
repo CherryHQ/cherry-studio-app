@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import type { Model } from '@/shared/domain/model';
+import type { Model } from '@/shared/data/types/model';
 
 import {
   filterModelsByKeywords,

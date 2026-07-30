@@ -6,7 +6,7 @@ import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/frontend/components/bottomSheet';
-import type { Model, UniqueModelId } from '@/shared/domain/model';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
 import { SettingsDialogActionButton } from '../../../components/SettingsDialogActionButton';
 import type { ProviderModelCheckApiKeyOption } from '../hooks/useProviderModelCheck';

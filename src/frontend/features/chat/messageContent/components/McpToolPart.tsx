@@ -4,12 +4,12 @@ import { Text, View } from 'react-native';
 
 import { parseFunctionCallToolName } from '@/ai/mcp';
 import { type NormalizedMcpContent, normalizeMcpResult } from '@/ai/mcp/mcpResult';
-import type { CherryMessagePart } from '@/shared/domain/message';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 import {
   type CherryToolMeta,
   readCherryMeta,
   readCherryToolMetadata,
-} from '@/shared/domain/uiParts';
+} from '@/shared/data/types/uiParts';
 import { ToolPartSectionTitle, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';
 

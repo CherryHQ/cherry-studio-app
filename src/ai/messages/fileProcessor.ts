@@ -9,8 +9,8 @@
 import { File } from 'expo-file-system';
 
 import { loggerService } from '@/core/logger/LoggerService';
-import type { FileUIPart } from '@/shared/domain/message';
-import { readCherryMeta } from '@/shared/domain/uiParts';
+import type { FileUIPart } from '@/shared/data/types/message';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 const FALLBACK_MEDIA_TYPE = 'application/octet-stream';
 const logger = loggerService.withContext('fileProcessor');

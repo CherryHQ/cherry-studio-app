@@ -10,11 +10,15 @@ import type {
   CherryUIMessage,
   Message,
   ModelSnapshot,
-} from '@/shared/domain/message';
-import type { Model, UniqueModelId } from '@/shared/domain/model';
-import { isUniqueModelId } from '@/shared/domain/model';
-import type { Topic } from '@/shared/domain/topic';
-import { type CherryReasoningMeta, readCherryMeta, withCherryMeta } from '@/shared/domain/uiParts';
+} from '@/shared/data/types/message';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import { isUniqueModelId } from '@/shared/data/types/model';
+import type { Topic } from '@/shared/data/types/topic';
+import {
+  type CherryReasoningMeta,
+  readCherryMeta,
+  withCherryMeta,
+} from '@/shared/data/types/uiParts';
 
 import {
   applyStreamingMessage,

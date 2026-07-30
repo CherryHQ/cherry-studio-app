@@ -15,8 +15,8 @@ import {
   useChatInputState,
 } from '@/frontend/features/chat/input';
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
-import { isUniqueModelId, type UniqueModelId } from '@/shared/domain/model';
-import type { Painting } from '@/shared/domain/painting';
+import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
+import type { Painting } from '@/shared/data/types/painting';
 
 import type {
   PaintingGenerationInput,

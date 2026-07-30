@@ -1,6 +1,6 @@
 import type { DbService } from '@/data/db/DbService';
 import { userModelTable } from '@/data/db/schemas/userModel';
-import { REASONING_EFFORT } from '@/shared/domain/model';
+import { REASONING_EFFORT } from '@/shared/data/types/model';
 import { ModelService } from '../ModelService';
 import type { PinService } from '../PinService';
 import type { PreferenceService } from '../PreferenceService';

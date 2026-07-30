@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 
-import type { EndpointType } from '@/shared/domain/model';
-import type { Provider } from '@/shared/domain/provider';
+import type { EndpointType } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import {
   canAddEndpointToDraft,

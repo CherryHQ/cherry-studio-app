@@ -7,7 +7,7 @@ import type {
   ReasoningConfig,
   RuntimeModelPricing,
   UniqueModelId,
-} from '@/shared/domain/model';
+} from '@/shared/data/types/model';
 
 export type ModelListQuery = {
   capability?: string;

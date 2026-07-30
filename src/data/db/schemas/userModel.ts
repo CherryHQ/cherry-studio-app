@@ -7,7 +7,7 @@ import type {
   ParameterSupport,
   ReasoningConfig,
   RuntimeModelPricing,
-} from '@/shared/domain/model';
+} from '@/shared/data/types/model';
 
 import { createUpdateTimestamps, orderKeyColumns, scopedOrderKeyIndex } from './_columnHelpers';
 import { userProviderTable } from './userProvider';
@@ -23,7 +23,7 @@ import { userProviderTable } from './userProvider';
  * - Single PK: id = "providerId::modelId" (deterministic UniqueModelId)
  * - providerId FK -> user_provider (ON DELETE CASCADE)
  *
- * Type definitions are sourced from @/shared/domain/model
+ * Type definitions are sourced from @/shared/data/types/model
  */
 
 // ═══════════════════════════════════════════════════════════════════════════════

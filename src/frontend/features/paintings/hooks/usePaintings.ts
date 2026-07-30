@@ -1,12 +1,12 @@
 import { type InfiniteData, keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
 import { useCallback, useMemo } from 'react';
-import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
-import { useDataInfiniteQuery, useDataMutation, useDataQuery } from '@/frontend/data/hooks';
 import { queryKeys } from '@/frontend/data';
-import type { CursorPaginationResponse } from '@/shared/contracts/dataTypes';
-import { imageMediaTypeFromExtension } from '@/shared/domain/file';
-import type { Painting } from '@/shared/domain/painting';
+import { useDataInfiniteQuery, useDataMutation, useDataQuery } from '@/frontend/data/hooks';
+import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import { imageMediaTypeFromExtension } from '@/shared/data/types/file';
+import type { Painting } from '@/shared/data/types/painting';
 
 const pageSize = 20;
 

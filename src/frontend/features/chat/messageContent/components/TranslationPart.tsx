@@ -1,7 +1,7 @@
 import { LanguagesIcon } from 'lucide-uniwind/png';
 import { View } from 'react-native';
 
-import type { CherryMessagePart } from '@/shared/domain/message';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { PartMarkdown } from './PartMarkdown';
 

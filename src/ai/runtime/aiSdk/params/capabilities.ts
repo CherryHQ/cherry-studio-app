@@ -2,9 +2,9 @@ import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugi
 import { extensionRegistry } from '@cherrystudio/ai-core/provider';
 
 import type { PreferenceService } from '@/data/services/PreferenceService';
-import type { Assistant } from '@/shared/domain/assistant';
-import type { Model } from '@/shared/domain/model';
-import type { Provider } from '@/shared/domain/provider';
+import type { Assistant } from '@/shared/data/types/assistant';
+import type { Model } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import type { AppProviderId } from '../../../types';
 import {

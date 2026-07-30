@@ -1,7 +1,7 @@
 import type { DbService } from '@/data/db/DbService';
 import { createRootMessageTx } from '@/data/services/MessageService';
 import { insertWithOrderKey } from '@/data/services/utils/orderKey';
-import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/domain/assistant';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 
 import { DefaultAssistantSeeder } from '../DefaultAssistantSeeder';
 

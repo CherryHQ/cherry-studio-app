@@ -1,5 +1,5 @@
 import { loggerService } from '@/core/logger/LoggerService';
-import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/domain/webSearch';
+import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/data/types/webSearch';
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { UrlSearchContext } from '../base/context';
 import { assertRecord, readObjectArray, readOptionalString } from './schemaUtils';

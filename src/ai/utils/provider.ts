@@ -1,6 +1,6 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { EndpointType } from '@/shared/domain/model';
-import type { Provider } from '@/shared/domain/provider';
+import type { EndpointType } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 import { defaultAppHeaders } from '@/utils/constants';
 
 const ENDPOINT_FALLBACK_ORDER: readonly EndpointType[] = [

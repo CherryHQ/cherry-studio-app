@@ -10,7 +10,7 @@ import type { EmbeddingModelV3, ImageModelV3, LanguageModelV3, ProviderV3 } from
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 import { loadApiKey, withoutTrailingSlash } from '@ai-sdk/provider-utils';
 
-import type { Model } from '@/shared/domain/model';
+import type { Model } from '@/shared/data/types/model';
 
 import { isOpenAIChatCompletionOnlyModel, isOpenAILLMModel } from '../../../utils/model';
 

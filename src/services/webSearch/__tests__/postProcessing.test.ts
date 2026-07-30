@@ -1,6 +1,6 @@
 import { sliceByTokens } from 'tokenx';
 
-import type { WebSearchExecutionConfig, WebSearchResult } from '@/shared/domain/webSearch';
+import type { WebSearchExecutionConfig, WebSearchResult } from '@/shared/data/types/webSearch';
 
 import { postProcessWebSearchResponse } from '../postProcessing';
 

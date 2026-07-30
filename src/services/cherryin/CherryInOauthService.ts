@@ -2,7 +2,7 @@ import { loggerService } from '@logger';
 import { randomUUID } from 'expo-crypto';
 import * as z from 'zod';
 import type { ProviderService } from '@/data/services/ProviderService';
-import type { ApiKeyEntry, AuthConfig } from '@/shared/domain/provider';
+import type { ApiKeyEntry, AuthConfig } from '@/shared/data/types/provider';
 import { CHERRYIN_CONFIG } from '@/utils/constants';
 
 const logger = loggerService.withContext('CherryInOauthService');

@@ -4,8 +4,8 @@ import type {
   PreferenceDefaultScopeType,
   PreferenceKeyType,
   PreferenceUpdateOptions,
-} from '@/shared/domain/preferences';
-import { getDefaultValue } from '@/shared/domain/preferences';
+} from '@/shared/data/preference';
+import { getDefaultValue } from '@/shared/data/preference';
 
 type PreferenceSetter<K extends PreferenceKeyType> = (
   value: PreferenceDefaultScopeType[K],

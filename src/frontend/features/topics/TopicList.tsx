@@ -25,8 +25,8 @@ import {
 } from '@/frontend/components/messageTabs';
 import { useAssistantsApi } from '@/frontend/hooks/chat';
 import { useExclusiveSwipeable } from '@/frontend/hooks/useExclusiveSwipeable';
-import type { Assistant } from '@/shared/domain/assistant';
-import type { Topic } from '@/shared/domain/topic';
+import type { Assistant } from '@/shared/data/types/assistant';
+import type { Topic } from '@/shared/data/types/topic';
 import { useTopicActionDialogs } from './components/TopicActionDialogs';
 import {
   TopicListProvider,

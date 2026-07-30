@@ -1,6 +1,6 @@
-import { useDataQuery } from '@/frontend/data/hooks';
 import { queryKeys } from '@/frontend/data';
-import type { Provider } from '@/shared/domain/provider';
+import { useDataQuery } from '@/frontend/data/hooks';
+import type { Provider } from '@/shared/data/types/provider';
 
 const EMPTY_PROVIDERS: readonly Provider[] = Object.freeze([]);
 

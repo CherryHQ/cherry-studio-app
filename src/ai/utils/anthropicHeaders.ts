@@ -11,10 +11,10 @@
  * Vertex here.
  */
 
-import type { Assistant } from '@/shared/domain/assistant';
-import type { Model } from '@/shared/domain/model';
-import type { Provider } from '@/shared/domain/provider';
-import { resolveProviderType } from '@/shared/domain/provider';
+import type { Assistant } from '@/shared/data/types/assistant';
+import type { Model } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
+import { resolveProviderType } from '@/shared/data/types/provider';
 
 import { isClaude4SeriesModel, isClaude45ReasoningModel } from './model';
 

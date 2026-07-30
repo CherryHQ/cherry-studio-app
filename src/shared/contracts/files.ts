@@ -1,4 +1,4 @@
-import type { FileEntry, FileEntryId } from '@/shared/domain/file';
+import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
 export type ResolvedFile = {
   entry: FileEntry;

@@ -12,14 +12,18 @@ import { loggerService } from '@/core/logger/LoggerService';
 import type { DbService } from '@/data/db/DbService';
 import type { InsertMcpServerRow, McpServerRow } from '@/data/db/schemas';
 import { mcpServerTable } from '@/data/db/schemas';
-import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/shared/contracts/dataTypes';
 import {
   type CreateMcpServerDto,
   CreateMcpServerSchema,
   type UpdateMcpServerDto,
   UpdateMcpServerSchema,
-} from '@/shared/contracts/schemas/mcpServers';
-import type { McpServer, McpServerType, StreamableHttpMcpServer } from '@/shared/domain/mcpServer';
+} from '@/shared/data/api/schemas/mcpServers';
+import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/shared/data/api/types';
+import type {
+  McpServer,
+  McpServerType,
+  StreamableHttpMcpServer,
+} from '@/shared/data/types/mcpServer';
 
 import { nullsToUndefined, timestampToISO } from './utils/rowMappers';
 

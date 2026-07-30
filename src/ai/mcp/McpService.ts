@@ -5,12 +5,12 @@ import { fetch as expoFetch } from 'expo/fetch';
 import type { ToolEntry } from '@/ai/tools';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { McpServerService } from '@/data/services/McpServerService';
-import { DataApiError, ErrorCode } from '@/shared/contracts/dataTypes';
-import type { Assistant } from '@/shared/domain/assistant';
+import { DataApiError, ErrorCode } from '@/shared/data/api/types';
+import type { Assistant } from '@/shared/data/types/assistant';
 import {
   DEFAULT_MCP_TIMEOUT_SECONDS,
   type StreamableHttpMcpServer,
-} from '@/shared/domain/mcpServer';
+} from '@/shared/data/types/mcpServer';
 
 import { fnv1a32 } from './fnv1a';
 import type { McpCallToolResult } from './mcpResult';

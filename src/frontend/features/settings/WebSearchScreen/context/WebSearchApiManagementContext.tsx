@@ -6,7 +6,7 @@ import type {
   WebSearchProvider,
   WebSearchProviderId,
   WebSearchProviderOverride,
-} from '@/shared/domain/preferences';
+} from '@/shared/data/preference';
 
 export type WebSearchApiManagementContextValue = {
   actions: {

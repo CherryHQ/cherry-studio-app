@@ -14,8 +14,8 @@ import {
 import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 import { loggerService } from '@/core/logger/LoggerService';
-import { DataApiErrorFactory } from '@/shared/contracts/dataTypes';
-import type { OrderRequest } from '@/shared/contracts/schemas/_endpointHelpers';
+import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
+import { DataApiErrorFactory } from '@/shared/data/api/types';
 
 type TxLike = any;
 

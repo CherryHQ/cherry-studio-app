@@ -13,7 +13,7 @@
 
 import type { LanguageModelUsage } from 'ai';
 
-import type { CherryUIMessageMetadata } from '@/shared/domain/message';
+import type { CherryUIMessageMetadata } from '@/shared/data/types/message';
 
 export const ZERO_USAGE: LanguageModelUsage = {
   inputTokens: 0,

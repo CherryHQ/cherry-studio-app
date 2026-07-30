@@ -10,7 +10,7 @@ import type {
   WebSearchCompressionMethod,
   WebSearchProviderId,
   WebSearchProviderOverride,
-} from '@/shared/domain/preferences';
+} from '@/shared/data/preference';
 import type { SettingSelectOption } from '../components/SettingSelect';
 import { mergeWebSearchProviderOverride } from '../WebSearchScreen/utils/providerSettings';
 

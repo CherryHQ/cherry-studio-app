@@ -3,7 +3,7 @@ import {
   type ModelRegistryLookup,
   mergePresetModel,
 } from '@/data/services/ProviderRegistryService';
-import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/domain/model';
+import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
 
 export type ProviderModelPullPreview = {
   added: Model[];

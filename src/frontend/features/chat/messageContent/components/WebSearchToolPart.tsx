@@ -3,7 +3,7 @@ import { SearchIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Text, View } from 'react-native';
 
-import type { CherryMessagePart } from '@/shared/domain/message';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { SourceUrlItem } from './SourceUrlItem';
 

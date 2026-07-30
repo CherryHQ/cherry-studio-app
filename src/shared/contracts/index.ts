@@ -1,6 +1,5 @@
 export * from './assistants';
 export * from './chat';
-export * from './dataTypes';
 export * from './files';
 export * from './mcp';
 export * from './mobileBackend';

@@ -3,10 +3,10 @@ import type { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 import type { OpenAIResponsesProviderOptions } from '@ai-sdk/openai';
 import type { XaiResponsesProviderOptions } from '@ai-sdk/xai';
 
-import type { Assistant } from '@/shared/domain/assistant';
-import type { Model } from '@/shared/domain/model';
-import { parseUniqueModelId } from '@/shared/domain/model';
-import type { Provider } from '@/shared/domain/provider';
+import type { Assistant } from '@/shared/data/types/assistant';
+import type { Model } from '@/shared/data/types/model';
+import { parseUniqueModelId } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 import {
   findTokenLimit,
   GEMINI_FLASH_MODEL_REGEX,

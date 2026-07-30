@@ -1,8 +1,8 @@
 import { type SQLWrapper, sql } from 'drizzle-orm';
 import { check, index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
-import { chatMessageRoles } from '@/shared/domain/file';
-import { paintingFileRoles } from '@/shared/domain/painting';
+import { chatMessageRoles } from '@/shared/data/types/file';
+import { paintingFileRoles } from '@/shared/data/types/painting';
 
 import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
 import { fileEntryTable } from './file';

@@ -1,19 +1,19 @@
 import * as z from 'zod';
 
-import type { CursorPaginationParams } from '@/shared/contracts/dataTypes';
+import type { CursorPaginationParams } from '@/shared/data/api/types';
 import type {
   BranchMessagesResponse,
   Message,
   MessageData,
   TreeResponse,
-} from '@/shared/domain/message';
+} from '@/shared/data/types/message';
 import {
   MessageDataSchema,
   MessageRoleSchema,
   MessageStatsSchema,
   MessageStatusSchema,
   ModelSnapshotSchema,
-} from '@/shared/domain/message';
+} from '@/shared/data/types/message';
 
 export const CreateMessageSchema = z.strictObject({
   data: MessageDataSchema,

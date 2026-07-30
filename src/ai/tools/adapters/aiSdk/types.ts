@@ -1,7 +1,7 @@
 import type { Tool } from 'ai';
 import type { SystemPermissionState } from '@/services/devicePermissions';
-import type { Assistant } from '@/shared/domain/assistant';
-import type { PermissionPreferenceKey } from '@/shared/domain/preferences';
+import type { PermissionPreferenceKey } from '@/shared/data/preference';
+import type { Assistant } from '@/shared/data/types/assistant';
 
 export type ToolDefer = 'never' | 'always' | 'auto';
 

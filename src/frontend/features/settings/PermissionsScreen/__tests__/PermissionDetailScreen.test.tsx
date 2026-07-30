@@ -1,7 +1,7 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { PermissionMode } from '@/shared/domain/preferences';
+import type { PermissionMode } from '@/shared/data/preference';
 
 import PermissionDetailSettingsScreen from '../PermissionDetailScreen';
 

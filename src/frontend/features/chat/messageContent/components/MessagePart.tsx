@@ -1,4 +1,4 @@
-import type { CherryMessagePart } from '@/shared/domain/message';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { CodePart } from './CodePart';
 import { CompactPart } from './CompactPart';

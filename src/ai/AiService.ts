@@ -10,9 +10,9 @@ import {
 import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import type { FileEntryService } from '@/data/services/FileEntryService';
-import type { Model } from '@/shared/domain/model';
-import { parseUniqueModelId } from '@/shared/domain/model';
-import type { Provider } from '@/shared/domain/provider';
+import type { Model } from '@/shared/data/types/model';
+import { parseUniqueModelId } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 import { resolveMediaCapabilities } from './messages/messageCapabilities';
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { listModels as listProviderModels } from './provider/listModels';

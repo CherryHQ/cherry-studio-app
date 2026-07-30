@@ -1,7 +1,7 @@
 import type {
   WebSearchCheckProviderRequest,
   WebSearchCheckProviderResponse,
-} from '@/shared/domain/webSearch';
+} from '@/shared/data/types/webSearch';
 
 export interface WebSearchBackend {
   checkProvider(input: WebSearchCheckProviderRequest): Promise<WebSearchCheckProviderResponse>;

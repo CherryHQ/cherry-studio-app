@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { AppState } from 'react-native';
 import { useDataServices } from '@/runtime';
 import type { SystemPermissionState } from '@/services/devicePermissions';
-import type { PermissionPreferenceKey } from '@/shared/domain/preferences';
+import type { PermissionPreferenceKey } from '@/shared/data/preference';
 
 import { permissionConfig, permissionKinds } from '../permissionConfig';
 

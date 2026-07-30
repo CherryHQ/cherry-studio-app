@@ -6,8 +6,8 @@ import {
   type EndpointType,
   type Model,
   type UniqueModelId,
-} from '@/shared/domain/model';
-import type { Provider } from '@/shared/domain/provider';
+} from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 export type ProviderModelAddFormState = {
   contextWindow: string;

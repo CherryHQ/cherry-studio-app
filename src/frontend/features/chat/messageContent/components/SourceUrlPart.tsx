@@ -1,4 +1,4 @@
-import type { CherryMessagePart } from '@/shared/domain/message';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { SourceUrlItem } from './SourceUrlItem';
 

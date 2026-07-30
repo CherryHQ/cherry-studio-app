@@ -1,8 +1,8 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
-import type { FileEntryId } from '@/shared/domain/file';
-import type { UniqueModelId } from '@/shared/domain/model';
-import type { Painting } from '@/shared/domain/painting';
-import type { CursorPaginationResponse } from './dataTypes';
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import type { FileEntryId } from '@/shared/data/types/file';
+import type { UniqueModelId } from '@/shared/data/types/model';
+import type { Painting } from '@/shared/data/types/painting';
 import type { ResolvedFile } from './files';
 
 export type PaintingListQuery = {

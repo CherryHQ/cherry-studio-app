@@ -2,14 +2,14 @@ import { isToolUIPart } from 'ai';
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { loggerService } from '@/core/logger/LoggerService';
-import { DataApiErrorFactory } from '@/shared/contracts/dataTypes';
 import type {
   ActiveNodeStrategy,
   CreateMessageDto,
   DeleteMessageResponse,
   UpdateMessageDto,
-} from '@/shared/contracts/schemas/messages';
-import type { PreparedInternalFile } from '@/shared/domain/file';
+} from '@/shared/data/api/schemas/messages';
+import { DataApiErrorFactory } from '@/shared/data/api/types';
+import type { PreparedInternalFile } from '@/shared/data/types/file';
 import type {
   BranchMessage,
   BranchMessagesResponse,
@@ -19,9 +19,9 @@ import type {
   SiblingsGroup,
   TreeNode,
   TreeResponse,
-} from '@/shared/domain/message';
-import type { UniqueModelId } from '@/shared/domain/model';
-import { readCherryMeta } from '@/shared/domain/uiParts';
+} from '@/shared/data/types/message';
+import type { UniqueModelId } from '@/shared/data/types/model';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import type { Database, DbService } from '../db/DbService';
 import {

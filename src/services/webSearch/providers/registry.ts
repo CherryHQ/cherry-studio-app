@@ -1,4 +1,4 @@
-import type { WebSearchProvider } from '@/shared/domain/preferences';
+import type { WebSearchProvider } from '@/shared/data/preference';
 import type { ApiKeyRotationState } from '../utils/provider';
 import { BochaProvider } from './api/BochaProvider';
 import { ExaProvider } from './api/ExaProvider';

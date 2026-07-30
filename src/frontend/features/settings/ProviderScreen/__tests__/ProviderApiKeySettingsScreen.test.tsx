@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/domain/provider';
+import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
 import ProviderApiKeySettingsScreen from '../ProviderApiKeySettingsScreen';
 
 type QueryState = { isError: boolean; isPending: boolean; isSuccess: boolean };

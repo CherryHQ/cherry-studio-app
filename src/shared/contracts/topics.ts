@@ -1,6 +1,10 @@
-import type { Topic } from '@/shared/domain/topic';
-import type { CursorPaginationResponse } from './dataTypes';
-import type { CreateTopicDto, ListTopicsQuery, UpdateTopicDto } from './schemas/topics';
+import type {
+  CreateTopicDto,
+  ListTopicsQuery,
+  UpdateTopicDto,
+} from '@/shared/data/api/schemas/topics';
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import type { Topic } from '@/shared/data/types/topic';
 
 export interface TopicsBackend {
   create(input: CreateTopicDto): Promise<Topic>;

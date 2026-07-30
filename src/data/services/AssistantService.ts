@@ -9,17 +9,17 @@ import {
   userModelTable,
 } from '@/data/db/schemas';
 import type { PreferenceService } from '@/data/services/PreferenceService';
-import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/shared/contracts/dataTypes';
-import type { OrderRequest } from '@/shared/contracts/schemas/_endpointHelpers';
+import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
 import {
   type CreateAssistantDto,
   type ListAssistantsQueryParams,
   ListAssistantsQuerySchema,
   type UpdateAssistantDto,
-} from '@/shared/contracts/schemas/assistants';
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/domain/assistant';
-import type { UniqueModelId } from '@/shared/domain/model';
-import type { Tag } from '@/shared/domain/tag';
+} from '@/shared/data/api/schemas/assistants';
+import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/shared/data/api/types';
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
+import type { UniqueModelId } from '@/shared/data/types/model';
+import type { Tag } from '@/shared/data/types/tag';
 import type { ModelService } from './ModelService';
 import type { PinService } from './PinService';
 import type { TagService } from './TagService';

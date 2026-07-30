@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { queryKeys } from '@/frontend/data';
+import { useDataMutation } from '@/frontend/data/hooks';
 import { usePins, useTopics } from '@/frontend/hooks/chat';
 import { prefetchTopicMessages } from '@/frontend/hooks/chat/utils/messageQueryOptions';
-import { useDataMutation } from '@/frontend/data/hooks';
-import { queryKeys } from '@/frontend/data';
 import type { DataServices } from '@/runtime/createDataServices';
-import type { Topic } from '@/shared/domain/topic';
+import type { Topic } from '@/shared/data/types/topic';
 
 import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
 

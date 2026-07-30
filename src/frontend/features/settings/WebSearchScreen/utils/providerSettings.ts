@@ -8,7 +8,7 @@ import type {
   WebSearchProviderId,
   WebSearchProviderOverride,
   WebSearchProviderOverrides,
-} from '@/shared/domain/preferences';
+} from '@/shared/data/preference';
 
 export type WebSearchProviderCapability = WebSearchProviderPreset['capabilities'][number];
 

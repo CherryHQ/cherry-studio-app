@@ -9,7 +9,7 @@ import {
   usePrefetchModelPickerData,
 } from '@/frontend/components/modelPicker';
 import { useModelById, useProviders, useTopic } from '@/frontend/hooks/chat';
-import { isUniqueModelId } from '@/shared/domain/model';
+import { isUniqueModelId } from '@/shared/data/types/model';
 import { useChatRuntimeTopic } from '../runtime';
 import { ChatInputActionSheet } from './components/ChatInputActionSheet';
 import { ChatInputReasoningSection } from './components/ChatInputReasoningSection';

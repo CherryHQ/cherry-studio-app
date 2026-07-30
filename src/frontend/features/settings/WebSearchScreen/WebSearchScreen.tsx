@@ -6,7 +6,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 import { MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS } from '@/data/presets/webSearchProviders';
 import { BackHeader } from '@/frontend/components/headers';
-import type { WebSearchProviderId } from '@/shared/domain/preferences';
+import type { WebSearchProviderId } from '@/shared/data/preference';
 import { SettingNumberInput } from '../components/SettingNumberInput';
 import { SettingSelect, type SettingSelectOption } from '../components/SettingSelect';
 import { SettingsSection } from '../components/SettingsSection';

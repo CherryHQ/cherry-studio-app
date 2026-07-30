@@ -4,8 +4,8 @@ import { loggerService } from '@/core/logger/LoggerService';
 import type { PreferenceService } from '@/data/services/PreferenceService';
 import type { DevicePermissionService } from '@/services/devicePermissions';
 import type { WebSearchService } from '@/services/webSearch/WebSearchService';
-import type { Assistant } from '@/shared/domain/assistant';
-import type { PermissionPreferenceKey } from '@/shared/domain/preferences';
+import type { PermissionPreferenceKey } from '@/shared/data/preference';
+import type { Assistant } from '@/shared/data/types/assistant';
 
 import type { McpService } from '../mcp';
 import { registerBuiltinTools } from './adapters/aiSdk/builtin/registerBuiltinTools';

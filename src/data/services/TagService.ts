@@ -3,9 +3,9 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { DbService } from '@/data/db/DbService';
 import { entityTagTable, tagTable } from '@/data/db/schemas';
 import type { TagRow } from '@/data/db/schemas/tagging';
-import { DataApiErrorFactory } from '@/shared/contracts/dataTypes';
-import type { EntityType } from '@/shared/domain/entityType';
-import type { CreateTagDto, SyncEntityTagsDto, Tag, UpdateTagDto } from '@/shared/domain/tag';
+import { DataApiErrorFactory } from '@/shared/data/api/types';
+import type { EntityType } from '@/shared/data/types/entityType';
+import type { CreateTagDto, SyncEntityTagsDto, Tag, UpdateTagDto } from '@/shared/data/types/tag';
 
 import { timestampToISO } from './utils/rowMappers';
 

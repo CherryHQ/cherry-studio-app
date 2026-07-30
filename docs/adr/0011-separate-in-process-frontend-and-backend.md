@@ -11,13 +11,13 @@ The source layout is:
 src/
 ├── app/                  # Expo Router route files
 ├── bootstrap/            # composition, startup, lifecycle, and polyfills
-├── frontend/             # features, components, hooks, query, i18n, and styles
+├── frontend/             # features, components, data, hooks, i18n, and styles
 ├── backend/
 │   ├── application/      # multi-step product workflows
 │   └── infrastructure/   # SQLite, AI, cache, device, and third-party adapters
 ├── shared/
-│   ├── contracts/        # frontend/backend interfaces, DTOs, errors, and events
-│   ├── domain/           # entities and value types shared by both sides
+│   ├── contracts/        # frontend/backend interfaces, workflow results, and events
+│   ├── data/             # API schemas, preferences, entities, and value types
 │   ├── core/             # cross-layer foundations such as logging
 │   └── utils/            # cross-layer pure utilities
 └── types/                # ambient and generated declarations
@@ -28,6 +28,10 @@ behaviour exclusively through `shared/contracts`; it does not import SQLite, Dri
 concrete persistence classes, or device and third-party adapters. Backend code does not import
 React UI, Expo Router, TanStack Query, translations, or toast implementations. `app` remains at
 the Expo Router-mandated path and imports only bootstrap, frontend, and shared modules.
+
+The `shared/data` vocabulary intentionally follows Cherry Desktop: `types` owns entities,
+`preference` owns preference schemas and defaults, and `api` owns DTOs and errors. This alignment
+does not make the code a workspace package or introduce desktop runtime coupling.
 
 `MobileBackend` is the stable frontend-facing interface. It groups cohesive modules for
 assistants, topics, chat, files, models, providers, paintings, MCP, pins, preferences,

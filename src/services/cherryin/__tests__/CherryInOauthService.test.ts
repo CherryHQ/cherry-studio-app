@@ -1,5 +1,5 @@
 import type { ProviderService } from '@/data/services/ProviderService';
-import type { AuthConfig } from '@/shared/domain/provider';
+import type { AuthConfig } from '@/shared/data/types/provider';
 import { CherryInOauthService } from '../CherryInOauthService';
 
 // Mock dependencies

@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useSharedValue } from 'react-native-reanimated';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
-import type { Message } from '@/shared/domain/message';
+import type { Message } from '@/shared/data/types/message';
 import { isIOS } from '@/utils/constants';
 import { ToolApprovalSheet } from '../approval/ToolApprovalSheet';
 import { MessageSlideInProvider } from '../messageItem';

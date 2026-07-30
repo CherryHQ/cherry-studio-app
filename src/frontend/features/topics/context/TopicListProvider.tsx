@@ -3,18 +3,18 @@ import { useIsFocused, useRouter } from 'expo-router';
 import { createContext, type PropsWithChildren, use, useCallback, useEffect, useMemo } from 'react';
 import { loggerService } from '@/core/logger/LoggerService';
 import { MODEL_SETTING_PREFERENCE_KEYS } from '@/frontend/components/modelPicker/utils/modelSettings';
+import { queryKeys } from '@/frontend/data';
+import { useDataMutation } from '@/frontend/data/hooks';
 import { usePins, useTopics } from '@/frontend/hooks/chat';
 import {
   getMessagesQueryKey,
   prefetchTopicMessages,
 } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPolicy';
-import { useDataMutation } from '@/frontend/data/hooks';
-import { queryKeys } from '@/frontend/data';
 import { useDataServices } from '@/runtime';
 import type { DataServices } from '@/runtime/createDataServices';
-import { isUniqueModelId } from '@/shared/domain/model';
-import type { Topic } from '@/shared/domain/topic';
+import { isUniqueModelId } from '@/shared/data/types/model';
+import type { Topic } from '@/shared/data/types/topic';
 
 const MODEL_DETAIL_PREFETCH_STALE_TIME_MS = 1000 * 60 * 5;
 

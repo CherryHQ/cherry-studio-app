@@ -1,6 +1,6 @@
-import { useDataQuery } from '@/frontend/data/hooks';
 import { queryKeys } from '@/frontend/data';
-import type { Model, UniqueModelId } from '@/shared/domain/model';
+import { useDataQuery } from '@/frontend/data/hooks';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
 const EMPTY_MODELS: readonly Model[] = Object.freeze([]);
 

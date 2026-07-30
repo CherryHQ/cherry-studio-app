@@ -14,11 +14,11 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { Image } from '@/frontend/components/nativePrimitives';
-import { useDataMutation } from '@/frontend/data/hooks';
 import { queryKeys } from '@/frontend/data';
+import { useDataMutation } from '@/frontend/data/hooks';
 import { saveProviderAvatar } from '@/services/avatars/providerAvatarStorage';
-import { ENDPOINT_TYPE } from '@/shared/domain/model';
-import type { ApiKeyEntry, EndpointConfigs } from '@/shared/domain/provider';
+import { ENDPOINT_TYPE } from '@/shared/data/types/model';
+import type { ApiKeyEntry, EndpointConfigs } from '@/shared/data/types/provider';
 import { keyboardBottomOffset } from '@/utils/constants';
 import { SettingsIconButton } from '../components/SettingsIconButton';
 import { normalizeApiKeySingleLine } from './apiService/utils/providerApiServiceApiKeys';

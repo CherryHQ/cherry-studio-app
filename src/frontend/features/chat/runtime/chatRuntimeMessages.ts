@@ -5,8 +5,8 @@ import type {
   CherryUIMessageMetadata,
   Message,
   MessageStats,
-} from '@/shared/domain/message';
-import { readCherryToolMetadata } from '@/shared/domain/uiParts';
+} from '@/shared/data/types/message';
+import { readCherryToolMetadata } from '@/shared/data/types/uiParts';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 

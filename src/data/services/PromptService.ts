@@ -9,14 +9,14 @@
 import { and, asc, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
 import type { DbService } from '@/data/db/DbService';
 import { type PromptRow, promptTable } from '@/data/db/schemas';
-import { DataApiErrorFactory } from '@/shared/contracts/dataTypes';
-import type { OrderRequest } from '@/shared/contracts/schemas/_endpointHelpers';
+import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
+import { DataApiErrorFactory } from '@/shared/data/api/types';
 import type {
   CreatePromptDto,
   ListPromptsQuery,
   Prompt,
   UpdatePromptDto,
-} from '@/shared/domain/prompt';
+} from '@/shared/data/types/prompt';
 
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';

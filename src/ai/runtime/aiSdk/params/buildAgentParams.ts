@@ -6,10 +6,10 @@ import type { AssistantService } from '@/data/services/AssistantService';
 import type { ModelService } from '@/data/services/ModelService';
 import type { PreferenceService } from '@/data/services/PreferenceService';
 import type { ProviderService } from '@/data/services/ProviderService';
-import type { Assistant } from '@/shared/domain/assistant';
-import type { Model, UniqueModelId } from '@/shared/domain/model';
-import { isUniqueModelId, parseUniqueModelId } from '@/shared/domain/model';
-import type { Provider } from '@/shared/domain/provider';
+import type { Assistant } from '@/shared/data/types/assistant';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import { providerToAiSdkConfig } from '../../../provider/config';
 import type { ToolService } from '../../../tools';

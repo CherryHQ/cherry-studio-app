@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { UpdateProviderInput } from '@/data/services/ProviderService';
 import { useDataServices } from '@/runtime';
-import type { Model, UniqueModelId } from '@/shared/domain/model';
-import type { ApiKeyEntry, Provider } from '@/shared/domain/provider';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 import { enableProviderWhenModelsAvailable } from '../../utils/providerEnablement';
 import {
   checkProviderModelsHealth,

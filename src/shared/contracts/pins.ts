@@ -1,5 +1,5 @@
-import type { EntityType } from '@/shared/domain/entityType';
-import type { CreatePinDto, Pin } from '@/shared/domain/pin';
+import type { EntityType } from '@/shared/data/types/entityType';
+import type { CreatePinDto, Pin } from '@/shared/data/types/pin';
 
 export interface PinsBackend {
   list(entityType: EntityType): Promise<Pin[]>;

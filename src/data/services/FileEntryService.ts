@@ -7,7 +7,7 @@ import {
   type FileEntryId,
   FileEntrySchema,
   type PreparedInternalFile,
-} from '@/shared/domain/file';
+} from '@/shared/data/types/file';
 
 import { resolveInternalFileUri } from './fileStorage';
 

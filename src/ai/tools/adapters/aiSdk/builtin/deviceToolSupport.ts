@@ -5,7 +5,7 @@ import { loggerService } from '@/core/logger/LoggerService';
 import type { PreferenceService } from '@/data/services/PreferenceService';
 import type { DevicePermissionService } from '@/services/devicePermissions';
 import { isAbortError } from '@/services/webSearch/utils/errors';
-import type { PermissionPreferenceKey } from '@/shared/domain/preferences';
+import type { PermissionPreferenceKey } from '@/shared/data/preference';
 
 import { getRequestContext } from '../context';
 import type { ToolEntry } from '../types';

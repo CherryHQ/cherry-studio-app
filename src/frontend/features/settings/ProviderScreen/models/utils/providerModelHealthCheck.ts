@@ -1,4 +1,4 @@
-import type { Model, UniqueModelId } from '@/shared/domain/model';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
 export const providerModelCheckTimeoutMs = 15_000;
 

@@ -2,7 +2,7 @@ import type { InfiniteData, QueryClient, QueryFunctionContext } from '@tanstack/
 
 import { queryKeys } from '@/frontend/data';
 import type { DataServices } from '@/runtime/createDataServices';
-import type { BranchMessagesResponse } from '@/shared/domain/message';
+import type { BranchMessagesResponse } from '@/shared/data/types/message';
 import { messageWindowPolicy } from './messageWindowPolicy';
 
 export const initialMessagesPageSize = messageWindowPolicy.initialFetchCount;

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { Topic } from '@/shared/domain/topic';
+import type { Topic } from '@/shared/data/types/topic';
 
 import { TopicList } from '../TopicList';
 

@@ -1,6 +1,10 @@
-import type { BranchMessagesResponse, CherryMessagePart, Message } from '@/shared/domain/message';
-import type { UniqueModelId } from '@/shared/domain/model';
-import type { BranchMessagesQueryParams } from './schemas/messages';
+import type { BranchMessagesQueryParams } from '@/shared/data/api/schemas/messages';
+import type {
+  BranchMessagesResponse,
+  CherryMessagePart,
+  Message,
+} from '@/shared/data/types/message';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 export const NEW_CHAT_SESSION_TOPIC_ID = '__new_topic__';
 

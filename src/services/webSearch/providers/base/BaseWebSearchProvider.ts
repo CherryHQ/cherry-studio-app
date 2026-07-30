@@ -1,4 +1,4 @@
-import type { WebSearchCapability, WebSearchProvider } from '@/shared/domain/preferences';
+import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/preference';
 import { defaultAppHeaders } from '@/utils/constants';
 import type { ApiKeyRotationState } from '../../utils/provider';
 import { resolveProviderApiHost } from '../../utils/provider';

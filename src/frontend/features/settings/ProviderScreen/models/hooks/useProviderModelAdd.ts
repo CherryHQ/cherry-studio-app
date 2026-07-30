@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next';
 
 import { queryKeys } from '@/frontend/data';
 import { useDataServices } from '@/runtime';
-import type { EndpointType } from '@/shared/domain/model';
-import type { Provider } from '@/shared/domain/provider';
+import type { EndpointType } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import {
   buildProviderModelAddInputs,

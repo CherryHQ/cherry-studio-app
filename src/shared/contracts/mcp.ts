@@ -1,10 +1,10 @@
-import type { StreamableHttpMcpServer } from '@/shared/domain/mcpServer';
-import type { OffsetPaginationResponse } from './dataTypes';
 import type {
   CreateMcpServerDto,
   ListMcpServersQueryParams,
   UpdateMcpServerDto,
-} from './schemas/mcpServers';
+} from '@/shared/data/api/schemas/mcpServers';
+import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 
 export type McpConnectionConfig = {
   baseUrl: string;

@@ -2,7 +2,7 @@ import type {
   PreferenceDefaultScopeType,
   PreferenceKeyType,
   PreferenceUpdateOptions,
-} from '@/shared/domain/preferences';
+} from '@/shared/data/preference';
 
 export type PreferenceMapping = Record<string, PreferenceKeyType>;
 export type PreferenceMappedValues<T extends PreferenceMapping> = {

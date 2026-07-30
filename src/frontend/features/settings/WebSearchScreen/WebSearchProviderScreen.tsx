@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { isMobileSupportedWebSearchProviderId } from '@/data/presets/webSearchProviders';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/shared/domain/preferences';
+import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/shared/data/preference';
 import { openExternalUrl } from '@/utils/openExternalUrl';
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';

@@ -1,10 +1,10 @@
 import type { AiStreamRequest } from '@/ai/types/requests';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { DataServices } from '@/runtime/createDataServices';
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/domain/assistant';
-import type { PreparedInternalFile } from '@/shared/domain/file';
-import type { CherryMessagePart, CherryUIMessage, Message } from '@/shared/domain/message';
-import type { Model, UniqueModelId } from '@/shared/domain/model';
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
+import type { PreparedInternalFile } from '@/shared/data/types/file';
+import type { CherryMessagePart, CherryUIMessage, Message } from '@/shared/data/types/message';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
 import { ChatRuntime, newTopicRuntimeId } from '../ChatRuntime';
 

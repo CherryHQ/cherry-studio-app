@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
-import type { EndpointType } from '@/shared/domain/model';
-import type { EndpointConfigs, Provider } from '@/shared/domain/provider';
+import type { EndpointType } from '@/shared/data/types/model';
+import type { EndpointConfigs, Provider } from '@/shared/data/types/provider';
 import {
   buildAddableEndpointOptions,
   buildProviderApiServiceEndpointUpdates,

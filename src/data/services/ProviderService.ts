@@ -7,8 +7,8 @@ import type { DbService } from '@/data/db/DbService';
 import { userModelTable } from '@/data/db/schemas/userModel';
 import type { InsertUserProviderRow, UserProviderRow } from '@/data/db/schemas/userProvider';
 import { userProviderTable } from '@/data/db/schemas/userProvider';
-import { DataApiErrorFactory } from '@/shared/contracts/dataTypes';
-import type { EndpointType } from '@/shared/domain/model';
+import { DataApiErrorFactory } from '@/shared/data/api/types';
+import type { EndpointType } from '@/shared/data/types/model';
 import type {
   ApiKeyEntry,
   AuthConfig,
@@ -18,11 +18,11 @@ import type {
   Provider,
   ProviderSettings,
   RuntimeApiFeatures,
-} from '@/shared/domain/provider';
+} from '@/shared/data/types/provider';
 import {
   DEFAULT_API_FEATURES as DEFAULT_FEATURES,
   DEFAULT_PROVIDER_SETTINGS,
-} from '@/shared/domain/provider';
+} from '@/shared/data/types/provider';
 
 import type { PinService } from './PinService';
 import { providerRegistryService } from './ProviderRegistryService';

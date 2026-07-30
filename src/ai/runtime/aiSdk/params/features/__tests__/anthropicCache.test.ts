@@ -1,7 +1,7 @@
 import type { LanguageModelV3CallOptions, LanguageModelV3Prompt } from '@ai-sdk/provider';
 import type { LanguageModelMiddleware } from 'ai';
 
-import type { Provider } from '@/shared/domain/provider';
+import type { Provider } from '@/shared/data/types/provider';
 
 import { createAnthropicCachePlugin } from '../anthropicCache';
 

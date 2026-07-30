@@ -1,7 +1,7 @@
-import type { Assistant } from '@/shared/domain/assistant';
-import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/domain/assistant';
-import { createUniqueModelId, type Model } from '@/shared/domain/model';
-import type { Provider } from '@/shared/domain/provider';
+import type { Assistant } from '@/shared/data/types/assistant';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
+import { createUniqueModelId, type Model } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import { addAnthropicHeaders } from '../anthropicHeaders';
 

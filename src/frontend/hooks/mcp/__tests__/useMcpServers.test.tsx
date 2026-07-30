@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { queryKeys } from '@/frontend/data';
-import type { StreamableHttpMcpServer } from '@/shared/domain/mcpServer';
+import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 
 import { useMcpServerMutations } from '../useMcpServers';
 

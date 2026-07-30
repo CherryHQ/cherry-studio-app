@@ -1,5 +1,5 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import { createUniqueModelId, type Model } from '@/shared/domain/model';
+import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import {
   buildProviderBuiltinWebSearchConfig,
   type CherryWebSearchConfig,

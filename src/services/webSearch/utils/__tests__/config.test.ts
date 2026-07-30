@@ -1,4 +1,4 @@
-import type { PreferenceDefaultScopeType, PreferenceKeyType } from '@/shared/domain/preferences';
+import type { PreferenceDefaultScopeType, PreferenceKeyType } from '@/shared/data/preference';
 import {
   getProviderForCapability,
   getRuntimeConfig,

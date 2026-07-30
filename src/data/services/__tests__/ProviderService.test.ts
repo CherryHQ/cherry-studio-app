@@ -1,7 +1,7 @@
 import { CacheService, createInMemoryKvStorage } from '@/data/cache';
 import type { DbService } from '@/data/db/DbService';
 import type { UserProviderRow } from '@/data/db/schemas/userProvider';
-import type { ApiKeyEntry, ProviderSettings } from '@/shared/domain/provider';
+import type { ApiKeyEntry, ProviderSettings } from '@/shared/data/types/provider';
 
 import type { PinService } from '../PinService';
 import { providerRegistryService } from '../ProviderRegistryService';

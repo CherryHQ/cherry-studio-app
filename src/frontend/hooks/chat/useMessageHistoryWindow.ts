@@ -1,7 +1,7 @@
 import { type InfiniteData } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useDataInfiniteQuery } from '@/frontend/data/hooks/useDataQuery';
-import type { BranchMessagesResponse, Message } from '@/shared/domain/message';
+import type { BranchMessagesResponse, Message } from '@/shared/data/types/message';
 import { useMessageRenderWindow } from './useMessageRenderWindow';
 import {
   getOlderLoadAction,

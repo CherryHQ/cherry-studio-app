@@ -8,8 +8,8 @@ import {
 } from '@/data/services/fileStorage';
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
 import { useDataServices } from '@/runtime';
-import { parseUniqueModelId, type UniqueModelId } from '@/shared/domain/model';
-import type { Painting } from '@/shared/domain/painting';
+import { parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
+import type { Painting } from '@/shared/data/types/painting';
 import { useSyncPaintingQueries } from './usePaintings';
 
 export type PaintingGenerationStatus = 'idle' | 'generating' | 'revealing';

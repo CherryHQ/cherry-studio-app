@@ -1,4 +1,4 @@
-import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/domain/assistant';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 
 export const DEFAULT_ASSISTANT_SEED = {
   description: '',

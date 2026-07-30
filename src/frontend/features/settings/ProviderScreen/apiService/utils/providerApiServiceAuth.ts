@@ -1,4 +1,4 @@
-import type { AuthConfig, Provider } from '@/shared/domain/provider';
+import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
 export function emptyAuthConfigFor(type: AuthConfig['type']): AuthConfig {
   switch (type) {

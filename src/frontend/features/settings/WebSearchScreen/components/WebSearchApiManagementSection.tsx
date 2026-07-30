@@ -10,7 +10,7 @@ import type {
   WebSearchProviderId,
   WebSearchProviderOverride,
   WebSearchProviderOverrides,
-} from '@/shared/domain/preferences';
+} from '@/shared/data/preference';
 import { WebSearchApiServiceFieldGroup } from '../apiService/components/WebSearchApiServiceFields';
 import {
   WebSearchApiManagementContext,
