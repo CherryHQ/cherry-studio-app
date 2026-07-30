@@ -59,7 +59,7 @@ export type ReconcileModelsResult = {
   removedIds: UniqueModelId[];
 };
 
-export type ModelHealthStatus = 'checking' | 'failed' | 'success';
+export type ModelHealthStatus = 'checking' | 'failed' | 'pending' | 'success';
 
 export type ModelHealthResult = {
   error?: string;
