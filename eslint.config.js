@@ -6,6 +6,7 @@ const { defineConfig } = require('eslint/config');
 // bootstrap -> {backend, frontend, shared}
 // frontend -> {frontend, shared}
 // backend -> {backend, shared}
+// backend internals: ai -> {services, data}; services -> data
 // shared -> shared
 
 const retiredRootPatterns = [
@@ -49,26 +50,14 @@ const tombstonePatterns = [
   },
   {
     group: [
-      '@/backend/infrastructure/ai/utils/model',
-      '@/backend/infrastructure/cache',
-      '@/backend/infrastructure/cache/*',
-      '@/backend/infrastructure/cache/*/**',
+      '@/backend/application',
+      '@/backend/application/*',
+      '@/backend/application/*/**',
+      '@/backend/infrastructure',
+      '@/backend/infrastructure/*',
+      '@/backend/infrastructure/*/**',
     ],
-    message: 'This module moved to its frontend or shared owner under ADR 0011.',
-  },
-  {
-    group: [
-      '@/backend/infrastructure/db',
-      '@/backend/infrastructure/db/*',
-      '@/backend/infrastructure/db/*/**',
-      '@/backend/infrastructure/fixtures',
-      '@/backend/infrastructure/fixtures/*',
-      '@/backend/infrastructure/fixtures/*/**',
-      '@/backend/infrastructure/services',
-      '@/backend/infrastructure/services/*',
-      '@/backend/infrastructure/services/*/**',
-    ],
-    message: 'Backend data implementations moved to @/backend/data.',
+    message: 'Use @/backend/ai, @/backend/data, or @/backend/services.',
   },
 ];
 
@@ -121,34 +110,12 @@ module.exports = defineConfig([
     ],
   ),
   restrictedImports(
-    ['src/backend/application/**/*.{ts,tsx}'],
+    ['src/backend/services/**/*.{ts,tsx}'],
     [
       {
-        group: [
-          ...aliasRoots(['backend/data', 'backend/infrastructure']),
-          '../data',
-          '../data/**',
-          '../infrastructure',
-          '../infrastructure/**',
-          '../../data',
-          '../../data/**',
-          '../../infrastructure',
-          '../../infrastructure/**',
-          '../../../data',
-          '../../../data/**',
-          '../../../infrastructure',
-          '../../../infrastructure/**',
-          '../../../../data',
-          '../../../../data/**',
-          '../../../../infrastructure',
-          '../../../../infrastructure/**',
-          '../../../../../data',
-          '../../../../../data/**',
-          '../../../../../infrastructure',
-          '../../../../../infrastructure/**',
-        ],
+        group: aliasRoots(['backend/ai']),
         message:
-          'Backend application modules receive concrete backend dependencies through their constructor interface.',
+          'Backend services receive AI capabilities through constructor interfaces; bootstrap owns concrete assembly.',
       },
     ],
   ),
@@ -156,26 +123,8 @@ module.exports = defineConfig([
     ['src/backend/data/**/*.{ts,tsx}'],
     [
       {
-        group: [
-          ...aliasRoots(['backend/application', 'backend/infrastructure']),
-          '../application',
-          '../application/**',
-          '../infrastructure',
-          '../infrastructure/**',
-          '../../application',
-          '../../application/**',
-          '../../infrastructure',
-          '../../infrastructure/**',
-          '../../../application',
-          '../../../application/**',
-          '../../../infrastructure',
-          '../../../infrastructure/**',
-          '../../../../application',
-          '../../../../application/**',
-          '../../../../infrastructure',
-          '../../../../infrastructure/**',
-        ],
-        message: 'Backend data modules must not depend on application, AI, or integration code.',
+        group: aliasRoots(['backend/ai', 'backend/services']),
+        message: 'Backend data modules must not depend on AI or general backend services.',
       },
     ],
   ),
