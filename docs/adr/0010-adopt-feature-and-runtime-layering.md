@@ -1,5 +1,7 @@
 # Adopt Feature And Runtime Layering
 
+> **Superseded in part by [ADR 0011](0011-separate-in-process-frontend-and-backend.md).** Feature ownership and directed dependencies remain, while the top-level runtime/data/AI/services layout and frontend-visible concrete service graph are replaced by an in-process frontend/backend seam.
+
 Cherry Mobile reorganizes `src/` into an explicit layered layout: a new `src/runtime/` tier owns the composition root (`createDataServices`), `DataProvider`, `InitialDataGate`, and app bootstrap (`appRuntime`); a new `src/features/<name>/` tier absorbs the former `src/screens/*Screen` directories (chat, topics, messages, assistants, paintings, settings, search, home, onboarding) with the screen component at the feature root; `src/data/` becomes a pure data layer; and `src/services/` groups platform/integration services (`webSearch`, `devicePermissions`, `cherryin`, `avatars`). This exercises the reopen clause recorded in ADR 0009: the injected runtime graph had scattered across `data/services/`, `data/runtime/`, `data/bootstrap/`, and its wiring reached upward into `src/ai` and `src/services` — the layering inversion ADR 0009 said would trigger extraction of a shared runtime layer.
 
 Two dependency defects motivated acting now rather than tolerating further drift:

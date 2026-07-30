@@ -1,6 +1,6 @@
 # Keep Flat src Layout
 
-> **Superseded in part by [ADR 0010](0010-adopt-feature-and-runtime-layering.md).** The reopen condition below was met: the runtime tier's scattering caused real coupling (the composition root in `src/data` constructed `src/ai` services; `src/ai` and `src/services` value-imported each other). ADR 0010 extracts `src/runtime/` and adopts feature layering. The rejection of a desktop-style `main`/`renderer` process split remains in force.
+> **Superseded in part by [ADR 0010](0010-adopt-feature-and-runtime-layering.md) and [ADR 0011](0011-separate-in-process-frontend-and-backend.md).** The reopen condition below was met: the runtime tier's scattering caused real coupling. ADR 0011 replaces the flat layout with an in-process frontend/backend seam. The rejection of a desktop-style `main`/`renderer` process split remains in force.
 
 Cherry Mobile keeps its flat top-level source layout — `src/{app,screens,data,ai,services,components,hooks,...}` — and does not adopt Cherry desktop's `main`/`renderer`/`shared` process split. The desktop split encodes an Electron process boundary that does not exist in a single React Native runtime, so importing it would add ceremony without enforcing a real boundary. This decision is coupled to ADR 0008: as long as the storage engine and its seams are not being reorganized, there is no structural pressure to re-layer.
 
