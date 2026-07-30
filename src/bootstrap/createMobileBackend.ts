@@ -21,9 +21,9 @@ import {
   prepareGeneratedImage,
   prepareInternalFileFromUri,
   prepareMessageParts,
-} from '@/backend/infrastructure/services/fileStorage';
-import { materializeRemoteModels } from '@/backend/infrastructure/services/materializeRemoteModels';
-import { canDeleteProvider } from '@/backend/infrastructure/services/ProviderService';
+} from '@/backend/data/services/fileStorage';
+import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
+import { canDeleteProvider } from '@/backend/data/services/ProviderService';
 import type { BackendServices } from '@/bootstrap/createBackendServices';
 import type { MobileBackend } from '@/shared/contracts';
 import type { CherryUIMessage } from '@/shared/data/types/message';

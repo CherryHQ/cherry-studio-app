@@ -3,7 +3,7 @@ import { createMCPClient } from '@ai-sdk/mcp';
 import type { Tool, ToolSet } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import type { ToolEntry } from '@/backend/infrastructure/ai/tools';
-import type { McpServerService } from '@/backend/infrastructure/services/McpServerService';
+import type { McpServerService } from '@/backend/data/services/McpServerService';
 import type {
   McpConnectionConfig,
   McpServerInfo,

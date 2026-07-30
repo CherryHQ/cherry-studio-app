@@ -9,7 +9,7 @@ import {
 } from '@cherrystudio/provider-registry';
 import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
-import type { FileEntryService } from '@/backend/infrastructure/services/FileEntryService';
+import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import type { Model } from '@/shared/data/types/model';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';

@@ -1,4 +1,4 @@
-import type { PreferenceService } from '@/backend/infrastructure/services/PreferenceService';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
 
 import { containsSupportedVariables, replacePromptVariables } from '../promptVariables';
 

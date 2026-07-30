@@ -1,4 +1,4 @@
-import type { ProviderService } from '@/backend/infrastructure/services/ProviderService';
+import type { ProviderService } from '@/backend/data/services/ProviderService';
 import type { AuthConfig } from '@/shared/data/types/provider';
 import { CherryInOauthService } from '../CherryInOauthService';
 

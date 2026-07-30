@@ -1,22 +1,22 @@
 import { AiService } from '@/backend/infrastructure/ai/AiService';
 import { McpService } from '@/backend/infrastructure/ai/mcp';
 import { ToolService } from '@/backend/infrastructure/ai/tools';
-import type { DbService } from '@/backend/infrastructure/db/DbService';
+import type { DbService } from '@/backend/data/db/DbService';
 import { DevicePermissionService } from '@/backend/infrastructure/integrations/devicePermissions';
 import { WebSearchService } from '@/backend/infrastructure/integrations/webSearch/WebSearchService';
-import { AssistantService } from '@/backend/infrastructure/services/AssistantService';
-import { FileEntryService } from '@/backend/infrastructure/services/FileEntryService';
-import { GroupService } from '@/backend/infrastructure/services/GroupService';
-import { McpServerService } from '@/backend/infrastructure/services/McpServerService';
-import { MessageService } from '@/backend/infrastructure/services/MessageService';
-import { ModelService } from '@/backend/infrastructure/services/ModelService';
-import { PaintingService } from '@/backend/infrastructure/services/PaintingService';
-import { PinService } from '@/backend/infrastructure/services/PinService';
-import { PreferenceService } from '@/backend/infrastructure/services/PreferenceService';
-import { PromptService } from '@/backend/infrastructure/services/PromptService';
-import { ProviderService } from '@/backend/infrastructure/services/ProviderService';
-import { TagService } from '@/backend/infrastructure/services/TagService';
-import { TopicService } from '@/backend/infrastructure/services/TopicService';
+import { AssistantService } from '@/backend/data/services/AssistantService';
+import { FileEntryService } from '@/backend/data/services/FileEntryService';
+import { GroupService } from '@/backend/data/services/GroupService';
+import { McpServerService } from '@/backend/data/services/McpServerService';
+import { MessageService } from '@/backend/data/services/MessageService';
+import { ModelService } from '@/backend/data/services/ModelService';
+import { PaintingService } from '@/backend/data/services/PaintingService';
+import { PinService } from '@/backend/data/services/PinService';
+import { PreferenceService } from '@/backend/data/PreferenceService';
+import { PromptService } from '@/backend/data/services/PromptService';
+import { ProviderService } from '@/backend/data/services/ProviderService';
+import { TagService } from '@/backend/data/services/TagService';
+import { TopicService } from '@/backend/data/services/TopicService';
 
 export type BackendServices = ReturnType<typeof createBackendServices>;
 

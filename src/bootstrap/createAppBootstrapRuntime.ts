@@ -1,4 +1,4 @@
-import { DbService } from '@/backend/infrastructure/db/DbService';
+import { DbService } from '@/backend/data/db/DbService';
 import { bootstrapAppRuntime, runPostReadyTasks } from '@/bootstrap/appRuntime';
 import { createBackendServices } from '@/bootstrap/createBackendServices';
 import { createMobileBackend } from '@/bootstrap/createMobileBackend';

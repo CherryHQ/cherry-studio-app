@@ -2,10 +2,10 @@ import type { AiPlugin } from '@cherrystudio/ai-core';
 import { stepCountIs, type ToolCallRepairFunction, type ToolSet } from 'ai';
 import * as Crypto from 'expo-crypto';
 
-import type { AssistantService } from '@/backend/infrastructure/services/AssistantService';
-import type { ModelService } from '@/backend/infrastructure/services/ModelService';
-import type { PreferenceService } from '@/backend/infrastructure/services/PreferenceService';
-import type { ProviderService } from '@/backend/infrastructure/services/ProviderService';
+import type { AssistantService } from '@/backend/data/services/AssistantService';
+import type { ModelService } from '@/backend/data/services/ModelService';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
+import type { ProviderService } from '@/backend/data/services/ProviderService';
 import type { Assistant } from '@/shared/data/types/assistant';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
