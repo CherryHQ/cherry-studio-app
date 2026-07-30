@@ -41,7 +41,7 @@ jest.mock('react-native-safe-area-context', () => ({
 
 let mockScreenCornerRadius = 0;
 
-jest.mock('@/modules/screenCornerRadius', () => ({
+jest.mock('../hooks/useScreenCornerRadius', () => ({
   useScreenCornerRadius: () => mockScreenCornerRadius,
 }));
 

@@ -13,9 +13,10 @@ Chrome constants live in `src/config/constants.ts` (`bottomSheet`,
 The card is inset by `bottomSheet.outerInset` from the left, right and bottom
 screen edges alike, so its bottom corners share a center with the display's
 corners at `screenCornerRadius - outerInset` — the two curves stay parallel
-instead of drifting. The screen radius comes from `@/modules/screenCornerRadius`,
-a thin wrapper over `expo-screen-corner-radius` (device-model lookup on iOS, the
-public `WindowInsets.getRoundedCorner` API on Android 12+).
+instead of drifting. The screen radius comes from the co-located
+`hooks/useScreenCornerRadius` hook, backed by `expo-screen-corner-radius`
+(device-model lookup on iOS, the public `WindowInsets.getRoundedCorner` API on
+Android 12+).
 
 Anything that can't name a radius — web, Android < 31, an iPhone newer than the
 library's model table, a square-cornered display — arrives as `0` and clamps to

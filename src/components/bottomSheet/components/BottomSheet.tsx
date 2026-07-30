@@ -6,13 +6,13 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { bottomSheet, isLiquidGlassAvailable, sheetScrimColor } from '@/config/constants';
-import { useScreenCornerRadius } from '@/modules/screenCornerRadius';
 
 import {
   type BottomSheetCloseReason,
   BottomSheetContext,
   controlledCloseReason,
 } from '../hooks/useBottomSheet';
+import { useScreenCornerRadius } from '../hooks/useScreenCornerRadius';
 
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
