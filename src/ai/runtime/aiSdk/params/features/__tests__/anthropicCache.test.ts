@@ -19,6 +19,7 @@ function createProvider(cacheControl?: Provider['settings']['cacheControl']): Pr
       serviceTier: true,
       streamOptions: true,
       verbosity: false,
+      reportsActualCost: false,
     },
     apiKeys: [],
     authType: 'api-key',

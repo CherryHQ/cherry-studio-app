@@ -49,6 +49,7 @@ function toApiFeatures(provider: ProtoProviderConfig): ApiFeatures | null {
   return {
     arrayContent: provider.apiFeatures.arrayContent,
     developerRole: provider.apiFeatures.developerRole,
+    reportsActualCost: provider.apiFeatures.reportsActualCost,
     serviceTier: provider.apiFeatures.serviceTier,
     streamOptions: provider.apiFeatures.streamOptions,
     verbosity: provider.apiFeatures.verbosity,

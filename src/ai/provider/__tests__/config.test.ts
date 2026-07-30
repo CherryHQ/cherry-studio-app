@@ -150,6 +150,7 @@ function createProvider(overrides: Partial<Provider>): Provider {
       serviceTier: true,
       streamOptions: true,
       verbosity: false,
+      reportsActualCost: false,
     },
     apiKeys: [],
     authType: 'api-key',

@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import type { EndpointType } from './model';
+import type { Currency, EndpointType } from './model';
 
 export const PROVIDER_TYPES = [
   'openai',
@@ -94,6 +94,7 @@ export type ApiFeatures = {
   serviceTier?: boolean;
   streamOptions?: boolean;
   verbosity?: boolean;
+  reportsActualCost?: boolean;
 };
 
 export type RuntimeApiFeatures = Required<ApiFeatures>;
@@ -104,6 +105,7 @@ export const DEFAULT_API_FEATURES: RuntimeApiFeatures = {
   serviceTier: false,
   streamOptions: true,
   verbosity: false,
+  reportsActualCost: false,
 };
 
 export type ProviderSettings = {
@@ -173,6 +175,7 @@ export type Provider = {
   modelListSource?: ProviderModelListSource;
   name: string;
   presetProviderId?: string;
+  reportedCostCurrency?: Currency;
   settings: ProviderSettings;
   websites?: ProviderWebsites;
 };

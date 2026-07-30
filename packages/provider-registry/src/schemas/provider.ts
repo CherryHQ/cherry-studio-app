@@ -7,6 +7,7 @@ import * as z from 'zod';
 
 import { MetadataSchema, ProviderIdSchema, VersionSchema } from './common';
 import {
+  CURRENCY,
   ENDPOINT_TYPE,
   type EndpointType,
   GEMINI_THINKING_LEVEL,
@@ -39,6 +40,8 @@ export const ApiFeaturesSchema = z.object({
   serviceTier: z.boolean().default(false),
   /** Whether the provider supports verbosity settings (OpenAI-specific) */
   verbosity: z.boolean().default(false),
+  /** Whether response usage carries the provider's actual billed cost. */
+  reportsActualCost: z.boolean().default(false),
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -263,6 +266,8 @@ export const ProviderConfigSchema = z
      * local provider still needs its baseUrl input. Defaults false.
      */
     authOptional: z.boolean().default(false),
+    /** Currency for provider-reported costs that omit it from the response. */
+    reportedCostCurrency: z.enum(objectValues(CURRENCY)).optional(),
     /** API feature flags controlling request construction */
     apiFeatures: ApiFeaturesSchema.optional(),
     /** Additional metadata including website URLs */

@@ -742,6 +742,9 @@ function createServices({
   };
 
   return {
+    aiUsageRecord: {
+      recordInvocation: jest.fn(async () => undefined),
+    },
     assistant: {
       getById: jest.fn(async () => assistant),
     },
@@ -781,6 +784,7 @@ function createProvider(overrides: Partial<Provider> = {}): Provider {
       serviceTier: true,
       streamOptions: true,
       verbosity: false,
+      reportsActualCost: false,
     },
     apiKeys: [],
     authType: 'api-key',

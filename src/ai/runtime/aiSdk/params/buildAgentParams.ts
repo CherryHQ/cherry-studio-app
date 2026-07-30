@@ -1,7 +1,7 @@
 import type { AiPlugin } from '@cherrystudio/ai-core';
 import { stepCountIs, type ToolCallRepairFunction, type ToolSet } from 'ai';
 import * as Crypto from 'expo-crypto';
-
+import type { AiUsageRecordService } from '@/data/services/AiUsageRecordService';
 import type { AssistantService } from '@/data/services/AssistantService';
 import type { ModelService } from '@/data/services/ModelService';
 import type { PreferenceService } from '@/data/services/PreferenceService';
@@ -10,7 +10,7 @@ import type { Assistant } from '@/data/types/assistant';
 import type { Model, UniqueModelId } from '@/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
-
+import { createAiUsagePlugin } from '../../../hooks/billingHook';
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
 import type { ServingCredentialReceipt } from '../../../provider/credential';
 import type { ToolService } from '../../../tools';
@@ -38,12 +38,14 @@ import {
   mergeCustomProviderParameters,
 } from '../../../utils/options';
 import { replacePromptVariables } from '../../../utils/promptVariables';
+import { createAiUsageCaptureContext } from '../../../utils/usageCapture';
 import type { AgentOptions } from '../Agent';
 import { getDeferredToolsSystemPrompt } from '../prompts/deferredTools';
 import { buildAgentPlugins } from './buildAgentPlugins';
 import { resolveCapabilities } from './capabilities';
 
 export interface BuildAgentParamsDependencies {
+  aiUsageRecord: Pick<AiUsageRecordService, 'recordInvocation'>;
   assistant: Pick<AssistantService, 'getById'>;
   model: Pick<ModelService, 'getById'>;
   preference: PreferenceService;
@@ -135,13 +137,30 @@ export async function buildAgentParams({
           }),
         }
       : undefined;
-  const plugins = buildAgentPlugins({
-    aiSdkProviderId: sdkConfig.providerId,
-    model,
-    provider,
-    streamOutput: capabilities?.streamOutput ?? true,
-    webSearchPluginConfig: capabilities?.webSearchPluginConfig,
+  const usageCaptureContext = createAiUsageCaptureContext({
+    providerId: provider.id,
+    providerName: provider.name,
+    modelId: model.modelId,
+    modelName: model.name,
+    pricing: model.pricing,
+    trustProviderReportedCost: provider.apiFeatures.reportsActualCost,
+    reportedCostCurrency: provider.reportedCostCurrency,
+    credentialReceipt,
+    source: assistant
+      ? { type: 'assistant', id: assistant.id, name: assistant.name, icon: assistant.emoji }
+      : null,
+    messageRef: request.messageId ? { kind: 'chat', id: request.messageId } : null,
   });
+  const plugins = [
+    ...buildAgentPlugins({
+      aiSdkProviderId: sdkConfig.providerId,
+      model,
+      provider,
+      streamOutput: capabilities?.streamOutput ?? true,
+      webSearchPluginConfig: capabilities?.webSearchPluginConfig,
+    }),
+    createAiUsagePlugin(usageCaptureContext, services.aiUsageRecord),
+  ];
   const shouldLoadTools = shouldIncludeExternalTools && assistant && isFunctionCallingModel(model);
   const resolvedTools = shouldLoadTools
     ? await services.tools.resolveForRequest({

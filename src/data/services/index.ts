@@ -1,3 +1,4 @@
+export { AiUsageRecordService } from './AiUsageRecordService';
 export { AssistantService } from './AssistantService';
 export { FileEntryService } from './FileEntryService';
 export { GroupService } from './GroupService';

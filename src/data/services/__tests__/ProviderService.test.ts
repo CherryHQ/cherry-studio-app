@@ -20,6 +20,35 @@ jest.mock('../ProviderRegistryService', () => ({
 }));
 
 describe('ProviderService', () => {
+  test('includes registry API feature baselines in runtime providers', async () => {
+    jest.mocked(providerRegistryService.getProviderDisplayMetadata).mockReturnValueOnce({
+      apiFeatures: {
+        arrayContent: true,
+        developerRole: false,
+        reportsActualCost: true,
+        serviceTier: false,
+        streamOptions: true,
+        verbosity: false,
+      },
+    });
+    const row = createProviderRow({});
+    const service = new ProviderService(
+      {
+        getDb: () => ({
+          select: () => ({
+            from: () => ({ where: () => ({ limit: async () => [row] }) }),
+          }),
+        }),
+      } as unknown as DbService,
+      createPinServiceStub(),
+      createCacheService(),
+    );
+
+    await expect(service.getByProviderId(row.providerId)).resolves.toMatchObject({
+      apiFeatures: { reportsActualCost: true },
+    });
+  });
+
   test('only exposes deletion for custom providers and user-created preset clones', () => {
     expect(canDeleteProvider({ id: 'custom-provider' })).toBe(true);
     expect(canDeleteProvider({ id: 'openai-work', presetProviderId: 'openai' })).toBe(true);

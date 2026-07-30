@@ -224,6 +224,7 @@ function rowToProvider(row: UserProviderRow): Provider {
   return {
     apiFeatures: {
       ...DEFAULT_FEATURES,
+      ...metadata.apiFeatures,
       ...row.apiFeatures,
     },
     apiKeys,
@@ -238,6 +239,7 @@ function rowToProvider(row: UserProviderRow): Provider {
     modelListSource: metadata.modelListSource,
     name: row.name,
     presetProviderId: row.presetProviderId ?? undefined,
+    reportedCostCurrency: metadata.reportedCostCurrency,
     settings: {
       ...DEFAULT_PROVIDER_SETTINGS,
       ...(row.providerSettings as Partial<ProviderSettings> | null),

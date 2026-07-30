@@ -1,4 +1,5 @@
 import type {
+  Currency,
   EndpointType,
   ModelCapability,
   ProtoModelConfig,
@@ -18,6 +19,7 @@ import {
 
 import { createUniqueModelId, type Model } from '@/data/types/model';
 import type {
+  ApiFeatures,
   EndpointConfigs,
   ProviderAuthMethod,
   ProviderModelListSource,
@@ -75,10 +77,12 @@ const defaultEfforts: Partial<Record<ReasoningFormatType, ReasoningEffort[]>> = 
 };
 
 export type ProviderDisplayMetadata = {
+  apiFeatures?: ApiFeatures;
   authMethods?: ProviderAuthMethod[];
   authOptional?: boolean;
   description?: string;
   modelListSource?: ProviderModelListSource;
+  reportedCostCurrency?: Currency;
   websites?: ProviderWebsites;
 };
 
@@ -318,10 +322,12 @@ export class ProviderRegistryService {
       (presetProviderId ? this.loader.findProvider(presetProviderId) : undefined);
 
     return {
+      apiFeatures: provider?.apiFeatures,
       authMethods: provider?.authMethods,
       authOptional: provider?.authOptional,
       description: provider?.description,
       modelListSource: provider?.modelListSource,
+      reportedCostCurrency: provider?.reportedCostCurrency,
       websites: provider?.metadata?.website,
     };
   }

@@ -1,8 +1,11 @@
+import { CURRENCY } from '../schemas/enums';
 import { defineProvider } from './types';
 
 export default defineProvider({
   id: 'openrouter',
   name: 'OpenRouter',
+  apiFeatures: { reportsActualCost: true },
+  reportedCostCurrency: CURRENCY.USD,
   defaultChatEndpoint: 'openai-chat-completions',
   endpointConfigs: {
     'anthropic-messages': {

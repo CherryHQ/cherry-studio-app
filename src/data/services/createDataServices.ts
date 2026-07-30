@@ -5,7 +5,7 @@ import { cacheService } from '@/data/cache';
 import type { DbService } from '@/data/db/DbService';
 import { DevicePermissionService } from '@/services/devicePermissions';
 import { WebSearchService } from '@/services/webSearch/WebSearchService';
-
+import { AiUsageRecordService } from './AiUsageRecordService';
 import { AssistantService } from './AssistantService';
 import { FileEntryService } from './FileEntryService';
 import { GroupService } from './GroupService';
@@ -24,6 +24,7 @@ export type DataServices = ReturnType<typeof createDataServices>;
 
 export function createDataServices(dbService: DbService) {
   const preference = new PreferenceService(dbService);
+  const aiUsageRecord = new AiUsageRecordService(dbService);
   const devicePermission = new DevicePermissionService();
   const pin = new PinService(dbService);
   const provider = new ProviderService(dbService, pin, cacheService);
@@ -42,6 +43,7 @@ export function createDataServices(dbService: DbService) {
   const tools = new ToolService({ devicePermission, mcp, preference, webSearch });
   const ai = new AiService({
     assistant,
+    aiUsageRecord,
     fileEntry,
     model,
     preference,
@@ -51,6 +53,7 @@ export function createDataServices(dbService: DbService) {
 
   return {
     ai,
+    aiUsageRecord,
     assistant,
     devicePermission,
     fileEntry,
