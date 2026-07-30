@@ -2,15 +2,8 @@ appId: com.cherry-ai.cherry-studio-app
 tags: [chat, legend-list]
 ---
 - runFlow: ../subflows/launch.yaml
-# 打开侧栏：固定入口 + 话题列表
-- tapOn: "Open sidebar"
-- assertVisible: "Search"
-- assertVisible: "Settings"
-- assertVisible: "Assistants"
-- assertVisible: "Recents"
-# 打开 100 条复杂消息的 benchmark 话题（LegendList 压力面）
+# 消息 tab 直接承载话题列表；打开 100 条复杂消息的 benchmark 话题（LegendList 压力面）
 - tapOn: "Benchmark Complex 100"
-- assertVisible: "Topic actions"
 # 初始定位在列表底部：最后一条消息（message 100）的末尾 Trace 行可见
 # （不能断言消息标题——最后一条消息很长，钉底时标题在屏幕上缘被裁）
 - assertVisible: "Trace: mock-benchmark-topic-complex-100:100"
@@ -24,7 +17,9 @@ tags: [chat, legend-list]
     timeout: 60000
 - scroll
 - scroll
-# 返回主页
-- tapOn: "Open sidebar"
-- tapOn: "New chat"
-- assertVisible: "What would you like to discuss?"
+# 返回消息 tab，再从 header 菜单创建新会话
+- tapOn:
+    point: 9%,10%
+- tapOn: "^New$|^新建$"
+- tapOn: "^New chat$|^新建聊天$"
+- assertVisible: "What would you like to discuss\\?|今天想聊什么？"

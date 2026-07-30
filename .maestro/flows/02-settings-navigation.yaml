@@ -2,30 +2,26 @@ appId: com.cherry-ai.cherry-studio-app
 tags: [settings]
 ---
 - runFlow: ../subflows/launch.yaml
-- tapOn: "Open sidebar"
-- tapOn: "Settings"
+- tapOn: "^Settings$|^设置$"
 # 设置根屏分组
-- assertVisible: "Edit profile"
-- assertVisible: "Model service"
-- assertVisible: "Default model"
-- assertVisible: "Web search"
-- assertVisible: "Data backup"
-- assertVisible: "About us"
+- assertVisible: "^Profile$|^个人资料$"
+- assertVisible: "Model service|模型服务"
+- assertVisible: "Default model|默认模型"
+- assertVisible: "Web search|网络搜索"
+- assertVisible: "Data backup|数据备份"
+- assertVisible: "About us|关于我们"
 # Model service 列表
-- tapOn: "Model service"
-- assertVisible: "Add Provider"
-- assertVisible: "CherryInExpress"
-- assertVisible: "Disabled model services.*"
+- tapOn: "Model service|模型服务"
+- assertVisible: "Add Provider|新建服务商"
+- assertVisible: "^CherryIN$"
 # 注意：Maestro 的 back 是 Android-only（iOS 上静默 no-op），必须点 header 返回键
-- tapOn: "Back"
+- tapOn: "Back|返回"
 # Web search 列表
-- tapOn: "Web search"
-- assertVisible: "General settings"
-- assertVisible: "API providers"
+- tapOn: "Web search|网络搜索"
+- assertVisible: "General settings|常规设置"
+- assertVisible: "API providers|API 服务商"
 - assertVisible: "Tavily"
-- tapOn: "Back"
-# 关闭设置：回到侧栏（设置由侧栏进入，Close 只退一层）。
-# 不再点侧栏的 New chat 回主页——该按钮在「当前已是空白新会话」时隐藏，
-# 显隐随会话状态变化，不是确定性锚点
-- tapOn: "Close"
-- assertVisible: "Recents"
+- tapOn: "Back|返回"
+# 返回后仍停留在设置 tab 根屏
+- assertVisible: "^Profile$|^个人资料$"
+- assertVisible: "Model service|模型服务"
