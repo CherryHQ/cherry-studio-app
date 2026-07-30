@@ -222,8 +222,8 @@ When a directory represents a **named domain** (a coherent business module with 
 ```
 src/frontend/components/confirmDialog/                      ✅
 src/frontend/components/modelPicker/                        ✅
-src/backend/infrastructure/integrations/webSearch/           ✅
-src/backend/infrastructure/integrations/devicePermissions/   ✅
+src/backend/services/webSearch/                             ✅
+src/backend/services/permissions/                           ✅
 ```
 
 Placement — whether a domain module lives as a large subtree or as a subdirectory inside a bucket like `services/` — is governed by §4.10; this section governs only its name.
@@ -264,7 +264,7 @@ is **closed by default**. The current `/src/` roots are `app/`, `bootstrap/`, `f
 
 - `frontend/`: `components/`, `data/`, `features/`, `hooks/`, `i18n/`, `styles/`, `types/`, and
   `utils/`.
-- `backend/`: `application/`, `data/`, `infrastructure/`, `types/`, and `utils/`.
+- `backend/`: `ai/`, `data/`, `services/`, `types/`, and `utils/`.
 - `shared/`: `contracts/`, `core/`, `data/`, `domain/`, and `utils/`.
 
 Adding a root or overlapping one of these layer-owned buckets is a structural commitment governed by
@@ -304,7 +304,7 @@ A **large multi-file domain** co-locates *everything* it owns — its components
 |---|---|---|
 | A large route-bound UI domain | `src/frontend/features/<name>/` | self-contained tree (`input/`, `workspace/`, `components/`, `hooks/`, `utils/`) |
 | A large shared UI domain | `src/frontend/components/<domain>/` | self-contained tree |
-| A large backend integration | `src/backend/infrastructure/integrations/<domain>/` | adapter, provider, and utility subtree |
+| A large backend service domain | `src/backend/services/<domain>/` | service, adapter, provider, and utility subtree |
 | One cohesive persistence service | `src/backend/data/services/<Domain>Service.ts` | a single file; its lone helper stays in the nearest `utils/` |
 | A small standalone helper | the owning module's or layer's `utils/` | a single file |
 
@@ -322,10 +322,10 @@ src/frontend/features/chat/
 └── session/              # React owner for the backend ChatSession
 ```
 
-Layer-level buckets such as `frontend/components`, `frontend/hooks`, `backend/data/services`,
-and each layer's `utils` stay reserved for small, independent, cross-domain pieces. A large,
-multi-file domain left scattered across those buckets instead of gathered into one subtree is the
-§6.7 scattered/impure anti-pattern.
+Layer-level buckets such as `frontend/components`, `frontend/hooks`, `backend/services`,
+`backend/data/services`, and each layer's `utils` stay reserved for small, independent,
+cross-domain pieces. A large, multi-file domain left scattered across those buckets instead of
+gathered into one subtree is the §6.7 scattered/impure anti-pattern.
 
 For UI modules, promotion is owner-based: keep the module under its screen until a second independent screen or feature domain consumes it. Import count inside one screen tree is not evidence of cross-domain ownership. App shell, design-system, and platform-adapter modules may be app-wide with one direct consumer, but must document that ownership and expose a stable public interface.
 
@@ -392,7 +392,7 @@ A class that owns state, resources, or a lifecycle MUST use one of exactly two s
 
 A `Service` / `Manager` class lives where its domain ownership lies (e.g.
 `src/backend/data/services/MessageService.ts`,
-`src/backend/infrastructure/integrations/cherryin/CherryInOauthService.ts`,
+`src/backend/services/oauth/CherryInOauthService.ts`,
 `src/shared/core/logger/LoggerService.ts`); placement under a directory named `services/` is not
 required.
 

@@ -19,9 +19,9 @@ isolation. See [ADR 0011](../adr/0011-separate-in-process-frontend-and-backend.m
 | `src/app` | Thin Expo Router route files |
 | `src/bootstrap` | Composition root, initialization, lifecycle, splash, and polyfills |
 | `src/frontend` | Features, components, React Query, hooks, i18n, styles, UI utils and types |
-| `src/backend/application` | Multi-step product workflows behind shared contracts |
+| `src/backend/ai` | AI SDK, provider adapters, MCP runtime, tools, and message conversion |
 | `src/backend/data` | Backend cache, preferences, SQLite, schemas, seeders, fixtures, and persistence services |
-| `src/backend/infrastructure` | AI SDK, device APIs, and third-party integrations |
+| `src/backend/services` | Multi-step workflows, device capabilities, OAuth, avatars, and web search |
 | `src/shared/contracts` | `MobileBackend`, module interfaces, sessions, events, and workflow results |
 | `src/shared/data` | Entities, DTO schemas, preferences, cache schemas, and data errors |
 | `src/shared/domain` | Platform-independent domain rules |
@@ -31,6 +31,10 @@ isolation. See [ADR 0011](../adr/0011-separate-in-process-frontend-and-backend.m
 Only `bootstrap` may import both frontend and backend. Frontend calls backend behavior through
 `useBackendModule(key)` and types from `shared/contracts`; it never imports SQLite, Drizzle, AI SDK,
 or concrete device and persistence implementations. ESLint enforces these directions.
+
+Inside backend, static imports flow from `ai` to `services` or `data`, and from `services` to `data`;
+`data` imports neither general services nor AI. A workflow service that needs AI receives a narrow
+constructor interface, and bootstrap supplies the concrete implementation.
 
 ## Topic Documents
 

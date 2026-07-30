@@ -10,7 +10,7 @@ Cherry Mobile has two different concepts that are easy to confuse:
 
 **Provider-Native Web Search**:
 Model-native web search configured through AI provider options during an AI request. This path is
-built in `src/backend/infrastructure/ai/utils/websearch.ts` and participates in `AiService` provider
+built in `src/backend/ai/utils/websearch.ts` and participates in `AiService` provider
 options.
 
 **Web Search Provider**:
@@ -24,8 +24,8 @@ The external search path is:
 
 `WebSearchService -> createWebSearchProvider() -> provider driver -> post-processing`
 
-`WebSearchService` lives in backend infrastructure and reads web search preferences through
-`PreferenceService`. Bootstrap keeps both implementations behind the `MobileBackend` graph.
+`WebSearchService` lives under `src/backend/services/webSearch` and reads web search preferences
+through `PreferenceService`. Bootstrap keeps both implementations behind the `MobileBackend` graph.
 
 Runtime behavior:
 
@@ -43,16 +43,16 @@ Abort errors are propagated when the caller's signal is aborted.
 ## Web Search In AI Requests
 
 External web search reaches the model as an AI-SDK tool, not as provider options.
-`src/backend/infrastructure/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts` wraps
+`src/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts` wraps
 `WebSearchService.searchKeywords` in a `web_search` tool (id `WEB_SEARCH_TOOL_NAME`) with a `2..200`
 self-contained query schema. Its `execute` classifies failures: permanent configuration errors
 return a do-not-retry message, transient errors return a retryable note, and abort errors are
 rethrown.
 
-`buildAgentParams` (`src/backend/infrastructure/ai/runtime/aiSdk/params/buildAgentParams.ts`)
+`buildAgentParams` (`src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts`)
 arbitrates the external tool against provider-native web search (the provider-native path is
 attached as a plugin by `buildAgentPlugins` in
-`src/backend/infrastructure/ai/runtime/aiSdk/params/buildAgentPlugins.ts`) — they are mutually
+`src/backend/ai/runtime/aiSdk/params/buildAgentPlugins.ts`) — they are mutually
 exclusive within one request:
 
 - Provider-native is forced for OpenRouter built-in web-search models and `sonar` models; the external tool is never attached for them.
@@ -74,7 +74,7 @@ Current mobile web search provider ids:
 - `jina`
 
 Current unsupported mobile entries (registered as `UnsupportedProvider` in
-`src/backend/infrastructure/integrations/webSearch/providers/registry.ts`):
+`src/backend/services/webSearch/providers/registry.ts`):
 
 - `exa-mcp`
 - `fetch`

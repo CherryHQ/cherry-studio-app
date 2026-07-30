@@ -10,7 +10,7 @@ The request path is:
 
 `ChatSession -> AiService -> providerToAiSdkConfig() -> Agent -> @cherrystudio/ai-core / AI SDK`
 
-`AiService` is backend infrastructure composed behind the `MobileBackend` contracts. It supports:
+`AiService` is the backend AI module composed behind the `MobileBackend` contracts. It supports:
 
 - `streamText()`
 - `generateText()`
@@ -63,11 +63,11 @@ Endpoint selection priority is:
 The endpoint and adapter-family logic chooses AI SDK provider variants such as OpenAI, OpenAI-compatible, Azure, Azure responses, Azure Anthropic, Gemini, CherryIN, NewAPI, AiHubMix, or Gateway.
 
 Provider settings builders are centralized in
-`src/backend/infrastructure/ai/provider/config.ts`.
+`src/backend/ai/provider/config.ts`.
 
 ## AI SDK Agent Adapter
 
-`src/backend/infrastructure/ai/runtime/aiSdk/Agent.ts` keeps the desktop `Agent` filename but narrows
+`src/backend/ai/runtime/aiSdk/Agent.ts` keeps the desktop `Agent` filename but narrows
 behavior to mobile AI SDK generate/stream calls.
 
 Current exclusions:
@@ -95,14 +95,14 @@ These exclusions are mobile runtime scope limits, not a new Provider/Model domai
 Provider-native web search is an AI request option. It is separate from `WebSearchService`.
 
 Beyond provider options, `buildAgentParams`
-(`src/backend/infrastructure/ai/runtime/aiSdk/params/buildAgentParams.ts`) may also attach a tool set,
+(`src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts`) may also attach a tool set,
 resolved per request by `ToolService.resolveForRequest`
-(`src/backend/infrastructure/ai/tools/ToolService.ts`). The resolved tool set can contain the
+(`src/backend/ai/tools/ToolService.ts`). The resolved tool set can contain the
 external `web_search` tool backed by `WebSearchService`, MCP tools merged from
-`McpService.getToolEntriesForAssistant(...)`, and built-in device tools (calendar, health, location,
-reminders under `src/backend/infrastructure/ai/tools/adapters/aiSdk/builtin`). When the external web
-search path wins arbitration (see [Web Search](./mobile-web-search.md#web-search-in-ai-requests)), the
-request carries the `web_search` tool; whenever tools are attached the request also sets
+`McpRuntimeService.getToolEntriesForAssistant(...)`, and built-in device tools (calendar, health,
+location, reminders under `src/backend/ai/tools/adapters/aiSdk/builtin`). When the external web search
+path wins arbitration (see [Web Search](./mobile-web-search.md#web-search-in-ai-requests)), the request
+carries the `web_search` tool; whenever tools are attached the request also sets
 `stopWhen: stepCountIs(...)` (bounded by the assistant's max tool calls, default 20). External web
 search and provider-native web search are mutually exclusive within one request; a request never
 carries both.

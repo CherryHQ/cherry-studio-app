@@ -10,11 +10,11 @@ existing deep module over a new registry or pass-through wrapper.
 1. Put entities and DTO schemas in `src/shared/data` when both sides need them.
 2. Define or extend the narrow module interface in `src/shared/contracts`.
 3. Implement simple persistence directly in `src/backend/data/services`.
-4. Add a `src/backend/application` module only for multi-step rules or coordinated dependencies.
+4. Add a `src/backend/services` module only for multi-step rules or coordinated dependencies.
 5. Compose the production implementation in `src/bootstrap/createMobileBackend.ts`.
 6. Call it from the owning frontend hook or feature through `useBackendModule(key)`.
 
-Frontend tests inject a fake module through `BackendProvider`. Backend application tests exercise
+Frontend tests inject a fake module through `BackendProvider`. Backend service tests exercise
 the same shared interface and observable results.
 
 ## Add Persistent Data
@@ -29,19 +29,20 @@ New Message Part vocabulary belongs in `src/shared/data/types/uiParts.ts`; rende
 `src/frontend/features/chat/messageContent`. A new JSON part does not require a table migration, but
 FTS indexes only text parts.
 
-## Add AI Or Integration Behavior
+## Add AI Or Backend Service Behavior
 
-AI SDK adapters live under `src/backend/infrastructure/ai`; device and third-party adapters live
-under `src/backend/infrastructure/integrations`. Pure model/domain rules used by both sides belong in
-`src/shared/domain`.
+AI SDK adapters live under `src/backend/ai`. Stateful device and third-party capabilities live in
+their owning domain under `src/backend/services`, such as `permissions`, `oauth`, and `webSearch`.
+Pure model/domain rules used by both sides belong in `src/shared/domain`.
 
 App-level tools are resolved by `ToolService` and attached in
-`src/backend/infrastructure/ai/runtime/aiSdk/params/buildAgentParams.ts`. Provider plugins are
+`src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts`. Provider plugins are
 assembled in `buildAgentPlugins.ts`. Add a registry only when the existing explicit assembly becomes
 measurably hard to maintain.
 
-The external web-search stack is the full precedent: infrastructure drivers and `WebSearchService`,
-AI tool integration, a `webSearch` backend contract, frontend settings, and thin Expo Router routes.
+The external web-search stack is the full precedent: provider drivers and `WebSearchService` under
+`backend/services`, AI tool integration under `backend/ai`, a `webSearch` backend contract, frontend
+settings, and thin Expo Router routes.
 
 ## Add UI
 

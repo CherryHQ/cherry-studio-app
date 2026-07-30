@@ -8,7 +8,7 @@ This document defines local data ownership after the in-process frontend/backend
 
 The normal read path is:
 
-`frontend query/hook -> useBackendModule() -> MobileBackend contract -> backend implementation -> SQLite or integration`
+`frontend query/hook -> useBackendModule() -> MobileBackend contract -> backend implementation -> SQLite, AI, device API, or third-party service`
 
 The normal composition path is:
 
@@ -72,7 +72,7 @@ cache would weaken that module's invariants.
 ## Backend Contracts
 
 `src/shared/contracts/mobileBackend.ts` aggregates cohesive modules. Simple SQLite services may
-directly satisfy a contract. Multi-step behavior belongs in `src/backend/application`, including:
+directly satisfy a contract. Multi-step behavior belongs in `src/backend/services`, including:
 
 - chat session orchestration;
 - painting generation sessions and incomplete receipts;
@@ -80,9 +80,10 @@ directly satisfy a contract. Multi-step behavior belongs in `src/backend/applica
 - MCP persistence/runtime coordination;
 - permission policy and profile avatar workflows.
 
-Application modules receive data and infrastructure dependencies through constructor-shaped
-interfaces and never import their concrete implementations. Bootstrap supplies production
-implementations.
+Workflow-oriented services receive AI and coordinated dependencies through constructor-shaped
+interfaces instead of importing the concrete AI implementation. Bootstrap supplies production
+implementations. Platform and third-party services may use their concrete SDK or persistence
+dependencies directly when that dependency is part of the service implementation.
 
 ## Database
 
@@ -110,10 +111,10 @@ terminal, paused, or error state to the placeholder.
 ## Service Graph
 
 `createBackendServices()` constructs concrete backend classes such as `CacheService`,
-`PreferenceService`, `ProviderService`, `MessageService`, `McpService`, `WebSearchService`,
+`PreferenceService`, `ProviderService`, `MessageService`, `McpRuntimeService`, `WebSearchService`,
 `ToolService`, and `AiService`. The graph is private to bootstrap. `createMobileBackend()` selects
-direct contract implementations and application workflows from that graph; it does not expose the
-cache itself.
+direct contract implementations and workflow services from that graph; it does not expose the cache
+itself.
 
 There is no desktop application singleton, IPC handler layer, lifecycle registry, or frontend DI
 container for these concrete classes.

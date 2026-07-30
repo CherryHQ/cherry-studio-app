@@ -5,7 +5,7 @@ desktop AI concepts to the in-process Expo app runtime.
 
 ## Scope
 
-- `AiService.ts` is the app-facing AI service registered in the mobile data runtime.
+- `AiService.ts` is the AI entry point registered in the private backend service graph.
 - `mcp/` owns the mobile Streamable HTTP MCP runtime, tool policies, and AI SDK adaptation.
 - `provider/` converts stored provider and model settings into AI SDK provider config.
 - `runtime/aiSdk/Agent.ts` keeps the desktop agent filename while narrowing behavior to plain AI SDK

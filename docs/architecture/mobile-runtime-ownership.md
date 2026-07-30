@@ -61,7 +61,7 @@ and query synchronization and disposes the session on unmount.
 
 ## Other Long-Lived Resources
 
-- `McpService` owns MCP clients and tool caches; app bootstrap disposes it.
+- `McpRuntimeService` owns MCP clients and tool caches; app bootstrap disposes it.
 - `WebSearchService` owns API-key rotation state; app bootstrap disposes it.
 - Backend `CacheService` owns Provider API-key rotation state and backend-only MMKV persistence;
   app bootstrap initializes and disposes it.

@@ -38,15 +38,18 @@ _Avoid_: persisted history page, query page
 The runtime owner for active LLM streams, AbortControllers, stream snapshots, and terminal assistant Message persistence.
 _Avoid_: UI state, screen state
 
-### Data
+### Backend And Data
 
-**Data Runtime**:
-The mobile runtime boundary that opens the local database, initializes preferences and seed data, creates Data Services, and exposes them to React.
-_Avoid_: desktop application service registry
+**App Bootstrap Runtime**:
+The mobile runtime owner that opens the local database, initializes cache, preferences, and seed
+data, constructs the private Backend Service Graph, and exposes startup status plus `MobileBackend`
+to the app shell.
+_Avoid_: Data Runtime, desktop application service registry
 
-**Data Service Graph**:
-The in-process service set that owns local persistence operations for providers, models, assistants, topics, messages, preferences, prompts, tags, pins, web search, and AI.
-_Avoid_: HTTP API layer, repository bag
+**Backend Service Graph**:
+The bootstrap-private in-process set that owns persistence, product workflows, platform
+capabilities, web search, and AI implementations behind `MobileBackend`.
+_Avoid_: Data Service Graph, HTTP API layer, repository bag
 
 **Provider**:
 A user-configurable AI service endpoint with API keys, auth configuration, endpoint configuration, and runtime API feature flags.
@@ -65,7 +68,8 @@ A provider/model routing description that selects the endpoint type and AI SDK a
 _Avoid_: URL string
 
 **Preference**:
-A scoped local setting persisted in the mobile database and read through the Data Runtime.
+A scoped local setting persisted in the mobile database and read through the backend preferences
+module.
 _Avoid_: global variable, config constant
 
 **Pin**:

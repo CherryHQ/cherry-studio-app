@@ -16,7 +16,7 @@ Status: active
 
 当前状态：MCP 已在移动端实现：`mcp_server` 主表
 （`src/backend/data/db/schemas/mcpServer.ts`）、`McpServerService`、运行时
-`src/backend/infrastructure/ai/mcp`（`McpService`）、管理 UI
+`src/backend/ai/mcp`（`McpRuntimeService`）、管理 UI
 （`src/frontend/features/settings/McpScreen/`，路由 `src/app/(tabs)/settings/mcp/`）均已落地；
 `assistant_mcp_server` 关联表带双侧外键，Assistant 创建和更新 DTO 可写 `mcpServerIds`。
 Knowledge 仍缺：移动端只保留 `assistant_knowledge_base` 关联表（无 Knowledge 侧外键），能读取并

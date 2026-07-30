@@ -13,9 +13,9 @@ src/
 ├── bootstrap/            # composition, startup, lifecycle, and polyfills
 ├── frontend/             # features, components, data, hooks, i18n, styles, utils, types
 ├── backend/
-│   ├── application/      # multi-step product workflows
+│   ├── ai/               # AI SDK, providers, MCP runtime, tools, and message conversion
 │   ├── data/             # backend cache, preferences, SQLite, seeders, and persistence services
-│   ├── infrastructure/   # AI, device, and third-party adapters
+│   ├── services/         # product workflows, platform capabilities, and third-party services
 │   ├── utils/            # backend-owned pure helpers
 │   └── types/            # backend-specific declarations
 ├── shared/
@@ -49,16 +49,16 @@ post-ready work, and disposal; its React context exposes only `loading`, `ready`
 Because the app is still pre-release, the migration is direct: there is no `DataServices`
 compatibility adapter and no generic data hook that can expose the concrete service graph.
 
-Simple persistence classes may directly satisfy a contract. An application implementation is
-introduced only when it hides a multi-step rule or coordinates several dependencies. This keeps
-the seam deep and avoids a parallel hierarchy of pass-through wrappers.
+Simple persistence classes may directly satisfy a contract. A general backend service is introduced
+only when it hides a multi-step rule, owns a platform or third-party capability, or coordinates
+several dependencies. This keeps the seam deep and avoids pass-through wrappers.
 
-`backend/application` names a role, not a desktop directory. It is unrelated to Cherry Desktop's
-`src/main/core/application`, which is the Electron lifecycle and IoC container. Its desktop
-counterparts are distributed across DataApi handlers, Main AI/business modules, and renderer-owned
-workflows because those operations cross process responsibilities on desktop. Mobile keeps the
-same multi-step rules behind the backend seam instead of moving AI, persistence, or device policy
-into frontend hooks.
+`backend/services` follows Cherry Desktop's `src/main/services` directory vocabulary. The mapping is
+by responsibility rather than by file: desktop process boundaries distribute some equivalent
+workflows across DataApi handlers, Main AI modules, Main services, and renderer owners. Mobile keeps
+those backend-owned rules behind the in-process seam. It does not copy Cherry Desktop's
+`src/main/core/application`, which remains an Electron lifecycle and IoC container with no mobile
+counterpart.
 
 **Considered Options**
 
