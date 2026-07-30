@@ -37,6 +37,11 @@ export const ListMcpServersQuerySchema = z.strictObject({
 });
 export type ListMcpServersQueryParams = z.input<typeof ListMcpServersQuerySchema>;
 
+export type McpUpdateServerResult = {
+  server: StreamableHttpMcpServer;
+  toolsChanged: boolean;
+};
+
 export type McpServerSchemas = {
   '/mcp-servers': {
     GET: {
@@ -60,7 +65,7 @@ export type McpServerSchemas = {
     PATCH: {
       body: UpdateMcpServerDto;
       params: { id: string };
-      response: StreamableHttpMcpServer;
+      response: McpUpdateServerResult;
     };
   };
 };

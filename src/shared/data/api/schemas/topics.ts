@@ -45,6 +45,10 @@ export interface ActiveNodeResponse {
 
 export type TopicSchemas = {
   '/topics': {
+    DELETE: {
+      query: { ids: readonly string[] };
+      response: undefined;
+    };
     GET: {
       query?: ListTopicsQuery;
       response: CursorPaginationResponse<Topic>;
