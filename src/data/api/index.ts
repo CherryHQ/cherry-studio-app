@@ -4,6 +4,7 @@
  * Combines all domain-specific query key factories into a unified queryKeys object.
  */
 
+import { aiUsageRecordQueryKeys } from './aiUsageRecords';
 import { assistantQueryKeys } from './assistants';
 import { mcpServerQueryKeys } from './mcpServers';
 import { messageQueryKeys } from './messages';
@@ -18,6 +19,7 @@ import { topicQueryKeys } from './topics';
 export { createMobileQueryClient, QueryProvider } from './queryClient';
 
 export const queryKeys = {
+  aiUsageRecords: aiUsageRecordQueryKeys,
   assistants: assistantQueryKeys,
   mcpServers: mcpServerQueryKeys,
   topics: topicQueryKeys,
