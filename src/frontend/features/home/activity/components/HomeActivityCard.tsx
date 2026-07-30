@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useUniwind } from 'uniwind';
 
-import { homeActivityCalendar } from '@/utils/constants';
+import { homeActivityCalendar } from '@/frontend/utils/constants';
 
 import type { ActivityAnimationControls, ActivityData } from '../types';
 import { buildActivityCalendarWeeks, getActivitySummary } from '../utils/calendarLayout';

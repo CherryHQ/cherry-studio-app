@@ -3,7 +3,7 @@ import { randomUUID } from 'expo-crypto';
 import * as z from 'zod';
 import type { ProviderService } from '@/backend/infrastructure/services/ProviderService';
 import type { ApiKeyEntry, AuthConfig } from '@/shared/data/types/provider';
-import { CHERRYIN_CONFIG } from '@/utils/constants';
+import { CHERRYIN_CONFIG } from '@/shared/utils/cherryInOauth';
 
 const logger = loggerService.withContext('CherryInOauthService');
 const CHERRYIN_PROVIDER_ID = 'cherryin';

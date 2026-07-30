@@ -90,7 +90,7 @@ jest.mock('@/frontend/components/SlotText', () => {
   return { SlotText: ({ text }: { text: string }) => <MockText>{text}</MockText> };
 });
 
-jest.mock('@/utils/constants', () => ({
+jest.mock('@/frontend/utils/constants', () => ({
   bottomSheet: { cornerRadius: 28, headerHeight: 60, headerSideWidth: 44, outerInset: 4 },
   isLiquidGlassAvailable: false,
   sheetScrimColor: '#00000066',

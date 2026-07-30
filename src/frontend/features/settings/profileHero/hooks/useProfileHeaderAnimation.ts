@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useAnimatedScrollHandler, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { profileHero } from '@/utils/constants';
+import { profileHero } from '@/frontend/utils/constants';
 
 import { useHeroLock } from './useHeroLock';
 

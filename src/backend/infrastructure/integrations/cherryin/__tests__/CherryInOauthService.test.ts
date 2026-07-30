@@ -14,7 +14,7 @@ jest.mock('@logger', () => ({
   },
 }));
 
-jest.mock('@/utils/constants', () => ({
+jest.mock('@/shared/utils/cherryInOauth', () => ({
   CHERRYIN_CONFIG: {
     CLIENT_ID: 'test-client-id',
     ALLOWED_HOSTS: ['https://open.cherryin.ai', 'https://open.cherryin.dev'],

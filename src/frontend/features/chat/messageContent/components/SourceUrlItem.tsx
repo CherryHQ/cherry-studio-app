@@ -1,7 +1,7 @@
 import { GlobeIcon, SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 import { Pressable, Text, View } from 'react-native';
 
-import { openExternalUrl } from '@/utils/openExternalUrl';
+import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 type SourceUrlItemProps = {
   label: string;

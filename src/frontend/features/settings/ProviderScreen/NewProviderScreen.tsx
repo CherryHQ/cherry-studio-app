@@ -17,7 +17,7 @@ import { Image } from '@/frontend/components/nativePrimitives';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { ENDPOINT_TYPE } from '@/shared/data/types/model';
 import type { ApiKeyEntry, EndpointConfigs } from '@/shared/data/types/provider';
-import { keyboardBottomOffset } from '@/utils/constants';
+import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { SettingsIconButton } from '../components/SettingsIconButton';
 import { normalizeApiKeySingleLine } from './apiService/utils/providerApiServiceApiKeys';
 import { providerApiServiceStyles } from './apiService/utils/providerApiServiceStyles';

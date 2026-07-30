@@ -8,7 +8,7 @@ import Animated, {
   useAnimatedStyle,
 } from 'react-native-reanimated';
 
-import { profileHero } from '@/utils/constants';
+import { profileHero } from '@/frontend/utils/constants';
 
 const fadeTravel = profileHero.collapseDistance;
 const fadeStart = fadeTravel * profileHero.crossFadeStartRatio;

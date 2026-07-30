@@ -41,7 +41,7 @@ jest.mock('expo-glass-effect', () => {
   };
 });
 
-jest.mock('@/utils/constants', () => ({
+jest.mock('@/frontend/utils/constants', () => ({
   isLiquidGlassAvailable: false,
   sheetScrimColor: '#00000066',
 }));

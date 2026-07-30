@@ -7,7 +7,7 @@ import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 import { useConfirmDialog } from '@/frontend/components/confirmDialog';
 import { Image } from '@/frontend/components/nativePrimitives';
-import { openExternalUrl } from '@/utils/openExternalUrl';
+import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { UserCancelledError, useCherryInOauth } from '../hooks/useCherryInOauth';
 
 const CHERRYIN_TOPUP_URL = 'https://open.cherryin.ai/console/topup';

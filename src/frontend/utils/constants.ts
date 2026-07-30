@@ -42,14 +42,6 @@ export const screenBottomActionInset = 16;
 // focus() call landing before that is silently ignored by UIKit.
 export const searchBarAutoFocusDelayMs = 100;
 
-// CherryIN OAuth configuration
-export const CHERRYIN_CONFIG = {
-  CLIENT_ID: '2a348c87-bae1-4756-a62f-b2e97200fd6d',
-  ALLOWED_HOSTS: ['https://open.cherryin.ai', 'https://open.cherryin.dev'],
-  REDIRECT_URI: 'cherrystudio://oauth/callback',
-  SCOPES: 'openid profile email offline_access balance:read usage:read tokens:read tokens:write',
-};
-
 // Tuning knobs for the GitHub-style activity calendar card on the Home tab.
 // Sizes, colors and spring feel replicate the reference contribution-graph
 // animation 1:1 — adjust here, not in the activity components.
@@ -158,16 +150,6 @@ export const profileHero = {
 export const settingsServiceRow = {
   rowHeight: 44,
 } as const;
-
-// Identifying headers attached to every outbound AI-provider and web-search
-// request. Lives in `utils` (not `ai`) so `services/webSearch` can use it
-// without depending on the AI layer (ADR 0010).
-export function defaultAppHeaders(): Record<string, string> {
-  return {
-    'User-Agent': 'CherryStudioMobile/1.0',
-    'X-App-Name': 'CherryStudioMobile',
-  };
-}
 
 // Providers that exist as rows but must never appear in the provider settings
 // list. `cherryai` is Cherry's own built-in service (api.cherry-ai.com): it is

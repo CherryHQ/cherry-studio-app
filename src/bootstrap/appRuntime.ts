@@ -1,8 +1,7 @@
 import { loggerService } from '@logger';
-import { Uniwind } from 'uniwind';
 import type { BackendServices } from '@/bootstrap/createBackendServices';
 import { initI18n } from '@/frontend/i18n';
-import { ThemeMode } from '@/shared/data/preference';
+import { applyThemeModePreference } from '@/frontend/utils/theme';
 
 const logger = loggerService.withContext('bootstrapAppRuntime');
 
@@ -51,19 +50,5 @@ async function reconcileStalePendingMessages(services: BackendServices) {
     await services.message.settleCrashedMessages(staleIds);
   } catch (error) {
     logger.error('Failed to reconcile stale pending messages', error as Error);
-  }
-}
-
-export function applyThemeModePreference(themeMode: ThemeMode) {
-  switch (themeMode) {
-    case ThemeMode.dark:
-      Uniwind.setTheme('dark');
-      break;
-    case ThemeMode.light:
-      Uniwind.setTheme('light');
-      break;
-    case ThemeMode.system:
-      Uniwind.setTheme('system');
-      break;
   }
 }

@@ -27,7 +27,7 @@ import {
   type McpMode,
 } from '@/shared/data/types/assistant';
 import type { UniqueModelId } from '@/shared/data/types/model';
-import { keyboardBottomOffset } from '@/utils/constants';
+import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { EmojiPickerBottomSheet } from './components/EmojiPickerBottomSheet';
 
 type AssistantFormState = {

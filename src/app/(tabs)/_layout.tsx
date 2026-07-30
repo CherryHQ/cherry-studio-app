@@ -18,7 +18,7 @@ import {
   useSetSearchScope,
 } from '@/frontend/features/search/context/SearchScopeProvider';
 import { getSearchScopeForTabRoute } from '@/frontend/features/search/utils/searchScope';
-import { isAndroid } from '@/utils/constants';
+import { isAndroid } from '@/frontend/utils/constants';
 
 const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
 

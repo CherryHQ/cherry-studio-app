@@ -13,7 +13,7 @@ import { withUniwind } from 'uniwind';
 import { AppBootstrapGate, AppBootstrapProvider } from '@/bootstrap';
 import { NavigationThemeProvider } from '@/frontend/components/navigation';
 import { QueryProvider } from '@/frontend/data';
-import { isIOS, isLiquidGlassAvailable } from '@/utils/constants';
+import { isIOS, isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 // Hold the native splash across app bootstrap so the gate never exposes a
 // blank frame. `AppBootstrapProvider` hides it once initialization settles.

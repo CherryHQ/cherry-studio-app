@@ -7,7 +7,7 @@ import { useSharedValue } from 'react-native-reanimated';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { Message } from '@/shared/data/types/message';
-import { isIOS } from '@/utils/constants';
+import { isIOS } from '@/frontend/utils/constants';
 import { ToolApprovalSheet } from '../approval/ToolApprovalSheet';
 import { MessageSlideInProvider } from '../messageItem';
 import { useChatSession, useChatSessionTopic } from '../session/ChatSessionProvider';

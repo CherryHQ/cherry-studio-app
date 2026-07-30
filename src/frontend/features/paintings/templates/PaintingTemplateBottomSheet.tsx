@@ -9,7 +9,7 @@ import {
   useBottomSheet,
 } from '@/frontend/components/bottomSheet';
 import { Image } from '@/frontend/components/nativePrimitives';
-import { bottomSheet } from '@/utils/constants';
+import { bottomSheet } from '@/frontend/utils/constants';
 
 import type { PaintingTemplate } from './paintingTemplates';
 

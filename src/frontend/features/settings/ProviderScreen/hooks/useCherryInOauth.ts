@@ -4,7 +4,7 @@ import { useToast } from 'heroui-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { queryKeys, useBackendModule } from '@/frontend/data';
-import { CHERRYIN_CONFIG } from '@/utils/constants';
+import { CHERRYIN_CONFIG } from '@/shared/utils/cherryInOauth';
 
 const { makeRedirectUri, useAuthRequest, ResponseType } = AuthSession;
 

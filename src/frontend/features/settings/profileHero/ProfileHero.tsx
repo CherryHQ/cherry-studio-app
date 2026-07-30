@@ -13,7 +13,7 @@ import Animated, {
 
 import { Image } from '@/frontend/components/nativePrimitives';
 import { useAvatar } from '@/frontend/hooks/useAvatar';
-import { profileHero } from '@/utils/constants';
+import { profileHero } from '@/frontend/utils/constants';
 
 type ProfileHeroProps = {
   lockProgress: SharedValue<number>;

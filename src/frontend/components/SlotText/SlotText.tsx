@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { type LayoutChangeEvent, Text, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { slotTextHighlightColor } from '@/utils/constants';
+import { slotTextHighlightColor } from '@/frontend/utils/constants';
 
 import { SlotGlyph } from './components/SlotGlyph';
 import type { SlotTextProps } from './SlotText.types';

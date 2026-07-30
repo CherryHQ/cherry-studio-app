@@ -1,4 +1,4 @@
-import { paintingSkeleton } from '@/utils/constants';
+import { paintingSkeleton } from '@/frontend/utils/constants';
 
 type PaintingSkeletonGrid = {
   cols: number;

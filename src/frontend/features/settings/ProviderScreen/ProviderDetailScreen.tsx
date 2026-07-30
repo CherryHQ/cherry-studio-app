@@ -9,7 +9,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { useConfirmDialog } from '@/frontend/components/confirmDialog';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { queryKeys, useBackendModule } from '@/frontend/data';
-import { openExternalUrl } from '@/utils/openExternalUrl';
+import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import {
   buildApiKeysInputFromEntries,
   canEditProviderEndpoint,

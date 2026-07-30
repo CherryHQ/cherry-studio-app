@@ -1,6 +1,6 @@
 import { Skia } from '@shopify/react-native-skia';
 
-import { paintingSkeleton } from '@/utils/constants';
+import { paintingSkeleton } from '@/frontend/utils/constants';
 
 /**
  * Full-lifecycle SkSL for the painting skeleton: the Act 1 loading grid (a

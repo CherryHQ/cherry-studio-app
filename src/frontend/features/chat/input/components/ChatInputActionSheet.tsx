@@ -8,7 +8,7 @@ import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-n
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { isLiquidGlassAvailable, sheetScrimColor } from '@/utils/constants';
+import { isLiquidGlassAvailable, sheetScrimColor } from '@/frontend/utils/constants';
 import {
   useChatInputActions,
   useChatInputMedia,

@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import type { Painting } from '@/shared/data/types/painting';
-import { paintingViewer } from '@/utils/constants';
+import { paintingViewer } from '@/frontend/utils/constants';
 import {
   type ResolvedPaintingAttachment,
   usePainting,

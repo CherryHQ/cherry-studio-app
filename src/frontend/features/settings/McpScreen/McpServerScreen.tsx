@@ -14,7 +14,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiError, ErrorCode } from '@/shared/data/api/types';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 import { withMcpToolRuleAdded, withMcpToolRuleCleared } from '@/shared/domain/mcp/mcpSourcePolicy';
-import { keyboardBottomOffset } from '@/utils/constants';
+import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { McpHeadersEditor } from './components/McpHeadersEditor';
 import { McpServerChrome } from './components/McpServerChrome/McpServerChrome';

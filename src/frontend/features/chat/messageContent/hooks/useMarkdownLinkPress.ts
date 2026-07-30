@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { LinkPressEvent } from 'react-native-enriched-markdown';
-import { openExternalUrl } from '@/utils/openExternalUrl';
+import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 export function useMarkdownLinkPress() {
   const handleLinkPress = useCallback(({ url }: LinkPressEvent) => {

@@ -15,7 +15,7 @@ import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
 import { Image } from '@/frontend/components/nativePrimitives';
-import { openExternalUrl } from '@/utils/openExternalUrl';
+import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { SettingsSection } from './components/SettingsSection';
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'latest';

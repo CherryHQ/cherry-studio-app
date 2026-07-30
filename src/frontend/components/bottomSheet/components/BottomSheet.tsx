@@ -5,7 +5,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { bottomSheet, isLiquidGlassAvailable, sheetScrimColor } from '@/utils/constants';
+import { bottomSheet, isLiquidGlassAvailable, sheetScrimColor } from '@/frontend/utils/constants';
 
 import {
   type BottomSheetCloseReason,
