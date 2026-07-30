@@ -1,1 +1,1 @@
-export { ProviderModelPullScreen as default } from '@/features/settings/ProviderScreen';
+export { ProviderModelPullScreen as default } from '@/frontend/features/settings/ProviderScreen';

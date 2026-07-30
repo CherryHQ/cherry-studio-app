@@ -1,1 +1,1 @@
-export { PermissionDetailScreen as default } from '@/features/settings/PermissionsScreen';
+export { PermissionDetailScreen as default } from '@/frontend/features/settings/PermissionsScreen';

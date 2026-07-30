@@ -1,1 +1,1 @@
-export { ProviderModelAddScreen as default } from '@/features/settings/ProviderScreen';
+export { ProviderModelAddScreen as default } from '@/frontend/features/settings/ProviderScreen';

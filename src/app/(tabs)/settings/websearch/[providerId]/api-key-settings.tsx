@@ -1,1 +1,1 @@
-export { WebSearchApiKeySettingsScreen as default } from '@/features/settings/WebSearchScreen';
+export { WebSearchApiKeySettingsScreen as default } from '@/frontend/features/settings/WebSearchScreen';

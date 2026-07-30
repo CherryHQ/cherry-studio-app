@@ -1,1 +1,1 @@
-export { MessagesRoute as default } from '@/features/messages';
+export { MessagesRoute as default } from '@/frontend/features/messages';

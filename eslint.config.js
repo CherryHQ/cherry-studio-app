@@ -12,7 +12,7 @@ const tombstonePatterns = [
   { group: ['@/config/constants'], message: 'Moved to @/utils/constants.' },
   {
     group: ['@/screens', '@/screens/*', '@/screens/*/**'],
-    message: 'Screens moved to @/features/<name> (ADR 0010).',
+    message: 'Screens moved to @/frontend/features/<name> (ADR 0010).',
   },
   { group: ['@/data/runtime', '@/data/runtime/*'], message: 'Moved to @/runtime.' },
   {
@@ -20,14 +20,14 @@ const tombstonePatterns = [
     message: 'Moved to @/runtime/createDataServices.',
   },
   { group: ['@/data/bootstrap', '@/data/bootstrap/*'], message: 'Moved to @/runtime/appRuntime.' },
-  { group: ['@/data/hooks', '@/data/hooks/*'], message: 'Moved to @/hooks/data.' },
+  { group: ['@/data/hooks', '@/data/hooks/*'], message: 'Moved to @/frontend/data/hooks.' },
   {
     group: ['@/integration', '@/integration/*', '@/integration/*/**'],
     message: 'cherryAi moved to @/services/cherryin/signature.',
   },
   {
     group: ['@/hooks/paintings', '@/hooks/paintings/*'],
-    message: 'Moved into @/features/paintings/hooks/usePaintings.',
+    message: 'Moved into @/frontend/features/paintings/hooks/usePaintings.',
   },
 ];
 
@@ -58,8 +58,15 @@ module.exports = defineConfig([
   },
   noUpwardImport('data', [
     {
-      group: ['@/features/*', '@/components/*', '@/app/*', '@/ai', '@/ai/*', '@/hooks/*'],
-      message: uiLayerMessage('data') + ' The data layer is the bottom tier.',
+      group: [
+        '@/frontend/features/*',
+        '@/frontend/components/*',
+        '@/app/*',
+        '@/ai',
+        '@/ai/*',
+        '@/frontend/hooks/*',
+      ],
+      message: `${uiLayerMessage('data')} The data layer is the bottom tier.`,
     },
     {
       group: ['@/runtime', '@/runtime/*'],
@@ -70,7 +77,7 @@ module.exports = defineConfig([
   ]),
   noUpwardImport('ai', [
     {
-      group: ['@/features/*', '@/components/*', '@/app/*', '@/hooks/*'],
+      group: ['@/frontend/features/*', '@/frontend/components/*', '@/app/*', '@/frontend/hooks/*'],
       message: uiLayerMessage('ai'),
     },
     {
@@ -93,26 +100,38 @@ module.exports = defineConfig([
         'src/services must not import src/ai — this direction was a cycle (ADR 0010); shared constants live in @/utils.',
     },
     {
-      group: ['@/features/*', '@/components/*', '@/app/*', '@/hooks/*', '@/runtime', '@/runtime/*'],
+      group: [
+        '@/frontend/features/*',
+        '@/frontend/components/*',
+        '@/app/*',
+        '@/frontend/hooks/*',
+        '@/runtime',
+        '@/runtime/*',
+      ],
       message: uiLayerMessage('services'),
     },
   ]),
   noUpwardImport('runtime', [
     {
-      group: ['@/features/*', '@/components/*', '@/app/*', '@/hooks/*'],
+      group: ['@/frontend/features/*', '@/frontend/components/*', '@/app/*', '@/frontend/hooks/*'],
       message:
         'The runtime tier only wires ai/services/data together; feature-owned runtime owners (e.g. ChatRuntime) stay in their feature (ADR 0001).',
     },
   ]),
   {
-    files: ['src/components/**/*.{ts,tsx}', 'src/hooks/**/*.{ts,tsx}', 'src/utils/**/*.{ts,tsx}'],
+    files: [
+      'src/frontend/components/**/*.{ts,tsx}',
+      'src/frontend/data/**/*.{ts,tsx}',
+      'src/frontend/hooks/**/*.{ts,tsx}',
+      'src/utils/**/*.{ts,tsx}',
+    ],
     rules: {
       '@typescript-eslint/no-restricted-imports': [
         'error',
         {
           patterns: [
             {
-              group: ['@/features/*', '@/app/*'],
+              group: ['@/frontend/features/*', '@/app/*'],
               message:
                 'Shared UI layers must not depend on features or routes; move the shared piece down instead.',
             },
@@ -122,7 +141,7 @@ module.exports = defineConfig([
     },
   },
   {
-    files: ['src/features/**/*.{ts,tsx}'],
+    files: ['src/frontend/features/**/*.{ts,tsx}'],
     rules: {
       '@typescript-eslint/no-restricted-imports': [
         'error',
@@ -134,7 +153,7 @@ module.exports = defineConfig([
             },
             {
               // Cross-feature imports go through a feature's public surface:
-              // `@/features/<f>` or `@/features/<f>/<area>` (two levels). The
+              // `@/frontend/features/<f>` or `@/frontend/features/<f>/<area>` (two levels). The
               // exceptions are the sanctioned pure-logic modules documented in
               // features/chat/input/index.ts, plus the shared SettingSelect
               // row. Same-feature files use relative paths, which this alias
@@ -144,24 +163,24 @@ module.exports = defineConfig([
               // needs the classic dance — unban its directory, ban the
               // directory's children, unban the one module.
               group: [
-                '@/features/*/*/*',
-                '@/features/*/*/*/*',
-                '@/features/*/*/*/*/*',
-                '@/features/*/*/*/*/*/*',
-                '!@/features/chat/input/chatInputLayout',
-                '!@/features/chat/input/utils',
-                '@/features/chat/input/utils/*',
-                '!@/features/chat/input/utils/chatInputAttachments',
-                '!@/features/chat/input/hooks',
-                '@/features/chat/input/hooks/*',
-                '!@/features/chat/input/hooks/useChatInputPhotoPicker',
-                '!@/features/settings/components',
-                '@/features/settings/components/*',
-                '!@/features/settings/components/SettingSelect',
+                '@/frontend/features/*/*/*',
+                '@/frontend/features/*/*/*/*',
+                '@/frontend/features/*/*/*/*/*',
+                '@/frontend/features/*/*/*/*/*/*',
+                '!@/frontend/features/chat/input/chatInputLayout',
+                '!@/frontend/features/chat/input/utils',
+                '@/frontend/features/chat/input/utils/*',
+                '!@/frontend/features/chat/input/utils/chatInputAttachments',
+                '!@/frontend/features/chat/input/hooks',
+                '@/frontend/features/chat/input/hooks/*',
+                '!@/frontend/features/chat/input/hooks/useChatInputPhotoPicker',
+                '!@/frontend/features/settings/components',
+                '@/frontend/features/settings/components/*',
+                '!@/frontend/features/settings/components/SettingSelect',
               ],
               allowTypeImports: true,
               message:
-                "Deep cross-feature import: use the feature's public surface (@/features/<f> or @/features/<f>/<area>), or add the module to the sanctioned surface deliberately.",
+                "Deep cross-feature import: use the feature's public surface (@/frontend/features/<f> or @/frontend/features/<f>/<area>), or add the module to the sanctioned surface deliberately.",
             },
           ],
         },

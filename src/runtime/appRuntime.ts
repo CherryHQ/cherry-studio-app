@@ -1,6 +1,6 @@
 import { loggerService } from '@logger';
 import { Uniwind } from 'uniwind';
-import { initI18n } from '@/i18n';
+import { initI18n } from '@/frontend/i18n';
 import type { DataServices } from '@/runtime/createDataServices';
 import { ThemeMode } from '@/shared/domain/preferences';
 

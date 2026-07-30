@@ -9,7 +9,7 @@ jest.mock('uniwind', () => ({
   Uniwind: { setTheme: (...args: unknown[]) => mockSetTheme(...args) },
 }));
 
-jest.mock('@/i18n', () => ({
+jest.mock('@/frontend/i18n', () => ({
   initI18n: (...args: unknown[]) => mockInitI18n(...args),
 }));
 

@@ -1,1 +1,1 @@
-export { PaintingScreen as default } from '@/features/paintings';
+export { PaintingScreen as default } from '@/frontend/features/paintings';

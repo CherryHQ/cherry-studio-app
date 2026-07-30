@@ -1,1 +1,1 @@
-export { SettingsScreen as default } from '@/features/settings';
+export { SettingsScreen as default } from '@/frontend/features/settings';

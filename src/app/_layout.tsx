@@ -1,4 +1,4 @@
-import '../styles/global.css';
+import '../frontend/styles/global.css';
 import '@/polyfills/abortSignal';
 import '@/polyfills/blob';
 
@@ -11,8 +11,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
 
-import { NavigationThemeProvider } from '@/components/navigation';
-import { QueryProvider } from '@/data';
+import { NavigationThemeProvider } from '@/frontend/components/navigation';
+import { QueryProvider } from '@/frontend/data';
 import { DataProvider, InitialDataGate } from '@/runtime';
 import { bootstrapAppRuntime } from '@/runtime/appRuntime';
 import { isIOS, isLiquidGlassAvailable } from '@/utils/constants';
