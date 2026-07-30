@@ -1,9 +1,4 @@
-import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
-
-export type ResolvedFile = {
-  entry: FileEntry;
-  uri: string;
-};
+import type { FileEntry, FileEntryId, ResolvedFile } from '@/shared/data/types/file';
 
 export type FileSchemas = {
   '/files/:id': {

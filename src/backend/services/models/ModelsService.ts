@@ -1,8 +1,6 @@
 import type {
-  AddModelInput,
   CheckModelsHealthInput,
   ModelHealthResult,
-  ModelListQuery,
   ModelPullResult,
   ModelsBackend,
   ReconcileModelsInput,
@@ -10,6 +8,7 @@ import type {
 } from '@/shared/contracts';
 import { ModelPullTimeoutError } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { AddModelInput, ModelListQuery } from '@/shared/data/api/schemas/models';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 

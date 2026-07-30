@@ -2,7 +2,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
-import type { MobileBackend } from '@/shared/contracts';
+import type { Backend } from '@/shared/contracts';
 import { DataApiError, ErrorCode } from '@/shared/data/api/types';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 import { McpServerScreen } from '../McpServerScreen';
@@ -43,7 +43,7 @@ const mockToastShow = jest.fn();
 const mockUpdateServer = jest.fn();
 const backend = {
   mcp: { getServerInfo: mockGetServerInfo },
-} as unknown as MobileBackend;
+} as unknown as Backend;
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ serverId: mockServerId }),

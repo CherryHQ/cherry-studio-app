@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { BackendProvider } from '@/frontend/data';
-import type { MobileBackend, PaintingGenerationSession } from '@/shared/contracts';
+import type { Backend, PaintingGenerationSession } from '@/shared/contracts';
 import type { Painting } from '@/shared/data/types/painting';
 import { usePaintingGeneration } from '../usePaintingGeneration';
 
@@ -31,7 +31,7 @@ const session: PaintingGenerationSession = {
 const mockCreateGenerationSession = jest.fn(() => session);
 const backend = {
   paintings: { createGenerationSession: mockCreateGenerationSession },
-} as unknown as MobileBackend;
+} as unknown as Backend;
 const mockSyncPaintingQueries = jest.fn(async () => undefined);
 
 jest.mock('@/frontend/features/paintings/hooks/usePaintings', () => ({

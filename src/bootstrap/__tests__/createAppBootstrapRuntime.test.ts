@@ -1,6 +1,7 @@
 import { createAppBootstrapRuntime } from '@/bootstrap/createAppBootstrapRuntime';
 
 const mockBackend = { kind: 'backend' };
+const mockDataApiDependencies = { kind: 'data-api-dependencies' };
 const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
 const mockCache = {
@@ -23,7 +24,10 @@ const mockServices = {
 const mockBootstrapAppRuntime = jest.fn(async (_services: unknown) => undefined);
 const mockRunPostReadyTasks = jest.fn(async (_services: unknown) => undefined);
 const mockCreateBackendServices = jest.fn((_db: unknown, _cache: unknown) => mockServices);
-const mockCreateMobileBackend = jest.fn((_services: unknown) => mockBackend);
+const mockCreateBackend = jest.fn((_services: unknown) => ({
+  backend: mockBackend,
+  dataApiDependencies: mockDataApiDependencies,
+}));
 
 jest.mock('@/backend/data/CacheService', () => ({
   CacheService: jest.fn(() => mockCache),
@@ -44,8 +48,8 @@ jest.mock('@/bootstrap/appRuntime', () => ({
 jest.mock('@/bootstrap/createBackendServices', () => ({
   createBackendServices: (db: unknown, cache: unknown) => mockCreateBackendServices(db, cache),
 }));
-jest.mock('@/bootstrap/createMobileBackend', () => ({
-  createMobileBackend: (services: unknown) => mockCreateMobileBackend(services),
+jest.mock('@/bootstrap/createBackend', () => ({
+  createBackend: (services: unknown) => mockCreateBackend(services),
 }));
 
 beforeEach(() => {
@@ -68,6 +72,7 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockBootstrapAppRuntime).toHaveBeenCalledWith(mockServices);
     expect(runtime.backend).toBe(mockBackend);
     expect(runtime.dataApi).toBe(mockDataApi);
+    expect(runtime.preference).toBe(mockPreference);
   });
 
   test('disposes backend cache with the concrete service graph', () => {

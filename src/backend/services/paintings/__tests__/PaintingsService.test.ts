@@ -1,4 +1,4 @@
-import type { FilesBackend, PaintingsBackend } from '@/shared/contracts';
+import type { PaintingsBackend } from '@/shared/contracts';
 import type { FileEntryId, PreparedInternalFile } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
@@ -29,10 +29,8 @@ function createSubject() {
   const receipt = painting('painting-1');
   const completed = painting('painting-1', [outputFileId]);
   const files = {
-    get: jest.fn(),
     resolve: jest.fn(),
-    resolveRenderableUri: jest.fn(),
-  } satisfies FilesBackend;
+  } satisfies PaintingsServiceDependencies['files'];
   const dependencies: PaintingsServiceDependencies = {
     ai: {
       generateImage: jest.fn(async () => ({

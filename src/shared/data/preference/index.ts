@@ -1,3 +1,9 @@
+export type {
+  PreferenceClient,
+  PreferenceMappedValues,
+  PreferenceMapping,
+  PreferenceUpdates,
+} from './preferenceClient';
 export type { PreferenceSchemas } from './preferenceSchemas';
 export { DefaultPreferences } from './preferenceSchemas';
 export type {

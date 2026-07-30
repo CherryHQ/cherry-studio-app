@@ -2,7 +2,7 @@ import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
-import type { MobileBackend } from '@/shared/contracts';
+import type { Backend } from '@/shared/contracts';
 import type { PermissionMode } from '@/shared/data/preference';
 
 import PermissionDetailSettingsScreen from '../PermissionDetailScreen';
@@ -23,7 +23,7 @@ const backend = {
     recover: mockRecover,
     setPolicy: mockSetPolicy,
   },
-} as unknown as MobileBackend;
+} as unknown as Backend;
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ permission: mockPermission }),

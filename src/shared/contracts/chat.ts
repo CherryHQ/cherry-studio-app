@@ -1,9 +1,4 @@
-import type { BranchMessagesQueryParams } from '@/shared/data/api/schemas/messages';
-import type {
-  BranchMessagesResponse,
-  CherryMessagePart,
-  Message,
-} from '@/shared/data/types/message';
+import type { CherryMessagePart, Message } from '@/shared/data/types/message';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export const NEW_CHAT_SESSION_TOPIC_ID = '__new_topic__';
@@ -62,8 +57,4 @@ export interface ChatSession {
 
 export interface ChatBackend {
   createSession(): ChatSession;
-  listMessagePage(
-    topicId: string,
-    query?: BranchMessagesQueryParams,
-  ): Promise<BranchMessagesResponse>;
 }

@@ -2,17 +2,12 @@ import { eq } from 'drizzle-orm';
 
 import type { DbService } from '@/backend/data/db/DbService';
 import { preferenceTable } from '@/backend/data/db/schemas';
-import type {
-  PreferenceMapping as ContractPreferenceMapping,
-  PreferenceUpdates as ContractPreferenceUpdates,
-  PreferenceMappedValues,
-  PreferencesBackend,
-} from '@/shared/contracts';
 import {
   DefaultPreferences,
   getDefaultValue,
   getPreferenceKeys,
   isPreferenceKey,
+  type PreferenceClient,
   type PreferenceDefaultScopeType,
   type PreferenceKeyType,
   type PreferenceUpdateOptions,
@@ -46,7 +41,7 @@ const defaultUpdateOptions: PreferenceUpdateOptions = {
  * - Batch operations for multiple preferences
  * - Integration with React's useSyncExternalStore
  */
-export class PreferenceService implements PreferencesBackend {
+export class PreferenceService implements PreferenceClient {
   private cache: PreferenceUpdateMap = { ...DefaultPreferences.default };
   private listeners = new Map<PreferenceKeyType, Set<PreferenceListener>>();
   private updateTail: Promise<void> = Promise.resolve();
@@ -118,10 +113,6 @@ export class PreferenceService implements PreferencesBackend {
     return result;
   }
 
-  readManyCached<T extends ContractPreferenceMapping>(mapping: T): PreferenceMappedValues<T> {
-    return this.getMultipleCached(mapping);
-  }
-
   getAll(): PreferenceDefaultScopeType {
     return {
       ...DefaultPreferences.default,
@@ -144,13 +135,6 @@ export class PreferenceService implements PreferencesBackend {
     await this.enqueueUpdate(updates as PreferenceUpdateMap, options);
   }
 
-  setMany<K extends PreferenceKeyType>(
-    updates: ContractPreferenceUpdates<K>,
-    options?: PreferenceUpdateOptions,
-  ): Promise<void> {
-    return this.setMultiple(updates, options);
-  }
-
   subscribeChange<K extends PreferenceKeyType>(key: K) {
     return (listener: PreferenceListener) => {
       const listeners = this.listeners.get(key) ?? new Set<PreferenceListener>();
@@ -165,10 +149,6 @@ export class PreferenceService implements PreferencesBackend {
         }
       };
     };
-  }
-
-  subscribe<K extends PreferenceKeyType>(key: K, listener: PreferenceListener): () => void {
-    return this.subscribeChange(key)(listener);
   }
 
   private enqueueUpdate(updates: PreferenceUpdateMap, options: PreferenceUpdateOptions) {

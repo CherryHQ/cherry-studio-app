@@ -25,11 +25,21 @@ import {
   saveProviderAvatar,
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { BackendServices } from '@/bootstrap/createBackendServices';
-import type { MobileBackend } from '@/shared/contracts';
+import type { Backend } from '@/shared/contracts';
 import type { CherryUIMessage } from '@/shared/data/types/message';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
-export function createMobileBackend(services: BackendServices): MobileBackend {
+export type BackendComposition = {
+  backend: Backend;
+  dataApiDependencies: {
+    mcpServers: McpService;
+    models: ModelsService;
+    paintings: PaintingsService;
+    providers: ProvidersService;
+  };
+};
+
+export function createBackend(services: BackendServices): BackendComposition {
   const oauth = CherryInOauthService.getInstance(services.provider);
   const chat = new ChatService({
     files: {
@@ -160,19 +170,22 @@ export function createMobileBackend(services: BackendServices): MobileBackend {
   });
 
   return {
-    assistants: services.assistant,
-    chat,
-    files: services.fileEntry,
-    mcp,
-    models,
-    paintings,
-    permissions,
-    pins: services.pin,
-    preferences: services.preference,
-    profile,
-    providers,
-    topics: services.topic,
-    webSearch: services.webSearch,
+    backend: {
+      chat,
+      mcp,
+      models,
+      paintings,
+      permissions,
+      profile,
+      providers,
+      webSearch: services.webSearch,
+    },
+    dataApiDependencies: {
+      mcpServers: mcp,
+      models,
+      paintings,
+      providers,
+    },
   };
 }
 

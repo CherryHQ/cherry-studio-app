@@ -1,8 +1,6 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { BackendProvider } from '@/frontend/data';
 import { usePins, useTopics } from '@/frontend/hooks/chat';
-import type { MobileBackend } from '@/shared/contracts';
 import type { Topic } from '@/shared/data/types/topic';
 
 import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
@@ -18,16 +16,6 @@ const mockQueryClient = {
 };
 const defaultModelId = 'provider::default-model';
 const mockGetCachedPreferenceValue = jest.fn((): string | null => defaultModelId);
-const mockBackend = {
-  preferences: {
-    readCached: mockGetCachedPreferenceValue,
-  },
-  topics: {
-    removeMany: jest.fn(),
-    update: jest.fn(),
-  },
-} as unknown as MobileBackend;
-
 jest.mock('expo-router', () => ({
   useIsFocused: () => true,
   useRouter: () => ({ push: mockRouterPush }),
@@ -42,6 +30,7 @@ jest.mock('@/frontend/data', () => ({
   useMutation: jest.fn(),
   usePrefetch: () => mockPrefetch,
   usePrefetchInfiniteQuery: () => mockPrefetchInfinite,
+  usePreference: () => [mockGetCachedPreferenceValue(), jest.fn()],
 }));
 
 jest.mock('@/frontend/hooks/chat', () => ({
@@ -121,11 +110,9 @@ async function renderProvider(topics: readonly Topic[]) {
 
   await act(async () => {
     renderer = create(
-      <BackendProvider backend={mockBackend}>
-        <TopicListProvider>
-          <TopicListProbe />
-        </TopicListProvider>
-      </BackendProvider>,
+      <TopicListProvider>
+        <TopicListProbe />
+      </TopicListProvider>,
     );
   });
 }
@@ -187,11 +174,9 @@ describe('TopicListProvider', () => {
 
     await act(async () => {
       renderer = create(
-        <BackendProvider backend={mockBackend}>
-          <TopicListProvider>
-            <TopicListProbe />
-          </TopicListProvider>
-        </BackendProvider>,
+        <TopicListProvider>
+          <TopicListProbe />
+        </TopicListProvider>,
       );
     });
     await act(async () => {

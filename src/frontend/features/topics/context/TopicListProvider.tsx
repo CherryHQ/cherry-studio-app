@@ -4,8 +4,8 @@ import { createContext, type PropsWithChildren, use, useCallback, useEffect, use
 import { MODEL_SETTING_PREFERENCE_KEYS } from '@/frontend/components/modelPicker/utils/modelSettings';
 import {
   queryKeys,
-  useBackendModule,
   useMutation,
+  usePreference,
   usePrefetch,
   usePrefetchInfiniteQuery,
 } from '@/frontend/data';
@@ -15,7 +15,6 @@ import {
   initialMessagesPageSize,
 } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPolicy';
-import type { PreferencesBackend } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isUniqueModelId } from '@/shared/data/types/model';
 import type { Topic } from '@/shared/data/types/topic';
@@ -48,7 +47,7 @@ export function TopicListProvider({ children }: PropsWithChildren) {
   const isFocused = useIsFocused();
   const queryClient = useQueryClient();
   const router = useRouter();
-  const preferences = useBackendModule('preferences');
+  const [defaultModelId] = usePreference(MODEL_SETTING_PREFERENCE_KEYS.default);
   const prefetch = usePrefetch();
   const prefetchInfiniteQuery = usePrefetchInfiniteQuery();
   const topicList = useTopics({ q: '' });
@@ -60,7 +59,7 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    void prefetchDefaultModelDetail(prefetch, preferences);
+    void prefetchDefaultModelDetail(prefetch, defaultModelId);
 
     for (const topic of topicList.topics.slice(
       0,
@@ -72,12 +71,12 @@ export function TopicListProvider({ children }: PropsWithChildren) {
         staleTime: messageWindowPolicy.prefetchStaleTimeMs,
       });
     }
-  }, [isFocused, prefetch, prefetchInfiniteQuery, preferences, topicList.topics]);
+  }, [defaultModelId, isFocused, prefetch, prefetchInfiniteQuery, topicList.topics]);
 
   const openTopic = useCallback(
     (topicId: string) => {
       perfLog.debug('[PERF] tap->push', { topicId, t: Date.now() });
-      void prefetchDefaultModelDetail(prefetch, preferences);
+      void prefetchDefaultModelDetail(prefetch, defaultModelId);
       void prefetchInfiniteQuery('/topics/:topicId/messages', {
         limit: initialMessagesPageSize,
         params: { topicId },
@@ -85,7 +84,7 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       });
       router.push({ pathname: '/topics', params: { topicId } });
     },
-    [prefetch, prefetchInfiniteQuery, preferences, router],
+    [defaultModelId, prefetch, prefetchInfiniteQuery, router],
   );
 
   const renameTopicMutation = useMutation('PATCH', '/topics/:id', {
@@ -179,12 +178,7 @@ export function TopicListProvider({ children }: PropsWithChildren) {
   );
 }
 
-function prefetchDefaultModelDetail(
-  prefetch: ReturnType<typeof usePrefetch>,
-  preferences: PreferencesBackend,
-) {
-  const modelId = preferences.readCached(MODEL_SETTING_PREFERENCE_KEYS.default);
-
+function prefetchDefaultModelDetail(prefetch: ReturnType<typeof usePrefetch>, modelId: unknown) {
   if (!isUniqueModelId(modelId)) {
     return;
   }

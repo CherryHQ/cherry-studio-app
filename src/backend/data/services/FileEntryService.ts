@@ -2,17 +2,17 @@ import { eq } from 'drizzle-orm';
 
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { type FileEntryRow, fileEntryTable } from '@/backend/data/db/schemas';
-import type { FilesBackend, ResolvedFile } from '@/shared/contracts';
 import {
   type FileEntry,
   type FileEntryId,
   FileEntrySchema,
   type PreparedInternalFile,
+  type ResolvedFile,
 } from '@/shared/data/types/file';
 
 import { resolveInternalFileUri } from './fileStorage';
 
-export class FileEntryService implements FilesBackend {
+export class FileEntryService {
   constructor(private readonly dbService: DbService) {}
 
   private get db() {

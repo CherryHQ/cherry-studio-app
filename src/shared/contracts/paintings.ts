@@ -1,14 +1,7 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
-import type { CursorPaginationResponse } from '@/shared/data/api/types';
-import type { FileEntryId } from '@/shared/data/types/file';
+import type { FileEntryId, ResolvedFile } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
-import type { ResolvedFile } from './files';
-
-export type PaintingListQuery = {
-  cursor?: string;
-  limit?: number;
-};
 
 export type PaintingSourceImage = {
   fileEntryId?: FileEntryId;
@@ -48,9 +41,5 @@ export interface PaintingGenerationSession {
 
 export interface PaintingsBackend {
   createGenerationSession(): PaintingGenerationSession;
-  get(id: string): Promise<Painting>;
-  listIds(): Promise<string[]>;
-  listPage(query?: PaintingListQuery): Promise<CursorPaginationResponse<Painting>>;
-  removeMany(ids: readonly string[]): Promise<void>;
   resolveFiles(painting: Painting): Promise<ResolvedPaintingFiles>;
 }

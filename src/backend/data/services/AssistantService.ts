@@ -9,7 +9,6 @@ import {
   userModelTable,
 } from '@/backend/data/db/schemas';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
-import type { AssistantsBackend } from '@/shared/contracts';
 import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
 import {
   type CreateAssistantDto,
@@ -61,7 +60,7 @@ function rowToAssistant(
   };
 }
 
-export class AssistantService implements AssistantsBackend {
+export class AssistantService {
   constructor(
     private readonly dbService: DbService,
     private readonly modelService: ModelService,

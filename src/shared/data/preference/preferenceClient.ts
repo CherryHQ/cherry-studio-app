@@ -2,7 +2,7 @@ import type {
   PreferenceDefaultScopeType,
   PreferenceKeyType,
   PreferenceUpdateOptions,
-} from '@/shared/data/preference';
+} from './preferenceTypes';
 
 export type PreferenceMapping = Record<string, PreferenceKeyType>;
 export type PreferenceMappedValues<T extends PreferenceMapping> = {
@@ -12,17 +12,17 @@ export type PreferenceUpdates<K extends PreferenceKeyType = PreferenceKeyType> =
   Pick<PreferenceDefaultScopeType, K>
 >;
 
-export interface PreferencesBackend {
-  readCached<K extends PreferenceKeyType>(key: K): PreferenceDefaultScopeType[K];
-  readManyCached<T extends PreferenceMapping>(mapping: T): PreferenceMappedValues<T>;
+export interface PreferenceClient {
+  getCachedValue<K extends PreferenceKeyType>(key: K): PreferenceDefaultScopeType[K] | undefined;
+  getMultipleCached<T extends PreferenceMapping>(mapping: T): PreferenceMappedValues<T>;
   set<K extends PreferenceKeyType>(
     key: K,
     value: PreferenceDefaultScopeType[K],
     options?: PreferenceUpdateOptions,
   ): Promise<void>;
-  setMany<K extends PreferenceKeyType>(
+  setMultiple<K extends PreferenceKeyType>(
     updates: PreferenceUpdates<K>,
     options?: PreferenceUpdateOptions,
   ): Promise<void>;
-  subscribe<K extends PreferenceKeyType>(key: K, listener: () => void): () => void;
+  subscribeChange<K extends PreferenceKeyType>(key: K): (listener: () => void) => () => void;
 }

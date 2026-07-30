@@ -1,7 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
-import type { MobileBackend } from '@/shared/contracts';
+import type { Backend } from '@/shared/contracts';
 import ProfileSettingsScreen from '../ProfileSettingsScreen';
 
 type HeaderAction = { key: string; onPress?: () => void };
@@ -15,7 +15,7 @@ const backend = {
     persistAvatar: jest.fn(async () => undefined),
     resolveAvatar: jest.fn(),
   },
-} as unknown as MobileBackend;
+} as unknown as Backend;
 
 jest.mock('@expo/ui/community/menu', () => {
   const { View: MockView } = jest.requireActual('react-native');

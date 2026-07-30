@@ -24,7 +24,6 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { DbService } from '@/backend/data/db/DbService';
 import { pinTable } from '@/backend/data/db/schemas';
 import type { PinRow } from '@/backend/data/db/schemas/pin';
-import type { PinsBackend } from '@/shared/contracts';
 import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
 import { DataApiErrorFactory } from '@/shared/data/api/types';
 import type { EntityType } from '@/shared/data/types/entityType';
@@ -62,7 +61,7 @@ function isUniqueConstraintError(error: unknown): boolean {
   );
 }
 
-export class PinService implements PinsBackend {
+export class PinService {
   constructor(private readonly dbService: DbService) {}
 
   private get db() {

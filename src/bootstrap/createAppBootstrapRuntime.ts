@@ -3,14 +3,16 @@ import { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
 import { DbService } from '@/backend/data/db/DbService';
 import { bootstrapAppRuntime, runPostReadyTasks } from '@/bootstrap/appRuntime';
+import { createBackend } from '@/bootstrap/createBackend';
 import { createBackendServices } from '@/bootstrap/createBackendServices';
-import { createMobileBackend } from '@/bootstrap/createMobileBackend';
-import type { MobileBackend } from '@/shared/contracts';
+import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
+import type { PreferenceClient } from '@/shared/data/preference';
 
 export type AppBootstrapRuntime = {
-  readonly backend: MobileBackend;
+  readonly backend: Backend;
   readonly dataApi: ApiClient;
+  readonly preference: PreferenceClient;
   dispose(): void;
   initialize(): Promise<void>;
   runPostReadyTasks(): Promise<void>;
@@ -20,17 +22,17 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
   const cacheService = new CacheService();
   const dbService = new DbService();
   const services = createBackendServices(dbService, cacheService);
-  const backend = createMobileBackend(services);
+  const { backend, dataApiDependencies } = createBackend(services);
   const dataApi = new DataApiService(
     createDataApiHandlers({
       assistants: services.assistant,
       files: services.fileEntry,
-      mcpServers: backend.mcp,
+      mcpServers: dataApiDependencies.mcpServers,
       messages: services.message,
-      models: backend.models,
-      paintings: backend.paintings,
+      models: dataApiDependencies.models,
+      paintings: dataApiDependencies.paintings,
       pins: services.pin,
-      providers: backend.providers,
+      providers: dataApiDependencies.providers,
       topics: services.topic,
     }),
   );
@@ -38,6 +40,7 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
   return {
     backend,
     dataApi,
+    preference: services.preference,
     dispose: () => {
       services.mcpRuntime.dispose();
       services.webSearch.dispose();

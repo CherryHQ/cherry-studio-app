@@ -61,6 +61,11 @@ export type FileEntry = z.infer<typeof FileEntrySchema>;
 export type InternalFileEntry = z.infer<typeof InternalFileEntrySchema>;
 export type ExternalFileEntry = z.infer<typeof ExternalFileEntrySchema>;
 
+export type ResolvedFile = {
+  entry: FileEntry;
+  uri: string;
+};
+
 export const chatMessageRoles = ['attachment'] as const;
 export type ChatMessageFileRole = (typeof chatMessageRoles)[number];
 

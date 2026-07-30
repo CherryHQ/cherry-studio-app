@@ -4,11 +4,11 @@ import type {
   McpServerInfo,
   McpServerRuntimeSummary,
   McpToolSummary,
-  McpUpdateServerResult,
 } from '@/shared/contracts';
 import type {
   CreateMcpServerDto,
   ListMcpServersQueryParams,
+  McpUpdateServerResult,
   UpdateMcpServerDto,
 } from '@/shared/data/api/schemas/mcpServers';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';

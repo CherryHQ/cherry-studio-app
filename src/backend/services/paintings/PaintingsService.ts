@@ -1,14 +1,13 @@
 import type {
-  FilesBackend,
   PaintingGenerationInput,
   PaintingGenerationResult,
   PaintingGenerationSession,
-  PaintingListQuery,
   PaintingsBackend,
   ResolvedPaintingFiles,
 } from '@/shared/contracts';
+import type { PaintingListQuery } from '@/shared/data/api/schemas/paintings';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
-import type { FileEntryId, PreparedInternalFile } from '@/shared/data/types/file';
+import type { FileEntryId, PreparedInternalFile, ResolvedFile } from '@/shared/data/types/file';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
 
@@ -45,9 +44,13 @@ type PaintingFileStorage = {
   readDataUrl(uri: string, mediaType: string): Promise<string>;
 };
 
+type PaintingFileRepository = {
+  resolve(id: FileEntryId): Promise<ResolvedFile | null>;
+};
+
 export type PaintingsServiceDependencies = {
   ai: PaintingAi;
-  files: FilesBackend;
+  files: PaintingFileRepository;
   paintings: PaintingRepository;
   storage: PaintingFileStorage;
 };
@@ -204,7 +207,7 @@ class PaintingGenerationSessionImpl implements PaintingGenerationSession {
   }
 }
 
-async function resolveFileEntries(files: FilesBackend, ids: readonly FileEntryId[]) {
+async function resolveFileEntries(files: PaintingFileRepository, ids: readonly FileEntryId[]) {
   const entries = await Promise.all(ids.map((id) => files.resolve(id)));
   return entries.filter((entry) => entry !== null);
 }

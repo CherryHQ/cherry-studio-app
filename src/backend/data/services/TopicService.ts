@@ -13,7 +13,6 @@ import {
   sql,
 } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
-import type { TopicsBackend } from '@/shared/contracts';
 import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
 import type {
   ActiveNodeResponse,
@@ -42,7 +41,7 @@ type TopicCursor =
   | { id: null; section: 'topic'; updatedAt: null }
   | { id: string; section: 'topic'; updatedAt: number };
 
-export class TopicService implements TopicsBackend {
+export class TopicService {
   constructor(
     private readonly dbService: DbService,
     private readonly pinService: PinService,

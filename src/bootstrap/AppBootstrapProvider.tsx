@@ -6,6 +6,7 @@ import {
 } from '@/bootstrap/createAppBootstrapRuntime';
 import { BackendProvider } from '@/frontend/data/BackendProvider';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
+import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 
 type AppBootstrapProviderProps = PropsWithChildren<{
   /** Test seam. Production owns one in-process backend runtime. */
@@ -50,7 +51,9 @@ export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapPr
   return (
     <BackendProvider backend={runtime.backend}>
       <DataApiProvider dataApi={runtime.dataApi}>
-        <AppBootstrapContext value={state}>{children}</AppBootstrapContext>
+        <PreferenceProvider preference={runtime.preference}>
+          <AppBootstrapContext value={state}>{children}</AppBootstrapContext>
+        </PreferenceProvider>
       </DataApiProvider>
     </BackendProvider>
   );

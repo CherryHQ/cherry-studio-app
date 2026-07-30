@@ -1,16 +1,16 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { MobileBackend, TopicsBackend } from '@/shared/contracts';
+import type { Backend, ProfileBackend } from '@/shared/contracts';
 
 import { BackendProvider, useBackendModule } from '../BackendProvider';
 
-const topics = { get: jest.fn() } as unknown as TopicsBackend;
-const backend = { topics } as MobileBackend;
+const profile = { resolveAvatar: jest.fn() } as unknown as ProfileBackend;
+const backend = { profile } as unknown as Backend;
 
-function TopicModuleProbe() {
-  const selected = useBackendModule('topics');
-  return <Text>{selected === topics ? 'selected' : 'wrong'}</Text>;
+function ProfileModuleProbe() {
+  const selected = useBackendModule('profile');
+  return <Text>{selected === profile ? 'selected' : 'wrong'}</Text>;
 }
 
 describe('BackendProvider', () => {
@@ -20,7 +20,7 @@ describe('BackendProvider', () => {
     await act(async () => {
       renderer = create(
         <BackendProvider backend={backend}>
-          <TopicModuleProbe />
+          <ProfileModuleProbe />
         </BackendProvider>,
       );
     });

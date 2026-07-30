@@ -2,8 +2,9 @@ import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { AppBootstrapRuntime } from '@/bootstrap/createAppBootstrapRuntime';
-import type { MobileBackend } from '@/shared/contracts';
+import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
+import type { PreferenceClient } from '@/shared/data/preference';
 
 import { AppBootstrapGate } from '../AppBootstrapGate';
 import { AppBootstrapProvider, useAppBootstrapState } from '../AppBootstrapProvider';
@@ -37,8 +38,9 @@ function makeRuntime(initializeImplementation: () => Promise<void>): {
     initialize,
     runPostReadyTasks,
     runtime: {
-      backend: {} as MobileBackend,
+      backend: {} as Backend,
       dataApi: {} as ApiClient,
+      preference: {} as PreferenceClient,
       dispose,
       initialize,
       runPostReadyTasks,

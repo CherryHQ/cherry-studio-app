@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
-import { useBackendModule } from '@/frontend/data/BackendProvider';
+import { usePreferenceClient } from '@/frontend/data/PreferenceProvider';
 import type {
   PreferenceDefaultScopeType,
   PreferenceKeyType,
@@ -31,11 +31,11 @@ type SnapshotState<T extends MultiplePreferenceMapping> = {
 export function usePreference<K extends PreferenceKeyType>(
   key: K,
 ): [PreferenceDefaultScopeType[K], PreferenceSetter<K>] {
-  const preferences = useBackendModule('preferences');
+  const preferences = usePreferenceClient();
 
   const value = useSyncExternalStore(
-    useCallback((listener) => preferences.subscribe(key, listener), [key, preferences]),
-    () => preferences.readCached(key),
+    useCallback((listener) => preferences.subscribeChange(key)(listener), [key, preferences]),
+    () => preferences.getCachedValue(key) ?? getDefaultValue(key),
     () => getDefaultValue(key),
   );
 
@@ -50,14 +50,14 @@ export function usePreference<K extends PreferenceKeyType>(
 export function useMultiplePreferences<T extends MultiplePreferenceMapping>(
   mapping: T,
 ): [MultiplePreferenceValues<T>, MultiplePreferenceSetter<T>] {
-  const preferences = useBackendModule('preferences');
+  const preferences = usePreferenceClient();
   const entries = useMemo(() => Object.entries(mapping) as [keyof T, T[keyof T]][], [mapping]);
   const keys = useMemo(() => entries.map(([, key]) => key), [entries]);
   const snapshotRef = useRef<SnapshotState<T> | null>(null);
 
   const readSnapshot = useCallback(() => {
     const previousState = snapshotRef.current;
-    const nextSnapshot = preferences.readManyCached(mapping);
+    const nextSnapshot = preferences.getMultipleCached(mapping);
     let changed =
       previousState === null ||
       previousState.names.length !== entries.length ||
@@ -83,7 +83,7 @@ export function useMultiplePreferences<T extends MultiplePreferenceMapping>(
   const values = useSyncExternalStore(
     useCallback(
       (listener) => {
-        const unsubscribers = keys.map((key) => preferences.subscribe(key, listener));
+        const unsubscribers = keys.map((key) => preferences.subscribeChange(key)(listener));
 
         return () => {
           for (const unsubscribe of unsubscribers) {
@@ -115,7 +115,7 @@ export function useMultiplePreferences<T extends MultiplePreferenceMapping>(
         }
       }
 
-      return preferences.setMany(updates, options);
+      return preferences.setMultiple(updates, options);
     },
     [entries, preferences],
   );

@@ -1,4 +1,3 @@
-import type { McpBackend } from '@/shared/contracts';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 import { McpService, type McpServiceDependencies } from '../McpService';
 
@@ -41,7 +40,7 @@ function createSubject() {
       ),
     },
   };
-  const backend: McpBackend = new McpService(dependencies);
+  const backend = new McpService(dependencies);
   return { backend, dependencies };
 }
 

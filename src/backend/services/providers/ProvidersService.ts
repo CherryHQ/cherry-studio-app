@@ -1,11 +1,13 @@
 import type {
   CherryInAccount,
   CompleteCherryInOAuthInput,
-  CreateProviderInput,
   ProvidersBackend,
+} from '@/shared/contracts';
+import type {
+  CreateProviderInput,
   UpdateProviderApiKeyInput,
   UpdateProviderInput,
-} from '@/shared/contracts';
+} from '@/shared/data/api/schemas/providers';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
 
 const cherryInProviderId = 'cherryin';

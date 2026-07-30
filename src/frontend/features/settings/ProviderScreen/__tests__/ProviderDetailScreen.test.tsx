@@ -5,7 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
-import type { MobileBackend } from '@/shared/contracts';
+import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
 import ProviderDetailScreen from '../ProviderDetailScreen';
@@ -47,8 +47,8 @@ let queryClient: QueryClient;
 const providersBackend = {
   canRemove: jest.fn(() => true),
   remove: jest.fn(async () => undefined),
-} as unknown as MobileBackend['providers'];
-const backend = { providers: providersBackend } as MobileBackend;
+} as unknown as Backend['providers'];
+const backend = { providers: providersBackend } as Backend;
 const dataApi = {
   delete: jest.fn(async () => undefined),
   get: jest.fn(),
