@@ -1,8 +1,8 @@
 import type { ToolSet } from 'ai';
 import { Platform } from 'react-native';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
-import type { DevicePermissionService } from '@/backend/infrastructure/integrations/devicePermissions';
-import type { WebSearchService } from '@/backend/infrastructure/integrations/webSearch/WebSearchService';
+import type { DevicePermissionService } from '@/backend/services/permissions';
+import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { PermissionPreferenceKey } from '@/shared/data/preference';
 import type { Assistant } from '@/shared/data/types/assistant';

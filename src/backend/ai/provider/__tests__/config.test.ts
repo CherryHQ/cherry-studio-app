@@ -4,7 +4,7 @@ import type { Provider } from '@/shared/data/types/provider';
 
 import { providerToAiSdkConfig } from '../config';
 
-jest.mock('@/backend/infrastructure/integrations/cherryin/signature', () => ({
+jest.mock('@/backend/ai/provider/cherryai', () => ({
   generateSignature: jest.fn(() => ({
     'X-Client-ID': 'cherry-studio',
     'X-Timestamp': '1700000000',
@@ -12,9 +12,7 @@ jest.mock('@/backend/infrastructure/integrations/cherryin/signature', () => ({
   })),
 }));
 
-const { generateSignature } = jest.requireMock(
-  '@/backend/infrastructure/integrations/cherryin/signature',
-) as {
+const { generateSignature } = jest.requireMock('@/backend/ai/provider/cherryai') as {
   generateSignature: jest.Mock;
 };
 

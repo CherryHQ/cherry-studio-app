@@ -1,5 +1,5 @@
 import type { Tool } from 'ai';
-import type { SystemPermissionState } from '@/backend/infrastructure/integrations/devicePermissions';
+import type { SystemPermissionState } from '@/backend/services/permissions';
 import type { PermissionPreferenceKey } from '@/shared/data/preference';
 import type { Assistant } from '@/shared/data/types/assistant';
 

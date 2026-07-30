@@ -1,4 +1,4 @@
-import type { WebSearchService } from '@/backend/infrastructure/integrations/webSearch/WebSearchService';
+import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { ToolRegistry } from '../registry';
 import { createCalendarToolEntries, createReminderToolEntries } from './calendarTools';
 import type { DeviceToolDependencies } from './deviceToolSupport';

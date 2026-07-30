@@ -3,8 +3,8 @@ import * as z from 'zod';
 import {
   isAbortError,
   isPermanentWebSearchConfigError,
-} from '@/backend/infrastructure/integrations/webSearch/utils/errors';
-import type { WebSearchService } from '@/backend/infrastructure/integrations/webSearch/WebSearchService';
+} from '@/backend/services/webSearch/utils/errors';
+import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { ToolEntry } from '../types';

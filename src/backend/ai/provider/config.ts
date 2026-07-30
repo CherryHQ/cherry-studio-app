@@ -6,7 +6,7 @@
 import { hasProviderConfig, type StringKeys } from '@cherrystudio/ai-core/provider';
 import type { CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import { generateSignature } from '@/backend/infrastructure/integrations/cherryin/signature';
+import { generateSignature } from '@/backend/ai/provider/cherryai';
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import type { EndpointType, Model } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';

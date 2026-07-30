@@ -1,3 +1,6 @@
+import { AiService } from '@/backend/ai/AiService';
+import { McpService } from '@/backend/ai/mcp';
+import { ToolService } from '@/backend/ai/tools';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
@@ -13,11 +16,8 @@ import { PromptService } from '@/backend/data/services/PromptService';
 import { ProviderService } from '@/backend/data/services/ProviderService';
 import { TagService } from '@/backend/data/services/TagService';
 import { TopicService } from '@/backend/data/services/TopicService';
-import { AiService } from '@/backend/ai/AiService';
-import { McpService } from '@/backend/ai/mcp';
-import { ToolService } from '@/backend/ai/tools';
-import { DevicePermissionService } from '@/backend/infrastructure/integrations/devicePermissions';
-import { WebSearchService } from '@/backend/infrastructure/integrations/webSearch/WebSearchService';
+import { DevicePermissionService } from '@/backend/services/permissions';
+import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 export type BackendServices = ReturnType<typeof createBackendServices>;
 

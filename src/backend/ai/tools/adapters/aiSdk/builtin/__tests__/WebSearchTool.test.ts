@@ -1,4 +1,4 @@
-import type { WebSearchService } from '@/backend/infrastructure/integrations/webSearch/WebSearchService';
+import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import { createWebSearchTool, WEB_LOOKUP_ERROR_NOTE, webSearchInputSchema } from '../WebSearchTool';
 

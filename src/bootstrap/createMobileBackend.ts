@@ -1,11 +1,4 @@
 import { readUIMessageStream, type UIMessageChunk } from 'ai';
-import { ChatApplication } from '@/backend/application/chat/ChatApplication';
-import { McpApplication } from '@/backend/application/mcp/McpApplication';
-import { ModelsApplication } from '@/backend/application/models/ModelsApplication';
-import { PaintingsApplication } from '@/backend/application/paintings/PaintingsApplication';
-import { PermissionsApplication } from '@/backend/application/permissions/PermissionsApplication';
-import { ProfileApplication } from '@/backend/application/profile/ProfileApplication';
-import { ProvidersApplication } from '@/backend/application/providers/ProvidersApplication';
 import {
   discardPreparedFiles,
   imageUriToDataUrl,
@@ -15,15 +8,22 @@ import {
 } from '@/backend/data/services/fileStorage';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
-import {
-  getProviderAvatarUri,
-  saveProviderAvatar,
-} from '@/backend/infrastructure/integrations/avatars/providerAvatarStorage';
+import { ChatService } from '@/backend/services/chat/ChatService';
+import { McpService } from '@/backend/services/mcp/McpService';
+import { ModelsService } from '@/backend/services/models/ModelsService';
+import { CherryInOauthService } from '@/backend/services/oauth/CherryInOauthService';
+import { PaintingsService } from '@/backend/services/paintings/PaintingsService';
+import { PermissionsService } from '@/backend/services/permissions/PermissionsService';
+import { ProfileService } from '@/backend/services/profile/ProfileService';
 import {
   replaceUserAvatar,
   resolveUserAvatarUri,
-} from '@/backend/infrastructure/integrations/avatars/userAvatarStorage';
-import { CherryInOauthService } from '@/backend/infrastructure/integrations/cherryin/CherryInOauthService';
+} from '@/backend/services/profile/userAvatarStorage';
+import { ProvidersService } from '@/backend/services/providers/ProvidersService';
+import {
+  getProviderAvatarUri,
+  saveProviderAvatar,
+} from '@/backend/services/providers/providerAvatarStorage';
 import type { BackendServices } from '@/bootstrap/createBackendServices';
 import type { MobileBackend } from '@/shared/contracts';
 import type { CherryUIMessage } from '@/shared/data/types/message';
@@ -31,7 +31,7 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 
 export function createMobileBackend(services: BackendServices): MobileBackend {
   const oauth = CherryInOauthService.getInstance(services.provider);
-  const chat = new ChatApplication({
+  const chat = new ChatService({
     files: {
       discard: discardPreparedFiles,
       prepareParts: prepareMessageParts,
@@ -54,7 +54,7 @@ export function createMobileBackend(services: BackendServices): MobileBackend {
       topic: services.topic,
     },
   });
-  const models = new ModelsApplication({
+  const models = new ModelsService({
     ai: services.ai,
     materializeRemoteModels,
     models: {
@@ -77,7 +77,7 @@ export function createMobileBackend(services: BackendServices): MobileBackend {
       update: (id, input) => services.provider.update(id, input),
     },
   });
-  const paintings = new PaintingsApplication({
+  const paintings = new PaintingsService({
     ai: services.ai,
     files: services.fileEntry,
     paintings: {
@@ -95,7 +95,7 @@ export function createMobileBackend(services: BackendServices): MobileBackend {
       readDataUrl: imageUriToDataUrl,
     },
   });
-  const mcp = new McpApplication({
+  const mcp = new McpService({
     runtime: {
       getRuntimeSummaries: (servers) => services.mcp.getRuntimeSummaries(servers),
       getServerInfo: (config) => services.mcp.getServerInfo(config),
@@ -112,7 +112,7 @@ export function createMobileBackend(services: BackendServices): MobileBackend {
       update: (id, input) => services.mcpServer.update(id, input, 'streamableHttp'),
     },
   });
-  const providers = new ProvidersApplication({
+  const providers = new ProvidersService({
     avatars: {
       persist: saveProviderAvatar,
       resolve: getProviderAvatarUri,
@@ -137,7 +137,7 @@ export function createMobileBackend(services: BackendServices): MobileBackend {
       updateApiKey: (id, keyId, input) => services.provider.updateApiKey(id, keyId, input),
     },
   });
-  const permissions = new PermissionsApplication({
+  const permissions = new PermissionsService({
     device: {
       getStatus: (key) => services.devicePermission.getStatusForPreference(key),
       openSystemSettings: (permission) => services.devicePermission.openSystemSettings(permission),
@@ -148,7 +148,7 @@ export function createMobileBackend(services: BackendServices): MobileBackend {
       set: (key, value) => services.preference.set(key, value),
     },
   });
-  const profile = new ProfileApplication({
+  const profile = new ProfileService({
     avatars: {
       replace: replaceUserAvatar,
       resolve: resolveUserAvatarUri,
