@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import type { Database, DbService } from '@/backend/infrastructure/db/DbService';
 import { type FileEntryRow, fileEntryTable } from '@/backend/infrastructure/db/schemas';
+import type { FilesBackend, ResolvedFile } from '@/shared/contracts';
 import {
   type FileEntry,
   type FileEntryId,
@@ -11,7 +12,7 @@ import {
 
 import { resolveInternalFileUri } from './fileStorage';
 
-export class FileEntryService {
+export class FileEntryService implements FilesBackend {
   constructor(private readonly dbService: DbService) {}
 
   private get db() {
@@ -25,6 +26,10 @@ export class FileEntryService {
       .where(eq(fileEntryTable.id, id))
       .limit(1);
     return row ? rowToFileEntry(row) : null;
+  }
+
+  get(id: FileEntryId): Promise<FileEntry | null> {
+    return this.findById(id);
   }
 
   async createPreparedEntriesTx(
@@ -52,6 +57,15 @@ export class FileEntryService {
       return undefined;
     }
     return resolveInternalFileUri(entry);
+  }
+
+  async resolve(id: FileEntryId): Promise<ResolvedFile | null> {
+    const [entry, uri] = await Promise.all([this.findById(id), this.resolveUri(id)]);
+    return entry && uri ? { entry, uri } : null;
+  }
+
+  resolveRenderableUri(id: FileEntryId): Promise<string | undefined> {
+    return this.resolveUri(id);
   }
 }
 

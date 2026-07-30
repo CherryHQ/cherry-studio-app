@@ -1,4 +1,3 @@
-import { finalizeDanglingToolApprovals } from '@/backend/infrastructure/services/utils/toolApprovals';
 import type {
   CherryMessagePart,
   CherryUIMessage,
@@ -6,23 +5,13 @@ import type {
   Message,
   MessageStats,
 } from '@/shared/data/types/message';
-import { readCherryToolMetadata } from '@/shared/data/types/uiParts';
+import { finalizeDanglingToolApprovals } from '@/shared/domain/chat/toolApprovals';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
 function isToolPart(part: CherryMessagePart): part is ToolMessagePart {
   return part.type === 'dynamic-tool' || part.type.startsWith('tool-');
 }
-
-/** A tool call the model made that is waiting on the user's decision. */
-export type PendingToolApproval = {
-  approvalId: string;
-  input: unknown;
-  messageId: string;
-  toolCallId: string;
-  toolName: string;
-  toolType?: 'builtin' | 'mcp' | 'provider';
-};
 
 export function hasPendingToolApproval(parts: readonly CherryMessagePart[]): boolean {
   return parts.some((part) => isToolPart(part) && part.state === 'approval-requested');
@@ -52,34 +41,6 @@ export function finalizeTurnToolApprovals(
   reason: string,
 ): CherryMessagePart[] {
   return finalizeDanglingToolApprovals(parts, reason).parts;
-}
-
-/**
- * Pending approvals for the approval sheet. Only the tip assistant message is
- * actionable; its persisted status is deliberately irrelevant so current
- * `success` rows and legacy `paused` rows both recover after a restart.
- */
-export function getPendingToolApprovals(messages: readonly Message[]): PendingToolApproval[] {
-  const last = messages.at(-1);
-  if (!last || last.role !== 'assistant') {
-    return [];
-  }
-
-  const approvals: PendingToolApproval[] = [];
-  for (const part of last.data.parts ?? []) {
-    if (isToolPart(part) && part.state === 'approval-requested') {
-      const toolType = readCherryToolMetadata(part)?.tool?.type;
-      approvals.push({
-        approvalId: part.approval.id,
-        input: part.input,
-        messageId: last.id,
-        toolCallId: part.toolCallId,
-        toolName: part.type === 'dynamic-tool' ? part.toolName : part.type.slice('tool-'.length),
-        ...(toolType && { toolType }),
-      });
-    }
-  }
-  return approvals;
 }
 
 /** Everything a resumed segment spends on top of the first one. The durations
@@ -152,25 +113,4 @@ export function applyStreamingMessage(baseMessage: Message, uiMessage: CherryUIM
     status: 'pending',
     updatedAt: new Date().toISOString(),
   };
-}
-
-export function mergeMessagesWithOverlay(
-  messages: readonly Message[],
-  overlayMessage?: Message,
-): readonly Message[] {
-  if (!overlayMessage) {
-    return messages;
-  }
-
-  let didReplace = false;
-  const nextMessages = messages.map((message) => {
-    if (message.id !== overlayMessage.id) {
-      return message;
-    }
-
-    didReplace = true;
-    return overlayMessage;
-  });
-
-  return didReplace ? nextMessages : [...nextMessages, overlayMessage];
 }

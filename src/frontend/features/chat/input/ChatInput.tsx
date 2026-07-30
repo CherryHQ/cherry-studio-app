@@ -10,7 +10,7 @@ import {
 import { useModelById, useProviders, useTopic } from '@/frontend/hooks/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isUniqueModelId } from '@/shared/data/types/model';
-import { useChatRuntimeTopic } from '../runtime';
+import { useChatSessionTopic } from '../session';
 import { ChatInputActionSheet } from './components/ChatInputActionSheet';
 import { ChatInputReasoningSection } from './components/ChatInputReasoningSection';
 import { type ChatInputSendPayload, ChatInputSurface } from './components/ChatInputSurface';
@@ -37,7 +37,7 @@ export function ChatInput({ assistantId, topicId }: ChatInputProps) {
   usePrefetchModelPickerData();
   const rawDefaultModel = modelSettings.selections.default;
   const selectedModelId = isUniqueModelId(rawDefaultModel) ? rawDefaultModel : null;
-  const chatRuntime = useChatRuntimeTopic(topicId);
+  const chatSession = useChatSessionTopic(topicId);
   const topicQuery = useTopic(topicId);
   const selectedAssistantId = topicId
     ? (topicQuery.data?.assistantId ?? null)
@@ -86,26 +86,26 @@ export function ChatInput({ assistantId, topicId }: ChatInputProps) {
     (payload: ChatInputSendPayload) => {
       const parts = createChatInputMessageParts(payload.text, payload.attachments);
 
-      return chatRuntime.sendText({
+      return chatSession.sendText({
         assistantId: selectedAssistantId,
         parts,
         selectedModelId,
         text: payload.text,
       });
     },
-    [chatRuntime, selectedAssistantId, selectedModelId],
+    [chatSession, selectedAssistantId, selectedModelId],
   );
 
   return (
     <>
       <ChatInputSurface
         isSendEnabled
-        isStreaming={chatRuntime.isBusy}
+        isStreaming={chatSession.isBusy}
         modelIcon={selectedModelIcon}
         modelLabel={selectedModelLabel}
         onModelPickerPress={openModelPicker}
         onSendPress={handleSendPress}
-        onStopPress={chatRuntime.abort}
+        onStopPress={chatSession.abort}
         reasoningEfforts={reasoningEfforts}
       />
       {isActionSheetOpen ? <ChatInputActionSheet /> : null}

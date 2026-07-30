@@ -71,7 +71,7 @@ ESLint enforces these (see the boundary blocks in `eslint.config.js`):
 ## Current Ownership
 
 - `chat/`: chat topic screen, new-topic screen, message content, message item rows, workspace
-  behavior, and the `ChatRuntime` runtime owner. `input/` and `workspace/` are its public areas.
+  behavior, and the `ChatSession` runtime owner. `input/` and `workspace/` are its public areas.
 - `assistants/`: assistant list and assistant editing flows.
 - `settings/`: settings home (with the animated profile hero at the top), about/data/model/
   provider/web-search/mcp/permissions settings screens, and settings-specific UI controls.

@@ -1,13 +1,14 @@
-import { readUIMessageStream } from 'ai';
-
-import { toCherryUIMessage } from '@/backend/infrastructure/ai/messages/messageConverter';
-import { serializeError } from '@/backend/infrastructure/ai/utils/serializeError';
-import {
-  discardPreparedFiles,
-  prepareMessageParts,
-} from '@/backend/infrastructure/services/fileStorage';
-import type { DataServices } from '@/bootstrap/createDataServices';
+import type {
+  ChatSendNewTopicTextInput,
+  ChatSendTextInput,
+  ChatSession,
+  ChatSessionListener,
+  ChatSessionTopicSnapshot,
+  ChatToolApprovalInput,
+} from '@/shared/contracts';
+import { NEW_CHAT_SESSION_TOPIC_ID } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { PreparedInternalFile } from '@/shared/data/types/file';
 import type {
   CherryMessagePart,
   CherryUIMessage,
@@ -22,7 +23,8 @@ import {
   readCherryMeta,
   withCherryMeta,
 } from '@/shared/data/types/uiParts';
-
+import { serializeError } from '@/shared/utils/serializeError';
+import type { ChatSessionDependencies } from './ChatSessionDependencies';
 import {
   applyStreamingMessage,
   finalizeTurnToolApprovals,
@@ -30,69 +32,16 @@ import {
   hasUnresumedToolApproval,
   mergeMessageStats,
   statsFromMetadata,
-} from './chatRuntimeMessages';
+} from './chatSessionMessages';
 import { normalizeAssistantMessageCitations } from './normalizeCitations';
 import { extractMainText, maybeRenameTopicFromConversationSummary } from './topicNaming';
-
-export type ChatRuntimeTopicStatus =
-  | 'aborting'
-  | 'awaiting-approval'
-  | 'idle'
-  | 'reserving'
-  | 'streaming';
-
-export type ChatRuntimeTopicSnapshot = {
-  error?: Error;
-  /**
-   * Whether the topic had content before the pending user turn. Defined only
-   * while that turn is overlaid so initial rendering can distinguish a true
-   * first exchange from an existing topic that is still streaming.
-   */
-  hasHistoryBeforePendingTurn?: boolean;
-  overlayMessage?: Message;
-  pendingUserMessage?: Message;
-  status: ChatRuntimeTopicStatus;
-};
-
-export type ChatRuntimeSendTextInput = {
-  assistantId?: string | null;
-  parts?: readonly CherryMessagePart[];
-  selectedModelId?: UniqueModelId | null;
-  text: string;
-  topicId: string;
-};
-
-export type ChatRuntimeSendNewTopicTextInput = {
-  assistantId?: string | null;
-  parts?: readonly CherryMessagePart[];
-  selectedModelId?: UniqueModelId | null;
-  text: string;
-};
-
-export type ChatRuntimeToolApprovalInput = {
-  approvalId: string;
-  approved: boolean;
-  messageId: string;
-  reason?: string;
-  topicId: string;
-  updatedInput?: Record<string, unknown>;
-};
-
-type ChatRuntimeDependencies = {
-  invalidateTopicMessages: (topicId: string) => Promise<void>;
-  invalidateTopics: () => Promise<void>;
-  openTopic: (topicId: string) => void;
-  services: DataServices;
-};
 
 type ActiveTurn = {
   abortController: AbortController;
 };
 
-export const newTopicRuntimeId = '__new_topic__';
-
-const idleTopicSnapshot: ChatRuntimeTopicSnapshot = Object.freeze({ status: 'idle' });
-const logger = loggerService.withContext('ChatRuntime');
+const idleTopicSnapshot: ChatSessionTopicSnapshot = Object.freeze({ status: 'idle' });
+const logger = loggerService.withContext('ChatSession');
 
 /**
  * Fed back to the model as tool results (via `convertToModelMessages`), never
@@ -100,15 +49,15 @@ const logger = loggerService.withContext('ChatRuntime');
  */
 const interruptedTurnApprovalReason = 'The turn ended before this tool call completed.';
 
-export class ChatRuntime {
+export class ChatSessionImpl implements ChatSession {
   private activeTurns = new Map<string, ActiveTurn>();
-  private listeners = new Set<() => void>();
+  private listeners = new Set<ChatSessionListener>();
   private newTopicHandoffTopicId: string | undefined;
-  private topicSnapshots = new Map<string, ChatRuntimeTopicSnapshot>();
+  private topicSnapshots = new Map<string, ChatSessionTopicSnapshot>();
 
-  constructor(private readonly dependencies: ChatRuntimeDependencies) {}
+  constructor(private readonly dependencies: ChatSessionDependencies) {}
 
-  subscribe = (listener: () => void) => {
+  subscribe = (listener: ChatSessionListener) => {
     this.listeners.add(listener);
 
     return () => {
@@ -116,7 +65,7 @@ export class ChatRuntime {
     };
   };
 
-  getTopicSnapshot(topicId: string): ChatRuntimeTopicSnapshot {
+  getTopicSnapshot(topicId: string): ChatSessionTopicSnapshot {
     const runtimeTopicId = this.resolveRuntimeTopicId(topicId);
 
     if (runtimeTopicId !== topicId) {
@@ -149,11 +98,11 @@ export class ChatRuntime {
 
     this.activeTurns.clear();
     this.newTopicHandoffTopicId = undefined;
-    this.setTopicSnapshot(newTopicRuntimeId, idleTopicSnapshot);
+    this.setTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID, idleTopicSnapshot);
     this.listeners.clear();
   }
 
-  async sendText(input: ChatRuntimeSendTextInput): Promise<void> {
+  async sendText(input: ChatSendTextInput): Promise<void> {
     const text = input.text.trim();
     const parts = getTurnParts({ parts: input.parts, text });
 
@@ -192,7 +141,7 @@ export class ChatRuntime {
     }
   }
 
-  async sendNewTopicText(input: ChatRuntimeSendNewTopicTextInput): Promise<void> {
+  async sendNewTopicText(input: ChatSendNewTopicTextInput): Promise<void> {
     const text = input.text.trim();
     const parts = getTurnParts({ parts: input.parts, text });
 
@@ -206,7 +155,7 @@ export class ChatRuntime {
     // snapshot onto this screen, so treating it as a mutex rejects a legitimate
     // send: the assistant detail screen's "start chat" lets the user open
     // another new topic while the previous reply is still streaming.
-    if (this.activeTurns.has(newTopicRuntimeId)) {
+    if (this.activeTurns.has(NEW_CHAT_SESSION_TOPIC_ID)) {
       // This rejection surfaces as a bare "message was not sent" toast, so it
       // has to leave a trace of its own.
       logger.warn('Rejected a new-topic send: the previous new topic is still being created');
@@ -218,8 +167,8 @@ export class ChatRuntime {
     this.newTopicHandoffTopicId = undefined;
     const abortController = new AbortController();
     const activeTurn: ActiveTurn = { abortController };
-    this.activeTurns.set(newTopicRuntimeId, activeTurn);
-    this.setTopicSnapshot(newTopicRuntimeId, { status: 'reserving' });
+    this.activeTurns.set(NEW_CHAT_SESSION_TOPIC_ID, activeTurn);
+    this.setTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID, { status: 'reserving' });
 
     let createdTopicId: string | undefined;
 
@@ -237,13 +186,13 @@ export class ChatRuntime {
       createdTopicId = topic.id;
       throwIfAborted(abortController.signal);
 
-      this.activeTurns.delete(newTopicRuntimeId);
+      this.activeTurns.delete(NEW_CHAT_SESSION_TOPIC_ID);
       this.newTopicHandoffTopicId = topic.id;
       this.activeTurns.set(topic.id, activeTurn);
       this.setTurnSnapshot(topic.id, { status: 'reserving' });
-      await this.dependencies.invalidateTopics();
+      await this.emitAndWait({ type: 'invalidate-topics' });
       throwIfAborted(abortController.signal);
-      this.dependencies.openTopic(topic.id);
+      await this.emitAndWait({ topicId: topic.id, type: 'open-topic' });
       throwIfAborted(abortController.signal);
 
       await this.runTopicTurn({
@@ -253,7 +202,7 @@ export class ChatRuntime {
         topic,
       });
     } catch (error) {
-      this.activeTurns.delete(newTopicRuntimeId);
+      this.activeTurns.delete(NEW_CHAT_SESSION_TOPIC_ID);
       if (createdTopicId) {
         this.activeTurns.delete(createdTopicId);
         await this.invalidateTopicMessagesSafely(createdTopicId);
@@ -262,7 +211,7 @@ export class ChatRuntime {
       if (createdTopicId && this.newTopicHandoffTopicId === createdTopicId) {
         this.newTopicHandoffTopicId = undefined;
       }
-      this.setTopicSnapshot(newTopicRuntimeId, idleTopicSnapshot);
+      this.setTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID, idleTopicSnapshot);
 
       if (!abortController.signal.aborted) {
         logger.warn('New topic chat stream failed before reservation', toError(error));
@@ -278,7 +227,7 @@ export class ChatRuntime {
    * sheet can collect the rest. Duplicate decisions are idempotent and never
    * dispatch a second continuation.
    */
-  async respondToolApproval(input: ChatRuntimeToolApprovalInput): Promise<void> {
+  async respondToolApproval(input: ChatToolApprovalInput): Promise<void> {
     const { messageId, topicId } = input;
 
     if (this.activeTurns.has(topicId)) {
@@ -432,12 +381,12 @@ export class ChatRuntime {
     let assistantPlaceholder: Message | undefined;
     let terminalAssistantMessage: Message | undefined;
     let preparedFilesCommitted = false;
-    let preparedFiles: Awaited<ReturnType<typeof prepareMessageParts>>['files'] = [];
+    let preparedFiles: PreparedInternalFile[] = [];
     let turnParts = [...parts];
     let handedOffToStream = false;
 
     try {
-      const prepared = await prepareMessageParts(parts);
+      const prepared = await this.dependencies.files.prepareParts(parts);
       preparedFiles = prepared.files;
       turnParts = prepared.parts;
       const modelSnapshot = toModelSnapshot(model);
@@ -487,7 +436,7 @@ export class ChatRuntime {
         pendingUserMessage: userMessage,
         status: 'streaming',
       });
-      await this.dependencies.invalidateTopicMessages(topicId);
+      await this.emitAndWait({ topicId, type: 'invalidate-topic-messages' });
       throwIfAborted(abortController.signal);
 
       const history = await this.dependencies.services.message.getPathToNode(
@@ -529,7 +478,7 @@ export class ChatRuntime {
       }
     } finally {
       if (!preparedFilesCommitted) {
-        discardPreparedFiles(preparedFiles);
+        this.dependencies.files.discard(preparedFiles);
       }
 
       if (!handedOffToStream) {
@@ -554,7 +503,7 @@ export class ChatRuntime {
    */
   private async releaseTurn(input: {
     activeTurn: ActiveTurn;
-    terminalSnapshot?: ChatRuntimeTopicSnapshot;
+    terminalSnapshot?: ChatSessionTopicSnapshot;
     topicId: string;
   }): Promise<void> {
     const { activeTurn, topicId } = input;
@@ -564,7 +513,7 @@ export class ChatRuntime {
     }
     if (this.newTopicHandoffTopicId === topicId) {
       this.newTopicHandoffTopicId = undefined;
-      this.setTopicSnapshot(newTopicRuntimeId, idleTopicSnapshot);
+      this.setTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID, idleTopicSnapshot);
     }
     if (input.terminalSnapshot) {
       this.setTurnSnapshot(topicId, input.terminalSnapshot);
@@ -618,10 +567,9 @@ export class ChatRuntime {
       });
       throwIfAborted(abortController.signal);
 
-      for await (const nextAssistantMessage of readUIMessageStream<CherryUIMessage>({
+      for await (const nextAssistantMessage of this.dependencies.services.ai.readMessageStream({
         message: toCherryUIMessage(assistantMessage),
         stream,
-        terminateOnError: true,
       })) {
         latestAssistantMessage = nextAssistantMessage;
         throwIfAborted(abortController.signal);
@@ -721,20 +669,26 @@ export class ChatRuntime {
     });
 
     if (renamed) {
-      await this.dependencies.invalidateTopics();
+      await this.emitAndWait({ type: 'invalidate-topics' });
     }
   }
 
-  private emit(): void {
+  private emit(event: Parameters<ChatSessionListener>[0]): void {
     for (const listener of this.listeners) {
       // One bad subscriber must not take the notification — or the teardown
       // that is often driving it — down with it.
       try {
-        listener();
+        void Promise.resolve(listener(event)).catch((error) => {
+          logger.error('Chat session listener failed', toError(error));
+        });
       } catch (error) {
-        logger.error('Chat runtime listener failed', toError(error));
+        logger.error('Chat session listener failed', toError(error));
       }
     }
+  }
+
+  private async emitAndWait(event: Parameters<ChatSessionListener>[0]): Promise<void> {
+    await Promise.all([...this.listeners].map((listener) => listener(event)));
   }
 
   /**
@@ -764,7 +718,7 @@ export class ChatRuntime {
    */
   private async invalidateTopicMessagesSafely(topicId: string): Promise<void> {
     try {
-      await this.dependencies.invalidateTopicMessages(topicId);
+      await this.emitAndWait({ topicId, type: 'invalidate-topic-messages' });
     } catch (error) {
       logger.error('Failed to refresh messages after a turn ended', toError(error));
     }
@@ -820,7 +774,7 @@ export class ChatRuntime {
     });
   }
 
-  private async resolveTurnContext(input: ChatRuntimeSendTextInput) {
+  private async resolveTurnContext(input: ChatSendTextInput) {
     let topic = await this.dependencies.services.topic.getById(input.topicId);
 
     if (topic.activeNodeId) {
@@ -834,8 +788,11 @@ export class ChatRuntime {
       topic = await this.dependencies.services.topic.update(input.topicId, {
         assistantId: input.assistantId,
       });
-      await this.dependencies.invalidateTopics();
-      await this.dependencies.invalidateTopicMessages(input.topicId);
+      await this.emitAndWait({ type: 'invalidate-topics' });
+      await this.emitAndWait({
+        topicId: input.topicId,
+        type: 'invalidate-topic-messages',
+      });
     }
 
     const model = await this.resolveModel(input.selectedModelId, topic);
@@ -844,18 +801,18 @@ export class ChatRuntime {
   }
 
   private resolveRuntimeTopicId(topicId: string): string {
-    if (topicId === newTopicRuntimeId && this.newTopicHandoffTopicId) {
+    if (topicId === NEW_CHAT_SESSION_TOPIC_ID && this.newTopicHandoffTopicId) {
       return this.newTopicHandoffTopicId;
     }
 
     return topicId;
   }
 
-  private setTurnSnapshot(topicId: string, snapshot: ChatRuntimeTopicSnapshot): void {
+  private setTurnSnapshot(topicId: string, snapshot: ChatSessionTopicSnapshot): void {
     this.setTopicSnapshot(topicId, snapshot);
 
     if (this.newTopicHandoffTopicId === topicId) {
-      this.setTopicSnapshot(newTopicRuntimeId, snapshot);
+      this.setTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID, snapshot);
     }
   }
 
@@ -898,7 +855,7 @@ export class ChatRuntime {
     return defaultModelId;
   }
 
-  private setTopicSnapshot(topicId: string, snapshot: ChatRuntimeTopicSnapshot): void {
+  private setTopicSnapshot(topicId: string, snapshot: ChatSessionTopicSnapshot): void {
     if (
       snapshot.status === 'idle' &&
       !snapshot.overlayMessage &&
@@ -910,7 +867,7 @@ export class ChatRuntime {
       this.topicSnapshots.set(topicId, snapshot);
     }
 
-    this.emit();
+    this.emit({ topicId, type: 'snapshot-changed' });
   }
 }
 
@@ -987,6 +944,14 @@ function toModelSnapshot(model: Model): ModelSnapshot {
     name: model.name,
     provider: model.providerId,
   };
+}
+
+function toCherryUIMessage(message: Message): CherryUIMessage {
+  return {
+    id: message.id,
+    parts: message.data.parts ?? [],
+    role: message.role,
+  } as CherryUIMessage;
 }
 
 function createTopicName(input: { parts: readonly CherryMessagePart[]; text: string }): string {

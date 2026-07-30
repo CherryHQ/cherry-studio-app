@@ -13,6 +13,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
+import type { TopicsBackend } from '@/shared/contracts';
 import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
 import type {
   ActiveNodeResponse,
@@ -41,7 +42,7 @@ type TopicCursor =
   | { id: null; section: 'topic'; updatedAt: null }
   | { id: string; section: 'topic'; updatedAt: number };
 
-export class TopicService {
+export class TopicService implements TopicsBackend {
   constructor(
     private readonly dbService: DbService,
     private readonly pinService: PinService,
@@ -64,6 +65,10 @@ export class TopicService {
     }
 
     return rowToTopic(row);
+  }
+
+  get(id: string): Promise<Topic> {
+    return this.getById(id);
   }
 
   async ensureTraceId(topicId: string): Promise<string> {
@@ -173,6 +178,10 @@ export class TopicService {
       await this.pinService.purgeForEntitiesTx(tx, 'topic', uniqueIds);
       await tx.delete(topicTable).where(inArray(topicTable.id, uniqueIds));
     });
+  }
+
+  removeMany(ids: readonly string[]): Promise<void> {
+    return this.deleteMany(ids);
   }
 
   async setActiveNode(topicId: string, nodeId: string): Promise<ActiveNodeResponse> {
@@ -309,6 +318,10 @@ export class TopicService {
         : undefined;
 
     return { items: items.map((item) => item.topic), nextCursor };
+  }
+
+  listPage(params?: ListTopicsQuery): Promise<CursorPaginationResponse<Topic>> {
+    return this.listByCursor(params);
   }
 
   async reorder(id: string, anchor: OrderRequest): Promise<void> {

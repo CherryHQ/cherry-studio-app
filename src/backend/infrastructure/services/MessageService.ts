@@ -22,7 +22,12 @@ import type {
 } from '@/shared/data/types/message';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
-
+import {
+  type ApprovalDecision,
+  applyToolApprovalDecisionsToParts,
+  countPendingToolApprovals,
+  finalizeDanglingToolApprovals,
+} from '@/shared/domain/chat/toolApprovals';
 import type { Database, DbService } from '../db/DbService';
 import {
   chatMessageFileRefTable,
@@ -34,12 +39,6 @@ import {
 import type { FileEntryService } from './FileEntryService';
 import type { TopicService } from './TopicService';
 import { timestampToISO } from './utils/rowMappers';
-import {
-  type ApprovalDecision,
-  applyToolApprovalDecisionsToParts,
-  countPendingToolApprovals,
-  finalizeDanglingToolApprovals,
-} from './utils/toolApprovals';
 
 const previewLength = 50;
 const defaultLimit = 20;

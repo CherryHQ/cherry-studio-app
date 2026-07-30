@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { runPostReadyTasks } from '@/bootstrap/appRuntime';
 import type { DataServices } from '@/bootstrap/createDataServices';
+import type { MobileBackend } from '@/shared/contracts';
 
 import { DataProvider, type DataRuntime, useDataState } from '../DataProvider';
 import { InitialDataGate } from '../InitialDataGate';
@@ -28,6 +29,10 @@ jest.mock('@/bootstrap/createDataServices', () => ({
   createDataServices: jest.fn(),
 }));
 
+jest.mock('@/bootstrap/createMobileBackend', () => ({
+  createMobileBackend: jest.fn(),
+}));
+
 jest.mock('@/bootstrap/appRuntime', () => ({
   runPostReadyTasks: jest.fn(async () => undefined),
 }));
@@ -51,7 +56,11 @@ function makeRuntime(init: () => Promise<void>): {
   return {
     dispose,
     preferenceInit,
-    runtime: { dbService: { init, dispose }, services },
+    runtime: {
+      backend: {} as MobileBackend,
+      dbService: { init, dispose },
+      services,
+    },
     services,
   };
 }

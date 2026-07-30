@@ -10,8 +10,11 @@ import type { Message } from '@/shared/data/types/message';
 import { isIOS } from '@/utils/constants';
 import { ToolApprovalSheet } from '../approval/ToolApprovalSheet';
 import { MessageSlideInProvider } from '../messageItem';
-import { useChatRuntime, useChatRuntimeTopic } from '../runtime/ChatRuntimeProvider';
-import { getPendingToolApprovals, mergeMessagesWithOverlay } from '../runtime/chatRuntimeMessages';
+import { useChatSession, useChatSessionTopic } from '../session/ChatSessionProvider';
+import {
+  getPendingToolApprovals,
+  mergeMessagesWithOverlay,
+} from '../session/chatSessionProjection';
 import { ChatComposer } from './components/ChatComposer';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessageList } from './components/ChatMessageList';
@@ -43,7 +46,7 @@ type ChatWorkspaceProps = {
 
 export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWorkspaceProps) {
   const { isLoadingInitial, isLoadingOlder, loadOlder, messages } = messageWindow;
-  const chatRuntime = useChatRuntimeTopic(topicId);
+  const chatSession = useChatSessionTopic(topicId);
   const headerHeight = useHeaderHeight();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -52,26 +55,26 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   const handleScrollToEnd = useCallback(() => {
     void listRef.current?.scrollToEnd({ animated: true });
   }, []);
-  const messagesWithUser = mergeMessagesWithOverlay(messages, chatRuntime.pendingUserMessage);
-  const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatRuntime.overlayMessage);
+  const messagesWithUser = mergeMessagesWithOverlay(messages, chatSession.pendingUserMessage);
+  const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatSession.overlayMessage);
   const anchorIndex = getAnchoredUserMessageIndex(visibleMessages);
-  const runtime = useChatRuntime();
+  const session = useChatSession();
   // 待审批检测以活动 tip 的 parts 为准，因此杀 app 重进后 sheet 也会自动恢复。
   const pendingApprovals = getPendingToolApprovals(visibleMessages);
-  const isApprovalSheetOpen = pendingApprovals.length > 0 && chatRuntime.status !== 'streaming';
+  const isApprovalSheetOpen = pendingApprovals.length > 0 && chatSession.status !== 'streaming';
   const handleApprovalRespond = useCallback(
     async (input: { approvalId: string; approved: boolean; messageId: string }) => {
       try {
-        await runtime.respondToolApproval({ ...input, topicId });
+        await session.respondToolApproval({ ...input, topicId });
       } catch (error) {
         logger.error('Tool approval response failed', error as Error);
         toast.show({ label: t('chat.tool.approval.failed'), variant: 'danger' });
       }
     },
-    [runtime, t, toast, topicId],
+    [session, t, toast, topicId],
   );
   const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
-    hasHistoryBeforePendingTurn: chatRuntime.hasHistoryBeforePendingTurn,
+    hasHistoryBeforePendingTurn: chatSession.hasHistoryBeforePendingTurn,
     isLoadingInitial,
     messageCount: messages.length,
   });
@@ -97,7 +100,7 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   return (
     <ChatWorkspaceFrame>
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
-      <MessageSlideInProvider slideInMessageId={chatRuntime.pendingUserMessage?.id}>
+      <MessageSlideInProvider slideInMessageId={chatSession.pendingUserMessage?.id}>
         <ChatMessageList
           key={listRenderKey}
           anchorIndex={anchorIndex}

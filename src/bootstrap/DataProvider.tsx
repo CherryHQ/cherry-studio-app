@@ -3,17 +3,22 @@ import { createContext, type PropsWithChildren, use, useEffect, useMemo, useStat
 import { DbService } from '@/backend/infrastructure/db/DbService';
 import { runPostReadyTasks } from '@/bootstrap/appRuntime';
 import { createDataServices, type DataServices } from '@/bootstrap/createDataServices';
+import { createMobileBackend } from '@/bootstrap/createMobileBackend';
+import { BackendProvider } from '@/frontend/data';
+import type { MobileBackend } from '@/shared/contracts';
 
 /** The long-lived resources owned by `DataProvider`. Injectable so tests can
  * drive the startup sequence without opening a real SQLite database. */
 export type DataRuntime = {
+  backend: MobileBackend;
   dbService: Pick<DbService, 'init' | 'dispose'>;
   services: DataServices;
 };
 
 function createDefaultRuntime(): DataRuntime {
   const dbService = new DbService();
-  return { dbService, services: createDataServices(dbService) };
+  const services = createDataServices(dbService);
+  return { backend: createMobileBackend(services), dbService, services };
 }
 
 type DataProviderProps = PropsWithChildren<{
@@ -42,7 +47,7 @@ type DataState =
 const DataContext = createContext<DataState | null>(null);
 
 export function DataProvider({ bootstrap, children, createRuntime }: DataProviderProps) {
-  const { dbService, services } = useMemo(
+  const { backend, dbService, services } = useMemo(
     () => (createRuntime ?? createDefaultRuntime)(),
     [createRuntime],
   );
@@ -67,7 +72,11 @@ export function DataProvider({ bootstrap, children, createRuntime }: DataProvide
     };
   }, [bootstrap, dbService, services]);
 
-  return <DataContext.Provider value={state}>{children}</DataContext.Provider>;
+  return (
+    <BackendProvider backend={backend}>
+      <DataContext.Provider value={state}>{children}</DataContext.Provider>
+    </BackendProvider>
+  );
 }
 
 // 模块级函数：try/finally 会让 React Compiler 对组件 bail out，故初始化流程放在组件体外。

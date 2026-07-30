@@ -8,10 +8,10 @@
  * variant that has no mobile equivalent).
  */
 
-import type { DataServices } from '@/bootstrap/createDataServices';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
+import type { ChatSessionServices } from './ChatSessionDependencies';
 
 const logger = loggerService.withContext('topicNaming');
 
@@ -43,7 +43,7 @@ function sanitizeTopicTitle(title: string): string {
     .slice(0, 255);
 }
 
-type TopicNamingServices = Pick<DataServices, 'ai' | 'model' | 'preference' | 'topic'>;
+type TopicNamingServices = Pick<ChatSessionServices, 'ai' | 'model' | 'preference' | 'topic'>;
 
 /**
  * Generates a topic title from the first user/assistant exchange and

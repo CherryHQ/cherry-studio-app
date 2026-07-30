@@ -2,6 +2,12 @@ import { eq } from 'drizzle-orm';
 
 import type { DbService } from '@/backend/infrastructure/db/DbService';
 import { preferenceTable } from '@/backend/infrastructure/db/schemas';
+import type {
+  PreferenceMapping as ContractPreferenceMapping,
+  PreferenceUpdates as ContractPreferenceUpdates,
+  PreferenceMappedValues,
+  PreferencesBackend,
+} from '@/shared/contracts';
 import {
   DefaultPreferences,
   getDefaultValue,
@@ -40,7 +46,7 @@ const defaultUpdateOptions: PreferenceUpdateOptions = {
  * - Batch operations for multiple preferences
  * - Integration with React's useSyncExternalStore
  */
-export class PreferenceService {
+export class PreferenceService implements PreferencesBackend {
   private cache: PreferenceUpdateMap = { ...DefaultPreferences.default };
   private listeners = new Map<PreferenceKeyType, Set<PreferenceListener>>();
   private updateTail: Promise<void> = Promise.resolve();
@@ -77,6 +83,10 @@ export class PreferenceService {
     return this.cache[key] as PreferenceDefaultScopeType[K] | undefined;
   }
 
+  readCached<K extends PreferenceKeyType>(key: K): PreferenceDefaultScopeType[K] {
+    return this.getCachedValue(key) ?? getDefaultValue(key);
+  }
+
   async getMultipleRaw<K extends PreferenceKeyType>(
     keys: readonly K[],
   ): Promise<PreferenceRawResult<K>> {
@@ -108,6 +118,10 @@ export class PreferenceService {
     return result;
   }
 
+  readManyCached<T extends ContractPreferenceMapping>(mapping: T): PreferenceMappedValues<T> {
+    return this.getMultipleCached(mapping);
+  }
+
   getAll(): PreferenceDefaultScopeType {
     return {
       ...DefaultPreferences.default,
@@ -130,6 +144,13 @@ export class PreferenceService {
     await this.enqueueUpdate(updates as PreferenceUpdateMap, options);
   }
 
+  setMany<K extends PreferenceKeyType>(
+    updates: ContractPreferenceUpdates<K>,
+    options?: PreferenceUpdateOptions,
+  ): Promise<void> {
+    return this.setMultiple(updates, options);
+  }
+
   subscribeChange<K extends PreferenceKeyType>(key: K) {
     return (listener: PreferenceListener) => {
       const listeners = this.listeners.get(key) ?? new Set<PreferenceListener>();
@@ -144,6 +165,10 @@ export class PreferenceService {
         }
       };
     };
+  }
+
+  subscribe<K extends PreferenceKeyType>(key: K, listener: PreferenceListener): () => void {
+    return this.subscribeChange(key)(listener);
   }
 
   private enqueueUpdate(updates: PreferenceUpdateMap, options: PreferenceUpdateOptions) {

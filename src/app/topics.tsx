@@ -1,10 +1,10 @@
 import { ChatScreen } from '@/frontend/features/chat';
-import { ChatRuntimeProvider } from '@/frontend/features/chat/runtime';
+import { ChatSessionProvider } from '@/frontend/features/chat/session';
 
 export default function TopicsRoute() {
   return (
-    <ChatRuntimeProvider>
+    <ChatSessionProvider>
       <ChatScreen />
-    </ChatRuntimeProvider>
+    </ChatSessionProvider>
   );
 }

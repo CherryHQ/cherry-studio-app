@@ -9,6 +9,7 @@ import {
   userModelTable,
 } from '@/backend/infrastructure/db/schemas';
 import type { PreferenceService } from '@/backend/infrastructure/services/PreferenceService';
+import type { AssistantsBackend } from '@/shared/contracts';
 import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
 import {
   type CreateAssistantDto,
@@ -60,7 +61,7 @@ function rowToAssistant(
   };
 }
 
-export class AssistantService {
+export class AssistantService implements AssistantsBackend {
   constructor(
     private readonly dbService: DbService,
     private readonly modelService: ModelService,
@@ -96,6 +97,10 @@ export class AssistantService {
     ]);
 
     return rowToAssistant(row.assistant, relations.get(id), tags.get(id), row.modelName ?? null);
+  }
+
+  get(id: string): Promise<Assistant> {
+    return this.getById(id);
   }
 
   async list(params: ListAssistantsQueryParams = {}): Promise<OffsetPaginationResponse<Assistant>> {
@@ -304,6 +309,10 @@ export class AssistantService {
       await this.tagService.purgeForEntityTx(tx, 'assistant', id);
       await this.pinService.purgeForEntityTx(tx, 'assistant', id);
     });
+  }
+
+  remove(id: string): Promise<void> {
+    return this.delete(id);
   }
 
   async reorder(id: string, anchor: OrderRequest): Promise<void> {

@@ -24,6 +24,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { DbService } from '@/backend/infrastructure/db/DbService';
 import { pinTable } from '@/backend/infrastructure/db/schemas';
 import type { PinRow } from '@/backend/infrastructure/db/schemas/pin';
+import type { PinsBackend } from '@/shared/contracts';
 import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
 import { DataApiErrorFactory } from '@/shared/data/api/types';
 import type { EntityType } from '@/shared/data/types/entityType';
@@ -61,7 +62,7 @@ function isUniqueConstraintError(error: unknown): boolean {
   );
 }
 
-export class PinService {
+export class PinService implements PinsBackend {
   constructor(private readonly dbService: DbService) {}
 
   private get db() {
@@ -78,6 +79,10 @@ export class PinService {
       .where(eq(pinTable.entityType, entityType))
       .orderBy(asc(pinTable.orderKey));
     return rows.map(rowToPin);
+  }
+
+  list(entityType: EntityType): Promise<Pin[]> {
+    return this.listByEntityType(entityType);
   }
 
   /**

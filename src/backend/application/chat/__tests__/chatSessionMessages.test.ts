@@ -1,14 +1,12 @@
-import type { CherryMessagePart, Message } from '@/shared/data/types/message';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import {
   finalizeTurnToolApprovals,
-  getPendingToolApprovals,
   hasPendingToolApproval,
   mergeMessageStats,
-  mergeMessagesWithOverlay,
   statsFromMetadata,
-} from '../chatRuntimeMessages';
+} from '../chatSessionMessages';
 
 describe('statsFromMetadata', () => {
   test('projects present token fields, dropping absent ones', () => {
@@ -34,29 +32,6 @@ describe('statsFromMetadata', () => {
 
   test('returns undefined when metadata has no token fields', () => {
     expect(statsFromMetadata({ modelId: 'gpt-5' })).toBeUndefined();
-  });
-});
-
-describe('chat runtime messages', () => {
-  test('replaces a persisted placeholder with the streaming overlay', () => {
-    const userMessage = createMessage('user-1', 'user');
-    const placeholder = createMessage('assistant-1', 'assistant');
-    const overlay = {
-      ...placeholder,
-      data: { parts: [{ type: 'text', text: 'streaming' }] },
-    } as Message;
-
-    expect(mergeMessagesWithOverlay([userMessage, placeholder], overlay)).toEqual([
-      userMessage,
-      overlay,
-    ]);
-  });
-
-  test('appends the streaming overlay when the placeholder page has not refetched yet', () => {
-    const userMessage = createMessage('user-1', 'user');
-    const overlay = createMessage('assistant-1', 'assistant');
-
-    expect(mergeMessagesWithOverlay([userMessage], overlay)).toEqual([userMessage, overlay]);
   });
 });
 
@@ -130,41 +105,6 @@ describe('tool approvals', () => {
     expect(toolMetaOf(parts[3])?.settledByApp).toBeUndefined();
   });
 
-  test('getPendingToolApprovals reads the assistant tip regardless of persisted status', () => {
-    const waiting = {
-      ...createMessage('assistant-1', 'assistant'),
-      data: { parts: [requested('a1'), requested('a2', 'create')] },
-      status: 'success' as const,
-    };
-
-    expect(getPendingToolApprovals([createMessage('user-1', 'user'), waiting])).toEqual([
-      expect.objectContaining({ approvalId: 'a1', messageId: 'assistant-1', toolName: 'search' }),
-      expect.objectContaining({ approvalId: 'a2', toolName: 'create' }),
-    ]);
-    expect(getPendingToolApprovals([{ ...waiting, status: 'paused' }])).toHaveLength(2);
-    expect(getPendingToolApprovals([{ ...waiting, status: 'pending' }])).toHaveLength(2);
-    // Only the active tip counts: an older approval request is not actionable.
-    expect(getPendingToolApprovals([waiting, createMessage('user-2', 'user')])).toEqual([]);
-  });
-
-  test('getPendingToolApprovals carries built-in identity from tool metadata', () => {
-    const builtin = {
-      ...requested('a1', 'location_get_current'),
-      toolMetadata: { cherry: { tool: { type: 'builtin' } } },
-    } as CherryMessagePart;
-    const waiting = {
-      ...createMessage('assistant-1', 'assistant'),
-      data: { parts: [builtin] },
-    };
-
-    expect(getPendingToolApprovals([waiting])).toEqual([
-      expect.objectContaining({
-        toolName: 'location_get_current',
-        toolType: 'builtin',
-      }),
-    ]);
-  });
-
   test('mergeMessageStats adds what a resumed segment spends', () => {
     expect(mergeMessageStats(undefined, { totalTokens: 5 })).toEqual({ totalTokens: 5 });
     expect(mergeMessageStats({ totalTokens: 5 }, undefined)).toEqual({ totalTokens: 5 });
@@ -187,20 +127,3 @@ describe('tool approvals', () => {
     });
   });
 });
-
-function createMessage(id: string, role: Message['role']): Message {
-  const now = '2026-05-15T00:00:00.000Z';
-
-  return {
-    createdAt: now,
-    data: { parts: [] },
-    id,
-    parentId: role === 'assistant' ? 'user-1' : null,
-    role,
-    searchableText: '',
-    siblingsGroupId: 0,
-    status: 'pending',
-    topicId: 'topic-1',
-    updatedAt: now,
-  };
-}

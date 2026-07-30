@@ -1,12 +1,11 @@
-import type { AiStreamRequest } from '@/backend/infrastructure/ai/types/requests';
-import type { DataServices } from '@/bootstrap/createDataServices';
+import { NEW_CHAT_SESSION_TOPIC_ID } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 import type { PreparedInternalFile } from '@/shared/data/types/file';
 import type { CherryMessagePart, CherryUIMessage, Message } from '@/shared/data/types/message';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
-
-import { ChatRuntime, newTopicRuntimeId } from '../ChatRuntime';
+import type { ChatSessionServices, ChatStreamRequest } from '../ChatSessionDependencies';
+import { ChatSessionImpl } from '../ChatSessionImpl';
 
 const mockReadUIMessageStream = jest.fn();
 const mockPrepareMessageParts = jest.fn(
@@ -19,16 +18,7 @@ const mockPrepareMessageParts = jest.fn(
 );
 const mockDiscardPreparedFiles = jest.fn();
 
-jest.mock('ai', () => ({
-  readUIMessageStream: (...args: unknown[]) => mockReadUIMessageStream(...args),
-}));
-
-jest.mock('@/backend/infrastructure/services/fileStorage', () => ({
-  discardPreparedFiles: (...args: unknown[]) => mockDiscardPreparedFiles(...args),
-  prepareMessageParts: (parts: readonly CherryMessagePart[]) => mockPrepareMessageParts(parts),
-}));
-
-describe('ChatRuntime', () => {
+describe('ChatSessionImpl', () => {
   beforeEach(() => {
     mockReadUIMessageStream.mockReset();
     mockPrepareMessageParts.mockClear();
@@ -486,7 +476,9 @@ describe('ChatRuntime', () => {
       selectedModelId: 'provider::model' as UniqueModelId,
       text: 'first topic',
     });
-    await waitUntil(() => runtime.getTopicSnapshot(newTopicRuntimeId).status === 'streaming');
+    await waitUntil(
+      () => runtime.getTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID).status === 'streaming',
+    );
 
     // The first reply is still streaming, which leaves `newTopicHandoffTopicId`
     // set — the assistant detail screen's "start chat" must still be able to
@@ -721,7 +713,7 @@ describe('ChatRuntime', () => {
   test('mirrors new topic handoff snapshots and forwards abort to the created topic', async () => {
     const services = createServices();
     const streamDeferred = createDeferred<ReadableStream>();
-    services.ai.streamText = jest.fn(async (request: AiStreamRequest) => {
+    services.ai.streamText = jest.fn(async (request: ChatStreamRequest) => {
       await streamDeferred.promise;
       return new ReadableStream({
         start(controller) {
@@ -739,8 +731,10 @@ describe('ChatRuntime', () => {
       text: 'first',
     });
 
-    await waitUntil(() => runtime.getTopicSnapshot(newTopicRuntimeId).status === 'streaming');
-    expect(runtime.getTopicSnapshot(newTopicRuntimeId)).toEqual(
+    await waitUntil(
+      () => runtime.getTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID).status === 'streaming',
+    );
+    expect(runtime.getTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID)).toEqual(
       expect.objectContaining({
         hasHistoryBeforePendingTurn: false,
         overlayMessage: expect.objectContaining({ id: 'assistant-1' }),
@@ -748,15 +742,15 @@ describe('ChatRuntime', () => {
       }),
     );
 
-    runtime.abort(newTopicRuntimeId);
-    expect(runtime.getTopicSnapshot(newTopicRuntimeId).status).toBe('aborting');
+    runtime.abort(NEW_CHAT_SESSION_TOPIC_ID);
+    expect(runtime.getTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID).status).toBe('aborting');
     expect(
       (services.ai.streamText as jest.Mock).mock.calls[0][0].requestOptions.signal.aborted,
     ).toBe(true);
 
     streamDeferred.resolve(new ReadableStream());
     await sendPromise;
-    expect(runtime.getTopicSnapshot(newTopicRuntimeId).status).toBe('idle');
+    expect(runtime.getTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID).status).toBe('idle');
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
@@ -1395,13 +1389,13 @@ describe('ChatRuntime', () => {
     });
 
     await waitUntil(() => invalidateTopics.callCount > 0);
-    runtime.abort(newTopicRuntimeId);
+    runtime.abort(NEW_CHAT_SESSION_TOPIC_ID);
     invalidateTopics.resolve();
     await sendPromise;
 
     expect(openTopic).not.toHaveBeenCalled();
     expect(services.message.createUserMessageWithPlaceholders).not.toHaveBeenCalled();
-    expect(runtime.getTopicSnapshot(newTopicRuntimeId).status).toBe('idle');
+    expect(runtime.getTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID).status).toBe('idle');
   });
 });
 
@@ -1496,15 +1490,31 @@ function createRuntime(input: {
   invalidateTopicMessages?: (topicId: string) => Promise<void>;
   invalidateTopics?: () => Promise<void>;
   openTopic?: (topicId: string) => void;
-  services: DataServices;
+  services: ChatSessionServices;
 }) {
-  return new ChatRuntime({
+  const session = new ChatSessionImpl({
+    files: {
+      discard: (...args) => mockDiscardPreparedFiles(...args),
+      prepareParts: (parts) => mockPrepareMessageParts(parts),
+    },
     services: input.services,
-    invalidateTopics: input.invalidateTopics ?? jest.fn(async () => undefined),
-    invalidateTopicMessages:
-      input.invalidateTopicMessages ?? jest.fn(async (_topicId: string) => undefined),
-    openTopic: input.openTopic ?? jest.fn(),
   });
+  session.subscribe(async (event) => {
+    switch (event.type) {
+      case 'invalidate-topic-messages':
+        await input.invalidateTopicMessages?.(event.topicId);
+        break;
+      case 'invalidate-topics':
+        await input.invalidateTopics?.();
+        break;
+      case 'open-topic':
+        input.openTopic?.(event.topicId);
+        break;
+      case 'snapshot-changed':
+        break;
+    }
+  });
+  return session;
 }
 
 function createServices() {
@@ -1514,6 +1524,8 @@ function createServices() {
 
   return {
     ai: {
+      generateText: jest.fn(),
+      readMessageStream: jest.fn((input) => mockReadUIMessageStream(input)),
       streamText: jest.fn(async () => new ReadableStream()),
     },
     assistant: {
@@ -1555,7 +1567,7 @@ function createServices() {
       getById: jest.fn(async () => createTopic()),
       update: jest.fn(async () => createTopic()),
     },
-  } as unknown as DataServices;
+  } as unknown as ChatSessionServices;
 }
 
 function createTopic(patch: Partial<ReturnType<typeof createTopicBase>> = {}) {
