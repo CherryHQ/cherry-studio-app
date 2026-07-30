@@ -1,4 +1,4 @@
-import { defaultAppHeaders } from '@/ai/utils/provider';
+import { defaultAppHeaders } from '@/config/constants';
 import type { WebSearchCapability, WebSearchProvider } from '@/data/preference';
 import type { ApiKeyRotationState } from '../../utils/provider';
 import { resolveProviderApiHost } from '../../utils/provider';

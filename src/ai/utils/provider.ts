@@ -1,4 +1,5 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { defaultAppHeaders } from '@/config/constants';
 import type { EndpointType } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 
@@ -47,13 +48,6 @@ export function getExtraHeaders(provider: Provider): Record<string, string> {
 
 export function isAwsBedrockProvider(provider: Provider): boolean {
   return provider.authType === 'iam-aws';
-}
-
-export function defaultAppHeaders(): Record<string, string> {
-  return {
-    'User-Agent': 'CherryStudioMobile/1.0',
-    'X-App-Name': 'CherryStudioMobile',
-  };
 }
 
 export function defaultHeaders(provider: Provider, apiKey = ''): Record<string, string> {

@@ -6,6 +6,7 @@
 import { hasProviderConfig, type StringKeys } from '@cherrystudio/ai-core/provider';
 import type { CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { defaultAppHeaders } from '@/config/constants';
 import type { EndpointType, Model } from '@/data/types/model';
 import type { AuthConfig, Provider } from '@/data/types/provider';
 import { generateSignature } from '@/integration/cherryAi';
@@ -16,7 +17,6 @@ import {
   ProviderConfig,
 } from '../types';
 import {
-  defaultAppHeaders,
   formatApiHost,
   formatOllamaApiHost,
   getExtraHeaders,

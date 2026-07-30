@@ -159,6 +159,16 @@ export const settingsServiceRow = {
   rowHeight: 44,
 } as const;
 
+// Identifying headers attached to every outbound AI-provider and web-search
+// request. Lives in `config` (not `ai`) so `services/webSearch` can use it
+// without depending on the AI layer (ADR 0010).
+export function defaultAppHeaders(): Record<string, string> {
+  return {
+    'User-Agent': 'CherryStudioMobile/1.0',
+    'X-App-Name': 'CherryStudioMobile',
+  };
+}
+
 // Providers that exist as rows but must never appear in the provider settings
 // list. `cherryai` is Cherry's own built-in service (api.cherry-ai.com): it is
 // seeded as a row only so the AI SDK can build a client for its free models
