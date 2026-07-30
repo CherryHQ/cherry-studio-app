@@ -1,1 +1,1 @@
-export { MessagesRoute as default } from '@/screens/MessagesScreen';
+export { MessagesRoute as default } from '@/features/messages';

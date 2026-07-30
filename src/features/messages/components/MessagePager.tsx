@@ -10,7 +10,7 @@ import Animated, {
 
 import { getMessageScopeIndex, useMessageScope } from '@/components/messageTabs';
 import { DrawingList } from '@/features/paintings';
-import { TopicList } from '@/screens/TopicListScreen';
+import { TopicList } from '@/features/topics';
 
 type MessagePagerProps = {
   showRecentsHeading?: boolean;

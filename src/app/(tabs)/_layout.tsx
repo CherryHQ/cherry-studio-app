@@ -14,8 +14,8 @@ import { isAndroid } from '@/config/constants';
 import {
   SearchScopeProvider,
   useSetSearchScope,
-} from '@/screens/GlobalSearchScreen/context/SearchScopeProvider';
-import { getSearchScopeForTabRoute } from '@/screens/GlobalSearchScreen/utils/searchScope';
+} from '@/features/search/context/SearchScopeProvider';
+import { getSearchScopeForTabRoute } from '@/features/search/utils/searchScope';
 
 const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
 
