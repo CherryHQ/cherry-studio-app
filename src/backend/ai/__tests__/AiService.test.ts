@@ -4,8 +4,8 @@ import {
 } from '@cherrystudio/ai-core';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import type { ToolSet } from 'ai';
-import { AiService, type AiServiceDependencies } from '@/backend/infrastructure/ai/AiService';
-import { createWebSearchTool } from '@/backend/infrastructure/ai/tools/adapters/aiSdk/builtin/WebSearchTool';
+import { AiService, type AiServiceDependencies } from '@/backend/ai/AiService';
+import { createWebSearchTool } from '@/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
@@ -31,7 +31,7 @@ jest.mock('@/backend/infrastructure/integrations/cherryin/signature', () => ({
   generateSignature: jest.fn(() => ({})),
 }));
 
-jest.mock('@/backend/infrastructure/ai/runtime/aiSdk/Agent', () => ({
+jest.mock('@/backend/ai/runtime/aiSdk/Agent', () => ({
   Agent: jest.fn().mockImplementation((params) => {
     mockAgentConstructor(params);
     return { generate: mockGenerate, stream: mockStream };

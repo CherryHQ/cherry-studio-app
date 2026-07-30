@@ -13,9 +13,9 @@ import { PromptService } from '@/backend/data/services/PromptService';
 import { ProviderService } from '@/backend/data/services/ProviderService';
 import { TagService } from '@/backend/data/services/TagService';
 import { TopicService } from '@/backend/data/services/TopicService';
-import { AiService } from '@/backend/infrastructure/ai/AiService';
-import { McpService } from '@/backend/infrastructure/ai/mcp';
-import { ToolService } from '@/backend/infrastructure/ai/tools';
+import { AiService } from '@/backend/ai/AiService';
+import { McpService } from '@/backend/ai/mcp';
+import { ToolService } from '@/backend/ai/tools';
 import { DevicePermissionService } from '@/backend/infrastructure/integrations/devicePermissions';
 import { WebSearchService } from '@/backend/infrastructure/integrations/webSearch/WebSearchService';
 
