@@ -65,7 +65,7 @@ jest.mock('@/frontend/data/hooks', () => ({
   useDataMutation: () => ({ isPending: false, mutateAsync: jest.fn() }),
 }));
 
-jest.mock('@/data/services/ProviderService', () => ({
+jest.mock('@/backend/infrastructure/services/ProviderService', () => ({
   canDeleteProvider: () => true,
 }));
 

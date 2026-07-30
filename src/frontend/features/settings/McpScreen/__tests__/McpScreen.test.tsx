@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { McpServerRuntimeSummary } from '@/ai/mcp';
+import type { McpServerRuntimeSummary } from '@/backend/infrastructure/ai/mcp';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 import { McpScreen } from '../McpScreen';
 

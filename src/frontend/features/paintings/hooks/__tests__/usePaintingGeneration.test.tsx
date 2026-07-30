@@ -8,7 +8,7 @@ const mockCreatePainting = jest.fn();
 const mockReplaceOutputs = jest.fn();
 const mockSyncPaintingQueries = jest.fn(async () => undefined);
 
-jest.mock('@/runtime', () => ({
+jest.mock('@/bootstrap', () => ({
   useDataServices: () => ({
     ai: { generateImage: mockGenerateImage },
     painting: {
@@ -22,7 +22,7 @@ jest.mock('@/frontend/features/paintings/hooks/usePaintings', () => ({
   useSyncPaintingQueries: () => mockSyncPaintingQueries,
 }));
 
-jest.mock('@/data/services/fileStorage', () => ({
+jest.mock('@/backend/infrastructure/services/fileStorage', () => ({
   discardPreparedFiles: jest.fn(),
   imageUriToDataUrl: jest.fn(),
   prepareGeneratedImage: jest.fn((base64: string) => {

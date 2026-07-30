@@ -2,9 +2,8 @@ import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
-
+import { getProviderAvatarUri } from '@/backend/infrastructure/integrations/avatars/providerAvatarStorage';
 import { Image } from '@/frontend/components/nativePrimitives';
-import { getProviderAvatarUri } from '@/services/avatars/providerAvatarStorage';
 
 /**
  * Reads a provider's stored custom avatar uri (see `providerAvatarStorage`).

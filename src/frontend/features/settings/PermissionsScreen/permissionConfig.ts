@@ -1,4 +1,4 @@
-import type { DevicePermission } from '@/services/devicePermissions';
+import type { DevicePermission } from '@/backend/infrastructure/integrations/devicePermissions';
 import type { PermissionMode, PermissionPreferenceKey } from '@/shared/data/preference';
 
 export const permissionKinds = ['location', 'calendar', 'reminders', 'health'] as const;

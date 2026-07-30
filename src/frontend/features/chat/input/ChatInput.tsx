@@ -1,6 +1,5 @@
 import { resolveIcon } from '@cherrystudio/ui/icons';
 import { useCallback, useEffect, useState } from 'react';
-import { loggerService } from '@/core/logger/LoggerService';
 import {
   getNextModelSelection,
   ModelPickerBottomSheet,
@@ -9,6 +8,7 @@ import {
   usePrefetchModelPickerData,
 } from '@/frontend/components/modelPicker';
 import { useModelById, useProviders, useTopic } from '@/frontend/hooks/chat';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isUniqueModelId } from '@/shared/data/types/model';
 import { useChatRuntimeTopic } from '../runtime';
 import { ChatInputActionSheet } from './components/ChatInputActionSheet';

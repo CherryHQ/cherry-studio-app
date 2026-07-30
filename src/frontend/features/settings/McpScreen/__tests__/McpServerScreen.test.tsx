@@ -65,7 +65,7 @@ jest.mock('react-native-keyboard-controller', () => {
   };
 });
 
-jest.mock('@/ai/mcp', () => ({
+jest.mock('@/backend/infrastructure/ai/mcp', () => ({
   withMcpToolRuleAdded: jest.fn(),
   withMcpToolRuleCleared: jest.fn(),
 }));
@@ -81,11 +81,11 @@ jest.mock('@/frontend/components/confirmDialog', () => ({
   useConfirmDialog: () => ({ confirmDialog: null, requestConfirm: mockRequestConfirm }),
 }));
 
-jest.mock('@/core/logger/LoggerService', () => ({
+jest.mock('@/shared/core/logger/LoggerService', () => ({
   loggerService: { withContext: () => ({ error: jest.fn() }) },
 }));
 
-jest.mock('@/runtime', () => ({
+jest.mock('@/bootstrap', () => ({
   useDataServices: () => ({ mcp: { getServerInfo: mockGetServerInfo } }),
 }));
 

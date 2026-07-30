@@ -19,7 +19,7 @@ jest.mock('@tanstack/react-query', () => ({
   useQuery: (options: unknown) => mockUseQuery(options),
 }));
 
-jest.mock('@/runtime', () => ({
+jest.mock('@/bootstrap', () => ({
   useDataServices: () => ({ mcp: { listToolsForServer: jest.fn() } }),
 }));
 

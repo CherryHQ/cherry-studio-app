@@ -5,11 +5,11 @@ import { PlusIcon, SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { canDeleteProvider } from '@/data/services/ProviderService';
+import { canDeleteProvider } from '@/backend/infrastructure/services/ProviderService';
 import { useConfirmDialog } from '@/frontend/components/confirmDialog';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import { useDataMutation } from '@/frontend/data/hooks';
 import { queryKeys } from '@/frontend/data';
+import { useDataMutation } from '@/frontend/data/hooks';
 import { openExternalUrl } from '@/utils/openExternalUrl';
 import {
   buildApiKeysInputFromEntries,

@@ -10,8 +10,8 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+import { useDataServices } from '@/bootstrap';
 import { getMessagesQueryKey } from '@/frontend/hooks/chat/utils/messageQueryOptions';
-import { useDataServices } from '@/runtime';
 
 import {
   ChatRuntime,

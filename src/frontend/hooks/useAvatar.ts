@@ -1,5 +1,5 @@
+import { resolveUserAvatarUri } from '@/backend/infrastructure/integrations/avatars/userAvatarStorage';
 import { usePreference } from '@/frontend/data/hooks';
-import { resolveUserAvatarUri } from '@/services/avatars/userAvatarStorage';
 
 const defaultAvatarSource = require('@/assets/icon.png');
 

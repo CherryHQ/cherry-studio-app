@@ -32,7 +32,7 @@ jest.mock('@/frontend/components/headers', () => ({ BackHeader: () => null }));
 jest.mock('@/frontend/data/hooks', () => ({
   usePreference: () => [mockMode, mockSetMode],
 }));
-jest.mock('@/runtime', () => ({
+jest.mock('@/bootstrap', () => ({
   useDataServices: () => ({
     devicePermission: {
       getStatusForPreference: mockGetStatus,

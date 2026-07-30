@@ -1,5 +1,5 @@
-import { loggerService } from '@/core/logger/LoggerService';
-import type { UpdateProviderInput } from '@/data/services/ProviderService';
+import type { UpdateProviderInput } from '@/backend/infrastructure/services/ProviderService';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { Provider } from '@/shared/data/types/provider';
 
 const logger = loggerService.withContext('ProviderScreen:EnableProviderWhenModelsAvailable');

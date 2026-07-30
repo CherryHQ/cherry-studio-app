@@ -2,8 +2,11 @@ import { Image } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { parseFunctionCallToolName } from '@/ai/mcp';
-import { type NormalizedMcpContent, normalizeMcpResult } from '@/ai/mcp/mcpResult';
+import { parseFunctionCallToolName } from '@/backend/infrastructure/ai/mcp';
+import {
+  type NormalizedMcpContent,
+  normalizeMcpResult,
+} from '@/backend/infrastructure/ai/mcp/mcpResult';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import {
   type CherryToolMeta,

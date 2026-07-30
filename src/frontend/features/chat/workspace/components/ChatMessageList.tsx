@@ -17,8 +17,8 @@ import {
   View,
 } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
-import { loggerService } from '@/core/logger/LoggerService';
 import { LinearGradient } from '@/frontend/components/nativePrimitives';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { Message } from '@/shared/data/types/message';
 
 import { AssistantMessageItem, UserMessageItem } from '../../messageItem';

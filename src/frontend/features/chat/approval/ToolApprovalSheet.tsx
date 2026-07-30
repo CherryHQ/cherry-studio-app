@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { parseFunctionCallToolName } from '@/ai/mcp';
+import { parseFunctionCallToolName } from '@/backend/infrastructure/ai/mcp';
 import { BottomSheet } from '@/frontend/components/bottomSheet';
 import type { PendingToolApproval } from '../runtime/chatRuntimeMessages';
 import { getBuiltInToolPresentation } from '../utils/builtInToolPresentation';

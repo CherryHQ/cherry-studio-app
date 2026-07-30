@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import type { McpServerRuntimeSummary } from '@/ai/mcp';
+import type { McpServerRuntimeSummary } from '@/backend/infrastructure/ai/mcp';
+import { useDataServices } from '@/bootstrap';
 import { queryKeys } from '@/frontend/data';
 import { useDataQuery } from '@/frontend/data/hooks';
-import { useDataServices } from '@/runtime';
 import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/shared/data/api/schemas/mcpServers';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 

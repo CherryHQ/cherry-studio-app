@@ -5,8 +5,8 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
-import { useDataServices } from '@/runtime';
-import type { DataServices } from '@/runtime/createDataServices';
+import { useDataServices } from '@/bootstrap';
+import type { DataServices } from '@/bootstrap/createDataServices';
 
 type DataMutationFunction<TData, TVariables> = (
   services: DataServices,

@@ -1,4 +1,4 @@
-import { finalizeDanglingToolApprovals } from '@/data/services/utils/toolApprovals';
+import { finalizeDanglingToolApprovals } from '@/backend/infrastructure/services/utils/toolApprovals';
 import type {
   CherryMessagePart,
   CherryUIMessage,

@@ -9,10 +9,10 @@ import { SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { replaceUserAvatar } from '@/backend/infrastructure/integrations/avatars/userAvatarStorage';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { ProfileAvatarEditBadge, ProfileAvatarImage } from '@/frontend/components/ProfileAvatar';
 import { usePreference } from '@/frontend/data/hooks';
-import { replaceUserAvatar } from '@/services/avatars/userAvatarStorage';
 
 const profileAvatarSize = 104;
 const logger = loggerService.withContext('ProfileSettingsScreen');

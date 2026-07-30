@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
-import { loggerService } from '@/core/logger/LoggerService';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 
 // 诊断埋点：冷/暖首次进入 topic 的遮罩 gate 时序（onReady 到达 → 撤遮罩），用于定位
 // 「reload 后第一次进入才跳」——差异在遮罩揭示相对内容 settle 的时机。`[GATE]` 前缀。

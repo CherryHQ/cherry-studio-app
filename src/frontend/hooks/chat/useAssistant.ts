@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
+import { useDataServices } from '@/bootstrap';
 import { queryKeys } from '@/frontend/data';
 import { useDataQuery } from '@/frontend/data/hooks';
-import { useDataServices } from '@/runtime';
 import type { CreateAssistantDto, UpdateAssistantDto } from '@/shared/data/api/schemas/assistants';
 import { type Assistant } from '@/shared/data/types/assistant';
 

@@ -4,7 +4,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
-import type { McpServerRuntimeSummary } from '@/ai/mcp';
+import type { McpServerRuntimeSummary } from '@/backend/infrastructure/ai/mcp';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';

@@ -1,6 +1,6 @@
 import '../frontend/styles/global.css';
-import '@/polyfills/abortSignal';
-import '@/polyfills/blob';
+import '@/bootstrap/polyfills/abortSignal';
+import '@/bootstrap/polyfills/blob';
 
 import { BottomSheetProvider } from '@swmansion/react-native-bottom-sheet';
 import { Stack } from 'expo-router';
@@ -10,11 +10,10 @@ import { HeroUINativeProvider } from 'heroui-native/provider';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
-
+import { DataProvider, InitialDataGate } from '@/bootstrap';
+import { bootstrapAppRuntime } from '@/bootstrap/appRuntime';
 import { NavigationThemeProvider } from '@/frontend/components/navigation';
 import { QueryProvider } from '@/frontend/data';
-import { DataProvider, InitialDataGate } from '@/runtime';
-import { bootstrapAppRuntime } from '@/runtime/appRuntime';
 import { isIOS, isLiquidGlassAvailable } from '@/utils/constants';
 
 // Hold the native splash across data-runtime init so the gate never exposes a

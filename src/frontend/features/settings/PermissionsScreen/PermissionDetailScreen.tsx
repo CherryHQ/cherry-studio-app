@@ -4,11 +4,10 @@ import { CheckIcon, SettingsIcon } from 'lucide-uniwind/png';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-
+import type { SystemPermissionState } from '@/backend/infrastructure/integrations/devicePermissions';
+import { useDataServices } from '@/bootstrap';
 import { BackHeader } from '@/frontend/components/headers';
 import { usePreference } from '@/frontend/data/hooks';
-import { useDataServices } from '@/runtime';
-import type { SystemPermissionState } from '@/services/devicePermissions';
 import type { PermissionMode, PermissionPreferenceKey } from '@/shared/data/preference';
 
 import { SettingsSection } from '../components/SettingsSection';

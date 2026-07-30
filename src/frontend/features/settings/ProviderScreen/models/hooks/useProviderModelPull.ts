@@ -2,9 +2,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { providerRegistryService } from '@/data/services/ProviderRegistryService';
-import type { UpdateProviderInput } from '@/data/services/ProviderService';
-import { useDataServices } from '@/runtime';
+import { providerRegistryService } from '@/backend/infrastructure/services/ProviderRegistryService';
+import type { UpdateProviderInput } from '@/backend/infrastructure/services/ProviderService';
+import { useDataServices } from '@/bootstrap';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 

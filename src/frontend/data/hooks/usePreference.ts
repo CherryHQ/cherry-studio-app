@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
-import { useDataServices } from '@/runtime';
+import { useDataServices } from '@/bootstrap';
 import type {
   PreferenceDefaultScopeType,
   PreferenceKeyType,

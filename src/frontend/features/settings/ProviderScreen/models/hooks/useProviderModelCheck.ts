@@ -1,8 +1,8 @@
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { UpdateProviderInput } from '@/data/services/ProviderService';
-import { useDataServices } from '@/runtime';
+import type { UpdateProviderInput } from '@/backend/infrastructure/services/ProviderService';
+import { useDataServices } from '@/bootstrap';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 import { enableProviderWhenModelsAvailable } from '../../utils/providerEnablement';

@@ -1,9 +1,5 @@
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  getMobileSupportedWebSearchProvidersByCapability,
-  type WebSearchProviderPreset,
-} from '@/data/presets/webSearchProviders';
 import { useMultiplePreferences } from '@/frontend/data/hooks';
 import type {
   WebSearchCapability,
@@ -11,6 +7,10 @@ import type {
   WebSearchProviderId,
   WebSearchProviderOverride,
 } from '@/shared/data/preference';
+import {
+  getMobileSupportedWebSearchProvidersByCapability,
+  type WebSearchProviderPreset,
+} from '@/shared/data/presets/webSearchProviders';
 import type { SettingSelectOption } from '../components/SettingSelect';
 import { mergeWebSearchProviderOverride } from '../WebSearchScreen/utils/providerSettings';
 

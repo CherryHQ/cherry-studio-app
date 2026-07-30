@@ -1,0 +1,182 @@
+/**
+ * Prompt Service - handles prompt CRUD and ordering
+ *
+ * Invariants maintained by this service:
+ * - Ordering: whole-table fractional-indexing `orderKey`. Reorder paths go
+ *   through `applyMoves`; callers never touch `orderKey` directly.
+ */
+
+import { and, asc, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
+import type { DbService } from '@/backend/infrastructure/db/DbService';
+import { type PromptRow, promptTable } from '@/backend/infrastructure/db/schemas';
+import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
+import { DataApiErrorFactory } from '@/shared/data/api/types';
+import type {
+  CreatePromptDto,
+  ListPromptsQuery,
+  Prompt,
+  UpdatePromptDto,
+} from '@/shared/data/types/prompt';
+
+import { applyMoves, insertWithOrderKey } from './utils/orderKey';
+import { timestampToISO } from './utils/rowMappers';
+
+type TxLike = any;
+
+function rowToPrompt(row: PromptRow): Prompt {
+  return {
+    content: row.content,
+    createdAt: timestampToISO(row.createdAt),
+    id: row.id,
+    orderKey: row.orderKey,
+    title: row.title,
+    updatedAt: timestampToISO(row.updatedAt),
+  };
+}
+
+/**
+ * Extract any `before`/`after` id referenced by a set of anchors. Reorder
+ * callers feed these into the existence pre-check so that a missing anchor
+ * surfaces as `NOT_FOUND` from the handler, not a 500 from `applyMoves`.
+ */
+function collectAnchorIds(anchors: OrderRequest[]): string[] {
+  const ids: string[] = [];
+  for (const anchor of anchors) {
+    if ('before' in anchor) {
+      ids.push(anchor.before);
+    }
+    if ('after' in anchor) {
+      ids.push(anchor.after);
+    }
+  }
+  return ids;
+}
+
+export class PromptService {
+  constructor(private readonly dbService: DbService) {}
+
+  private get db() {
+    return this.dbService.getDb();
+  }
+
+  async list(query: ListPromptsQuery = {}): Promise<Prompt[]> {
+    // Canonical API order is old → new; settings UI reverses this for display.
+    const conditions: SQL[] = [];
+    if (query.search) {
+      const pattern = `%${query.search.replace(/[\\%_]/g, '\\$&')}%`;
+      const titleMatch = sql`${promptTable.title} LIKE ${pattern} ESCAPE '\\'`;
+      const contentMatch = sql`${promptTable.content} LIKE ${pattern} ESCAPE '\\'`;
+      const searchClause = or(titleMatch, contentMatch);
+      if (searchClause) {
+        conditions.push(searchClause);
+      }
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const rows = await this.db
+      .select()
+      .from(promptTable)
+      .where(whereClause)
+      .orderBy(asc(promptTable.orderKey));
+    return rows.map(rowToPrompt);
+  }
+
+  async getById(id: string): Promise<Prompt> {
+    const [row] = await this.db.select().from(promptTable).where(eq(promptTable.id, id)).limit(1);
+    if (!row) {
+      throw DataApiErrorFactory.notFound('Prompt', id);
+    }
+    return rowToPrompt(row);
+  }
+
+  async create(dto: CreatePromptDto): Promise<Prompt> {
+    const row = (await this.dbService.withWriteTx((tx) =>
+      insertWithOrderKey(
+        tx,
+        promptTable,
+        {
+          content: dto.content,
+          title: dto.title,
+        },
+        { pkColumn: promptTable.id },
+      ),
+    )) as PromptRow;
+
+    return rowToPrompt(row);
+  }
+
+  async update(id: string, dto: UpdatePromptDto): Promise<Prompt> {
+    return this.dbService.withWriteTx(async (tx) => {
+      const updates: Partial<typeof promptTable.$inferInsert> = {};
+      if (dto.title !== undefined) {
+        updates.title = dto.title;
+      }
+      if (dto.content !== undefined) {
+        updates.content = dto.content;
+      }
+
+      const [row] = await tx
+        .update(promptTable)
+        .set(updates)
+        .where(eq(promptTable.id, id))
+        .returning();
+      if (!row) {
+        throw DataApiErrorFactory.notFound('Prompt', id);
+      }
+
+      return rowToPrompt(row);
+    });
+  }
+
+  /** Move a single prompt relative to an anchor. */
+  async reorder(id: string, anchor: OrderRequest): Promise<void> {
+    await this.dbService.withWriteTx(async (tx) => {
+      await this.assertPromptsExistTx(tx, [id, ...collectAnchorIds([anchor])]);
+      await applyMoves(tx, promptTable, [{ anchor, id }], {
+        pkColumn: promptTable.id,
+      });
+    });
+  }
+
+  /** Apply a batch of moves atomically. */
+  async reorderBatch(moves: { anchor: OrderRequest; id: string }[]): Promise<void> {
+    if (moves.length === 0) {
+      return;
+    }
+    await this.dbService.withWriteTx(async (tx) => {
+      await this.assertPromptsExistTx(tx, [
+        ...moves.map((move) => move.id),
+        ...collectAnchorIds(moves.map((move) => move.anchor)),
+      ]);
+      await applyMoves(tx, promptTable, moves, {
+        pkColumn: promptTable.id,
+      });
+    });
+  }
+
+  /** Pre-check that every id in a reorder exists; convert to NOT_FOUND otherwise. */
+  private async assertPromptsExistTx(tx: Pick<TxLike, 'select'>, ids: string[]): Promise<void> {
+    const uniqueIds = Array.from(new Set(ids));
+    const rows = (await tx
+      .select({ id: promptTable.id })
+      .from(promptTable)
+      .where(inArray(promptTable.id, uniqueIds))) as { id: string }[];
+    if (rows.length === uniqueIds.length) {
+      return;
+    }
+    const found = new Set(rows.map((row) => row.id));
+    const missing = uniqueIds.find((id) => !found.has(id)) ?? uniqueIds[0];
+    throw DataApiErrorFactory.notFound('Prompt', missing);
+  }
+
+  async delete(id: string): Promise<void> {
+    const [row] = await this.dbService.withWriteTx((tx) => {
+      return tx.delete(promptTable).where(eq(promptTable.id, id)).returning({
+        id: promptTable.id,
+      });
+    });
+    if (!row) {
+      throw DataApiErrorFactory.notFound('Prompt', id);
+    }
+  }
+}

@@ -1,8 +1,8 @@
-import type { CreateModelInput } from '@/data/services/ModelService';
+import type { CreateModelInput } from '@/backend/infrastructure/services/ModelService';
 import {
   type ModelRegistryLookup,
   mergePresetModel,
-} from '@/data/services/ProviderRegistryService';
+} from '@/backend/infrastructure/services/ProviderRegistryService';
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
 
 export type ProviderModelPullPreview = {

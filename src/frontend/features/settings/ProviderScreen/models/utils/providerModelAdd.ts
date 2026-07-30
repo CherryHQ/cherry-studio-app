@@ -1,6 +1,6 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
-import type { CreateModelInput } from '@/data/services/ModelService';
+import type { CreateModelInput } from '@/backend/infrastructure/services/ModelService';
 import {
   createUniqueModelId,
   type EndpointType,

@@ -30,7 +30,7 @@ export function PaintingViewerChrome({
     () => [
       {
         id: 'view-conversation',
-        image: require('../../../../../assets/navigation/messages.png'),
+        image: require('../../../../../../assets/navigation/messages.png'),
         title: t('painting.viewer.viewConversation'),
       },
       {

@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { applyThemeModePreference } from '@/bootstrap/appRuntime';
 import { useMultiplePreferences } from '@/frontend/data/hooks';
 import { initI18n, resolveLanguage } from '@/frontend/i18n';
-import { applyThemeModePreference } from '@/runtime/appRuntime';
 import { type LanguageVarious, ThemeMode } from '@/shared/data/preference';
 import type { SettingSelectOption } from '../components/SettingSelect';
 

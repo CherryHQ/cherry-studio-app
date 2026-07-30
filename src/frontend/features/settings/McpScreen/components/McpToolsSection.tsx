@@ -6,9 +6,12 @@ import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { hasMcpServerWildcardRule, matchesMcpSourceToolRule } from '@/ai/mcp';
+import {
+  hasMcpServerWildcardRule,
+  matchesMcpSourceToolRule,
+} from '@/backend/infrastructure/ai/mcp';
+import { useDataServices } from '@/bootstrap';
 import { queryKeys } from '@/frontend/data';
-import { useDataServices } from '@/runtime';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 

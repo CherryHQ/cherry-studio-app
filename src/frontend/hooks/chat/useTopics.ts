@@ -1,8 +1,8 @@
 import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
+import { useDataServices } from '@/bootstrap';
 import { queryKeys } from '@/frontend/data';
 import { useDataInfiniteQuery, useDataQuery } from '@/frontend/data/hooks/useDataQuery';
-import { useDataServices } from '@/runtime';
 import type { UpdateTopicDto } from '@/shared/data/api/schemas/topics';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { Topic } from '@/shared/data/types/topic';

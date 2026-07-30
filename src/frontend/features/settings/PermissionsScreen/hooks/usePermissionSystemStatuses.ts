@@ -1,8 +1,8 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { AppState } from 'react-native';
-import { useDataServices } from '@/runtime';
-import type { SystemPermissionState } from '@/services/devicePermissions';
+import type { SystemPermissionState } from '@/backend/infrastructure/integrations/devicePermissions';
+import { useDataServices } from '@/bootstrap';
 import type { PermissionPreferenceKey } from '@/shared/data/preference';
 
 import { permissionConfig, permissionKinds } from '../permissionConfig';

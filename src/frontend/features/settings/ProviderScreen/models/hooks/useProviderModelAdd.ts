@@ -2,9 +2,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
+import { useDataServices } from '@/bootstrap';
 import { queryKeys } from '@/frontend/data';
-import { useDataServices } from '@/runtime';
 import type { EndpointType } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 

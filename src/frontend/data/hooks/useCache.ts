@@ -1,13 +1,13 @@
 import { loggerService } from '@logger';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
-import { cacheService } from '@/data/cache/CacheService';
+import { cacheService } from '@/backend/infrastructure/cache/CacheService';
 import type {
   InferUseCacheValue,
   PersistCacheKey,
   PersistCacheSchema,
   UseCacheKey,
-} from '@/data/cache/cacheSchemas';
-import { getUseCacheDefaultValue } from '@/data/cache/templateKey';
+} from '@/backend/infrastructure/cache/cacheSchemas';
+import { getUseCacheDefaultValue } from '@/backend/infrastructure/cache/templateKey';
 
 const logger = loggerService.withContext('useCache');
 

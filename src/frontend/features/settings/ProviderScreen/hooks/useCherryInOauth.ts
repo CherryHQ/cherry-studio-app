@@ -2,10 +2,10 @@ import * as AuthSession from 'expo-auth-session';
 import { useToast } from 'heroui-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useDataMutation, useDataQuery } from '@/frontend/data/hooks';
+import { CherryInOauthService } from '@/backend/infrastructure/integrations/cherryin/CherryInOauthService';
+import { useDataServices } from '@/bootstrap';
 import { queryKeys } from '@/frontend/data';
-import { useDataServices } from '@/runtime';
-import { CherryInOauthService } from '@/services/cherryin/CherryInOauthService';
+import { useDataMutation, useDataQuery } from '@/frontend/data/hooks';
 import { CHERRYIN_CONFIG } from '@/utils/constants';
 
 const { makeRedirectUri, useAuthRequest, ResponseType } = AuthSession;

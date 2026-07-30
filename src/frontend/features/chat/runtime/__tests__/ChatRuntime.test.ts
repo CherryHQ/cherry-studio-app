@@ -1,6 +1,6 @@
-import type { AiStreamRequest } from '@/ai/types/requests';
-import { loggerService } from '@/core/logger/LoggerService';
-import type { DataServices } from '@/runtime/createDataServices';
+import type { AiStreamRequest } from '@/backend/infrastructure/ai/types/requests';
+import type { DataServices } from '@/bootstrap/createDataServices';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 import type { PreparedInternalFile } from '@/shared/data/types/file';
 import type { CherryMessagePart, CherryUIMessage, Message } from '@/shared/data/types/message';
@@ -23,7 +23,7 @@ jest.mock('ai', () => ({
   readUIMessageStream: (...args: unknown[]) => mockReadUIMessageStream(...args),
 }));
 
-jest.mock('@/data/services/fileStorage', () => ({
+jest.mock('@/backend/infrastructure/services/fileStorage', () => ({
   discardPreparedFiles: (...args: unknown[]) => mockDiscardPreparedFiles(...args),
   prepareMessageParts: (parts: readonly CherryMessagePart[]) => mockPrepareMessageParts(parts),
 }));

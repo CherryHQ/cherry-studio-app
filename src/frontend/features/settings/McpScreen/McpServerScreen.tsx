@@ -6,12 +6,12 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { withMcpToolRuleAdded, withMcpToolRuleCleared } from '@/ai/mcp';
-import { loggerService } from '@/core/logger/LoggerService';
+import { withMcpToolRuleAdded, withMcpToolRuleCleared } from '@/backend/infrastructure/ai/mcp';
+import { useDataServices } from '@/bootstrap';
 import { useConfirmDialog } from '@/frontend/components/confirmDialog';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useMcpServerApiById, useMcpServerMutations } from '@/frontend/hooks/mcp/useMcpServers';
-import { useDataServices } from '@/runtime';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiError, ErrorCode } from '@/shared/data/api/types';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 import { keyboardBottomOffset } from '@/utils/constants';

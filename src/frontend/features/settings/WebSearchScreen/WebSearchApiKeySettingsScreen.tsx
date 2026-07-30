@@ -2,10 +2,10 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
-import { isMobileSupportedWebSearchProviderId } from '@/data/presets/webSearchProviders';
 import { useConfirmDialog } from '@/frontend/components/confirmDialog';
 import { BackHeader } from '@/frontend/components/headers';
 import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/shared/data/preference';
+import { isMobileSupportedWebSearchProviderId } from '@/shared/data/presets/webSearchProviders';
 import {
   normalizeWebSearchApiKeys,
   useWebSearchApiKeySettings,

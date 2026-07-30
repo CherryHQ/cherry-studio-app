@@ -1,10 +1,13 @@
 import { readUIMessageStream } from 'ai';
 
-import { toCherryUIMessage } from '@/ai/messages/messageConverter';
-import { serializeError } from '@/ai/utils/serializeError';
-import { loggerService } from '@/core/logger/LoggerService';
-import { discardPreparedFiles, prepareMessageParts } from '@/data/services/fileStorage';
-import type { DataServices } from '@/runtime/createDataServices';
+import { toCherryUIMessage } from '@/backend/infrastructure/ai/messages/messageConverter';
+import { serializeError } from '@/backend/infrastructure/ai/utils/serializeError';
+import {
+  discardPreparedFiles,
+  prepareMessageParts,
+} from '@/backend/infrastructure/services/fileStorage';
+import type { DataServices } from '@/bootstrap/createDataServices';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import type {
   CherryMessagePart,
   CherryUIMessage,

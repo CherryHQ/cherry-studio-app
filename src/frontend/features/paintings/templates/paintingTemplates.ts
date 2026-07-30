@@ -14,7 +14,7 @@ export const paintingTemplates: readonly PaintingTemplate[] = [
   {
     author: '@0x00_Krypt',
     id: 'china-landmark-diorama',
-    preview: require('../../../../assets/paintings/templates/china-landmark-diorama.webp'),
+    preview: require('../../../../../assets/paintings/templates/china-landmark-diorama.webp'),
     prompt: `A highly realistic miniature city diorama emerging vertically from a flat, detailed street map of [CITY], vertical composition.
 
 [CORE CONCEPT]
@@ -59,7 +59,7 @@ vertical 3:4 aspect ratio, macro lens, shallow depth of field, ultra-detailed, p
   {
     author: '@wory37303852',
     id: 'meta-quest-3-exploded-view',
-    preview: require('../../../../assets/paintings/templates/meta-quest-3-exploded-view.webp'),
+    preview: require('../../../../../assets/paintings/templates/meta-quest-3-exploded-view.webp'),
     prompt: `Create a clean high-tech exploded-view product diagram poster for a [PRODUCT TYPE], vertical composition.
 
 [CONFIGURATION]
@@ -125,7 +125,7 @@ vertical 3:4 aspect ratio, ultra-detailed product visualization, studio lighting
   {
     author: '@rovvmut_',
     id: 'crocs-editorial-poster',
-    preview: require('../../../../assets/paintings/templates/crocs-editorial-poster.webp'),
+    preview: require('../../../../../assets/paintings/templates/crocs-editorial-poster.webp'),
     prompt: `A high-fashion surrealist advertising poster for Crocs. The scene is set in a minimalist, monochrome light blue studio with a semi-reflective floor.
 
 The central focus is an oversized, giant white Croc clog positioned on its heel at a diagonal angle, serving as a backrest. A fashion model with long dark hair, dressed in a clean, all-white coordinated sweatshirt and wide-leg trousers, leans her entire back against the giant shoe in a relaxed, leaning posture. She is facing right in profile, looking ahead with a serene expression, and wearing standard-sized white Crocs.
@@ -140,7 +140,7 @@ Make the aspect ratio 3:4.`,
   {
     author: '@iamaiistudio',
     id: 'algorithm-fog-city-poster',
-    preview: require('../../../../assets/paintings/templates/algorithm-fog-city-poster.webp'),
+    preview: require('../../../../../assets/paintings/templates/algorithm-fog-city-poster.webp'),
     prompt:
       'Create an international-quality cinematic movie poster for a film titled "Algorithm Fog City." Make it look like a masterfully designed festival-grade sci-fi thriller poster: a fog-drowned megacity, a lone figure in the lower foreground, a giant translucent human profile merged with glowing data streams and prediction-interface graphics, cold blue-gray atmosphere with subtle amber UI accents, dramatic vertical typography for the title, premium theatrical composition, realistic lighting, dense atmospheric depth, and polished high-end film poster design.',
     title: 'Algorithm: Fog City',
@@ -148,7 +148,7 @@ Make the aspect ratio 3:4.`,
   {
     author: '@aimikoda',
     id: 'cyber-rabbit-character',
-    preview: require('../../../../assets/paintings/templates/cyber-rabbit-character.webp'),
+    preview: require('../../../../../assets/paintings/templates/cyber-rabbit-character.webp'),
     prompt: `Create a full-body character concept illustration of a [CHARACTER TYPE], vertical composition.
 
 [CONFIGURATION]

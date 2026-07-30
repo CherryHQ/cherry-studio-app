@@ -1,4 +1,4 @@
-import { createOrderedUuid } from '@/data/db/schemas/_columnHelpers';
+import { createOrderedUuid } from '@/backend/infrastructure/db/schemas/_columnHelpers';
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
 
 export type PaintingDraftHandoff = {

@@ -26,10 +26,10 @@ const permissionIcons: Record<PermissionKind, ComponentType<PngIconProps>> = {
 };
 
 const iosPermissionImages: Record<PermissionKind, number> = {
-  calendar: require('../../../../assets/permissions/ios/calendar.png'),
-  health: require('../../../../assets/permissions/ios/health.png'),
-  location: require('../../../../assets/permissions/ios/location.png'),
-  reminders: require('../../../../assets/permissions/ios/reminders.png'),
+  calendar: require('../../../../../assets/permissions/ios/calendar.png'),
+  health: require('../../../../../assets/permissions/ios/health.png'),
+  location: require('../../../../../assets/permissions/ios/location.png'),
+  reminders: require('../../../../../assets/permissions/ios/reminders.png'),
 };
 
 export default function PermissionsSettingsScreen() {

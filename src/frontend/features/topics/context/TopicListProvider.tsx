@@ -1,7 +1,8 @@
 import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useIsFocused, useRouter } from 'expo-router';
 import { createContext, type PropsWithChildren, use, useCallback, useEffect, useMemo } from 'react';
-import { loggerService } from '@/core/logger/LoggerService';
+import { useDataServices } from '@/bootstrap';
+import type { DataServices } from '@/bootstrap/createDataServices';
 import { MODEL_SETTING_PREFERENCE_KEYS } from '@/frontend/components/modelPicker/utils/modelSettings';
 import { queryKeys } from '@/frontend/data';
 import { useDataMutation } from '@/frontend/data/hooks';
@@ -11,8 +12,7 @@ import {
   prefetchTopicMessages,
 } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPolicy';
-import { useDataServices } from '@/runtime';
-import type { DataServices } from '@/runtime/createDataServices';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isUniqueModelId } from '@/shared/data/types/model';
 import type { Topic } from '@/shared/data/types/topic';
 

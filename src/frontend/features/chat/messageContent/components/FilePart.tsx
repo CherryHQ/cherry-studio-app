@@ -1,7 +1,7 @@
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useTranslation } from 'react-i18next';
 
-import { loggerService } from '@/core/logger/LoggerService';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { FileTile, ImageTile } from '../../mediaTile';
 import { useFilePartUri } from '../hooks/useFilePartUri';

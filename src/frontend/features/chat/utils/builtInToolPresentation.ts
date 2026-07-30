@@ -14,10 +14,10 @@ export type BuiltInToolPresentation = {
 };
 
 const iosSystemImages = {
-  calendar: require('../../../../assets/permissions/ios/calendar.png'),
-  health: require('../../../../assets/permissions/ios/health.png'),
-  location: require('../../../../assets/permissions/ios/location.png'),
-  reminders: require('../../../../assets/permissions/ios/reminders.png'),
+  calendar: require('../../../../../assets/permissions/ios/calendar.png'),
+  health: require('../../../../../assets/permissions/ios/health.png'),
+  location: require('../../../../../assets/permissions/ios/location.png'),
+  reminders: require('../../../../../assets/permissions/ios/reminders.png'),
 } as const;
 
 const builtInToolPresentations: Record<string, BuiltInToolPresentation> = {

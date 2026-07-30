@@ -5,9 +5,9 @@ import {
   imageUriToDataUrl,
   prepareGeneratedImage,
   prepareInternalFileFromUri,
-} from '@/data/services/fileStorage';
+} from '@/backend/infrastructure/services/fileStorage';
+import { useDataServices } from '@/bootstrap';
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
-import { useDataServices } from '@/runtime';
 import { parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
 import { useSyncPaintingQueries } from './usePaintings';
