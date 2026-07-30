@@ -2,6 +2,7 @@ import { inferAdapterFamily } from '@cherrystudio/provider-registry';
 import { asc, eq, inArray } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
+import type { CacheService } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import type {
@@ -224,11 +225,10 @@ function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
 }
 
 export class ProviderService {
-  private readonly lastUsedApiKeyIds = new Map<string, string>();
-
   constructor(
     private readonly dbService: DbService,
     private readonly pinService: PinService,
+    private readonly cacheService: CacheService,
   ) {}
 
   private get db() {
@@ -319,17 +319,18 @@ export class ProviderService {
       return enabledKeys[0].key;
     }
 
-    const lastUsedKeyId = this.lastUsedApiKeyIds.get(providerId);
+    const cacheKey = apiKeyRotationCacheKey(providerId);
+    const lastUsedKeyId = this.cacheService.get(cacheKey);
 
     if (!lastUsedKeyId) {
-      this.lastUsedApiKeyIds.set(providerId, enabledKeys[0].id);
+      this.cacheService.set(cacheKey, enabledKeys[0].id);
       return enabledKeys[0].key;
     }
 
     const currentIndex = enabledKeys.findIndex((key) => key.id === lastUsedKeyId);
     const nextIndex = (currentIndex + 1) % enabledKeys.length;
     const nextKey = enabledKeys[nextIndex];
-    this.lastUsedApiKeyIds.set(providerId, nextKey.id);
+    this.cacheService.set(cacheKey, nextKey.id);
 
     return nextKey.key;
   }
@@ -494,7 +495,7 @@ export class ProviderService {
       }
     });
 
-    this.lastUsedApiKeyIds.delete(providerId);
+    this.cacheService.delete(apiKeyRotationCacheKey(providerId));
   }
 
   async batchUpsert(inputs: CreateProviderInput[]): Promise<void> {
@@ -547,4 +548,8 @@ export class ProviderService {
       }
     });
   }
+}
+
+function apiKeyRotationCacheKey(providerId: string) {
+  return `settings.provider.${providerId}.last_used_key_id` as const;
 }

@@ -1,3 +1,4 @@
+import { CacheService } from '@/backend/data/CacheService';
 import { DbService } from '@/backend/data/db/DbService';
 import { bootstrapAppRuntime, runPostReadyTasks } from '@/bootstrap/appRuntime';
 import { createBackendServices } from '@/bootstrap/createBackendServices';
@@ -12,18 +13,21 @@ export type AppBootstrapRuntime = {
 };
 
 export function createAppBootstrapRuntime(): AppBootstrapRuntime {
+  const cacheService = new CacheService();
   const dbService = new DbService();
-  const services = createBackendServices(dbService);
+  const services = createBackendServices(dbService, cacheService);
 
   return {
     backend: createMobileBackend(services),
     dispose: () => {
       services.mcp.dispose();
       services.webSearch.dispose();
+      services.cache.dispose();
       dbService.dispose();
     },
     initialize: async () => {
-      await dbService.init();
+      services.cache.init();
+      await dbService.init(services.cache);
       await services.preference.init();
       await bootstrapAppRuntime(services);
     },

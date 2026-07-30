@@ -3,6 +3,8 @@ import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import * as SQLite from 'expo-sqlite';
 
+import type { CacheService } from '@/backend/data/CacheService';
+
 import { customSqlStatements } from './customSql';
 import { migrations } from './migrations';
 import { type DatabaseSchema, schema } from './schemas';
@@ -29,13 +31,13 @@ export class DbService {
     this.db = createDrizzleDatabase(this.sqlite);
   }
 
-  async init(): Promise<void> {
+  async init(cacheService: CacheService): Promise<void> {
     this.assertOpen();
 
     await this.configurePragmas();
     await migrate(this.db, migrations);
     this.runCustomMigrations();
-    await seedDatabase(this);
+    await seedDatabase(this, cacheService);
     this.ready = true;
   }
 

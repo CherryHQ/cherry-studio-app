@@ -1,3 +1,4 @@
+import { CacheService, createInMemoryBackendCacheStorage } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { UserProviderRow } from '@/backend/data/db/schemas/userProvider';
 import type { ApiKeyEntry, ProviderSettings } from '@/shared/data/types/provider';
@@ -61,6 +62,7 @@ describe('ProviderService', () => {
         withWriteTx: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
       } as unknown as DbService,
       createPinServiceStub(),
+      createCacheService(),
     );
 
     const provider = await service.update(row.providerId, {
@@ -144,6 +146,18 @@ describe('ProviderService', () => {
     await expect(first.getRotatedApiKey('provider-one')).resolves.toBe('key-b');
   });
 
+  test('shares rotation state through the backend cache', async () => {
+    const cache = createCacheService();
+    const keys = [apiKey('a', 'key-a'), apiKey('b', 'key-b')];
+
+    await expect(
+      createRotationService(keys, undefined, cache).getRotatedApiKey('provider'),
+    ).resolves.toBe('key-a');
+    await expect(
+      createRotationService(keys, undefined, cache).getRotatedApiKey('provider'),
+    ).resolves.toBe('key-b');
+  });
+
   test('deleting a provider resets its rotation state', async () => {
     const tx = createDeleteTransaction({
       modelIds: [],
@@ -190,6 +204,7 @@ function createService(tx: object, pinService?: PinService): ProviderService {
       withWriteTx: async (callback: (transaction: object) => Promise<unknown>) => callback(tx),
     } as unknown as DbService,
     pinService ?? createPinServiceStub(),
+    createCacheService(),
   );
 }
 
@@ -198,7 +213,11 @@ function apiKey(id: string, key: string, isEnabled = true): ApiKeyEntry {
 }
 
 /** Service whose db always resolves one provider row with the given API keys. */
-function createRotationService(apiKeys: ApiKeyEntry[], writeTransaction?: object) {
+function createRotationService(
+  apiKeys: ApiKeyEntry[],
+  writeTransaction?: object,
+  cacheService = createCacheService(),
+) {
   const db = {
     select: jest.fn(() => ({
       from: jest.fn(() => ({
@@ -216,7 +235,14 @@ function createRotationService(apiKeys: ApiKeyEntry[], writeTransaction?: object
         callback(writeTransaction ?? {}),
     } as unknown as DbService,
     createPinServiceStub(),
+    cacheService,
   );
+}
+
+function createCacheService(): CacheService {
+  const service = new CacheService(createInMemoryBackendCacheStorage());
+  service.init();
+  return service;
 }
 
 function createPinServiceStub(): PinService {

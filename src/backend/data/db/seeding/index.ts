@@ -1,3 +1,5 @@
+import type { CacheService } from '@/backend/data/CacheService';
+
 import type { DbService } from '../DbService';
 import { SeedRunner } from './SeedRunner';
 import { DefaultAssistantSeeder } from './seeders/DefaultAssistantSeeder';
@@ -6,14 +8,14 @@ import { PreferenceSeeder } from './seeders/PreferenceSeeder';
 import { PresetProviderSeeder } from './seeders/PresetProviderSeeder';
 import type { DatabaseSeeder } from './types';
 
-export async function seedDatabase(dbService: DbService) {
-  await new SeedRunner(dbService).runAll(await createSeeders());
+export async function seedDatabase(dbService: DbService, cacheService: CacheService) {
+  await new SeedRunner(dbService).runAll(await createSeeders(cacheService));
 }
 
-async function createSeeders(): Promise<DatabaseSeeder[]> {
+async function createSeeders(cacheService: CacheService): Promise<DatabaseSeeder[]> {
   const seeders: DatabaseSeeder[] = [
     new PreferenceSeeder(),
-    new PresetProviderSeeder(),
+    new PresetProviderSeeder(cacheService),
     new DefaultAssistantSeeder(),
   ];
 

@@ -1,9 +1,6 @@
-import { AiService } from '@/backend/infrastructure/ai/AiService';
-import { McpService } from '@/backend/infrastructure/ai/mcp';
-import { ToolService } from '@/backend/infrastructure/ai/tools';
+import type { CacheService } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
-import { DevicePermissionService } from '@/backend/infrastructure/integrations/devicePermissions';
-import { WebSearchService } from '@/backend/infrastructure/integrations/webSearch/WebSearchService';
+import { PreferenceService } from '@/backend/data/PreferenceService';
 import { AssistantService } from '@/backend/data/services/AssistantService';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { GroupService } from '@/backend/data/services/GroupService';
@@ -12,19 +9,23 @@ import { MessageService } from '@/backend/data/services/MessageService';
 import { ModelService } from '@/backend/data/services/ModelService';
 import { PaintingService } from '@/backend/data/services/PaintingService';
 import { PinService } from '@/backend/data/services/PinService';
-import { PreferenceService } from '@/backend/data/PreferenceService';
 import { PromptService } from '@/backend/data/services/PromptService';
 import { ProviderService } from '@/backend/data/services/ProviderService';
 import { TagService } from '@/backend/data/services/TagService';
 import { TopicService } from '@/backend/data/services/TopicService';
+import { AiService } from '@/backend/infrastructure/ai/AiService';
+import { McpService } from '@/backend/infrastructure/ai/mcp';
+import { ToolService } from '@/backend/infrastructure/ai/tools';
+import { DevicePermissionService } from '@/backend/infrastructure/integrations/devicePermissions';
+import { WebSearchService } from '@/backend/infrastructure/integrations/webSearch/WebSearchService';
 
 export type BackendServices = ReturnType<typeof createBackendServices>;
 
-export function createBackendServices(dbService: DbService) {
+export function createBackendServices(dbService: DbService, cache: CacheService) {
   const preference = new PreferenceService(dbService);
   const devicePermission = new DevicePermissionService();
   const pin = new PinService(dbService);
-  const provider = new ProviderService(dbService, pin);
+  const provider = new ProviderService(dbService, pin, cache);
   const model = new ModelService(dbService, preference, pin);
   const tag = new TagService(dbService);
   const group = new GroupService(dbService);
@@ -50,6 +51,7 @@ export function createBackendServices(dbService: DbService) {
   return {
     ai,
     assistant,
+    cache,
     devicePermission,
     fileEntry,
     group,
