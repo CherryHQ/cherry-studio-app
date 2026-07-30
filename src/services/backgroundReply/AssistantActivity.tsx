@@ -12,41 +12,38 @@ import {
   truncationMode,
 } from '@expo/ui/swift-ui/modifiers';
 import { createLiveActivity, type LiveActivityEnvironment } from 'expo-widgets';
-import type { SFSymbol } from 'sf-symbols-typescript';
 
-import type { BackgroundReplyActivityProps, BackgroundReplyPhase } from './backgroundReplyTypes';
-
-const BRAND_COLOR = '#F65D5D';
-
-const phaseSymbols = {
-  'awaiting-approval': 'exclamationmark.bubble.fill',
-  cancelled: 'xmark.circle.fill',
-  completed: 'checkmark.circle.fill',
-  failed: 'exclamationmark.triangle.fill',
-  preparing: 'hourglass',
-  responding: 'ellipsis.bubble.fill',
-  thinking: 'brain.head.profile',
-  'using-tool': 'wrench.and.screwdriver.fill',
-} satisfies Record<BackgroundReplyPhase, SFSymbol>;
+import type { BackgroundReplyActivityProps } from './backgroundReplyTypes';
 
 function AssistantActivity(
   props: BackgroundReplyActivityProps,
   environment: LiveActivityEnvironment,
 ) {
   'widget';
+  // Widget layouts execute as isolated function strings, so runtime values must be local.
+  const brandColor = '#F65D5D';
   const foreground = environment.colorScheme === 'dark' ? '#FFFFFF' : '#151515';
   const secondary = environment.colorScheme === 'dark' ? '#C7C7CC' : '#5E5E63';
   const background = environment.colorScheme === 'dark' ? '#1C1C1E' : '#FFFFFF';
   const finishedAt = props.finishedAtEpochMs ? new Date(props.finishedAtEpochMs) : undefined;
-  const timer = (
-    <Text
-      date={new Date(props.startedAtEpochMs)}
-      dateStyle="timer"
-      pauseTime={finishedAt}
-      modifiers={[font({ size: 13, weight: 'medium' }), foregroundStyle(secondary)]}
-    />
-  );
-  const phaseIcon = <Image color={BRAND_COLOR} size={16} systemName={phaseSymbols[props.phase]} />;
+  const isTerminal =
+    props.phase === 'completed' || props.phase === 'failed' || props.phase === 'cancelled';
+  const phaseSymbol =
+    props.phase === 'awaiting-approval'
+      ? 'exclamationmark.bubble.fill'
+      : props.phase === 'cancelled'
+        ? 'xmark.circle.fill'
+        : props.phase === 'completed'
+          ? 'checkmark.circle.fill'
+          : props.phase === 'failed'
+            ? 'exclamationmark.triangle.fill'
+            : props.phase === 'preparing'
+              ? 'hourglass'
+              : props.phase === 'responding'
+                ? 'ellipsis.bubble.fill'
+                : props.phase === 'thinking'
+                  ? 'brain.head.profile'
+                  : 'wrench.and.screwdriver.fill';
 
   return {
     banner: (
@@ -61,7 +58,7 @@ function AssistantActivity(
             modifiers={[resizable(), frame({ height: 36, width: 36 }), cornerRadius(8)]}
           />
         ) : (
-          <Image color={BRAND_COLOR} size={24} systemName="ellipsis.bubble.fill" />
+          <Image color={brandColor} size={24} systemName="ellipsis.bubble.fill" />
         )}
         <VStack alignment="leading" spacing={3} modifiers={[frame({ maxWidth: Infinity })]}>
           <Text
@@ -75,7 +72,7 @@ function AssistantActivity(
             {props.assistantName}
           </Text>
           <HStack spacing={5}>
-            {phaseIcon}
+            <Image color={brandColor} size={16} systemName={phaseSymbol} />
             <Text
               modifiers={[
                 font({ size: 13 }),
@@ -89,7 +86,12 @@ function AssistantActivity(
           </HStack>
         </VStack>
         <Spacer />
-        {timer}
+        <Text
+          date={new Date(props.startedAtEpochMs)}
+          dateStyle="timer"
+          pauseTime={finishedAt}
+          modifiers={[font({ size: 13, weight: 'medium' }), foregroundStyle(secondary)]}
+        />
       </HStack>
     ),
     compactLeading: (
@@ -104,11 +106,17 @@ function AssistantActivity(
         {props.compactLabel}
       </Text>
     ),
-    compactTrailing:
-      props.phase === 'completed' || props.phase === 'failed' || props.phase === 'cancelled'
-        ? phaseIcon
-        : timer,
-    minimal: phaseIcon,
+    compactTrailing: isTerminal ? (
+      <Image color={brandColor} size={16} systemName={phaseSymbol} />
+    ) : (
+      <Text
+        date={new Date(props.startedAtEpochMs)}
+        dateStyle="timer"
+        pauseTime={finishedAt}
+        modifiers={[font({ size: 13, weight: 'medium' }), foregroundStyle('#FFFFFF')]}
+      />
+    ),
+    minimal: <Image color={brandColor} size={16} systemName={phaseSymbol} />,
     expandedLeading: (
       <HStack spacing={8} modifiers={[padding({ leading: 12, top: 10 })]}>
         {props.logoUri ? (
@@ -129,10 +137,19 @@ function AssistantActivity(
         </Text>
       </HStack>
     ),
-    expandedTrailing: <HStack modifiers={[padding({ top: 10, trailing: 12 })]}>{timer}</HStack>,
+    expandedTrailing: (
+      <HStack modifiers={[padding({ top: 10, trailing: 12 })]}>
+        <Text
+          date={new Date(props.startedAtEpochMs)}
+          dateStyle="timer"
+          pauseTime={finishedAt}
+          modifiers={[font({ size: 13, weight: 'medium' }), foregroundStyle('#C7C7CC')]}
+        />
+      </HStack>
+    ),
     expandedCenter: (
       <HStack spacing={6} modifiers={[padding({ horizontal: 12, top: 6 })]}>
-        {phaseIcon}
+        <Image color={brandColor} size={16} systemName={phaseSymbol} />
         <Text
           modifiers={[
             font({ size: 14, weight: 'medium' }),
