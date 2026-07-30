@@ -12,8 +12,10 @@ business-data persistence and the concrete implementations that read or write th
 - `services/` owns entity persistence, managed-file storage, and data-specific transformations.
 - `fixtures/` contains development data consumed by the database seeders and their tests.
 
-The concrete graph is assembled only by `src/bootstrap`. Frontend callers see contracts from
-`src/shared/contracts`, never these classes.
+The concrete graph is assembled only by `src/bootstrap`. Frontend resource callers see endpoint
+definitions and `ApiClient` from `src/shared/data/api`; preference callers see `PreferenceClient`
+from `src/shared/data/preference`; workflow callers see `src/shared/contracts`. They never see these
+classes.
 
 ## Cache
 
@@ -29,7 +31,7 @@ rotation is its first memory-cache consumer. Its persist tier uses the independe
 Electron-only shared-cache relay, BrowserWindow synchronization, and IPC handlers do not apply in
 the single Hermes runtime and are intentionally absent. Cache initialization and disposal belong to
 `src/bootstrap`; the service remains private to the concrete backend graph and is not part of
-`MobileBackend`.
+`ApiClient`, `PreferenceClient`, or `Backend`.
 
 Domain-specific caches that need stronger invariants remain private to their owning module, such as
 MCP tool snapshots. User configuration and durable business records still belong in preferences or

@@ -8,7 +8,10 @@ frontend and backend. The layout follows Cherry Desktop's `src/shared/data` voca
 - Keep entity schemas, limits, comments, and exported type names aligned with desktop unless mobile
   has a documented runtime compatibility reason to diverge.
 - API-shaped DTO schemas, pagination shapes, and data errors live under `src/shared/data/api`.
-- DB-backed preference value types and defaults live under `src/shared/data/preference`.
+- `ApiClient` is the platform-neutral resource interface shared by frontend endpoint hooks and the
+  backend in-process `DataApiService` implementation.
+- DB-backed preference value types, defaults, and the separate `PreferenceClient` interface live
+  under `src/shared/data/preference`.
 - Cache schemas and pure cache-key helpers live under `src/shared/data/cache`; concrete cache
   implementations remain with their runtime owner.
 - Entity and value types live under `src/shared/data/types`.

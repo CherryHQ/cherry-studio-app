@@ -17,5 +17,6 @@ Mobile data services migrated from the desktop `src/main/data/services` director
 
 Services that are part of the mobile data layer are instantiated by
 `src/bootstrap/createBackendServices.ts`. That concrete graph is private to bootstrap;
-`src/bootstrap/createMobileBackend.ts` exposes only implementations of contracts from
-`src/shared/contracts` to frontend callers.
+resource operations are exposed through handlers in `src/backend/data/api`, while
+`src/bootstrap/createBackend.ts` exposes only multi-step workflow implementations through
+`src/shared/contracts`.

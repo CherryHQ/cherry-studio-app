@@ -6,7 +6,7 @@ belong to AI or entity persistence.
 
 The correspondence is by responsibility, not by file. Desktop process boundaries place some
 equivalent workflows in DataApi handlers, Main AI modules, or renderer owners. Mobile keeps those
-rules here when they belong behind the in-process `MobileBackend` seam.
+rules here when they belong behind the in-process Data API or workflow seam.
 
 ## Ownership
 

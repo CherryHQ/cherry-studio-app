@@ -4,41 +4,52 @@ Status: current
 
 This document defines local data ownership after the in-process frontend/backend split in ADR 0011.
 
-## Runtime Path
+## Runtime Paths
 
-The normal read path is:
+Resource data follows the same public vocabulary as Cherry Desktop:
 
-`frontend query/hook -> useBackendModule() -> MobileBackend contract -> backend implementation -> SQLite, AI, device API, or third-party service`
+`frontend owner -> useQuery/useMutation/useInfiniteQuery -> ApiClient -> DataApiService -> endpoint handler -> backend implementation`
 
-The normal composition path is:
+Preferences remain a separate channel:
 
-`AppBootstrapProvider -> createAppBootstrapRuntime() -> DbService + BackendServices -> createMobileBackend()`
+`usePreference/useMultiplePreferences -> PreferenceClient -> PreferenceService -> SQLite`
+
+Multi-step workflows and long-lived sessions use a narrower path:
+
+`frontend owner -> useBackendModule() -> Backend workflow contract -> backend service/session`
+
+The composition path is:
+
+`AppBootstrapProvider -> createAppBootstrapRuntime() -> BackendServices + createBackend() + DataApiService`
 
 `BackendServices` is a private bootstrap implementation graph. It is not placed in React context and
-is not importable by frontend code. `MobileBackend` is the only frontend-facing backend interface.
+is not importable by frontend code. Bootstrap injects one stable `Backend`, `ApiClient`, and
+`PreferenceClient` into separate frontend providers.
 
 ## Frontend Data
 
 `src/frontend/data` follows the Cherry Desktop renderer-data vocabulary while remaining mobile-owned.
 It contains:
 
-- `BackendProvider` and `useBackendModule(key)`.
+- `DataApiProvider` and typed endpoint hooks: `useQuery`, `useMutation`, and `useInfiniteQuery`.
+- `PreferenceProvider`, `usePreference`, and `useMultiplePreferences`.
+- `BackendProvider` and `useBackendModule(key)` for workflows only.
 - `QueryProvider` and endpoint-specific files under the `queryKeys` registry.
-- Preference hooks backed by the `preferences` contract.
 - The frontend `CacheService.ts` and cache hooks; its MMKV adapter is private to the service, while
   pure cache schemas live in `src/shared/data/cache`.
 
-Feature and cross-feature hooks own resource-specific queries and call a narrow backend module
-directly. `frontend/data/queryKeys` supplies one cache-key file per endpoint family without becoming
-a second service catalog. There are no generic hooks that expose a concrete service graph, and
-frontend tests provide fake `MobileBackend` modules through the real `BackendProvider`.
+Feature and cross-feature hooks own resource-specific queries and call endpoint paths through the
+typed Data API hooks. `frontend/data/queryKeys` supplies one cache-key file per endpoint family
+without becoming a second service catalog. There is no generic module selector that exposes a
+concrete service graph. Frontend tests inject an `ApiClient`, `PreferenceClient`, or workflow
+`Backend` fake through the corresponding real provider.
 
 ## Shared Data
 
 `src/shared/data` contains values both sides may know:
 
-- `api`: DTO schemas, pagination shapes, and data errors.
-- `preference`: preference keys, value schemas, defaults, and pure helpers.
+- `api`: endpoint DTO schemas, pagination shapes, data errors, and `ApiClient`.
+- `preference`: preference keys, value schemas, defaults, pure helpers, and `PreferenceClient`.
 - `types`: entities and value types such as Assistant, Topic, Message, Provider, and Model.
 - `presets`: shared catalog data.
 - `cache`: cache schemas, shared cache types, and pure template/equality helpers.
@@ -69,15 +80,19 @@ classes, adapters, values, subscriptions, and lifecycles remain independent. Dom
 caches, such as MCP tool snapshots, may remain private to the owning backend module when a generic
 cache would weaken that module's invariants.
 
-## Backend Contracts
+## Data API And Workflow Contracts
 
-`src/shared/contracts/mobileBackend.ts` aggregates cohesive modules. Simple SQLite services may
-directly satisfy a contract. Multi-step behavior belongs in `src/backend/services`, including:
+`src/backend/data/api/handlers` maps endpoint families from `src/shared/data/api` to persistence or
+workflow implementations. `DataApiService` performs typed in-process route dispatch and satisfies
+`ApiClient`; it adds no IPC, HTTP, or serialization.
+
+`src/shared/contracts/backend.ts` aggregates workflow-only modules. Multi-step behavior belongs in
+`src/backend/services`, including:
 
 - chat session orchestration;
 - painting generation sessions and incomplete receipts;
 - provider/model pull, reconcile, health, OAuth, and avatar workflows;
-- MCP persistence/runtime coordination;
+- MCP runtime coordination;
 - permission policy and profile avatar workflows.
 
 Workflow-oriented services receive AI and coordinated dependencies through constructor-shaped
@@ -112,9 +127,11 @@ terminal, paused, or error state to the placeholder.
 
 `createBackendServices()` constructs concrete backend classes such as `CacheService`,
 `PreferenceService`, `ProviderService`, `MessageService`, `McpRuntimeService`, `WebSearchService`,
-`ToolService`, and `AiService`. The graph is private to bootstrap. `createMobileBackend()` selects
-direct contract implementations and workflow services from that graph; it does not expose the cache
-itself.
+`ToolService`, and `AiService`. The graph is private to bootstrap. `createBackend()` returns the
+workflow-only `Backend` plus the workflow implementations needed by Data API handlers.
+`createAppBootstrapRuntime()` wires those handlers into `DataApiService` and exposes
+`PreferenceService` only through the `PreferenceClient` interface. The concrete graph and caches are
+never exposed to frontend code.
 
 There is no desktop application singleton, IPC handler layer, lifecycle registry, or frontend DI
 container for these concrete classes.

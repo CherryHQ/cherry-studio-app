@@ -23,13 +23,14 @@ isolation. See [ADR 0011](../adr/0011-separate-in-process-frontend-and-backend.m
 | `src/backend/data` | Backend cache, preferences, SQLite, schemas, seeders, fixtures, and persistence services |
 | `src/backend/services` | Multi-step workflows, device capabilities, OAuth, avatars, and web search |
 | `src/shared/ai` | Cross-layer AI tool and transport rules |
-| `src/shared/contracts` | `MobileBackend`, module interfaces, sessions, events, and workflow results |
-| `src/shared/data` | Entities, DTO schemas, preferences, cache schemas, and data errors |
+| `src/shared/contracts` | Workflow-only `Backend` modules, sessions, events, and results |
+| `src/shared/data` | Entities, endpoint DTOs, `ApiClient`, preferences, `PreferenceClient`, cache schemas, and data errors |
 | `src/shared/core` / `src/shared/utils` | Cross-layer foundations and pure utilities |
 | `src/types` | Truly global or generated declarations only |
 
-Only `bootstrap` may import both frontend and backend. Frontend calls backend behavior through
-`useBackendModule(key)` and types from `shared/contracts`; it never imports SQLite, Drizzle, AI SDK,
+Only `bootstrap` may import both frontend and backend. Frontend resource data uses typed Data API
+hooks and `shared/data/api`; preferences use the separate `shared/data/preference` client; workflows
+use `useBackendModule(key)` and `shared/contracts`. Frontend never imports SQLite, Drizzle, AI SDK,
 or concrete device and persistence implementations. ESLint enforces these directions.
 
 Inside backend, static imports flow from `ai` to `services` or `data`, and from `services` to `data`;
@@ -38,7 +39,7 @@ constructor interface, and bootstrap supplies the concrete implementation.
 
 ## Topic Documents
 
-- [Data Layer](./mobile-data-layer.md): contracts, frontend data, SQLite services, schemas, and seeding.
+- [Data Layer](./mobile-data-layer.md): Data API, preferences, workflow contracts, SQLite services, schemas, and seeding.
 - [Runtime Ownership](./mobile-runtime-ownership.md): app bootstrap, sessions, cleanup, and startup gates.
 - [AI Provider Integration](./mobile-ai-provider-integration.md): provider/model records and AI adapters.
 - [Chat Streaming And Rendering](./mobile-chat-streaming-rendering.md): `ChatSession`, overlay, and persistence.
@@ -64,8 +65,11 @@ constructor interface, and bootstrap supplies the concrete implementation.
 ## Current Baseline
 
 - `AppBootstrapProvider` owns one `AppBootstrapRuntime`; its context exposes startup status only.
-- `BackendProvider` holds one stable `MobileBackend` and exposes only `useBackendModule(key)`.
-- `frontend/data` owns `BackendProvider`, `QueryProvider`, endpoint query keys, preference/cache
+- `DataApiProvider` supplies `ApiClient` only to endpoint hooks; resource callers use
+  `useQuery`/`useMutation`/`useInfiniteQuery`.
+- `PreferenceProvider` supplies the separate `PreferenceClient` only to preference hooks.
+- `BackendProvider` holds the workflow-only `Backend` and exposes `useBackendModule(key)`.
+- `frontend/data` owns these providers, `QueryProvider`, endpoint query keys, data/preference/cache
   hooks, and the frontend `CacheService`.
 - `backend/data` owns an independent backend `CacheService` used by the private service graph.
 - `shared/data` owns frontend/backend data vocabulary; database rows remain under `backend/data`.

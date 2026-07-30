@@ -31,25 +31,37 @@ The database-backed active-branch message window for a Topic. It owns history pa
 _Avoid_: stream state, live message buffer
 
 **Streaming Message Overlay**:
-The in-memory active assistant Message layer composed on top of the Message History Window while a Chat Runtime is generating.
+The in-memory active assistant Message layer composed on top of the Message History Window while a Chat Session is generating.
 _Avoid_: persisted history page, query page
 
-**Chat Runtime**:
-The runtime owner for active LLM streams, AbortControllers, stream snapshots, and terminal assistant Message persistence.
+**Chat Session**:
+The backend runtime owner for active LLM streams, AbortControllers, topic snapshots, tool approval,
+and terminal assistant Message persistence.
 _Avoid_: UI state, screen state
 
 ### Backend And Data
 
 **App Bootstrap Runtime**:
 The mobile runtime owner that opens the local database, initializes cache, preferences, and seed
-data, constructs the private Backend Service Graph, and exposes startup status plus `MobileBackend`
-to the app shell.
+data, constructs the private Backend Service Graph, and composes the stable `ApiClient`,
+`PreferenceClient`, and workflow `Backend` used by frontend providers.
 _Avoid_: Data Runtime, desktop application service registry
 
 **Backend Service Graph**:
 The bootstrap-private in-process set that owns persistence, product workflows, platform
-capabilities, web search, and AI implementations behind `MobileBackend`.
+capabilities, web search, and AI implementations behind the frontend-facing interfaces.
 _Avoid_: Data Service Graph, HTTP API layer, repository bag
+
+**Data API**:
+The typed resource interface made of endpoint schemas, `ApiClient`, frontend query/mutation hooks,
+in-process dispatch, and backend handlers. It shares Cherry Desktop's vocabulary but has no IPC or
+HTTP transport on mobile.
+_Avoid_: module selector, service bag, remote API
+
+**Workflow Backend**:
+The `Backend` aggregate of multi-step workflow and session modules that are not ordinary resource
+endpoints, such as chat sessions, painting generation, model reconciliation, and permission policy.
+_Avoid_: persistence registry, Data API, resource service bag
 
 **Provider**:
 A user-configurable AI service endpoint with API keys, auth configuration, endpoint configuration, and runtime API feature flags.
@@ -68,8 +80,8 @@ A provider/model routing description that selects the endpoint type and AI SDK a
 _Avoid_: URL string
 
 **Preference**:
-A scoped local setting persisted in the mobile database and read through the backend preferences
-module.
+A scoped local setting persisted in the mobile database and accessed through the separate
+`PreferenceClient` and preference hooks.
 _Avoid_: global variable, config constant
 
 **Pin**:

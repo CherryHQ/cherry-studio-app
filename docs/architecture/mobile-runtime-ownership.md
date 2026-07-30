@@ -20,14 +20,15 @@ Related decisions: [ADR 0001](../adr/0001-use-provider-owned-runtime-owners.md),
 `AppBootstrapProvider` owns one `AppBootstrapRuntime`. The production runtime:
 
 - creates `CacheService`, `DbService`, and the private backend service graph;
-- creates one stable `MobileBackend`;
+- creates one stable workflow `Backend`, `ApiClient`, and `PreferenceClient`;
 - initializes the backend cache before SQLite seeding, then preferences, boot theme, and i18n;
 - starts best-effort post-ready tasks after the gate opens;
 - disposes MCP, web-search state, the backend cache, and SQLite on unmount.
 
-The provider's React context exposes only `loading`, `ready`, or `error`. Concrete backend services
-never enter React state or frontend code. `BackendProvider` separately supplies the stable
-`MobileBackend` and exposes only `useBackendModule(key)`.
+The provider's own React context exposes only `loading`, `ready`, or `error`. Concrete backend
+services never enter React state or frontend code. Its children receive three stable, narrow
+providers: `DataApiProvider` for typed resource endpoints, `PreferenceProvider` for preferences, and
+`BackendProvider` for workflow modules and sessions.
 
 `AppBootstrapGate` is the only initial-render gate. It renders `null` while loading and throws the
 initialization error. The root layout retains the native splash, and `AppBootstrapProvider` hides it
@@ -36,8 +37,9 @@ when initialization settles, including the error path.
 ## Query Runtime
 
 `QueryProvider` owns the React Query client and maps React Native `AppState` to query focus. It does
-not own SQLite, AI streams, or backend implementation classes. Query functions select a backend
-module through `useBackendModule` and invalidate keys in frontend owners.
+not own SQLite, AI streams, or backend implementation classes. Endpoint hooks call the injected
+`ApiClient`; query keys and invalidation remain in frontend owners. `useBackendModule` is reserved
+for workflows that are not ordinary resource queries or mutations.
 
 ## Chat Session
 

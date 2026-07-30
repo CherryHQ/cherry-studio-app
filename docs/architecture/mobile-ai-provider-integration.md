@@ -10,7 +10,8 @@ The request path is:
 
 `ChatSession -> AiService -> providerToAiSdkConfig() -> Agent -> @cherrystudio/ai-core / AI SDK`
 
-`AiService` is the backend AI module composed behind the `MobileBackend` contracts. It supports:
+`AiService` is a private backend AI implementation composed into workflow services and Data API
+handlers by bootstrap. It is not exposed through `Backend` or frontend context. It supports:
 
 - `streamText()`
 - `generateText()`

@@ -25,7 +25,9 @@ The external search path is:
 `WebSearchService -> createWebSearchProvider() -> provider driver -> post-processing`
 
 `WebSearchService` lives under `src/backend/services/webSearch` and reads web search preferences
-through `PreferenceService`. Bootstrap keeps both implementations behind the `MobileBackend` graph.
+through `PreferenceService`. Bootstrap keeps both concrete implementations private; frontend
+preference access uses `PreferenceClient`, while provider checks use the narrow `webSearch`
+workflow module.
 
 Runtime behavior:
 
