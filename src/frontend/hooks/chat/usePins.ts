@@ -1,32 +1,25 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef } from 'react';
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { useMutation, useQuery } from '@/frontend/data';
 import type { EntityType } from '@/shared/data/types/entityType';
-import type { CreatePinDto, Pin } from '@/shared/data/types/pin';
+import type { Pin } from '@/shared/data/types/pin';
 
 const EMPTY_PINS: readonly Pin[] = Object.freeze([]);
 
 export function usePins(entityType: EntityType) {
-  const pinsBackend = useBackendModule('pins');
-  const queryClient = useQueryClient();
-  const listQueryKey = queryKeys.pins.list({ entityType });
-  const pinsQuery = useQuery({
-    queryFn: () => pinsBackend.list(entityType),
-    queryKey: listQueryKey,
+  const pinsQuery = useQuery('/pins', {
+    query: { entityType },
   });
-  const createPinMutation = useMutation({
-    mutationFn: (dto: CreatePinDto) => pinsBackend.pin(dto),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: listQueryKey }),
+  const createPinMutation = useMutation('POST', '/pins', {
+    refresh: ['/pins'],
   });
-  const deletePinMutation = useMutation({
-    mutationFn: (id: string) => pinsBackend.unpin(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: listQueryKey }),
+  const deletePinMutation = useMutation('DELETE', '/pins/:id', {
+    refresh: ['/pins'],
   });
   const toggleInFlightRef = useRef(false);
   const pins = pinsQuery.data ?? EMPTY_PINS;
   const pinnedIds = useMemo(() => pins.map((pin) => pin.entityId), [pins]);
-  const isMutating = createPinMutation.isPending || deletePinMutation.isPending;
-  const isRefreshing = pinsQuery.isFetching && !pinsQuery.isLoading;
+  const isMutating = createPinMutation.isLoading || deletePinMutation.isLoading;
+  const isRefreshing = pinsQuery.isRefreshing;
   const error = pinsQuery.error ?? createPinMutation.error ?? deletePinMutation.error;
 
   // Depend on the mutations' `mutateAsync` rather than the mutation objects:
@@ -34,8 +27,8 @@ export function usePins(entityType: EntityType) {
   // spreads the observer result), while `mutateAsync` keeps a stable identity.
   // Depending on the objects rebuilt `togglePin` every render, which in turn
   // invalidated every consumer memo keyed on it.
-  const createPin = createPinMutation.mutateAsync;
-  const deletePin = deletePinMutation.mutateAsync;
+  const createPin = createPinMutation.trigger;
+  const deletePin = deletePinMutation.trigger;
   const togglePin = useCallback(
     async (entityId: string) => {
       if (pinsQuery.isLoading || isRefreshing || isMutating || toggleInFlightRef.current) {
@@ -44,7 +37,9 @@ export function usePins(entityType: EntityType) {
 
       toggleInFlightRef.current = true;
       const existing = pins.find((pin) => pin.entityId === entityId);
-      const mutation = existing ? deletePin(existing.id) : createPin({ entityId, entityType });
+      const mutation = existing
+        ? deletePin({ params: { id: existing.id } })
+        : createPin({ body: { entityId, entityType } });
       await mutation.finally(() => {
         toggleInFlightRef.current = false;
       });

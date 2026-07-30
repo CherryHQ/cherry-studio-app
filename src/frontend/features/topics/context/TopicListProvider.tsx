@@ -1,8 +1,8 @@
-import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useIsFocused, useRouter } from 'expo-router';
 import { createContext, type PropsWithChildren, use, useCallback, useEffect, useMemo } from 'react';
 import { MODEL_SETTING_PREFERENCE_KEYS } from '@/frontend/components/modelPicker/utils/modelSettings';
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { queryKeys, useBackendModule, useMutation } from '@/frontend/data';
 import { usePins, useTopics } from '@/frontend/hooks/chat';
 import {
   getMessagesQueryKey,
@@ -45,7 +45,6 @@ export function TopicListProvider({ children }: PropsWithChildren) {
   const chat = useBackendModule('chat');
   const models = useBackendModule('models');
   const preferences = useBackendModule('preferences');
-  const topics = useBackendModule('topics');
   const topicList = useTopics({ q: '' });
   const topicPins = usePins('topic');
   const isPinActionDisabled = topicPins.isLoading || topicPins.isRefreshing || topicPins.isMutating;
@@ -75,29 +74,12 @@ export function TopicListProvider({ children }: PropsWithChildren) {
     [chat, models, preferences, queryClient, router],
   );
 
-  const renameTopicMutation = useMutation({
-    mutationFn: (variables: { id: string; name: string }) =>
-      topics.update(variables.id, {
-        isNameManuallyEdited: true,
-        name: variables.name,
-      }),
-    onSuccess: async (_topic, variables) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.topics.all() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.topics.detail(variables.id) }),
-      ]);
-    },
+  const renameTopicMutation = useMutation('PATCH', '/topics/:id', {
+    refresh: ({ args }) => ['/topics', ...(args ? [`/topics/${args.params.id}`] : [])],
   });
 
-  const { mutateAsync: deleteManyTopics } = useMutation({
-    mutationFn: (ids: readonly string[]) => topics.removeMany(ids),
-    onSuccess: async (_result, ids) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.topics.all() });
-      for (const id of ids) {
-        queryClient.removeQueries({ queryKey: queryKeys.topics.detail(id) });
-        queryClient.removeQueries({ queryKey: getMessagesQueryKey(id) });
-      }
-    },
+  const deleteTopicsMutation = useMutation('DELETE', '/topics', {
+    refresh: ['/topics'],
   });
 
   const renameTopic = useCallback(
@@ -108,16 +90,21 @@ export function TopicListProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      await renameTopicMutation.mutateAsync({ id, name: trimmedName });
+      await renameTopicMutation.trigger({
+        body: { isNameManuallyEdited: true, name: trimmedName },
+        params: { id },
+      });
     },
-    [renameTopicMutation],
+    [renameTopicMutation.trigger],
   );
 
   const deleteTopic = useCallback(
     async (id: string) => {
-      await deleteManyTopics([id]);
+      await deleteTopicsMutation.trigger({ query: { ids: [id] } });
+      queryClient.removeQueries({ queryKey: queryKeys.topics.detail(id) });
+      queryClient.removeQueries({ queryKey: getMessagesQueryKey(id) });
     },
-    [deleteManyTopics],
+    [deleteTopicsMutation.trigger, queryClient],
   );
 
   const deleteTopics = useCallback(
@@ -127,9 +114,13 @@ export function TopicListProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      await deleteManyTopics(uniqueIds);
+      await deleteTopicsMutation.trigger({ query: { ids: uniqueIds } });
+      for (const id of uniqueIds) {
+        queryClient.removeQueries({ queryKey: queryKeys.topics.detail(id) });
+        queryClient.removeQueries({ queryKey: getMessagesQueryKey(id) });
+      }
     },
-    [deleteManyTopics],
+    [deleteTopicsMutation.trigger, queryClient],
   );
 
   const toggleTopicPin = useCallback(

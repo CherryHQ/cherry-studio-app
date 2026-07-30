@@ -82,6 +82,7 @@ export function useQuery<TPath extends ApiPath>(
   return {
     data: result.data,
     error: result.error ?? undefined,
+    isError: result.isError,
     isLoading: result.isLoading,
     isRefreshing: result.isFetching && !result.isLoading,
     refetch: result.refetch,
@@ -180,9 +181,9 @@ export function useInfiniteQuery<TPath extends ApiPath>(
   });
   const pages = useMemo(() => result.data?.pages ?? [], [result.data?.pages]);
   const fetchNextPage = result.fetchNextPage;
-  const loadNext = useCallback(() => {
+  const loadNext = useCallback(async () => {
     if (result.hasNextPage && !result.isFetchingNextPage) {
-      void fetchNextPage();
+      await fetchNextPage();
     }
   }, [fetchNextPage, result.hasNextPage, result.isFetchingNextPage]);
   const reset = useCallback(() => {

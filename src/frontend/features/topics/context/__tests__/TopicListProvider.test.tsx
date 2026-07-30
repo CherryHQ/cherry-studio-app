@@ -41,8 +41,12 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@tanstack/react-query', () => ({
-  useMutation: jest.fn(),
   useQueryClient: () => mockQueryClient,
+}));
+
+jest.mock('@/frontend/data', () => ({
+  ...jest.requireActual('@/frontend/data'),
+  useMutation: jest.fn(),
 }));
 
 jest.mock('@/frontend/hooks/chat', () => ({
@@ -51,12 +55,11 @@ jest.mock('@/frontend/hooks/chat', () => ({
 }));
 
 jest.mock('@/frontend/hooks/chat/utils/messageQueryOptions', () => ({
+  getMessagesQueryKey: (topicId: string) => [`/topics/${topicId}/messages`],
   prefetchTopicMessages: jest.fn(async () => undefined),
 }));
 
-const useMutationMock = jest.requireMock<{ useMutation: jest.Mock }>(
-  '@tanstack/react-query',
-).useMutation;
+const useMutationMock = jest.requireMock<{ useMutation: jest.Mock }>('@/frontend/data').useMutation;
 const usePinsMock = usePins as jest.MockedFunction<typeof usePins>;
 const useTopicsMock = useTopics as jest.MockedFunction<typeof useTopics>;
 const prefetchTopicMessagesMock = prefetchTopicMessages as jest.MockedFunction<
@@ -93,7 +96,7 @@ beforeEach(() => {
   mockGetCachedPreferenceValue.mockReturnValue(defaultModelId);
 
   usePinsMock.mockReturnValue({
-    error: null,
+    error: undefined,
     isLoading: false,
     isMutating: false,
     isRefreshing: false,
@@ -105,9 +108,9 @@ beforeEach(() => {
   });
 
   useMutationMock.mockImplementation(() => {
-    const mutateAsync = mutationHookIndex % 2 === 0 ? mockRenameTopic : mockDeleteTopics;
+    const trigger = mutationHookIndex % 2 === 0 ? mockRenameTopic : mockDeleteTopics;
     mutationHookIndex += 1;
-    return { mutateAsync };
+    return { trigger };
   });
 });
 
@@ -219,9 +222,14 @@ describe('TopicListProvider', () => {
     });
 
     expect(mockRenameTopic).toHaveBeenCalledTimes(1);
-    expect(mockRenameTopic).toHaveBeenCalledWith({ id: 'topic-1', name: 'Renamed' });
-    expect(mockDeleteTopics).toHaveBeenNthCalledWith(1, ['topic-2']);
-    expect(mockDeleteTopics).toHaveBeenNthCalledWith(2, ['topic-3', 'topic-4']);
+    expect(mockRenameTopic).toHaveBeenCalledWith({
+      body: { isNameManuallyEdited: true, name: 'Renamed' },
+      params: { id: 'topic-1' },
+    });
+    expect(mockDeleteTopics).toHaveBeenNthCalledWith(1, { query: { ids: ['topic-2'] } });
+    expect(mockDeleteTopics).toHaveBeenNthCalledWith(2, {
+      query: { ids: ['topic-3', 'topic-4'] },
+    });
   });
 
   test('toggles a topic pin and refreshes the ordered topic list', async () => {

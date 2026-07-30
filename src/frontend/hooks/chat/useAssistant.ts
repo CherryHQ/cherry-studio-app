@@ -1,6 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { useMutation, useQuery } from '@/frontend/data';
 import type { CreateAssistantDto, UpdateAssistantDto } from '@/shared/data/api/schemas/assistants';
 import { type Assistant } from '@/shared/data/types/assistant';
 
@@ -8,10 +7,8 @@ const ASSISTANTS_LIST_LIMIT = 500;
 const EMPTY_ASSISTANTS: readonly Assistant[] = Object.freeze([]);
 
 export function useAssistantsApi() {
-  const assistants = useBackendModule('assistants');
-  const query = useQuery({
-    queryFn: () => assistants.list({ limit: ASSISTANTS_LIST_LIMIT }),
-    queryKey: queryKeys.assistants.list({ limit: ASSISTANTS_LIST_LIMIT }),
+  const query = useQuery('/assistants', {
+    query: { limit: ASSISTANTS_LIST_LIMIT },
   });
 
   return {
@@ -25,13 +22,10 @@ export function useAssistantsApi() {
 }
 
 export function useAssistantApiById(id: string | undefined) {
-  const assistants = useBackendModule('assistants');
   const enabled = Boolean(id);
-  const queryAssistantId = id ?? '__missing_assistant__';
-  const query = useQuery({
+  const query = useQuery('/assistants/:id', {
     enabled,
-    queryFn: () => assistants.get(id ?? ''),
-    queryKey: queryKeys.assistants.detail(queryAssistantId),
+    params: { id: id ?? '' },
   });
 
   return {
@@ -44,63 +38,43 @@ export function useAssistantApiById(id: string | undefined) {
 }
 
 export function useAssistantMutations() {
-  const assistants = useBackendModule('assistants');
-  const queryClient = useQueryClient();
-
-  const invalidateAssistants = useCallback(
-    async (assistantId?: string) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.assistants.all() });
-
-      if (assistantId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.assistants.detail(assistantId) });
-      }
-    },
-    [queryClient],
-  );
-
-  const createMutation = useMutation({
-    mutationFn: (dto: CreateAssistantDto) => assistants.create(dto),
-    onSuccess: (assistant) => invalidateAssistants(assistant.id),
+  const createMutation = useMutation('POST', '/assistants', {
+    refresh: ['/assistants'],
   });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: UpdateAssistantDto }) => {
-      if (!id) {
-        throw new Error('updateAssistant called with empty id');
-      }
-
-      return assistants.update(id, patch);
-    },
-    onSuccess: (assistant) => invalidateAssistants(assistant.id),
+  const updateMutation = useMutation('PATCH', '/assistants/:id', {
+    refresh: ({ args }) => ['/assistants', ...(args ? [`/assistants/${args.params.id}`] : [])],
   });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => assistants.remove(id),
-    onSuccess: (_data, id) => invalidateAssistants(id),
+  const deleteMutation = useMutation('DELETE', '/assistants/:id', {
+    refresh: ({ args }) => ['/assistants', ...(args ? [`/assistants/${args.params.id}`] : [])],
   });
 
   const createAssistant = useCallback(
-    (dto: CreateAssistantDto) => createMutation.mutateAsync(dto),
-    [createMutation],
+    (dto: CreateAssistantDto) => createMutation.trigger({ body: dto }),
+    [createMutation.trigger],
   );
 
   const updateAssistant = useCallback(
-    (id: string, patch: UpdateAssistantDto) => updateMutation.mutateAsync({ id, patch }),
-    [updateMutation],
+    (id: string, patch: UpdateAssistantDto) => {
+      if (!id) {
+        throw new Error('updateAssistant called with empty id');
+      }
+      return updateMutation.trigger({ body: patch, params: { id } });
+    },
+    [updateMutation.trigger],
   );
 
   const deleteAssistant = useCallback(
-    (id: string) => deleteMutation.mutateAsync(id),
-    [deleteMutation],
+    (id: string) => deleteMutation.trigger({ params: { id } }),
+    [deleteMutation.trigger],
   );
 
   return {
     createAssistant,
     updateAssistant,
     deleteAssistant,
-    isCreating: createMutation.isPending,
-    isUpdating: updateMutation.isPending,
-    isDeleting: deleteMutation.isPending,
+    isCreating: createMutation.isLoading,
+    isUpdating: updateMutation.isLoading,
+    isDeleting: deleteMutation.isLoading,
     createMutation,
     updateMutation,
     deleteMutation,
