@@ -28,7 +28,7 @@ The 90% case. See later sections for full rules and edge cases.
 | What you're naming | Convention | Example |
 |---|---|---|
 | Business React component file | `PascalCase.tsx` | `HeaderIconButton.tsx`, `ChatScreen.tsx` |
-| Platform-specific component file (RN) | `PascalCase.ios.tsx` / `PascalCase.android.tsx` | `MainHeader.ios.tsx`, `ContextMenu.android.tsx` |
+| Platform-specific component file (RN) | `PascalCase.ios.tsx` / `PascalCase.android.tsx` | `MainHeader.ios.tsx`, `SearchScopeTabs.android.tsx` |
 | Expo Router route file (`src/app/`) | `kebab-case.tsx` + reserved tokens | `api-key-settings.tsx`, `_layout.tsx`, `index.tsx` |
 | Hook file | `useXxx.ts(x)` (camelCase, `use` prefix) | `useMessages.ts` |
 | Util / function file (function-as-default-export) | `camelCase.ts` | `messageQueryOptions.ts` |
@@ -109,7 +109,7 @@ A `*Utils` suffix is used only when the file lives outside any `utils/` director
 
 **Utilities** — pure helpers stay in the owning module's `utils/` by default. Only domain-neutral helpers consumed by independent domains move to top-level `src/utils/`. Multiple imports inside one screen tree do not establish cross-domain reuse.
 
-**Native module wrappers** — wrappers around custom native modules (under `modules/`, e.g. `modules/context-menu/`) or Expo modules carry no `*Api`, `*Client`, or `*Bridge` suffix. Categorize them by module shape per §5.2 (a stateful wrapper → `Service`/`Manager`; a pure-function set → `utils/`).
+**Native module wrappers** — wrappers around custom native modules (under `modules/`, e.g. `modules/pdf-text-extractor/`) or Expo modules carry no `*Api`, `*Client`, or `*Bridge` suffix. Categorize them by module shape per §5.2 (a stateful wrapper → `Service`/`Manager`; a pure-function set → `utils/`).
 
 ### 3.3 Test Files
 
@@ -155,7 +155,7 @@ MainHeader/
 - The **base name** keeps its normal casing — `PascalCase` for components (§3.1), `camelCase` for `.ts` modules (§3.2). The `.ios` / `.android` segment is the platform selector, not part of the name.
 - Applies to both `.tsx` and `.ts` (`Foo.ios.ts`, `Foo.android.ts`).
 - These are **not** §6.3 case/duplicate violations — Metro resolves exactly one variant per platform at build time.
-- Examples: `MainHeader.{ios,android}.tsx`, `BackHeader.{ios,android}.tsx`, `ScrollToBottomButton.{ios,android}.tsx`, `ContextMenu.{ios,android}.tsx`.
+- Examples: `MainHeader.{ios,android}.tsx`, `BackHeader.{ios,android}.tsx`, `ScrollToBottomButton.{ios,android}.tsx`, `SearchScopeTabs.{ios,android}.tsx`.
 
 ---
 
@@ -216,7 +216,7 @@ When a directory represents a **named domain** (a coherent business module with 
 src/components/assistantPicker/   ✅
 src/components/modelPicker/       ✅
 src/services/webSearch/           ✅
-src/modules/contextMenu/          ✅
+src/services/devicePermissions/   ✅
 ```
 
 Placement — whether a domain module lives as a large subtree or as a subdirectory inside a bucket like `services/` — is governed by §4.10; this section governs only its name.
@@ -271,7 +271,7 @@ Choose number based on what the directory **conceptually contains**, not on whic
 |---|---|---|
 | **Collection bucket** — holds many items of the same kind | **plural** | `services/`, `utils/`, `hooks/`, `components/`, `features/`, `types/`, `schemas/`, `providers/`, `presets/` |
 | **Namespace / theme** — represents one subject area, not a collection | **singular** | `config/`, `data/`, `core/`, `api/`, `runtime/` |
-| **Business / domain module** — named action or concept | **singular** (default) | `webSearch/`, `assistantPicker/`, `contextMenu/`, `bootstrap/` |
+| **Business / domain module** — named action or concept | **singular** (default) | `webSearch/`, `assistantPicker/`, `devicePermissions/`, `bootstrap/` |
 | **Component directory** (dir = component) | follows the **component name** | `MainHeader/`, `McpScreen/` (singular component); `SettingsSection/` (component representing a group) |
 
 Decision rule: ask "does this directory hold **many of X**?" — yes → plural; no → singular. When two readings both make sense, pick the one that matches the directory's **default import name** (e.g. `import { ... } from './config'` reads naturally with `config/` singular).
@@ -486,7 +486,7 @@ Naming a new DIRECTORY
 ├─ Is itself a React component?   → PascalCase      (MainHeader, ScrollToBottomButton)
 ├─ Bucket / categorical container? → lowercase plural noun  (services, hooks, schemas)
 ├─ Large multi-file domain?       → src/features/<name>/ or camelCase/  (features/chat, webSearch; §4.10)
-├─ Business domain module?        → camelCase       (assistantPicker, contextMenu)
+├─ Business domain module?        → camelCase       (assistantPicker, devicePermissions)
 └─ Unsure singular vs plural?     → see §4.9
 ```
 
