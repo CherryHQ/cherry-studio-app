@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { PaintingZoomLink, PaintingZoomTarget } from '../PaintingZoomTransition';
 
-jest.mock('@/config/constants', () => ({ isIOS: true }));
+jest.mock('@/utils/constants', () => ({ isIOS: true }));
 
 jest.mock('expo-router', () => {
   const React = jest.requireActual('react');

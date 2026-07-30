@@ -1,7 +1,7 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import { defaultAppHeaders } from '@/config/constants';
 import type { EndpointType } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
+import { defaultAppHeaders } from '@/utils/constants';
 
 const ENDPOINT_FALLBACK_ORDER: readonly EndpointType[] = [
   ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,

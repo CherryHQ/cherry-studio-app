@@ -3,12 +3,13 @@ const { defineConfig } = require('eslint/config');
 
 // ── Layer boundaries (ADR 0010) ──
 // Dependency direction: app → features → {runtime, components, hooks} →
-// {ai, services} → data → {config, core, utils}. The blocks below make the
+// {ai, services} → data → {core, utils}. The blocks below make the
 // upward edges lint errors so the layering cannot silently regress.
 
 // Retired module paths. These exist so a stale branch or muscle memory gets a
 // pointer to the new home instead of a bare "module not found".
 const tombstonePatterns = [
+  { group: ['@/config/constants'], message: 'Moved to @/utils/constants.' },
   {
     group: ['@/screens', '@/screens/*', '@/screens/*/**'],
     message: 'Screens moved to @/features/<name> (ADR 0010).',
@@ -89,7 +90,7 @@ module.exports = defineConfig([
     {
       group: ['@/ai', '@/ai/*'],
       message:
-        'src/services must not import src/ai — this direction was a cycle (ADR 0010); shared constants live in @/config.',
+        'src/services must not import src/ai — this direction was a cycle (ADR 0010); shared constants live in @/utils.',
     },
     {
       group: ['@/features/*', '@/components/*', '@/app/*', '@/hooks/*', '@/runtime', '@/runtime/*'],

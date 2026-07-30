@@ -1,4 +1,4 @@
-import { homeActivityCalendar } from '@/config/constants';
+import { homeActivityCalendar } from '@/utils/constants';
 
 import type { ActivityCalendarDay, ActivityData } from '../types';
 

@@ -1,6 +1,6 @@
 import { Skia } from '@shopify/react-native-skia';
 
-import { paintingSkeleton } from '@/config/constants';
+import { paintingSkeleton } from '@/utils/constants';
 
 /**
  * SkSL port of the desktop paintings grid skeleton (PaintingSkeletonGrid.tsx).

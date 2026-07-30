@@ -8,8 +8,6 @@ import { ActivityIndicator, type LayoutChangeEvent, Text, View } from 'react-nat
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { isIOS } from '@/config/constants';
 import type { Message } from '@/data/types/message';
 import { ChatInputProvider } from '@/features/chat/input';
 import {
@@ -23,6 +21,7 @@ import {
   ScrollToBottomButton,
   useFloatingChatInputLayout,
 } from '@/features/chat/workspace';
+import { isIOS } from '@/utils/constants';
 import { PaintingInput } from '../components/PaintingInput';
 import {
   type PaintingGenerationInput,

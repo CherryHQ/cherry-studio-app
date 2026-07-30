@@ -1,9 +1,9 @@
 import { loggerService } from '@logger';
 import { randomUUID } from 'expo-crypto';
 import * as z from 'zod';
-import { CHERRYIN_CONFIG } from '@/config/constants';
 import type { ProviderService } from '@/data/services/ProviderService';
 import type { ApiKeyEntry, AuthConfig } from '@/data/types/provider';
+import { CHERRYIN_CONFIG } from '@/utils/constants';
 
 const logger = loggerService.withContext('CherryInOauthService');
 const CHERRYIN_PROVIDER_ID = 'cherryin';

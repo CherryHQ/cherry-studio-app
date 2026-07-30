@@ -8,13 +8,13 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
+import { queryKeys } from '@/data/api';
+import { useDataQuery } from '@/hooks/data';
 import {
   hiddenProviderListIds,
   isLiquidGlassAvailable,
   settingsServiceRow,
-} from '@/config/constants';
-import { queryKeys } from '@/data/api';
-import { useDataQuery } from '@/hooks/data';
+} from '@/utils/constants';
 import { ProviderAvatar } from './components/ProviderAvatar';
 import { SettingsSection } from './components/SettingsSection';
 import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';

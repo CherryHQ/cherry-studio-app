@@ -6,7 +6,7 @@ import { runOnJS, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { Image } from '@/components/nativePrimitives';
 import { PaintingSkeleton } from '@/components/paintingSkeleton';
-import { paintingSkeleton } from '@/config/constants';
+import { paintingSkeleton } from '@/utils/constants';
 
 import type { PaintingGenerationStatus } from '../hooks/usePaintingGeneration';
 

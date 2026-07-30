@@ -160,7 +160,7 @@ export const settingsServiceRow = {
 } as const;
 
 // Identifying headers attached to every outbound AI-provider and web-search
-// request. Lives in `config` (not `ai`) so `services/webSearch` can use it
+// request. Lives in `utils` (not `ai`) so `services/webSearch` can use it
 // without depending on the AI layer (ADR 0010).
 export function defaultAppHeaders(): Record<string, string> {
   return {

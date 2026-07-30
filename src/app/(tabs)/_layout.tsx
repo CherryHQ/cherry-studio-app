@@ -10,12 +10,12 @@ import { useThemeColor } from 'heroui-native/hooks';
 import { useTranslation } from 'react-i18next';
 import { BottomTabBarVisibilityProvider, useBottomTabBarHidden } from '@/components/navigation';
 import { selectIsNestedTabScreen } from '@/components/navigation/tabBarVisibility';
-import { isAndroid } from '@/config/constants';
 import {
   SearchScopeProvider,
   useSetSearchScope,
 } from '@/features/search/context/SearchScopeProvider';
 import { getSearchScopeForTabRoute } from '@/features/search/utils/searchScope';
+import { isAndroid } from '@/utils/constants';
 
 const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
 

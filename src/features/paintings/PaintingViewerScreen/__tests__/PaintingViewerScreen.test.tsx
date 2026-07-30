@@ -19,7 +19,7 @@ jest.mock('expo-router', () => ({
 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
-jest.mock('@/config/constants', () => ({
+jest.mock('@/utils/constants', () => ({
   isIOS: true,
   paintingViewer: { aspectRatios: [] },
 }));

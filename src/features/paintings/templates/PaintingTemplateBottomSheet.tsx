@@ -5,7 +5,7 @@ import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { BottomSheet, type BottomSheetCloseReason, useBottomSheet } from '@/components/bottomSheet';
 import { Image } from '@/components/nativePrimitives';
-import { bottomSheet } from '@/config/constants';
+import { bottomSheet } from '@/utils/constants';
 
 import type { PaintingTemplate } from './paintingTemplates';
 

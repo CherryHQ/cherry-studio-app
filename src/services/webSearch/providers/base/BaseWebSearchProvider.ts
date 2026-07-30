@@ -1,5 +1,5 @@
-import { defaultAppHeaders } from '@/config/constants';
 import type { WebSearchCapability, WebSearchProvider } from '@/data/preference';
+import { defaultAppHeaders } from '@/utils/constants';
 import type { ApiKeyRotationState } from '../../utils/provider';
 import { resolveProviderApiHost } from '../../utils/provider';
 import { withoutTrailingSlash } from '../../utils/url';

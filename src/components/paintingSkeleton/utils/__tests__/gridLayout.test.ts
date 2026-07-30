@@ -1,4 +1,4 @@
-import { paintingSkeleton } from '@/config/constants';
+import { paintingSkeleton } from '@/utils/constants';
 
 import { measurePaintingSkeletonGrid } from '../gridLayout';
 

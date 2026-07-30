@@ -17,5 +17,5 @@ This module owns settings screens' shared UI and feature-specific settings modul
 - `hooks/` contains shared settings preference hooks.
 - `profileHero/` contains the animated avatar + name hero and self-drawn sticky bar shown at the top
   of the settings home (pull-to-expand on iOS, tap-to-toggle on both platforms). Animation tuning
-  lives in `src/config/constants.ts` under `profileHero`.
+  lives in `src/utils/constants.ts` under `profileHero`.
 - `ProviderScreen/` and `WebSearchScreen/` contain feature-specific settings modules.

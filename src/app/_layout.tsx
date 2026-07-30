@@ -12,10 +12,10 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
 
 import { NavigationThemeProvider } from '@/components/navigation';
-import { isIOS, isLiquidGlassAvailable } from '@/config/constants';
 import { QueryProvider } from '@/data';
 import { DataProvider, InitialDataGate } from '@/runtime';
 import { bootstrapAppRuntime } from '@/runtime/appRuntime';
+import { isIOS, isLiquidGlassAvailable } from '@/utils/constants';
 
 // Hold the native splash across data-runtime init so the gate never exposes a
 // blank frame. `DataProvider` calls `SplashScreen.hideAsync()` once init settles.

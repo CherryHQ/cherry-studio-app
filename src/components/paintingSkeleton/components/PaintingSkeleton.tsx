@@ -3,9 +3,8 @@ import { useMemo, useState } from 'react';
 import { type LayoutChangeEvent, View } from 'react-native';
 import { type DerivedValue, useDerivedValue, useReducedMotion } from 'react-native-reanimated';
 import { useUniwind } from 'uniwind';
-
-import { paintingSkeleton } from '@/config/constants';
 import { useShaderClock } from '@/hooks/useShaderClock';
+import { paintingSkeleton } from '@/utils/constants';
 
 import { paintingSkeletonGridEffect } from '../shaders/paintingSkeletonGrid';
 import { paintingSkeletonRevealEffect } from '../shaders/paintingSkeletonReveal';

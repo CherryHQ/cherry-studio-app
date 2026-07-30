@@ -10,7 +10,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 
-import { homeActivityCalendar } from '@/config/constants';
+import { homeActivityCalendar } from '@/utils/constants';
 
 import type { ActivityAnimationControls, ActivityLevel } from '../types';
 import { getActivitySweepDelayMs } from '../utils/calendarLayout';

@@ -7,7 +7,7 @@ import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { SearchBarCommands } from 'react-native-screens';
 
-import { isAndroid, isIOS, searchBarAutoFocusDelayMs } from '@/config/constants';
+import { isAndroid, isIOS, searchBarAutoFocusDelayMs } from '@/utils/constants';
 
 import { SearchScopePager } from './components/SearchScopePager';
 import { SearchScopeTabs } from './components/SearchScopeTabs';

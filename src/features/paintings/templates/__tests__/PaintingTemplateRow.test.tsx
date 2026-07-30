@@ -73,7 +73,7 @@ jest.mock('@/components/nativePrimitives', () => {
   return { Image: MockView };
 });
 
-jest.mock('@/config/constants', () => ({
+jest.mock('@/utils/constants', () => ({
   bottomSheet: { cornerRadius: 28, headerHeight: 60, headerSideWidth: 44, outerInset: 4 },
   isLiquidGlassAvailable: true,
   sheetScrimColor: '#00000066',

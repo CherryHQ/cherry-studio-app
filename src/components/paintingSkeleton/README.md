@@ -40,5 +40,5 @@ after the generated image is available. The caller owns the reveal timing.
   tint/slice/heal reveal), result image bound as a child `ImageShader`.
 - `utils/gridLayout.ts` — pure grid measurement (desktop algorithm).
 
-All tuning knobs live in `paintingSkeleton` in `src/config/constants.ts` —
+All tuning knobs live in `paintingSkeleton` in `src/utils/constants.ts` —
 adjust there, not here.

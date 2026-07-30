@@ -1,9 +1,8 @@
 import { getLocales } from 'expo-localization';
 import { createInstance } from 'i18next';
 import { initReactI18next } from 'react-i18next';
-
-import { defaultLanguage } from '@/config/constants';
 import type { LanguageVarious } from '@/data/preference';
+import { defaultLanguage } from '@/utils/constants';
 
 import enUS from './locales/en-us.json';
 import zhCN from './locales/zh-cn.json';

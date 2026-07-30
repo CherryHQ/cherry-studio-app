@@ -18,7 +18,7 @@ Import `SlotText` and its public types from `@/components/SlotText`.
 The component accepts animation timing, stagger, bounce, typography, accessibility, and
 font-scaling props. Defaults tuned for snappy status labels: `200ms` glyph duration, `45ms` stagger,
 `24ms` entry offset, and `0.6` bounce. Glyphs always roll downward, and incoming glyphs land
-tinted with the brand highlight (`slotTextHighlightColor` in `src/config/constants.ts`) before
+tinted with the brand highlight (`slotTextHighlightColor` in `src/utils/constants.ts`) before
 fading to the regular text color over `colorFadeDurationMs`.
 
 `skipUnchanged` (default `true`) keeps a grapheme static only when it is unchanged *and* its slot

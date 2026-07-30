@@ -4,11 +4,10 @@ import { useToast } from 'heroui-native/toast';
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSharedValue } from 'react-native-reanimated';
-
-import { isIOS } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
 import type { Message } from '@/data/types/message';
 import type { MessagesViewModel } from '@/hooks/chat';
+import { isIOS } from '@/utils/constants';
 import { ToolApprovalSheet } from '../approval/ToolApprovalSheet';
 import { MessageSlideInProvider } from '../messageItem';
 import { useChatRuntime, useChatRuntimeTopic } from '../runtime/ChatRuntimeProvider';

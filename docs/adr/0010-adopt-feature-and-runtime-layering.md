@@ -5,7 +5,7 @@ Cherry Mobile reorganizes `src/` into an explicit layered layout: a new `src/run
 Two dependency defects motivated acting now rather than tolerating further drift:
 
 - `src/data/services/createDataServices.ts` constructed `AiService`, `McpService`, `ToolService`, `WebSearchService`, and `DevicePermissionService` — the data layer instantiating every layer above it. The composition root now lives in `src/runtime/`, which is allowed to see all layers.
-- `src/ai` and `src/services` value-imported each other (`ai/tools` → `services/webSearch`; `services/webSearch` → `ai/utils/provider` for `defaultAppHeaders`). The shared constant moved to `src/config`, fixing the direction to `ai → services` only.
+- `src/ai` and `src/services` value-imported each other (`ai/tools` → `services/webSearch`; `services/webSearch` → `ai/utils/provider` for `defaultAppHeaders`). The shared constant moved to `src/utils`, fixing the direction to `ai → services` only.
 
 Import direction is now enforced by ESLint (`import/no-restricted-paths` plus type-aware restricted imports) instead of discipline alone: `data` sees no upper layer, `ai` and `services` see no UI, features do not deep-import each other past their public surface (`@/features/<f>` and `@/features/<f>/<area>`), and nothing outside `src/app` imports routes.
 

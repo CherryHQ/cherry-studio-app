@@ -7,8 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { isLiquidGlassAvailable, sheetScrimColor } from '@/config/constants';
 import { loggerService } from '@/core/logger/LoggerService';
+import { isLiquidGlassAvailable, sheetScrimColor } from '@/utils/constants';
 import {
   useChatInputActions,
   useChatInputMedia,

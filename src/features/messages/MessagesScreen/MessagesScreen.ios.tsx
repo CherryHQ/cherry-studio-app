@@ -10,7 +10,7 @@ import {
   useMessageSelectionActions,
   useMessageSelectionState,
 } from '@/components/messageTabs';
-import { isLiquidGlassAvailable } from '@/config/constants';
+import { isLiquidGlassAvailable } from '@/utils/constants';
 
 import { MessagePager } from '../components/MessagePager';
 import { MessageScopeTabs } from '../components/MessageScopeTabs';

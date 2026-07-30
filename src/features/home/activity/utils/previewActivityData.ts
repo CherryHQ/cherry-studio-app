@@ -1,4 +1,4 @@
-import { homeActivityCalendar } from '@/config/constants';
+import { homeActivityCalendar } from '@/utils/constants';
 
 import type { ActivityData, ActivityLevel } from '../types';
 import { addCalendarDays, normalizeLocalDate, toLocalDateKey } from './calendarLayout';

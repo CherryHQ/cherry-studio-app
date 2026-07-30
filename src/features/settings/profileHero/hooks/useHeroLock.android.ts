@@ -5,7 +5,7 @@ import {
   withTiming,
 } from 'react-native-reanimated';
 
-import { profileHero } from '@/config/constants';
+import { profileHero } from '@/utils/constants';
 
 import type { HeroLock } from './useHeroLock.types';
 

@@ -12,8 +12,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Image } from '@/components/nativePrimitives';
-import { profileHero } from '@/config/constants';
 import { useAvatar } from '@/hooks/useAvatar';
+import { profileHero } from '@/utils/constants';
 
 type ProfileHeroProps = {
   lockProgress: SharedValue<number>;

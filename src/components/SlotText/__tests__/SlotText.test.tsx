@@ -1,7 +1,7 @@
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { slotTextHighlightColor } from '@/config/constants';
+import { slotTextHighlightColor } from '@/utils/constants';
 
 import { SlotText } from '../SlotText';
 

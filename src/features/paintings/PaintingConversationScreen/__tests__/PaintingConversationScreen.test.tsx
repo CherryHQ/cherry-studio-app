@@ -96,7 +96,7 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 0 }),
 }));
 
-jest.mock('@/config/constants', () => ({
+jest.mock('@/utils/constants', () => ({
   isIOS: false,
 }));
 

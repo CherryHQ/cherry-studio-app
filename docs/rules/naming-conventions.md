@@ -252,7 +252,7 @@ The set of top-level directories under each of:
 - repository root `/`
 - `/src/`
 
-is **closed by default**. The current `/src/` buckets are: `ai/`, `app/`, `components/`, `config/`, `core/`, `data/`, `features/`, `hooks/`, `i18n/`, `mocks/`, `modules/`, `polyfills/`, `runtime/`, `services/`, `styles/`, `types/`, `utils/`. Adding one is a structural commitment.
+is **closed by default**. The current `/src/` buckets are: `ai/`, `app/`, `components/`, `core/`, `data/`, `features/`, `hooks/`, `i18n/`, `mocks/`, `polyfills/`, `runtime/`, `services/`, `styles/`, `types/`, `utils/`. Adding one is a structural commitment.
 
 **A new top-level directory MAY be added only when the PR description establishes both:**
 

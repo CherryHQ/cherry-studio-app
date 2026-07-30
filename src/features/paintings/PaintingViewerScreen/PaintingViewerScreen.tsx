@@ -1,9 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
-
-import { paintingViewer } from '@/config/constants';
 import type { Painting } from '@/data/types/painting';
+import { paintingViewer } from '@/utils/constants';
 import {
   type ResolvedPaintingAttachment,
   usePainting,

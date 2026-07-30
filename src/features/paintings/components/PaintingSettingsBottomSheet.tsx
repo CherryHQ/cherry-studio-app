@@ -10,7 +10,7 @@ import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomSheet } from '@/components/bottomSheet';
 import { SlotText } from '@/components/SlotText';
-import { bottomSheet } from '@/config/constants';
+import { bottomSheet } from '@/utils/constants';
 
 import { imageParamLabel, imageParamOptionLabel } from '../utils/imageGenerationLabels';
 import type {

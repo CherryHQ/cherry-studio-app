@@ -15,7 +15,6 @@ import {
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/components/modelPicker';
-import { keyboardBottomOffset } from '@/config/constants';
 import type { CreateAssistantDto } from '@/data/api/schemas/assistants';
 import {
   type Assistant,
@@ -28,6 +27,7 @@ import { SettingSelect } from '@/features/settings/components/SettingSelect';
 import { useAssistantApiById, useAssistantMutations } from '@/hooks/chat';
 import { usePreference } from '@/hooks/data';
 import { useMcpServersApi } from '@/hooks/mcp/useMcpServers';
+import { keyboardBottomOffset } from '@/utils/constants';
 import { EmojiPickerBottomSheet } from './components/EmojiPickerBottomSheet';
 
 type AssistantFormState = {

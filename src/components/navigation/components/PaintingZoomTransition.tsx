@@ -1,7 +1,7 @@
 import { Link } from 'expo-router';
 import type { ReactElement, ReactNode } from 'react';
 
-import { isIOS } from '@/config/constants';
+import { isIOS } from '@/utils/constants';
 
 // Apple zoom transition between a gallery thumbnail and the full-screen viewer,
 // built on expo-router's public `Link.AppleZoom` / `Link.AppleZoomTarget`. The
