@@ -10,7 +10,11 @@ import type { Assistant } from '@/shared/data/types/assistant';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
-
+import {
+  isAnthropicModel,
+  isForcedNativeWebSearchModel,
+  isFunctionCallingModel,
+} from '@/shared/domain/model/modelCapabilities';
 import { providerToAiSdkConfig } from '../../../provider/config';
 import type { ToolService } from '../../../tools';
 import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/adapters/aiSdk/meta/toolSearch';
@@ -19,11 +23,6 @@ import type { RequestContext } from '../../../tools/adapters/aiSdk/types';
 import type { ProviderConfig } from '../../../types';
 import type { AiBaseRequest } from '../../../types/requests';
 import { addAnthropicHeaders } from '../../../utils/anthropicHeaders';
-import {
-  isAnthropicModel,
-  isForcedNativeWebSearchModel,
-  isFunctionCallingModel,
-} from '../../../utils/model';
 import {
   filterStandardParams,
   getMaxTokens,

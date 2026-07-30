@@ -42,7 +42,7 @@ import {
   isSupportedThinkingTokenQwenModel,
   isSupportedThinkingTokenZhipuModel,
   isSupportNoneReasoningEffortModel,
-} from './model';
+} from '@/shared/domain/model/modelCapabilities';
 import {
   EFFORT_RATIO,
   isSystemProviderId,

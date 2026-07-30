@@ -17,7 +17,7 @@ import type { UIMessage } from 'ai';
 
 import type { Model } from '@/shared/data/types/model';
 
-import { isAudioModel, isVideoModel, isVisionModel } from '../utils/model';
+import { isAudioModel, isVideoModel, isVisionModel } from '@/shared/domain/model/modelCapabilities';
 
 export interface MediaCapabilities {
   image: boolean;

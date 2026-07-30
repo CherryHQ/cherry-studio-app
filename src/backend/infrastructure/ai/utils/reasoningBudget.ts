@@ -1,4 +1,4 @@
-import { findTokenLimit } from './model';
+import { findTokenLimit } from '@/shared/domain/model/modelCapabilities';
 
 export const FALLBACK_TOKEN_LIMIT = { min: 1024, max: 16384 };
 

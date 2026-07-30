@@ -5,15 +5,14 @@ import type { PreferenceService } from '@/backend/infrastructure/services/Prefer
 import type { Assistant } from '@/shared/data/types/assistant';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
-
-import type { AppProviderId } from '../../../types';
 import {
   isAnthropicModel,
   isForcedNativeWebSearchModel,
   isGeminiModel,
   isGrokModel,
   isOpenAIModel,
-} from '../../../utils/model';
+} from '@/shared/domain/model/modelCapabilities';
+import type { AppProviderId } from '../../../types';
 import { SystemProviderIds } from '../../../utils/providerIds';
 import {
   buildProviderBuiltinWebSearchConfig,

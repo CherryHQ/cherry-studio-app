@@ -12,7 +12,10 @@ import { loadApiKey, withoutTrailingSlash } from '@ai-sdk/provider-utils';
 
 import type { Model } from '@/shared/data/types/model';
 
-import { isOpenAIChatCompletionOnlyModel, isOpenAILLMModel } from '../../../utils/model';
+import {
+  isOpenAIChatCompletionOnlyModel,
+  isOpenAILLMModel,
+} from '@/shared/domain/model/modelCapabilities';
 
 export const AIHUBMIX_PROVIDER_NAME = 'aihubmix' as const;
 const APP_CODE_HEADER = { 'APP-Code': 'MLTG2087' };

@@ -4,10 +4,6 @@ import type { JSONValue } from 'ai';
 import type { Assistant } from '@/shared/data/types/assistant';
 import type { Model } from '@/shared/data/types/model';
 import type { OpenAIServiceTier, Provider, ServiceTier } from '@/shared/data/types/provider';
-
-import { getAiSdkProviderId } from '../provider/factory';
-import type { ProviderCapabilities } from '../types';
-import { buildGeminiGenerateImageParams } from './image';
 import {
   getModelSupportedVerbosity,
   isAnthropicModel,
@@ -17,7 +13,10 @@ import {
   isReasoningModel,
   isSupportFlexServiceTierModel,
   isSupportVerbosityModel,
-} from './model';
+} from '@/shared/domain/model/modelCapabilities';
+import { getAiSdkProviderId } from '../provider/factory';
+import type { ProviderCapabilities } from '../types';
+import { buildGeminiGenerateImageParams } from './image';
 import { SystemProviderIds } from './providerIds';
 import {
   getAnthropicReasoningParams,

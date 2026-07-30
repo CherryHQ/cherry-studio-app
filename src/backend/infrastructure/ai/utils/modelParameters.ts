@@ -19,7 +19,7 @@ import {
   isSupportTemperatureModel,
   isSupportTopPModel,
   isTemperatureTopPMutuallyExclusiveModel,
-} from './model';
+} from '@/shared/domain/model/modelCapabilities';
 import { isAwsBedrockProvider } from './provider';
 import { getThinkingBudget } from './reasoning';
 
