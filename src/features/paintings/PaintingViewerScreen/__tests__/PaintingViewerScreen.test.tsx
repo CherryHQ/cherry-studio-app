@@ -1,7 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { Painting } from '@/data/types/painting';
-import type { ResolvedPaintingFiles } from '@/hooks/paintings';
+import type { ResolvedPaintingFiles } from '@/features/paintings/hooks/usePaintings';
 
 import { PaintingViewerScreen } from '../PaintingViewerScreen';
 
@@ -24,7 +24,7 @@ jest.mock('@/config/constants', () => ({
   paintingViewer: { aspectRatios: [] },
 }));
 
-jest.mock('@/hooks/paintings', () => ({
+jest.mock('@/features/paintings/hooks/usePaintings', () => ({
   usePainting: (paintingId: string | undefined) => {
     mockPaintingIds.push(paintingId);
     return { data: paintingId ? mockPaintingById.get(paintingId) : undefined, isLoading: false };

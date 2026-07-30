@@ -9,7 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { getMessageScopeIndex, useMessageScope } from '@/components/messageTabs';
-import { DrawingList } from '@/screens/PaintingScreen';
+import { DrawingList } from '@/features/paintings';
 import { TopicList } from '@/screens/TopicListScreen';
 
 type MessagePagerProps = {

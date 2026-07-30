@@ -32,7 +32,11 @@ import {
   type ChatInputAttachmentDraft,
   createPhotoAttachmentDraft,
 } from '@/features/chat/input/utils/chatInputAttachments';
-import { type PaintingGalleryItem, usePaintingGalleryItems, usePaintings } from '@/hooks/paintings';
+import {
+  type PaintingGalleryItem,
+  usePaintingGalleryItems,
+  usePaintings,
+} from '@/features/paintings/hooks/usePaintings';
 import { usePaintingSelectionSource } from './hooks/usePaintingSelectionSource';
 import { type PaintingTemplate, PaintingTemplateRow, toPaintingTemplateDraft } from './templates';
 import { distributeMasonryItems } from './utils/masonry';

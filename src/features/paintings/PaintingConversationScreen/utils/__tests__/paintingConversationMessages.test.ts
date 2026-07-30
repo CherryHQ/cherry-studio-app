@@ -1,6 +1,6 @@
 import type { Painting } from '@/data/types/painting';
 import { readCherryMeta } from '@/data/types/uiParts';
-import type { ResolvedPaintingFiles } from '@/hooks/paintings';
+import type { ResolvedPaintingFiles } from '@/features/paintings/hooks/usePaintings';
 
 import {
   createPaintingConversationMessages,

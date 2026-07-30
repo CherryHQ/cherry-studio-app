@@ -2,11 +2,11 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { Message } from '@/data/types/message';
 import type { Painting } from '@/data/types/painting';
-import type { ResolvedPaintingFiles } from '@/hooks/paintings';
 import type {
   PaintingGenerationInput,
   PaintingGenerationResult,
-} from '@/screens/PaintingScreen/hooks/usePaintingGeneration';
+} from '@/features/paintings/hooks/usePaintingGeneration';
+import type { ResolvedPaintingFiles } from '@/features/paintings/hooks/usePaintings';
 
 import { PaintingConversationScreen } from '../PaintingConversationScreen';
 
@@ -100,7 +100,7 @@ jest.mock('@/config/constants', () => ({
   isIOS: false,
 }));
 
-jest.mock('@/hooks/paintings', () => ({
+jest.mock('@/features/paintings/hooks/usePaintings', () => ({
   usePainting: () => ({ data: mockPainting, isError: false, isLoading: false }),
   useResolvedPaintingFiles: () => ({ data: mockFiles, isError: false, isLoading: false }),
 }));
@@ -132,14 +132,14 @@ jest.mock('@/features/chat/workspace', () => ({
   }),
 }));
 
-jest.mock('@/screens/PaintingScreen/components/PaintingInput', () => ({
+jest.mock('@/features/paintings/components/PaintingInput', () => ({
   PaintingInput: (props: PaintingInputProps) => {
     mockPaintingInputProps = props;
     return null;
   },
 }));
 
-jest.mock('@/screens/PaintingScreen/hooks/usePaintingGeneration', () => ({
+jest.mock('@/features/paintings/hooks/usePaintingGeneration', () => ({
   usePaintingGeneration: () => ({
     cancel: jest.fn(),
     generate: mockGenerate,

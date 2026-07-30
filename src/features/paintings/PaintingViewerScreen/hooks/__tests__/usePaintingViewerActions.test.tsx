@@ -39,11 +39,11 @@ jest.mock('@/runtime', () => ({
   useDataServices: () => ({ painting: { delete: jest.fn() } }),
 }));
 
-jest.mock('@/screens/PaintingScreen/utils/paintingDraftHandoff', () => ({
+jest.mock('@/features/paintings/utils/paintingDraftHandoff', () => ({
   createPaintingDraftHandoff: (input: unknown) => mockCreatePaintingDraftHandoff(input),
 }));
 
-jest.mock('@/screens/PaintingScreen/utils/paintingOutputAttachment', () => ({
+jest.mock('@/features/paintings/utils/paintingOutputAttachment', () => ({
   createPaintingOutputAttachmentDraft: (output: unknown) =>
     mockCreatePaintingOutputAttachmentDraft(output),
 }));

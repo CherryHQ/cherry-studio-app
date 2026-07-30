@@ -18,7 +18,7 @@ jest.mock('@/runtime', () => ({
   }),
 }));
 
-jest.mock('@/hooks/paintings', () => ({
+jest.mock('@/features/paintings/hooks/usePaintings', () => ({
   useSyncPaintingQueries: () => mockSyncPaintingQueries,
 }));
 

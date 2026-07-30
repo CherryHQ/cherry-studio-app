@@ -23,7 +23,7 @@ import {
   ScrollToBottomButton,
   useFloatingChatInputLayout,
 } from '@/features/chat/workspace';
-import { usePainting, useResolvedPaintingFiles } from '@/hooks/paintings';
+import { usePainting, useResolvedPaintingFiles } from '@/features/paintings/hooks/usePaintings';
 import { PaintingInput } from '../components/PaintingInput';
 import {
   type PaintingGenerationInput,

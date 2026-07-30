@@ -96,7 +96,7 @@ jest.mock('@/components/navigation', () => {
   };
 });
 
-jest.mock('@/hooks/paintings', () => ({
+jest.mock('@/features/paintings/hooks/usePaintings', () => ({
   usePaintingGalleryItems: () => ({ data: mockGalleryItems, isLoading: false }),
   usePaintings: () => ({
     isLoading: false,
@@ -115,7 +115,7 @@ jest.mock('@/features/chat/input/utils/chatInputAttachments', () => ({
   createPhotoAttachmentDraft: jest.fn(),
 }));
 
-jest.mock('@/screens/PaintingScreen/utils/paintingDraftHandoff', () => ({
+jest.mock('@/features/paintings/utils/paintingDraftHandoff', () => ({
   createPaintingDraftHandoff: jest.fn(() => 'handoff'),
 }));
 
@@ -127,7 +127,7 @@ jest.mock('@/components/messageTabs', () => ({
   useRegisterSelectionSource: () => undefined,
 }));
 
-jest.mock('@/screens/PaintingScreen/hooks/usePaintingSelectionSource', () => ({
+jest.mock('@/features/paintings/hooks/usePaintingSelectionSource', () => ({
   usePaintingSelectionSource: () => ({
     copy: { deleteFailed: '', deleteMessage: '', deleteTitle: '' },
     deleteSelected: jest.fn(),
@@ -135,7 +135,7 @@ jest.mock('@/screens/PaintingScreen/hooks/usePaintingSelectionSource', () => ({
   }),
 }));
 
-jest.mock('@/screens/PaintingScreen/templates', () => {
+jest.mock('@/features/paintings/templates', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
   return {

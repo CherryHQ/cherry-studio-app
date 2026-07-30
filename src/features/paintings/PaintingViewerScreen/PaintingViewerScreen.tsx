@@ -8,7 +8,7 @@ import {
   type ResolvedPaintingAttachment,
   usePainting,
   useResolvedPaintingFiles,
-} from '@/hooks/paintings';
+} from '@/features/paintings/hooks/usePaintings';
 
 import { PaintingViewerChrome } from './components/PaintingViewerChrome';
 import { ViewerImage } from './components/ViewerImage';

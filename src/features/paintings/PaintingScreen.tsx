@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatInputProvider } from '@/features/chat/input/context/ChatInputProvider';
-import { usePainting, useResolvedPaintingFiles } from '@/hooks/paintings';
+import { usePainting, useResolvedPaintingFiles } from '@/features/paintings/hooks/usePaintings';
 import { PaintingComposer } from './components/PaintingComposer';
 import { consumePaintingDraftHandoff } from './utils/paintingDraftHandoff';
 
