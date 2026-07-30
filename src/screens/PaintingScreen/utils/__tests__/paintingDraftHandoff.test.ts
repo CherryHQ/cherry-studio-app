@@ -1,4 +1,4 @@
-import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+import type { ChatInputAttachmentDraft } from '@/features/chat/input/utils/chatInputAttachments';
 
 import { consumePaintingDraftHandoff, createPaintingDraftHandoff } from '../paintingDraftHandoff';
 

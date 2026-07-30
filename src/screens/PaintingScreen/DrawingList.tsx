@@ -23,16 +23,16 @@ import {
 } from '@/components/messageTabs';
 import { Image } from '@/components/nativePrimitives';
 import { PaintingZoomLink } from '@/components/navigation';
-import { type PaintingGalleryItem, usePaintingGalleryItems, usePaintings } from '@/hooks/paintings';
 import {
   CHAT_INPUT_PHOTO_SELECTION_LIMIT,
   type ChatInputPhotoPreview,
   loadPhotoPreviewPage,
-} from '@/screens/ChatScreen/input/hooks/useChatInputPhotoPicker';
+} from '@/features/chat/input/hooks/useChatInputPhotoPicker';
 import {
   type ChatInputAttachmentDraft,
   createPhotoAttachmentDraft,
-} from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+} from '@/features/chat/input/utils/chatInputAttachments';
+import { type PaintingGalleryItem, usePaintingGalleryItems, usePaintings } from '@/hooks/paintings';
 import { usePaintingSelectionSource } from './hooks/usePaintingSelectionSource';
 import { type PaintingTemplate, PaintingTemplateRow, toPaintingTemplateDraft } from './templates';
 import { distributeMasonryItems } from './utils/masonry';

@@ -7,7 +7,7 @@ import { useDataInfiniteQuery, useDataMutation, useDataQuery } from '@/data/hook
 import type { CursorPaginationResponse } from '@/data/types/apiTypes';
 import { imageMediaTypeFromExtension } from '@/data/types/file';
 import type { Painting } from '@/data/types/painting';
-import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+import type { ChatInputAttachmentDraft } from '@/features/chat/input/utils/chatInputAttachments';
 
 const pageSize = 20;
 

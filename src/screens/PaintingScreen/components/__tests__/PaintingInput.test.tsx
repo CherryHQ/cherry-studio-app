@@ -4,7 +4,7 @@ import type { Painting } from '@/data/types/painting';
 import type {
   ChatInputModelSettings,
   ChatInputSendPayload,
-} from '@/screens/ChatScreen/input/components/ChatInputSurface';
+} from '@/features/chat/input/components/ChatInputSurface';
 
 import type { PaintingGenerationResult } from '../../hooks/usePaintingGeneration';
 import { PaintingInput } from '../PaintingInput';
@@ -57,18 +57,18 @@ jest.mock('@/hooks/chat', () => ({
   }),
 }));
 
-jest.mock('@/screens/ChatScreen/input/components/ChatInputActionSheet', () => ({
+jest.mock('@/features/chat/input/components/ChatInputActionSheet', () => ({
   ChatInputActionSheet: () => null,
 }));
 
-jest.mock('@/screens/ChatScreen/input/components/ChatInputSurface', () => ({
+jest.mock('@/features/chat/input/components/ChatInputSurface', () => ({
   ChatInputSurface: (props: typeof mockSurfaceProps) => {
     mockSurfaceProps = props;
     return null;
   },
 }));
 
-jest.mock('@/screens/ChatScreen/input/context/ChatInputProvider', () => ({
+jest.mock('@/features/chat/input/context/ChatInputProvider', () => ({
   useChatInputActions: () => ({ setAttachments: mockSetAttachments }),
   useChatInputState: () => ({ draft: 'refine this', isActionSheetOpen: false }),
 }));

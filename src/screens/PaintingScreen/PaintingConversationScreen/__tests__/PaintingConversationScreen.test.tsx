@@ -105,7 +105,7 @@ jest.mock('@/hooks/paintings', () => ({
   useResolvedPaintingFiles: () => ({ data: mockFiles, isError: false, isLoading: false }),
 }));
 
-jest.mock('@/screens/ChatScreen/input/context/ChatInputProvider', () => ({
+jest.mock('@/features/chat/input/context/ChatInputProvider', () => ({
   ChatInputProvider: ({
     children,
     initialAttachments,
@@ -118,7 +118,7 @@ jest.mock('@/screens/ChatScreen/input/context/ChatInputProvider', () => ({
   },
 }));
 
-jest.mock('@/screens/ChatScreen/workspace', () => ({
+jest.mock('@/features/chat/workspace', () => ({
   ChatMessageList: (props: MessageListProps) => {
     mockMessageListProps = props;
     return null;

@@ -1,5 +1,5 @@
-import { ChatScreen } from '@/screens/ChatScreen';
-import { ChatRuntimeProvider } from '@/screens/ChatScreen/runtime';
+import { ChatScreen } from '@/features/chat';
+import { ChatRuntimeProvider } from '@/features/chat/runtime';
 
 export default function TopicsRoute() {
   return (

@@ -2,7 +2,7 @@
  * Canaries for the AI SDK behaviours our MCP tool-approval flow rides on.
  *
  * The flow in `src/data/services/utils/toolApprovals.ts`,
- * `src/screens/ChatScreen/runtime/chatRuntimeMessages.ts` and `McpService`
+ * `src/features/chat/runtime/chatRuntimeMessages.ts` and `McpService`
  * owns no approval machinery of its own — it steers the SDK's. So the rules it
  * depends on are invisible in our source, and an `ai` upgrade that changes any
  * of them would surface as a provider 400 on a poisoned conversation branch

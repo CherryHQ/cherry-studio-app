@@ -1,5 +1,5 @@
 import { createOrderedUuid } from '@/data/db/schemas/_columnHelpers';
-import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+import type { ChatInputAttachmentDraft } from '@/features/chat/input/utils/chatInputAttachments';
 
 export type PaintingDraftHandoff = {
   attachments: readonly ChatInputAttachmentDraft[];

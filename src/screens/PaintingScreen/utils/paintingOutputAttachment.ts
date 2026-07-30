@@ -1,5 +1,5 @@
 import { imageMediaTypeFromExtension } from '@/data/types/file';
-import type { ChatInputAttachmentDraft } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
+import type { ChatInputAttachmentDraft } from '@/features/chat/input/utils/chatInputAttachments';
 
 // Mirrors the draft shape produced by useResolvedPaintingFiles for inputs; the
 // fileEntryId lets usePaintingGeneration reference the stored file instead of

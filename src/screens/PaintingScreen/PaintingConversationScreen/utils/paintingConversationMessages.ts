@@ -1,7 +1,7 @@
 import type { CherryMessagePart, Message } from '@/data/types/message';
 import type { Painting } from '@/data/types/painting';
+import { createChatInputMessageParts } from '@/features/chat/input/utils/chatInputAttachments';
 import type { ResolvedPaintingFiles } from '@/hooks/paintings';
-import { createChatInputMessageParts } from '@/screens/ChatScreen/input/utils/chatInputAttachments';
 import type { PaintingGenerationInput } from '../../hooks/usePaintingGeneration';
 
 type PendingPaintingTurn = {

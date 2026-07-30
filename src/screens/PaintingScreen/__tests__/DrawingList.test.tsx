@@ -106,12 +106,12 @@ jest.mock('@/hooks/paintings', () => ({
   }),
 }));
 
-jest.mock('@/screens/ChatScreen/input/hooks/useChatInputPhotoPicker', () => ({
+jest.mock('@/features/chat/input/hooks/useChatInputPhotoPicker', () => ({
   CHAT_INPUT_PHOTO_SELECTION_LIMIT: 6,
   loadPhotoPreviewPage: jest.fn(),
 }));
 
-jest.mock('@/screens/ChatScreen/input/utils/chatInputAttachments', () => ({
+jest.mock('@/features/chat/input/utils/chatInputAttachments', () => ({
   createPhotoAttachmentDraft: jest.fn(),
 }));
 

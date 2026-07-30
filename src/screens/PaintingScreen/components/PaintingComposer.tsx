@@ -3,8 +3,8 @@ import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Painting } from '@/data/types/painting';
+import { getChatInputKeyboardStickyOffset } from '@/features/chat/input/chatInputLayout';
 import type { ResolvedPaintingFiles } from '@/hooks/paintings';
-import { getChatInputKeyboardStickyOffset } from '@/screens/ChatScreen/input/chatInputLayout';
 
 import { usePaintingGeneration } from '../hooks/usePaintingGeneration';
 import { PaintingCanvas } from './PaintingCanvas';

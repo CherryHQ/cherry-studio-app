@@ -11,19 +11,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isIOS } from '@/config/constants';
 import type { Message } from '@/data/types/message';
-import { usePainting, useResolvedPaintingFiles } from '@/hooks/paintings';
 import {
   chatInputHorizontalScreenInset,
   chatInputMinBottomPadding,
   getChatInputKeyboardStickyOffset,
-} from '@/screens/ChatScreen/input/chatInputLayout';
-import { ChatInputProvider } from '@/screens/ChatScreen/input/context/ChatInputProvider';
+} from '@/features/chat/input/chatInputLayout';
+import { ChatInputProvider } from '@/features/chat/input/context/ChatInputProvider';
 import {
   ChatMessageList,
   ChatWorkspaceFrame,
   ScrollToBottomButton,
   useFloatingChatInputLayout,
-} from '@/screens/ChatScreen/workspace';
+} from '@/features/chat/workspace';
+import { usePainting, useResolvedPaintingFiles } from '@/hooks/paintings';
 import { PaintingInput } from '../components/PaintingInput';
 import {
   type PaintingGenerationInput,
