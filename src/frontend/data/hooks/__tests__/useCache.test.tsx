@@ -1,7 +1,7 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { cacheService } from '@/backend/infrastructure/cache';
+import { cacheService } from '@/frontend/data/cache';
 
 import { useCache, usePersistCache } from '../useCache';
 

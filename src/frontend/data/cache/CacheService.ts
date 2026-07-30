@@ -33,7 +33,7 @@
  * The module-level singleton {@link cacheService} is the runtime instance —
  * hooks and services must share it. Tests construct their own
  * `new CacheService(createInMemoryKvStorage())` to avoid cross-test pollution.
- * Note the singleton survives DataProvider remounts and React Fast Refresh of
+ * Note the singleton survives bootstrap-provider remounts and React Fast Refresh of
  * consumer modules; the memory tier is session-scoped by design (cleared only
  * by a full JS reload, equivalent to a desktop window refresh).
  */
@@ -45,8 +45,9 @@ import type {
   PersistCacheKey,
   PersistCacheSchema,
   UseCacheKey,
-} from './cacheSchemas';
-import { DefaultPersistCache } from './cacheSchemas';
+} from '@/shared/data/cache/cacheSchemas';
+import { DefaultPersistCache } from '@/shared/data/cache/cacheSchemas';
+import { deepEqual } from '@/shared/data/cache/cacheUtils';
 import type {
   CacheEntry,
   CacheEntryDetail,
@@ -54,7 +55,6 @@ import type {
   CacheSubscriber,
   CacheTierSummary,
 } from './cacheTypes';
-import { deepEqual } from './cacheUtils';
 import type { KvStorage } from './kvStorage';
 import { createInMemoryKvStorage, createMmkvStorage } from './kvStorage';
 
