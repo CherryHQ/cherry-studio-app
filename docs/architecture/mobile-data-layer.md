@@ -37,7 +37,10 @@ The current schema contains:
 - Chat domain: `assistant`, `topic`, `message`, `prompt`.
 - Organization: `group`, `pin`, `tag`, `entity_tag`.
 - Provider/model domain: `user_provider`, `user_model`.
-- Partial assistant relation tables: `assistant_mcp_server`, `assistant_knowledge_base`.
+- MCP domain: `mcp_server`.
+- File domain: `file_entry`, `chat_message_file_ref`, `painting_file_ref`.
+- Painting domain: `painting`.
+- Assistant relation tables: `assistant_mcp_server` (foreign keys on both sides), `assistant_knowledge_base` (partial; no knowledge-side foreign key).
 
 `message` stores a tree with `parentId` adjacency references and `topic.activeNodeId` marks the active branch. Message content is stored as `data.parts`, not legacy desktop `blocks`.
 
@@ -48,16 +51,22 @@ The current schema contains:
 `createDataServices()` creates the current service graph:
 
 - `PreferenceService`
+- `DevicePermissionService`
+- `PinService`
 - `ProviderService`
 - `ModelService`
 - `TagService`
 - `GroupService`
-- `PinService`
 - `PromptService`
+- `FileEntryService`
+- `PaintingService`
+- `McpServerService`
+- `McpService`
 - `AssistantService`
 - `TopicService`
 - `MessageService`
 - `WebSearchService`
+- `ToolService`
 - `AiService`
 
 Services receive dependencies directly through constructors. Mobile does not use the desktop application singleton, IPC handlers, or lifecycle service registry.
@@ -108,10 +117,10 @@ Current divergences:
 
 - Message content is `data.parts`; mobile should not introduce new `data.blocks` writes.
 - FTS indexes `data.parts` text parts.
-- Assistant MCP and knowledge relation tables exist, but full MCP/knowledge runtime domains are not part of the current mobile app.
+- The MCP domain is part of the current mobile app: the `mcp_server` table, `McpServerService`, the `src/ai/mcp` runtime (`McpService`), and the MCP settings UI (`src/features/settings/McpScreen/`, routed at `src/app/(tabs)/settings/mcp/`). The knowledge domain is not migrated.
 - Mobile services are in-process and local; they are not HTTP endpoint handlers.
 
-Assistant MCP and knowledge relation tables remain partial relation support for desktop schema alignment. They do not imply that mobile currently owns MCP server runtime, knowledge indexing/search, agent workspace behavior, or the related UI domains.
+`assistant_mcp_server` is a full relation with foreign keys on both sides, backed by the mobile MCP domain. `assistant_knowledge_base` remains partial relation support for desktop schema alignment: it stores knowledge-base IDs without a knowledge-side foreign key and does not imply that mobile currently owns knowledge indexing/search, agent workspace behavior, or the related UI domains.
 
 ## Desktop Alignment And Reset Policy
 

@@ -27,14 +27,14 @@ This document defines Cherry Mobile interaction component boundaries, focused on
 
 Feature-local Pressable wrappers:
 
-- Settings, drawer, chat input, and provider/model screens still contain local `Pressable` controls.
+- Settings, chat input, and provider/model screens still contain local `Pressable` controls.
 - Local wrappers are acceptable when the state and styling are feature-specific.
 - Repeated interaction behavior should be extracted into a shared wrapper before it spreads across modules.
 
 HeroUI and Expo UI controls:
 
 - The app uses `heroui-native` controls for some settings and search-field surfaces.
-- The app uses `@expo/ui` community bottom sheets and menus for native-feeling sheets/menus.
+- The app uses `@expo/ui` community menus and platform controls for native-feeling surfaces; bottom sheets use the app-owned `@/components/bottomSheet` wrapper over `@swmansion/react-native-bottom-sheet`.
 - These libraries are component choices, not replacements for Cherry-owned product interaction rules.
 
 Planned shared wrappers:
@@ -57,8 +57,8 @@ RN `Button` is acceptable for temporary code, demos, system examples, or non-pro
 Android top navigation actions use shared header wrappers and self-rendered headers where needed:
 
 ```tsx
-<HeaderIconButton accessibilityLabel="Open sidebar" onPress={openDrawer}>
-  <MenuIcon className="size-6 text-foreground" />
+<HeaderIconButton accessibilityLabel={t('navigation.newChat')} onPress={openNewTopic}>
+  <SquarePenIcon className="size-6 text-foreground" strokeWidth={2} />
 </HeaderIconButton>
 ```
 
@@ -71,4 +71,4 @@ iOS header adapters currently use Expo Router `Stack.Toolbar`. The base capabili
 - Buttons remain recognizable, tappable, and accessible when platform-specific enhancement is unavailable.
 - Icon buttons do not require nearby explanatory text to be understood. Ambiguous icons need a tooltip or menu context.
 - New repeated button variants should extend Cherry wrappers instead of repeating `Pressable` state logic inside feature components.
-- Swipe actions, drawers, carousels, and similar horizontal components must avoid Android system edge back areas.
+- Swipe actions, carousels, and similar horizontal components must avoid Android system edge back areas.

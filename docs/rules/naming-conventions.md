@@ -27,7 +27,7 @@ The 90% case. See later sections for full rules and edge cases.
 
 | What you're naming | Convention | Example |
 |---|---|---|
-| Business React component file | `PascalCase.tsx` | `DrawerContent.tsx`, `ChatScreen.tsx` |
+| Business React component file | `PascalCase.tsx` | `HeaderIconButton.tsx`, `ChatScreen.tsx` |
 | Platform-specific component file (RN) | `PascalCase.ios.tsx` / `PascalCase.android.tsx` | `MainHeader.ios.tsx`, `ContextMenu.android.tsx` |
 | Expo Router route file (`src/app/`) | `kebab-case.tsx` + reserved tokens | `api-key-settings.tsx`, `_layout.tsx`, `index.tsx` |
 | Hook file | `useXxx.ts(x)` (camelCase, `use` prefix) | `useMessages.ts` |
@@ -42,7 +42,7 @@ The 90% case. See later sections for full rules and edge cases.
 | Business React component directory | `PascalCase` | `MainHeader/`, `ScrollToBottomButton/` |
 | Bucket directory (categorical container) | lowercase **plural** noun | `services/`, `hooks/`, `schemas/` |
 | Business / domain module directory | `camelCase` | `assistantPicker/`, `webSearch/` |
-| Large multi-file domain subtree | `<Name>Screen/` (route UI) or `camelCase/` (under a bucket) | `ChatScreen/`, `webSearch/` |
+| Large multi-file domain subtree | `src/features/<name>/` (route-bound) or `camelCase/` (under a bucket) | `features/chat/`, `webSearch/` |
 | `packages/ui/` (icon registry) directory | `kebab-case` | `icons/`, `icons-png/` |
 
 > Stateful classes use only `Service` (default) or `Manager` (instance pool) — see §5.2. Files placed inside any `utils/` directory drop the `Utils` suffix — the directory already declares the role; see §3.2. React Native platform-divergent files carry a `.ios`/`.android` suffix on the base name — see §3.8.
@@ -66,17 +66,17 @@ Three rules trump any specific table below when in conflict:
 | Location | Convention | Rationale |
 |---|---|---|
 | `src/components/**` | `PascalCase.tsx` | Filename mirrors the exported component name. |
-| `src/screens/**` | `PascalCase.tsx` | Filename mirrors the exported component name. |
+| `src/features/**` | `PascalCase.tsx` | Filename mirrors the exported component name. |
 | `src/app/**` (Expo Router routes) | `kebab-case.tsx` + reserved tokens | Filename maps to the route/navigation; see §6.6. |
 
 The component's **exported identifier** is always `PascalCase`, regardless of filename style:
 
 ```tsx
-// src/screens/ChatScreen/ChatScreen.tsx
+// src/features/chat/ChatScreen.tsx
 export function ChatScreen() { /* ... */ }
 
-// src/components/drawer/components/DrawerContent.tsx
-export function DrawerContent() { /* ... */ }
+// src/components/headers/components/HeaderIconButton.tsx
+export function HeaderIconButton() { /* ... */ }
 ```
 
 Route files under `src/app/` keep kebab-case / reserved-token filenames (§6.6) but their default export is still a `PascalCase` screen component.
@@ -105,7 +105,7 @@ utils/messageQueryOptions.ts  ✅
 
 A `*Utils` suffix is used only when the file lives outside any `utils/` directory.
 
-**Hooks (`useXxx.ts`)** — are co-located with their owning feature by default (e.g. `src/screens/ChatScreen/input/hooks/`). A hook moves to `src/hooks/` only when independent feature or screen domains consume it; cross-domain hooks may group into a domain folder such as `src/hooks/chat/`. A hook that embeds JSX in its return value uses the `.tsx` extension (e.g. `useConfirmDialog.tsx`); a hook with no JSX uses `.ts`.
+**Hooks (`useXxx.ts`)** — are co-located with their owning feature by default (e.g. `src/features/chat/input/hooks/`). A hook moves to `src/hooks/` only when independent feature or screen domains consume it; cross-domain hooks may group into a domain folder such as `src/hooks/chat/`. A hook that embeds JSX in its return value uses the `.tsx` extension (e.g. `useConfirmDialog.tsx`); a hook with no JSX uses `.ts`.
 
 **Utilities** — pure helpers stay in the owning module's `utils/` by default. Only domain-neutral helpers consumed by independent domains move to top-level `src/utils/`. Multiple imports inside one screen tree do not establish cross-domain reuse.
 
@@ -133,7 +133,7 @@ A `*Utils` suffix is used only when the file lives outside any `utils/` director
 | Type | Convention | Example |
 |---|---|---|
 | Top-level meta docs at repo root | `UPPERCASE.md` | `README.md`, `AGENTS.md`, `CONTEXT.md`, `LICENSE` |
-| Per-directory README | `README.md` (always uppercase) | `src/components/README.md`, `src/screens/README.md` |
+| Per-directory README | `README.md` (always uppercase) | `src/components/README.md`, `src/features/README.md` |
 | All other docs (under `docs/`, `packages/*/docs/`, etc.) | `kebab-case.md` | `mobile-data-layer.md`, `naming-conventions.md` |
 
 ### 3.7 JSON / YAML / TOML
@@ -184,7 +184,7 @@ When a directory **is** a component (i.e. contains `index.tsx` exporting the com
 ```
 src/components/headers/MainHeader/                       ✅
 src/components/headers/BackHeader/                       ✅
-src/screens/ChatScreen/workspace/components/ScrollToBottomButton/  ✅
+src/features/chat/workspace/components/ScrollToBottomButton/  ✅
 ```
 
 ### 4.3 Bucket Directories — `lowercase plural noun`
@@ -192,7 +192,7 @@ src/screens/ChatScreen/workspace/components/ScrollToBottomButton/  ✅
 "Bucket" = a categorical container holding many unrelated items of the same kind.
 
 ```
-services/   utils/   hooks/   components/   screens/   types/   schemas/
+services/   utils/   hooks/   components/   features/   types/   schemas/
 ```
 
 Bucket names are **plural** (see §4.9 for singular-vs-plural rules across all directory kinds). Do **not** invent variants like `Services/` or `helpers-and-utils/`.
@@ -204,7 +204,7 @@ Inside any bucket or domain directory, a **single file is the default**. Promote
 | Situation | Layout | Examples |
 |---|---|---|
 | One file can express the entire capability / topic | One `.ts` file | `data/services/TagService.ts`, `utils/orderKey.ts`, `hooks/chat/useMessages.ts` |
-| Implementation is too large for one file, **or** the topic owns several closely related artifacts (helpers, types, sub-files) that belong together | A subdirectory grouping the files | `services/webSearch/`, `components/modelPicker/`, `screens/ChatScreen/input/` |
+| Implementation is too large for one file, **or** the topic owns several closely related artifacts (helpers, types, sub-files) that belong together | A subdirectory grouping the files | `services/webSearch/`, `components/modelPicker/`, `features/chat/input/` |
 
 Do not pre-create a subdirectory for anticipated growth — promote only when the second file actually arrives.
 
@@ -228,7 +228,7 @@ Everything inside `packages/ui/` (both files and directories) uses `kebab-case` 
 ```
 packages/ui/src/icons/        ✅
 packages/ui/src/icons-png/    ✅
-packages/ui/src/provider-aliases.ts   ✅
+packages/ui/src/icons-png/provider-aliases.ts   ✅
 ```
 
 The other publishable packages (`ai-sdk-provider/`, `provider-registry/`, `lucide-uniwind/`) follow the same package-local `kebab-case` for their files.
@@ -252,7 +252,7 @@ The set of top-level directories under each of:
 - repository root `/`
 - `/src/`
 
-is **closed by default**. The current `/src/` buckets are: `ai/`, `app/`, `components/`, `config/`, `core/`, `data/`, `hooks/`, `i18n/`, `integration/`, `mocks/`, `modules/`, `screens/`, `services/`, `styles/`, `types/`. Adding one is a structural commitment.
+is **closed by default**. The current `/src/` buckets are: `ai/`, `app/`, `components/`, `config/`, `core/`, `data/`, `features/`, `hooks/`, `i18n/`, `mocks/`, `modules/`, `polyfills/`, `runtime/`, `services/`, `styles/`, `types/`, `utils/`. Adding one is a structural commitment.
 
 **A new top-level directory MAY be added only when the PR description establishes both:**
 
@@ -269,10 +269,10 @@ Choose number based on what the directory **conceptually contains**, not on whic
 
 | Directory role | Number | Examples |
 |---|---|---|
-| **Collection bucket** — holds many items of the same kind | **plural** | `services/`, `utils/`, `hooks/`, `components/`, `screens/`, `types/`, `schemas/`, `providers/`, `presets/` |
+| **Collection bucket** — holds many items of the same kind | **plural** | `services/`, `utils/`, `hooks/`, `components/`, `features/`, `types/`, `schemas/`, `providers/`, `presets/` |
 | **Namespace / theme** — represents one subject area, not a collection | **singular** | `config/`, `data/`, `core/`, `api/`, `runtime/` |
 | **Business / domain module** — named action or concept | **singular** (default) | `webSearch/`, `assistantPicker/`, `contextMenu/`, `bootstrap/` |
-| **Component directory** (dir = component) | follows the **component name** | `MainHeader/`, `ChatScreen/` (singular component); `SettingsSection/` (component representing a group) |
+| **Component directory** (dir = component) | follows the **component name** | `MainHeader/`, `McpScreen/` (singular component); `SettingsSection/` (component representing a group) |
 
 Decision rule: ask "does this directory hold **many of X**?" — yes → plural; no → singular. When two readings both make sense, pick the one that matches the directory's **default import name** (e.g. `import { ... } from './config'` reads naturally with `config/` singular).
 
@@ -284,17 +284,17 @@ A **large multi-file domain** co-locates *everything* it owns — its components
 
 | The domain is… | Home | Layout |
 |---|---|---|
-| A large route-bound UI domain | `src/screens/<Name>Screen/` | self-contained tree (`input/`, `workspace/`, `components/`, `hooks/`, `utils/`) |
+| A large route-bound UI domain | `src/features/<name>/` | self-contained tree (`input/`, `workspace/`, `components/`, `hooks/`, `utils/`) |
 | A large non-route domain (shared UI or logic) | a `camelCase/` dir under the owning bucket — `src/components/<domain>/`, `src/services/<domain>/` | self-contained tree |
 | One cohesive service, even if domain-specific | `services/<Domain>Service.ts` | a single file; its lone helper util → `utils/<topic>.ts` |
 | A small cross-domain / standalone helper | `services/` or `utils/` | a single file |
 
 This is the §4.4 promotion rule applied at the top level: a domain graduates from "a file (plus maybe one util) in a bucket" to "its own subtree" only once the additional files actually arrive and span more than one concern. Do not pre-create a subtree for an anticipated module.
 
-**Canonical example** — `src/screens/ChatScreen/`:
+**Canonical example** — `src/features/chat/`:
 
 ```
-screens/ChatScreen/
+src/features/chat/
 ├── ChatScreen.tsx        # the route-bound screen component (§3.1)
 ├── input/                # ChatInput + its components/hooks/utils
 ├── workspace/            # message list + scroll/layout sub-modules
@@ -358,7 +358,7 @@ A `Service` / `Manager` class lives where its domain ownership lies (e.g. `src/d
 |---|---|---|
 | Pure-function collection (queries, conversions, predicates, formatters) | `utils/` (or feature-local `utils/` subdirectory) | `<topic>.ts` (camelCase; no `Utils` suffix — see §3.2) |
 | Depends on React lifecycle / state / context | `hooks/` (or co-located with the consuming feature) | `useXxx.ts(x)` (the `use` prefix is the role marker — see §3.2) |
-| Renders JSX / owns view markup | `components/` (shared) or `screens/` (route-bound) | `Xxx.tsx` (PascalCase — see §3.1) |
+| Renders JSX / owns view markup | `components/` (shared) or `features/` (route-bound) | `Xxx.tsx` (PascalCase — see §3.1) |
 | Single-call pass-through to a native / Expo module | inlined at the call site | (no file) |
 
 #### Two valid forms of a `Service`
@@ -370,7 +370,7 @@ The `Service` suffix names a **role** (a stateful domain capability), not a **me
 | Direct-import singleton | `export const xxxService = new XxxService()` (or a `static getInstance()` singleton) | The service holds class-level state but no externally-wired dependencies — e.g. `loggerService`, `providerRegistryService`, `CherryInOauthService`. |
 | Factory-constructed service | instantiated by a factory and wired through the Data Runtime — `createDataServices(dbService)` | The service depends on a shared resource (the database) that must be injected and made ready before first use — e.g. `AssistantService`, `MessageService`, `TopicService`. |
 
-There is no main-process DI container in the mobile app; readiness is coordinated by **startup gates**, not lifecycle phases. See [ADR 0002 — Use startup gates, not lifecycle phases](../adr/0002-use-startup-gates-not-lifecycle-phases.md) and `src/data/bootstrap/appRuntime.ts`.
+There is no main-process DI container in the mobile app; readiness is coordinated by **startup gates**, not lifecycle phases. See [ADR 0002 — Use startup gates, not lifecycle phases](../adr/0002-use-startup-gates-not-lifecycle-phases.md) and `src/runtime/appRuntime.ts`.
 
 ### 5.3 Drizzle Schema Inferred Row Types
 
@@ -442,7 +442,7 @@ Files under `src/app/` map to routes/navigation by filename (Expo Router). Route
 |---|---|
 | `_layout.tsx` | Layout route for the directory |
 | `index.tsx` | Index route for the directory |
-| `(group)/` | Route group — organizes without adding a URL segment (e.g. `(drawer)/`, `(chat)/`) |
+| `(group)/` | Route group — organizes without adding a URL segment (e.g. `(tabs)/`, `(messages)/`, `(search)/`) |
 | `[param].tsx` / `[param]/` | Dynamic segment (e.g. `[providerId]/`) |
 | `[...rest].tsx` | Catch-all segment |
 
@@ -469,7 +469,7 @@ Naming a new FILE
 │  ├─ Platform-divergent?                 → PascalCase.ios.tsx / .android.tsx  (MainHeader.ios.tsx, §3.8)
 │  ├─ Under src/app/ (Expo Router)?       → kebab-case.tsx + reserved tokens   (api-key-settings.tsx, _layout.tsx, §6.6)
 │  ├─ Under packages/ui/ (icon registry)? → kebab-case.tsx                      (§4.6)
-│  └─ Under src/components or src/screens? → PascalCase.tsx                      (DrawerContent.tsx, ChatScreen.tsx)
+│  └─ Under src/components or src/features? → PascalCase.tsx                      (HeaderIconButton.tsx, ChatScreen.tsx)
 ├─ React hook?                    → useXxx.ts(x)    (useMessages.ts; .tsx only if it returns JSX)
 ├─ Primary export is a class?     → PascalCase.ts   (AssistantService.ts)
 ├─ Primary export is function(s)? → camelCase.ts    (messageQueryOptions.ts)
@@ -485,7 +485,7 @@ Naming a new DIRECTORY
 ├─ Under packages/ui/?            → kebab-case      (icons, icons-png)
 ├─ Is itself a React component?   → PascalCase      (MainHeader, ScrollToBottomButton)
 ├─ Bucket / categorical container? → lowercase plural noun  (services, hooks, schemas)
-├─ Large multi-file domain?       → <Name>Screen/ or camelCase/  (ChatScreen, webSearch; §4.10)
+├─ Large multi-file domain?       → src/features/<name>/ or camelCase/  (features/chat, webSearch; §4.10)
 ├─ Business domain module?        → camelCase       (assistantPicker, contextMenu)
 └─ Unsure singular vs plural?     → see §4.9
 ```

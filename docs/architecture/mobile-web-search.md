@@ -41,7 +41,7 @@ Abort errors are propagated when the caller's signal is aborted.
 
 External web search reaches the model as an AI-SDK tool, not as provider options. `src/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts` wraps `WebSearchService.searchKeywords` in a `web_search` tool (id `WEB_SEARCH_TOOL_NAME`) with a `2..200` self-contained query schema. Its `execute` classifies failures: permanent configuration errors return a do-not-retry message, transient errors return a retryable note, and abort errors are rethrown.
 
-`AiService.buildAgentParamsFor` (`src/ai/AiService.ts`) arbitrates the external tool against provider-native web search — they are mutually exclusive within one request:
+`buildAgentParams` (`src/ai/runtime/aiSdk/params/buildAgentParams.ts`) arbitrates the external tool against provider-native web search (the provider-native path is attached as a plugin by `buildAgentPlugins` in `src/ai/runtime/aiSdk/params/buildAgentPlugins.ts`) — they are mutually exclusive within one request:
 
 - Provider-native is forced for OpenRouter built-in web-search models and `sonar` models; the external tool is never attached for them.
 - Otherwise the external `web_search` tool is attached when the assistant has web search enabled, the model supports function calling, and either an external provider is configured or the model has no native web-search plugin config.

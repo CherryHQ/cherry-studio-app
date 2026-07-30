@@ -1,5 +1,10 @@
 # Topic Rendering Benchmark
 
+> Note (2026-07): The flows recorded below predate the migration from the navigation drawer to
+> `react-native-bottom-tabs`. Topic entry now goes through the bottom-tab messages/topics list, so
+> keep the recorded numbers as historical reference only and re-measure with the tab-based flow
+> before comparing new results.
+
 ## Baseline: `a8fb953`
 
 Date: 2026-05-17
@@ -145,7 +150,7 @@ Decision:
 - Do not ship secondary-runtime message rendering yet.
 - Keep `Benchmark Complex 1000` as the stress fixture for future comparisons.
 - If this is revisited, start behind a feature flag and use the secondary runtime only for read-only heavy message rendering first.
-- Do not use click-time prewarm as the first optimization; it was too late to hide startup cost. If prewarm is revisited, trigger it earlier, such as drawer-open, focused topic candidate, or `onPressIn`, and cap retained runtimes to avoid memory growth.
+- Do not use click-time prewarm as the first optimization; it was too late to hide startup cost. If prewarm is revisited, trigger it earlier, such as focused topic candidate or `onPressIn` (the drawer-open trigger suggested at the time no longer exists after the bottom-tabs migration), and cap retained runtimes to avoid memory growth.
 - Future work must measure streaming updates, JSON serialization cost, fallback behavior, memory, native rebuild complexity, and real message interactions before replacing the default `ChatMessageList`.
 
 Notes:

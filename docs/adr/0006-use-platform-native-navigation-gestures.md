@@ -10,4 +10,4 @@ Cherry Mobile will rely on platform-native navigation behavior for Android edge 
 
 **Consequences**
 
-Android edge gesture zones are reserved for the system. Horizontal gestures such as drawers, swipe actions, and carousels must avoid fighting the system edge. `predictiveBackGestureEnabled` can stay disabled as a conservative default until navigation flows are stable, then be enabled and validated on real Android devices.
+Android edge gesture zones are reserved for the system. Horizontal gestures such as drawers, swipe actions, and carousels must avoid fighting the system edge (the navigation drawer has since been replaced by bottom tabs; the rule still applies to any horizontal gesture surface). `predictiveBackGestureEnabled` can stay disabled as a conservative default until navigation flows are stable, then be enabled and validated on real Android devices.

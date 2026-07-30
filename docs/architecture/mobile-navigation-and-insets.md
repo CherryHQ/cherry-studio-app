@@ -17,7 +17,7 @@ This document defines Cherry Mobile v1 navigation gestures, Android predictive b
 - Edge-to-edge is a platform window layout capability. The app is responsible for fitting headers, chat input, message lists, sheets, and keyboard areas against insets.
 - System gesture zones belong to the system. Product horizontal gestures must not compete with Android screen edges.
 - Back interception is limited to explicit product states such as unsaved edits, active generation confirmation, or dangerous action confirmation.
-- Route-level sheets are used for page-like flows such as settings. Model selection uses a component-level BottomSheet.
+- Route-level sheets are reserved for page-like flows; no current route uses one. Model selection uses a component-level BottomSheet.
 
 ## Android Back Gesture
 
@@ -59,21 +59,23 @@ Before enabling it, verify:
 
 ## Current Navigation Shape
 
-- `src/app/_layout.tsx` owns the app root wrappers: gesture handler root, keyboard provider, HeroUI provider, QueryProvider, DataProvider, InitialDataGate, navigation theme, and DrawerRoot.
-- `DrawerRoot` owns the root Stack. The `(drawer)` route hides its header; `settings` uses route-level `presentation: 'formSheet'`.
-- `DrawerLayout` owns the Expo drawer route group and bridges drawer open/close state into the drawer provider.
-- The chat route group is wrapped in `ChatRuntimeProvider`.
-- Route files stay thin and generally re-export screen modules from `src/screens`.
+- `src/app/_layout.tsx` owns the app root wrappers: gesture handler root, keyboard provider, HeroUI provider, QueryProvider, DataProvider, InitialDataGate, navigation theme, bottom sheet provider, and the root Stack.
+- The root Stack hosts the `(tabs)` group (header hidden) plus root-level `onboarding`, `topics` (chat), and `paintings` screens.
+- `src/app/(tabs)/_layout.tsx` owns the native bottom tab bar through `react-native-bottom-tabs` (`createNativeBottomTabNavigator`) with five tabs: home, assistants, `(messages)`, settings, and `(search)`.
+- Settings is a normal nested Stack inside its tab (`src/app/(tabs)/settings/`).
+- The chat surface is the root-level `topics` route, which wraps `ChatScreen` in `ChatRuntimeProvider`.
+- Route files stay thin and generally re-export feature modules from `src/features`.
 
 ## Picker Sheets
 
-Short local pickers, such as model setting selection, use reusable Expo UI `BottomSheet`
-components owned by their feature module. These sheets are plain overlays controlled by local
-state; their triggers should only pass open/close and selection state.
+Short local pickers, such as model setting selection, use the app-owned `@/components/bottomSheet`
+`BottomSheet` (a wrapper over `@swmansion/react-native-bottom-sheet`'s `ModalBottomSheet`). These
+sheets are plain overlays controlled by local state; their triggers should only pass open/close
+and selection state.
 
 Model selection is a reusable component-level `ModelPickerBottomSheet`. It is used by chat input and settings/model selection, includes search, tags, grouped model rows, pinning, and an 85% snap point.
 
-Route-level `formSheet` remains appropriate for page-like flows that need navigation history, deep linking, or system-back dismissal semantics. Settings is the current route-level form sheet.
+Route-level `formSheet` remains appropriate for page-like flows that need navigation history, deep linking, or system-back dismissal semantics. No current route uses it; settings is now a bottom tab with its own nested stack.
 
 Recommended shape:
 
@@ -114,7 +116,7 @@ Android edge-to-edge should not be avoided by pinning a system navigation bar ba
 - If a page must use an edge horizontal gesture, validate on Android that system back remains intact.
 - iOS interactive pop and Android system back are not the same product contract; do not flatten them into one JavaScript gesture.
 
-Current drawer implementation uses `swipeEdgeWidth: width`, so drawer swipe can start across the screen. Treat this as a validation risk against Android system edge back until real-device testing confirms the gestures do not conflict.
+Current horizontal gestures, such as topic-row swipe actions, start inside content areas. The app no longer has a navigation drawer, so there is no full-width drawer swipe competing with Android system edge back.
 
 ## Acceptance
 

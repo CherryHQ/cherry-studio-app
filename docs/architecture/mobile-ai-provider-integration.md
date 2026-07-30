@@ -71,7 +71,6 @@ Current exclusions:
 
 - Desktop IPC handlers.
 - Stream manager sessions.
-- MCP tools.
 - Pending message steering.
 - Full agent-session orchestration.
 
@@ -92,7 +91,7 @@ These exclusions are mobile runtime scope limits, not a new Provider/Model domai
 
 Provider-native web search is an AI request option. It is separate from `WebSearchService`.
 
-Beyond provider options, `buildAgentParamsFor` may also attach a tool set. When the external web search path wins arbitration (see [Web Search](./mobile-web-search.md#web-search-in-ai-requests)), the request carries a `tools: { web_search }` entry backed by `WebSearchService` plus `stopWhen: stepCountIs(...)` (bounded by the assistant's max tool calls, default 20). External web search and provider-native web search are mutually exclusive within one request; a request never carries both.
+Beyond provider options, `buildAgentParams` (`src/ai/runtime/aiSdk/params/buildAgentParams.ts`) may also attach a tool set, resolved per request by `ToolService.resolveForRequest` (`src/ai/tools/ToolService.ts`). The resolved tool set can contain the external `web_search` tool backed by `WebSearchService`, MCP tools merged from `McpService.getToolEntriesForAssistant(...)`, and built-in device tools (calendar, health, location, reminders — `src/ai/tools/adapters/aiSdk/builtin/`). When the external web search path wins arbitration (see [Web Search](./mobile-web-search.md#web-search-in-ai-requests)), the request carries the `web_search` tool; whenever tools are attached the request also sets `stopWhen: stepCountIs(...)` (bounded by the assistant's max tool calls, default 20). External web search and provider-native web search are mutually exclusive within one request; a request never carries both.
 
 ## Special Providers
 
@@ -133,4 +132,4 @@ Current state:
 ## Reopen When
 
 - Desktop Provider/Model semantics change.
-- Mobile adds currently excluded agent-session, MCP, or stream-manager behavior.
+- Mobile adds currently excluded agent-session or stream-manager behavior.
