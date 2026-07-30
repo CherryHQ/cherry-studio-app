@@ -2,8 +2,8 @@ import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/ut
 
 import { consumePaintingDraftHandoff, createPaintingDraftHandoff } from '../paintingDraftHandoff';
 
-jest.mock('uuid', () => ({
-  v7: jest.fn(() => '00000000-0000-7000-8000-000000000001'),
+jest.mock('expo-crypto', () => ({
+  randomUUID: jest.fn(() => '00000000-0000-4000-8000-000000000001'),
 }));
 
 describe('painting draft handoff', () => {

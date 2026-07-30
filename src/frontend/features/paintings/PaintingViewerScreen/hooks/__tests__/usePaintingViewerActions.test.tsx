@@ -1,18 +1,22 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { BackendProvider } from '@/frontend/data';
+import type { MobileBackend } from '@/shared/contracts';
 import type { Painting } from '@/shared/data/types/painting';
 
 import { usePaintingViewerActions } from '../usePaintingViewerActions';
 
 const mockRouterPush = jest.fn();
+const mockRouterBack = jest.fn();
+const mockRemoveMany = jest.fn(async () => undefined);
 const mockCreatePaintingDraftHandoff = jest.fn((_input: unknown) => 'handoff');
 const mockCreatePaintingOutputAttachmentDraft = jest.fn((_output: unknown) => ({
   id: 'painting-output',
 }));
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ back: jest.fn(), push: mockRouterPush }),
+  useRouter: () => ({ back: mockRouterBack, push: mockRouterPush }),
 }));
 
 jest.mock('expo-media-library', () => ({
@@ -35,10 +39,6 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('@/bootstrap', () => ({
-  useDataServices: () => ({ painting: { delete: jest.fn() } }),
-}));
-
 jest.mock('@/frontend/features/paintings/utils/paintingDraftHandoff', () => ({
   createPaintingDraftHandoff: (input: unknown) => mockCreatePaintingDraftHandoff(input),
 }));
@@ -52,6 +52,9 @@ const painting = {
   id: '00000000-0000-7000-8000-000000000001',
   prompt: 'Draw a cherry',
 } as Painting;
+const backend = {
+  paintings: { removeMany: mockRemoveMany },
+} as unknown as MobileBackend;
 
 let actions: ReturnType<typeof usePaintingViewerActions> | undefined;
 let renderer: ReactTestRenderer | undefined;
@@ -77,7 +80,11 @@ describe('usePaintingViewerActions', () => {
     jest.clearAllMocks();
     actions = undefined;
     await act(async () => {
-      renderer = create(<Probe />);
+      renderer = create(
+        <BackendProvider backend={backend}>
+          <Probe />
+        </BackendProvider>,
+      );
     });
   });
 
@@ -109,5 +116,14 @@ describe('usePaintingViewerActions', () => {
       params: { handoff: 'handoff', paintingId: painting.id },
       pathname: '/paintings',
     });
+  });
+
+  it('removes the painting through the backend contract before navigating back', async () => {
+    await act(async () => {
+      await actions?.remove();
+    });
+
+    expect(mockRemoveMany).toHaveBeenCalledWith([painting.id]);
+    expect(mockRouterBack).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,20 +1,17 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
-import { useCallback, useRef, useState } from 'react';
-import {
-  discardPreparedFiles,
-  imageUriToDataUrl,
-  prepareGeneratedImage,
-  prepareInternalFileFromUri,
-} from '@/backend/infrastructure/services/fileStorage';
-import { useDataServices } from '@/bootstrap';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useBackendModule } from '@/frontend/data';
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
-import { parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
-import type { Painting } from '@/shared/data/types/painting';
+import type {
+  PaintingGenerationResult as BackendPaintingGenerationResult,
+  PaintingGenerationOutput,
+} from '@/shared/contracts';
+import type { UniqueModelId } from '@/shared/data/types/model';
 import { useSyncPaintingQueries } from './usePaintings';
 
 export type PaintingGenerationStatus = 'idle' | 'generating' | 'revealing';
 
-export type PaintingOutput = { fileEntryId: string; uri: string };
+export type PaintingOutput = PaintingGenerationOutput;
 
 export type PaintingGenerationInput = {
   attachments: readonly ChatInputAttachmentDraft[];
@@ -24,28 +21,22 @@ export type PaintingGenerationInput = {
   prompt: string;
 };
 
-export type PaintingGenerationResult = {
-  outputs: PaintingOutput[];
-  painting: Painting;
-};
-
-type IncompleteReceipt = {
-  id: string;
-  signature: string;
-};
+export type PaintingGenerationResult = BackendPaintingGenerationResult;
 
 export function usePaintingGeneration({
   initialOutputs,
 }: {
   initialOutputs: readonly PaintingOutput[];
 }) {
-  const services = useDataServices();
+  const paintings = useBackendModule('paintings');
   const syncPaintingQueries = useSyncPaintingQueries();
+  const [session] = useState(() => paintings.createGenerationSession());
   const abortControllerRef = useRef<AbortController | null>(null);
-  const incompleteReceiptRef = useRef<IncompleteReceipt | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [outputs, setOutputs] = useState<PaintingOutput[]>(() => [...initialOutputs]);
   const [status, setStatus] = useState<PaintingGenerationStatus>('idle');
+
+  useEffect(() => () => session.dispose(), [session]);
 
   const generate = useCallback(
     async ({
@@ -59,87 +50,38 @@ export function usePaintingGeneration({
         throw new Error('Painting generation is already in progress');
       }
 
-      const imageAttachments = attachments.filter((attachment) => attachment.kind === 'image');
-      const signature = generationSignature(prompt, modelId, mode, paramValues, imageAttachments);
       const controller = new AbortController();
       abortControllerRef.current = controller;
       setError(null);
       setStatus('generating');
 
       try {
-        let receiptId =
-          incompleteReceiptRef.current?.signature === signature
-            ? incompleteReceiptRef.current.id
-            : undefined;
-
-        if (!receiptId) {
-          const preparedInputs = [];
-          try {
-            for (const attachment of imageAttachments) {
-              if (!attachment.fileEntryId) {
-                // react-doctor-disable-next-line async-await-in-loop -- Copy files serially so partial writes can be discarded deterministically.
-                preparedInputs.push(
-                  await prepareInternalFileFromUri(attachment.uri, attachment.name),
-                );
-              }
-            }
-            const { providerId } = parseUniqueModelId(modelId);
-            const receipt = await services.painting.create({
-              inputFileIds: imageAttachments.flatMap((attachment) =>
-                attachment.fileEntryId ? [attachment.fileEntryId] : [],
-              ),
-              modelId,
-              preparedInputFiles: preparedInputs,
-              prompt: prompt.trim(),
-              providerId,
-            });
-            receiptId = receipt.id;
-          } catch (receiptError) {
-            discardPreparedFiles(preparedInputs);
-            throw receiptError;
-          }
-          incompleteReceiptRef.current = { id: receiptId, signature };
-        }
-
-        const inputImages = await Promise.all(
-          imageAttachments.map((attachment) =>
-            imageUriToDataUrl(attachment.uri, attachment.mediaType),
-          ),
+        const result = await session.generate(
+          {
+            images: attachments.flatMap((attachment) =>
+              attachment.kind === 'image'
+                ? [
+                    {
+                      fileEntryId: attachment.fileEntryId,
+                      id: attachment.id,
+                      mediaType: attachment.mediaType,
+                      name: attachment.name,
+                      uri: attachment.uri,
+                    },
+                  ]
+                : [],
+            ),
+            mode,
+            modelId,
+            paramValues,
+            prompt,
+          },
+          controller.signal,
         );
-        const result = await services.ai.generateImage({
-          inputImages,
-          mode,
-          paramValues,
-          prompt: prompt.trim(),
-          requestOptions: { signal: controller.signal },
-          uniqueModelId: modelId,
-        });
-        if (result.images.length === 0) {
-          throw new Error('Image provider returned no image');
-        }
-
-        const preparedOutputs: ReturnType<typeof prepareGeneratedImage>[] = [];
-        try {
-          for (const image of result.images) {
-            preparedOutputs.push(prepareGeneratedImage(image.base64, image.mediaType));
-          }
-        } catch (prepareError) {
-          discardPreparedFiles(preparedOutputs);
-          throw prepareError;
-        }
-        const painting = await services.painting.replaceOutputs(receiptId, preparedOutputs);
-        const persistedOutputIds = new Set(painting.files.output);
-        const generatedOutputs = preparedOutputs.map((preparedOutput) => {
-          if (!persistedOutputIds.has(preparedOutput.id)) {
-            throw new Error('Generated painting has a missing output file');
-          }
-          return { fileEntryId: preparedOutput.id, uri: preparedOutput.uri };
-        });
-        incompleteReceiptRef.current = null;
-        setOutputs(generatedOutputs);
+        setOutputs(result.outputs);
         setStatus('revealing');
-        await syncPaintingQueries(painting);
-        return { outputs: generatedOutputs, painting };
+        await syncPaintingQueries(result.painting);
+        return result;
       } catch (generationError) {
         const normalized =
           generationError instanceof Error ? generationError : new Error(String(generationError));
@@ -152,7 +94,7 @@ export function usePaintingGeneration({
         }
       }
     },
-    [services.ai, services.painting, syncPaintingQueries],
+    [session, syncPaintingQueries],
   );
 
   const cancel = useCallback(() => {
@@ -168,28 +110,4 @@ export function usePaintingGeneration({
     outputs,
     status,
   };
-}
-
-function generationSignature(
-  prompt: string,
-  modelId: UniqueModelId,
-  mode: ImageGenerationMode,
-  paramValues: ParamValues,
-  attachments: readonly ChatInputAttachmentDraft[],
-): string {
-  return JSON.stringify({
-    attachments: attachments.map(
-      (attachment) => attachment.fileEntryId ?? `${attachment.id}:${attachment.uri}`,
-    ),
-    mode,
-    modelId,
-    paramValues: sortRecord(paramValues),
-    prompt: prompt.trim(),
-  });
-}
-
-function sortRecord(values: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(values).sort(([left], [right]) => left.localeCompare(right)),
-  );
 }

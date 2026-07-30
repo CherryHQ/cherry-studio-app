@@ -1,8 +1,14 @@
-import { type InfiniteData, keepPreviousData, useQueryClient } from '@tanstack/react-query';
+import {
+  type InfiniteData,
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
 import { useCallback, useMemo } from 'react';
-import { queryKeys } from '@/frontend/data';
-import { useDataInfiniteQuery, useDataMutation, useDataQuery } from '@/frontend/data/hooks';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import { imageMediaTypeFromExtension } from '@/shared/data/types/file';
@@ -29,7 +35,8 @@ export type ResolvedPaintingFiles = {
 };
 
 export function usePaintings() {
-  const query = useDataInfiniteQuery<
+  const paintingsBackend = useBackendModule('paintings');
+  const query = useInfiniteQuery<
     CursorPaginationResponse<Painting>,
     Error,
     InfiniteData<CursorPaginationResponse<Painting>, string | undefined>,
@@ -38,8 +45,7 @@ export function usePaintings() {
   >({
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     initialPageParam: undefined,
-    queryFn: (services, { pageParam }) =>
-      services.painting.listByCursor({ cursor: pageParam, limit: pageSize }),
+    queryFn: ({ pageParam }) => paintingsBackend.listPage({ cursor: pageParam, limit: pageSize }),
     queryKey: queryKeys.paintings.list({ limit: pageSize }),
   });
   const paintings = useMemo(
@@ -64,19 +70,21 @@ export function usePaintings() {
 }
 
 export function usePaintingIds({ enabled }: { enabled: boolean }) {
-  return useDataQuery({
+  const paintings = useBackendModule('paintings');
+  return useQuery({
     enabled,
-    queryFn: (services) => services.painting.listAllIds(),
+    queryFn: () => paintings.listIds(),
     queryKey: queryKeys.paintings.allIds(),
   });
 }
 
 export function useDeletePaintings() {
+  const paintings = useBackendModule('paintings');
   const queryClient = useQueryClient();
-  const { mutateAsync } = useDataMutation({
-    invalidateQueries: [queryKeys.paintings.all()],
-    mutationFn: (dataServices, ids: readonly string[]) => dataServices.painting.deleteMany(ids),
-    onSuccess: (_result, ids) => {
+  const { mutateAsync } = useMutation({
+    mutationFn: (ids: readonly string[]) => paintings.removeMany(ids),
+    onSuccess: async (_result, ids) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.paintings.all() });
       for (const id of ids) {
         // Drop rather than invalidate: refetching a deleted painting would throw.
         queryClient.removeQueries({ queryKey: queryKeys.paintings.detail(id) });
@@ -98,36 +106,30 @@ export function useDeletePaintings() {
 }
 
 export function usePainting(id: string | undefined) {
+  const paintings = useBackendModule('paintings');
   const queryId = id ?? '__new_painting__';
-  return useDataQuery<Painting, Error, Painting, PaintingDetailQueryKey>({
+  return useQuery<Painting, Error, Painting, PaintingDetailQueryKey>({
     enabled: Boolean(id),
-    queryFn: (services) => services.painting.getById(id ?? ''),
+    queryFn: () => paintings.get(id ?? ''),
     queryKey: queryKeys.paintings.detail(queryId),
   });
 }
 
 export function useResolvedPaintingFiles(painting: Painting | undefined) {
-  return useDataQuery({
+  const paintings = useBackendModule('paintings');
+  return useQuery({
     enabled: Boolean(painting),
-    queryFn: async (services): Promise<ResolvedPaintingFiles> => {
+    queryFn: async (): Promise<ResolvedPaintingFiles> => {
       if (!painting) {
         return { inputs: [], outputs: [] };
       }
 
-      const resolveAttachment = async (
-        fileEntryId: string,
-      ): Promise<ResolvedPaintingAttachment | null> => {
-        const [entry, uri] = await Promise.all([
-          services.fileEntry.findById(fileEntryId),
-          services.fileEntry.resolveUri(fileEntryId),
-        ]);
-        if (!entry || !uri) {
-          return null;
-        }
+      const resolved = await paintings.resolveFiles(painting);
+      const resolveAttachment = ({ entry, uri }: (typeof resolved.inputs)[number]) => {
         const mediaType = imageMediaTypeFromExtension(entry.ext);
         return {
-          fileEntryId,
-          id: `painting-file:${fileEntryId}`,
+          fileEntryId: entry.id,
+          id: `painting-file:${entry.id}`,
           kind: 'image' as const,
           mediaType,
           name: entry.ext ? `${entry.name}.${entry.ext}` : entry.name,
@@ -135,12 +137,10 @@ export function useResolvedPaintingFiles(painting: Painting | undefined) {
           uri,
         };
       };
-      const inputEntries = await Promise.all(painting.files.input.map(resolveAttachment));
-      const outputs = await Promise.all(painting.files.output.map(resolveAttachment));
 
       return {
-        inputs: inputEntries.filter((entry) => entry !== null),
-        outputs: outputs.filter((output) => output !== null),
+        inputs: resolved.inputs.map(resolveAttachment),
+        outputs: resolved.outputs.map(resolveAttachment),
       };
     },
     queryKey: ['painting-files', painting?.id ?? '', painting?.updatedAt ?? ''],
@@ -148,20 +148,21 @@ export function useResolvedPaintingFiles(painting: Painting | undefined) {
 }
 
 export function usePaintingGalleryItems(paintings: readonly Painting[]) {
-  return useDataQuery({
+  const files = useBackendModule('files');
+  return useQuery({
     enabled: paintings.length > 0,
     // The key embeds every painting's updatedAt, so loading another page (or a
     // regeneration) mints a fresh key. Keep the previous resolved items visible
     // until the new set resolves so the masonry never blinks to empty mid-scroll.
     placeholderData: keepPreviousData,
-    queryFn: async (services): Promise<PaintingGalleryItem[]> => {
+    queryFn: async (): Promise<PaintingGalleryItem[]> => {
       const items = paintings.flatMap((painting) =>
         painting.files.output.map((fileEntryId) => ({ fileEntryId, painting })),
       );
       return (
         await Promise.all(
           items.map(async ({ fileEntryId, painting }) => {
-            const uri = await services.fileEntry.resolveUri(fileEntryId);
+            const uri = await files.resolveRenderableUri(fileEntryId);
             if (!uri) {
               return null;
             }

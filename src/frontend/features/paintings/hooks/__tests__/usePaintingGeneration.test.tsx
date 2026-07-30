@@ -1,41 +1,41 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
+import { BackendProvider } from '@/frontend/data';
+import type { MobileBackend, PaintingGenerationSession } from '@/shared/contracts';
+import type { Painting } from '@/shared/data/types/painting';
 import { usePaintingGeneration } from '../usePaintingGeneration';
 
-const mockGenerateImage = jest.fn();
-const mockCreatePainting = jest.fn();
-const mockReplaceOutputs = jest.fn();
+const output = {
+  fileEntryId: '00000000-0000-4000-8000-000000000009' as const,
+  uri: 'file:///generated.png',
+};
+const painting: Painting = {
+  createdAt: '2026-01-01T00:00:00.000Z',
+  files: { input: [], output: [output.fileEntryId] },
+  id: 'painting-1',
+  modelId: 'provider::gpt-image-2',
+  orderKey: 'painting-1',
+  prompt: 'draw a cherry',
+  providerId: 'provider',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+const mockGenerate = jest.fn<
+  ReturnType<PaintingGenerationSession['generate']>,
+  Parameters<PaintingGenerationSession['generate']>
+>();
+const mockDispose = jest.fn();
+const session: PaintingGenerationSession = {
+  dispose: mockDispose,
+  generate: mockGenerate,
+};
+const mockCreateGenerationSession = jest.fn(() => session);
+const backend = {
+  paintings: { createGenerationSession: mockCreateGenerationSession },
+} as unknown as MobileBackend;
 const mockSyncPaintingQueries = jest.fn(async () => undefined);
-
-jest.mock('@/bootstrap', () => ({
-  useDataServices: () => ({
-    ai: { generateImage: mockGenerateImage },
-    painting: {
-      create: mockCreatePainting,
-      replaceOutputs: mockReplaceOutputs,
-    },
-  }),
-}));
 
 jest.mock('@/frontend/features/paintings/hooks/usePaintings', () => ({
   useSyncPaintingQueries: () => mockSyncPaintingQueries,
-}));
-
-jest.mock('@/backend/infrastructure/services/fileStorage', () => ({
-  discardPreparedFiles: jest.fn(),
-  imageUriToDataUrl: jest.fn(),
-  prepareGeneratedImage: jest.fn((base64: string) => {
-    const suffix = base64 === 'BBBB' ? '10' : '09';
-    return {
-      ext: 'png',
-      id: `00000000-0000-7000-8000-0000000000${suffix}`,
-      name: 'generated',
-      size: 4,
-      uri: `file:///generated-${suffix}.png`,
-    };
-  }),
-  prepareInternalFileFromUri: jest.fn(),
 }));
 
 type GenerationApi = ReturnType<typeof usePaintingGeneration>;
@@ -50,20 +50,33 @@ function Probe() {
   return null;
 }
 
+const request = {
+  attachments: [
+    {
+      fileEntryId: '00000000-0000-4000-8000-000000000001' as const,
+      id: 'draft-1',
+      kind: 'image' as const,
+      mediaType: 'image/png',
+      name: 'input.png',
+      uri: 'file:///input.png',
+    },
+  ],
+  mode: 'generate' as const,
+  modelId: 'provider::gpt-image-2' as const,
+  paramValues: {},
+  prompt: 'draw a cherry',
+};
+
 beforeEach(async () => {
   jest.clearAllMocks();
   api = undefined;
-  let receiptIndex = 0;
-  mockCreatePainting.mockImplementation(async () => {
-    receiptIndex += 1;
-    return { id: `receipt-${receiptIndex}` };
-  });
-  mockReplaceOutputs.mockImplementation(async (id: string, outputs: Array<{ id: string }>) => ({
-    files: { input: [], output: outputs.map((output) => output.id) },
-    id,
-  }));
+  mockGenerate.mockResolvedValue({ outputs: [output], painting });
   await act(async () => {
-    renderer = create(<Probe />);
+    renderer = create(
+      <BackendProvider backend={backend}>
+        <Probe />
+      </BackendProvider>,
+    );
   });
 });
 
@@ -71,123 +84,73 @@ afterEach(async () => {
   await act(async () => renderer?.unmount());
 });
 
-const request = {
-  attachments: [],
-  mode: 'generate' as const,
-  modelId: 'provider::gpt-image-2' as const,
-  paramValues: {},
-  prompt: 'draw a cherry',
-};
-
 describe('usePaintingGeneration', () => {
-  it('retries the same incomplete receipt after a generation failure', async () => {
-    mockGenerateImage
-      .mockRejectedValueOnce(new Error('network failed'))
-      .mockResolvedValueOnce({ images: [{ base64: 'AAAA', mediaType: 'image/png' }] });
-
-    let failure: unknown;
+  it('maps image drafts into a backend session and reveals persisted outputs', async () => {
+    let result: Awaited<ReturnType<GenerationApi['generate']>> | undefined;
     await act(async () => {
-      try {
-        await api?.generate(request);
-      } catch (error) {
-        failure = error;
-      }
+      result = await api?.generate(request);
     });
-    expect(failure).toEqual(new Error('network failed'));
+
+    expect(mockGenerate).toHaveBeenCalledWith(
+      {
+        images: [
+          {
+            fileEntryId: request.attachments[0].fileEntryId,
+            id: 'draft-1',
+            mediaType: 'image/png',
+            name: 'input.png',
+            uri: 'file:///input.png',
+          },
+        ],
+        mode: 'generate',
+        modelId: 'provider::gpt-image-2',
+        paramValues: {},
+        prompt: 'draw a cherry',
+      },
+      expect.any(AbortSignal),
+    );
+    expect(result).toEqual({ outputs: [output], painting });
+    expect(api?.outputs).toEqual([output]);
+    expect(api?.status).toBe('revealing');
+    expect(mockSyncPaintingQueries).toHaveBeenCalledWith(painting);
+  });
+
+  it('keeps workflow failure as frontend error state and reuses the same session', async () => {
+    mockGenerate.mockRejectedValueOnce(new Error('network failed'));
+
+    await act(async () => {
+      await expect(api?.generate(request)).rejects.toThrow('network failed');
+    });
+    expect(api?.error).toEqual(new Error('network failed'));
+    expect(api?.status).toBe('idle');
+
     await act(async () => {
       await api?.generate(request);
     });
-
-    expect(mockCreatePainting).toHaveBeenCalledTimes(1);
-    expect(mockReplaceOutputs).toHaveBeenCalledWith('receipt-1', [expect.any(Object)]);
+    expect(mockCreateGenerationSession).toHaveBeenCalledTimes(1);
+    expect(mockGenerate).toHaveBeenCalledTimes(2);
   });
 
-  it('creates a new receipt when generating again after a completed output', async () => {
-    mockGenerateImage.mockResolvedValue({
-      images: [{ base64: 'AAAA', mediaType: 'image/png' }],
+  it('aborts the active backend call and disposes its session on unmount', async () => {
+    let observedSignal: AbortSignal | undefined;
+    mockGenerate.mockImplementationOnce((_input, signal) => {
+      observedSignal = signal;
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      });
     });
 
-    await act(async () => api?.generate(request));
-    await act(async () => api?.finishReveal());
-    await act(async () => api?.generate(request));
-
-    expect(mockCreatePainting).toHaveBeenCalledTimes(2);
-    expect(mockReplaceOutputs).toHaveBeenNthCalledWith(1, 'receipt-1', [expect.any(Object)]);
-    expect(mockReplaceOutputs).toHaveBeenNthCalledWith(2, 'receipt-2', [expect.any(Object)]);
-  });
-
-  it('creates a new receipt when normalized parameters change after a failure', async () => {
-    mockGenerateImage
-      .mockRejectedValueOnce(new Error('network failed'))
-      .mockResolvedValueOnce({ images: [{ base64: 'AAAA', mediaType: 'image/png' }] });
-
+    const result = api?.generate(request).catch((error) => error);
     await act(async () => {
-      await expect(api?.generate({ ...request, paramValues: { quality: 'low' } })).rejects.toThrow(
-        'network failed',
-      );
-    });
-    await act(async () => {
-      await api?.generate({ ...request, paramValues: { quality: 'high' } });
+      api?.cancel();
+      await result;
     });
 
-    expect(mockCreatePainting).toHaveBeenCalledTimes(2);
-    expect(mockReplaceOutputs).toHaveBeenCalledWith('receipt-2', [expect.any(Object)]);
-  });
+    expect(observedSignal?.aborted).toBe(true);
+    expect(api?.error).toEqual(new Error('Painting generation cancelled'));
 
-  it('persists and returns every generated image in provider order', async () => {
-    mockGenerateImage.mockResolvedValue({
-      images: [
-        { base64: 'AAAA', mediaType: 'image/png' },
-        { base64: 'BBBB', mediaType: 'image/webp' },
-      ],
-    });
-
-    let result: Awaited<ReturnType<GenerationApi['generate']>> | undefined;
-    await act(async () => {
-      result = await api?.generate(request);
-    });
-
-    expect(mockReplaceOutputs).toHaveBeenCalledWith('receipt-1', [
-      expect.objectContaining({ id: '00000000-0000-7000-8000-000000000009' }),
-      expect.objectContaining({ id: '00000000-0000-7000-8000-000000000010' }),
-    ]);
-    expect(result?.outputs).toEqual([
-      {
-        fileEntryId: '00000000-0000-7000-8000-000000000009',
-        uri: 'file:///generated-09.png',
-      },
-      {
-        fileEntryId: '00000000-0000-7000-8000-000000000010',
-        uri: 'file:///generated-10.png',
-      },
-    ]);
-  });
-
-  it('returns the persisted painting and generated output', async () => {
-    mockGenerateImage.mockResolvedValue({
-      images: [{ base64: 'AAAA', mediaType: 'image/png' }],
-    });
-
-    let result: Awaited<ReturnType<GenerationApi['generate']>> | undefined;
-    await act(async () => {
-      result = await api?.generate(request);
-    });
-
-    expect(result).toEqual({
-      outputs: [
-        {
-          fileEntryId: '00000000-0000-7000-8000-000000000009',
-          uri: 'file:///generated-09.png',
-        },
-      ],
-      painting: {
-        files: { input: [], output: ['00000000-0000-7000-8000-000000000009'] },
-        id: 'receipt-1',
-      },
-    });
-    expect(mockSyncPaintingQueries).toHaveBeenCalledWith({
-      files: { input: [], output: ['00000000-0000-7000-8000-000000000009'] },
-      id: 'receipt-1',
-    });
+    await act(async () => renderer?.unmount());
+    renderer = undefined;
+    expect(mockDispose).toHaveBeenCalledTimes(1);
   });
 });

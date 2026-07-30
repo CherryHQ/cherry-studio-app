@@ -1,4 +1,4 @@
-import { createOrderedUuid } from '@/backend/infrastructure/db/schemas/_columnHelpers';
+import * as Crypto from 'expo-crypto';
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
 
 export type PaintingDraftHandoff = {
@@ -9,7 +9,7 @@ export type PaintingDraftHandoff = {
 const handoffs = new Map<string, PaintingDraftHandoff>();
 
 export function createPaintingDraftHandoff(payload: PaintingDraftHandoff): string {
-  const token = createOrderedUuid();
+  const token = Crypto.randomUUID();
   handoffs.set(token, {
     ...payload,
     attachments: payload.attachments.map((attachment) => ({ ...attachment })),
