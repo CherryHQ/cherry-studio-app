@@ -108,7 +108,7 @@ export type ApiPaths = keyof ApiSchemas & string;
 export type ApiMethods<Path extends ApiPaths> = keyof ApiSchemas[Path] & HttpMethod;
 
 type MethodShape<Path extends ApiPaths, Method extends ApiMethods<Path>> = ApiSchemas[Path][Method];
-type Field<Shape, Key extends PropertyKey> = Shape extends Record<Key, infer Value> ? Value : never;
+type Field<Shape, Key extends PropertyKey> = Key extends keyof Shape ? Shape[Key] : never;
 type RequiredField<Shape, Key extends PropertyKey> =
   Shape extends Record<Key, unknown> ? true : false;
 
@@ -122,7 +122,11 @@ export type ApiHandler<Path extends ApiPaths, Method extends ApiMethods<Path>> =
     (RequiredField<MethodShape<Path, Method>, 'body'> extends true
       ? { body: Field<MethodShape<Path, Method>, 'body'> }
       : { body?: Field<MethodShape<Path, Method>, 'body'> }),
-) => Promise<Field<MethodShape<Path, Method>, 'response'>>;
+) => Promise<
+  Field<MethodShape<Path, Method>, 'response'> extends undefined
+    ? void
+    : Field<MethodShape<Path, Method>, 'response'>
+>;
 
 export type ApiImplementation = {
   [Path in ApiPaths]: {
