@@ -4,9 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Painting } from '@/data/types/painting';
 import { getChatInputKeyboardStickyOffset } from '@/features/chat/input/chatInputLayout';
-import type { ResolvedPaintingFiles } from '@/features/paintings/hooks/usePaintings';
-
 import { usePaintingGeneration } from '../hooks/usePaintingGeneration';
+import type { ResolvedPaintingFiles } from '../hooks/usePaintings';
 import { PaintingCanvas } from './PaintingCanvas';
 import { PaintingInput } from './PaintingInput';
 

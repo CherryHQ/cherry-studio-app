@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
 import type { SelectionSource } from '@/components/messageTabs';
-import { useDeletePaintings, usePaintingIds } from '@/features/paintings/hooks/usePaintings';
+import { useDeletePaintings, usePaintingIds } from './usePaintings';
 
 // Selection behavior the shared toolbar uses for the drawings tab. `enabled`
 // gates the (potentially large) all-ids query to edit mode on the active tab.

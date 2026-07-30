@@ -5,8 +5,8 @@ import type { Painting } from '@/data/types/painting';
 import type {
   PaintingGenerationInput,
   PaintingGenerationResult,
-} from '@/features/paintings/hooks/usePaintingGeneration';
-import type { ResolvedPaintingFiles } from '@/features/paintings/hooks/usePaintings';
+} from '../../hooks/usePaintingGeneration';
+import type { ResolvedPaintingFiles } from '../../hooks/usePaintings';
 
 import { PaintingConversationScreen } from '../PaintingConversationScreen';
 

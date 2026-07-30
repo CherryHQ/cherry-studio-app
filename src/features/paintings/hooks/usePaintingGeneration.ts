@@ -9,8 +9,8 @@ import {
 import { parseUniqueModelId, type UniqueModelId } from '@/data/types/model';
 import type { Painting } from '@/data/types/painting';
 import type { ChatInputAttachmentDraft } from '@/features/chat/input/utils/chatInputAttachments';
-import { useSyncPaintingQueries } from '@/features/paintings/hooks/usePaintings';
 import { useDataServices } from '@/runtime';
+import { useSyncPaintingQueries } from './usePaintings';
 
 export type PaintingGenerationStatus = 'idle' | 'generating' | 'revealing';
 
