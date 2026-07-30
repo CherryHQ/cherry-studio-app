@@ -5,12 +5,12 @@ import { createContext, type PropsWithChildren, use, useCallback, useEffect, use
 import { MODEL_SETTING_PREFERENCE_KEYS } from '@/components/modelPicker/utils/modelSettings';
 import { loggerService } from '@/core/logger/LoggerService';
 import { queryKeys } from '@/data/api';
-import { useDataMutation } from '@/data/hooks';
 import { isUniqueModelId } from '@/data/types/model';
 import type { Topic } from '@/data/types/topic';
 import { usePins, useTopics } from '@/hooks/chat';
 import { getMessagesQueryKey, prefetchTopicMessages } from '@/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/hooks/chat/utils/messageWindowPolicy';
+import { useDataMutation } from '@/hooks/data';
 import { useDataServices } from '@/runtime';
 import type { DataServices } from '@/runtime/createDataServices';
 

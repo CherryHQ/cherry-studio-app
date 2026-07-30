@@ -1,6 +1,6 @@
 import { queryKeys } from '@/data/api';
-import { useDataMutation, useDataQuery } from '@/data/hooks';
 import type { ApiKeyEntry, EndpointConfigs } from '@/data/types/provider';
+import { useDataMutation, useDataQuery } from '@/hooks/data';
 
 export function useProviderApiServiceQueries(providerId: string) {
   const providerQuery = useDataQuery({

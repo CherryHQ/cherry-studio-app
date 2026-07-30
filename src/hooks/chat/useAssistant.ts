@@ -2,8 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { queryKeys } from '@/data/api';
 import type { CreateAssistantDto, UpdateAssistantDto } from '@/data/api/schemas/assistants';
-import { useDataQuery } from '@/data/hooks';
 import { type Assistant } from '@/data/types/assistant';
+import { useDataQuery } from '@/hooks/data';
 import { useDataServices } from '@/runtime';
 
 const ASSISTANTS_LIST_LIMIT = 500;

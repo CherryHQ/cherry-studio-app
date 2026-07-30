@@ -29,7 +29,7 @@ jest.mock('lucide-uniwind/png', () => ({
   SettingsIcon: () => null,
 }));
 jest.mock('@/components/headers', () => ({ BackHeader: () => null }));
-jest.mock('@/data/hooks', () => ({
+jest.mock('@/hooks/data', () => ({
   usePreference: () => [mockMode, mockSetMode],
 }));
 jest.mock('@/runtime', () => ({

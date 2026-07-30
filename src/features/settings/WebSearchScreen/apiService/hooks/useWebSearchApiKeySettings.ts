@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
-
-import { usePreference } from '@/data/hooks';
 import type { WebSearchProviderId } from '@/data/preference';
+import { usePreference } from '@/hooks/data';
 import {
   buildWebSearchApiKeyEntries,
   createEmptyWebSearchApiKeyEntry,

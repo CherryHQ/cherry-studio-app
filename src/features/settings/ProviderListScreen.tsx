@@ -14,7 +14,7 @@ import {
   settingsServiceRow,
 } from '@/config/constants';
 import { queryKeys } from '@/data/api';
-import { useDataQuery } from '@/data/hooks';
+import { useDataQuery } from '@/hooks/data';
 import { ProviderAvatar } from './components/ProviderAvatar';
 import { SettingsSection } from './components/SettingsSection';
 import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';

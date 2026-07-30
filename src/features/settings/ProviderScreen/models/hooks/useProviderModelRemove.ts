@@ -2,9 +2,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { usePreference } from '@/data/hooks';
 import type { Model, UniqueModelId } from '@/data/types/model';
+import { usePreference } from '@/hooks/data';
 import { useDataServices } from '@/runtime';
 
 import { refreshProviderModelQueries } from '../utils/refreshProviderModelQueries';

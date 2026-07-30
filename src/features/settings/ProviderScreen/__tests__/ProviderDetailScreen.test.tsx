@@ -61,7 +61,7 @@ jest.mock('@/data/api', () => ({
   },
 }));
 
-jest.mock('@/data/hooks', () => ({
+jest.mock('@/hooks/data', () => ({
   useDataMutation: () => ({ isPending: false, mutateAsync: jest.fn() }),
 }));
 

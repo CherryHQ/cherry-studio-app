@@ -2,9 +2,9 @@ import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-
 import { useCallback, useMemo } from 'react';
 import { queryKeys } from '@/data/api';
 import type { UpdateTopicDto } from '@/data/api/schemas/topics';
-import { useDataInfiniteQuery, useDataQuery } from '@/data/hooks/useDataQuery';
 import type { CursorPaginationResponse } from '@/data/types/apiTypes';
 import type { Topic } from '@/data/types/topic';
+import { useDataInfiniteQuery, useDataQuery } from '@/hooks/data/useDataQuery';
 import { useDataServices } from '@/runtime';
 import { useHydrateTopicDetails } from './useHydrateTopicDetails';
 import { getMessagesQueryKey } from './utils/messageQueryOptions';

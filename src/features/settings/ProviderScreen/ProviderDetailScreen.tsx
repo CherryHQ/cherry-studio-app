@@ -9,8 +9,8 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { useConfirmDialog } from '@/components/confirmDialog';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { queryKeys } from '@/data/api';
-import { useDataMutation } from '@/data/hooks';
 import { canDeleteProvider } from '@/data/services/ProviderService';
+import { useDataMutation } from '@/hooks/data';
 import { openExternalUrl } from '@/utils/openExternalUrl';
 import {
   buildApiKeysInputFromEntries,

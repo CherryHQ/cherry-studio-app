@@ -3,8 +3,8 @@ import { useCallback } from 'react';
 import type { McpServerRuntimeSummary } from '@/ai/mcp';
 import { queryKeys } from '@/data/api';
 import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/data/api/schemas/mcpServers';
-import { useDataQuery } from '@/data/hooks';
 import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
+import { useDataQuery } from '@/hooks/data';
 import { useDataServices } from '@/runtime';
 
 const EMPTY_MCP_SERVERS: readonly StreamableHttpMcpServer[] = Object.freeze([]);

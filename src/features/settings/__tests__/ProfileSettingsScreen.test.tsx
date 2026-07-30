@@ -72,7 +72,7 @@ jest.mock('@/components/ProfileAvatar', () => ({
   ProfileAvatarImage: () => null,
 }));
 
-jest.mock('@/data/hooks', () => ({
+jest.mock('@/hooks/data', () => ({
   usePreference: (key: string) =>
     key === 'app.user.name' ? ['Saved name', mockSetUserName] : [null, mockSetAvatar],
 }));

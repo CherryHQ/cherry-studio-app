@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/components/headers';
-import { usePreference } from '@/data/hooks';
 import type { PermissionMode, PermissionPreferenceKey } from '@/data/preference';
+import { usePreference } from '@/hooks/data';
 import { useDataServices } from '@/runtime';
 import type { SystemPermissionState } from '@/services/devicePermissions';
 

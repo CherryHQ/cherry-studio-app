@@ -71,7 +71,7 @@ jest.mock('@/components/modelPicker', () => ({
   }),
 }));
 
-jest.mock('@/data/hooks', () => ({
+jest.mock('@/hooks/data', () => ({
   usePreference: () => [mockDefaultModelPreference, jest.fn()],
 }));
 

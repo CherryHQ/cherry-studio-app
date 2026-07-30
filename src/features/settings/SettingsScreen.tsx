@@ -19,7 +19,7 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
-import { usePreference } from '@/data/hooks';
+import { usePreference } from '@/hooks/data';
 
 import { SettingSelect } from './components/SettingSelect';
 import { SettingsSection } from './components/SettingsSection';

@@ -11,7 +11,7 @@ const providerId = 'tavily' as WebSearchProviderId;
 let mockProviderOverrides: ProviderOverrides;
 let mockSetProviderOverrides: jest.Mock;
 
-jest.mock('@/data/hooks', () => ({
+jest.mock('@/hooks/data', () => ({
   usePreference: () => [mockProviderOverrides, mockSetProviderOverrides],
 }));
 

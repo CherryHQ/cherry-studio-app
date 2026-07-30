@@ -1,4 +1,4 @@
-import { usePreference } from '@/data/hooks';
+import { usePreference } from '@/hooks/data';
 
 export function usePermissionPolicies() {
   const [calendarRead] = usePreference('permissions.calendar_read');

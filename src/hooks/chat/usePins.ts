@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useRef } from 'react';
 
 import { queryKeys } from '@/data/api';
-import { useDataMutation, useDataQuery } from '@/data/hooks';
 import type { EntityType } from '@/data/types/entityType';
 import type { CreatePinDto, Pin } from '@/data/types/pin';
+import { useDataMutation, useDataQuery } from '@/hooks/data';
 
 const EMPTY_PINS: readonly Pin[] = Object.freeze([]);
 

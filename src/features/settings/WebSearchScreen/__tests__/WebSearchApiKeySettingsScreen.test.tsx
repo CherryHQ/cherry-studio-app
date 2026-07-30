@@ -31,7 +31,7 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('@/data/hooks', () => ({
+jest.mock('@/hooks/data', () => ({
   usePreference: () => [
     mockProviderOverrides,
     jest.fn().mockImplementation(async (next: ProviderOverrides) => {

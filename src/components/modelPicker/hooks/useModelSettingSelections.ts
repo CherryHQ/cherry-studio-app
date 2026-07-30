@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
-
-import { useMultiplePreferences } from '@/data/hooks';
 import type { UniqueModelId } from '@/data/types/model';
+import { useMultiplePreferences } from '@/hooks/data';
 import type { ModelSettingKind } from '../utils/modelSettings';
 import { MODEL_SETTING_PREFERENCE_KEYS } from '../utils/modelSettings';
 

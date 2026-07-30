@@ -1,6 +1,6 @@
 import { queryKeys } from '@/data/api';
-import { useDataQuery } from '@/data/hooks';
 import type { Provider } from '@/data/types/provider';
+import { useDataQuery } from '@/hooks/data';
 
 const EMPTY_PROVIDERS: readonly Provider[] = Object.freeze([]);
 

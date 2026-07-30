@@ -2,10 +2,10 @@ import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { queryKeys } from '@/data/api';
-import { useDataMutation } from '@/data/hooks';
 import type { Topic } from '@/data/types/topic';
 import { usePins, useTopics } from '@/hooks/chat';
 import { prefetchTopicMessages } from '@/hooks/chat/utils/messageQueryOptions';
+import { useDataMutation } from '@/hooks/data';
 import type { DataServices } from '@/runtime/createDataServices';
 
 import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
@@ -44,7 +44,7 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => mockQueryClient,
 }));
 
-jest.mock('@/data/hooks', () => ({
+jest.mock('@/hooks/data', () => ({
   useDataMutation: jest.fn(),
 }));
 
