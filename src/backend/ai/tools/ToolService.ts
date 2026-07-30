@@ -7,7 +7,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { PermissionPreferenceKey } from '@/shared/data/preference';
 import type { Assistant } from '@/shared/data/types/assistant';
 
-import type { McpService } from '../mcp';
+import type { McpRuntimeService } from '../mcp';
 import { registerBuiltinTools } from './adapters/aiSdk/builtin/registerBuiltinTools';
 import { applyDeferExposition } from './adapters/aiSdk/exposition/applyDeferExposition';
 import { ToolRegistry } from './adapters/aiSdk/registry';
@@ -25,7 +25,7 @@ const DEVICE_PREFERENCE_KEYS = [
 
 export type ToolServiceDependencies = {
   devicePermission: Pick<DevicePermissionService, 'getStatusForPreference'>;
-  mcp: Pick<McpService, 'getToolEntriesForAssistant'>;
+  mcpRuntime: Pick<McpRuntimeService, 'getToolEntriesForAssistant'>;
   preference: Pick<PreferenceService, 'get'>;
   webSearch: WebSearchService;
 };
@@ -44,7 +44,7 @@ export class ToolService {
   }): Promise<{ deferredEntries: ToolEntry[]; tools: ToolSet | undefined }> {
     const [deviceAccess, mcpEntries] = await Promise.all([
       this.getDeviceAccess(),
-      this.deps.mcp.getToolEntriesForAssistant(input.assistant),
+      this.deps.mcpRuntime.getToolEntriesForAssistant(input.assistant),
     ]);
     const activeBuiltins = this.builtinRegistry.selectActive({
       assistant: input.assistant,

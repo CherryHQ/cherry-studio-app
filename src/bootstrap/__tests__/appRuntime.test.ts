@@ -21,7 +21,7 @@ function createServices(
   } = {},
 ): BackendServices {
   return {
-    mcp: {
+    mcpRuntime: {
       prewarmActiveServers: overrides.prewarmActiveServers ?? jest.fn(async () => undefined),
     },
     message: {

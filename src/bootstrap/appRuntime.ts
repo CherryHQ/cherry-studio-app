@@ -29,7 +29,7 @@ export async function runPostReadyTasks(services: BackendServices) {
     await Promise.all([
       reconcileStalePendingMessages(services),
       // The chat path is cache-only, so warm tools off the startup critical path.
-      services.mcp.prewarmActiveServers(),
+      services.mcpRuntime.prewarmActiveServers(),
     ]);
   } catch (error) {
     logger.error('Post-ready tasks failed', error as Error);

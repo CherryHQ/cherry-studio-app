@@ -87,7 +87,7 @@ function createService(options: {
     devicePermission: {
       getStatusForPreference: options.getStatus ?? jest.fn(async () => 'granted'),
     },
-    mcp: { getToolEntriesForAssistant: jest.fn(async () => options.mcpEntries ?? []) },
+    mcpRuntime: { getToolEntriesForAssistant: jest.fn(async () => options.mcpEntries ?? []) },
     preference: {
       get: jest.fn(async (key: string) => {
         if (key === options.failingKey) throw new Error('db unavailable');

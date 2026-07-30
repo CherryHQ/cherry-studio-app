@@ -20,7 +20,7 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
   return {
     backend: createMobileBackend(services),
     dispose: () => {
-      services.mcp.dispose();
+      services.mcpRuntime.dispose();
       services.webSearch.dispose();
       services.cache.dispose();
       dbService.dispose();

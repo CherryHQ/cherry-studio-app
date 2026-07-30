@@ -3,7 +3,7 @@ import { DataApiErrorFactory } from '@/shared/data/api/types';
 import type { Assistant } from '@/shared/data/types/assistant';
 import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
-import { McpService } from '../McpService';
+import { McpRuntimeService } from '../McpRuntimeService';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
@@ -137,18 +137,18 @@ function makeService(servers: StreamableHttpMcpServer[]) {
     }),
     list: jest.fn(async () => ({ items: servers, total: servers.length })),
   };
-  const service = new McpService({ mcpServer: mcpServer as never });
+  const service = new McpRuntimeService({ mcpServer: mcpServer as never });
   return { mcpServer, service };
 }
 
 /** Cold cache → warm it the way the chat path does, then read it back. */
-async function warmedToolSet(service: McpService, assistant = makeAssistant()) {
+async function warmedToolSet(service: McpRuntimeService, assistant = makeAssistant()) {
   await getProjectedToolSet(service, assistant);
   await flush();
   return getProjectedToolSet(service, assistant);
 }
 
-async function getProjectedToolSet(service: McpService, assistant: Assistant) {
+async function getProjectedToolSet(service: McpRuntimeService, assistant: Assistant) {
   const entries = await service.getToolEntriesForAssistant(assistant);
   return entries.length
     ? Object.fromEntries(entries.map((entry) => [entry.name, entry.tool]))
@@ -322,7 +322,7 @@ describe('assistant tool preparation', () => {
   it('returns undefined instead of rejecting when the server list read fails', async () => {
     // AiService awaits this with no try/catch of its own, so a throw here would
     // take the whole send down rather than just the tools.
-    const service = new McpService({
+    const service = new McpRuntimeService({
       mcpServer: { list: jest.fn(async () => Promise.reject(new Error('db locked'))) } as never,
     });
 
@@ -625,7 +625,7 @@ describe('prewarmActiveServers', () => {
   });
 
   it('never rejects when listing servers fails', async () => {
-    const service = new McpService({
+    const service = new McpRuntimeService({
       mcpServer: { list: jest.fn(async () => Promise.reject(new Error('db down'))) } as never,
     });
 
@@ -634,7 +634,7 @@ describe('prewarmActiveServers', () => {
 });
 
 describe('tool execution', () => {
-  async function executeTool(service: McpService, key: string) {
+  async function executeTool(service: McpRuntimeService, key: string) {
     const tools = await warmedToolSet(service);
     const tool = tools?.[key];
     return (tool?.execute as (args: unknown, opts: unknown) => Promise<unknown>)({}, {});
@@ -1318,7 +1318,7 @@ describe('dispose', () => {
  * The fingerprint is private and deliberately absent from every public summary, but
  * "it does not hold the bearer token" is the property worth pinning, so read it back.
  */
-function retainedFingerprints(service: McpService): string[] {
+function retainedFingerprints(service: McpRuntimeService): string[] {
   const internals = service as unknown as {
     runtimeSnapshots: Map<string, { transportFingerprint: string }>;
     runtimeStates: Map<string, { transportFingerprint: string }>;

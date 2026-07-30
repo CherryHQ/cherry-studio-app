@@ -9,12 +9,12 @@ const mockDb = {
   dispose: jest.fn(),
   init: jest.fn(async () => undefined),
 };
-const mockMcp = { dispose: jest.fn() };
+const mockMcpRuntime = { dispose: jest.fn() };
 const mockPreference = { init: jest.fn(async () => undefined) };
 const mockWebSearch = { dispose: jest.fn() };
 const mockServices = {
   cache: mockCache,
-  mcp: mockMcp,
+  mcpRuntime: mockMcpRuntime,
   preference: mockPreference,
   webSearch: mockWebSearch,
 };
@@ -66,7 +66,7 @@ describe('createAppBootstrapRuntime', () => {
 
     runtime.dispose();
 
-    expect(mockMcp.dispose).toHaveBeenCalledTimes(1);
+    expect(mockMcpRuntime.dispose).toHaveBeenCalledTimes(1);
     expect(mockWebSearch.dispose).toHaveBeenCalledTimes(1);
     expect(mockCache.dispose).toHaveBeenCalledTimes(1);
     expect(mockDb.dispose).toHaveBeenCalledTimes(1);

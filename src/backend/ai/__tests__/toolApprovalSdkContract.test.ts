@@ -2,7 +2,7 @@
  * Canaries for the AI SDK behaviours our MCP tool-approval flow rides on.
  *
  * The flow in `src/shared/domain/chat/toolApprovals.ts`,
- * `src/frontend/features/chat/session/chatSessionProjection.ts` and `McpService`
+ * `src/frontend/features/chat/session/chatSessionProjection.ts` and `McpRuntimeService`
  * owns no approval machinery of its own — it steers the SDK's. So the rules it
  * depends on are invisible in our source, and an `ai` upgrade that changes any
  * of them would surface as a provider 400 on a poisoned conversation branch
@@ -29,7 +29,7 @@ const TOOL_NAME = 'mcp__files__read';
 const TOOL_CALL_ID = 'call-1';
 const APPROVAL_ID = 'approval-1';
 const TOOL_INPUT = { path: 'README.md' };
-/** The shape `McpService.wrapTool` puts on a tool definition's `metadata`. */
+/** The shape `McpRuntimeService.wrapTool` puts on a tool definition's `metadata`. */
 const TOOL_METADATA = {
   cherry: {
     tool: { serverId: 's1', serverName: 'Files', type: 'mcp' },
@@ -117,7 +117,7 @@ describe('convertToModelMessages tool-approval states', () => {
 
 describe('streamText tool-approval gate', () => {
   test('a tool whose needsApproval resolves true is not executed', async () => {
-    // `McpService` puts approval on this native gate rather than intercepting
+    // `McpRuntimeService` puts approval on this native gate rather than intercepting
     // the call itself, so "asked, not run" has to hold inside the SDK.
     const execute = jest.fn(async () => 'file body');
     const result = streamText({
@@ -158,7 +158,7 @@ describe('streamText tool-approval gate', () => {
   });
 
   test('the tool definition metadata reaches the part as toolMetadata', async () => {
-    // The MCP identity travels from `McpService.wrapTool`'s `metadata` to
+    // The MCP identity travels from `McpRuntimeService.wrapTool`'s `metadata` to
     // `McpToolPart`'s `part.toolMetadata` entirely inside the SDK — no code of
     // ours copies it across. If an `ai` upgrade renames or drops the field the
     // card falls back to parsing the minted `mcp__server__tool` key: it titles

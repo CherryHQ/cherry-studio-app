@@ -97,12 +97,12 @@ export function createMobileBackend(services: BackendServices): MobileBackend {
   });
   const mcp = new McpService({
     runtime: {
-      getRuntimeSummaries: (servers) => services.mcp.getRuntimeSummaries(servers),
-      getServerInfo: (config) => services.mcp.getServerInfo(config),
-      invalidate: (id, options) => services.mcp.invalidateServer(id, options),
-      listTools: (server) => services.mcp.listToolsForServer(server),
-      test: (config) => services.mcp.testConnection(config),
-      warm: (server) => services.mcp.warmToolsCache(server),
+      getRuntimeSummaries: (servers) => services.mcpRuntime.getRuntimeSummaries(servers),
+      getServerInfo: (config) => services.mcpRuntime.getServerInfo(config),
+      invalidate: (id, options) => services.mcpRuntime.invalidateServer(id, options),
+      listTools: (server) => services.mcpRuntime.listToolsForServer(server),
+      test: (config) => services.mcpRuntime.testConnection(config),
+      warm: (server) => services.mcpRuntime.warmToolsCache(server),
     },
     servers: {
       create: (input) => services.mcpServer.create(input, 'streamableHttp'),

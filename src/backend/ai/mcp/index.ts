@@ -1,1 +1,1 @@
-export { McpService } from './McpService';
+export { McpRuntimeService } from './McpRuntimeService';

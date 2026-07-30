@@ -2,8 +2,8 @@ import type { ListToolsResult, MCPClient } from '@ai-sdk/mcp';
 import { createMCPClient } from '@ai-sdk/mcp';
 import type { Tool, ToolSet } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
-import type { McpServerService } from '@/backend/data/services/McpServerService';
 import type { ToolEntry } from '@/backend/ai/tools';
+import type { McpServerService } from '@/backend/data/services/McpServerService';
 import type {
   McpConnectionConfig,
   McpServerInfo,
@@ -28,7 +28,7 @@ import { fnv1a32 } from '@/shared/utils/fnv1a';
 
 import { resolveServersForAssistant } from './resolveAssistantMcpServers';
 
-const logger = loggerService.withContext('McpService');
+const logger = loggerService.withContext('McpRuntimeService');
 
 const TOOLS_CACHE_TTL_MS = 5 * 60 * 1000;
 const ACTIVE_PREWARM_CONCURRENCY = 3;
@@ -215,7 +215,7 @@ function withTimeout<T>(
  * Background refresh preserves the last good cache and backs off after failure.
  * Explicit tool listings reconnect once; tool calls are never replayed.
  */
-export class McpService {
+export class McpRuntimeService {
   constructor(private readonly deps: { mcpServer: McpServerService }) {}
 
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();

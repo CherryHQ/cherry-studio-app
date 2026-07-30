@@ -1,5 +1,5 @@
 import { AiService } from '@/backend/ai/AiService';
-import { McpService } from '@/backend/ai/mcp';
+import { McpRuntimeService } from '@/backend/ai/mcp';
 import { ToolService } from '@/backend/ai/tools';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
@@ -33,12 +33,12 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
   const fileEntry = new FileEntryService(dbService);
   const painting = new PaintingService(dbService, fileEntry);
   const mcpServer = new McpServerService(dbService);
-  const mcp = new McpService({ mcpServer });
+  const mcpRuntime = new McpRuntimeService({ mcpServer });
   const assistant = new AssistantService(dbService, model, preference, tag, pin);
   const topic = new TopicService(dbService, pin, tag);
   const message = new MessageService(dbService, topic, fileEntry);
   const webSearch = new WebSearchService(preference);
-  const tools = new ToolService({ devicePermission, mcp, preference, webSearch });
+  const tools = new ToolService({ devicePermission, mcpRuntime, preference, webSearch });
   const ai = new AiService({
     assistant,
     fileEntry,
@@ -55,7 +55,7 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
     devicePermission,
     fileEntry,
     group,
-    mcp,
+    mcpRuntime,
     mcpServer,
     message,
     model,

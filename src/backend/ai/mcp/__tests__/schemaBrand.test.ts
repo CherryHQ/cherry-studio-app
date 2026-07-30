@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 
 /**
- * `McpService.castMcpToolSet` asserts that tools from `@ai-sdk/mcp` are usable
+ * `McpRuntimeService.castMcpToolSet` asserts that tools from `@ai-sdk/mcp` are usable
  * as `ai`'s `ToolSet`. That holds only because both packages resolve schema
  * brands through the *global* symbol registry, so their separate
  * `@ai-sdk/provider-utils` copies agree at runtime.
