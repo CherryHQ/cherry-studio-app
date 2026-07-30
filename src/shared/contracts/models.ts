@@ -48,6 +48,17 @@ export type ModelPullResult =
   | { providerEnabled: boolean; status: 'up-to-date' }
   | { preview: ModelPullPreview; status: 'changes' };
 
+export class ModelPullTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`Pull models timed out after ${timeoutMs}ms`);
+    this.name = 'ModelPullTimeoutError';
+  }
+}
+
+export function isModelPullTimeoutError(error: unknown): error is ModelPullTimeoutError {
+  return error instanceof ModelPullTimeoutError;
+}
+
 export type ReconcileModelsInput = {
   toAdd?: readonly Model[];
   toRemove?: readonly UniqueModelId[];
