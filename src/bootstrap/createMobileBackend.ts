@@ -24,12 +24,12 @@ import {
 } from '@/backend/infrastructure/services/fileStorage';
 import { materializeRemoteModels } from '@/backend/infrastructure/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/infrastructure/services/ProviderService';
-import type { DataServices } from '@/bootstrap/createDataServices';
+import type { BackendServices } from '@/bootstrap/createBackendServices';
 import type { MobileBackend } from '@/shared/contracts';
 import type { CherryUIMessage } from '@/shared/data/types/message';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
-export function createMobileBackend(services: DataServices): MobileBackend {
+export function createMobileBackend(services: BackendServices): MobileBackend {
   const oauth = CherryInOauthService.getInstance(services.provider);
   const chat = new ChatApplication({
     files: {
@@ -178,10 +178,10 @@ export function createMobileBackend(services: DataServices): MobileBackend {
 
 function providerConfiguration(provider: {
   defaultChatEndpoint?: NonNullable<
-    Parameters<DataServices['model']['createFromRegistry']>[1]
+    Parameters<BackendServices['model']['createFromRegistry']>[1]
   >['defaultChatEndpoint'];
   endpointConfigs?: NonNullable<
-    Parameters<DataServices['model']['createFromRegistry']>[1]
+    Parameters<BackendServices['model']['createFromRegistry']>[1]
   >['endpointConfigs'];
 }) {
   return {

@@ -1,6 +1,6 @@
 import { loggerService } from '@logger';
 import { Uniwind } from 'uniwind';
-import type { DataServices } from '@/bootstrap/createDataServices';
+import type { BackendServices } from '@/bootstrap/createBackendServices';
 import { initI18n } from '@/frontend/i18n';
 import { ThemeMode } from '@/shared/data/preference';
 
@@ -11,7 +11,7 @@ const bootPreferenceKeys = {
   themeMode: 'ui.theme_mode',
 } as const;
 
-export async function bootstrapAppRuntime(services: DataServices) {
+export async function bootstrapAppRuntime(services: BackendServices) {
   const preferences = services.preference.getMultipleCached(bootPreferenceKeys);
 
   applyThemeModePreference(preferences.themeMode);
@@ -23,7 +23,7 @@ export async function bootstrapAppRuntime(services: DataServices) {
  * and initial/boot preferences — data repair and diagnostics belong here, not
  * in `bootstrapAppRuntime`. Best-effort: callers fire-and-forget and a failure
  * must not surface to the user. */
-export async function runPostReadyTasks(services: DataServices) {
+export async function runPostReadyTasks(services: BackendServices) {
   // The catch lives here, not in callers: they `void` this promise, so a task
   // added below without its own handling would become an unhandled rejection.
   try {
@@ -41,7 +41,7 @@ export async function runPostReadyTasks(services: DataServices) {
  * cold start is the only reliable "no writer is streaming into this" signal,
  * since the OS suspends rather than kills a backgrounded app. Best-effort:
  * a failure here shouldn't block the rest of startup. */
-async function reconcileStalePendingMessages(services: DataServices) {
+async function reconcileStalePendingMessages(services: BackendServices) {
   try {
     const staleIds = await services.message.findPendingAssistantMessageIds();
     if (staleIds.length === 0) return;

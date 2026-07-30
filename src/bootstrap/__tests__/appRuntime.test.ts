@@ -1,4 +1,4 @@
-import type { DataServices } from '@/bootstrap/createDataServices';
+import type { BackendServices } from '@/bootstrap/createBackendServices';
 
 import { bootstrapAppRuntime, runPostReadyTasks } from '../appRuntime';
 
@@ -19,7 +19,7 @@ function createServices(
     prewarmActiveServers?: () => Promise<void>;
     settleCrashedMessages?: (ids: string[]) => Promise<void>;
   } = {},
-): DataServices {
+): BackendServices {
   return {
     mcp: {
       prewarmActiveServers: overrides.prewarmActiveServers ?? jest.fn(async () => undefined),
@@ -31,7 +31,7 @@ function createServices(
     preference: {
       getMultipleCached: () => ({ language: 'en-US', themeMode: 'system' }),
     },
-  } as unknown as DataServices;
+  } as unknown as BackendServices;
 }
 
 describe('bootstrapAppRuntime', () => {

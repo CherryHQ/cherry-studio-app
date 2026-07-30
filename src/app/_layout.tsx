@@ -10,14 +10,13 @@ import { HeroUINativeProvider } from 'heroui-native/provider';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
-import { DataProvider, InitialDataGate } from '@/bootstrap';
-import { bootstrapAppRuntime } from '@/bootstrap/appRuntime';
+import { AppBootstrapGate, AppBootstrapProvider } from '@/bootstrap';
 import { NavigationThemeProvider } from '@/frontend/components/navigation';
 import { QueryProvider } from '@/frontend/data';
 import { isIOS, isLiquidGlassAvailable } from '@/utils/constants';
 
-// Hold the native splash across data-runtime init so the gate never exposes a
-// blank frame. `DataProvider` calls `SplashScreen.hideAsync()` once init settles.
+// Hold the native splash across app bootstrap so the gate never exposes a
+// blank frame. `AppBootstrapProvider` hides it once initialization settles.
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const RootGestureView = withUniwind(GestureHandlerRootView);
@@ -28,15 +27,15 @@ export default function RootLayout() {
       <KeyboardProvider>
         <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false } }}>
           <QueryProvider>
-            <DataProvider bootstrap={bootstrapAppRuntime}>
-              <InitialDataGate>
+            <AppBootstrapProvider>
+              <AppBootstrapGate>
                 <NavigationThemeProvider>
                   <BottomSheetProvider>
                     <RootStack />
                   </BottomSheetProvider>
                 </NavigationThemeProvider>
-              </InitialDataGate>
-            </DataProvider>
+              </AppBootstrapGate>
+            </AppBootstrapProvider>
           </QueryProvider>
         </HeroUINativeProvider>
       </KeyboardProvider>

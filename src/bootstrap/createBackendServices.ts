@@ -18,9 +18,9 @@ import { ProviderService } from '@/backend/infrastructure/services/ProviderServi
 import { TagService } from '@/backend/infrastructure/services/TagService';
 import { TopicService } from '@/backend/infrastructure/services/TopicService';
 
-export type DataServices = ReturnType<typeof createDataServices>;
+export type BackendServices = ReturnType<typeof createBackendServices>;
 
-export function createDataServices(dbService: DbService) {
+export function createBackendServices(dbService: DbService) {
   const preference = new PreferenceService(dbService);
   const devicePermission = new DevicePermissionService();
   const pin = new PinService(dbService);

@@ -1,9 +1,9 @@
 import type { PropsWithChildren } from 'react';
 
-import { useDataState } from './DataProvider';
+import { useAppBootstrapState } from './AppBootstrapProvider';
 
-export function InitialDataGate({ children }: PropsWithChildren) {
-  const state = useDataState();
+export function AppBootstrapGate({ children }: PropsWithChildren) {
+  const state = useAppBootstrapState();
 
   if (state.status === 'loading') {
     return null;
