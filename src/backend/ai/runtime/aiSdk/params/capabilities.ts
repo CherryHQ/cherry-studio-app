@@ -11,7 +11,7 @@ import {
   isGeminiModel,
   isGrokModel,
   isOpenAIModel,
-} from '@/shared/domain/model/modelCapabilities';
+} from '@/shared/utils/model';
 import type { AppProviderId } from '../../../types';
 import { SystemProviderIds } from '../../../utils/providerIds';
 import {

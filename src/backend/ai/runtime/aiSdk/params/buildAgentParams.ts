@@ -13,7 +13,7 @@ import {
   isAnthropicModel,
   isForcedNativeWebSearchModel,
   isFunctionCallingModel,
-} from '@/shared/domain/model/modelCapabilities';
+} from '@/shared/utils/model';
 import { providerToAiSdkConfig } from '../../../provider/config';
 import type { ToolService } from '../../../tools';
 import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/adapters/aiSdk/meta/toolSearch';

@@ -5,7 +5,7 @@ import { providerToolPlugin } from '@cherrystudio/ai-core/built-in/plugins';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
-import { isAnthropicModel } from '@/shared/domain/model/modelCapabilities';
+import { isAnthropicModel } from '@/shared/utils/model';
 import { SystemProviderIds } from '../../../utils/providerIds';
 import { getReasoningTagName } from '../../../utils/reasoning';
 import { createAnthropicCachePlugin } from './features/anthropicCache';

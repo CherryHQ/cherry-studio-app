@@ -13,7 +13,7 @@ import {
   isReasoningModel,
   isSupportFlexServiceTierModel,
   isSupportVerbosityModel,
-} from '@/shared/domain/model/modelCapabilities';
+} from '@/shared/utils/model';
 import { getAiSdkProviderId } from '../provider/factory';
 import type { ProviderCapabilities } from '../types';
 import { buildGeminiGenerateImageParams } from './image';

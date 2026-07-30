@@ -16,10 +16,7 @@ import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 import { resolveProviderType } from '@/shared/data/types/provider';
 
-import {
-  isClaude4SeriesModel,
-  isClaude45ReasoningModel,
-} from '@/shared/domain/model/modelCapabilities';
+import { isClaude4SeriesModel, isClaude45ReasoningModel } from '@/shared/utils/model';
 
 const INTERLEAVED_THINKING_HEADER = 'interleaved-thinking-2025-05-14';
 const WEBSEARCH_HEADER = 'web-search-2025-03-05';

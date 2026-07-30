@@ -4,7 +4,7 @@ import {
   type ReasoningEffort,
 } from '@cherrystudio/provider-registry';
 import type { Model } from '@/shared/data/types/model';
-import { getModelSupportedReasoningEffortOptions } from '@/shared/domain/model/modelCapabilities';
+import { getModelSupportedReasoningEffortOptions } from '@/shared/utils/model';
 
 export const CHAT_INPUT_DEFAULT_REASONING_EFFORT = 'default';
 
