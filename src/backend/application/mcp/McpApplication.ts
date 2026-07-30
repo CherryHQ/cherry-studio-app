@@ -4,6 +4,7 @@ import type {
   McpServerInfo,
   McpServerRuntimeSummary,
   McpToolSummary,
+  McpUpdateServerResult,
 } from '@/shared/contracts';
 import type {
   CreateMcpServerDto,
@@ -88,7 +89,7 @@ export class McpApplication implements McpBackend {
     return this.dependencies.runtime.test(config);
   }
 
-  async updateServer(id: string, input: UpdateMcpServerDto): Promise<StreamableHttpMcpServer> {
+  async updateServer(id: string, input: UpdateMcpServerDto): Promise<McpUpdateServerResult> {
     if (!id) {
       throw new Error('updateServer requires a server id');
     }
@@ -98,8 +99,10 @@ export class McpApplication implements McpBackend {
       : undefined;
     const server = await this.dependencies.servers.update(id, input);
 
+    let toolsChanged = false;
     if (previous) {
       const transportChanged = !hasSameTransport(previous, server);
+      toolsChanged = transportChanged;
       const becameActive = !previous.isActive && server.isActive;
       const becameInactive = previous.isActive && !server.isActive;
 
@@ -114,7 +117,7 @@ export class McpApplication implements McpBackend {
       }
     }
 
-    return server;
+    return { server, toolsChanged };
   }
 }
 

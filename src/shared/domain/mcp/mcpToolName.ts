@@ -3,7 +3,7 @@
  * `src/shared/ai/tools/mcpToolName.ts` (subset used by mobile).
  */
 
-import { fnv1a32 } from './fnv1a';
+import { fnv1a32 } from '@/shared/utils/fnv1a';
 
 /**
  * Convert a string to camelCase, ensuring it's a valid JavaScript identifier.

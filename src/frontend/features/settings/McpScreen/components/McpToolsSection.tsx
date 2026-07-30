@@ -5,14 +5,12 @@ import { useToast } from 'heroui-native/toast';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-
+import { queryKeys, useBackendModule } from '@/frontend/data';
+import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 import {
   hasMcpServerWildcardRule,
   matchesMcpSourceToolRule,
-} from '@/backend/infrastructure/ai/mcp';
-import { useDataServices } from '@/bootstrap';
-import { queryKeys } from '@/frontend/data';
-import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
+} from '@/shared/domain/mcp/mcpSourcePolicy';
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 
 type McpToolsSectionProps = {
@@ -35,7 +33,7 @@ export function McpToolsSection({
 }: McpToolsSectionProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const services = useDataServices();
+  const mcp = useBackendModule('mcp');
   const isToggleInFlight = useRef(false);
   const [isTogglePending, setIsTogglePending] = useState(false);
   // Matches raw names, wire ids and server wildcards alike, so a tool disabled
@@ -53,7 +51,7 @@ export function McpToolsSection({
 
   const toolsQuery = useQuery({
     enabled: /^https?:\/\//i.test(server.baseUrl),
-    queryFn: () => services.mcp.listToolsForServer(server),
+    queryFn: () => mcp.listTools(server.id),
     queryKey: queryKeys.mcpServers.tools(server.id),
     retry: false,
   });

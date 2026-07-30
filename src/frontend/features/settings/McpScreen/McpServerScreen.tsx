@@ -6,14 +6,14 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { withMcpToolRuleAdded, withMcpToolRuleCleared } from '@/backend/infrastructure/ai/mcp';
-import { useDataServices } from '@/bootstrap';
 import { useConfirmDialog } from '@/frontend/components/confirmDialog';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { useBackendModule } from '@/frontend/data';
 import { useMcpServerApiById, useMcpServerMutations } from '@/frontend/hooks/mcp/useMcpServers';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiError, ErrorCode } from '@/shared/data/api/types';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
+import { withMcpToolRuleAdded, withMcpToolRuleCleared } from '@/shared/domain/mcp/mcpSourcePolicy';
 import { keyboardBottomOffset } from '@/utils/constants';
 import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { McpHeadersEditor } from './components/McpHeadersEditor';
@@ -117,7 +117,7 @@ function McpServerEditor({
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
-  const { mcp: mcpService } = useDataServices();
+  const mcp = useBackendModule('mcp');
   const { confirmDialog, requestConfirm } = useConfirmDialog();
 
   const isCreating = !serverId;
@@ -155,7 +155,7 @@ function McpServerEditor({
         await updateServer(serverId, dto.value);
         setIsEditing(false);
       } else {
-        const serverInfo = await mcpService.getServerInfo({
+        const serverInfo = await mcp.getServerInfo({
           baseUrl: dto.value.baseUrl,
           headers: dto.value.headers,
         });
@@ -179,7 +179,7 @@ function McpServerEditor({
     } finally {
       setIsSaving(false);
     }
-  }, [createServer, form, mcpService, router, serverId, t, toast, updateServer]);
+  }, [createServer, form, mcp, router, serverId, t, toast, updateServer]);
 
   const handleToggleTool = useCallback(
     async (toolName: string, enabled: boolean, knownToolNames: string[]) => {

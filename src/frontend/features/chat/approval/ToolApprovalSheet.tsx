@@ -3,8 +3,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { parseFunctionCallToolName } from '@/backend/infrastructure/ai/mcp';
 import { BottomSheet } from '@/frontend/components/bottomSheet';
+import { parseFunctionCallToolName } from '@/shared/domain/mcp/mcpToolName';
 import type { PendingToolApproval } from '../session/chatSessionProjection';
 import { getBuiltInToolPresentation } from '../utils/builtInToolPresentation';
 

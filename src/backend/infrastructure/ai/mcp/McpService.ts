@@ -4,6 +4,12 @@ import type { Tool, ToolSet } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import type { ToolEntry } from '@/backend/infrastructure/ai/tools';
 import type { McpServerService } from '@/backend/infrastructure/services/McpServerService';
+import type {
+  McpConnectionConfig,
+  McpServerInfo,
+  McpServerRuntimeSummary,
+  McpToolSummary,
+} from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiError, ErrorCode } from '@/shared/data/api/types';
 import type { Assistant } from '@/shared/data/types/assistant';
@@ -11,12 +17,15 @@ import {
   DEFAULT_MCP_TIMEOUT_SECONDS,
   type StreamableHttpMcpServer,
 } from '@/shared/data/types/mcpServer';
+import type { McpCallToolResult } from '@/shared/domain/mcp/mcpResult';
+import { mcpResultToTextSummary } from '@/shared/domain/mcp/mcpResult';
+import {
+  isMcpToolDisabledBySource,
+  isMcpToolForcePromptBySource,
+} from '@/shared/domain/mcp/mcpSourcePolicy';
+import { buildFunctionCallToolName } from '@/shared/domain/mcp/mcpToolName';
+import { fnv1a32 } from '@/shared/utils/fnv1a';
 
-import { fnv1a32 } from './fnv1a';
-import type { McpCallToolResult } from './mcpResult';
-import { mcpResultToTextSummary } from './mcpResult';
-import { isMcpToolDisabledBySource, isMcpToolForcePromptBySource } from './mcpSourcePolicy';
-import { buildFunctionCallToolName } from './mcpToolName';
 import { resolveServersForAssistant } from './resolveAssistantMcpServers';
 
 const logger = loggerService.withContext('McpService');
@@ -34,33 +43,6 @@ const TOOLS_FETCH_TIMEOUT_MS = 15 * 1000;
  * forever, on a phone. */
 const REFRESH_BACKOFF_BASE_MS = 30 * 1000;
 const REFRESH_BACKOFF_MAX_MS = 10 * 60 * 1000;
-
-export type McpConnectionConfig = {
-  baseUrl: string;
-  headers?: Record<string, string>;
-};
-
-export type McpToolSummary = {
-  description?: string;
-  name: string;
-};
-
-export type McpServerInfo = {
-  instructions?: string;
-  name: string;
-  title?: string;
-  version: string;
-};
-
-export type McpServerRuntimeSummary = {
-  lastConnectedAt?: number;
-  lastError?: string;
-  serverName?: string;
-  serverTitle?: string;
-  serverVersion?: string;
-  state: 'connected' | 'connecting' | 'disabled' | 'error';
-  toolCount?: number;
-};
 
 type ToolsCacheEntry = {
   fetchedAt: number;

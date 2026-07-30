@@ -1,6 +1,8 @@
 import type { ReactElement, ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { BackendProvider } from '@/frontend/data';
+import type { MobileBackend } from '@/shared/contracts';
 import { DataApiError, ErrorCode } from '@/shared/data/api/types';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 import { McpServerScreen } from '../McpServerScreen';
@@ -39,6 +41,9 @@ const mockRouterReplace = jest.fn();
 const mockServerRefetch = jest.fn();
 const mockToastShow = jest.fn();
 const mockUpdateServer = jest.fn();
+const backend = {
+  mcp: { getServerInfo: mockGetServerInfo },
+} as unknown as MobileBackend;
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ serverId: mockServerId }),
@@ -65,11 +70,6 @@ jest.mock('react-native-keyboard-controller', () => {
   };
 });
 
-jest.mock('@/backend/infrastructure/ai/mcp', () => ({
-  withMcpToolRuleAdded: jest.fn(),
-  withMcpToolRuleCleared: jest.fn(),
-}));
-
 jest.mock('@/frontend/components/headers', () => ({
   BackHeader: (props: HeaderProps) => {
     mockHeaderProps = props;
@@ -83,10 +83,6 @@ jest.mock('@/frontend/components/confirmDialog', () => ({
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
   loggerService: { withContext: () => ({ error: jest.fn() }) },
-}));
-
-jest.mock('@/bootstrap', () => ({
-  useDataServices: () => ({ mcp: { getServerInfo: mockGetServerInfo } }),
 }));
 
 jest.mock('@/frontend/hooks/mcp/useMcpServers', () => ({
@@ -209,7 +205,7 @@ describe('McpServerScreen tabs', () => {
 
   async function render() {
     await act(async () => {
-      renderer = create(<McpServerScreen />);
+      renderer = create(renderSubject());
     });
 
     if (!renderer) {
@@ -217,6 +213,14 @@ describe('McpServerScreen tabs', () => {
     }
 
     return renderer;
+  }
+
+  function renderSubject() {
+    return (
+      <BackendProvider backend={backend}>
+        <McpServerScreen />
+      </BackendProvider>
+    );
   }
 
   it('shows only the Config title before the server is saved', async () => {
@@ -551,7 +555,7 @@ describe('McpServerScreen tabs', () => {
 
     mockServer = makeServer({ isActive: false });
     await act(async () => {
-      tree.update(<McpServerScreen />);
+      tree.update(renderSubject());
     });
 
     expect(findNameInput().props.value).toBe('Draft name');

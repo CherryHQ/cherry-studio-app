@@ -1,9 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import type { McpServerRuntimeSummary } from '@/backend/infrastructure/ai/mcp';
-import { useDataServices } from '@/bootstrap';
-import { queryKeys } from '@/frontend/data';
-import { useDataQuery } from '@/frontend/data/hooks';
+import { queryKeys, useBackendModule } from '@/frontend/data';
+import type { McpServerRuntimeSummary } from '@/shared/contracts';
 import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/shared/data/api/schemas/mcpServers';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 
@@ -12,8 +10,9 @@ const EMPTY_MCP_RUNTIME_SUMMARIES: Readonly<Record<string, McpServerRuntimeSumma
   Object.freeze({});
 
 export function useMcpServersApi() {
-  const query = useDataQuery({
-    queryFn: (services) => services.mcpServer.list({ type: 'streamableHttp' }),
+  const mcp = useBackendModule('mcp');
+  const query = useQuery({
+    queryFn: () => mcp.listServers(),
     queryKey: queryKeys.mcpServers.list(),
   });
 
@@ -28,11 +27,12 @@ export function useMcpServersApi() {
 }
 
 export function useMcpServerApiById(id: string | undefined) {
+  const mcp = useBackendModule('mcp');
   const enabled = Boolean(id);
   const queryServerId = id ?? '__missing_mcp_server__';
-  const query = useDataQuery({
+  const query = useQuery({
     enabled,
-    queryFn: (services) => services.mcpServer.getById(id ?? '', 'streamableHttp'),
+    queryFn: () => mcp.getServer(id ?? ''),
     queryKey: queryKeys.mcpServers.detail(queryServerId),
   });
 
@@ -46,9 +46,10 @@ export function useMcpServerApiById(id: string | undefined) {
 }
 
 export function useMcpServerRuntimeSummaries(servers: readonly StreamableHttpMcpServer[]) {
-  const query = useDataQuery({
+  const mcp = useBackendModule('mcp');
+  const query = useQuery({
     enabled: servers.length > 0,
-    queryFn: (services) => services.mcp.getRuntimeSummaries(servers),
+    queryFn: () => mcp.getRuntimeSummaries(servers),
     queryKey: queryKeys.mcpServers.runtimeSummaries(servers),
     retry: false,
     staleTime: 5 * 60 * 1000,
@@ -63,7 +64,7 @@ export function useMcpServerRuntimeSummaries(servers: readonly StreamableHttpMcp
 }
 
 export function useMcpServerMutations() {
-  const services = useDataServices();
+  const mcp = useBackendModule('mcp');
   const queryClient = useQueryClient();
 
   const invalidateServerQueries = useCallback(
@@ -87,54 +88,28 @@ export function useMcpServerMutations() {
   );
 
   const createMutation = useMutation({
-    mutationFn: (dto: CreateMcpServerDto) => services.mcpServer.create(dto, 'streamableHttp'),
+    mutationFn: (dto: CreateMcpServerDto) => mcp.createServer(dto),
     onSuccess: async (server) => {
       queryClient.setQueryData(queryKeys.mcpServers.detail(server.id), server);
       await invalidateServerQueries(server.id, { refetchDetail: false });
-      if (server.isActive) {
-        void services.mcp.warmToolsCache(server);
-      }
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: UpdateMcpServerDto }) => {
-      if (!id) {
-        throw new Error('updateMcpServer called with empty id');
-      }
-
-      const previous = hasRuntimeRelevantPatch(patch)
-        ? await services.mcpServer.getById(id, 'streamableHttp')
-        : undefined;
-      const server = await services.mcpServer.update(id, patch, 'streamableHttp');
-      return { previous, server };
-    },
-    onSuccess: async ({ previous, server }) => {
-      const transportChanged = previous ? !hasSameTransport(previous, server) : false;
-      const becameActive = previous ? !previous.isActive && server.isActive : false;
-      const becameInactive = previous ? previous.isActive && !server.isActive : false;
-
-      if (transportChanged) {
-        services.mcp.invalidateServer(server.id);
-      } else if (becameInactive) {
-        services.mcp.invalidateServer(server.id, { preserveSnapshot: true });
-      }
-
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateMcpServerDto }) =>
+      mcp.updateServer(id, patch),
+    onSuccess: async ({ server, toolsChanged }) => {
       queryClient.setQueryData(queryKeys.mcpServers.detail(server.id), server);
       await invalidateServerQueries(server.id, {
-        includeTools: transportChanged,
+        includeTools: toolsChanged,
         refetchDetail: false,
       });
-      if (server.isActive && (transportChanged || becameActive)) {
-        void services.mcp.warmToolsCache(server);
-      }
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => services.mcpServer.delete(id, 'streamableHttp'),
+    mutationFn: (id: string) => mcp.removeServer(id),
     onSuccess: (_data, id) => {
-      services.mcp.invalidateServer(id);
       void Promise.allSettled([
         invalidateServerQueries(id, { refetchDetail: false }),
         queryClient.invalidateQueries({ queryKey: queryKeys.assistants.all() }),
@@ -146,13 +121,11 @@ export function useMcpServerMutations() {
     (dto: CreateMcpServerDto) => createMutation.mutateAsync(dto),
     [createMutation],
   );
-
   const updateServer = useCallback(
     async (id: string, patch: UpdateMcpServerDto) =>
       (await updateMutation.mutateAsync({ id, patch })).server,
     [updateMutation],
   );
-
   const deleteServer = useCallback(
     (id: string) => deleteMutation.mutateAsync(id),
     [deleteMutation],
@@ -166,20 +139,4 @@ export function useMcpServerMutations() {
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
   };
-}
-
-function hasRuntimeRelevantPatch(patch: UpdateMcpServerDto): boolean {
-  return patch.baseUrl !== undefined || patch.headers !== undefined || patch.isActive !== undefined;
-}
-
-function hasSameTransport(left: StreamableHttpMcpServer, right: StreamableHttpMcpServer): boolean {
-  if (left.baseUrl !== right.baseUrl) {
-    return false;
-  }
-
-  const leftHeaders = Object.entries(left.headers);
-  return (
-    leftHeaders.length === Object.keys(right.headers).length &&
-    leftHeaders.every(([name, value]) => right.headers[name] === value)
-  );
 }

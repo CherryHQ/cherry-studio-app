@@ -33,6 +33,11 @@ export type McpServerRuntimeSummary = {
   toolCount?: number;
 };
 
+export type McpUpdateServerResult = {
+  server: StreamableHttpMcpServer;
+  toolsChanged: boolean;
+};
+
 export interface McpBackend {
   createServer(input: CreateMcpServerDto): Promise<StreamableHttpMcpServer>;
   getRuntimeSummaries(
@@ -47,5 +52,5 @@ export interface McpBackend {
   listTools(serverId: string): Promise<McpToolSummary[]>;
   removeServer(id: string): Promise<void>;
   test(config: McpConnectionConfig): Promise<McpToolSummary[]>;
-  updateServer(id: string, input: UpdateMcpServerDto): Promise<StreamableHttpMcpServer>;
+  updateServer(id: string, input: UpdateMcpServerDto): Promise<McpUpdateServerResult>;
 }

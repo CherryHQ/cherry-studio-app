@@ -2,6 +2,8 @@ import { Switch } from 'heroui-native/switch';
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { BackendProvider } from '@/frontend/data';
+import type { MobileBackend } from '@/shared/contracts';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 import { McpToolsSection } from '../McpToolsSection';
 
@@ -14,13 +16,12 @@ const mockUseQuery = jest.fn((_options: unknown) => ({
   refetch: mockRefetch,
 }));
 let mockToolsQuery: ToolsQueryResult & { isLoading: boolean };
+const backend = {
+  mcp: { listTools: jest.fn() },
+} as unknown as MobileBackend;
 
 jest.mock('@tanstack/react-query', () => ({
   useQuery: (options: unknown) => mockUseQuery(options),
-}));
-
-jest.mock('@/bootstrap', () => ({
-  useDataServices: () => ({ mcp: { listToolsForServer: jest.fn() } }),
 }));
 
 jest.mock('react-i18next', () => ({
@@ -104,12 +105,14 @@ describe('McpToolsSection auto-approve toggle', () => {
 
     act(() => {
       renderer = create(
-        <McpToolsSection
-          isReadOnly={isReadOnly}
-          onToggleAutoApprove={onToggleAutoApprove}
-          onToggleTool={onToggleTool}
-          server={server}
-        />,
+        <BackendProvider backend={backend}>
+          <McpToolsSection
+            isReadOnly={isReadOnly}
+            onToggleAutoApprove={onToggleAutoApprove}
+            onToggleTool={onToggleTool}
+            server={server}
+          />
+        </BackendProvider>,
       );
     });
 

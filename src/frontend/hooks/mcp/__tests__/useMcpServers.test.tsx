@@ -1,19 +1,31 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import { queryKeys } from '@/frontend/data';
+import { BackendProvider, queryKeys } from '@/frontend/data';
+import type { McpBackend, MobileBackend } from '@/shared/contracts';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
-
 import { useMcpServerMutations } from '../useMcpServers';
 
-const mockInvalidateQueries = jest.fn<Promise<void>, []>(async () => undefined);
-const mockInvalidateServer = jest.fn();
+const mockInvalidateQueries = jest.fn<Promise<void>, [unknown]>(async () => undefined);
 const mockSetQueryData = jest.fn();
-const mockWarmToolsCache = jest.fn(async (): Promise<void> => undefined);
-const mockCreateServer = jest.fn();
-const mockDeleteServer = jest.fn(async () => undefined);
-const mockGetServer = jest.fn();
-const mockUpdateServer = jest.fn();
+const mockCreateServer = jest.fn<
+  ReturnType<McpBackend['createServer']>,
+  Parameters<McpBackend['createServer']>
+>();
+const mockRemoveServer = jest.fn<
+  ReturnType<McpBackend['removeServer']>,
+  Parameters<McpBackend['removeServer']>
+>();
+const mockUpdateServer = jest.fn<
+  ReturnType<McpBackend['updateServer']>,
+  Parameters<McpBackend['updateServer']>
+>();
+const backend = {
+  mcp: {
+    createServer: mockCreateServer,
+    removeServer: mockRemoveServer,
+    updateServer: mockUpdateServer,
+  },
+} as unknown as MobileBackend;
 
 jest.mock('@tanstack/react-query', () => ({
   useMutation: (config: {
@@ -33,31 +45,14 @@ jest.mock('@tanstack/react-query', () => ({
   }),
 }));
 
-jest.mock('@/bootstrap', () => ({
-  useDataServices: () => ({
-    mcp: {
-      invalidateServer: mockInvalidateServer,
-      warmToolsCache: mockWarmToolsCache,
-    },
-    mcpServer: {
-      create: mockCreateServer,
-      delete: mockDeleteServer,
-      getById: mockGetServer,
-      update: mockUpdateServer,
-    },
-  }),
-}));
-
 let actions: ReturnType<typeof useMcpServerMutations> | undefined;
 let renderer: ReactTestRenderer | undefined;
 
 function Probe() {
   const result = useMcpServerMutations();
-
   useEffect(() => {
     actions = result;
   }, [result]);
-
   return null;
 }
 
@@ -78,12 +73,17 @@ function makeServer(overrides: Partial<StreamableHttpMcpServer> = {}): Streamabl
   };
 }
 
-describe('useMcpServerMutations runtime effects', () => {
+describe('useMcpServerMutations', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     actions = undefined;
+    mockRemoveServer.mockResolvedValue(undefined);
     await act(async () => {
-      renderer = create(<Probe />);
+      renderer = create(
+        <BackendProvider backend={backend}>
+          <Probe />
+        </BackendProvider>,
+      );
     });
   });
 
@@ -91,152 +91,65 @@ describe('useMcpServerMutations runtime effects', () => {
     await act(async () => renderer?.unmount());
   });
 
-  it('updates tool policy without touching the runtime or tools query', async () => {
-    mockUpdateServer.mockResolvedValue(makeServer({ disabledTools: ['search'] }));
+  it('keeps the tools cache when the backend reports unchanged tools', async () => {
+    const server = makeServer({ disabledTools: ['search'] });
+    mockUpdateServer.mockResolvedValue({ server, toolsChanged: false });
 
     await act(async () => {
-      await actions?.updateServer('server-1', { disabledTools: ['search'] });
+      await actions?.updateServer(server.id, { disabledTools: ['search'] });
     });
 
-    expect(mockGetServer).not.toHaveBeenCalled();
-    expect(mockInvalidateServer).not.toHaveBeenCalled();
-    expect(mockWarmToolsCache).not.toHaveBeenCalled();
+    expect(mockSetQueryData).toHaveBeenCalledWith(queryKeys.mcpServers.detail(server.id), server);
     expect(mockInvalidateQueries).not.toHaveBeenCalledWith({
-      queryKey: queryKeys.mcpServers.tools('server-1'),
+      queryKey: queryKeys.mcpServers.tools(server.id),
     });
   });
 
-  it('leaves the runtime alone when a full save keeps the same transport', async () => {
-    const server = makeServer({ headers: { Authorization: 'Bearer token' } });
-    mockGetServer.mockResolvedValue(server);
-    mockUpdateServer.mockResolvedValue({ ...server, name: 'Renamed', timeout: 10 });
+  it('invalidates the tools cache when the backend reports a transport change', async () => {
+    const server = makeServer({ baseUrl: 'https://b.example/mcp' });
+    mockUpdateServer.mockResolvedValue({ server, toolsChanged: true });
 
     await act(async () => {
-      await actions?.updateServer('server-1', {
-        baseUrl: server.baseUrl,
-        headers: { Authorization: 'Bearer token' },
-        name: 'Renamed',
-        timeout: 10,
-      });
+      await actions?.updateServer(server.id, { baseUrl: server.baseUrl });
     });
 
-    expect(mockInvalidateServer).not.toHaveBeenCalled();
-    expect(mockWarmToolsCache).not.toHaveBeenCalled();
-    expect(mockInvalidateQueries).not.toHaveBeenCalledWith({
-      queryKey: queryKeys.mcpServers.tools('server-1'),
-    });
-  });
-
-  it('invalidates, refreshes tools, and warms only the changed server', async () => {
-    mockGetServer.mockResolvedValue(makeServer());
-    mockUpdateServer.mockResolvedValue(makeServer({ baseUrl: 'https://b.example/mcp' }));
-
-    await act(async () => {
-      await actions?.updateServer('server-1', { baseUrl: 'https://b.example/mcp' });
-    });
-
-    expect(mockInvalidateServer).toHaveBeenCalledWith('server-1');
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.mcpServers.tools('server-1'),
-    });
-    expect(mockWarmToolsCache).toHaveBeenCalledWith(
-      expect.objectContaining({ baseUrl: 'https://b.example/mcp', id: 'server-1' }),
-    );
-  });
-
-  it('warms the enabled server and invalidates on disable', async () => {
-    mockGetServer.mockResolvedValueOnce(makeServer({ isActive: false }));
-    mockUpdateServer.mockResolvedValueOnce(makeServer({ isActive: true }));
-
-    await act(async () => {
-      await actions?.updateServer('server-1', { isActive: true });
-    });
-
-    expect(mockWarmToolsCache).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'server-1', isActive: true }),
-    );
-    expect(mockSetQueryData).toHaveBeenCalledWith(
-      queryKeys.mcpServers.detail('server-1'),
-      expect.objectContaining({ id: 'server-1' }),
-    );
-    expect(mockInvalidateServer).not.toHaveBeenCalled();
-
-    jest.clearAllMocks();
-    mockGetServer.mockResolvedValueOnce(makeServer({ isActive: true }));
-    mockUpdateServer.mockResolvedValueOnce(makeServer({ isActive: false }));
-
-    await act(async () => {
-      await actions?.updateServer('server-1', { isActive: false });
-    });
-
-    expect(mockInvalidateServer).toHaveBeenCalledWith('server-1', { preserveSnapshot: true });
-    expect(mockWarmToolsCache).not.toHaveBeenCalled();
-    expect(mockInvalidateQueries).not.toHaveBeenCalledWith({
-      queryKey: queryKeys.mcpServers.tools('server-1'),
+      queryKey: queryKeys.mcpServers.tools(server.id),
     });
   });
 
-  it('warms an active create and only invalidates runtime on delete', async () => {
-    mockCreateServer.mockResolvedValue(makeServer());
+  it('hydrates a created server and delegates runtime effects to the backend', async () => {
+    const server = makeServer();
+    mockCreateServer.mockResolvedValue(server);
 
     await act(async () => {
-      await actions?.createServer({ baseUrl: 'https://a.example/mcp', name: 'Server' });
+      await actions?.createServer({ baseUrl: server.baseUrl, name: server.name });
     });
 
-    expect(mockWarmToolsCache).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'server-1', isActive: true }),
-    );
-    expect(mockInvalidateServer).not.toHaveBeenCalled();
+    expect(mockCreateServer).toHaveBeenCalledWith({ baseUrl: server.baseUrl, name: server.name });
+    expect(mockSetQueryData).toHaveBeenCalledWith(queryKeys.mcpServers.detail(server.id), server);
+  });
 
-    jest.clearAllMocks();
-    await act(async () => {
-      await actions?.deleteServer('server-1');
-    });
+  it('does not keep delete pending while cache invalidation settles', async () => {
+    const pendingInvalidation = deferred<void>();
+    mockInvalidateQueries.mockImplementationOnce(() => pendingInvalidation.promise);
 
-    expect(mockInvalidateServer).toHaveBeenCalledWith('server-1');
-    expect(mockWarmToolsCache).not.toHaveBeenCalled();
+    const deletion = actions?.deleteServer('server-1');
+    await expect(deletion).resolves.toBeUndefined();
+    expect(mockRemoveServer).toHaveBeenCalledWith('server-1');
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.mcpServers.detail('server-1'),
-      refetchType: 'none',
-    });
-    expect(mockInvalidateQueries).not.toHaveBeenCalledWith({
-      queryKey: queryKeys.mcpServers.tools('server-1'),
-    });
-  });
-
-  it('does not keep a delete mutation pending while cache invalidation runs', async () => {
-    const invalidation = deferred<void>();
-    mockInvalidateQueries.mockReturnValue(invalidation.promise);
-
-    await act(async () => {
-      await actions?.deleteServer('server-1');
+      queryKey: queryKeys.assistants.all(),
     });
 
-    expect(mockDeleteServer).toHaveBeenCalledWith('server-1', 'streamableHttp');
-    invalidation.resolve();
-    await act(async () => {
-      await Promise.resolve();
-    });
-  });
-
-  it('does not keep a create mutation pending while the server warms', async () => {
-    const warm = deferred<void>();
-    mockWarmToolsCache.mockReturnValueOnce(warm.promise);
-    mockCreateServer.mockResolvedValue(makeServer());
-
-    await act(async () => {
-      await actions?.createServer({ baseUrl: 'https://a.example/mcp', name: 'Server' });
-    });
-
-    expect(mockWarmToolsCache).toHaveBeenCalledTimes(1);
-    warm.resolve();
+    pendingInvalidation.resolve();
+    await pendingInvalidation.promise;
   });
 });
 
 function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
   });
   return { promise, resolve };
 }

@@ -61,12 +61,13 @@ describe('McpApplication', () => {
   it('invalidates the transport and warms after a URL change', async () => {
     const { backend, dependencies } = createSubject();
 
-    const updated = await backend.updateServer('server-1', {
+    const result = await backend.updateServer('server-1', {
       baseUrl: 'https://example.com/new-mcp',
     });
 
+    expect(result.toolsChanged).toBe(true);
     expect(dependencies.runtime.invalidate).toHaveBeenCalledWith('server-1');
-    expect(dependencies.runtime.warm).toHaveBeenCalledWith(updated);
+    expect(dependencies.runtime.warm).toHaveBeenCalledWith(result.server);
   });
 
   it('preserves the last runtime snapshot when a server is disabled', async () => {
@@ -77,6 +78,17 @@ describe('McpApplication', () => {
     expect(dependencies.runtime.invalidate).toHaveBeenCalledWith('server-1', {
       preserveSnapshot: true,
     });
+    expect(dependencies.runtime.warm).not.toHaveBeenCalled();
+  });
+
+  it('reports unchanged tools when a policy-only update skips the runtime', async () => {
+    const { backend, dependencies } = createSubject();
+
+    await expect(
+      backend.updateServer('server-1', { disabledTools: ['search'] }),
+    ).resolves.toMatchObject({ toolsChanged: false });
+    expect(dependencies.servers.get).not.toHaveBeenCalled();
+    expect(dependencies.runtime.invalidate).not.toHaveBeenCalled();
     expect(dependencies.runtime.warm).not.toHaveBeenCalled();
   });
 
