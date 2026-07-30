@@ -1,14 +1,14 @@
 import { Image } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
+import { type NormalizedMcpContent, normalizeMcpResult } from '@/shared/ai/tools/mcpResult';
+import { parseFunctionCallToolName } from '@/shared/ai/tools/mcpToolName';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import {
   type CherryToolMeta,
   readCherryMeta,
   readCherryToolMetadata,
 } from '@/shared/data/types/uiParts';
-import { type NormalizedMcpContent, normalizeMcpResult } from '@/shared/domain/mcp/mcpResult';
-import { parseFunctionCallToolName } from '@/shared/domain/mcp/mcpToolName';
 import { ToolPartSectionTitle, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';
 

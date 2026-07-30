@@ -6,11 +6,11 @@ import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { queryKeys, useBackendModule } from '@/frontend/data';
-import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 import {
   hasMcpServerWildcardRule,
   matchesMcpSourceToolRule,
-} from '@/shared/domain/mcp/mcpSourcePolicy';
+} from '@/shared/ai/tools/mcpSourcePolicy';
+import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 
 type McpToolsSectionProps = {

@@ -1,6 +1,11 @@
 import { isToolUIPart } from 'ai';
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
-
+import {
+  type ApprovalDecision,
+  applyToolApprovalDecisionsToParts,
+  countPendingToolApprovals,
+  finalizeDanglingToolApprovals,
+} from '@/shared/ai/transport/toolApprovals';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type {
   ActiveNodeStrategy,
@@ -22,12 +27,6 @@ import type {
 } from '@/shared/data/types/message';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
-import {
-  type ApprovalDecision,
-  applyToolApprovalDecisionsToParts,
-  countPendingToolApprovals,
-  finalizeDanglingToolApprovals,
-} from '@/shared/domain/chat/toolApprovals';
 import type { Database, DbService } from '../db/DbService';
 import {
   chatMessageFileRefTable,

@@ -4,6 +4,13 @@ import type { Tool, ToolSet } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import type { ToolEntry } from '@/backend/ai/tools';
 import type { McpServerService } from '@/backend/data/services/McpServerService';
+import type { McpCallToolResult } from '@/shared/ai/tools/mcpResult';
+import { mcpResultToTextSummary } from '@/shared/ai/tools/mcpResult';
+import {
+  isMcpToolDisabledBySource,
+  isMcpToolForcePromptBySource,
+} from '@/shared/ai/tools/mcpSourcePolicy';
+import { buildFunctionCallToolName } from '@/shared/ai/tools/mcpToolName';
 import type {
   McpConnectionConfig,
   McpServerInfo,
@@ -17,13 +24,6 @@ import {
   DEFAULT_MCP_TIMEOUT_SECONDS,
   type StreamableHttpMcpServer,
 } from '@/shared/data/types/mcpServer';
-import type { McpCallToolResult } from '@/shared/domain/mcp/mcpResult';
-import { mcpResultToTextSummary } from '@/shared/domain/mcp/mcpResult';
-import {
-  isMcpToolDisabledBySource,
-  isMcpToolForcePromptBySource,
-} from '@/shared/domain/mcp/mcpSourcePolicy';
-import { buildFunctionCallToolName } from '@/shared/domain/mcp/mcpToolName';
 import { fnv1a32 } from '@/shared/utils/fnv1a';
 
 import { resolveServersForAssistant } from './resolveAssistantMcpServers';
