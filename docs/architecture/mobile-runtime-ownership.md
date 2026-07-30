@@ -2,136 +2,85 @@
 
 Status: current
 
-Related decisions:
-
-- [ADR 0001: Use Provider-Owned Runtime Owners](../adr/0001-use-provider-owned-runtime-owners.md)
-- [ADR 0002: Use Startup Gates Instead Of Lifecycle Phases](../adr/0002-use-startup-gates-not-lifecycle-phases.md)
-
-This document defines which Cherry Mobile objects currently own runtime resources and which startup work may block first chat paint. Terms follow [CONTEXT.md](../../CONTEXT.md).
+Related decisions: [ADR 0001](../adr/0001-use-provider-owned-runtime-owners.md),
+[ADR 0002](../adr/0002-use-startup-gates-not-lifecycle-phases.md), and
+[ADR 0011](../adr/0011-separate-in-process-frontend-and-backend.md).
 
 ## Principles
 
-- Mobile does not port Cherry desktop's lifecycle framework, global service registry, `defineService` DSL, or phase dependency graph.
-- A runtime owner is only needed for work or resources that can outlive the current function call.
-- Runtime owners are held by React Providers where possible, with lifetime tied to Provider mount/unmount. AppState and screen-focus hooks are added only when a runtime actually needs them.
-- App background is not treated as a reliable execution window for active chat streams. A runtime must not claim background checkpoint, pause, or resume behavior unless it has explicit platform support and tests for that behavior.
-- Startup gates express startup performance boundaries only. They are not OS lifecycle phases or desktop service phases.
-- Plain helpers, repositories, query wrappers, parsers, validators, transforms, and UI state are not runtime owners by default.
+- Mobile does not port the desktop lifecycle framework, service registry, or phase graph.
+- A runtime owner exists only for state or resources that outlive one call.
+- Every owner defines creation, disposal, and abort behavior.
+- Backgrounding is not a reliable execution window for chat or painting generation.
+- Backend sessions report events/results; frontend owners perform navigation, translation, toast,
+  and React Query invalidation.
 
-## Resources That Need Owners
+## App Bootstrap
 
-These resources must have an explicit owner and cleanup. Background/resume behavior is required only when the resource is expected to survive app backgrounding.
+`AppBootstrapProvider` owns one `AppBootstrapRuntime`. The production runtime:
 
-- SQLite/Drizzle connections, migration locks, or long transaction boundaries.
-- AI chat streams, stream readers, AbortControllers, stream snapshots, and checkpoint schedulers when present.
-- AppState listeners, navigation/screen focus listeners, and native event listeners.
-- Timers, debounce schedulers, retry queues, background queues, and workers.
-- Sockets, subscriptions, download/upload tasks, and native module sessions.
-- Long-lived caches with invalidation or refresh logic.
+- creates `DbService` and the private backend service graph;
+- creates one stable `MobileBackend`;
+- initializes SQLite, preferences, boot theme, and i18n;
+- starts best-effort post-ready tasks after the gate opens;
+- disposes MCP, web-search state, and SQLite on unmount.
 
-One-shot network requests, pure transforms, schema validation, Message Part parsers, and render components do not become owners just because they are important. They become runtime owners only when they hold one of the resources above.
+The provider's React context exposes only `loading`, `ready`, or `error`. Concrete backend services
+never enter React state or frontend code. `BackendProvider` separately supplies the stable
+`MobileBackend` and exposes only `useBackendModule(key)`.
 
-## Current Owner Boundaries
+`AppBootstrapGate` is the only initial-render gate. It renders `null` while loading and throws the
+initialization error. The root layout retains the native splash, and `AppBootstrapProvider` hides it
+when initialization settles, including the error path.
 
-`DataProvider`:
+## Query Runtime
 
-- Owns `DbService`, SQLite/Drizzle initialization, bundled migrations, custom SQL, seeders, initial preference loading, app bootstrap, and `DbService.dispose()`.
-- Creates the Data Service Graph through `createDataServices()` (injectable via `createRuntime` for tests).
-- Hides the native splash once init settles and fires `runPostReadyTasks` after the gate opens.
-- Disposes `WebSearchService` API-key rotation state and closes the SQLite database on unmount.
-- Does not own chat streams or route-level chat state.
+`QueryProvider` owns the React Query client and maps React Native `AppState` to query focus. It does
+not own SQLite, AI streams, or backend implementation classes. Query functions select a backend
+module through `useBackendModule` and invalidate keys in frontend owners.
 
-`QueryProvider`:
+## Chat Session
 
-- Owns the React Query client.
-- Connects React Query focus state to React Native `AppState`.
-- Does not own SQLite resources or chat stream AbortControllers.
+`ChatSessionProvider` owns one backend `ChatSession` for the route and disposes it on unmount. The
+session interface supports subscription, snapshots, sending, tool approval, abort, and disposal.
 
-`ChatRuntimeProvider`:
+The backend session owns active turn state, AbortControllers, assistant placeholder identity,
+stream reading, terminal persistence, and session events. The frontend provider owns session
+subscription, route navigation, and React Query invalidation. Backend code never imports Expo Router
+or TanStack Query.
 
-- Owns one `ChatRuntime` for the chat route group.
-- Injects Data Services, message-query invalidation, topic-list invalidation, and navigation handoff into the runtime.
-- Calls `runtime.dispose()` on Provider unmount.
-- Does not attach AppState `resume/background` listeners for active chat streams.
+An active stream is not guaranteed to continue, checkpoint, or resume after OS suspension or
+termination. User abort persists the defined paused/partial state; disposal aborts active work.
 
-`ChatRuntime`:
+## Painting Session
 
-- Owns active turn state by topic id, AbortControllers, assistant placeholder ids, and in-memory topic snapshots.
-- Persists the user message and assistant placeholder before streaming.
-- Reads AI SDK UI message chunks through `readUIMessageStream()` and exposes the active assistant Message as a Streaming Message Overlay.
-- On success, updates the assistant placeholder with terminal `data.parts` and `status`.
-- On failure, appends a `data-error` part and marks status `error`; on user abort, persists partial parts with status `paused`.
-- On abort or dispose, aborts active AbortControllers.
-- Does not promise that an active stream will continue, checkpoint, pause, resume, or save terminal state after the app is backgrounded, suspended, or killed by the OS.
+`usePaintingGeneration` owns a backend `PaintingGenerationSession`, an AbortController, and UI-only
+generating/revealing/error state. The backend session owns file preparation, AI generation,
+persistence, incomplete receipt retry state, and failed-output cleanup. The frontend hook owns toast
+and query synchronization and disposes the session on unmount.
 
-Feature-local sheets and native sessions:
+## Other Long-Lived Resources
 
-- Components that open native or Expo UI sessions own those sessions through local refs and cleanup. Examples include model picker and provider settings bottom sheets.
+- `McpService` owns MCP clients and tool caches; app bootstrap disposes it.
+- `WebSearchService` owns API-key rotation state; app bootstrap disposes it.
+- Frontend cache owns subscriptions and MMKV-backed UI persistence.
+- Screen and component listeners, timers, and native sessions remain with their React owner.
 
-## Provider Shape
+## Startup Work
 
-The current shape is to create long-lived resources explicitly in a Provider and clean them up through React effects:
+`bootstrapAppRuntime()` reads cached boot preferences, applies the frontend theme, and initializes
+i18n. It must not refresh catalogs, prefetch history, repair data, or run diagnostics.
 
-```tsx
-function ChatRuntimeProvider({ children }: PropsWithChildren) {
-  const [runtime] = useState(() => new ChatRuntime(dependencies))
+`runPostReadyTasks()` starts after status becomes `ready`. It currently repairs crash-orphaned
+pending assistant messages and prewarms active MCP servers. It is fire-and-forget, best-effort, and
+must not block first paint.
 
-  useEffect(() => {
-    return () => runtime.dispose()
-  }, [runtime])
-
-  return <ChatRuntimeContext value={{ runtime }}>{children}</ChatRuntimeContext>
-}
-```
-
-This shape is illustrative. Not every runtime must expose exactly the same methods. The requirement is clear ownership, clear resources, and clear cleanup.
-
-## Startup Gates
-
-`bootstrapAppRuntime`:
-
-- Reads cached boot preferences.
-- Applies Uniwind theme mode.
-- Initializes i18n.
-- Must not run full provider refresh, full history prefetch, index building, data repair, or diagnostics.
-
-`runPostReadyTasks`:
-
-- Runs after the gate opens (first paint), off the startup critical path.
-- Currently performs orphan pending-Message reconciliation (crash-orphaned `pending` assistant messages).
-- `DataProvider` fires it fire-and-forget once status becomes `ready`; it must stay best-effort and must not block or reopen the gate.
-
-`InitialDataGate`:
-
-- The only current gate allowed to block initial app rendering.
-- Waits for `DataProvider` status to become ready.
-- Renders `null` while data initializes and throws initialization errors.
-- The native splash is retained across this window: the root layout calls `SplashScreen.preventAutoHideAsync` and `DataProvider` calls `SplashScreen.hideAsync` once init settles (ready or error), so the `null` frame is never a blank screen. The hide is imperative, not an effect, because the error path throws during gate render.
-- Does not currently wait for current assistant/topic, message windows, or chat runtime state.
-
-Route-level loading:
-
-- Current topic, topic detail hydration, and Message History Window loading happen through route/screen hooks after the data runtime is ready.
-- Full-history prefetch, diagnostics, and non-current work must not blank the current chat screen.
-
-Provider/model refresh:
-
-- Provider/model catalog refresh and model pull/reconcile flows remain ordinary service calls behind React Query mutations.
-- They do not become runtime owners unless they add a long-lived scheduler, subscription, cache refresh loop, retry queue, or other resource that can outlive the current mutation.
-
-## Non-Goals
-
-- Background chat streaming, background checkpointing, and recoverable stream resume.
-
-## Reopen When
-
-- A new long-lived resource appears.
-- Startup requirements change enough to justify a new gate.
+Current topic, message history windows, provider queries, and feature state load at route level after
+the bootstrap gate.
 
 ## Acceptance
 
-- Cold start into the current conversation does not wait for non-current history, provider/model refresh, or diagnostics.
-- `DataProvider` unmount closes the SQLite database and disposes service-local long-lived state.
-- `ChatRuntimeProvider` unmount aborts active chat streams through `runtime.dispose()`.
-- User abort produces a clear terminal state for the active assistant Message.
-- Every new long-lived resource can answer: who owns it, when it is released, and whether it needs explicit app background behavior.
+- App bootstrap unmount closes SQLite and disposes long-lived backend resources.
+- Chat and painting owners abort active work and dispose their backend sessions.
+- Cold start does not wait for non-current history, provider/model refresh, or diagnostics.
+- Every new long-lived resource can identify its owner, release point, and background behavior.

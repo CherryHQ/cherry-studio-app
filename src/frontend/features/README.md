@@ -1,8 +1,8 @@
 # Feature Module Conventions
 
 This directory owns the app's features — screen implementations plus the feature-private
-components, hooks, context, runtime owners, and utils that back them (ADR 0010). Expo Router route
-files in `src/app` stay thin and re-export from here.
+components, hooks, context, session owners, and utils that back them (ADRs 0010 and 0011). Expo
+Router route files in `src/app` stay thin and re-export from here.
 
 ## Route Adapter Rule
 
@@ -36,7 +36,8 @@ settings/
   WebSearchScreen/
 ```
 
-A feature that owns a runtime owner keeps it in the feature (`chat/runtime/`, per ADR 0001).
+A feature that owns a runtime or backend session keeps the React owner in the feature
+(`chat/session/`, per ADRs 0001 and 0011).
 
 ## Imports
 
@@ -53,7 +54,8 @@ ESLint enforces these (see the boundary blocks in `eslint.config.js`):
   consumers don't load a component barrel (documented in `chat/input/index.ts`); extend it
   deliberately, in the same commit that adds the new dependency.
 - Cross-feature reusable modules with two or more feature owners belong in neutral
-  `src/frontend/components`, `src/frontend/hooks`, or `src/utils` — move them when the second owner appears.
+  `src/frontend/components`, `src/frontend/hooks`, or `src/frontend/utils` — move them when the
+  second owner appears.
 - Do not import feature-private modules from `src/frontend/components` (shared layers never depend on
   features).
 

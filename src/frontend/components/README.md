@@ -1,12 +1,12 @@
 # Component Module Conventions
 
 This directory follows the repository-wide naming rules in
-[`docs/rules/naming-conventions.md`](../../docs/rules/naming-conventions.md). The notes below are
+[`docs/rules/naming-conventions.md`](../../../docs/rules/naming-conventions.md). The notes below are
 the local conventions for `src/frontend/components`.
 
-`src/frontend/components` is for independently owned modules shared across screens or feature domains.
-Route-owned UI should live under `src/screens` until a second independent owner actually consumes
-it.
+`src/frontend/components` is for independently owned modules shared across screens or feature
+domains. Route-owned UI should live under `src/frontend/features` until a second independent owner
+actually consumes it.
 
 ## Module Names
 
@@ -20,7 +20,7 @@ it.
 
 ## Module Shape
 
-Feature modules should usually look like this:
+Shared component modules should usually look like this:
 
 ```text
 moduleName/
@@ -51,7 +51,7 @@ Only add the subdirectories that the module actually needs.
   root.
 - Do not make callers import leaf files under `components/` unless that file is intentionally the
   module's public surface.
-- `src/frontend/components` must not import screen-private modules from `src/screens`.
+- `src/frontend/components` must not import private modules from `src/frontend/features`.
 
 ## Reusable vs Feature-Owned
 
@@ -59,7 +59,7 @@ Only add the subdirectories that the module actually needs.
   `ChatScreen/messageContent` is still owned by `ChatScreen`.
 - Put UI or behavior in an independent module, such as `modelPicker`, when a second screen or
   component domain consumes it.
-- Keep feature-specific UI inside the owning screen module under `src/screens`.
+- Keep feature-specific UI inside the owning module under `src/frontend/features`.
 - If a module starts being used outside its owning feature, move it to a neutral domain module
   instead of exporting through the original feature.
 - App shell modules, design-system adapters, and platform adapters may have one direct caller when
@@ -70,8 +70,9 @@ Only add the subdirectories that the module actually needs.
 
 - Hooks stay with the module that owns their state and behavior. Only hooks used across independent
   domains belong in top-level `src/frontend/hooks`.
-- Pure helpers stay in the owning module's `utils/`. Only domain-neutral helpers used across
-  independent domains belong in top-level `src/utils`.
+- Pure helpers stay in the owning module's `utils/`. Only frontend-neutral helpers used across
+  independent UI domains belong in `src/frontend/utils`; cross-layer pure helpers belong in
+  `src/shared/utils`.
 - Add `index.ts` only at a real module boundary. It must contain named re-exports only and expose the
   smallest interface callers need.
 - Do not add barrels for private `components/`, `hooks/`, or `utils/` buckets. Import their leaf

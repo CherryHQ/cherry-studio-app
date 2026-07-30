@@ -5,7 +5,7 @@ app uses so they share one silhouette: inset from the screen edges, bottom
 corners concentric with the display's own corners, a circular close button
 nested into the top-left corner, a centered title, and a liquid-glass (or solid)
 surface. Built on `@swmansion/react-native-bottom-sheet`'s `ModalBottomSheet`.
-Chrome constants live in `src/utils/constants.ts` (`bottomSheet`,
+Chrome constants live in `src/frontend/utils/constants.ts` (`bottomSheet`,
 `sheetScrimColor`, `isLiquidGlassAvailable`).
 
 ## Concentric bottom corners

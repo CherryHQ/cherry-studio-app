@@ -8,7 +8,10 @@ Status: active
 
 ## STARTUP-TODO-001: 测量新用户首启开屏耗时
 
-当前状态：`_layout.tsx` 顶层 `SplashScreen.preventAutoHideAsync()` 把原生 splash 钉住，`DataProvider.initData()` 在 init 结算后命令式 `hideAsync()`。因此**开屏时长 = 原生 splash 显示到 `hideAsync()` 之间的墙钟时间**，等于 gate 内关键路径耗时。目前没有任何真机/模拟器实测数据，也没有埋点。
+当前状态：`_layout.tsx` 顶层 `SplashScreen.preventAutoHideAsync()` 把原生 splash 钉住，
+`AppBootstrapProvider` 在 `AppBootstrapRuntime.initialize()` 结算后命令式调用 `hideAsync()`。
+因此**开屏时长 = 原生 splash 显示到 `hideAsync()` 之间的墙钟时间**，等于 gate 内关键路径耗时。
+目前没有任何真机/模拟器实测数据，也没有埋点。
 
 需要重点区分两种场景，二者成本差异很大：
 

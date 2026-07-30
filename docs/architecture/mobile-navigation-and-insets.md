@@ -7,6 +7,7 @@ Related decisions:
 - [ADR 0006: Use Platform-Native Navigation Gestures](../adr/0006-use-platform-native-navigation-gestures.md)
 - [ADR 0007: Use Component Bottom Sheets For Model Picker](../adr/0007-use-component-bottom-sheets-for-model-picker.md)
 - [ADR 0003: Use Pressable Wrappers For Product Buttons](../adr/0003-use-pressable-wrappers-for-product-buttons.md)
+- [ADR 0011: Separate The In-Process Frontend And Backend](../adr/0011-separate-in-process-frontend-and-backend.md)
 
 This document defines Cherry Mobile v1 navigation gestures, Android predictive back, edge-to-edge, and safe-area/inset strategy. Terms follow [CONTEXT.md](../../CONTEXT.md).
 
@@ -59,16 +60,20 @@ Before enabling it, verify:
 
 ## Current Navigation Shape
 
-- `src/app/_layout.tsx` owns the app root wrappers: gesture handler root, keyboard provider, HeroUI provider, QueryProvider, DataProvider, InitialDataGate, navigation theme, bottom sheet provider, and the root Stack.
+- `src/app/_layout.tsx` owns the app root wrappers: gesture handler root, keyboard provider, HeroUI
+  provider, `QueryProvider`, `AppBootstrapProvider`, `AppBootstrapGate`, navigation theme, bottom
+  sheet provider, and the root Stack.
 - The root Stack hosts the `(tabs)` group (header hidden) plus root-level `onboarding`, `topics` (chat), and `paintings` screens.
 - `src/app/(tabs)/_layout.tsx` owns the native bottom tab bar through `react-native-bottom-tabs` (`createNativeBottomTabNavigator`) with five tabs: home, assistants, `(messages)`, settings, and `(search)`.
 - Settings is a normal nested Stack inside its tab (`src/app/(tabs)/settings/`).
-- The chat surface is the root-level `topics` route, which wraps `ChatScreen` in `ChatRuntimeProvider`.
-- Route files stay thin and generally re-export feature modules from `src/features`.
+- The chat surface is the root-level `topics` route, which wraps `ChatScreen` in
+  `ChatSessionProvider`.
+- Route files stay thin and generally re-export feature modules from `src/frontend/features`.
 
 ## Picker Sheets
 
-Short local pickers, such as model setting selection, use the app-owned `@/components/bottomSheet`
+Short local pickers, such as model setting selection, use the app-owned
+`@/frontend/components/bottomSheet`
 `BottomSheet` (a wrapper over `@swmansion/react-native-bottom-sheet`'s `ModalBottomSheet`). These
 sheets are plain overlays controlled by local state; their triggers should only pass open/close
 and selection state.

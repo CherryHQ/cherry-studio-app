@@ -10,5 +10,6 @@ frontend and backend. The layout follows Cherry Desktop's `src/shared/data` voca
 - API-shaped DTO schemas, pagination shapes, and data errors live under `src/shared/data/api`.
 - DB-backed preference value types and defaults live under `src/shared/data/preference`.
 - Entity and value types live under `src/shared/data/types`.
-- Excluded desktop domains are not migrated here yet: agent, MCP, knowledge, job, translate,
-  miniapp, file, and agent workspace types.
+- Excluded desktop domains are not migrated here yet: agent sessions, knowledge, jobs, translate,
+  miniapps, and agent workspaces. MCP, file, and painting types are present because their mobile
+  domains are implemented.

@@ -10,4 +10,9 @@ Cherry Mobile renders structured Message Parts directly instead of flattening a 
 
 **Consequences**
 
-The Message History Window stays database-backed and static; active assistant output is composed through an in-memory Streaming Message Overlay until terminal `parts` and `status` are persisted. Render components do not write SQLite. A separate stable renderer, Streaming Text Store, UI throttle, checkpoint scheduler, or usage stats update can still be added later, but only for a measured performance, compatibility, or product need and with Chat Runtime ownership for stream cadence or persistence cadence.
+The Message History Window stays database-backed and static; active assistant output is composed
+through an in-memory Streaming Message Overlay until terminal `parts` and `status` are persisted.
+Render components do not write SQLite. A separate stable renderer, Streaming Text Store, UI throttle,
+checkpoint scheduler, or usage stats update can still be added later, but only for a measured
+performance, compatibility, or product need and with backend `ChatSession` ownership for stream
+cadence or persistence cadence.

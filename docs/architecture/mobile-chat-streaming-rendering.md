@@ -7,12 +7,15 @@ Related decisions:
 - [ADR 0004: Use Expo Runtime Fetch For Chat Streaming](../adr/0004-use-expo-runtime-fetch-for-chat-streaming.md)
 - [ADR 0005: Preserve Message Part Rendering Boundaries](../adr/0005-preserve-message-part-rendering-boundaries.md)
 
-This document defines Cherry Mobile's current AI SDK stream, Chat Runtime overlay, Message History Window, and Markdown/LaTeX rendering boundaries. Terms follow [CONTEXT.md](../../CONTEXT.md).
+This document defines Cherry Mobile's current AI SDK stream, backend `ChatSession` overlay, Message
+History Window, and Markdown/LaTeX rendering boundaries. Terms follow
+[CONTEXT.md](../../CONTEXT.md).
 
 ## Principles
 
 - AI SDK continues to own provider requests and provider-specific stream parsing.
-- Chat Runtime consumes AI SDK UI message chunks and converts them into Cherry Message overlay snapshots.
+- `ChatSession` consumes AI SDK UI message chunks and converts them into Cherry Message overlay
+  snapshots.
 - Message History Window remains database-backed and static: it exposes persisted active-branch Messages from SQLite through React Query pagination.
 - Active assistant output is composed through an in-memory Streaming Message Overlay instead of mutating the Message History Window for every token.
 - Render components do not write SQLite directly. Terminal persistence belongs to the runtime owner.
@@ -22,7 +25,7 @@ This document defines Cherry Mobile's current AI SDK stream, Chat Runtime overla
 - `AiService.streamText()` requires `requestOptions.signal`.
 - `AiService` resolves provider/model/assistant parameters and constructs an AI SDK `Agent`.
 - `Agent.stream()` calls the AI SDK stream API and returns a `ReadableStream<UIMessageChunk>`.
-- `ChatRuntime` reads that stream with `readUIMessageStream<CherryUIMessage>()`.
+- `ChatSessionImpl` reads that stream with `readUIMessageStream<CherryUIMessage>()`.
 - Cherry Mobile does not parse provider-specific SSE in the chat runtime.
 - Provider configs rely on the Expo/React Native runtime fetch behavior used by AI SDK provider packages.
 - CherryAI signing is a provider-specific fetch wrapper and calls runtime `fetch` after adding signature headers.
@@ -31,18 +34,18 @@ This document defines Cherry Mobile's current AI SDK stream, Chat Runtime overla
 
 Expo's native fetch support now provides streaming responses in the tested app runtime. The current code streams incrementally without a shared transport adapter, so the architecture does not require injecting `expo/fetch`, Nitro fetch, or another provider-wide transport wrapper.
 
-## Chat Runtime Boundary
+## Chat Session Boundary
 
-Chat Runtime owns:
+The backend `ChatSession` owns:
 
 - Active request state.
 - AbortController.
 - Assistant placeholder id.
 - Topic snapshots with the current Streaming Message Overlay.
 - Terminal assistant Message persistence.
-- User abort and Provider-unmount abort.
+- User abort and session-disposal abort.
 
-Chat Runtime does not own:
+The backend `ChatSession` does not own:
 
 - Markdown component trees.
 - Provider/model catalog refresh.
@@ -63,7 +66,7 @@ Current flow:
 
 1. Persist the user Message and a stable assistant placeholder before streaming starts.
 2. Set the assistant placeholder as the active overlay Message.
-3. Build the active history path and call `services.ai.streamText()`.
+3. Build the active history path and call the injected AI dependency's `streamText()`.
 4. Read AI SDK UI message chunks with `readUIMessageStream()`.
 5. Apply each UI message to the assistant placeholder and publish a new overlay snapshot.
 6. Persist terminal `data.parts` and `status` when the stream succeeds.
@@ -84,7 +87,9 @@ Current persistence is terminal-save oriented:
 - The assistant placeholder receives its `modelSnapshot` before streaming; terminal persistence does not currently add usage, cost, timing stats, or richer trace metadata.
 - If the app is backgrounded, suspended, or killed during an active stream, Cherry Mobile does not promise that in-memory overlay deltas are saved or that a pending assistant placeholder is finalized.
 
-There is no 30-60 ms UI throttle store, 1-2 second SQLite checkpoint scheduler, or background checkpoint policy. If those are introduced, they must stay owned by Chat Runtime because updating `message.data` also updates derived searchable text and FTS state.
+There is no 30-60 ms UI throttle store, 1-2 second SQLite checkpoint scheduler, or background
+checkpoint policy. If those are introduced, they must stay owned by the backend `ChatSession`
+because updating `message.data` also updates derived searchable text and FTS state.
 
 ## Rendering Paths
 
@@ -106,7 +111,9 @@ Current non-goals:
 
 A Streaming Text Store or UI throttle is not part of the current architecture. Add one only after measured streaming/rendering issues, such as reproducible scroll or input jank with long Markdown responses on target devices.
 
-If added, the owner remains `ChatRuntime`: token-level UI cadence and SQLite persistence cadence must stay separate because updating `message.data` also updates derived searchable text and FTS state.
+If added, the owner remains the backend `ChatSession`: token-level UI cadence and SQLite persistence
+cadence must stay separate because updating `message.data` also updates derived searchable text and
+FTS state.
 
 ## Desktop Alignment Gaps
 

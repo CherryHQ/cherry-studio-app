@@ -11,16 +11,19 @@ The source layout is:
 src/
 ├── app/                  # Expo Router route files
 ├── bootstrap/            # composition, startup, lifecycle, and polyfills
-├── frontend/             # features, components, data, hooks, i18n, and styles
+├── frontend/             # features, components, data, hooks, i18n, styles, utils, types
 ├── backend/
 │   ├── application/      # multi-step product workflows
-│   └── infrastructure/   # SQLite, AI, cache, device, and third-party adapters
+│   ├── infrastructure/   # SQLite, AI, device, and third-party adapters
+│   ├── utils/            # backend-owned pure helpers
+│   └── types/            # backend-specific declarations
 ├── shared/
 │   ├── contracts/        # frontend/backend interfaces, workflow results, and events
 │   ├── data/             # API schemas, preferences, entities, and value types
+│   ├── domain/           # cross-layer domain rules
 │   ├── core/             # cross-layer foundations such as logging
 │   └── utils/            # cross-layer pure utilities
-└── types/                # ambient and generated declarations
+└── types/                # truly global and generated declarations only
 ```
 
 Only `bootstrap` may import both frontend and backend modules. Frontend code depends on backend
@@ -38,6 +41,12 @@ assistants, topics, chat, files, models, providers, paintings, MCP, pins, prefer
 permissions, profile, and web search. Stateful workflows such as chat and painting generation
 return sessions whose lifetimes are explicit. Backend workflow results and events describe what
 happened; frontend owners translate them into navigation, cache invalidation, and user feedback.
+
+`BackendProvider` holds one stable `MobileBackend` value and exposes only
+`useBackendModule(key)`. `AppBootstrapProvider` owns database initialization, boot preferences,
+post-ready work, and disposal; its React context exposes only `loading`, `ready`, or `error`.
+Because the app is still pre-release, the migration is direct: there is no `DataServices`
+compatibility adapter and no generic data hook that can expose the concrete service graph.
 
 Simple persistence classes may directly satisfy a contract. An application implementation is
 introduced only when it hides a multi-step rule or coordinates several dependencies. This keeps

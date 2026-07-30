@@ -2,143 +2,108 @@
 
 Status: current
 
-This document defines the current mobile local data architecture. Terms follow [CONTEXT.md](../../CONTEXT.md).
+This document defines local data ownership after the in-process frontend/backend split in ADR 0011.
 
 ## Runtime Path
 
-The app data path is:
+The normal read path is:
 
-`DataProvider -> DbService -> createDataServices() -> Data Services -> React Query hooks -> screens/components`
+`frontend query/hook -> useBackendModule() -> MobileBackend contract -> backend implementation -> SQLite or integration`
 
-`DataProvider` creates `DbService` and the Data Service Graph, runs database initialization, initializes preferences, applies boot preferences through `bootstrapAppRuntime()`, then exposes services through `useDataServices()`.
+The normal composition path is:
 
-`InitialDataGate` only waits for `DataProvider` to become ready. It does not load the current topic, hydrate the message window, or start the Chat Runtime.
+`AppBootstrapProvider -> createAppBootstrapRuntime() -> DbService + BackendServices -> createMobileBackend()`
+
+`BackendServices` is a private bootstrap implementation graph. It is not placed in React context and
+is not importable by frontend code. `MobileBackend` is the only frontend-facing backend interface.
+
+## Frontend Data
+
+`src/frontend/data` follows the Cherry Desktop renderer-data vocabulary while remaining mobile-owned.
+It contains:
+
+- `BackendProvider` and `useBackendModule(key)`.
+- React Query client and query-key factories.
+- Query functions for assistants, topics, messages, files, models, providers, paintings, MCP, and pins.
+- Preference hooks backed by the `preferences` contract.
+- Frontend cache implementation and hooks; pure cache schemas live in `src/shared/data/cache`.
+
+Frontend hooks call a narrow backend module directly. There are no generic hooks that expose a
+concrete service graph, and frontend tests provide fake `MobileBackend` modules through the real
+`BackendProvider`.
+
+## Shared Data
+
+`src/shared/data` contains values both sides may know:
+
+- `api`: DTO schemas, pagination shapes, and data errors.
+- `preference`: preference keys, value schemas, defaults, and pure helpers.
+- `types`: entities and value types such as Assistant, Topic, Message, Provider, and Model.
+- `presets`: shared catalog data.
+- `cache`: cache schemas and pure template/equality helpers.
+
+Database tables, Drizzle row types, migrations, and storage adapters are not shared contracts. They
+remain under `src/backend/infrastructure/db`.
+
+## Backend Contracts
+
+`src/shared/contracts/mobileBackend.ts` aggregates cohesive modules. Simple SQLite services may
+directly satisfy a contract. Multi-step behavior belongs in `src/backend/application`, including:
+
+- chat session orchestration;
+- painting generation sessions and incomplete receipts;
+- provider/model pull, reconcile, health, OAuth, and avatar workflows;
+- MCP persistence/runtime coordination;
+- permission policy and profile avatar workflows.
+
+Application modules receive infrastructure dependencies through constructor-shaped interfaces and
+never import infrastructure implementations. Bootstrap supplies production implementations.
 
 ## Database
 
-`DbService` owns the Expo SQLite database named `cherry.db` and wraps it with Drizzle's Expo SQLite adapter.
+`DbService` owns the Expo SQLite database `cherry.db` and Drizzle's Expo adapter. Startup:
 
-Startup does the following:
+- configures WAL, `synchronous=NORMAL`, and foreign keys;
+- runs bundled migrations from `src/backend/infrastructure/db/migrations.ts`;
+- runs idempotent custom FTS SQL from `src/backend/infrastructure/db/customSql.ts`;
+- runs versioned seeders through `SeedRunner`.
 
-- Configures WAL, `synchronous=NORMAL`, and foreign keys.
-- Runs bundled Drizzle migrations from `src/data/db/migrations.ts`.
-- Runs idempotent custom SQL from `src/data/db/customSql.ts`.
-- Runs seeders through `SeedRunner`.
+Expo cannot read a migration directory at runtime, so SQL and the journal are bundled in
+`migrations.ts`. Writes go through `DbService.withWriteTx()`, which serializes `BEGIN IMMEDIATE`
+transactions on the long-lived connection.
 
-Expo runtime cannot read the migration folder directly, so SQL migrations and the journal are imported into `src/data/db/migrations.ts`.
+## Schema And Message Persistence
 
-Writes go through `DbService.withWriteTx()`, which serializes writes and uses `BEGIN IMMEDIATE` on the long-lived SQLite connection. This avoids Expo's temporary exclusive transaction connection path, which is risky when FTS5 tables are present on physical iOS devices.
+The schema includes app state/preferences, chat, provider/model, MCP, file, painting, organization,
+and assistant relation tables. `message` stores a parent-linked tree; `topic.activeNodeId` selects
+the active branch. Message content is `data.parts`, and FTS derives searchable text from text parts.
 
-## Schemas
-
-The current schema contains:
-
-- App/runtime state: `app_state`, `preference`.
-- Chat domain: `assistant`, `topic`, `message`, `prompt`.
-- Organization: `group`, `pin`, `tag`, `entity_tag`.
-- Provider/model domain: `user_provider`, `user_model`.
-- MCP domain: `mcp_server`.
-- File domain: `file_entry`, `chat_message_file_ref`, `painting_file_ref`.
-- Painting domain: `painting`.
-- Assistant relation tables: `assistant_mcp_server` (foreign keys on both sides), `assistant_knowledge_base` (partial; no knowledge-side foreign key).
-
-`message` stores a tree with `parentId` adjacency references and `topic.activeNodeId` marks the active branch. Message content is stored as `data.parts`, not legacy desktop `blocks`.
-
-`message_fts` is created by custom SQL. Its triggers derive searchable text from `data.parts` text parts, not from legacy `data.blocks`.
+`MessageService` persists user messages and reserves stable assistant placeholders before a
+`ChatSession` streams. The session publishes an in-memory overlay during generation and writes the
+terminal, paused, or error state to the placeholder.
 
 ## Service Graph
 
-`createDataServices()` creates the current service graph:
+`createBackendServices()` constructs concrete infrastructure classes such as `PreferenceService`,
+`ProviderService`, `MessageService`, `McpService`, `WebSearchService`, `ToolService`, and `AiService`.
+The graph is private to bootstrap. `createMobileBackend()` selects direct contract implementations
+and application workflows from that graph.
 
-- `PreferenceService`
-- `DevicePermissionService`
-- `PinService`
-- `ProviderService`
-- `ModelService`
-- `TagService`
-- `GroupService`
-- `PromptService`
-- `FileEntryService`
-- `PaintingService`
-- `McpServerService`
-- `McpService`
-- `AssistantService`
-- `TopicService`
-- `MessageService`
-- `WebSearchService`
-- `ToolService`
-- `AiService`
+There is no desktop application singleton, IPC handler layer, lifecycle registry, or frontend DI
+container for these concrete classes.
 
-Services receive dependencies directly through constructors. Mobile does not use the desktop application singleton, IPC handlers, or lifecycle service registry.
+## Seeding And Compatibility
 
-## Topic And Message Flow
+Seeders always apply default preferences and preset providers; development builds also add mock chat
+data. Seeder versions are journaled under `app_state` keys prefixed with `seed:`.
 
-`TopicService` owns topic create/update/delete/list/reorder and active-node updates. Topic listing prioritizes pinned topics, then non-pinned topics with cursor pagination.
+Mobile keeps shared entity and service semantics aligned with Cherry Desktop where practical, but it
+does not share the physical SQLite file or Drizzle migration timeline. Breaking schema changes may
+still reset development data; no legacy migration bridge is required before release.
 
-`MessageService` owns tree and branch reads plus write paths:
+## Startup Gate
 
-- `getTree()`
-- `getBranchMessages()`
-- `create()`
-- `createSibling()`
-- `createUserMessageWithPlaceholders()`
-- `reserveAssistantTurn()`
-- `update()`
-- `delete()`
-- path queries
-
-The Chat Runtime uses `createUserMessageWithPlaceholders()` to persist a user Message and reserve a stable assistant placeholder before streaming starts.
-
-## React Query Layer
-
-`src/data/api` is not an HTTP server layer. It contains query key factories, the React Query provider, and API-shaped schemas for local service calls.
-
-Current chat hooks call local services through `useDataQuery`, `useDataInfiniteQuery`, and `useDataMutation`:
-
-- `useTopics()` reads `services.topic.listByCursor()`.
-- `useMessageHistoryWindow()` reads `services.message.getBranchMessages()`.
-- Provider, model, preference, pin, and assistant hooks follow the same service-backed pattern.
-
-Message query keys include page-size policy values for initial and older pages, not a single `limit` field.
-
-Keep the `src/data/api` name for this local Data API shape. It should not be renamed just because mobile does not expose HTTP endpoint handlers; the directory README and this architecture document define its mobile meaning.
-
-## Seeding
-
-Seeders always run default preferences and preset providers. Development builds also seed mock chat topics and messages.
-
-Seeder state is tracked through `app_state` keys prefixed with `seed:`. Version changes rerun the corresponding seeder.
-
-## Compatibility Boundaries
-
-Mobile follows Cherry desktop's domain model where practical, but the current data layer is a mobile local runtime, not a complete desktop data-layer port.
-
-Current divergences:
-
-- Message content is `data.parts`; mobile should not introduce new `data.blocks` writes.
-- FTS indexes `data.parts` text parts.
-- The MCP domain is part of the current mobile app: the `mcp_server` table, `McpServerService`, the `src/ai/mcp` runtime (`McpService`), and the MCP settings UI (`src/features/settings/McpScreen/`, routed at `src/app/(tabs)/settings/mcp/`). The knowledge domain is not migrated.
-- Mobile services are in-process and local; they are not HTTP endpoint handlers.
-
-`assistant_mcp_server` is a full relation with foreign keys on both sides, backed by the mobile MCP domain. `assistant_knowledge_base` remains partial relation support for desktop schema alignment: it stores knowledge-base IDs without a knowledge-side foreign key and does not imply that mobile currently owns knowledge indexing/search, agent workspace behavior, or the related UI domains.
-
-## Desktop Alignment And Reset Policy
-
-Provider, Model, Assistant, Tag, Pin, Prompt, Topic, and Message schemas are not mobile-owned product contracts yet. They stay aligned with Cherry desktop table structure, data types, service semantics, and business logic unless mobile has a documented runtime compatibility reason to diverge.
-
-During mobile development, these local schemas may still reset when desktop alignment requires breaking structure or behavior changes. When desktop changes a shared domain, mobile should update both schema and local service behavior rather than preserving a mobile-only interpretation for compatibility.
-
-Development-stage legacy migration-ledger adoption and downgrade bridges are intentionally out of scope. Desktop and mobile also cannot safely open the same physical SQLite file today because their Drizzle timelines differ. Future sharing should use an explicit shared-entity export or sync contract rather than file-level interchange.
-
-## Startup Measurement Boundary
-
-`InitialDataGate` currently includes database open/configuration, bundled migrations, custom FTS SQL, seeding, cached boot preferences, and i18n initialization. These consistency steps must finish before the Data Runtime is exposed; they must not be skipped merely to shorten the splash screen. The native splash is held across the whole gate (root layout calls `SplashScreen.preventAutoHideAsync`; `DataProvider` calls `hideAsync` once init settles) so the gate never exposes a blank frame while it renders `null`.
-
-Orphan pending-Message reconciliation no longer runs inside the gate. It is a `runPostReadyTasks` step that `DataProvider` fires after the gate opens (see [Runtime Ownership](./mobile-runtime-ownership.md)). This is a gate-contract correction, not a measured optimization: per ADR 0002 the gate must only wait for database readiness and initial/boot preferences, so diagnostics and data repair belong after first paint.
-
-No physical-device cold-start timing has been captured for this V1 change. Type checking, Jest duration, Metro readiness, and Expo export time are not substitutes for first-frame measurements. A future performance pass should record each startup step and first chat paint on release-like iOS and Android builds, then move only measured nonessential work such as catalog refresh or non-current history prefetch behind the first screen. Until that evidence exists, this change makes no startup-speed improvement claim.
-
-## Reopen When
-
-- Mobile brings a new desktop domain into scope.
-- Desktop schema or business logic changes require a mobile data-layer update.
+`AppBootstrapGate` waits for database initialization, preference initialization, boot theme, and
+i18n only. The root route keeps the native splash visible until initialization settles.
+`runPostReadyTasks()` performs orphan pending-message repair and MCP prewarming after the gate opens;
+it is best-effort and cannot reopen or extend the gate.

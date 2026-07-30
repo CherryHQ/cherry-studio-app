@@ -14,7 +14,13 @@ Status: active
 
 ### MOB-TODO-001: Assistant MCP And Knowledge Import
 
-当前状态：MCP 已在移动端实现：`mcp_server` 主表（`src/data/db/schemas/mcpServer.ts`）、`McpServerService`、运行时 `src/ai/mcp`（`McpService`）、管理 UI（`src/features/settings/McpScreen/`，路由 `src/app/(tabs)/settings/mcp/`）均已落地；`assistant_mcp_server` 关联表带双侧外键，Assistant 创建和更新 DTO 可写 `mcpServerIds`。Knowledge 仍缺：移动端只保留 `assistant_knowledge_base` 关联表（无 Knowledge 侧外键），能读取并原样保留已有关系 ID，DTO 不允许写入；没有 Knowledge Base 主表、Service、运行时或管理 UI。
+当前状态：MCP 已在移动端实现：`mcp_server` 主表
+（`src/backend/infrastructure/db/schemas/mcpServer.ts`）、`McpServerService`、运行时
+`src/backend/infrastructure/ai/mcp`（`McpService`）、管理 UI
+（`src/frontend/features/settings/McpScreen/`，路由 `src/app/(tabs)/settings/mcp/`）均已落地；
+`assistant_mcp_server` 关联表带双侧外键，Assistant 创建和更新 DTO 可写 `mcpServerIds`。
+Knowledge 仍缺：移动端只保留 `assistant_knowledge_base` 关联表（无 Knowledge 侧外键），能读取并
+原样保留已有关系 ID，DTO 不允许写入；没有 Knowledge Base 主表、Service、运行时或管理 UI。
 
 完成条件：
 
@@ -144,7 +150,12 @@ Status: active
 
 ### MOB-TODO-012: Deferred Desktop Runtime Domains
 
-当前状态：移动端架构明确没有迁移以下完整桌面域：Agent Session、Knowledge、Job、Translate、Miniapp 和 Agent Workspace。当前存在的类型、消息部件或 Assistant 关联 ID 只用于兼容，不代表对应业务已实现。MCP 已落地（见 MOB-TODO-001 的证据路径）；Painting 已存在（`PaintingService`、`src/data/db/schemas/painting.ts`、`src/app/paintings/` 路由）；File 部分落地（`FileEntryService`、`src/data/db/schemas/file.ts`、`fileRelations.ts`），尚非完整桌面 File 域。
+当前状态：移动端架构明确没有迁移以下完整桌面域：Agent Session、Knowledge、Job、Translate、
+Miniapp 和 Agent Workspace。当前存在的类型、消息部件或 Assistant 关联 ID 只用于兼容，不代表
+对应业务已实现。MCP 已落地（见 MOB-TODO-001 的证据路径）；Painting 已存在
+（`PaintingService`、`src/backend/infrastructure/db/schemas/painting.ts`、`src/app/paintings/`
+路由）；File 部分落地（`FileEntryService`、
+`src/backend/infrastructure/db/schemas/file.ts`、`fileRelations.ts`），尚非完整桌面 File 域。
 
 完成条件：每个域单独建立 PRD 和 ADR，明确 schema、Service、同步边界、移动端运行时限制、权限、离线行为和 UI 后再实施。不要把这些域作为一次数据层对齐的附带工作整体迁入。
 

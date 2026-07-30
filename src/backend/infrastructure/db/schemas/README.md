@@ -1,6 +1,6 @@
 # Data DB Schemas
 
-Mobile Drizzle schemas migrated from the desktop `src/main/data/db/schemass` directory.
+Mobile Drizzle schemas migrated from the desktop `src/main/data/db/schemas` directory.
 
 ## Scope
 

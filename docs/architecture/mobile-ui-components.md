@@ -34,7 +34,9 @@ Feature-local Pressable wrappers:
 HeroUI and Expo UI controls:
 
 - The app uses `heroui-native` controls for some settings and search-field surfaces.
-- The app uses `@expo/ui` community menus and platform controls for native-feeling surfaces; bottom sheets use the app-owned `@/components/bottomSheet` wrapper over `@swmansion/react-native-bottom-sheet`.
+- The app uses `@expo/ui` community menus directly and platform controls for native-feeling
+  surfaces; bottom sheets use the app-owned `@/frontend/components/bottomSheet` wrapper over
+  `@swmansion/react-native-bottom-sheet`.
 - These libraries are component choices, not replacements for Cherry-owned product interaction rules.
 
 Planned shared wrappers:

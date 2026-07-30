@@ -2,45 +2,58 @@
 
 Status: current
 
-This document maps where future feature domains — drawing/canvas and cloud agent are the motivating examples — attach to the existing mobile architecture. It is a placement guide, not a design or a commitment to build these features. Terms follow [CONTEXT.md](../../CONTEXT.md).
+This is a placement guide for extending the in-process frontend/backend architecture. Prefer an
+existing deep module over a new registry or pass-through wrapper.
 
-## Principle: Follow Existing Seams, Not New Registries
+## Add A Backend Capability
 
-Mobile deliberately omits the desktop feature/plugin registries. AI tools and request plugins are assembled inline (see the "no feature registry here" note in `src/ai/runtime/aiSdk/Agent.ts`), settings sections are hardcoded JSX, and services are wired by plain constructor injection with no DI container. Extending a feature means adding to these existing seams. Reintroducing the desktop `RequestFeature`-style registry is the sanctioned move only once inline assembly stops scaling — not a prerequisite for the first version of a new feature.
+1. Put entities and DTO schemas in `src/shared/data` when both sides need them.
+2. Define or extend the narrow module interface in `src/shared/contracts`.
+3. Implement simple persistence directly in `src/backend/infrastructure/services`.
+4. Add a `src/backend/application` module only for multi-step rules or coordinated dependencies.
+5. Compose the production implementation in `src/bootstrap/createMobileBackend.ts`.
+6. Call it from `src/frontend/data` or the owning feature through `useBackendModule(key)`.
 
-The `web_search` subsystem (`src/services/webSearch/`) is the best full-stack precedent to mirror: it spans a driver registry (`providers/registry.ts`), a factory (`providers/factory.ts`), a service in the graph (`WebSearchService`, wired in `createDataServices.ts`), an AI SDK adapter (`src/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts`), a message-part renderer, and settings screens (`src/features/settings/WebSearchScreen/`) with routes under `src/app/(tabs)/settings/websearch/`.
+Frontend tests inject a fake module through `BackendProvider`. Backend application tests exercise
+the same shared interface and observable results.
 
-## Data Layer (`src/data`)
+## Add Persistent Data
 
-- **Service graph**: register a new service in `createDataServices.ts` (the single assembly point); it becomes reachable through `useDataServices()`. Cold-start rehydration hooks belong in `runPostReadyTasks` (`src/runtime/appRuntime.ts`), off the startup gate.
-- **New tables**: add a Drizzle file under `src/data/db/schemas/`, register it in `schemas/index.ts`, and generate a migration per `src/data/db/schemas/README.md`. A relation to a not-yet-migrated domain follows the partial-stub pattern in `assistantRelations.ts` (FK to the absent domain omitted until it lands).
-- **New message content** (e.g. a drawing result): add a key to `CherryDataPartTypes` in `src/data/types/uiParts.ts` and register its metadata in the same file's part-schema table. Message parts are stored as a JSON `parts[]` blob on `message.data`, so a new non-text part needs no schema migration; note FTS only indexes `type === 'text'` parts.
+- Add Drizzle schemas under `src/backend/infrastructure/db/schemas` and register them in its barrel.
+- Generate and bundle the migration under `src/backend/infrastructure/db`.
+- Keep Drizzle row types backend-only; expose entities/DTOs from `src/shared/data`.
+- Add query keys and query functions in `src/frontend/data`, not in shared or backend code.
 
-**Drawing**: results as message parts → new `CherryDataPartTypes` key, no new table. Standalone drawing documents → a new schema file + `schemas/index.ts` entry.
+New Message Part vocabulary belongs in `src/shared/data/types/uiParts.ts`; render dispatch belongs in
+`src/frontend/features/chat/messageContent`. A new JSON part does not require a table migration, but
+FTS indexes only text parts.
 
-**Cloud agent**: a new `agentSession` table (schema file + `schemas/index.ts`), a relation stub modeled on `assistantRelations.ts`, a `CloudAgentService` in `createDataServices.ts`, and optional cold-start session rehydration in `runPostReadyTasks`.
+## Add AI Or Integration Behavior
 
-## AI Layer (`src/ai`)
+AI SDK adapters live under `src/backend/infrastructure/ai`; device and third-party adapters live
+under `src/backend/infrastructure/integrations`. Pure model/domain rules used by both sides belong in
+`src/shared/domain`.
 
-- **App-level tools**: resolved per request by `ToolService.resolveForRequest` (`src/ai/tools/ToolService.ts`), which merges the built-in tool entries registered in `src/ai/tools/adapters/aiSdk/builtin/registerBuiltinTools.ts` with the assistant's MCP tools; `buildAgentParams` (`src/ai/runtime/aiSdk/params/buildAgentParams.ts`) attaches the resolved set to the request. A new model-invocable tool is registered as another `ToolEntry` in `registerBuiltinTools`, following the `createWebSearchToolEntry` factory shape.
-- **Request plugins**: `buildAgentPlugins` in `src/ai/runtime/aiSdk/params/buildAgentPlugins.ts` is a hand-written ladder; add a branch there.
-- **Provider capabilities**: the extensible provider system is `extensionRegistry` from `@cherrystudio/ai-core`, fed by `ProviderExtension.create(...)` factories in `src/ai/provider/extensions.ts`. A provider-native tool capability requires adding a literal to the `ToolCapability` union in `@cherrystudio/ai-core` — a cross-package choke point — plus a `providerToolPlugin(...)` call in `buildAgentPlugins`.
+App-level tools are resolved by `ToolService` and attached in
+`src/backend/infrastructure/ai/runtime/aiSdk/params/buildAgentParams.ts`. Provider plugins are
+assembled in `buildAgentPlugins.ts`. Add a registry only when the existing explicit assembly becomes
+measurably hard to maintain.
 
-**Drawing**: image generation already has a first-class entry (`AiService.generateImage` + `isGenerateImageModel`); a draw flow extends `AiService` similarly or adds an app tool. A provider-native canvas tool hits the `ToolCapability` union choke point.
+The external web-search stack is the full precedent: infrastructure drivers and `WebSearchService`,
+AI tool integration, a `webSearch` backend contract, frontend settings, and thin Expo Router routes.
 
-**Cloud agent**: a new `AiService` method (peer of `streamText`) or a `runtime/aiSdk/` session class beside `Agent` (which explicitly disclaims agent-session support). `createAgent` from `@cherrystudio/ai-core` is the core primitive.
+## Add UI
 
-## UI Layer (`src/features`, `src/components`, `src/app`)
-
-- **Routes**: file-based under `src/app/`. A full-screen surface is a new route (or drawer/stack group); wrap it in its own runtime provider if it owns long-lived resources, mirroring `ChatRuntimeProvider`.
-- **Message rendering**: the dispatch is a hand-written switch in `src/features/chat/messageContent/components/MessagePart.tsx` with an `UnknownPart` fallback. A new part renders by adding a `case 'data-<type>'` there plus a focused renderer component (mirror `VideoPart`/`CodePart`), per that module's README.
-- **Settings**: `SettingsScreen.tsx` composes hardcoded `SettingsSection` blocks; a new feature adds an item there plus a route file under `src/app/(tabs)/settings/`.
-
-**Drawing**: `DrawingPart.tsx` + a `case 'data-drawing':` in `MessagePart.tsx`; optionally a full canvas route.
-
-**Cloud agent**: a new screen/route with its own runtime provider (modeled on `ChatRuntimeProvider`), plus a settings entry.
+- Route files stay thin under `src/app` and import feature module roots.
+- Route-bound UI belongs in `src/frontend/features/<name>`.
+- Cross-feature React modules belong in `src/frontend/components` or `src/frontend/hooks` only after
+  a second independent owner appears.
+- UI persistence/query code belongs in `src/frontend/data`.
+- A feature that owns a backend session keeps navigation, toast, and query invalidation in its
+  frontend Provider or hook.
 
 ## Reopen When
 
-- Inline tool/plugin assembly in `buildAgentParams`/`ToolService` grows enough to justify reintroducing a feature registry.
-- A new feature needs a runtime tier that the flat layout can no longer keep legible (see ADR 0009).
+- A real process or network transport is introduced.
+- A capability must be shared with desktop as a package rather than only aligned by vocabulary.
+- Explicit tool/plugin assembly grows enough to justify a registry.
