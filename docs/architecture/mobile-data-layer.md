@@ -23,15 +23,15 @@ is not importable by frontend code. `MobileBackend` is the only frontend-facing 
 It contains:
 
 - `BackendProvider` and `useBackendModule(key)`.
-- React Query client and query-key factories.
-- Query functions for assistants, topics, messages, files, models, providers, paintings, MCP, and pins.
+- `QueryProvider` and endpoint-specific files under the `queryKeys` registry.
 - Preference hooks backed by the `preferences` contract.
-- `CacheService.ts`, its mobile storage adapter, and cache hooks; pure cache schemas live in
-  `src/shared/data/cache`.
+- The frontend `CacheService.ts` and cache hooks; its MMKV adapter is private to the service, while
+  pure cache schemas live in `src/shared/data/cache`.
 
-Frontend hooks call a narrow backend module directly. There are no generic hooks that expose a
-concrete service graph, and frontend tests provide fake `MobileBackend` modules through the real
-`BackendProvider`.
+Feature and cross-feature hooks own resource-specific queries and call a narrow backend module
+directly. `frontend/data/queryKeys` supplies one cache-key file per endpoint family without becoming
+a second service catalog. There are no generic hooks that expose a concrete service graph, and
+frontend tests provide fake `MobileBackend` modules through the real `BackendProvider`.
 
 ## Shared Data
 
@@ -41,26 +41,33 @@ concrete service graph, and frontend tests provide fake `MobileBackend` modules 
 - `preference`: preference keys, value schemas, defaults, and pure helpers.
 - `types`: entities and value types such as Assistant, Topic, Message, Provider, and Model.
 - `presets`: shared catalog data.
-- `cache`: cache schemas and pure template/equality helpers.
+- `cache`: cache schemas, shared cache types, and pure template/equality helpers.
 
 Database tables, Drizzle row types, and migrations are not shared contracts. They remain under
 `src/backend/data/db`; managed-file persistence lives with the backend data services, while the
-concrete UI-cache adapter stays frontend-owned.
+frontend and backend cache adapters stay with their respective data owners.
 
 ## Backend Data
 
 `src/backend/data` is the mobile counterpart of Cherry Desktop's `src/main/data`:
 
+- `CacheService.ts` owns backend memory and loseable persisted cache state.
 - `PreferenceService.ts` owns cached access to SQLite-backed preferences.
 - `db` owns the connection, schemas, migrations, custom SQL, and seeders.
 - `services` owns entity persistence and data-specific transformations.
 - `fixtures` owns development data consumed by seeders and tests.
 
-Mobile has no backend `CacheService` today. The current general cache corresponds to Desktop's
-renderer cache and therefore lives at `src/frontend/data/CacheService.ts`. Desktop Main's cache
-exists for Main-only scratch state, cross-window relay, and a Main-owned JSON persist tier; mobile
-currently needs none of those. Domain-specific caches, such as MCP tool snapshots, remain private
-to their owning backend modules.
+The backend `CacheService` corresponds to Desktop Main's cache, while
+`src/frontend/data/CacheService.ts` corresponds to Desktop renderer data. The backend keeps the
+Main-owned memory and persist semantics and currently stores ProviderService's API-key rotation
+cursor. It omits Electron-only IPC, shared-window relay, and BrowserWindow synchronization. The
+backend persist tier uses its own `cherry-backend-cache-persist` MMKV store and is not readable
+through the frontend cache API.
+
+Both caches use schemas and pure cache helpers from `src/shared/data/cache`, but their concrete
+classes, adapters, values, subscriptions, and lifecycles remain independent. Domain-specific
+caches, such as MCP tool snapshots, may remain private to the owning backend module when a generic
+cache would weaken that module's invariants.
 
 ## Backend Contracts
 
@@ -102,10 +109,11 @@ terminal, paused, or error state to the placeholder.
 
 ## Service Graph
 
-`createBackendServices()` constructs concrete backend classes such as `PreferenceService`,
-`ProviderService`, `MessageService`, `McpService`, `WebSearchService`, `ToolService`, and `AiService`.
-The graph is private to bootstrap. `createMobileBackend()` selects direct contract implementations
-and application workflows from that graph.
+`createBackendServices()` constructs concrete backend classes such as `CacheService`,
+`PreferenceService`, `ProviderService`, `MessageService`, `McpService`, `WebSearchService`,
+`ToolService`, and `AiService`. The graph is private to bootstrap. `createMobileBackend()` selects
+direct contract implementations and application workflows from that graph; it does not expose the
+cache itself.
 
 There is no desktop application singleton, IPC handler layer, lifecycle registry, or frontend DI
 container for these concrete classes.
@@ -121,7 +129,8 @@ still reset development data; no legacy migration bridge is required before rele
 
 ## Startup Gate
 
-`AppBootstrapGate` waits for database initialization, preference initialization, boot theme, and
-i18n only. The root route keeps the native splash visible until initialization settles.
+`AppBootstrapGate` initializes the backend cache before database seeding, then waits for database
+initialization, preference initialization, boot theme, and i18n only. The root route keeps the
+native splash visible until initialization settles.
 `runPostReadyTasks()` performs orphan pending-message repair and MCP prewarming after the gate opens;
 it is best-effort and cannot reopen or extend the gate.

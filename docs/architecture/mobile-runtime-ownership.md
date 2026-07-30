@@ -19,11 +19,11 @@ Related decisions: [ADR 0001](../adr/0001-use-provider-owned-runtime-owners.md),
 
 `AppBootstrapProvider` owns one `AppBootstrapRuntime`. The production runtime:
 
-- creates `DbService` and the private backend service graph;
+- creates `CacheService`, `DbService`, and the private backend service graph;
 - creates one stable `MobileBackend`;
-- initializes SQLite, preferences, boot theme, and i18n;
+- initializes the backend cache before SQLite seeding, then preferences, boot theme, and i18n;
 - starts best-effort post-ready tasks after the gate opens;
-- disposes MCP, web-search state, and SQLite on unmount.
+- disposes MCP, web-search state, the backend cache, and SQLite on unmount.
 
 The provider's React context exposes only `loading`, `ready`, or `error`. Concrete backend services
 never enter React state or frontend code. `BackendProvider` separately supplies the stable
@@ -63,6 +63,8 @@ and query synchronization and disposes the session on unmount.
 
 - `McpService` owns MCP clients and tool caches; app bootstrap disposes it.
 - `WebSearchService` owns API-key rotation state; app bootstrap disposes it.
+- Backend `CacheService` owns Provider API-key rotation state and backend-only MMKV persistence;
+  app bootstrap initializes and disposes it.
 - Frontend cache owns subscriptions and MMKV-backed UI persistence.
 - Screen and component listeners, timers, and native sessions remain with their React owner.
 

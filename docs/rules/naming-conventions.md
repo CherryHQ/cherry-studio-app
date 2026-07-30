@@ -338,9 +338,9 @@ root-level merge:
 
 | Path | Ownership |
 |---|---|
-| `src/frontend/data` | `BackendProvider`, React Query, backend-bound query functions, preferences hooks, and frontend `CacheService` |
+| `src/frontend/data` | `BackendProvider`, `QueryProvider`, endpoint query keys, preference/cache hooks, and frontend `CacheService` |
 | `src/shared/data` | frontend/backend entities, DTO schemas, preferences, shared cache schemas, and data errors |
-| `src/backend/data` | backend `PreferenceService`, SQLite/Drizzle, seeders, fixtures, and persistence services |
+| `src/backend/data` | backend `CacheService`, `PreferenceService`, SQLite/Drizzle, seeders, fixtures, and persistence services |
 | `src/frontend/utils` | pure helpers and constants used only by frontend modules |
 | `src/backend/utils` | pure helpers and constants used only by backend modules |
 | `src/shared/utils` | platform-independent pure helpers used by both frontend and backend |

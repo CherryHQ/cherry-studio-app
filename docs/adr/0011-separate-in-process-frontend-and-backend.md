@@ -14,7 +14,7 @@ src/
 ├── frontend/             # features, components, data, hooks, i18n, styles, utils, types
 ├── backend/
 │   ├── application/      # multi-step product workflows
-│   ├── data/              # preferences, SQLite, schemas, seeders, and persistence services
+│   ├── data/             # backend cache, preferences, SQLite, seeders, and persistence services
 │   ├── infrastructure/   # AI, device, and third-party adapters
 │   ├── utils/            # backend-owned pure helpers
 │   └── types/            # backend-specific declarations

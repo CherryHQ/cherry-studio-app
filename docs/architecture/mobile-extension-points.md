@@ -12,7 +12,7 @@ existing deep module over a new registry or pass-through wrapper.
 3. Implement simple persistence directly in `src/backend/data/services`.
 4. Add a `src/backend/application` module only for multi-step rules or coordinated dependencies.
 5. Compose the production implementation in `src/bootstrap/createMobileBackend.ts`.
-6. Call it from `src/frontend/data` or the owning feature through `useBackendModule(key)`.
+6. Call it from the owning frontend hook or feature through `useBackendModule(key)`.
 
 Frontend tests inject a fake module through `BackendProvider`. Backend application tests exercise
 the same shared interface and observable results.
@@ -22,7 +22,8 @@ the same shared interface and observable results.
 - Add Drizzle schemas under `src/backend/data/db/schemas` and register them in its barrel.
 - Generate and bundle the migration under `src/backend/data/db`.
 - Keep Drizzle row types backend-only; expose entities/DTOs from `src/shared/data`.
-- Add query keys and query functions in `src/frontend/data`, not in shared or backend code.
+- Add its key factory under `src/frontend/data/queryKeys`; keep the query function in the owning
+  frontend hook or feature, not in shared or backend code.
 
 New Message Part vocabulary belongs in `src/shared/data/types/uiParts.ts`; render dispatch belongs in
 `src/frontend/features/chat/messageContent`. A new JSON part does not require a table migration, but
@@ -48,7 +49,8 @@ AI tool integration, a `webSearch` backend contract, frontend settings, and thin
 - Route-bound UI belongs in `src/frontend/features/<name>`.
 - Cross-feature React modules belong in `src/frontend/components` or `src/frontend/hooks` only after
   a second independent owner appears.
-- UI persistence/query code belongs in `src/frontend/data`.
+- Shared query infrastructure and key factories belong in `src/frontend/data`; resource-specific
+  query behavior stays with its frontend owner.
 - A feature that owns a backend session keeps navigation, toast, and query invalidation in its
   frontend Provider or hook.
 

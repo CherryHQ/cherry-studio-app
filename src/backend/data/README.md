@@ -5,6 +5,8 @@ business-data persistence and the concrete implementations that read or write th
 
 ## Structure
 
+- `CacheService.ts` owns backend memory, loseable persisted cache state, and its private MMKV
+  adapter.
 - `PreferenceService.ts` owns cached access to SQLite-backed user preferences.
 - `db/` owns the Expo SQLite connection, Drizzle schemas, migrations, custom SQL, and seeders.
 - `services/` owns entity persistence, managed-file storage, and data-specific transformations.
@@ -15,11 +17,20 @@ The concrete graph is assembled only by `src/bootstrap`. Frontend callers see co
 
 ## Cache
 
-Mobile's current general-purpose `CacheService` is frontend-owned and lives at
-`src/frontend/data/CacheService.ts`. It corresponds to Desktop's renderer cache: memory state plus
-loseable persisted UI state. Mobile has no multi-window relay and no backend-owned general cache
-consumer, so it does not carry an unused counterpart to Desktop's Main `CacheService`.
+Mobile keeps two independent cache owners, matching Desktop's renderer/Main data ownership:
 
-Domain-specific caches remain private to their owning module, such as MCP tool snapshots. Add a
-backend `CacheService` here only when backend-owned, regenerable state has at least one real
-consumer and does not belong to Preference or business data.
+- `src/frontend/data/CacheService.ts` owns frontend memory state and loseable persisted UI state.
+- `src/backend/data/CacheService.ts` owns backend memory state and a separate backend persist tier.
+
+The backend service is the mobile counterpart of Desktop Main's `CacheService`. Provider API-key
+rotation is its first memory-cache consumer. Its persist tier uses the independent
+`cherry-backend-cache-persist` MMKV store, so frontend and backend values cannot collide.
+
+Electron-only shared-cache relay, BrowserWindow synchronization, and IPC handlers do not apply in
+the single Hermes runtime and are intentionally absent. Cache initialization and disposal belong to
+`src/bootstrap`; the service remains private to the concrete backend graph and is not part of
+`MobileBackend`.
+
+Domain-specific caches that need stronger invariants remain private to their owning module, such as
+MCP tool snapshots. User configuration and durable business records still belong in preferences or
+SQLite rather than either cache tier.
