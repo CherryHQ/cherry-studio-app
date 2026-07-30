@@ -12,7 +12,7 @@ import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-n
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { ProfileAvatarEditBadge, ProfileAvatarImage } from '@/components/ProfileAvatar';
 import { usePreference } from '@/data/hooks';
-import { replaceUserAvatar } from '@/services/userAvatarStorage';
+import { replaceUserAvatar } from '@/services/avatars/userAvatarStorage';
 
 const profileAvatarSize = 104;
 const logger = loggerService.withContext('ProfileSettingsScreen');

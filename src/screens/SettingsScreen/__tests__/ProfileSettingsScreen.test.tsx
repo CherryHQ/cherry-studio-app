@@ -77,7 +77,7 @@ jest.mock('@/data/hooks', () => ({
     key === 'app.user.name' ? ['Saved name', mockSetUserName] : [null, mockSetAvatar],
 }));
 
-jest.mock('@/services/userAvatarStorage', () => ({
+jest.mock('@/services/avatars/userAvatarStorage', () => ({
   replaceUserAvatar: jest.fn(),
 }));
 

@@ -27,7 +27,7 @@ jest.mock('@cherrystudio/ai-core', () => ({
   definePlugin: jest.fn((plugin) => plugin),
 }));
 
-jest.mock('@/integration/cherryAi', () => ({
+jest.mock('@/services/cherryin/signature', () => ({
   generateSignature: jest.fn(() => ({})),
 }));
 

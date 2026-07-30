@@ -4,7 +4,7 @@ import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { Image } from '@/components/nativePrimitives';
-import { getProviderAvatarUri } from '@/services/providerAvatarStorage';
+import { getProviderAvatarUri } from '@/services/avatars/providerAvatarStorage';
 
 /**
  * Reads a provider's stored custom avatar uri (see `providerAvatarStorage`).

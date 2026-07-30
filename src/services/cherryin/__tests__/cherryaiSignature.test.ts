@@ -1,4 +1,4 @@
-import { SignatureClient } from '../index';
+import { SignatureClient } from '../signature';
 
 describe('CherryAI signature', () => {
   const dateNow = jest.spyOn(Date, 'now');

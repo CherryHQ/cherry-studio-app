@@ -19,7 +19,7 @@ import { queryKeys } from '@/data/api';
 import { useDataMutation } from '@/data/hooks';
 import { ENDPOINT_TYPE } from '@/data/types/model';
 import type { ApiKeyEntry, EndpointConfigs } from '@/data/types/provider';
-import { saveProviderAvatar } from '@/services/providerAvatarStorage';
+import { saveProviderAvatar } from '@/services/avatars/providerAvatarStorage';
 import { SettingsIconButton } from '../components/SettingsIconButton';
 import { normalizeApiKeySingleLine } from './apiService/utils/providerApiServiceApiKeys';
 import { providerApiServiceStyles } from './apiService/utils/providerApiServiceStyles';
