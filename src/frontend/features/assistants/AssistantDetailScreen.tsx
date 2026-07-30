@@ -9,8 +9,8 @@ import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/head
 import { ModelPickerIcon, useModelPickerData } from '@/frontend/components/modelPicker';
 import { useSetBottomTabBarHidden } from '@/frontend/components/navigation';
 import { useAssistantApiById } from '@/frontend/hooks/chat';
-import type { Assistant } from '@/shared/data/types/assistant';
 import { screenBottomActionInset } from '@/frontend/utils/constants';
+import type { Assistant } from '@/shared/data/types/assistant';
 
 export default function AssistantDetailScreen() {
   const { t } = useTranslation();

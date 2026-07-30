@@ -1,9 +1,9 @@
 import type { DbService } from '@/backend/data/db/DbService';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import { REASONING_EFFORT } from '@/shared/data/types/model';
+import type { PreferenceService } from '../../PreferenceService';
 import { ModelService } from '../ModelService';
 import type { PinService } from '../PinService';
-import type { PreferenceService } from '../../PreferenceService';
 import { providerRegistryService } from '../ProviderRegistryService';
 import { insertManyWithOrderKey } from '../utils/orderKey';
 

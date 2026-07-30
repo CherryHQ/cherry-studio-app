@@ -1,11 +1,10 @@
 import type { DbService } from '@/backend/data/db/DbService';
 import type { AssistantRow } from '@/backend/data/db/schemas';
 import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
-
+import type { PreferenceService } from '../../PreferenceService';
 import { AssistantService } from '../AssistantService';
 import type { ModelService } from '../ModelService';
 import type { PinService } from '../PinService';
-import type { PreferenceService } from '../../PreferenceService';
 import type { TagService } from '../TagService';
 import { applyMoves, insertWithOrderKey } from '../utils/orderKey';
 

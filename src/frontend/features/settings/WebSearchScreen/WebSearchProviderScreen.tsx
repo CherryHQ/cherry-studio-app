@@ -4,9 +4,9 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/shared/data/preference';
 import { isMobileSupportedWebSearchProviderId } from '@/shared/data/presets/webSearchProviders';
-import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';
 import {

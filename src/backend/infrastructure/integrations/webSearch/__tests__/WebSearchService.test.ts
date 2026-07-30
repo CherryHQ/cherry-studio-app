@@ -1,5 +1,5 @@
-import { WebSearchService } from '@/backend/infrastructure/integrations/webSearch/WebSearchService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { WebSearchService } from '@/backend/infrastructure/integrations/webSearch/WebSearchService';
 import type { PreferenceDefaultScopeType, PreferenceKeyType } from '@/shared/data/preference';
 
 describe('WebSearchService', () => {

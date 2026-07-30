@@ -1,9 +1,9 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import {
   mergePresetModel,
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
-import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 

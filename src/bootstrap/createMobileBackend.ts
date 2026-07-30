@@ -7,15 +7,6 @@ import { PermissionsApplication } from '@/backend/application/permissions/Permis
 import { ProfileApplication } from '@/backend/application/profile/ProfileApplication';
 import { ProvidersApplication } from '@/backend/application/providers/ProvidersApplication';
 import {
-  getProviderAvatarUri,
-  saveProviderAvatar,
-} from '@/backend/infrastructure/integrations/avatars/providerAvatarStorage';
-import {
-  replaceUserAvatar,
-  resolveUserAvatarUri,
-} from '@/backend/infrastructure/integrations/avatars/userAvatarStorage';
-import { CherryInOauthService } from '@/backend/infrastructure/integrations/cherryin/CherryInOauthService';
-import {
   discardPreparedFiles,
   imageUriToDataUrl,
   prepareGeneratedImage,
@@ -24,6 +15,15 @@ import {
 } from '@/backend/data/services/fileStorage';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
+import {
+  getProviderAvatarUri,
+  saveProviderAvatar,
+} from '@/backend/infrastructure/integrations/avatars/providerAvatarStorage';
+import {
+  replaceUserAvatar,
+  resolveUserAvatarUri,
+} from '@/backend/infrastructure/integrations/avatars/userAvatarStorage';
+import { CherryInOauthService } from '@/backend/infrastructure/integrations/cherryin/CherryInOauthService';
 import type { BackendServices } from '@/bootstrap/createBackendServices';
 import type { MobileBackend } from '@/shared/contracts';
 import type { CherryUIMessage } from '@/shared/data/types/message';

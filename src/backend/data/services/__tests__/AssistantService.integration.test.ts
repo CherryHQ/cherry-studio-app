@@ -5,12 +5,11 @@ import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
-
+import type { PreferenceService } from '../../PreferenceService';
 import { AssistantService } from '../AssistantService';
 import { McpServerService } from '../McpServerService';
 import type { ModelService } from '../ModelService';
 import type { PinService } from '../PinService';
-import type { PreferenceService } from '../../PreferenceService';
 import type { TagService } from '../TagService';
 
 jest.mock('uuid', () => ({ v7: mockRandomUUID }));

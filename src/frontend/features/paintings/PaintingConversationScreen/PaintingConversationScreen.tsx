@@ -20,8 +20,8 @@ import {
   ScrollToBottomButton,
   useFloatingChatInputLayout,
 } from '@/frontend/features/chat/workspace';
-import type { Message } from '@/shared/data/types/message';
 import { isIOS } from '@/frontend/utils/constants';
+import type { Message } from '@/shared/data/types/message';
 import { PaintingInput } from '../components/PaintingInput';
 import {
   type PaintingGenerationInput,

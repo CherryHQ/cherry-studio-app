@@ -19,6 +19,7 @@ import { usePreference } from '@/frontend/data/hooks';
 import { SettingSelect } from '@/frontend/features/settings/components/SettingSelect';
 import { useAssistantApiById, useAssistantMutations } from '@/frontend/hooks/chat';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
+import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { CreateAssistantDto } from '@/shared/data/api/schemas/assistants';
 import {
   type Assistant,
@@ -27,7 +28,6 @@ import {
   type McpMode,
 } from '@/shared/data/types/assistant';
 import type { UniqueModelId } from '@/shared/data/types/model';
-import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { EmojiPickerBottomSheet } from './components/EmojiPickerBottomSheet';
 
 type AssistantFormState = {
