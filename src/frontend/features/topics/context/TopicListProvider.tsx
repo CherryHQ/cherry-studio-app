@@ -1,17 +1,15 @@
-import { type QueryClient, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useIsFocused, useRouter } from 'expo-router';
 import { createContext, type PropsWithChildren, use, useCallback, useEffect, useMemo } from 'react';
-import { useDataServices } from '@/bootstrap';
-import type { DataServices } from '@/bootstrap/createDataServices';
 import { MODEL_SETTING_PREFERENCE_KEYS } from '@/frontend/components/modelPicker/utils/modelSettings';
-import { queryKeys } from '@/frontend/data';
-import { useDataMutation } from '@/frontend/data/hooks';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import { usePins, useTopics } from '@/frontend/hooks/chat';
 import {
   getMessagesQueryKey,
   prefetchTopicMessages,
 } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPolicy';
+import type { ModelsBackend, PreferencesBackend } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isUniqueModelId } from '@/shared/data/types/model';
 import type { Topic } from '@/shared/data/types/topic';
@@ -44,7 +42,10 @@ export function TopicListProvider({ children }: PropsWithChildren) {
   const isFocused = useIsFocused();
   const queryClient = useQueryClient();
   const router = useRouter();
-  const services = useDataServices();
+  const chat = useBackendModule('chat');
+  const models = useBackendModule('models');
+  const preferences = useBackendModule('preferences');
+  const topics = useBackendModule('topics');
   const topicList = useTopics({ q: '' });
   const topicPins = usePins('topic');
   const isPinActionDisabled = topicPins.isLoading || topicPins.isRefreshing || topicPins.isMutating;
@@ -54,41 +55,44 @@ export function TopicListProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    void prefetchDefaultModelDetail(queryClient, services);
+    void prefetchDefaultModelDetail(queryClient, models, preferences);
 
     for (const topic of topicList.topics.slice(
       0,
       messageWindowPolicy.topicListPrefetchTopicCount,
     )) {
-      void prefetchTopicMessages(queryClient, services, topic.id);
+      void prefetchTopicMessages(queryClient, chat, topic.id);
     }
-  }, [isFocused, queryClient, services, topicList.topics]);
+  }, [chat, isFocused, models, preferences, queryClient, topicList.topics]);
 
   const openTopic = useCallback(
     (topicId: string) => {
       perfLog.debug('[PERF] tap->push', { topicId, t: Date.now() });
-      void prefetchDefaultModelDetail(queryClient, services);
-      void prefetchTopicMessages(queryClient, services, topicId);
+      void prefetchDefaultModelDetail(queryClient, models, preferences);
+      void prefetchTopicMessages(queryClient, chat, topicId);
       router.push({ pathname: '/topics', params: { topicId } });
     },
-    [queryClient, router, services],
+    [chat, models, preferences, queryClient, router],
   );
 
-  const renameTopicMutation = useDataMutation({
-    invalidateQueries: [['/topics']],
-    mutationFn: (dataServices, variables: { id: string; name: string }) =>
-      dataServices.topic.update(variables.id, {
+  const renameTopicMutation = useMutation({
+    mutationFn: (variables: { id: string; name: string }) =>
+      topics.update(variables.id, {
         isNameManuallyEdited: true,
         name: variables.name,
       }),
-    onSuccess: (_topic, variables) =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.topics.detail(variables.id) }),
+    onSuccess: async (_topic, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.topics.all() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.topics.detail(variables.id) }),
+      ]);
+    },
   });
 
-  const { mutateAsync: deleteManyTopics } = useDataMutation({
-    invalidateQueries: [['/topics']],
-    mutationFn: (dataServices, ids: readonly string[]) => dataServices.topic.deleteMany(ids),
-    onSuccess: (_result, ids) => {
+  const { mutateAsync: deleteManyTopics } = useMutation({
+    mutationFn: (ids: readonly string[]) => topics.removeMany(ids),
+    onSuccess: async (_result, ids) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.topics.all() });
       for (const id of ids) {
         queryClient.removeQueries({ queryKey: queryKeys.topics.detail(id) });
         queryClient.removeQueries({ queryKey: getMessagesQueryKey(id) });
@@ -168,15 +172,19 @@ export function TopicListProvider({ children }: PropsWithChildren) {
   );
 }
 
-function prefetchDefaultModelDetail(queryClient: QueryClient, services: DataServices) {
-  const modelId = services.preference.getCachedValue(MODEL_SETTING_PREFERENCE_KEYS.default);
+function prefetchDefaultModelDetail(
+  queryClient: QueryClient,
+  models: ModelsBackend,
+  preferences: PreferencesBackend,
+) {
+  const modelId = preferences.readCached(MODEL_SETTING_PREFERENCE_KEYS.default);
 
   if (!isUniqueModelId(modelId)) {
     return;
   }
 
   return queryClient.prefetchQuery({
-    queryFn: () => services.model.getById(modelId),
+    queryFn: () => models.get(modelId),
     queryKey: queryKeys.models.detail(modelId),
     staleTime: MODEL_DETAIL_PREFETCH_STALE_TIME_MS,
   });

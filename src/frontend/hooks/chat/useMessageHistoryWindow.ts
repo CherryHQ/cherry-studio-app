@@ -1,6 +1,6 @@
-import { type InfiniteData } from '@tanstack/react-query';
+import { type InfiniteData, useInfiniteQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useDataInfiniteQuery } from '@/frontend/data/hooks/useDataQuery';
+import { useBackendModule } from '@/frontend/data';
 import type { BranchMessagesResponse, Message } from '@/shared/data/types/message';
 import { useMessageRenderWindow } from './useMessageRenderWindow';
 import {
@@ -51,10 +51,11 @@ export function useMessageHistoryWindow(
   topicId: string | undefined,
   options: MessageHistoryWindowOptions,
 ): MessageHistoryWindow {
+  const chat = useBackendModule('chat');
   const enabled = options.enabled && Boolean(topicId);
   const queryTopicId = topicId ?? '__missing_topic__';
 
-  const query = useDataInfiniteQuery<
+  const query = useInfiniteQuery<
     BranchMessagesResponse,
     Error,
     InfiniteData<BranchMessagesResponse, string | undefined>,
@@ -64,7 +65,7 @@ export function useMessageHistoryWindow(
     enabled,
     getNextPageParam: getNextMessagesPageParam,
     initialPageParam: undefined,
-    queryFn: (services, context) => fetchTopicMessagesPage(services, queryTopicId, context),
+    queryFn: (context) => fetchTopicMessagesPage(chat, queryTopicId, context),
     queryKey: getMessagesQueryKey(queryTopicId),
   });
 

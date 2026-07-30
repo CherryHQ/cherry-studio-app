@@ -1,6 +1,6 @@
 import type { InfiniteData, QueryClient, QueryFunctionContext } from '@tanstack/react-query';
-import type { DataServices } from '@/bootstrap/createDataServices';
 import { queryKeys } from '@/frontend/data';
+import type { ChatBackend } from '@/shared/contracts';
 import type { BranchMessagesResponse } from '@/shared/data/types/message';
 import { messageWindowPolicy } from './messageWindowPolicy';
 
@@ -21,11 +21,11 @@ export function getNextMessagesPageParam(lastPage: BranchMessagesResponse) {
 }
 
 export function fetchTopicMessagesPage(
-  services: DataServices,
+  chat: ChatBackend,
   topicId: string,
   context: QueryFunctionContext<MessagesQueryKey, string | undefined>,
 ) {
-  return services.message.getBranchMessages(topicId, {
+  return chat.listMessagePage(topicId, {
     cursor: context.pageParam,
     limit: context.pageParam ? olderMessagesPageSize : initialMessagesPageSize,
   });
@@ -33,7 +33,7 @@ export function fetchTopicMessagesPage(
 
 export function prefetchTopicMessages(
   queryClient: QueryClient,
-  services: DataServices,
+  chat: ChatBackend,
   topicId: string,
 ) {
   return queryClient.prefetchInfiniteQuery<
@@ -45,7 +45,7 @@ export function prefetchTopicMessages(
   >({
     getNextPageParam: getNextMessagesPageParam,
     initialPageParam: undefined,
-    queryFn: (context) => fetchTopicMessagesPage(services, topicId, context),
+    queryFn: (context) => fetchTopicMessagesPage(chat, topicId, context),
     queryKey: getMessagesQueryKey(topicId),
     staleTime: messageWindowPolicy.prefetchStaleTimeMs,
   });

@@ -1,8 +1,6 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { useDataServices } from '@/bootstrap';
-import { queryKeys } from '@/frontend/data';
-import { useDataQuery } from '@/frontend/data/hooks';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { CreateAssistantDto, UpdateAssistantDto } from '@/shared/data/api/schemas/assistants';
 import { type Assistant } from '@/shared/data/types/assistant';
 
@@ -10,8 +8,9 @@ const ASSISTANTS_LIST_LIMIT = 500;
 const EMPTY_ASSISTANTS: readonly Assistant[] = Object.freeze([]);
 
 export function useAssistantsApi() {
-  const query = useDataQuery({
-    queryFn: (services) => services.assistant.list({ limit: ASSISTANTS_LIST_LIMIT }),
+  const assistants = useBackendModule('assistants');
+  const query = useQuery({
+    queryFn: () => assistants.list({ limit: ASSISTANTS_LIST_LIMIT }),
     queryKey: queryKeys.assistants.list({ limit: ASSISTANTS_LIST_LIMIT }),
   });
 
@@ -26,11 +25,12 @@ export function useAssistantsApi() {
 }
 
 export function useAssistantApiById(id: string | undefined) {
+  const assistants = useBackendModule('assistants');
   const enabled = Boolean(id);
   const queryAssistantId = id ?? '__missing_assistant__';
-  const query = useDataQuery({
+  const query = useQuery({
     enabled,
-    queryFn: (services) => services.assistant.getById(id ?? ''),
+    queryFn: () => assistants.get(id ?? ''),
     queryKey: queryKeys.assistants.detail(queryAssistantId),
   });
 
@@ -44,7 +44,7 @@ export function useAssistantApiById(id: string | undefined) {
 }
 
 export function useAssistantMutations() {
-  const services = useDataServices();
+  const assistants = useBackendModule('assistants');
   const queryClient = useQueryClient();
 
   const invalidateAssistants = useCallback(
@@ -59,7 +59,7 @@ export function useAssistantMutations() {
   );
 
   const createMutation = useMutation({
-    mutationFn: (dto: CreateAssistantDto) => services.assistant.create(dto),
+    mutationFn: (dto: CreateAssistantDto) => assistants.create(dto),
     onSuccess: (assistant) => invalidateAssistants(assistant.id),
   });
 
@@ -69,13 +69,13 @@ export function useAssistantMutations() {
         throw new Error('updateAssistant called with empty id');
       }
 
-      return services.assistant.update(id, patch);
+      return assistants.update(id, patch);
     },
     onSuccess: (assistant) => invalidateAssistants(assistant.id),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => services.assistant.delete(id),
+    mutationFn: (id: string) => assistants.remove(id),
     onSuccess: (_data, id) => invalidateAssistants(id),
   });
 

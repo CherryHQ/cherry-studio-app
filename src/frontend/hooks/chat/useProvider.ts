@@ -1,12 +1,13 @@
-import { queryKeys } from '@/frontend/data';
-import { useDataQuery } from '@/frontend/data/hooks';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { Provider } from '@/shared/data/types/provider';
 
 const EMPTY_PROVIDERS: readonly Provider[] = Object.freeze([]);
 
 export function useProviders(query: { enabled?: boolean } = {}) {
-  const providersQuery = useDataQuery({
-    queryFn: (services) => services.provider.list(query),
+  const providers = useBackendModule('providers');
+  const providersQuery = useQuery({
+    queryFn: () => providers.list(query),
     queryKey: queryKeys.providers.list(query),
   });
 

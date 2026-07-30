@@ -1,10 +1,9 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import type { DataServices } from '@/bootstrap/createDataServices';
-import { queryKeys } from '@/frontend/data';
-import { useDataMutation } from '@/frontend/data/hooks';
+import { BackendProvider, queryKeys } from '@/frontend/data';
 import { usePins, useTopics } from '@/frontend/hooks/chat';
 import { prefetchTopicMessages } from '@/frontend/hooks/chat/utils/messageQueryOptions';
+import type { MobileBackend } from '@/shared/contracts';
 import type { Topic } from '@/shared/data/types/topic';
 
 import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
@@ -21,18 +20,20 @@ const mockQueryClient = {
 const defaultModelId = 'provider::default-model';
 const mockGetCachedPreferenceValue = jest.fn((): string | null => defaultModelId);
 const mockGetModelById = jest.fn(async (_modelId: string) => null);
-const mockServices = {
-  model: {
-    getById: mockGetModelById,
+const mockChat = {} as MobileBackend['chat'];
+const mockBackend = {
+  chat: mockChat,
+  models: {
+    get: mockGetModelById,
   },
-  preference: {
-    getCachedValue: mockGetCachedPreferenceValue,
+  preferences: {
+    readCached: mockGetCachedPreferenceValue,
   },
-  topic: {
-    deleteMany: jest.fn(),
+  topics: {
+    removeMany: jest.fn(),
     update: jest.fn(),
   },
-} as unknown as DataServices;
+} as unknown as MobileBackend;
 
 jest.mock('expo-router', () => ({
   useIsFocused: () => true,
@@ -40,15 +41,8 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@tanstack/react-query', () => ({
+  useMutation: jest.fn(),
   useQueryClient: () => mockQueryClient,
-}));
-
-jest.mock('@/frontend/data/hooks', () => ({
-  useDataMutation: jest.fn(),
-}));
-
-jest.mock('@/bootstrap', () => ({
-  useDataServices: () => mockServices,
 }));
 
 jest.mock('@/frontend/hooks/chat', () => ({
@@ -60,7 +54,9 @@ jest.mock('@/frontend/hooks/chat/utils/messageQueryOptions', () => ({
   prefetchTopicMessages: jest.fn(async () => undefined),
 }));
 
-const useDataMutationMock = useDataMutation as jest.Mock;
+const useMutationMock = jest.requireMock<{ useMutation: jest.Mock }>(
+  '@tanstack/react-query',
+).useMutation;
 const usePinsMock = usePins as jest.MockedFunction<typeof usePins>;
 const useTopicsMock = useTopics as jest.MockedFunction<typeof useTopics>;
 const prefetchTopicMessagesMock = prefetchTopicMessages as jest.MockedFunction<
@@ -108,7 +104,7 @@ beforeEach(() => {
     togglePin: mockTogglePin,
   });
 
-  useDataMutationMock.mockImplementation(() => {
+  useMutationMock.mockImplementation(() => {
     const mutateAsync = mutationHookIndex % 2 === 0 ? mockRenameTopic : mockDeleteTopics;
     mutationHookIndex += 1;
     return { mutateAsync };
@@ -130,9 +126,11 @@ async function renderProvider(topics: readonly Topic[]) {
 
   await act(async () => {
     renderer = create(
-      <TopicListProvider>
-        <TopicListProbe />
-      </TopicListProvider>,
+      <BackendProvider backend={mockBackend}>
+        <TopicListProvider>
+          <TopicListProbe />
+        </TopicListProvider>
+      </BackendProvider>,
     );
   });
 }
@@ -162,7 +160,7 @@ describe('TopicListProvider', () => {
     expect(prefetchTopicMessagesMock).toHaveBeenCalledTimes(12);
     expect(prefetchTopicMessagesMock).not.toHaveBeenCalledWith(
       mockQueryClient,
-      mockServices,
+      mockChat,
       'topic-13',
     );
 
@@ -171,11 +169,7 @@ describe('TopicListProvider', () => {
     });
 
     expect(mockPrefetchQuery).toHaveBeenCalledTimes(2);
-    expect(prefetchTopicMessagesMock).toHaveBeenCalledWith(
-      mockQueryClient,
-      mockServices,
-      'topic-13',
-    );
+    expect(prefetchTopicMessagesMock).toHaveBeenCalledWith(mockQueryClient, mockChat, 'topic-13');
     expect(mockRouterPush).toHaveBeenCalledWith({
       params: { topicId: 'topic-13' },
       pathname: '/topics',
@@ -203,9 +197,11 @@ describe('TopicListProvider', () => {
 
     await act(async () => {
       renderer = create(
-        <TopicListProvider>
-          <TopicListProbe />
-        </TopicListProvider>,
+        <BackendProvider backend={mockBackend}>
+          <TopicListProvider>
+            <TopicListProbe />
+          </TopicListProvider>
+        </BackendProvider>,
       );
     });
     await act(async () => {

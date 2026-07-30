@@ -1,24 +1,26 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef } from 'react';
-import { queryKeys } from '@/frontend/data';
-import { useDataMutation, useDataQuery } from '@/frontend/data/hooks';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { EntityType } from '@/shared/data/types/entityType';
 import type { CreatePinDto, Pin } from '@/shared/data/types/pin';
 
 const EMPTY_PINS: readonly Pin[] = Object.freeze([]);
 
 export function usePins(entityType: EntityType) {
+  const pinsBackend = useBackendModule('pins');
+  const queryClient = useQueryClient();
   const listQueryKey = queryKeys.pins.list({ entityType });
-  const pinsQuery = useDataQuery({
-    queryFn: (services) => services.pin.listByEntityType(entityType),
+  const pinsQuery = useQuery({
+    queryFn: () => pinsBackend.list(entityType),
     queryKey: listQueryKey,
   });
-  const createPinMutation = useDataMutation({
-    invalidateQueries: [listQueryKey],
-    mutationFn: (services, dto: CreatePinDto) => services.pin.pin(dto),
+  const createPinMutation = useMutation({
+    mutationFn: (dto: CreatePinDto) => pinsBackend.pin(dto),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: listQueryKey }),
   });
-  const deletePinMutation = useDataMutation({
-    invalidateQueries: [listQueryKey],
-    mutationFn: (services, id: string) => services.pin.unpin(id),
+  const deletePinMutation = useMutation({
+    mutationFn: (id: string) => pinsBackend.unpin(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: listQueryKey }),
   });
   const toggleInFlightRef = useRef(false);
   const pins = pinsQuery.data ?? EMPTY_PINS;

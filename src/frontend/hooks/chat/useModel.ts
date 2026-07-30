@@ -1,5 +1,5 @@
-import { queryKeys } from '@/frontend/data';
-import { useDataQuery } from '@/frontend/data/hooks';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
 const EMPTY_MODELS: readonly Model[] = Object.freeze([]);
@@ -7,8 +7,9 @@ const EMPTY_MODELS: readonly Model[] = Object.freeze([]);
 export function useModels(
   query: { capability?: string; enabled?: boolean; providerId?: string } = {},
 ) {
-  const modelsQuery = useDataQuery({
-    queryFn: (services) => services.model.list(query),
+  const models = useBackendModule('models');
+  const modelsQuery = useQuery({
+    queryFn: () => models.list(query),
     queryKey: queryKeys.models.list(query),
   });
 
@@ -21,10 +22,17 @@ export function useModels(
 }
 
 export function useModelById(uniqueModelId: UniqueModelId | null | undefined) {
+  const models = useBackendModule('models');
   const modelKey = uniqueModelId ?? '';
-  const modelQuery = useDataQuery({
+  const modelQuery = useQuery({
     enabled: Boolean(modelKey),
-    queryFn: (services) => services.model.getById(modelKey),
+    queryFn: () => {
+      if (!uniqueModelId) {
+        throw new Error('Cannot load a model without an id.');
+      }
+
+      return models.get(uniqueModelId);
+    },
     queryKey: queryKeys.models.detail(modelKey),
   });
 

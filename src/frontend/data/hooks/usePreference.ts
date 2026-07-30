@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
-import { useDataServices } from '@/bootstrap';
+import { useBackendModule } from '@/frontend/data/BackendProvider';
 import type {
   PreferenceDefaultScopeType,
   PreferenceKeyType,
@@ -31,17 +31,17 @@ type SnapshotState<T extends MultiplePreferenceMapping> = {
 export function usePreference<K extends PreferenceKeyType>(
   key: K,
 ): [PreferenceDefaultScopeType[K], PreferenceSetter<K>] {
-  const service = useDataServices().preference;
+  const preferences = useBackendModule('preferences');
 
   const value = useSyncExternalStore(
-    service.subscribeChange(key),
-    () => service.getCachedValue(key) ?? getDefaultValue(key),
+    useCallback((listener) => preferences.subscribe(key, listener), [key, preferences]),
+    () => preferences.readCached(key),
     () => getDefaultValue(key),
   );
 
   const setValue = useCallback<PreferenceSetter<K>>(
-    (nextValue, options) => service.set(key, nextValue, options),
-    [key, service],
+    (nextValue, options) => preferences.set(key, nextValue, options),
+    [key, preferences],
   );
 
   return [value, setValue];
@@ -50,14 +50,14 @@ export function usePreference<K extends PreferenceKeyType>(
 export function useMultiplePreferences<T extends MultiplePreferenceMapping>(
   mapping: T,
 ): [MultiplePreferenceValues<T>, MultiplePreferenceSetter<T>] {
-  const service = useDataServices().preference;
+  const preferences = useBackendModule('preferences');
   const entries = useMemo(() => Object.entries(mapping) as [keyof T, T[keyof T]][], [mapping]);
   const keys = useMemo(() => entries.map(([, key]) => key), [entries]);
   const snapshotRef = useRef<SnapshotState<T> | null>(null);
 
   const readSnapshot = useCallback(() => {
     const previousState = snapshotRef.current;
-    const nextSnapshot = service.getMultipleCached(mapping);
+    const nextSnapshot = preferences.readManyCached(mapping);
     let changed =
       previousState === null ||
       previousState.names.length !== entries.length ||
@@ -78,12 +78,12 @@ export function useMultiplePreferences<T extends MultiplePreferenceMapping>(
       values: nextSnapshot,
     };
     return nextSnapshot;
-  }, [entries, mapping, service]);
+  }, [entries, mapping, preferences]);
 
   const values = useSyncExternalStore(
     useCallback(
       (listener) => {
-        const unsubscribers = keys.map((key) => service.subscribeChange(key)(listener));
+        const unsubscribers = keys.map((key) => preferences.subscribe(key, listener));
 
         return () => {
           for (const unsubscribe of unsubscribers) {
@@ -91,7 +91,7 @@ export function useMultiplePreferences<T extends MultiplePreferenceMapping>(
           }
         };
       },
-      [keys, service],
+      [keys, preferences],
     ),
     readSnapshot,
     () => {
@@ -115,9 +115,9 @@ export function useMultiplePreferences<T extends MultiplePreferenceMapping>(
         }
       }
 
-      return service.setMultiple(updates, options);
+      return preferences.setMany(updates, options);
     },
-    [entries, service],
+    [entries, preferences],
   );
 
   return [values, setValues];

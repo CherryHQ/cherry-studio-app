@@ -1,8 +1,12 @@
-import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
-import { useDataServices } from '@/bootstrap';
-import { queryKeys } from '@/frontend/data';
-import { useDataInfiniteQuery, useDataQuery } from '@/frontend/data/hooks/useDataQuery';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { UpdateTopicDto } from '@/shared/data/api/schemas/topics';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { Topic } from '@/shared/data/types/topic';
@@ -25,9 +29,10 @@ export type TopicsViewModel = {
 const defaultPageSize = 50;
 
 export function useTopics(options: TopicsOptions): TopicsViewModel {
+  const topicsBackend = useBackendModule('topics');
   const queryText = options.q.trim() || undefined;
 
-  const query = useDataInfiniteQuery<
+  const query = useInfiniteQuery<
     CursorPaginationResponse<Topic>,
     Error,
     InfiniteData<CursorPaginationResponse<Topic>, string | undefined>,
@@ -36,8 +41,8 @@ export function useTopics(options: TopicsOptions): TopicsViewModel {
   >({
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     initialPageParam: undefined,
-    queryFn: (services, { pageParam }) =>
-      services.topic.listByCursor({
+    queryFn: ({ pageParam }) =>
+      topicsBackend.listPage({
         cursor: pageParam,
         limit: defaultPageSize,
         q: queryText,
@@ -70,19 +75,20 @@ export function useTopics(options: TopicsOptions): TopicsViewModel {
 }
 
 export function useTopic(topicId: string | undefined) {
+  const topics = useBackendModule('topics');
   const enabled = Boolean(topicId);
   const queryTopicId = topicId ?? '__missing_topic__';
 
-  return useDataQuery<Topic, Error, Topic, TopicDetailQueryKey>({
+  return useQuery<Topic, Error, Topic, TopicDetailQueryKey>({
     enabled,
-    queryFn: (services) => services.topic.getById(topicId ?? ''),
+    queryFn: () => topics.get(topicId ?? ''),
     queryKey: queryKeys.topics.detail(queryTopicId),
   });
 }
 
 export function useTopicMutations() {
   const queryClient = useQueryClient();
-  const services = useDataServices();
+  const topics = useBackendModule('topics');
 
   const invalidateTopic = useCallback(
     async (topicId: string) => {
@@ -101,7 +107,7 @@ export function useTopicMutations() {
         throw new Error('updateTopic called with empty id');
       }
 
-      return services.topic.update(id, patch);
+      return topics.update(id, patch);
     },
     onSuccess: (topic) => invalidateTopic(topic.id),
   });

@@ -1,5 +1,6 @@
+import { useQuery } from '@tanstack/react-query';
 import { File } from 'expo-file-system';
-import { useDataQuery } from '@/frontend/data/hooks';
+import { useBackendModule } from '@/frontend/data';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { FileUIPart } from '@/shared/data/types/message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
@@ -9,11 +10,12 @@ const logger = loggerService.withContext('useFilePartUri');
 type ResolveFileEntryUri = (fileEntryId: string) => Promise<string | undefined>;
 
 export function useFilePartUri(part: FileUIPart) {
+  const files = useBackendModule('files');
   const fileEntryId = readCherryMeta(part)?.fileEntryId;
   const requiresLookup = Boolean(fileEntryId) || isLocalFileUri(part.url);
-  const query = useDataQuery({
+  const query = useQuery({
     enabled: requiresLookup,
-    queryFn: (services) => resolveFilePartUri(part, (id) => services.fileEntry.resolveUri(id)),
+    queryFn: () => resolveFilePartUri(part, (id) => files.resolveRenderableUri(id)),
     queryKey: ['file-part-uri', fileEntryId ?? null, part.url],
   });
 

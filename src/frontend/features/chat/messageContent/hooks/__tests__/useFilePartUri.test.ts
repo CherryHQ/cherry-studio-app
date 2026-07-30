@@ -1,8 +1,6 @@
 import type { FileUIPart } from '@/shared/data/types/message';
 import { resolveFilePartUri } from '../useFilePartUri';
 
-jest.mock('@/frontend/data/hooks', () => ({ useDataQuery: jest.fn() }));
-
 jest.mock('expo-file-system', () => {
   const files = new Set<string>();
 

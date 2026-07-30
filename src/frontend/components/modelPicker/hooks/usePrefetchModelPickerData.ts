@@ -1,31 +1,32 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { useDataServices } from '@/bootstrap';
-import { queryKeys } from '@/frontend/data';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 
 const modelPickerPrefetchStaleTime = 1000 * 60 * 5;
 
 export function usePrefetchModelPickerData() {
   const queryClient = useQueryClient();
-  const services = useDataServices();
+  const models = useBackendModule('models');
+  const pins = useBackendModule('pins');
+  const providers = useBackendModule('providers');
 
   useEffect(() => {
     void Promise.all([
       queryClient.prefetchQuery({
-        queryFn: () => services.model.list({ enabled: true }),
+        queryFn: () => models.list({ enabled: true }),
         queryKey: queryKeys.models.list({ enabled: true }),
         staleTime: modelPickerPrefetchStaleTime,
       }),
       queryClient.prefetchQuery({
-        queryFn: () => services.provider.list({ enabled: true }),
+        queryFn: () => providers.list({ enabled: true }),
         queryKey: queryKeys.providers.list({ enabled: true }),
         staleTime: modelPickerPrefetchStaleTime,
       }),
       queryClient.prefetchQuery({
-        queryFn: () => services.pin.listByEntityType('model'),
+        queryFn: () => pins.list('model'),
         queryKey: queryKeys.pins.list({ entityType: 'model' }),
         staleTime: modelPickerPrefetchStaleTime,
       }),
     ]);
-  }, [queryClient, services]);
+  }, [models, pins, providers, queryClient]);
 }
