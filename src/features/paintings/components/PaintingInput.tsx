@@ -6,15 +6,13 @@ import { useTranslation } from 'react-i18next';
 import { ModelPickerBottomSheet, type ModelPickerModelItem } from '@/components/modelPicker';
 import { isUniqueModelId, type UniqueModelId } from '@/data/types/model';
 import type { Painting } from '@/data/types/painting';
-import { ChatInputActionSheet } from '@/features/chat/input/components/ChatInputActionSheet';
 import {
+  ChatInputActionSheet,
   type ChatInputSendPayload,
   ChatInputSurface,
-} from '@/features/chat/input/components/ChatInputSurface';
-import {
   useChatInputActions,
   useChatInputState,
-} from '@/features/chat/input/context/ChatInputProvider';
+} from '@/features/chat/input';
 import { useModelById, useModels, useProviders } from '@/hooks/chat';
 
 import type {

@@ -1,10 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { Painting } from '@/data/types/painting';
-import type {
-  ChatInputModelSettings,
-  ChatInputSendPayload,
-} from '@/features/chat/input/components/ChatInputSurface';
+import type { ChatInputModelSettings, ChatInputSendPayload } from '@/features/chat/input';
 
 import type { PaintingGenerationResult } from '../../hooks/usePaintingGeneration';
 import { PaintingInput } from '../PaintingInput';
@@ -57,18 +54,12 @@ jest.mock('@/hooks/chat', () => ({
   }),
 }));
 
-jest.mock('@/features/chat/input/components/ChatInputActionSheet', () => ({
+jest.mock('@/features/chat/input', () => ({
   ChatInputActionSheet: () => null,
-}));
-
-jest.mock('@/features/chat/input/components/ChatInputSurface', () => ({
   ChatInputSurface: (props: typeof mockSurfaceProps) => {
     mockSurfaceProps = props;
     return null;
   },
-}));
-
-jest.mock('@/features/chat/input/context/ChatInputProvider', () => ({
   useChatInputActions: () => ({ setAttachments: mockSetAttachments }),
   useChatInputState: () => ({ draft: 'refine this', isActionSheetOpen: false }),
 }));

@@ -105,7 +105,7 @@ jest.mock('@/features/paintings/hooks/usePaintings', () => ({
   useResolvedPaintingFiles: () => ({ data: mockFiles, isError: false, isLoading: false }),
 }));
 
-jest.mock('@/features/chat/input/context/ChatInputProvider', () => ({
+jest.mock('@/features/chat/input', () => ({
   ChatInputProvider: ({
     children,
     initialAttachments,

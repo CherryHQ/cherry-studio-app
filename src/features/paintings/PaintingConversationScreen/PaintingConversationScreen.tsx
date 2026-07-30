@@ -11,12 +11,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isIOS } from '@/config/constants';
 import type { Message } from '@/data/types/message';
+import { ChatInputProvider } from '@/features/chat/input';
 import {
   chatInputHorizontalScreenInset,
   chatInputMinBottomPadding,
   getChatInputKeyboardStickyOffset,
 } from '@/features/chat/input/chatInputLayout';
-import { ChatInputProvider } from '@/features/chat/input/context/ChatInputProvider';
 import {
   ChatMessageList,
   ChatWorkspaceFrame,
