@@ -9,9 +9,9 @@ import { SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { replaceUserAvatar } from '@/backend/infrastructure/integrations/avatars/userAvatarStorage';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { ProfileAvatarEditBadge, ProfileAvatarImage } from '@/frontend/components/ProfileAvatar';
+import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 
 const profileAvatarSize = 104;
@@ -26,7 +26,7 @@ export default function ProfileSettingsScreen() {
   const borderColor = useThemeColor('border');
   const inputRef = useRef<TextInput>(null);
   const [userName, setUserName] = usePreference('app.user.name');
-  const [avatar, setAvatar] = usePreference('app.user.avatar');
+  const profile = useBackendModule('profile');
   const [nameDraft, setNameDraft] = useState(userName);
   const avatarActions = useMemo<MenuAction[]>(
     () => [
@@ -45,11 +45,8 @@ export default function ProfileSettingsScreen() {
   );
 
   const persistSelectedAvatar = useCallback(
-    (sourceUri: string) =>
-      replaceUserAvatar(sourceUri, avatar, (nextAvatar) =>
-        setAvatar(nextAvatar, { optimistic: true }),
-      ),
-    [avatar, setAvatar],
+    (sourceUri: string) => profile.persistAvatar(sourceUri),
+    [profile],
   );
   const reportAvatarSaveError = useCallback(
     (error: unknown) => {

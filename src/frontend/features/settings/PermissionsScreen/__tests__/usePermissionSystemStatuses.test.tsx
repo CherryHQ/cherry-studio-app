@@ -1,22 +1,24 @@
 import type { EffectCallback } from 'react';
 import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { BackendProvider } from '@/frontend/data';
+import type { MobileBackend, PermissionStatuses } from '@/shared/contracts';
 
 import { usePermissionSystemStatuses } from '../hooks/usePermissionSystemStatuses';
 
-const mockGetStatus = jest.fn(async () => 'granted');
-const mockDevicePermission = { getStatusForPreference: mockGetStatus };
+const mockGetStatuses = jest.fn(
+  async (keys: readonly string[]) =>
+    Object.fromEntries(keys.map((key) => [key, 'granted'])) as PermissionStatuses,
+);
+const backend = {
+  permissions: { getStatuses: mockGetStatuses },
+} as unknown as MobileBackend;
 
 jest.mock('expo-router', () => ({
   useFocusEffect: (effect: EffectCallback) => {
     const { useEffect } = jest.requireActual('react');
     useEffect(effect, [effect]);
   },
-}));
-jest.mock('@/bootstrap', () => ({
-  useDataServices: () => ({
-    devicePermission: mockDevicePermission,
-  }),
 }));
 
 function HookHarness() {
@@ -46,20 +48,36 @@ describe('usePermissionSystemStatuses', () => {
 
   test('refreshes permissions when the focused app returns to the foreground', async () => {
     await act(async () => {
-      renderer = create(<HookHarness />);
+      renderer = create(
+        <BackendProvider backend={backend}>
+          <HookHarness />
+        </BackendProvider>,
+      );
     });
-    expect(mockGetStatus).toHaveBeenCalledTimes(6);
+    expect(mockGetStatuses).toHaveBeenCalledTimes(1);
+    expect(mockGetStatuses).toHaveBeenCalledWith([
+      'permissions.location_read',
+      'permissions.calendar_read',
+      'permissions.calendar_write',
+      'permissions.reminders_read',
+      'permissions.reminders_write',
+      'permissions.health_read',
+    ]);
 
     await act(async () => appStateListener?.('background'));
-    expect(mockGetStatus).toHaveBeenCalledTimes(6);
+    expect(mockGetStatuses).toHaveBeenCalledTimes(1);
 
     await act(async () => appStateListener?.('active'));
-    expect(mockGetStatus).toHaveBeenCalledTimes(12);
+    expect(mockGetStatuses).toHaveBeenCalledTimes(2);
   });
 
   test('removes the app-state listener when the screen loses focus', async () => {
     await act(async () => {
-      renderer = create(<HookHarness />);
+      renderer = create(
+        <BackendProvider backend={backend}>
+          <HookHarness />
+        </BackendProvider>,
+      );
     });
 
     await act(async () => renderer?.unmount());

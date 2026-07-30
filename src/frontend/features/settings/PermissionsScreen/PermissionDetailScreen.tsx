@@ -4,9 +4,8 @@ import { CheckIcon, SettingsIcon } from 'lucide-uniwind/png';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import type { SystemPermissionState } from '@/backend/infrastructure/integrations/devicePermissions';
-import { useDataServices } from '@/bootstrap';
 import { BackHeader } from '@/frontend/components/headers';
+import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 import type { PermissionMode, PermissionPreferenceKey } from '@/shared/data/preference';
 
@@ -61,7 +60,6 @@ export default function PermissionDetailSettingsScreen() {
               configuredKeys={configuredKeys}
               kind={kind}
               onSystemStatusChange={refresh}
-              statuses={statuses}
             />
           ) : null}
         </View>
@@ -80,8 +78,8 @@ function PermissionModeGroup({
   title: string;
 }) {
   const { t } = useTranslation();
-  const [mode, setMode] = usePreference(preferenceKey);
-  const permissionService = useDataServices().devicePermission;
+  const [mode] = usePreference(preferenceKey);
+  const permissions = useBackendModule('permissions');
   const [isUpdating, setIsUpdating] = useState(false);
 
   const selectMode = async (nextMode: PermissionMode) => {
@@ -91,18 +89,8 @@ function PermissionModeGroup({
 
     setIsUpdating(true);
     try {
-      if (mode === 'never' && nextMode !== 'never') {
-        const currentStatus = await permissionService.getStatusForPreference(preferenceKey);
-        const nextStatus =
-          currentStatus === 'granted'
-            ? currentStatus
-            : await permissionService.requestForPreference(preferenceKey);
-        await onSystemStatusChange();
-        if (nextStatus !== 'granted') {
-          return;
-        }
-      }
-      await setMode(nextMode);
+      await permissions.setPolicy(preferenceKey, nextMode);
+      await onSystemStatusChange();
     } finally {
       setIsUpdating(false);
     }
@@ -146,24 +134,16 @@ function OpenSettingsSection({
   configuredKeys,
   kind,
   onSystemStatusChange,
-  statuses,
 }: {
   configuredKeys: PermissionPreferenceKey[];
   kind: PermissionKind;
   onSystemStatusChange: () => Promise<void>;
-  statuses: Partial<Record<PermissionPreferenceKey, SystemPermissionState>>;
 }) {
   const { t } = useTranslation();
-  const permissionService = useDataServices().devicePermission;
+  const permissions = useBackendModule('permissions');
   const recoverAccess = async () => {
-    const missingKeys = configuredKeys.filter((key) => statuses[key] !== 'granted');
-    if (missingKeys.every((key) => statuses[key] === 'undetermined')) {
-      await Promise.all(missingKeys.map((key) => permissionService.requestForPreference(key)));
-      await onSystemStatusChange();
-      return;
-    }
-
-    await permissionService.openSystemSettings(kind);
+    await permissions.recover(configuredKeys);
+    await onSystemStatusChange();
   };
 
   return (

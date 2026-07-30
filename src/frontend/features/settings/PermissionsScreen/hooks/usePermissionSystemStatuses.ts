@@ -1,8 +1,8 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { AppState } from 'react-native';
-import type { SystemPermissionState } from '@/backend/infrastructure/integrations/devicePermissions';
-import { useDataServices } from '@/bootstrap';
+import { useBackendModule } from '@/frontend/data';
+import type { SystemPermissionState } from '@/shared/contracts';
 import type { PermissionPreferenceKey } from '@/shared/data/preference';
 
 import { permissionConfig, permissionKinds } from '../permissionConfig';
@@ -12,7 +12,7 @@ export type PermissionSystemStatuses = Partial<
 >;
 
 export function usePermissionSystemStatuses() {
-  const service = useDataServices().devicePermission;
+  const permissions = useBackendModule('permissions');
   const [statuses, setStatuses] = useState<PermissionSystemStatuses>({});
 
   const refresh = useCallback(async () => {
@@ -20,11 +20,9 @@ export function usePermissionSystemStatuses() {
       const config = permissionConfig[kind];
       return config.writeKey ? [config.readKey, config.writeKey] : [config.readKey];
     });
-    const results = await Promise.all(
-      keys.map(async (key) => [key, await service.getStatusForPreference(key)] as const),
-    );
-    setStatuses((current) => ({ ...current, ...Object.fromEntries(results) }));
-  }, [service]);
+    const nextStatuses = await permissions.getStatuses(keys);
+    setStatuses((current) => ({ ...current, ...nextStatuses }));
+  }, [permissions]);
 
   useFocusEffect(
     useCallback(() => {

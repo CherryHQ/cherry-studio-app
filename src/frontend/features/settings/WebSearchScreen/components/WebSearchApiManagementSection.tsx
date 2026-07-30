@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { useDataServices } from '@/bootstrap';
+import { useBackendModule } from '@/frontend/data';
 import type {
   WebSearchCapability,
   WebSearchProvider,
@@ -40,7 +40,7 @@ export function WebSearchApiManagementSection({
 }: WebSearchApiManagementSectionProps) {
   const { t } = useTranslation();
   const router = useRouter();
-  const { webSearch } = useDataServices();
+  const webSearch = useBackendModule('webSearch');
   const providerOverride = providerOverrides[provider.id];
   const sections = getWebSearchProviderDetailSections(provider.id);
 

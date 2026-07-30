@@ -1,19 +1,29 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { BackendProvider } from '@/frontend/data';
+import type { MobileBackend } from '@/shared/contracts';
 import type { PermissionMode } from '@/shared/data/preference';
 
 import PermissionDetailSettingsScreen from '../PermissionDetailScreen';
 
 const mockSetMode = jest.fn(async (_mode: PermissionMode) => undefined);
-const mockGetStatus = jest.fn(async () => 'denied');
-const mockRequestPermission = jest.fn(async () => 'denied');
-const mockOpenSettings = jest.fn(async () => undefined);
+const mockSetPolicy = jest.fn(async (_key: string, policy: PermissionMode) => ({
+  policy,
+  status: 'granted' as const,
+}));
+const mockRecover = jest.fn(async () => ({}));
 const mockRefresh = jest.fn(async () => undefined);
 let mockPermission = 'health';
 let mockMode: PermissionMode = 'never';
 let mockPolicies = makePolicies();
 let mockStatuses: Record<string, string> = {};
+const backend = {
+  permissions: {
+    recover: mockRecover,
+    setPolicy: mockSetPolicy,
+  },
+} as unknown as MobileBackend;
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ permission: mockPermission }),
@@ -31,15 +41,6 @@ jest.mock('lucide-uniwind/png', () => ({
 jest.mock('@/frontend/components/headers', () => ({ BackHeader: () => null }));
 jest.mock('@/frontend/data/hooks', () => ({
   usePreference: () => [mockMode, mockSetMode],
-}));
-jest.mock('@/bootstrap', () => ({
-  useDataServices: () => ({
-    devicePermission: {
-      getStatusForPreference: mockGetStatus,
-      openSystemSettings: mockOpenSettings,
-      requestForPreference: mockRequestPermission,
-    },
-  }),
 }));
 jest.mock('../hooks/usePermissionPolicies', () => ({
   usePermissionPolicies: () => mockPolicies,
@@ -79,8 +80,6 @@ describe('PermissionDetailSettingsScreen', () => {
     mockMode = 'never';
     mockPolicies = makePolicies();
     mockStatuses = {};
-    mockGetStatus.mockResolvedValue('denied');
-    mockRequestPermission.mockResolvedValue('denied');
   });
 
   afterEach(async () => {
@@ -105,34 +104,23 @@ describe('PermissionDetailSettingsScreen', () => {
     expect(texts()).toContain('settings.permissions.writeAccess');
   });
 
-  test('keeps never when native authorization is denied', async () => {
+  test('delegates policy changes to the permissions backend', async () => {
     renderScreen();
 
     await pressRadio('settings.permissions.mode.ask');
 
-    expect(mockRequestPermission).toHaveBeenCalledWith('permissions.health_read');
+    expect(mockSetPolicy).toHaveBeenCalledWith('permissions.health_read', 'ask');
     expect(mockSetMode).not.toHaveBeenCalled();
-  });
-
-  test('stores ask after native authorization succeeds', async () => {
-    mockRequestPermission.mockResolvedValue('granted');
-    renderScreen();
-
-    await pressRadio('settings.permissions.mode.ask');
-
-    expect(mockSetMode).toHaveBeenCalledWith('ask');
     expect(mockRefresh).toHaveBeenCalled();
   });
 
-  test('switches ask to always without another native request', async () => {
+  test('switches ask to always through the same backend interface', async () => {
     mockMode = 'ask';
     renderScreen();
 
     await pressRadio('settings.permissions.mode.always');
 
-    expect(mockGetStatus).not.toHaveBeenCalled();
-    expect(mockRequestPermission).not.toHaveBeenCalled();
-    expect(mockSetMode).toHaveBeenCalledWith('always');
+    expect(mockSetPolicy).toHaveBeenCalledWith('permissions.health_read', 'always');
   });
 
   test('shows system settings recovery only for a configured revoked scope', () => {
@@ -143,32 +131,24 @@ describe('PermissionDetailSettingsScreen', () => {
     expect(texts()).toContain('settings.permissions.openSystemSettings');
   });
 
-  test('requests a restored policy that has not been authorized on this device', async () => {
+  test('delegates recovery for a configured scope and refreshes its status', async () => {
     mockPolicies = makePolicies({ 'permissions.health_read': 'always' });
     mockStatuses = { 'permissions.health_read': 'undetermined' };
     renderScreen();
 
     await pressRecovery();
 
-    expect(mockRequestPermission).toHaveBeenCalledWith('permissions.health_read');
-    expect(mockOpenSettings).not.toHaveBeenCalled();
+    expect(mockRecover).toHaveBeenCalledWith(['permissions.health_read']);
     expect(mockRefresh).toHaveBeenCalled();
-  });
-
-  test('opens system settings after access was denied or revoked', async () => {
-    mockPolicies = makePolicies({ 'permissions.health_read': 'always' });
-    mockStatuses = { 'permissions.health_read': 'denied' };
-    renderScreen();
-
-    await pressRecovery();
-
-    expect(mockRequestPermission).not.toHaveBeenCalled();
-    expect(mockOpenSettings).toHaveBeenCalledWith('health');
   });
 
   function renderScreen() {
     act(() => {
-      renderer = create(<PermissionDetailSettingsScreen />);
+      renderer = create(
+        <BackendProvider backend={backend}>
+          <PermissionDetailSettingsScreen />
+        </BackendProvider>,
+      );
     });
   }
 

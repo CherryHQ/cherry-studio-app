@@ -1,5 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { BackendProvider } from '@/frontend/data';
+import type { MobileBackend } from '@/shared/contracts';
 import ProfileSettingsScreen from '../ProfileSettingsScreen';
 
 type HeaderAction = { key: string; onPress?: () => void };
@@ -8,6 +10,12 @@ const mockBack = jest.fn();
 const mockSetAvatar = jest.fn();
 const mockSetUserName = jest.fn();
 let mockRightActions: readonly HeaderAction[] = [];
+const backend = {
+  profile: {
+    persistAvatar: jest.fn(async () => undefined),
+    resolveAvatar: jest.fn(),
+  },
+} as unknown as MobileBackend;
 
 jest.mock('@expo/ui/community/menu', () => {
   const { View: MockView } = jest.requireActual('react-native');
@@ -77,10 +85,6 @@ jest.mock('@/frontend/data/hooks', () => ({
     key === 'app.user.name' ? ['Saved name', mockSetUserName] : [null, mockSetAvatar],
 }));
 
-jest.mock('@/backend/infrastructure/integrations/avatars/userAvatarStorage', () => ({
-  replaceUserAvatar: jest.fn(),
-}));
-
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) =>
@@ -110,7 +114,11 @@ describe('ProfileSettingsScreen', () => {
 
   it('keeps name edits local until the user saves', async () => {
     await act(async () => {
-      renderer = create(<ProfileSettingsScreen />);
+      renderer = create(
+        <BackendProvider backend={backend}>
+          <ProfileSettingsScreen />
+        </BackendProvider>,
+      );
     });
 
     const nameInput = renderer?.root.findByProps({ accessibilityLabel: 'Username' });
