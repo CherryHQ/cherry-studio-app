@@ -33,7 +33,8 @@ FTS indexes only text parts.
 
 AI SDK adapters live under `src/backend/ai`. Stateful device and third-party capabilities live in
 their owning domain under `src/backend/services`, such as `permissions`, `oauth`, and `webSearch`.
-Pure model/domain rules used by both sides belong in `src/shared/domain`.
+Cross-layer AI tool and transport rules belong in `src/shared/ai`. General pure helpers used by
+both sides, including model capability checks, belong in `src/shared/utils`.
 
 App-level tools are resolved by `ToolService` and attached in
 `src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts`. Provider plugins are

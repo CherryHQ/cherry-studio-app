@@ -19,10 +19,10 @@ src/
 │   ├── utils/            # backend-owned pure helpers
 │   └── types/            # backend-specific declarations
 ├── shared/
+│   ├── ai/               # cross-layer AI tool and transport rules
 │   ├── contracts/        # frontend/backend interfaces, workflow results, and events
-│   ├── data/             # API schemas, preferences, entities, and value types
-│   ├── domain/           # cross-layer domain rules
 │   ├── core/             # cross-layer foundations such as logging
+│   ├── data/             # API schemas, preferences, entities, and value types
 │   └── utils/            # cross-layer pure utilities
 └── types/                # truly global and generated declarations only
 ```
@@ -36,6 +36,11 @@ the Expo Router-mandated path and imports only bootstrap, frontend, and shared m
 The `shared/data` vocabulary intentionally follows Cherry Desktop: `types` owns entities,
 `preference` owns preference schemas and defaults, and `api` owns DTOs and errors. This alignment
 does not make the code a workspace package or introduce desktop runtime coupling.
+
+`shared/ai` follows Cherry Desktop's placement for cross-layer AI tool and transport rules, while
+general model capability helpers live in `shared/utils/model.ts`. `shared/contracts` is different:
+it is the mobile-specific in-process seam, not a directory copied from desktop and not a transport
+or serialization layer.
 
 `MobileBackend` is the stable frontend-facing interface. It groups cohesive modules for
 assistants, topics, chat, files, models, providers, paintings, MCP, pins, preferences,

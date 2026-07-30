@@ -265,7 +265,7 @@ is **closed by default**. The current `/src/` roots are `app/`, `bootstrap/`, `f
 - `frontend/`: `components/`, `data/`, `features/`, `hooks/`, `i18n/`, `styles/`, `types/`, and
   `utils/`.
 - `backend/`: `ai/`, `data/`, `services/`, `types/`, and `utils/`.
-- `shared/`: `contracts/`, `core/`, `data/`, `domain/`, and `utils/`.
+- `shared/`: `ai/`, `contracts/`, `core/`, `data/`, and `utils/`.
 
 Adding a root or overlapping one of these layer-owned buckets is a structural commitment governed by
 [ADR 0011](../adr/0011-separate-in-process-frontend-and-backend.md).

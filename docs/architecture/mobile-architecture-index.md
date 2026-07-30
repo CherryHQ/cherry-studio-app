@@ -22,9 +22,9 @@ isolation. See [ADR 0011](../adr/0011-separate-in-process-frontend-and-backend.m
 | `src/backend/ai` | AI SDK, provider adapters, MCP runtime, tools, and message conversion |
 | `src/backend/data` | Backend cache, preferences, SQLite, schemas, seeders, fixtures, and persistence services |
 | `src/backend/services` | Multi-step workflows, device capabilities, OAuth, avatars, and web search |
+| `src/shared/ai` | Cross-layer AI tool and transport rules |
 | `src/shared/contracts` | `MobileBackend`, module interfaces, sessions, events, and workflow results |
 | `src/shared/data` | Entities, DTO schemas, preferences, cache schemas, and data errors |
-| `src/shared/domain` | Platform-independent domain rules |
 | `src/shared/core` / `src/shared/utils` | Cross-layer foundations and pure utilities |
 | `src/types` | Truly global or generated declarations only |
 

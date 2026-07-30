@@ -37,6 +37,11 @@ const tombstonePatterns = [
     message: 'Constants now live in the owning layer under its utils directory.',
   },
   {
+    group: ['@/shared/domain', '@/shared/domain/*', '@/shared/domain/*/**'],
+    message:
+      'The generic shared domain root was retired. Use @/shared/ai for AI rules, @/shared/data for data vocabulary, or @/shared/utils for pure helpers.',
+  },
+  {
     group: ['@/screens', '@/screens/*', '@/screens/*/**'],
     message: 'Screens moved to @/frontend/features/<name>.',
   },
@@ -138,7 +143,11 @@ module.exports = defineConfig([
     ],
   ),
   restrictedImports(
-    ['src/shared/contracts/**/*.{ts,tsx}', 'src/shared/domain/**/*.{ts,tsx}'],
+    [
+      'src/shared/ai/**/*.{ts,tsx}',
+      'src/shared/contracts/**/*.{ts,tsx}',
+      'src/shared/utils/**/*.{ts,tsx}',
+    ],
     [
       {
         group: [
@@ -154,7 +163,8 @@ module.exports = defineConfig([
           '@expo/*',
           '@expo/*/**',
         ],
-        message: 'Shared contracts and domain modules must remain platform- and React-independent.',
+        message:
+          'Shared contracts, AI rules, and utilities must remain platform- and React-independent.',
       },
     ],
   ),
