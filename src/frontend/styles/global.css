@@ -5,9 +5,9 @@
 @import "heroui-native/styles";
 
 @source "..";
-@source "../../packages/lucide-uniwind/src";
-@source "../../packages/ui/src";
-@source "../../node_modules/heroui-native/lib";
+@source "../../../packages/lucide-uniwind/src";
+@source "../../../packages/ui/src";
+@source "../../../node_modules/heroui-native/lib";
 
 @theme {
   --cs-neutral-50: oklch(0.98 0 0);

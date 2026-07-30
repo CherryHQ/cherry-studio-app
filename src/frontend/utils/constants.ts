@@ -12,7 +12,7 @@ export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassE
 // the background behind them consistently. Single source of truth — tune here.
 export const sheetScrimColor = 'rgba(0, 0, 0, 0.4)';
 
-// Shared chrome for the floating BottomSheet frame (src/components/bottomSheet).
+// Shared chrome for the floating BottomSheet frame (src/frontend/components/bottomSheet).
 // Every sheet derives its inset width, bottom gap, concentric corner radius, and
 // header placement from these values — single source of truth, tune here.
 export const bottomSheet = {

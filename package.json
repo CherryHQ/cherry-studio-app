@@ -19,7 +19,6 @@
     "ui:icons:generate:general": "tsx packages/ui/src/scripts/generate-icons.ts --type=general",
     "ui:icons:generate:models": "tsx packages/ui/src/scripts/generate-icons.ts --type=models",
     "ui:provider-icons:generate": "tsx packages/ui/src/scripts/generate-icons.ts --type=providers",
-    "prototype:chat-conversation": "tsx src/components/chat/prototype/chat-conversation-prototype.ts",
     "skills:sync": "tsx scripts/skills-sync.ts",
     "skills:check": "tsx scripts/skills-check.ts",
     "test": "jest",
