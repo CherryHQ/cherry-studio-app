@@ -1,5 +1,5 @@
-import type { CherryMessagePart } from '@/data/types/message';
-import type { Model, UniqueModelId } from '@/data/types/model';
+import type { CherryMessagePart } from '@/shared/domain/message';
+import type { Model, UniqueModelId } from '@/shared/domain/model';
 
 import { extractMainText, maybeRenameTopicFromConversationSummary } from '../topicNaming';
 

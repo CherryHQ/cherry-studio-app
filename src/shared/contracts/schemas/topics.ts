@@ -1,7 +1,7 @@
 import * as z from 'zod';
 
-import type { CursorPaginationResponse } from '@/data/types/apiTypes';
-import { type Topic, TopicSchema } from '@/data/types/topic';
+import type { CursorPaginationResponse } from '@/shared/contracts/dataTypes';
+import { type Topic, TopicSchema } from '@/shared/domain/topic';
 
 import { type OrderEndpoints } from './_endpointHelpers';
 

@@ -1,5 +1,5 @@
-import type { EndpointType } from '@/data/types/model';
-import type { ApiKeyEntry, Provider } from '@/data/types/provider';
+import type { EndpointType } from '@/shared/domain/model';
+import type { ApiKeyEntry, Provider } from '@/shared/domain/provider';
 
 import { apiKeyEntriesSignature, normalizeApiKeyEntries } from './providerApiServiceApiKeys';
 import type { EndpointDraft } from './providerApiServiceEndpointDraft';

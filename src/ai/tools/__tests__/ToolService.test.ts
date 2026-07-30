@@ -1,7 +1,7 @@
 import { tool } from 'ai';
 import * as z from 'zod';
 
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/domain/assistant';
 import type { ToolEntry } from '../adapters/aiSdk/types';
 import { ToolService } from '../ToolService';
 

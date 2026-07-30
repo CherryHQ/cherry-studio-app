@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { BackHeader } from '@/components/headers';
-import type { ApiKeyEntry } from '@/data/types/provider';
+import type { ApiKeyEntry } from '@/shared/domain/provider';
 import {
   getEffectiveAuthConfig,
   getProviderApiServiceApiKeysDirtyState,

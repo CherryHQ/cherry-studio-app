@@ -1,5 +1,5 @@
-import type { CherryMessagePart, Message } from '@/data/types/message';
-import { readCherryMeta } from '@/data/types/uiParts';
+import type { CherryMessagePart, Message } from '@/shared/domain/message';
+import { readCherryMeta } from '@/shared/domain/uiParts';
 
 import {
   finalizeTurnToolApprovals,

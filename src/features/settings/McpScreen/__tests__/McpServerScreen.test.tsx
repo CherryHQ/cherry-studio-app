@@ -1,8 +1,8 @@
 import type { ReactElement, ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { DataApiError, ErrorCode } from '@/data/types/apiTypes';
-import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
+import { DataApiError, ErrorCode } from '@/shared/contracts/dataTypes';
+import type { StreamableHttpMcpServer } from '@/shared/domain/mcpServer';
 import { McpServerScreen } from '../McpServerScreen';
 
 type HeaderAction = {

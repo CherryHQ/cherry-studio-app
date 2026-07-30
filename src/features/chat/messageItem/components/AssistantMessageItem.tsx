@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import type { Message } from '@/data/types/message';
+import type { Message } from '@/shared/domain/message';
 import { MessageParts } from '../../messageContent';
 import { PrismSweep } from '../../prismSweep';
 

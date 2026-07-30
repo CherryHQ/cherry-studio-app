@@ -8,8 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
 import { ModelPickerIcon, useModelPickerData } from '@/components/modelPicker';
 import { useSetBottomTabBarHidden } from '@/components/navigation';
-import type { Assistant } from '@/data/types/assistant';
 import { useAssistantApiById } from '@/hooks/chat';
+import type { Assistant } from '@/shared/domain/assistant';
 import { screenBottomActionInset } from '@/utils/constants';
 
 export default function AssistantDetailScreen() {

@@ -2,8 +2,8 @@ import type { AiPlugin } from '@cherrystudio/ai-core';
 import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
 import { providerToolPlugin } from '@cherrystudio/ai-core/built-in/plugins';
 
-import type { Model } from '@/data/types/model';
-import type { Provider } from '@/data/types/provider';
+import type { Model } from '@/shared/domain/model';
+import type { Provider } from '@/shared/domain/provider';
 
 import { isAnthropicModel } from '../../../utils/model';
 import { SystemProviderIds } from '../../../utils/providerIds';

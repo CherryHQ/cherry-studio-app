@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ApiKeyEntry } from '@/data/types/provider';
+import type { ApiKeyEntry } from '@/shared/domain/provider';
 
 import { getProviderApiServiceApiKeysDirtyState } from '../../utils/providerApiServiceDirtyState';
 import { useProviderApiServiceApiKeysDraft } from '../useProviderApiServiceApiKeysDraft';

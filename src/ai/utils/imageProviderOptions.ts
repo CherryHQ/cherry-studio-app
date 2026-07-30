@@ -1,7 +1,7 @@
 import { type CanonicalParamKey, wireName } from '@cherrystudio/provider-registry';
 import type { JSONValue } from 'ai';
 
-import type { Provider } from '@/data/types/provider';
+import type { Provider } from '@/shared/domain/provider';
 
 import { normalizeAspectRatio } from './imageOptions';
 

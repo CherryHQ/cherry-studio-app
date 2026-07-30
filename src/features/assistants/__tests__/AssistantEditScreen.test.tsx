@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
-import type { UniqueModelId } from '@/data/types/model';
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/domain/assistant';
+import type { UniqueModelId } from '@/shared/domain/model';
 import AssistantEditScreen from '../AssistantEditScreen';
 
 const nameFieldLabel = 'assistant.form.name';

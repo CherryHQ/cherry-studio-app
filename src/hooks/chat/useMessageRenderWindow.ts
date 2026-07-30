@@ -1,6 +1,6 @@
 import { startTransition, useCallback, useMemo, useState } from 'react';
 
-import type { Message } from '@/data/types/message';
+import type { Message } from '@/shared/domain/message';
 import { messageWindowPolicy } from './utils/messageWindowPolicy';
 
 type MessageWindowSignature = {

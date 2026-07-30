@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { queryKeys } from '@/data/api';
-import type { CreateAssistantDto, UpdateAssistantDto } from '@/data/api/schemas/assistants';
-import { type Assistant } from '@/data/types/assistant';
 import { useDataQuery } from '@/hooks/data';
 import { useDataServices } from '@/runtime';
+import type { CreateAssistantDto, UpdateAssistantDto } from '@/shared/contracts/schemas/assistants';
+import { type Assistant } from '@/shared/domain/assistant';
 
 const ASSISTANTS_LIST_LIMIT = 500;
 const EMPTY_ASSISTANTS: readonly Assistant[] = Object.freeze([]);

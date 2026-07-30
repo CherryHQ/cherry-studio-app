@@ -11,8 +11,8 @@ import {
 } from 'react-native-keyboard-controller';
 
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
-import type { EndpointType } from '@/data/types/model';
-import type { Provider } from '@/data/types/provider';
+import type { EndpointType } from '@/shared/domain/model';
+import type { Provider } from '@/shared/domain/provider';
 import { useProviderDetailSettings } from './detail';
 import { useProviderModelAdd } from './models/hooks/useProviderModelAdd';
 import { providerModelAddEndpointOptions } from './models/utils/providerModelAdd';

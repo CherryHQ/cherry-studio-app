@@ -1,6 +1,6 @@
 import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import type { AssistantSettings } from '@/data/types/assistant';
+import type { AssistantSettings } from '@/shared/domain/assistant';
 
 import {
   createUpdateDeleteTimestamps,

@@ -4,17 +4,17 @@ import { toCherryUIMessage } from '@/ai/messages/messageConverter';
 import { serializeError } from '@/ai/utils/serializeError';
 import { loggerService } from '@/core/logger/LoggerService';
 import { discardPreparedFiles, prepareMessageParts } from '@/data/services/fileStorage';
+import type { DataServices } from '@/runtime/createDataServices';
 import type {
   CherryMessagePart,
   CherryUIMessage,
   Message,
   ModelSnapshot,
-} from '@/data/types/message';
-import type { Model, UniqueModelId } from '@/data/types/model';
-import { isUniqueModelId } from '@/data/types/model';
-import type { Topic } from '@/data/types/topic';
-import { type CherryReasoningMeta, readCherryMeta, withCherryMeta } from '@/data/types/uiParts';
-import type { DataServices } from '@/runtime/createDataServices';
+} from '@/shared/domain/message';
+import type { Model, UniqueModelId } from '@/shared/domain/model';
+import { isUniqueModelId } from '@/shared/domain/model';
+import type { Topic } from '@/shared/domain/topic';
+import { type CherryReasoningMeta, readCherryMeta, withCherryMeta } from '@/shared/domain/uiParts';
 
 import {
   applyStreamingMessage,

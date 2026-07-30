@@ -13,16 +13,15 @@ import {
   sql,
 } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
-
-import type { OrderRequest } from '@/data/api/schemas/_endpointHelpers';
+import { type CursorPaginationResponse, DataApiErrorFactory } from '@/shared/contracts/dataTypes';
+import type { OrderRequest } from '@/shared/contracts/schemas/_endpointHelpers';
 import type {
   ActiveNodeResponse,
   CreateTopicDto,
   ListTopicsQuery,
   UpdateTopicDto,
-} from '@/data/api/schemas/topics';
-import { type CursorPaginationResponse, DataApiErrorFactory } from '@/data/types/apiTypes';
-import type { Topic } from '@/data/types/topic';
+} from '@/shared/contracts/schemas/topics';
+import type { Topic } from '@/shared/domain/topic';
 import type { DbService } from '../db/DbService';
 import { messageTable, pinTable, type TopicRow, topicTable } from '../db/schemas';
 import { createRootMessageTx } from './MessageService';

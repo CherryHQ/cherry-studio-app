@@ -5,7 +5,7 @@ import type {
   WebSearchCapability,
   WebSearchProvider,
   WebSearchProviderOverride,
-} from '@/data/preference';
+} from '@/shared/domain/preferences';
 import { useWebSearchApiManagementContext } from '../../context/WebSearchApiManagementContext';
 import {
   getWebSearchCapabilityTitleKey,

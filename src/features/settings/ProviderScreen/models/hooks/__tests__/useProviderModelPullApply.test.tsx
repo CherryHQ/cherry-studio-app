@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { createUniqueModelId, type Model } from '@/data/types/model';
+import { createUniqueModelId, type Model } from '@/shared/domain/model';
 
 import type { ProviderModelPullPreview } from '../../utils/providerModelPullPreview';
 import {

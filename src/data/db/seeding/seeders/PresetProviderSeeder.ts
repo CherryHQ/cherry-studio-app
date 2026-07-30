@@ -4,7 +4,7 @@ import { cacheService } from '@/data/cache';
 import { PinService } from '@/data/services/PinService';
 import { providerRegistryService } from '@/data/services/ProviderRegistryService';
 import { type CreateProviderInput, ProviderService } from '@/data/services/ProviderService';
-import type { ApiFeatures, AuthConfig } from '@/data/types/provider';
+import type { ApiFeatures, AuthConfig } from '@/shared/domain/provider';
 
 import type { DatabaseSeeder } from '../types';
 

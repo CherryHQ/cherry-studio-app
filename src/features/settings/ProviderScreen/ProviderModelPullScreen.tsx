@@ -9,8 +9,8 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BackHeader } from '@/components/headers';
-import type { Model, UniqueModelId } from '@/data/types/model';
-import type { Provider } from '@/data/types/provider';
+import type { Model, UniqueModelId } from '@/shared/domain/model';
+import type { Provider } from '@/shared/domain/provider';
 import { useProviderDetailSettings } from './detail';
 import { ProviderModelRow, providerModelRowHeight } from './models/components/ProviderModelRow';
 import { ProviderModelSearchField } from './models/components/ProviderModelSearchField';

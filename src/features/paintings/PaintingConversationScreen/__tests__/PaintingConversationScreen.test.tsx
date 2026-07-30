@@ -1,7 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { Message } from '@/data/types/message';
-import type { Painting } from '@/data/types/painting';
+import type { Message } from '@/shared/domain/message';
+import type { Painting } from '@/shared/domain/painting';
 import type {
   PaintingGenerationInput,
   PaintingGenerationResult,

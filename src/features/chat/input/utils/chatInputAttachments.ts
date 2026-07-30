@@ -1,8 +1,8 @@
 import type { DocumentPickerAsset } from 'expo-document-picker';
 
-import { imageMediaTypeFromExtension, isImageFileExtension } from '@/data/types/file';
-import type { CherryMessagePart } from '@/data/types/message';
-import { withCherryMeta } from '@/data/types/uiParts';
+import { imageMediaTypeFromExtension, isImageFileExtension } from '@/shared/domain/file';
+import type { CherryMessagePart } from '@/shared/domain/message';
+import { withCherryMeta } from '@/shared/domain/uiParts';
 
 export type ChatInputAttachmentKind = 'file' | 'image';
 

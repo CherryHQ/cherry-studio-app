@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useModelSettingSelections } from '@/components/modelPicker';
-import { isUniqueModelId } from '@/data/types/model';
 import { useModelById } from '@/hooks/chat';
+import { isUniqueModelId } from '@/shared/domain/model';
 import { getChatInputReasoningEffortsForModel } from '../utils/chatInputReasoning';
 
 /**

@@ -1,7 +1,7 @@
 import { MODEL_CAPABILITY, REASONING_EFFORT } from '@cherrystudio/provider-registry';
 
-import type { AssistantSettings } from '@/data/types/assistant';
-import type { Model } from '@/data/types/model';
+import type { AssistantSettings } from '@/shared/domain/assistant';
+import type { Model } from '@/shared/domain/model';
 
 export type ReasoningEffortPatch = {
   reasoning_effort?: string;

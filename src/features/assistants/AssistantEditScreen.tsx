@@ -15,18 +15,18 @@ import {
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/components/modelPicker';
-import type { CreateAssistantDto } from '@/data/api/schemas/assistants';
+import { SettingSelect } from '@/features/settings/components/SettingSelect';
+import { useAssistantApiById, useAssistantMutations } from '@/hooks/chat';
+import { usePreference } from '@/hooks/data';
+import { useMcpServersApi } from '@/hooks/mcp/useMcpServers';
+import type { CreateAssistantDto } from '@/shared/contracts/schemas/assistants';
 import {
   type Assistant,
   type AssistantSettings,
   DEFAULT_ASSISTANT_SETTINGS,
   type McpMode,
-} from '@/data/types/assistant';
-import type { UniqueModelId } from '@/data/types/model';
-import { SettingSelect } from '@/features/settings/components/SettingSelect';
-import { useAssistantApiById, useAssistantMutations } from '@/hooks/chat';
-import { usePreference } from '@/hooks/data';
-import { useMcpServersApi } from '@/hooks/mcp/useMcpServers';
+} from '@/shared/domain/assistant';
+import type { UniqueModelId } from '@/shared/domain/model';
 import { keyboardBottomOffset } from '@/utils/constants';
 import { EmojiPickerBottomSheet } from './components/EmojiPickerBottomSheet';
 

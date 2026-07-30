@@ -1,8 +1,8 @@
 import { generateNKeysBetween } from 'fractional-indexing';
 
-import { DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
-import { type CherryMessagePart, type Message } from '@/data/types/message';
-import type { Topic } from '@/data/types/topic';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/domain/assistant';
+import { type CherryMessagePart, type Message } from '@/shared/domain/message';
+import type { Topic } from '@/shared/domain/topic';
 
 const baseDateMs = Date.parse('2026-05-15T00:00:00.000Z');
 // Must exceed the largest topic's messageCount (1000) * the per-message offset

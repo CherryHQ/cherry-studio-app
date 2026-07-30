@@ -1,4 +1,4 @@
-import type { EndpointConfigs, Provider } from '@/data/types/provider';
+import type { EndpointConfigs, Provider } from '@/shared/domain/provider';
 
 import type { EndpointDraft } from './providerApiServiceEndpointDraft';
 import { isValidEndpointBaseUrl, mergeEndpointConfigs } from './providerApiServiceEndpointRules';

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { Painting } from '@/data/types/painting';
+import type { Painting } from '@/shared/domain/painting';
 
 import { usePaintingViewerActions } from '../usePaintingViewerActions';
 

@@ -1,6 +1,6 @@
 import type { DbService } from '@/data/db/DbService';
 import { chatMessageFileRefTable, messageTable } from '@/data/db/schemas';
-import type { Message, MessageData } from '@/data/types/message';
+import type { Message, MessageData } from '@/shared/domain/message';
 import { MessageService } from '../MessageService';
 
 jest.mock('@/data/db/schemas', () => ({

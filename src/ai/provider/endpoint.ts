@@ -4,8 +4,8 @@
  */
 
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { EndpointType, Model } from '@/data/types/model';
-import type { Provider } from '@/data/types/provider';
+import type { EndpointType, Model } from '@/shared/domain/model';
+import type { Provider } from '@/shared/domain/provider';
 
 import { type AppProviderId, appProviderIds, isRegisteredProviderId } from '../types';
 import { getBaseUrl } from '../utils/provider';

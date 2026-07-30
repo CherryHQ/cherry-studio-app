@@ -1,7 +1,7 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/domain/assistant';
 import AssistantDetailScreen from '../AssistantDetailScreen';
 
 type HeaderAction = { key: string; label?: string; onPress?: () => void };

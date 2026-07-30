@@ -1,13 +1,13 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import type { EndpointType } from '@/data/types/model';
+import type { EndpointType } from '@/shared/domain/model';
 import type {
   ApiFeatures,
   ApiKeyEntry,
   AuthConfig,
   EndpointConfig,
   ProviderSettings,
-} from '@/data/types/provider';
+} from '@/shared/domain/provider';
 
 import { createUpdateTimestamps, orderKeyColumns, orderKeyIndex } from './_columnHelpers';
 

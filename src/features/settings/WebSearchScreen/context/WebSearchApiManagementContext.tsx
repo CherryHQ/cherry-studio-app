@@ -1,13 +1,12 @@
 import { createContext, use } from 'react';
 import type { useTranslation } from 'react-i18next';
-
+import type { WebSearchProviderPreset } from '@/data/presets/webSearchProviders';
 import type {
   WebSearchCapability,
   WebSearchProvider,
   WebSearchProviderId,
   WebSearchProviderOverride,
-} from '@/data/preference';
-import type { WebSearchProviderPreset } from '@/data/presets/webSearchProviders';
+} from '@/shared/domain/preferences';
 
 export type WebSearchApiManagementContextValue = {
   actions: {

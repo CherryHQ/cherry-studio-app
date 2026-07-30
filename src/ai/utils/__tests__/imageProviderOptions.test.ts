@@ -1,4 +1,4 @@
-import type { Provider } from '@/data/types/provider';
+import type { Provider } from '@/shared/domain/provider';
 import { splitImageParamValues } from '../imageOptions';
 import { buildImageProviderOptions, mergeImageProviderOptions } from '../imageProviderOptions';
 

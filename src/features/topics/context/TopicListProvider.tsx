@@ -5,14 +5,14 @@ import { createContext, type PropsWithChildren, use, useCallback, useEffect, use
 import { MODEL_SETTING_PREFERENCE_KEYS } from '@/components/modelPicker/utils/modelSettings';
 import { loggerService } from '@/core/logger/LoggerService';
 import { queryKeys } from '@/data/api';
-import { isUniqueModelId } from '@/data/types/model';
-import type { Topic } from '@/data/types/topic';
 import { usePins, useTopics } from '@/hooks/chat';
 import { getMessagesQueryKey, prefetchTopicMessages } from '@/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/hooks/chat/utils/messageWindowPolicy';
 import { useDataMutation } from '@/hooks/data';
 import { useDataServices } from '@/runtime';
 import type { DataServices } from '@/runtime/createDataServices';
+import { isUniqueModelId } from '@/shared/domain/model';
+import type { Topic } from '@/shared/domain/topic';
 
 const MODEL_DETAIL_PREFETCH_STALE_TIME_MS = 1000 * 60 * 5;
 

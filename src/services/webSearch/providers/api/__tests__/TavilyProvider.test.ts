@@ -1,4 +1,4 @@
-import type { WebSearchProvider } from '@/data/preference';
+import type { WebSearchProvider } from '@/shared/domain/preferences';
 import { ApiKeyRotationState } from '../../../utils/provider';
 import { TavilyProvider } from '../TavilyProvider';
 

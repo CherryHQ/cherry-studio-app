@@ -1,6 +1,6 @@
 import * as z from 'zod';
-import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
-import { McpServerSchema } from '@/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@/shared/domain/mcpServer';
+import { McpServerSchema } from '@/shared/domain/mcpServer';
 
 const MCP_SERVER_MUTABLE_FIELDS = {
   baseUrl: true,

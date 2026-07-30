@@ -6,10 +6,10 @@ import {
   prepareGeneratedImage,
   prepareInternalFileFromUri,
 } from '@/data/services/fileStorage';
-import { parseUniqueModelId, type UniqueModelId } from '@/data/types/model';
-import type { Painting } from '@/data/types/painting';
 import type { ChatInputAttachmentDraft } from '@/features/chat/input/utils/chatInputAttachments';
 import { useDataServices } from '@/runtime';
+import { parseUniqueModelId, type UniqueModelId } from '@/shared/domain/model';
+import type { Painting } from '@/shared/domain/painting';
 import { useSyncPaintingQueries } from './usePaintings';
 
 export type PaintingGenerationStatus = 'idle' | 'generating' | 'revealing';

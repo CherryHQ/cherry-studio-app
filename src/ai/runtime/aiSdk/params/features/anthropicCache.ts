@@ -16,7 +16,7 @@ import { definePlugin } from '@cherrystudio/ai-core';
 import type { LanguageModelMiddleware } from 'ai';
 import { estimateTokenCount } from 'tokenx';
 
-import type { Provider } from '@/data/types/provider';
+import type { Provider } from '@/shared/domain/provider';
 
 const cacheProviderOptions = {
   anthropic: { cacheControl: { type: 'ephemeral' } },

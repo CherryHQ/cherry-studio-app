@@ -1,5 +1,5 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { createUniqueModelId, type Model } from '@/data/types/model';
+import { createUniqueModelId, type Model } from '@/shared/domain/model';
 import {
   buildProviderModelPullListItems,
   buildProviderModelPullPreview,

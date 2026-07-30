@@ -5,7 +5,7 @@ import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import type { Database, DbService } from '@/data/db/DbService';
 import { schema } from '@/data/db/schemas';
-import type { CherryMessagePart, Message } from '@/data/types/message';
+import type { CherryMessagePart, Message } from '@/shared/domain/message';
 import { FileEntryService } from '../FileEntryService';
 import { MessageService } from '../MessageService';
 import { PinService } from '../PinService';

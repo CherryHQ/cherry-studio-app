@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Platform, Text } from 'react-native';
 
-import type { CherryMessagePart } from '@/data/types/message';
+import type { CherryMessagePart } from '@/shared/domain/message';
 import { getBuiltInToolPresentation } from '../../utils/builtInToolPresentation';
 import { hasToolPartValue, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';

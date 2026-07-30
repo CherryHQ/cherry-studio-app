@@ -20,7 +20,7 @@ import type { SharedValue } from 'react-native-reanimated';
 
 import { LinearGradient } from '@/components/nativePrimitives';
 import { loggerService } from '@/core/logger/LoggerService';
-import type { Message } from '@/data/types/message';
+import type { Message } from '@/shared/domain/message';
 
 import { AssistantMessageItem, UserMessageItem } from '../../messageItem';
 import { getMessageListScrollSignal } from '../utils/messageListScrollSignals';

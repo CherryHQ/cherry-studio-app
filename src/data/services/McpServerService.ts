@@ -9,17 +9,17 @@
 import { and, asc, eq, ne, type SQL, sql } from 'drizzle-orm';
 
 import { loggerService } from '@/core/logger/LoggerService';
+import type { DbService } from '@/data/db/DbService';
+import type { InsertMcpServerRow, McpServerRow } from '@/data/db/schemas';
+import { mcpServerTable } from '@/data/db/schemas';
+import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/shared/contracts/dataTypes';
 import {
   type CreateMcpServerDto,
   CreateMcpServerSchema,
   type UpdateMcpServerDto,
   UpdateMcpServerSchema,
-} from '@/data/api/schemas/mcpServers';
-import type { DbService } from '@/data/db/DbService';
-import type { InsertMcpServerRow, McpServerRow } from '@/data/db/schemas';
-import { mcpServerTable } from '@/data/db/schemas';
-import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/data/types/apiTypes';
-import type { McpServer, McpServerType, StreamableHttpMcpServer } from '@/data/types/mcpServer';
+} from '@/shared/contracts/schemas/mcpServers';
+import type { McpServer, McpServerType, StreamableHttpMcpServer } from '@/shared/domain/mcpServer';
 
 import { nullsToUndefined, timestampToISO } from './utils/rowMappers';
 

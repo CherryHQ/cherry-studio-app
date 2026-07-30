@@ -4,8 +4,6 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ModelPickerBottomSheet, type ModelPickerModelItem } from '@/components/modelPicker';
-import { isUniqueModelId, type UniqueModelId } from '@/data/types/model';
-import type { Painting } from '@/data/types/painting';
 import {
   ChatInputActionSheet,
   type ChatInputSendPayload,
@@ -14,6 +12,8 @@ import {
   useChatInputState,
 } from '@/features/chat/input';
 import { useModelById, useModels, useProviders } from '@/hooks/chat';
+import { isUniqueModelId, type UniqueModelId } from '@/shared/domain/model';
+import type { Painting } from '@/shared/domain/painting';
 
 import type {
   PaintingGenerationInput,

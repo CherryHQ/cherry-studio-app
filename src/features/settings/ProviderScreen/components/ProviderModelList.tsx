@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 
-import type { Model } from '@/data/types/model';
-import type { Provider } from '@/data/types/provider';
+import type { Model } from '@/shared/domain/model';
+import type { Provider } from '@/shared/domain/provider';
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 import { ProviderModelAccordion } from '../models/components/ProviderModelAccordion';
 import { ProviderModelSearchField } from '../models/components/ProviderModelSearchField';

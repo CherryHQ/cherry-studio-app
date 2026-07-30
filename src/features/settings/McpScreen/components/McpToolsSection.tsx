@@ -8,8 +8,8 @@ import { Text, View } from 'react-native';
 
 import { hasMcpServerWildcardRule, matchesMcpSourceToolRule } from '@/ai/mcp';
 import { queryKeys } from '@/data/api';
-import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import { useDataServices } from '@/runtime';
+import type { StreamableHttpMcpServer } from '@/shared/domain/mcpServer';
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 
 type McpToolsSectionProps = {

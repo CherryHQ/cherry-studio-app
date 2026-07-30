@@ -7,11 +7,11 @@ import {
   paintingFileRefTable,
   paintingTable,
 } from '@/data/db/schemas';
-import type { CursorPaginationResponse } from '@/data/types/apiTypes';
-import { DataApiErrorFactory } from '@/data/types/apiTypes';
-import type { FileEntryId, PreparedInternalFile } from '@/data/types/file';
-import { createUniqueModelId, isUniqueModelId } from '@/data/types/model';
-import type { Painting, PaintingFileRole, PaintingFiles } from '@/data/types/painting';
+import type { CursorPaginationResponse } from '@/shared/contracts/dataTypes';
+import { DataApiErrorFactory } from '@/shared/contracts/dataTypes';
+import type { FileEntryId, PreparedInternalFile } from '@/shared/domain/file';
+import { createUniqueModelId, isUniqueModelId } from '@/shared/domain/model';
+import type { Painting, PaintingFileRole, PaintingFiles } from '@/shared/domain/painting';
 
 import type { FileEntryService } from './FileEntryService';
 import { discardPreparedFiles } from './fileStorage';

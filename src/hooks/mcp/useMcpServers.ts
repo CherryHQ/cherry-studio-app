@@ -2,10 +2,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import type { McpServerRuntimeSummary } from '@/ai/mcp';
 import { queryKeys } from '@/data/api';
-import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/data/api/schemas/mcpServers';
-import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import { useDataQuery } from '@/hooks/data';
 import { useDataServices } from '@/runtime';
+import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/shared/contracts/schemas/mcpServers';
+import type { StreamableHttpMcpServer } from '@/shared/domain/mcpServer';
 
 const EMPTY_MCP_SERVERS: readonly StreamableHttpMcpServer[] = Object.freeze([]);
 const EMPTY_MCP_RUNTIME_SUMMARIES: Readonly<Record<string, McpServerRuntimeSummary>> =

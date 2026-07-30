@@ -1,7 +1,7 @@
 import { MODEL_CAPABILITY, REASONING_EFFORT } from '@cherrystudio/provider-registry';
 
-import { DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
-import type { Model, UniqueModelId } from '@/data/types/model';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/domain/assistant';
+import type { Model, UniqueModelId } from '@/shared/domain/model';
 import { reconcileReasoningEffortForModel, reconcileWebSearchForModel } from '../modelReconcile';
 
 function createModel(patch: Partial<Model> = {}): Model {

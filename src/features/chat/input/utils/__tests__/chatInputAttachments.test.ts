@@ -1,4 +1,4 @@
-import { readCherryMeta } from '@/data/types/uiParts';
+import { readCherryMeta } from '@/shared/domain/uiParts';
 
 import {
   appendChatInputAttachments,

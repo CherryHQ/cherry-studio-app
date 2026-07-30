@@ -4,7 +4,7 @@ import type {
   WebSearchExecutionConfig,
   WebSearchResponse,
   WebSearchResult,
-} from '@/data/types/webSearch';
+} from '@/shared/domain/webSearch';
 
 export type WebSearchPostProcessingResult = {
   response: WebSearchResponse;

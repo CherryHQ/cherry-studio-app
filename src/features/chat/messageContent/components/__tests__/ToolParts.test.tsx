@@ -3,7 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { CherryMessagePart } from '@/data/types/message';
+import type { CherryMessagePart } from '@/shared/domain/message';
 import { McpToolPart } from '../McpToolPart';
 import { MetaToolPart } from '../MetaToolPart';
 import { ToolPart } from '../ToolPart';

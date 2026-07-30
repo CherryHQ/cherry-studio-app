@@ -6,9 +6,9 @@
  */
 
 import { loggerService } from '@logger';
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/data/types/assistant';
-import type { Model } from '@/data/types/model';
-import type { Provider } from '@/data/types/provider';
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/domain/assistant';
+import type { Model } from '@/shared/domain/model';
+import type { Provider } from '@/shared/domain/provider';
 import {
   isClaude46SeriesModel,
   isClaude47SeriesModel,

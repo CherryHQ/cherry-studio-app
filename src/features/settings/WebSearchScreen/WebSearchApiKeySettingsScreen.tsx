@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useConfirmDialog } from '@/components/confirmDialog';
 import { BackHeader } from '@/components/headers';
-import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/data/preference';
 import { isMobileSupportedWebSearchProviderId } from '@/data/presets/webSearchProviders';
+import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/shared/domain/preferences';
 import {
   normalizeWebSearchApiKeys,
   useWebSearchApiKeySettings,

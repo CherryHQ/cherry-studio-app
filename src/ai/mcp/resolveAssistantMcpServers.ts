@@ -1,5 +1,5 @@
-import type { Assistant, McpMode } from '@/data/types/assistant';
-import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
+import type { Assistant, McpMode } from '@/shared/domain/assistant';
+import type { StreamableHttpMcpServer } from '@/shared/domain/mcpServer';
 
 /**
  * Effective MCP mode for an assistant, ported from desktop

@@ -10,7 +10,7 @@
  * kept identical here so the two can't drift apart once rows do sync.
  */
 
-import type { McpServer } from '@/data/types/mcpServer';
+import type { McpServer } from '@/shared/domain/mcpServer';
 import { buildFunctionCallToolName, toCamelCase } from './mcpToolName';
 
 type McpPolicyTool = {

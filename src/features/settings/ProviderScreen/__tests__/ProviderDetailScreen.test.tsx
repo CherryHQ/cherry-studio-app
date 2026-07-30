@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 import { ScrollView } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ApiKeyEntry, AuthConfig, Provider } from '@/data/types/provider';
+import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/domain/provider';
 import ProviderDetailScreen from '../ProviderDetailScreen';
 
 type QueryState = { isPending: boolean; isError: boolean; isSuccess: boolean };

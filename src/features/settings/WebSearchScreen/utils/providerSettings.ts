@@ -1,14 +1,14 @@
-import type {
-  WebSearchCapability,
-  WebSearchProviderId,
-  WebSearchProviderOverride,
-  WebSearchProviderOverrides,
-} from '@/data/preference';
 import {
   MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS,
   WEB_SEARCH_PROVIDER_PRESET_MAP,
   type WebSearchProviderPreset,
 } from '@/data/presets/webSearchProviders';
+import type {
+  WebSearchCapability,
+  WebSearchProviderId,
+  WebSearchProviderOverride,
+  WebSearchProviderOverrides,
+} from '@/shared/domain/preferences';
 
 export type WebSearchProviderCapability = WebSearchProviderPreset['capabilities'][number];
 

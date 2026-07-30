@@ -1,6 +1,6 @@
 import { loggerService } from '@/core/logger/LoggerService';
-import type { WebSearchCapability, WebSearchProvider } from '@/data/preference';
 import type { PreferenceService } from '@/data/services/PreferenceService';
+import type { WebSearchCapability, WebSearchProvider } from '@/shared/domain/preferences';
 import type {
   WebSearchCheckProviderRequest,
   WebSearchCheckProviderResponse,
@@ -8,7 +8,7 @@ import type {
   WebSearchFetchUrlsRequest,
   WebSearchResponse,
   WebSearchSearchKeywordsRequest,
-} from '@/data/types/webSearch';
+} from '@/shared/domain/webSearch';
 import { postProcessWebSearchResponse } from './postProcessing';
 import type { WebSearchProviderDriver } from './providers/factory';
 import { createWebSearchProvider } from './providers/factory';

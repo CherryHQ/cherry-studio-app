@@ -1,9 +1,9 @@
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LanguageVarious, ThemeMode } from '@/data/preference';
 import { useMultiplePreferences } from '@/hooks/data';
 import { initI18n, resolveLanguage } from '@/i18n';
 import { applyThemeModePreference } from '@/runtime/appRuntime';
+import { type LanguageVarious, ThemeMode } from '@/shared/domain/preferences';
 import type { SettingSelectOption } from '../components/SettingSelect';
 
 const preferenceMapping = {

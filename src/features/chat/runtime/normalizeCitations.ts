@@ -13,8 +13,8 @@ import {
   CitationType,
   type ContentReference,
   ReferenceCategory,
-} from '@/data/types/message';
-import { readCherryMeta, withCherryMeta } from '@/data/types/uiParts';
+} from '@/shared/domain/message';
+import { readCherryMeta, withCherryMeta } from '@/shared/domain/uiParts';
 
 type TextPart = CherryMessagePart & { type: 'text'; text?: string };
 

@@ -8,8 +8,8 @@ import {
   usePrefetchModelPickerData,
 } from '@/components/modelPicker';
 import { loggerService } from '@/core/logger/LoggerService';
-import { isUniqueModelId } from '@/data/types/model';
 import { useModelById, useProviders, useTopic } from '@/hooks/chat';
+import { isUniqueModelId } from '@/shared/domain/model';
 import { useChatRuntimeTopic } from '../runtime';
 import { ChatInputActionSheet } from './components/ChatInputActionSheet';
 import { ChatInputReasoningSection } from './components/ChatInputReasoningSection';

@@ -1,5 +1,5 @@
 import { loggerService } from '@/core/logger/LoggerService';
-import type { WebSearchResponse } from '@/data/types/webSearch';
+import type { WebSearchResponse } from '@/shared/domain/webSearch';
 
 const logger = loggerService.withContext('WebSearchBlacklist');
 

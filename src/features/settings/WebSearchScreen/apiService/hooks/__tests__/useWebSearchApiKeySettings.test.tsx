@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { WebSearchProviderId } from '@/data/preference';
+import type { WebSearchProviderId } from '@/shared/domain/preferences';
 import { useWebSearchApiKeySettings } from '../useWebSearchApiKeySettings';
 
 type ApiKeySettings = ReturnType<typeof useWebSearchApiKeySettings>;

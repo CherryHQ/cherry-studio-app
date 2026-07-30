@@ -1,4 +1,4 @@
-import { createUniqueModelId, isUniqueModelId, UniqueModelIdSchema } from '@/data/types/model';
+import { createUniqueModelId, isUniqueModelId, UniqueModelIdSchema } from '@/shared/domain/model';
 
 describe('model ids', () => {
   test('creates and validates strict unique model ids', () => {

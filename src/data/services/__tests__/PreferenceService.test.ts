@@ -1,6 +1,6 @@
 import type { DbService } from '@/data/db/DbService';
-import type { PreferenceKeyType } from '@/data/preference';
 import { PreferenceService } from '@/data/services/PreferenceService';
+import type { PreferenceKeyType } from '@/shared/domain/preferences';
 
 jest.mock('@/data/db/schemas', () => ({
   preferenceTable: {

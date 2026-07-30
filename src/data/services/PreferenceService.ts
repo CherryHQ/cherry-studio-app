@@ -10,7 +10,7 @@ import {
   type PreferenceDefaultScopeType,
   type PreferenceKeyType,
   type PreferenceUpdateOptions,
-} from '@/data/preference';
+} from '@/shared/domain/preferences';
 
 type PreferenceListener = () => void;
 type PreferenceValue = PreferenceDefaultScopeType[PreferenceKeyType];

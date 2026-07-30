@@ -9,8 +9,8 @@ import {
   type ModelPickerTag,
   ModelPickerTagChip,
 } from '@/components/modelPicker';
-import type { Model } from '@/data/types/model';
-import type { Provider } from '@/data/types/provider';
+import type { Model } from '@/shared/domain/model';
+import type { Provider } from '@/shared/domain/provider';
 
 import { SettingsGroupedSurface } from '../../../components/SettingsGroupedSurface';
 

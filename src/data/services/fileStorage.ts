@@ -9,9 +9,9 @@ import {
   type PreparedInternalFile,
   SafeFileExtensionSchema,
   SafeFileNameSchema,
-} from '@/data/types/file';
-import type { CherryMessagePart } from '@/data/types/message';
-import { readCherryMeta, withCherryMeta } from '@/data/types/uiParts';
+} from '@/shared/domain/file';
+import type { CherryMessagePart } from '@/shared/domain/message';
+import { readCherryMeta, withCherryMeta } from '@/shared/domain/uiParts';
 
 const FILE_DIRECTORY_NAME = 'files';
 const logger = loggerService.withContext('fileStorage');

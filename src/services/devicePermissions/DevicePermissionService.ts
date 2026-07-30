@@ -3,7 +3,7 @@ import * as Location from 'expo-location';
 import { AppState, Linking, Platform } from 'react-native';
 import type { HealthKit } from 'react-native-nitro-healthkit';
 
-import type { PermissionPreferenceKey } from '@/data/preference';
+import type { PermissionPreferenceKey } from '@/shared/domain/preferences';
 
 export type DevicePermission = 'calendar' | 'health' | 'location' | 'reminders';
 export type DevicePermissionAccess = 'read' | 'write';

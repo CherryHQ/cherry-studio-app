@@ -6,8 +6,8 @@ import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/bottomSheet';
-import type { CherryMessagePart } from '@/data/types/message';
-import { readCherryMeta } from '@/data/types/uiParts';
+import type { CherryMessagePart } from '@/shared/domain/message';
+import { readCherryMeta } from '@/shared/domain/uiParts';
 import { PrismSweep } from '../../prismSweep';
 
 import { useThinkingTimerMs } from '../hooks/useThinkingTimerMs';

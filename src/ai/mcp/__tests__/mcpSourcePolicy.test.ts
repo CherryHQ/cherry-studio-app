@@ -1,4 +1,4 @@
-import type { McpServer, StreamableHttpMcpServer } from '@/data/types/mcpServer';
+import type { McpServer, StreamableHttpMcpServer } from '@/shared/domain/mcpServer';
 import {
   buildMcpWireToolId,
   buildMcpWireWildcard,

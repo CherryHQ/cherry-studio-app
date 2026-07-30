@@ -7,7 +7,7 @@
 
 import * as z from 'zod';
 
-import type { SearchParams } from './apiTypes';
+import type { SearchParams } from '@/shared/contracts/dataTypes';
 
 // ============================================================================
 // Prompt Schemas

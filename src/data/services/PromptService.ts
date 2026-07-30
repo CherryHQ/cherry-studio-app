@@ -7,16 +7,16 @@
  */
 
 import { and, asc, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
-import type { OrderRequest } from '@/data/api/schemas/_endpointHelpers';
 import type { DbService } from '@/data/db/DbService';
 import { type PromptRow, promptTable } from '@/data/db/schemas';
-import { DataApiErrorFactory } from '@/data/types/apiTypes';
+import { DataApiErrorFactory } from '@/shared/contracts/dataTypes';
+import type { OrderRequest } from '@/shared/contracts/schemas/_endpointHelpers';
 import type {
   CreatePromptDto,
   ListPromptsQuery,
   Prompt,
   UpdatePromptDto,
-} from '@/data/types/prompt';
+} from '@/shared/domain/prompt';
 
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';

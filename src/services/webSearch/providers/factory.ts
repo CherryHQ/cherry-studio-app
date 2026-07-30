@@ -1,5 +1,5 @@
-import type { WebSearchProvider } from '@/data/preference';
-import type { WebSearchExecutionConfig, WebSearchResponse } from '@/data/types/webSearch';
+import type { WebSearchProvider } from '@/shared/domain/preferences';
+import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/domain/webSearch';
 import type { ApiKeyRotationState } from '../utils/provider';
 import type { BaseWebSearchProvider } from './base/BaseWebSearchProvider';
 import { WEB_SEARCH_PROVIDER_REGISTRY } from './registry';

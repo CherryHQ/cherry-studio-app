@@ -23,10 +23,10 @@ import {
   useMessageSelectionState,
   useRegisterSelectionSource,
 } from '@/components/messageTabs';
-import type { Assistant } from '@/data/types/assistant';
-import type { Topic } from '@/data/types/topic';
 import { useAssistantsApi } from '@/hooks/chat';
 import { useExclusiveSwipeable } from '@/hooks/useExclusiveSwipeable';
+import type { Assistant } from '@/shared/domain/assistant';
+import type { Topic } from '@/shared/domain/topic';
 import { useTopicActionDialogs } from './components/TopicActionDialogs';
 import {
   TopicListProvider,

@@ -6,10 +6,10 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/components/headers';
-import type { PermissionMode, PermissionPreferenceKey } from '@/data/preference';
 import { usePreference } from '@/hooks/data';
 import { useDataServices } from '@/runtime';
 import type { SystemPermissionState } from '@/services/devicePermissions';
+import type { PermissionMode, PermissionPreferenceKey } from '@/shared/domain/preferences';
 
 import { SettingsSection } from '../components/SettingsSection';
 import { usePermissionPolicies } from './hooks/usePermissionPolicies';

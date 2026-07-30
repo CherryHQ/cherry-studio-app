@@ -1,6 +1,6 @@
-import type { WebSearchProvider } from '@/data/preference';
-import type { WebSearchExecutionConfig } from '@/data/types/webSearch';
 import { ApiKeyRotationState } from '@/services/webSearch/utils/provider';
+import type { WebSearchProvider } from '@/shared/domain/preferences';
+import type { WebSearchExecutionConfig } from '@/shared/domain/webSearch';
 
 import { JinaProvider } from '../JinaProvider';
 

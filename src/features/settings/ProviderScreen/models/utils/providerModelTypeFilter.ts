@@ -5,7 +5,7 @@ import {
   MODEL_CAPABILITY,
 } from '@cherrystudio/provider-registry';
 
-import type { Model } from '@/data/types/model';
+import type { Model } from '@/shared/domain/model';
 
 /**
  * The pull screen filters by what a model is *for*, not by the overlapping

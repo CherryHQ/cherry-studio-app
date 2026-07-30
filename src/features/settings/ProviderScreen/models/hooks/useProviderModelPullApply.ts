@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import type { Model, UniqueModelId } from '@/data/types/model';
+import type { Model, UniqueModelId } from '@/shared/domain/model';
 
 import type {
   ProviderModelPullPreview,

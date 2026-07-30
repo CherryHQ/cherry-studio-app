@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 
-import type { Provider } from '@/data/types/provider';
+import type { Provider } from '@/shared/domain/provider';
 import { ProviderApiServiceApiKeysField, ProviderApiServiceEndpointField } from '../apiService';
 import { CherryInOauth } from './CherryInOauth';
 

@@ -1,5 +1,5 @@
-import type { CherryMessagePart } from '@/data/types/message';
-import { readCherryMeta } from '@/data/types/uiParts';
+import type { CherryMessagePart } from '@/shared/domain/message';
+import { readCherryMeta } from '@/shared/domain/uiParts';
 
 import {
   imageUriToDataUrl,

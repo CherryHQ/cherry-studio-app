@@ -1,4 +1,4 @@
-import type { EntityType } from '@/data/types/entityType';
+import type { EntityType } from '@/shared/domain/entityType';
 
 export const pinQueryKeys = {
   detail: (pinId: string) => [`/pins/${pinId}`] as const,

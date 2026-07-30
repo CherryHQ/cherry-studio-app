@@ -1,6 +1,6 @@
 import { queryKeys } from '@/data/api';
-import type { Model, UniqueModelId } from '@/data/types/model';
 import { useDataQuery } from '@/hooks/data';
+import type { Model, UniqueModelId } from '@/shared/domain/model';
 
 const EMPTY_MODELS: readonly Model[] = Object.freeze([]);
 

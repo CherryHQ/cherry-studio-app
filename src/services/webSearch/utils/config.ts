@@ -1,16 +1,16 @@
+import {
+  WEB_SEARCH_PROVIDER_PRESET_MAP,
+  type WebSearchProviderPreset,
+} from '@/data/presets/webSearchProviders';
 import type {
   PreferenceDefaultScopeType,
   PreferenceKeyType,
   WebSearchCapability,
   WebSearchProvider,
   WebSearchProviderOverrides,
-} from '@/data/preference';
-import {
-  WEB_SEARCH_PROVIDER_PRESET_MAP,
-  type WebSearchProviderPreset,
-} from '@/data/presets/webSearchProviders';
-import type { WebSearchExecutionConfig } from '@/data/types/webSearch';
-import { normalizeWebSearchCutoffLimit } from '@/data/types/webSearch';
+} from '@/shared/domain/preferences';
+import type { WebSearchExecutionConfig } from '@/shared/domain/webSearch';
+import { normalizeWebSearchCutoffLimit } from '@/shared/domain/webSearch';
 
 export interface WebSearchPreferenceReader {
   get<K extends PreferenceKeyType>(

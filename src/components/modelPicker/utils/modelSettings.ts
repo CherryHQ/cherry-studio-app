@@ -1,5 +1,5 @@
-import type { PreferenceKeyType } from '@/data/preference';
-import type { UniqueModelId } from '@/data/types/model';
+import type { UniqueModelId } from '@/shared/domain/model';
+import type { PreferenceKeyType } from '@/shared/domain/preferences';
 
 export const MODEL_SETTING_KINDS = ['default', 'fast', 'translate'] as const;
 

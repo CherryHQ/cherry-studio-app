@@ -2,10 +2,10 @@ import type { ToolResultOutput } from '@ai-sdk/provider-utils';
 import type { JSONValue, Tool, ToolExecutionOptions } from 'ai';
 import * as z from 'zod';
 import { loggerService } from '@/core/logger/LoggerService';
-import type { PermissionPreferenceKey } from '@/data/preference';
 import type { PreferenceService } from '@/data/services/PreferenceService';
 import type { DevicePermissionService } from '@/services/devicePermissions';
 import { isAbortError } from '@/services/webSearch/utils/errors';
+import type { PermissionPreferenceKey } from '@/shared/domain/preferences';
 
 import { getRequestContext } from '../context';
 import type { ToolEntry } from '../types';

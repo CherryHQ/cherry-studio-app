@@ -1,4 +1,4 @@
-import type { Message } from '@/data/types/message';
+import type { Message } from '@/shared/domain/message';
 
 import { MessagePart } from './MessagePart';
 

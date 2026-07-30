@@ -1,9 +1,9 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { JSONValue } from 'ai';
 
-import type { Assistant } from '@/data/types/assistant';
-import type { Model } from '@/data/types/model';
-import type { OpenAIServiceTier, Provider, ServiceTier } from '@/data/types/provider';
+import type { Assistant } from '@/shared/domain/assistant';
+import type { Model } from '@/shared/domain/model';
+import type { OpenAIServiceTier, Provider, ServiceTier } from '@/shared/domain/provider';
 
 import { getAiSdkProviderId } from '../provider/factory';
 import type { ProviderCapabilities } from '../types';

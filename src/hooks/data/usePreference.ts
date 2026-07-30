@@ -1,11 +1,11 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useDataServices } from '@/runtime';
 import type {
   PreferenceDefaultScopeType,
   PreferenceKeyType,
   PreferenceUpdateOptions,
-} from '@/data/preference';
-import { getDefaultValue } from '@/data/preference';
-import { useDataServices } from '@/runtime';
+} from '@/shared/domain/preferences';
+import { getDefaultValue } from '@/shared/domain/preferences';
 
 type PreferenceSetter<K extends PreferenceKeyType> = (
   value: PreferenceDefaultScopeType[K],

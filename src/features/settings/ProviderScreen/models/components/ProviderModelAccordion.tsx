@@ -4,8 +4,8 @@ import { memo, type ReactElement, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { Model, UniqueModelId } from '@/data/types/model';
-import type { Provider } from '@/data/types/provider';
+import type { Model, UniqueModelId } from '@/shared/domain/model';
+import type { Provider } from '@/shared/domain/provider';
 import { SettingsGroupedSurface } from '../../../components/SettingsGroupedSurface';
 
 import { getModelGroupLabel, type ProviderModelGroup } from '../utils/providerModelGroups';

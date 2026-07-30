@@ -1,6 +1,6 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import { createUniqueModelId, type Model } from '@/data/types/model';
-import type { Provider } from '@/data/types/provider';
+import { createUniqueModelId, type Model } from '@/shared/domain/model';
+import type { Provider } from '@/shared/domain/provider';
 
 import { providerToAiSdkConfig } from '../config';
 

@@ -2,16 +2,15 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-
+import type { WebSearchProviderPreset } from '@/data/presets/webSearchProviders';
+import { useDataServices } from '@/runtime';
 import type {
   WebSearchCapability,
   WebSearchProvider,
   WebSearchProviderId,
   WebSearchProviderOverride,
   WebSearchProviderOverrides,
-} from '@/data/preference';
-import type { WebSearchProviderPreset } from '@/data/presets/webSearchProviders';
-import { useDataServices } from '@/runtime';
+} from '@/shared/domain/preferences';
 import { WebSearchApiServiceFieldGroup } from '../apiService/components/WebSearchApiServiceFields';
 import {
   WebSearchApiManagementContext,

@@ -1,11 +1,11 @@
 import type { ToolSet } from 'ai';
 import { Platform } from 'react-native';
 import { loggerService } from '@/core/logger/LoggerService';
-import type { PermissionPreferenceKey } from '@/data/preference';
 import type { PreferenceService } from '@/data/services/PreferenceService';
-import type { Assistant } from '@/data/types/assistant';
 import type { DevicePermissionService } from '@/services/devicePermissions';
 import type { WebSearchService } from '@/services/webSearch/WebSearchService';
+import type { Assistant } from '@/shared/domain/assistant';
+import type { PermissionPreferenceKey } from '@/shared/domain/preferences';
 
 import type { McpService } from '../mcp';
 import { registerBuiltinTools } from './adapters/aiSdk/builtin/registerBuiltinTools';

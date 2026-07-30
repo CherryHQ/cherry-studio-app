@@ -1,9 +1,9 @@
 import { File } from 'expo-file-system';
 
 import { loggerService } from '@/core/logger/LoggerService';
-import type { FileUIPart } from '@/data/types/message';
-import { readCherryMeta } from '@/data/types/uiParts';
 import { useDataQuery } from '@/hooks/data';
+import type { FileUIPart } from '@/shared/domain/message';
+import { readCherryMeta } from '@/shared/domain/uiParts';
 
 const logger = loggerService.withContext('useFilePartUri');
 

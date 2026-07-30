@@ -1,9 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { Pressable, Text } from 'react-native';
-
-import type { Assistant } from '@/data/types/assistant';
 import { useAssistantApiById, useTopic } from '@/hooks/chat';
+import type { Assistant } from '@/shared/domain/assistant';
 
 const assistantButtonSize = 36;
 

@@ -1,7 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import type { Painting } from '@/data/types/painting';
 import type { ChatInputModelSettings, ChatInputSendPayload } from '@/features/chat/input';
+import type { Painting } from '@/shared/domain/painting';
 
 import type { PaintingGenerationResult } from '../../hooks/usePaintingGeneration';
 import { PaintingInput } from '../PaintingInput';

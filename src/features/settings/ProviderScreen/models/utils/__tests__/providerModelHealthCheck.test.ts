@@ -1,4 +1,4 @@
-import { createUniqueModelId, type Model } from '@/data/types/model';
+import { createUniqueModelId, type Model } from '@/shared/domain/model';
 
 import {
   checkProviderModelsHealth,

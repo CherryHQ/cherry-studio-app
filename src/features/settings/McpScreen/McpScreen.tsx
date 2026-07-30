@@ -6,8 +6,8 @@ import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
 import type { McpServerRuntimeSummary } from '@/ai/mcp';
 import { BackHeader, type HeaderToolbarAction } from '@/components/headers';
-import type { StreamableHttpMcpServer } from '@/data/types/mcpServer';
 import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/hooks/mcp/useMcpServers';
+import type { StreamableHttpMcpServer } from '@/shared/domain/mcpServer';
 import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { SettingsServiceRow } from '../components/SettingsServiceRow';
 

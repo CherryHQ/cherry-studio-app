@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 
-import type { ApiKeyEntry } from '@/data/types/provider';
+import type { ApiKeyEntry } from '@/shared/domain/provider';
 
 function createApiKeyEntryId(): string {
   return Crypto.randomUUID();

@@ -1,5 +1,5 @@
 import type { ChatTransport, UIMessage } from 'ai';
-import type { UniqueModelId } from '@/data/types/model';
+import type { UniqueModelId } from '@/shared/domain/model';
 
 /**
  * Per-request transport config. Mirrors desktop's IPC-safe shape, but

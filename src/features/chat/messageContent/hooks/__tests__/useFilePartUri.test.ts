@@ -1,4 +1,4 @@
-import type { FileUIPart } from '@/data/types/message';
+import type { FileUIPart } from '@/shared/domain/message';
 import { resolveFilePartUri } from '../useFilePartUri';
 
 jest.mock('@/hooks/data', () => ({ useDataQuery: jest.fn() }));

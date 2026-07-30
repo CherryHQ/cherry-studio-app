@@ -6,7 +6,7 @@
  * Ported from desktop's `src/main/ai/utils/serializeError.ts`.
  */
 
-import type { Serializable, SerializedError } from '@/data/types/uiParts';
+import type { Serializable, SerializedError } from '@/shared/domain/uiParts';
 
 /** Lenient JSON serialization with circular-reference safety.
  *  Returns null for absent values so callers can preserve the `string | null`

@@ -2,8 +2,8 @@ import { resolveIcon } from '@cherrystudio/ui/icons';
 import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 import { Image } from '@/components/nativePrimitives';
-import type { Model } from '@/data/types/model';
-import type { Provider } from '@/data/types/provider';
+import type { Model } from '@/shared/domain/model';
+import type { Provider } from '@/shared/domain/provider';
 
 type ModelPickerIconProps = {
   model: Model;

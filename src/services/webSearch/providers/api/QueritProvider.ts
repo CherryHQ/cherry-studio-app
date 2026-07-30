@@ -1,4 +1,4 @@
-import type { WebSearchExecutionConfig, WebSearchResponse } from '@/data/types/webSearch';
+import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/domain/webSearch';
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { ApiKeyRequestSearchContext } from '../base/context';
 import {

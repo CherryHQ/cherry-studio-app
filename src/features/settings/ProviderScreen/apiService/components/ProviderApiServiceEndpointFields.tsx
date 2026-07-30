@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
 import { Text, View } from 'react-native';
 
-import type { EndpointType } from '@/data/types/model';
+import type { EndpointType } from '@/shared/domain/model';
 import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import {
   getEndpointLabel,

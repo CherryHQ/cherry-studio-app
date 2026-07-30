@@ -14,8 +14,8 @@ import {
   type Model,
   type ModelCapability,
   type UniqueModelId,
-} from '@/data/types/model';
-import type { EndpointConfigs } from '@/data/types/provider';
+} from '@/shared/domain/model';
+import type { EndpointConfigs } from '@/shared/domain/provider';
 import type { PinService } from './PinService';
 import type { PreferenceService } from './PreferenceService';
 import {

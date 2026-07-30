@@ -16,13 +16,13 @@ import {
   type MobileRegistryLoader,
 } from '@cherrystudio/provider-registry/mobile';
 
-import { createUniqueModelId, type Model } from '@/data/types/model';
+import { createUniqueModelId, type Model } from '@/shared/domain/model';
 import type {
   EndpointConfigs,
   ProviderAuthMethod,
   ProviderModelListSource,
   ProviderWebsites,
-} from '@/data/types/provider';
+} from '@/shared/domain/provider';
 
 const chatReasoningEndpointPriority: EndpointType[] = [
   ENDPOINT_TYPE.OPENAI_RESPONSES,

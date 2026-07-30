@@ -1,4 +1,4 @@
-import type { WebSearchExecutionConfig, WebSearchResponse } from '@/data/types/webSearch';
+import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/domain/webSearch';
 import { resolveProviderApiHost } from '../../utils/provider';
 import { withoutTrailingSlash } from '../../utils/url';
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';

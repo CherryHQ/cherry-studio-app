@@ -1,4 +1,3 @@
-export * from './apiTypes';
 export * from './assistant';
 export * from './entityType';
 export * from './file';

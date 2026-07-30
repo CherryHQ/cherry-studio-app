@@ -3,11 +3,11 @@ import { Image as ExpoImage } from 'expo-image';
 import { useCallback, useMemo } from 'react';
 
 import { queryKeys } from '@/data/api';
-import type { CursorPaginationResponse } from '@/data/types/apiTypes';
-import { imageMediaTypeFromExtension } from '@/data/types/file';
-import type { Painting } from '@/data/types/painting';
 import type { ChatInputAttachmentDraft } from '@/features/chat/input/utils/chatInputAttachments';
 import { useDataInfiniteQuery, useDataMutation, useDataQuery } from '@/hooks/data';
+import type { CursorPaginationResponse } from '@/shared/contracts/dataTypes';
+import { imageMediaTypeFromExtension } from '@/shared/domain/file';
+import type { Painting } from '@/shared/domain/painting';
 
 const pageSize = 20;
 

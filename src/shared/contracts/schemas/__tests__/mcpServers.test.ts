@@ -1,4 +1,7 @@
-import { CreateMcpServerSchema, UpdateMcpServerSchema } from '@/data/api/schemas/mcpServers';
+import {
+  CreateMcpServerSchema,
+  UpdateMcpServerSchema,
+} from '@/shared/contracts/schemas/mcpServers';
 
 describe('mobile MCP server DTO schemas', () => {
   it('accepts only the remote fields mobile owns', () => {

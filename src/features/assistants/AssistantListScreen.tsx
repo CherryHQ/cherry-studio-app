@@ -25,10 +25,9 @@ import {
 } from '@/components/messageTabs';
 import { SelectionToolbar } from '@/components/messageTabs/SelectionToolbar/SelectionToolbar';
 import { useSetBottomTabBarHidden } from '@/components/navigation';
-
-import type { Assistant } from '@/data/types/assistant';
 import { useAssistantMutations, useAssistantsApi } from '@/hooks/chat';
 import { useExclusiveSwipeable } from '@/hooks/useExclusiveSwipeable';
+import type { Assistant } from '@/shared/domain/assistant';
 
 // Width of the revealed swipe-to-delete panel; keep in sync with `w-16` below.
 const DELETE_ACTION_WIDTH = 64;
