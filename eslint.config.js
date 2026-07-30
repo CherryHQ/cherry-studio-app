@@ -22,7 +22,6 @@ const retiredRootPatterns = [
   'runtime',
   'services',
   'styles',
-  'types',
   'utils',
 ].flatMap((root) => [`@/${root}`, `@/${root}/*`, `@/${root}/*/**`]);
 
@@ -64,6 +63,42 @@ const tombstonePatterns = [
     ],
     message: 'Use @/backend/ai, @/backend/data, or @/backend/services.',
   },
+  {
+    group: [
+      '@/bootstrap/createMobileBackend',
+      '@/shared/contracts/mobileBackend',
+      '@/shared/contracts/assistants',
+      '@/shared/contracts/files',
+      '@/shared/contracts/pins',
+      '@/shared/contracts/preferences',
+      '@/shared/contracts/topics',
+    ],
+    message:
+      'Resource data moved to shared/data and the Data API. shared/contracts now contains workflow/session capabilities only.',
+  },
+];
+
+const retiredImports = [
+  {
+    name: '@/frontend/data',
+    importNames: ['useDataModule'],
+    message: 'Use the typed Data API hooks: useQuery, useMutation, or useInfiniteQuery.',
+  },
+  {
+    name: '@/shared/contracts',
+    importNames: [
+      'AssistantsBackend',
+      'FilesBackend',
+      'MobileBackend',
+      'MobileBackendModule',
+      'MobileBackendModuleKey',
+      'PinsBackend',
+      'PreferencesBackend',
+      'TopicsBackend',
+    ],
+    message:
+      'Resource interfaces moved to shared/data; Backend now contains workflow/session modules only.',
+  },
 ];
 
 const aliasRoots = (roots) =>
@@ -93,7 +128,7 @@ module.exports = defineConfig([
   {
     files: ['src/**/*.{ts,tsx}'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: tombstonePatterns }],
+      'no-restricted-imports': ['error', { paths: retiredImports, patterns: tombstonePatterns }],
     },
   },
   restrictedImports(
@@ -101,7 +136,7 @@ module.exports = defineConfig([
     [
       layerPattern(
         ['app', 'backend', 'bootstrap'],
-        'Frontend may depend only on frontend and shared modules. Cross the backend seam through useBackendModule().',
+        'Frontend may depend only on frontend and shared modules. Use Data API hooks for resources, preference hooks for settings, and useBackendModule() for workflows.',
       ),
     ],
   ),
@@ -146,6 +181,7 @@ module.exports = defineConfig([
     [
       'src/shared/ai/**/*.{ts,tsx}',
       'src/shared/contracts/**/*.{ts,tsx}',
+      'src/shared/data/**/*.{ts,tsx}',
       'src/shared/utils/**/*.{ts,tsx}',
     ],
     [
@@ -164,7 +200,7 @@ module.exports = defineConfig([
           '@expo/*/**',
         ],
         message:
-          'Shared contracts, AI rules, and utilities must remain platform- and React-independent.',
+          'Shared contracts, data, AI rules, and utilities must remain platform- and React-independent.',
       },
     ],
   ),
