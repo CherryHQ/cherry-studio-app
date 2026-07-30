@@ -1,1 +1,1 @@
-export { NewProviderScreen as default } from '@/screens/SettingsScreen/ProviderScreen';
+export { NewProviderScreen as default } from '@/features/settings/ProviderScreen';

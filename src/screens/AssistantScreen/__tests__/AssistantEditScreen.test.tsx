@@ -89,7 +89,7 @@ jest.mock('@/hooks/mcp/useMcpServers', () => ({
   useMcpServersApi: () => ({ servers: [] }),
 }));
 
-jest.mock('../../SettingsScreen/components/SettingSelect', () => ({
+jest.mock('@/features/settings/components/SettingSelect', () => ({
   SettingSelect: () => null,
 }));
 

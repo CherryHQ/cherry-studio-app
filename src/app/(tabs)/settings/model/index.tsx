@@ -1,1 +1,1 @@
-export { ModelSettingsScreen as default } from '@/screens/SettingsScreen';
+export { ModelSettingsScreen as default } from '@/features/settings';

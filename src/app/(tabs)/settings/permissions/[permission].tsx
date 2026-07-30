@@ -1,1 +1,1 @@
-export { PermissionDetailScreen as default } from '@/screens/SettingsScreen/PermissionsScreen';
+export { PermissionDetailScreen as default } from '@/features/settings/PermissionsScreen';

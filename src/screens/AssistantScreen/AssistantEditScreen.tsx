@@ -25,9 +25,9 @@ import {
   type McpMode,
 } from '@/data/types/assistant';
 import type { UniqueModelId } from '@/data/types/model';
+import { SettingSelect } from '@/features/settings/components/SettingSelect';
 import { useAssistantApiById, useAssistantMutations } from '@/hooks/chat';
 import { useMcpServersApi } from '@/hooks/mcp/useMcpServers';
-import { SettingSelect } from '../SettingsScreen/components/SettingSelect';
 import { EmojiPickerBottomSheet } from './components/EmojiPickerBottomSheet';
 
 type AssistantFormState = {

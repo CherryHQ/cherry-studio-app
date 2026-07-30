@@ -106,7 +106,7 @@ jest.mock('@/hooks/mcp/useMcpServers', () => ({
   }),
 }));
 
-jest.mock('@/screens/SettingsScreen/components/SettingsDialogActionButton', () => {
+jest.mock('@/features/settings/components/SettingsDialogActionButton', () => {
   const { Pressable: MockPressable } = jest.requireActual('react-native');
 
   return {

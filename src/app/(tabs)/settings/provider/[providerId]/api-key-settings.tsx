@@ -1,1 +1,1 @@
-export { ProviderApiKeySettingsScreen as default } from '@/screens/SettingsScreen/ProviderScreen';
+export { ProviderApiKeySettingsScreen as default } from '@/features/settings/ProviderScreen';

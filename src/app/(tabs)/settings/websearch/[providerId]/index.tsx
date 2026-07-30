@@ -1,1 +1,1 @@
-export { WebSearchProviderScreen as default } from '@/screens/SettingsScreen/WebSearchScreen';
+export { WebSearchProviderScreen as default } from '@/features/settings/WebSearchScreen';
