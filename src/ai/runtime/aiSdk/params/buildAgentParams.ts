@@ -11,7 +11,8 @@ import type { Model, UniqueModelId } from '@/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 
-import { providerToAiSdkConfig } from '../../../provider/config';
+import { resolveProviderAiSdkConfig } from '../../../provider/config';
+import type { ServingCredentialReceipt } from '../../../provider/credential';
 import type { ToolService } from '../../../tools';
 import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/adapters/aiSdk/meta/toolSearch';
 import { createAiRepair } from '../../../tools/adapters/aiSdk/repair';
@@ -46,7 +47,10 @@ export interface BuildAgentParamsDependencies {
   assistant: Pick<AssistantService, 'getById'>;
   model: Pick<ModelService, 'getById'>;
   preference: PreferenceService;
-  provider: Pick<ProviderService, 'getAuthConfig' | 'getByProviderId' | 'getRotatedApiKey'>;
+  provider: Pick<
+    ProviderService,
+    'getAuthConfig' | 'getByProviderId' | 'getRotatedApiKey' | 'resolveApiKey'
+  >;
   tools: Pick<ToolService, 'resolveForRequest'>;
 }
 
@@ -67,6 +71,7 @@ export interface BuiltAgentParams {
   repairToolCall: ToolCallRepairFunction<ToolSet>;
   tools: ToolSet | undefined;
   options: AgentOptions;
+  credentialReceipt: ServingCredentialReceipt;
 }
 
 export async function buildAgentParams({
@@ -75,11 +80,16 @@ export async function buildAgentParams({
   shouldIncludeExternalTools = false,
 }: BuildAgentParamsInput): Promise<BuiltAgentParams> {
   const { provider, model, assistant } = await getProviderAndModel(request, services);
-  const sdkConfig = await providerToAiSdkConfig(provider, model, {
-    getRotatedApiKey: async (providerId) =>
-      request.apiKeyOverride ?? services.provider.getRotatedApiKey(providerId),
-    getAuthConfig: (providerId) => services.provider.getAuthConfig(providerId),
-  });
+  const { config: sdkConfig, credentialReceipt } = await resolveProviderAiSdkConfig(
+    provider,
+    model,
+    {
+      getAuthConfig: (providerId) => services.provider.getAuthConfig(providerId),
+      resolveApiKey: (providerId, override) =>
+        services.provider.resolveApiKey(providerId, override),
+    },
+    { apiKeyOverride: request.apiKeyOverride },
+  );
   const externalWebSearchProviderId =
     shouldIncludeExternalTools && assistant?.settings.enableWebSearch
       ? await services.preference.get('chat.web_search.default_search_keywords_provider')
@@ -165,6 +175,7 @@ export async function buildAgentParams({
   });
 
   return {
+    credentialReceipt,
     sdkConfig: { ...sdkConfig, modelId: model.modelId },
     provider,
     model,

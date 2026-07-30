@@ -51,6 +51,21 @@ export type UpdateProviderInput = {
   providerSettings?: ProviderSettings | null;
 };
 
+export interface ProviderApiKeySnapshot {
+  id: string;
+  label?: string;
+  masked: string;
+}
+
+export type ProviderApiKeySelection =
+  | ({ attribution: 'explicit' | 'matched' } & ProviderApiKeySnapshot)
+  | { attribution: 'unknown' };
+
+export interface ResolvedProviderApiKey {
+  value: string;
+  apiKeySelection: ProviderApiKeySelection;
+}
+
 export function canDeleteProvider(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean {
   return (
     provider.presetProviderId !== provider.id &&
@@ -169,6 +184,33 @@ function normalizeApiKeys(apiKeys: ApiKeyEntry[] | undefined): ApiKeyEntry[] {
       ...(entry.label ? { label: entry.label } : {}),
     };
   });
+}
+
+function maskApiKeyForSnapshot(key: string): string {
+  if (key.length <= 8) return '****';
+  if (key.length <= 16) return `${key.slice(0, 2)}****${key.slice(-2)}`;
+  if (key.length <= 24) return `${key.slice(0, 4)}****${key.slice(-4)}`;
+  return `${key.slice(0, 8)}****${key.slice(-8)}`;
+}
+
+function resolvedApiKey(
+  value: string,
+  attribution: 'explicit' | 'matched',
+  entry: ApiKeyEntry,
+): ResolvedProviderApiKey {
+  return {
+    value,
+    apiKeySelection: {
+      attribution,
+      id: entry.id,
+      ...(entry.label ? { label: entry.label } : {}),
+      masked: maskApiKeyForSnapshot(entry.key),
+    },
+  };
+}
+
+function unknownApiKey(value: string): ResolvedProviderApiKey {
+  return { value, apiKeySelection: { attribution: 'unknown' } };
 }
 
 function rowToProvider(row: UserProviderRow): Provider {
@@ -295,25 +337,28 @@ export class ProviderService {
     return row.authConfig ?? null;
   }
 
-  /**
-   * Get a rotated API key for a provider (round-robin across enabled keys).
-   * Returns empty string for providers that don't have keys.
-   */
-  async getRotatedApiKey(providerId: string): Promise<string> {
+  /** Select a serving key and capture its non-secret identity atomically. */
+  async resolveApiKey(providerId: string, override?: string): Promise<ResolvedProviderApiKey> {
     const row = await this.getRowByProviderId(providerId);
 
     if (!row) {
       throw DataApiErrorFactory.notFound('Provider', providerId);
     }
 
-    const enabledKeys = (row.apiKeys ?? []).filter((key) => key.isEnabled);
+    const allKeys = row.apiKeys ?? [];
+    if (override !== undefined) {
+      const matched = allKeys.find((entry) => entry.key === override);
+      return matched ? resolvedApiKey(override, 'matched', matched) : unknownApiKey(override);
+    }
+
+    const enabledKeys = allKeys.filter((key) => key.isEnabled);
 
     if (enabledKeys.length === 0) {
-      return '';
+      return unknownApiKey('');
     }
 
     if (enabledKeys.length === 1) {
-      return enabledKeys[0].key;
+      return resolvedApiKey(enabledKeys[0].key, 'explicit', enabledKeys[0]);
     }
 
     // Round-robin via the CacheService memory tier, same key as the desktop
@@ -324,7 +369,7 @@ export class ProviderService {
 
     if (!lastUsedKeyId) {
       this.cacheService.set(cacheKey, enabledKeys[0].id);
-      return enabledKeys[0].key;
+      return resolvedApiKey(enabledKeys[0].key, 'explicit', enabledKeys[0]);
     }
 
     const currentIndex = enabledKeys.findIndex((key) => key.id === lastUsedKeyId);
@@ -332,7 +377,12 @@ export class ProviderService {
     const nextKey = enabledKeys[nextIndex];
     this.cacheService.set(cacheKey, nextKey.id);
 
-    return nextKey.key;
+    return resolvedApiKey(nextKey.key, 'explicit', nextKey);
+  }
+
+  /** Get only the selected key value for callers that do not persist usage. */
+  async getRotatedApiKey(providerId: string): Promise<string> {
+    return (await this.resolveApiKey(providerId)).value;
   }
 
   async create(input: CreateProviderInput): Promise<Provider> {

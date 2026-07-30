@@ -129,6 +129,71 @@ describe('ProviderService', () => {
     await expect(service.getRotatedApiKey('custom-provider')).resolves.toBe('key-a');
   });
 
+  test('returns the selected key with a non-secret identity receipt', async () => {
+    const service = createRotationService([
+      {
+        id: 'primary',
+        isEnabled: true,
+        key: 'sk-abcdefghijklmnopqrstuvwxyz-123456',
+        label: 'Main',
+      },
+    ]);
+
+    const resolved = await service.resolveApiKey('custom-provider');
+
+    expect(resolved.value).toBe('sk-abcdefghijklmnopqrstuvwxyz-123456');
+    expect(resolved.apiKeySelection).toEqual({
+      attribution: 'explicit',
+      id: 'primary',
+      label: 'Main',
+      masked: 'sk-abcde****z-123456',
+    });
+    expect(JSON.stringify(resolved.apiKeySelection)).not.toContain(resolved.value);
+  });
+
+  test('matches overrides against every stored key without advancing rotation', async () => {
+    const cacheService = createCacheService();
+    const service = createRotationService(
+      [apiKey('enabled', 'enabled-key'), apiKey('disabled', 'disabled-key', false)],
+      cacheService,
+    );
+
+    await expect(service.resolveApiKey('custom-provider', 'disabled-key')).resolves.toEqual({
+      value: 'disabled-key',
+      apiKeySelection: {
+        attribution: 'matched',
+        id: 'disabled',
+        masked: 'di****ey',
+      },
+    });
+    expect(cacheService.get('settings.provider.custom-provider.last_used_key_id')).toBeUndefined();
+  });
+
+  test('keeps unmatched overrides usable without persisting their identity', async () => {
+    const service = createRotationService([apiKey('primary', 'stored-key')]);
+
+    const resolved = await service.resolveApiKey('custom-provider', 'caller-secret');
+
+    expect(resolved).toEqual({
+      value: 'caller-secret',
+      apiKeySelection: { attribution: 'unknown' },
+    });
+    expect(JSON.stringify(resolved.apiKeySelection)).not.toContain('caller-secret');
+  });
+
+  test('never snapshots a raw short key and reports missing keys as unknown', async () => {
+    await expect(
+      createRotationService([apiKey('short', 'tiny')]).resolveApiKey('custom-provider'),
+    ).resolves.toEqual({
+      value: 'tiny',
+      apiKeySelection: { attribution: 'explicit', id: 'short', masked: '****' },
+    });
+    await expect(createRotationService([]).resolveApiKey('custom-provider')).resolves.toEqual({
+      value: '',
+      apiKeySelection: { attribution: 'unknown' },
+    });
+  });
+
   test('short-circuits rotation for zero or one enabled key', async () => {
     const cacheService = createCacheService();
 

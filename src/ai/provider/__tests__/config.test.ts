@@ -1,8 +1,9 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import type { ResolvedProviderApiKey } from '@/data/services/ProviderService';
 import { createUniqueModelId, type Model } from '@/data/types/model';
 import type { Provider } from '@/data/types/provider';
 
-import { providerToAiSdkConfig } from '../config';
+import { providerToAiSdkConfig, resolveProviderAiSdkConfig } from '../config';
 
 jest.mock('@/integration/cherryAi', () => ({
   generateSignature: jest.fn(() => ({
@@ -88,12 +89,56 @@ describe('providerToAiSdkConfig', () => {
     expect(config.providerId).toBe('openai-compatible');
     expect(config.providerSettings.fetch).toBeUndefined();
   });
+
+  it('returns the exact serving credential receipt with the provider config', async () => {
+    const provider = createProvider({ id: 'custom-openai' });
+    const model = createModel(provider.id, 'custom-model');
+    const runtime = createRuntime({
+      value: 'raw-secret-key',
+      apiKeySelection: {
+        attribution: 'explicit',
+        id: 'key-1',
+        label: 'Primary',
+        masked: 'ra****ey',
+      },
+    });
+
+    const resolved = await resolveProviderAiSdkConfig(provider, model, runtime);
+
+    expect(resolved.config.providerSettings).toMatchObject({ apiKey: 'raw-secret-key' });
+    expect(resolved.credentialReceipt).toEqual({
+      attribution: 'explicit',
+      id: 'key-1',
+      label: 'Primary',
+      masked: 'ra****ey',
+    });
+  });
+
+  it('passes caller overrides to the atomic credential selector', async () => {
+    const provider = createProvider({ id: 'custom-openai' });
+    const model = createModel(provider.id, 'custom-model');
+    const runtime = createRuntime({
+      value: 'override-key',
+      apiKeySelection: { attribution: 'unknown' },
+    });
+
+    await resolveProviderAiSdkConfig(provider, model, runtime, {
+      apiKeyOverride: 'override-key',
+    });
+
+    expect(runtime.resolveApiKey).toHaveBeenCalledWith(provider.id, 'override-key');
+  });
 });
 
-function createRuntime() {
+function createRuntime(
+  resolved: ResolvedProviderApiKey = {
+    value: '',
+    apiKeySelection: { attribution: 'unknown' },
+  },
+) {
   return {
     getAuthConfig: jest.fn(async () => null),
-    getRotatedApiKey: jest.fn(async () => ''),
+    resolveApiKey: jest.fn(async () => resolved),
   };
 }
 

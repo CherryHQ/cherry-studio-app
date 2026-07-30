@@ -187,6 +187,7 @@ describe('AiService.checkModel', () => {
       }),
     );
     expect(mockGenerate).not.toHaveBeenCalled();
+    expect(services.provider.resolveApiKey).toHaveBeenCalledWith(model.providerId, 'selected-key');
     expect(services.provider.getRotatedApiKey).not.toHaveBeenCalled();
   });
 
@@ -760,6 +761,12 @@ function createServices({
       getAuthConfig: jest.fn(async () => null),
       getByProviderId: jest.fn(async () => provider),
       getRotatedApiKey: jest.fn(async () => 'rotated-key'),
+      resolveApiKey: jest.fn(async (_providerId: string, override?: string) => ({
+        value: override ?? 'rotated-key',
+        apiKeySelection: override
+          ? { attribution: 'unknown' as const }
+          : { attribution: 'explicit' as const, id: 'key-1', masked: 'ro****ey' },
+      })),
     },
     tools,
     webSearch,
