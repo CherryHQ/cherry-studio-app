@@ -14,7 +14,7 @@ Mobile Drizzle schemas migrated from the desktop `src/main/data/db/schemas` dire
 ## Migration Flow
 
 After changing a schema file, run `pnpm db:generate` and add the generated SQL import to
-`src/backend/infrastructure/db/migrations.ts` so Expo can bundle the migration.
+`src/backend/data/db/migrations.ts` so Expo can bundle the migration.
 
 Custom SQL that Drizzle cannot generate, such as the message FTS5 table and triggers, lives in the
-schema module and is executed idempotently through `src/backend/infrastructure/db/customSql.ts`.
+schema module and is executed idempotently through `src/backend/data/db/customSql.ts`.

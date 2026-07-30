@@ -26,7 +26,8 @@ It contains:
 - React Query client and query-key factories.
 - Query functions for assistants, topics, messages, files, models, providers, paintings, MCP, and pins.
 - Preference hooks backed by the `preferences` contract.
-- Frontend cache implementation and hooks; pure cache schemas live in `src/shared/data/cache`.
+- `CacheService.ts`, its mobile storage adapter, and cache hooks; pure cache schemas live in
+  `src/shared/data/cache`.
 
 Frontend hooks call a narrow backend module directly. There are no generic hooks that expose a
 concrete service graph, and frontend tests provide fake `MobileBackend` modules through the real
@@ -42,8 +43,24 @@ concrete service graph, and frontend tests provide fake `MobileBackend` modules 
 - `presets`: shared catalog data.
 - `cache`: cache schemas and pure template/equality helpers.
 
-Database tables, Drizzle row types, migrations, and storage adapters are not shared contracts. They
-remain under `src/backend/infrastructure/db`.
+Database tables, Drizzle row types, and migrations are not shared contracts. They remain under
+`src/backend/data/db`; managed-file persistence lives with the backend data services, while the
+concrete UI-cache adapter stays frontend-owned.
+
+## Backend Data
+
+`src/backend/data` is the mobile counterpart of Cherry Desktop's `src/main/data`:
+
+- `PreferenceService.ts` owns cached access to SQLite-backed preferences.
+- `db` owns the connection, schemas, migrations, custom SQL, and seeders.
+- `services` owns entity persistence and data-specific transformations.
+- `fixtures` owns development data consumed by seeders and tests.
+
+Mobile has no backend `CacheService` today. The current general cache corresponds to Desktop's
+renderer cache and therefore lives at `src/frontend/data/CacheService.ts`. Desktop Main's cache
+exists for Main-only scratch state, cross-window relay, and a Main-owned JSON persist tier; mobile
+currently needs none of those. Domain-specific caches, such as MCP tool snapshots, remain private
+to their owning backend modules.
 
 ## Backend Contracts
 
@@ -56,16 +73,17 @@ directly satisfy a contract. Multi-step behavior belongs in `src/backend/applica
 - MCP persistence/runtime coordination;
 - permission policy and profile avatar workflows.
 
-Application modules receive infrastructure dependencies through constructor-shaped interfaces and
-never import infrastructure implementations. Bootstrap supplies production implementations.
+Application modules receive data and infrastructure dependencies through constructor-shaped
+interfaces and never import their concrete implementations. Bootstrap supplies production
+implementations.
 
 ## Database
 
 `DbService` owns the Expo SQLite database `cherry.db` and Drizzle's Expo adapter. Startup:
 
 - configures WAL, `synchronous=NORMAL`, and foreign keys;
-- runs bundled migrations from `src/backend/infrastructure/db/migrations.ts`;
-- runs idempotent custom FTS SQL from `src/backend/infrastructure/db/customSql.ts`;
+- runs bundled migrations from `src/backend/data/db/migrations.ts`;
+- runs idempotent custom FTS SQL from `src/backend/data/db/customSql.ts`;
 - runs versioned seeders through `SeedRunner`.
 
 Expo cannot read a migration directory at runtime, so SQL and the journal are bundled in
@@ -84,7 +102,7 @@ terminal, paused, or error state to the placeholder.
 
 ## Service Graph
 
-`createBackendServices()` constructs concrete infrastructure classes such as `PreferenceService`,
+`createBackendServices()` constructs concrete backend classes such as `PreferenceService`,
 `ProviderService`, `MessageService`, `McpService`, `WebSearchService`, `ToolService`, and `AiService`.
 The graph is private to bootstrap. `createMobileBackend()` selects direct contract implementations
 and application workflows from that graph.

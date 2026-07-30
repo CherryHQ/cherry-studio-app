@@ -20,7 +20,8 @@ isolation. See [ADR 0011](../adr/0011-separate-in-process-frontend-and-backend.m
 | `src/bootstrap` | Composition root, initialization, lifecycle, splash, and polyfills |
 | `src/frontend` | Features, components, React Query, hooks, i18n, styles, UI utils and types |
 | `src/backend/application` | Multi-step product workflows behind shared contracts |
-| `src/backend/infrastructure` | SQLite, AI SDK, device APIs, storage, and integrations |
+| `src/backend/data` | Preferences, SQLite, schemas, seeders, fixtures, and persistence services |
+| `src/backend/infrastructure` | AI SDK, device APIs, and third-party integrations |
 | `src/shared/contracts` | `MobileBackend`, module interfaces, sessions, events, and workflow results |
 | `src/shared/data` | Entities, DTO schemas, preferences, cache schemas, and data errors |
 | `src/shared/domain` | Platform-independent domain rules |
@@ -60,8 +61,8 @@ or concrete device and persistence implementations. ESLint enforces these direct
 
 - `AppBootstrapProvider` owns one `AppBootstrapRuntime`; its context exposes startup status only.
 - `BackendProvider` holds one stable `MobileBackend` and exposes only `useBackendModule(key)`.
-- `frontend/data` owns React Query keys/client, backend-bound query functions, preferences hooks, and UI cache.
-- `shared/data` owns frontend/backend data vocabulary; database rows remain backend infrastructure.
+- `frontend/data` owns React Query keys/client, backend-bound query functions, preferences hooks, and `CacheService`.
+- `shared/data` owns frontend/backend data vocabulary; database rows remain under `backend/data`.
 - Chat and painting generation use explicit backend sessions with `dispose` and abort behavior.
 - Navigation, translation, toast, and React Query invalidation stay in frontend owners.
 - `expo-screen-corner-radius` remains the bottom-sheet device adapter; context menus use Expo UI directly.

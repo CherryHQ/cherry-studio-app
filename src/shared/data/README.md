@@ -9,6 +9,8 @@ frontend and backend. The layout follows Cherry Desktop's `src/shared/data` voca
   has a documented runtime compatibility reason to diverge.
 - API-shaped DTO schemas, pagination shapes, and data errors live under `src/shared/data/api`.
 - DB-backed preference value types and defaults live under `src/shared/data/preference`.
+- Cache schemas and pure cache-key helpers live under `src/shared/data/cache`; concrete cache
+  implementations remain with their runtime owner.
 - Entity and value types live under `src/shared/data/types`.
 - Excluded desktop domains are not migrated here yet: agent sessions, knowledge, jobs, translate,
   miniapps, and agent workspaces. MCP, file, and painting types are present because their mobile

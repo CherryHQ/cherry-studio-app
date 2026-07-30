@@ -9,7 +9,7 @@ existing deep module over a new registry or pass-through wrapper.
 
 1. Put entities and DTO schemas in `src/shared/data` when both sides need them.
 2. Define or extend the narrow module interface in `src/shared/contracts`.
-3. Implement simple persistence directly in `src/backend/infrastructure/services`.
+3. Implement simple persistence directly in `src/backend/data/services`.
 4. Add a `src/backend/application` module only for multi-step rules or coordinated dependencies.
 5. Compose the production implementation in `src/bootstrap/createMobileBackend.ts`.
 6. Call it from `src/frontend/data` or the owning feature through `useBackendModule(key)`.
@@ -19,8 +19,8 @@ the same shared interface and observable results.
 
 ## Add Persistent Data
 
-- Add Drizzle schemas under `src/backend/infrastructure/db/schemas` and register them in its barrel.
-- Generate and bundle the migration under `src/backend/infrastructure/db`.
+- Add Drizzle schemas under `src/backend/data/db/schemas` and register them in its barrel.
+- Generate and bundle the migration under `src/backend/data/db`.
 - Keep Drizzle row types backend-only; expose entities/DTOs from `src/shared/data`.
 - Add query keys and query functions in `src/frontend/data`, not in shared or backend code.
 

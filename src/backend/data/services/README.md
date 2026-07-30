@@ -1,12 +1,12 @@
-# Backend Persistence Services
+# Backend Data Services
 
-Mobile DB services migrated from the desktop `src/main/data/services` directory.
+Mobile data services migrated from the desktop `src/main/data/services` directory.
 
 ## Scope
 
 - Keep service names, method names, ordering semantics, and service comments aligned with desktop
   unless mobile has a documented runtime compatibility reason to diverge.
-- Mobile services receive the Provider-owned `DbService` through the constructor instead of using
+- Mobile services receive the bootstrap-owned `DbService` through the constructor instead of using
   the desktop `application.get('DbService')` singleton.
 - Desktop logger calls are omitted here unless mobile has an equivalent logging service.
 - Full agent-session, knowledge, job, translate, miniapp, and agent-workspace services are not

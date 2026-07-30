@@ -14,7 +14,8 @@ src/
 ├── frontend/             # features, components, data, hooks, i18n, styles, utils, types
 ├── backend/
 │   ├── application/      # multi-step product workflows
-│   ├── infrastructure/   # SQLite, AI, device, and third-party adapters
+│   ├── data/              # preferences, SQLite, schemas, seeders, and persistence services
+│   ├── infrastructure/   # AI, device, and third-party adapters
 │   ├── utils/            # backend-owned pure helpers
 │   └── types/            # backend-specific declarations
 ├── shared/
@@ -51,6 +52,13 @@ compatibility adapter and no generic data hook that can expose the concrete serv
 Simple persistence classes may directly satisfy a contract. An application implementation is
 introduced only when it hides a multi-step rule or coordinates several dependencies. This keeps
 the seam deep and avoids a parallel hierarchy of pass-through wrappers.
+
+`backend/application` names a role, not a desktop directory. It is unrelated to Cherry Desktop's
+`src/main/core/application`, which is the Electron lifecycle and IoC container. Its desktop
+counterparts are distributed across DataApi handlers, Main AI/business modules, and renderer-owned
+workflows because those operations cross process responsibilities on desktop. Mobile keeps the
+same multi-step rules behind the backend seam instead of moving AI, persistence, or device policy
+into frontend hooks.
 
 **Considered Options**
 

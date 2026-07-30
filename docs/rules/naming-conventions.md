@@ -264,7 +264,7 @@ is **closed by default**. The current `/src/` roots are `app/`, `bootstrap/`, `f
 
 - `frontend/`: `components/`, `data/`, `features/`, `hooks/`, `i18n/`, `styles/`, `types/`, and
   `utils/`.
-- `backend/`: `application/`, `infrastructure/`, `types/`, and `utils/`.
+- `backend/`: `application/`, `data/`, `infrastructure/`, `types/`, and `utils/`.
 - `shared/`: `contracts/`, `core/`, `data/`, `domain/`, and `utils/`.
 
 Adding a root or overlapping one of these layer-owned buckets is a structural commitment governed by
@@ -305,7 +305,7 @@ A **large multi-file domain** co-locates *everything* it owns — its components
 | A large route-bound UI domain | `src/frontend/features/<name>/` | self-contained tree (`input/`, `workspace/`, `components/`, `hooks/`, `utils/`) |
 | A large shared UI domain | `src/frontend/components/<domain>/` | self-contained tree |
 | A large backend integration | `src/backend/infrastructure/integrations/<domain>/` | adapter, provider, and utility subtree |
-| One cohesive persistence service | `src/backend/infrastructure/services/<Domain>Service.ts` | a single file; its lone helper stays in the nearest `utils/` |
+| One cohesive persistence service | `src/backend/data/services/<Domain>Service.ts` | a single file; its lone helper stays in the nearest `utils/` |
 | A small standalone helper | the owning module's or layer's `utils/` | a single file |
 
 This is the §4.4 promotion rule applied at the top level: a domain graduates from "a file (plus maybe one util) in a bucket" to "its own subtree" only once the additional files actually arrive and span more than one concern. Do not pre-create a subtree for an anticipated module.
@@ -322,7 +322,7 @@ src/frontend/features/chat/
 └── session/              # React owner for the backend ChatSession
 ```
 
-Layer-level buckets such as `frontend/components`, `frontend/hooks`, `backend/infrastructure/services`,
+Layer-level buckets such as `frontend/components`, `frontend/hooks`, `backend/data/services`,
 and each layer's `utils` stay reserved for small, independent, cross-domain pieces. A large,
 multi-file domain left scattered across those buckets instead of gathered into one subtree is the
 §6.7 scattered/impure anti-pattern.
@@ -338,9 +338,9 @@ root-level merge:
 
 | Path | Ownership |
 |---|---|
-| `src/frontend/data` | `BackendProvider`, React Query, backend-bound query functions, preferences hooks, and UI cache |
+| `src/frontend/data` | `BackendProvider`, React Query, backend-bound query functions, preferences hooks, and frontend `CacheService` |
 | `src/shared/data` | frontend/backend entities, DTO schemas, preferences, shared cache schemas, and data errors |
-| `src/backend/infrastructure/db` | SQLite, Drizzle schemas/rows, migrations, seeders, and transactions |
+| `src/backend/data` | backend `PreferenceService`, SQLite/Drizzle, seeders, fixtures, and persistence services |
 | `src/frontend/utils` | pure helpers and constants used only by frontend modules |
 | `src/backend/utils` | pure helpers and constants used only by backend modules |
 | `src/shared/utils` | platform-independent pure helpers used by both frontend and backend |
@@ -391,7 +391,7 @@ A class that owns state, resources, or a lifecycle MUST use one of exactly two s
 **Decision rule:** ask "is this class's primary job to own and coordinate a *set of many like instances*?" — yes → `Manager`; otherwise → `Service` (default when unsure).
 
 A `Service` / `Manager` class lives where its domain ownership lies (e.g.
-`src/backend/infrastructure/services/MessageService.ts`,
+`src/backend/data/services/MessageService.ts`,
 `src/backend/infrastructure/integrations/cherryin/CherryInOauthService.ts`,
 `src/shared/core/logger/LoggerService.ts`); placement under a directory named `services/` is not
 required.
@@ -424,7 +424,7 @@ and readiness is coordinated by **startup gates**, not lifecycle phases. See
 
 ### 5.3 Drizzle Schema Inferred Row Types
 
-Every Drizzle table in `src/backend/infrastructure/db/schemas/` exports its inferred select/insert
+Every Drizzle table in `src/backend/data/db/schemas/` exports its inferred select/insert
 types using the **`Row` suffix** form:
 
 | Inferred from | Type name | Example |
