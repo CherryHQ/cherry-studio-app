@@ -54,8 +54,8 @@ export function templateToRegex(template: string): RegExp {
  *
  * @example
  * ```typescript
- * findMatchingUseCacheSchemaKey('settings.provider.openai.last_used_key_id')
- * // -> 'settings.provider.${providerId}.last_used_key_id'
+ * findMatchingUseCacheSchemaKey('internal.memory_probe.frontend')
+ * // -> 'internal.memory_probe.${instanceId}'
  * findMatchingUseCacheSchemaKey('unknown.key')  // undefined
  * ```
  */
@@ -83,8 +83,7 @@ export function findMatchingUseCacheSchemaKey(key: string): keyof UseCacheSchema
  * Works with both fixed keys (direct lookup) and concrete keys that match
  * template patterns (finds template, returns its default). Template default
  * values are shared across all instances — e.g. all
- * `settings.provider.*.last_used_key_id` keys fall back to the single
- * default `''`.
+ * `internal.memory_probe.*` keys fall back to the single default `''`.
  */
 export function getUseCacheDefaultValue<K extends UseCacheKey>(
   key: K,

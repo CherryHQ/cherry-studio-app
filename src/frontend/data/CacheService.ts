@@ -39,7 +39,7 @@
  */
 
 import { loggerService } from '@logger';
-
+import { createMMKV } from 'react-native-mmkv';
 import type {
   InferUseCacheValue,
   PersistCacheKey,
@@ -47,18 +47,50 @@ import type {
   UseCacheKey,
 } from '@/shared/data/cache/cacheSchemas';
 import { DefaultPersistCache } from '@/shared/data/cache/cacheSchemas';
-import { deepEqual } from '@/shared/data/cache/cacheUtils';
 import type {
   CacheEntry,
   CacheEntryDetail,
   CacheStats,
   CacheSubscriber,
   CacheTierSummary,
-} from './cacheTypes';
-import type { KvStorage } from './kvStorage';
-import { createInMemoryKvStorage, createMmkvStorage } from './kvStorage';
+} from '@/shared/data/cache/cacheTypes';
+import { deepEqual } from '@/shared/data/cache/cacheUtils';
 
 const logger = loggerService.withContext('CacheService');
+
+interface KvStorage {
+  delete(key: string): void;
+  getAllKeys(): string[];
+  getString(key: string): string | undefined;
+  set(key: string, value: string): void;
+}
+
+function createMmkvStorage(): KvStorage {
+  const mmkv = createMMKV({ id: 'cherry-cache-persist' });
+  return {
+    delete: (key) => {
+      mmkv.remove(key);
+    },
+    getAllKeys: () => mmkv.getAllKeys(),
+    getString: (key) => mmkv.getString(key),
+    set: (key, value) => mmkv.set(key, value),
+  };
+}
+
+/** Map-backed storage for isolated CacheService tests. */
+export function createInMemoryKvStorage(): KvStorage {
+  const values = new Map<string, string>();
+  return {
+    delete: (key) => {
+      values.delete(key);
+    },
+    getAllKeys: () => [...values.keys()],
+    getString: (key) => values.get(key),
+    set: (key, value) => {
+      values.set(key, value);
+    },
+  };
+}
 
 export class CacheService {
   // Two-tier cache system
@@ -74,7 +106,7 @@ export class CacheService {
   // Persist tier backing store (one entry per schema key, JSON-encoded)
   private readonly storage: KvStorage;
 
-  constructor(storage: KvStorage = createInMemoryKvStorage()) {
+  constructor(storage: KvStorage = createMmkvStorage()) {
     this.storage = storage;
     this.loadPersistCache();
   }
@@ -609,4 +641,4 @@ function formatBytes(bytes: number): string {
  * instead (react-native-mmkv is also globally mocked in jest.setup.ts for
  * anything that touches this singleton transitively).
  */
-export const cacheService = new CacheService(createMmkvStorage());
+export const cacheService = new CacheService();

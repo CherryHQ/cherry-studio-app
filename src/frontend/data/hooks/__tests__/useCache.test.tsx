@@ -5,7 +5,7 @@ import { cacheService } from '@/frontend/data/CacheService';
 
 import { useCache, usePersistCache } from '../useCache';
 
-const PROVIDER_KEY = 'settings.provider.openai.last_used_key_id' as const;
+const MEMORY_KEY = 'internal.memory_probe.frontend' as const;
 
 type CacheSetter = (value: string | ((prev: string) => string)) => void;
 
@@ -16,7 +16,7 @@ function CacheProbe({
   onSetter?: (setter: CacheSetter) => void;
   initValue?: string;
 }) {
-  const [value, setValue] = useCache(PROVIDER_KEY, initValue);
+  const [value, setValue] = useCache(MEMORY_KEY, initValue);
   onSetter?.(setValue);
   return <Text testID="value">{value}</Text>;
 }
@@ -43,7 +43,7 @@ describe('useCache', () => {
     });
 
     expect(renderedValue(renderer)).toBe('');
-    expect(cacheService.has(PROVIDER_KEY)).toBe(true);
+    expect(cacheService.has(MEMORY_KEY)).toBe(true);
 
     act(() => renderer.unmount());
   });
@@ -55,7 +55,7 @@ describe('useCache', () => {
     });
 
     expect(renderedValue(renderer)).toBe('seed');
-    expect(cacheService.get(PROVIDER_KEY)).toBe('seed');
+    expect(cacheService.get(MEMORY_KEY)).toBe('seed');
 
     act(() => renderer.unmount());
   });
@@ -92,7 +92,7 @@ describe('useCache', () => {
       renderer = create(<CacheProbe />);
     });
 
-    act(() => cacheService.set(PROVIDER_KEY, 'external'));
+    act(() => cacheService.set(MEMORY_KEY, 'external'));
     expect(renderedValue(renderer)).toBe('external');
 
     act(() => renderer.unmount());
@@ -111,7 +111,7 @@ describe('useCache', () => {
       );
     });
 
-    act(() => cacheService.set(PROVIDER_KEY, 'base'));
+    act(() => cacheService.set(MEMORY_KEY, 'base'));
     act(() => setter((prev) => `${prev}+next`));
     expect(renderedValue(renderer)).toBe('base+next');
 
@@ -124,10 +124,10 @@ describe('useCache', () => {
       renderer = create(<CacheProbe />);
     });
 
-    expect(cacheService.delete(PROVIDER_KEY)).toBe(false);
+    expect(cacheService.delete(MEMORY_KEY)).toBe(false);
 
     act(() => renderer.unmount());
-    expect(cacheService.delete(PROVIDER_KEY)).toBe(true);
+    expect(cacheService.delete(MEMORY_KEY)).toBe(true);
   });
 });
 

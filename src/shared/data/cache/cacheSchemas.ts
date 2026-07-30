@@ -114,19 +114,30 @@ export type ProcessKey<K extends string> = IsTemplateKey<K> extends true ? Expan
 // ============================================================================
 
 /**
- * Memory cache schema (TTL-capable, lost on app restart).
+ * Frontend memory cache schema (TTL-capable, lost on app restart).
  */
 export type UseCacheSchema = {
-  // LLM provider API key round-robin state, keyed per provider. Aligned with
-  // the desktop main-process ProviderService cache key of the same name.
-  'settings.provider.${providerId}.last_used_key_id': string;
+  // Template-key probe retained until the frontend has a product-owned memory
+  // cache consumer. It keeps useCache's template-key interface testable without
+  // borrowing a backend-owned key.
+  'internal.memory_probe.${instanceId}': string;
 };
 
 // PascalCase kept verbatim from the desktop export of the same name (like
 // DefaultPreferences in the preference domain) so schema entries port with
 // zero rewrites — deliberate exception to the UPPER_SNAKE_CASE constant rule.
 export const DefaultUseCache: UseCacheSchema = {
-  'settings.provider.${providerId}.last_used_key_id': '',
+  'internal.memory_probe.${instanceId}': '',
+};
+
+/**
+ * Backend memory cache schema. Unlike {@link UseCacheSchema}, misses remain
+ * observable as `undefined`; entries are not initialized from defaults.
+ */
+export type BackendCacheSchema = {
+  // Round-robin cursor for enabled provider API keys. Aligned with Desktop
+  // Main's ProviderService cache key.
+  'settings.provider.${providerId}.last_used_key_id': string;
 };
 
 // ============================================================================
@@ -153,6 +164,18 @@ export const DefaultPersistCache: PersistCacheSchema = {
   'internal.persist_probe': 0,
 };
 
+/**
+ * Backend-owned persist cache schema. This store is physically independent
+ * from the frontend persist cache, matching Desktop Main/Renderer ownership.
+ */
+export type BackendPersistCacheSchema = {
+  'internal.persist_probe': number;
+};
+
+export const DefaultBackendPersistCache: BackendPersistCacheSchema = {
+  'internal.persist_probe': 0,
+};
+
 // ============================================================================
 // Cache Key Types
 // ============================================================================
@@ -161,6 +184,9 @@ export const DefaultPersistCache: PersistCacheSchema = {
  * Key type for persist cache (fixed keys only)
  */
 export type PersistCacheKey = keyof PersistCacheSchema;
+
+/** Backend persist keys are fixed and backend-owned. */
+export type BackendPersistCacheKey = keyof BackendPersistCacheSchema;
 
 /**
  * Key type for memory cache (supports both fixed and template keys).
@@ -176,6 +202,11 @@ export type UseCacheKey = {
   [K in keyof UseCacheSchema]: ProcessKey<K & string>;
 }[keyof UseCacheSchema];
 
+/** Backend memory keys, including concrete instances of template entries. */
+export type BackendCacheKey = {
+  [K in keyof BackendCacheSchema]: ProcessKey<K & string>;
+}[keyof BackendCacheSchema];
+
 /**
  * Infers the value type for a given cache key from UseCacheSchema.
  *
@@ -187,13 +218,18 @@ export type UseCacheKey = {
  *
  * @example
  * ```typescript
- * type T1 = InferUseCacheValue<'settings.provider.openai.last_used_key_id'>  // string
+ * type T1 = InferUseCacheValue<'internal.memory_probe.frontend'>  // string
  * type T2 = InferUseCacheValue<'unknown.key'>                                // never
  * ```
  */
 export type InferUseCacheValue<K extends string> = {
   [S in keyof UseCacheSchema]: K extends ProcessKey<S & string> ? UseCacheSchema[S] : never;
 }[keyof UseCacheSchema];
+
+/** Resolves a concrete backend memory key to its schema value. */
+export type InferBackendCacheValue<K extends string> = {
+  [S in keyof BackendCacheSchema]: K extends ProcessKey<S & string> ? BackendCacheSchema[S] : never;
+}[keyof BackendCacheSchema];
 
 /**
  * Type guard for casual cache keys that blocks schema-defined keys.

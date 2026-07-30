@@ -87,19 +87,19 @@ describe('templateToRegex', () => {
 
 describe('findMatchingUseCacheSchemaKey', () => {
   test('returns the template pattern when concrete key matches a template entry', () => {
-    expect(findMatchingUseCacheSchemaKey('settings.provider.openai.last_used_key_id')).toBe(
-      'settings.provider.${providerId}.last_used_key_id',
+    expect(findMatchingUseCacheSchemaKey('internal.memory_probe.frontend')).toBe(
+      'internal.memory_probe.${instanceId}',
     );
   });
 
   test('returns undefined when the key matches nothing', () => {
     expect(findMatchingUseCacheSchemaKey('unknown.key')).toBeUndefined();
-    expect(findMatchingUseCacheSchemaKey('settings.provider..last_used_key_id')).toBeUndefined();
+    expect(findMatchingUseCacheSchemaKey('internal.memory_probe.')).toBeUndefined();
   });
 });
 
 describe('getUseCacheDefaultValue', () => {
   test('resolves a concrete template instance to the template default', () => {
-    expect(getUseCacheDefaultValue('settings.provider.openai.last_used_key_id')).toBe('');
+    expect(getUseCacheDefaultValue('internal.memory_probe.frontend')).toBe('');
   });
 });
