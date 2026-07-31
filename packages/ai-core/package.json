@@ -2,10 +2,10 @@
   "name": "@cherrystudio/ai-core",
   "version": "2.0.1",
   "description": "Cherry Studio AI Core - Unified AI Provider Interface Based on Vercel AI SDK",
-  "main": "src/index.ts",
-  "module": "src/index.ts",
-  "types": "src/index.ts",
-  "react-native": "src/index.ts",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "react-native": "dist/index.mjs",
   "scripts": {
     "build": "tsdown",
     "dev": "tsc -w",
@@ -19,15 +19,7 @@
     "test:watch": "vitest",
     "prepublishOnly": "pnpm build"
   },
-  "keywords": [
-    "ai",
-    "sdk",
-    "openai",
-    "anthropic",
-    "google",
-    "cherry-studio",
-    "vercel-ai-sdk"
-  ],
+  "keywords": ["ai", "sdk", "openai", "anthropic", "google", "cherry-studio", "vercel-ai-sdk"],
   "author": "Cherry Studio",
   "license": "MIT",
   "repository": {
@@ -47,60 +39,49 @@
     "@ai-sdk/anthropic": "^3.0.71",
     "@ai-sdk/azure": "^3.0.54",
     "@ai-sdk/deepseek": "^2.0.30",
-    "@ai-sdk/openai-compatible": "^2.0.37",
-    "@ai-sdk/provider": "^3.0.8",
-    "@ai-sdk/provider-utils": "^4.0.23",
-    "@ai-sdk/xai": "^3.0.83",
+    "@ai-sdk/openai-compatible": "^2.0.62",
+    "@ai-sdk/provider": "^3.0.14",
+    "@ai-sdk/provider-utils": "^4.0.40",
+    "@ai-sdk/xai": "^3.0.111",
     "@cherrystudio/ai-sdk-provider": "workspace:*",
     "@openrouter/ai-sdk-provider": "^2.10.0",
     "quick-lru": "^5.1.1",
     "zod": "^4.1.5"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.2.4",
     "@cherrystudio/ai-sdk-provider": "workspace:*",
-    "biome": "^0.3.3",
     "oxlint": "^1.36.0",
     "tsdown": "^0.20.3",
     "typescript": "^5.0.0",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.7"
   },
   "sideEffects": false,
   "engines": {
     "node": ">=18.0.0"
   },
-  "files": [
-    "src"
-  ],
+  "files": ["dist"],
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "react-native": "./src/index.ts",
-      "import": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.mts",
+      "react-native": "./dist/index.mjs",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.mjs"
     },
     "./built-in/plugins": {
-      "types": "./src/core/plugins/built-in/index.ts",
-      "react-native": "./src/core/plugins/built-in/index.ts",
-      "import": "./src/core/plugins/built-in/index.ts",
-      "default": "./src/core/plugins/built-in/index.ts"
+      "types": "./dist/built-in/plugins/index.d.mts",
+      "react-native": "./dist/built-in/plugins/index.mjs",
+      "import": "./dist/built-in/plugins/index.mjs",
+      "require": "./dist/built-in/plugins/index.cjs",
+      "default": "./dist/built-in/plugins/index.mjs"
     },
     "./provider": {
-      "types": "./src/core/providers/index.ts",
-      "react-native": "./src/core/providers/index.ts",
-      "import": "./src/core/providers/index.ts",
-      "default": "./src/core/providers/index.ts"
-    },
-    "./core": {
-      "types": "./src/core/index.ts",
-      "react-native": "./src/core/index.ts",
-      "import": "./src/core/index.ts",
-      "default": "./src/core/index.ts"
-    },
-    "./core/*": {
-      "types": "./src/core/*",
-      "react-native": "./src/core/*",
-      "import": "./src/core/*",
-      "default": "./src/core/*"
+      "types": "./dist/provider/index.d.mts",
+      "react-native": "./dist/provider/index.mjs",
+      "import": "./dist/provider/index.mjs",
+      "require": "./dist/provider/index.cjs",
+      "default": "./dist/provider/index.mjs"
     }
   }
 }

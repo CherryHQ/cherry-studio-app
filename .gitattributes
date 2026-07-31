@@ -1,1 +1,3 @@
 * text=auto eol=lf
+packages/ai-sdk-provider/README.md whitespace=-blank-at-eol
+patches/@openrouter__ai-sdk-provider@2.10.0.patch whitespace=-blank-at-eol

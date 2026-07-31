@@ -9,14 +9,8 @@
         "./packages/provider-registry/src/mobile-loader.ts"
       ],
       "@cherrystudio/provider-registry/*": ["./packages/provider-registry/src/*"],
-      "@cherrystudio/ai-core": ["./packages/ai-core/src/index.ts"],
       "@cherrystudio/ai-core/core": ["./packages/ai-core/src/core/index.ts"],
       "@cherrystudio/ai-core/core/*": ["./packages/ai-core/src/core/*"],
-      "@cherrystudio/ai-core/provider": ["./packages/ai-core/src/core/providers/index.ts"],
-      "@cherrystudio/ai-core/built-in/plugins": [
-        "./packages/ai-core/src/core/plugins/built-in/index.ts"
-      ],
-      "@cherrystudio/ai-sdk-provider": ["./packages/ai-sdk-provider/src/index.ts"],
       "@cherrystudio/ui": ["./packages/ui/src/index.ts"],
       "@cherrystudio/ui/*": ["./packages/ui/src/*"],
       "lucide-uniwind": ["./packages/lucide-uniwind/src/index.ts"],
@@ -27,5 +21,6 @@
       "@logger": ["./src/shared/core/logger/LoggerService.ts"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "exclude": ["packages/ai-core", "packages/ai-sdk-provider"]
 }
