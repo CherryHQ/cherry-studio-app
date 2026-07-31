@@ -66,7 +66,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
               {name}
             </Text>
             {subtitle ? (
-              <Text className="text-foreground-muted text-sm" numberOfLines={1}>
+              <Text className="text-foreground-tertiary text-sm" numberOfLines={1}>
                 {subtitle}
               </Text>
             ) : null}

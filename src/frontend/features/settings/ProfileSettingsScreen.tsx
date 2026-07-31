@@ -2,7 +2,6 @@ import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/comm
 import { loggerService } from '@logger';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useThemeColor } from 'heroui-native/hooks';
 import { Input } from 'heroui-native/input';
 import { useToast } from 'heroui-native/toast';
 import { SaveIcon } from 'lucide-uniwind/png';
@@ -13,6 +12,7 @@ import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/head
 import { ProfileAvatarEditBadge, ProfileAvatarImage } from '@/frontend/components/ProfileAvatar';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 const profileAvatarSize = 104;
 const logger = loggerService.withContext('ProfileSettingsScreen');
@@ -174,7 +174,7 @@ export default function ProfileSettingsScreen() {
               className="rounded-2xl px-4 text-base text-foreground leading-5"
               onChangeText={setNameDraft}
               onSubmitEditing={blurInput}
-              placeholderColorClassName="accent-muted"
+              placeholderColorClassName="accent-muted-foreground"
               ref={inputRef}
               returnKeyLabel="done"
               returnKeyType="done"

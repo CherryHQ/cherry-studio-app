@@ -354,7 +354,7 @@ function EnumChipsField({
               accessibilityState={{ selected: isSelected }}
               className={
                 isSelected
-                  ? 'h-14 items-center justify-center gap-1 rounded-lg border border-accent bg-accent/10 px-2 active:opacity-70'
+                  ? 'h-14 items-center justify-center gap-1 rounded-lg border border-primary bg-primary/10 px-2 active:opacity-70'
                   : 'h-14 items-center justify-center gap-1 rounded-lg border border-border bg-surface-secondary px-2 active:opacity-70'
               }
               key={option}
@@ -363,7 +363,7 @@ function EnumChipsField({
             >
               <RatioPreview value={option} />
               <Text
-                className={isSelected ? 'text-accent text-xs' : 'text-foreground text-xs'}
+                className={isSelected ? 'text-primary text-xs' : 'text-foreground text-xs'}
                 numberOfLines={1}
               >
                 {imageParamOptionLabel(t, field.key, option)}

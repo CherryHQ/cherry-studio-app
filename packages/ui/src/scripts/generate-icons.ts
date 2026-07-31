@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -123,13 +132,18 @@ function buildRegistrySource(group: IconGroup, entries: IconEntry[]) {
   const { catalog, key: keyType, label, resolver } = registryNames[group];
   const resolverAlias =
     group === 'providers'
-      ? '\nexport const resolveProviderIcon = resolveProviderAssetIcon;'
+      ? `
+export function resolveProviderIcon(iconId: string): IconPngSource | undefined {
+  if (iconId === 'opencode') return resolveGeneralIcon('open-code');
+
+  return resolveProviderAssetIcon(iconId);
+}`
       : group === 'models'
         ? '\nexport const resolveModelIconAsset = resolveModelAssetIcon;'
         : '';
   const aliasImport =
     group === 'providers'
-      ? "import { PROVIDER_ID_ALIASES } from '../provider-aliases';\n\n"
+      ? "import { resolveGeneralIcon } from '../general';\nimport { PROVIDER_ID_ALIASES } from '../provider-aliases';\n\n"
       : group === 'models'
         ? "import { MODEL_ID_ALIASES } from '../model-aliases';\n\n"
         : '';
@@ -209,10 +223,10 @@ ${aliasResolution}}${resolverAlias}
 `;
 }
 
-async function generateGroup(group: IconGroup) {
+export async function generateGroup(group: IconGroup, targetRoot = outputRoot, log = true) {
   const sourceDirs = groupedSourceDirs[group];
-  const lightAssetDir = join(outputRoot, group, 'light');
-  const darkAssetDir = join(outputRoot, group, 'dark');
+  const lightAssetDir = join(targetRoot, group, 'light');
+  const darkAssetDir = join(targetRoot, group, 'dark');
   const files = readdirSync(sourceDirs.light)
     .filter((fileName) => fileName.endsWith('.svg'))
     .sort();
@@ -220,7 +234,7 @@ async function generateGroup(group: IconGroup) {
   // Provider icons get their transparent safe-area cropped so logos fill the box.
   const shouldTrim = group === 'providers';
 
-  rmSync(join(outputRoot, group), { recursive: true, force: true });
+  rmSync(join(targetRoot, group), { recursive: true, force: true });
   mkdirSync(lightAssetDir, { recursive: true });
   mkdirSync(darkAssetDir, { recursive: true });
 
@@ -253,11 +267,78 @@ async function generateGroup(group: IconGroup) {
     });
   }
 
-  writeFileSync(join(outputRoot, group, 'index.ts'), buildRegistrySource(group, entries));
-  console.log(`Generated ${entries.length} ${group} icon assets at ${imageSize}px`);
+  writeFileSync(join(targetRoot, group, 'index.ts'), buildRegistrySource(group, entries));
+  if (log) console.log(`Generated ${entries.length} ${group} icon assets at ${imageSize}px`);
+}
+
+function listRelativeFiles(root: string, relativeRoot = ''): string[] {
+  const absoluteRoot = join(root, relativeRoot);
+
+  return readdirSync(absoluteRoot, { withFileTypes: true })
+    .flatMap((entry) => {
+      const relativePath = join(relativeRoot, entry.name);
+      return entry.isDirectory() ? listRelativeFiles(root, relativePath) : [relativePath];
+    })
+    .sort();
+}
+
+function assertDirectoriesEqual(expectedRoot: string, actualRoot: string) {
+  const expectedFiles = listRelativeFiles(expectedRoot);
+  const actualFiles = listRelativeFiles(actualRoot);
+
+  if (expectedFiles.join('\n') !== actualFiles.join('\n')) {
+    throw new Error('Generated icon file set is stale; run pnpm ui:icons:generate');
+  }
+
+  for (const relativePath of expectedFiles) {
+    if (
+      !readFileSync(join(expectedRoot, relativePath)).equals(
+        readFileSync(join(actualRoot, relativePath)),
+      )
+    ) {
+      throw new Error(`Generated icon is stale: ${relativePath}`);
+    }
+  }
+}
+
+async function assertPngAssetsValid(root: string) {
+  const pngFiles = listRelativeFiles(root).filter((fileName) => fileName.endsWith('.png'));
+
+  for (const relativePath of pngFiles) {
+    const image = sharp(join(root, relativePath));
+    const [metadata, stats] = await Promise.all([image.metadata(), image.stats()]);
+    if (metadata.width !== imageSize || metadata.height !== imageSize) {
+      throw new Error(`Generated icon must be ${imageSize}x${imageSize}: ${relativePath}`);
+    }
+
+    const alpha = metadata.hasAlpha ? stats.channels.at(-1) : undefined;
+    if (alpha && alpha.max === 0) {
+      throw new Error(`Generated icon is fully transparent: ${relativePath}`);
+    }
+  }
+}
+
+export async function checkGeneratedIcons() {
+  const temporaryRoot = mkdtempSync(join(tmpdir(), 'cherry-icons-'));
+
+  try {
+    for (const group of ['general', 'models', 'providers'] as const) {
+      await generateGroup(group, temporaryRoot, false);
+      assertDirectoriesEqual(join(temporaryRoot, group), join(outputRoot, group));
+      await assertPngAssetsValid(join(outputRoot, group));
+    }
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
 }
 
 async function main() {
+  if (process.argv.includes('--check')) {
+    await checkGeneratedIcons();
+    console.log('Generated icon assets are current.');
+    return;
+  }
+
   const group = parseGroupArg();
 
   if (group === 'all' || group === 'general') await generateGroup('general');
@@ -265,7 +346,9 @@ async function main() {
   if (group === 'all' || group === 'providers') await generateGroup('providers');
 }
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.filename === process.argv[1]) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

@@ -10,7 +10,7 @@ import {
 } from '../context/ChatInputProvider';
 
 // heroui-native's Input paints the border/outline `accent`-colored on focus
-// (`ios:focus:outline-accent` / `android:focus:border-accent`). `border-0` only
+// (`ios:focus:outline-ring` / `android:focus:border-primary`). `border-0` only
 // removes the resting border, not the focus outline, so the chat surface would
 // flash a green ring when focused. Override the focus states back to transparent.
 const transparentInputSurfaceClassName =

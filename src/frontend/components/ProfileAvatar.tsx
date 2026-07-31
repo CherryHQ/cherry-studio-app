@@ -1,9 +1,8 @@
-import { useThemeColor } from 'heroui-native/hooks';
 import { CameraIcon, PencilIcon } from 'lucide-uniwind/png';
 import { View } from 'react-native';
-
 import { Image } from '@/frontend/components/nativePrimitives';
 import { useAvatar } from '@/frontend/hooks/useAvatar';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 export type ProfileAvatarEditIcon = 'camera' | 'pencil';
 

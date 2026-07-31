@@ -1,4 +1,3 @@
-import { useThemeColor } from 'heroui-native/hooks';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
@@ -7,6 +6,7 @@ import Animated, {
   type SharedValue,
   useAnimatedStyle,
 } from 'react-native-reanimated';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { profileHero } from '@/frontend/utils/constants';
 

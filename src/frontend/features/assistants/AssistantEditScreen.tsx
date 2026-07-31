@@ -229,7 +229,7 @@ function AssistantEditForm({
                 className="rounded-2xl px-4 text-base text-foreground leading-5"
                 onChangeText={(value) => updateForm('name', value)}
                 placeholder={t('assistant.form.namePlaceholder')}
-                placeholderColorClassName="accent-muted"
+                placeholderColorClassName="accent-muted-foreground"
                 returnKeyType="next"
                 style={styles.textInput}
                 value={form.name}
@@ -244,7 +244,7 @@ function AssistantEditForm({
               className="rounded-2xl px-4 text-base text-foreground leading-5"
               onChangeText={(value) => updateForm('description', value)}
               placeholder={t('assistant.form.descriptionPlaceholder')}
-              placeholderColorClassName="accent-muted"
+              placeholderColorClassName="accent-muted-foreground"
               style={styles.textInput}
               value={form.description}
             />
@@ -258,7 +258,7 @@ function AssistantEditForm({
               multiline
               onChangeText={(value) => updateForm('prompt', value)}
               placeholder={t('assistant.form.promptPlaceholder')}
-              placeholderColorClassName="accent-muted"
+              placeholderColorClassName="accent-muted-foreground"
               style={styles.textArea}
               value={form.prompt}
             />
@@ -349,7 +349,7 @@ function AssistantEditForm({
               multiline
               onChangeText={(value) => updateForm('customParametersJson', value)}
               placeholder="[]"
-              placeholderColorClassName="accent-muted"
+              placeholderColorClassName="accent-muted-foreground"
               spellCheck={false}
               style={styles.textArea}
               value={form.customParametersJson}
@@ -473,7 +473,7 @@ function NumberField({
       keyboardType={inputMode === 'numeric' ? 'number-pad' : 'decimal-pad'}
       onChangeText={onChangeText}
       placeholder="0"
-      placeholderColorClassName="accent-muted"
+      placeholderColorClassName="accent-muted-foreground"
       style={styles.textInput}
       value={value}
     />

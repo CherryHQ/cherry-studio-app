@@ -1,4 +1,5 @@
 import { resolveModelProviderIcon, resolveModelToProviderIcon } from '../../icons';
+import { GENERAL_ICONS } from '../general';
 import { PROVIDER_ICONS, resolveProviderIcon } from '../providers';
 
 describe('provider png icon registry', () => {
@@ -10,10 +11,17 @@ describe('provider png icon registry', () => {
     expect(resolveProviderIcon('azure-openai')).toBe(resolveProviderIcon('azureai'));
   });
 
+  test('adapts the desktop virtual opencode provider to the general glyph', () => {
+    expect(resolveProviderIcon('opencode')).toBe(GENERAL_ICONS['open-code']);
+  });
+
   test('resolves kebab-case provider asset ids', () => {
     expect(resolveProviderIcon('arcee-ai')).toBe(PROVIDER_ICONS['arcee-ai']);
     expect(resolveProviderIcon('github-copilot')).toBe(PROVIDER_ICONS['github-copilot']);
     expect(resolveProviderIcon('githubCopilot')).toBe(PROVIDER_ICONS['github-copilot']);
+    expect(resolveProviderIcon('openai-codex')).toBe(PROVIDER_ICONS.openai);
+    expect(resolveProviderIcon('grok-cli')).toBe(PROVIDER_ICONS.grok);
+    expect(resolveProviderIcon('tokenhub')).toBe(PROVIDER_ICONS['tencent-cloud-ti']);
   });
 
   test('resolves provider icons inferred from model ids', () => {

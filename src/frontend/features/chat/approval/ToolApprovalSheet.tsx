@@ -59,14 +59,14 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
     >
       <View className="gap-4 px-4 pb-4">
         <View className="gap-1">
-          <Text className="text-foreground-muted text-sm">
+          <Text className="text-foreground-tertiary text-sm">
             {t('chat.tool.approval.description')}
           </Text>
           <Text className="font-semibold text-base text-default-foreground" selectable>
             {approval ? formatApprovalTitle(approval, t) : ''}
           </Text>
           {approvals.length > 1 ? (
-            <Text className="text-foreground-muted text-xs">
+            <Text className="text-foreground-tertiary text-xs">
               {t('chat.tool.approval.pendingCount', { count: approvals.length })}
             </Text>
           ) : null}
@@ -105,7 +105,7 @@ function ApprovalArgumentsPreview({ input }: { input: unknown }) {
 
   return (
     <View className="gap-1">
-      <Text className="text-foreground-muted text-xs">{t('chat.tool.arguments')}</Text>
+      <Text className="text-foreground-tertiary text-xs">{t('chat.tool.arguments')}</Text>
       <ScrollView className="max-h-48 rounded-md bg-surface-tertiary" nestedScrollEnabled>
         <Text className="p-2 font-mono text-default-foreground text-xs leading-5" selectable>
           {preview}

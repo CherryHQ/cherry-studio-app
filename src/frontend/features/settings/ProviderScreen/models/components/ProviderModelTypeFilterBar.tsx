@@ -95,7 +95,7 @@ export function ProviderModelTypeFilterBar({
             >
               {label}
             </Text>
-            <Text className="text-foreground-muted text-xs">{counts[filter]}</Text>
+            <Text className="text-foreground-tertiary text-xs">{counts[filter]}</Text>
           </Pressable>
         );
       })}

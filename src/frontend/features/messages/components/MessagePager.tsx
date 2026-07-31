@@ -45,7 +45,7 @@ export function MessagePager({ showRecentsHeading = false }: MessagePagerProps) 
       <Animated.View className="flex-1 flex-row" style={[{ width: windowWidth * 2 }, trackStyle]}>
         <View collapsable={false} style={{ width: windowWidth }}>
           {showRecentsHeading ? (
-            <Text className="px-5 pb-1 pt-1 font-medium text-foreground-secondary text-sm">
+            <Text className="px-5 pb-1 pt-1 font-medium text-muted-foreground text-sm">
               {t('navigation.recents')}
             </Text>
           ) : null}

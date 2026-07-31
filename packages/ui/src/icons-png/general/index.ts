@@ -64,10 +64,6 @@ export const GENERAL_ICONS = {
     light: require('./light/group.png'),
     dark: require('./light/group.png'),
   },
-  'iflow-cli': {
-    light: require('./light/iflow-cli.png'),
-    dark: require('./light/iflow-cli.png'),
-  },
   'kimi-cli': {
     light: require('./light/kimi-cli.png'),
     dark: require('./light/kimi-cli.png'),
@@ -82,11 +78,15 @@ export const GENERAL_ICONS = {
   },
   'open-code': {
     light: require('./light/open-code.png'),
-    dark: require('./light/open-code.png'),
+    dark: require('./dark/open-code.png'),
   },
   'openai-codex': {
     light: require('./light/openai-codex.png'),
     dark: require('./light/openai-codex.png'),
+  },
+  'qoder-cli': {
+    light: require('./light/qoder-cli.png'),
+    dark: require('./dark/qoder-cli.png'),
   },
   'qwen-code': {
     light: require('./light/qwen-code.png'),

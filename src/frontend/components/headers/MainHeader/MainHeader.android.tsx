@@ -1,10 +1,10 @@
 import { Stack, useRouter } from 'expo-router';
-import { useThemeColor } from 'heroui-native/hooks';
 import { ChevronLeftIcon, SquarePenIcon } from 'lucide-uniwind/png';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { HeaderIconButton } from '../components/HeaderIconButton';
 import { MainHeaderAssistantButton, useMainHeaderAssistant } from './MainHeaderAssistantButton';

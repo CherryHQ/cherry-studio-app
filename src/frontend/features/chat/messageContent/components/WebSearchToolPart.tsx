@@ -98,7 +98,7 @@ function WebSearchHeaderContent({
         {title}
       </Text>
       <Text
-        className="max-w-[42%] shrink-0 text-foreground-muted text-xs"
+        className="max-w-[42%] shrink-0 text-foreground-tertiary text-xs"
         numberOfLines={1}
         selectable
       >

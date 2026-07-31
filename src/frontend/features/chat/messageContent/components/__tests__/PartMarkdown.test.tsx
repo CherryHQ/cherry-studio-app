@@ -5,8 +5,16 @@ import { PartMarkdown } from '../PartMarkdown';
 
 const mockHandleLinkPress = jest.fn();
 
-jest.mock('heroui-native/hooks', () => ({
-  useThemeColor: () => ['foreground', 'background', 'muted', 'accent', 'border', 'default'],
+jest.mock('@/frontend/hooks/useThemeColor', () => ({
+  useThemeColor: () => [
+    'foreground',
+    'background',
+    'muted-foreground',
+    'link',
+    'primary',
+    'border',
+    'secondary',
+  ],
 }));
 
 jest.mock('react-native-enriched-markdown', () => {

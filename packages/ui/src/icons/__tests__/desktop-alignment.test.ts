@@ -1,44 +1,34 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { GENERAL_ICONS } from '../../icons-png/general';
 import { MODEL_ICONS } from '../../icons-png/models';
 import { PROVIDER_ICONS } from '../../icons-png/providers';
+import { resolveProviderIcon } from '../registry';
 
-const desktopUiRoot = '/Users/eeee/Code/03_Forks/cherry/cherry-studio-base/packages/ui';
+const iconSourceRoot = join(process.cwd(), 'packages/ui/icons');
 
-function readDesktopCatalogKeys(catalogPath: string, exportName: string) {
-  const source = readFileSync(catalogPath, 'utf-8');
-  const start = source.indexOf(`export const ${exportName} = {`);
-  const bodyStart = source.indexOf('{', start);
-  const bodyEnd = source.indexOf('\n} as const', bodyStart);
-  const body = source.slice(bodyStart + 1, bodyEnd);
-
-  return [...body.matchAll(/^ {2}(?:'([^']+)'|([A-Za-z0-9_$]+)):/gm)]
-    .map((match) => match[1] ?? match[2])
+function svgKeys(relativePath: string) {
+  return readdirSync(join(iconSourceRoot, relativePath))
+    .filter((fileName) => fileName.endsWith('.svg'))
+    .map((fileName) => fileName.replace(/\.svg$/, ''))
     .sort();
 }
 
-const describeIfDesktopUiExists = existsSync(desktopUiRoot) ? describe : describe.skip;
-
-describeIfDesktopUiExists('desktop icon alignment', () => {
-  test('keeps model icon keys aligned with desktop catalog', () => {
-    const desktopKeys = readDesktopCatalogKeys(
-      join(desktopUiRoot, 'src/components/icons/models/catalog.ts'),
-      'MODEL_ICON_CATALOG',
-    );
-
-    expect(Object.keys(MODEL_ICONS).sort()).toEqual(desktopKeys);
-    expect(MODEL_ICONS.hunyuan).toBeDefined();
-    expect(MODEL_ICONS.mimo).toBeDefined();
+describe('desktop icon alignment', () => {
+  test('keeps generated model and provider keys aligned with raw light sources', () => {
+    expect(Object.keys(MODEL_ICONS).sort()).toEqual(svgKeys('models/light'));
+    expect(Object.keys(PROVIDER_ICONS).sort()).toEqual(svgKeys('providers/light'));
   });
 
-  test('keeps provider icon keys aligned with desktop catalog', () => {
-    const desktopKeys = readDesktopCatalogKeys(
-      join(desktopUiRoot, 'src/components/icons/providers/catalog.ts'),
-      'PROVIDER_ICON_CATALOG',
-    );
+  test('uses the desktop general icon set', () => {
+    expect(Object.keys(GENERAL_ICONS).sort()).toEqual(svgKeys('general'));
+    expect(GENERAL_ICONS['qoder-cli']).toBeDefined();
+    expect(GENERAL_ICONS).not.toHaveProperty('iflow-cli');
+  });
 
-    expect(Object.keys(PROVIDER_ICONS).sort()).toEqual(desktopKeys);
-    expect(PROVIDER_ICONS['github-copilot']).toBeDefined();
-    expect(PROVIDER_ICONS['arcee-ai']).toBeDefined();
+  test('adapts the desktop virtual opencode provider to the general glyph', () => {
+    expect(PROVIDER_ICONS).not.toHaveProperty('opencode');
+    expect(resolveProviderIcon('opencode')).toBe(GENERAL_ICONS['open-code']);
   });
 });

@@ -1,4 +1,3 @@
-import { useThemeColor } from 'heroui-native/hooks';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, Pressable, Text, useWindowDimensions } from 'react-native';
@@ -10,9 +9,9 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
-
 import { Image } from '@/frontend/components/nativePrimitives';
 import { useAvatar } from '@/frontend/hooks/useAvatar';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { profileHero } from '@/frontend/utils/constants';
 
 type ProfileHeroProps = {
@@ -172,7 +171,7 @@ export function ProfileHero({ lockProgress, onPress, scrollY, userName }: Profil
             style={{ maxWidth: screenWidth - 2 * profileHero.nameOverlayInsetX }}
           >
             <Text
-              className="text-center font-medium text-base text-foreground-secondary"
+              className="text-center font-medium text-base text-muted-foreground"
               numberOfLines={1}
             >
               {t('settings.profile.setPrompt')}

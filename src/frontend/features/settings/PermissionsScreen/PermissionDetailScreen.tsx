@@ -118,7 +118,7 @@ function PermissionModeGroup({
               <Text className="text-base text-foreground">
                 {t(`settings.permissions.mode.${option}`)}
               </Text>
-              {selected ? <CheckIcon className="size-6 text-accent" strokeWidth={2.5} /> : null}
+              {selected ? <CheckIcon className="size-6 text-primary" strokeWidth={2.5} /> : null}
               {index < permissionModes.length - 1 ? (
                 <View className="absolute right-4 bottom-0 left-4 h-px bg-border" />
               ) : null}

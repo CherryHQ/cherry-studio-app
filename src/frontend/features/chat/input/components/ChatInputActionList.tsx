@@ -39,18 +39,18 @@ export function ChatInputActionList({
             onPress={() => onActionPress(action.id)}
           >
             <Icon
-              className={cn('size-7', isSelected ? 'text-accent' : 'text-foreground')}
+              className={cn('size-7', isSelected ? 'text-primary' : 'text-foreground')}
               strokeWidth={2}
             />
             <Text
               className={cn(
                 'flex-1 font-semibold text-base',
-                isSelected ? 'text-accent' : 'text-foreground',
+                isSelected ? 'text-primary' : 'text-foreground',
               )}
             >
               {title}
             </Text>
-            {isSelected ? <CheckIcon className="size-5 text-accent" strokeWidth={2.25} /> : null}
+            {isSelected ? <CheckIcon className="size-5 text-primary" strokeWidth={2.25} /> : null}
           </Pressable>
         );
       })}
