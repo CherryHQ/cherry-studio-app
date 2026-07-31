@@ -1,1 +1,1 @@
-export { GlobalSearchScreen as default } from '@/screens/GlobalSearchScreen';
+export { GlobalSearchScreen as default } from '@/frontend/features/search';

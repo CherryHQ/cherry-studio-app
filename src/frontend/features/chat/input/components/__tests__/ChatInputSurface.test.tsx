@@ -1,0 +1,508 @@
+import { useEffect } from 'react';
+import { Text, TextInput, type ViewProps } from 'react-native';
+import { KeyboardController } from 'react-native-keyboard-controller';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { ChatInputProvider, useChatInputActions } from '../../context/ChatInputProvider';
+import { thinkingAccentColor } from '../../effortSlider';
+import type { ChatInputAttachmentDraft } from '../../utils/chatInputAttachments';
+import { ChatInputSurface } from '../ChatInputSurface';
+
+const mockToastShow = jest.fn();
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+}));
+
+jest.mock('heroui-native/toast', () => ({
+  useToast: () => ({
+    toast: {
+      show: mockToastShow,
+    },
+  }),
+}));
+
+jest.mock('heroui-native/text-area', () => {
+  const { TextInput } = jest.requireActual('react-native');
+
+  return {
+    TextArea: TextInput,
+  };
+});
+
+jest.mock('heroui-native/utils', () => ({
+  cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
+}));
+
+jest.mock('react-native-keyboard-controller', () => ({
+  KeyboardController: {
+    dismiss: jest.fn(async () => undefined),
+  },
+}));
+
+jest.mock('react-native-reanimated', () => {
+  const { Text, View } = jest.requireActual('react-native');
+  type MockTransition = {
+    duration: jest.Mock<MockTransition, [number]>;
+    easing: jest.Mock<MockTransition, [unknown]>;
+    reduceMotion: jest.Mock<MockTransition, [unknown]>;
+  };
+  const transition = {} as MockTransition;
+  transition.duration = jest.fn((_duration: number) => transition);
+  transition.easing = jest.fn((_easing: unknown) => transition);
+  transition.reduceMotion = jest.fn((_reduceMotion: unknown) => transition);
+
+  return {
+    __esModule: true,
+    default: {
+      Text,
+      View,
+    },
+    cancelAnimation: jest.fn(),
+    Easing: {
+      cubic: jest.fn(),
+      in: jest.fn((value) => value),
+      out: jest.fn((value) => value),
+    },
+    Extrapolation: {
+      CLAMP: 'clamp',
+      EXTEND: 'extend',
+      IDENTITY: 'identity',
+    },
+    FadeIn: transition,
+    FadeOut: transition,
+    LinearTransition: transition,
+    ReduceMotion: {
+      Never: 'never',
+    },
+    // Static stand-ins: the surface only needs these to resolve to plain
+    // values/styles for render; this suite asserts behavior, not animation.
+    interpolate: (_value: number, _inputRange: number[], outputRange: number[]) => outputRange[0],
+    runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+    useAnimatedStyle: (factory: () => unknown) => factory(),
+    useDerivedValue: (factory: () => unknown) => ({ value: factory() }),
+    useReducedMotion: () => false,
+    useSharedValue: (initialValue: unknown) => {
+      const shared = {
+        value: initialValue,
+        get: () => shared.value,
+        set: (next: unknown) => {
+          shared.value = next;
+        },
+      };
+      return shared;
+    },
+    withDelay: (_delayMs: number, animation: unknown) => animation,
+    withSpring: (toValue: unknown) => toValue,
+    withTiming: (
+      toValue: unknown,
+      _config?: unknown,
+      callback?: (isFinished?: boolean) => void,
+    ) => {
+      callback?.(true);
+      return toValue;
+    },
+  };
+});
+
+jest.mock('@magrinj/expo-quick-look', () => ({
+  __esModule: true,
+  default: {
+    previewFile: jest.fn(async () => undefined),
+  },
+}));
+
+jest.mock('@/frontend/components/nativePrimitives', () => {
+  const { View } = jest.requireActual('react-native');
+
+  return {
+    Image: View,
+    LinearGradient: View,
+  };
+});
+
+jest.mock('lucide-uniwind', () => {
+  const { View } = jest.requireActual('react-native');
+  const Icon = (props: ViewProps) => <View {...props} />;
+
+  return new Proxy(
+    {},
+    {
+      get: () => Icon,
+    },
+  );
+});
+
+jest.mock('../../hooks/useChatInputPhotoPicker', () => ({
+  useChatInputPhotoPicker: () => ({
+    addSelectedPhotoPreviews: jest.fn(),
+    clearSelectedPhotos: jest.fn(),
+    launchCamera: jest.fn(),
+    launchImageLibrary: jest.fn(),
+    photoAccess: null,
+    photoPreviews: [],
+    presentLimitedPhotoPermissionsPicker: jest.fn(),
+    selectedPhotoCount: 0,
+    selectedPhotoOrder: new Map(),
+    shouldShowPhotosTile: false,
+    togglePhotoSelection: jest.fn(),
+  }),
+}));
+
+describe('ChatInputSurface', () => {
+  beforeEach(() => {
+    mockToastShow.mockReset();
+  });
+
+  test('restores draft and attachments and shows a toast when send rejects', async () => {
+    const attachment: ChatInputAttachmentDraft = {
+      id: 'attachment-1',
+      kind: 'file',
+      mediaType: 'application/pdf',
+      name: 'notes.pdf',
+      uri: 'file://notes.pdf',
+    };
+    const onSendPress = jest.fn(async () => {
+      throw new Error('send failed');
+    });
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <SeedChatInputState attachments={[attachment]} draft=" hello " />
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={onSendPress}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    const sendButton = renderer.root.findByProps({
+      accessibilityLabel: 'chat.input.action.sendMessage',
+    });
+
+    await act(async () => {
+      await sendButton.props.onPress();
+    });
+
+    expect(onSendPress).toHaveBeenCalledWith({
+      attachments: [attachment],
+      text: 'hello',
+    });
+    expect(getTextInputValue(renderer)).toBe(' hello ');
+    expect(findText(renderer, 'notes')).toBe(true);
+    expect(findText(renderer, 'PDF')).toBe(true);
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'chat.input.sendFailed',
+      variant: 'danger',
+    });
+  });
+
+  test('uses a caller-provided label for known send errors', async () => {
+    const validationError = new Error('invalid painting input');
+    const onSendPress = jest.fn(async () => {
+      throw validationError;
+    });
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <SeedChatInputState attachments={[]} draft="draw" />
+          <ChatInputSurface
+            getSendErrorLabel={(error) =>
+              error === validationError ? 'painting.input.invalidCustomSize' : undefined
+            }
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={onSendPress}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    const sendButton = renderer.root.findByProps({
+      accessibilityLabel: 'chat.input.action.sendMessage',
+    });
+    await act(async () => sendButton.props.onPress());
+
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'painting.input.invalidCustomSize',
+      variant: 'danger',
+    });
+  });
+
+  test('keeps a persistent placeholder action button that does not send without content', async () => {
+    const onSendPress = jest.fn();
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={onSendPress}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    // The primary action button is persistent: with no sendable content it stays
+    // mounted as a placeholder that focuses the input instead of sending.
+    const actionButtons = renderer.root.findAllByProps({
+      accessibilityLabel: 'chat.input.action.sendMessage',
+    });
+    expect(actionButtons.length).toBeGreaterThan(0);
+
+    await act(async () => {
+      await actionButtons[0].props.onPress();
+    });
+
+    expect(onSendPress).not.toHaveBeenCalled();
+    // The stop button only appears while streaming.
+    expect(
+      renderer.root.findAllByProps({
+        accessibilityLabel: 'chat.input.action.stopGenerating',
+      }),
+    ).toHaveLength(0);
+  });
+
+  test('can send an empty payload when the caller explicitly allows it', async () => {
+    const onSendPress = jest.fn(async () => undefined);
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            allowEmptySend
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={onSendPress}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    const sendButton = renderer.root.findByProps({
+      accessibilityLabel: 'chat.input.action.sendMessage',
+    });
+    await act(async () => sendButton.props.onPress());
+
+    expect(onSendPress).toHaveBeenCalledWith({ attachments: [], text: '' });
+  });
+
+  test('shows the icon-only settings button and dismisses the keyboard before opening it', async () => {
+    const onSettingsPress = jest.fn();
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <SeedInputFocused />
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            modelSettings={{
+              accessibilityLabel: 'Image settings: 16:9',
+              onPress: onSettingsPress,
+            }}
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    const settingsButton = renderer.root.findByProps({
+      testID: 'chat-input-model-settings-button',
+    });
+    expect(findText(renderer, '16:9')).toBe(false);
+
+    await act(async () => settingsButton.props.onPress());
+
+    expect(KeyboardController.dismiss).toHaveBeenCalled();
+    expect(onSettingsPress).toHaveBeenCalledTimes(1);
+  });
+
+  test('shows the current reasoning effort muted next to the model name', async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+            reasoningEfforts={['default', 'high']}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    expect(findText(renderer, 'Model')).toBe(true);
+
+    const effortLabels = renderer.root.findAllByProps({
+      testID: 'chat-input-model-effort-label',
+    });
+    expect(effortLabels.length).toBeGreaterThan(0);
+    expect(effortLabels[0].props.children).toBe('chat.reasoning.default');
+    expect(effortLabels[0].props.className).toContain('text-default-foreground');
+    expect(effortLabels[0].props.style).toBeUndefined();
+  });
+
+  test('shows the max effort label in the thinking accent color', async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <SeedMaxReasoningEffort />
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+            reasoningEfforts={['default', 'max']}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    const effortLabels = renderer.root.findAllByProps({
+      testID: 'chat-input-model-effort-label',
+    });
+    expect(effortLabels.length).toBeGreaterThan(0);
+    expect(effortLabels[0].props.children).toBe('chat.reasoning.max');
+    expect(effortLabels[0].props.style).toEqual({ color: thinkingAccentColor.light });
+  });
+
+  test('hides the effort label when the model has no reasoning stops', async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    expect(
+      renderer.root.findAllByProps({
+        testID: 'chat-input-model-effort-label',
+      }),
+    ).toHaveLength(0);
+  });
+});
+
+function SeedChatInputState({
+  attachments,
+  draft,
+}: {
+  attachments: ChatInputAttachmentDraft[];
+  draft: string;
+}) {
+  const { setAttachments, setDraft } = useChatInputActions();
+
+  useEffect(() => {
+    setDraft(draft);
+    setAttachments(attachments);
+  }, [attachments, draft, setAttachments, setDraft]);
+
+  return null;
+}
+
+function getTextInputValue(renderer: ReactTestRenderer) {
+  const textInput = renderer.root.findByType(TextInput);
+
+  return textInput.props.value;
+}
+
+function SeedMaxReasoningEffort() {
+  const { selectReasoningEffort } = useChatInputActions();
+
+  useEffect(() => {
+    selectReasoningEffort('max');
+  }, [selectReasoningEffort]);
+
+  return null;
+}
+
+function SeedInputFocused() {
+  const { setInputFocused } = useChatInputActions();
+
+  useEffect(() => {
+    setInputFocused(true);
+  }, [setInputFocused]);
+
+  return null;
+}
+
+function findText(renderer: ReactTestRenderer, text: string) {
+  return renderer.root.findAllByType(Text).some((node) => node.props.children === text);
+}

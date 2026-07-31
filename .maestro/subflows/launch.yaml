@@ -1,6 +1,6 @@
 appId: com.cherry-ai.cherry-studio-app
 ---
-# 启动 dev-client。冷启动会自动重连上次使用的 Metro，直接进入主屏。
+# 启动 dev-client。冷启动会自动重连上次使用的 Metro，直接进入消息 tab。
 # 陷阱：openLink 不能紧跟 launchApp —— openurl 落在冷启动窗口期会把 app
 # 留在后台（前台停在桌面），流程必挂。因此 deep link 只作为停在
 # launcher/白屏时的兜底，此时 app 必已在前台，无竞态。
@@ -11,15 +11,33 @@ appId: com.cherry-ai.cherry-studio-app
     maxRetries: 2
     commands:
       - launchApp
+      # Dismiss Expo dev-menu onboarding if this installed dev client has not
+      # acknowledged it yet. Both actions are no-ops on the normal app screen.
+      - tapOn:
+          text: "Continue"
+          optional: true
+      - tapOn:
+          text: "Close"
+          optional: true
       - extendedWaitUntil:
-          visible: "Open sidebar"
+          visible: "^New$|^新建$"
           timeout: 30000
           optional: true
       - runFlow:
           when:
-            notVisible: "Open sidebar"
+            notVisible: "^New$|^新建$"
           commands:
             - openLink: "cherrystudio://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"
             - extendedWaitUntil:
-                visible: "Open sidebar"
-                timeout: 20000
+                visible: "Continue|^New$|^新建$"
+                timeout: 30000
+                optional: true
+            - tapOn:
+                text: "Continue"
+                optional: true
+            - tapOn:
+                text: "Close"
+                optional: true
+            - extendedWaitUntil:
+                visible: "^New$|^新建$"
+                timeout: 30000

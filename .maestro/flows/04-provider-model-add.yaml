@@ -2,26 +2,26 @@ appId: com.cherry-ai.cherry-studio-app
 tags: [settings, provider]
 ---
 - runFlow: ../subflows/launch.yaml
-- tapOn: "Open sidebar"
-- tapOn: "Settings"
-- tapOn: "Model service"
-- tapOn: "CherryInExpress"
+- tapOn: "^Settings$|^设置$"
+- tapOn: "Model service|模型服务"
+- tapOn: "^CherryIN$"
 # 等 provider 详情加载完成后再操作模型工具栏
 - extendedWaitUntil:
     visible: "Base URL"
     timeout: 10000
 - waitForAnimationToEnd
-- tapOn: "Add"
+- tapOn: "Models|模型"
+- tapOn: "Add|添加"
 # 表单骨架
-- assertVisible: "Add model"
+- assertVisible: "Add model|添加模型"
 - assertVisible: "Model ID"
-- assertVisible: "Model name"
-- assertVisible: "Group name"
-- assertVisible: "More settings"
+- assertVisible: "Model name|模型名称"
+- assertVisible: "Group name|分组名称"
+- assertVisible: "More settings|更多设置"
 # 填 Model ID 后 Save 应可用（不实际保存，返回丢弃）
 - tapOn: "Model ID"
 - inputText: "e2e-test-model"
 - hideKeyboard
-- assertVisible: "Save"
-- tapOn: "Back"
-- assertVisible: "Model list"
+- assertVisible: "Save|保存"
+- tapOn: "Back|返回"
+- assertVisible: "Models|模型"

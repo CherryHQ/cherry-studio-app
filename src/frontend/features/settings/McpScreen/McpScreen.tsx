@@ -1,0 +1,139 @@
+import { useRouter } from 'expo-router';
+import { PlusIcon } from 'lucide-uniwind/png';
+import { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+
+import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
+import type { McpServerRuntimeSummary } from '@/shared/contracts';
+import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
+import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
+import { SettingsServiceRow } from '../components/SettingsServiceRow';
+
+export function McpScreen() {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const { error, isLoading, refetch, servers } = useMcpServersApi();
+  const { summaries } = useMcpServerRuntimeSummaries(servers);
+
+  const openCreate = useCallback(() => {
+    router.push({ pathname: './mcp/[serverId]', params: { serverId: 'new' } });
+  }, [router]);
+
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('settings.mcp.addServer'),
+        androidIcon: PlusIcon,
+        icon: 'plus',
+        key: 'create-mcp-server',
+        onPress: openCreate,
+      },
+    ],
+    [openCreate, t],
+  );
+
+  return (
+    <>
+      <BackHeader rightActions={rightActions} title={t('settings.pages.mcp.title')} />
+      <ScrollView
+        alwaysBounceVertical={false}
+        className="flex-1"
+        contentContainerClassName="gap-6 px-4 py-5"
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+      >
+        {isLoading ? (
+          <View className="items-center gap-2 px-1 py-8">
+            <ActivityIndicator size="small" />
+            <Text className="text-default-foreground text-sm">
+              {t('settings.mcp.list.loading')}
+            </Text>
+          </View>
+        ) : error ? (
+          <View className="items-center gap-3 px-1 py-8">
+            <Text className="text-danger-foreground text-sm">
+              {t('settings.mcp.list.loadFailed')}
+            </Text>
+            <Text className="text-center text-default-foreground text-xs" selectable>
+              {error instanceof Error ? error.message : String(error)}
+            </Text>
+            <SettingsDialogActionButton
+              label={t('settings.mcp.retry')}
+              onPress={() => void refetch()}
+            />
+          </View>
+        ) : servers.length === 0 ? (
+          <View className="items-center px-1">
+            <SettingsDialogActionButton
+              isPrimary
+              label={t('settings.mcp.emptyAction')}
+              onPress={openCreate}
+            />
+          </View>
+        ) : (
+          <View className="overflow-hidden rounded-xl bg-settings-grouped-surface">
+            {servers.map((server, index) => {
+              const summary = summaries[server.id];
+              const status = getServerStatus(server, summary);
+
+              return (
+                <SettingsServiceRow
+                  id={server.id}
+                  isEnabled={server.isActive}
+                  key={server.id}
+                  name={server.name}
+                  showSeparator={index > 0}
+                  onPress={() =>
+                    router.push({
+                      pathname: './mcp/[serverId]',
+                      params: { serverId: server.id },
+                    })
+                  }
+                  statusLabel={t(`settings.mcp.list.status.${status}`)}
+                  statusTone={
+                    status === 'connected' ? 'success' : status === 'error' ? 'danger' : 'default'
+                  }
+                  subtitle={getServerSubtitle(summary, (count) =>
+                    t('settings.mcp.list.toolCount', { count }),
+                  )}
+                />
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+    </>
+  );
+}
+
+function getServerStatus(
+  server: StreamableHttpMcpServer,
+  summary: McpServerRuntimeSummary | undefined,
+): McpServerRuntimeSummary['state'] {
+  if (!server.isActive) {
+    return 'disabled';
+  }
+  return summary?.state ?? 'connecting';
+}
+
+function getServerSubtitle(
+  summary: McpServerRuntimeSummary | undefined,
+  formatToolCount: (count: number) => string,
+): string | undefined {
+  const details: string[] = [];
+
+  if (summary?.toolCount !== undefined) {
+    details.push(formatToolCount(summary.toolCount));
+  }
+  if (summary?.serverVersion) {
+    details.push(formatServerVersion(summary.serverVersion));
+  }
+
+  return details.length > 0 ? details.join(' · ') : undefined;
+}
+
+function formatServerVersion(version: string): string {
+  return /^\d/.test(version) ? `v${version}` : version;
+}

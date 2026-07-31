@@ -1,1 +1,1 @@
-export { PaintingConversationScreen as default } from '@/screens/PaintingScreen/PaintingConversationScreen';
+export { PaintingConversationScreen as default } from '@/frontend/features/paintings/PaintingConversationScreen';

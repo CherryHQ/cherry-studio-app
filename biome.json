@@ -9,6 +9,7 @@
     "includes": [
       "**",
       "!.agents",
+      "!.context",
       "!.expo",
       "!.vscode",
       "!android",
@@ -67,7 +68,7 @@
   },
   "overrides": [
     {
-      "includes": ["src/data/cache/**"],
+      "includes": ["src/shared/data/cache/**"],
       "linter": {
         "rules": {
           "suspicious": {

@@ -11,7 +11,7 @@
     launch.yaml        # 启动 app + 等主屏（launcher 时 deep link 兜底连 Metro）
   flows/               # 测试流（maestro test 的目标目录）
     00-smoke-boot.yaml
-    01-drawer-topics.yaml
+    01-topic-list.yaml
     02-settings-navigation.yaml
     03-provider-detail.yaml
     04-provider-model-add.yaml
@@ -42,9 +42,10 @@ pnpm e2e:ios:flow .maestro/flows/00-smoke-boot.yaml
 2. **Metro 运行中**（8081）。dev-client 冷启动会自动重连上次使用的 Metro；
    仅当停在 launcher 时，`subflows/launch.yaml` 才用 deep link
    `cherrystudio://expo-development-client/?url=…` 兜底强连。
-3. **种子数据**：dev 环境 SeedRunner 会注入 Benchmark 话题与 CherryInExpress
-   provider（含 mock 远端模型），flows 依赖这些 fixture。生产构建无这些数据，
-   flows 仅面向 dev/preview 构建。
+3. **种子数据**：dev 环境 SeedRunner 会注入 Benchmark 话题；Provider flows 使用
+   preset `CherryIN`。它没有测试 API key，因此 pull flow 验证错误/空结果反馈，
+   pull/reconcile 成功路径由 application contract tests 覆盖。生产构建无 Benchmark
+   数据，flows 仅面向 dev/preview 构建。
 
 ## 已知环境陷阱（排查实证）
 
@@ -71,10 +72,9 @@ pnpm e2e:ios:flow .maestro/flows/00-smoke-boot.yaml
 
 ## 断言与数据卫生规范
 
-- 只断言**稳定 label**（i18n 英文缺省文案）；动态计数用正则
-  （如 `New models \(\d+\)`、`Add \d+ models`）。
-- flows **不落库**：Pull 预览不点 Apply、Add model 不 Save、WebSearch
-  测试 key 用后立即通过 Remove 清理（见 06 尾部）。
+- 文案 selector 同时覆盖英文和简体中文；测试数据名称与技术字段使用稳定原文。
+- flows **不留脏数据**：Add model 不 Save，WebSearch 测试 key 用后立即通过 Remove
+  清理（见 06 尾部），未配置密钥的 model pull 不会写模型。
 - 每个 flow 自身可独立运行（都以 `runFlow: ../subflows/launch.yaml` 开头，
   并从主页出发导航）。
 - 新增 flow 时：先用 agent-device snapshot 实测 label，再写断言；
@@ -84,11 +84,11 @@ pnpm e2e:ios:flow .maestro/flows/00-smoke-boot.yaml
 
 | Flow | 覆盖面 | 排查结论 |
 | --- | --- | --- |
-| 00 | 冷启动、主页骨架、输入框、model picker 底部 Reasoning effort 滑杆 | ✅ 正常 |
-| 01 | 侧栏、话题列表、100 条复杂消息渲染+滚动（LegendList） | ✅ 正常，初始定位底部 |
+| 00 | 冷启动、消息 tab、新会话、无默认模型时的 model picker | ✅ 正常 |
+| 01 | 话题列表、100 条复杂消息渲染+滚动（LegendList） | ✅ 正常，初始定位底部 |
 | 02 | Settings 各屏可达性 | ✅ 正常 |
-| 03 | Provider 详情、工具栏（Check/Pull/Add）、Check sheet | ✅ 正常 |
+| 03 | Provider 配置/模型 tabs、空模型页、Pull/Add 入口 | ✅ 正常 |
 | 04 | Add model 表单、Save 使能 | ✅ 正常 |
-| 05 | Pull 预览、能力过滤 chips、行选择、全选/反选 | ✅ 正常 |
+| 05 | 未配置 API key 时的 Pull 错误/空结果反馈 | ✅ 正常，无写入 |
 | 06 | WebSearch key 输入/commit、per-key 设置、删除 | ✅ 单行显示（历史"两行"问题未复现） |
 | 07 | Add to Chat sheet、照片网格选择/取消（Gesture.Tap） | ✅ 正常，a11y 保留 |
