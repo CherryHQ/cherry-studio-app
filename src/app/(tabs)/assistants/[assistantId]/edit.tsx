@@ -1,1 +1,1 @@
-export { AssistantEditScreen as default } from '@/screens/AssistantScreen';
+export { AssistantEditScreen as default } from '@/frontend/features/assistants';

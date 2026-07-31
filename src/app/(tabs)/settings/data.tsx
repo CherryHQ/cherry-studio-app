@@ -1,1 +1,1 @@
-export { DataScreen as default } from '@/screens/SettingsScreen';
+export { DataScreen as default } from '@/frontend/features/settings';
