@@ -1,9 +1,11 @@
 import type { ApiImplementation } from '@/shared/data/api/types';
+import type { AiUsageRecordService } from '../../services/AiUsageRecordService';
 import type { AssistantService } from '../../services/AssistantService';
 import type { FileEntryService } from '../../services/FileEntryService';
 import type { MessageService } from '../../services/MessageService';
 import type { PinService } from '../../services/PinService';
 import type { TopicService } from '../../services/TopicService';
+import { createAiUsageRecordHandlers } from './aiUsageRecords';
 import { createAssistantHandlers } from './assistants';
 import { createFileHandlers } from './files';
 import { createMcpServerHandlers, type McpServerData } from './mcpServers';
@@ -15,6 +17,7 @@ import { createProviderHandlers, type ProviderData } from './providers';
 import { createTopicHandlers } from './topics';
 
 export type DataApiDependencies = {
+  aiUsageRecords: AiUsageRecordService;
   assistants: AssistantService;
   files: FileEntryService;
   mcpServers: McpServerData;
@@ -28,6 +31,7 @@ export type DataApiDependencies = {
 
 export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImplementation {
   return {
+    ...createAiUsageRecordHandlers(dependencies.aiUsageRecords),
     ...createAssistantHandlers(dependencies.assistants),
     ...createFileHandlers(dependencies.files),
     ...createMcpServerHandlers(dependencies.mcpServers),

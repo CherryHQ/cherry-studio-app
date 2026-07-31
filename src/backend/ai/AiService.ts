@@ -1,6 +1,8 @@
 import {
   embedMany as aiCoreEmbedMany,
   generateImage as aiCoreGenerateImage,
+  type RuntimeProviderCallEvent,
+  type RuntimeProviderCallHandler,
 } from '@cherrystudio/ai-core';
 import {
   type ImageGenerationMode,
@@ -9,6 +11,7 @@ import {
 } from '@cherrystudio/provider-registry';
 import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
+import type { AiUsageCaptureContext } from '@/backend/data/services/AiUsageRecordService';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import type { Model } from '@/shared/data/types/model';
 import { parseUniqueModelId } from '@/shared/data/types/model';
@@ -63,6 +66,39 @@ export interface AiServiceDependencies extends BuildAgentParamsDependencies {
   fileEntry: Pick<FileEntryService, 'resolveUri'>;
 }
 
+function createProviderCallHandler(
+  context: AiUsageCaptureContext,
+  recorder: AiServiceDependencies['aiUsageRecord'],
+): RuntimeProviderCallHandler {
+  return (event: RuntimeProviderCallEvent) => {
+    void recorder.recordInvocation({
+      requestId: event.requestId,
+      context,
+      modality: event.modality,
+      ...(event.modality === 'embedding' && event.usage
+        ? { usage: { inputTokens: event.usage.tokens, totalTokens: event.usage.tokens } }
+        : event.modality === 'image' && event.usage
+          ? {
+              usage: {
+                ...(event.usage.inputTokens !== undefined
+                  ? { inputTokens: event.usage.inputTokens }
+                  : {}),
+                ...(event.usage.outputTokens !== undefined
+                  ? { outputTokens: event.usage.outputTokens }
+                  : {}),
+                ...(event.usage.totalTokens !== undefined
+                  ? { totalTokens: event.usage.totalTokens }
+                  : {}),
+              },
+            }
+          : {}),
+      ...(event.modality === 'image' ? { imageCount: event.imageCount } : {}),
+      metrics: event.metrics,
+      completedAt: event.completedAt,
+    });
+  };
+}
+
 /**
  * Lifecycle AI service. See `docs/references/ai/core-architecture.md` in desktop.
  *
@@ -96,6 +132,7 @@ export class AiService {
         request,
         services: this.services,
         shouldIncludeExternalTools: true,
+        usageMessageRef: request.messageId ? { kind: 'chat', id: request.messageId } : null,
       }),
       resolveUIMessageFileUrls(request.messages ?? [], (fileEntryId) =>
         this.services.fileEntry.resolveUri(fileEntryId),
@@ -113,6 +150,15 @@ export class AiService {
       repairToolCall,
       system,
       tools,
+      ...(request.runtimeTimingSink
+        ? {
+            toolExecutionHooks: {
+              onToolExecutionStart: (event) =>
+                request.runtimeTimingSink?.onToolExecutionStart(event),
+              onToolExecutionEnd: (event) => request.runtimeTimingSink?.onToolExecutionEnd(event),
+            },
+          }
+        : {}),
       options,
     });
 
@@ -164,10 +210,8 @@ export class AiService {
 
   async generateImage(request: AiImageRequest): Promise<AiImageResult> {
     const signal = request.requestOptions?.signal;
-    const { sdkConfig, model, assistant, options, provider } = await buildAgentParams({
-      request,
-      services: this.services,
-    });
+    const { sdkConfig, model, assistant, options, provider, usageCaptureContext } =
+      await buildAgentParams({ request, services: this.services });
     const customParams = assistant ? getCustomParameters(assistant) : {};
     const split = extractAiSdkStandardParams(customParams);
     const { structured, vendorBag } = splitImageParamValues(request.paramValues);
@@ -203,6 +247,7 @@ export class AiService {
         ...(request.requestOptions?.headers && {
           headers: stripUndefinedHeaders(request.requestOptions.headers),
         }),
+        onProviderCall: createProviderCallHandler(usageCaptureContext, this.services.aiUsageRecord),
         ...split.standardParams,
       },
     );
@@ -280,10 +325,8 @@ export class AiService {
     request: AiBaseRequest & { apiKeyOverride?: string },
     signal: AbortSignal,
   ): Promise<unknown> {
-    const { context, sdkConfig, model, plugins, repairToolCall, options } = await buildAgentParams({
-      request,
-      services: this.services,
-    });
+    const { context, sdkConfig, model, plugins, repairToolCall, options, usageCaptureContext } =
+      await buildAgentParams({ request, services: this.services });
 
     if (isEmbeddingModel(model)) {
       return aiCoreEmbedMany<AppProviderSettingsMap>(
@@ -296,6 +339,10 @@ export class AiService {
           abortSignal: signal,
           ...(options.providerOptions && { providerOptions: options.providerOptions }),
           ...(options.headers && { headers: stripUndefinedHeaders(options.headers) }),
+          onProviderCall: createProviderCallHandler(
+            usageCaptureContext,
+            this.services.aiUsageRecord,
+          ),
         },
       );
     }

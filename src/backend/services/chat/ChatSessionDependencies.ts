@@ -2,7 +2,6 @@ import type { ChatToolApprovalInput } from '@/shared/contracts';
 import type {
   BranchMessagesQueryParams,
   CreateMessageDto,
-  UpdateMessageDto,
 } from '@/shared/data/api/schemas/messages';
 import type { CreateTopicDto, UpdateTopicDto } from '@/shared/data/api/schemas/topics';
 import type { Assistant } from '@/shared/data/types/assistant';
@@ -12,6 +11,9 @@ import type {
   CherryMessagePart,
   CherryUIMessage,
   Message,
+  MessageData,
+  MessageRuntimeStatsInput,
+  MessageRuntimeTimingSink,
 } from '@/shared/data/types/message';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Topic } from '@/shared/data/types/topic';
@@ -22,6 +24,7 @@ export type ChatStreamRequest = {
   messageId: string;
   messages: CherryUIMessage[];
   requestOptions: { signal: AbortSignal };
+  runtimeTimingSink?: MessageRuntimeTimingSink;
   trigger: 'submit-message';
   uniqueModelId: UniqueModelId;
 };
@@ -71,7 +74,14 @@ export type ChatSessionServices = {
     ): Promise<BranchMessagesResponse>;
     getById(id: string): Promise<Message>;
     getPathToNode(id: string): Promise<Message[]>;
-    update(id: string, input: UpdateMessageDto): Promise<Message>;
+    finalizeAssistantMessage(
+      id: string,
+      input: {
+        data: MessageData;
+        status: Extract<Message['status'], 'success' | 'paused' | 'error'>;
+        runtimeStats?: MessageRuntimeStatsInput;
+      },
+    ): Promise<Message>;
   };
   model: {
     getById(id: string): Promise<Model | null>;

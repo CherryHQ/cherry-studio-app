@@ -1,3 +1,4 @@
+import { aiUsageRecordTable } from './aiUsageRecord';
 import { appStateTable } from './appState';
 import { assistantTable } from './assistant';
 import { assistantKnowledgeBaseTable, assistantMcpServerTable } from './assistantRelations';
@@ -15,6 +16,8 @@ import { topicTable } from './topic';
 import { userModelTable } from './userModel';
 import { userProviderTable } from './userProvider';
 
+export type { AiUsageRecordRow, InsertAiUsageRecordRow } from './aiUsageRecord';
+export { aiUsageRecordTable } from './aiUsageRecord';
 export type { AppStateRow, InsertAppStateRow } from './appState';
 export { appStateTable } from './appState';
 export type { AssistantRow, InsertAssistantRow } from './assistant';
@@ -67,6 +70,7 @@ export type { InsertUserProviderRow, UserProviderRow } from './userProvider';
 export { userProviderTable } from './userProvider';
 
 export const schema = {
+  aiUsageRecordTable,
   assistantKnowledgeBaseTable,
   assistantMcpServerTable,
   assistantTable,

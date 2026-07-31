@@ -3,6 +3,7 @@ import m0001 from '../../../../migrations/sqlite-drizzle/0001_message-status-ind
 import m0002 from '../../../../migrations/sqlite-drizzle/0002_melted_odin.sql';
 import m0003 from '../../../../migrations/sqlite-drizzle/0003_eager_freak.sql';
 import m0004 from '../../../../migrations/sqlite-drizzle/0004_tidy_killraven.sql';
+import m0005 from '../../../../migrations/sqlite-drizzle/0005_complete_silver_centurion.sql';
 import journal from '../../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main
@@ -17,5 +18,6 @@ export const migrations = {
     m0002,
     m0003,
     m0004,
+    m0005,
   },
 };

@@ -40,4 +40,38 @@ describe('Agent tool request wiring', () => {
       }),
     );
   });
+
+  test('wraps tools with desktop-compatible execution timing hooks', async () => {
+    const execute = jest.fn(async () => 'done');
+    const onToolExecutionStart = jest.fn();
+    const onToolExecutionEnd = jest.fn();
+    const agent = new Agent({
+      modelId: 'deepseek-flash',
+      providerId: 'openai-compatible',
+      providerSettings: {
+        apiKey: 'test',
+        baseURL: 'https://example.com',
+        name: 'CherryExpress',
+      },
+      toolExecutionHooks: { onToolExecutionStart, onToolExecutionEnd },
+      tools: { search: { execute } as never },
+    });
+
+    await agent.generate({ prompt: 'hello' });
+    const wrappedTool = (createAgent as jest.Mock).mock.calls.at(-1)?.[0].agentSettings.tools
+      .search;
+    await wrappedTool.execute({ query: 'Cherry Studio' }, { messages: [], toolCallId: 'call-1' });
+
+    expect(execute).toHaveBeenCalled();
+    expect(onToolExecutionStart).toHaveBeenCalledWith(
+      expect.objectContaining({ callId: 'call-1', toolName: 'search' }),
+    );
+    expect(onToolExecutionEnd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callId: 'call-1',
+        toolName: 'search',
+        toolOutput: { type: 'tool-result', output: 'done' },
+      }),
+    );
+  });
 });

@@ -879,12 +879,11 @@ export class McpRuntimeService {
       },
       // Approval rides on the AI SDK's native gate: when this resolves true the
       // SDK emits a `tool-approval-request` instead of executing, and the turn
-      // ends cleanly. (ai-core's promptToolUsePlugin would bypass this gate by
-      // pulling tools out of the toolset — it is opt-in and never registered
-      // here; keep it that way.) Re-read the server so flipping the setting
-      // mid-turn is honoured, like `assertToolStillAllowed`. A failed read
-      // asks rather than assumes: falling back to the wrap-time snapshot would
-      // run a tool the user just put behind approval.
+      // ends cleanly. Keep tools in the native toolset so this gate remains
+      // authoritative. Re-read the server so flipping the setting mid-turn is
+      // honoured, like `assertToolStillAllowed`. A failed read asks rather than
+      // assumes: falling back to the wrap-time snapshot would run a tool the
+      // user just put behind approval.
       needsApproval: async () => {
         let current: StreamableHttpMcpServer;
         try {

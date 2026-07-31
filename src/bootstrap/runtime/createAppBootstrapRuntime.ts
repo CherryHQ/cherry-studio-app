@@ -26,6 +26,7 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
   const { backend, dataApiDependencies } = createBackend(services);
   const dataApi = new DataApiService(
     createDataApiHandlers({
+      aiUsageRecords: services.aiUsageRecord,
       assistants: services.assistant,
       files: services.fileEntry,
       mcpServers: dataApiDependencies.mcpServers,

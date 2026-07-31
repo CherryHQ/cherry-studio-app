@@ -19,6 +19,8 @@
       "!node_modules",
       "!dist",
       "!web-build",
+      "!packages/ai-core",
+      "!packages/ai-sdk-provider",
       "!packages/lucide-uniwind/src/index.ts",
       "!packages/lucide-uniwind/src/icons",
       "!packages/ui/src/icons/general",

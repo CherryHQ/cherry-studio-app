@@ -1,13 +1,15 @@
 /**
  * `Provider + Model` -> `ProviderConfig` for `@cherrystudio/ai-core`.
- * Always async because `providerService.getRotatedApiKey` is async.
+ * Always async because serving credential selection is async.
  */
 
 import { hasProviderConfig, type StringKeys } from '@cherrystudio/ai-core/provider';
 import type { CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import { generateSignature } from '@/backend/ai/provider/cherryai';
+import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
+import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { EndpointType, Model } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 import {
@@ -33,8 +35,8 @@ interface BaseConfig {
 }
 
 interface ProviderConfigRuntime {
-  getRotatedApiKey(providerId: string): Promise<string>;
   getAuthConfig(providerId: string): Promise<AuthConfig | null>;
+  resolveApiKey(providerId: string, override?: string): Promise<ResolvedProviderApiKey>;
 }
 
 interface BuilderContext {
@@ -44,7 +46,21 @@ interface BuilderContext {
   endpoint?: string;
   endpointType?: EndpointType;
   aiSdkProviderId: StringKeys<AppProviderSettingsMap>;
+  apiKeyOverride?: string;
   runtime: ProviderConfigRuntime;
+}
+
+type ApiKeyBuilderContext = BuilderContext & {
+  apiKeySelection: ResolvedProviderApiKey['apiKeySelection'];
+};
+
+interface ProviderToAiSdkConfigOptions {
+  apiKeyOverride?: string;
+}
+
+export interface ResolvedProviderAiSdkConfig {
+  config: ProviderConfig;
+  credentialReceipt: ServingCredentialReceipt;
 }
 
 /** Applies endpoint-/provider-specific formatting (API version, Ollama/Gemini paths). */
@@ -89,17 +105,53 @@ function formatBaseURL(baseURL: string, provider: Provider, endpointType?: Endpo
 
 // ── SDK Config Building ──
 
+type ProviderConfigBuilder = (ctx: BuilderContext) => ProviderConfig | Promise<ProviderConfig>;
+
+type ResolvedProviderConfigBuild = {
+  config: ProviderConfig;
+  credentialReceipt: ServingCredentialReceipt;
+};
+
 type ConfigBuilderEntry = {
   match: (provider: Provider, aiSdkProviderId: AppProviderId) => boolean;
-  build: (ctx: BuilderContext) => ProviderConfig | Promise<ProviderConfig>;
+  build: (ctx: BuilderContext) => Promise<ResolvedProviderConfigBuild>;
 };
+
+async function selectApiKey(ctx: BuilderContext): Promise<ApiKeyBuilderContext> {
+  const selected = await ctx.runtime.resolveApiKey(ctx.actualProvider.id, ctx.apiKeyOverride);
+  return {
+    ...ctx,
+    baseConfig: { ...ctx.baseConfig, apiKey: selected.value },
+    apiKeySelection: selected.apiKeySelection,
+  };
+}
+
+function withSelectedApiKey(build: ProviderConfigBuilder): ConfigBuilderEntry['build'] {
+  return async (ctx) => {
+    const selected = await selectApiKey(ctx);
+    return {
+      config: await build(selected),
+      credentialReceipt: selected.apiKeySelection,
+    };
+  };
+}
 
 /** Endpoint priority: `model.endpointTypes[0]` > `provider.defaultChatEndpoint` > fallback. */
 export async function providerToAiSdkConfig(
   provider: Provider,
   model: Model,
   runtime: ProviderConfigRuntime,
+  options?: ProviderToAiSdkConfigOptions,
 ): Promise<ProviderConfig> {
+  return (await resolveProviderAiSdkConfig(provider, model, runtime, options)).config;
+}
+
+export async function resolveProviderAiSdkConfig(
+  provider: Provider,
+  model: Model,
+  runtime: ProviderConfigRuntime,
+  options?: ProviderToAiSdkConfigOptions,
+): Promise<ResolvedProviderAiSdkConfig> {
   const { endpointType, baseUrl } = resolveEffectiveEndpoint(provider, model);
 
   const aiSdkProviderId = appProviderIdMap[
@@ -108,12 +160,12 @@ export async function providerToAiSdkConfig(
 
   const formattedBaseUrl = formatBaseURL(baseUrl, provider, endpointType);
   const { baseURL, endpoint } = routeToEndpoint(formattedBaseUrl);
-  const apiKey = await runtime.getRotatedApiKey(provider.id);
 
   const ctx: BuilderContext = {
     actualProvider: provider,
     model,
-    baseConfig: { baseURL, apiKey },
+    baseConfig: { baseURL, apiKey: '' },
+    apiKeyOverride: options?.apiKeyOverride,
     endpoint,
     endpointType,
     aiSdkProviderId,
@@ -121,12 +173,12 @@ export async function providerToAiSdkConfig(
   };
 
   const builders: ConfigBuilderEntry[] = [
-    { match: (p) => isCherryAIProvider(p), build: buildCherryAIConfig },
-    { match: (p) => isAzureOpenAIProvider(p), build: buildAzureConfig },
-    { match: (_, id) => id === 'cherryin', build: buildRoutedGatewayConfig },
-    { match: (_, id) => id === 'newapi', build: buildRoutedGatewayConfig },
-    { match: (_, id) => id === 'aihubmix', build: buildGenericProviderConfig },
-    { match: (_, id) => id === 'gateway', build: buildGenericProviderConfig },
+    { match: (p) => isCherryAIProvider(p), build: withSelectedApiKey(buildCherryAIConfig) },
+    { match: (p) => isAzureOpenAIProvider(p), build: withSelectedApiKey(buildAzureConfig) },
+    { match: (_, id) => id === 'cherryin', build: withSelectedApiKey(buildRoutedGatewayConfig) },
+    { match: (_, id) => id === 'newapi', build: withSelectedApiKey(buildRoutedGatewayConfig) },
+    { match: (_, id) => id === 'aihubmix', build: withSelectedApiKey(buildGenericProviderConfig) },
+    { match: (_, id) => id === 'gateway', build: withSelectedApiKey(buildGenericProviderConfig) },
   ];
 
   const builder = builders.find((b) => b.match(provider, aiSdkProviderId));
@@ -135,9 +187,9 @@ export async function providerToAiSdkConfig(
   }
 
   if (hasProviderConfig(aiSdkProviderId) && aiSdkProviderId !== 'openai-compatible') {
-    return buildGenericProviderConfig(ctx);
+    return withSelectedApiKey(buildGenericProviderConfig)(ctx);
   }
-  return buildOpenAICompatibleConfig(ctx);
+  return withSelectedApiKey(buildOpenAICompatibleConfig)(ctx);
 }
 
 // ── Config Builders ──

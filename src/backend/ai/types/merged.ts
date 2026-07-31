@@ -5,8 +5,6 @@
  */
 
 import type { RuntimeConfig } from '@cherrystudio/ai-core/core';
-import type { ModelConfig } from '@cherrystudio/ai-core/core/models/types';
-import type { RuntimeExecutor } from '@cherrystudio/ai-core/core/runtime';
 import type {
   ExtensionConfigToIdResolutionMap,
   ExtensionToSettingsMap,
@@ -32,6 +30,10 @@ export type AppProviderSettingsMap = UnionToIntersection<
 
 export function isRegisteredProviderId(id: string): boolean {
   return allExtensions.some((ext) => ext.hasProviderId(id));
+}
+
+export function getAllProviderIds(): string[] {
+  return allExtensions.flatMap((ext) => ext.getProviderIds());
 }
 
 type ProviderIdsMap = UnionToIntersection<ExtensionConfigToIdResolutionMap<AllExtensionConfigs>>;
@@ -64,12 +66,6 @@ function buildAppProviderIds(): ProviderIdsMap {
 
 export const appProviderIds = buildAppProviderIds();
 
-export type AppModelConfig<
-  T extends StringKeys<AppProviderSettingsMap> = StringKeys<AppProviderSettingsMap>,
-> = ModelConfig<T, AppProviderSettingsMap>;
-
 export type AppRuntimeConfig<
   T extends StringKeys<AppProviderSettingsMap> = StringKeys<AppProviderSettingsMap>,
 > = RuntimeConfig<AppProviderSettingsMap, T>;
-
-export type AppRuntimeExecutor = RuntimeExecutor<AppProviderSettingsMap>;

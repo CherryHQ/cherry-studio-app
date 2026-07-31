@@ -6,6 +6,19 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('registers every journal entry in the Expo runtime bundle', () => {
+    const journal = readMigrationJournal();
+    const bundleSource = readFileSync(`${process.cwd()}/src/backend/data/db/migrations.ts`, 'utf8');
+
+    for (const [index, { tag }] of journal.entries.entries()) {
+      const moduleName = `m${index.toString().padStart(4, '0')}`;
+      expect(bundleSource).toContain(
+        `import ${moduleName} from '../../../../migrations/sqlite-drizzle/${tag}.sql';`,
+      );
+      expect(bundleSource).toMatch(new RegExp(`\\n\\s{4}${moduleName},`));
+    }
+  });
+
   test('replays the full journal on top of the release baseline', () => {
     const database = new DatabaseSync(':memory:');
 
@@ -540,12 +553,17 @@ function readMigrationSqlFiles(): string[] {
 
 function readMigrationEntries(): { sql: string; tag: string }[] {
   const migrationDirectory = `${process.cwd()}/migrations/sqlite-drizzle`;
-  const journal = JSON.parse(
-    readFileSync(`${migrationDirectory}/meta/_journal.json`, 'utf8'),
-  ) as MigrationJournal;
+  const journal = readMigrationJournal();
 
   return journal.entries.map(({ tag }) => ({
     sql: readFileSync(`${migrationDirectory}/${tag}.sql`, 'utf8'),
     tag,
   }));
+}
+
+function readMigrationJournal(): MigrationJournal {
+  const migrationDirectory = `${process.cwd()}/migrations/sqlite-drizzle`;
+  return JSON.parse(
+    readFileSync(`${migrationDirectory}/meta/_journal.json`, 'utf8'),
+  ) as MigrationJournal;
 }

@@ -2,9 +2,15 @@ import type { AiPlugin } from '@cherrystudio/ai-core';
 import { stepCountIs, type ToolCallRepairFunction, type ToolSet } from 'ai';
 import * as Crypto from 'expo-crypto';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import type {
+  AiUsageCaptureContext,
+  AiUsageRecordService,
+  MessageRef,
+} from '@/backend/data/services/AiUsageRecordService';
 import type { AssistantService } from '@/backend/data/services/AssistantService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
+import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { Assistant } from '@/shared/data/types/assistant';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
@@ -14,7 +20,8 @@ import {
   isForcedNativeWebSearchModel,
   isFunctionCallingModel,
 } from '@/shared/utils/model';
-import { providerToAiSdkConfig } from '../../../provider/config';
+import { createAiUsagePlugin } from '../../../hooks/billingHook';
+import { resolveProviderAiSdkConfig } from '../../../provider/config';
 import type { ToolService } from '../../../tools';
 import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/adapters/aiSdk/meta/toolSearch';
 import { createAiRepair } from '../../../tools/adapters/aiSdk/repair';
@@ -35,16 +42,21 @@ import {
   mergeCustomProviderParameters,
 } from '../../../utils/options';
 import { replacePromptVariables } from '../../../utils/promptVariables';
+import { createAiUsageCaptureContext } from '../../../utils/usageCapture';
 import type { AgentOptions } from '../Agent';
 import { getDeferredToolsSystemPrompt } from '../prompts/deferredTools';
 import { buildAgentPlugins } from './buildAgentPlugins';
 import { resolveCapabilities } from './capabilities';
 
 export interface BuildAgentParamsDependencies {
+  aiUsageRecord: Pick<AiUsageRecordService, 'recordInvocation'>;
   assistant: Pick<AssistantService, 'getById'>;
   model: Pick<ModelService, 'getById'>;
   preference: PreferenceService;
-  provider: Pick<ProviderService, 'getAuthConfig' | 'getByProviderId' | 'getRotatedApiKey'>;
+  provider: Pick<
+    ProviderService,
+    'getAuthConfig' | 'getByProviderId' | 'getRotatedApiKey' | 'resolveApiKey'
+  >;
   tools: Pick<ToolService, 'resolveForRequest'>;
 }
 
@@ -52,6 +64,7 @@ export interface BuildAgentParamsInput {
   request: AiBaseRequest & { apiKeyOverride?: string; chatId?: string; messageId?: string };
   services: BuildAgentParamsDependencies;
   shouldIncludeExternalTools?: boolean;
+  usageMessageRef?: MessageRef | null;
 }
 
 export interface BuiltAgentParams {
@@ -65,19 +78,27 @@ export interface BuiltAgentParams {
   repairToolCall: ToolCallRepairFunction<ToolSet>;
   tools: ToolSet | undefined;
   options: AgentOptions;
+  credentialReceipt: ServingCredentialReceipt;
+  usageCaptureContext: AiUsageCaptureContext;
 }
 
 export async function buildAgentParams({
   request,
   services,
   shouldIncludeExternalTools = false,
+  usageMessageRef = null,
 }: BuildAgentParamsInput): Promise<BuiltAgentParams> {
   const { provider, model, assistant } = await getProviderAndModel(request, services);
-  const sdkConfig = await providerToAiSdkConfig(provider, model, {
-    getRotatedApiKey: async (providerId) =>
-      request.apiKeyOverride ?? services.provider.getRotatedApiKey(providerId),
-    getAuthConfig: (providerId) => services.provider.getAuthConfig(providerId),
-  });
+  const { config: sdkConfig, credentialReceipt } = await resolveProviderAiSdkConfig(
+    provider,
+    model,
+    {
+      getAuthConfig: (providerId) => services.provider.getAuthConfig(providerId),
+      resolveApiKey: (providerId, override) =>
+        services.provider.resolveApiKey(providerId, override),
+    },
+    { apiKeyOverride: request.apiKeyOverride },
+  );
   const externalWebSearchProviderId =
     shouldIncludeExternalTools && assistant?.settings.enableWebSearch
       ? await services.preference.get('chat.web_search.default_search_keywords_provider')
@@ -123,13 +144,31 @@ export async function buildAgentParams({
           }),
         }
       : undefined;
-  const plugins = buildAgentPlugins({
-    aiSdkProviderId: sdkConfig.providerId,
-    model,
-    provider,
-    streamOutput: capabilities?.streamOutput ?? true,
-    webSearchPluginConfig: capabilities?.webSearchPluginConfig,
+  const usageCaptureContext = createAiUsageCaptureContext({
+    providerId: provider.id,
+    providerName: provider.name,
+    modelId: model.modelId,
+    modelName: model.name,
+    pricing: model.pricing,
+    trustProviderReportedCost: provider.apiFeatures.reportsActualCost,
+    reportedCostCurrency: provider.reportedCostCurrency,
+    credentialReceipt,
+    source: assistant
+      ? { type: 'assistant', id: assistant.id, name: assistant.name, icon: assistant.emoji }
+      : null,
+    messageRef: usageMessageRef,
   });
+  const usagePlugin = createAiUsagePlugin(usageCaptureContext, services.aiUsageRecord);
+  const plugins = [
+    ...buildAgentPlugins({
+      aiSdkProviderId: sdkConfig.providerId,
+      model,
+      provider,
+      streamOutput: capabilities?.streamOutput ?? true,
+      webSearchPluginConfig: capabilities?.webSearchPluginConfig,
+    }),
+    usagePlugin,
+  ];
   const shouldLoadTools = shouldIncludeExternalTools && assistant && isFunctionCallingModel(model);
   const resolvedTools = shouldLoadTools
     ? await services.tools.resolveForRequest({
@@ -160,9 +199,12 @@ export async function buildAgentParams({
     modelId: model.modelId,
     providerId: sdkConfig.providerId,
     providerSettings: sdkConfig.providerSettings,
+    getUsagePlugins: () => [usagePlugin],
   });
 
   return {
+    credentialReceipt,
+    usageCaptureContext,
     sdkConfig: { ...sdkConfig, modelId: model.modelId },
     provider,
     model,

@@ -21,6 +21,8 @@ import type {
   CherryMessagePart,
   Message,
   MessageData,
+  MessageRuntimeStatsInput,
+  MessageStats,
   SiblingsGroup,
   TreeNode,
   TreeResponse,
@@ -37,6 +39,7 @@ import {
 } from '../db/schemas';
 import type { FileEntryService } from './FileEntryService';
 import type { TopicService } from './TopicService';
+import { mergeMessageRuntimeStats } from './utils/messageStats';
 import { timestampToISO } from './utils/rowMappers';
 
 const previewLength = 50;
@@ -534,7 +537,6 @@ export class MessageService {
           parentId: resolvedParentId,
           role: dto.role,
           siblingsGroupId: dto.siblingsGroupId ?? 0,
-          stats: dto.stats ?? null,
           status: dto.status ?? 'pending',
           topicId,
         })
@@ -587,7 +589,6 @@ export class MessageService {
             parentId: resolvedParentId,
             role: dto.role,
             siblingsGroupId: dto.siblingsGroupId ?? 0,
-            stats: dto.stats ?? null,
             status: dto.status ?? 'pending',
             topicId: input.topicId,
           })
@@ -634,7 +635,6 @@ export class MessageService {
             parentId: userMessage.id,
             role: placeholder.role,
             siblingsGroupId: input.siblingsGroupId ?? 0,
-            stats: placeholder.stats ?? null,
             status: placeholder.status ?? 'pending',
             topicId: input.topicId,
           })
@@ -695,9 +695,6 @@ export class MessageService {
       if (dto.siblingsGroupId !== undefined) {
         updates.siblingsGroupId = dto.siblingsGroupId;
       }
-      if (dto.stats !== undefined) {
-        updates.stats = dto.stats;
-      }
       if (dto.status !== undefined) {
         updates.status = dto.status;
       }
@@ -714,6 +711,55 @@ export class MessageService {
         await replaceChatMessageFileRefsTx(tx, id, dto.data);
       }
 
+      return rowToMessage(row);
+    });
+  }
+
+  /**
+   * Internal AI-runtime finalizer. Content/status and runtime timing are
+   * message-owned; the merge preserves the existing record-owned usage
+   * projection and never accepts usage or cost from this caller.
+   */
+  async finalizeAssistantMessage(
+    id: string,
+    input: {
+      data: MessageData;
+      status: Extract<Message['status'], 'success' | 'paused' | 'error'>;
+      runtimeStats?: MessageRuntimeStatsInput;
+    },
+  ): Promise<Message> {
+    return await this.dbService.withWriteTx(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(messageTable)
+        .where(and(eq(messageTable.id, id), isNull(messageTable.deletedAt)))
+        .limit(1);
+
+      if (!existing) {
+        throw DataApiErrorFactory.notFound('Message', id);
+      }
+      if (existing.role !== 'assistant') {
+        throw DataApiErrorFactory.invalidOperation(
+          'finalize message',
+          'only assistant messages can be finalized',
+        );
+      }
+
+      const stats = mergeMessageRuntimeStats(existing.stats, input.runtimeStats);
+      const [row] = await tx
+        .update(messageTable)
+        .set({
+          data: input.data,
+          status: input.status,
+          stats: stats ?? null,
+        })
+        .where(eq(messageTable.id, id))
+        .returning();
+      if (!row) {
+        throw DataApiErrorFactory.notFound('Message', id);
+      }
+
+      await replaceChatMessageFileRefsTx(tx, id, input.data);
       return rowToMessage(row);
     });
   }
@@ -995,6 +1041,7 @@ export class MessageService {
     appliedApprovalIds: string[];
     alreadySettledApprovalIds: string[];
   } | null> {
+    const completedAt = Date.now();
     return await this.dbService.withWriteTx(async (tx) => {
       const [existing] = await tx
         .select()
@@ -1028,10 +1075,15 @@ export class MessageService {
         .filter((id) => settledIds.has(id));
 
       if (appliedApprovalIds.length > 0) {
+        const stats = appliedApprovalIds.reduce(
+          (current, approvalId) => completeApprovalWait(current, approvalId, completedAt),
+          existing.stats ?? undefined,
+        );
         await tx
           .update(messageTable)
           .set({
             data: { ...existing.data, parts: nextParts },
+            stats: stats ?? null,
             ...(countPendingToolApprovals(nextParts) === 0 ? { status: 'pending' as const } : {}),
           })
           .where(eq(messageTable.id, anchorId));
@@ -1126,6 +1178,33 @@ export function rowToMessage(row: MessageRow): Message {
     topicId: row.topicId,
     updatedAt: timestampToISO(row.updatedAt),
   };
+}
+
+function completeApprovalWait(
+  existing: MessageStats | null | undefined,
+  approvalId: string,
+  completedAt: number,
+): MessageStats | undefined {
+  const runtimeTiming = existing?.runtimeTiming;
+  if (!runtimeTiming) return existing ?? undefined;
+
+  const spans = runtimeTiming.spans.map((span) =>
+    span.kind === 'approval-wait' &&
+    span.approvalId === approvalId &&
+    span.completedAt === undefined
+      ? { ...span, completedAt: Math.max(span.startedAt, completedAt) }
+      : span,
+  );
+  if (spans.every((span, index) => span === runtimeTiming.spans[index])) {
+    return existing ?? undefined;
+  }
+
+  return mergeMessageRuntimeStats(existing, {
+    runtimeTiming: {
+      ...runtimeTiming,
+      spans,
+    },
+  });
 }
 
 function messageToTreeNode(message: Message, hasChildren: boolean): TreeNode {

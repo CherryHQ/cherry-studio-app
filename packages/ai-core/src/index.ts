@@ -5,17 +5,23 @@
 
 // 导入内部使用的类和函数
 
-// ==================== 错误处理 ====================
-export {
-  AiCoreError,
-  ModelResolutionError,
-  ParameterValidationError,
-  PluginExecutionError,
-  RecursiveDepthError,
-  TemplateLoadError,
-} from './core/errors';
+// ==================== 主要用户接口 ====================
+export { createAgent, createExecutor, embedMany, generateImage, generateText, rerank, streamText } from './core/runtime'
+
+// ==================== Embedding 类型 ====================
+export type {
+  CreateAgentOptions,
+  EmbedManyParams,
+  EmbedManyResult,
+  RerankParams,
+  RerankResult,
+  RuntimeProviderCallEvent,
+  RuntimeProviderCallHandler
+} from './core/runtime'
+
 // ==================== 高级API ====================
-export { isV2Model, isV3Model } from './core/models';
+export { isV2Model, isV3Model } from './core/models'
+
 // ==================== 插件系统 ====================
 export type {
   AiPlugin,
@@ -23,9 +29,11 @@ export type {
   GenerateTextParams,
   GenerateTextResult,
   StreamTextParams,
-  StreamTextResult,
-} from './core/plugins';
-export { definePlugin } from './core/plugins';
+  StreamTextResult
+} from './core/plugins'
+export { definePlugin } from './core/plugins'
+export { PluginEngine } from './core/runtime/pluginEngine'
+
 // ==================== 类型工具 ====================
 export type {
   AiSdkModel,
@@ -36,17 +44,15 @@ export type {
   ToolFactory,
   ToolFactoryMap,
   ToolFactoryPatch,
-  WebSearchToolConfigMap,
-} from './core/providers';
-// ==================== Embedding 类型 ====================
-export type { CreateAgentOptions, EmbedManyParams, EmbedManyResult } from './core/runtime';
-// ==================== 主要用户接口 ====================
+  WebSearchToolConfigMap
+} from './core/providers'
+
+// ==================== 错误处理 ====================
 export {
-  createAgent,
-  createExecutor,
-  embedMany,
-  generateImage,
-  generateText,
-  streamText,
-} from './core/runtime';
-export { PluginEngine } from './core/runtime/pluginEngine';
+  AiCoreError,
+  ModelResolutionError,
+  ParameterValidationError,
+  PluginExecutionError,
+  RecursiveDepthError,
+  TemplateLoadError
+} from './core/errors'

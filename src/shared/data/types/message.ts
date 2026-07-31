@@ -1,3 +1,4 @@
+import { CURRENCY, objectValues } from '@cherrystudio/provider-registry';
 import type {
   DataUIPart,
   DynamicToolUIPart,
@@ -18,20 +19,93 @@ import type { CherryDataPartTypes } from './uiParts';
 export const MessageIdSchema = z.uuid();
 export type MessageId = z.infer<typeof MessageIdSchema>;
 
+/**
+ * Materialized statistics for one assistant message. Usage, request counts,
+ * costs, and provider performance are projections of immutable usage records.
+ * Runtime timing is message-owned and written by runtime persistence. Scalar
+ * timing fields are historical compatibility data read only when
+ * `runtimeTiming` is absent.
+ */
+const MessageProviderPerformanceSchema = z.strictObject({
+  measuredOutputTokens: z.number().nonnegative(),
+  generationDurationMs: z.number().nonnegative(),
+});
+export type MessageProviderPerformance = z.infer<typeof MessageProviderPerformanceSchema>;
+
+const MessageRuntimeToolExecutionSpanSchema = z.strictObject({
+  id: z.string().min(1),
+  kind: z.literal('tool-execution'),
+  toolCallId: z.string().min(1),
+  toolName: z.string().min(1).optional(),
+  startedAt: z.number(),
+  completedAt: z.number().optional(),
+});
+
+const MessageRuntimeApprovalWaitSpanSchema = z.strictObject({
+  id: z.string().min(1),
+  kind: z.literal('approval-wait'),
+  approvalId: z.string().min(1),
+  toolCallId: z.string().min(1),
+  toolName: z.string().min(1).optional(),
+  startedAt: z.number(),
+  completedAt: z.number().optional(),
+});
+
+export const MessageRuntimeTimingSchema = z.strictObject({
+  startedAt: z.number(),
+  completedAt: z.number().optional(),
+  spans: z.array(
+    z.discriminatedUnion('kind', [
+      MessageRuntimeToolExecutionSpanSchema,
+      MessageRuntimeApprovalWaitSpanSchema,
+    ]),
+  ),
+});
+export type MessageRuntimeTiming = z.infer<typeof MessageRuntimeTimingSchema>;
+export type MessageRuntimeSpan = MessageRuntimeTiming['spans'][number];
+
 export const MessageStatsSchema = z.strictObject({
-  cacheReadTokens: z.number().optional(),
-  cacheWriteTokens: z.number().optional(),
-  completionTokens: z.number().optional(),
-  cost: z.number().optional(),
-  noCacheTokens: z.number().optional(),
-  promptTokens: z.number().optional(),
-  thoughtsTokens: z.number().optional(),
+  inputTokens: z.number().optional(),
+  outputTokens: z.number().optional(),
+  totalTokens: z.number().optional(),
+  inputTokenDetails: z
+    .strictObject({
+      noCacheTokens: z.number().optional(),
+      cacheReadTokens: z.number().optional(),
+      cacheWriteTokens: z.number().optional(),
+    })
+    .optional(),
+  outputTokenDetails: z
+    .strictObject({
+      textTokens: z.number().optional(),
+      reasoningTokens: z.number().optional(),
+    })
+    .optional(),
+  requestCount: z.number().int().nonnegative().optional(),
+  estimatedRequestCount: z.number().int().nonnegative().optional(),
+  unpricedRequestCount: z.number().int().nonnegative().optional(),
+  costs: z
+    .array(
+      z.strictObject({
+        currency: z.enum(objectValues(CURRENCY)),
+        amount: z.number().nonnegative(),
+        providerReportedRequestCount: z.number().int().nonnegative(),
+        computedRequestCount: z.number().int().nonnegative(),
+      }),
+    )
+    .optional(),
+  providerPerformance: MessageProviderPerformanceSchema.optional(),
+  runtimeTiming: MessageRuntimeTimingSchema.optional(),
   timeCompletionMs: z.number().optional(),
   timeFirstTokenMs: z.number().optional(),
   timeThinkingMs: z.number().optional(),
-  totalTokens: z.number().optional(),
 });
 export type MessageStats = z.infer<typeof MessageStatsSchema>;
+export type MessageRuntimeStatsInput = Readonly<Pick<MessageStats, 'runtimeTiming'>>;
+export interface MessageRuntimeTimingSink {
+  onToolExecutionStart(event: { callId: string; toolName?: string }): void;
+  onToolExecutionEnd(event: { callId: string; toolName?: string; durationMs: number }): void;
+}
 
 export type CherryMessagePart = UIMessagePart<CherryDataPartTypes, UITools>;
 

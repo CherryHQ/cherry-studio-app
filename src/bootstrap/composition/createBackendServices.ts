@@ -4,6 +4,7 @@ import { ToolService } from '@/backend/ai/tools';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
+import { AiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
 import { AssistantService } from '@/backend/data/services/AssistantService';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { GroupService } from '@/backend/data/services/GroupService';
@@ -23,6 +24,7 @@ export type BackendServices = ReturnType<typeof createBackendServices>;
 
 export function createBackendServices(dbService: DbService, cache: CacheService) {
   const preference = new PreferenceService(dbService);
+  const aiUsageRecord = new AiUsageRecordService(dbService);
   const devicePermission = new DevicePermissionService();
   const pin = new PinService(dbService);
   const provider = new ProviderService(dbService, pin, cache);
@@ -41,6 +43,7 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
   const tools = new ToolService({ devicePermission, mcpRuntime, preference, webSearch });
   const ai = new AiService({
     assistant,
+    aiUsageRecord,
     fileEntry,
     model,
     preference,
@@ -50,6 +53,7 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
 
   return {
     ai,
+    aiUsageRecord,
     assistant,
     cache,
     devicePermission,

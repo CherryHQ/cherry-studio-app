@@ -156,6 +156,7 @@ function provider(input: { id: string; presetProviderId?: string }): Provider {
       serviceTier: true,
       streamOptions: true,
       verbosity: false,
+      reportsActualCost: false,
     },
     apiKeys: [],
     authType: 'api-key',

@@ -62,10 +62,30 @@ describe('ChatSessionImpl', () => {
         uniqueModelId: 'provider::model',
       }),
     );
-    expect(services.message.update).toHaveBeenCalledWith('assistant-1', {
-      data: { parts: assistantChunk.parts },
-      status: 'success',
+    expect(services.message.finalizeAssistantMessage).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: { parts: assistantChunk.parts },
+        status: 'success',
+      }),
+    );
+    const finalized = (services.message.finalizeAssistantMessage as jest.Mock).mock.calls[0]?.[1];
+    expect(finalized.runtimeStats.runtimeTiming).toEqual({
+      startedAt: expect.any(Number),
+      completedAt: expect.any(Number),
+      spans: [],
     });
+    expect(finalized.runtimeStats.runtimeTiming.completedAt).toBeGreaterThanOrEqual(
+      finalized.runtimeStats.runtimeTiming.startedAt,
+    );
+    expect(services.ai.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtimeTimingSink: expect.objectContaining({
+          onToolExecutionEnd: expect.any(Function),
+          onToolExecutionStart: expect.any(Function),
+        }),
+      }),
+    );
     expect(invalidateTopicMessages).toHaveBeenCalledWith('topic-1');
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
@@ -97,7 +117,7 @@ describe('ChatSessionImpl', () => {
     );
   });
 
-  test('persists token usage stats projected from the final assistant metadata', async () => {
+  test('does not persist stream metadata usage over the durable ledger projection', async () => {
     const services = createServices();
     const runtime = createRuntime({ services });
     const assistantChunk = {
@@ -112,11 +132,13 @@ describe('ChatSessionImpl', () => {
       topicId: 'topic-1',
     });
 
-    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
-      data: { parts: assistantChunk.parts },
-      stats: { totalTokens: 150, promptTokens: 100, completionTokens: 50 },
-      status: 'success',
-    });
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: { parts: assistantChunk.parts },
+        status: 'success',
+      }),
+    );
   });
 
   test('normalizes source-url citations into text part references on successful persistence', async () => {
@@ -143,7 +165,7 @@ describe('ChatSessionImpl', () => {
       topicId: 'topic-1',
     });
 
-    expect(services.message.update).toHaveBeenLastCalledWith(
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
       'assistant-1',
       expect.objectContaining({
         data: {
@@ -214,8 +236,8 @@ describe('ChatSessionImpl', () => {
       topicId: 'topic-1',
     });
 
-    const updateMessage = services.message.update as jest.Mock;
-    await waitUntil(() => updateMessage.mock.calls.length > 0);
+    const finalizeMessage = services.message.finalizeAssistantMessage as jest.Mock;
+    await waitUntil(() => finalizeMessage.mock.calls.length > 0);
 
     expect(runtime.getTopicSnapshot('topic-1')).toEqual(
       expect.objectContaining({
@@ -250,8 +272,8 @@ describe('ChatSessionImpl', () => {
       topicId: 'topic-1',
     });
 
-    const updateMessage = services.message.update as jest.Mock;
-    await waitUntil(() => updateMessage.mock.calls.length > 0);
+    const finalizeMessage = services.message.finalizeAssistantMessage as jest.Mock;
+    await waitUntil(() => finalizeMessage.mock.calls.length > 0);
 
     expect(runtime.getTopicSnapshot('topic-1')).toEqual(
       expect.objectContaining({
@@ -288,17 +310,20 @@ describe('ChatSessionImpl', () => {
       topicId: 'topic-1',
     });
 
-    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
-      data: {
-        parts: [
-          expect.objectContaining({
-            data: expect.objectContaining({ message: 'stream failed' }),
-            type: 'data-error',
-          }),
-        ],
-      },
-      status: 'error',
-    });
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: {
+          parts: [
+            expect.objectContaining({
+              data: expect.objectContaining({ message: 'stream failed' }),
+              type: 'data-error',
+            }),
+          ],
+        },
+        status: 'error',
+      }),
+    );
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
@@ -317,21 +342,24 @@ describe('ChatSessionImpl', () => {
       topicId: 'topic-1',
     });
 
-    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
-      data: {
-        parts: [
-          expect.objectContaining({
-            data: expect.objectContaining({
-              message: 'rate limited',
-              statusCode: 429,
-              isRetryable: true,
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: {
+          parts: [
+            expect.objectContaining({
+              data: expect.objectContaining({
+                message: 'rate limited',
+                statusCode: 429,
+                isRetryable: true,
+              }),
+              type: 'data-error',
             }),
-            type: 'data-error',
-          }),
-        ],
-      },
-      status: 'error',
-    });
+          ],
+        },
+        status: 'error',
+      }),
+    );
   });
 
   test('appends an error part when streaming fails after partial output', async () => {
@@ -360,18 +388,21 @@ describe('ChatSessionImpl', () => {
       topicId: 'topic-1',
     });
 
-    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
-      data: {
-        parts: [
-          { type: 'text', text: 'partial' },
-          expect.objectContaining({
-            data: expect.objectContaining({ message: 'stream failed' }),
-            type: 'data-error',
-          }),
-        ],
-      },
-      status: 'error',
-    });
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: {
+          parts: [
+            { type: 'text', text: 'partial' },
+            expect.objectContaining({
+              data: expect.objectContaining({ message: 'stream failed' }),
+              type: 'data-error',
+            }),
+          ],
+        },
+        status: 'error',
+      }),
+    );
     expect(mockDiscardPreparedFiles).not.toHaveBeenCalled();
   });
 
@@ -401,19 +432,22 @@ describe('ChatSessionImpl', () => {
       topicId: 'topic-1',
     });
 
-    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
-      data: {
-        parts: [
-          expect.objectContaining({
-            providerMetadata: { cherry: { startedAt: 1000, thinkingMs: 3500 } },
-            state: 'done',
-            type: 'reasoning',
-          }),
-          expect.objectContaining({ type: 'data-error' }),
-        ],
-      },
-      status: 'error',
-    });
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: {
+          parts: [
+            expect.objectContaining({
+              providerMetadata: { cherry: { startedAt: 1000, thinkingMs: 3500 } },
+              state: 'done',
+              type: 'reasoning',
+            }),
+            expect.objectContaining({ type: 'data-error' }),
+          ],
+        },
+        status: 'error',
+      }),
+    );
 
     dateSpy.mockRestore();
   });
@@ -824,10 +858,31 @@ describe('ChatSessionImpl', () => {
       topicId: 'topic-1',
     });
 
-    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
-      data: { parts: approvalChunk.parts },
-      status: 'success',
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: { parts: approvalChunk.parts },
+        status: 'success',
+      }),
+    );
+    const finalized = (services.message.finalizeAssistantMessage as jest.Mock).mock.calls.at(
+      -1,
+    )?.[1];
+    expect(finalized.runtimeStats.runtimeTiming).toMatchObject({
+      startedAt: expect.any(Number),
+      spans: [
+        {
+          id: 'approval:approval-1',
+          kind: 'approval-wait',
+          approvalId: 'approval-1',
+          toolCallId: 'call-approval-1',
+          toolName: 'search',
+          startedAt: expect.any(Number),
+        },
+      ],
     });
+    expect(finalized.runtimeStats.runtimeTiming).not.toHaveProperty('completedAt');
+    expect(finalized.runtimeStats.runtimeTiming.spans[0]).not.toHaveProperty('completedAt');
     expect(services.ai.generateText).not.toHaveBeenCalled();
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('awaiting-approval');
   });
@@ -857,19 +912,31 @@ describe('ChatSessionImpl', () => {
       topicId: 'topic-1',
     });
 
-    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
-      data: {
-        parts: [
-          { type: 'text', text: 'checking' },
-          // Terminal, not merely responded: an unanswered tool call would make
-          // every later request on this branch fail at the provider.
-          expect.objectContaining({
-            approval: expect.objectContaining({ approved: false, id: 'approval-1' }),
-            state: 'output-denied',
-          }),
-        ],
-      },
-      status: 'paused',
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: {
+          parts: [
+            { type: 'text', text: 'checking' },
+            // Terminal, not merely responded: an unanswered tool call would make
+            // every later request on this branch fail at the provider.
+            expect.objectContaining({
+              approval: expect.objectContaining({ approved: false, id: 'approval-1' }),
+              state: 'output-denied',
+            }),
+          ],
+        },
+        status: 'paused',
+      }),
+    );
+    const finalized = (services.message.finalizeAssistantMessage as jest.Mock).mock.calls.at(
+      -1,
+    )?.[1];
+    expect(finalized.runtimeStats.runtimeTiming).toMatchObject({
+      completedAt: expect.any(Number),
+      spans: [
+        expect.objectContaining({ approvalId: 'approval-1', completedAt: expect.any(Number) }),
+      ],
     });
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
@@ -880,6 +947,21 @@ describe('ChatSessionImpl', () => {
       ...createMessage('assistant-1', 'assistant'),
       data: { parts: [createRespondedApprovalPart('approval-1')] },
       modelId: 'provider::pinned' as UniqueModelId,
+      stats: {
+        runtimeTiming: {
+          startedAt: 1_000,
+          spans: [
+            {
+              id: 'approval:approval-1',
+              kind: 'approval-wait' as const,
+              approvalId: 'approval-1',
+              toolCallId: 'call-approval-1',
+              startedAt: 1_100,
+              completedAt: 2_000,
+            },
+          ],
+        },
+      },
       status: 'pending' as const,
     };
     services.message.applyToolApprovalDecisions = jest.fn(async () => ({
@@ -917,9 +999,20 @@ describe('ChatSessionImpl', () => {
         uniqueModelId: 'provider::pinned',
       }),
     );
-    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
-      data: { parts: finalChunk.parts },
-      status: 'success',
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: { parts: finalChunk.parts },
+        status: 'success',
+      }),
+    );
+    expect(
+      (services.message.finalizeAssistantMessage as jest.Mock).mock.calls.at(-1)?.[1].runtimeStats
+        .runtimeTiming,
+    ).toMatchObject({
+      startedAt: 1_000,
+      completedAt: expect.any(Number),
+      spans: [expect.objectContaining({ id: 'approval:approval-1', completedAt: 2_000 })],
     });
     expect(invalidateTopicMessages).toHaveBeenCalledWith('topic-1');
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
@@ -1069,25 +1162,28 @@ describe('ChatSessionImpl', () => {
       topicId: 'topic-1',
     });
 
-    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
-      data: {
-        parts: [
-          priorParts[0],
-          // Approved, but the resume never delivered an output — the row must
-          // not keep a tool call the model can never see a result for.
-          expect.objectContaining({
-            approval: { approved: true, id: 'approval-1' },
-            errorText: expect.any(String),
-            state: 'output-error',
-          }),
-          expect.objectContaining({
-            data: expect.objectContaining({ message: 'resume failed' }),
-            type: 'data-error',
-          }),
-        ],
-      },
-      status: 'error',
-    });
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: {
+          parts: [
+            priorParts[0],
+            // Approved, but the resume never delivered an output — the row must
+            // not keep a tool call the model can never see a result for.
+            expect.objectContaining({
+              approval: { approved: true, id: 'approval-1' },
+              errorText: expect.any(String),
+              state: 'output-error',
+            }),
+            expect.objectContaining({
+              data: expect.objectContaining({ message: 'resume failed' }),
+              type: 'data-error',
+            }),
+          ],
+        },
+        status: 'error',
+      }),
+    );
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
@@ -1206,7 +1302,7 @@ describe('ChatSessionImpl', () => {
     // A subscriber that blows up during teardown: the error escapes the stream
     // helper only after it has already persisted the streamed answer.
     runtime.subscribe(() => {
-      if ((services.message.update as jest.Mock).mock.calls.length > 0) {
+      if ((services.message.finalizeAssistantMessage as jest.Mock).mock.calls.length > 0) {
         throw new Error('subscriber blew up');
       }
     });
@@ -1219,11 +1315,14 @@ describe('ChatSessionImpl', () => {
 
     // The placeholder's parts are empty; a second persist from runTopicTurn
     // would overwrite the streamed answer with them.
-    expect(services.message.update).toHaveBeenCalledTimes(1);
-    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
-      data: { parts: assistantChunk.parts },
-      status: 'success',
-    });
+    expect(services.message.finalizeAssistantMessage).toHaveBeenCalledTimes(1);
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: { parts: assistantChunk.parts },
+        status: 'success',
+      }),
+    );
   });
 
   test('releases the topic when the refetch throws before the stream starts', async () => {
@@ -1279,10 +1378,13 @@ describe('ChatSessionImpl', () => {
 
     // Teardown failing must not cost the turn its answer: the row keeps what
     // streamed in, with no second persist falling back to empty parts.
-    expect(services.message.update).toHaveBeenLastCalledWith('assistant-1', {
-      data: { parts: assistantChunk.parts },
-      status: 'success',
-    });
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: { parts: assistantChunk.parts },
+        status: 'success',
+      }),
+    );
     // And the rest of the teardown still ran: the terminal overlay is dropped,
     // which a refetch failure taking the cleanup with it would skip.
     expect(runtime.getTopicSnapshot('topic-1')).toEqual({ status: 'idle' });
@@ -1329,15 +1431,18 @@ describe('ChatSessionImpl', () => {
 
     // The decision already flipped the row to 'pending'; leaving it there
     // would strand it with no writer, no sheet and no recovery path.
-    expect(services.message.update).toHaveBeenCalledWith('assistant-1', {
-      data: {
-        parts: [
-          expect.objectContaining({ state: 'output-error' }),
-          expect.objectContaining({ type: 'data-error' }),
-        ],
-      },
-      status: 'error',
-    });
+    expect(services.message.finalizeAssistantMessage).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: {
+          parts: [
+            expect.objectContaining({ state: 'output-error' }),
+            expect.objectContaining({ type: 'data-error' }),
+          ],
+        },
+        status: 'error',
+      }),
+    );
     expect(services.ai.streamText).not.toHaveBeenCalled();
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
@@ -1360,7 +1465,7 @@ describe('ChatSessionImpl', () => {
     ).rejects.toThrow('database is locked');
 
     // Nothing was written, so the row still carries the request and the sheet can retry.
-    expect(services.message.update).not.toHaveBeenCalled();
+    expect(services.message.finalizeAssistantMessage).not.toHaveBeenCalled();
     // And nothing was attempted either: with no settled message there is no row
     // to write, and a runtime that tried anyway would only look clean because
     // settleFailedTurn swallows the resulting crash into this log line.
@@ -1521,6 +1626,17 @@ function createServices() {
   const userMessage = createMessage('user-1', 'user');
   const assistantMessage = createMessage('assistant-1', 'assistant');
   const model = createModel();
+  const finalizeAssistantMessage = jest.fn(
+    async (
+      _id: string,
+      input: Parameters<ChatSessionServices['message']['finalizeAssistantMessage']>[1],
+    ) => ({
+      ...assistantMessage,
+      data: input.data,
+      stats: input.runtimeStats ?? assistantMessage.stats,
+      status: input.status,
+    }),
+  );
 
   return {
     ai: {
@@ -1545,12 +1661,9 @@ function createServices() {
         deletedIds: ['user-1', 'assistant-1'],
         newActiveNodeId: 'active-node',
       })),
+      finalizeAssistantMessage,
       getById: jest.fn(async () => assistantMessage),
       getPathToNode: jest.fn(async () => [userMessage]),
-      update: jest.fn(async (_id: string, dto: Partial<Message>) => ({
-        ...assistantMessage,
-        ...dto,
-      })),
     },
     model: {
       getById: jest.fn(async () => model),

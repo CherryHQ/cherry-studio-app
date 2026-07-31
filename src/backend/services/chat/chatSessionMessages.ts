@@ -1,11 +1,5 @@
 import { finalizeDanglingToolApprovals } from '@/shared/ai/transport/toolApprovals';
-import type {
-  CherryMessagePart,
-  CherryUIMessage,
-  CherryUIMessageMetadata,
-  Message,
-  MessageStats,
-} from '@/shared/data/types/message';
+import type { CherryMessagePart, CherryUIMessage, Message } from '@/shared/data/types/message';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
@@ -41,66 +35,6 @@ export function finalizeTurnToolApprovals(
   reason: string,
 ): CherryMessagePart[] {
   return finalizeDanglingToolApprovals(parts, reason).parts;
-}
-
-/** Everything a resumed segment spends on top of the first one. The durations
- * are listed for when a producer appears — `statsFromMetadata` emits token
- * counts only today — because they measure generation, and the stretch the turn
- * spent waiting on the user belongs to neither segment. */
-const additiveStatKeys = [
-  'cacheReadTokens',
-  'cacheWriteTokens',
-  'completionTokens',
-  'cost',
-  'noCacheTokens',
-  'promptTokens',
-  'thoughtsTokens',
-  'timeCompletionMs',
-  'timeThinkingMs',
-  'totalTokens',
-] as const;
-
-/**
- * Combine stats across a resume boundary. A resumed turn is a brand-new stream
- * whose usage accumulator starts at zero, so overwriting would silently drop
- * what the first segment already paid for.
- */
-export function mergeMessageStats(
-  prior: MessageStats | null | undefined,
-  next: MessageStats | undefined,
-): MessageStats | undefined {
-  if (!prior) return next;
-  if (!next) return prior;
-
-  const merged: MessageStats = { ...prior, ...next };
-  for (const key of additiveStatKeys) {
-    const a = prior[key];
-    const b = next[key];
-    if (a !== undefined && b !== undefined) merged[key] = a + b;
-  }
-  // Time to first token is a property of the turn, not of its last segment.
-  if (prior.timeFirstTokenMs !== undefined) {
-    merged.timeFirstTokenMs = prior.timeFirstTokenMs;
-  }
-
-  return merged;
-}
-
-/** Token counts come from `metadata`, populated by `Agent.stream`'s
- * per-step usage accumulator via `message-metadata` chunks. */
-export function statsFromMetadata(
-  metadata: CherryUIMessageMetadata | undefined,
-): MessageStats | undefined {
-  if (!metadata) return undefined;
-
-  const stats: MessageStats = {};
-  if (typeof metadata.totalTokens === 'number') stats.totalTokens = metadata.totalTokens;
-  if (typeof metadata.promptTokens === 'number') stats.promptTokens = metadata.promptTokens;
-  if (typeof metadata.completionTokens === 'number')
-    stats.completionTokens = metadata.completionTokens;
-  if (typeof metadata.thoughtsTokens === 'number') stats.thoughtsTokens = metadata.thoughtsTokens;
-
-  return Object.keys(stats).length > 0 ? stats : undefined;
 }
 
 export function applyStreamingMessage(baseMessage: Message, uiMessage: CherryUIMessage): Message {
