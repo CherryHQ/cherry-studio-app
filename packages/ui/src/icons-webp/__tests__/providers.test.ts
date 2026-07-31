@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+import sharp from 'sharp';
 import { resolveModelProviderIcon, resolveModelToProviderIcon } from '../../icons';
 import { GENERAL_ICONS } from '../general';
 import { PROVIDER_ICONS, resolveProviderIcon } from '../providers';
@@ -35,5 +37,24 @@ describe('provider WebP icon registry', () => {
     expect(resolveModelProviderIcon('custom-chat-model', 'azure-openai')).toBe(
       PROVIDER_ICONS.azureai,
     );
+  });
+
+  test('preserves full-bleed provider backgrounds', async () => {
+    const cherryInPath = join(
+      process.cwd(),
+      'packages/ui/src/icons-webp/providers/light/cherryin.webp',
+    );
+    const { data, info } = await sharp(cherryInPath)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const corners = [
+      0,
+      (info.width - 1) * info.channels,
+      (info.height - 1) * info.width * info.channels,
+      (info.width * info.height - 1) * info.channels,
+    ].map((offset) => [...data.subarray(offset, offset + info.channels)]);
+
+    expect(corners).toEqual(Array.from({ length: 4 }, () => [255, 95, 95, 255]));
   });
 });

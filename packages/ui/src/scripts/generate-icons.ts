@@ -110,10 +110,10 @@ async function renderIcon(
   const svg = normalizeCurrentColor(readFileSync(sourcePath, 'utf-8'), foregroundColor);
   const pipeline = sharp(Buffer.from(svg), { density: 192 });
 
-  // Crop the transparent safe-area baked into the source SVG so the logo fills
-  // the icon box instead of floating in whitespace (used for provider icons).
+  // Crop transparent safe-area without treating a full-bleed brand color as
+  // removable background when the SVG's top-left pixel is opaque.
   if (options.trim) {
-    pipeline.trim();
+    pipeline.trim({ background: { alpha: 0, b: 0, g: 0, r: 0 } });
   }
 
   await pipeline
