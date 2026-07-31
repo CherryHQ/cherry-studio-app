@@ -1,8 +1,7 @@
-# Cherry Mobile Web Search
+# Web Search
 
-Status: current
-
-This document defines the current external web search architecture and separates it from provider-native web search. Terms follow [CONTEXT.md](../../CONTEXT.md).
+This reference defines the external web search architecture and separates it from provider-native
+web search. Terms follow [Domain Language](./domain-language.md).
 
 ## Two Web Search Paths
 

@@ -1,15 +1,8 @@
-# Cherry Mobile Chat Streaming And Rendering
+# Chat Streaming And Rendering
 
-Status: current
-
-Related decisions:
-
-- [ADR 0004: Use Expo Runtime Fetch For Chat Streaming](../adr/0004-use-expo-runtime-fetch-for-chat-streaming.md)
-- [ADR 0005: Preserve Message Part Rendering Boundaries](../adr/0005-preserve-message-part-rendering-boundaries.md)
-
-This document defines Cherry Mobile's current AI SDK stream, backend `ChatSession` overlay, Message
+This reference defines Cherry Studio Mobile's AI SDK stream, backend `ChatSession` overlay, Message
 History Window, and Markdown/LaTeX rendering boundaries. Terms follow
-[CONTEXT.md](../../CONTEXT.md).
+[Domain Language](../domain-language.md).
 
 ## Principles
 

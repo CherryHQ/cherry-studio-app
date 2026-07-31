@@ -1,9 +1,9 @@
-# Cherry Mobile Extension Points
-
-Status: current
+# Extending Cherry Mobile
 
 This is a placement guide for extending the in-process frontend/backend architecture. Prefer an
-existing deep module over a new registry or pass-through wrapper.
+existing deep module over a new registry or pass-through wrapper. Read the
+[Architecture Overview](../references/architecture-overview.md) and [Data Layer](../references/data/README.md)
+before introducing a new cross-layer interface.
 
 ## Add A Resource Endpoint
 
@@ -73,7 +73,7 @@ The external web-search stack is the full workflow precedent: provider drivers a
 - A feature that owns a backend session keeps navigation, toast, and query invalidation in its
   frontend Provider or hook.
 
-## Reopen When
+## When To Revisit The Architecture
 
 - A real process or network transport is introduced.
 - A capability must be shared with desktop as a package rather than only aligned by vocabulary.

@@ -1,7 +1,7 @@
 const expoConfig = require('eslint-config-expo/flat');
 const { defineConfig } = require('eslint/config');
 
-// Layer dependency direction (ADR 0011):
+// Layer dependency direction from the current architecture reference:
 // app -> {bootstrap, frontend, shared}
 // bootstrap -> {backend, frontend, shared}
 // frontend -> {frontend, shared}
@@ -29,7 +29,7 @@ const tombstonePatterns = [
   {
     group: retiredRootPatterns,
     message:
-      'This root path was retired by ADR 0011. Import from @/frontend, @/backend, @/shared, or @/bootstrap.',
+      'This root path is retired. Import from @/frontend, @/backend, @/shared, or @/bootstrap.',
   },
   {
     group: ['@/config/constants'],

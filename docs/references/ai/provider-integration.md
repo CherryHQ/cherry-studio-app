@@ -1,8 +1,7 @@
-# Cherry Mobile AI Provider Integration
+# AI Provider Integration
 
-Status: current
-
-This document defines the current mobile AI provider/model request architecture. Terms follow [CONTEXT.md](../../CONTEXT.md).
+This reference defines the mobile AI provider/model request architecture. Terms follow
+[Domain Language](../domain-language.md).
 
 ## Runtime Path
 
@@ -102,7 +101,7 @@ resolved per request by `ToolService.resolveForRequest`
 external `web_search` tool backed by `WebSearchService`, MCP tools merged from
 `McpRuntimeService.getToolEntriesForAssistant(...)`, and built-in device tools (calendar, health,
 location, reminders under `src/backend/ai/tools/adapters/aiSdk/builtin`). When the external web search
-path wins arbitration (see [Web Search](./mobile-web-search.md#web-search-in-ai-requests)), the request
+path wins arbitration (see [Web Search](../web-search.md#web-search-in-ai-requests)), the request
 carries the `web_search` tool; whenever tools are attached the request also sets
 `stopWhen: stepCountIs(...)` (bounded by the assistant's max tool calls, default 20). External web
 search and provider-native web search are mutually exclusive within one request; a request never
@@ -135,7 +134,7 @@ Azure:
 
 ## Fetch Transport
 
-ADR 0004 records the decision to rely on the Expo/React Native runtime fetch behavior for AI SDK chat streaming.
+AI SDK chat streaming relies on the Expo/React Native runtime fetch behavior.
 
 Current state:
 

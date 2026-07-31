@@ -1,13 +1,8 @@
-# Cherry Mobile UI Components
+# UI Components
 
-Status: current
-
-Related decision:
-
-- [ADR 0003: Use Pressable Wrappers For Product Buttons](../adr/0003-use-pressable-wrappers-for-product-buttons.md)
-- [ADR 0006: Use Platform-Native Navigation Gestures](../adr/0006-use-platform-native-navigation-gestures.md)
-
-This document defines Cherry Mobile interaction component boundaries, focused on current button/control ownership, top navigation actions, and platform enhancement strategy. Terms follow [CONTEXT.md](../../CONTEXT.md).
+This reference defines Cherry Studio Mobile interaction component boundaries, button/control
+ownership, top navigation actions, and platform enhancement strategy. Terms follow
+[Domain Language](./domain-language.md).
 
 ## Principles
 

@@ -1,15 +1,8 @@
-# Cherry Mobile Navigation And Insets
+# Navigation And Insets
 
-Status: current
-
-Related decisions:
-
-- [ADR 0006: Use Platform-Native Navigation Gestures](../adr/0006-use-platform-native-navigation-gestures.md)
-- [ADR 0007: Use Component Bottom Sheets For Model Picker](../adr/0007-use-component-bottom-sheets-for-model-picker.md)
-- [ADR 0003: Use Pressable Wrappers For Product Buttons](../adr/0003-use-pressable-wrappers-for-product-buttons.md)
-- [ADR 0011: Separate The In-Process Frontend And Backend](../adr/0011-separate-in-process-frontend-and-backend.md)
-
-This document defines Cherry Mobile v1 navigation gestures, Android predictive back, edge-to-edge, and safe-area/inset strategy. Terms follow [CONTEXT.md](../../CONTEXT.md).
+This reference defines Cherry Studio Mobile navigation gestures, Android predictive back,
+edge-to-edge layout, and safe-area/inset strategy. Terms follow
+[Domain Language](./domain-language.md).
 
 ## Principles
 

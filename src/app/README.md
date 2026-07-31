@@ -1,8 +1,8 @@
 # App Route Conventions
 
-This directory contains Expo Router route definitions. It follows the repository-wide naming rules
-in [`docs/rules/naming-conventions.md`](../../docs/rules/naming-conventions.md) plus Expo Router's
-file-system routing rules.
+This directory contains Expo Router route definitions. It follows the repository-wide
+[naming conventions](../../docs/references/naming-conventions.md) plus Expo Router's file-system
+routing rules.
 
 `src/app` is intentionally thin. Feature implementation belongs under `src/frontend/features`;
 reusable cross-feature modules belong under `src/frontend/components`.

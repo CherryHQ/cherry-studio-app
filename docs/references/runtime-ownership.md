@@ -1,10 +1,7 @@
-# Cherry Mobile Runtime Ownership
+# Runtime Ownership
 
-Status: current
-
-Related decisions: [ADR 0001](../adr/0001-use-provider-owned-runtime-owners.md),
-[ADR 0002](../adr/0002-use-startup-gates-not-lifecycle-phases.md), and
-[ADR 0011](../adr/0011-separate-in-process-frontend-and-backend.md).
+This reference defines ownership for long-lived resources, startup work, sessions, and cleanup.
+Terms follow [Domain Language](./domain-language.md).
 
 ## Principles
 

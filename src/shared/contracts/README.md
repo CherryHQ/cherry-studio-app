@@ -147,5 +147,5 @@ Before approval, reviewers should be able to answer all of the following with "y
 - Can production and fake implementations satisfy the same interface?
 - Is every exported type necessary for a frontend caller or contract-level test?
 
-See `docs/adr/0011-separate-in-process-frontend-and-backend.md` and
-`docs/architecture/mobile-extension-points.md` for the surrounding architecture.
+See the [Architecture Overview](../../../docs/references/architecture-overview.md) and
+[Extending Cherry Mobile](../../../docs/guides/extending.md) for the surrounding architecture.

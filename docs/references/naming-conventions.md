@@ -1,8 +1,8 @@
 # Naming Conventions
 
-> Version: 2.1
+> Version: 2.2
 > Last Updated: 2026-07
-> **This document is the authoritative source. `CLAUDE.md` only links here.**
+> **This document is the authoritative source for repository naming rules.**
 
 This document defines naming rules for files, directories, and identifiers across the Cherry Studio mobile app (Expo / React Native). It encodes both industry consensus (React/TypeScript, Node.js) and project-specific conventions. Toolchain-binding rules come from Expo Router (file-based routing) and React Native (Metro platform-extension resolution) — not shadcn or Next.js.
 
@@ -36,8 +36,8 @@ The 90% case. See later sections for full rules and edge cases.
 | Test file | `*.test.ts(x)` | `rowMappers.test.ts` |
 | Config file | `*.config.{ts,js}` | `metro.config.js`, `drizzle.config.ts` |
 | Type declaration | `*.d.ts` (lowercase / kebab) | `expo-env.d.ts` |
-| Top-level meta doc | `UPPERCASE.md` | `README.md`, `AGENTS.md`, `CONTEXT.md` |
-| Regular doc | `kebab-case.md` | `mobile-data-layer.md` |
+| Repository meta doc | `UPPERCASE.md` | `README.md`, `AGENTS.md` |
+| Documentation guide or reference | `kebab-case.md` | `extending.md`, `architecture-overview.md` |
 | npm package directory (`packages/*`) | `kebab-case` | `ai-sdk-provider/` |
 | Business React component directory | `PascalCase` | `MainHeader/`, `ScrollToBottomButton/` |
 | Bucket directory (categorical container) | lowercase **plural** noun | `services/`, `hooks/`, `schemas/` |
@@ -139,9 +139,16 @@ inside one screen tree do not establish cross-domain reuse.
 
 | Type | Convention | Example |
 |---|---|---|
-| Top-level meta docs at repo root | `UPPERCASE.md` | `README.md`, `AGENTS.md`, `CONTEXT.md`, `LICENSE` |
-| Per-directory README | `README.md` (always uppercase) | `src/frontend/components/README.md`, `src/frontend/features/README.md` |
-| All other docs (under `docs/`, `packages/*/docs/`, etc.) | `kebab-case.md` | `mobile-data-layer.md`, `naming-conventions.md` |
+| Repository meta docs at root | `UPPERCASE.md` | `README.md`, `AGENTS.md` |
+| Directory index | `README.md` (always uppercase) | `docs/README.md`, `src/frontend/components/README.md` |
+| Task-oriented guide under `docs/guides` | `kebab-case.md` | `extending.md` |
+| Current-state reference under `docs/references` | `kebab-case.md` | `architecture-overview.md`, `naming-conventions.md` |
+| Package-local documentation | `kebab-case.md` except directory indexes | `architecture.md`, `provider-aliases.md` |
+
+`docs/README.md` is the repository documentation entry point. Guides explain how to perform a task;
+references describe current behavior, terminology, constraints, or measurements. Do not create ADR
+or TODO documentation trees. Git history preserves superseded decisions, and unfinished work belongs
+in the project issue tracker. Module-specific `README.md` files remain beside their code.
 
 ### 3.7 JSON / YAML / TOML
 
@@ -268,7 +275,7 @@ is **closed by default**. The current `/src/` roots are `app/`, `bootstrap/`, `f
 - `shared/`: `ai/`, `contracts/`, `core/`, `data/`, and `utils/`.
 
 Adding a root or overlapping one of these layer-owned buckets is a structural commitment governed by
-[ADR 0011](../adr/0011-separate-in-process-frontend-and-backend.md).
+the [Architecture Overview](./architecture-overview.md).
 
 **A new top-level directory MAY be added only when the PR description establishes both:**
 
@@ -277,9 +284,8 @@ Adding a root or overlapping one of these layer-owned buckets is a structural co
 
 If either is in doubt, place the files inside an existing bucket. Subdirectories under existing buckets are unrestricted.
 
-For the architecture rationale behind these roots, see
-[Mobile Architecture Index](../architecture/mobile-architecture-index.md) and the per-area docs under
-`docs/architecture/mobile-*.md`.
+For the architecture rationale behind these roots, see the
+[Architecture Overview](./architecture-overview.md) and its linked area references.
 
 ### 4.9 Singular vs Plural
 
@@ -329,7 +335,8 @@ gathered into one subtree is the §6.7 scattered/impure anti-pattern.
 
 For UI modules, promotion is owner-based: keep the module under its screen until a second independent screen or feature domain consumes it. Import count inside one screen tree is not evidence of cross-domain ownership. App shell, design-system, and platform-adapter modules may be app-wide with one direct consumer, but must document that ownership and expose a stable public interface.
 
-For how screen subtrees fit the navigation, data, and runtime layering, see [Mobile Architecture Index](../architecture/mobile-architecture-index.md).
+For how screen subtrees fit the navigation, data, and runtime layering, see the
+[Architecture Overview](./architecture-overview.md).
 
 ### 4.11 Layer-Owned Data, Utils, And Types
 
@@ -418,9 +425,8 @@ The `Service` suffix names a **role** (a stateful domain capability), not a **me
 
 There is no main-process DI container in the mobile app. `src/bootstrap` is the only composition root,
 and readiness is coordinated by **startup gates**, not lifecycle phases. See
-[ADR 0002 — Use startup gates, not lifecycle phases](../adr/0002-use-startup-gates-not-lifecycle-phases.md),
-[ADR 0011](../adr/0011-separate-in-process-frontend-and-backend.md), and
-`src/bootstrap/README.md`.
+[Runtime Ownership](./runtime-ownership.md), the [Architecture Overview](./architecture-overview.md),
+and [`src/bootstrap/README.md`](../../src/bootstrap/README.md).
 
 ### 5.3 Drizzle Schema Inferred Row Types
 
@@ -534,8 +540,8 @@ Naming a new FILE
 ├─ Test?                          → *.test.ts(x)
 ├─ Config?                        → *.config.{ts,js}
 └─ Documentation?
-   ├─ Repo-root meta?             → UPPERCASE.md    (README.md, AGENTS.md)
-   └─ Other?                      → kebab-case.md   (mobile-data-layer.md)
+   ├─ Repo meta or directory index? → UPPERCASE.md  (README.md, AGENTS.md)
+   └─ Guide, reference, or package doc? → kebab-case.md (architecture-overview.md)
 
 Naming a new DIRECTORY
 ├─ npm package (packages/*)?      → kebab-case      (ai-sdk-provider)

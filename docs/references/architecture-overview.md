@@ -1,16 +1,19 @@
-# Cherry Mobile Architecture Index
-
-Status: current
+# Architecture Overview
 
 This is the entry point for Cherry Studio Mobile architecture. Domain language lives in
-[CONTEXT.md](../../CONTEXT.md), decisions live under [docs/adr](../adr), and implementation detail
-lives in the topic documents below.
+[Domain Language](./domain-language.md), and implementation detail lives in the topic documents
+below.
 
 ## Scope
 
 Cherry Mobile runs in one React Native/Hermes runtime. It has an enforced in-process
 frontend/backend seam, not Electron processes, IPC, HTTP, independent deployment, or security
-isolation. See [ADR 0011](../adr/0011-separate-in-process-frontend-and-backend.md).
+isolation.
+
+The separation is structural: calls cross TypeScript interfaces rather than a transport or
+serialization layer. It improves dependency direction and test substitution, but does not provide
+fault isolation or protection from blocking the JavaScript thread. Contract values may include
+`AbortSignal`, callbacks, subscriptions, errors, and session objects.
 
 ## Source Ownership
 
@@ -39,30 +42,36 @@ Inside backend, static imports flow from `ai` to `services` or `data`, and from 
 `data` imports neither general services nor AI. A workflow service that needs AI receives a narrow
 constructor interface, and bootstrap supplies the concrete implementation.
 
+`app` imports only bootstrap, frontend, and shared modules. Backend does not import React UI, Expo
+Router, TanStack Query, translations, or toast implementations. Shared modules do not import upper
+layers. The layout follows Cherry Desktop vocabulary where responsibilities match without copying
+its process topology, lifecycle framework, or dependency-injection container.
+
+## Frontend Interfaces
+
+- Resource CRUD and pagination use typed React Query hooks backed by `ApiClient` from
+  `shared/data/api`.
+- Preference reads, writes, and subscriptions use `PreferenceClient` from
+  `shared/data/preference`.
+- Multi-step workflows and long-lived sessions use `useBackendModule(key)` and the workflow-only
+  `Backend` from `shared/contracts`.
+
+`DataApiService` dispatches resource calls directly to backend handlers in-process. Workflow events
+and results describe what happened; frontend owners perform navigation, cache invalidation,
+translation, and user feedback. Concrete backend classes never enter frontend state, and there is no
+compatibility adapter or generic frontend selector for persistence services.
+
 ## Topic Documents
 
-- [Data Layer](./mobile-data-layer.md): Data API, preferences, workflow contracts, SQLite services, schemas, and seeding.
-- [Runtime Ownership](./mobile-runtime-ownership.md): app bootstrap, sessions, cleanup, and startup gates.
-- [AI Provider Integration](./mobile-ai-provider-integration.md): provider/model records and AI adapters.
-- [Chat Streaming And Rendering](./mobile-chat-streaming-rendering.md): `ChatSession`, overlay, and persistence.
-- [Web Search](./mobile-web-search.md): external providers versus provider-native web search.
-- [Navigation And Insets](./mobile-navigation-and-insets.md): Expo Router, tabs, stacks, sheets, and insets.
-- [UI Components](./mobile-ui-components.md): shared controls and feature-local UI.
-- [Extension Points](./mobile-extension-points.md): how to extend contracts, backend workflows, and UI.
-
-## Decision Index
-
-- [ADR 0001: Use Provider-Owned Runtime Owners](../adr/0001-use-provider-owned-runtime-owners.md)
-- [ADR 0002: Use Startup Gates Instead Of Lifecycle Phases](../adr/0002-use-startup-gates-not-lifecycle-phases.md)
-- [ADR 0003: Use Pressable Wrappers For Product Buttons](../adr/0003-use-pressable-wrappers-for-product-buttons.md)
-- [ADR 0004: Use Expo Runtime Fetch For Chat Streaming](../adr/0004-use-expo-runtime-fetch-for-chat-streaming.md)
-- [ADR 0005: Preserve Message Part Rendering Boundaries](../adr/0005-preserve-message-part-rendering-boundaries.md)
-- [ADR 0006: Use Platform-Native Navigation Gestures](../adr/0006-use-platform-native-navigation-gestures.md)
-- [ADR 0007: Use Component Bottom Sheets For Model Picker](../adr/0007-use-component-bottom-sheets-for-model-picker.md)
-- [ADR 0008: Defer op-sqlite Storage Migration](../adr/0008-defer-op-sqlite-storage-migration.md)
-- [ADR 0009: Keep Flat src Layout](../adr/0009-keep-flat-src-layout.md), superseded in part
-- [ADR 0010: Adopt Feature And Runtime Layering](../adr/0010-adopt-feature-and-runtime-layering.md), superseded in part
-- [ADR 0011: Separate The In-Process Frontend And Backend](../adr/0011-separate-in-process-frontend-and-backend.md)
+- [Data Layer](./data/README.md): Data API, preferences, workflow contracts, SQLite services, schemas, and seeding.
+- [Storage Engine](./data/storage-engine.md): current SQLite constraints and migration criteria.
+- [Runtime Ownership](./runtime-ownership.md): app bootstrap, sessions, cleanup, and startup gates.
+- [AI Provider Integration](./ai/provider-integration.md): provider/model records and AI adapters.
+- [Chat Streaming And Rendering](./chat/streaming-and-rendering.md): `ChatSession`, overlay, and persistence.
+- [Web Search](./web-search.md): external providers versus provider-native web search.
+- [Navigation And Insets](./navigation-and-insets.md): Expo Router, tabs, stacks, sheets, and insets.
+- [UI Components](./ui-components.md): shared controls and feature-local UI.
+- [Extending Cherry Mobile](../guides/extending.md): how to extend data, workflows, backend behavior, and UI.
 
 ## Current Baseline
 
@@ -78,3 +87,6 @@ constructor interface, and bootstrap supplies the concrete implementation.
 - Chat and painting generation use explicit backend sessions with `dispose` and abort behavior.
 - Navigation, translation, toast, and React Query invalidation stay in frontend owners.
 - `expo-screen-corner-radius` remains the bottom-sheet device adapter; context menus use Expo UI directly.
+
+Simple persistence classes sit behind Data API handlers. A workflow contract is introduced only
+when it hides meaningful orchestration, lifetime, platform, or third-party complexity.

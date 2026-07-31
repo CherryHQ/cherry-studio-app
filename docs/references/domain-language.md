@@ -1,6 +1,8 @@
-# Cherry Mobile Context
+# Domain Language
 
-Cherry Mobile is the React Native / Expo client for Cherry Studio. It keeps Cherry's chat and provider model compatible with desktop while using mobile-native data, navigation, rendering, and resource ownership patterns.
+This reference defines the shared product and architecture language for Cherry Studio Mobile. The
+mobile app keeps Cherry's chat and provider model compatible with Desktop while using mobile-native
+data, navigation, rendering, and resource ownership patterns.
 
 ## Language
 

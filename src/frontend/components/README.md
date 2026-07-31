@@ -1,8 +1,8 @@
 # Component Module Conventions
 
-This directory follows the repository-wide naming rules in
-[`docs/rules/naming-conventions.md`](../../../docs/rules/naming-conventions.md). The notes below are
-the local conventions for `src/frontend/components`.
+This directory follows the repository-wide
+[naming conventions](../../../docs/references/naming-conventions.md). The notes below are the local
+conventions for `src/frontend/components`.
 
 `src/frontend/components` is for independently owned modules shared across screens or feature
 domains. Route-owned UI should live under `src/frontend/features` until a second independent owner

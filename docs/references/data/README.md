@@ -1,8 +1,7 @@
-# Cherry Mobile Data Layer
+# Data Layer
 
-Status: current
-
-This document defines local data ownership after the in-process frontend/backend split in ADR 0011.
+This reference defines local data ownership across the in-process frontend/backend boundary. Terms
+follow [Domain Language](../domain-language.md).
 
 ## Runtime Paths
 
@@ -112,6 +111,8 @@ dependencies directly when that dependency is part of the service implementation
 Expo cannot read a migration directory at runtime, so SQL and the journal are bundled in
 `migrations.ts`. Writes go through `DbService.withWriteTx()`, which serializes `BEGIN IMMEDIATE`
 transactions on the long-lived connection.
+
+See [Storage Engine](./storage-engine.md) for the current engine constraints and migration criteria.
 
 ## Schema And Message Persistence
 

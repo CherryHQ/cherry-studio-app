@@ -1,6 +1,6 @@
 // Public component surface of the chat input area. Other features (today:
 // paintings) compose the chat input through this module; deep imports of the
-// component/context modules below are boundary violations (ADR 0010).
+// component/context modules below violate the module ownership boundary.
 //
 // Three pure-logic modules are additionally sanctioned for direct import so
 // logic-only consumers (and their node-env tests) don't have to load this
