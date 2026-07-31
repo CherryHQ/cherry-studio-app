@@ -217,7 +217,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
           </Text>
         ) : null}
       </View>
-      {isSelected ? <CheckIcon className="size-5 text-accent" strokeWidth={2.5} /> : null}
+      {isSelected ? <CheckIcon className="size-5 text-primary" strokeWidth={2.5} /> : null}
     </Pressable>
   );
 });

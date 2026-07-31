@@ -5,7 +5,6 @@ import '@/bootstrap/preboot/blob';
 import { BottomSheetProvider } from '@swmansion/react-native-bottom-sheet';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useThemeColor } from 'heroui-native/hooks';
 import { HeroUINativeProvider } from 'heroui-native/provider';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -13,6 +12,7 @@ import { withUniwind } from 'uniwind';
 import { AppBootstrapGate, AppBootstrapProvider } from '@/bootstrap';
 import { NavigationThemeProvider } from '@/frontend/components/navigation';
 import { QueryProvider } from '@/frontend/data';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isIOS, isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 // Hold the native splash across app bootstrap so the gate never exposes a

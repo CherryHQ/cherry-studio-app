@@ -353,7 +353,7 @@ function AssistantListRow({
                   className={
                     isSelected
                       ? 'size-6 items-center justify-center rounded-full bg-primary'
-                      : 'size-6 items-center justify-center rounded-full border-2 border-foreground-muted'
+                      : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
                   }
                 >
                   {isSelected ? <CheckIcon className="size-4 text-white" strokeWidth={3} /> : null}
@@ -366,7 +366,7 @@ function AssistantListRow({
                 <Text className="font-semibold text-foreground text-md" numberOfLines={1}>
                   {assistant.name}
                 </Text>
-                <Text className="text-foreground-muted text-xs" numberOfLines={1}>
+                <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
                   {assistant.modelName ?? t('assistant.model.none')}
                 </Text>
               </View>

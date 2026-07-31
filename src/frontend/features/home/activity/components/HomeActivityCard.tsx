@@ -117,9 +117,9 @@ export function HomeActivityCard({ data }: HomeActivityCardProps) {
           </View>
           <View className="mt-4 flex-row items-center justify-between gap-2">
             <View className="min-w-0 flex-row items-center gap-1.5 rounded-full bg-surface-secondary px-3 py-1">
-              <FlameIcon className="size-4 text-accent" strokeWidth={2.25} />
+              <FlameIcon className="size-4 text-primary" strokeWidth={2.25} />
               <Text
-                className="shrink text-accent text-sm"
+                className="shrink text-primary text-sm"
                 numberOfLines={1}
                 style={styles.statText}
               >

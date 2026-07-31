@@ -30,11 +30,11 @@ export function SourceUrlItem({ label, url, variant = 'card' }: SourceUrlItemPro
         <Text className="font-medium text-default-foreground text-sm" numberOfLines={1} selectable>
           {label || url}
         </Text>
-        <Text className="text-foreground-muted text-xs" numberOfLines={1} selectable>
+        <Text className="text-foreground-tertiary text-xs" numberOfLines={1} selectable>
           {domain || url}
         </Text>
       </View>
-      <SquareArrowOutUpRightIcon className="size-3.5 text-foreground-muted" strokeWidth={2} />
+      <SquareArrowOutUpRightIcon className="size-3.5 text-foreground-tertiary" strokeWidth={2} />
     </Pressable>
   );
 }

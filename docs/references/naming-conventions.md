@@ -43,7 +43,7 @@ The 90% case. See later sections for full rules and edge cases.
 | Bucket directory (categorical container) | lowercase **plural** noun | `services/`, `hooks/`, `schemas/` |
 | Business / domain module directory | `camelCase` | `assistantPicker/`, `webSearch/` |
 | Large multi-file domain subtree | `src/frontend/features/<name>/` (route-bound) or `camelCase/` (under an owning bucket) | `frontend/features/chat/`, `integrations/webSearch/` |
-| `packages/ui/` (icon registry) directory | `kebab-case` | `icons/`, `icons-png/` |
+| `packages/ui/` (icon registry) directory | `kebab-case` | `icons/`, `icons-webp/` |
 
 > Stateful classes use only `Service` (default) or `Manager` (instance pool) — see §5.2. Files placed inside any `utils/` directory drop the `Utils` suffix — the directory already declares the role; see §3.2. React Native platform-divergent files carry a `.ios`/`.android` suffix on the base name — see §3.8.
 
@@ -241,8 +241,8 @@ Everything inside `packages/ui/` (both files and directories) uses `kebab-case` 
 
 ```
 packages/ui/src/icons/        ✅
-packages/ui/src/icons-png/    ✅
-packages/ui/src/icons-png/provider-aliases.ts   ✅
+packages/ui/src/icons-webp/    ✅
+packages/ui/src/icons-webp/provider-aliases.ts   ✅
 ```
 
 The other publishable packages (`ai-sdk-provider/`, `provider-registry/`, `lucide-uniwind/`) follow the same package-local `kebab-case` for their files.
@@ -545,7 +545,7 @@ Naming a new FILE
 
 Naming a new DIRECTORY
 ├─ npm package (packages/*)?      → kebab-case      (ai-sdk-provider)
-├─ Under packages/ui/?            → kebab-case      (icons, icons-png)
+├─ Under packages/ui/?            → kebab-case      (icons, icons-webp)
 ├─ Is itself a React component?   → PascalCase      (MainHeader, ScrollToBottomButton)
 ├─ Bucket / categorical container? → lowercase plural noun  (services, hooks, schemas)
 ├─ Large route-bound UI domain?   → src/frontend/features/<name>/       (frontend/features/chat; §4.10)

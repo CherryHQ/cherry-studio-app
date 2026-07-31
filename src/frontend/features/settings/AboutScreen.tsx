@@ -1,4 +1,4 @@
-import { PROVIDER_ICONS } from '@cherrystudio/ui/icons-png/providers';
+import { PROVIDER_ICONS } from '@cherrystudio/ui/icons/providers';
 import Constants from 'expo-constants';
 import {
   CodeIcon,
@@ -66,8 +66,8 @@ export default function AboutSettingsScreen() {
               <Text className="text-default-foreground text-sm" numberOfLines={0}>
                 {t('common.cherryStudioDescription')}
               </Text>
-              <View className="self-start rounded-full bg-accent/10 px-2 py-0.5">
-                <Text className="font-medium text-accent text-sm">v{APP_VERSION}</Text>
+              <View className="self-start rounded-full bg-primary/10 px-2 py-0.5">
+                <Text className="font-medium text-primary text-sm">v{APP_VERSION}</Text>
               </View>
             </View>
           </View>

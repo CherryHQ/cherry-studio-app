@@ -1,5 +1,5 @@
 import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
-import type { IconPngSource } from '@cherrystudio/ui/icons';
+import type { IconSource } from '@cherrystudio/ui/icons';
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useToast } from 'heroui-native/toast';
 import { Settings2Icon } from 'lucide-uniwind/png';
@@ -56,7 +56,7 @@ type ChatInputSurfaceProps = {
   isSendEnabled: boolean;
   isStreaming: boolean;
   /** Themed icon for the selected model; the button falls back to the label's initial. */
-  modelIcon?: IconPngSource;
+  modelIcon?: IconSource;
   modelLabel?: string;
   modelSettings?: ChatInputModelSettings;
   onModelPickerPress: () => void;
@@ -326,7 +326,7 @@ function ChatInputModelButton({
   accessibilityLabel: string;
   /** Current reasoning effort of the model; rendered muted next to the name. */
   effortLabel?: string;
-  icon?: IconPngSource;
+  icon?: IconSource;
   initial: string;
   /** The max stop stands out in the thinking accent color instead of muted. */
   isEffortMax?: boolean;

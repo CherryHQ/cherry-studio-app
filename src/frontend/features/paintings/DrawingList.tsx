@@ -215,7 +215,7 @@ export function DrawingList() {
                 className="mx-4 h-20 items-center justify-center rounded-md bg-surface-secondary active:opacity-70"
                 onPress={() => void handleViewAllPress()}
               >
-                <ImageIcon className="size-6 text-foreground-muted" strokeWidth={1.5} />
+                <ImageIcon className="size-6 text-foreground-tertiary" strokeWidth={1.5} />
               </Pressable>
             )}
           </View>
@@ -324,7 +324,7 @@ function DrawingGridItem({
               <CheckIcon className="size-4 text-white" strokeWidth={3} />
             </View>
           ) : (
-            <View className="size-6 rounded-full border-2 border-foreground-muted bg-black/30" />
+            <View className="size-6 rounded-full border-2 border-border-strong bg-black/30" />
           )}
         </Animated.View>
       </Pressable>

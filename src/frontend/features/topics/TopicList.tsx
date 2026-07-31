@@ -433,7 +433,7 @@ const TopicRow = memo(function TopicRow({
                   className={
                     isSelected
                       ? 'size-6 items-center justify-center rounded-full bg-primary'
-                      : 'size-6 items-center justify-center rounded-full border-2 border-foreground-muted'
+                      : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
                   }
                 >
                   {isSelected ? <CheckIcon className="size-4 text-white" strokeWidth={3} /> : null}
@@ -452,11 +452,11 @@ const TopicRow = memo(function TopicRow({
                   >
                     {topic.name || t('navigation.newChat')}
                   </Text>
-                  <Text className="text-foreground-muted text-xs" numberOfLines={1}>
+                  <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
                     {updatedAtLabel}
                   </Text>
                 </View>
-                <Text className="text-foreground-muted text-xs" numberOfLines={1}>
+                <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
                   {assistant?.modelName ?? t('assistant.model.none')}
                 </Text>
               </View>

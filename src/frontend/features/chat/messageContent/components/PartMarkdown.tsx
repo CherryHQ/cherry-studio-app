@@ -1,8 +1,8 @@
-import { useThemeColor } from 'heroui-native/hooks';
 import { useColorScheme } from 'react-native';
 import { EnrichedMarkdownText, type MarkdownStyle } from 'react-native-enriched-markdown';
 import { StreamdownText } from 'react-native-streamdown';
 
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { useMarkdownLinkPress } from '../hooks/useMarkdownLinkPress';
 
 type PartMarkdownProps = {
@@ -16,14 +16,9 @@ export function PartMarkdown({ isStreaming, markdown }: PartMarkdownProps) {
   const isDark = colorScheme === 'dark';
   const MarkdownRenderer = isStreaming ? StreamdownText : EnrichedMarkdownText;
 
-  const [foreground, background, muted, accent, border, defaultColor] = useThemeColor([
-    'foreground',
-    'background',
-    'muted',
-    'accent',
-    'border',
-    'default',
-  ]);
+  const [foreground, background, mutedForeground, link, primary, border, secondary] = useThemeColor(
+    ['foreground', 'background', 'muted-foreground', 'link', 'primary', 'border', 'secondary'],
+  );
 
   const markdownStyle: MarkdownStyle | undefined = isDark
     ? {
@@ -35,8 +30,8 @@ export function PartMarkdown({ isStreaming, markdown }: PartMarkdownProps) {
         h5: { color: foreground },
         h6: { color: foreground },
         blockquote: {
-          color: muted,
-          borderColor: muted,
+          color: mutedForeground,
+          borderColor: mutedForeground,
           backgroundColor: background,
         },
         list: {
@@ -47,31 +42,31 @@ export function PartMarkdown({ isStreaming, markdown }: PartMarkdownProps) {
         code: {
           color: foreground,
           borderColor: border,
-          backgroundColor: defaultColor,
+          backgroundColor: secondary,
         },
         link: {
-          color: accent,
+          color: link,
         },
         strong: { color: foreground },
         em: { color: foreground },
-        strikethrough: { color: muted },
+        strikethrough: { color: mutedForeground },
         underline: { color: foreground },
-        thematicBreak: { color: muted },
+        thematicBreak: { color: mutedForeground },
         table: {
           color: foreground,
           headerTextColor: foreground,
-          headerBackgroundColor: defaultColor,
+          headerBackgroundColor: secondary,
           rowEvenBackgroundColor: background,
           rowOddBackgroundColor: background,
           borderColor: border,
         },
         taskList: {
-          checkedColor: accent,
-          borderColor: muted,
+          checkedColor: primary,
+          borderColor: mutedForeground,
           checkmarkColor: foreground,
-          checkedTextColor: muted,
+          checkedTextColor: mutedForeground,
         },
-        math: { color: foreground, backgroundColor: defaultColor },
+        math: { color: foreground, backgroundColor: secondary },
         inlineMath: { color: foreground },
         spoiler: { color: foreground },
       }

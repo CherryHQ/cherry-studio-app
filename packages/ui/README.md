@@ -1,15 +1,11 @@
 # UI Package
 
 Shared Cherry Studio UI assets for the mobile app. This package owns the mobile
-PNG runtime for the desktop UI icon set.
+WebP runtime for the desktop UI icon set.
 
 ## Icon Sync
 
-The source icons are copied from the desktop repository:
-
-```txt
-/Users/eeee/Code/03_Forks/cherry/cherry-studio/packages/ui
-```
+The source icons are copied from the desktop repository's `packages/ui` package.
 
 Synced source SVGs live in this package under:
 
@@ -21,22 +17,22 @@ packages/ui/icons/models/light
 packages/ui/icons/models/dark
 ```
 
-Generated PNG assets are consumed by the mobile app through static Metro
+Generated WebP assets are consumed by the mobile app through static Metro
 registries:
 
 ```txt
-packages/ui/src/icons-png/general/light
-packages/ui/src/icons-png/general/dark
-packages/ui/src/icons-png/models/light
-packages/ui/src/icons-png/models/dark
-packages/ui/src/icons-png/providers/light
-packages/ui/src/icons-png/providers/dark
-packages/ui/src/icons-png/**/index.ts
+packages/ui/src/icons-webp/general/light
+packages/ui/src/icons-webp/general/dark
+packages/ui/src/icons-webp/models/light
+packages/ui/src/icons-webp/models/dark
+packages/ui/src/icons-webp/providers/light
+packages/ui/src/icons-webp/providers/dark
+packages/ui/src/icons-webp/**/index.ts
 ```
 
 The source SVGs under `packages/ui/icons` are conversion inputs only. Runtime
-imports should come from `@cherrystudio/ui/icons` or `@cherrystudio/ui/icons-png`,
-not from the source SVG directories.
+imports should come from the format-neutral `@cherrystudio/ui/icons` exports,
+not from the source SVG or generated WebP directories.
 
 Do not edit generated icons directly. Update the SVG source or the generator,
 then run the relevant generator again.
@@ -57,26 +53,26 @@ pnpm ui:provider-icons:generate
 pnpm ui:icons:generate:models
 ```
 
-The PNG generator is:
+The WebP generator is:
 
 ```txt
 packages/ui/src/scripts/generate-icons.ts
 ```
 
-It renders general, model, and provider SVG sources to 72px PNGs with `sharp`,
-writes light and dark assets under `src/icons-png`, and generates static
+It renders general, model, and provider SVG sources to transparent 72px lossless
+WebPs with `sharp`, writes light and dark assets under `src/icons-webp`, and generates static
 `require()` registries for Metro. SVGs using `currentColor` are rendered as
-theme foreground PNG pairs.
+theme foreground WebP pairs.
 
 Current generated counts:
 
 - General icons: 22
-- Provider icons: 159
-- Model icons: 35
+- Provider icons: 156
+- Model icons: 168
 
-## PNG Runtime
+## WebP Runtime
 
-Icons use PNG source pairs:
+Icons use static source pairs:
 
 ```ts
 import { resolveIcon, resolveProviderIcon } from '@cherrystudio/ui/icons';
@@ -88,18 +84,18 @@ const source = icon?.[theme];
 Call sites pass the selected source to `expo-image`. Theme switching is handled
 by choosing `light` or `dark` from the returned pair.
 
-If a dark SVG does not exist, the generated dark PNG entry points to the light
-PNG unless the source uses `currentColor`. This keeps the API stable while still
+If a dark SVG does not exist, the generated dark WebP entry points to the light
+WebP unless the source uses `currentColor`. This keeps the API stable while still
 allowing later dark assets to be added without changing call sites.
 
 Provider id aliases live in:
 
 ```txt
-packages/ui/src/icons-png/provider-aliases.ts
+packages/ui/src/icons-webp/provider-aliases.ts
 ```
 
 When adding a new provider id that differs from the source SVG name, add an
-alias and extend `packages/ui/src/icons-png/__tests__/providers.test.ts`.
+alias and extend `packages/ui/src/icons-webp/__tests__/providers.test.ts`.
 
 ## App Wiring
 
@@ -118,7 +114,7 @@ After syncing or changing icons, run:
 ```sh
 pnpm ui:icons:generate
 pnpm typecheck
-pnpm test packages/ui/src/icons/__tests__/registry.test.ts packages/ui/src/icons-png/__tests__/providers.test.ts --runInBand
+pnpm test packages/ui/src/icons/__tests__/registry.test.ts packages/ui/src/icons-webp/__tests__/providers.test.ts --runInBand
 pnpm exec biome check packages/ui
 git diff --check
 ```

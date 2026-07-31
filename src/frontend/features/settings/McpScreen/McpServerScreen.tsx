@@ -339,7 +339,7 @@ function McpServerEditor({
                 isDisabled={!isEditing}
                 onChangeText={(value) => updateField('name', value)}
                 placeholder={t('settings.mcp.fields.name')}
-                placeholderColorClassName="accent-muted"
+                placeholderColorClassName="accent-muted-foreground"
                 style={styles.textInput}
                 value={displayedForm.name}
                 variant="secondary"
@@ -356,7 +356,7 @@ function McpServerEditor({
               keyboardType="url"
               onChangeText={(value) => updateField('baseUrl', value)}
               placeholder="https://example.com/mcp"
-              placeholderColorClassName="accent-muted"
+              placeholderColorClassName="accent-muted-foreground"
               spellCheck={false}
               style={styles.textInput}
               value={displayedForm.baseUrl}
@@ -376,7 +376,7 @@ function McpServerEditor({
                 isDisabled={!isEditing}
                 onChangeText={(value) => updateField('description', value)}
                 placeholder={t('settings.mcp.fields.description')}
-                placeholderColorClassName="accent-muted"
+                placeholderColorClassName="accent-muted-foreground"
                 style={styles.textInput}
                 value={displayedForm.description}
                 variant="secondary"
@@ -399,7 +399,7 @@ function McpServerEditor({
               keyboardType="number-pad"
               onChangeText={(value) => updateField('timeout', value)}
               placeholder="60"
-              placeholderColorClassName="accent-muted"
+              placeholderColorClassName="accent-muted-foreground"
               style={styles.textInput}
               value={displayedForm.timeout}
               variant="secondary"

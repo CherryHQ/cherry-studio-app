@@ -25,7 +25,7 @@ export function McpHeadersEditor({
       multiline
       onChangeText={onChangeText}
       placeholder={t('settings.mcp.headers.placeholder')}
-      placeholderColorClassName="accent-muted"
+      placeholderColorClassName="accent-muted-foreground"
       spellCheck={false}
       style={styles.input}
       textAlignVertical="top"

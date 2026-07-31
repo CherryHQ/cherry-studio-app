@@ -1,4 +1,4 @@
-import { resolveProviderIcon } from '@cherrystudio/ui/icons-png/providers';
+import { resolveProviderIcon } from '@cherrystudio/ui/icons/providers';
 import { Button, Card, Spinner, useToast } from 'heroui-native';
 import { LogInIcon, LogOutIcon, WalletIcon } from 'lucide-uniwind/png';
 import { Fragment, useCallback } from 'react';
@@ -178,7 +178,7 @@ export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProp
         <Card.Footer className="mt-2">
           <Text
             accessibilityRole="link"
-            className="text-xs text-foreground-muted underline"
+            className="text-xs text-foreground-tertiary underline"
             onPress={() => void openExternalUrl('https://open.cherryin.ai')}
           >
             {t('settings.provider.oauth.cherryIn.service_attribution')}

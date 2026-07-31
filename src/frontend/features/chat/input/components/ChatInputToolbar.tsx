@@ -35,9 +35,9 @@ function SelectedToolTag({ onClear, tool }: SelectedToolTagProps) {
   const Icon = tool.icon;
 
   return (
-    <ChatInputAccessoryItem className="flex-row items-center gap-1 rounded-full bg-accent/10 px-2 py-1">
-      <Icon className="size-5 text-accent" strokeWidth={2.25} />
-      <Text className="font-semibold text-accent text-base" numberOfLines={1}>
+    <ChatInputAccessoryItem className="flex-row items-center gap-1 rounded-full bg-primary/10 px-2 py-1">
+      <Icon className="size-5 text-primary" strokeWidth={2.25} />
+      <Text className="font-semibold text-primary text-base" numberOfLines={1}>
         {t(tool.tagTitleKey)}
       </Text>
       <ClearTagButton onPress={onClear} />
@@ -56,7 +56,7 @@ function ClearTagButton({ onPress }: { onPress: () => void }) {
       hitSlop={6}
       onPress={onPress}
     >
-      <XIcon className="size-5 text-accent" strokeWidth={2.25} />
+      <XIcon className="size-5 text-primary" strokeWidth={2.25} />
     </Pressable>
   );
 }

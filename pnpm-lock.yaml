@@ -97,6 +97,9 @@ importers:
       '@cherrystudio/ai-sdk-provider':
         specifier: workspace:*
         version: link:packages/ai-sdk-provider
+      '@cherrystudio/design-tokens':
+        specifier: workspace:*
+        version: link:packages/design-tokens
       '@cherrystudio/provider-registry':
         specifier: workspace:*
         version: link:packages/provider-registry
@@ -490,6 +493,8 @@ importers:
       vitest:
         specifier: ^3.2.7
         version: 3.2.7(@types/node@25.9.5)(jiti@2.7.0)(jsdom@20.0.3)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.0)(yaml@2.9.0)
+
+  packages/design-tokens: {}
 
   packages/lucide-uniwind:
     dependencies:

@@ -79,8 +79,8 @@ export function ChatInputReasoningSection({
         />
       </View>
       <View className="mt-3 flex-row items-center justify-between">
-        <Text className="text-accent text-sm">{t('chat.reasoning.faster')}</Text>
-        <Text className="text-accent text-sm">{t('chat.reasoning.smarter')}</Text>
+        <Text className="text-primary text-sm">{t('chat.reasoning.faster')}</Text>
+        <Text className="text-primary text-sm">{t('chat.reasoning.smarter')}</Text>
       </View>
       <View className="mt-2">
         <EffortSlider
