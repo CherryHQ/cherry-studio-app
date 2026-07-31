@@ -22,6 +22,7 @@
     "ui:provider-icons:generate": "tsx packages/ui/src/scripts/generate-icons.ts --type=providers",
     "design:sync": "tsx packages/design-tokens/scripts/sync-desktop.ts",
     "design:check": "tsx packages/design-tokens/scripts/check.ts && tsx packages/design-tokens/scripts/check-app-theme.ts && tsx packages/ui/src/scripts/check-icons.ts",
+    "desktop:sync:audit": "tsx scripts/desktopSyncAudit.ts",
     "skills:sync": "tsx scripts/skills-sync.ts",
     "skills:check": "tsx scripts/skills-check.ts",
     "docs:check-links": "tsx scripts/check-doc-links.ts",
