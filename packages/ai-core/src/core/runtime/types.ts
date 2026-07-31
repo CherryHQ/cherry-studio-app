@@ -35,9 +35,33 @@ export interface RuntimeConfig<
   modelResolver?: (modelId: string) => any;
 }
 
+export type RuntimeProviderCallEvent =
+  | {
+      modality: 'embedding';
+      requestId: string;
+      providerId: string;
+      modelId: string;
+      usage?: { tokens: number };
+      metrics: { timeCompletionMs: number };
+      completedAt: number;
+    }
+  | {
+      modality: 'image';
+      requestId: string;
+      providerId: string;
+      modelId: string;
+      imageCount: number;
+      usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+      metrics: { timeCompletionMs: number };
+      completedAt: number;
+    };
+
+export type RuntimeProviderCallHandler = (event: RuntimeProviderCallEvent) => void;
+
 export type generateImageParams = Omit<Parameters<typeof generateImage>[0], 'model'> & {
   model: string | ImageModelV3;
   experimental_download?: Experimental_DownloadFunction;
+  onProviderCall?: RuntimeProviderCallHandler;
 };
 export type generateImageResult = Awaited<ReturnType<typeof generateImage>>;
 export type generateTextParams = Parameters<typeof generateText>[0];
@@ -46,5 +70,6 @@ export type streamTextParams = Parameters<typeof streamText>[0];
 // Embedding types (AI SDK v6 only has embedMany, no embed)
 export type EmbedManyParams = Omit<Parameters<typeof embedMany>[0], 'model'> & {
   model: string | EmbeddingModelV3;
+  onProviderCall?: RuntimeProviderCallHandler;
 };
 export type EmbedManyResult = Awaited<ReturnType<typeof embedMany>>;

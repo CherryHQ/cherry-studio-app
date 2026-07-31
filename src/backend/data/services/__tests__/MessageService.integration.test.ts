@@ -147,7 +147,7 @@ describe('MessageService integration', () => {
     });
     sqlite
       .prepare('UPDATE message SET stats = ? WHERE id = ?')
-      .run(JSON.stringify({ promptTokens: 999, cost: 9, timeFirstTokenMs: 12 }), message.id);
+      .run(JSON.stringify({ timeFirstTokenMs: 12 }), message.id);
     const usageService = new AiUsageRecordService(dbService);
     const context = {
       providerId: 'openrouter',
@@ -222,11 +222,6 @@ describe('MessageService integration', () => {
         timeFirstTokenMs: 12,
       },
     });
-    const persistedStats = JSON.parse(
-      sqlite.prepare('SELECT stats FROM message WHERE id = ?').get(message.id)?.stats as string,
-    ) as Record<string, unknown>;
-    expect(persistedStats).not.toHaveProperty('promptTokens');
-    expect(persistedStats).not.toHaveProperty('cost');
   });
 
   describe('applyToolApprovalDecisions', () => {

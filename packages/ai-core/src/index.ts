@@ -39,7 +39,13 @@ export type {
   WebSearchToolConfigMap,
 } from './core/providers';
 // ==================== Embedding 类型 ====================
-export type { CreateAgentOptions, EmbedManyParams, EmbedManyResult } from './core/runtime';
+export type {
+  CreateAgentOptions,
+  EmbedManyParams,
+  EmbedManyResult,
+  RuntimeProviderCallEvent,
+  RuntimeProviderCallHandler,
+} from './core/runtime';
 // ==================== 主要用户接口 ====================
 export {
   createAgent,

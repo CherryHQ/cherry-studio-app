@@ -301,23 +301,12 @@ const usageProjectionKeys = [
   'providerPerformance',
 ] as const satisfies readonly (keyof MessageUsageProjection)[];
 
-const legacyUsageKeys = [
-  'cacheReadTokens',
-  'cacheWriteTokens',
-  'completionTokens',
-  'cost',
-  'noCacheTokens',
-  'promptTokens',
-  'thoughtsTokens',
-] as const;
-
 export function mergeMessageUsageProjection(
   existing: MessageStats | null | undefined,
   projection: MessageUsageProjection,
 ): MessageStats {
   const messageOwned = { ...(existing ?? {}) } as MessageStats & Record<string, unknown>;
   for (const key of usageProjectionKeys) delete messageOwned[key];
-  for (const key of legacyUsageKeys) delete messageOwned[key];
   return { ...messageOwned, ...projection };
 }
 

@@ -7,7 +7,13 @@
 export { RuntimeExecutor } from './executor';
 
 // 导出类型
-export type { EmbedManyParams, EmbedManyResult, RuntimeConfig } from './types';
+export type {
+  EmbedManyParams,
+  EmbedManyResult,
+  RuntimeConfig,
+  RuntimeProviderCallEvent,
+  RuntimeProviderCallHandler,
+} from './types';
 
 // === 便捷工厂函数 ===
 

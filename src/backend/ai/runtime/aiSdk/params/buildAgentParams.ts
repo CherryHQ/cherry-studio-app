@@ -2,7 +2,11 @@ import type { AiPlugin } from '@cherrystudio/ai-core';
 import { stepCountIs, type ToolCallRepairFunction, type ToolSet } from 'ai';
 import * as Crypto from 'expo-crypto';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
-import type { AiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
+import type {
+  AiUsageCaptureContext,
+  AiUsageRecordService,
+  MessageRef,
+} from '@/backend/data/services/AiUsageRecordService';
 import type { AssistantService } from '@/backend/data/services/AssistantService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
@@ -60,6 +64,7 @@ export interface BuildAgentParamsInput {
   request: AiBaseRequest & { apiKeyOverride?: string; chatId?: string; messageId?: string };
   services: BuildAgentParamsDependencies;
   shouldIncludeExternalTools?: boolean;
+  usageMessageRef?: MessageRef | null;
 }
 
 export interface BuiltAgentParams {
@@ -74,12 +79,14 @@ export interface BuiltAgentParams {
   tools: ToolSet | undefined;
   options: AgentOptions;
   credentialReceipt: ServingCredentialReceipt;
+  usageCaptureContext: AiUsageCaptureContext;
 }
 
 export async function buildAgentParams({
   request,
   services,
   shouldIncludeExternalTools = false,
+  usageMessageRef = null,
 }: BuildAgentParamsInput): Promise<BuiltAgentParams> {
   const { provider, model, assistant } = await getProviderAndModel(request, services);
   const { config: sdkConfig, credentialReceipt } = await resolveProviderAiSdkConfig(
@@ -149,8 +156,9 @@ export async function buildAgentParams({
     source: assistant
       ? { type: 'assistant', id: assistant.id, name: assistant.name, icon: assistant.emoji }
       : null,
-    messageRef: request.messageId ? { kind: 'chat', id: request.messageId } : null,
+    messageRef: usageMessageRef,
   });
+  const usagePlugin = createAiUsagePlugin(usageCaptureContext, services.aiUsageRecord);
   const plugins = [
     ...buildAgentPlugins({
       aiSdkProviderId: sdkConfig.providerId,
@@ -159,7 +167,7 @@ export async function buildAgentParams({
       streamOutput: capabilities?.streamOutput ?? true,
       webSearchPluginConfig: capabilities?.webSearchPluginConfig,
     }),
-    createAiUsagePlugin(usageCaptureContext, services.aiUsageRecord),
+    usagePlugin,
   ];
   const shouldLoadTools = shouldIncludeExternalTools && assistant && isFunctionCallingModel(model);
   const resolvedTools = shouldLoadTools
@@ -191,10 +199,12 @@ export async function buildAgentParams({
     modelId: model.modelId,
     providerId: sdkConfig.providerId,
     providerSettings: sdkConfig.providerSettings,
+    getUsagePlugins: () => [usagePlugin],
   });
 
   return {
     credentialReceipt,
+    usageCaptureContext,
     sdkConfig: { ...sdkConfig, modelId: model.modelId },
     provider,
     model,

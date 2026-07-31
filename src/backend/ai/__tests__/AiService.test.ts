@@ -1,9 +1,12 @@
+import type { LanguageModelV3ToolCall } from '@ai-sdk/provider';
 import {
   embedMany as aiCoreEmbedMany,
   generateImage as aiCoreGenerateImage,
+  generateText as aiCoreGenerateText,
+  type RuntimeProviderCallEvent,
 } from '@cherrystudio/ai-core';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import type { ToolSet } from 'ai';
+import { InvalidToolInputError, type ToolSet } from 'ai';
 import { AiService, type AiServiceDependencies } from '@/backend/ai/AiService';
 import { createWebSearchTool } from '@/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
@@ -24,6 +27,7 @@ const mockAgentConstructor = jest.fn();
 jest.mock('@cherrystudio/ai-core', () => ({
   embedMany: jest.fn(async () => ({ embeddings: [[0.1]], usage: undefined })),
   generateImage: jest.fn(),
+  generateText: jest.fn(),
   definePlugin: jest.fn((plugin) => plugin),
 }));
 
@@ -40,6 +44,7 @@ jest.mock('@/backend/ai/runtime/aiSdk/Agent', () => ({
 
 const embedManyMock = aiCoreEmbedMany as jest.MockedFunction<typeof aiCoreEmbedMany>;
 const generateImageMock = aiCoreGenerateImage as jest.MockedFunction<typeof aiCoreGenerateImage>;
+const generateTextMock = aiCoreGenerateText as jest.MockedFunction<typeof aiCoreGenerateText>;
 
 describe('AiService.generateImage', () => {
   beforeEach(() => {
@@ -144,6 +149,59 @@ describe('AiService.generateImage', () => {
       }),
     );
   });
+
+  it('records each observed image provider call with its usage context', async () => {
+    const model = createModel('gpt-image-2', {
+      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+    });
+    const assistant = createAssistant(model.id);
+    const services = createServices({ assistant, model });
+    generateImageMock.mockImplementationOnce(async (_providerId, _settings, params) => {
+      const observer = params as unknown as {
+        onProviderCall?: (event: ImageProviderCallEvent) => void;
+      };
+      observer.onProviderCall?.({
+        modality: 'image',
+        requestId: 'ai-core:image:provider-call',
+        providerId: 'openai-compatible',
+        modelId: model.modelId,
+        imageCount: 2,
+        usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+        metrics: { timeCompletionMs: 125 },
+        completedAt: 1_785_427_200_000,
+      });
+      return {
+        images: [
+          { base64: 'first', mediaType: 'image/png' },
+          { base64: 'second', mediaType: 'image/png' },
+        ],
+        usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+      } as never;
+    });
+
+    await new AiService(services).generateImage({
+      assistantId: assistant.id,
+      mode: 'generate',
+      paramValues: { numImages: 2 },
+      prompt: 'draw two cherries',
+      uniqueModelId: model.id,
+    });
+
+    expect(services.aiUsageRecord.recordInvocation).toHaveBeenCalledWith({
+      requestId: 'ai-core:image:provider-call',
+      context: expect.objectContaining({
+        messageRef: null,
+        modelId: model.modelId,
+        source: expect.objectContaining({ id: assistant.id, type: 'assistant' }),
+      }),
+      modality: 'image',
+      usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+      imageCount: 2,
+      metrics: { timeCompletionMs: 125 },
+      completedAt: 1_785_427_200_000,
+    });
+  });
 });
 
 describe('AiService.checkModel', () => {
@@ -189,6 +247,40 @@ describe('AiService.checkModel', () => {
     expect(mockGenerate).not.toHaveBeenCalled();
     expect(services.provider.resolveApiKey).toHaveBeenCalledWith(model.providerId, 'selected-key');
     expect(services.provider.getRotatedApiKey).not.toHaveBeenCalled();
+  });
+
+  it('records each observed embedding provider call', async () => {
+    const model = createModel('text-embedding-3-small', {
+      capabilities: [MODEL_CAPABILITY.EMBEDDING],
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_EMBEDDINGS],
+    });
+    const services = createServices({ model });
+    embedManyMock.mockImplementationOnce(async (_providerId, _settings, params) => {
+      const observer = params as unknown as {
+        onProviderCall?: (event: EmbeddingProviderCallEvent) => void;
+      };
+      observer.onProviderCall?.({
+        modality: 'embedding',
+        requestId: 'ai-core:embedding:provider-call',
+        providerId: 'openai-compatible',
+        modelId: model.modelId,
+        usage: { tokens: 42 },
+        metrics: { timeCompletionMs: 80 },
+        completedAt: 1_785_427_200_000,
+      });
+      return { embeddings: [[0.1]], usage: { tokens: 42 } } as never;
+    });
+
+    await new AiService(services).checkModel({ timeout: 1000, uniqueModelId: model.id });
+
+    expect(services.aiUsageRecord.recordInvocation).toHaveBeenCalledWith({
+      requestId: 'ai-core:embedding:provider-call',
+      context: expect.objectContaining({ messageRef: null, modelId: model.modelId }),
+      modality: 'embedding',
+      usage: { inputTokens: 42, totalTokens: 42 },
+      metrics: { timeCompletionMs: 80 },
+      completedAt: 1_785_427_200_000,
+    });
   });
 
   it('keeps provider options when checking embedding models through an assistant', async () => {
@@ -315,6 +407,88 @@ describe('AiService.checkModel', () => {
         modelId: explicitModel.modelId,
       }),
     );
+  });
+});
+
+describe('AiService usage ownership', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('binds stream usage to the chat message', async () => {
+    const model = createModel('gpt-4o-mini');
+    const services = createServices({ model });
+
+    await new AiService(services).streamText({
+      chatId: 'topic-1',
+      messageId: 'message-1',
+      messages: [],
+      requestOptions: { signal: new AbortController().signal },
+      trigger: 'submit-message',
+      uniqueModelId: model.id,
+    });
+
+    await runGenerateUsageMiddleware(mockAgentConstructor.mock.calls.at(-1)?.[0]);
+    expect(services.aiUsageRecord.recordInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ messageRef: { kind: 'chat', id: 'message-1' } }),
+      }),
+    );
+  });
+
+  it('does not bind non-stream generation usage to a chat message', async () => {
+    const model = createModel('gpt-4o-mini');
+    const services = createServices({ model });
+
+    await new AiService(services).generateText({
+      messageId: 'message-1',
+      prompt: 'summarize',
+      uniqueModelId: model.id,
+    } as never);
+
+    await runGenerateUsageMiddleware(mockAgentConstructor.mock.calls.at(-1)?.[0]);
+    expect(services.aiUsageRecord.recordInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({ context: expect.objectContaining({ messageRef: null }) }),
+    );
+  });
+
+  it('uses the same usage plugin for nested tool-call repair', async () => {
+    const model = createModel('gpt-4o-mini');
+    const services = createServices({ model });
+    generateTextMock.mockResolvedValueOnce({ output: { query: 'fixed' } } as never);
+
+    await new AiService(services).generateText({
+      prompt: 'search',
+      uniqueModelId: model.id,
+    });
+
+    const agentParams = mockAgentConstructor.mock.calls.at(-1)?.[0];
+    const usagePlugin = agentParams.plugins.find(
+      (plugin: { name: string }) => plugin.name === 'ai-usage-capture',
+    );
+    await agentParams.repairToolCall({
+      error: new InvalidToolInputError({
+        cause: new Error('query required'),
+        toolInput: '{}',
+        toolName: 'web_search',
+      }),
+      inputSchema: async () => ({
+        properties: { query: { type: 'string' } },
+        type: 'object',
+      }),
+      messages: [],
+      system: undefined,
+      toolCall: {
+        input: '{}',
+        toolCallId: 'call-1',
+        toolCallType: 'function',
+        toolName: 'web_search',
+        type: 'tool-call',
+      } as LanguageModelV3ToolCall,
+      tools: {},
+    });
+
+    expect(generateTextMock.mock.calls.at(-1)?.[3]).toEqual([usagePlugin]);
   });
 });
 
@@ -844,3 +1018,29 @@ function createAssistant(modelId: Model['id'] | null): Assistant {
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 }
+
+async function runGenerateUsageMiddleware(agentParams: {
+  plugins: {
+    name: string;
+    configureContext?: (context: { middlewares?: unknown[] }) => void | Promise<void>;
+  }[];
+}) {
+  const requestContext: { middlewares?: { wrapGenerate?: (input: unknown) => unknown }[] } = {};
+  const plugin = agentParams.plugins.find((item) => item.name === 'ai-usage-capture');
+  await plugin?.configureContext?.(requestContext);
+  const middleware = requestContext.middlewares?.[0];
+  if (!middleware?.wrapGenerate) throw new Error('Expected AI usage middleware');
+  await middleware.wrapGenerate({
+    doGenerate: async () => ({
+      content: [],
+      finishReason: 'stop',
+      usage: {
+        inputTokens: { total: 1 },
+        outputTokens: { total: 1 },
+      },
+    }),
+  });
+}
+
+type ImageProviderCallEvent = Extract<RuntimeProviderCallEvent, { modality: 'image' }>;
+type EmbeddingProviderCallEvent = Extract<RuntimeProviderCallEvent, { modality: 'embedding' }>;
