@@ -54,6 +54,21 @@ const tombstonePatterns = [
   },
   {
     group: [
+      '@/bootstrap/AppBootstrapGate',
+      '@/bootstrap/AppBootstrapProvider',
+      '@/bootstrap/appRuntime',
+      '@/bootstrap/createAppBootstrapRuntime',
+      '@/bootstrap/createBackend',
+      '@/bootstrap/createBackendServices',
+      '@/bootstrap/polyfills',
+      '@/bootstrap/polyfills/*',
+      '@/bootstrap/polyfills/*/**',
+    ],
+    message:
+      'Bootstrap is split by ownership. Use @/bootstrap for its public React interface, or the preboot, composition, and runtime directories internally.',
+  },
+  {
+    group: [
       '@/backend/application',
       '@/backend/application/*',
       '@/backend/application/*/**',
@@ -131,6 +146,33 @@ module.exports = defineConfig([
       'no-restricted-imports': ['error', { paths: retiredImports, patterns: tombstonePatterns }],
     },
   },
+  restrictedImports(
+    ['src/bootstrap/preboot/**/*.{ts,tsx}'],
+    [
+      layerPattern(
+        ['app', 'backend', 'frontend', 'bootstrap/composition', 'bootstrap/runtime'],
+        'Preboot may patch the global runtime before composition, but must not depend on app code or composed frontend/backend modules.',
+      ),
+    ],
+  ),
+  restrictedImports(
+    ['src/bootstrap/composition/**/*.{ts,tsx}'],
+    [
+      layerPattern(
+        ['app', 'frontend', 'bootstrap/preboot', 'bootstrap/runtime'],
+        'Bootstrap composition may construct backend/shared modules, but must not depend on app, frontend, preboot, or runtime owners.',
+      ),
+    ],
+  ),
+  restrictedImports(
+    ['src/bootstrap/runtime/**/*.{ts,tsx}'],
+    [
+      layerPattern(
+        ['app', 'bootstrap/preboot'],
+        'Bootstrap runtime may consume composition and frontend/backend interfaces, but must not depend on app routes or rerun preboot modules.',
+      ),
+    ],
+  ),
   restrictedImports(
     ['src/frontend/**/*.{ts,tsx}'],
     [
