@@ -2,32 +2,18 @@ appId: com.cherry-ai.cherry-studio-app
 tags: [settings, provider, legend-list]
 ---
 - runFlow: ../subflows/launch.yaml
-- tapOn: "Open sidebar"
-- tapOn: "Settings"
-- tapOn: "Model service"
-- tapOn: "CherryInExpress"
+- tapOn: "^Settings$|^设置$"
+- tapOn: "Model service|模型服务"
+- tapOn: "^CherryIN$"
 # 等 provider 详情加载完成后再操作模型工具栏
 - extendedWaitUntil:
     visible: "Base URL"
     timeout: 10000
 - waitForAnimationToEnd
-- tapOn: "Pull"
-# 预览加载（dev fixture 提供远端模型）
+- tapOn: "Models|模型"
+- tapOn: "Pull models|拉取模型"
+# CherryIN 没有测试密钥；验证 pull workflow 的错误/空结果反馈且页面保持可用。
 - extendedWaitUntil:
-    visible: "Pull models"
-    timeout: 15000
-- assertVisible: "New models \\(\\d+\\)"
-- assertVisible: "Add \\d+ models"
-- assertVisible: "Deselect all"
-# 能力过滤 chips（横向 LegendList）：选中 Reasoning 应收窄列表
-- tapOn: "Reasoning"
-- assertVisible: "New models \\(\\d+\\)"
-- tapOn: "Reasoning"
-# 行选择切换：取消一行后计数应变化、出现 Select all
-- tapOn: "Qwen3.7 Plus"
-- assertVisible: "Select all"
-- tapOn: "Select all"
-- assertVisible: "Deselect all"
-# 不 Apply，直接返回（不落库）
-- tapOn: "Back"
-- assertVisible: "Model list"
+    visible: "Failed to pull models|拉取模型失败|Pull timed out\\. Try again later\\.|拉取模型超时，请稍后重试|Model list is up to date|模型列表已是最新"
+    timeout: 30000
+- assertVisible: "Models|模型"

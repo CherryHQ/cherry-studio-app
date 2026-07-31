@@ -16,6 +16,6 @@ config.watchFolders.push(workletsDir);
 config = getBundleModeMetroConfig(config);
 
 module.exports = withUniwindConfig(config, {
-  cssEntryFile: './src/styles/global.css',
+  cssEntryFile: './src/frontend/styles/global.css',
   dtsFile: './src/types/uniwind-types.d.ts',
 });

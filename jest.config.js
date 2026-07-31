@@ -20,7 +20,7 @@ module.exports = {
     '^lucide-uniwind/png$': '<rootDir>/packages/lucide-uniwind/src/png-icons/index.ts',
     '^vitest$': '<rootDir>/packages/provider-registry/vitestJestShim.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^@logger$': '<rootDir>/src/core/logger/LoggerService.ts',
+    '^@logger$': '<rootDir>/src/shared/core/logger/LoggerService.ts',
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   // tokenx ships ESM-only (.mjs, no CJS build); jest-expo's preset transform

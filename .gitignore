@@ -20,6 +20,7 @@ expo-env.d.ts
 
 # Metro
 .metro-health-check*
+.agent-device/
 
 # debug
 npm-debug.*
@@ -31,6 +32,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 .local/
 
@@ -43,3 +45,4 @@ yarn-error.*
 /android
 
 .zed/*
+.idea/*

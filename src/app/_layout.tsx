@@ -1,6 +1,6 @@
-import '../styles/global.css';
-import '@/polyfills/abortSignal';
-import '@/polyfills/blob';
+import '../frontend/styles/global.css';
+import '@/bootstrap/preboot/abortSignal';
+import '@/bootstrap/preboot/blob';
 
 import { BottomSheetProvider } from '@swmansion/react-native-bottom-sheet';
 import { Stack } from 'expo-router';
@@ -10,14 +10,13 @@ import { HeroUINativeProvider } from 'heroui-native/provider';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
+import { AppBootstrapGate, AppBootstrapProvider } from '@/bootstrap';
+import { NavigationThemeProvider } from '@/frontend/components/navigation';
+import { QueryProvider } from '@/frontend/data';
+import { isIOS, isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
-import { NavigationThemeProvider } from '@/components/navigation';
-import { isIOS, isLiquidGlassAvailable } from '@/config/constants';
-import { DataProvider, InitialDataGate, QueryProvider } from '@/data';
-import { bootstrapAppRuntime } from '@/data/bootstrap/appRuntime';
-
-// Hold the native splash across data-runtime init so the gate never exposes a
-// blank frame. `DataProvider` calls `SplashScreen.hideAsync()` once init settles.
+// Hold the native splash across app bootstrap so the gate never exposes a
+// blank frame. `AppBootstrapProvider` hides it once initialization settles.
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const RootGestureView = withUniwind(GestureHandlerRootView);
@@ -28,15 +27,15 @@ export default function RootLayout() {
       <KeyboardProvider>
         <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false } }}>
           <QueryProvider>
-            <DataProvider bootstrap={bootstrapAppRuntime}>
-              <InitialDataGate>
+            <AppBootstrapProvider>
+              <AppBootstrapGate>
                 <NavigationThemeProvider>
                   <BottomSheetProvider>
                     <RootStack />
                   </BottomSheetProvider>
                 </NavigationThemeProvider>
-              </InitialDataGate>
-            </DataProvider>
+              </AppBootstrapGate>
+            </AppBootstrapProvider>
           </QueryProvider>
         </HeroUINativeProvider>
       </KeyboardProvider>
