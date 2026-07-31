@@ -8,7 +8,7 @@ export {
 } from './registry';
 export type {
   GeneralIconKey,
-  IconPngSource,
+  IconSource,
   ModelIconKey,
   ProviderIconKey,
 } from './types';

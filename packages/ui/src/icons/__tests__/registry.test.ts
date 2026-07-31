@@ -1,5 +1,5 @@
-import { MODEL_ICONS } from '../../icons-png/models';
-import { PROVIDER_ICONS } from '../../icons-png/providers';
+import { MODEL_ICONS } from '../../icons-webp/models';
+import { PROVIDER_ICONS } from '../../icons-webp/providers';
 import {
   resolveIcon,
   resolveModelIcon,
@@ -8,7 +8,7 @@ import {
   resolveProviderIcon,
 } from '../registry';
 
-describe('png icon registry', () => {
+describe('WebP icon registry', () => {
   test('resolves the most specific model icon first', () => {
     expect(resolveModelIcon('gpt-5.1-codex-mini')).toBe(MODEL_ICONS['gpt-5-1-codex-mini']);
   });

@@ -1,9 +1,9 @@
-import type { GENERAL_ICONS } from '../icons-png/general';
-import type { MODEL_ICONS } from '../icons-png/models';
-import type { PROVIDER_ICONS } from '../icons-png/providers';
-import type { IconPngSource } from '../icons-png/types';
+import type { GENERAL_ICONS } from '../icons-webp/general';
+import type { MODEL_ICONS } from '../icons-webp/models';
+import type { PROVIDER_ICONS } from '../icons-webp/providers';
+import type { IconSource } from '../icons-webp/types';
 
-export type { IconPngSource };
+export type { IconSource };
 
 export type GeneralIconKey = keyof typeof GENERAL_ICONS;
 export type ModelIconKey = keyof typeof MODEL_ICONS;

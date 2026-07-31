@@ -1,9 +1,9 @@
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { GENERAL_ICONS } from '../../icons-png/general';
-import { MODEL_ICONS } from '../../icons-png/models';
-import { PROVIDER_ICONS } from '../../icons-png/providers';
+import { GENERAL_ICONS } from '../../icons-webp/general';
+import { MODEL_ICONS } from '../../icons-webp/models';
+import { PROVIDER_ICONS } from '../../icons-webp/providers';
 import { resolveProviderIcon } from '../registry';
 
 const iconSourceRoot = join(process.cwd(), 'packages/ui/icons');

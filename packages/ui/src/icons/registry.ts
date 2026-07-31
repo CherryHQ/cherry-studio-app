@@ -1,16 +1,16 @@
-import { resolveGeneralIcon } from '../icons-png/general';
-import { MODEL_ICONS, type ModelIconKey, resolveModelAssetIcon } from '../icons-png/models';
-import { resolveProviderAssetIcon } from '../icons-png/providers';
+import { resolveGeneralIcon } from '../icons-webp/general';
+import { MODEL_ICONS, type ModelIconKey, resolveModelAssetIcon } from '../icons-webp/models';
+import { resolveProviderAssetIcon } from '../icons-webp/providers';
 import {
   MODEL_ICON_PATTERNS,
   MODEL_TO_PROVIDER_ICON_PATTERNS,
   PROVIDER_ID_ALIASES,
 } from './desktop-routing';
-import type { IconPngSource } from './types';
+import type { IconSource } from './types';
 
 export { resolveGeneralIcon };
 
-export function resolveModelIcon(modelId: string): IconPngSource | undefined {
+export function resolveModelIcon(modelId: string): IconSource | undefined {
   if (!modelId) return undefined;
 
   for (const [regex, catalogKey] of MODEL_ICON_PATTERNS) {
@@ -22,7 +22,7 @@ export function resolveModelIcon(modelId: string): IconPngSource | undefined {
   return undefined;
 }
 
-export function resolveModelToProviderIcon(modelId: string): IconPngSource | undefined {
+export function resolveModelToProviderIcon(modelId: string): IconSource | undefined {
   if (!modelId) return undefined;
 
   for (const [regex, providerId] of MODEL_TO_PROVIDER_ICON_PATTERNS) {
@@ -34,7 +34,7 @@ export function resolveModelToProviderIcon(modelId: string): IconPngSource | und
   return undefined;
 }
 
-export function resolveProviderIcon(providerId: string): IconPngSource | undefined {
+export function resolveProviderIcon(providerId: string): IconSource | undefined {
   if (!providerId) return undefined;
 
   if (providerId === 'opencode') {
@@ -49,11 +49,11 @@ export function resolveProviderIcon(providerId: string): IconPngSource | undefin
 export function resolveModelProviderIcon(
   modelId: string,
   providerId: string,
-): IconPngSource | undefined {
+): IconSource | undefined {
   return resolveModelToProviderIcon(modelId) ?? resolveProviderIcon(providerId);
 }
 
-export function resolveIcon(modelId: string, providerId: string): IconPngSource | undefined {
+export function resolveIcon(modelId: string, providerId: string): IconSource | undefined {
   return (
     resolveModelIcon(modelId) ??
     resolveModelToProviderIcon(modelId) ??

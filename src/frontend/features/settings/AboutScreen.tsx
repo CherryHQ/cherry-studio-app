@@ -1,4 +1,4 @@
-import { PROVIDER_ICONS } from '@cherrystudio/ui/icons-png/providers';
+import { PROVIDER_ICONS } from '@cherrystudio/ui/icons/providers';
 import Constants from 'expo-constants';
 import {
   CodeIcon,

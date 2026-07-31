@@ -23,9 +23,9 @@
       "!packages/lucide-uniwind/src/icons",
       "!packages/design-tokens/scripts/theme-contract.ts",
       "!packages/design-tokens/src/styles",
-      "!packages/ui/src/icons/general",
-      "!packages/ui/src/icons/models",
-      "!packages/ui/src/icons/providers",
+      "!packages/ui/src/icons-webp/general",
+      "!packages/ui/src/icons-webp/models",
+      "!packages/ui/src/icons-webp/providers",
       "!packages/ui/src/icons/desktop-routing.ts",
       "!src/types/uniwind-types.d.ts"
     ]

@@ -25,7 +25,7 @@ const foregroundLight = 'rgba(0, 0, 0, 0.9)';
 const foregroundDark = 'rgba(255, 255, 255, 0.9)';
 const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const sourceRoot = join(packageRoot, 'icons');
-const outputRoot = join(packageRoot, 'src/icons-png');
+const outputRoot = join(packageRoot, 'src/icons-webp');
 
 const groupedSourceDirs: Record<IconGroup, { dark?: string; light: string }> = {
   general: {
@@ -121,9 +121,9 @@ async function renderIcon(
       background: { alpha: 0, b: 0, g: 0, r: 0 },
       fit: 'contain',
     })
-    .png({
-      adaptiveFiltering: true,
-      compressionLevel: 9,
+    .webp({
+      effort: 6,
+      lossless: true,
     })
     .toFile(outputPath);
 }
@@ -133,7 +133,7 @@ function buildRegistrySource(group: IconGroup, entries: IconEntry[]) {
   const resolverAlias =
     group === 'providers'
       ? `
-export function resolveProviderIcon(iconId: string): IconPngSource | undefined {
+export function resolveProviderIcon(iconId: string): IconSource | undefined {
   if (iconId === 'opencode') return resolveGeneralIcon('open-code');
 
   return resolveProviderAssetIcon(iconId);
@@ -150,7 +150,7 @@ export function resolveProviderIcon(iconId: string): IconPngSource | undefined {
   const aliasResolution =
     group === 'providers'
       ? `  const key = PROVIDER_ID_ALIASES[iconId] ?? iconId;
-  const icons = ${catalog} as Record<string, IconPngSource>;
+  const icons = ${catalog} as Record<string, IconSource>;
 
   return (
     icons[key as ${keyType}] ??
@@ -160,7 +160,7 @@ export function resolveProviderIcon(iconId: string): IconPngSource | undefined {
 `
       : group === 'models'
         ? `  const key = MODEL_ID_ALIASES[iconId] ?? iconId;
-  const icons = ${catalog} as Record<string, IconPngSource>;
+  const icons = ${catalog} as Record<string, IconSource>;
 
   return (
     icons[key as ${keyType}] ??
@@ -168,7 +168,7 @@ export function resolveProviderIcon(iconId: string): IconPngSource | undefined {
     icons[toCamelCase(key) as ${keyType}]
   );
 `
-        : `  const icons = ${catalog} as Record<string, IconPngSource>;
+        : `  const icons = ${catalog} as Record<string, IconSource>;
 
   return (
     icons[iconId as ${keyType}] ??
@@ -179,21 +179,21 @@ export function resolveProviderIcon(iconId: string): IconPngSource | undefined {
   const objectBody = entries
     .map(({ fileName, hasDark, key }) => {
       const darkSource = hasDark
-        ? `require('./dark/${fileName}.png')`
-        : `require('./light/${fileName}.png')`;
+        ? `require('./dark/${fileName}.webp')`
+        : `require('./light/${fileName}.webp')`;
 
       return `  ${formatPropertyKey(key)}: {
-    light: require('./light/${fileName}.png'),
+    light: require('./light/${fileName}.webp'),
     dark: ${darkSource},
   },`;
     })
     .join('\n');
 
-  return `${writeGeneratedHeader(entries.length, label)}${aliasImport}import type { IconPngSource } from '../types';
+  return `${writeGeneratedHeader(entries.length, label)}${aliasImport}import type { IconSource } from '../types';
 
 export const ${catalog} = {
 ${objectBody}
-} as const satisfies Record<string, IconPngSource>;
+} as const satisfies Record<string, IconSource>;
 
 export type ${keyType} = keyof typeof ${catalog};
 
@@ -216,7 +216,7 @@ function toKebabCase(iconId: string) {
     .toLowerCase();
 }
 
-export function ${resolver}(iconId: string): IconPngSource | undefined {
+export function ${resolver}(iconId: string): IconSource | undefined {
   if (!iconId) return undefined;
 
 ${aliasResolution}}${resolverAlias}
@@ -247,14 +247,14 @@ export async function generateGroup(group: IconGroup, targetRoot = outputRoot, l
     const hasDarkSource = Boolean(darkSourcePath && existsSync(darkSourcePath));
     const shouldRenderDark = hasDarkSource || hasCurrentColor;
 
-    await renderIcon(lightSourcePath, join(lightAssetDir, `${assetName}.png`), foregroundLight, {
+    await renderIcon(lightSourcePath, join(lightAssetDir, `${assetName}.webp`), foregroundLight, {
       trim: shouldTrim,
     });
 
     if (shouldRenderDark) {
       await renderIcon(
         hasDarkSource && darkSourcePath ? darkSourcePath : lightSourcePath,
-        join(darkAssetDir, `${assetName}.png`),
+        join(darkAssetDir, `${assetName}.webp`),
         foregroundDark,
         { trim: shouldTrim },
       );
@@ -301,12 +301,15 @@ function assertDirectoriesEqual(expectedRoot: string, actualRoot: string) {
   }
 }
 
-async function assertPngAssetsValid(root: string) {
-  const pngFiles = listRelativeFiles(root).filter((fileName) => fileName.endsWith('.png'));
+async function assertWebpAssetsValid(root: string) {
+  const webpFiles = listRelativeFiles(root).filter((fileName) => fileName.endsWith('.webp'));
 
-  for (const relativePath of pngFiles) {
+  for (const relativePath of webpFiles) {
     const image = sharp(join(root, relativePath));
     const [metadata, stats] = await Promise.all([image.metadata(), image.stats()]);
+    if (metadata.format !== 'webp') {
+      throw new Error(`Generated icon must be WebP: ${relativePath}`);
+    }
     if (metadata.width !== imageSize || metadata.height !== imageSize) {
       throw new Error(`Generated icon must be ${imageSize}x${imageSize}: ${relativePath}`);
     }
@@ -325,7 +328,7 @@ export async function checkGeneratedIcons() {
     for (const group of ['general', 'models', 'providers'] as const) {
       await generateGroup(group, temporaryRoot, false);
       assertDirectoriesEqual(join(temporaryRoot, group), join(outputRoot, group));
-      await assertPngAssetsValid(join(outputRoot, group));
+      await assertWebpAssetsValid(join(outputRoot, group));
     }
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });
