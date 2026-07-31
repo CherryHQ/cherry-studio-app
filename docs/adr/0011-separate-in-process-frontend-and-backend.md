@@ -10,7 +10,10 @@ The source layout is:
 ```text
 src/
 ├── app/                  # Expo Router route files
-├── bootstrap/            # composition, startup, lifecycle, and polyfills
+├── bootstrap/
+│   ├── preboot/          # ordered global runtime patches
+│   ├── composition/      # concrete backend graph and workflow wiring
+│   └── runtime/          # initialization, startup gate, post-ready work, disposal
 ├── frontend/             # features, components, data, hooks, i18n, styles, utils, types
 ├── backend/
 │   ├── ai/               # AI SDK, providers, MCP runtime, tools, and message conversion
@@ -33,6 +36,11 @@ does not import SQLite, Drizzle, AI SDKs, concrete persistence classes, or devic
 adapters. Backend code does not import React UI, Expo Router, TanStack Query, translations, or toast
 implementations. `app` remains at the Expo Router-mandated path and imports only bootstrap,
 frontend, and shared modules.
+
+Bootstrap is split internally by ownership. `preboot` runs mandatory global patches before
+composition, `composition` only creates and connects concrete implementations, and `runtime` owns
+initialization order, the startup gate, post-ready work, and disposal. This responsibility split
+does not introduce Desktop's Electron process, IoC container, or lifecycle phase graph.
 
 The `shared/data` vocabulary intentionally follows Cherry Desktop: `types` owns entities,
 `preference` owns preference schemas, defaults, and the `PreferenceClient` interface, while `api`

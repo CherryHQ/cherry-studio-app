@@ -20,7 +20,7 @@ Status: active
 
 完成条件：
 
-- 在 gate 内关键路径打点，至少覆盖 `DbService.init()`（细分 `configurePragmas` / `migrate` / `runCustomMigrations` / `seedDatabase`）、`preference.init()`、`bootstrapAppRuntime`（含 `initI18n`）四段，并记录 `preventAutoHideAsync` 到 `hideAsync` 的总窗口。
+- 在 gate 内关键路径打点，至少覆盖 `DbService.init()`（细分 `configurePragmas` / `migrate` / `runCustomMigrations` / `seedDatabase`）、`preference.init()`、`initializeAppRuntime`（含 `initI18n`）四段，并记录 `preventAutoHideAsync` 到 `hideAsync` 的总窗口。
 - 分别采集**新用户首启（fresh install，先 uninstall 清数据容器）**与**稳态冷启动**两组数据，各在真机上重复多次取中位数/尾部（p50/p95），机型至少覆盖一台低端 Android + 一台旧 iPhone。
 - 给出每段耗时占比，定位主要成本来源（预期在 `migrate` 首次执行 + `PresetProviderSeeder` 全量写入）。
 - 若首启开屏超出可接受阈值，再评估第二部分**明确不做**清单中仍未做的优化项是否需要重启：`PresetProviderSeeder` 全量目录写入延后到 post-ready。阈值与优化取舍待本 TODO 有数据后再定。

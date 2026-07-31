@@ -27,7 +27,7 @@ exercise observable endpoint and storage behavior independently.
    endpoint.
 2. Implement it under `src/backend/services` and keep concrete AI/data/platform dependencies behind
    constructor interfaces.
-3. Compose the production implementation in `src/bootstrap/createBackend.ts`.
+3. Compose the production implementation in `src/bootstrap/composition/createBackend.ts`.
 4. Call it through `useBackendModule(key)` from the owning frontend feature.
 
 Frontend tests inject a workflow fake through `BackendProvider`. Backend tests exercise the same

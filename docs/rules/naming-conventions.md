@@ -420,7 +420,7 @@ There is no main-process DI container in the mobile app. `src/bootstrap` is the 
 and readiness is coordinated by **startup gates**, not lifecycle phases. See
 [ADR 0002 — Use startup gates, not lifecycle phases](../adr/0002-use-startup-gates-not-lifecycle-phases.md),
 [ADR 0011](../adr/0011-separate-in-process-frontend-and-backend.md), and
-`src/bootstrap/appRuntime.ts`.
+`src/bootstrap/README.md`.
 
 ### 5.3 Drizzle Schema Inferred Row Types
 

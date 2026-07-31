@@ -17,7 +17,9 @@ isolation. See [ADR 0011](../adr/0011-separate-in-process-frontend-and-backend.m
 | Directory | Owner |
 |---|---|
 | `src/app` | Thin Expo Router route files |
-| `src/bootstrap` | Composition root, initialization, lifecycle, splash, and polyfills |
+| `src/bootstrap/preboot` | Ordered global runtime patches required before composition |
+| `src/bootstrap/composition` | Concrete backend graph and workflow wiring |
+| `src/bootstrap/runtime` | Initialization, startup gate, splash, post-ready work, and disposal |
 | `src/frontend` | Features, components, React Query, hooks, i18n, styles, UI utils and types |
 | `src/backend/ai` | AI SDK, provider adapters, MCP runtime, tools, and message conversion |
 | `src/backend/data` | Backend cache, preferences, SQLite, schemas, seeders, fixtures, and persistence services |

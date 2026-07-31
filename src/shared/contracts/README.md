@@ -132,7 +132,7 @@ CRUD is a Data API concern while model pull and health checks are workflow contr
 2. Define the smallest frontend-visible interface and reuse existing shared data types.
 3. Put the implementation under `src/backend/services` and keep its private dependency interfaces
    there.
-4. Assemble the production implementation in `src/bootstrap/createBackend.ts`.
+4. Assemble the production implementation in `src/bootstrap/composition/createBackend.ts`.
 5. Consume it through `useBackendModule(key)`; keep frontend effects in the owning feature or hook.
 6. Test the backend implementation through the contract's observable behavior.
 7. Test frontend consumers with a fake module supplied through the real `BackendProvider`.

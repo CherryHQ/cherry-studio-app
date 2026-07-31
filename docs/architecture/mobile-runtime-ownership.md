@@ -17,6 +17,11 @@ Related decisions: [ADR 0001](../adr/0001-use-provider-owned-runtime-owners.md),
 
 ## App Bootstrap
 
+Bootstrap has three internal owners: `preboot` performs ordered global runtime patches,
+`composition` constructs and connects concrete backend implementations, and `runtime` owns
+initialization, the startup gate, post-ready work, and disposal. Apart from the explicit preboot
+side-effect imports in the root layout, ordinary app code uses only `src/bootstrap/index.ts`.
+
 `AppBootstrapProvider` owns one `AppBootstrapRuntime`. The production runtime:
 
 - creates `CacheService`, `DbService`, and the private backend service graph;
@@ -72,7 +77,7 @@ and query synchronization and disposes the session on unmount.
 
 ## Startup Work
 
-`bootstrapAppRuntime()` reads cached boot preferences, applies the frontend theme, and initializes
+`initializeAppRuntime()` reads cached boot preferences, applies the frontend theme, and initializes
 i18n. It must not refresh catalogs, prefetch history, repair data, or run diagnostics.
 
 `runPostReadyTasks()` starts after status becomes `ready`. It currently repairs crash-orphaned
