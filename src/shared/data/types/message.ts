@@ -22,13 +22,47 @@ export type MessageId = z.infer<typeof MessageIdSchema>;
 /**
  * Materialized statistics for one assistant message. Usage, request counts,
  * costs, and provider performance are projections of immutable usage records.
- * Scalar timing fields remain message-owned compatibility data.
+ * Runtime timing is message-owned and written by runtime persistence. Scalar
+ * timing fields are historical compatibility data read only when
+ * `runtimeTiming` is absent.
  */
 const MessageProviderPerformanceSchema = z.strictObject({
   measuredOutputTokens: z.number().nonnegative(),
   generationDurationMs: z.number().nonnegative(),
 });
 export type MessageProviderPerformance = z.infer<typeof MessageProviderPerformanceSchema>;
+
+const MessageRuntimeToolExecutionSpanSchema = z.strictObject({
+  id: z.string().min(1),
+  kind: z.literal('tool-execution'),
+  toolCallId: z.string().min(1),
+  toolName: z.string().min(1).optional(),
+  startedAt: z.number(),
+  completedAt: z.number().optional(),
+});
+
+const MessageRuntimeApprovalWaitSpanSchema = z.strictObject({
+  id: z.string().min(1),
+  kind: z.literal('approval-wait'),
+  approvalId: z.string().min(1),
+  toolCallId: z.string().min(1),
+  toolName: z.string().min(1).optional(),
+  startedAt: z.number(),
+  completedAt: z.number().optional(),
+});
+
+export const MessageRuntimeTimingSchema = z.strictObject({
+  startedAt: z.number(),
+  completedAt: z.number().optional(),
+  spans: z.array(
+    z.discriminatedUnion('kind', [
+      MessageRuntimeToolExecutionSpanSchema,
+      MessageRuntimeApprovalWaitSpanSchema,
+    ]),
+  ),
+});
+export type MessageRuntimeTiming = z.infer<typeof MessageRuntimeTimingSchema>;
+export type MessageRuntimeSpan = MessageRuntimeTiming['spans'][number];
 
 export const MessageStatsSchema = z.strictObject({
   inputTokens: z.number().optional(),
@@ -61,11 +95,17 @@ export const MessageStatsSchema = z.strictObject({
     )
     .optional(),
   providerPerformance: MessageProviderPerformanceSchema.optional(),
+  runtimeTiming: MessageRuntimeTimingSchema.optional(),
   timeCompletionMs: z.number().optional(),
   timeFirstTokenMs: z.number().optional(),
   timeThinkingMs: z.number().optional(),
 });
 export type MessageStats = z.infer<typeof MessageStatsSchema>;
+export type MessageRuntimeStatsInput = Readonly<Pick<MessageStats, 'runtimeTiming'>>;
+export interface MessageRuntimeTimingSink {
+  onToolExecutionStart(event: { callId: string; toolName?: string }): void;
+  onToolExecutionEnd(event: { callId: string; toolName?: string; durationMs: number }): void;
+}
 
 export type CherryMessagePart = UIMessagePart<CherryDataPartTypes, UITools>;
 

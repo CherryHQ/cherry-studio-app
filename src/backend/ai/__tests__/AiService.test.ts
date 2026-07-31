@@ -436,6 +436,39 @@ describe('AiService usage ownership', () => {
     );
   });
 
+  it('forwards tool execution timing hooks to the chat runtime sink', async () => {
+    const model = createModel('gpt-4o-mini');
+    const services = createServices({ model });
+    const runtimeTimingSink = {
+      onToolExecutionStart: jest.fn(),
+      onToolExecutionEnd: jest.fn(),
+    };
+
+    await new AiService(services).streamText({
+      chatId: 'topic-1',
+      messageId: 'message-1',
+      messages: [],
+      requestOptions: { signal: new AbortController().signal },
+      runtimeTimingSink,
+      trigger: 'submit-message',
+      uniqueModelId: model.id,
+    });
+
+    const hooks = mockAgentConstructor.mock.calls.at(-1)?.[0].toolExecutionHooks;
+    hooks.onToolExecutionStart({ callId: 'call-1', toolName: 'search' });
+    hooks.onToolExecutionEnd({ callId: 'call-1', toolName: 'search', durationMs: 125 });
+
+    expect(runtimeTimingSink.onToolExecutionStart).toHaveBeenCalledWith({
+      callId: 'call-1',
+      toolName: 'search',
+    });
+    expect(runtimeTimingSink.onToolExecutionEnd).toHaveBeenCalledWith({
+      callId: 'call-1',
+      toolName: 'search',
+      durationMs: 125,
+    });
+  });
+
   it('does not bind non-stream generation usage to a chat message', async () => {
     const model = createModel('gpt-4o-mini');
     const services = createServices({ model });

@@ -29,6 +29,7 @@ import { toModelMessages } from '../../messages/messageRules';
 import { withReasoningTimingMetadata } from '../../streamManager/withReasoningTimingMetadata';
 import type { RequestContext } from '../../tools';
 import type { AppProviderSettingsMap } from '../../types';
+import { type ToolExecutionHooks, wrapToolsWithExecutionHooks } from './loop/hookRunner';
 import { mergeUsage, toMessageMetadataPatch, ZERO_USAGE } from './observers/usage';
 
 type AppProviderKey = StringKeys<AppProviderSettingsMap>;
@@ -60,6 +61,7 @@ export interface AgentParams<T extends AppProviderKey = AppProviderKey> {
   repairToolCall?: ToolCallRepairFunction<ToolSet>;
   system?: string;
   tools?: ToolSet;
+  toolExecutionHooks?: ToolExecutionHooks;
   options?: AgentOptions;
 }
 
@@ -69,6 +71,7 @@ export class Agent<T extends AppProviderKey = AppProviderKey> {
   private async buildAiSdkAgent() {
     const params = this.params;
     const opts = params.options ?? {};
+    const tools = wrapToolsWithExecutionHooks(params.tools, params.toolExecutionHooks);
     return createAgent<AppProviderSettingsMap, T, ToolSet>({
       providerId: params.providerId,
       providerSettings: params.providerSettings,
@@ -77,7 +80,7 @@ export class Agent<T extends AppProviderKey = AppProviderKey> {
       agentSettings: {
         experimental_context: params.context,
         experimental_repairToolCall: params.repairToolCall,
-        tools: params.tools,
+        tools,
         // System
         instructions: params.system,
         // CallSettings (model parameters)

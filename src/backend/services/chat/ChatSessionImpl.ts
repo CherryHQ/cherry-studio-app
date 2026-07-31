@@ -1,3 +1,4 @@
+import { isToolUIPart } from 'ai';
 import type {
   ChatSendNewTopicTextInput,
   ChatSendTextInput,
@@ -13,6 +14,7 @@ import type {
   CherryMessagePart,
   CherryUIMessage,
   Message,
+  MessageRuntimeStatsInput,
   ModelSnapshot,
 } from '@/shared/data/types/message';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
@@ -31,6 +33,7 @@ import {
   hasPendingToolApproval,
   hasUnresumedToolApproval,
 } from './chatSessionMessages';
+import { MessageRuntimeTimingCollector } from './MessageRuntimeTimingCollector';
 import { normalizeAssistantMessageCitations } from './normalizeCitations';
 import { extractMainText, maybeRenameTopicFromConversationSummary } from './topicNaming';
 
@@ -552,6 +555,7 @@ export class ChatSessionImpl implements ChatSession {
     const { abortController } = activeTurn;
     let latestAssistantMessage: CherryUIMessage | undefined;
     let terminalAssistantMessage: Message | undefined;
+    const runtimeTiming = new MessageRuntimeTimingCollector(assistantMessage.stats?.runtimeTiming);
 
     try {
       const stream = await this.dependencies.services.ai.streamText({
@@ -560,6 +564,7 @@ export class ChatSessionImpl implements ChatSession {
         messageId: assistantMessage.id,
         messages: history.map(toCherryUIMessage),
         requestOptions: { signal: abortController.signal },
+        runtimeTimingSink: runtimeTiming.sink,
         trigger: 'submit-message',
         uniqueModelId: model.id,
       });
@@ -570,6 +575,7 @@ export class ChatSessionImpl implements ChatSession {
         stream,
       })) {
         latestAssistantMessage = nextAssistantMessage;
+        captureApprovalTiming(runtimeTiming, nextAssistantMessage.parts as CherryMessagePart[]);
         throwIfAborted(abortController.signal);
         this.setTurnSnapshot(topicId, {
           hasHistoryBeforePendingTurn: input.hasHistoryBeforePendingTurn,
@@ -591,9 +597,15 @@ export class ChatSessionImpl implements ChatSession {
       }
 
       const isAwaitingApproval = hasPendingToolApproval(finalParts);
+      runtimeTiming.closeOpenToolSpans();
+      if (!isAwaitingApproval) {
+        runtimeTiming.closeOpenSpans();
+        runtimeTiming.complete();
+      }
       terminalAssistantMessage = await this.persistSuccessfulAssistantMessage({
         assistantMessage,
         latestAssistantMessage,
+        runtimeStats: { runtimeTiming: runtimeTiming.snapshot() },
       });
 
       if (!isAwaitingApproval && input.autoNameUserParts) {
@@ -606,10 +618,13 @@ export class ChatSessionImpl implements ChatSession {
         });
       }
     } catch (error) {
+      runtimeTiming.closeOpenSpans();
+      runtimeTiming.complete();
       terminalAssistantMessage = await this.settleFailedTurn({
         assistantMessage,
         error,
         latestAssistantMessage,
+        runtimeStats: { runtimeTiming: runtimeTiming.snapshot() },
         wasAborted: abortController.signal.aborted,
       });
 
@@ -699,6 +714,7 @@ export class ChatSessionImpl implements ChatSession {
     assistantMessage: Message;
     error: unknown;
     latestAssistantMessage?: CherryUIMessage;
+    runtimeStats?: MessageRuntimeStatsInput;
     wasAborted: boolean;
   }): Promise<Message | undefined> {
     try {
@@ -726,6 +742,7 @@ export class ChatSessionImpl implements ChatSession {
     assistantMessage: Message;
     error: unknown;
     latestAssistantMessage?: CherryUIMessage;
+    runtimeStats?: MessageRuntimeStatsInput;
     wasAborted: boolean;
   }): Promise<Message | undefined> {
     // Fall back to the row's own parts when the stream died before its first
@@ -738,15 +755,20 @@ export class ChatSessionImpl implements ChatSession {
       interruptedTurnApprovalReason,
     );
     const dataParts = input.wasAborted ? latestParts : appendErrorPart(latestParts, input.error);
-    return await this.dependencies.services.message.update(input.assistantMessage.id, {
-      data: { parts: finalizeInterruptedReasoningParts(dataParts as CherryMessagePart[]) },
-      status: input.wasAborted ? 'paused' : 'error',
-    });
+    return await this.dependencies.services.message.finalizeAssistantMessage(
+      input.assistantMessage.id,
+      {
+        data: { parts: finalizeInterruptedReasoningParts(dataParts as CherryMessagePart[]) },
+        ...(input.runtimeStats ? { runtimeStats: input.runtimeStats } : {}),
+        status: input.wasAborted ? 'paused' : 'error',
+      },
+    );
   }
 
   private async persistSuccessfulAssistantMessage(input: {
     assistantMessage: Message;
     latestAssistantMessage?: CherryUIMessage;
+    runtimeStats: MessageRuntimeStatsInput;
   }): Promise<Message> {
     const normalizedMessage = input.latestAssistantMessage
       ? normalizeAssistantMessageCitations(input.latestAssistantMessage)
@@ -754,10 +776,14 @@ export class ChatSessionImpl implements ChatSession {
     const parts = (normalizedMessage?.parts ??
       input.assistantMessage.data.parts ??
       []) as CherryMessagePart[];
-    return await this.dependencies.services.message.update(input.assistantMessage.id, {
-      data: { parts },
-      status: 'success',
-    });
+    return await this.dependencies.services.message.finalizeAssistantMessage(
+      input.assistantMessage.id,
+      {
+        data: { parts },
+        runtimeStats: input.runtimeStats,
+        status: 'success',
+      },
+    );
   }
 
   private async resolveTurnContext(input: ChatSendTextInput) {
@@ -854,6 +880,23 @@ export class ChatSessionImpl implements ChatSession {
     }
 
     this.emit({ topicId, type: 'snapshot-changed' });
+  }
+}
+
+function captureApprovalTiming(
+  collector: MessageRuntimeTimingCollector,
+  parts: readonly CherryMessagePart[],
+): void {
+  for (const part of parts) {
+    if (!isToolUIPart(part) || !part.approval?.id) continue;
+
+    if (part.state === 'approval-requested') {
+      const toolName =
+        part.type === 'dynamic-tool' ? part.toolName : part.type.slice('tool-'.length);
+      collector.startApproval(part.approval.id, part.toolCallId, toolName);
+    } else {
+      collector.finishApproval({ approvalId: part.approval.id });
+    }
   }
 }
 

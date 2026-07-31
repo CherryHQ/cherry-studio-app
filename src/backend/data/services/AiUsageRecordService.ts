@@ -60,6 +60,8 @@ import type { MessageStats } from '@/shared/data/types/message';
 import type { Currency } from '@/shared/data/types/model';
 import { timestampToISO } from './utils/rowMappers';
 
+export { mergeMessageRuntimeStats } from './utils/messageStats';
+
 export interface SourceSnapshot {
   type: AiUsageRecordSourceType;
   id: string;

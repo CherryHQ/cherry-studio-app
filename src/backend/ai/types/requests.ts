@@ -1,4 +1,5 @@
 import type { ChatTransport, UIMessage } from 'ai';
+import type { MessageRuntimeTimingSink } from '@/shared/data/types/message';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 /**
@@ -44,4 +45,5 @@ export interface AiStreamRequest extends AiBaseRequest {
   messageId?: string;
   messages?: UIMessage[];
   knowledgeBaseIds?: string[];
+  runtimeTimingSink?: MessageRuntimeTimingSink;
 }

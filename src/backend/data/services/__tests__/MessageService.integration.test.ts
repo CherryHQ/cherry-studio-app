@@ -224,6 +224,89 @@ describe('MessageService integration', () => {
     });
   });
 
+  test('finalizes assistant runtime timing while preserving the durable usage projection', async () => {
+    const topic = await topicService.create({ name: 'runtime timing' });
+    const message = await service.create(topic.id, {
+      data: { parts: [] },
+      role: 'assistant',
+      status: 'pending',
+    });
+    sqlite.prepare('UPDATE message SET stats = ? WHERE id = ?').run(
+      JSON.stringify({
+        outputTokens: 20,
+        providerPerformance: { measuredOutputTokens: 20, generationDurationMs: 500 },
+        timeFirstTokenMs: 100,
+        runtimeTiming: {
+          startedAt: 1_000,
+          spans: [
+            {
+              id: 'tool:first',
+              kind: 'tool-execution',
+              toolCallId: 'first',
+              startedAt: 1_500,
+              completedAt: 2_000,
+            },
+          ],
+        },
+      }),
+      message.id,
+    );
+
+    await service.finalizeAssistantMessage(message.id, {
+      data: { parts: [{ text: 'done', type: 'text' }] },
+      runtimeStats: {
+        runtimeTiming: {
+          startedAt: 1_000,
+          completedAt: 4_000,
+          spans: [
+            {
+              id: 'tool:second',
+              kind: 'tool-execution',
+              toolCallId: 'second',
+              startedAt: 3_000,
+              completedAt: 3_500,
+            },
+          ],
+        },
+      },
+      status: 'success',
+    });
+
+    await expect(service.getById(message.id)).resolves.toMatchObject({
+      data: { parts: [{ text: 'done', type: 'text' }] },
+      stats: {
+        outputTokens: 20,
+        providerPerformance: { measuredOutputTokens: 20, generationDurationMs: 500 },
+        runtimeTiming: {
+          startedAt: 1_000,
+          completedAt: 4_000,
+          spans: [{ id: 'tool:first' }, { id: 'tool:second' }],
+        },
+      },
+      status: 'success',
+    });
+    expect((await service.getById(message.id)).stats).not.toHaveProperty('timeFirstTokenMs');
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM ai_usage_record').get()).toMatchObject({
+      count: 0,
+    });
+  });
+
+  test('rejects runtime finalization for non-assistant messages', async () => {
+    const topic = await topicService.create({ name: 'runtime timing role' });
+    const message = await service.create(topic.id, {
+      data: { parts: [] },
+      role: 'user',
+      status: 'success',
+    });
+
+    await expect(
+      service.finalizeAssistantMessage(message.id, {
+        data: { parts: [] },
+        status: 'error',
+      }),
+    ).rejects.toThrow('only assistant messages can be finalized');
+  });
+
   describe('applyToolApprovalDecisions', () => {
     async function seedTip() {
       const topic = await topicService.create({ name: 'approval' });
@@ -264,6 +347,52 @@ describe('MessageService integration', () => {
           state: 'approval-responded',
         }),
       ]);
+    });
+
+    test('completes approval wait timing in the same transaction as the decision', async () => {
+      const { tip } = await seedTip();
+      sqlite.prepare('UPDATE message SET stats = ? WHERE id = ?').run(
+        JSON.stringify({
+          runtimeTiming: {
+            startedAt: 1_000,
+            spans: [
+              {
+                id: 'approval:a1',
+                kind: 'approval-wait',
+                approvalId: 'a1',
+                toolCallId: 'call-a1',
+                startedAt: 1_100,
+              },
+              {
+                id: 'approval:a2',
+                kind: 'approval-wait',
+                approvalId: 'a2',
+                toolCallId: 'call-a2',
+                startedAt: 1_200,
+              },
+            ],
+          },
+        }),
+        tip.id,
+      );
+      const now = jest.spyOn(Date, 'now').mockReturnValue(2_000);
+
+      try {
+        await service.applyToolApprovalDecisions(tip.id, [{ approvalId: 'a1', approved: true }]);
+      } finally {
+        now.mockRestore();
+      }
+
+      await expect(service.getById(tip.id)).resolves.toMatchObject({
+        stats: {
+          runtimeTiming: {
+            spans: [
+              expect.objectContaining({ approvalId: 'a1', completedAt: 2_000 }),
+              expect.not.objectContaining({ completedAt: expect.anything() }),
+            ],
+          },
+        },
+      });
     });
 
     test('returns null for a deleted approval message', async () => {

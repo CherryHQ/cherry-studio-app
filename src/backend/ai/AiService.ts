@@ -150,6 +150,15 @@ export class AiService {
       repairToolCall,
       system,
       tools,
+      ...(request.runtimeTimingSink
+        ? {
+            toolExecutionHooks: {
+              onToolExecutionStart: (event) =>
+                request.runtimeTimingSink?.onToolExecutionStart(event),
+              onToolExecutionEnd: (event) => request.runtimeTimingSink?.onToolExecutionEnd(event),
+            },
+          }
+        : {}),
       options,
     });
 

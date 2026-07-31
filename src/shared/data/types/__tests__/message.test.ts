@@ -44,8 +44,47 @@ describe('MessageStatsSchema', () => {
           },
         ],
         providerPerformance: { measuredOutputTokens: 20, generationDurationMs: 800 },
+        runtimeTiming: {
+          startedAt: 1_000,
+          completedAt: 2_000,
+          spans: [
+            {
+              id: 'tool:call-1',
+              kind: 'tool-execution',
+              toolCallId: 'call-1',
+              toolName: 'search',
+              startedAt: 1_100,
+              completedAt: 1_300,
+            },
+            {
+              id: 'approval:approval-1',
+              kind: 'approval-wait',
+              approvalId: 'approval-1',
+              toolCallId: 'call-2',
+              startedAt: 1_400,
+            },
+          ],
+        },
       }),
     ).toBeDefined();
+  });
+
+  test('rejects invalid runtime timing spans', () => {
+    expect(
+      MessageStatsSchema.safeParse({
+        runtimeTiming: {
+          startedAt: 1_000,
+          spans: [
+            {
+              id: 'approval:approval-1',
+              kind: 'approval-wait',
+              toolCallId: 'call-1',
+              startedAt: 1_100,
+            },
+          ],
+        },
+      }).success,
+    ).toBe(false);
   });
 
   test('rejects legacy message-owned usage fields', () => {
