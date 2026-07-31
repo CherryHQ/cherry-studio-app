@@ -24,7 +24,7 @@ import {
   getProviderAvatarUri,
   saveProviderAvatar,
 } from '@/backend/services/providers/providerAvatarStorage';
-import type { BackendServices } from '@/bootstrap/createBackendServices';
+import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { CherryUIMessage } from '@/shared/data/types/message';
 import type { UniqueModelId } from '@/shared/data/types/model';

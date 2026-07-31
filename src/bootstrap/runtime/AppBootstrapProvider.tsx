@@ -3,7 +3,7 @@ import { createContext, type PropsWithChildren, use, useEffect, useMemo, useStat
 import {
   type AppBootstrapRuntime,
   createAppBootstrapRuntime,
-} from '@/bootstrap/createAppBootstrapRuntime';
+} from '@/bootstrap/runtime/createAppBootstrapRuntime';
 import { BackendProvider } from '@/frontend/data/BackendProvider';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';

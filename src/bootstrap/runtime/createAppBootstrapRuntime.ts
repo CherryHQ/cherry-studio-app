@@ -2,9 +2,10 @@ import { createDataApiHandlers } from '@/backend/data/api/handlers/apiHandlers';
 import { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
 import { DbService } from '@/backend/data/db/DbService';
-import { bootstrapAppRuntime, runPostReadyTasks } from '@/bootstrap/appRuntime';
-import { createBackend } from '@/bootstrap/createBackend';
-import { createBackendServices } from '@/bootstrap/createBackendServices';
+import { createBackend } from '@/bootstrap/composition/createBackend';
+import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
+import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
+import { runPostReadyTasks } from '@/bootstrap/runtime/runPostReadyTasks';
 import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { PreferenceClient } from '@/shared/data/preference';
@@ -51,7 +52,7 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
       services.cache.init();
       await dbService.init(services.cache);
       await services.preference.init();
-      await bootstrapAppRuntime(services);
+      await initializeAppRuntime(services);
     },
     runPostReadyTasks: () => runPostReadyTasks(services),
   };

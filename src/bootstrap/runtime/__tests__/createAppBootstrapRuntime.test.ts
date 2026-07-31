@@ -1,4 +1,4 @@
-import { createAppBootstrapRuntime } from '@/bootstrap/createAppBootstrapRuntime';
+import { createAppBootstrapRuntime } from '@/bootstrap/runtime/createAppBootstrapRuntime';
 
 const mockBackend = { kind: 'backend' };
 const mockDataApiDependencies = { kind: 'data-api-dependencies' };
@@ -21,7 +21,7 @@ const mockServices = {
   preference: mockPreference,
   webSearch: mockWebSearch,
 };
-const mockBootstrapAppRuntime = jest.fn(async (_services: unknown) => undefined);
+const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
 const mockRunPostReadyTasks = jest.fn(async (_services: unknown) => undefined);
 const mockCreateBackendServices = jest.fn((_db: unknown, _cache: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown) => ({
@@ -41,14 +41,16 @@ jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
 jest.mock('@/backend/data/db/DbService', () => ({
   DbService: jest.fn(() => mockDb),
 }));
-jest.mock('@/bootstrap/appRuntime', () => ({
-  bootstrapAppRuntime: (services: unknown) => mockBootstrapAppRuntime(services),
+jest.mock('@/bootstrap/runtime/initializeAppRuntime', () => ({
+  initializeAppRuntime: (services: unknown) => mockInitializeAppRuntime(services),
+}));
+jest.mock('@/bootstrap/runtime/runPostReadyTasks', () => ({
   runPostReadyTasks: (services: unknown) => mockRunPostReadyTasks(services),
 }));
-jest.mock('@/bootstrap/createBackendServices', () => ({
+jest.mock('@/bootstrap/composition/createBackendServices', () => ({
   createBackendServices: (db: unknown, cache: unknown) => mockCreateBackendServices(db, cache),
 }));
-jest.mock('@/bootstrap/createBackend', () => ({
+jest.mock('@/bootstrap/composition/createBackend', () => ({
   createBackend: (services: unknown) => mockCreateBackend(services),
 }));
 
@@ -69,7 +71,7 @@ describe('createAppBootstrapRuntime', () => {
       mockDb.init.mock.invocationCallOrder[0],
     );
     expect(mockPreference.init).toHaveBeenCalledTimes(1);
-    expect(mockBootstrapAppRuntime).toHaveBeenCalledWith(mockServices);
+    expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);
     expect(runtime.backend).toBe(mockBackend);
     expect(runtime.dataApi).toBe(mockDataApi);
     expect(runtime.preference).toBe(mockPreference);

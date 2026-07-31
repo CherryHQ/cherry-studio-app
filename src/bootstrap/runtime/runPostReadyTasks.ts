@@ -1,26 +1,12 @@
 import { loggerService } from '@logger';
-import type { BackendServices } from '@/bootstrap/createBackendServices';
-import { initI18n } from '@/frontend/i18n';
-import { applyThemeModePreference } from '@/frontend/utils/theme';
+import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 
-const logger = loggerService.withContext('bootstrapAppRuntime');
-
-const bootPreferenceKeys = {
-  language: 'app.language',
-  themeMode: 'ui.theme_mode',
-} as const;
-
-export async function bootstrapAppRuntime(services: BackendServices) {
-  const preferences = services.preference.getMultipleCached(bootPreferenceKeys);
-
-  applyThemeModePreference(preferences.themeMode);
-  await initI18n(preferences.language);
-}
+const logger = loggerService.withContext('runPostReadyTasks');
 
 /** Runs after the App Bootstrap Gate opens (first paint), off the startup
  * critical path. Per ADR 0002 the gate must only wait for database readiness
  * and initial/boot preferences — data repair and diagnostics belong here, not
- * in `bootstrapAppRuntime`. Best-effort: callers fire-and-forget and a failure
+ * in `initializeAppRuntime`. Best-effort: callers fire-and-forget and a failure
  * must not surface to the user. */
 export async function runPostReadyTasks(services: BackendServices) {
   // The catch lives here, not in callers: they `void` this promise, so a task

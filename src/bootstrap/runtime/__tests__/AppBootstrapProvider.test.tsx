@@ -1,7 +1,7 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { AppBootstrapRuntime } from '@/bootstrap/createAppBootstrapRuntime';
+import type { AppBootstrapRuntime } from '@/bootstrap/runtime/createAppBootstrapRuntime';
 import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { PreferenceClient } from '@/shared/data/preference';
@@ -19,7 +19,7 @@ jest.mock('expo-splash-screen', () => ({
 
 // The injected runtime keeps native SQLite and the concrete backend graph out
 // of this provider-level test.
-jest.mock('@/bootstrap/createAppBootstrapRuntime', () => ({
+jest.mock('@/bootstrap/runtime/createAppBootstrapRuntime', () => ({
   createAppBootstrapRuntime: jest.fn(),
 }));
 

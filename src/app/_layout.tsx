@@ -1,6 +1,6 @@
 import '../frontend/styles/global.css';
-import '@/bootstrap/polyfills/abortSignal';
-import '@/bootstrap/polyfills/blob';
+import '@/bootstrap/preboot/abortSignal';
+import '@/bootstrap/preboot/blob';
 
 import { BottomSheetProvider } from '@swmansion/react-native-bottom-sheet';
 import { Stack } from 'expo-router';
