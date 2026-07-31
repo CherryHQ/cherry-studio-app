@@ -21,6 +21,7 @@
     "ui:provider-icons:generate": "tsx packages/ui/src/scripts/generate-icons.ts --type=providers",
     "skills:sync": "tsx scripts/skills-sync.ts",
     "skills:check": "tsx scripts/skills-check.ts",
+    "docs:check-links": "tsx scripts/check-doc-links.ts",
     "test": "jest",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",

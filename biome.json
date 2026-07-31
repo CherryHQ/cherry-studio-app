@@ -9,6 +9,7 @@
     "includes": [
       "**",
       "!.agents",
+      "!.context",
       "!.expo",
       "!.vscode",
       "!android",
