@@ -3,6 +3,7 @@ import * as AuthSession from 'expo-auth-session';
 import { useToast } from 'heroui-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
 import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
 import { CHERRYIN_CONFIG } from '@/shared/utils/cherryInOauth';
 

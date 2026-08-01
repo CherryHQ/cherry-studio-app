@@ -4,6 +4,7 @@ import { CheckIcon, SettingsIcon } from 'lucide-uniwind/png';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+
 import { BackHeader } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';

@@ -1,10 +1,10 @@
 /* biome-ignore-all lint/suspicious/noDuplicateCustomProperties: Light and dark theme variants intentionally redefine the same design tokens. */
 
-@import "tailwindcss";
-@import "uniwind";
+@import 'tailwindcss';
+@import 'uniwind';
 
-@import "heroui-native/styles";
-@import "@cherrystudio/design-tokens/native.css";
+@import 'heroui-native/styles';
+@import '@cherrystudio/design-tokens/native.css';
 
 @source "..";
 @source "../../../packages/lucide-uniwind/src";

@@ -14,6 +14,7 @@ import type {
 import * as z from 'zod';
 
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
+
 import type { CherryDataPartTypes } from './uiParts';
 
 export const MessageIdSchema = z.uuid();

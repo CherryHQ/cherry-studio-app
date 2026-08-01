@@ -6,6 +6,7 @@ import {
 } from '@ai-sdk/provider-utils';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import * as z from 'zod';
+
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 

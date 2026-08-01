@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+
 import { usePrefetch } from '@/frontend/data';
 
 const modelPickerPrefetchStaleTime = 1000 * 60 * 5;

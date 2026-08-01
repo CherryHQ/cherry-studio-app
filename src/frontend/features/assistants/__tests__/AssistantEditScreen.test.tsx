@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 import type { UniqueModelId } from '@/shared/data/types/model';
+
 import AssistantEditScreen from '../AssistantEditScreen';
 
 const nameFieldLabel = 'assistant.form.name';

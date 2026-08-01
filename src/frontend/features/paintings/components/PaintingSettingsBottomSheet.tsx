@@ -8,6 +8,7 @@ import { ChevronDownIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { BottomSheet } from '@/frontend/components/bottomSheet';
 import { SlotText } from '@/frontend/components/SlotText';
 import { bottomSheet } from '@/frontend/utils/constants';

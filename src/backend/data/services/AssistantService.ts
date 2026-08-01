@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
+
 import type { DbService } from '@/backend/data/db/DbService';
 import {
   type AssistantRow,
@@ -20,6 +21,7 @@ import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/shared/dat
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { Tag } from '@/shared/data/types/tag';
+
 import type { ModelService } from './ModelService';
 import type { PinService } from './PinService';
 import type { TagService } from './TagService';
@@ -152,7 +154,10 @@ export class AssistantService {
         )
         .limit(query.limit)
         .offset(offset),
-      this.db.select({ count: sql<number>`count(*)` }).from(assistantTable).where(whereClause),
+      this.db
+        .select({ count: sql<number>`count(*)` })
+        .from(assistantTable)
+        .where(whereClause),
     ]);
 
     const assistantIds = rows.map((row) => row.assistant.id);

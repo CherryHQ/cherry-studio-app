@@ -6,6 +6,7 @@
  */
 
 import { loggerService } from '@logger';
+
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
@@ -20,6 +21,7 @@ import {
   isSupportTopPModel,
   isTemperatureTopPMutuallyExclusiveModel,
 } from '@/shared/utils/model';
+
 import { isAwsBedrockProvider } from './provider';
 import { getThinkingBudget } from './reasoning';
 

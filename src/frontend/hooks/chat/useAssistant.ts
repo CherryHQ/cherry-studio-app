@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+
 import { useMutation, useQuery } from '@/frontend/data';
 import type { CreateAssistantDto, UpdateAssistantDto } from '@/shared/data/api/schemas/assistants';
 import { type Assistant } from '@/shared/data/types/assistant';

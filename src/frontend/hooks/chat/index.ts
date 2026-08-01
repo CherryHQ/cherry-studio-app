@@ -1,10 +1,6 @@
 export { useAssistantApiById, useAssistantMutations, useAssistantsApi } from './useAssistant';
 export { useHydrateTopicDetails } from './useHydrateTopicDetails';
-export {
-  type MessagesOptions,
-  type MessagesViewModel,
-  useMessages,
-} from './useMessages';
+export { type MessagesOptions, type MessagesViewModel, useMessages } from './useMessages';
 export { useModelById, useModels } from './useModel';
 export { usePins } from './usePins';
 export { useProviders } from './useProvider';

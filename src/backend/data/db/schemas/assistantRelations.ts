@@ -1,4 +1,5 @@
 import { primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+
 import { createUpdateTimestamps } from './_columnHelpers';
 import { assistantTable } from './assistant';
 import { mcpServerTable } from './mcpServer';

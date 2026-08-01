@@ -28,10 +28,7 @@ export type {
   InsertAssistantKnowledgeBaseRow,
   InsertAssistantMcpServerRow,
 } from './assistantRelations';
-export {
-  assistantKnowledgeBaseTable,
-  assistantMcpServerTable,
-} from './assistantRelations';
+export { assistantKnowledgeBaseTable, assistantMcpServerTable } from './assistantRelations';
 export type { FileEntryRow, InsertFileEntryRow } from './file';
 export { fileEntryTable } from './file';
 export type {
@@ -55,12 +52,7 @@ export type { InsertPreferenceRow, PreferenceRow } from './preference';
 export { preferenceTable } from './preference';
 export type { InsertPromptRow, PromptRow } from './prompt';
 export { promptTable } from './prompt';
-export type {
-  EntityTagRow,
-  InsertEntityTagRow,
-  InsertTagRow,
-  TagRow,
-} from './tagging';
+export type { EntityTagRow, InsertEntityTagRow, InsertTagRow, TagRow } from './tagging';
 export { entityTagTable, tagTable } from './tagging';
 export type { InsertTopicRow, TopicRow } from './topic';
 export { topicTable } from './topic';

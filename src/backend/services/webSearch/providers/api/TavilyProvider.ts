@@ -1,4 +1,5 @@
 import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/data/types/webSearch';
+
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { ApiKeyRequestSearchContext } from '../base/context';
 import { assertRecord, readObjectArray, readOptionalString, readString } from './schemaUtils';

@@ -14,6 +14,7 @@ import {
   isLiquidGlassAvailable,
   settingsServiceRow,
 } from '@/frontend/utils/constants';
+
 import { ProviderAvatar } from './components/ProviderAvatar';
 import { SettingsSection } from './components/SettingsSection';
 import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';

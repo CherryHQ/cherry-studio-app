@@ -4,6 +4,7 @@ import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BottomSheet } from '@/frontend/components/bottomSheet';
+
 import type { PendingToolApproval } from '../../session/chatSessionProjection';
 import { ToolApprovalSheet } from '../ToolApprovalSheet';
 

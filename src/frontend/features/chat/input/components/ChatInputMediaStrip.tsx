@@ -2,6 +2,7 @@ import { CameraIcon, FileIcon, ImagesIcon, type PngIconProps, XIcon } from 'luci
 import { type ComponentType, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type GestureResponderEvent, Pressable, ScrollView, Text, View } from 'react-native';
+
 import { FileTile, ImageTile } from '../../mediaTile';
 import type { ChatInputAttachmentDraft } from '../utils/chatInputAttachments';
 import { ChatInputAccessoryItem, ChatInputAccessorySection } from './ChatInputAccessory';

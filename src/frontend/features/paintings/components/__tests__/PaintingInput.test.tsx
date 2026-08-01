@@ -1,4 +1,5 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
 import type { ChatInputModelSettings, ChatInputSendPayload } from '@/frontend/features/chat/input';
 import type { Painting } from '@/shared/data/types/painting';
 

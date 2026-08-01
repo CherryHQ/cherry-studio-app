@@ -1,4 +1,5 @@
 import type { Database, DbService } from '@/backend/data/db/DbService';
+
 import { FileEntryService } from '../FileEntryService';
 
 jest.mock('uuid', () => ({

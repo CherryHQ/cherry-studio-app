@@ -1,5 +1,7 @@
 import { MODEL_CAPABILITY, REASONING_EFFORT } from '@cherrystudio/provider-registry';
+
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
+
 import { getModelSupportedReasoningEffortOptions } from '../model';
 
 describe('model reasoning support', () => {

@@ -1,7 +1,6 @@
 import modelsRegistry from '../data/models.json';
 import providerModelsRegistry from '../data/provider-models.json';
 import providersRegistry from '../data/providers.json';
-
 import type { ModelConfig } from './schemas/model';
 import { ModelListSchema } from './schemas/model';
 import type { ProviderConfig } from './schemas/provider';

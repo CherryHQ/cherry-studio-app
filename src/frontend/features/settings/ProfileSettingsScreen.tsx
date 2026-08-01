@@ -8,6 +8,7 @@ import { SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { ProfileAvatarEditBadge, ProfileAvatarImage } from '@/frontend/components/ProfileAvatar';
 import { useBackendModule } from '@/frontend/data';

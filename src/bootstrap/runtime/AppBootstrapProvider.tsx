@@ -1,5 +1,6 @@
 import * as SplashScreen from 'expo-splash-screen';
 import { createContext, type PropsWithChildren, use, useEffect, useMemo, useState } from 'react';
+
 import {
   type AppBootstrapRuntime,
   createAppBootstrapRuntime,

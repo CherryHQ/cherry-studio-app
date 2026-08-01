@@ -8,8 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomSheet } from '@/frontend/components/bottomSheet';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
-import { PrismSweep } from '../../prismSweep';
 
+import { PrismSweep } from '../../prismSweep';
 import { useThinkingTimerMs } from '../hooks/useThinkingTimerMs';
 import { PartMarkdown } from './PartMarkdown';
 

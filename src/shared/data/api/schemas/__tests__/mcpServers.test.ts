@@ -23,18 +23,14 @@ describe('mobile MCP server DTO schemas', () => {
     });
   });
 
-  it.each([
-    'type',
-    'provider',
-    'dxtVersion',
-    'sortOrder',
-    'installSource',
-    'isTrusted',
-  ])('rejects the synchronized desktop-only field %s', (field) => {
-    expect(() =>
-      UpdateMcpServerSchema.parse({
-        [field]: field === 'isTrusted' ? true : 'desktop-value',
-      }),
-    ).toThrow();
-  });
+  it.each(['type', 'provider', 'dxtVersion', 'sortOrder', 'installSource', 'isTrusted'])(
+    'rejects the synchronized desktop-only field %s',
+    (field) => {
+      expect(() =>
+        UpdateMcpServerSchema.parse({
+          [field]: field === 'isTrusted' ? true : 'desktop-value',
+        }),
+      ).toThrow();
+    },
+  );
 });

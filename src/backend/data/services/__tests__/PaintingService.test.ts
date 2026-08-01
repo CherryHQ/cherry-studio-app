@@ -1,9 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
+
 import { FileEntryService } from '../FileEntryService';
 import { PaintingService } from '../PaintingService';
 

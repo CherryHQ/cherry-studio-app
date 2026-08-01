@@ -7,6 +7,7 @@ import {
 } from '@cherrystudio/ai-core';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { InvalidToolInputError, type ToolSet } from 'ai';
+
 import { AiService, type AiServiceDependencies } from '@/backend/ai/AiService';
 import { createWebSearchTool } from '@/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';

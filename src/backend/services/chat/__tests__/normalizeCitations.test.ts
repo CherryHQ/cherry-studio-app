@@ -1,4 +1,5 @@
 import type { CherryUIMessage } from '@/shared/data/types/message';
+
 import { normalizeAssistantMessageCitations } from '../normalizeCitations';
 
 describe('normalizeAssistantMessageCitations', () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import providersRegistry from '../../data/providers.json';
 import { ApiFeaturesSchema, ProviderListSchema } from '../schemas/provider';
 

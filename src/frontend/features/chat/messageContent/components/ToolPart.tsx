@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Platform, Text } from 'react-native';
 
 import type { CherryMessagePart } from '@/shared/data/types/message';
+
 import { getBuiltInToolPresentation } from '../../utils/builtInToolPresentation';
 import { hasToolPartValue, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';

@@ -13,6 +13,7 @@
  */
 
 import { asc, eq } from 'drizzle-orm';
+
 import type { DbService } from '@/backend/data/db/DbService';
 import { groupTable } from '@/backend/data/db/schemas';
 import type { GroupRow } from '@/backend/data/db/schemas/group';

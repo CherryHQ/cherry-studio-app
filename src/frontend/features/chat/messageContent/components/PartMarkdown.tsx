@@ -3,6 +3,7 @@ import { EnrichedMarkdownText, type MarkdownStyle } from 'react-native-enriched-
 import { StreamdownText } from 'react-native-streamdown';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+
 import { useMarkdownLinkPress } from '../hooks/useMarkdownLinkPress';
 
 type PartMarkdownProps = {

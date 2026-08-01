@@ -13,6 +13,7 @@ import {
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import type { EndpointType } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
+
 import { useProviderDetailSettings } from './detail';
 import { useProviderModelAdd } from './models/hooks/useProviderModelAdd';
 import { providerModelAddEndpointOptions } from './models/utils/providerModelAdd';

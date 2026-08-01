@@ -7,6 +7,7 @@
  */
 
 import { and, asc, eq, ne, type SQL, sql } from 'drizzle-orm';
+
 import type { DbService } from '@/backend/data/db/DbService';
 import type { InsertMcpServerRow, McpServerRow } from '@/backend/data/db/schemas';
 import { mcpServerTable } from '@/backend/data/db/schemas';
@@ -132,7 +133,10 @@ export class McpServerService {
         .from(mcpServerTable)
         .where(whereClause)
         .orderBy(asc(mcpServerTable.sortOrder), asc(mcpServerTable.createdAt)),
-      this.db.select({ count: sql<number>`count(*)` }).from(mcpServerTable).where(whereClause),
+      this.db
+        .select({ count: sql<number>`count(*)` })
+        .from(mcpServerTable)
+        .where(whereClause),
     ]);
     const items = rows.map(rowToMcpServer);
 

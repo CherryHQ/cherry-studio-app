@@ -1,4 +1,5 @@
 import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/data/types/webSearch';
+
 import { resolveProviderApiHost } from '../../utils/provider';
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { ApiKeyRequestSearchContext } from '../base/context';

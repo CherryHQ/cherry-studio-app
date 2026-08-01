@@ -8,6 +8,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import {
   ModelPickerBottomSheet,
@@ -28,6 +29,7 @@ import {
   type McpMode,
 } from '@/shared/data/types/assistant';
 import type { UniqueModelId } from '@/shared/data/types/model';
+
 import { EmojiPickerBottomSheet } from './components/EmojiPickerBottomSheet';
 
 type AssistantFormState = {

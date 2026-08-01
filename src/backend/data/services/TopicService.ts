@@ -13,6 +13,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
+
 import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
 import type {
   ActiveNodeResponse,
@@ -22,6 +23,7 @@ import type {
 } from '@/shared/data/api/schemas/topics';
 import { type CursorPaginationResponse, DataApiErrorFactory } from '@/shared/data/api/types';
 import type { Topic } from '@/shared/data/types/topic';
+
 import type { DbService } from '../db/DbService';
 import { messageTable, pinTable, type TopicRow, topicTable } from '../db/schemas';
 import { createRootMessageTx } from './MessageService';

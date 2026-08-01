@@ -20,7 +20,9 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+
 import { Image } from '@/frontend/components/nativePrimitives';
+
 import {
   CHAT_INPUT_PHOTO_SELECTION_LIMIT,
   type ChatInputPhotoPickerActions,

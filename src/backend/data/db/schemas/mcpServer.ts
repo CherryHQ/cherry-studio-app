@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+
 import type { McpConfigSample } from '@/shared/data/types/mcpServer';
 
 import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';

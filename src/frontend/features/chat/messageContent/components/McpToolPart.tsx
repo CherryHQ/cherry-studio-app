@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
+
 import { type NormalizedMcpContent, normalizeMcpResult } from '@/shared/ai/tools/mcpResult';
 import { parseFunctionCallToolName } from '@/shared/ai/tools/mcpToolName';
 import type { CherryMessagePart } from '@/shared/data/types/message';
@@ -9,6 +10,7 @@ import {
   readCherryMeta,
   readCherryToolMetadata,
 } from '@/shared/data/types/uiParts';
+
 import { ToolPartSectionTitle, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';
 

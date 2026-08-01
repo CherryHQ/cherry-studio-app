@@ -1,4 +1,5 @@
 import type { PermissionsBackend } from '@/shared/contracts';
+
 import { PermissionsService, type PermissionsServiceDependencies } from '../PermissionsService';
 
 function createSubject() {

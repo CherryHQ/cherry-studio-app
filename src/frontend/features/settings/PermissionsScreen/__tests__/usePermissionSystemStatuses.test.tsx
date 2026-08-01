@@ -1,6 +1,7 @@
 import type { EffectCallback } from 'react';
 import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
 import { BackendProvider } from '@/frontend/data';
 import type { Backend, PermissionStatuses } from '@/shared/contracts';
 

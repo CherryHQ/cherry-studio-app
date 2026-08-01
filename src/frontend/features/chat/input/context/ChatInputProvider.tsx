@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import { type TextInput } from 'react-native';
+
 import { useChatInputPhotoPicker } from '../hooks/useChatInputPhotoPicker';
 import {
   type ChatInputAction,

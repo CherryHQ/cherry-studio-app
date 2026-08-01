@@ -1,4 +1,5 @@
 import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/data/types/webSearch';
+
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 
 export class UnsupportedProvider extends BaseWebSearchProvider {

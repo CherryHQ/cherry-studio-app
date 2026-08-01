@@ -1,4 +1,5 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import type { EndpointType } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
