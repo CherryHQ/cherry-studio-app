@@ -10,9 +10,9 @@ import type {
   ListMcpServersQueryParams,
   McpUpdateServerResult,
   UpdateMcpServerDto,
-} from '@cherrystudio/shared/data/api/schemas/mcpServers';
-import type { OffsetPaginationResponse } from '@cherrystudio/shared/data/api/types';
-import type { StreamableHttpMcpServer } from '@cherrystudio/shared/data/types/mcpServer';
+} from '@cherrystudio/universal/data/api/schemas/mcpServers';
+import type { OffsetPaginationResponse } from '@cherrystudio/universal/data/api/types';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
 type McpServerRepository = {
   create(input: CreateMcpServerDto): Promise<StreamableHttpMcpServer>;

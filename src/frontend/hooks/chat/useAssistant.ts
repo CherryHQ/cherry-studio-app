@@ -3,8 +3,8 @@ import { useMutation, useQuery } from '@/frontend/data';
 import type {
   CreateAssistantDto,
   UpdateAssistantDto,
-} from '@cherrystudio/shared/data/api/schemas/assistants';
-import { type Assistant } from '@cherrystudio/shared/data/types/assistant';
+} from '@cherrystudio/universal/data/api/schemas/assistants';
+import { type Assistant } from '@cherrystudio/universal/data/types/assistant';
 
 const ASSISTANTS_LIST_LIMIT = 500;
 const EMPTY_ASSISTANTS: readonly Assistant[] = Object.freeze([]);

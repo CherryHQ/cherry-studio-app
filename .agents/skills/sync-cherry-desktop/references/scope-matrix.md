@@ -8,15 +8,15 @@ Use `desktop-sync-manifest.json` as the versioned domain inventory. Let the desi
 |---|---|---|---|
 | `design-catalog` | `packages/ui/icons`, icon registry and components | `packages/ui/icons`, `packages/ui/src/icons`, `packages/ui/src/icons-webp` | `semantic-port`; exact SVG sources plus native asset/catalog adapters |
 | `schema` | `src/main/data/db/schemas`, migration snapshots | `src/backend/data/db/schemas`, migration snapshots | `opaque-retention`; identical target schema with independent append-only history |
-| `shared-data` | `src/shared/data` | `packages/shared/src/data` | `semantic-port` |
-| `shared-portable` | shared `types`/`utils` files listed in the Manifest | `packages/shared/src/{types,utils}` | `semantic-port`; shape-only trims registered in `shapeOnlyPorts` |
+| `shared-data` | `src/shared/data` | `packages/universal/src/data` | `semantic-port` |
+| `shared-portable` | shared `types`/`utils` files listed in the Manifest | `packages/universal/src/{types,utils}` | `semantic-port`; shape-only trims registered in `shapeOnlyPorts` |
 | `data-main` | `src/main/data` | `src/backend/data` | `semantic-port`; exclude only the Manifest's legacy desktop migration mechanics |
 | `data-renderer` | `src/renderer/data` | `src/frontend/data` | `semantic-port`; TanStack Query is the mobile adapter |
 | `ai-core` | `packages/aiCore` | `packages/ai-core` | `mirror` |
 | `ai-sdk-provider` | `packages/ai-sdk-provider` | same path | `mirror` |
 | `provider-registry` | `packages/provider-registry` | same path | `semantic-port` with a narrow mobile loader |
 | `ai-runtime` | `src/main/ai` | `src/backend/ai`, chat service | `semantic-port` except explicit Manifest exclusions |
-| `shared-ai` | `src/shared/ai` | `packages/shared/src/ai` | `semantic-port` |
+| `shared-ai` | `src/shared/ai` | `packages/universal/src/ai` | `semantic-port` |
 | `services` | `src/main/services` | `src/backend/services`, reached data and AI services | `semantic-port` |
 | `dependencies` | manifests, lockfile, patches | mobile equivalents | `semantic-port`; retain Expo-compatible resolution |
 | `backup` | backup manager, restore, cache | mobile data and services | `opaque-retention`; remain `blocked` until lossless desktop restoration works |

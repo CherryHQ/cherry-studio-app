@@ -1,8 +1,8 @@
-import type { WebSearchProvider } from '@cherrystudio/shared/data/preference';
+import type { WebSearchProvider } from '@cherrystudio/universal/data/preference';
 import type {
   WebSearchExecutionConfig,
   WebSearchResponse,
-} from '@cherrystudio/shared/data/types/webSearch';
+} from '@cherrystudio/universal/data/types/webSearch';
 import type { ApiKeyRotationState } from '../utils/provider';
 import type { BaseWebSearchProvider } from './base/BaseWebSearchProvider';
 import { WEB_SEARCH_PROVIDER_REGISTRY } from './registry';

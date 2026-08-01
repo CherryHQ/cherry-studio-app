@@ -1,5 +1,5 @@
-import type { EndpointType } from '@cherrystudio/shared/data/types/model';
-import type { ApiKeyEntry, Provider } from '@cherrystudio/shared/data/types/provider';
+import type { EndpointType } from '@cherrystudio/universal/data/types/model';
+import type { ApiKeyEntry, Provider } from '@cherrystudio/universal/data/types/provider';
 
 import { apiKeyEntriesSignature, normalizeApiKeyEntries } from './providerApiServiceApiKeys';
 import type { EndpointDraft } from './providerApiServiceEndpointDraft';

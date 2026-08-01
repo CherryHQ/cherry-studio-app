@@ -16,16 +16,16 @@ import {
   CreateMcpServerSchema,
   type UpdateMcpServerDto,
   UpdateMcpServerSchema,
-} from '@cherrystudio/shared/data/api/schemas/mcpServers';
+} from '@cherrystudio/universal/data/api/schemas/mcpServers';
 import {
   DataApiErrorFactory,
   type OffsetPaginationResponse,
-} from '@cherrystudio/shared/data/api/types';
+} from '@cherrystudio/universal/data/api/types';
 import type {
   McpServer,
   McpServerType,
   StreamableHttpMcpServer,
-} from '@cherrystudio/shared/data/types/mcpServer';
+} from '@cherrystudio/universal/data/types/mcpServer';
 
 import { nullsToUndefined, timestampToISO } from './utils/rowMappers';
 

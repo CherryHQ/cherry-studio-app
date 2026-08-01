@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import { CURRENCY, type Currency, objectValues } from '@cherrystudio/shared/data/types/model';
+import { CURRENCY, type Currency, objectValues } from '@cherrystudio/universal/data/types/model';
 
 const finiteNonnegativeCost = z.number().nonnegative().refine(Number.isFinite);
 const ProviderCostWithCurrencySchema = z.union([

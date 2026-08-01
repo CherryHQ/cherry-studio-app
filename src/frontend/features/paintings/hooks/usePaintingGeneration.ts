@@ -6,7 +6,7 @@ import type {
   PaintingGenerationResult as BackendPaintingGenerationResult,
   PaintingGenerationOutput,
 } from '@/shared/contracts';
-import type { UniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useSyncPaintingQueries } from './usePaintings';
 
 export type PaintingGenerationStatus = 'idle' | 'generating' | 'revealing';

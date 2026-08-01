@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useModelSettingSelections } from '@/frontend/components/modelPicker';
 import { useModelById } from '@/frontend/hooks/chat';
-import { isUniqueModelId } from '@cherrystudio/shared/data/types/model';
+import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { getChatInputReasoningEffortsForModel } from '../utils/chatInputReasoning';
 
 /**

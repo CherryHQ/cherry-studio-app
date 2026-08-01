@@ -4,8 +4,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
-} from '@cherrystudio/shared/data/types/assistant';
-import type { UniqueModelId } from '@cherrystudio/shared/data/types/model';
+} from '@cherrystudio/universal/data/types/assistant';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import AssistantEditScreen from '../AssistantEditScreen';
 
 const nameFieldLabel = 'assistant.form.name';

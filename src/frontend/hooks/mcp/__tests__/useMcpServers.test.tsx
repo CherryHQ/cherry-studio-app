@@ -3,8 +3,8 @@ import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { queryKeys } from '@/frontend/data';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
-import type { ApiClient } from '@cherrystudio/shared/data/api/types';
-import type { StreamableHttpMcpServer } from '@cherrystudio/shared/data/types/mcpServer';
+import type { ApiClient } from '@cherrystudio/universal/data/api/types';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useMcpServerMutations } from '../useMcpServers';
 
 const mockInvalidateQueries = jest.fn<Promise<void>, [unknown]>(async () => undefined);

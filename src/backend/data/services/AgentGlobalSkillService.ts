@@ -10,9 +10,12 @@ import {
   agentWorkspaceTable,
   type InsertAgentGlobalSkillRow,
 } from '@/backend/data/db/schemas';
-import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
-import type { AgentSkillUpdateDto } from '@cherrystudio/shared/data/api/schemas/agents';
-import type { InstalledSkill, ListSkillsQuery } from '@cherrystudio/shared/data/api/schemas/skills';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
+import type { AgentSkillUpdateDto } from '@cherrystudio/universal/data/api/schemas/agents';
+import type {
+  InstalledSkill,
+  ListSkillsQuery,
+} from '@cherrystudio/universal/data/api/schemas/skills';
 
 import { timestampToISO } from './utils/rowMappers';
 

@@ -8,8 +8,8 @@ import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import {
   WEB_SEARCH_PROVIDER_IDS,
   type WebSearchProviderId,
-} from '@cherrystudio/shared/data/preference';
-import { isMobileSupportedWebSearchProviderId } from '@cherrystudio/shared/data/presets/webSearchProviders';
+} from '@cherrystudio/universal/data/preference';
+import { isMobileSupportedWebSearchProviderId } from '@cherrystudio/universal/data/presets/webSearchProviders';
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';
 import {

@@ -1,7 +1,7 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { PreferenceClient } from '@cherrystudio/shared/data/preference';
+import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
 
 import { PreferenceProvider, usePreferenceClient } from '../PreferenceProvider';
 

@@ -12,13 +12,13 @@ import { createWebSearchTool } from '@/backend/ai/tools/adapters/aiSdk/builtin/W
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
-} from '@cherrystudio/shared/data/types/assistant';
+} from '@cherrystudio/universal/data/types/assistant';
 import {
   createUniqueModelId,
   type Model,
   type UniqueModelId,
-} from '@cherrystudio/shared/data/types/model';
-import type { Provider } from '@cherrystudio/shared/data/types/provider';
+} from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 const mockGenerate = jest.fn(async () => ({ text: 'ok', usage: undefined }));
 const mockStream = jest.fn(

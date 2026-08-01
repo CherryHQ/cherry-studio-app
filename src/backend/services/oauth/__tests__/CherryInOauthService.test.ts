@@ -1,5 +1,5 @@
 import type { ProviderService } from '@/backend/data/services/ProviderService';
-import type { AuthConfig } from '@cherrystudio/shared/data/types/provider';
+import type { AuthConfig } from '@cherrystudio/universal/data/types/provider';
 import { CherryInOauthService } from '../CherryInOauthService';
 
 // Mock dependencies

@@ -1,13 +1,13 @@
 import { loggerService } from '@logger';
 import { type SQL, sql } from 'drizzle-orm';
 
-import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
-import type { CursorPaginationResponse } from '@cherrystudio/shared/data/api/types';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
+import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import {
   buildKeywordRegexes,
   type KeywordMatchMode,
   splitKeywordsToTerms,
-} from '@cherrystudio/shared/utils/keywordSearch';
+} from '@cherrystudio/universal/utils/keywordSearch';
 
 import { asNumericKey, encodeCursor, parseCursor } from './keysetCursor';
 import { stripMarkdownFormatting } from './searchSnippet';

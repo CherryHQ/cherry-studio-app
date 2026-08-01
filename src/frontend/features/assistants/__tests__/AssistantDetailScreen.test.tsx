@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
-} from '@cherrystudio/shared/data/types/assistant';
+} from '@cherrystudio/universal/data/types/assistant';
 import AssistantDetailScreen from '../AssistantDetailScreen';
 
 type HeaderAction = { key: string; label?: string; onPress?: () => void };

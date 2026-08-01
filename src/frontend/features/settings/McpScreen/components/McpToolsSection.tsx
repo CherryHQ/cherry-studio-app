@@ -9,8 +9,8 @@ import { queryKeys, useBackendModule } from '@/frontend/data';
 import {
   hasMcpServerWildcardRule,
   matchesMcpSourceToolRule,
-} from '@cherrystudio/shared/ai/tools/mcpSourcePolicy';
-import type { StreamableHttpMcpServer } from '@cherrystudio/shared/data/types/mcpServer';
+} from '@cherrystudio/universal/ai/tools/mcpSourcePolicy';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 
 type McpToolsSectionProps = {

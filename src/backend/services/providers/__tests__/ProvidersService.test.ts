@@ -1,5 +1,5 @@
 import type { ProvidersBackend } from '@/shared/contracts';
-import type { Provider } from '@cherrystudio/shared/data/types/provider';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { ProvidersService, type ProvidersServiceDependencies } from '../ProvidersService';
 
 const provider = { id: 'cherryin', isEnabled: false } as Provider;

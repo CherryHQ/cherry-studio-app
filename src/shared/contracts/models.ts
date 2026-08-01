@@ -1,4 +1,4 @@
-import type { Model, UniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 
 export type ModelPullPreview = {
   added: Model[];

@@ -21,7 +21,7 @@ import {
   useFloatingChatInputLayout,
 } from '@/frontend/features/chat/workspace';
 import { isIOS } from '@/frontend/utils/constants';
-import type { Message } from '@cherrystudio/shared/data/types/message';
+import type { Message } from '@cherrystudio/universal/data/types/message';
 import { PaintingInput } from '../components/PaintingInput';
 import {
   type PaintingGenerationInput,

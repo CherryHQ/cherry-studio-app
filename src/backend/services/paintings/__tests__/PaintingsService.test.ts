@@ -1,7 +1,7 @@
 import type { PaintingsBackend } from '@/shared/contracts';
-import type { FileEntryId, PreparedInternalFile } from '@cherrystudio/shared/data/types/file';
-import { createUniqueModelId } from '@cherrystudio/shared/data/types/model';
-import type { Painting } from '@cherrystudio/shared/data/types/painting';
+import type { FileEntryId, PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
+import { createUniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { PaintingsService, type PaintingsServiceDependencies } from '../PaintingsService';
 
 const modelId = createUniqueModelId('openai', 'image-1');

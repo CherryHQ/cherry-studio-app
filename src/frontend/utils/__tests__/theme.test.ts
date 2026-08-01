@@ -1,4 +1,4 @@
-import { ThemeMode } from '@cherrystudio/shared/data/preference';
+import { ThemeMode } from '@cherrystudio/universal/data/preference';
 
 import {
   applyPrimaryColorPreference,

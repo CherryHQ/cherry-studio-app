@@ -35,7 +35,7 @@
       "strategy": "semantic-port",
       "status": "unbaselined",
       "sourcePaths": ["src/shared/data"],
-      "targetPaths": ["packages/shared/src/data"],
+      "targetPaths": ["packages/universal/src/data"],
       "sourceCommit": null,
       "sourceSha256": null,
       "explicitExclusions": [
@@ -82,16 +82,16 @@
         "src/shared/utils/url.ts"
       ],
       "targetPaths": [
-        "packages/shared/src/types/aiSdk.ts",
-        "packages/shared/src/types/codeCli.ts",
-        "packages/shared/src/types/error.ts",
-        "packages/shared/src/types/serializable.ts",
-        "packages/shared/src/utils/conversationTitle.ts",
-        "packages/shared/src/utils/keywordSearch.ts",
-        "packages/shared/src/utils/model.ts",
-        "packages/shared/src/utils/shortcut.ts",
-        "packages/shared/src/utils/text.ts",
-        "packages/shared/src/utils/url.ts"
+        "packages/universal/src/types/aiSdk.ts",
+        "packages/universal/src/types/codeCli.ts",
+        "packages/universal/src/types/error.ts",
+        "packages/universal/src/types/serializable.ts",
+        "packages/universal/src/utils/conversationTitle.ts",
+        "packages/universal/src/utils/keywordSearch.ts",
+        "packages/universal/src/utils/model.ts",
+        "packages/universal/src/utils/shortcut.ts",
+        "packages/universal/src/utils/text.ts",
+        "packages/universal/src/utils/url.ts"
       ],
       "sourceCommit": null,
       "sourceSha256": null,
@@ -173,7 +173,7 @@
       "strategy": "semantic-port",
       "status": "unbaselined",
       "sourcePaths": ["src/shared/ai"],
-      "targetPaths": ["packages/shared/src/ai"],
+      "targetPaths": ["packages/universal/src/ai"],
       "sourceCommit": null,
       "sourceSha256": null,
       "explicitExclusions": [

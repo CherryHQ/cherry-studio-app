@@ -1,10 +1,10 @@
 import type { AgentService } from '@/backend/data/services/AgentService';
 import type { AgentTaskService } from '@/backend/data/services/AgentTaskService';
-import { DataApiErrorFactory, toDataApiError } from '@cherrystudio/shared/data/api/errors';
+import { DataApiErrorFactory, toDataApiError } from '@cherrystudio/universal/data/api/errors';
 import {
   OrderBatchRequestSchema,
   OrderRequestSchema,
-} from '@cherrystudio/shared/data/api/schemas/_endpointHelpers';
+} from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
 import {
   type AgentSchemas,
   DeleteAgentQuerySchema,
@@ -12,8 +12,8 @@ import {
   type ListQuery,
   ListQuerySchema,
   UpdateAgentSchema,
-} from '@cherrystudio/shared/data/api/schemas/agents';
-import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
+} from '@cherrystudio/universal/data/api/schemas/agents';
+import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
 
 function pagination(query: ListQuery) {
   const page = query.page ?? 1;

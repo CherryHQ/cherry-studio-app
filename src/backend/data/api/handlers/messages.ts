@@ -1,6 +1,6 @@
 import type { MessageService } from '@/backend/data/services/MessageService';
-import type { MessageSchemas } from '@cherrystudio/shared/data/api/schemas/messages';
-import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
+import type { MessageSchemas } from '@cherrystudio/universal/data/api/schemas/messages';
+import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
 
 type MessageData = Pick<
   MessageService,

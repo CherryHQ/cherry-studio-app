@@ -1,4 +1,4 @@
-import { ErrorCode } from '@cherrystudio/shared/data/api/types';
+import { ErrorCode } from '@cherrystudio/universal/data/api/types';
 import { DataApiService } from '../DataApiService';
 
 function createService(handlers: Record<string, Record<string, jest.Mock>>) {

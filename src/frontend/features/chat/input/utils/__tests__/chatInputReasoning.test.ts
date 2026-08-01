@@ -1,5 +1,5 @@
 import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
-import type { Model, UniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import {
   CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   chatInputReasoningEffortOptions,

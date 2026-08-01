@@ -4,7 +4,7 @@ import * as z from 'zod';
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
-} from '@cherrystudio/shared/data/types/assistant';
+} from '@cherrystudio/universal/data/types/assistant';
 import type { ToolEntry } from '../adapters/aiSdk/types';
 import { ToolService } from '../ToolService';
 

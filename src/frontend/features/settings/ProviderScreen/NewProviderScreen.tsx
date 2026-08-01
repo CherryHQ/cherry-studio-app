@@ -15,8 +15,8 @@ import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/head
 import { Image } from '@/frontend/components/nativePrimitives';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
-import { ENDPOINT_TYPE } from '@cherrystudio/shared/data/types/model';
-import type { ApiKeyEntry, EndpointConfigs } from '@cherrystudio/shared/data/types/provider';
+import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
+import type { ApiKeyEntry, EndpointConfigs } from '@cherrystudio/universal/data/types/provider';
 import { SettingsIconButton } from '../components/SettingsIconButton';
 import { normalizeApiKeySingleLine } from './apiService/utils/providerApiServiceApiKeys';
 import { providerApiServiceStyles } from './apiService/utils/providerApiServiceStyles';

@@ -20,14 +20,14 @@ import { SettingSelect } from '@/frontend/features/settings/components/SettingSe
 import { useAssistantApiById, useAssistantMutations } from '@/frontend/hooks/chat';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
-import type { CreateAssistantDto } from '@cherrystudio/shared/data/api/schemas/assistants';
+import type { CreateAssistantDto } from '@cherrystudio/universal/data/api/schemas/assistants';
 import {
   type Assistant,
   type AssistantSettings,
   DEFAULT_ASSISTANT_SETTINGS,
   type McpMode,
-} from '@cherrystudio/shared/data/types/assistant';
-import type { UniqueModelId } from '@cherrystudio/shared/data/types/model';
+} from '@cherrystudio/universal/data/types/assistant';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { EmojiPickerBottomSheet } from './components/EmojiPickerBottomSheet';
 
 type AssistantFormState = {

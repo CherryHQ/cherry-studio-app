@@ -13,9 +13,9 @@ import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 
 import { fetch as expoFetch } from 'expo/fetch';
 import type { AiUsageCaptureContext } from '@/backend/data/services/AiUsageRecordService';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
-import type { Model } from '@cherrystudio/shared/data/types/model';
-import { parseUniqueModelId } from '@cherrystudio/shared/data/types/model';
-import type { Provider } from '@cherrystudio/shared/data/types/provider';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { resolveMediaCapabilities } from './messages/messageCapabilities';
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { listModels as listProviderModels } from './provider/listModels';

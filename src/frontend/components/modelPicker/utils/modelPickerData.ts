@@ -3,9 +3,9 @@ import {
   isUniqueModelId,
   type Model,
   type UniqueModelId,
-} from '@cherrystudio/shared/data/types/model';
-import type { Pin } from '@cherrystudio/shared/data/types/pin';
-import type { Provider } from '@cherrystudio/shared/data/types/provider';
+} from '@cherrystudio/universal/data/types/model';
+import type { Pin } from '@cherrystudio/universal/data/types/pin';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 export type ModelPickerGroupKind = 'pinned' | 'provider';
 

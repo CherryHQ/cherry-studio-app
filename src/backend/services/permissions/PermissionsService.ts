@@ -5,7 +5,10 @@ import type {
   SetPermissionPolicyResult,
   SystemPermissionState,
 } from '@/shared/contracts';
-import type { PermissionMode, PermissionPreferenceKey } from '@cherrystudio/shared/data/preference';
+import type {
+  PermissionMode,
+  PermissionPreferenceKey,
+} from '@cherrystudio/universal/data/preference';
 
 type PermissionDevice = {
   getStatus(key: PermissionPreferenceKey): Promise<SystemPermissionState>;

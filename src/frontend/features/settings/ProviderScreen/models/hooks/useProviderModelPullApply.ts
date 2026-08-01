@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import type { Model, UniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 
 import type {
   ProviderModelPullPreview,

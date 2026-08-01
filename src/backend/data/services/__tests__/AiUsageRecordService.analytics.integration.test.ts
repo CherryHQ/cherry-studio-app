@@ -7,7 +7,7 @@ import {
   AiUsageRecordListQuerySchema,
   AiUsageRecordStatsQuerySchema,
   AiUsageRecordTimelineQuerySchema,
-} from '@cherrystudio/shared/data/api/schemas/aiUsageRecords';
+} from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 import type { AiUsageCaptureContext, RecordAiInvocationInput } from '../AiUsageRecordService';

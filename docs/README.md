@@ -23,7 +23,7 @@ They are the source of truth for how the repository works today.
 | [Domain Language](./references/domain-language.md) | Shared product and architecture terminology |
 | [Naming Conventions](./references/naming-conventions.md) | File, directory, identifier, and documentation naming rules |
 | [Runtime Ownership](./references/runtime-ownership.md) | Bootstrap, startup gates, sessions, cleanup, and post-ready work |
-| [Shared Package](./references/shared-package.md) | `@cherrystudio/shared` scope, admission criteria, aliasing, and desktop sync |
+| [Universal Package](./references/universal-package.md) | `@cherrystudio/universal` scope, admission criteria, aliasing, and desktop sync |
 | [Navigation And Insets](./references/navigation-and-insets.md) | Router structure, native gestures, sheets, safe areas, and edge-to-edge layout |
 | [UI Components](./references/ui-components.md) | Interaction component ownership and platform enhancement rules |
 

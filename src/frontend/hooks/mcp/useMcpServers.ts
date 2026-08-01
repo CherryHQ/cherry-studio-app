@@ -5,8 +5,8 @@ import type { McpServerRuntimeSummary } from '@/shared/contracts';
 import type {
   CreateMcpServerDto,
   UpdateMcpServerDto,
-} from '@cherrystudio/shared/data/api/schemas/mcpServers';
-import type { StreamableHttpMcpServer } from '@cherrystudio/shared/data/types/mcpServer';
+} from '@cherrystudio/universal/data/api/schemas/mcpServers';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
 const EMPTY_MCP_SERVERS: readonly StreamableHttpMcpServer[] = Object.freeze([]);
 const EMPTY_MCP_RUNTIME_SUMMARIES: Readonly<Record<string, McpServerRuntimeSummary>> =

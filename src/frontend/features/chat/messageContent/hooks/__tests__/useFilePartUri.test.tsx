@@ -3,8 +3,8 @@ import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
-import type { ApiClient } from '@cherrystudio/shared/data/api/types';
-import type { FileUIPart } from '@cherrystudio/shared/data/types/message';
+import type { ApiClient } from '@cherrystudio/universal/data/api/types';
+import type { FileUIPart } from '@cherrystudio/universal/data/types/message';
 
 import { useFilePartUri } from '../useFilePartUri';
 

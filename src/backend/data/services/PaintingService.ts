@@ -7,15 +7,15 @@ import {
   paintingFileRefTable,
   paintingTable,
 } from '@/backend/data/db/schemas';
-import type { CursorPaginationResponse } from '@cherrystudio/shared/data/api/types';
-import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/types';
-import type { FileEntryId, PreparedInternalFile } from '@cherrystudio/shared/data/types/file';
-import { createUniqueModelId, isUniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
+import type { FileEntryId, PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
+import { createUniqueModelId, isUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type {
   Painting,
   PaintingFileRole,
   PaintingFiles,
-} from '@cherrystudio/shared/data/types/painting';
+} from '@cherrystudio/universal/data/types/painting';
 
 import type { FileEntryService } from './FileEntryService';
 import { discardPreparedFiles } from './fileStorage';

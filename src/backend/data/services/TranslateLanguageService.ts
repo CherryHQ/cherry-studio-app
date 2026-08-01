@@ -2,13 +2,13 @@ import { asc, eq } from 'drizzle-orm';
 
 import type { DbService } from '@/backend/data/db/DbService';
 import { translateLanguageTable } from '@/backend/data/db/schemas/translateLanguage';
-import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
 import type {
   CreateTranslateLanguageDto,
   UpdateTranslateLanguageDto,
-} from '@cherrystudio/shared/data/api/schemas/translate';
-import { parsePersistedLangCode } from '@cherrystudio/shared/data/preference/preferenceTypes';
-import type { TranslateLanguage } from '@cherrystudio/shared/data/types/translate';
+} from '@cherrystudio/universal/data/api/schemas/translate';
+import { parsePersistedLangCode } from '@cherrystudio/universal/data/preference/preferenceTypes';
+import type { TranslateLanguage } from '@cherrystudio/universal/data/types/translate';
 
 import { timestampToISO } from './utils/rowMappers';
 

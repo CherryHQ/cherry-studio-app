@@ -2,16 +2,16 @@ import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugi
 import { extensionRegistry } from '@cherrystudio/ai-core/provider';
 
 import type { PreferenceService } from '@/backend/data/PreferenceService';
-import type { Assistant } from '@cherrystudio/shared/data/types/assistant';
-import type { Model } from '@cherrystudio/shared/data/types/model';
-import type { Provider } from '@cherrystudio/shared/data/types/provider';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import {
   isAnthropicModel,
   isForcedNativeWebSearchModel,
   isGeminiModel,
   isGrokModel,
   isOpenAIModel,
-} from '@cherrystudio/shared/utils/model';
+} from '@cherrystudio/universal/utils/model';
 import type { AppProviderId } from '../../../types';
 import { SystemProviderIds } from '../../../utils/providerIds';
 import {

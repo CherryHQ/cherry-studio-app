@@ -1,9 +1,13 @@
-# Shared Package
+# Universal Package
 
-`packages/shared` (`@cherrystudio/shared`) is the cross-platform subset of Cherry Desktop's
+`packages/universal` (`@cherrystudio/universal`) is the cross-platform subset of Cherry Desktop's
 `src/shared`, extracted into a workspace package so the desktop mirror is a visible boundary
 instead of being mixed into mobile-native code, and so a future desktop/mobile monorepo can consume
 it as-is.
+
+It is named `universal` rather than `shared` because three different "shared" scopes are in play —
+desktop's process-shared `src/shared`, this cross-platform subset, and the mobile-native remainder
+in `src/shared`. The package name keeps every import site unambiguous.
 
 ## Scope
 
@@ -43,7 +47,7 @@ under the preference-parity invariant, not code.
 
 ## Imports And Aliasing
 
-- App code imports `@cherrystudio/shared/*` (enforced by ESLint; the package-internal alias is
+- App code imports `@cherrystudio/universal/*` (enforced by ESLint; the package-internal alias is
   banned in `src/`).
 - Inside the package, imports use `@shared/*` — the same alias desktop uses — so synced files diff
   verbatim against their desktop counterparts.
@@ -55,7 +59,7 @@ under the preference-parity invariant, not code.
 ## Sync
 
 The `sync-cherry-desktop` skill owns desktop parity. `desktop-sync-manifest.json` maps the
-`shared-data`, `shared-ai`, and `shared-portable` domains onto `packages/shared/src`, carries the
+`shared-data`, `shared-ai`, and `shared-portable` domains onto `packages/universal/src`, carries the
 `explicitExclusions`, and registers every `shapeOnlyPorts` trim that must be re-applied on each
 sync. `pnpm desktop:sync:audit` compares both repositories against that manifest.
 

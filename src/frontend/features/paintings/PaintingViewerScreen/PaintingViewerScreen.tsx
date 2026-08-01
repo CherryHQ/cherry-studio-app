@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import { paintingViewer } from '@/frontend/utils/constants';
-import type { Painting } from '@cherrystudio/shared/data/types/painting';
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import {
   type ResolvedPaintingAttachment,
   usePainting,

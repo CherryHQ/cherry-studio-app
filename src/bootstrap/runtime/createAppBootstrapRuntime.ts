@@ -7,8 +7,8 @@ import { createBackendServices } from '@/bootstrap/composition/createBackendServ
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
 import { runPostReadyTasks } from '@/bootstrap/runtime/runPostReadyTasks';
 import type { Backend } from '@/shared/contracts';
-import type { ApiClient } from '@cherrystudio/shared/data/api/types';
-import type { PreferenceClient } from '@cherrystudio/shared/data/preference';
+import type { ApiClient } from '@cherrystudio/universal/data/api/types';
+import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
 
 export type AppBootstrapRuntime = {
   readonly backend: Backend;

@@ -8,8 +8,8 @@ const { defineConfig } = require('eslint/config');
 // backend -> {backend, shared}
 // backend internals: ai -> {services, data}; services -> data
 // shared -> shared
-// packages/shared (@cherrystudio/shared) sits below every layer: any layer may
-// import it, it must not import app code or react/react-native/expo.
+// packages/universal (@cherrystudio/universal) sits below every layer: any layer
+// may import it, it must not import app code or react/react-native/expo.
 
 const retiredRootPatterns = [
   'ai',
@@ -40,7 +40,7 @@ const tombstonePatterns = [
   {
     group: ['@/shared/domain', '@/shared/domain/*', '@/shared/domain/*/**'],
     message:
-      'The generic shared domain root was retired. Use @cherrystudio/shared/ai for AI rules, @cherrystudio/shared/data for data vocabulary, or @cherrystudio/shared/utils and @/shared/utils for pure helpers.',
+      'The generic shared domain root was retired. Use @cherrystudio/universal/ai for AI rules, @cherrystudio/universal/data for data vocabulary, or @cherrystudio/universal/utils and @/shared/utils for pure helpers.',
   },
   {
     group: ['@/screens', '@/screens/*', '@/screens/*/**'],
@@ -244,12 +244,12 @@ module.exports = defineConfig([
     ],
   ),
   restrictedImports(
-    ['packages/shared/src/**/*.{ts,tsx}'],
+    ['packages/universal/src/**/*.{ts,tsx}'],
     [
       {
         group: ['@/*', '@/*/**', '@src/*', '@src/*/**', '@logger'],
         message:
-          '@cherrystudio/shared must not depend on app code; the dependency direction is app -> package.',
+          '@cherrystudio/universal must not depend on app code; the dependency direction is app -> package.',
       },
       {
         group: [
@@ -266,7 +266,7 @@ module.exports = defineConfig([
           '@expo/*/**',
         ],
         message:
-          '@cherrystudio/shared mirrors desktop src/shared and must remain platform- and React-independent.',
+          '@cherrystudio/universal mirrors desktop src/shared and must remain platform- and React-independent.',
       },
     ],
   ),
@@ -276,7 +276,7 @@ module.exports = defineConfig([
       {
         group: ['@shared/*', '@shared/*/**'],
         message:
-          '@shared/* is the package-internal alias inside packages/shared; app code imports @cherrystudio/shared/*.',
+          '@shared/* is the package-internal alias inside packages/universal (it matches desktop verbatim); app code imports @cherrystudio/universal/*.',
       },
     ],
   ),

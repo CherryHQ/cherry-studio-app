@@ -10,8 +10,8 @@ import type {
   UserProviderRow,
 } from '@/backend/data/db/schemas/userProvider';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
-import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/types';
-import type { EndpointType } from '@cherrystudio/shared/data/types/model';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
+import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type {
   ApiKeyEntry,
   AuthConfig,
@@ -21,11 +21,11 @@ import type {
   Provider,
   ProviderSettings,
   RuntimeApiFeatures,
-} from '@cherrystudio/shared/data/types/provider';
+} from '@cherrystudio/universal/data/types/provider';
 import {
   DEFAULT_API_FEATURES as DEFAULT_FEATURES,
   DEFAULT_PROVIDER_SETTINGS,
-} from '@cherrystudio/shared/data/types/provider';
+} from '@cherrystudio/universal/data/types/provider';
 
 import type { PinService } from './PinService';
 import { providerRegistryService } from './ProviderRegistryService';

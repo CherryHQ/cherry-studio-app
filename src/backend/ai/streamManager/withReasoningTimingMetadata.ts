@@ -16,7 +16,7 @@ import type { ProviderMetadata, UIMessageChunk } from 'ai';
 import {
   type CherryReasoningMeta,
   CherryReasoningMetaSchema,
-} from '@cherrystudio/shared/data/types/uiParts';
+} from '@cherrystudio/universal/data/types/uiParts';
 
 const logger = loggerService.withContext('withReasoningTimingMetadata');
 

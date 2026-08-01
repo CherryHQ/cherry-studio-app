@@ -1,5 +1,5 @@
 {
-  "name": "@cherrystudio/shared",
+  "name": "@cherrystudio/universal",
   "version": "0.0.1-alpha.1",
   "description": "Cross-platform subset of desktop src/shared: data contracts, AI rules, portable types and utils",
   "private": true,

@@ -5,7 +5,7 @@ import {
   applyToolApprovalDecisionsToParts,
   countPendingToolApprovals,
   finalizeDanglingToolApprovals,
-} from '@cherrystudio/shared/ai/transport/toolApprovals';
+} from '@cherrystudio/universal/ai/transport/toolApprovals';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type {
   ActiveNodeStrategy,
@@ -13,9 +13,9 @@ import type {
   CreateMessageDto,
   DeleteMessageResponse,
   UpdateMessageDto,
-} from '@cherrystudio/shared/data/api/schemas/messages';
-import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/types';
-import type { PreparedInternalFile } from '@cherrystudio/shared/data/types/file';
+} from '@cherrystudio/universal/data/api/schemas/messages';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
+import type { PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
 import type {
   BranchMessage,
   BranchMessagesResponse,
@@ -27,9 +27,9 @@ import type {
   SiblingsGroup,
   TreeNode,
   TreeResponse,
-} from '@cherrystudio/shared/data/types/message';
-import type { UniqueModelId } from '@cherrystudio/shared/data/types/model';
-import { readCherryMeta } from '@cherrystudio/shared/data/types/uiParts';
+} from '@cherrystudio/universal/data/types/message';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import type { Database, DbService } from '../db/DbService';
 import {
   chatMessageFileRefTable,

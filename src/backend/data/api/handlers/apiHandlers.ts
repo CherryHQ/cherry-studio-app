@@ -1,4 +1,4 @@
-import type { ApiImplementation } from '@cherrystudio/shared/data/api/types';
+import type { ApiImplementation } from '@cherrystudio/universal/data/api/types';
 import type { AgentChannelService } from '../../services/AgentChannelService';
 import type { AgentGlobalSkillService } from '../../services/AgentGlobalSkillService';
 import type { AgentService } from '../../services/AgentService';

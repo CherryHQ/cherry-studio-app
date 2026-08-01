@@ -3,8 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
 import type { Backend } from '@/shared/contracts';
-import { DataApiError, ErrorCode } from '@cherrystudio/shared/data/api/types';
-import type { StreamableHttpMcpServer } from '@cherrystudio/shared/data/types/mcpServer';
+import { DataApiError, ErrorCode } from '@cherrystudio/universal/data/api/types';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { McpServerScreen } from '../McpServerScreen';
 
 type HeaderAction = {

@@ -4,7 +4,7 @@ import type { CacheService } from '@/backend/data/CacheService';
 import { PinService } from '@/backend/data/services/PinService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { type CreateProviderInput, ProviderService } from '@/backend/data/services/ProviderService';
-import type { ApiFeatures, AuthConfig } from '@cherrystudio/shared/data/types/provider';
+import type { ApiFeatures, AuthConfig } from '@cherrystudio/universal/data/types/provider';
 
 import type { DatabaseSeeder } from '../types';
 

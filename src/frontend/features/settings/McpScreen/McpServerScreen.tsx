@@ -14,10 +14,10 @@ import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import {
   withMcpToolRuleAdded,
   withMcpToolRuleCleared,
-} from '@cherrystudio/shared/ai/tools/mcpSourcePolicy';
+} from '@cherrystudio/universal/ai/tools/mcpSourcePolicy';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { DataApiError, ErrorCode } from '@cherrystudio/shared/data/api/types';
-import type { StreamableHttpMcpServer } from '@cherrystudio/shared/data/types/mcpServer';
+import { DataApiError, ErrorCode } from '@cherrystudio/universal/data/api/types';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { McpHeadersEditor } from './components/McpHeadersEditor';
 import { McpServerChrome } from './components/McpServerChrome/McpServerChrome';

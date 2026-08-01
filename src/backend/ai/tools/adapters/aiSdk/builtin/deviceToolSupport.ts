@@ -5,7 +5,7 @@ import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { DevicePermissionService } from '@/backend/services/permissions';
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { PermissionPreferenceKey } from '@cherrystudio/shared/data/preference';
+import type { PermissionPreferenceKey } from '@cherrystudio/universal/data/preference';
 
 import { getRequestContext } from '../context';
 import type { ToolEntry } from '../types';

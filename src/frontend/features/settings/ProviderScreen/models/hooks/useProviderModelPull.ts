@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { isModelPullTimeoutError } from '@/shared/contracts';
-import type { Model, UniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 
 import type { ProviderModelPullPreview } from '../utils/providerModelPullPreview';
 import { refreshProviderModelQueries } from '../utils/refreshProviderModelQueries';

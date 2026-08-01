@@ -1,8 +1,8 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { ChatTransport, ToolChoice, ToolSet, UIMessage } from 'ai';
-import type { MessageRuntimeTimingSink } from '@cherrystudio/shared/data/types/message';
-import type { UniqueModelId } from '@cherrystudio/shared/data/types/model';
-import type { ReasoningEffortOption } from '@cherrystudio/shared/types/aiSdk';
+import type { MessageRuntimeTimingSink } from '@cherrystudio/universal/data/types/message';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
 /**
  * Per-request transport config. Mirrors desktop's IPC-safe shape, but

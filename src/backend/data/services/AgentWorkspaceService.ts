@@ -5,14 +5,14 @@ import {
   type AgentWorkspaceRow,
   agentWorkspaceTable,
 } from '@/backend/data/db/schemas/agentWorkspace';
-import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
-import type { OrderRequest } from '@cherrystudio/shared/data/api/schemas/_endpointHelpers';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
+import type { OrderRequest } from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
 import {
   AGENT_WORKSPACE_TYPE,
   type AgentWorkspaceEntity,
   AgentWorkspaceTypeSchema,
   type UpdateAgentWorkspaceDto,
-} from '@cherrystudio/shared/data/api/schemas/agentWorkspaces';
+} from '@cherrystudio/universal/data/api/schemas/agentWorkspaces';
 
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';

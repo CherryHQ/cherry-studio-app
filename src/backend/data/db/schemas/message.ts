@@ -2,7 +2,7 @@ import type {
   MessageData,
   MessageSnapshot,
   MessageStats,
-} from '@cherrystudio/shared/data/types/message';
+} from '@cherrystudio/universal/data/types/message';
 import { sql } from 'drizzle-orm';
 import {
   check,

@@ -2,10 +2,10 @@ import type { AiPlugin } from '@cherrystudio/ai-core';
 import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
 import { providerToolPlugin } from '@cherrystudio/ai-core/built-in/plugins';
 
-import type { Model } from '@cherrystudio/shared/data/types/model';
-import type { Provider } from '@cherrystudio/shared/data/types/provider';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
-import { isAnthropicModel } from '@cherrystudio/shared/utils/model';
+import { isAnthropicModel } from '@cherrystudio/universal/utils/model';
 import { SystemProviderIds } from '../../../utils/providerIds';
 import { getReasoningTagName } from '../../../utils/reasoning';
 import { createAnthropicCachePlugin } from './features/anthropicCache';

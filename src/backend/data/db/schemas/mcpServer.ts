@@ -1,4 +1,4 @@
-import type { McpConfigSample } from '@cherrystudio/shared/data/types/mcpServer';
+import type { McpConfigSample } from '@cherrystudio/universal/data/types/mcpServer';
 import { sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 

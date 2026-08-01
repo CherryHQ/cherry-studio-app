@@ -26,8 +26,8 @@ import {
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
-import type { CherryUIMessage } from '@cherrystudio/shared/data/types/message';
-import type { UniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 
 export type BackendComposition = {
   backend: Backend;

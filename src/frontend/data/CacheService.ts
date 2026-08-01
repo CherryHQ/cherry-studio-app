@@ -45,16 +45,16 @@ import type {
   PersistCacheKey,
   PersistCacheSchema,
   UseCacheKey,
-} from '@cherrystudio/shared/data/cache/cacheSchemas';
-import { DefaultPersistCache } from '@cherrystudio/shared/data/cache/cacheSchemas';
+} from '@cherrystudio/universal/data/cache/cacheSchemas';
+import { DefaultPersistCache } from '@cherrystudio/universal/data/cache/cacheSchemas';
 import type {
   CacheEntry,
   CacheEntryDetail,
   CacheStats,
   CacheSubscriber,
   CacheTierSummary,
-} from '@cherrystudio/shared/data/cache/cacheTypes';
-import { deepEqual } from '@cherrystudio/shared/data/cache/cacheUtils';
+} from '@cherrystudio/universal/data/cache/cacheTypes';
+import { deepEqual } from '@cherrystudio/universal/data/cache/cacheUtils';
 
 const logger = loggerService.withContext('CacheService');
 

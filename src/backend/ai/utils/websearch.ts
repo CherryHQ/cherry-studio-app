@@ -1,7 +1,7 @@
 import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { Model } from '@cherrystudio/shared/data/types/model';
-import { isOpenAIDeepResearchModel } from '@cherrystudio/shared/utils/model';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import { isOpenAIDeepResearchModel } from '@cherrystudio/universal/utils/model';
 import type { AppProviderId } from '../types';
 
 /** Inputs for provider-builtin web-search plugin configuration. */

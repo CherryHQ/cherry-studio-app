@@ -2,15 +2,15 @@ import type { PromptService } from '@/backend/data/services/PromptService';
 import {
   OrderBatchRequestSchema,
   OrderRequestSchema,
-} from '@cherrystudio/shared/data/api/schemas/_endpointHelpers';
+} from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
 import {
   CreatePromptSchema,
   ListPromptsQuerySchema,
   PromptIdSchema,
   type PromptSchemas,
   UpdatePromptSchema,
-} from '@cherrystudio/shared/data/api/schemas/prompts';
-import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
+} from '@cherrystudio/universal/data/api/schemas/prompts';
+import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
 
 export function createPromptHandlers(service: PromptService): HandlersFor<PromptSchemas> {
   return {

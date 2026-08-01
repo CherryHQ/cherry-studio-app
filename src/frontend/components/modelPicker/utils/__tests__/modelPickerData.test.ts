@@ -4,13 +4,13 @@ import {
   createUniqueModelId,
   type Model,
   type ModelCapability,
-} from '@cherrystudio/shared/data/types/model';
-import type { Pin } from '@cherrystudio/shared/data/types/pin';
+} from '@cherrystudio/universal/data/types/model';
+import type { Pin } from '@cherrystudio/universal/data/types/pin';
 import {
   DEFAULT_API_FEATURES,
   DEFAULT_PROVIDER_SETTINGS,
   type Provider,
-} from '@cherrystudio/shared/data/types/provider';
+} from '@cherrystudio/universal/data/types/provider';
 import {
   buildModelPickerGroups,
   filterModelsByModelPickerTags,

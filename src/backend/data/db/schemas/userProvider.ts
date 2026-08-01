@@ -10,14 +10,14 @@
  *
  */
 
-import type { EndpointType } from '@cherrystudio/shared/data/types/model';
+import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type {
   ApiFeatures,
   ApiKeyEntry,
   AuthConfig,
   EndpointConfigOverride,
   ProviderSettings,
-} from '@cherrystudio/shared/data/types/provider';
+} from '@cherrystudio/universal/data/types/provider';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import { createUpdateTimestamps, orderKeyColumns, orderKeyIndex } from './_columnHelpers';

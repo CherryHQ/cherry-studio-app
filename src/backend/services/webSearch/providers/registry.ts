@@ -1,4 +1,4 @@
-import type { WebSearchProvider } from '@cherrystudio/shared/data/preference';
+import type { WebSearchProvider } from '@cherrystudio/universal/data/preference';
 import type { ApiKeyRotationState } from '../utils/provider';
 import { BochaProvider } from './api/BochaProvider';
 import { ExaProvider } from './api/ExaProvider';

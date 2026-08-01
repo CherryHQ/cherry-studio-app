@@ -5,7 +5,7 @@ import { useToast } from 'heroui-native/toast';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { queryKeys, useMutation } from '@/frontend/data';
-import type { Painting } from '@cherrystudio/shared/data/types/painting';
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { createPaintingDraftHandoff } from '../../utils/paintingDraftHandoff';
 import { createPaintingOutputAttachmentDraft } from '../../utils/paintingOutputAttachment';
 

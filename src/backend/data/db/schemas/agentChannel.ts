@@ -1,6 +1,6 @@
-import type { AgentPermissionMode } from '@cherrystudio/shared/data/api/schemas/agents';
-import type { AgentSessionWorkspaceSource } from '@cherrystudio/shared/data/api/schemas/agentWorkspaces';
-import type { ChannelType } from '@cherrystudio/shared/data/types/channel';
+import type { AgentPermissionMode } from '@cherrystudio/universal/data/api/schemas/agents';
+import type { AgentSessionWorkspaceSource } from '@cherrystudio/universal/data/api/schemas/agentWorkspaces';
+import type { ChannelType } from '@cherrystudio/universal/data/types/channel';
 import { sql } from 'drizzle-orm';
 import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 

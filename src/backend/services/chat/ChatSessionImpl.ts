@@ -9,7 +9,7 @@ import type {
 } from '@/shared/contracts';
 import { NEW_CHAT_SESSION_TOPIC_ID } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { PreparedInternalFile } from '@cherrystudio/shared/data/types/file';
+import type { PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
 import type {
   CherryMessagePart,
   CherryUIMessage,
@@ -17,20 +17,20 @@ import type {
   MessageRuntimeStatsInput,
   MessageSnapshot,
   ModelSnapshot,
-} from '@cherrystudio/shared/data/types/message';
-import type { Model, UniqueModelId } from '@cherrystudio/shared/data/types/model';
-import { isUniqueModelId } from '@cherrystudio/shared/data/types/model';
-import type { Topic } from '@cherrystudio/shared/data/types/topic';
+} from '@cherrystudio/universal/data/types/message';
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import {
   type CherryReasoningMeta,
   readCherryMeta,
   withCherryMeta,
-} from '@cherrystudio/shared/data/types/uiParts';
+} from '@cherrystudio/universal/data/types/uiParts';
 import { serializeError } from '@/shared/utils/serializeError';
 import {
   buildFirstUserMessageTitle,
   sanitizeConversationTitle,
-} from '@cherrystudio/shared/utils/conversationTitle';
+} from '@cherrystudio/universal/utils/conversationTitle';
 import type { ChatSessionDependencies } from './ChatSessionDependencies';
 import {
   applyStreamingMessage,

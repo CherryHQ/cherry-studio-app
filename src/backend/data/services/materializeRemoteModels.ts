@@ -6,8 +6,8 @@ import {
   createUniqueModelId,
   type Model,
   type UniqueModelId,
-} from '@cherrystudio/shared/data/types/model';
-import type { Provider } from '@cherrystudio/shared/data/types/provider';
+} from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 export function materializeRemoteModels(
   provider: Provider,

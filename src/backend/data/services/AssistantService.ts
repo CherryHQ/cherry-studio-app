@@ -9,23 +9,23 @@ import {
   userModelTable,
 } from '@/backend/data/db/schemas';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
-import type { OrderRequest } from '@cherrystudio/shared/data/api/schemas/_endpointHelpers';
+import type { OrderRequest } from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
 import {
   type CreateAssistantDto,
   type ListAssistantsQueryParams,
   ListAssistantsQuerySchema,
   type UpdateAssistantDto,
-} from '@cherrystudio/shared/data/api/schemas/assistants';
+} from '@cherrystudio/universal/data/api/schemas/assistants';
 import {
   DataApiErrorFactory,
   type OffsetPaginationResponse,
-} from '@cherrystudio/shared/data/api/types';
+} from '@cherrystudio/universal/data/api/types';
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
-} from '@cherrystudio/shared/data/types/assistant';
-import type { UniqueModelId } from '@cherrystudio/shared/data/types/model';
-import type { Tag } from '@cherrystudio/shared/data/types/tag';
+} from '@cherrystudio/universal/data/types/assistant';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Tag } from '@cherrystudio/universal/data/types/tag';
 import type { ModelService } from './ModelService';
 import type { PinService } from './PinService';
 import type { TagService } from './TagService';

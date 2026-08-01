@@ -3,9 +3,13 @@ import type {
   ProviderSchemas,
   UpdateProviderApiKeyInput,
   UpdateProviderInput,
-} from '@cherrystudio/shared/data/api/schemas/providers';
-import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
-import type { ApiKeyEntry, AuthConfig, Provider } from '@cherrystudio/shared/data/types/provider';
+} from '@cherrystudio/universal/data/api/schemas/providers';
+import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+import type {
+  ApiKeyEntry,
+  AuthConfig,
+  Provider,
+} from '@cherrystudio/universal/data/types/provider';
 
 export type ProviderData = {
   create(input: CreateProviderInput): Promise<Provider>;

@@ -1,9 +1,9 @@
-import { finalizeDanglingToolApprovals } from '@cherrystudio/shared/ai/transport/toolApprovals';
+import { finalizeDanglingToolApprovals } from '@cherrystudio/universal/ai/transport/toolApprovals';
 import type {
   CherryMessagePart,
   CherryUIMessage,
   Message,
-} from '@cherrystudio/shared/data/types/message';
+} from '@cherrystudio/universal/data/types/message';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 

@@ -3,14 +3,14 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
-} from '@cherrystudio/shared/data/types/assistant';
-import type { PreparedInternalFile } from '@cherrystudio/shared/data/types/file';
+} from '@cherrystudio/universal/data/types/assistant';
+import type { PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
 import type {
   CherryMessagePart,
   CherryUIMessage,
   Message,
-} from '@cherrystudio/shared/data/types/message';
-import type { Model, UniqueModelId } from '@cherrystudio/shared/data/types/model';
+} from '@cherrystudio/universal/data/types/message';
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { ChatSessionServices, ChatStreamRequest } from '../ChatSessionDependencies';
 import { ChatSessionImpl } from '../ChatSessionImpl';
 

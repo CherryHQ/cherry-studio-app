@@ -18,7 +18,7 @@ import type {
   ParameterSupport,
   ReasoningConfig,
   RuntimeModelPricing,
-} from '@cherrystudio/shared/data/types/model';
+} from '@cherrystudio/universal/data/types/model';
 import { sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
 

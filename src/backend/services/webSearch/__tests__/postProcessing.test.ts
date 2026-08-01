@@ -3,7 +3,7 @@ import { sliceByTokens } from 'tokenx';
 import type {
   WebSearchExecutionConfig,
   WebSearchResult,
-} from '@cherrystudio/shared/data/types/webSearch';
+} from '@cherrystudio/universal/data/types/webSearch';
 
 import { postProcessWebSearchResponse } from '../postProcessing';
 

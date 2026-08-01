@@ -2,13 +2,13 @@ import { and, asc, eq, inArray, not, sql } from 'drizzle-orm';
 
 import type { DbService } from '@/backend/data/db/DbService';
 import { type NoteRow, noteTable } from '@/backend/data/db/schemas/note';
-import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
 import type {
   DeleteNoteQuery,
   RewriteNotePathDto,
   UpsertNoteDto,
-} from '@cherrystudio/shared/data/api/schemas/notes';
-import type { Note } from '@cherrystudio/shared/data/types/note';
+} from '@cherrystudio/universal/data/api/schemas/notes';
+import type { Note } from '@cherrystudio/universal/data/types/note';
 
 import { timestampToISO } from './utils/rowMappers';
 

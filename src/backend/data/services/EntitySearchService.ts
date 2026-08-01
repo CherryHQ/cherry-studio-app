@@ -13,7 +13,7 @@ import {
   DataApiErrorFactory,
   isDataApiError,
   toDataApiError,
-} from '@cherrystudio/shared/data/api/errors';
+} from '@cherrystudio/universal/data/api/errors';
 import {
   ENTITY_SEARCH_MAX_LIMIT_PER_TYPE,
   type EntitySearchGroup,
@@ -22,7 +22,7 @@ import {
   type EntitySearchResponse,
   type EntitySearchType,
   entitySearchTypes,
-} from '@cherrystudio/shared/data/api/schemas/search';
+} from '@cherrystudio/universal/data/api/schemas/search';
 
 import { timestampToISO } from './utils/rowMappers';
 

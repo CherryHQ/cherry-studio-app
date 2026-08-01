@@ -921,7 +921,7 @@ async function auditSharedData(desktopRoot: string, mobileRoot: string) {
   const desktopHandlerPath = 'src/main/data/api/handlers';
   const mobileHandlerPath = 'src/backend/data/api/handlers';
   const desktopSchemaPath = 'src/shared/data/api/schemas';
-  const mobileSchemaPath = 'packages/shared/src/data/api/schemas';
+  const mobileSchemaPath = 'packages/universal/src/data/api/schemas';
   const [
     desktopPreferences,
     mobilePreferences,
@@ -931,7 +931,7 @@ async function auditSharedData(desktopRoot: string, mobileRoot: string) {
     mobileRoutes,
   ] = await Promise.all([
     preferenceKeys(desktopRoot, 'src/shared/data/preference/preferenceSchemas.ts'),
-    preferenceKeys(mobileRoot, 'packages/shared/src/data/preference/preferenceSchemas.ts'),
+    preferenceKeys(mobileRoot, 'packages/universal/src/data/preference/preferenceSchemas.ts'),
     directTrackedTypeScriptFiles(desktopRoot, desktopHandlerPath),
     directTrackedTypeScriptFiles(mobileRoot, mobileHandlerPath),
     routeMethods(desktopRoot, desktopHandlerPath),
@@ -1109,7 +1109,7 @@ export async function auditDesignCatalog(
 
 async function auditMcpRetention(desktopRoot: string, mobileRoot: string) {
   const desktopFile = 'src/shared/data/types/mcpServer.ts';
-  const mobileFile = 'packages/shared/src/data/types/mcpServer.ts';
+  const mobileFile = 'packages/universal/src/data/types/mcpServer.ts';
   const [desktopSource, mobileSource] = await Promise.all([
     readFile(path.join(desktopRoot, desktopFile), 'utf8'),
     readFile(path.join(mobileRoot, mobileFile), 'utf8'),

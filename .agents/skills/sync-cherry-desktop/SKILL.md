@@ -7,7 +7,7 @@ description: Audits and synchronizes Cherry Studio desktop behavior into the Exp
 
 Treat a clean Cherry Studio desktop checkout as the read-only source of truth. Preserve behavior and every persisted value; adapt only platform boundaries.
 
-The cross-platform subset of desktop `src/shared` lives in `packages/shared/src` (`@cherrystudio/shared`), mirroring the desktop directory layout one-to-one; inside that package the import alias `@shared/*` matches desktop exactly so synced diffs stay verbatim.
+The cross-platform subset of desktop `src/shared` lives in `packages/universal/src` (`@cherrystudio/universal`), mirroring the desktop directory layout one-to-one; inside that package the import alias `@shared/*` matches desktop exactly so synced diffs stay verbatim.
 
 ## Audit First
 

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 
-import type { ApiKeyEntry } from '@cherrystudio/shared/data/types/provider';
+import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 
 import {
   cloneApiKeyEntries,

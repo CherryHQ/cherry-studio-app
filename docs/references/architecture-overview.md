@@ -30,13 +30,13 @@ fault isolation or protection from blocking the JavaScript thread. Contract valu
 | `src/shared/contracts` | Workflow-only `Backend` modules, sessions, events, and results |
 | `src/shared/core` / `src/shared/utils` | Cross-layer foundations and mobile-native pure utilities |
 | `src/types` | Truly global or generated declarations only |
-| `packages/shared/src/ai` | Cross-layer AI tool and transport rules (`@cherrystudio/shared/ai`) |
-| `packages/shared/src/data` | Entities, endpoint DTOs, `ApiClient`, preferences, `PreferenceClient`, cache schemas, and data errors (`@cherrystudio/shared/data`) |
-| `packages/shared/src/{types,utils}` | Portable desktop-mirrored types and pure helpers (`@cherrystudio/shared/{types,utils}`) |
+| `packages/universal/src/ai` | Cross-layer AI tool and transport rules (`@cherrystudio/universal/ai`) |
+| `packages/universal/src/data` | Entities, endpoint DTOs, `ApiClient`, preferences, `PreferenceClient`, cache schemas, and data errors (`@cherrystudio/universal/data`) |
+| `packages/universal/src/{types,utils}` | Portable desktop-mirrored types and pure helpers (`@cherrystudio/universal/{types,utils}`) |
 
 Only `bootstrap` may import both frontend and backend. Frontend resource data uses typed Data API
-hooks and `@cherrystudio/shared/data/api`; preferences use the separate
-`@cherrystudio/shared/data/preference` client; workflows use `useBackendModule(key)` and
+hooks and `@cherrystudio/universal/data/api`; preferences use the separate
+`@cherrystudio/universal/data/preference` client; workflows use `useBackendModule(key)` and
 `@/shared/contracts`. Frontend never imports SQLite, Drizzle, AI SDK, or concrete device and
 persistence implementations. ESLint enforces these directions.
 
@@ -52,9 +52,9 @@ its process topology, lifecycle framework, or dependency-injection container.
 ## Frontend Interfaces
 
 - Resource CRUD and pagination use typed React Query hooks backed by `ApiClient` from
-  `@cherrystudio/shared/data/api`.
+  `@cherrystudio/universal/data/api`.
 - Preference reads, writes, and subscriptions use `PreferenceClient` from
-  `@cherrystudio/shared/data/preference`.
+  `@cherrystudio/universal/data/preference`.
 - Multi-step workflows and long-lived sessions use `useBackendModule(key)` and the workflow-only
   `Backend` from `@/shared/contracts`.
 
@@ -66,7 +66,7 @@ compatibility adapter or generic frontend selector for persistence services.
 ## Topic Documents
 
 - [Data Layer](./data/README.md): Data API, preferences, workflow contracts, SQLite services, schemas, and seeding.
-- [Shared Package](./shared-package.md): `@cherrystudio/shared` scope, admission criteria, aliasing, and desktop sync.
+- [Universal Package](./universal-package.md): `@cherrystudio/universal` scope, admission criteria, aliasing, and desktop sync.
 - [Storage Engine](./data/storage-engine.md): current SQLite constraints and migration criteria.
 - [Runtime Ownership](./runtime-ownership.md): app bootstrap, sessions, cleanup, and startup gates.
 - [AI Provider Integration](./ai/provider-integration.md): provider/model records and AI adapters.

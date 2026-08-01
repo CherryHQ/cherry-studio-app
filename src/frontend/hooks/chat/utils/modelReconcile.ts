@@ -1,9 +1,9 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
-import { resolveReasoningEffortForModel } from '@cherrystudio/shared/ai/reasoning';
-import type { AssistantSettings } from '@cherrystudio/shared/data/types/assistant';
-import type { Model } from '@cherrystudio/shared/data/types/model';
-import type { ReasoningEffortOption } from '@cherrystudio/shared/types/aiSdk';
+import { resolveReasoningEffortForModel } from '@cherrystudio/universal/ai/reasoning';
+import type { AssistantSettings } from '@cherrystudio/universal/data/types/assistant';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
 export type ReasoningEffortPatch = {
   reasoning_effort?: ReasoningEffortOption;

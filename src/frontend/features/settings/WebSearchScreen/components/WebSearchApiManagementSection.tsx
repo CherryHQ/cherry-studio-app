@@ -9,8 +9,8 @@ import type {
   WebSearchProviderId,
   WebSearchProviderOverride,
   WebSearchProviderOverrides,
-} from '@cherrystudio/shared/data/preference';
-import type { WebSearchProviderPreset } from '@cherrystudio/shared/data/presets/webSearchProviders';
+} from '@cherrystudio/universal/data/preference';
+import type { WebSearchProviderPreset } from '@cherrystudio/universal/data/presets/webSearchProviders';
 import { WebSearchApiServiceFieldGroup } from '../apiService/components/WebSearchApiServiceFields';
 import {
   WebSearchApiManagementContext,

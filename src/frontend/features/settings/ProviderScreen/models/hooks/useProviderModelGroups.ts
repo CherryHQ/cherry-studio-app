@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import type { Model } from '@cherrystudio/shared/data/types/model';
+import type { Model } from '@cherrystudio/universal/data/types/model';
 
 import {
   filterModelsByKeywords,

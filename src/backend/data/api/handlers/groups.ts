@@ -2,15 +2,15 @@ import type { GroupService } from '@/backend/data/services/GroupService';
 import {
   OrderBatchRequestSchema,
   OrderRequestSchema,
-} from '@cherrystudio/shared/data/api/schemas/_endpointHelpers';
+} from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
 import {
   CreateGroupSchema,
   GroupIdSchema,
   type GroupSchemas,
   ListGroupsQuerySchema,
   UpdateGroupSchema,
-} from '@cherrystudio/shared/data/api/schemas/groups';
-import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
+} from '@cherrystudio/universal/data/api/schemas/groups';
+import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
 
 export function createGroupHandlers(service: GroupService): HandlersFor<GroupSchemas> {
   return {

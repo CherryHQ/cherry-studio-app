@@ -1,4 +1,4 @@
-import type { StreamableHttpMcpServer } from '@cherrystudio/shared/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
 export type McpConnectionConfig = {
   baseUrl: string;

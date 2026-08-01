@@ -1,5 +1,5 @@
-import type { PreferenceKeyType } from '@cherrystudio/shared/data/preference';
-import type { UniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { PreferenceKeyType } from '@cherrystudio/universal/data/preference';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 
 export const MODEL_SETTING_KINDS = ['default', 'fast', 'translate'] as const;
 

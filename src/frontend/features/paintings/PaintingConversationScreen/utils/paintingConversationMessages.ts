@@ -1,6 +1,6 @@
 import { createChatInputMessageParts } from '@/frontend/features/chat/input/utils/chatInputAttachments';
-import type { CherryMessagePart, Message } from '@cherrystudio/shared/data/types/message';
-import type { Painting } from '@cherrystudio/shared/data/types/painting';
+import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import type { PaintingGenerationInput } from '../../hooks/usePaintingGeneration';
 import type { ResolvedPaintingFiles } from '../../hooks/usePaintings';
 

@@ -15,8 +15,8 @@ import {
   AiUsageRecordModalitySchema,
   type AiUsageRecordSourceType,
   AiUsageRecordSourceTypeSchema,
-} from '@cherrystudio/shared/data/types/aiUsageRecord';
-import { CURRENCY, type Currency, objectValues } from '@cherrystudio/shared/data/types/model';
+} from '@cherrystudio/universal/data/types/aiUsageRecord';
+import { CURRENCY, type Currency, objectValues } from '@cherrystudio/universal/data/types/model';
 import { sql } from 'drizzle-orm';
 import {
   check,

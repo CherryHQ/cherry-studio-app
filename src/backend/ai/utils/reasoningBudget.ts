@@ -1,4 +1,4 @@
-import { findTokenLimit } from '@cherrystudio/shared/utils/model';
+import { findTokenLimit } from '@cherrystudio/universal/utils/model';
 
 export const FALLBACK_TOKEN_LIMIT = { min: 1024, max: 16384 };
 

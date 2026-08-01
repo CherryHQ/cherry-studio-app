@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import type { Message } from '@cherrystudio/shared/data/types/message';
+import type { Message } from '@cherrystudio/universal/data/types/message';
 
 import { MessageParts } from '../../messageContent';
 import { useUserMessageSlideInStyle } from '../slideIn/hooks/useUserMessageSlideInStyle';

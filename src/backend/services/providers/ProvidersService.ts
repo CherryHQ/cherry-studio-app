@@ -7,8 +7,12 @@ import type {
   CreateProviderInput,
   UpdateProviderApiKeyInput,
   UpdateProviderInput,
-} from '@cherrystudio/shared/data/api/schemas/providers';
-import type { ApiKeyEntry, AuthConfig, Provider } from '@cherrystudio/shared/data/types/provider';
+} from '@cherrystudio/universal/data/api/schemas/providers';
+import type {
+  ApiKeyEntry,
+  AuthConfig,
+  Provider,
+} from '@cherrystudio/universal/data/types/provider';
 
 const cherryInProviderId = 'cherryin';
 

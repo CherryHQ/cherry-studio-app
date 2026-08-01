@@ -1,7 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { Message } from '@cherrystudio/shared/data/types/message';
-import type { Painting } from '@cherrystudio/shared/data/types/painting';
+import type { Message } from '@cherrystudio/universal/data/types/message';
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import type {
   PaintingGenerationInput,
   PaintingGenerationResult,

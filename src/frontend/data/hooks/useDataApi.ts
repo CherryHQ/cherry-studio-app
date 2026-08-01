@@ -17,12 +17,12 @@ import type {
   QueryParamsForPath,
   ResponseForPath,
   TemplateApiPaths,
-} from '@cherrystudio/shared/data/api/paths';
+} from '@cherrystudio/universal/data/api/paths';
 import type {
   ApiClient,
   CursorPaginationResponse,
   InferPaginationMode,
-} from '@cherrystudio/shared/data/api/types';
+} from '@cherrystudio/universal/data/api/types';
 
 type DataApiQueryKey = readonly [string] | readonly [string, unknown];
 type MutationMethod = 'DELETE' | 'PATCH' | 'POST' | 'PUT';

@@ -1,7 +1,7 @@
 import type { TemporaryChatService } from '@/backend/data/services/TemporaryChatService';
-import { CreateMessageSchema } from '@cherrystudio/shared/data/api/schemas/messages';
-import type { TemporaryChatSchemas } from '@cherrystudio/shared/data/api/schemas/temporaryChats';
-import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
+import { CreateMessageSchema } from '@cherrystudio/universal/data/api/schemas/messages';
+import type { TemporaryChatSchemas } from '@cherrystudio/universal/data/api/schemas/temporaryChats';
+import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
 
 export function createTemporaryChatHandlers(
   service: TemporaryChatService,

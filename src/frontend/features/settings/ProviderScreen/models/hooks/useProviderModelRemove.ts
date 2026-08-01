@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
-import type { Model, UniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 
 const emptyModelIdSet: ReadonlySet<UniqueModelId> = new Set();
 

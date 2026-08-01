@@ -25,8 +25,8 @@ import {
 } from '@/frontend/components/messageTabs';
 import { useAssistantsApi } from '@/frontend/hooks/chat';
 import { useExclusiveSwipeable } from '@/frontend/hooks/useExclusiveSwipeable';
-import type { Assistant } from '@cherrystudio/shared/data/types/assistant';
-import type { Topic } from '@cherrystudio/shared/data/types/topic';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { useTopicActionDialogs } from './components/TopicActionDialogs';
 import {
   TopicListProvider,

@@ -7,20 +7,20 @@ import { agentSessionTable } from '@/backend/data/db/schemas/agentSession';
 import { agentSessionMessageTable } from '@/backend/data/db/schemas/agentSessionMessage';
 import { agentWorkspaceTable } from '@/backend/data/db/schemas/agentWorkspace';
 import { pinTable } from '@/backend/data/db/schemas/pin';
-import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
-import type { OrderRequest } from '@cherrystudio/shared/data/api/schemas/_endpointHelpers';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
+import type { OrderRequest } from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
 import type {
   AgentSessionEntity,
   CreateAgentSessionDto,
   DeleteAgentSessionsResult,
   ListAgentSessionsQuery,
   UpdateAgentSessionDto,
-} from '@cherrystudio/shared/data/api/schemas/agentSessions';
+} from '@cherrystudio/universal/data/api/schemas/agentSessions';
 import {
   AGENT_WORKSPACE_TYPE,
   type AgentSessionWorkspaceSource,
-} from '@cherrystudio/shared/data/api/schemas/agentWorkspaces';
-import type { CursorPaginationResponse } from '@cherrystudio/shared/data/api/types';
+} from '@cherrystudio/universal/data/api/schemas/agentWorkspaces';
+import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 
 import type { PinService } from './PinService';
 import { type AgentWorkspaceService, rowToAgentWorkspace } from './AgentWorkspaceService';

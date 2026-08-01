@@ -10,7 +10,7 @@ import { ModelPickerIcon, useModelPickerData } from '@/frontend/components/model
 import { useSetBottomTabBarHidden } from '@/frontend/components/navigation';
 import { useAssistantApiById } from '@/frontend/hooks/chat';
 import { screenBottomActionInset } from '@/frontend/utils/constants';
-import type { Assistant } from '@cherrystudio/shared/data/types/assistant';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 
 export default function AssistantDetailScreen() {
   const { t } = useTranslation();

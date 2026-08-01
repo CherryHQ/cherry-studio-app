@@ -1,7 +1,7 @@
 import { CacheService, createInMemoryBackendCacheStorage } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { UserProviderRow } from '@/backend/data/db/schemas/userProvider';
-import type { ApiKeyEntry, ProviderSettings } from '@cherrystudio/shared/data/types/provider';
+import type { ApiKeyEntry, ProviderSettings } from '@cherrystudio/universal/data/types/provider';
 
 import type { PinService } from '../PinService';
 import { providerRegistryService } from '../ProviderRegistryService';

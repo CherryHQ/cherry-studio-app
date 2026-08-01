@@ -9,8 +9,8 @@
         "./packages/provider-registry/src/mobile-loader.ts"
       ],
       "@cherrystudio/provider-registry/*": ["./packages/provider-registry/src/*"],
-      "@cherrystudio/shared/*": ["./packages/shared/src/*"],
-      "@shared/*": ["./packages/shared/src/*"],
+      "@cherrystudio/universal/*": ["./packages/universal/src/*"],
+      "@shared/*": ["./packages/universal/src/*"],
       "@cherrystudio/ai-core/core": ["./packages/ai-core/src/core/index.ts"],
       "@cherrystudio/ai-core/core/*": ["./packages/ai-core/src/core/*"],
       "@cherrystudio/ui": ["./packages/ui/src/index.ts"],

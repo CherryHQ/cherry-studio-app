@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { WebSearchProviderId } from '@cherrystudio/shared/data/preference';
+import type { WebSearchProviderId } from '@cherrystudio/universal/data/preference';
 import { useWebSearchApiKeySettings } from '../useWebSearchApiKeySettings';
 
 type ApiKeySettings = ReturnType<typeof useWebSearchApiKeySettings>;

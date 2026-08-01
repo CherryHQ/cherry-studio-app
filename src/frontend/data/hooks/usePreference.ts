@@ -4,8 +4,8 @@ import type {
   PreferenceDefaultScopeType,
   PreferenceKeyType,
   PreferenceUpdateOptions,
-} from '@cherrystudio/shared/data/preference';
-import { getDefaultValue } from '@cherrystudio/shared/data/preference';
+} from '@cherrystudio/universal/data/preference';
+import { getDefaultValue } from '@cherrystudio/universal/data/preference';
 
 type PreferenceSetter<K extends PreferenceKeyType> = (
   value: PreferenceDefaultScopeType[K],

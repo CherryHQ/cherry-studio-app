@@ -4,8 +4,8 @@ import {
   mergePresetModel,
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
-import type { Model } from '@cherrystudio/shared/data/types/model';
-import type { Provider } from '@cherrystudio/shared/data/types/provider';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 jest.mock('@/backend/data/services/ProviderRegistryService', () => ({
   mergePresetModel: jest.fn(),

@@ -1,5 +1,5 @@
 import { Uniwind } from 'uniwind';
-import { ThemeMode } from '@cherrystudio/shared/data/preference';
+import { ThemeMode } from '@cherrystudio/universal/data/preference';
 
 export const DEFAULT_PRIMARY_COLOR = '#00b96b';
 

@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ApiKeyEntry } from '@cherrystudio/shared/data/types/provider';
+import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 
 import { getProviderApiServiceApiKeysDirtyState } from '../../utils/providerApiServiceDirtyState';
 import { useProviderApiServiceApiKeysDraft } from '../useProviderApiServiceApiKeysDraft';

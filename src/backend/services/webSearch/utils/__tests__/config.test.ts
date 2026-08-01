@@ -1,7 +1,7 @@
 import type {
   PreferenceDefaultScopeType,
   PreferenceKeyType,
-} from '@cherrystudio/shared/data/preference';
+} from '@cherrystudio/universal/data/preference';
 import {
   getProviderForCapability,
   getRuntimeConfig,

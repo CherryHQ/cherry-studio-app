@@ -15,9 +15,9 @@ import {
   type BackendPersistCacheSchema,
   DefaultBackendPersistCache,
   type InferBackendCacheValue,
-} from '@cherrystudio/shared/data/cache/cacheSchemas';
-import type { CacheEntry } from '@cherrystudio/shared/data/cache/cacheTypes';
-import { deepEqual } from '@cherrystudio/shared/data/cache/cacheUtils';
+} from '@cherrystudio/universal/data/cache/cacheSchemas';
+import type { CacheEntry } from '@cherrystudio/universal/data/cache/cacheTypes';
+import { deepEqual } from '@cherrystudio/universal/data/cache/cacheUtils';
 
 const logger = loggerService.withContext('BackendCacheService');
 

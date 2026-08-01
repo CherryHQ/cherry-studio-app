@@ -3,10 +3,10 @@ import type { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 import type { OpenAIResponsesProviderOptions } from '@ai-sdk/openai';
 import type { XaiResponsesProviderOptions } from '@ai-sdk/xai';
 
-import type { Assistant } from '@cherrystudio/shared/data/types/assistant';
-import type { Model } from '@cherrystudio/shared/data/types/model';
-import { parseUniqueModelId } from '@cherrystudio/shared/data/types/model';
-import type { Provider } from '@cherrystudio/shared/data/types/provider';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import {
   findTokenLimit,
   GEMINI_FLASH_MODEL_REGEX,
@@ -42,7 +42,7 @@ import {
   isSupportedThinkingTokenQwenModel,
   isSupportedThinkingTokenZhipuModel,
   isSupportNoneReasoningEffortModel,
-} from '@cherrystudio/shared/utils/model';
+} from '@cherrystudio/universal/utils/model';
 import {
   EFFORT_RATIO,
   isSystemProviderId,

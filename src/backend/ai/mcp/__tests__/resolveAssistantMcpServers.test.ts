@@ -1,6 +1,6 @@
-import type { Assistant, McpMode } from '@cherrystudio/shared/data/types/assistant';
-import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/shared/data/types/assistant';
-import type { StreamableHttpMcpServer } from '@cherrystudio/shared/data/types/mcpServer';
+import type { Assistant, McpMode } from '@cherrystudio/universal/data/types/assistant';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { getEffectiveMcpMode, resolveServersForAssistant } from '../resolveAssistantMcpServers';
 
 function makeAssistant(overrides: { mcpMode?: McpMode; mcpServerIds?: string[] }): Assistant {

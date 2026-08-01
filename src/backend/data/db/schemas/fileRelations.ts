@@ -1,4 +1,4 @@
-import type { tempSessionSourceType } from '@cherrystudio/shared/data/types/file';
+import type { tempSessionSourceType } from '@cherrystudio/universal/data/types/file';
 import {
   chatMessageRoles,
   chatMessageSourceType,
@@ -7,7 +7,7 @@ import {
   paintingRoles,
   paintingSourceType,
   providerLogoRef,
-} from '@cherrystudio/shared/data/types/file';
+} from '@cherrystudio/universal/data/types/file';
 import { sql, type SQLWrapper } from 'drizzle-orm';
 import { check, index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 

@@ -2,7 +2,7 @@ import { CircleAlertIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import type { CherryMessagePart } from '@cherrystudio/shared/data/types/message';
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 
 type ErrorPartProps = {
   part: Extract<CherryMessagePart, { type: 'data-error' }>;

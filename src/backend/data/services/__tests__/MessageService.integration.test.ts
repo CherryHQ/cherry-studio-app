@@ -5,7 +5,7 @@ import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
-import type { CherryMessagePart, Message } from '@cherrystudio/shared/data/types/message';
+import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
 import { AiUsageRecordService } from '../AiUsageRecordService';
 import { FileEntryService } from '../FileEntryService';
 import { MessageService } from '../MessageService';

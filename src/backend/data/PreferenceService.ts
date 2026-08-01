@@ -11,7 +11,7 @@ import {
   type PreferenceDefaultScopeType,
   type PreferenceKeyType,
   type PreferenceUpdateOptions,
-} from '@cherrystudio/shared/data/preference';
+} from '@cherrystudio/universal/data/preference';
 
 type PreferenceListener = () => void;
 type PreferenceValue = PreferenceDefaultScopeType[PreferenceKeyType];

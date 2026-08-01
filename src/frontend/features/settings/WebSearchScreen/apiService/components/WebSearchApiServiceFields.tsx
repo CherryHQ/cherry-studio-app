@@ -5,7 +5,7 @@ import type {
   WebSearchCapability,
   WebSearchProvider,
   WebSearchProviderOverride,
-} from '@cherrystudio/shared/data/preference';
+} from '@cherrystudio/universal/data/preference';
 import { useWebSearchApiManagementContext } from '../../context/WebSearchApiManagementContext';
 import {
   getWebSearchCapabilityTitleKey,
