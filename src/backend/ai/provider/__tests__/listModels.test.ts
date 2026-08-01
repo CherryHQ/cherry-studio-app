@@ -101,6 +101,59 @@ describe('listModels', () => {
     ]);
   });
 
+  test('drops non-chat models from the OpenAI preset only', async () => {
+    const data = [
+      { id: 'gpt-4o', object: 'model' },
+      { id: 'whisper-1', object: 'model' },
+      { id: 'gpt-4o-audio-preview', object: 'model' },
+      { id: 'tts-1', object: 'model' },
+      { id: 'sora-2', object: 'model' },
+    ];
+    // A Response body can only be read once, so each call needs its own.
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(
+        async () => new Response(JSON.stringify({ data, object: 'list' }), { status: 200 }),
+      );
+    const context = { getRotatedApiKey: jest.fn(async () => 'test-key') };
+
+    const openAiModels = await listModels(createProvider({ id: 'openai' }), context);
+    // A third-party OpenAI-compatible endpoint may legitimately serve one of these ids.
+    const compatibleModels = await listModels(createProvider({ id: 'some-proxy' }), context);
+
+    expect(openAiModels.map((model) => model.apiModelId)).toEqual(['gpt-4o']);
+    expect(compatibleModels.map((model) => model.apiModelId)).toEqual(data.map((item) => item.id));
+  });
+
+  test('drops Gemini models that cannot serve generateContent', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          models: [
+            { name: 'models/gemini-3-pro', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/veo-3', supportedGenerationMethods: ['predictLongRunning'] },
+            {
+              name: 'models/gemini-live-2.5',
+              supportedGenerationMethods: ['bidiGenerateContent'],
+            },
+            {
+              name: 'models/gemini-2.5-flash-tts',
+              supportedGenerationMethods: ['generateContent'],
+            },
+            { name: 'models/gemini-legacy' },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const models = await listModels(createProvider({ id: 'gemini' }), {
+      getRotatedApiKey: jest.fn(async () => 'test-key'),
+    });
+
+    expect(models.map((model) => model.apiModelId)).toEqual(['gemini-3-pro', 'gemini-legacy']);
+  });
+
   test('adds X-Source to Radeon model listing without adding it to other providers', async () => {
     const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () =>
       Promise.resolve(

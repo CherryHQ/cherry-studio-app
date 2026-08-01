@@ -137,6 +137,22 @@ function isAiGatewayProvider(provider: Provider): boolean {
   return provider.id === 'gateway' || provider.presetProviderId === 'gateway';
 }
 
+const EXCLUDED_GEMINI_GENERATION_METHODS = ['predictLongRunning', 'bidiGenerateContent'] as const;
+
+const EXCLUDED_GEMINI_MODEL_KEYWORDS = ['tts'] as const;
+
+function isSupportedGeminiModel(
+  model: z.infer<typeof GeminiModelsResponseSchema>['models'][number],
+): boolean {
+  const methods = model.supportedGenerationMethods ?? [];
+  if (EXCLUDED_GEMINI_GENERATION_METHODS.some((method) => methods.includes(method))) {
+    return false;
+  }
+
+  const id = (model.name.startsWith('models/') ? model.name.slice(7) : model.name).toLowerCase();
+  return !EXCLUDED_GEMINI_MODEL_KEYWORDS.some((keyword) => id.includes(keyword));
+}
+
 const geminiFetcher: ModelFetcher = {
   match: isGeminiProvider,
   fetch: async (provider, context, signal) => {
@@ -153,13 +169,15 @@ const geminiFetcher: ModelFetcher = {
       responseSchema: GeminiModelsResponseSchema,
       abortSignal: signal,
     });
-    return dedup(response.models, (model) => model.name).map((model) => {
-      const id = model.name.startsWith('models/') ? model.name.slice(7) : model.name;
-      return toModel(id, provider, {
-        name: model.displayName || id,
-        description: model.description,
+    return dedup(response.models, (model) => model.name)
+      .filter(isSupportedGeminiModel)
+      .map((model) => {
+        const id = model.name.startsWith('models/') ? model.name.slice(7) : model.name;
+        return toModel(id, provider, {
+          name: model.displayName || id,
+          description: model.description,
+        });
       });
-    });
   },
 };
 
@@ -265,6 +283,40 @@ const gatewayFetcher: ModelFetcher = {
   },
 };
 
+const EXCLUDED_OPENAI_MODEL_KEYWORDS = [
+  'tts',
+  'whisper',
+  'transcribe',
+  'speech',
+  'audio',
+  'realtime',
+  'sora',
+] as const;
+
+function isSupportedOpenAIModel(modelId: string): boolean {
+  const id = modelId.toLowerCase();
+  return !EXCLUDED_OPENAI_MODEL_KEYWORDS.some((keyword) => id.includes(keyword));
+}
+
+// Only the OpenAI preset filters by keyword: a third-party OpenAI-compatible
+// endpoint may legitimately serve a model whose id contains one of these words,
+// so the always-match fallback below keeps everything the API returns.
+const openAIFetcher: ModelFetcher = {
+  match: (provider) => isPreset(provider, 'openai'),
+  fetch: async (provider, context, signal) => {
+    const baseUrl = formatApiHost(getBaseUrl(provider));
+    const response = await getFromApi({
+      url: `${baseUrl}/models`,
+      headers: await providerHeaders(provider, context),
+      responseSchema: OpenAIModelsResponseSchema,
+      abortSignal: signal,
+    });
+    return dedup(response.data, (model) => model.id)
+      .filter((model) => isSupportedOpenAIModel(model.id))
+      .map((model) => toModel(model.id, provider, { ownedBy: model.owned_by }));
+  },
+};
+
 const openAICompatibleFetcher: ModelFetcher = {
   match: () => true,
   fetch: async (provider, context, signal) => {
@@ -288,7 +340,8 @@ const fetchers: ModelFetcher[] = [
   newApiFetcher,
   openRouterFetcher,
   gatewayFetcher,
-  openAICompatibleFetcher,
+  openAIFetcher,
+  openAICompatibleFetcher, // always-match fallback, must be last
 ];
 
 const UNSUPPORTED_PROVIDERS = new Set<string>(['aws-bedrock', 'anthropic', 'voyage', 'ollama']);
