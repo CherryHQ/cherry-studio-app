@@ -68,6 +68,11 @@ export interface AiServiceDependencies extends BuildAgentParamsDependencies {
   fileEntry: Pick<FileEntryService, 'resolveUri'>;
 }
 
+/** `auto` is the picker's "let the model decide" sentinel, not a wire value. */
+function resolveImageRequestSize(size: string | undefined): string | undefined {
+  return size === 'auto' ? undefined : size;
+}
+
 function createProviderCallHandler(
   context: AiUsageCaptureContext,
   recorder: AiServiceDependencies['aiUsageRecord'],
@@ -240,7 +245,7 @@ export class AiService {
         model: model.modelId,
         prompt: hasInputImages ? { images: inputImages, text: request.prompt } : request.prompt,
         n: structured.n ?? 1,
-        size: structured.size as `${number}x${number}` | undefined,
+        size: resolveImageRequestSize(structured.size) as `${number}x${number}` | undefined,
         aspectRatio: structured.aspectRatio as `${number}:${number}` | undefined,
         seed: structured.seed,
         maxRetries: request.requestOptions?.maxRetries ?? 0,

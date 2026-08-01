@@ -88,6 +88,30 @@ describe('AiService.generateImage', () => {
     );
   });
 
+  it.each([
+    { expected: undefined, size: 'auto' },
+    { expected: '1024x1024', size: '1024x1024' },
+  ])('sends size $size as $expected', async ({ expected, size }) => {
+    const model = createModel('gpt-image-2', {
+      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+    });
+    const service = new AiService(createServices({ model }));
+
+    await service.generateImage({
+      mode: 'generate',
+      paramValues: { size },
+      prompt: 'draw a cherry',
+      uniqueModelId: model.id,
+    });
+
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      expect.objectContaining({ size: expected }),
+    );
+  });
+
   it('maps attachment data URLs to the AI SDK image prompt shape', async () => {
     const model = createModel('gpt-image-2', {
       capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
