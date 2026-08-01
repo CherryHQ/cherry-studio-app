@@ -432,6 +432,64 @@ export class ProviderRegistryService {
     };
   }
 
+  /** Resolve the backend-only wire profile for one already materialized request model. */
+  resolveReasoningProfile(
+    provider: ReasoningProviderContext,
+    model: Model,
+    endpointType?: EndpointType,
+  ): ResolvedReasoningProfile {
+    const profileProvider = this.findProfileProvider(provider);
+    const effectiveEndpoint =
+      endpointType ??
+      resolveReasoningEndpointType(model.endpointTypes, provider.defaultChatEndpoint ?? undefined);
+    const providerIds = Array.from(
+      new Set(
+        [provider.id, profileProvider?.id, provider.presetProviderId].filter(
+          (value): value is string => Boolean(value),
+        ),
+      ),
+    );
+    const modelIds = Array.from(
+      new Set(
+        [model.apiModelId, model.presetModelId].filter((value): value is string => Boolean(value)),
+      ),
+    );
+    let contract: ProviderModelReasoningContract | undefined;
+    let matchedOverride: ProtoProviderModelOverride | null = null;
+
+    for (const providerId of providerIds) {
+      for (const modelId of modelIds) {
+        const candidate = this.loader.findOverride(providerId, modelId);
+        contract = effectiveEndpoint
+          ? (
+              candidate?.reasoningContracts as
+                | Partial<Record<EndpointType, ProviderModelReasoningContract>>
+                | undefined
+            )?.[effectiveEndpoint]
+          : undefined;
+        if (contract) matchedOverride = candidate;
+        if (contract) break;
+      }
+      if (contract) break;
+    }
+
+    const resolved = resolveReasoningProfileFromRegistry({
+      contract,
+      endpointType: effectiveEndpoint,
+      format: effectiveEndpoint
+        ? profileProvider?.endpointConfigs?.[effectiveEndpoint]?.reasoningFormat
+        : undefined,
+    });
+    const presetReasoning = this.loader.findModel(
+      matchedOverride?.modelId ?? model.presetModelId ?? '',
+    )?.reasoning;
+
+    return {
+      ...resolved,
+      support: mergeReasoningSupport(presetReasoning ?? model.reasoning, contract?.support),
+    };
+  }
+
   lookupModel(
     providerId: string,
     modelId: string,

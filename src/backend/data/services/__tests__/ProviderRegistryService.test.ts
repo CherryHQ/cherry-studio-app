@@ -131,4 +131,36 @@ describe('provider-registry-service', () => {
     expect(service.isRegistryProvider('login-provider')).toBe(true);
     expect(service.isRegistryProvider('custom-provider')).toBe(false);
   });
+
+  test('resolves the request-time model contract before endpoint and global profiles', () => {
+    const model = providerRegistryService.resolveModels('zhipu', ['glm-5-2'], {
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      presetProviderId: 'zhipu',
+    })[0];
+
+    const resolved = providerRegistryService.resolveReasoningProfile(
+      {
+        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        id: 'zhipu',
+        presetProviderId: 'zhipu',
+      },
+      model,
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    );
+
+    expect(resolved.support?.controls).toEqual([
+      { default: 'max', kind: 'effort', values: ['none', 'high', 'max'] },
+    ]);
+    expect(resolved.wire).toMatchObject({
+      off: {
+        operations: [{ target: 'thinking.type', value: { source: 'literal', value: 'disabled' } }],
+      },
+      effort: {
+        operations: [
+          { target: 'thinking.type', value: { source: 'literal', value: 'enabled' } },
+          { target: 'reasoningEffort', value: { source: 'effort' } },
+        ],
+      },
+    });
+  });
 });
