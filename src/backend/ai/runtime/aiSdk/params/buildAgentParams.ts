@@ -25,7 +25,7 @@ import type { ProviderService } from '@/backend/data/services/ProviderService';
 
 import { createAiUsagePlugin } from '../../../hooks/billingHook';
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
-import type { ToolService } from '../../../tools';
+import type { ToolResolver } from '../../../tools';
 import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/adapters/aiSdk/meta/toolSearch';
 import { createAiRepair } from '../../../tools/adapters/aiSdk/repair';
 import type { RequestContext } from '../../../tools/adapters/aiSdk/types';
@@ -66,7 +66,7 @@ export interface BuildAgentParamsDependencies {
     ProviderService,
     'getAuthConfig' | 'getByProviderId' | 'getRotatedApiKey' | 'resolveApiKey'
   >;
-  tools: Pick<ToolService, 'resolveForRequest'>;
+  tools: Pick<ToolResolver, 'resolveForRequest'>;
 }
 
 export interface BuildAgentParamsInput {

@@ -1,6 +1,6 @@
 import { AiService } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
-import { ToolService } from '@/backend/ai/tools';
+import { ToolResolver } from '@/backend/ai/tools';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
@@ -74,8 +74,8 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
   const entitySearch = new EntitySearchService(dbService);
   const temporaryChat = new TemporaryChatService(dbService, aiUsageRecord);
   const webSearch = new WebSearchService(preference);
-  const tools = new ToolService({
-    devicePermission: devicePermissions,
+  const toolResolver = new ToolResolver({
+    devicePermissions,
     mcpRuntime,
     preference,
     webSearch,
@@ -87,7 +87,7 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
     model,
     preference,
     provider,
-    tools,
+    tools: toolResolver,
   });
 
   return {
@@ -124,7 +124,7 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
     tag,
     temporaryChat,
     topic,
-    tools,
+    tools: toolResolver,
     translateHistory,
     translateLanguage,
     webSearch,

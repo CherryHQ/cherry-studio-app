@@ -6,9 +6,9 @@ import { tool } from 'ai';
 import * as z from 'zod';
 
 import type { ToolEntry } from '../adapters/aiSdk/types';
-import { ToolService } from '../ToolService';
+import { ToolResolver } from '../ToolResolver';
 
-describe('ToolService', () => {
+describe('ToolResolver', () => {
   test('merges active built-ins, web search, and assistant MCP entries', async () => {
     const mcpEntry: ToolEntry = {
       defer: 'never',
@@ -17,9 +17,9 @@ describe('ToolService', () => {
       namespace: 'mcp:Server',
       tool: tool({ inputSchema: z.object({ query: z.string() }) }),
     };
-    const service = createService({ mcpEntries: [mcpEntry] });
+    const resolver = createResolver({ mcpEntries: [mcpEntry] });
 
-    const result = await service.resolveForRequest({
+    const result = await resolver.resolveForRequest({
       assistant: assistant(),
       contextWindow: 1_000_000,
       externalWebSearchEnabled: true,
@@ -47,8 +47,8 @@ describe('ToolService', () => {
   });
 
   test('fails closed when a preference lookup fails', async () => {
-    const service = createService({ failingKey: 'permissions.location_read' });
-    const result = await service.resolveForRequest({
+    const resolver = createResolver({ failingKey: 'permissions.location_read' });
+    const result = await resolver.resolveForRequest({
       assistant: assistant(),
       externalWebSearchEnabled: false,
     });
@@ -57,7 +57,7 @@ describe('ToolService', () => {
   });
 
   test('does not register web search when the request uses provider-native search', async () => {
-    const result = await createService({}).resolveForRequest({
+    const result = await createResolver({}).resolveForRequest({
       assistant: assistant(),
       externalWebSearchEnabled: false,
     });
@@ -66,12 +66,12 @@ describe('ToolService', () => {
 
   test('does not query native permission status for disabled scopes', async () => {
     const getStatus = jest.fn(async () => 'granted');
-    const service = createService({
+    const resolver = createResolver({
       getStatus,
       neverKey: 'permissions.health_read',
     });
 
-    await service.resolveForRequest({
+    await resolver.resolveForRequest({
       assistant: assistant(),
       externalWebSearchEnabled: false,
     });
@@ -80,14 +80,14 @@ describe('ToolService', () => {
   });
 });
 
-function createService(options: {
+function createResolver(options: {
   failingKey?: string;
   getStatus?: jest.Mock;
   mcpEntries?: ToolEntry[];
   neverKey?: string;
 }) {
-  return new ToolService({
-    devicePermission: {
+  return new ToolResolver({
+    devicePermissions: {
       getStatusForPreference: options.getStatus ?? jest.fn(async () => 'granted'),
     },
     mcpRuntime: { getToolEntriesForAssistant: jest.fn(async () => options.mcpEntries ?? []) },

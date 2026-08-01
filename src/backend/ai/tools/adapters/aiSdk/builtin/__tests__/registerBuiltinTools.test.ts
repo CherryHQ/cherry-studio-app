@@ -78,7 +78,7 @@ function createRegistry() {
 
 function dependencies(mode: 'ask' | 'always') {
   return {
-    devicePermission: { getStatusForPreference: jest.fn(async () => 'granted' as const) },
+    devicePermissions: { getStatusForPreference: jest.fn(async () => 'granted' as const) },
     preference: { get: jest.fn(async () => mode) },
     webSearch: { searchKeywords: jest.fn() },
   } as never;

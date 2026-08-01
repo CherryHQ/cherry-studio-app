@@ -14,7 +14,7 @@ import type { ToolEntry } from '../types';
 const logger = loggerService.withContext('DeviceTool');
 
 export type DeviceToolDependencies = {
-  devicePermission: Pick<DevicePermissions, 'getStatusForPreference'>;
+  devicePermissions: Pick<DevicePermissions, 'getStatusForPreference'>;
   preference: Pick<PreferenceService, 'get'>;
 };
 
@@ -111,7 +111,7 @@ function guardDeviceTool(input: {
         throw new Error(`Device tool is disabled: ${input.name}`);
       }
       const statuses = await Promise.all(
-        input.preferenceKeys.map((key) => input.deps.devicePermission.getStatusForPreference(key)),
+        input.preferenceKeys.map((key) => input.deps.devicePermissions.getStatusForPreference(key)),
       );
       if (statuses.some((status) => status !== 'granted')) {
         throw new Error(`Device tool requires system permission: ${input.name}`);

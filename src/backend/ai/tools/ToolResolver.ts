@@ -14,7 +14,7 @@ import { applyDeferExposition } from './adapters/aiSdk/exposition/applyDeferExpo
 import { ToolRegistry } from './adapters/aiSdk/registry';
 import type { DeviceToolAccess, ToolEntry } from './adapters/aiSdk/types';
 
-const logger = loggerService.withContext('ToolService');
+const logger = loggerService.withContext('ToolResolver');
 const DEVICE_PREFERENCE_KEYS = [
   'permissions.calendar_read',
   'permissions.calendar_write',
@@ -24,17 +24,17 @@ const DEVICE_PREFERENCE_KEYS = [
   'permissions.reminders_write',
 ] as const satisfies readonly PermissionPreferenceKey[];
 
-export type ToolServiceDependencies = {
-  devicePermission: Pick<DevicePermissions, 'getStatusForPreference'>;
+export type ToolResolverDependencies = {
+  devicePermissions: Pick<DevicePermissions, 'getStatusForPreference'>;
   mcpRuntime: Pick<McpRuntimeService, 'getToolEntriesForAssistant'>;
   preference: Pick<PreferenceService, 'get'>;
   webSearch: WebSearchService;
 };
 
-export class ToolService {
+export class ToolResolver {
   private readonly builtinRegistry = new ToolRegistry();
 
-  constructor(private readonly deps: ToolServiceDependencies) {
+  constructor(private readonly deps: ToolResolverDependencies) {
     registerBuiltinTools(this.builtinRegistry, deps);
   }
 
@@ -69,7 +69,7 @@ export class ToolService {
           if (mode === 'never') {
             return [key, { mode, status: 'unavailable' as const }] as const;
           }
-          const status = await this.deps.devicePermission.getStatusForPreference(key);
+          const status = await this.deps.devicePermissions.getStatusForPreference(key);
           return [key, { mode, status }] as const;
         } catch (error) {
           logger.warn('Device access lookup failed; disabling the affected scope', { error, key });
