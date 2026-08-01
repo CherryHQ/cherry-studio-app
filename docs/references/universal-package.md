@@ -23,7 +23,8 @@ Desktop's `src/shared` means "shared between the Electron main and renderer proc
 
 The directory layout maps one-to-one onto desktop `src/shared/{data,ai,types,utils}`.
 Mobile-native shared code stays in `src/shared`: `contracts/` (in-process API boundary, the mobile
-counterpart of desktop IPC), `core/logger`, and `utils/cherryInOauth`.
+counterpart of desktop IPC), `core/logger`, and `oauth/` (the OAuth provider registry, which is
+keyed by mobile provider ids and read by both layers).
 
 ## Admission Criteria
 

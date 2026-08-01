@@ -28,6 +28,7 @@ fault isolation or protection from blocking the JavaScript thread. Contract valu
 | `src/backend/data` | Backend cache, preferences, SQLite, schemas, seeders, fixtures, and persistence services |
 | `src/backend/services` | Multi-step workflows, device capabilities, OAuth, avatars, and web search |
 | `src/shared/contracts` | Workflow-only `Backend` modules, sessions, events, and results |
+| `src/shared/oauth` | OAuth provider registry, definitions, and errors, read by both layers |
 | `src/shared/core` / `src/shared/utils` | Cross-layer foundations and mobile-native pure utilities |
 | `src/types` | Truly global or generated declarations only |
 | `packages/universal/src/ai` | Cross-layer AI tool and transport rules (`@cherrystudio/universal/ai`) |

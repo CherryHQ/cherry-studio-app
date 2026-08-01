@@ -12,8 +12,9 @@ rules here when they belong behind the in-process Data API or workflow seam.
 
 - `chat`, `models`, `paintings`, `mcp`, `providers`, `permissions`, and `profile` implement
   multi-step contract behavior.
-- `oauth`, `webSearch`, device permissions, and avatar storage own platform or third-party runtime
-  behavior.
+- `oauth`, `cherryin`, `webSearch`, device permissions, and avatar storage own platform or
+  third-party runtime behavior. `oauth` holds the provider-generic OAuth runtime (see its
+  [README](./oauth/README.md)); `cherryin` holds that one provider's own REST surface.
 - `src/backend/data/services` remains reserved for entity persistence and data-specific
   transformations.
 - `src/backend/ai` remains reserved for AI SDK, provider, MCP runtime, message, and tool behavior.
