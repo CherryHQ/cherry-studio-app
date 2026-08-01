@@ -2,6 +2,7 @@ import type { WebSearchProvider } from '@cherrystudio/universal/data/preference'
 import type { WebSearchExecutionConfig } from '@cherrystudio/universal/data/types/webSearch';
 
 import { ApiKeyRotationState } from '../../../utils/provider';
+import searxngSearchResponse from '../../__tests__/fixtures/searxng-search-response.json';
 import { SearxngProvider } from '../SearxngProvider';
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
@@ -21,6 +22,42 @@ describe('SearxngProvider', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+  });
+
+  // The fixture is shared with desktop, but the expected result below is not:
+  // desktop re-fetches every result URL and replaces the engine's title/content
+  // with text extracted from the page, so the same bytes normalize to
+  // "Resolved Page Title" there. Mobile keeps what the engine returned. Do not
+  // "fix" this to match desktop's snapshot on sync -- the fixture pins the wire
+  // shape, not the normalized output.
+  test('issues the search request and maps the fixture response', async () => {
+    const fetchMock = mockJsonResponse(searxngSearchResponse);
+
+    const provider = new SearxngProvider(createProvider(), new ApiKeyRotationState());
+    const result = await provider.searchKeywords('hello', runtimeConfig);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8080/search?q=hello&language=auto&format=json',
+      {
+        method: 'GET',
+        headers: expect.any(Headers),
+        signal: undefined,
+      },
+    );
+    expect(result).toEqual({
+      query: 'hello',
+      providerId: 'searxng',
+      capability: 'searchKeywords',
+      inputs: ['hello'],
+      results: [
+        {
+          title: 'Searxng Title',
+          content: 'Searxng Content',
+          url: 'https://searx.example/result',
+          sourceInput: 'hello',
+        },
+      ],
+    });
   });
 
   test('keeps only http(s) result URLs', async () => {
@@ -51,6 +88,14 @@ describe('SearxngProvider', () => {
     ]);
   });
 });
+
+function mockJsonResponse(payload: unknown): jest.Mock {
+  const fetchMock = jest
+    .fn()
+    .mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+  global.fetch = fetchMock;
+  return fetchMock;
+}
 
 function createProvider(): WebSearchProvider {
   return {

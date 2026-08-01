@@ -2,6 +2,7 @@ import type { WebSearchProvider } from '@cherrystudio/universal/data/preference'
 import type { WebSearchExecutionConfig } from '@cherrystudio/universal/data/types/webSearch';
 
 import { ApiKeyRotationState } from '../../../utils/provider';
+import firecrawlResponse from '../../__tests__/fixtures/firecrawl-response.json';
 import { FirecrawlProvider } from '../FirecrawlProvider';
 
 const runtimeConfig: WebSearchExecutionConfig = {
@@ -18,19 +19,7 @@ describe('FirecrawlProvider', () => {
   });
 
   test('posts a search request and maps scraped markdown', async () => {
-    const fetchMock = mockJsonResponse({
-      success: true,
-      data: {
-        web: [
-          {
-            description: 'Fallback Description',
-            markdown: 'Scraped Markdown Content',
-            title: 'Firecrawl Title',
-            url: 'https://firecrawl.example/result',
-          },
-        ],
-      },
-    });
+    const fetchMock = mockJsonResponse(firecrawlResponse);
 
     const provider = new FirecrawlProvider(createProvider(), new ApiKeyRotationState());
     const result = await provider.searchKeywords('hello', runtimeConfig);
@@ -38,12 +27,16 @@ describe('FirecrawlProvider', () => {
     expect(fetchMock).toHaveBeenCalledWith('https://api.firecrawl.example/v2/search', {
       method: 'POST',
       headers: expect.any(Headers),
-      body: JSON.stringify({
-        query: 'hello',
-        limit: 4,
-        scrapeOptions: { formats: ['markdown'] },
-      }),
+      body: expect.any(String),
       signal: undefined,
+    });
+    // Decode before asserting: the request schema's `parse` rebuilds the object
+    // in schema-shape order, and pinning the serialized string would pin a key
+    // order the API does not care about.
+    expect(readRequestBody(fetchMock)).toEqual({
+      query: 'hello',
+      limit: 4,
+      scrapeOptions: { formats: ['markdown'] },
     });
     const headers = fetchMock.mock.calls[0][1].headers as Headers;
     expect(headers.get('Authorization')).toBe('Bearer firecrawl-key');
@@ -124,6 +117,10 @@ function mockJsonResponse(payload: unknown): jest.Mock {
     .mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
   global.fetch = fetchMock;
   return fetchMock;
+}
+
+function readRequestBody(fetchMock: jest.Mock): unknown {
+  return JSON.parse(fetchMock.mock.calls[0][1].body as string);
 }
 
 function createProvider(overrides: Partial<WebSearchProvider> = {}): WebSearchProvider {

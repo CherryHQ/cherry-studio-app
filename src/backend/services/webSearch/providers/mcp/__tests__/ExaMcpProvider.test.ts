@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import type { WebSearchProvider } from '@cherrystudio/universal/data/preference';
 import type { WebSearchExecutionConfig } from '@cherrystudio/universal/data/types/webSearch';
 
@@ -16,8 +19,12 @@ const runtimeConfig: WebSearchExecutionConfig = {
   compression: { method: 'none', cutoffLimit: 2000 },
 };
 
-const SSE_RESULT_FRAME =
-  'data: {"result":{"content":[{"type":"text","text":"Title: Exa MCP Title\\nURL: https://mcp.exa.ai/result\\nText: Exa MCP Content"}]}}';
+// The SSE body is a byte-for-byte copy of a real Exa MCP response, shared with
+// desktop's fixture of the same name, so both ends pin the same wire shape.
+const SSE_RESULT_FRAME = readFileSync(
+  path.join(__dirname, '../../__tests__/fixtures/exa-mcp-response.txt'),
+  'utf8',
+);
 
 describe('ExaMcpProvider', () => {
   const originalFetch = global.fetch;
