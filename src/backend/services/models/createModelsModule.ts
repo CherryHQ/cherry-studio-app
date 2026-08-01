@@ -18,12 +18,11 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 const defaultPullTimeoutMs = 10_000;
 const defaultHealthTimeoutMs = 15_000;
-const logger = loggerService.withContext('ModelsService');
+const logger = loggerService.withContext('ModelsModule');
 
 type RemoteModel = Partial<Model>;
 
-type ModelRepository = {
-  add(input: AddModelInput, provider: Provider): Promise<Model>;
+type ModelWorkflowData = {
   get(id: UniqueModelId): Promise<Model | null>;
   list(query?: ModelListQuery): Promise<Model[]>;
   reconcile(
@@ -31,10 +30,9 @@ type ModelRepository = {
     input: { toAdd: AddModelInput[]; toRemove: UniqueModelId[] },
     provider: Provider,
   ): Promise<{ added: Model[]; removedIds: UniqueModelId[] }>;
-  remove(id: UniqueModelId): Promise<boolean>;
 };
 
-type ProviderRepository = {
+type ProviderWorkflowData = {
   get(id: string): Promise<Provider>;
   update(id: string, input: { isEnabled: boolean }): Promise<Provider>;
 };
@@ -53,150 +51,34 @@ type ModelsAi = {
   }): Promise<RemoteModel[]>;
 };
 
-export type ModelsServiceDependencies = {
+export type ModelsModuleDependencies = {
   ai: ModelsAi;
   materializeRemoteModels(provider: Provider, models: readonly RemoteModel[]): Model[];
-  models: ModelRepository;
-  providers: ProviderRepository;
+  models: ModelWorkflowData;
+  providers: ProviderWorkflowData;
   pullTimeoutMs?: number;
 };
 
-export class ModelsService implements ModelsModule {
-  constructor(private readonly dependencies: ModelsServiceDependencies) {}
-
-  async add(inputs: readonly AddModelInput[]): Promise<Model[]> {
-    const providers = new Map<string, Provider>();
-    const added: Model[] = [];
-
-    for (const input of inputs) {
-      let provider = providers.get(input.providerId);
-      if (!provider) {
-        // Sequential writes preserve the repository's order-key invariant.
-        provider = await this.dependencies.providers.get(input.providerId);
-        providers.set(input.providerId, provider);
-      }
-      added.push(await this.dependencies.models.add(input, provider));
-    }
-
-    return added;
-  }
-
-  async checkHealth(input: CheckModelsHealthInput): Promise<ModelHealthResult[]> {
-    const models = await Promise.all(input.modelIds.map((id) => this.requireModel(id)));
-    const results: ModelHealthResult[] = [];
-
-    for (const [index, model] of models.entries()) {
-      throwIfAborted(input.signal);
-
-      let result: ModelHealthResult;
-      try {
-        const { latency } = await this.dependencies.ai.checkModel({
-          ...(input.apiKey !== undefined && { apiKeyOverride: input.apiKey }),
-          ...(input.signal && { requestOptions: { signal: input.signal } }),
-          timeout: input.timeoutMs ?? defaultHealthTimeoutMs,
-          uniqueModelId: model.id,
-        });
-        throwIfAborted(input.signal);
-        result = { latency, model, status: 'success' };
-      } catch (error) {
-        if (input.signal?.aborted) {
-          throw error;
-        }
-        result = { error: errorMessage(error), model, status: 'failed' };
-      }
-
-      results[index] = result;
-      input.onResult?.(result, index);
-    }
-
-    if (results.length > 0 && results.every((result) => result.status === 'success')) {
-      const provider = await this.dependencies.providers.get(input.providerId);
-      await this.enableProviderWhenModelsAvailable(provider, models.length, 'health-check');
-    }
-
-    return results;
-  }
-
-  get(id: UniqueModelId): Promise<Model | null> {
-    return this.dependencies.models.get(id);
-  }
-
-  list(query?: ModelListQuery): Promise<Model[]> {
-    return this.dependencies.models.list(query);
-  }
-
-  async pull(providerId: string, signal?: AbortSignal): Promise<ModelPullResult> {
-    const provider = await this.dependencies.providers.get(providerId);
-    const [localModels, remoteModels] = await this.runPullRequest(signal, (requestSignal) =>
-      Promise.all([
-        this.dependencies.models.list({ providerId }),
-        this.dependencies.ai.listModels({
-          providerId,
-          requestOptions: { signal: requestSignal },
-          throwOnError: true,
-        }),
-      ]),
-    );
-    const normalizedRemoteModels = this.dependencies.materializeRemoteModels(
-      provider,
-      remoteModels,
-    );
-    const preview = buildPullPreview(providerId, localModels, normalizedRemoteModels);
-
-    if (preview.added.length > 0 || preview.missing.length > 0) {
-      return { preview, status: 'changes' };
-    }
-
-    const providerEnabled = await this.enableProviderWhenModelsAvailable(
-      provider,
-      localModels.length,
-      'pull-up-to-date',
-    );
-    return { providerEnabled, status: 'up-to-date' };
-  }
-
-  async reconcile(providerId: string, input: ReconcileModelsInput): Promise<ReconcileModelsResult> {
-    const provider = await this.dependencies.providers.get(providerId);
-    const result = await this.dependencies.models.reconcile(
-      providerId,
-      {
-        toAdd: (input.toAdd ?? []).map(modelToAddInput),
-        toRemove: [...(input.toRemove ?? [])],
-      },
-      provider,
-    );
-    const providerEnabled = await this.enableProviderWhenModelsAvailable(
-      provider,
-      result.added.length,
-      'reconcile',
-    );
-
-    return { ...result, providerEnabled };
-  }
-
-  remove(id: UniqueModelId): Promise<boolean> {
-    return this.dependencies.models.remove(id);
-  }
-
-  private async requireModel(id: UniqueModelId): Promise<Model> {
-    const model = await this.dependencies.models.get(id);
+export function createModelsModule(dependencies: ModelsModuleDependencies): ModelsModule {
+  const requireModel = async (id: UniqueModelId): Promise<Model> => {
+    const model = await dependencies.models.get(id);
     if (!model) {
       throw new Error(`Model not found: ${id}`);
     }
     return model;
-  }
+  };
 
-  private async enableProviderWhenModelsAvailable(
+  const enableProviderWhenModelsAvailable = async (
     provider: Pick<Provider, 'id' | 'isEnabled'>,
     modelCount: number,
     source: string,
-  ): Promise<boolean> {
+  ): Promise<boolean> => {
     if (provider.isEnabled || modelCount <= 0) {
       return false;
     }
 
     try {
-      await this.dependencies.providers.update(provider.id, { isEnabled: true });
+      await dependencies.providers.update(provider.id, { isEnabled: true });
       return true;
     } catch (error) {
       logger.error('Failed to enable provider when models are available', toError(error), {
@@ -206,16 +88,16 @@ export class ModelsService implements ModelsModule {
       });
       return false;
     }
-  }
+  };
 
-  private async runPullRequest<T>(
+  const runPullRequest = async <T>(
     signal: AbortSignal | undefined,
     request: (signal: AbortSignal) => Promise<T>,
-  ): Promise<T> {
+  ): Promise<T> => {
     throwIfAborted(signal);
 
     const controller = new AbortController();
-    const timeoutMs = this.dependencies.pullTimeoutMs ?? defaultPullTimeoutMs;
+    const timeoutMs = dependencies.pullTimeoutMs ?? defaultPullTimeoutMs;
     const forwardAbort = () => controller.abort(signal?.reason);
     signal?.addEventListener('abort', forwardAbort, { once: true });
     let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
@@ -235,7 +117,94 @@ export class ModelsService implements ModelsModule {
       }
       signal?.removeEventListener('abort', forwardAbort);
     }
-  }
+  };
+
+  const checkHealth = async (input: CheckModelsHealthInput): Promise<ModelHealthResult[]> => {
+    const models = await Promise.all(input.modelIds.map(requireModel));
+    const results: ModelHealthResult[] = [];
+
+    for (const [index, model] of models.entries()) {
+      throwIfAborted(input.signal);
+
+      let result: ModelHealthResult;
+      try {
+        const { latency } = await dependencies.ai.checkModel({
+          ...(input.apiKey !== undefined && { apiKeyOverride: input.apiKey }),
+          ...(input.signal && { requestOptions: { signal: input.signal } }),
+          timeout: input.timeoutMs ?? defaultHealthTimeoutMs,
+          uniqueModelId: model.id,
+        });
+        throwIfAborted(input.signal);
+        result = { latency, model, status: 'success' };
+      } catch (error) {
+        if (input.signal?.aborted) {
+          throw error;
+        }
+        result = { error: errorMessage(error), model, status: 'failed' };
+      }
+
+      results[index] = result;
+      input.onResult?.(result, index);
+    }
+
+    if (results.length > 0 && results.every((result) => result.status === 'success')) {
+      const provider = await dependencies.providers.get(input.providerId);
+      await enableProviderWhenModelsAvailable(provider, models.length, 'health-check');
+    }
+
+    return results;
+  };
+
+  const pull = async (providerId: string, signal?: AbortSignal): Promise<ModelPullResult> => {
+    const provider = await dependencies.providers.get(providerId);
+    const [localModels, remoteModels] = await runPullRequest(signal, (requestSignal) =>
+      Promise.all([
+        dependencies.models.list({ providerId }),
+        dependencies.ai.listModels({
+          providerId,
+          requestOptions: { signal: requestSignal },
+          throwOnError: true,
+        }),
+      ]),
+    );
+    const normalizedRemoteModels = dependencies.materializeRemoteModels(provider, remoteModels);
+    const preview = buildPullPreview(providerId, localModels, normalizedRemoteModels);
+
+    if (preview.added.length > 0 || preview.missing.length > 0) {
+      return { preview, status: 'changes' };
+    }
+
+    const providerEnabled = await enableProviderWhenModelsAvailable(
+      provider,
+      localModels.length,
+      'pull-up-to-date',
+    );
+    return { providerEnabled, status: 'up-to-date' };
+  };
+
+  const reconcile = async (
+    providerId: string,
+    input: ReconcileModelsInput,
+  ): Promise<ReconcileModelsResult> => {
+    const provider = await dependencies.providers.get(providerId);
+    const result = await dependencies.models.reconcile(
+      providerId,
+      {
+        toAdd: (input.toAdd ?? []).map(modelToAddInput),
+        toRemove: [...(input.toRemove ?? [])],
+      },
+      provider,
+    );
+    const providerEnabled = await enableProviderWhenModelsAvailable(
+      provider,
+      result.added.length,
+      'reconcile',
+    );
+
+    return { ...result, providerEnabled };
+  };
+
+  return { checkHealth, pull, reconcile };
 }
 
 function buildPullPreview(

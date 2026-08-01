@@ -14,7 +14,7 @@ import { materializeRemoteModels } from '@/backend/data/services/materializeRemo
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
 import { CherryInService } from '@/backend/services/cherryin/CherryInService';
 import { McpService } from '@/backend/services/mcp/McpService';
-import { ModelsService } from '@/backend/services/models/ModelsService';
+import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { ProviderAuthConfigOAuthTokenStore } from '@/backend/services/oauth/runtime/OAuthTokenStore';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
@@ -36,7 +36,6 @@ export type BackendComposition = {
   backend: Backend;
   dataApiDependencies: {
     mcpServers: McpService;
-    models: ModelsService;
   };
   dispose(): Promise<void>;
 };
@@ -84,12 +83,10 @@ export function createBackend(services: BackendServices): BackendComposition {
       topic: services.topic,
     },
   });
-  const models = new ModelsService({
+  const models = createModelsModule({
     ai: services.ai,
     materializeRemoteModels,
     models: {
-      add: (input, provider) =>
-        services.model.createFromRegistry(input, providerConfiguration(provider)),
       get: (id) => services.model.getById(id),
       list: (query) => services.model.list(query),
       reconcile: async (providerId, input, provider) => {
@@ -100,7 +97,6 @@ export function createBackend(services: BackendServices): BackendComposition {
         );
         return { ...result, removedIds: result.removedIds as UniqueModelId[] };
       },
-      remove: (id) => services.model.delete(id),
     },
     providers: {
       get: (id) => services.provider.getByProviderId(id),
@@ -179,7 +175,6 @@ export function createBackend(services: BackendServices): BackendComposition {
     },
     dataApiDependencies: {
       mcpServers: mcp,
-      models,
     },
     dispose: () => chat.dispose(),
   };

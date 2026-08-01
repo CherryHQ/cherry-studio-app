@@ -1,4 +1,3 @@
-import type { AddModelInput } from '@cherrystudio/universal/data/api/schemas/models';
 import {
   createUniqueModelId,
   type Model,
@@ -9,7 +8,7 @@ import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { ModelsModule } from '@/shared/contracts';
 import { ModelPullTimeoutError } from '@/shared/contracts';
 
-import { ModelsService, type ModelsServiceDependencies } from '../ModelsService';
+import { createModelsModule, type ModelsModuleDependencies } from '../createModelsModule';
 
 const provider = {
   id: 'openai',
@@ -31,22 +30,20 @@ function model(modelId: string, overrides: Partial<Model> = {}): Model {
   };
 }
 
-function createSubject(overrides: Partial<ModelsServiceDependencies> = {}) {
-  const dependencies: ModelsServiceDependencies = {
+function createSubject(overrides: Partial<ModelsModuleDependencies> = {}) {
+  const dependencies: ModelsModuleDependencies = {
     ai: {
       checkModel: jest.fn(async () => ({ latency: 12 })),
       listModels: jest.fn(async () => []),
     },
     materializeRemoteModels: (_provider, models) => models as Model[],
     models: {
-      add: jest.fn(async (input: AddModelInput) => model(input.modelId)),
       get: jest.fn(async (id: UniqueModelId) => model(id.split('::')[1] ?? id)),
       list: jest.fn(async () => []),
       reconcile: jest.fn(async (_providerId, input) => ({
         added: input.toAdd.map((item) => model(item.modelId)),
         removedIds: input.toRemove,
       })),
-      remove: jest.fn(async () => true),
     },
     providers: {
       get: jest.fn(async () => provider),
@@ -54,11 +51,11 @@ function createSubject(overrides: Partial<ModelsServiceDependencies> = {}) {
     },
     ...overrides,
   };
-  const backend: ModelsModule = new ModelsService(dependencies);
+  const backend: ModelsModule = createModelsModule(dependencies);
   return { backend, dependencies };
 }
 
-describe('ModelsService', () => {
+describe('createModelsModule', () => {
   it('returns a pull preview and keeps persistence behind reconcile', async () => {
     const local = model('old', { presetModelId: 'old' });
     const remote = model('new');
