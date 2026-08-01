@@ -27,7 +27,11 @@ import {
   isWithTrailingSharp,
   routeToEndpoint,
 } from '../utils/provider';
-import { resolveAiSdkProviderId, resolveEffectiveEndpoint } from './endpoint';
+import {
+  resolveAiSdkProviderId,
+  type ResolvedEndpoint,
+  resolveEffectiveEndpoint,
+} from './endpoint';
 
 const appProviderIdMap = appProviderIds as Record<string, AppProviderId>;
 
@@ -58,6 +62,7 @@ type ApiKeyBuilderContext = BuilderContext & {
 
 interface ProviderToAiSdkConfigOptions {
   apiKeyOverride?: string;
+  resolvedEndpoint?: ResolvedEndpoint;
 }
 
 export interface ResolvedProviderAiSdkConfig {
@@ -154,7 +159,8 @@ export async function resolveProviderAiSdkConfig(
   runtime: ProviderConfigRuntime,
   options?: ProviderToAiSdkConfigOptions,
 ): Promise<ResolvedProviderAiSdkConfig> {
-  const { endpointType, baseUrl } = resolveEffectiveEndpoint(provider, model);
+  const { endpointType, baseUrl } =
+    options?.resolvedEndpoint ?? resolveEffectiveEndpoint(provider, model);
 
   const aiSdkProviderId = appProviderIdMap[
     resolveAiSdkProviderId(provider, endpointType)

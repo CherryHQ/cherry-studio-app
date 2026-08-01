@@ -9,11 +9,8 @@ import { OpenAIChatLanguageModel, OpenAIResponsesLanguageModel } from '@ai-sdk/o
 import type { EmbeddingModelV3, ImageModelV3, LanguageModelV3, ProviderV3 } from '@ai-sdk/provider';
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 import { loadApiKey, withoutTrailingSlash } from '@ai-sdk/provider-utils';
-import type { Model } from '@cherrystudio/universal/data/types/model';
-import {
-  isOpenAIChatCompletionOnlyModel,
-  isOpenAILLMModel,
-} from '@cherrystudio/universal/utils/model';
+
+import { resolveAihubmixChatFamily } from './aihubmixRouting';
 
 export const AIHUBMIX_PROVIDER_NAME = 'aihubmix' as const;
 const APP_CODE_HEADER = { 'APP-Code': 'MLTG2087' };
@@ -77,7 +74,7 @@ export function createAihubmix(options: AihubmixProviderSettings = {}): Aihubmix
 
   const createOpenAICompatibleChatModel = (modelId: string): LanguageModelV3 =>
     new OpenAICompatibleChatLanguageModel(modelId, {
-      provider: `openai-compatible.${AIHUBMIX_PROVIDER_NAME}`,
+      provider: `${AIHUBMIX_PROVIDER_NAME}.chat`,
       url,
       headers: authHeaders,
       fetch: customFetch,
@@ -85,7 +82,7 @@ export function createAihubmix(options: AihubmixProviderSettings = {}): Aihubmix
 
   const createOpenAIChatModel = (modelId: string): LanguageModelV3 =>
     new OpenAIChatLanguageModel(modelId, {
-      provider: `openai-compatible.${AIHUBMIX_PROVIDER_NAME}`,
+      provider: `${AIHUBMIX_PROVIDER_NAME}.chat`,
       url,
       headers: authHeaders,
       fetch: customFetch,
@@ -101,36 +98,18 @@ export function createAihubmix(options: AihubmixProviderSettings = {}): Aihubmix
     });
 
   const createChatModel = (modelId: string): LanguageModelV3 => {
-    if (modelId.startsWith('claude')) {
-      return createAnthropicModel(modelId);
+    switch (resolveAihubmixChatFamily(modelId)) {
+      case 'anthropic':
+        return createAnthropicModel(modelId);
+      case 'gemini':
+        return createGeminiModel(modelId);
+      case 'openai-chat':
+        return createOpenAIChatModel(modelId);
+      case 'openai-responses':
+        return createResponsesModel(modelId);
+      case 'compat':
+        return createOpenAICompatibleChatModel(modelId);
     }
-    if (
-      (modelId.startsWith('gemini') || modelId.startsWith('imagen')) &&
-      !modelId.endsWith('no-think') &&
-      !modelId.endsWith('-search') &&
-      !modelId.includes('embedding')
-    ) {
-      return createGeminiModel(modelId);
-    }
-
-    const model: Model = {
-      capabilities: [],
-      id: `aihubmix::${modelId}`,
-      isDeprecated: false,
-      isEnabled: true,
-      isHidden: false,
-      modelId,
-      name: modelId,
-      providerId: AIHUBMIX_PROVIDER_NAME,
-      supportsStreaming: true,
-    };
-
-    if (isOpenAILLMModel(model)) {
-      return isOpenAIChatCompletionOnlyModel(model)
-        ? createOpenAIChatModel(modelId)
-        : createResponsesModel(modelId);
-    }
-    return createOpenAICompatibleChatModel(modelId);
   };
 
   const provider = Object.assign((modelId: string) => createChatModel(modelId), {
