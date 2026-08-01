@@ -87,6 +87,12 @@ export class JinaProvider extends BaseWebSearchProvider {
     const normalizedQuery = query.trim();
 
     return {
+      // Deliberate divergence: desktop requires a key here
+      // (JinaProvider.ts:118) and only lets the reader path run anonymously.
+      // s.jina.ai answers unauthenticated requests too, and mobile keeps that
+      // open so web search works on a fresh install with nothing configured --
+      // JinaProvider.test.ts pins the no-Authorization-header behaviour for
+      // both paths. Do not "fix" this back to resolveApiKey() on sync.
       apiKey: this.resolveApiKey(false),
       query: normalizedQuery,
       maxResults: config.maxResults,
