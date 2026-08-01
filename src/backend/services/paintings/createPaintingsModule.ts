@@ -9,7 +9,7 @@ import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import type {
   PaintingGenerationInput,
   PaintingGenerationResult,
-  PaintingGenerationSession,
+  PaintingGenerationSession as PaintingGenerationSessionContract,
   PaintingsModule,
   ResolvedPaintingFiles,
 } from '@/shared/contracts';
@@ -56,7 +56,7 @@ export type PaintingsModuleDependencies = {
 
 export function createPaintingsModule(dependencies: PaintingsModuleDependencies): PaintingsModule {
   return {
-    createGenerationSession: () => new PaintingGenerationSessionImpl(dependencies),
+    createGenerationSession: () => new PaintingGenerationSession(dependencies),
     resolveFiles: async (painting: Painting): Promise<ResolvedPaintingFiles> => {
       const [inputs, outputs] = await Promise.all([
         resolveFileEntries(dependencies.files, painting.files.input),
@@ -72,7 +72,7 @@ type IncompleteReceipt = {
   signature: string;
 };
 
-class PaintingGenerationSessionImpl implements PaintingGenerationSession {
+class PaintingGenerationSession implements PaintingGenerationSessionContract {
   private activeController: AbortController | undefined;
   private disposed = false;
   private incompleteReceipt: IncompleteReceipt | undefined;
