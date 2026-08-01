@@ -41,7 +41,6 @@ import {
   hasUnresumedToolApproval,
 } from './chatSessionMessages';
 import { MessageRuntimeTimingCollector } from './MessageRuntimeTimingCollector';
-import { normalizeAssistantMessageCitations } from './normalizeCitations';
 import { extractMainText, maybeRenameTopicFromConversationSummary } from './topicNaming';
 
 type ActiveTurn = {
@@ -803,10 +802,7 @@ export class ChatSessionImpl implements ChatSession {
     latestAssistantMessage?: CherryUIMessage;
     runtimeStats: MessageRuntimeStatsInput;
   }): Promise<Message> {
-    const normalizedMessage = input.latestAssistantMessage
-      ? normalizeAssistantMessageCitations(input.latestAssistantMessage)
-      : undefined;
-    const parts = (normalizedMessage?.parts ??
+    const parts = (input.latestAssistantMessage?.parts ??
       input.assistantMessage.data.parts ??
       []) as CherryMessagePart[];
     return await this.dependencies.services.message.finalizeAssistantMessage(

@@ -165,7 +165,7 @@ describe('ChatSessionImpl', () => {
     );
   });
 
-  test('normalizes source-url citations into text part references on successful persistence', async () => {
+  test('persists source-url citations exactly as streamed', async () => {
     const services = createServices();
     const runtime = createRuntime({ services });
     const assistantChunk = {
@@ -189,31 +189,12 @@ describe('ChatSessionImpl', () => {
       topicId: 'topic-1',
     });
 
+    // No persist-time citation projection: the renderer reads source-url parts
+    // directly, so rewriting them here only added metadata nothing consumed.
     expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
       'assistant-1',
       expect.objectContaining({
-        data: {
-          parts: [
-            expect.objectContaining({
-              type: 'text',
-              providerMetadata: {
-                cherry: {
-                  references: [
-                    expect.objectContaining({
-                      category: 'citation',
-                      citationType: 'web',
-                      content: {
-                        source: 'ai-sdk',
-                        results: [{ number: 1, url: 'https://source1.test', title: 'Source 1' }],
-                      },
-                    }),
-                  ],
-                },
-              },
-            }),
-            assistantChunk.parts[1],
-          ],
-        },
+        data: { parts: assistantChunk.parts },
         status: 'success',
       }),
     );
