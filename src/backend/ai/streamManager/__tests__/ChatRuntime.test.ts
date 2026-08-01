@@ -10,11 +10,11 @@ import type {
 } from '@cherrystudio/universal/data/types/message';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 
-import { NEW_CHAT_SESSION_TOPIC_ID } from '@/shared/contracts';
+import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import type { ChatSessionServices, ChatStreamRequest } from '../ChatSessionDependencies';
-import { ChatSessionImpl } from '../ChatSessionImpl';
+import { ChatRuntime } from '../ChatRuntime';
+import type { ChatRuntimeServices, ChatStreamRequest } from '../ChatRuntimeDependencies';
 
 const mockReadUIMessageStream = jest.fn();
 const mockPrepareMessageParts = jest.fn(
@@ -27,7 +27,7 @@ const mockPrepareMessageParts = jest.fn(
 );
 const mockDiscardPreparedFiles = jest.fn();
 
-describe('ChatSessionImpl', () => {
+describe('ChatRuntime', () => {
   beforeEach(() => {
     mockReadUIMessageStream.mockReset();
     mockPrepareMessageParts.mockClear();
@@ -591,9 +591,7 @@ describe('ChatSessionImpl', () => {
       selectedModelId: 'provider::model' as UniqueModelId,
       text: 'first topic',
     });
-    await waitUntil(
-      () => runtime.getTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID).status === 'streaming',
-    );
+    await waitUntil(() => runtime.getTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY).status === 'streaming');
 
     // The first reply is still streaming, which leaves `newTopicHandoffTopicId`
     // set — the assistant detail screen's "start chat" must still be able to
@@ -846,10 +844,8 @@ describe('ChatSessionImpl', () => {
       text: 'first',
     });
 
-    await waitUntil(
-      () => runtime.getTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID).status === 'streaming',
-    );
-    expect(runtime.getTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID)).toEqual(
+    await waitUntil(() => runtime.getTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY).status === 'streaming');
+    expect(runtime.getTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY)).toEqual(
       expect.objectContaining({
         hasHistoryBeforePendingTurn: false,
         overlayMessage: expect.objectContaining({ id: 'assistant-1' }),
@@ -857,15 +853,15 @@ describe('ChatSessionImpl', () => {
       }),
     );
 
-    runtime.abort(NEW_CHAT_SESSION_TOPIC_ID);
-    expect(runtime.getTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID).status).toBe('aborting');
+    runtime.abort(NEW_TOPIC_SNAPSHOT_KEY);
+    expect(runtime.getTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY).status).toBe('aborting');
     expect(
       (services.ai.streamText as jest.Mock).mock.calls[0][0].requestOptions.signal.aborted,
     ).toBe(true);
 
     streamDeferred.resolve(new ReadableStream());
     await sendPromise;
-    expect(runtime.getTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID).status).toBe('idle');
+    expect(runtime.getTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY).status).toBe('idle');
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
@@ -1577,13 +1573,13 @@ describe('ChatSessionImpl', () => {
     });
 
     await waitUntil(() => invalidateTopics.callCount > 0);
-    runtime.abort(NEW_CHAT_SESSION_TOPIC_ID);
+    runtime.abort(NEW_TOPIC_SNAPSHOT_KEY);
     invalidateTopics.resolve();
     await sendPromise;
 
     expect(openTopic).not.toHaveBeenCalled();
     expect(services.message.createUserMessageWithPlaceholders).not.toHaveBeenCalled();
-    expect(runtime.getTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID).status).toBe('idle');
+    expect(runtime.getTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY).status).toBe('idle');
   });
 });
 
@@ -1678,16 +1674,16 @@ function createRuntime(input: {
   invalidateTopicMessages?: (topicId: string) => Promise<void>;
   invalidateTopics?: () => Promise<void>;
   openTopic?: (topicId: string) => void;
-  services: ChatSessionServices;
+  services: ChatRuntimeServices;
 }) {
-  const session = new ChatSessionImpl({
+  const runtime = new ChatRuntime({
     files: {
       discard: (...args) => mockDiscardPreparedFiles(...args),
       prepareParts: (parts) => mockPrepareMessageParts(parts),
     },
     services: input.services,
   });
-  session.subscribe(async (event) => {
+  runtime.subscribe(async (event) => {
     switch (event.type) {
       case 'invalidate-topic-messages':
         await input.invalidateTopicMessages?.(event.topicId);
@@ -1702,7 +1698,7 @@ function createRuntime(input: {
         break;
     }
   });
-  return session;
+  return runtime;
 }
 
 function createServices() {
@@ -1712,7 +1708,7 @@ function createServices() {
   const finalizeAssistantMessage = jest.fn(
     async (
       _id: string,
-      input: Parameters<ChatSessionServices['message']['finalizeAssistantMessage']>[1],
+      input: Parameters<ChatRuntimeServices['message']['finalizeAssistantMessage']>[1],
     ) => ({
       ...assistantMessage,
       data: input.data,
@@ -1766,7 +1762,7 @@ function createServices() {
       getById: jest.fn(async () => createTopic()),
       update: jest.fn(async () => createTopic()),
     },
-  } as unknown as ChatSessionServices;
+  } as unknown as ChatRuntimeServices;
 }
 
 function createTopic(patch: Partial<ReturnType<typeof createTopicBase>> = {}) {

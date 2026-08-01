@@ -24,7 +24,7 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
   const cacheService = new CacheService();
   const dbService = new DbService();
   const services = createBackendServices(dbService, cacheService);
-  const { backend, dataApiDependencies } = createBackend(services);
+  const { backend, dataApiDependencies, dispose: disposeBackend } = createBackend(services);
   const dataApi = new DataApiService(
     createDataApiHandlers({
       agentChannels: services.agentChannel,
@@ -65,6 +65,7 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
     dataApi,
     preference: services.preference,
     dispose: () => {
+      disposeBackend();
       services.mcpRuntime.dispose();
       services.webSearch.dispose();
       services.cache.dispose();

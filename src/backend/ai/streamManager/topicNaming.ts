@@ -19,7 +19,7 @@ import {
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import type { ChatSessionServices } from './ChatSessionDependencies';
+import type { ChatRuntimeServices } from './ChatRuntimeDependencies';
 
 const logger = loggerService.withContext('topicNaming');
 
@@ -47,8 +47,8 @@ export function extractMainText(parts: readonly CherryMessagePart[]): string {
     .join('\n\n');
 }
 
-type TopicNamingServices = Pick<ChatSessionServices, 'ai' | 'model' | 'preference' | 'topic'> & {
-  provider?: Pick<ChatSessionServices['provider'], 'getByProviderId'>;
+type TopicNamingServices = Pick<ChatRuntimeServices, 'ai' | 'model' | 'preference' | 'topic'> & {
+  provider?: Pick<ChatRuntimeServices['provider'], 'getByProviderId'>;
 };
 
 function canAutoRenameTopicName(name: string | null | undefined, userText: string): boolean {

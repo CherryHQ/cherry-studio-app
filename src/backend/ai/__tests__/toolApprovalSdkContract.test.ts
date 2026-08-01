@@ -2,7 +2,7 @@
  * Canaries for the AI SDK behaviours our MCP tool-approval flow rides on.
  *
  * The flow in `packages/universal/src/ai/transport/toolApprovals.ts`,
- * `src/frontend/features/chat/session/chatSessionProjection.ts` and `McpRuntimeService`
+ * `src/frontend/features/chat/runtime/chatRuntimeProjection.ts` and `McpRuntimeService`
  * owns no approval machinery of its own — it steers the SDK's. So the rules it
  * depends on are invisible in our source, and an `ai` upgrade that changes any
  * of them would surface as a provider 400 on a poisoned conversation branch
@@ -132,7 +132,7 @@ describe('streamText tool-approval gate', () => {
     expect(streamParts).toContainEqual(
       expect.objectContaining({ approvalId: expect.any(String), type: 'tool-approval-request' }),
     );
-    // The step ends cleanly on `tool-calls`, which is what lets ChatSession
+    // The step ends cleanly on `tool-calls`, which is what lets ChatRuntime
     // settle the message into `paused` instead of treating it as an abort.
     expect(await result.finishReason).toBe('tool-calls');
   });
@@ -203,7 +203,7 @@ describe('streamText tool-approval gate', () => {
     });
 
     // Resume writes into the same assistant message, so the reader is seeded
-    // with it — that is also how ChatSession continues a paused message.
+    // with it — that is also how ChatRuntime continues a paused message.
     const message = await readLastUIMessage(result.toUIMessageStream(), priorMessage);
 
     expect(execute).not.toHaveBeenCalled();

@@ -6,47 +6,36 @@ import {
   use,
   useCallback,
   useEffect,
-  useMemo,
   useState,
   useSyncExternalStore,
 } from 'react';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { getMessagesQueryKey } from '@/frontend/hooks/chat/utils/messageQueryOptions';
-import type {
-  ChatSendNewTopicTextInput,
-  ChatSession,
-  ChatSessionTopicSnapshot,
-} from '@/shared/contracts';
-import { NEW_CHAT_SESSION_TOPIC_ID } from '@/shared/contracts';
+import type { ChatModule, ChatSendNewTopicTextInput, ChatTopicSnapshot } from '@/shared/contracts';
+import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 
-type ChatSessionContextValue = {
-  session: ChatSession;
-};
-
-type ChatSessionTopicValue = ChatSessionTopicSnapshot & {
+type ChatTopicValue = ChatTopicSnapshot & {
   abort: () => void;
   isBusy: boolean;
   sendText: (input: ChatSendNewTopicTextInput) => Promise<void>;
 };
 
-const ChatSessionContext = createContext<ChatSessionContextValue | null>(null);
+const ChatContext = createContext<ChatModule | null>(null);
 
-export function ChatSessionProvider({ children }: PropsWithChildren) {
+export function ChatProvider({ children }: PropsWithChildren) {
   const chat = useBackendModule('chat');
   const queryClient = useQueryClient();
   const pathname = usePathname();
   const router = useRouter();
-  const [navigation] = useState(() => createChatSessionNavigation({ pathname, router }));
-  const [session] = useState(() => chat.createSession());
-  const contextValue = useMemo(() => ({ session }), [session]);
+  const [navigation] = useState(() => createChatNavigation({ pathname, router }));
 
   useEffect(() => {
     navigation.update({ pathname, router });
   }, [navigation, pathname, router]);
   useEffect(
     () =>
-      session.subscribe(async (event) => {
+      chat.subscribe(async (event) => {
         switch (event.type) {
           case 'invalidate-topic-messages':
             await queryClient.invalidateQueries({ queryKey: getMessagesQueryKey(event.topicId) });
@@ -61,17 +50,13 @@ export function ChatSessionProvider({ children }: PropsWithChildren) {
             break;
         }
       }),
-    [navigation, queryClient, session],
+    [chat, navigation, queryClient],
   );
-  useEffect(() => () => session.dispose(), [session]);
 
-  return <ChatSessionContext value={contextValue}>{children}</ChatSessionContext>;
+  return <ChatContext value={chat}>{children}</ChatContext>;
 }
 
-function createChatSessionNavigation(input: {
-  pathname: string;
-  router: ReturnType<typeof useRouter>;
-}) {
+function createChatNavigation(input: { pathname: string; router: ReturnType<typeof useRouter> }) {
   let navigation = input;
 
   return {
@@ -92,43 +77,43 @@ function createChatSessionNavigation(input: {
   };
 }
 
-export function useChatSession() {
-  const context = use(ChatSessionContext);
+export function useChat() {
+  const context = use(ChatContext);
 
   if (!context) {
-    throw new Error('useChatSession must be used within ChatSessionProvider');
+    throw new Error('useChat must be used within ChatProvider');
   }
 
-  return context.session;
+  return context;
 }
 
-export function useChatSessionTopic(topicId?: string): ChatSessionTopicValue {
-  const session = useChatSession();
-  const sessionTopicId = topicId ?? NEW_CHAT_SESSION_TOPIC_ID;
+export function useChatTopic(topicId?: string): ChatTopicValue {
+  const chat = useChat();
+  const runtimeTopicId = topicId ?? NEW_TOPIC_SNAPSHOT_KEY;
   const subscribe = useCallback(
     (listener: () => void) =>
-      session.subscribe((event) => {
-        if (event.type === 'snapshot-changed') {
+      chat.subscribe((event) => {
+        if (event.type === 'snapshot-changed' && event.topicId === runtimeTopicId) {
           listener();
         }
       }),
-    [session],
+    [chat, runtimeTopicId],
   );
   const snapshot = useSyncExternalStore(
     subscribe,
-    () => session.getTopicSnapshot(sessionTopicId),
-    () => session.getTopicSnapshot(sessionTopicId),
+    () => chat.getTopicSnapshot(runtimeTopicId),
+    () => chat.getTopicSnapshot(runtimeTopicId),
   );
-  const abort = useCallback(() => session.abort(sessionTopicId), [session, sessionTopicId]);
+  const abort = useCallback(() => chat.abort(runtimeTopicId), [chat, runtimeTopicId]);
   const sendText = useCallback(
     (input: ChatSendNewTopicTextInput) => {
       if (!topicId) {
-        return session.sendNewTopicText(input);
+        return chat.sendNewTopicText(input);
       }
 
-      return session.sendText({ ...input, topicId });
+      return chat.sendText({ ...input, topicId });
     },
-    [session, topicId],
+    [chat, topicId],
   );
   const isBusy =
     snapshot.status === 'aborting' ||

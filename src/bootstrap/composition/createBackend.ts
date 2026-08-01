@@ -2,7 +2,7 @@ import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { readUIMessageStream, type UIMessageChunk } from 'ai';
 
-import { ChatService } from '@/backend/ai/streamManager/ChatService';
+import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import {
   discardPreparedFiles,
   imageUriToDataUrl,
@@ -40,6 +40,7 @@ export type BackendComposition = {
     paintings: PaintingsService;
     providers: ProvidersService;
   };
+  dispose(): void;
 };
 
 export function createBackend(services: BackendServices): BackendComposition {
@@ -61,7 +62,7 @@ export function createBackend(services: BackendServices): BackendComposition {
       hasToken: (providerId) => oauth.hasToken(providerId),
     },
   });
-  const chat = new ChatService({
+  const chat = new ChatRuntime({
     files: {
       discard: discardPreparedFiles,
       prepareParts: prepareMessageParts,
@@ -202,6 +203,7 @@ export function createBackend(services: BackendServices): BackendComposition {
       paintings,
       providers,
     },
+    dispose: () => chat.dispose(),
   };
 }
 

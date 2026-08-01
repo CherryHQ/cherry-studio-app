@@ -19,16 +19,16 @@ import { isToolUIPart } from 'ai';
 import type {
   ChatSendNewTopicTextInput,
   ChatSendTextInput,
-  ChatSession,
-  ChatSessionListener,
-  ChatSessionTopicSnapshot,
+  ChatListener,
+  ChatModule,
+  ChatTopicSnapshot,
   ChatToolApprovalInput,
 } from '@/shared/contracts';
-import { NEW_CHAT_SESSION_TOPIC_ID } from '@/shared/contracts';
+import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { serializeError } from '../utils/serializeError';
-import type { ChatSessionDependencies } from './ChatSessionDependencies';
+import type { ChatRuntimeDependencies } from './ChatRuntimeDependencies';
 import {
   applyStreamingMessage,
   dropEmptyContentParts,
@@ -36,7 +36,7 @@ import {
   finalizeTurnToolApprovals,
   hasPendingToolApproval,
   hasUnresumedToolApproval,
-} from './chatSessionMessages';
+} from './chatRuntimeMessages';
 import { MessageRuntimeTimingCollector } from './MessageRuntimeTimingCollector';
 import { extractMainText, maybeRenameTopicFromConversationSummary } from './topicNaming';
 
@@ -44,8 +44,8 @@ type ActiveTurn = {
   abortController: AbortController;
 };
 
-const idleTopicSnapshot: ChatSessionTopicSnapshot = Object.freeze({ status: 'idle' });
-const logger = loggerService.withContext('ChatSession');
+const idleTopicSnapshot: ChatTopicSnapshot = Object.freeze({ status: 'idle' });
+const logger = loggerService.withContext('ChatRuntime');
 
 /**
  * Fed back to the model as tool results (via `convertToModelMessages`), never
@@ -53,15 +53,15 @@ const logger = loggerService.withContext('ChatSession');
  */
 const interruptedTurnApprovalReason = 'The turn ended before this tool call completed.';
 
-export class ChatSessionImpl implements ChatSession {
+export class ChatRuntime implements ChatModule {
   private activeTurns = new Map<string, ActiveTurn>();
-  private listeners = new Set<ChatSessionListener>();
+  private listeners = new Set<ChatListener>();
   private newTopicHandoffTopicId: string | undefined;
-  private topicSnapshots = new Map<string, ChatSessionTopicSnapshot>();
+  private topicSnapshots = new Map<string, ChatTopicSnapshot>();
 
-  constructor(private readonly dependencies: ChatSessionDependencies) {}
+  constructor(private readonly dependencies: ChatRuntimeDependencies) {}
 
-  subscribe = (listener: ChatSessionListener) => {
+  subscribe = (listener: ChatListener) => {
     this.listeners.add(listener);
 
     return () => {
@@ -69,7 +69,7 @@ export class ChatSessionImpl implements ChatSession {
     };
   };
 
-  getTopicSnapshot(topicId: string): ChatSessionTopicSnapshot {
+  getTopicSnapshot(topicId: string): ChatTopicSnapshot {
     const runtimeTopicId = this.resolveRuntimeTopicId(topicId);
 
     if (runtimeTopicId !== topicId) {
@@ -102,7 +102,7 @@ export class ChatSessionImpl implements ChatSession {
 
     this.activeTurns.clear();
     this.newTopicHandoffTopicId = undefined;
-    this.setTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID, idleTopicSnapshot);
+    this.setTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY, idleTopicSnapshot);
     this.listeners.clear();
   }
 
@@ -160,7 +160,7 @@ export class ChatSessionImpl implements ChatSession {
     // snapshot onto this screen, so treating it as a mutex rejects a legitimate
     // send: the assistant detail screen's "start chat" lets the user open
     // another new topic while the previous reply is still streaming.
-    if (this.activeTurns.has(NEW_CHAT_SESSION_TOPIC_ID)) {
+    if (this.activeTurns.has(NEW_TOPIC_SNAPSHOT_KEY)) {
       // This rejection surfaces as a bare "message was not sent" toast, so it
       // has to leave a trace of its own.
       logger.warn('Rejected a new-topic send: the previous new topic is still being created');
@@ -172,8 +172,8 @@ export class ChatSessionImpl implements ChatSession {
     this.newTopicHandoffTopicId = undefined;
     const abortController = new AbortController();
     const activeTurn: ActiveTurn = { abortController };
-    this.activeTurns.set(NEW_CHAT_SESSION_TOPIC_ID, activeTurn);
-    this.setTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID, { status: 'reserving' });
+    this.activeTurns.set(NEW_TOPIC_SNAPSHOT_KEY, activeTurn);
+    this.setTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY, { status: 'reserving' });
 
     let createdTopicId: string | undefined;
 
@@ -191,7 +191,7 @@ export class ChatSessionImpl implements ChatSession {
       createdTopicId = topic.id;
       throwIfAborted(abortController.signal);
 
-      this.activeTurns.delete(NEW_CHAT_SESSION_TOPIC_ID);
+      this.activeTurns.delete(NEW_TOPIC_SNAPSHOT_KEY);
       this.newTopicHandoffTopicId = topic.id;
       this.activeTurns.set(topic.id, activeTurn);
       this.setTurnSnapshot(topic.id, { status: 'reserving' });
@@ -208,7 +208,7 @@ export class ChatSessionImpl implements ChatSession {
         topic,
       });
     } catch (error) {
-      this.activeTurns.delete(NEW_CHAT_SESSION_TOPIC_ID);
+      this.activeTurns.delete(NEW_TOPIC_SNAPSHOT_KEY);
       if (createdTopicId) {
         this.activeTurns.delete(createdTopicId);
         await this.invalidateTopicMessagesSafely(createdTopicId);
@@ -217,7 +217,7 @@ export class ChatSessionImpl implements ChatSession {
       if (createdTopicId && this.newTopicHandoffTopicId === createdTopicId) {
         this.newTopicHandoffTopicId = undefined;
       }
-      this.setTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID, idleTopicSnapshot);
+      this.setTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY, idleTopicSnapshot);
 
       if (!abortController.signal.aborted) {
         logger.warn('New topic chat stream failed before reservation', toError(error));
@@ -534,7 +534,7 @@ export class ChatSessionImpl implements ChatSession {
    */
   private async releaseTurn(input: {
     activeTurn: ActiveTurn;
-    terminalSnapshot?: ChatSessionTopicSnapshot;
+    terminalSnapshot?: ChatTopicSnapshot;
     topicId: string;
   }): Promise<void> {
     const { activeTurn, topicId } = input;
@@ -544,7 +544,7 @@ export class ChatSessionImpl implements ChatSession {
     }
     if (this.newTopicHandoffTopicId === topicId) {
       this.newTopicHandoffTopicId = undefined;
-      this.setTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID, idleTopicSnapshot);
+      this.setTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY, idleTopicSnapshot);
     }
     if (input.terminalSnapshot) {
       this.setTurnSnapshot(topicId, input.terminalSnapshot);
@@ -715,21 +715,21 @@ export class ChatSessionImpl implements ChatSession {
     }
   }
 
-  private emit(event: Parameters<ChatSessionListener>[0]): void {
+  private emit(event: Parameters<ChatListener>[0]): void {
     for (const listener of this.listeners) {
       // One bad subscriber must not take the notification — or the teardown
       // that is often driving it — down with it.
       try {
         void Promise.resolve(listener(event)).catch((error) => {
-          logger.error('Chat session listener failed', toError(error));
+          logger.error('Chat runtime listener failed', toError(error));
         });
       } catch (error) {
-        logger.error('Chat session listener failed', toError(error));
+        logger.error('Chat runtime listener failed', toError(error));
       }
     }
   }
 
-  private async emitAndWait(event: Parameters<ChatSessionListener>[0]): Promise<void> {
+  private async emitAndWait(event: Parameters<ChatListener>[0]): Promise<void> {
     await Promise.all([...this.listeners].map((listener) => listener(event)));
   }
 
@@ -849,18 +849,18 @@ export class ChatSessionImpl implements ChatSession {
   }
 
   private resolveRuntimeTopicId(topicId: string): string {
-    if (topicId === NEW_CHAT_SESSION_TOPIC_ID && this.newTopicHandoffTopicId) {
+    if (topicId === NEW_TOPIC_SNAPSHOT_KEY && this.newTopicHandoffTopicId) {
       return this.newTopicHandoffTopicId;
     }
 
     return topicId;
   }
 
-  private setTurnSnapshot(topicId: string, snapshot: ChatSessionTopicSnapshot): void {
+  private setTurnSnapshot(topicId: string, snapshot: ChatTopicSnapshot): void {
     this.setTopicSnapshot(topicId, snapshot);
 
     if (this.newTopicHandoffTopicId === topicId) {
-      this.setTopicSnapshot(NEW_CHAT_SESSION_TOPIC_ID, snapshot);
+      this.setTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY, snapshot);
     }
   }
 
@@ -903,7 +903,7 @@ export class ChatSessionImpl implements ChatSession {
     return defaultModelId;
   }
 
-  private setTopicSnapshot(topicId: string, snapshot: ChatSessionTopicSnapshot): void {
+  private setTopicSnapshot(topicId: string, snapshot: ChatTopicSnapshot): void {
     if (
       snapshot.status === 'idle' &&
       !snapshot.overlayMessage &&

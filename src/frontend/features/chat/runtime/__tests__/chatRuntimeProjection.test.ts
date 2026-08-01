@@ -1,6 +1,6 @@
 import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
 
-import { getPendingToolApprovals, mergeMessagesWithOverlay } from '../chatSessionProjection';
+import { getPendingToolApprovals, mergeMessagesWithOverlay } from '../chatRuntimeProjection';
 
 describe('chat runtime message projection', () => {
   it('replaces or appends the live overlay', () => {

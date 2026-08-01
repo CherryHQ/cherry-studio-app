@@ -2,21 +2,16 @@ import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/ty
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
-export const NEW_CHAT_SESSION_TOPIC_ID = '__new_topic__';
+export const NEW_TOPIC_SNAPSHOT_KEY = '__new_topic__';
 
-export type ChatSessionTopicStatus =
-  | 'aborting'
-  | 'awaiting-approval'
-  | 'idle'
-  | 'reserving'
-  | 'streaming';
+export type ChatTopicStatus = 'aborting' | 'awaiting-approval' | 'idle' | 'reserving' | 'streaming';
 
-export type ChatSessionTopicSnapshot = {
+export type ChatTopicSnapshot = {
   error?: Error;
   hasHistoryBeforePendingTurn?: boolean;
   overlayMessage?: Message;
   pendingUserMessage?: Message;
-  status: ChatSessionTopicStatus;
+  status: ChatTopicStatus;
 };
 
 export type ChatSendTextInput = {
@@ -39,24 +34,19 @@ export type ChatToolApprovalInput = {
   updatedInput?: Record<string, unknown>;
 };
 
-export type ChatSessionEvent =
+export type ChatEvent =
   | { topicId: string; type: 'invalidate-topic-messages' }
   | { type: 'invalidate-topics' }
   | { topicId: string; type: 'open-topic' }
   | { topicId: string; type: 'snapshot-changed' };
 
-export type ChatSessionListener = (event: ChatSessionEvent) => Promise<void> | void;
+export type ChatListener = (event: ChatEvent) => Promise<void> | void;
 
-export interface ChatSession {
+export interface ChatModule {
   abort(topicId: string): void;
-  dispose(): void;
-  getTopicSnapshot(topicId: string): ChatSessionTopicSnapshot;
+  getTopicSnapshot(topicId: string): ChatTopicSnapshot;
   respondToolApproval(input: ChatToolApprovalInput): Promise<void>;
   sendNewTopicText(input: ChatSendNewTopicTextInput): Promise<void>;
   sendText(input: ChatSendTextInput): Promise<void>;
-  subscribe(listener: ChatSessionListener): () => void;
-}
-
-export interface ChatModule {
-  createSession(): ChatSession;
+  subscribe(listener: ChatListener): () => void;
 }

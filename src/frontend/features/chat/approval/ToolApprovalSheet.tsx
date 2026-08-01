@@ -6,7 +6,7 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/frontend/components/bottomSheet';
 
-import type { PendingToolApproval } from '../session/chatSessionProjection';
+import type { PendingToolApproval } from '../runtime/chatRuntimeProjection';
 import { getBuiltInToolPresentation } from '../utils/builtInToolPresentation';
 
 const ignoreClose = () => undefined;

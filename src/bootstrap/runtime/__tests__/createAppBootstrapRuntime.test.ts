@@ -24,9 +24,11 @@ const mockServices = {
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
 const mockRunPostReadyTasks = jest.fn(async (_services: unknown) => undefined);
 const mockCreateBackendServices = jest.fn((_db: unknown, _cache: unknown) => mockServices);
+const mockDisposeBackend = jest.fn();
 const mockCreateBackend = jest.fn((_services: unknown) => ({
   backend: mockBackend,
   dataApiDependencies: mockDataApiDependencies,
+  dispose: mockDisposeBackend,
 }));
 
 jest.mock('@/backend/data/CacheService', () => ({
@@ -82,6 +84,7 @@ describe('createAppBootstrapRuntime', () => {
 
     runtime.dispose();
 
+    expect(mockDisposeBackend).toHaveBeenCalledTimes(1);
     expect(mockMcpRuntime.dispose).toHaveBeenCalledTimes(1);
     expect(mockWebSearch.dispose).toHaveBeenCalledTimes(1);
     expect(mockCache.dispose).toHaveBeenCalledTimes(1);

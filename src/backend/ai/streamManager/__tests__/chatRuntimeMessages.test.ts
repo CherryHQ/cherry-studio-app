@@ -6,7 +6,7 @@ import {
   finalizeInterruptedParts,
   finalizeTurnToolApprovals,
   hasPendingToolApproval,
-} from '../chatSessionMessages';
+} from '../chatRuntimeMessages';
 
 describe('tool approvals', () => {
   const requested = (approvalId: string, toolName = 'search'): CherryMessagePart =>

@@ -45,7 +45,7 @@ type CreateTurnInput = {
   userMessage: { dto: CreateMessageDto; mode: 'create' };
 };
 
-export type ChatSessionServices = {
+export type ChatRuntimeServices = {
   ai: {
     generateText(input: {
       assistantId?: string;
@@ -110,12 +110,12 @@ export type ChatSessionServices = {
   };
 };
 
-export type ChatSessionDependencies = {
+export type ChatRuntimeDependencies = {
   files: {
     discard(files: readonly PreparedInternalFile[]): void;
     prepareParts(
       parts: readonly CherryMessagePart[],
     ): Promise<{ files: PreparedInternalFile[]; parts: CherryMessagePart[] }>;
   };
-  services: ChatSessionServices;
+  services: ChatRuntimeServices;
 };
