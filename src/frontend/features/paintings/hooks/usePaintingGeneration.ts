@@ -1,6 +1,6 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { useBackendModule } from '@/frontend/data';
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
@@ -33,7 +33,6 @@ export function usePaintingGeneration({
   const paintings = useBackendModule('paintings');
   const syncPaintingQueries = useSyncPaintingQueries();
   const [session] = useState(() => paintings.createGenerationSession());
-  const abortControllerRef = useRef<AbortController | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [outputs, setOutputs] = useState<PaintingOutput[]>(() => [...initialOutputs]);
   const [status, setStatus] = useState<PaintingGenerationStatus>('idle');
@@ -48,38 +47,29 @@ export function usePaintingGeneration({
       paramValues,
       prompt,
     }: PaintingGenerationInput): Promise<PaintingGenerationResult> => {
-      if (abortControllerRef.current) {
-        throw new Error('Painting generation is already in progress');
-      }
-
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
       setError(null);
       setStatus('generating');
 
       try {
-        const result = await session.generate(
-          {
-            images: attachments.flatMap((attachment) =>
-              attachment.kind === 'image'
-                ? [
-                    {
-                      fileEntryId: attachment.fileEntryId,
-                      id: attachment.id,
-                      mediaType: attachment.mediaType,
-                      name: attachment.name,
-                      uri: attachment.uri,
-                    },
-                  ]
-                : [],
-            ),
-            mode,
-            modelId,
-            paramValues,
-            prompt,
-          },
-          controller.signal,
-        );
+        const result = await session.generate({
+          images: attachments.flatMap((attachment) =>
+            attachment.kind === 'image'
+              ? [
+                  {
+                    fileEntryId: attachment.fileEntryId,
+                    id: attachment.id,
+                    mediaType: attachment.mediaType,
+                    name: attachment.name,
+                    uri: attachment.uri,
+                  },
+                ]
+              : [],
+          ),
+          mode,
+          modelId,
+          paramValues,
+          prompt,
+        });
         setOutputs(result.outputs);
         setStatus('revealing');
         await syncPaintingQueries(result.painting);
@@ -90,18 +80,12 @@ export function usePaintingGeneration({
         setError(normalized);
         setStatus('idle');
         throw normalized;
-      } finally {
-        if (abortControllerRef.current === controller) {
-          abortControllerRef.current = null;
-        }
       }
     },
     [session, syncPaintingQueries],
   );
 
-  const cancel = useCallback(() => {
-    abortControllerRef.current?.abort(new Error('Painting generation cancelled'));
-  }, []);
+  const cancel = useCallback(() => session.cancel(), [session]);
   const finishReveal = useCallback(() => setStatus('idle'), []);
 
   return {

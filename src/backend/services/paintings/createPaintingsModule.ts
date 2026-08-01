@@ -73,30 +73,37 @@ type IncompleteReceipt = {
 };
 
 class PaintingGenerationSessionImpl implements PaintingGenerationSession {
+  private activeController: AbortController | undefined;
   private disposed = false;
-  private generating = false;
   private incompleteReceipt: IncompleteReceipt | undefined;
 
   constructor(private readonly dependencies: PaintingsModuleDependencies) {}
 
+  cancel(): void {
+    this.activeController?.abort(new Error('Painting generation cancelled'));
+  }
+
   dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+
     this.disposed = true;
+    this.activeController?.abort(new Error('Painting generation session is disposed'));
     this.incompleteReceipt = undefined;
   }
 
-  async generate(
-    input: PaintingGenerationInput,
-    signal: AbortSignal,
-  ): Promise<PaintingGenerationResult> {
+  async generate(input: PaintingGenerationInput): Promise<PaintingGenerationResult> {
     if (this.disposed) {
       throw new Error('Painting generation session is disposed');
     }
-    if (this.generating) {
+    if (this.activeController) {
       throw new Error('Painting generation is already in progress');
     }
-    throwIfAborted(signal);
 
-    this.generating = true;
+    const controller = new AbortController();
+    const { signal } = controller;
+    this.activeController = controller;
     try {
       const prompt = input.prompt.trim();
       const signature = generationSignature({ ...input, prompt });
@@ -105,7 +112,10 @@ class PaintingGenerationSessionImpl implements PaintingGenerationSession {
 
       if (!receiptId) {
         receiptId = await this.createReceipt({ ...input, prompt }, signal);
-        this.incompleteReceipt = { id: receiptId, signature };
+        if (!this.disposed) {
+          this.incompleteReceipt = { id: receiptId, signature };
+        }
+        throwIfAborted(signal);
       }
 
       const inputImages = await Promise.all(
@@ -141,6 +151,7 @@ class PaintingGenerationSessionImpl implements PaintingGenerationSession {
       }
 
       const painting = await this.dependencies.paintings.replaceOutputs(receiptId, preparedOutputs);
+      throwIfAborted(signal);
       const persistedOutputIds = new Set(painting.files.output);
       const outputs = preparedOutputs.map((output) => {
         if (!persistedOutputIds.has(output.id)) {
@@ -152,7 +163,9 @@ class PaintingGenerationSessionImpl implements PaintingGenerationSession {
       this.incompleteReceipt = undefined;
       return { outputs, painting };
     } finally {
-      this.generating = false;
+      if (this.activeController === controller) {
+        this.activeController = undefined;
+      }
     }
   }
 

@@ -75,7 +75,7 @@ describe('createPaintingsModule', () => {
     const { backend, dependencies } = createSubject();
     const session = backend.createGenerationSession();
 
-    await expect(session.generate(generationInput, new AbortController().signal)).resolves.toEqual({
+    await expect(session.generate(generationInput)).resolves.toEqual({
       outputs: [{ fileEntryId: outputFileId, uri: 'file:///output.png' }],
       painting: painting('painting-1', [outputFileId]),
     });
@@ -98,10 +98,8 @@ describe('createPaintingsModule', () => {
       .mockResolvedValueOnce({ images: [{ base64: 'aW1hZ2U=', mediaType: 'image/png' }] });
     const session = backend.createGenerationSession();
 
-    await expect(session.generate(generationInput, new AbortController().signal)).rejects.toThrow(
-      'provider failed',
-    );
-    await session.generate(generationInput, new AbortController().signal);
+    await expect(session.generate(generationInput)).rejects.toThrow('provider failed');
+    await session.generate(generationInput);
 
     expect(dependencies.paintings.create).toHaveBeenCalledTimes(1);
   });
@@ -111,11 +109,122 @@ describe('createPaintingsModule', () => {
     jest.mocked(dependencies.paintings.create).mockRejectedValue(new Error('database failed'));
     const session = backend.createGenerationSession();
 
-    await expect(session.generate(generationInput, new AbortController().signal)).rejects.toThrow(
-      'database failed',
-    );
+    await expect(session.generate(generationInput)).rejects.toThrow('database failed');
     expect(dependencies.storage.discard).toHaveBeenCalledWith([
       expect.objectContaining({ id: inputFileId }),
     ]);
   });
+
+  it('cancels the active call and reuses its receipt for the same input', async () => {
+    const { backend, dependencies } = createSubject();
+    let observedSignal: AbortSignal | undefined;
+    jest
+      .mocked(dependencies.ai.generateImage)
+      .mockImplementationOnce(
+        ({ requestOptions }) =>
+          new Promise((_resolve, reject) => {
+            observedSignal = requestOptions.signal;
+            requestOptions.signal.addEventListener(
+              'abort',
+              () => reject(requestOptions.signal.reason),
+              {
+                once: true,
+              },
+            );
+          }),
+      )
+      .mockResolvedValueOnce({ images: [{ base64: 'aW1hZ2U=', mediaType: 'image/png' }] });
+    const session = backend.createGenerationSession();
+
+    const firstGeneration = session.generate(generationInput);
+    await waitUntil(() => observedSignal !== undefined);
+    await expect(session.generate(generationInput)).rejects.toThrow(
+      'Painting generation is already in progress',
+    );
+    session.cancel();
+
+    await expect(firstGeneration).rejects.toThrow('Painting generation cancelled');
+    expect(observedSignal?.aborted).toBe(true);
+    await session.generate(generationInput);
+    expect(dependencies.paintings.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps incomplete receipts isolated between sessions', async () => {
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.ai.generateImage).mockRejectedValue(new Error('provider failed'));
+    const firstSession = backend.createGenerationSession();
+    const secondSession = backend.createGenerationSession();
+
+    await expect(firstSession.generate(generationInput)).rejects.toThrow('provider failed');
+    await expect(secondSession.generate(generationInput)).rejects.toThrow('provider failed');
+
+    expect(dependencies.paintings.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('aborts on dispose and permanently rejects later generation', async () => {
+    const { backend, dependencies } = createSubject();
+    let observedSignal: AbortSignal | undefined;
+    jest.mocked(dependencies.ai.generateImage).mockImplementationOnce(
+      ({ requestOptions }) =>
+        new Promise((_resolve, reject) => {
+          observedSignal = requestOptions.signal;
+          requestOptions.signal.addEventListener(
+            'abort',
+            () => reject(requestOptions.signal.reason),
+            {
+              once: true,
+            },
+          );
+        }),
+    );
+    const session = backend.createGenerationSession();
+
+    const generation = session.generate(generationInput);
+    await waitUntil(() => observedSignal !== undefined);
+    session.dispose();
+
+    await expect(generation).rejects.toThrow('Painting generation session is disposed');
+    expect(observedSignal?.aborted).toBe(true);
+    await expect(session.generate(generationInput)).rejects.toThrow(
+      'Painting generation session is disposed',
+    );
+  });
+
+  it('does not revive a disposed session when receipt creation settles late', async () => {
+    const { backend, dependencies } = createSubject();
+    const receipt = createDeferred<Painting>();
+    jest.mocked(dependencies.paintings.create).mockReturnValueOnce(receipt.promise);
+    const session = backend.createGenerationSession();
+
+    const generation = session.generate(generationInput);
+    await waitUntil(() => jest.mocked(dependencies.paintings.create).mock.calls.length === 1);
+    session.dispose();
+    receipt.resolve(painting('painting-late'));
+
+    await expect(generation).rejects.toThrow('Painting generation session is disposed');
+    expect(dependencies.ai.generateImage).not.toHaveBeenCalled();
+    await expect(session.generate(generationInput)).rejects.toThrow(
+      'Painting generation session is disposed',
+    );
+  });
 });
+
+function createDeferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+}
+
+async function waitUntil(predicate: () => boolean) {
+  for (let index = 0; index < 20; index += 1) {
+    if (predicate()) {
+      return;
+    }
+    await Promise.resolve();
+  }
+
+  throw new Error('Timed out waiting for condition');
+}

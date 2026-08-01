@@ -35,8 +35,9 @@ export type ResolvedPaintingFiles = {
 };
 
 export interface PaintingGenerationSession {
+  cancel(): void;
   dispose(): void;
-  generate(input: PaintingGenerationInput, signal: AbortSignal): Promise<PaintingGenerationResult>;
+  generate(input: PaintingGenerationInput): Promise<PaintingGenerationResult>;
 }
 
 export interface PaintingsModule {

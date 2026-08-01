@@ -25,8 +25,10 @@ const mockGenerate = jest.fn<
   ReturnType<PaintingGenerationSession['generate']>,
   Parameters<PaintingGenerationSession['generate']>
 >();
+const mockCancel = jest.fn();
 const mockDispose = jest.fn();
 const session: PaintingGenerationSession = {
+  cancel: mockCancel,
   dispose: mockDispose,
   generate: mockGenerate,
 };
@@ -93,24 +95,21 @@ describe('usePaintingGeneration', () => {
       result = await api?.generate(request);
     });
 
-    expect(mockGenerate).toHaveBeenCalledWith(
-      {
-        images: [
-          {
-            fileEntryId: request.attachments[0].fileEntryId,
-            id: 'draft-1',
-            mediaType: 'image/png',
-            name: 'input.png',
-            uri: 'file:///input.png',
-          },
-        ],
-        mode: 'generate',
-        modelId: 'provider::gpt-image-2',
-        paramValues: {},
-        prompt: 'draw a cherry',
-      },
-      expect.any(AbortSignal),
-    );
+    expect(mockGenerate).toHaveBeenCalledWith({
+      images: [
+        {
+          fileEntryId: request.attachments[0].fileEntryId,
+          id: 'draft-1',
+          mediaType: 'image/png',
+          name: 'input.png',
+          uri: 'file:///input.png',
+        },
+      ],
+      mode: 'generate',
+      modelId: 'provider::gpt-image-2',
+      paramValues: {},
+      prompt: 'draw a cherry',
+    });
     expect(result).toEqual({ outputs: [output], painting });
     expect(api?.outputs).toEqual([output]);
     expect(api?.status).toBe('revealing');
@@ -133,22 +132,29 @@ describe('usePaintingGeneration', () => {
     expect(mockGenerate).toHaveBeenCalledTimes(2);
   });
 
-  it('aborts the active backend call and disposes its session on unmount', async () => {
-    let observedSignal: AbortSignal | undefined;
-    mockGenerate.mockImplementationOnce((_input, signal) => {
-      observedSignal = signal;
-      return new Promise((_resolve, reject) => {
-        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-      });
+  it('cancels the active backend session and disposes it on unmount', async () => {
+    let rejectGeneration: (error: Error) => void = () => undefined;
+    mockGenerate.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectGeneration = reject;
+        }),
+    );
+    mockCancel.mockImplementationOnce(() => {
+      rejectGeneration(new Error('Painting generation cancelled'));
     });
 
-    const result = api?.generate(request).catch((error) => error);
+    let result: Promise<unknown> | undefined;
+    await act(async () => {
+      result = api?.generate(request).catch((error) => error);
+      await Promise.resolve();
+    });
     await act(async () => {
       api?.cancel();
       await result;
     });
 
-    expect(observedSignal?.aborted).toBe(true);
+    expect(mockCancel).toHaveBeenCalledTimes(1);
     expect(api?.error).toEqual(new Error('Painting generation cancelled'));
 
     await act(async () => renderer?.unmount());
