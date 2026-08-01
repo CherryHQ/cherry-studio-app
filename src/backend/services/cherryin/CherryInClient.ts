@@ -6,7 +6,7 @@ import { OAuthServiceError } from '@/shared/oauth';
 import type { OAuthProviderContext, OAuthTokenCredentials } from '@/shared/oauth';
 import { CHERRYIN_PROVIDER_ID, resolveCherryInContext } from '@/shared/oauth/providers/cherryin';
 
-const logger = loggerService.withContext('CherryInService');
+const logger = loggerService.withContext('CherryInClient');
 
 /** Conversion factor from quota units to balance/spend (1 unit = 500000 quota) */
 const QUOTA_TO_BALANCE_DIVISOR = 500000;
@@ -55,7 +55,7 @@ type CherryInOAuthRuntime = {
   hasToken(providerId: string): Promise<boolean>;
 };
 
-export type CherryInServiceDependencies = {
+export type CherryInClientDependencies = {
   oauth: CherryInOAuthRuntime;
 };
 
@@ -63,8 +63,8 @@ export type CherryInServiceDependencies = {
  * CherryIN's own REST surface (balance, profile). The OAuth session it rides on
  * belongs to `OAuthRuntimeService`; this only knows how to read an account.
  */
-export class CherryInService implements CherryInModule {
-  constructor(private readonly dependencies: CherryInServiceDependencies) {}
+export class CherryInClient implements CherryInModule {
+  constructor(private readonly dependencies: CherryInClientDependencies) {}
 
   async getBalance(requestedApiHost?: string): Promise<CherryInAccount | null> {
     // Validates the host against the allowlist and falls back to the primary one.

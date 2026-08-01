@@ -1,15 +1,15 @@
 import type { CherryInModule } from '@/shared/contracts';
 
-import { CherryInService, type CherryInServiceDependencies } from '../CherryInService';
+import { CherryInClient, type CherryInClientDependencies } from '../CherryInClient';
 
 function createSubject() {
-  const dependencies: CherryInServiceDependencies = {
+  const dependencies: CherryInClientDependencies = {
     oauth: {
       authenticatedFetch: jest.fn(async () => new Response()),
       hasToken: jest.fn(async () => true),
     },
   };
-  const backend: CherryInModule = new CherryInService(dependencies);
+  const backend: CherryInModule = new CherryInClient(dependencies);
 
   /** Answer each endpoint the balance path touches, in call order. */
   const respondWith = (responses: Record<string, unknown>) => {
@@ -32,7 +32,7 @@ function createSubject() {
 
 const balancePayload = { data: { quota: 1_000_000, used_quota: 500_000 }, success: true };
 
-describe('CherryInService', () => {
+describe('CherryInClient', () => {
   it('does not call the API without a stored OAuth session', async () => {
     const { backend, dependencies } = createSubject();
     jest.mocked(dependencies.oauth.hasToken).mockResolvedValue(false);

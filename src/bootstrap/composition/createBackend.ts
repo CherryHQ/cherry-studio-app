@@ -12,7 +12,7 @@ import {
 } from '@/backend/data/services/fileStorage';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
-import { CherryInService } from '@/backend/services/cherryin/CherryInService';
+import { CherryInClient } from '@/backend/services/cherryin/CherryInClient';
 import { createMcpModule, type McpServerMutations } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
@@ -52,7 +52,7 @@ export function createBackend(services: BackendServices): BackendComposition {
       update: (providerId, input) => services.provider.update(providerId, input),
     }),
   });
-  const cherryin = new CherryInService({
+  const cherryin = new CherryInClient({
     oauth: {
       authenticatedFetch: (providerId, buildRequest, doFetch, options) =>
         oauth.authenticatedFetch(providerId, buildRequest, doFetch, options),
