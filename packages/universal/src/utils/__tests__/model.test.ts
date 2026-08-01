@@ -36,7 +36,7 @@ describe('model reasoning support', () => {
     ]);
   });
 
-  test('uses model-id fallback for grok fast reasoning models with empty efforts', () => {
+  test("returns Grok's registry vocabulary without model-id inference", () => {
     const model = createModel('grok-4-fast-reasoning', {
       capabilities: [MODEL_CAPABILITY.REASONING],
       providerId: 'openrouter',

@@ -81,52 +81,19 @@ export const isGeminiModel = vendorCheck(VENDOR_PATTERNS.gemini);
 export const isGrokModel = vendorCheck(VENDOR_PATTERNS.grok);
 export const isOpenAIModel = vendorCheck(VENDOR_PATTERNS.openai);
 export const isQwenModel = vendorCheck(VENDOR_PATTERNS.qwen);
-export const isMiMoModel = vendorCheck(VENDOR_PATTERNS.mimo);
-export const isMistralModel = vendorCheck(VENDOR_PATTERNS.mistral);
-
-export const isDoubaoModel = (model: Model): boolean =>
-  VENDOR_PATTERNS.doubao.test(getLowerBaseModelName(getRawModelId(model), '/')) ||
-  model.providerId === 'doubao';
-
-export const isHunyuanModel = (model: Model): boolean =>
-  VENDOR_PATTERNS.hunyuan.test(getLowerBaseModelName(getRawModelId(model), '/')) ||
-  model.providerId === 'hunyuan';
-
-export const isKimiModel = (model: Model): boolean =>
-  VENDOR_PATTERNS.kimi.test(getLowerBaseModelName(getRawModelId(model), '/')) ||
-  model.providerId === 'moonshot';
-
-export const isZhipuModel = (model: Model): boolean =>
-  VENDOR_PATTERNS.zhipu.test(getLowerBaseModelName(getRawModelId(model))) ||
-  model.providerId === 'zhipu';
 
 export const isOpenAILLMModel = (model: Model): boolean =>
   isOpenAIModel(model) && !getLowerBaseModelName(getRawModelId(model)).includes('gpt-4o-image');
-
-export const isOpenAIReasoningModel = (model: Model): boolean =>
-  isOpenAIModel(model) && isReasoningModel(model);
 
 export const isOpenAIWebSearchChatCompletionOnlyModel = (model: Model): boolean => {
   const id = getLowerBaseModelName(getRawModelId(model));
   return id.includes('gpt-4o-search-preview') || id.includes('gpt-4o-mini-search-preview');
 };
 
-export const isOpenAIChatCompletionOnlyModel = (model: Model): boolean => {
-  const id = getLowerBaseModelName(getRawModelId(model));
-  return (
-    isOpenAIWebSearchChatCompletionOnlyModel(model) ||
-    id.includes('o1-mini') ||
-    id.includes('o1-preview')
-  );
-};
-
 export const isOpenAIDeepResearchModel = (model: Model): boolean => {
   if (model.providerId !== 'openai' && model.providerId !== 'openai-chat') return false;
   return /deep[-_]?research/.test(getLowerBaseModelName(getRawModelId(model), '/'));
 };
-
-export const isSupportedReasoningEffortOpenAIModel = (model: Model): boolean =>
-  isOpenAIModel(model) && isSupportedReasoningEffortModel(model);
 
 export const isGPT5FamilyModel = (model: Model): boolean =>
   getLowerBaseModelName(getRawModelId(model)).includes('gpt-5');
@@ -141,19 +108,6 @@ export const isGPT52SeriesModel = (model: Model): boolean =>
   getLowerBaseModelName(getRawModelId(model)).includes('gpt-5.2');
 
 export const isSupportVerbosityModel = isGPT5FamilyModel;
-
-export const isSupportNoneReasoningEffortModel = (model: Model): boolean => {
-  const id = getLowerBaseModelName(getRawModelId(model));
-  const isCodex = id.includes('codex');
-  const isOldCodex = isCodex && (isGPT51SeriesModel(model) || isGPT52SeriesModel(model));
-  return (
-    isGPT5FamilyModel(model) &&
-    !isGPT5SeriesModel(model) &&
-    !id.includes('chat') &&
-    !id.includes('pro') &&
-    !isOldCodex
-  );
-};
 
 export const isSupportFlexServiceTierModel = (model: Model): boolean => {
   const id = getLowerBaseModelName(getRawModelId(model));
@@ -209,41 +163,10 @@ export const isMaxTemperatureOneModel = (model: Model): boolean => {
   );
 };
 
-export const isHostedGemma4ThinkingModel = (model: Model): boolean => {
-  if (model.providerId !== 'gemini') return false;
-  const id = getLowerBaseModelName(getRawModelId(model), '/');
-  return id.startsWith('gemma-4-');
-};
-
 export const isGemini3Model = (model: Model): boolean => {
   const id = getLowerBaseModelName(getRawModelId(model));
   return id.includes('gemini-3') || id === 'gemini-flash-latest' || id === 'gemini-pro-latest';
 };
-
-export const isGemini3ThinkingTokenModel = (model: Model): boolean => {
-  const id = getLowerBaseModelName(getRawModelId(model));
-  return isGemini3Model(model) && !id.includes('image');
-};
-
-export const isSupportedThinkingTokenGeminiModel = (model: Model): boolean =>
-  (isGeminiModel(model) || isHostedGemma4ThinkingModel(model)) &&
-  isSupportedThinkingTokenModel(model);
-
-export const isSupportedReasoningEffortGrokModel = (model: Model): boolean => {
-  if (isGrokModel(model) && isSupportedReasoningEffortModel(model)) return true;
-  if (model.providerId === 'openrouter') {
-    return getLowerBaseModelName(getRawModelId(model)).includes('grok-4-fast');
-  }
-  return false;
-};
-
-export const isGrok4FastReasoningModel = (model: Model): boolean => {
-  const id = getLowerBaseModelName(getRawModelId(model));
-  return id.includes('grok-4-fast') && !id.includes('non-reasoning');
-};
-
-export const isQwenReasoningModel = (model: Model): boolean =>
-  isQwenModel(model) && isReasoningModel(model);
 
 export const isSupportedThinkingTokenQwenModel = (model: Model): boolean => {
   if (!isQwenModel(model)) return false;
@@ -258,64 +181,8 @@ export const isSupportedThinkingTokenQwenModel = (model: Model): boolean => {
   return isSupportedThinkingTokenModel(model);
 };
 
-export const isQwenAlwaysThinkModel = (model: Model): boolean => {
-  const id = getLowerBaseModelName(getRawModelId(model), '/');
-  return (
-    (id.startsWith('qwen3') && id.includes('thinking')) ||
-    (id.includes('qwen3-vl') && id.includes('thinking'))
-  );
-};
-
 export const isQwen35to39Model = (model: Model): boolean =>
   /^qwen3\.[5-9]/.test(getLowerBaseModelName(getRawModelId(model), '/'));
-
-export const DOUBAO_THINKING_AUTO_MODEL_REGEX =
-  /doubao-(1-5-thinking-pro-m|seed-1[.-]6)(?!-(?:flash|thinking)(?:-|$))(?:-lite)?(?!-251015)(?:-\d+)?$/i;
-
-export const isDoubaoThinkingAutoModel = (model: Model): boolean =>
-  DOUBAO_THINKING_AUTO_MODEL_REGEX.test(getLowerBaseModelName(getRawModelId(model)));
-
-export const isDoubaoSeedAfter251015 = (model: Model): boolean => {
-  const id = getLowerBaseModelName(getRawModelId(model));
-  return /doubao-seed-1-6-(?:lite-)?251015|doubao-seed-2[.-]0/i.test(id);
-};
-
-export const isDoubaoSeed18Model = (model: Model): boolean =>
-  /doubao-seed-1[.-]8(?:-[\w-]+)?/i.test(getLowerBaseModelName(getRawModelId(model)));
-
-export const isSupportedThinkingTokenDoubaoModel = (model: Model): boolean =>
-  isDoubaoModel(model) && isSupportedThinkingTokenModel(model);
-
-export const isSupportedThinkingTokenHunyuanModel = (model: Model): boolean =>
-  isHunyuanModel(model) && isSupportedThinkingTokenModel(model);
-
-export const isSupportedThinkingTokenZhipuModel = (model: Model): boolean =>
-  isZhipuModel(model) && isSupportedThinkingTokenModel(model);
-
-export const isSupportedThinkingTokenMiMoModel = (model: Model): boolean =>
-  isMiMoModel(model) && isSupportedThinkingTokenModel(model);
-
-export const isSupportedThinkingTokenKimiModel = (model: Model): boolean =>
-  isKimiModel(model) && isSupportedThinkingTokenModel(model);
-
-const isDeepSeekV4PlusId = (id: string): boolean =>
-  /deepseek-v(?:[4-9]\d*|[1-9]\d{1,})(?:\.\d+)?(?:-[\w]+)*(?=$|[:/])/i.test(id);
-
-export const isDeepSeekV4PlusModel = (model: Model): boolean => {
-  const id = getLowerBaseModelName(getRawModelId(model));
-  const name = getLowerBaseModelName(model.name ?? '');
-  return isDeepSeekV4PlusId(id) || isDeepSeekV4PlusId(name);
-};
-
-export const isDeepSeekHybridInferenceModel = (model: Model): boolean => {
-  const id = getLowerBaseModelName(getRawModelId(model));
-  return (
-    /(\w+-)?deepseek-v3(?:\.\d|-\d)(?:(\.|-)(?!speciale$)\w+)?$/.test(id) ||
-    id.includes('deepseek-chat-v3.1') ||
-    id.includes('deepseek-chat') ||
-    isDeepSeekV4PlusModel(model)
-  );
-};
 
 export const isOpenAIWebSearchModel = (model: Model): boolean =>
   isOpenAIModel(model) && isWebSearchModel(model);
@@ -354,68 +221,3 @@ export const getModelSupportedVerbosity = (
 };
 
 export const GEMINI_FLASH_MODEL_REGEX = /gemini.*flash/i;
-
-const THINKING_TOKEN_MAP: Record<string, { min: number; max: number }> = {
-  'gemini-2\\.5-flash-lite.*$': { min: 512, max: 24576 },
-  'gemini-flash-lite-latest$': { min: 512, max: 24576 },
-  'gemini-flash-latest$': { min: 0, max: 24576 },
-  'gemini-pro-latest$': { min: 128, max: 32768 },
-  'gemini-.*-flash.*$': { min: 0, max: 24576 },
-  'gemini-.*-pro.*$': { min: 128, max: 32768 },
-  'qwen3-235b-a22b-thinking-2507$': { min: 0, max: 81920 },
-  'qwen3-30b-a3b-thinking-2507$': { min: 0, max: 81920 },
-  'qwen3-vl-235b-a22b-thinking$': { min: 0, max: 81920 },
-  'qwen3-vl-30b-a3b-thinking$': { min: 0, max: 81920 },
-  'qwen-plus-2025-07-14$': { min: 0, max: 38912 },
-  'qwen-plus-2025-04-28$': { min: 0, max: 38912 },
-  'qwen3-1\\.7b$': { min: 0, max: 30720 },
-  'qwen3-0\\.6b$': { min: 0, max: 30720 },
-  'qwen-plus.*$': { min: 0, max: 81920 },
-  'qwen-turbo.*$': { min: 0, max: 38912 },
-  'qwen-flash.*$': { min: 0, max: 81920 },
-  'qwen3-max(-.*)?$': { min: 0, max: 81920 },
-  'qwen-max-latest$': { min: 0, max: 81920 },
-  '^qwen3\\.[5-9]': { min: 0, max: 81920 },
-  'qwen3-(?!max).*$': { min: 1024, max: 38912 },
-  '(?:anthropic\\.)?claude-opus-4[.-]7(?:[@\\-:][\\w\\-:]+)?$': { min: 1024, max: 128000 },
-  '(?:anthropic\\.)?claude-opus-4[.-]6(?:[@\\-:][\\w\\-:]+)?$': { min: 1024, max: 128000 },
-  '(?:anthropic\\.)?claude-(:?sonnet|haiku)-4[.-]6.*(?:-v\\d+:\\d+)?$': { min: 1024, max: 64000 },
-  '(?:anthropic\\.)?claude-(:?haiku|sonnet|opus)-4[.-]5.*(?:-v\\d+:\\d+)?$': {
-    min: 1024,
-    max: 64000,
-  },
-  '(?:anthropic\\.)?claude-opus-4[.-]1.*(?:-v\\d+:\\d+)?$': { min: 1024, max: 32000 },
-  '(?:anthropic\\.)?claude-sonnet-4(?:[.-]0)?(?:[@-](?:\\d{4,}|[a-z][\\w-]*))?(?:-v\\d+:\\d+)?$': {
-    min: 1024,
-    max: 64000,
-  },
-  '(?:anthropic\\.)?claude-opus-4(?:[.-]0)?(?:[@-](?:\\d{4,}|[a-z][\\w-]*))?(?:-v\\d+:\\d+)?$': {
-    min: 1024,
-    max: 32000,
-  },
-  '(?:anthropic\\.)?claude-3[.-]7.*sonnet.*(?:-v\\d+:\\d+)?$': { min: 1024, max: 64000 },
-  'baichuan-m2$': { min: 0, max: 30000 },
-  'baichuan-m3$': { min: 0, max: 30000 },
-  'gemma-?4[:-]?e[24]b': { min: 1024, max: 8192 },
-  'gemma-?4[:-]?26b': { min: 1024, max: 30720 },
-  'gemma-?4[:-]?31b': { min: 1024, max: 30720 },
-  'hunyuan-a13b': { min: 0, max: 30720 },
-  'glm-?5|glm-4\\.[567]': { min: 0, max: 30720 },
-  'mimo-v2\\.5(?:-pro)?(?!-)': { min: 0, max: 30720 },
-  'mimo-v2-(?:flash|pro|omni)': { min: 0, max: 30720 },
-  'kimi-k(?:2\\.[5-9]\\d*|[3-9]\\d*(?:\\.\\d+)?)': { min: 0, max: 30720 },
-  'doubao-(?:1[.-]5-thinking-vision-pro|1[.-]5-thinking-pro-m|seed-1[.-][68](?:-flash)?(?!-thinking(?:-|$))|seed-code(?:-preview)?(?:-\\d+)?|seed-2[.-]0(?:-[\\w-]+)?)(?:-[\\w-]+)*':
-    {
-      min: 0,
-      max: 30720,
-    },
-};
-
-export const findTokenLimit = (rawModelId: string): { min: number; max: number } | undefined => {
-  for (const [pattern, limits] of Object.entries(THINKING_TOKEN_MAP)) {
-    if (new RegExp(pattern, 'i').test(rawModelId)) {
-      return limits;
-    }
-  }
-  return undefined;
-};
