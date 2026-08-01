@@ -411,6 +411,82 @@ describe('ChatSessionImpl', () => {
     expect(mockDiscardPreparedFiles).not.toHaveBeenCalled();
   });
 
+  test('drops content-free parts the accumulator left behind on a successful turn', async () => {
+    const services = createServices();
+    const runtime = createRuntime({ services });
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterable([
+        {
+          id: 'assistant-1',
+          parts: [
+            { type: 'text', text: 'answer' },
+            // A final step that produced no output: invisible, but it still
+            // injects layout spacing on render.
+            { type: 'text', text: '' },
+            { state: 'done', text: '  ', type: 'reasoning' },
+          ],
+          role: 'assistant',
+        } as CherryUIMessage,
+      ]),
+    );
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        data: { parts: [{ type: 'text', text: 'answer' }] },
+        status: 'success',
+      }),
+    );
+  });
+
+  test('terminalizes a tool part left mid-call when the stream fails', async () => {
+    const services = createServices();
+    const runtime = createRuntime({ services });
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterableWithFailure(
+        [
+          {
+            id: 'assistant-1',
+            parts: [
+              {
+                input: { q: 'x' },
+                state: 'input-available',
+                toolCallId: 'call-1',
+                toolName: 'search',
+                type: 'dynamic-tool',
+              },
+            ],
+            role: 'assistant',
+          } as unknown as CherryUIMessage,
+        ],
+        new Error('stream failed'),
+      ),
+    );
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    // A tool call with no result poisons the branch: convertToModelMessages
+    // replays it on the next turn and the provider 400s.
+    const finalized = (services.message.finalizeAssistantMessage as jest.Mock).mock.calls.at(
+      -1,
+    )?.[1];
+    expect(finalized.data.parts[0]).toMatchObject({
+      errorText: 'Stream errored before tool completed',
+      state: 'output-error',
+    });
+    expect(finalized.status).toBe('error');
+  });
+
   test('finalizes a lingering streaming reasoning part when the stream fails after partial output', async () => {
     const services = createServices();
     const runtime = createRuntime({ services });

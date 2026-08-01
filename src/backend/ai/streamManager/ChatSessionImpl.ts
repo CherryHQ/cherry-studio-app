@@ -11,11 +11,6 @@ import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/mo
 import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import {
-  type CherryReasoningMeta,
-  readCherryMeta,
-  withCherryMeta,
-} from '@cherrystudio/universal/data/types/uiParts';
-import {
   buildFirstUserMessageTitle,
   sanitizeConversationTitle,
 } from '@cherrystudio/universal/utils/conversationTitle';
@@ -36,6 +31,8 @@ import { serializeError } from '../utils/serializeError';
 import type { ChatSessionDependencies } from './ChatSessionDependencies';
 import {
   applyStreamingMessage,
+  dropEmptyContentParts,
+  finalizeInterruptedParts,
   finalizeTurnToolApprovals,
   hasPendingToolApproval,
   hasUnresumedToolApproval,
@@ -787,12 +784,18 @@ export class ChatSessionImpl implements ChatSession {
       interruptedTurnApprovalReason,
     );
     const dataParts = input.wasAborted ? latestParts : appendErrorPart(latestParts, input.error);
+    const status = input.wasAborted ? 'paused' : 'error';
     return await this.dependencies.services.message.finalizeAssistantMessage(
       input.assistantMessage.id,
       {
-        data: { parts: finalizeInterruptedReasoningParts(dataParts as CherryMessagePart[]) },
+        data: {
+          parts: finalizeInterruptedParts(
+            dropEmptyContentParts(dataParts as CherryMessagePart[]),
+            status,
+          ),
+        },
         ...(input.runtimeStats ? { runtimeStats: input.runtimeStats } : {}),
-        status: input.wasAborted ? 'paused' : 'error',
+        status,
       },
     );
   }
@@ -805,10 +808,14 @@ export class ChatSessionImpl implements ChatSession {
     const parts = (input.latestAssistantMessage?.parts ??
       input.assistantMessage.data.parts ??
       []) as CherryMessagePart[];
+    // No approval settlement here: a turn that ends in success may legitimately
+    // be waiting on `approval-requested`, and that part has to survive for the
+    // sheet to reappear. `finalizeInterruptedParts` is identity on success, so
+    // this only drops empty parts.
     return await this.dependencies.services.message.finalizeAssistantMessage(
       input.assistantMessage.id,
       {
-        data: { parts },
+        data: { parts: finalizeInterruptedParts(dropEmptyContentParts(parts), 'success') },
         runtimeStats: input.runtimeStats,
         status: 'success',
       },
@@ -969,31 +976,6 @@ function appendErrorPart(parts: readonly CherryMessagePart[], error: unknown): C
   }
 
   return [...parts, toErrorPart(error)] as CherryMessagePart[];
-}
-
-/**
- * A reasoning part can still be `state: 'streaming'` when a turn ends early
- * (abort, network error, app kill). Left as-is, ReasoningPart would treat it
- * as perpetually thinking on every future render. Force it to `done` and
- * backfill `thinkingMs` from `startedAt` when the stream never sent a
- * `reasoning-end` to compute it.
- */
-function finalizeInterruptedReasoningParts(parts: CherryMessagePart[]): CherryMessagePart[] {
-  return parts.map((part) => {
-    if (part.type !== 'reasoning' || part.state !== 'streaming') {
-      return part;
-    }
-
-    const cherry = readCherryMeta(part);
-    const startedAt = cherry?.startedAt;
-    const thinkingMs = cherry?.thinkingMs;
-    const patch: Partial<CherryReasoningMeta> =
-      typeof startedAt === 'number' && Number.isFinite(startedAt) && !Number.isFinite(thinkingMs)
-        ? { thinkingMs: Math.max(0, Date.now() - startedAt) }
-        : {};
-
-    return withCherryMeta({ ...part, state: 'done' }, patch);
-  });
 }
 
 function toModelSnapshot(model: Model): ModelSnapshot {
