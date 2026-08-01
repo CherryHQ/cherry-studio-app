@@ -1,9 +1,12 @@
 import type { PermissionsModule } from '@/shared/contracts';
 
-import { PermissionsService, type PermissionsServiceDependencies } from '../PermissionsService';
+import {
+  createPermissionsModule,
+  type PermissionsModuleDependencies,
+} from '../createPermissionsModule';
 
 function createSubject() {
-  const dependencies: PermissionsServiceDependencies = {
+  const dependencies: PermissionsModuleDependencies = {
     device: {
       getStatus: jest.fn(async () => 'undetermined'),
       openSystemSettings: jest.fn(async () => undefined),
@@ -14,11 +17,11 @@ function createSubject() {
       set: jest.fn(async () => undefined),
     },
   };
-  const backend: PermissionsModule = new PermissionsService(dependencies);
+  const backend: PermissionsModule = createPermissionsModule(dependencies);
   return { backend, dependencies };
 }
 
-describe('PermissionsService', () => {
+describe('createPermissionsModule', () => {
   it('requests system access before persisting an enabled policy', async () => {
     const { backend, dependencies } = createSubject();
 

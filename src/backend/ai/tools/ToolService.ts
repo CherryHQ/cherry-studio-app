@@ -4,7 +4,7 @@ import type { ToolSet } from 'ai';
 import { Platform } from 'react-native';
 
 import type { PreferenceService } from '@/backend/data/PreferenceService';
-import type { DevicePermissionService } from '@/backend/services/permissions';
+import type { DevicePermissions } from '@/backend/services/permissions';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -25,7 +25,7 @@ const DEVICE_PREFERENCE_KEYS = [
 ] as const satisfies readonly PermissionPreferenceKey[];
 
 export type ToolServiceDependencies = {
-  devicePermission: Pick<DevicePermissionService, 'getStatusForPreference'>;
+  devicePermission: Pick<DevicePermissions, 'getStatusForPreference'>;
   mcpRuntime: Pick<McpRuntimeService, 'getToolEntriesForAssistant'>;
   preference: Pick<PreferenceService, 'get'>;
   webSearch: WebSearchService;

@@ -18,7 +18,7 @@ import { createModelsModule } from '@/backend/services/models/createModelsModule
 import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { ProviderAuthConfigOAuthTokenStore } from '@/backend/services/oauth/runtime/OAuthTokenStore';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
-import { PermissionsService } from '@/backend/services/permissions/PermissionsService';
+import { createPermissionsModule } from '@/backend/services/permissions/createPermissionsModule';
 import { ProfileService } from '@/backend/services/profile/ProfileService';
 import {
   replaceUserAvatar,
@@ -137,11 +137,11 @@ export function createBackend(services: BackendServices): BackendComposition {
     },
     canRemove: canDeleteProvider,
   });
-  const permissions = new PermissionsService({
+  const permissions = createPermissionsModule({
     device: {
-      getStatus: (key) => services.devicePermission.getStatusForPreference(key),
-      openSystemSettings: (permission) => services.devicePermission.openSystemSettings(permission),
-      request: (key) => services.devicePermission.requestForPreference(key),
+      getStatus: (key) => services.devicePermissions.getStatusForPreference(key),
+      openSystemSettings: (permission) => services.devicePermissions.openSystemSettings(permission),
+      request: (key) => services.devicePermissions.requestForPreference(key),
     },
     preferences: {
       readCached: (key) => services.preference.readCached(key),

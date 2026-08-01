@@ -1,7 +1,7 @@
 import * as Calendar from 'expo-calendar';
 import * as Location from 'expo-location';
 
-import { DevicePermissionService } from '../DevicePermissionService';
+import { DevicePermissions } from '../DevicePermissions';
 
 const mockHealthKit = {
   checkAuthorizationStatus: jest.fn(async (_type: string): Promise<string> => 'sharingAuthorized'),
@@ -22,8 +22,8 @@ jest.mock('expo-location', () => ({
 const granted = { granted: true, status: 'granted' };
 const denied = { granted: false, status: 'denied' };
 
-describe('DevicePermissionService', () => {
-  let service: DevicePermissionService;
+describe('DevicePermissions', () => {
+  let service: DevicePermissions;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -36,7 +36,7 @@ describe('DevicePermissionService', () => {
     mockHealthKit.isHealthKitAvailable.mockResolvedValue(true);
     mockHealthKit.checkAuthorizationStatus.mockResolvedValue('sharingAuthorized');
     mockHealthKit.requestAuthorization.mockResolvedValue(true);
-    service = new DevicePermissionService(async () => mockHealthKit as never);
+    service = new DevicePermissions(async () => mockHealthKit as never);
   });
 
   test('uses full calendar access for read and write-only access for write', async () => {

@@ -4,9 +4,11 @@ import * as Location from 'expo-location';
 import { AppState, Linking, Platform } from 'react-native';
 import type { HealthKit } from 'react-native-nitro-healthkit';
 
-export type DevicePermission = 'calendar' | 'health' | 'location' | 'reminders';
-export type DevicePermissionAccess = 'read' | 'write';
-export type SystemPermissionState = 'denied' | 'granted' | 'undetermined' | 'unavailable';
+import type {
+  DevicePermission,
+  DevicePermissionAccess,
+  SystemPermissionState,
+} from '@/shared/contracts';
 
 const HEALTH_AUTHORIZATION_TYPES = [
   'HKQuantityTypeIdentifierStepCount',
@@ -33,7 +35,7 @@ const permissionByPreference: Record<
   'permissions.reminders_write': { access: 'write', permission: 'reminders' },
 };
 
-export class DevicePermissionService {
+export class DevicePermissions {
   constructor(private readonly loadHealthKit: HealthKitLoader = loadHealthKitModule) {}
 
   async getStatus(

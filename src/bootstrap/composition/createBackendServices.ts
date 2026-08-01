@@ -34,7 +34,7 @@ import { TemporaryChatService } from '@/backend/data/services/TemporaryChatServi
 import { TopicService } from '@/backend/data/services/TopicService';
 import { TranslateHistoryService } from '@/backend/data/services/TranslateHistoryService';
 import { TranslateLanguageService } from '@/backend/data/services/TranslateLanguageService';
-import { DevicePermissionService } from '@/backend/services/permissions';
+import { DevicePermissions } from '@/backend/services/permissions';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 export type BackendServices = ReturnType<typeof createBackendServices>;
@@ -42,7 +42,7 @@ export type BackendServices = ReturnType<typeof createBackendServices>;
 export function createBackendServices(dbService: DbService, cache: CacheService) {
   const preference = new PreferenceService(dbService);
   const aiUsageRecord = new AiUsageRecordService(dbService);
-  const devicePermission = new DevicePermissionService();
+  const devicePermissions = new DevicePermissions();
   const pin = new PinService(dbService);
   const provider = new ProviderService(dbService, pin, cache);
   const model = new ModelService(dbService, preference, pin);
@@ -74,7 +74,12 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
   const entitySearch = new EntitySearchService(dbService);
   const temporaryChat = new TemporaryChatService(dbService, aiUsageRecord);
   const webSearch = new WebSearchService(preference);
-  const tools = new ToolService({ devicePermission, mcpRuntime, preference, webSearch });
+  const tools = new ToolService({
+    devicePermission: devicePermissions,
+    mcpRuntime,
+    preference,
+    webSearch,
+  });
   const ai = new AiService({
     assistant,
     aiUsageRecord,
@@ -98,7 +103,7 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
     assistant,
     cache,
     contentSearch,
-    devicePermission,
+    devicePermissions,
     entitySearch,
     fileEntry,
     group,

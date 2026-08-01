@@ -22,29 +22,28 @@ type PermissionPreferences = {
   set(key: PermissionPreferenceKey, value: PermissionMode): Promise<void>;
 };
 
-export type PermissionsServiceDependencies = {
+export type PermissionsModuleDependencies = {
   device: PermissionDevice;
   preferences: PermissionPreferences;
 };
 
-export class PermissionsService implements PermissionsModule {
-  constructor(private readonly dependencies: PermissionsServiceDependencies) {}
-
-  async getStatuses(keys: readonly PermissionPreferenceKey[]): Promise<PermissionStatuses> {
+export function createPermissionsModule(
+  dependencies: PermissionsModuleDependencies,
+): PermissionsModule {
+  const getStatuses = async (
+    keys: readonly PermissionPreferenceKey[],
+  ): Promise<PermissionStatuses> => {
     const entries = await Promise.all(
-      unique(keys).map(
-        async (key) => [key, await this.dependencies.device.getStatus(key)] as const,
-      ),
+      unique(keys).map(async (key) => [key, await dependencies.device.getStatus(key)] as const),
     );
     return Object.fromEntries(entries);
-  }
+  };
 
-  openSystemSettings(permission?: DevicePermission): Promise<void> {
-    return this.dependencies.device.openSystemSettings(permission);
-  }
+  const openSystemSettings = (permission?: DevicePermission): Promise<void> =>
+    dependencies.device.openSystemSettings(permission);
 
-  async recover(keys: readonly PermissionPreferenceKey[]): Promise<PermissionStatuses> {
-    const statuses = await this.getStatuses(keys);
+  const recover = async (keys: readonly PermissionPreferenceKey[]): Promise<PermissionStatuses> => {
+    const statuses = await getStatuses(keys);
     const missingKeys = unique(keys).filter((key) => statuses[key] !== 'granted');
     if (missingKeys.length === 0) {
       return statuses;
@@ -52,36 +51,38 @@ export class PermissionsService implements PermissionsModule {
 
     if (missingKeys.every((key) => statuses[key] === 'undetermined')) {
       const requested = await Promise.all(
-        missingKeys.map(async (key) => [key, await this.dependencies.device.request(key)] as const),
+        missingKeys.map(async (key) => [key, await dependencies.device.request(key)] as const),
       );
       return { ...statuses, ...Object.fromEntries(requested) };
     }
 
-    await this.dependencies.device.openSystemSettings(permissionForPreference(missingKeys[0]));
+    await dependencies.device.openSystemSettings(permissionForPreference(missingKeys[0]));
     return statuses;
-  }
+  };
 
-  async setPolicy(
+  const setPolicy = async (
     key: PermissionPreferenceKey,
     policy: PermissionMode,
-  ): Promise<SetPermissionPolicyResult> {
-    const currentPolicy = this.dependencies.preferences.readCached(key);
-    let status = await this.dependencies.device.getStatus(key);
+  ): Promise<SetPermissionPolicyResult> => {
+    const currentPolicy = dependencies.preferences.readCached(key);
+    let status = await dependencies.device.getStatus(key);
 
     if (currentPolicy === policy) {
       return { policy, status };
     }
 
     if (currentPolicy === 'never' && policy !== 'never' && status !== 'granted') {
-      status = await this.dependencies.device.request(key);
+      status = await dependencies.device.request(key);
       if (status !== 'granted') {
         return { policy: currentPolicy, status };
       }
     }
 
-    await this.dependencies.preferences.set(key, policy);
+    await dependencies.preferences.set(key, policy);
     return { policy, status };
-  }
+  };
+
+  return { getStatuses, openSystemSettings, recover, setPolicy };
 }
 
 function unique<T>(values: readonly T[]): T[] {
