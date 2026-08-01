@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
 import { BackendProvider } from '@/frontend/data';
 import type { Backend, PaintingGenerationSession } from '@/shared/contracts';
 import type { Painting } from '@/shared/data/types/painting';
+
 import { usePaintingGeneration } from '../usePaintingGeneration';
 
 const output = {

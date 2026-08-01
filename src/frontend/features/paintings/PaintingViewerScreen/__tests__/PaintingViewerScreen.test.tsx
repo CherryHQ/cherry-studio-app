@@ -1,8 +1,8 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { Painting } from '@/shared/data/types/painting';
-import type { ResolvedPaintingFiles } from '../../hooks/usePaintings';
 
+import type { ResolvedPaintingFiles } from '../../hooks/usePaintings';
 import { PaintingViewerScreen } from '../PaintingViewerScreen';
 
 const mockRouterBack = jest.fn();

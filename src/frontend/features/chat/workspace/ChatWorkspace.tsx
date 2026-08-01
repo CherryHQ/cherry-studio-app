@@ -4,17 +4,19 @@ import { useToast } from 'heroui-native/toast';
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSharedValue } from 'react-native-reanimated';
+
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
 import { isIOS } from '@/frontend/utils/constants';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { Message } from '@/shared/data/types/message';
+
 import { ToolApprovalSheet } from '../approval/ToolApprovalSheet';
 import { MessageSlideInProvider } from '../messageItem';
-import { useChatSession, useChatSessionTopic } from '../session/ChatSessionProvider';
 import {
   getPendingToolApprovals,
   mergeMessagesWithOverlay,
 } from '../session/chatSessionProjection';
+import { useChatSession, useChatSessionTopic } from '../session/ChatSessionProvider';
 import { ChatComposer } from './components/ChatComposer';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessageList } from './components/ChatMessageList';

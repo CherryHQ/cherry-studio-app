@@ -1,5 +1,6 @@
 import { loggerService } from '@logger';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
+
 import { cacheService } from '@/frontend/data/CacheService';
 import type {
   InferUseCacheValue,

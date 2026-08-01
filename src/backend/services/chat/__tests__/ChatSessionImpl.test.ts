@@ -4,6 +4,7 @@ import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/
 import type { PreparedInternalFile } from '@/shared/data/types/file';
 import type { CherryMessagePart, CherryUIMessage, Message } from '@/shared/data/types/message';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
+
 import type { ChatSessionServices, ChatStreamRequest } from '../ChatSessionDependencies';
 import { ChatSessionImpl } from '../ChatSessionImpl';
 

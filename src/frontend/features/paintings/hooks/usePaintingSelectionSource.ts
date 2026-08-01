@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import type { SelectionSource } from '@/frontend/components/messageTabs';
+
 import { useDeletePaintings, usePaintingIds } from './usePaintings';
 
 // Selection behavior the shared toolbar uses for the drawings tab. `enabled`

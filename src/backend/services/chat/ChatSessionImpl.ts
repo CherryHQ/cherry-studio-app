@@ -1,4 +1,5 @@
 import { isToolUIPart } from 'ai';
+
 import type {
   ChatSendNewTopicTextInput,
   ChatSendTextInput,
@@ -26,6 +27,7 @@ import {
   withCherryMeta,
 } from '@/shared/data/types/uiParts';
 import { serializeError } from '@/shared/utils/serializeError';
+
 import type { ChatSessionDependencies } from './ChatSessionDependencies';
 import {
   applyStreamingMessage,

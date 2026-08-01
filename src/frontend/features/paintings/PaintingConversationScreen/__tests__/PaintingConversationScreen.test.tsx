@@ -2,12 +2,12 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { Message } from '@/shared/data/types/message';
 import type { Painting } from '@/shared/data/types/painting';
+
 import type {
   PaintingGenerationInput,
   PaintingGenerationResult,
 } from '../../hooks/usePaintingGeneration';
 import type { ResolvedPaintingFiles } from '../../hooks/usePaintings';
-
 import { PaintingConversationScreen } from '../PaintingConversationScreen';
 
 type PaintingInputProps = {

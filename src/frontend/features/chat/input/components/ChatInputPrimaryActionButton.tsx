@@ -2,6 +2,7 @@ import { cn } from 'heroui-native/utils';
 import { ArrowUpIcon, SquareIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Pressable } from 'react-native';
+
 import {
   useChatInputActions,
   useChatInputMeta,

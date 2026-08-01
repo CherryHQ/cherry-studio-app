@@ -16,6 +16,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
+
 import { useConfirmDialog } from '@/frontend/components/confirmDialog';
 import { type HeaderToolbarAction, TabRootHeader } from '@/frontend/components/headers';
 import {

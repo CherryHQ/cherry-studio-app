@@ -1,5 +1,6 @@
 import { PlusIcon } from 'lucide-uniwind/png';
 import { Pressable } from 'react-native';
+
 import { useChatInputActions } from '../context/ChatInputProvider';
 
 const buttonSize = 32;

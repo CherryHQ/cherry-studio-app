@@ -1,4 +1,5 @@
 import { queryKeys } from '@/frontend/data';
+
 import { messageWindowPolicy } from './messageWindowPolicy';
 
 export const initialMessagesPageSize = messageWindowPolicy.initialFetchCount;

@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
+
 import { LinearGradient } from '@/frontend/components/nativePrimitives';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { Message } from '@/shared/data/types/message';

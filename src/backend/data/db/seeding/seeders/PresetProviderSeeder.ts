@@ -1,5 +1,6 @@
 import type { ProtoProviderConfig } from '@cherrystudio/provider-registry';
 import { buildRuntimeEndpointConfigs, ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+
 import type { CacheService } from '@/backend/data/CacheService';
 import { PinService } from '@/backend/data/services/PinService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';

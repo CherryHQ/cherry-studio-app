@@ -6,12 +6,14 @@
 import { hasProviderConfig, type StringKeys } from '@cherrystudio/ai-core/provider';
 import type { CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+
 import { generateSignature } from '@/backend/ai/provider/cherryai';
 import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { EndpointType, Model } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
+
 import {
   type AppProviderId,
   type AppProviderSettingsMap,

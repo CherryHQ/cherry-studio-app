@@ -1,5 +1,6 @@
 import { resolveIcon } from '@cherrystudio/ui/icons';
 import { useCallback, useEffect, useState } from 'react';
+
 import {
   getNextModelSelection,
   ModelPickerBottomSheet,
@@ -10,13 +11,14 @@ import {
 import { useModelById, useProviders, useTopic } from '@/frontend/hooks/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isUniqueModelId } from '@/shared/data/types/model';
+
 import { useChatSessionTopic } from '../session';
 import { ChatInputActionSheet } from './components/ChatInputActionSheet';
 import { ChatInputReasoningSection } from './components/ChatInputReasoningSection';
 import { type ChatInputSendPayload, ChatInputSurface } from './components/ChatInputSurface';
 import { useChatInputActions, useChatInputState } from './context/ChatInputProvider';
-import { useChatInputReasoningEffortSync } from './hooks/useChatInputReasoningEffortSync';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
+import { useChatInputReasoningEffortSync } from './hooks/useChatInputReasoningEffortSync';
 import { createChatInputMessageParts } from './utils/chatInputAttachments';
 
 type ChatInputProps = {

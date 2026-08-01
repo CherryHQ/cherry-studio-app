@@ -4,6 +4,7 @@ import { Platform, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { CherryMessagePart } from '@/shared/data/types/message';
+
 import { McpToolPart } from '../McpToolPart';
 import { MetaToolPart } from '../MetaToolPart';
 import { ToolPart } from '../ToolPart';

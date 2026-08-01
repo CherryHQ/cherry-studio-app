@@ -5,6 +5,7 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/frontend/components/bottomSheet';
 import { parseFunctionCallToolName } from '@/shared/ai/tools/mcpToolName';
+
 import type { PendingToolApproval } from '../session/chatSessionProjection';
 import { getBuiltInToolPresentation } from '../utils/builtInToolPresentation';
 

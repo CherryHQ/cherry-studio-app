@@ -9,6 +9,7 @@
 import { loggerService } from '@logger';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
+
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 
 const logger = loggerService.withContext('utils:promptVariables');

@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+
 import {
   useMessageListBottomInset,
   useMessageScope,
@@ -32,12 +33,13 @@ import {
   type ChatInputAttachmentDraft,
   createPhotoAttachmentDraft,
 } from '@/frontend/features/chat/input/utils/chatInputAttachments';
-import { usePaintingSelectionSource } from './hooks/usePaintingSelectionSource';
+
 import {
   type PaintingGalleryItem,
   usePaintingGalleryItems,
   usePaintings,
 } from './hooks/usePaintings';
+import { usePaintingSelectionSource } from './hooks/usePaintingSelectionSource';
 import { type PaintingTemplate, PaintingTemplateRow, toPaintingTemplateDraft } from './templates';
 import { distributeMasonryItems } from './utils/masonry';
 import {

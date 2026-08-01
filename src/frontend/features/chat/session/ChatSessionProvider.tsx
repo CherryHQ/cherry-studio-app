@@ -10,6 +10,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { getMessagesQueryKey } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 import type {

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Text, TextInput, type ViewProps } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
 import { ChatInputProvider, useChatInputActions } from '../../context/ChatInputProvider';
 import { thinkingAccentColor } from '../../effortSlider';
 import type { ChatInputAttachmentDraft } from '../../utils/chatInputAttachments';

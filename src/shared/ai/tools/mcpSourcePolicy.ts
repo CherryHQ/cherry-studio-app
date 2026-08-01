@@ -11,6 +11,7 @@
  */
 
 import type { McpServer } from '@/shared/data/types/mcpServer';
+
 import { buildFunctionCallToolName, toCamelCase } from './mcpToolName';
 
 type McpPolicyTool = {

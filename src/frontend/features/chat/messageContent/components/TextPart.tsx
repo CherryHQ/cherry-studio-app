@@ -1,5 +1,7 @@
 import { Text } from 'heroui-native/text';
+
 import type { CherryMessagePart } from '@/shared/data/types/message';
+
 import type { MessagePartRenderMode } from './MessageParts';
 import { PartMarkdown } from './PartMarkdown';
 

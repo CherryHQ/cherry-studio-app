@@ -1,5 +1,6 @@
 import { cn } from 'heroui-native/utils';
 import { type AccessibilityState, Pressable, Text, View } from 'react-native';
+
 import { getFileBaseName, getFileExtension } from '../utils/getFileExtension';
 
 type FileTileProps = {

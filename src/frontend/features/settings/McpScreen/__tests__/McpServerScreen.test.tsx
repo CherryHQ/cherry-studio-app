@@ -5,6 +5,7 @@ import { BackendProvider } from '@/frontend/data';
 import type { Backend } from '@/shared/contracts';
 import { DataApiError, ErrorCode } from '@/shared/data/api/types';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
+
 import { McpServerScreen } from '../McpServerScreen';
 
 type HeaderAction = {

@@ -1,4 +1,5 @@
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
+
 import { McpService, type McpServiceDependencies } from '../McpService';
 
 function server(overrides: Partial<StreamableHttpMcpServer> = {}): StreamableHttpMcpServer {

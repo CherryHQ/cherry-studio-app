@@ -1,4 +1,5 @@
 import type { PreferenceDefaultScopeType, PreferenceKeyType } from '@/shared/data/preference';
+
 import {
   getProviderForCapability,
   getRuntimeConfig,

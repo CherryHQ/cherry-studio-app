@@ -11,6 +11,7 @@
   "bracketSameLine": false,
   "bracketSpacing": true,
   "sortPackageJson": false,
+  "sortImports": true,
   "ignorePatterns": [
     "**/*.md",
     "**/*.mdx",

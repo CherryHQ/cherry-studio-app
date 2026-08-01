@@ -1,6 +1,7 @@
 import { XIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text } from 'react-native';
+
 import type { ChatInputAction } from '../utils/chatInputActions';
 import { ChatInputAccessoryItem, ChatInputAccessorySection } from './ChatInputAccessory';
 

@@ -16,6 +16,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
+
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import {
   type AiUsageRecordRow,
@@ -58,6 +59,7 @@ import type {
 import { getAiUsageRecordTotalTokens } from '@/shared/data/types/aiUsageRecord';
 import type { MessageStats } from '@/shared/data/types/message';
 import type { Currency } from '@/shared/data/types/model';
+
 import { timestampToISO } from './utils/rowMappers';
 
 export { mergeMessageRuntimeStats } from './utils/messageStats';

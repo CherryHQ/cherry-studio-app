@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
 
 export type PaintingDraftHandoff = {

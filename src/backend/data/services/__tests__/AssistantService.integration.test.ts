@@ -1,10 +1,12 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
+
 import type { PreferenceService } from '../../PreferenceService';
 import { AssistantService } from '../AssistantService';
 import { McpServerService } from '../McpServerService';

@@ -2,6 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
 import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
+
 import { McpScreen } from '../McpScreen';
 
 type HeaderAction = { key: string; onPress?: () => void };

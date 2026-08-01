@@ -1,4 +1,5 @@
 import type { ChatTransport, UIMessage } from 'ai';
+
 import type { MessageRuntimeTimingSink } from '@/shared/data/types/message';
 import type { UniqueModelId } from '@/shared/data/types/model';
 

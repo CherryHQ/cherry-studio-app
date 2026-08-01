@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef } from 'react';
+
 import { useMutation, useQuery } from '@/frontend/data';
 import type { EntityType } from '@/shared/data/types/entityType';
 import type { Pin } from '@/shared/data/types/pin';

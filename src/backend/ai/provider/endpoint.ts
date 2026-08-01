@@ -4,6 +4,7 @@
  */
 
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+
 import type { EndpointType, Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 

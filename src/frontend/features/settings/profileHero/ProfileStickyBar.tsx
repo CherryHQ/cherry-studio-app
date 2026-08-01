@@ -6,8 +6,8 @@ import Animated, {
   type SharedValue,
   useAnimatedStyle,
 } from 'react-native-reanimated';
-import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { profileHero } from '@/frontend/utils/constants';
 
 const fadeTravel = profileHero.collapseDistance;

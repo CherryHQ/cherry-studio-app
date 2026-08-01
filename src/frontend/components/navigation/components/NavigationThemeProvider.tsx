@@ -1,6 +1,7 @@
 import { DefaultTheme, ThemeProvider } from 'expo-router';
 import { useMemo } from 'react';
 import { useUniwind } from 'uniwind';
+
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 type NavigationThemeProviderProps = {

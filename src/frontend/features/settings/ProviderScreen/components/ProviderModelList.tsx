@@ -4,6 +4,7 @@ import { Keyboard, Text, View } from 'react-native';
 
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
+
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 import { ProviderModelAccordion } from '../models/components/ProviderModelAccordion';
 import { ProviderModelSearchField } from '../models/components/ProviderModelSearchField';

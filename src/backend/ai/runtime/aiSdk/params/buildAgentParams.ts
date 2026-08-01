@@ -1,6 +1,7 @@
 import type { AiPlugin } from '@cherrystudio/ai-core';
 import { stepCountIs, type ToolCallRepairFunction, type ToolSet } from 'ai';
 import * as Crypto from 'expo-crypto';
+
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type {
   AiUsageCaptureContext,
@@ -20,6 +21,7 @@ import {
   isForcedNativeWebSearchModel,
   isFunctionCallingModel,
 } from '@/shared/utils/model';
+
 import { createAiUsagePlugin } from '../../../hooks/billingHook';
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
 import type { ToolService } from '../../../tools';

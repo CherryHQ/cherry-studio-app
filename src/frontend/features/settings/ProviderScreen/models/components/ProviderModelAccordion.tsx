@@ -6,8 +6,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
-import { SettingsGroupedSurface } from '../../../components/SettingsGroupedSurface';
 
+import { SettingsGroupedSurface } from '../../../components/SettingsGroupedSurface';
 import { getModelGroupLabel, type ProviderModelGroup } from '../utils/providerModelGroups';
 import { ProviderModelRow, providerModelRowHeight } from './ProviderModelRow';
 

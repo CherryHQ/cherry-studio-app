@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
+
 import { usePreferenceClient } from '@/frontend/data/PreferenceProvider';
 import type {
   PreferenceDefaultScopeType,

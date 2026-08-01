@@ -8,6 +8,7 @@ import { CheckIcon } from 'lucide-uniwind/png';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+
 import type { ModelPickerGroup, ModelPickerModelItem } from '../utils/modelPickerData';
 import type { ModelPickerListItem } from '../utils/modelPickerListItems';
 import { ModelPickerIcon } from './ModelPickerIcon';

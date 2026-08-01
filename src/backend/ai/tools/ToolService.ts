@@ -1,5 +1,6 @@
 import type { ToolSet } from 'ai';
 import { Platform } from 'react-native';
+
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { DevicePermissionService } from '@/backend/services/permissions';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
