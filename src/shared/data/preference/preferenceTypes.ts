@@ -1,4 +1,3 @@
-import type { BootConfigPreferenceKeys } from '@/shared/data/bootConfig/bootConfigTypes';
 import type { ShortcutBinding } from '@/shared/utils/shortcut';
 import * as z from 'zod';
 
@@ -9,8 +8,12 @@ export type PreferenceDefaultScopeType = PreferenceSchemas['default'];
 export type PreferenceKeyType = keyof PreferenceDefaultScopeType;
 export type PermissionPreferenceKey = Extract<PreferenceKeyType, `permissions.${string}`>;
 
-/** Unified type: DB-backed preferences + file-backed boot config (BootConfig.* prefix) */
-export type UnifiedPreferenceType = PreferenceDefaultScopeType & BootConfigPreferenceKeys;
+/**
+ * Unified type: on desktop this also intersects file-backed BootConfigPreferenceKeys
+ * (Electron boot state); mobile has no boot-config file, so the union is DB-only.
+ * Shape-only divergence — registered in desktop-sync-manifest.json.
+ */
+export type UnifiedPreferenceType = PreferenceDefaultScopeType;
 export type UnifiedPreferenceKeyType = keyof UnifiedPreferenceType;
 
 /**

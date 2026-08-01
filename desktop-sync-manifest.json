@@ -38,7 +38,18 @@
       "targetPaths": ["src/shared/data"],
       "sourceCommit": null,
       "sourceSha256": null,
-      "explicitExclusions": [],
+      "explicitExclusions": [
+        "src/shared/data/bootConfig/**",
+        "src/shared/data/migration/**",
+        "src/shared/data/presets/binaryTools.ts",
+        "src/shared/data/presets/claudeCode.ts",
+        "src/shared/data/presets/codex.ts",
+        "src/shared/data/presets/grokCli.ts",
+        "src/shared/data/presets/localEmbedding.ts",
+        "src/shared/data/presets/localModel.ts",
+        "src/shared/data/types/fileProcessing.ts",
+        "src/shared/data/types/settingsPath.ts"
+      ],
       "mobilePreferenceExtensions": [
         "permissions.calendar_read",
         "permissions.calendar_write",
