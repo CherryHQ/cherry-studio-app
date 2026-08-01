@@ -1,10 +1,15 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiPlugin } from '@cherrystudio/ai-core';
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import {
+  type Assistant,
+  DEFAULT_ASSISTANT_SETTINGS,
+} from '@cherrystudio/universal/data/types/assistant';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import {
   isAnthropicModel,
   isForcedNativeWebSearchModel,
@@ -21,10 +26,19 @@ import type {
 } from '@/backend/data/services/AiUsageRecordService';
 import type { AssistantService } from '@/backend/data/services/AssistantService';
 import type { ModelService } from '@/backend/data/services/ModelService';
+import {
+  projectRuntimeReasoning,
+  providerRegistryService,
+} from '@/backend/data/services/ProviderRegistryService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
 
 import { createAiUsagePlugin } from '../../../hooks/billingHook';
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
+import {
+  resolveAiSdkProviderId,
+  resolveEffectiveEndpoint,
+  resolveProviderOptionsKey,
+} from '../../../provider/endpoint';
 import type { ToolResolver } from '../../../tools';
 import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/adapters/aiSdk/meta/toolSearch';
 import { createAiRepair } from '../../../tools/adapters/aiSdk/repair';
@@ -42,10 +56,16 @@ import {
 import {
   applyFastModeToProviderOptions,
   buildCapabilityProviderOptions,
+  buildResolvedReasoningProviderOptions,
   extractAiSdkStandardParams,
   mergeCustomProviderParameters,
 } from '../../../utils/options';
 import { replacePromptVariables } from '../../../utils/promptVariables';
+import { getCustomParameters } from '../../../utils/reasoning';
+import {
+  resolveReasoningInvocation,
+  type ResolvedReasoningInvocation,
+} from '../../../utils/reasoningSerializers';
 import { createAiUsageCaptureContext } from '../../../utils/usageCapture';
 import type { AgentOptions } from '../Agent';
 import {
@@ -98,7 +118,7 @@ export async function buildAgentParams({
   usageMessageRef = null,
 }: BuildAgentParamsInput): Promise<BuiltAgentParams> {
   const { provider, model, assistant } = await getProviderAndModel(request, services);
-  const settingsAssistant = createSettingsAssistant(assistant, request.reasoningEffort);
+  const resolvedEndpoint = resolveEffectiveEndpoint(provider, model);
   const { config: sdkConfig, credentialReceipt } = await resolveProviderAiSdkConfig(
     provider,
     model,
@@ -107,8 +127,37 @@ export async function buildAgentParams({
       resolveApiKey: (providerId, override) =>
         services.provider.resolveApiKey(providerId, override),
     },
-    { apiKeyOverride: request.apiKeyOverride },
+    { apiKeyOverride: request.apiKeyOverride, resolvedEndpoint },
   );
+  const endpointType = resolvedEndpoint.endpointType;
+  const aiSdkProviderId = resolveAiSdkProviderId(provider, endpointType);
+  const providerOptionsKey = resolveProviderOptionsKey(sdkConfig.providerId, {
+    actualProviderId: provider.id,
+    endpointType,
+    gatewayProviderOptionsKey: resolvedEndpoint.providerOptionsKey,
+  });
+  const reasoningProfile = providerRegistryService.resolveReasoningProfile(
+    provider,
+    model,
+    endpointType,
+  );
+  const invocationModel = reasoningProfile.support
+    ? {
+        ...model,
+        reasoning: projectRuntimeReasoning(reasoningProfile.support, reasoningProfile.wire),
+      }
+    : model;
+  const reasoning = resolveReasoningInvocation({
+    selection:
+      request.reasoningEffort ??
+      (assistant?.settings.reasoning_effort as ReasoningEffortOption | undefined) ??
+      'default',
+    model: invocationModel,
+    profile: reasoningProfile.wire,
+    maxTokens: resolveReasoningMaxTokens(request.callOverrides?.maxOutputTokens, assistant, model),
+    assistantSummary:
+      typeof provider.settings.summaryText === 'string' ? provider.settings.summaryText : undefined,
+  });
   const externalWebSearchProviderId =
     shouldIncludeExternalTools && assistant?.settings.enableWebSearch
       ? await services.preference.get('chat.web_search.default_search_keywords_provider')
@@ -117,19 +166,12 @@ export async function buildAgentParams({
   const hasConfiguredExternalWebSearch = Boolean(
     externalWebSearchProviderId && isFunctionCallingModel(model) && !shouldForceNativeWebSearch,
   );
-  const capabilities = settingsAssistant
-    ? resolveCapabilities(
-        model,
-        provider,
-        settingsAssistant,
-        sdkConfig.providerId,
-        services.preference,
-        {
-          webSearchProviderId: hasConfiguredExternalWebSearch
-            ? (externalWebSearchProviderId ?? undefined)
-            : undefined,
-        },
-      )
+  const capabilities = assistant
+    ? resolveCapabilities(model, provider, assistant, sdkConfig.providerId, services.preference, {
+        webSearchProviderId: hasConfiguredExternalWebSearch
+          ? (externalWebSearchProviderId ?? undefined)
+          : undefined,
+      })
     : undefined;
   const shouldUseExternalWebSearch = Boolean(
     shouldIncludeExternalTools &&
@@ -138,22 +180,36 @@ export async function buildAgentParams({
     (hasConfiguredExternalWebSearch || !capabilities?.webSearchPluginConfig),
   );
   let providerOptions =
-    settingsAssistant && capabilities
-      ? buildCapabilityProviderOptions(settingsAssistant, model, provider, capabilities)
-      : {};
-  const standardParams = assistant ? getAssistantStandardParams(assistant, model, provider) : {};
+    assistant && capabilities
+      ? buildCapabilityProviderOptions(assistant, model, provider, capabilities, {
+          aiSdkProviderId,
+          runtimeProviderId: sdkConfig.providerId,
+          providerOptionsKey,
+          endpointType,
+          reasoning,
+        })
+      : request.reasoningEffort !== undefined
+        ? buildResolvedReasoningProviderOptions({
+            aiSdkProviderId: sdkConfig.providerId,
+            providerOptionsKey,
+            endpointType,
+            reasoning,
+          })
+        : {};
+  const standardParams = assistant
+    ? getAssistantStandardParams(assistant, model, provider, reasoning)
+    : {};
   const customParams = assistant ? getCustomParameters(assistant) : {};
   const split = extractAiSdkStandardParams(customParams);
   const filteredStandardParams = filterStandardParams(split.standardParams, model);
   providerOptions = mergeCustomProviderParameters(
     providerOptions,
     split.providerParams,
-    sdkConfig.providerId,
+    provider.id,
+    aiSdkProviderId,
   );
   const anthropicBetaHeaders =
-    settingsAssistant && isAnthropicModel(model)
-      ? addAnthropicHeaders(settingsAssistant, model, provider)
-      : [];
+    assistant && isAnthropicModel(model) ? addAnthropicHeaders(assistant, model, provider) : [];
   const headers =
     request.requestOptions?.headers || anthropicBetaHeaders.length > 0
       ? {
@@ -245,7 +301,7 @@ export async function buildAgentParams({
   return {
     credentialReceipt,
     usageCaptureContext,
-    sdkConfig: { ...sdkConfig, modelId: model.modelId },
+    sdkConfig: { ...sdkConfig, modelId: model.apiModelId ?? model.modelId },
     provider,
     model,
     assistant,
@@ -275,29 +331,6 @@ export async function buildAgentParams({
       }),
     },
   };
-}
-
-export function getCustomParameters(assistant: Assistant): Record<string, unknown> {
-  const params: Record<string, unknown> = {};
-  for (const item of assistant.settings?.customParameters ?? []) {
-    params[item.name] = item.value;
-  }
-  return params;
-}
-
-function createSettingsAssistant(
-  assistant: Assistant | undefined,
-  reasoningEffort: AiBaseRequest['reasoningEffort'],
-): Assistant | undefined {
-  if (reasoningEffort === undefined) return assistant;
-
-  return {
-    ...assistant,
-    settings: {
-      ...assistant?.settings,
-      reasoning_effort: reasoningEffort,
-    },
-  } as Assistant;
 }
 
 function mergeToolSets(
@@ -354,17 +387,34 @@ function getAssistantStandardParams(
   assistant: Assistant,
   model: Model,
   provider: Provider,
+  reasoning: ResolvedReasoningInvocation,
 ): Record<string, number> {
   const params: Record<string, number> = {};
-  const temperature = getTemperature(assistant, model);
-  const topP = getTopP(assistant, model);
-  const maxOutputTokens = getMaxTokens(assistant, model, provider);
+  const temperature = getTemperature(assistant, model, reasoning);
+  const topP = getTopP(assistant, model, reasoning);
+  const maxOutputTokens = getMaxTokens(assistant, model, provider, reasoning);
 
   if (temperature !== undefined) params.temperature = temperature;
   if (topP !== undefined) params.topP = topP;
   if (maxOutputTokens !== undefined) params.maxOutputTokens = maxOutputTokens;
 
   return params;
+}
+
+export function resolveReasoningMaxTokens(
+  requestMaxOutputTokens: number | undefined,
+  assistant: Assistant | undefined,
+  model: Model,
+): number | undefined {
+  if (requestMaxOutputTokens !== undefined) return requestMaxOutputTokens;
+
+  const enableMaxTokens =
+    assistant?.settings.enableMaxTokens ?? DEFAULT_ASSISTANT_SETTINGS.enableMaxTokens;
+  if (enableMaxTokens) {
+    return assistant?.settings.maxTokens ?? DEFAULT_ASSISTANT_SETTINGS.maxTokens;
+  }
+
+  return model.maxOutputTokens;
 }
 
 async function getProviderAndModel(

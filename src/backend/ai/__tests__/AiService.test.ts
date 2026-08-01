@@ -167,13 +167,11 @@ describe('AiService.generateImage', () => {
         aspectRatio: '16:9',
         n: 2,
         providerOptions: expect.objectContaining({
-          'openai-compatible': expect.objectContaining({
-            customFlag: true,
-            reasoningEffort: 'low',
-          }),
           'test-provider': expect.objectContaining({
             background: 'transparent',
+            customFlag: true,
             quality: 'high',
+            reasoningEffort: 'low',
             seed: 42,
           }),
         }),
@@ -335,7 +333,7 @@ describe('AiService.checkModel', () => {
       expect.objectContaining({
         maxRetries: 1,
         providerOptions: {
-          'openai-compatible': {
+          'test-provider': {
             customFlag: true,
             reasoningEffort: 'low',
           },
@@ -504,7 +502,10 @@ describe('AiService usage ownership', () => {
   it('applies an assistant-less per-turn reasoning selection at the provider boundary', async () => {
     const model = createModel('o3', {
       capabilities: [MODEL_CAPABILITY.REASONING],
-      reasoning: { selectableEfforts: ['none', 'low', 'high'] },
+      reasoning: {
+        controls: [{ kind: 'effort', values: ['none', 'low', 'high'] }],
+        selectableEfforts: ['none', 'low', 'high'],
+      },
     });
     const services = createServices({ model });
 
@@ -522,7 +523,7 @@ describe('AiService usage ownership', () => {
       expect.objectContaining({
         options: expect.objectContaining({
           providerOptions: expect.objectContaining({
-            'openai-compatible': expect.objectContaining({ reasoningEffort: 'high' }),
+            'test-provider': expect.objectContaining({ reasoningEffort: 'high' }),
           }),
         }),
       }),

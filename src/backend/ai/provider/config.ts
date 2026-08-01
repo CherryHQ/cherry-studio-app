@@ -32,6 +32,9 @@ import {
   type ResolvedEndpoint,
   resolveEffectiveEndpoint,
 } from './endpoint';
+// Config dispatch reads the extension registry before Agent construction. Register app extensions
+// here explicitly instead of relying on an unrelated options-module import to initialize them.
+import './factory';
 
 const appProviderIdMap = appProviderIds as Record<string, AppProviderId>;
 

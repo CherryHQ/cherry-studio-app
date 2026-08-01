@@ -22,15 +22,13 @@ import { resolveMediaCapabilities } from './messages/messageCapabilities';
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { listModels as listProviderModels } from './provider/listModels';
 import { Agent, buildAgentParams } from './runtime/aiSdk';
-import {
-  type BuildAgentParamsDependencies,
-  getCustomParameters,
-} from './runtime/aiSdk/params/buildAgentParams';
+import type { BuildAgentParamsDependencies } from './runtime/aiSdk/params/buildAgentParams';
 import type { AppProviderSettingsMap } from './types';
 import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/requests';
 import { splitImageParamValues } from './utils/imageOptions';
 import { buildImageProviderOptions, mergeImageProviderOptions } from './utils/imageProviderOptions';
 import { extractAiSdkStandardParams } from './utils/options';
+import { getCustomParameters } from './utils/reasoning';
 
 // ── Request types ──────────────────────────────────────────────────
 

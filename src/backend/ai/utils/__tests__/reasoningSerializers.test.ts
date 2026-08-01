@@ -68,6 +68,66 @@ describe('resolveReasoningInvocation', () => {
     expect(result.budgetTokens).toBe(8191);
   });
 
+  it('uses the declared budget floor and ceiling for the canonical extremes', () => {
+    const model = createModel({
+      controls: [{ kind: 'budget', min: 0, max: 10_000 }],
+      selectableEfforts: ['minimal', 'max'],
+      thinkingTokenLimits: { min: 0, max: 10_000 },
+    });
+    const profile: ReasoningWireProfile = {
+      effort: {
+        operations: [{ target: 'reasoning_budget', value: { source: 'budget' } }],
+        budget: { missing: { type: 'omit-mode' } },
+      },
+    };
+
+    expect(resolveReasoningInvocation({ selection: 'minimal', model, profile }).budgetTokens).toBe(
+      1024,
+    );
+    expect(resolveReasoningInvocation({ selection: 'max', model, profile }).budgetTokens).toBe(
+      10_000,
+    );
+  });
+
+  it('applies fallback, omit-mode, and omit-value missing-budget policies', () => {
+    const model = createModel({
+      controls: [{ kind: 'effort', values: ['high'] }],
+      selectableEfforts: ['high'],
+    });
+    const mode = {
+      operations: [
+        { target: 'enable_thinking' as const, value: { source: 'literal' as const, value: true } },
+        { target: 'thinking_budget' as const, value: { source: 'budget' as const } },
+      ],
+    };
+
+    const fallback = resolveReasoningInvocation({
+      selection: 'high',
+      model,
+      profile: {
+        effort: { ...mode, budget: { missing: { type: 'fallback', value: 13_312 } } },
+      },
+    });
+    expect(encodeReasoningInvocation(fallback)).toEqual({
+      enable_thinking: true,
+      thinking_budget: 13_312,
+    });
+
+    const omittedMode = resolveReasoningInvocation({
+      selection: 'high',
+      model,
+      profile: { effort: { ...mode, budget: { missing: { type: 'omit-mode' } } } },
+    });
+    expect(omittedMode).toEqual({ kind: 'omit', selection: 'high', emissions: [] });
+
+    const omittedValue = resolveReasoningInvocation({
+      selection: 'high',
+      model,
+      profile: { effort: { ...mode, budget: { missing: { type: 'omit-value' } } } },
+    });
+    expect(encodeReasoningInvocation(omittedValue)).toEqual({ enable_thinking: true });
+  });
+
   it('encodes nested and flat reviewed targets without provider or model branches', () => {
     const profile: ReasoningWireProfile = {
       effort: {

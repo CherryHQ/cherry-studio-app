@@ -91,6 +91,28 @@ describe('providerToAiSdkConfig', () => {
     expect(config.providerSettings.fetch).toBeUndefined();
   });
 
+  it('resolves registered adapter extensions before falling back to openai-compatible', async () => {
+    const provider = createProvider({
+      id: 'together',
+      presetProviderId: 'together',
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          adapterFamily: 'togetherai',
+          baseUrl: 'https://api.together.ai',
+        },
+      },
+    });
+
+    const config = await providerToAiSdkConfig(
+      provider,
+      createModel(provider.id, 'zai-org/GLM-5'),
+      createRuntime(),
+    );
+
+    expect(config.providerId).toBe('togetherai');
+  });
+
   it('adds X-Source only to Radeon Cloud chat request headers', async () => {
     const radeonProvider = createProvider({
       id: 'radeon-cloud',

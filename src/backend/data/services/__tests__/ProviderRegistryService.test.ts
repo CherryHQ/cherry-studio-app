@@ -9,6 +9,7 @@ import {
   mergePresetModel,
   ProviderRegistryService,
   providerRegistryService,
+  resolveReasoningProfileFromRegistry,
 } from '../ProviderRegistryService';
 
 describe('provider-registry-service', () => {
@@ -162,5 +163,31 @@ describe('provider-registry-service', () => {
         ],
       },
     });
+  });
+
+  test('resolves endpoint inline wire before the global format wire', () => {
+    const inlineWire = {
+      effort: {
+        operations: [
+          {
+            target: 'disable_reasoning' as const,
+            value: { source: 'literal' as const, value: false },
+          },
+        ],
+      },
+    };
+
+    expect(
+      resolveReasoningProfileFromRegistry({
+        endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        format: { type: 'openai-chat', wire: inlineWire },
+      }).wire,
+    ).toBe(inlineWire);
+    expect(
+      resolveReasoningProfileFromRegistry({
+        endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        format: { type: 'openai-chat' },
+      }).wire,
+    ).toBe(REASONING_FORMAT_PROFILES['openai-chat'].wire);
   });
 });

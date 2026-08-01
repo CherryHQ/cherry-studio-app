@@ -137,6 +137,8 @@ export function resolveReasoningInvocation(
       ? resolveModeBudget(selection, input.model, mode.budget, input.maxTokens)
       : undefined;
 
+  // `null` means the output cap cannot satisfy the wire contract. Omit the whole mode instead of
+  // emitting an invalid or partially enabled request.
   if (budgetTokens === null) return { ...OMIT, selection };
 
   if ('budget' in mode && mode.budget.missing.type === 'omit-mode' && budgetTokens === undefined) {

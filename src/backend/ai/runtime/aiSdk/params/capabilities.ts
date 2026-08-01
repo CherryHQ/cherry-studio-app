@@ -37,9 +37,9 @@ export function resolveCapabilities(
   preference: Pick<PreferenceService, 'getMultipleRawCached'>,
   options: { webSearchProviderId?: string } = {},
 ): ResolvedCapabilities {
-  const enableReasoning = Boolean(
-    model.reasoning && assistant.settings?.reasoning_effort !== undefined,
-  );
+  // The descriptor says whether the model exposes reasoning. The per-request resolver decides
+  // whether `default`, `none`, or an effort emits anything for this invocation.
+  const enableReasoning = Boolean(model.reasoning);
   const enableWebSearch = Boolean(
     !options.webSearchProviderId &&
     ((assistant.settings?.enableWebSearch && model.capabilities.includes('web-search')) ||
