@@ -73,7 +73,7 @@
   },
   "overrides": [
     {
-      "includes": ["src/shared/data/cache/**"],
+      "includes": ["src/shared/data/cache/**", "packages/shared/src/data/cache/**"],
       "linter": {
         "rules": {
           "suspicious": {

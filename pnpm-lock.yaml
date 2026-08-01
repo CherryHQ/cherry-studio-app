@@ -103,6 +103,9 @@ importers:
       '@cherrystudio/provider-registry':
         specifier: workspace:*
         version: link:packages/provider-registry
+      '@cherrystudio/shared':
+        specifier: workspace:*
+        version: link:packages/shared
       '@cherrystudio/ui':
         specifier: workspace:*
         version: link:packages/ui
@@ -535,6 +538,18 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.6(@types/node@24.13.2)(jiti@2.7.0)(jsdom@20.0.3)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.0)(yaml@2.9.0)
+
+  packages/shared:
+    dependencies:
+      '@cherrystudio/provider-registry':
+        specifier: workspace:*
+        version: link:../provider-registry
+      ai:
+        specifier: 6.0.183
+        version: 6.0.183(patch_hash=fb46a93dada4a2926457e0ccbf4749b2f2d9cf7c94e70d9b4e37da59d9010c05)(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/ui:
     dependencies:

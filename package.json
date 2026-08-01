@@ -68,6 +68,7 @@
     "@cherrystudio/ai-sdk-provider": "workspace:*",
     "@cherrystudio/design-tokens": "workspace:*",
     "@cherrystudio/provider-registry": "workspace:*",
+    "@cherrystudio/shared": "workspace:*",
     "@cherrystudio/ui": "workspace:*",
     "@expo/dom-webview": "^57.0.1",
     "@expo/metro-runtime": "~57.0.5",

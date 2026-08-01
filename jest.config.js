@@ -25,6 +25,8 @@ module.exports = {
       '<rootDir>/packages/lucide-uniwind/src/png-icons/generated/$1',
     '^lucide-uniwind/png$': '<rootDir>/packages/lucide-uniwind/src/png-icons/index.ts',
     '^vitest$': '<rootDir>/packages/provider-registry/vitestJestShim.ts',
+    '^@cherrystudio/shared/(.*)$': '<rootDir>/packages/shared/src/$1',
+    '^@shared/(.*)$': '<rootDir>/packages/shared/src/$1',
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@logger$': '<rootDir>/src/shared/core/logger/LoggerService.ts',
   },

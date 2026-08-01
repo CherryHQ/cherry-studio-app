@@ -247,6 +247,43 @@ module.exports = defineConfig([
     ],
   ),
   restrictedImports(
+    ['packages/shared/src/**/*.{ts,tsx}'],
+    [
+      {
+        group: ['@/*', '@/*/**', '@src/*', '@src/*/**', '@logger'],
+        message:
+          '@cherrystudio/shared must not depend on app code; the dependency direction is app -> package.',
+      },
+      {
+        group: [
+          'react',
+          'react/*',
+          'react-native',
+          'react-native/*',
+          'react-native-*',
+          'react-native-*/*',
+          'expo',
+          'expo-*',
+          'expo-*/*',
+          '@expo/*',
+          '@expo/*/**',
+        ],
+        message:
+          '@cherrystudio/shared mirrors desktop src/shared and must remain platform- and React-independent.',
+      },
+    ],
+  ),
+  restrictedImports(
+    ['src/**/*.{ts,tsx}'],
+    [
+      {
+        group: ['@shared/*', '@shared/*/**'],
+        message:
+          '@shared/* is the package-internal alias inside packages/shared; app code imports @cherrystudio/shared/*.',
+      },
+    ],
+  ),
+  restrictedImports(
     ['src/app/**/*.{ts,tsx}'],
     [
       layerPattern(
