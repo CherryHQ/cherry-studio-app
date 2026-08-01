@@ -1,6 +1,5 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiPlugin } from '@cherrystudio/ai-core';
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
 import {
   type Assistant,
