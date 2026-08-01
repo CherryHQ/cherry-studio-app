@@ -346,11 +346,12 @@ root-level merge:
 | Path | Ownership |
 |---|---|
 | `src/frontend/data` | `DataApiProvider`, `PreferenceProvider`, workflow `BackendProvider`, `QueryProvider`, endpoint query keys, data/preference/cache hooks, and frontend `CacheService` |
-| `src/shared/data` | frontend/backend entities, DTO schemas, preferences, shared cache schemas, and data errors |
+| `packages/shared/src/data` | frontend/backend entities, DTO schemas, preferences, shared cache schemas, and data errors (`@cherrystudio/shared/data`, desktop-mirrored) |
 | `src/backend/data` | backend `CacheService`, `PreferenceService`, SQLite/Drizzle, seeders, fixtures, and persistence services |
 | `src/frontend/utils` | pure helpers and constants used only by frontend modules |
 | `src/backend/utils` | pure helpers and constants used only by backend modules |
-| `src/shared/utils` | platform-independent pure helpers used by both frontend and backend |
+| `src/shared/utils` | mobile-native platform-independent pure helpers used by both frontend and backend |
+| `packages/shared/src/utils` | desktop-mirrored portable pure helpers (`@cherrystudio/shared/utils`) |
 | `src/frontend/types` / `src/backend/types` | declarations owned by one layer |
 | `src/types` | truly global environment declarations and generated declarations only |
 

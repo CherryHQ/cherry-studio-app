@@ -8,6 +8,8 @@ const { defineConfig } = require('eslint/config');
 // backend -> {backend, shared}
 // backend internals: ai -> {services, data}; services -> data
 // shared -> shared
+// packages/shared (@cherrystudio/shared) sits below every layer: any layer may
+// import it, it must not import app code or react/react-native/expo.
 
 const retiredRootPatterns = [
   'ai',
@@ -38,7 +40,7 @@ const tombstonePatterns = [
   {
     group: ['@/shared/domain', '@/shared/domain/*', '@/shared/domain/*/**'],
     message:
-      'The generic shared domain root was retired. Use @/shared/ai for AI rules, @/shared/data for data vocabulary, or @/shared/utils for pure helpers.',
+      'The generic shared domain root was retired. Use @cherrystudio/shared/ai for AI rules, @cherrystudio/shared/data for data vocabulary, or @cherrystudio/shared/utils and @/shared/utils for pure helpers.',
   },
   {
     group: ['@/screens', '@/screens/*', '@/screens/*/**'],
@@ -220,12 +222,7 @@ module.exports = defineConfig([
     ],
   ),
   restrictedImports(
-    [
-      'src/shared/ai/**/*.{ts,tsx}',
-      'src/shared/contracts/**/*.{ts,tsx}',
-      'src/shared/data/**/*.{ts,tsx}',
-      'src/shared/utils/**/*.{ts,tsx}',
-    ],
+    ['src/shared/contracts/**/*.{ts,tsx}', 'src/shared/utils/**/*.{ts,tsx}'],
     [
       {
         group: [

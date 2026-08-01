@@ -893,8 +893,7 @@ export async function compareSchemaState(desktopRoot: string, mobileRoot: string
   };
 }
 
-async function preferenceKeys(root: string): Promise<string[]> {
-  const file = 'src/shared/data/preference/preferenceSchemas.ts';
+async function preferenceKeys(root: string, file: string): Promise<string[]> {
   return extractObjectKeys(
     await readFile(path.join(root, file), 'utf8'),
     'DefaultPreferences',
@@ -921,7 +920,8 @@ async function routeMethods(root: string, directory: string): Promise<string[]> 
 async function auditSharedData(desktopRoot: string, mobileRoot: string) {
   const desktopHandlerPath = 'src/main/data/api/handlers';
   const mobileHandlerPath = 'src/backend/data/api/handlers';
-  const schemaPath = 'src/shared/data/api/schemas';
+  const desktopSchemaPath = 'src/shared/data/api/schemas';
+  const mobileSchemaPath = 'packages/shared/src/data/api/schemas';
   const [
     desktopPreferences,
     mobilePreferences,
@@ -930,16 +930,16 @@ async function auditSharedData(desktopRoot: string, mobileRoot: string) {
     desktopRoutes,
     mobileRoutes,
   ] = await Promise.all([
-    preferenceKeys(desktopRoot),
-    preferenceKeys(mobileRoot),
+    preferenceKeys(desktopRoot, 'src/shared/data/preference/preferenceSchemas.ts'),
+    preferenceKeys(mobileRoot, 'packages/shared/src/data/preference/preferenceSchemas.ts'),
     directTrackedTypeScriptFiles(desktopRoot, desktopHandlerPath),
     directTrackedTypeScriptFiles(mobileRoot, mobileHandlerPath),
     routeMethods(desktopRoot, desktopHandlerPath),
     routeMethods(mobileRoot, mobileHandlerPath),
   ]);
   const [desktopSchemaModules, mobileSchemaModules] = await Promise.all([
-    directTrackedTypeScriptFiles(desktopRoot, schemaPath),
-    directTrackedTypeScriptFiles(mobileRoot, schemaPath),
+    directTrackedTypeScriptFiles(desktopRoot, desktopSchemaPath),
+    directTrackedTypeScriptFiles(mobileRoot, mobileSchemaPath),
   ]);
   const desktopHandlerNames = desktopHandlers.map((file) => path.basename(file));
   const mobileHandlerNames = mobileHandlers.map((file) => path.basename(file));
@@ -1108,29 +1108,30 @@ export async function auditDesignCatalog(
 }
 
 async function auditMcpRetention(desktopRoot: string, mobileRoot: string) {
-  const file = 'src/shared/data/types/mcpServer.ts';
+  const desktopFile = 'src/shared/data/types/mcpServer.ts';
+  const mobileFile = 'packages/shared/src/data/types/mcpServer.ts';
   const [desktopSource, mobileSource] = await Promise.all([
-    readFile(path.join(desktopRoot, file), 'utf8'),
-    readFile(path.join(mobileRoot, file), 'utf8'),
+    readFile(path.join(desktopRoot, desktopFile), 'utf8'),
+    readFile(path.join(mobileRoot, mobileFile), 'utf8'),
   ]);
   return {
     desktopStoredTransports: extractVariableCallStrings(
       desktopSource,
       'McpServerTypeSchema',
       'enum',
-      file,
+      desktopFile,
     ),
     mobileRuntimeProjection: extractVariableCallStrings(
       mobileSource,
       'StreamableHttpMcpServerSchema',
       'literal',
-      file,
+      mobileFile,
     ),
     mobileStoredTransports: extractVariableCallStrings(
       mobileSource,
       'McpServerTypeSchema',
       'enum',
-      file,
+      mobileFile,
     ),
   };
 }

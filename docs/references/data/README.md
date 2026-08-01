@@ -35,7 +35,7 @@ It contains:
 - `BackendProvider` and `useBackendModule(key)` for workflows only.
 - `QueryProvider` and endpoint-specific files under the `queryKeys` registry.
 - The frontend `CacheService.ts` and cache hooks; its MMKV adapter is private to the service, while
-  pure cache schemas live in `src/shared/data/cache`.
+  pure cache schemas live in `@cherrystudio/shared/data/cache`.
 
 Feature and cross-feature hooks own resource-specific queries and call endpoint paths through the
 typed Data API hooks. `frontend/data/queryKeys` supplies one cache-key file per endpoint family
@@ -45,7 +45,9 @@ concrete service graph. Frontend tests inject an `ApiClient`, `PreferenceClient`
 
 ## Shared Data
 
-`src/shared/data` contains values both sides may know:
+`packages/shared/src/data` (`@cherrystudio/shared/data`) contains values both sides may know. The
+package mirrors the cross-platform subset of Cherry Desktop's `src/shared`, so its contents stay
+desktop-compatible:
 
 - `api`: endpoint DTO schemas, pagination shapes, data errors, and `ApiClient`.
 - `preference`: preference keys, value schemas, defaults, pure helpers, and `PreferenceClient`.
@@ -74,14 +76,14 @@ cursor. It omits Electron-only IPC, shared-window relay, and BrowserWindow synch
 backend persist tier uses its own `cherry-backend-cache-persist` MMKV store and is not readable
 through the frontend cache API.
 
-Both caches use schemas and pure cache helpers from `src/shared/data/cache`, but their concrete
+Both caches use schemas and pure cache helpers from `@cherrystudio/shared/data/cache`, but their concrete
 classes, adapters, values, subscriptions, and lifecycles remain independent. Domain-specific
 caches, such as MCP tool snapshots, may remain private to the owning backend module when a generic
 cache would weaken that module's invariants.
 
 ## Data API And Workflow Contracts
 
-`src/backend/data/api/handlers` maps endpoint families from `src/shared/data/api` to persistence or
+`src/backend/data/api/handlers` maps endpoint families from `@cherrystudio/shared/data/api` to persistence or
 workflow implementations. `DataApiService` performs typed in-process route dispatch and satisfies
 `ApiClient`; it adds no IPC, HTTP, or serialization.
 

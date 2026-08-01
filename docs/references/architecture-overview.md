@@ -27,16 +27,18 @@ fault isolation or protection from blocking the JavaScript thread. Contract valu
 | `src/backend/ai` | AI SDK, provider adapters, MCP runtime, tools, and message conversion |
 | `src/backend/data` | Backend cache, preferences, SQLite, schemas, seeders, fixtures, and persistence services |
 | `src/backend/services` | Multi-step workflows, device capabilities, OAuth, avatars, and web search |
-| `src/shared/ai` | Cross-layer AI tool and transport rules |
 | `src/shared/contracts` | Workflow-only `Backend` modules, sessions, events, and results |
-| `src/shared/data` | Entities, endpoint DTOs, `ApiClient`, preferences, `PreferenceClient`, cache schemas, and data errors |
-| `src/shared/core` / `src/shared/utils` | Cross-layer foundations and pure utilities |
+| `src/shared/core` / `src/shared/utils` | Cross-layer foundations and mobile-native pure utilities |
 | `src/types` | Truly global or generated declarations only |
+| `packages/shared/src/ai` | Cross-layer AI tool and transport rules (`@cherrystudio/shared/ai`) |
+| `packages/shared/src/data` | Entities, endpoint DTOs, `ApiClient`, preferences, `PreferenceClient`, cache schemas, and data errors (`@cherrystudio/shared/data`) |
+| `packages/shared/src/{types,utils}` | Portable desktop-mirrored types and pure helpers (`@cherrystudio/shared/{types,utils}`) |
 
 Only `bootstrap` may import both frontend and backend. Frontend resource data uses typed Data API
-hooks and `shared/data/api`; preferences use the separate `shared/data/preference` client; workflows
-use `useBackendModule(key)` and `shared/contracts`. Frontend never imports SQLite, Drizzle, AI SDK,
-or concrete device and persistence implementations. ESLint enforces these directions.
+hooks and `@cherrystudio/shared/data/api`; preferences use the separate
+`@cherrystudio/shared/data/preference` client; workflows use `useBackendModule(key)` and
+`@/shared/contracts`. Frontend never imports SQLite, Drizzle, AI SDK, or concrete device and
+persistence implementations. ESLint enforces these directions.
 
 Inside backend, static imports flow from `ai` to `services` or `data`, and from `services` to `data`;
 `data` imports neither general services nor AI. A workflow service that needs AI receives a narrow
@@ -50,11 +52,11 @@ its process topology, lifecycle framework, or dependency-injection container.
 ## Frontend Interfaces
 
 - Resource CRUD and pagination use typed React Query hooks backed by `ApiClient` from
-  `shared/data/api`.
+  `@cherrystudio/shared/data/api`.
 - Preference reads, writes, and subscriptions use `PreferenceClient` from
-  `shared/data/preference`.
+  `@cherrystudio/shared/data/preference`.
 - Multi-step workflows and long-lived sessions use `useBackendModule(key)` and the workflow-only
-  `Backend` from `shared/contracts`.
+  `Backend` from `@/shared/contracts`.
 
 `DataApiService` dispatches resource calls directly to backend handlers in-process. Workflow events
 and results describe what happened; frontend owners perform navigation, cache invalidation,
@@ -64,6 +66,7 @@ compatibility adapter or generic frontend selector for persistence services.
 ## Topic Documents
 
 - [Data Layer](./data/README.md): Data API, preferences, workflow contracts, SQLite services, schemas, and seeding.
+- [Shared Package](./shared-package.md): `@cherrystudio/shared` scope, admission criteria, aliasing, and desktop sync.
 - [Storage Engine](./data/storage-engine.md): current SQLite constraints and migration criteria.
 - [Runtime Ownership](./runtime-ownership.md): app bootstrap, sessions, cleanup, and startup gates.
 - [AI Provider Integration](./ai/provider-integration.md): provider/model records and AI adapters.

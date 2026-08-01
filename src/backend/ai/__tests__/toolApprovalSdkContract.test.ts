@@ -1,7 +1,7 @@
 /**
  * Canaries for the AI SDK behaviours our MCP tool-approval flow rides on.
  *
- * The flow in `src/shared/ai/transport/toolApprovals.ts`,
+ * The flow in `packages/shared/src/ai/transport/toolApprovals.ts`,
  * `src/frontend/features/chat/session/chatSessionProjection.ts` and `McpRuntimeService`
  * owns no approval machinery of its own — it steers the SDK's. So the rules it
  * depends on are invisible in our source, and an `ai` upgrade that changes any

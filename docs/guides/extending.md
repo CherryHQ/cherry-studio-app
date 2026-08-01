@@ -7,8 +7,10 @@ before introducing a new cross-layer interface.
 
 ## Add A Resource Endpoint
 
-1. Put entities and DTO schemas in `src/shared/data` when both sides need them.
-2. Define the endpoint under `src/shared/data/api/schemas` and add it to `apiSchemas.ts`.
+1. Put entities and DTO schemas in `packages/shared/src/data` (`@cherrystudio/shared/data`) when
+   both sides need them; this package mirrors desktop `src/shared`, so keep additions
+   desktop-compatible.
+2. Define the endpoint under `packages/shared/src/data/api/schemas` and add it to `apiSchemas.ts`.
 3. Implement simple persistence directly in `src/backend/data/services`.
 4. Add an endpoint-family handler under `src/backend/data/api/handlers` and register it in
    `apiHandlers.ts`.
@@ -37,12 +39,12 @@ workflow interface and observable results.
 
 - Add Drizzle schemas under `src/backend/data/db/schemas` and register them in its barrel.
 - Generate and bundle the migration under `src/backend/data/db`.
-- Keep Drizzle row types backend-only; expose entities/DTOs from `src/shared/data`.
+- Keep Drizzle row types backend-only; expose entities/DTOs from `@cherrystudio/shared/data`.
 - Expose frontend access through a Data API endpoint, not a new `Backend` module.
 - Keep resource-specific composition in the owning frontend hook or feature, not in shared or
   backend code.
 
-New Message Part vocabulary belongs in `src/shared/data/types/uiParts.ts`; render dispatch belongs in
+New Message Part vocabulary belongs in `packages/shared/src/data/types/uiParts.ts`; render dispatch belongs in
 `src/frontend/features/chat/messageContent`. A new JSON part does not require a table migration, but
 FTS indexes only text parts.
 
@@ -50,8 +52,10 @@ FTS indexes only text parts.
 
 AI SDK adapters live under `src/backend/ai`. Stateful device and third-party capabilities live in
 their owning domain under `src/backend/services`, such as `permissions`, `oauth`, and `webSearch`.
-Cross-layer AI tool and transport rules belong in `src/shared/ai`. General pure helpers used by
-both sides, including model capability checks, belong in `src/shared/utils`.
+Cross-layer AI tool and transport rules belong in `packages/shared/src/ai`
+(`@cherrystudio/shared/ai`). General pure helpers used by both sides belong in `src/shared/utils`
+when they are mobile-native, or in `packages/shared/src/utils` when they mirror a desktop helper,
+including model capability checks.
 
 App-level tools are resolved by `ToolService` and attached in
 `src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts`. Provider plugins are
@@ -76,5 +80,6 @@ The external web-search stack is the full workflow precedent: provider drivers a
 ## When To Revisit The Architecture
 
 - A real process or network transport is introduced.
-- A capability must be shared with desktop as a package rather than only aligned by vocabulary.
+- A capability beyond the `@cherrystudio/shared` mirror must be shared with desktop as a package
+  rather than only aligned by vocabulary.
 - Explicit tool/plugin assembly grows enough to justify a registry.
