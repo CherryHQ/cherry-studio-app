@@ -25,9 +25,7 @@ const preferenceMapping = {
 } as const;
 
 const searchKeywordsProviderOptions = createWebSearchProviderOptions(
-  getMobileSupportedWebSearchProvidersByCapability('searchKeywords').filter(
-    (provider) => provider.type === 'api',
-  ),
+  getMobileSupportedWebSearchProvidersByCapability('searchKeywords'),
 );
 
 function createWebSearchProviderOptions(
@@ -52,7 +50,7 @@ export function useWebSearchProviderPreferences() {
   );
 
   const handleSearchKeywordsProviderChange = useCallback(
-    (providerId: WebSearchProviderId | null) => {
+    (providerId: WebSearchProviderId) => {
       void setPreferences({ defaultSearchKeywordsProvider: providerId });
     },
     [setPreferences],

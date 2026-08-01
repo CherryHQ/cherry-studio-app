@@ -27,6 +27,18 @@ export function readOptionalString(value: unknown, path: string): string | undef
   return readString(value, path);
 }
 
+export function readOptionalBoolean(value: unknown, path: string): boolean | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'boolean') {
+    throwSchemaIssue({ path, expected: 'boolean' });
+  }
+
+  return value;
+}
+
 export function readNumber(value: unknown, path: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throwSchemaIssue({ path, expected: 'number' });

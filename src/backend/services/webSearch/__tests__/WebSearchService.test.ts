@@ -96,37 +96,34 @@ describe('WebSearchService', () => {
     });
   });
 
-  test.each([
-    { capability: 'fetchUrls' as const, id: 'fetch' as const, name: 'fetch' },
-    { capability: 'searchKeywords' as const, id: 'firecrawl' as const, name: 'Firecrawl' },
-  ])('reports unsupported mobile provider $id during checks', async ({ capability, id, name }) => {
+  test('reports the fetch provider as unsupported during checks', async () => {
     const service = new WebSearchService(createPreferenceService());
 
     await expect(
       service.checkProvider({
         provider: {
-          id,
-          name,
+          id: 'fetch',
+          name: 'fetch',
           type: 'api',
           apiKeys: [],
-          capabilities: [{ feature: capability }],
+          capabilities: [{ feature: 'fetchUrls' }],
           engines: [],
           basicAuthUsername: '',
           basicAuthPassword: '',
         },
-        capability,
+        capability: 'fetchUrls',
       }),
     ).resolves.toEqual({
       valid: false,
-      error: `Web search provider ${id} is not supported on mobile`,
+      error: 'Web search provider fetch is not supported on mobile',
     });
   });
 });
 
 function createPreferenceService(values: Partial<PreferenceDefaultScopeType> = {}) {
+  // The two default-provider keys are deliberately absent: tests that exercise
+  // the unconfigured path rely on `get` resolving them to undefined.
   const defaults: Partial<PreferenceDefaultScopeType> = {
-    'chat.web_search.default_fetch_urls_provider': null,
-    'chat.web_search.default_search_keywords_provider': null,
     'chat.web_search.exclude_domains': [],
     'chat.web_search.max_results': 5,
     'chat.web_search.compression.method': 'none',

@@ -187,9 +187,9 @@ export interface PreferenceSchemas {
     // target-key-definitions/complex/complex
     'chat.web_search.compression.method': PreferenceTypes.WebSearchCompressionMethod;
     // target-key-definitions/complex/complex
-    'chat.web_search.default_fetch_urls_provider': PreferenceTypes.WebSearchProviderId | null;
+    'chat.web_search.default_fetch_urls_provider': PreferenceTypes.WebSearchProviderId;
     // target-key-definitions/complex/complex
-    'chat.web_search.default_search_keywords_provider': PreferenceTypes.WebSearchProviderId | null;
+    'chat.web_search.default_search_keywords_provider': PreferenceTypes.WebSearchProviderId;
     // target-key-definitions/complex/complex
     'chat.web_search.exclude_domains': string[];
     // target-key-definitions/complex/complex
