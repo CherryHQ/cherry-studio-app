@@ -17,7 +17,7 @@ import { McpService } from '@/backend/services/mcp/McpService';
 import { ModelsService } from '@/backend/services/models/ModelsService';
 import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { ProviderAuthConfigOAuthTokenStore } from '@/backend/services/oauth/runtime/OAuthTokenStore';
-import { PaintingsService } from '@/backend/services/paintings/PaintingsService';
+import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
 import { PermissionsService } from '@/backend/services/permissions/PermissionsService';
 import { ProfileService } from '@/backend/services/profile/ProfileService';
 import {
@@ -37,7 +37,6 @@ export type BackendComposition = {
   dataApiDependencies: {
     mcpServers: McpService;
     models: ModelsService;
-    paintings: PaintingsService;
     providers: ProvidersService;
   };
   dispose(): Promise<void>;
@@ -109,17 +108,10 @@ export function createBackend(services: BackendServices): BackendComposition {
       update: (id, input) => services.provider.update(id, input),
     },
   });
-  const paintings = new PaintingsService({
+  const paintings = createPaintingsModule({
     ai: services.ai,
     files: services.fileEntry,
-    paintings: {
-      create: (input) => services.painting.create(input),
-      get: (id) => services.painting.getById(id),
-      listIds: () => services.painting.listAllIds(),
-      listPage: (query) => services.painting.listByCursor(query),
-      removeMany: (ids) => services.painting.deleteMany(ids),
-      replaceOutputs: (id, outputs) => services.painting.replaceOutputs(id, outputs),
-    },
+    paintings: services.painting,
     storage: {
       discard: discardPreparedFiles,
       prepareGeneratedImage,
@@ -200,7 +192,6 @@ export function createBackend(services: BackendServices): BackendComposition {
     dataApiDependencies: {
       mcpServers: mcp,
       models,
-      paintings,
       providers,
     },
     dispose: () => chat.dispose(),

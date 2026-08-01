@@ -1,28 +1,19 @@
-import type {
-  PaintingListQuery,
-  PaintingSchemas,
-} from '@cherrystudio/universal/data/api/schemas/paintings';
+import type { PaintingSchemas } from '@cherrystudio/universal/data/api/schemas/paintings';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
-export type PaintingData = {
-  get(id: string): Promise<Painting>;
-  listIds(): Promise<string[]>;
-  listPage(query?: PaintingListQuery): Promise<{ items: Painting[]; nextCursor?: string }>;
-  removeMany(ids: readonly string[]): Promise<void>;
-};
+import type { PaintingService } from '@/backend/data/services/PaintingService';
 
-export function createPaintingHandlers(service: PaintingData): HandlersFor<PaintingSchemas> {
+export function createPaintingHandlers(service: PaintingService): HandlersFor<PaintingSchemas> {
   return {
     '/paintings': {
-      DELETE: ({ query }) => service.removeMany(query.ids),
-      GET: ({ query }) => service.listPage(query),
+      DELETE: ({ query }) => service.deleteMany(query.ids),
+      GET: ({ query }) => service.listByCursor(query),
     },
     '/paintings/ids': {
-      GET: () => service.listIds(),
+      GET: () => service.listAllIds(),
     },
     '/paintings/:id': {
-      GET: ({ params }) => service.get(params.id),
+      GET: ({ params }) => service.getById(params.id),
     },
   };
 }

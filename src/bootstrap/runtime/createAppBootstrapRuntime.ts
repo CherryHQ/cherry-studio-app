@@ -49,7 +49,7 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
       miniApps: services.miniApp,
       models: services.model,
       notes: services.note,
-      paintings: dataApiDependencies.paintings,
+      paintings: services.painting,
       pins: services.pin,
       prompts: services.prompt,
       providers: dataApiDependencies.providers,

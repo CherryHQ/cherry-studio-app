@@ -1,5 +1,3 @@
-import type { PaintingListQuery } from '@cherrystudio/universal/data/api/schemas/paintings';
-import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import type {
   FileEntryId,
   PreparedInternalFile,
@@ -16,7 +14,7 @@ import type {
   ResolvedPaintingFiles,
 } from '@/shared/contracts';
 
-type PaintingRepository = {
+type PaintingGenerationPersistence = {
   create(input: {
     inputFileIds: readonly FileEntryId[];
     modelId: string;
@@ -24,10 +22,6 @@ type PaintingRepository = {
     prompt: string;
     providerId: string;
   }): Promise<Painting>;
-  get(id: string): Promise<Painting>;
-  listIds(): Promise<string[]>;
-  listPage(query?: PaintingListQuery): Promise<CursorPaginationResponse<Painting>>;
-  removeMany(ids: readonly string[]): Promise<void>;
   replaceOutputs(id: string, outputs: readonly PreparedInternalFile[]): Promise<Painting>;
 };
 
@@ -53,43 +47,24 @@ type PaintingFileRepository = {
   resolve(id: FileEntryId): Promise<ResolvedFile | null>;
 };
 
-export type PaintingsServiceDependencies = {
+export type PaintingsModuleDependencies = {
   ai: PaintingAi;
   files: PaintingFileRepository;
-  paintings: PaintingRepository;
+  paintings: PaintingGenerationPersistence;
   storage: PaintingFileStorage;
 };
 
-export class PaintingsService implements PaintingsModule {
-  constructor(private readonly dependencies: PaintingsServiceDependencies) {}
-
-  createGenerationSession(): PaintingGenerationSession {
-    return new PaintingGenerationSessionImpl(this.dependencies);
-  }
-
-  get(id: string): Promise<Painting> {
-    return this.dependencies.paintings.get(id);
-  }
-
-  listIds(): Promise<string[]> {
-    return this.dependencies.paintings.listIds();
-  }
-
-  listPage(query?: PaintingListQuery): Promise<CursorPaginationResponse<Painting>> {
-    return this.dependencies.paintings.listPage(query);
-  }
-
-  removeMany(ids: readonly string[]): Promise<void> {
-    return this.dependencies.paintings.removeMany(ids);
-  }
-
-  async resolveFiles(painting: Painting): Promise<ResolvedPaintingFiles> {
-    const [inputs, outputs] = await Promise.all([
-      resolveFileEntries(this.dependencies.files, painting.files.input),
-      resolveFileEntries(this.dependencies.files, painting.files.output),
-    ]);
-    return { inputs, outputs };
-  }
+export function createPaintingsModule(dependencies: PaintingsModuleDependencies): PaintingsModule {
+  return {
+    createGenerationSession: () => new PaintingGenerationSessionImpl(dependencies),
+    resolveFiles: async (painting: Painting): Promise<ResolvedPaintingFiles> => {
+      const [inputs, outputs] = await Promise.all([
+        resolveFileEntries(dependencies.files, painting.files.input),
+        resolveFileEntries(dependencies.files, painting.files.output),
+      ]);
+      return { inputs, outputs };
+    },
+  };
 }
 
 type IncompleteReceipt = {
@@ -102,7 +77,7 @@ class PaintingGenerationSessionImpl implements PaintingGenerationSession {
   private generating = false;
   private incompleteReceipt: IncompleteReceipt | undefined;
 
-  constructor(private readonly dependencies: PaintingsServiceDependencies) {}
+  constructor(private readonly dependencies: PaintingsModuleDependencies) {}
 
   dispose(): void {
     this.disposed = true;

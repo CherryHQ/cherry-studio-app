@@ -4,7 +4,7 @@ import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
 import type { PaintingsModule } from '@/shared/contracts';
 
-import { PaintingsService, type PaintingsServiceDependencies } from '../PaintingsService';
+import { createPaintingsModule, type PaintingsModuleDependencies } from '../createPaintingsModule';
 
 const modelId = createUniqueModelId('openai', 'image-1');
 const inputFileId = '00000000-0000-4000-8000-000000000001' as FileEntryId;
@@ -32,8 +32,8 @@ function createSubject() {
   const completed = painting('painting-1', [outputFileId]);
   const files = {
     resolve: jest.fn(),
-  } satisfies PaintingsServiceDependencies['files'];
-  const dependencies: PaintingsServiceDependencies = {
+  } satisfies PaintingsModuleDependencies['files'];
+  const dependencies: PaintingsModuleDependencies = {
     ai: {
       generateImage: jest.fn(async () => ({
         images: [{ base64: 'aW1hZ2U=', mediaType: 'image/png' }],
@@ -42,10 +42,6 @@ function createSubject() {
     files,
     paintings: {
       create: jest.fn(async () => receipt),
-      get: jest.fn(async () => completed),
-      listIds: jest.fn(async () => [completed.id]),
-      listPage: jest.fn(async () => ({ items: [completed] })),
-      removeMany: jest.fn(async () => undefined),
       replaceOutputs: jest.fn(async () => completed),
     },
     storage: {
@@ -55,7 +51,7 @@ function createSubject() {
       readDataUrl: jest.fn(async () => 'data:image/png;base64,aW1hZ2U='),
     },
   };
-  const backend: PaintingsModule = new PaintingsService(dependencies);
+  const backend: PaintingsModule = createPaintingsModule(dependencies);
   return { backend, dependencies };
 }
 
@@ -74,7 +70,7 @@ const generationInput = {
   prompt: ' draw ',
 };
 
-describe('PaintingsService', () => {
+describe('createPaintingsModule', () => {
   it('persists prepared inputs and generated outputs behind one session call', async () => {
     const { backend, dependencies } = createSubject();
     const session = backend.createGenerationSession();
