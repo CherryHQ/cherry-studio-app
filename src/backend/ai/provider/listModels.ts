@@ -4,7 +4,11 @@ import {
   createJsonResponseHandler,
   zodSchema,
 } from '@ai-sdk/provider-utils';
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import {
+  ENDPOINT_TYPE,
+  type EndpointType,
+  endpointImpliedCapability,
+} from '@cherrystudio/provider-registry';
 import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { deriveModelGroupName } from '@cherrystudio/universal/utils/model';
@@ -201,6 +205,41 @@ const togetherFetcher: ModelFetcher = {
   },
 };
 
+const ENDPOINT_TYPE_ALIASES: Record<string, EndpointType> = {
+  anthropic: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+  embeddings: ENDPOINT_TYPE.OPENAI_EMBEDDINGS,
+  gemini: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+  'image-edit': ENDPOINT_TYPE.OPENAI_IMAGE_EDIT,
+  'image-generation': ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION,
+  'jina-rerank': ENDPOINT_TYPE.JINA_RERANK,
+  openai: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+  'openai-response': ENDPOINT_TYPE.OPENAI_RESPONSES,
+  'openai-response-compact': ENDPOINT_TYPE.OPENAI_RESPONSES,
+  'openai-video': ENDPOINT_TYPE.OPENAI_VIDEO_GENERATION,
+};
+const ENDPOINT_TYPE_VALUES = new Set<string>(Object.values(ENDPOINT_TYPE));
+
+function normalizeEndpointTypes(values: string[] | undefined): EndpointType[] | undefined {
+  if (!values?.length) {
+    return undefined;
+  }
+
+  const endpointTypes = dedup(
+    values
+      .map((value) => {
+        const normalized = value.trim().toLowerCase();
+        return (
+          ENDPOINT_TYPE_ALIASES[normalized] ??
+          (ENDPOINT_TYPE_VALUES.has(normalized) ? (normalized as EndpointType) : undefined)
+        );
+      })
+      .filter((value): value is EndpointType => Boolean(value)),
+    (value) => value,
+  );
+
+  return endpointTypes.length > 0 ? endpointTypes : undefined;
+}
+
 const newApiFetcher: ModelFetcher = {
   match: (provider) =>
     isPreset(provider, 'new-api') || provider.id === 'newapi' || provider.id === 'cherryin',
@@ -212,9 +251,16 @@ const newApiFetcher: ModelFetcher = {
       responseSchema: NewApiModelsResponseSchema,
       abortSignal: signal,
     });
-    return dedup(response.data, (model) => model.id).map((model) =>
-      toModel(model.id, provider, { ownedBy: model.owned_by }),
-    );
+    return dedup(response.data, (model) => model.id).map((model) => {
+      const endpointTypes = normalizeEndpointTypes(model.supported_endpoint_types);
+      const impliedCapability = endpointImpliedCapability(endpointTypes?.[0]);
+
+      return toModel(model.id, provider, {
+        ownedBy: model.owned_by,
+        endpointTypes,
+        ...(impliedCapability ? { capabilities: [impliedCapability] } : {}),
+      });
+    });
   },
 };
 

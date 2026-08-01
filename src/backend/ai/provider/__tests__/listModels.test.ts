@@ -1,4 +1,4 @@
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import { listModels } from '../listModels';
@@ -98,6 +98,56 @@ describe('listModels', () => {
         ownedBy: 'OpenAI',
         providerId: 'gateway',
       }),
+    ]);
+  });
+
+  test('maps NewAPI supported_endpoint_types to endpointTypes and an implied capability', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            { id: 'gpt-image-1', supported_endpoint_types: ['image-generation', 'image-edit'] },
+            { id: 'text-embedding-3', supported_endpoint_types: ['EMBEDDINGS'] },
+            { id: 'claude-sonnet', supported_endpoint_types: ['anthropic', 'anthropic'] },
+            { id: 'mystery-model', supported_endpoint_types: ['not-a-known-endpoint'] },
+            { id: 'plain-model' },
+          ],
+          object: 'list',
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const models = await listModels(createProvider(), {
+      getRotatedApiKey: jest.fn(async () => 'test-key'),
+    });
+
+    expect(
+      models.map((model) => ({
+        apiModelId: model.apiModelId,
+        capabilities: model.capabilities,
+        endpointTypes: model.endpointTypes,
+      })),
+    ).toEqual([
+      {
+        apiModelId: 'gpt-image-1',
+        capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+        endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION, ENDPOINT_TYPE.OPENAI_IMAGE_EDIT],
+      },
+      {
+        apiModelId: 'text-embedding-3',
+        capabilities: [MODEL_CAPABILITY.EMBEDDING],
+        endpointTypes: [ENDPOINT_TYPE.OPENAI_EMBEDDINGS],
+      },
+      // Duplicates collapse, and a chat endpoint implies no extra capability.
+      {
+        apiModelId: 'claude-sonnet',
+        capabilities: [],
+        endpointTypes: [ENDPOINT_TYPE.ANTHROPIC_MESSAGES],
+      },
+      // Unknown values drop out entirely rather than being persisted as-is.
+      { apiModelId: 'mystery-model', capabilities: [], endpointTypes: undefined },
+      { apiModelId: 'plain-model', capabilities: [], endpointTypes: undefined },
     ]);
   });
 
