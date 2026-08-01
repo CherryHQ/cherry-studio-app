@@ -5,6 +5,7 @@ import type {
 } from '@cherrystudio/universal/data/api/schemas/mcpServers';
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
+import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import type {
   McpModule,
   McpConnectionConfig,
@@ -34,12 +35,6 @@ type McpRuntime = {
 export type McpModuleDependencies = {
   runtime: McpRuntime;
   servers: McpServerData;
-};
-
-export type McpServerMutations = {
-  createServer(input: CreateMcpServerDto): Promise<StreamableHttpMcpServer>;
-  removeServer(id: string): Promise<void>;
-  updateServer(id: string, input: UpdateMcpServerDto): Promise<McpUpdateServerResult>;
 };
 
 export function createMcpModule(

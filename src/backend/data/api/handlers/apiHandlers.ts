@@ -1,7 +1,5 @@
 import type { ApiImplementation } from '@cherrystudio/universal/data/api/types';
 
-import type { McpServerMutations } from '@/backend/services/mcp/createMcpModule';
-
 import type { AgentChannelService } from '../../services/AgentChannelService';
 import type { AgentGlobalSkillService } from '../../services/AgentGlobalSkillService';
 import type { AgentService } from '../../services/AgentService';
@@ -42,7 +40,7 @@ import { createFileHandlers } from './files';
 import { createGroupHandlers } from './groups';
 import { createJobHandlers } from './jobs';
 import { createKnowledgeHandlers } from './knowledges';
-import { createMcpServerHandlers } from './mcpServers';
+import { createMcpServerHandlers, type McpServerMutations } from './mcpServers';
 import { createMessageHandlers } from './messages';
 import { createMiniAppHandlers } from './miniApps';
 import { createModelHandlers } from './models';

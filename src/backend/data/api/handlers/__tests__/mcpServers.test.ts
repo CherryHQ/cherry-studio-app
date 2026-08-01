@@ -1,7 +1,6 @@
 import type { McpServerService } from '@/backend/data/services/McpServerService';
-import type { McpServerMutations } from '@/backend/services/mcp/createMcpModule';
 
-import { createMcpServerHandlers } from '../mcpServers';
+import { createMcpServerHandlers, type McpServerMutations } from '../mcpServers';
 
 describe('MCP server Data API handlers', () => {
   test('read through McpServerService and coordinate mutations through McpModule', async () => {

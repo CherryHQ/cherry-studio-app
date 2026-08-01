@@ -3,6 +3,7 @@ import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { readUIMessageStream, type UIMessageChunk } from 'ai';
 
 import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
+import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import {
   discardPreparedFiles,
   imageUriToDataUrl,
@@ -13,7 +14,7 @@ import {
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
 import { CherryInClient } from '@/backend/services/cherryin/CherryInClient';
-import { createMcpModule, type McpServerMutations } from '@/backend/services/mcp/createMcpModule';
+import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { ProviderAuthConfigOAuthTokenStore } from '@/backend/services/oauth/runtime/OAuthTokenStore';
