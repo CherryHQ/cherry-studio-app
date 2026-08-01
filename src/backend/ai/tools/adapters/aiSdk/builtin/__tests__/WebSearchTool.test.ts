@@ -1,35 +1,45 @@
+import { getTrustedLocalToolTerminalFailure } from '@/backend/ai/runtime/aiSdk/loop/localToolTerminalOutcome';
+import {
+  WEB_LOOKUP_ERROR_NOTE,
+  WEB_PROVIDER_CONFIGURATION_ERROR_NOTE,
+  WEB_PROVIDER_NOT_CONFIGURED_NOTE,
+} from '@/backend/ai/tools/webLookup';
 import type { WebSearchConfigErrorCode } from '@/backend/services/webSearch/WebSearchConfigError';
 import { WebSearchConfigError } from '@/backend/services/webSearch/WebSearchConfigError';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
-import { createWebSearchTool, WEB_LOOKUP_ERROR_NOTE, webSearchInputSchema } from '../WebSearchTool';
+import { createWebSearchTool, webSearchInputSchema } from '../WebSearchTool';
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
   loggerService: {
-    withContext: () => ({ warn: jest.fn() }),
+    withContext: () => ({ error: jest.fn(), warn: jest.fn() }),
   },
 }));
 
+function createTool(searchKeywords: jest.Mock) {
+  return createWebSearchTool({ searchKeywords } as unknown as WebSearchService);
+}
+
+function execute(tool: ReturnType<typeof createTool>, abortSignal?: AbortSignal) {
+  return tool.execute?.(
+    { query: 'Cherry Studio mobile' },
+    { abortSignal, messages: [], toolCallId: 'web-search-1' },
+  );
+}
+
 describe('createWebSearchTool', () => {
   it('returns citation IDs that are unique across lookup calls', async () => {
-    const webSearchService = {
-      searchKeywords: jest.fn(async () => ({
+    const searchTool = createTool(
+      jest.fn(async () => ({
         results: [
           { content: 'A', title: 'A', url: 'https://example.com/a' },
           { content: 'B', title: 'B', url: 'https://example.com/b' },
         ],
       })),
-    } as unknown as WebSearchService;
-    const searchTool = createWebSearchTool(webSearchService);
+    );
 
-    const first = await searchTool.execute?.(
-      { query: 'Cherry Studio mobile' },
-      { messages: [], toolCallId: 'web-search-1' },
-    );
-    const second = await searchTool.execute?.(
-      { query: 'Cherry Studio desktop' },
-      { messages: [], toolCallId: 'web-search-2' },
-    );
+    const first = await execute(searchTool);
+    const second = await execute(searchTool);
 
     expect(first).toEqual([
       expect.objectContaining({ id: expect.stringMatching(/^[0-9a-f]{8}-1$/) }),
@@ -39,56 +49,116 @@ describe('createWebSearchTool', () => {
   });
 
   it.each([
-    'provider_not_configured',
-    'provider_unknown',
-    'capability_unsupported',
-    'api_key_missing',
-    'api_host_missing',
-    'api_host_invalid',
-    'provider_unsupported_on_platform',
-  ] satisfies WebSearchConfigErrorCode[])(
-    'marks permanent configuration errors as non-retryable: %s',
-    async (code) => {
-      const webSearchService = {
-        searchKeywords: jest.fn(async () => {
-          throw new WebSearchConfigError(code, `web search failed with ${code}`);
+    {
+      code: 'provider_not_configured',
+      i18nKey: 'web_search_provider_unavailable',
+      userMessage: /no compatible provider is configured/,
+    },
+    {
+      code: 'provider_unknown',
+      i18nKey: 'web_search_provider_unavailable',
+      userMessage: /no compatible provider is configured/,
+    },
+    {
+      code: 'capability_unsupported',
+      i18nKey: 'web_search_provider_unavailable',
+      userMessage: /no compatible provider is configured/,
+    },
+    {
+      code: 'provider_unsupported_on_platform',
+      i18nKey: 'web_search_provider_unavailable',
+      userMessage: /not supported on this device/,
+    },
+    {
+      code: 'api_key_missing',
+      i18nKey: 'web_search_api_key_missing',
+      userMessage: /missing an API key/,
+    },
+    {
+      code: 'api_host_missing',
+      i18nKey: 'web_search_api_host_missing',
+      userMessage: /missing an API host/,
+    },
+    {
+      code: 'api_host_invalid',
+      i18nKey: 'web_search_api_host_invalid',
+      userMessage: /API host is invalid/,
+    },
+  ] satisfies {
+    code: WebSearchConfigErrorCode;
+    i18nKey: string;
+    userMessage: RegExp;
+  }[])(
+    'marks a $code configuration error as terminal with matching guidance',
+    async ({ code, i18nKey, userMessage }) => {
+      const message = `web search failed with ${code}`;
+      const searchTool = createTool(
+        jest.fn(async () => {
+          throw new WebSearchConfigError(code, message);
         }),
-      } as unknown as WebSearchService;
-      const searchTool = createWebSearchTool(webSearchService);
+      );
 
-      await expect(
-        searchTool.execute?.(
-          { query: 'Cherry Studio mobile' },
-          {
-            abortSignal: new AbortController().signal,
-            messages: [],
-            toolCallId: 'web-search-1',
-          },
-        ),
-      ).resolves.toEqual({
-        error: expect.stringMatching(/configure.*Settings.*do not retry/i),
-        i18nKey: 'web_search_provider_not_configured',
+      const output = await execute(searchTool, new AbortController().signal);
+
+      expect(output).toEqual({
+        error: message,
+        i18nKey,
         retryable: false,
         terminal: true,
-        userMessage: expect.stringMatching(/configure.*Settings.*do not retry/i),
+        userMessage: expect.stringMatching(userMessage),
       });
+      // The loop only stops on a failure it can attribute to a local tool it trusts.
+      expect(getTrustedLocalToolTerminalFailure(output)).toMatchObject({ error: message, i18nKey });
     },
   );
 
-  it('returns a stable retry note for transient provider failures', async () => {
-    const webSearchService = {
-      searchKeywords: jest.fn(async () => {
+  it('reports a transient provider failure as retryable, keeping the raw message', async () => {
+    const searchTool = createTool(
+      jest.fn(async () => {
         throw new Error('HTTP 503 upstream unavailable');
       }),
-    } as unknown as WebSearchService;
-    const searchTool = createWebSearchTool(webSearchService);
+    );
 
-    await expect(
-      searchTool.execute?.(
-        { query: 'Cherry Studio mobile' },
-        { messages: [], toolCallId: 'web-search-1' },
-      ),
-    ).resolves.toEqual({ error: WEB_LOOKUP_ERROR_NOTE });
+    const output = await execute(searchTool);
+
+    expect(output).toEqual({ error: 'HTTP 503 upstream unavailable', retryable: true });
+    expect(getTrustedLocalToolTerminalFailure(output)).toBeUndefined();
+  });
+
+  it('rethrows an abort instead of turning it into an error result', async () => {
+    const abortError = Object.assign(new Error('Aborted'), { name: 'AbortError' });
+    const searchTool = createTool(
+      jest.fn(async () => {
+        throw abortError;
+      }),
+    );
+
+    await expect(execute(searchTool)).rejects.toBe(abortError);
+  });
+
+  it.each([
+    { i18nKey: 'web_search_provider_unavailable', note: WEB_PROVIDER_NOT_CONFIGURED_NOTE },
+    { i18nKey: 'web_search_api_key_missing', note: WEB_PROVIDER_CONFIGURATION_ERROR_NOTE },
+    { i18nKey: 'web_search_api_host_missing', note: WEB_PROVIDER_CONFIGURATION_ERROR_NOTE },
+    { i18nKey: 'web_search_api_host_invalid', note: WEB_PROVIDER_CONFIGURATION_ERROR_NOTE },
+    { i18nKey: undefined, note: WEB_LOOKUP_ERROR_NOTE },
+  ])('projects the $i18nKey failure to its model-facing note', ({ i18nKey, note }) => {
+    const searchTool = createTool(jest.fn());
+
+    expect(searchTool.toModelOutput?.({ output: { error: 'boom', i18nKey } } as never)).toEqual({
+      type: 'text',
+      value: note,
+    });
+  });
+
+  it('passes results through as json', () => {
+    const searchTool = createTool(jest.fn());
+    const results = [{ content: 'A', id: 'abc-1', title: 'A', url: 'https://example.com/a' }];
+
+    expect(searchTool.toModelOutput?.({ output: results } as never)).toEqual({
+      type: 'json',
+      value: results,
+    });
   });
 
   it('requires concise, self-contained queries', () => {
