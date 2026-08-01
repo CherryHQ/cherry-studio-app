@@ -45,7 +45,7 @@ export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapPr
 
     return () => {
       disposed = true;
-      runtime.dispose();
+      void runtime.dispose();
     };
   }, [runtime]);
 

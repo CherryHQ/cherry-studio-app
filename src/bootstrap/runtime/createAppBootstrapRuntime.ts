@@ -15,7 +15,7 @@ export type AppBootstrapRuntime = {
   readonly backend: Backend;
   readonly dataApi: ApiClient;
   readonly preference: PreferenceClient;
-  dispose(): void;
+  dispose(): Promise<void>;
   initialize(): Promise<void>;
   runPostReadyTasks(): Promise<void>;
 };
@@ -25,6 +25,7 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
   const dbService = new DbService();
   const services = createBackendServices(dbService, cacheService);
   const { backend, dataApiDependencies, dispose: disposeBackend } = createBackend(services);
+  let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({
       agentChannels: services.agentChannel,
@@ -65,11 +66,14 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
     dataApi,
     preference: services.preference,
     dispose: () => {
-      disposeBackend();
-      services.mcpRuntime.dispose();
-      services.webSearch.dispose();
-      services.cache.dispose();
-      dbService.dispose();
+      disposePromise ??= (async () => {
+        await disposeBackend();
+        services.mcpRuntime.dispose();
+        services.webSearch.dispose();
+        services.cache.dispose();
+        dbService.dispose();
+      })();
+      return disposePromise;
     },
     initialize: async () => {
       services.cache.init();

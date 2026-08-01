@@ -1581,6 +1581,187 @@ describe('ChatRuntime', () => {
     expect(services.message.createUserMessageWithPlaceholders).not.toHaveBeenCalled();
     expect(runtime.getTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY).status).toBe('idle');
   });
+
+  test('rejects a second turn for the same topic', async () => {
+    const services = createServices();
+    const topicGate = createDeferred();
+    services.topic.getById = jest.fn(async () => {
+      await topicGate.promise;
+      return createTopic();
+    });
+    mockReadUIMessageStream.mockImplementation(() =>
+      asyncIterable([createUiMessage('assistant-1', 'done')]),
+    );
+    const runtime = createRuntime({ services });
+
+    const firstTurn = runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'first',
+      topicId: 'topic-1',
+    });
+    await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'reserving');
+
+    await expect(
+      runtime.sendText({
+        selectedModelId: 'provider::model' as UniqueModelId,
+        text: 'second',
+        topicId: 'topic-1',
+      }),
+    ).rejects.toThrow('A response is already streaming for this topic.');
+
+    topicGate.resolve();
+    await firstTurn;
+    expect(services.message.createUserMessageWithPlaceholders).toHaveBeenCalledTimes(1);
+  });
+
+  test('runs turns for different topics in parallel', async () => {
+    const services = createServices();
+    const topicGate = createDeferred();
+    services.topic.getById = jest.fn(async (topicId: string) => {
+      await topicGate.promise;
+      return createTopic({ id: topicId });
+    });
+    mockReadUIMessageStream.mockImplementation(() =>
+      asyncIterable([createUiMessage('assistant-1', 'done')]),
+    );
+    const runtime = createRuntime({ services });
+
+    const firstTurn = runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'first',
+      topicId: 'topic-1',
+    });
+    const secondTurn = runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'second',
+      topicId: 'topic-2',
+    });
+
+    await waitUntil(
+      () =>
+        runtime.getTopicSnapshot('topic-1').status === 'reserving' &&
+        runtime.getTopicSnapshot('topic-2').status === 'reserving',
+    );
+    topicGate.resolve();
+    await Promise.all([firstTurn, secondTurn]);
+
+    expect(services.ai.streamText).toHaveBeenCalledTimes(2);
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+    expect(runtime.getTopicSnapshot('topic-2').status).toBe('idle');
+  });
+
+  test('keeps a turn running when a route subscriber unmounts', async () => {
+    const services = createServices();
+    const streamGate = createDeferred();
+    mockReadUIMessageStream.mockImplementation(() =>
+      gatedAsyncIterable([createUiMessage('assistant-1', 'streaming')], streamGate.promise),
+    );
+    const runtime = createRuntime({ services });
+    const unsubscribeRoute = runtime.subscribe(jest.fn());
+
+    const turn = runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'continue after unmount',
+      topicId: 'topic-1',
+    });
+    await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'streaming');
+    const signal = (services.ai.streamText as jest.Mock).mock.calls[0][0].requestOptions
+      .signal as AbortSignal;
+
+    unsubscribeRoute();
+
+    expect(signal.aborted).toBe(false);
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('streaming');
+    streamGate.resolve();
+    await turn;
+  });
+
+  test('restores the current snapshot after a route resubscribes', async () => {
+    const services = createServices();
+    const streamGate = createDeferred();
+    mockReadUIMessageStream.mockImplementation(() =>
+      gatedAsyncIterable([createUiMessage('assistant-1', 'streaming')], streamGate.promise),
+    );
+    const runtime = createRuntime({ services });
+    const unsubscribeFirstRoute = runtime.subscribe(jest.fn());
+
+    const turn = runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'restore me',
+      topicId: 'topic-1',
+    });
+    await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'streaming');
+    unsubscribeFirstRoute();
+
+    const nextRouteListener = jest.fn();
+    const unsubscribeNextRoute = runtime.subscribe(nextRouteListener);
+    expect(runtime.getTopicSnapshot('topic-1')).toEqual(
+      expect.objectContaining({ status: 'streaming' }),
+    );
+
+    streamGate.resolve();
+    await turn;
+    expect(nextRouteListener).toHaveBeenCalledWith({
+      topicId: 'topic-1',
+      type: 'snapshot-changed',
+    });
+    unsubscribeNextRoute();
+  });
+
+  test('aborts and awaits active turns before completing dispose', async () => {
+    const services = createServices();
+    const finalizationStarted = createDeferred();
+    const finalizationGate = createDeferred();
+    services.ai.streamText = jest.fn(async (request: ChatStreamRequest) =>
+      Promise.resolve(request.requestOptions.signal),
+    );
+    services.message.finalizeAssistantMessage = jest.fn(async (_id, input) => {
+      finalizationStarted.resolve();
+      await finalizationGate.promise;
+      return {
+        ...createMessage('assistant-1', 'assistant'),
+        data: input.data,
+        status: input.status,
+      };
+    });
+    mockReadUIMessageStream.mockImplementation(({ stream }: { stream: AbortSignal }) =>
+      abortableAsyncIterable(createUiMessage('assistant-1', 'streaming'), stream),
+    );
+    const runtime = createRuntime({ services });
+
+    const turn = runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'stop on shutdown',
+      topicId: 'topic-1',
+    });
+    await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'streaming');
+    const signal = (services.ai.streamText as jest.Mock).mock.calls[0][0].requestOptions
+      .signal as AbortSignal;
+
+    const disposePromise = runtime.dispose();
+    let disposeCompleted = false;
+    void disposePromise.then(() => {
+      disposeCompleted = true;
+    });
+    await finalizationStarted.promise;
+
+    expect(signal.aborted).toBe(true);
+    expect(disposeCompleted).toBe(false);
+    await expect(
+      runtime.sendText({
+        selectedModelId: 'provider::model' as UniqueModelId,
+        text: 'too late',
+        topicId: 'topic-2',
+      }),
+    ).rejects.toThrow('Chat runtime is disposed.');
+
+    finalizationGate.resolve();
+    await Promise.all([turn, disposePromise]);
+
+    expect(disposeCompleted).toBe(true);
+    expect(runtime.dispose()).toBe(disposePromise);
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
 });
 
 function asyncIterable<T>(items: T[]) {
@@ -1599,6 +1780,20 @@ function gatedAsyncIterable<T>(items: T[], gate: Promise<void>) {
     }
 
     await gate;
+  })();
+}
+
+function abortableAsyncIterable<T>(item: T, signal: AbortSignal) {
+  return (async function* () {
+    yield item;
+    await new Promise<void>((_resolve, reject) => {
+      if (signal.aborted) {
+        reject(signal.reason);
+        return;
+      }
+
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    });
   })();
 }
 

@@ -40,7 +40,7 @@ export type BackendComposition = {
     paintings: PaintingsService;
     providers: ProvidersService;
   };
-  dispose(): void;
+  dispose(): Promise<void>;
 };
 
 export function createBackend(services: BackendServices): BackendComposition {

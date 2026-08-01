@@ -29,7 +29,7 @@ function makeRuntime(initializeImplementation: () => Promise<void>): {
   runPostReadyTasks: jest.Mock;
   runtime: AppBootstrapRuntime;
 } {
-  const dispose = jest.fn();
+  const dispose = jest.fn(async () => undefined);
   const initialize = jest.fn(initializeImplementation);
   const runPostReadyTasks = jest.fn(async () => undefined);
 

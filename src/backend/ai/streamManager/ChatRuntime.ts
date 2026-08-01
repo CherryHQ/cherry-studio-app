@@ -54,7 +54,10 @@ const logger = loggerService.withContext('ChatRuntime');
 const interruptedTurnApprovalReason = 'The turn ended before this tool call completed.';
 
 export class ChatRuntime implements ChatModule {
+  private activeTasks = new Set<Promise<unknown>>();
   private activeTurns = new Map<string, ActiveTurn>();
+  private disposePromise: Promise<void> | undefined;
+  private isDisposed = false;
   private listeners = new Set<ChatListener>();
   private newTopicHandoffTopicId: string | undefined;
   private topicSnapshots = new Map<string, ChatTopicSnapshot>();
@@ -94,19 +97,41 @@ export class ChatRuntime implements ChatModule {
     activeTurn.abortController.abort(new Error('Chat stream aborted'));
   }
 
-  dispose(): void {
-    for (const [topicId, activeTurn] of this.activeTurns) {
-      activeTurn.abortController.abort(new Error('Chat runtime disposed'));
-      this.setTopicSnapshot(topicId, idleTopicSnapshot);
+  dispose(): Promise<void> {
+    if (!this.disposePromise) {
+      this.isDisposed = true;
+      this.disposePromise = this.disposeRuntime();
     }
 
+    return this.disposePromise;
+  }
+
+  sendText(input: ChatSendTextInput): Promise<void> {
+    return this.startTask(() => this.sendTextTask(input));
+  }
+
+  sendNewTopicText(input: ChatSendNewTopicTextInput): Promise<void> {
+    return this.startTask(() => this.sendNewTopicTextTask(input));
+  }
+
+  respondToolApproval(input: ChatToolApprovalInput): Promise<void> {
+    return this.startTask(() => this.respondToolApprovalTask(input));
+  }
+
+  private async disposeRuntime(): Promise<void> {
+    for (const activeTurn of this.activeTurns.values()) {
+      activeTurn.abortController.abort(new Error('Chat runtime disposed'));
+    }
+
+    await Promise.allSettled([...this.activeTasks]);
+    this.activeTasks.clear();
     this.activeTurns.clear();
     this.newTopicHandoffTopicId = undefined;
-    this.setTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY, idleTopicSnapshot);
+    this.topicSnapshots.clear();
     this.listeners.clear();
   }
 
-  async sendText(input: ChatSendTextInput): Promise<void> {
+  private async sendTextTask(input: ChatSendTextInput): Promise<void> {
     const text = input.text.trim();
     const parts = getTurnParts({ parts: input.parts, text });
 
@@ -146,7 +171,7 @@ export class ChatRuntime implements ChatModule {
     }
   }
 
-  async sendNewTopicText(input: ChatSendNewTopicTextInput): Promise<void> {
+  private async sendNewTopicTextTask(input: ChatSendNewTopicTextInput): Promise<void> {
     const text = input.text.trim();
     const parts = getTurnParts({ parts: input.parts, text });
 
@@ -233,7 +258,7 @@ export class ChatRuntime implements ChatModule {
    * sheet can collect the rest. Duplicate decisions are idempotent and never
    * dispatch a second continuation.
    */
-  async respondToolApproval(input: ChatToolApprovalInput): Promise<void> {
+  private async respondToolApprovalTask(input: ChatToolApprovalInput): Promise<void> {
     const { messageId, topicId } = input;
 
     if (this.activeTurns.has(topicId)) {
@@ -640,12 +665,16 @@ export class ChatRuntime implements ChatModule {
         runtimeStats: { runtimeTiming: runtimeTiming.snapshot() },
       });
 
-      if (!isAwaitingApproval && input.autoNameUserParts) {
-        void this.autoNameTopicFromSummary({
+      if (!this.isDisposed && !isAwaitingApproval && input.autoNameUserParts) {
+        const namingTask = this.autoNameTopicFromSummary({
           assistantId: topic.assistantId,
           assistantParts: (latestAssistantMessage?.parts ?? []) as CherryMessagePart[],
           topicId,
           userParts: input.autoNameUserParts,
+        });
+        this.trackTask(namingTask);
+        void namingTask.catch((error) => {
+          logger.warn('Topic auto-naming failed', toError(error));
         });
       }
     } catch (error) {
@@ -916,6 +945,24 @@ export class ChatRuntime implements ChatModule {
     }
 
     this.emit({ topicId, type: 'snapshot-changed' });
+  }
+
+  private startTask(run: () => Promise<void>): Promise<void> {
+    if (this.isDisposed) {
+      return Promise.reject(new Error('Chat runtime is disposed.'));
+    }
+
+    const task = run();
+    this.trackTask(task);
+    return task;
+  }
+
+  private trackTask(task: Promise<unknown>): void {
+    this.activeTasks.add(task);
+    void task.then(
+      () => this.activeTasks.delete(task),
+      () => this.activeTasks.delete(task),
+    );
   }
 }
 
