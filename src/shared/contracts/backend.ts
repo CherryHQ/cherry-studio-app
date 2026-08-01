@@ -1,25 +1,25 @@
-import type { ChatBackend } from './chat';
-import type { CherryInBackend } from './cherryin';
-import type { McpBackend } from './mcp';
-import type { ModelsBackend } from './models';
-import type { OAuthBackend } from './oauth';
-import type { PaintingsBackend } from './paintings';
-import type { PermissionsBackend } from './permissions';
-import type { ProfileBackend } from './profile';
-import type { ProvidersBackend } from './providers';
-import type { WebSearchBackend } from './webSearch';
+import type { ChatModule } from './chat';
+import type { CherryInModule } from './cherryin';
+import type { McpModule } from './mcp';
+import type { ModelsModule } from './models';
+import type { OAuthModule } from './oauth';
+import type { PaintingsModule } from './paintings';
+import type { PermissionsModule } from './permissions';
+import type { ProfileModule } from './profile';
+import type { ProvidersModule } from './providers';
+import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
-  readonly chat: ChatBackend;
-  readonly cherryin: CherryInBackend;
-  readonly mcp: McpBackend;
-  readonly models: ModelsBackend;
-  readonly oauth: OAuthBackend;
-  readonly paintings: PaintingsBackend;
-  readonly permissions: PermissionsBackend;
-  readonly profile: ProfileBackend;
-  readonly providers: ProvidersBackend;
-  readonly webSearch: WebSearchBackend;
+  readonly chat: ChatModule;
+  readonly cherryin: CherryInModule;
+  readonly mcp: McpModule;
+  readonly models: ModelsModule;
+  readonly oauth: OAuthModule;
+  readonly paintings: PaintingsModule;
+  readonly permissions: PermissionsModule;
+  readonly profile: ProfileModule;
+  readonly providers: ProvidersModule;
+  readonly webSearch: WebSearchModule;
 }
 
 export type BackendModuleKey = keyof Backend;

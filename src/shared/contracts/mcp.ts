@@ -27,7 +27,7 @@ export type McpServerRuntimeSummary = {
   toolCount?: number;
 };
 
-export interface McpBackend {
+export interface McpModule {
   getRuntimeSummaries(
     servers: readonly StreamableHttpMcpServer[],
   ): Promise<Record<string, McpServerRuntimeSummary>>;

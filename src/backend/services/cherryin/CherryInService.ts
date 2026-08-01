@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import type { CherryInAccount, CherryInBackend, CherryInProfile } from '@/shared/contracts';
+import type { CherryInAccount, CherryInModule, CherryInProfile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { OAuthServiceError } from '@/shared/oauth';
 import type { OAuthProviderContext, OAuthTokenCredentials } from '@/shared/oauth';
@@ -63,7 +63,7 @@ export type CherryInServiceDependencies = {
  * CherryIN's own REST surface (balance, profile). The OAuth session it rides on
  * belongs to `OAuthRuntimeService`; this only knows how to read an account.
  */
-export class CherryInService implements CherryInBackend {
+export class CherryInService implements CherryInModule {
   constructor(private readonly dependencies: CherryInServiceDependencies) {}
 
   async getBalance(requestedApiHost?: string): Promise<CherryInAccount | null> {

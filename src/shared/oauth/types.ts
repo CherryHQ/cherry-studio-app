@@ -62,7 +62,7 @@ export interface OAuthEndpoints {
  * Deep-link redirect parts rather than a finished URI: `expo-auth-session`'s
  * `makeRedirectUri` resolves a different URI under a dev client than in a
  * standalone build, so the frontend must assemble it. The assembled value
- * travels back through `OAuthBackend.completeAuthorization` because RFC 6749
+ * travels back through `OAuthModule.completeAuthorization` because RFC 6749
  * requires the exchange to echo the exact `redirect_uri` that was authorized.
  */
 export interface OAuthRedirect {

@@ -1,4 +1,4 @@
-import type { ProfileBackend } from '@/shared/contracts';
+import type { ProfileModule } from '@/shared/contracts';
 
 import { ProfileService, type ProfileServiceDependencies } from '../ProfileService';
 
@@ -14,7 +14,7 @@ describe('ProfileService', () => {
         writeAvatar: jest.fn(async () => undefined),
       },
     };
-    const backend: ProfileBackend = new ProfileService(dependencies);
+    const backend: ProfileModule = new ProfileService(dependencies);
 
     await backend.persistAvatar('file:///picker.png');
 

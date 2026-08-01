@@ -13,7 +13,7 @@ export type SetPermissionPolicyResult = {
   status: SystemPermissionState;
 };
 
-export interface PermissionsBackend {
+export interface PermissionsModule {
   getStatuses(keys: readonly PermissionPreferenceKey[]): Promise<PermissionStatuses>;
   openSystemSettings(permission?: DevicePermission): Promise<void>;
   recover(keys: readonly PermissionPreferenceKey[]): Promise<PermissionStatuses>;

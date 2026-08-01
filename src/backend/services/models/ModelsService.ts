@@ -9,7 +9,7 @@ import type {
   CheckModelsHealthInput,
   ModelHealthResult,
   ModelPullResult,
-  ModelsBackend,
+  ModelsModule,
   ReconcileModelsInput,
   ReconcileModelsResult,
 } from '@/shared/contracts';
@@ -61,7 +61,7 @@ export type ModelsServiceDependencies = {
   pullTimeoutMs?: number;
 };
 
-export class ModelsService implements ModelsBackend {
+export class ModelsService implements ModelsModule {
   constructor(private readonly dependencies: ModelsServiceDependencies) {}
 
   async add(inputs: readonly AddModelInput[]): Promise<Model[]> {

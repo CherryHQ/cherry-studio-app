@@ -1,4 +1,4 @@
-import type { ProfileBackend } from '@/shared/contracts';
+import type { ProfileModule } from '@/shared/contracts';
 
 type ProfilePreferences = {
   readAvatar(): string;
@@ -19,7 +19,7 @@ export type ProfileServiceDependencies = {
   preferences: ProfilePreferences;
 };
 
-export class ProfileService implements ProfileBackend {
+export class ProfileService implements ProfileModule {
   constructor(private readonly dependencies: ProfileServiceDependencies) {}
 
   persistAvatar(sourceUri: string): Promise<void> {

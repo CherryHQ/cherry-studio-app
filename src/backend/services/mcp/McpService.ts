@@ -8,7 +8,7 @@ import type { OffsetPaginationResponse } from '@cherrystudio/universal/data/api/
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
 import type {
-  McpBackend,
+  McpModule,
   McpConnectionConfig,
   McpServerInfo,
   McpServerRuntimeSummary,
@@ -41,7 +41,7 @@ export type McpServiceDependencies = {
   servers: McpServerRepository;
 };
 
-export class McpService implements McpBackend {
+export class McpService implements McpModule {
   constructor(private readonly dependencies: McpServiceDependencies) {}
 
   async createServer(input: CreateMcpServerDto): Promise<StreamableHttpMcpServer> {

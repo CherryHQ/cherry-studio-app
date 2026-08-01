@@ -1,4 +1,4 @@
-import type { CherryInBackend } from '@/shared/contracts';
+import type { CherryInModule } from '@/shared/contracts';
 
 import { CherryInService, type CherryInServiceDependencies } from '../CherryInService';
 
@@ -9,7 +9,7 @@ function createSubject() {
       hasToken: jest.fn(async () => true),
     },
   };
-  const backend: CherryInBackend = new CherryInService(dependencies);
+  const backend: CherryInModule = new CherryInService(dependencies);
 
   /** Answer each endpoint the balance path touches, in call order. */
   const respondWith = (responses: Record<string, unknown>) => {

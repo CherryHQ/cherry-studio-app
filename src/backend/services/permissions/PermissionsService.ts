@@ -6,7 +6,7 @@ import type {
 import type {
   DevicePermission,
   PermissionStatuses,
-  PermissionsBackend,
+  PermissionsModule,
   SetPermissionPolicyResult,
   SystemPermissionState,
 } from '@/shared/contracts';
@@ -27,7 +27,7 @@ export type PermissionsServiceDependencies = {
   preferences: PermissionPreferences;
 };
 
-export class PermissionsService implements PermissionsBackend {
+export class PermissionsService implements PermissionsModule {
   constructor(private readonly dependencies: PermissionsServiceDependencies) {}
 
   async getStatuses(keys: readonly PermissionPreferenceKey[]): Promise<PermissionStatuses> {

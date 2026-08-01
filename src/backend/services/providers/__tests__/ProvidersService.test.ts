@@ -1,6 +1,6 @@
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
-import type { ProvidersBackend } from '@/shared/contracts';
+import type { ProvidersModule } from '@/shared/contracts';
 
 import { ProvidersService, type ProvidersServiceDependencies } from '../ProvidersService';
 
@@ -29,7 +29,7 @@ function createSubject() {
       updateApiKey: jest.fn(async () => provider),
     },
   };
-  const backend: ProvidersBackend = new ProvidersService(dependencies);
+  const backend: ProvidersModule = new ProvidersService(dependencies);
   return { backend, dependencies };
 }
 

@@ -2,7 +2,7 @@ import type { FileEntryId, PreparedInternalFile } from '@cherrystudio/universal/
 import { createUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
-import type { PaintingsBackend } from '@/shared/contracts';
+import type { PaintingsModule } from '@/shared/contracts';
 
 import { PaintingsService, type PaintingsServiceDependencies } from '../PaintingsService';
 
@@ -55,7 +55,7 @@ function createSubject() {
       readDataUrl: jest.fn(async () => 'data:image/png;base64,aW1hZ2U='),
     },
   };
-  const backend: PaintingsBackend = new PaintingsService(dependencies);
+  const backend: PaintingsModule = new PaintingsService(dependencies);
   return { backend, dependencies };
 }
 

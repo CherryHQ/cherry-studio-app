@@ -39,7 +39,7 @@ export interface PaintingGenerationSession {
   generate(input: PaintingGenerationInput, signal: AbortSignal): Promise<PaintingGenerationResult>;
 }
 
-export interface PaintingsBackend {
+export interface PaintingsModule {
   createGenerationSession(): PaintingGenerationSession;
   resolveFiles(painting: Painting): Promise<ResolvedPaintingFiles>;
 }

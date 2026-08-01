@@ -9,7 +9,7 @@ import type {
   Provider,
 } from '@cherrystudio/universal/data/types/provider';
 
-import type { ProvidersBackend } from '@/shared/contracts';
+import type { ProvidersModule } from '@/shared/contracts';
 
 type ProviderRepository = {
   canRemove(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean;
@@ -34,7 +34,7 @@ export type ProvidersServiceDependencies = {
   providers: ProviderRepository;
 };
 
-export class ProvidersService implements ProvidersBackend {
+export class ProvidersService implements ProvidersModule {
   constructor(private readonly dependencies: ProvidersServiceDependencies) {}
 
   canRemove(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean {

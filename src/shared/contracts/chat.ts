@@ -57,6 +57,6 @@ export interface ChatSession {
   subscribe(listener: ChatSessionListener): () => void;
 }
 
-export interface ChatBackend {
+export interface ChatModule {
   createSession(): ChatSession;
 }

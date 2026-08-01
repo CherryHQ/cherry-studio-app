@@ -49,7 +49,7 @@ export type CheckModelsHealthInput = {
   timeoutMs?: number;
 };
 
-export interface ModelsBackend {
+export interface ModelsModule {
   checkHealth(input: CheckModelsHealthInput): Promise<ModelHealthResult[]>;
   pull(providerId: string, signal?: AbortSignal): Promise<ModelPullResult>;
   reconcile(providerId: string, input: ReconcileModelsInput): Promise<ReconcileModelsResult>;

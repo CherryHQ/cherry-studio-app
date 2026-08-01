@@ -1,4 +1,4 @@
-import type { PermissionsBackend } from '@/shared/contracts';
+import type { PermissionsModule } from '@/shared/contracts';
 
 import { PermissionsService, type PermissionsServiceDependencies } from '../PermissionsService';
 
@@ -14,7 +14,7 @@ function createSubject() {
       set: jest.fn(async () => undefined),
     },
   };
-  const backend: PermissionsBackend = new PermissionsService(dependencies);
+  const backend: PermissionsModule = new PermissionsService(dependencies);
   return { backend, dependencies };
 }
 

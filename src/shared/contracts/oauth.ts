@@ -21,7 +21,7 @@ export type CompleteOAuthAuthorizationInput = {
  * `getAccount`) stay internal until a frontend owner actually needs them. The
  * settings screen reads sign-in state from the provider's auth config query.
  */
-export interface OAuthBackend {
+export interface OAuthModule {
   completeAuthorization(input: CompleteOAuthAuthorizationInput): Promise<void>;
   logout(providerId: string, context?: OAuthProviderContext): Promise<void>;
 }

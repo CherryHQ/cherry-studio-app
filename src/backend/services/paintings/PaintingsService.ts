@@ -12,7 +12,7 @@ import type {
   PaintingGenerationInput,
   PaintingGenerationResult,
   PaintingGenerationSession,
-  PaintingsBackend,
+  PaintingsModule,
   ResolvedPaintingFiles,
 } from '@/shared/contracts';
 
@@ -60,7 +60,7 @@ export type PaintingsServiceDependencies = {
   storage: PaintingFileStorage;
 };
 
-export class PaintingsService implements PaintingsBackend {
+export class PaintingsService implements PaintingsModule {
   constructor(private readonly dependencies: PaintingsServiceDependencies) {}
 
   createGenerationSession(): PaintingGenerationSession {

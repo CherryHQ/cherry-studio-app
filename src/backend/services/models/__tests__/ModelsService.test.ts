@@ -6,7 +6,7 @@ import {
 } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
-import type { ModelsBackend } from '@/shared/contracts';
+import type { ModelsModule } from '@/shared/contracts';
 import { ModelPullTimeoutError } from '@/shared/contracts';
 
 import { ModelsService, type ModelsServiceDependencies } from '../ModelsService';
@@ -54,7 +54,7 @@ function createSubject(overrides: Partial<ModelsServiceDependencies> = {}) {
     },
     ...overrides,
   };
-  const backend: ModelsBackend = new ModelsService(dependencies);
+  const backend: ModelsModule = new ModelsService(dependencies);
   return { backend, dependencies };
 }
 
