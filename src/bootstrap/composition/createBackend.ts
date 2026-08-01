@@ -9,9 +9,11 @@ import {
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
 import { ChatService } from '@/backend/services/chat/ChatService';
+import { CherryInService } from '@/backend/services/cherryin/CherryInService';
 import { McpService } from '@/backend/services/mcp/McpService';
 import { ModelsService } from '@/backend/services/models/ModelsService';
-import { CherryInOauthService } from '@/backend/services/oauth/CherryInOauthService';
+import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
+import { ProviderAuthConfigOAuthTokenStore } from '@/backend/services/oauth/runtime/OAuthTokenStore';
 import { PaintingsService } from '@/backend/services/paintings/PaintingsService';
 import { PermissionsService } from '@/backend/services/permissions/PermissionsService';
 import { ProfileService } from '@/backend/services/profile/ProfileService';
@@ -40,7 +42,24 @@ export type BackendComposition = {
 };
 
 export function createBackend(services: BackendServices): BackendComposition {
-  const oauth = CherryInOauthService.getInstance(services.provider);
+  const oauth = new OAuthRuntimeService({
+    providers: {
+      listApiKeys: (providerId) => services.provider.listApiKeys(providerId),
+      replaceApiKeys: (providerId, keys) => services.provider.replaceApiKeys(providerId, keys),
+      update: (providerId, input) => services.provider.update(providerId, input),
+    },
+    tokenStore: new ProviderAuthConfigOAuthTokenStore({
+      getAuthConfig: (providerId) => services.provider.getAuthConfig(providerId),
+      update: (providerId, input) => services.provider.update(providerId, input),
+    }),
+  });
+  const cherryin = new CherryInService({
+    oauth: {
+      authenticatedFetch: (providerId, buildRequest, doFetch, options) =>
+        oauth.authenticatedFetch(providerId, buildRequest, doFetch, options),
+      hasToken: (providerId) => oauth.hasToken(providerId),
+    },
+  });
   const chat = new ChatService({
     files: {
       discard: discardPreparedFiles,
@@ -128,13 +147,6 @@ export function createBackend(services: BackendServices): BackendComposition {
       persist: saveProviderAvatar,
       resolve: getProviderAvatarUri,
     },
-    oauth: {
-      complete: (input) => oauth.completeOAuth(input),
-      getAccount: (apiHost) => oauth.getBalance(apiHost),
-      getNonOAuthApiKeys: (providerId) => oauth.getNonOAuthApiKeys(providerId),
-      logout: (apiHost) => oauth.logout(apiHost),
-      saveResult: (providerId, apiKeys) => oauth.saveOAuthResult(providerId, apiKeys),
-    },
     providers: {
       canRemove: canDeleteProvider,
       create: (input) => services.provider.create(input),
@@ -173,8 +185,10 @@ export function createBackend(services: BackendServices): BackendComposition {
   return {
     backend: {
       chat,
+      cherryin,
       mcp,
       models,
+      oauth,
       paintings,
       permissions,
       profile,

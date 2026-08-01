@@ -1,8 +1,4 @@
-import type {
-  CherryInAccount,
-  CompleteCherryInOAuthInput,
-  ProvidersBackend,
-} from '@/shared/contracts';
+import type { ProvidersBackend } from '@/shared/contracts';
 import type {
   CreateProviderInput,
   UpdateProviderApiKeyInput,
@@ -13,8 +9,6 @@ import type {
   AuthConfig,
   Provider,
 } from '@cherrystudio/universal/data/types/provider';
-
-const cherryInProviderId = 'cherryin';
 
 type ProviderRepository = {
   canRemove(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean;
@@ -29,14 +23,6 @@ type ProviderRepository = {
   updateApiKey(id: string, keyId: string, input: UpdateProviderApiKeyInput): Promise<Provider>;
 };
 
-type CherryInOAuth = {
-  complete(input: CompleteCherryInOAuthInput): Promise<string>;
-  getAccount(apiHost: string): Promise<CherryInAccount>;
-  getNonOAuthApiKeys(providerId: string): Promise<ApiKeyEntry[]>;
-  logout(apiHost: string): Promise<void>;
-  saveResult(providerId: string, apiKeys: string): Promise<void>;
-};
-
 type ProviderAvatarStorage = {
   persist(providerId: string, sourceUri: string): Promise<string>;
   resolve(providerId: string): string | undefined;
@@ -44,7 +30,6 @@ type ProviderAvatarStorage = {
 
 export type ProvidersServiceDependencies = {
   avatars: ProviderAvatarStorage;
-  oauth: CherryInOAuth;
   providers: ProviderRepository;
 };
 
@@ -53,11 +38,6 @@ export class ProvidersService implements ProvidersBackend {
 
   canRemove(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean {
     return this.dependencies.providers.canRemove(provider);
-  }
-
-  async completeCherryInOAuth(input: CompleteCherryInOAuthInput): Promise<void> {
-    const apiKeys = await this.dependencies.oauth.complete(input);
-    await this.dependencies.oauth.saveResult(cherryInProviderId, apiKeys);
   }
 
   create(input: CreateProviderInput): Promise<Provider> {
@@ -72,26 +52,12 @@ export class ProvidersService implements ProvidersBackend {
     return this.dependencies.providers.getAuth(id);
   }
 
-  async getCherryInAccount(apiHost: string): Promise<CherryInAccount | null> {
-    const auth = await this.dependencies.providers.getAuth(cherryInProviderId);
-    if (auth?.type !== 'oauth' || !auth.accessToken) {
-      return null;
-    }
-    return this.dependencies.oauth.getAccount(apiHost);
-  }
-
   list(query?: { enabled?: boolean }): Promise<Provider[]> {
     return this.dependencies.providers.list(query);
   }
 
   listApiKeys(id: string, query?: { enabled?: boolean }): Promise<ApiKeyEntry[]> {
     return this.dependencies.providers.listApiKeys(id, query);
-  }
-
-  async logoutCherryIn(apiHost: string): Promise<void> {
-    await this.dependencies.oauth.logout(apiHost);
-    const apiKeys = await this.dependencies.oauth.getNonOAuthApiKeys(cherryInProviderId);
-    await this.dependencies.providers.replaceApiKeys(cherryInProviderId, apiKeys);
   }
 
   persistAvatar(id: string, sourceUri: string): Promise<string> {
