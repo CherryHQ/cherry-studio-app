@@ -35,9 +35,16 @@ export type ShapeOnlyPort = {
   path: string;
 };
 
+export type MobileExtension = {
+  adds: string;
+  keeps: string;
+  path: string;
+};
+
 export type DesktopSyncDomain = {
   blocker?: string;
   explicitExclusions?: string[];
+  mobileExtensions?: MobileExtension[];
   mobilePreferenceExtensions?: string[];
   shapeOnlyPorts?: ShapeOnlyPort[];
   sourceCommit: string | null;
@@ -352,9 +359,30 @@ function validateDomain(id: string, value: unknown): DesktopSyncDomain {
     assertRelativeRepoPath(port.path, `${id}.shapeOnlyPorts`);
   }
 
+  const mobileExtensions = value.mobileExtensions;
+  if (
+    mobileExtensions !== undefined &&
+    (!Array.isArray(mobileExtensions) ||
+      !mobileExtensions.every(
+        (entry) =>
+          isRecord(entry) &&
+          typeof entry.path === 'string' &&
+          typeof entry.keeps === 'string' &&
+          typeof entry.adds === 'string',
+      ))
+  ) {
+    throw new Error(
+      `[desktop-sync-audit] ${id}.mobileExtensions must be {path, keeps, adds} entries`,
+    );
+  }
+  for (const extension of (mobileExtensions ?? []) as MobileExtension[]) {
+    assertRelativeRepoPath(extension.path, `${id}.mobileExtensions`);
+  }
+
   return {
     blocker: value.blocker as string | undefined,
     explicitExclusions: explicitExclusions as string[] | undefined,
+    mobileExtensions: mobileExtensions as MobileExtension[] | undefined,
     mobilePreferenceExtensions: mobilePreferenceExtensions as string[] | undefined,
     shapeOnlyPorts: shapeOnlyPorts as ShapeOnlyPort[] | undefined,
     sourceCommit: sourceCommit as string | null,

@@ -14,6 +14,7 @@ import {
   hashTrackedFiles,
   parseArguments,
   pathMatchesGlob,
+  validateManifest,
 } from '../desktopSyncAudit';
 
 const temporaryRoots: string[] = [];
@@ -117,6 +118,56 @@ describe('parseArguments', () => {
     expect(() => parseArguments(['--desktop-root', '.', '--write'], {})).toThrow(
       /unexpected argument.*--write/i,
     );
+  });
+});
+
+describe('validateManifest', () => {
+  test('retains mobileExtensions entries that declare a path, keeps, and adds', () => {
+    const manifest = validateManifest(
+      manifestWithDomains({
+        'shared-ai': mirrorDomain({
+          mobileExtensions: [
+            {
+              path: 'packages/universal/src/ai/transport/toolApprovals.ts',
+              keeps: 'nothing, desktop has no counterpart',
+              adds: 'the approval settlement helpers the mobile approval sheet needs',
+            },
+          ],
+        }),
+      }),
+    );
+
+    expect(manifest.domains['shared-ai'].mobileExtensions).toEqual([
+      expect.objectContaining({
+        path: 'packages/universal/src/ai/transport/toolApprovals.ts',
+      }),
+    ]);
+  });
+
+  test('rejects a mobileExtensions entry that omits adds', () => {
+    expect(() =>
+      validateManifest(
+        manifestWithDomains({
+          'shared-ai': mirrorDomain({
+            mobileExtensions: [
+              { path: 'packages/universal/src/ai/tools/mcpResult.ts', keeps: 'everything' },
+            ] as never,
+          }),
+        }),
+      ),
+    ).toThrow(/mobileExtensions must be \{path, keeps, adds\} entries/);
+  });
+
+  test('rejects a mobileExtensions path that escapes the repository', () => {
+    expect(() =>
+      validateManifest(
+        manifestWithDomains({
+          'shared-ai': mirrorDomain({
+            mobileExtensions: [{ path: '../elsewhere.ts', keeps: 'nothing', adds: 'nothing' }],
+          }),
+        }),
+      ),
+    ).toThrow(/mobileExtensions must be a repository-relative path/);
   });
 });
 
