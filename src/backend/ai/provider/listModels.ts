@@ -8,6 +8,7 @@ import {
   ENDPOINT_TYPE,
   type EndpointType,
   endpointImpliedCapability,
+  MODEL_CAPABILITY,
 } from '@cherrystudio/provider-registry';
 import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
@@ -268,24 +269,45 @@ const openRouterFetcher: ModelFetcher = {
   match: (provider) => isPreset(provider, 'openrouter'),
   fetch: async (provider, context, signal, options) => {
     const headers = await providerHeaders(provider, context);
-    const [modelsResponse, embedModelsResponse] = await Promise.all([
+    const modelsApiUrls =
+      provider.endpointConfigs?.[ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]?.modelsApiUrls;
+    const [modelsResponse, embedModelsResponse, imageModelsResponse] = await Promise.all([
       getFromApi({
-        url: 'https://openrouter.ai/api/v1/models',
+        url: modelsApiUrls?.default ?? 'https://openrouter.ai/api/v1/models',
         headers,
         responseSchema: OpenAIModelsResponseSchema,
         abortSignal: signal,
       }),
       getFromApi({
-        url: 'https://openrouter.ai/api/v1/embeddings/models',
+        url: modelsApiUrls?.embedding ?? 'https://openrouter.ai/api/v1/embeddings/models',
         headers,
         responseSchema: OpenAIModelsResponseSchema,
         abortSignal: signal,
       }).catch((error) => handleOptionalModelListFailure<OpenAIModelResponseItem>(error, options)),
+      getFromApi({
+        url: modelsApiUrls?.image ?? 'https://openrouter.ai/api/v1/images/models',
+        headers,
+        responseSchema: OpenAIModelsResponseSchema,
+        abortSignal: signal,
+        // Always recovered, never rethrown under throwOnError: "check this
+        // provider" must not fail just because the image catalog is missing.
+      }).catch(() => ({ data: [] as OpenAIModelResponseItem[] })),
     ]);
-    const all = [...modelsResponse.data, ...embedModelsResponse.data];
-    return dedup(all, (model) => model.id).map((model) =>
-      toModel(model.id, provider, { ownedBy: model.owned_by }),
-    );
+    const imageModelsById = new Map(imageModelsResponse.data.map((model) => [model.id, model]));
+    const all = [...modelsResponse.data, ...embedModelsResponse.data, ...imageModelsResponse.data];
+    return dedup(all, (model) => model.id).map((model) => {
+      const imageModel = imageModelsById.get(model.id);
+      return toModel(model.id, provider, {
+        name: imageModel?.name ?? model.name,
+        ownedBy: model.owned_by,
+        ...(imageModel
+          ? {
+              capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+              endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
+            }
+          : {}),
+      });
+    });
   },
 };
 

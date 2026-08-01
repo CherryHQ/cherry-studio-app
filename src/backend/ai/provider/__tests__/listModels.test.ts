@@ -101,6 +101,72 @@ describe('listModels', () => {
     ]);
   });
 
+  test('marks OpenRouter image models and survives a missing image endpoint', async () => {
+    const responseByUrl: Record<string, unknown> = {
+      'https://openrouter.ai/api/v1/models': { data: [{ id: 'openai/gpt-4o' }] },
+      'https://openrouter.ai/api/v1/embeddings/models': { data: [{ id: 'openai/text-embed' }] },
+      'https://openrouter.ai/api/v1/images/models': {
+        data: [{ id: 'google/nano-banana', name: 'Nano Banana' }],
+      },
+    };
+    let imageEndpointAvailable = true;
+    jest.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.endsWith('/images/models') && !imageEndpointAvailable) {
+        return new Response('not found', { status: 404 });
+      }
+      return new Response(JSON.stringify(responseByUrl[url]), { status: 200 });
+    });
+    const context = { getRotatedApiKey: jest.fn(async () => 'test-key') };
+
+    const models = await listModels(createProvider({ id: 'openrouter' }), context);
+
+    expect(
+      models.map((model) => ({
+        apiModelId: model.apiModelId,
+        capabilities: model.capabilities,
+        endpointTypes: model.endpointTypes,
+        name: model.name,
+      })),
+    ).toEqual([
+      {
+        apiModelId: 'openai/gpt-4o',
+        capabilities: [],
+        endpointTypes: undefined,
+        name: 'openai/gpt-4o',
+      },
+      {
+        apiModelId: 'openai/text-embed',
+        capabilities: [],
+        endpointTypes: undefined,
+        name: 'openai/text-embed',
+      },
+      {
+        apiModelId: 'google/nano-banana',
+        capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+        endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
+        name: 'Nano Banana',
+      },
+    ]);
+
+    // The image catalog is optional: a deployment without it still lists chat models,
+    // even when the caller asked for failures to be thrown.
+    imageEndpointAvailable = false;
+    const withoutImages = await listModels(
+      createProvider({ id: 'openrouter' }),
+      context,
+      undefined,
+      {
+        throwOnError: true,
+      },
+    );
+
+    expect(withoutImages.map((model) => model.apiModelId)).toEqual([
+      'openai/gpt-4o',
+      'openai/text-embed',
+    ]);
+  });
+
   test('maps NewAPI supported_endpoint_types to endpointTypes and an implied capability', async () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(
