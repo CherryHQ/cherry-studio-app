@@ -49,3 +49,12 @@ Exclude only the paths in the Manifest:
 - `src/main/ai/tools/adapters/claudeCode/**`
 
 Do not exclude Agent database tables. Do not exclude ordinary chat `src/main/ai/runtime/aiSdk/Agent.ts` or `packages/aiCore/**/agents/createAgent.ts`. Require evidence and a Manifest change before adding an exclusion.
+
+## Explicit Shared AI Exclusions
+
+The nine `shared-ai` exclusions are the shared half of surfaces the `ai-runtime` domain already excludes. They rest on two different grounds, and the difference matters when re-checking them:
+
+- **Hard.** `agentSessionContextUsage.ts` and `agentSessionSlashCommands.ts` alias `@anthropic-ai/claude-agent-sdk` types directly, and mobile has no such dependency. `claudecode/**` serves the desktop Claude Code runtime. These cannot be ported without first taking the dependency.
+- **Product surface.** `slashCommands.ts`, `agentSlashCommands.ts` and `tool.ts` describe the desktop Agent's slash-command palette and tool-registry DTO, whose consumers are `src/renderer/hooks/agent/**` and the Claude Code tool adapter. `tool.ts` is the weakest of the nine: mobile already ships an approval sheet and an MCP settings screen, so the first "tools overview" screen makes it portable.
+
+`agentSessionApiRetry.ts`, `agentSessionBackgroundTasks.ts` and `agentSessionFlowParts.ts` are on neither ground. They are cache-key constants and state types with no SDK dependency, structurally indistinguishable from `agentSessionCompaction.ts` — which **is** ported, with just as few mobile consumers (zero). Porting is the default and exclusion is what needs a reason, so the honest reading is that these three are unfinished porting rather than a decided boundary. Nothing depends on the inconsistency today, since all four are type-and-constant only; do not cite "no mobile consumer" as the rationale for keeping them out, because it would exclude the ported one too.

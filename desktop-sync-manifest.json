@@ -152,12 +152,49 @@
     },
     "provider-registry": {
       "strategy": "semantic-port",
-      "status": "unbaselined",
+      "status": "aligned",
       "sourcePaths": ["packages/provider-registry"],
       "targetPaths": ["packages/provider-registry"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": []
+      "sourceCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
+      "sourceSha256": "4114ac8750f47098cbac0ff8e37cae4dbb1b51840129fdda30125cfcd76d8d33",
+      "explicitExclusions": [],
+      "mobileExtensions": [
+        {
+          "path": "packages/provider-registry/vitestJestShim.ts",
+          "keeps": "every test file's `import { describe, expect, it } from 'vitest'` line verbatim",
+          "adds": "a jest.config.js moduleNameMapper target that re-exports jest's globals under vitest's names, so ten suites run on both runners without a single import diff"
+        },
+        {
+          "path": "packages/provider-registry/src/testing/catalogData.ts",
+          "keeps": "the readCatalogJson helper the catalog suites share",
+          "adds": "a `typeof __dirname === 'undefined'` branch, because vitest resolves the fixture directory from import.meta.url while jest-expo runs CJS and has no import.meta"
+        },
+        {
+          "path": "packages/provider-registry/src/mobile-loader.ts",
+          "keeps": "nothing, there is no desktop counterpart",
+          "adds": "a loader that static-imports data/*.json so Metro bundles the catalog; desktop's registry-loader reads it off disk, which React Native has no fs for"
+        },
+        {
+          "path": "packages/provider-registry/package.json",
+          "keeps": "the package identity, script names and public entry points",
+          "adds": "src-facing main/module/types/exports because Metro does not consume dist, a ./mobile subpath, src+docs+scripts in files, oxfmt instead of biome in generate, and zod promoted to dependencies since the app typechecks this package's source directly. Also drops desktop's class-variance-authority, lucide-react, json-schema and dotenv, which no code in this package imports, and pins vitest 3 and tsdown 0.20 against desktop's vitest 4 and tsdown 0.16"
+        },
+        {
+          "path": "packages/provider-registry/tsdown.config.ts",
+          "keeps": "the desktop build entries",
+          "adds": "the mobile-loader entry"
+        },
+        {
+          "path": "packages/provider-registry/src/registry-utils.ts",
+          "keeps": "every desktop export unchanged",
+          "adds": "RuntimeEndpointConfig and buildRuntimeEndpointConfigs, consumed by PresetProviderSeeder.ts:65 to seed provider rows; desktop builds the same shape inline in the renderer"
+        },
+        {
+          "path": "packages/provider-registry/src/utils/buildParamsSchema.ts",
+          "keeps": "the whole file semantically",
+          "adds": "one `as ImageGenerationMode | undefined` cast on Object.keys(modes)[0]; the app typechecks this package's source rather than its dist, so the widened key type surfaces here and not on desktop. This one gets clobbered on every sync"
+        }
+      ]
     },
     "ai-runtime": {
       "strategy": "semantic-port",
@@ -176,11 +213,11 @@
     },
     "shared-ai": {
       "strategy": "semantic-port",
-      "status": "unbaselined",
+      "status": "aligned",
       "sourcePaths": ["src/shared/ai"],
       "targetPaths": ["packages/universal/src/ai"],
-      "sourceCommit": null,
-      "sourceSha256": null,
+      "sourceCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
+      "sourceSha256": "bb816f1380b3ddd71b5a31f3906e77a55e529640dae90537de6d9640083eb698",
       "explicitExclusions": [
         "src/shared/ai/agentSessionApiRetry.ts",
         "src/shared/ai/agentSessionBackgroundTasks.ts",
@@ -197,6 +234,28 @@
           "path": "src/shared/ai/prompts.ts",
           "keeps": "TRANSLATE_PROMPT — seeded default of feature.translate.model_prompt",
           "drops": "AGENT_PROMPT/SUMMARIZE_PROMPT/LANG_DETECT_PROMPT desktop templates with no mobile consumer"
+        },
+        {
+          "path": "src/shared/ai/tools/__tests__/mcpToolName.test.ts",
+          "keeps": "the identity-critical regressions: the 63-character cap, the server hash suffix that stops two long server names from colliding after truncation, single-server attribution for truncated ids, collision suffixes staying inside maxLength, and the mcp__server__tool round-trip",
+          "drops": "desktop's buildMcpToolName and generateMcpToolFunctionName case matrices — both functions have only a test consumer on mobile, no product one, so the matrices would pin behaviour nothing depends on"
+        }
+      ],
+      "mobileExtensions": [
+        {
+          "path": "packages/universal/src/ai/tools/mcpSourcePolicy.ts",
+          "keeps": "all six desktop exports unchanged",
+          "adds": "the write side — hasMcpServerWildcardRule, withMcpToolRuleAdded and withMcpToolRuleCleared. Desktop edits rule arrays inline at each call site; mobile's MCP settings screen needs one shared implementation"
+        },
+        {
+          "path": "packages/universal/src/ai/transport/toolApprovals.ts",
+          "keeps": "nothing, there is no desktop counterpart",
+          "adds": "mobile's own approval settlement helpers. Note this overlaps the ported transport/applyApprovalDecisions.ts, which is barrel-only dead code here, and the two declare their own ApprovalDecision types — collapsing them is open work, not an intended fork"
+        },
+        {
+          "path": "packages/universal/src/ai/tools/mcpResult.ts",
+          "keeps": "desktop's implementation verbatim",
+          "adds": "nothing; it only looks mobile-only in this domain because desktop keeps the same code in src/main/ai/tools/adapters/aiSdk/mcp/utils.ts, which the ai-runtime domain covers"
         }
       ]
     },
