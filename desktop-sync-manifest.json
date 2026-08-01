@@ -50,6 +50,13 @@
         "src/shared/data/types/fileProcessing.ts",
         "src/shared/data/types/settingsPath.ts"
       ],
+      "shapeOnlyPorts": [
+        {
+          "path": "src/shared/data/preference/preferenceTypes.ts",
+          "keeps": "DB-backed preference types",
+          "drops": "BootConfigPreferenceKeys intersection in UnifiedPreferenceType (Electron boot-config file does not exist on mobile)"
+        }
+      ],
       "mobilePreferenceExtensions": [
         "permissions.calendar_read",
         "permissions.calendar_write",
@@ -57,6 +64,49 @@
         "permissions.location_read",
         "permissions.reminders_read",
         "permissions.reminders_write"
+      ]
+    },
+    "shared-portable": {
+      "strategy": "semantic-port",
+      "status": "unbaselined",
+      "sourcePaths": [
+        "src/shared/types/aiSdk.ts",
+        "src/shared/types/codeCli.ts",
+        "src/shared/types/error.ts",
+        "src/shared/types/serializable.ts",
+        "src/shared/utils/conversationTitle.ts",
+        "src/shared/utils/keywordSearch.ts",
+        "src/shared/utils/model.ts",
+        "src/shared/utils/shortcut.ts",
+        "src/shared/utils/text.ts",
+        "src/shared/utils/url.ts"
+      ],
+      "targetPaths": [
+        "src/shared/types/aiSdk.ts",
+        "src/shared/types/codeCli.ts",
+        "src/shared/types/error.ts",
+        "src/shared/types/serializable.ts",
+        "src/shared/utils/conversationTitle.ts",
+        "src/shared/utils/keywordSearch.ts",
+        "src/shared/utils/model.ts",
+        "src/shared/utils/shortcut.ts",
+        "src/shared/utils/text.ts",
+        "src/shared/utils/url.ts"
+      ],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": [],
+      "shapeOnlyPorts": [
+        {
+          "path": "src/shared/types/codeCli.ts",
+          "keeps": "CodeCli enum backing the seeded feature.code_cli.configs preference value",
+          "drops": "TerminalApp/TerminalConfig launch configs, CLI gateway and own-login virtual provider ids (mobile cannot launch CLIs)"
+        },
+        {
+          "path": "src/shared/utils/shortcut.ts",
+          "keeps": "Shortcut token vocabulary, ShortcutToken/ShortcutBinding types, isShortcutToken guard backing seeded shortcut.* preference values",
+          "drops": "Accelerator/hotkey conversion, key display formatting, binding validation for the desktop command system"
+        }
       ]
     },
     "data-main": {
@@ -136,6 +186,13 @@
         "src/shared/ai/claudecode/**",
         "src/shared/ai/slashCommands.ts",
         "src/shared/ai/tool.ts"
+      ],
+      "shapeOnlyPorts": [
+        {
+          "path": "src/shared/ai/prompts.ts",
+          "keeps": "TRANSLATE_PROMPT — seeded default of feature.translate.model_prompt",
+          "drops": "AGENT_PROMPT/SUMMARIZE_PROMPT/LANG_DETECT_PROMPT desktop templates with no mobile consumer"
+        }
       ]
     },
     "services": {

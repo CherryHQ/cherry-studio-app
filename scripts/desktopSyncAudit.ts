@@ -28,10 +28,17 @@ type BaselineStatus = (typeof BASELINE_STATUSES)[number];
 type Classification = (typeof CLASSIFICATIONS)[number];
 type AuditStatus = BaselineStatus | 'drift';
 
+export type ShapeOnlyPort = {
+  drops: string;
+  keeps: string;
+  path: string;
+};
+
 export type DesktopSyncDomain = {
   blocker?: string;
   explicitExclusions?: string[];
   mobilePreferenceExtensions?: string[];
+  shapeOnlyPorts?: ShapeOnlyPort[];
   sourceCommit: string | null;
   sourcePaths: string[];
   sourceSha256: string | null;
@@ -324,10 +331,31 @@ function validateDomain(id: string, value: unknown): DesktopSyncDomain {
     throw new Error(`[desktop-sync-audit] ${id}.virtualIconAdapters must be a string map`);
   }
 
+  const shapeOnlyPorts = value.shapeOnlyPorts;
+  if (
+    shapeOnlyPorts !== undefined &&
+    (!Array.isArray(shapeOnlyPorts) ||
+      !shapeOnlyPorts.every(
+        (entry) =>
+          isRecord(entry) &&
+          typeof entry.path === 'string' &&
+          typeof entry.keeps === 'string' &&
+          typeof entry.drops === 'string',
+      ))
+  ) {
+    throw new Error(
+      `[desktop-sync-audit] ${id}.shapeOnlyPorts must be {path, keeps, drops} entries`,
+    );
+  }
+  for (const port of (shapeOnlyPorts ?? []) as ShapeOnlyPort[]) {
+    assertRelativeRepoPath(port.path, `${id}.shapeOnlyPorts`);
+  }
+
   return {
     blocker: value.blocker as string | undefined,
     explicitExclusions: explicitExclusions as string[] | undefined,
     mobilePreferenceExtensions: mobilePreferenceExtensions as string[] | undefined,
+    shapeOnlyPorts: shapeOnlyPorts as ShapeOnlyPort[] | undefined,
     sourceCommit: sourceCommit as string | null,
     sourcePaths: sourcePaths as string[],
     sourceSha256: sourceSha256 as string | null,

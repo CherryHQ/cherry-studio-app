@@ -29,6 +29,12 @@ The Manifest may also exclude shared contracts used only by those Agent surfaces
 Agent tool-policy DTOs. Retain any shared file reached by ordinary chat or persisted mobile data;
 `agentSessionCompaction.ts` remains in scope because mobile can retain compaction-anchor parts.
 
+Honor the shared-ai `shapeOnlyPorts` entries: `prompts.ts` ports only `TRANSLATE_PROMPT` (the
+seeded `feature.translate.model_prompt` default); the remaining desktop templates stay out. Some
+shared-ai mirrors (`builtinTools.ts`, `anthropicCache.ts`, `paintingGenerateError.ts`) are retained
+verbatim while mobile still runs divergent parallel implementations — rewiring mobile onto them is
+tracked follow-up work, not a reason to delete the mirrors.
+
 Synchronize ordinary chat `src/main/ai/runtime/aiSdk/Agent.ts` and `packages/aiCore/**/agents/createAgent.ts`. Do not infer an exclusion from the word `Agent`. For channels, inference, observability, stream management, local MCP, browser, file tools, or any other non-Agent gap, implement it, prove an existing equivalent, or classify the domain as `blocked` with evidence.
 
 ## Port Used Services And Shared Code
