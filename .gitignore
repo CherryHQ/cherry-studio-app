@@ -46,3 +46,6 @@ yarn-error.*
 
 .zed/*
 .idea/*
+
+# eslint
+.eslintcache
