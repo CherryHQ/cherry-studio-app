@@ -26,7 +26,7 @@ import {
   readCherryMeta,
   withCherryMeta,
 } from '@cherrystudio/universal/data/types/uiParts';
-import { serializeError } from '@/shared/utils/serializeError';
+import { serializeError } from '@/backend/ai/utils/serializeError';
 import {
   buildFirstUserMessageTitle,
   sanitizeConversationTitle,
