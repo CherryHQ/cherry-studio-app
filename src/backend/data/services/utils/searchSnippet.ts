@@ -1,4 +1,7 @@
-import { buildKeywordRegexes, type KeywordMatchMode } from '@/shared/utils/keywordSearch';
+import {
+  buildKeywordRegexes,
+  type KeywordMatchMode,
+} from '@cherrystudio/shared/utils/keywordSearch';
 
 const searchSnippetContextLines = 1;
 const searchSnippetMaxLines = 12;

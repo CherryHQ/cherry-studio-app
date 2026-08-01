@@ -6,8 +6,8 @@ import type {
   PersistCacheKey,
   PersistCacheSchema,
   UseCacheKey,
-} from '@/shared/data/cache/cacheSchemas';
-import { getUseCacheDefaultValue } from '@/shared/data/cache/templateKey';
+} from '@cherrystudio/shared/data/cache/cacheSchemas';
+import { getUseCacheDefaultValue } from '@cherrystudio/shared/data/cache/templateKey';
 
 const logger = loggerService.withContext('useCache');
 

@@ -9,14 +9,14 @@
  */
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@/shared/data/presets/cherryai';
-import type { CherryMessagePart } from '@/shared/data/types/message';
-import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
+import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@cherrystudio/shared/data/presets/cherryai';
+import type { CherryMessagePart } from '@cherrystudio/shared/data/types/message';
+import { isUniqueModelId, parseUniqueModelId } from '@cherrystudio/shared/data/types/model';
 import {
   buildFirstUserMessageTitle,
   normalizeConversationTitle,
   sanitizeConversationTitle,
-} from '@/shared/utils/conversationTitle';
+} from '@cherrystudio/shared/utils/conversationTitle';
 import type { ChatSessionServices } from './ChatSessionDependencies';
 
 const logger = loggerService.withContext('topicNaming');

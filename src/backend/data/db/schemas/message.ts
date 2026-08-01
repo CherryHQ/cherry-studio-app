@@ -1,4 +1,8 @@
-import type { MessageData, MessageSnapshot, MessageStats } from '@/shared/data/types/message';
+import type {
+  MessageData,
+  MessageSnapshot,
+  MessageStats,
+} from '@cherrystudio/shared/data/types/message';
 import { sql } from 'drizzle-orm';
 import {
   check,

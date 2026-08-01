@@ -13,7 +13,7 @@ import {
 } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
-import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
+import type { OrderRequest } from '@cherrystudio/shared/data/api/schemas/_endpointHelpers';
 import type {
   ActiveNodeResponse,
   CreateTopicDto,
@@ -21,10 +21,13 @@ import type {
   DuplicateTopicDto,
   ListTopicsQuery,
   UpdateTopicDto,
-} from '@/shared/data/api/schemas/topics';
-import { type CursorPaginationResponse, DataApiErrorFactory } from '@/shared/data/api/types';
-import type { MessageStats } from '@/shared/data/types/message';
-import type { Topic } from '@/shared/data/types/topic';
+} from '@cherrystudio/shared/data/api/schemas/topics';
+import {
+  type CursorPaginationResponse,
+  DataApiErrorFactory,
+} from '@cherrystudio/shared/data/api/types';
+import type { MessageStats } from '@cherrystudio/shared/data/types/message';
+import type { Topic } from '@cherrystudio/shared/data/types/topic';
 import type { DbService } from '../db/DbService';
 import {
   assistantTable,

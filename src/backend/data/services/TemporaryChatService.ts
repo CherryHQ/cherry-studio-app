@@ -4,16 +4,16 @@ import { v4 as uuidv4, v7 as uuidv7 } from 'uuid';
 
 import type { DbService } from '@/backend/data/db/DbService';
 import { messageTable, topicTable } from '@/backend/data/db/schemas';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
-import type { CreateMessageDto } from '@/shared/data/api/schemas/messages';
-import type { CreateTopicDto } from '@/shared/data/api/schemas/topics';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
+import type { CreateMessageDto } from '@cherrystudio/shared/data/api/schemas/messages';
+import type { CreateTopicDto } from '@cherrystudio/shared/data/api/schemas/topics';
 import type {
   Message,
   MessageRole,
   MessageRuntimeStatsInput,
   MessageStatus,
-} from '@/shared/data/types/message';
-import type { Topic } from '@/shared/data/types/topic';
+} from '@cherrystudio/shared/data/types/message';
+import type { Topic } from '@cherrystudio/shared/data/types/topic';
 
 import { type AiUsageRecordService, mergeMessageUsageProjection } from './AiUsageRecordService';
 import { createRootMessageTx } from './MessageService';

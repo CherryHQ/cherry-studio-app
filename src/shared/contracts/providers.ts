@@ -1,4 +1,4 @@
-import type { Provider } from '@/shared/data/types/provider';
+import type { Provider } from '@cherrystudio/shared/data/types/provider';
 
 export type CompleteCherryInOAuthInput = {
   apiHost: string;

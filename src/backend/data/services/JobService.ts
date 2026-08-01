@@ -7,7 +7,7 @@ import {
   JobErrorSchema,
   type JobSnapshot,
   type JobStatus,
-} from '@/shared/data/api/schemas/jobs';
+} from '@cherrystudio/shared/data/api/schemas/jobs';
 
 import { timestampToISO } from './utils/rowMappers';
 

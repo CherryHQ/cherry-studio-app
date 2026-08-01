@@ -1,4 +1,4 @@
-import type { FileEntry, FileEntryId, ResolvedFile } from '@/shared/data/types/file';
+import type { FileEntry, FileEntryId, ResolvedFile } from '@shared/data/types/file';
 
 export type FileSchemas = {
   '/files/:id': {

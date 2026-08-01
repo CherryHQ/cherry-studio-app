@@ -1,5 +1,5 @@
-import type { EndpointType } from '@/shared/data/types/model';
-import type { EndpointConfigs, Provider } from '@/shared/data/types/provider';
+import type { EndpointType } from '@cherrystudio/shared/data/types/model';
+import type { EndpointConfigs, Provider } from '@cherrystudio/shared/data/types/provider';
 
 import type { EndpointDraft } from './providerApiServiceEndpointDraft';
 import { isValidEndpointBaseUrl, mergeEndpointConfigs } from './providerApiServiceEndpointRules';

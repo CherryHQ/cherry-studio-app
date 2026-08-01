@@ -1,5 +1,5 @@
-import type { EntityType } from '@/shared/data/types/entityType';
-import type { CreatePinDto, Pin } from '@/shared/data/types/pin';
+import type { EntityType } from '@shared/data/types/entityType';
+import type { CreatePinDto, Pin } from '@shared/data/types/pin';
 
 export type PinSchemas = {
   '/pins': {

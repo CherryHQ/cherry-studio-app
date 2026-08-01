@@ -1,7 +1,7 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
-import { createUniqueModelId, type Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import { createUniqueModelId, type Model } from '@cherrystudio/shared/data/types/model';
+import type { Provider } from '@cherrystudio/shared/data/types/provider';
 
 import {
   buildProviderModelAddInputs,

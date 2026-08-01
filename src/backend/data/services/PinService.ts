@@ -24,10 +24,10 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { DbService } from '@/backend/data/db/DbService';
 import { pinTable } from '@/backend/data/db/schemas';
 import type { PinRow } from '@/backend/data/db/schemas/pin';
-import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
-import { DataApiErrorFactory } from '@/shared/data/api/types';
-import type { EntityType } from '@/shared/data/types/entityType';
-import type { CreatePinDto, Pin } from '@/shared/data/types/pin';
+import type { OrderRequest } from '@cherrystudio/shared/data/api/schemas/_endpointHelpers';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/types';
+import type { EntityType } from '@cherrystudio/shared/data/types/entityType';
+import type { CreatePinDto, Pin } from '@cherrystudio/shared/data/types/pin';
 
 import { applyScopedMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';

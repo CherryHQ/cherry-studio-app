@@ -1,5 +1,5 @@
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { WebSearchResponse } from '@/shared/data/types/webSearch';
+import type { WebSearchResponse } from '@cherrystudio/shared/data/types/webSearch';
 
 const logger = loggerService.withContext('WebSearchBlacklist');
 

@@ -6,8 +6,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { BackendProvider } from '@/frontend/data';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import type { Backend } from '@/shared/contracts';
-import type { ApiClient } from '@/shared/data/api/types';
-import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
+import type { ApiClient } from '@cherrystudio/shared/data/api/types';
+import type { ApiKeyEntry, AuthConfig, Provider } from '@cherrystudio/shared/data/types/provider';
 import ProviderDetailScreen from '../ProviderDetailScreen';
 
 type QueryState = { isPending: boolean; isError: boolean; isSuccess: boolean };

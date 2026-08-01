@@ -1,6 +1,9 @@
 import { sliceByTokens } from 'tokenx';
 
-import type { WebSearchExecutionConfig, WebSearchResult } from '@/shared/data/types/webSearch';
+import type {
+  WebSearchExecutionConfig,
+  WebSearchResult,
+} from '@cherrystudio/shared/data/types/webSearch';
 
 import { postProcessWebSearchResponse } from '../postProcessing';
 

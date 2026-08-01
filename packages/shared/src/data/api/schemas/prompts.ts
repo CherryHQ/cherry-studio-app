@@ -5,7 +5,7 @@
  * Entity schemas and types live in `@shared/data/types/prompt`.
  */
 
-import type { SearchParams } from '@/shared/data/api/types';
+import type { SearchParams } from '@shared/data/api/types';
 import * as z from 'zod';
 
 import {

@@ -6,8 +6,8 @@
  * a response payload and an entity). DTOs are derived via .pick().
  */
 
-import { UniqueModelIdSchema } from '@/shared/data/types/model';
-import { ReasoningEffortOptionSchema } from '@/shared/types/aiSdk';
+import { UniqueModelIdSchema } from '@shared/data/types/model';
+import { ReasoningEffortOptionSchema } from '@shared/types/aiSdk';
 import * as z from 'zod';
 
 import type { OffsetPaginationResponse } from '../types';

@@ -6,11 +6,14 @@ import {
   type MiniAppRow,
   miniAppTable,
 } from '@/backend/data/db/schemas/miniApp';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
-import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
-import type { CreateMiniAppDto, UpdateMiniAppDto } from '@/shared/data/api/schemas/miniApps';
-import { PRESETS_MINI_APPS } from '@/shared/data/presets/miniApps';
-import type { MiniApp, MiniAppId, MiniAppStatus } from '@/shared/data/types/miniApp';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
+import type { OrderRequest } from '@cherrystudio/shared/data/api/schemas/_endpointHelpers';
+import type {
+  CreateMiniAppDto,
+  UpdateMiniAppDto,
+} from '@cherrystudio/shared/data/api/schemas/miniApps';
+import { PRESETS_MINI_APPS } from '@cherrystudio/shared/data/presets/miniApps';
+import type { MiniApp, MiniAppId, MiniAppStatus } from '@cherrystudio/shared/data/types/miniApp';
 
 import { applyMoves, generateOrderKeyBetween, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';

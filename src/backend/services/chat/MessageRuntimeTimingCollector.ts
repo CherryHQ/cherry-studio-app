@@ -2,7 +2,7 @@ import type {
   MessageRuntimeSpan,
   MessageRuntimeTiming,
   MessageRuntimeTimingSink,
-} from '@/shared/data/types/message';
+} from '@cherrystudio/shared/data/types/message';
 
 function cloneTiming(timing: MessageRuntimeTiming): MessageRuntimeTiming {
   return {

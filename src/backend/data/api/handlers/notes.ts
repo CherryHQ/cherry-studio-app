@@ -5,8 +5,8 @@ import {
   type NoteSchemas,
   RewriteNotePathSchema,
   UpsertNoteSchema,
-} from '@/shared/data/api/schemas/notes';
-import type { HandlersFor } from '@/shared/data/api/types';
+} from '@cherrystudio/shared/data/api/schemas/notes';
+import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
 
 export function createNoteHandlers(service: NoteService): HandlersFor<NoteSchemas> {
   return {

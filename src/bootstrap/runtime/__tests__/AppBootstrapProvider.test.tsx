@@ -3,8 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { AppBootstrapRuntime } from '@/bootstrap/runtime/createAppBootstrapRuntime';
 import type { Backend } from '@/shared/contracts';
-import type { ApiClient } from '@/shared/data/api/types';
-import type { PreferenceClient } from '@/shared/data/preference';
+import type { ApiClient } from '@cherrystudio/shared/data/api/types';
+import type { PreferenceClient } from '@cherrystudio/shared/data/preference';
 
 import { AppBootstrapGate } from '../AppBootstrapGate';
 import { AppBootstrapProvider, useAppBootstrapState } from '../AppBootstrapProvider';

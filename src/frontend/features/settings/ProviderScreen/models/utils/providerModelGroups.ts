@@ -1,4 +1,4 @@
-import type { Model } from '@/shared/data/types/model';
+import type { Model } from '@cherrystudio/shared/data/types/model';
 
 export const UNGROUPED_MODEL_GROUP_KEY = '__ungrouped__';
 

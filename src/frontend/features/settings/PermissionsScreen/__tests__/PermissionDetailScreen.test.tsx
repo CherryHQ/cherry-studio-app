@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
 import type { Backend } from '@/shared/contracts';
-import type { PermissionMode } from '@/shared/data/preference';
+import type { PermissionMode } from '@cherrystudio/shared/data/preference';
 
 import PermissionDetailSettingsScreen from '../PermissionDetailScreen';
 

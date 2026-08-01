@@ -8,8 +8,8 @@ import type {
   PreferenceKeyType,
   PreferenceMappedValues,
   PreferenceMapping,
-} from '@/shared/data/preference';
-import { getDefaultValue, ThemeMode } from '@/shared/data/preference';
+} from '@cherrystudio/shared/data/preference';
+import { getDefaultValue, ThemeMode } from '@cherrystudio/shared/data/preference';
 
 import { useMultiplePreferences, usePreference } from '../usePreference';
 

@@ -7,21 +7,21 @@ import type {
   CreateModelDto,
   ListModelsQuery,
   UpdateModelDto,
-} from '@/shared/data/api/schemas/models';
-import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/types';
-import { deepEqual } from '@/shared/data/cache/cacheUtils';
+} from '@cherrystudio/shared/data/api/schemas/models';
+import { DataApiErrorFactory, ErrorCode } from '@cherrystudio/shared/data/api/types';
+import { deepEqual } from '@cherrystudio/shared/data/cache/cacheUtils';
 import {
   CHERRYAI_DEFAULT_UNIQUE_MODEL_ID,
   CHERRYAI_PROVIDER_ID,
   isManagedCherryAiDefaultModel,
-} from '@/shared/data/presets/cherryai';
+} from '@cherrystudio/shared/data/presets/cherryai';
 import {
   createUniqueModelId,
   type EndpointType,
   type Model,
   parseUniqueModelId,
   type UniqueModelId,
-} from '@/shared/data/types/model';
+} from '@cherrystudio/shared/data/types/model';
 import type { PreferenceService } from '../PreferenceService';
 import type { PinService } from './PinService';
 import {

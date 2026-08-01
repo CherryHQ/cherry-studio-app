@@ -1,8 +1,8 @@
 import type { ToolSet } from 'ai';
-import { DataApiErrorFactory } from '@/shared/data/api/types';
-import type { Assistant } from '@/shared/data/types/assistant';
-import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
-import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/types';
+import type { Assistant } from '@cherrystudio/shared/data/types/assistant';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/shared/data/types/assistant';
+import type { StreamableHttpMcpServer } from '@cherrystudio/shared/data/types/mcpServer';
 import { McpRuntimeService } from '../McpRuntimeService';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));

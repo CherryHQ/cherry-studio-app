@@ -9,9 +9,16 @@ import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry
 import { InvalidToolInputError, type ToolSet } from 'ai';
 import { AiService, type AiServiceDependencies } from '@/backend/ai/AiService';
 import { createWebSearchTool } from '@/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool';
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
-import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import {
+  type Assistant,
+  DEFAULT_ASSISTANT_SETTINGS,
+} from '@cherrystudio/shared/data/types/assistant';
+import {
+  createUniqueModelId,
+  type Model,
+  type UniqueModelId,
+} from '@cherrystudio/shared/data/types/model';
+import type { Provider } from '@cherrystudio/shared/data/types/provider';
 
 const mockGenerate = jest.fn(async () => ({ text: 'ok', usage: undefined }));
 const mockStream = jest.fn(

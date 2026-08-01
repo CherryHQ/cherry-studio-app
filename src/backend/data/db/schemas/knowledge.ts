@@ -5,7 +5,7 @@ import {
   type KnowledgeItemData,
   type KnowledgeItemStatus,
   type KnowledgeItemType,
-} from '@/shared/data/types/knowledge';
+} from '@cherrystudio/shared/data/types/knowledge';
 import { sql } from 'drizzle-orm';
 import {
   check,

@@ -4,13 +4,13 @@ import type {
   WebSearchCapability,
   WebSearchProvider,
   WebSearchProviderOverrides,
-} from '@/shared/data/preference';
+} from '@cherrystudio/shared/data/preference';
 import {
   WEB_SEARCH_PROVIDER_PRESET_MAP,
   type WebSearchProviderPreset,
-} from '@/shared/data/presets/webSearchProviders';
-import type { WebSearchExecutionConfig } from '@/shared/data/types/webSearch';
-import { normalizeWebSearchCutoffLimit } from '@/shared/data/types/webSearch';
+} from '@cherrystudio/shared/data/presets/webSearchProviders';
+import type { WebSearchExecutionConfig } from '@cherrystudio/shared/data/types/webSearch';
+import { normalizeWebSearchCutoffLimit } from '@cherrystudio/shared/data/types/webSearch';
 
 export interface WebSearchPreferenceReader {
   get<K extends PreferenceKeyType>(

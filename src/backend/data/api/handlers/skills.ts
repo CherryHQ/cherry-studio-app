@@ -1,7 +1,10 @@
 import type { AgentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
-import { DataApiErrorFactory, toDataApiError } from '@/shared/data/api/errors';
-import { ListSkillsQuerySchema, type SkillSchemas } from '@/shared/data/api/schemas/skills';
-import type { HandlersFor } from '@/shared/data/api/types';
+import { DataApiErrorFactory, toDataApiError } from '@cherrystudio/shared/data/api/errors';
+import {
+  ListSkillsQuerySchema,
+  type SkillSchemas,
+} from '@cherrystudio/shared/data/api/schemas/skills';
+import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
 
 export function createSkillHandlers(service: AgentGlobalSkillService): HandlersFor<SkillSchemas> {
   return {

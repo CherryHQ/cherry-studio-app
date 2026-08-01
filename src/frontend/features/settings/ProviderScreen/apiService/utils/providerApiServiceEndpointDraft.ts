@@ -1,5 +1,5 @@
-import type { EndpointType } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { EndpointType } from '@cherrystudio/shared/data/types/model';
+import type { Provider } from '@cherrystudio/shared/data/types/provider';
 
 import {
   getPrimaryEndpoint,

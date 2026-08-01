@@ -2,7 +2,7 @@ import {
   AiUsagePricingSnapshotSchema,
   AiUsageRecordEntrySchema,
   getAiUsageRecordTotalTokens,
-} from '@/shared/data/types/aiUsageRecord';
+} from '@shared/data/types/aiUsageRecord';
 
 const entry = {
   id: '00000000-0000-7000-8000-000000000000',

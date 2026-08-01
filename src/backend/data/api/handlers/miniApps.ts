@@ -2,14 +2,14 @@ import type { MiniAppService } from '@/backend/data/services/MiniAppService';
 import {
   OrderBatchRequestSchema,
   OrderRequestSchema,
-} from '@/shared/data/api/schemas/_endpointHelpers';
+} from '@cherrystudio/shared/data/api/schemas/_endpointHelpers';
 import {
   CreateMiniAppSchema,
   ListMiniAppsQuerySchema,
   type MiniAppSchemas,
   UpdateMiniAppSchema,
-} from '@/shared/data/api/schemas/miniApps';
-import type { HandlersFor } from '@/shared/data/api/types';
+} from '@cherrystudio/shared/data/api/schemas/miniApps';
+import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
 
 export function createMiniAppHandlers(service: MiniAppService): HandlersFor<MiniAppSchemas> {
   return {

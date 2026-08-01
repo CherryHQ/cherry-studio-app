@@ -6,9 +6,9 @@ import type {
 import type {
   AiUsagePricingSnapshot,
   ServingCredentialReceipt,
-} from '@/shared/data/types/aiUsageRecord';
-import { AiUsagePricingSnapshotSchema } from '@/shared/data/types/aiUsageRecord';
-import type { Currency, RuntimeModelPricing } from '@/shared/data/types/model';
+} from '@cherrystudio/shared/data/types/aiUsageRecord';
+import { AiUsagePricingSnapshotSchema } from '@cherrystudio/shared/data/types/aiUsageRecord';
+import type { Currency, RuntimeModelPricing } from '@cherrystudio/shared/data/types/model';
 
 export interface CreateAiUsageCaptureContextInput {
   providerId: string;

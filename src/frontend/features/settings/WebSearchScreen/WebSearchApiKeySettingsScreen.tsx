@@ -4,8 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useConfirmDialog } from '@/frontend/components/confirmDialog';
 import { BackHeader } from '@/frontend/components/headers';
-import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/shared/data/preference';
-import { isMobileSupportedWebSearchProviderId } from '@/shared/data/presets/webSearchProviders';
+import {
+  WEB_SEARCH_PROVIDER_IDS,
+  type WebSearchProviderId,
+} from '@cherrystudio/shared/data/preference';
+import { isMobileSupportedWebSearchProviderId } from '@cherrystudio/shared/data/presets/webSearchProviders';
 import {
   normalizeWebSearchApiKeys,
   useWebSearchApiKeySettings,

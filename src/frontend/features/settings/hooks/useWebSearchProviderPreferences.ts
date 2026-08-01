@@ -6,11 +6,11 @@ import type {
   WebSearchCompressionMethod,
   WebSearchProviderId,
   WebSearchProviderOverride,
-} from '@/shared/data/preference';
+} from '@cherrystudio/shared/data/preference';
 import {
   getMobileSupportedWebSearchProvidersByCapability,
   type WebSearchProviderPreset,
-} from '@/shared/data/presets/webSearchProviders';
+} from '@cherrystudio/shared/data/presets/webSearchProviders';
 import type { SettingSelectOption } from '../components/SettingSelect';
 import { mergeWebSearchProviderOverride } from '../WebSearchScreen/utils/providerSettings';
 

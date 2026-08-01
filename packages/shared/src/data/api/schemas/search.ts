@@ -8,7 +8,7 @@
 import type {
   AgentSessionMessageSearchRole,
   TopicMessageSearchRole,
-} from '@/shared/data/types/message';
+} from '@shared/data/types/message';
 import * as z from 'zod';
 
 export type EntitySearchTarget =

@@ -1,9 +1,16 @@
 import { NEW_CHAT_SESSION_TOPIC_ID } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
-import type { PreparedInternalFile } from '@/shared/data/types/file';
-import type { CherryMessagePart, CherryUIMessage, Message } from '@/shared/data/types/message';
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import {
+  type Assistant,
+  DEFAULT_ASSISTANT_SETTINGS,
+} from '@cherrystudio/shared/data/types/assistant';
+import type { PreparedInternalFile } from '@cherrystudio/shared/data/types/file';
+import type {
+  CherryMessagePart,
+  CherryUIMessage,
+  Message,
+} from '@cherrystudio/shared/data/types/message';
+import type { Model, UniqueModelId } from '@cherrystudio/shared/data/types/model';
 import type { ChatSessionServices, ChatStreamRequest } from '../ChatSessionDependencies';
 import { ChatSessionImpl } from '../ChatSessionImpl';
 

@@ -1,7 +1,7 @@
 import type { Tool } from 'ai';
 import type { SystemPermissionState } from '@/backend/services/permissions';
-import type { PermissionPreferenceKey } from '@/shared/data/preference';
-import type { Assistant } from '@/shared/data/types/assistant';
+import type { PermissionPreferenceKey } from '@cherrystudio/shared/data/preference';
+import type { Assistant } from '@cherrystudio/shared/data/types/assistant';
 
 export type ToolDefer = 'never' | 'always' | 'auto';
 

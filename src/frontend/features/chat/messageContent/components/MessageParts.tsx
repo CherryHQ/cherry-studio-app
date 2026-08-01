@@ -1,4 +1,4 @@
-import type { Message } from '@/shared/data/types/message';
+import type { Message } from '@cherrystudio/shared/data/types/message';
 
 import { resolveMessageCitationText } from '../citations';
 import { MessagePart } from './MessagePart';

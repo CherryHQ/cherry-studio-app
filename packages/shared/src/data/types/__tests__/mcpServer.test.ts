@@ -1,4 +1,4 @@
-import { McpServerSchema, StreamableHttpMcpServerSchema } from '@/shared/data/types/mcpServer';
+import { McpServerSchema, StreamableHttpMcpServerSchema } from '@shared/data/types/mcpServer';
 
 const id = '00000000-0000-4000-8000-000000000000';
 

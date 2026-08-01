@@ -5,8 +5,8 @@
  * API only manages user preferences for default apps and full CRUD for custom apps.
  */
 
-import type { MiniApp } from '@/shared/data/types/miniApp';
-import { MiniAppStatusSchema } from '@/shared/data/types/miniApp';
+import type { MiniApp } from '@shared/data/types/miniApp';
+import { MiniAppStatusSchema } from '@shared/data/types/miniApp';
 import * as z from 'zod';
 
 import type { OrderEndpoints } from './_endpointHelpers';

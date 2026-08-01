@@ -3,7 +3,7 @@ import {
   type PreferenceKeyType,
   type SidebarFavorite,
   type SidebarFavoriteItem,
-} from '@/shared/data/preference/preferenceTypes';
+} from '@cherrystudio/shared/data/preference/preferenceTypes';
 
 type StoredPreference = {
   key: string;

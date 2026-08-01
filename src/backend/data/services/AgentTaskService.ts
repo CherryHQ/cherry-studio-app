@@ -2,9 +2,12 @@ import { and, desc, eq, ne } from 'drizzle-orm';
 
 import type { DbService } from '@/backend/data/db/DbService';
 import { jobScheduleTable } from '@/backend/data/db/schemas/job';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
-import type { ScheduledTaskEntity, TaskRunLogEntity } from '@/shared/data/api/schemas/agents';
-import { AgentSessionWorkspaceSourceSchema } from '@/shared/data/api/schemas/agentWorkspaces';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
+import type {
+  ScheduledTaskEntity,
+  TaskRunLogEntity,
+} from '@cherrystudio/shared/data/api/schemas/agents';
+import { AgentSessionWorkspaceSourceSchema } from '@cherrystudio/shared/data/api/schemas/agentWorkspaces';
 
 import type { AgentChannelService } from './AgentChannelService';
 import type { JobService } from './JobService';

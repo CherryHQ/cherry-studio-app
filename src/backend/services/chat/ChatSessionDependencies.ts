@@ -2,10 +2,10 @@ import type { ChatToolApprovalInput } from '@/shared/contracts';
 import type {
   BranchMessagesQueryParams,
   CreateMessageDto,
-} from '@/shared/data/api/schemas/messages';
-import type { CreateTopicDto, UpdateTopicDto } from '@/shared/data/api/schemas/topics';
-import type { Assistant } from '@/shared/data/types/assistant';
-import type { PreparedInternalFile } from '@/shared/data/types/file';
+} from '@cherrystudio/shared/data/api/schemas/messages';
+import type { CreateTopicDto, UpdateTopicDto } from '@cherrystudio/shared/data/api/schemas/topics';
+import type { Assistant } from '@cherrystudio/shared/data/types/assistant';
+import type { PreparedInternalFile } from '@cherrystudio/shared/data/types/file';
 import type {
   BranchMessagesResponse,
   CherryMessagePart,
@@ -14,11 +14,11 @@ import type {
   MessageData,
   MessageRuntimeStatsInput,
   MessageRuntimeTimingSink,
-} from '@/shared/data/types/message';
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
-import type { Topic } from '@/shared/data/types/topic';
-import type { ReasoningEffortOption } from '@/shared/types/aiSdk';
+} from '@cherrystudio/shared/data/types/message';
+import type { Model, UniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { Provider } from '@cherrystudio/shared/data/types/provider';
+import type { Topic } from '@cherrystudio/shared/data/types/topic';
+import type { ReasoningEffortOption } from '@cherrystudio/shared/types/aiSdk';
 
 export type ChatStreamRequest = {
   assistantId?: string;

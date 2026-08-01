@@ -3,9 +3,9 @@ import { File } from 'expo-file-system';
 import { useEffect } from 'react';
 import { useQuery } from '@/frontend/data';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { FileEntryId } from '@/shared/data/types/file';
-import type { FileUIPart } from '@/shared/data/types/message';
-import { readCherryMeta } from '@/shared/data/types/uiParts';
+import type { FileEntryId } from '@cherrystudio/shared/data/types/file';
+import type { FileUIPart } from '@cherrystudio/shared/data/types/message';
+import { readCherryMeta } from '@cherrystudio/shared/data/types/uiParts';
 
 const logger = loggerService.withContext('useFilePartUri');
 

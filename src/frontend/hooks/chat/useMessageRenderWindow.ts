@@ -1,6 +1,6 @@
 import { startTransition, useCallback, useMemo, useState } from 'react';
 
-import type { Message } from '@/shared/data/types/message';
+import type { Message } from '@cherrystudio/shared/data/types/message';
 import { messageWindowPolicy } from './utils/messageWindowPolicy';
 
 type MessageWindowSignature = {

@@ -1,4 +1,4 @@
-import type { AssistantSettings } from '@/shared/data/types/assistant';
+import type { AssistantSettings } from '@cherrystudio/shared/data/types/assistant';
 import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import {

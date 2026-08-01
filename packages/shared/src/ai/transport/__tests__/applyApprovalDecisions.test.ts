@@ -1,4 +1,4 @@
-import type { CherryMessagePart } from '@/shared/data/types/message';
+import type { CherryMessagePart } from '@shared/data/types/message';
 
 import { applyApprovalDecisions } from '../applyApprovalDecisions';
 import type { ApprovalDecision } from '../stream';

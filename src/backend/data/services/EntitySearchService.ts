@@ -9,7 +9,11 @@ import {
   knowledgeBaseTable,
   topicTable,
 } from '@/backend/data/db/schemas';
-import { DataApiErrorFactory, isDataApiError, toDataApiError } from '@/shared/data/api/errors';
+import {
+  DataApiErrorFactory,
+  isDataApiError,
+  toDataApiError,
+} from '@cherrystudio/shared/data/api/errors';
 import {
   ENTITY_SEARCH_MAX_LIMIT_PER_TYPE,
   type EntitySearchGroup,
@@ -18,7 +22,7 @@ import {
   type EntitySearchResponse,
   type EntitySearchType,
   entitySearchTypes,
-} from '@/shared/data/api/schemas/search';
+} from '@cherrystudio/shared/data/api/schemas/search';
 
 import { timestampToISO } from './utils/rowMappers';
 

@@ -4,8 +4,8 @@ import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { DevicePermissionService } from '@/backend/services/permissions';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { PermissionPreferenceKey } from '@/shared/data/preference';
-import type { Assistant } from '@/shared/data/types/assistant';
+import type { PermissionPreferenceKey } from '@cherrystudio/shared/data/preference';
+import type { Assistant } from '@cherrystudio/shared/data/types/assistant';
 
 import type { McpRuntimeService } from '../mcp';
 import { registerBuiltinTools } from './adapters/aiSdk/builtin/registerBuiltinTools';

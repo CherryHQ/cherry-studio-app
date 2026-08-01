@@ -6,9 +6,12 @@
  */
 
 import { loggerService } from '@logger';
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
-import type { Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import {
+  type Assistant,
+  DEFAULT_ASSISTANT_SETTINGS,
+} from '@cherrystudio/shared/data/types/assistant';
+import type { Model } from '@cherrystudio/shared/data/types/model';
+import type { Provider } from '@cherrystudio/shared/data/types/provider';
 import {
   isClaude46SeriesModel,
   isClaude47SeriesModel,
@@ -19,7 +22,7 @@ import {
   isSupportTemperatureModel,
   isSupportTopPModel,
   isTemperatureTopPMutuallyExclusiveModel,
-} from '@/shared/utils/model';
+} from '@cherrystudio/shared/utils/model';
 import { isAwsBedrockProvider } from './provider';
 import { getThinkingBudget } from './reasoning';
 

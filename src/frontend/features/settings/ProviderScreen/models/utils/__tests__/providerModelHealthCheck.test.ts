@@ -1,4 +1,4 @@
-import { createUniqueModelId, type Model } from '@/shared/data/types/model';
+import { createUniqueModelId, type Model } from '@cherrystudio/shared/data/types/model';
 import { createProviderModelHealthPendingStatuses } from '../providerModelHealthCheck';
 
 describe('provider model health check presentation', () => {

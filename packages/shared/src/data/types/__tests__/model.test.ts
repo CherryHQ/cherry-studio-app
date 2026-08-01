@@ -2,7 +2,7 @@ import {
   createUniqueModelId,
   isUniqueModelId,
   UniqueModelIdSchema,
-} from '@/shared/data/types/model';
+} from '@shared/data/types/model';
 
 describe('model ids', () => {
   test('creates and validates strict unique model ids', () => {

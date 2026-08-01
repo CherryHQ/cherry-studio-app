@@ -1,7 +1,7 @@
 import type { JobService } from '@/backend/data/services/JobService';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
-import { type JobSchemas, ListJobsQuerySchema } from '@/shared/data/api/schemas/jobs';
-import type { HandlersFor } from '@/shared/data/api/types';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
+import { type JobSchemas, ListJobsQuerySchema } from '@cherrystudio/shared/data/api/schemas/jobs';
+import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
 
 export function createJobHandlers(service: JobService): HandlersFor<JobSchemas> {
   return {

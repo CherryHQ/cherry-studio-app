@@ -11,16 +11,16 @@ import type {
 import type { AssistantService } from '@/backend/data/services/AssistantService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
-import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
-import type { Assistant } from '@/shared/data/types/assistant';
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
-import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { ServingCredentialReceipt } from '@cherrystudio/shared/data/types/aiUsageRecord';
+import type { Assistant } from '@cherrystudio/shared/data/types/assistant';
+import type { Model, UniqueModelId } from '@cherrystudio/shared/data/types/model';
+import { isUniqueModelId, parseUniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { Provider } from '@cherrystudio/shared/data/types/provider';
 import {
   isAnthropicModel,
   isForcedNativeWebSearchModel,
   isFunctionCallingModel,
-} from '@/shared/utils/model';
+} from '@cherrystudio/shared/utils/model';
 import { createAiUsagePlugin } from '../../../hooks/billingHook';
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
 import type { ToolService } from '../../../tools';

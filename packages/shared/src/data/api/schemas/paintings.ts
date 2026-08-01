@@ -1,5 +1,5 @@
-import type { CursorPaginationResponse } from '@/shared/data/api/types';
-import type { Painting } from '@/shared/data/types/painting';
+import type { CursorPaginationResponse } from '@shared/data/api/types';
+import type { Painting } from '@shared/data/types/painting';
 
 export type PaintingListQuery = {
   cursor?: string;

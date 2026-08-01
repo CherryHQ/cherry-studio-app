@@ -11,15 +11,15 @@ import { agentGlobalSkillTable } from '@/backend/data/db/schemas/agentGlobalSkil
 import { knowledgeBaseTable } from '@/backend/data/db/schemas/knowledge';
 import { pinTable } from '@/backend/data/db/schemas/pin';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
-import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
+import type { OrderRequest } from '@cherrystudio/shared/data/api/schemas/_endpointHelpers';
 import {
   type AgentConfiguration,
   type AgentEntity,
   sanitizeAgentConfiguration,
   type UpdateAgentDto,
-} from '@/shared/data/api/schemas/agents';
-import type { UniqueModelId } from '@/shared/data/types/model';
+} from '@cherrystudio/shared/data/api/schemas/agents';
+import type { UniqueModelId } from '@cherrystudio/shared/data/types/model';
 
 import type { PinService } from './PinService';
 import type { AgentSessionService } from './AgentSessionService';

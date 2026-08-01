@@ -8,7 +8,7 @@ import {
   FileEntrySchema,
   type PreparedInternalFile,
   type ResolvedFile,
-} from '@/shared/data/types/file';
+} from '@cherrystudio/shared/data/types/file';
 
 import { resolveInternalFileUri } from './fileStorage';
 

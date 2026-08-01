@@ -1,7 +1,10 @@
 import { useCallback } from 'react';
 import { useMutation, useQuery } from '@/frontend/data';
-import type { CreateAssistantDto, UpdateAssistantDto } from '@/shared/data/api/schemas/assistants';
-import { type Assistant } from '@/shared/data/types/assistant';
+import type {
+  CreateAssistantDto,
+  UpdateAssistantDto,
+} from '@cherrystudio/shared/data/api/schemas/assistants';
+import { type Assistant } from '@cherrystudio/shared/data/types/assistant';
 
 const ASSISTANTS_LIST_LIMIT = 500;
 const EMPTY_ASSISTANTS: readonly Assistant[] = Object.freeze([]);

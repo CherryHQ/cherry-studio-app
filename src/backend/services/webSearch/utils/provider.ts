@@ -1,4 +1,4 @@
-import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/preference';
+import type { WebSearchCapability, WebSearchProvider } from '@cherrystudio/shared/data/preference';
 
 export function resolveProviderApiHost(
   provider: WebSearchProvider,

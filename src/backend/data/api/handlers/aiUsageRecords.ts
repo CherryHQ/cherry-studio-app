@@ -1,6 +1,6 @@
 import type { AiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
-import type { AiUsageRecordSchemas } from '@/shared/data/api/schemas/aiUsageRecords';
-import type { HandlersFor } from '@/shared/data/api/types';
+import type { AiUsageRecordSchemas } from '@cherrystudio/shared/data/api/schemas/aiUsageRecords';
+import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
 
 type AiUsageRecordData = Pick<AiUsageRecordService, 'list' | 'stats' | 'timeline'>;
 

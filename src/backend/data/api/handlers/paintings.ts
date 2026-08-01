@@ -1,6 +1,9 @@
-import type { PaintingListQuery, PaintingSchemas } from '@/shared/data/api/schemas/paintings';
-import type { HandlersFor } from '@/shared/data/api/types';
-import type { Painting } from '@/shared/data/types/painting';
+import type {
+  PaintingListQuery,
+  PaintingSchemas,
+} from '@cherrystudio/shared/data/api/schemas/paintings';
+import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
+import type { Painting } from '@cherrystudio/shared/data/types/painting';
 
 export type PaintingData = {
   get(id: string): Promise<Painting>;

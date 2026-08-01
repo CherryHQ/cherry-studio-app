@@ -1,6 +1,6 @@
 import type { AssistantService } from '@/backend/data/services/AssistantService';
-import type { AssistantSchemas } from '@/shared/data/api/schemas/assistants';
-import type { HandlersFor } from '@/shared/data/api/types';
+import type { AssistantSchemas } from '@cherrystudio/shared/data/api/schemas/assistants';
+import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
 
 type AssistantData = Pick<
   AssistantService,

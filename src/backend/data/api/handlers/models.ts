@@ -1,6 +1,6 @@
 import type { ModelService } from '@/backend/data/services/ModelService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
 import {
   BulkUpdateModelsSchema,
   CreateModelsSchema,
@@ -10,9 +10,9 @@ import {
   ReconcileProviderModelsSchema,
   ResolveProviderModelsQuerySchema,
   UpdateModelSchema,
-} from '@/shared/data/api/schemas/models';
-import type { HandlersFor } from '@/shared/data/api/types';
-import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
+} from '@cherrystudio/shared/data/api/schemas/models';
+import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
+import { isUniqueModelId, parseUniqueModelId } from '@cherrystudio/shared/data/types/model';
 
 function parseUniqueId(uniqueModelId: string) {
   if (!isUniqueModelId(uniqueModelId)) {

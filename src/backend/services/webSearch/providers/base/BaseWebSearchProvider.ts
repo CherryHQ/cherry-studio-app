@@ -1,5 +1,5 @@
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
-import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/preference';
+import type { WebSearchCapability, WebSearchProvider } from '@cherrystudio/shared/data/preference';
 import type { ApiKeyRotationState } from '../../utils/provider';
 import { resolveProviderApiHost } from '../../utils/provider';
 import { withoutTrailingSlash } from '../../utils/url';

@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { isHttpUrl } from '@/shared/utils/url';
+import { isHttpUrl } from '@shared/utils/url';
 
 import {
   KB_LIST_TOOL_NAME,

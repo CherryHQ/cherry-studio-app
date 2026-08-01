@@ -2,15 +2,15 @@ import { and, eq, or, sql, type SQL } from 'drizzle-orm';
 
 import type { DbService } from '@/backend/data/db/DbService';
 import { translateHistoryTable } from '@/backend/data/db/schemas/translateHistory';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
 import type {
   CreateTranslateHistoryDto,
   TranslateHistoryListResponse,
   TranslateHistoryQuery,
   UpdateTranslateHistoryDto,
-} from '@/shared/data/api/schemas/translate';
-import { parsePersistedLangCode } from '@/shared/data/preference/preferenceTypes';
-import type { TranslateHistory } from '@/shared/data/types/translate';
+} from '@cherrystudio/shared/data/api/schemas/translate';
+import { parsePersistedLangCode } from '@cherrystudio/shared/data/preference/preferenceTypes';
+import type { TranslateHistory } from '@cherrystudio/shared/data/types/translate';
 
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 import { timestampToISO } from './utils/rowMappers';

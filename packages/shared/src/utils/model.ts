@@ -1,7 +1,7 @@
 import { MODALITY, MODEL_CAPABILITY, VENDOR_PATTERNS } from '@cherrystudio/provider-registry';
 
-import type { Model } from '@/shared/data/types/model';
-import { parseUniqueModelId } from '@/shared/data/types/model';
+import type { Model } from '@shared/data/types/model';
+import { parseUniqueModelId } from '@shared/data/types/model';
 
 export const isReasoningModel = (model: Model): boolean =>
   model.capabilities.includes(MODEL_CAPABILITY.REASONING) || model.reasoning != null;

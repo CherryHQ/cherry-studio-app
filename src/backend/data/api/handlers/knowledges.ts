@@ -5,8 +5,8 @@ import {
   ListKnowledgeBasesQuerySchema,
   ListKnowledgeItemsQuerySchema,
   UpdateKnowledgeBaseSchema,
-} from '@/shared/data/api/schemas/knowledges';
-import type { HandlersFor } from '@/shared/data/api/types';
+} from '@cherrystudio/shared/data/api/schemas/knowledges';
+import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
 
 export function createKnowledgeHandlers(
   bases: KnowledgeBaseService,

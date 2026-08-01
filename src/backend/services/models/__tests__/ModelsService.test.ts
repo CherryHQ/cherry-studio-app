@@ -1,8 +1,12 @@
 import type { ModelsBackend } from '@/shared/contracts';
 import { ModelPullTimeoutError } from '@/shared/contracts';
-import type { AddModelInput } from '@/shared/data/api/schemas/models';
-import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { AddModelInput } from '@cherrystudio/shared/data/api/schemas/models';
+import {
+  createUniqueModelId,
+  type Model,
+  type UniqueModelId,
+} from '@cherrystudio/shared/data/types/model';
+import type { Provider } from '@cherrystudio/shared/data/types/provider';
 import { ModelsService, type ModelsServiceDependencies } from '../ModelsService';
 
 const provider = {

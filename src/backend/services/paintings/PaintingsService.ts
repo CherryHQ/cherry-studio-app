@@ -5,11 +5,15 @@ import type {
   PaintingsBackend,
   ResolvedPaintingFiles,
 } from '@/shared/contracts';
-import type { PaintingListQuery } from '@/shared/data/api/schemas/paintings';
-import type { CursorPaginationResponse } from '@/shared/data/api/types';
-import type { FileEntryId, PreparedInternalFile, ResolvedFile } from '@/shared/data/types/file';
-import { parseUniqueModelId } from '@/shared/data/types/model';
-import type { Painting } from '@/shared/data/types/painting';
+import type { PaintingListQuery } from '@cherrystudio/shared/data/api/schemas/paintings';
+import type { CursorPaginationResponse } from '@cherrystudio/shared/data/api/types';
+import type {
+  FileEntryId,
+  PreparedInternalFile,
+  ResolvedFile,
+} from '@cherrystudio/shared/data/types/file';
+import { parseUniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { Painting } from '@cherrystudio/shared/data/types/painting';
 
 type PaintingRepository = {
   create(input: {

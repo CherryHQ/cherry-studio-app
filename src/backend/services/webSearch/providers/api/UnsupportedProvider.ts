@@ -1,4 +1,7 @@
-import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/data/types/webSearch';
+import type {
+  WebSearchExecutionConfig,
+  WebSearchResponse,
+} from '@cherrystudio/shared/data/types/webSearch';
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 
 export class UnsupportedProvider extends BaseWebSearchProvider {

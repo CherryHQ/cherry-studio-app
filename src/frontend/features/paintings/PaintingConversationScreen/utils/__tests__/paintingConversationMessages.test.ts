@@ -1,5 +1,5 @@
-import type { Painting } from '@/shared/data/types/painting';
-import { readCherryMeta } from '@/shared/data/types/uiParts';
+import type { Painting } from '@cherrystudio/shared/data/types/painting';
+import { readCherryMeta } from '@cherrystudio/shared/data/types/uiParts';
 import type { ResolvedPaintingFiles } from '../../../hooks/usePaintings';
 
 import {

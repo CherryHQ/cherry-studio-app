@@ -16,8 +16,8 @@ import {
 } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPolicy';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { isUniqueModelId } from '@/shared/data/types/model';
-import type { Topic } from '@/shared/data/types/topic';
+import { isUniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { Topic } from '@cherrystudio/shared/data/types/topic';
 
 const MODEL_DETAIL_PREFETCH_STALE_TIME_MS = 1000 * 60 * 5;
 

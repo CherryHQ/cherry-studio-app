@@ -9,7 +9,7 @@ import {
 } from '@/frontend/components/modelPicker';
 import { useModelById, useProviders, useTopic } from '@/frontend/hooks/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { isUniqueModelId } from '@/shared/data/types/model';
+import { isUniqueModelId } from '@cherrystudio/shared/data/types/model';
 import { useChatSessionTopic } from '../session';
 import { ChatInputActionSheet } from './components/ChatInputActionSheet';
 import { ChatInputReasoningSection } from './components/ChatInputReasoningSection';

@@ -1,13 +1,13 @@
 import type { AgentChannelService } from '@/backend/data/services/AgentChannelService';
-import { DataApiErrorFactory, toDataApiError } from '@/shared/data/api/errors';
+import { DataApiErrorFactory, toDataApiError } from '@cherrystudio/shared/data/api/errors';
 import {
   ActiveAgentChannelConfigSchemasByType,
   AgentChannelListQuerySchema,
   type AgentChannelSchemas,
   CreateAgentChannelSchema,
   UpdateAgentChannelSchema,
-} from '@/shared/data/api/schemas/agentChannels';
-import type { HandlersFor } from '@/shared/data/api/types';
+} from '@cherrystudio/shared/data/api/schemas/agentChannels';
+import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
 
 export function createAgentChannelHandlers(
   service: AgentChannelService,

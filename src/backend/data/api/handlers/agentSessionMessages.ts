@@ -1,13 +1,13 @@
 import type { AgentSessionMessageService } from '@/backend/data/services/AgentSessionMessageService';
-import { projectMessagePartsForRenderer } from '@/shared/ai/transport';
-import { toDataApiError } from '@/shared/data/api/errors';
+import { projectMessagePartsForRenderer } from '@cherrystudio/shared/ai/transport';
+import { toDataApiError } from '@cherrystudio/shared/data/api/errors';
 import {
   type AgentSessionMessageEntity,
   type AgentSessionMessageSchemas,
   AgentSessionMessagesListQuerySchema,
   UpdateAgentSessionMessageSchema,
-} from '@/shared/data/api/schemas/agentSessionMessages';
-import type { HandlersFor } from '@/shared/data/api/types';
+} from '@cherrystudio/shared/data/api/schemas/agentSessionMessages';
+import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
 
 function projectForRenderer(
   message: AgentSessionMessageEntity,

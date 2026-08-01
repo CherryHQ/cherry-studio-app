@@ -15,9 +15,9 @@
 
 import type { UIMessage } from 'ai';
 
-import type { Model } from '@/shared/data/types/model';
+import type { Model } from '@cherrystudio/shared/data/types/model';
 
-import { isAudioModel, isVideoModel, isVisionModel } from '@/shared/utils/model';
+import { isAudioModel, isVideoModel, isVisionModel } from '@cherrystudio/shared/utils/model';
 
 export interface MediaCapabilities {
   image: boolean;

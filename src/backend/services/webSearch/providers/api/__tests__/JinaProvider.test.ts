@@ -1,6 +1,6 @@
 import { ApiKeyRotationState } from '@/backend/services/webSearch/utils/provider';
-import type { WebSearchProvider } from '@/shared/data/preference';
-import type { WebSearchExecutionConfig } from '@/shared/data/types/webSearch';
+import type { WebSearchProvider } from '@cherrystudio/shared/data/preference';
+import type { WebSearchExecutionConfig } from '@cherrystudio/shared/data/types/webSearch';
 
 import { JinaProvider } from '../JinaProvider';
 

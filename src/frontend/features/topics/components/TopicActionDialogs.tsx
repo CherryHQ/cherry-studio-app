@@ -6,7 +6,7 @@ import { type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, StyleSheet, Text, View } from 'react-native';
 
-import type { Topic } from '@/shared/data/types/topic';
+import type { Topic } from '@cherrystudio/shared/data/types/topic';
 
 import { useTopicListActions } from '../context/TopicListProvider';
 

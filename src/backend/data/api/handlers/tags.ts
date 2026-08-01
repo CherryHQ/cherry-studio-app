@@ -6,9 +6,9 @@ import {
   TagIdSchema,
   type TagSchemas,
   UpdateTagSchema,
-} from '@/shared/data/api/schemas/tags';
-import type { HandlersFor } from '@/shared/data/api/types';
-import { EntityIdSchema, EntityTypeSchema } from '@/shared/data/types/entityType';
+} from '@cherrystudio/shared/data/api/schemas/tags';
+import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
+import { EntityIdSchema, EntityTypeSchema } from '@cherrystudio/shared/data/types/entityType';
 
 export function createTagHandlers(service: TagService): HandlersFor<TagSchemas> {
   return {

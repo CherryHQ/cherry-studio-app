@@ -9,8 +9,8 @@ import {
   type ModelPickerTag,
   ModelPickerTagChip,
 } from '@/frontend/components/modelPicker';
-import type { Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { Model } from '@cherrystudio/shared/data/types/model';
+import type { Provider } from '@cherrystudio/shared/data/types/provider';
 
 import { SettingsGroupedSurface } from '../../../components/SettingsGroupedSurface';
 

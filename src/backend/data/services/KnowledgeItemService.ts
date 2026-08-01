@@ -2,17 +2,17 @@ import { and, asc, count, desc, eq, gt, isNull, lt, ne, or, sql, type SQL } from
 
 import type { DbService } from '@/backend/data/db/DbService';
 import { knowledgeItemTable } from '@/backend/data/db/schemas/knowledge';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
 import type {
   KnowledgeItemListResponse,
   ListKnowledgeItemsQuery,
-} from '@/shared/data/api/schemas/knowledges';
+} from '@cherrystudio/shared/data/api/schemas/knowledges';
 import {
   type CreateKnowledgeItemDto,
   type KnowledgeItem,
   KnowledgeItemSchema,
   type KnowledgeItemStatus,
-} from '@/shared/data/types/knowledge';
+} from '@cherrystudio/shared/data/types/knowledge';
 
 import type { KnowledgeBaseService } from './KnowledgeBaseService';
 import { timestampToISO } from './utils/rowMappers';

@@ -1,4 +1,4 @@
-import type { CherryMessagePart } from '@/shared/data/types/message';
+import type { CherryMessagePart } from '@cherrystudio/shared/data/types/message';
 
 import { PartPlaceholder } from './PartPlaceholder';
 

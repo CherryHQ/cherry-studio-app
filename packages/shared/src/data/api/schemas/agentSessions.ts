@@ -2,7 +2,7 @@
  * Agent session domain API Schema definitions.
  */
 
-import { TraceIdSchema } from '@/shared/data/types/trace';
+import { TraceIdSchema } from '@shared/data/types/trace';
 import * as z from 'zod';
 
 import type { CursorPaginationResponse } from '../types';

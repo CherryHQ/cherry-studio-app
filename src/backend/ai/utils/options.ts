@@ -2,9 +2,13 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { JSONValue } from 'ai';
 
-import type { Assistant } from '@/shared/data/types/assistant';
-import type { Model } from '@/shared/data/types/model';
-import type { OpenAIServiceTier, Provider, ServiceTier } from '@/shared/data/types/provider';
+import type { Assistant } from '@cherrystudio/shared/data/types/assistant';
+import type { Model } from '@cherrystudio/shared/data/types/model';
+import type {
+  OpenAIServiceTier,
+  Provider,
+  ServiceTier,
+} from '@cherrystudio/shared/data/types/provider';
 import {
   getModelSupportedVerbosity,
   isAnthropicModel,
@@ -14,7 +18,7 @@ import {
   isReasoningModel,
   isSupportFlexServiceTierModel,
   isSupportVerbosityModel,
-} from '@/shared/utils/model';
+} from '@cherrystudio/shared/utils/model';
 import { getAiSdkProviderId } from '../provider/factory';
 import type { ProviderCapabilities } from '../types';
 import { buildGeminiGenerateImageParams } from './image';

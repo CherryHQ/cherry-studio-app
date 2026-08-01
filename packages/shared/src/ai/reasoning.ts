@@ -1,8 +1,8 @@
 /** Provider-neutral reasoning vocabulary and budget policy shared by Main and Renderer. */
 import { REASONING_EFFORT_ORDER } from '@cherrystudio/provider-registry';
-import type { Model, RuntimeReasoning } from '@/shared/data/types/model';
-import type { ReasoningEffortOption } from '@/shared/types/aiSdk';
-import { isReasoningModel } from '@/shared/utils/model';
+import type { Model, RuntimeReasoning } from '@shared/data/types/model';
+import type { ReasoningEffortOption } from '@shared/types/aiSdk';
+import { isReasoningModel } from '@shared/utils/model';
 
 type BudgetEffort = Exclude<ReasoningEffortOption, 'default' | 'none' | 'auto'>;
 

@@ -2,7 +2,7 @@ import type { TopicService } from '@/backend/data/services/TopicService';
 import {
   OrderBatchRequestSchema,
   OrderRequestSchema,
-} from '@/shared/data/api/schemas/_endpointHelpers';
+} from '@cherrystudio/shared/data/api/schemas/_endpointHelpers';
 import {
   CreateTopicSchema,
   DeleteTopicsQuerySchema,
@@ -11,8 +11,8 @@ import {
   SetActiveNodeSchema,
   type TopicSchemas,
   UpdateTopicSchema,
-} from '@/shared/data/api/schemas/topics';
-import type { HandlersFor } from '@/shared/data/api/types';
+} from '@cherrystudio/shared/data/api/schemas/topics';
+import type { HandlersFor } from '@cherrystudio/shared/data/api/types';
 
 export function createTopicHandlers(service: TopicService): HandlersFor<TopicSchemas> {
   return {

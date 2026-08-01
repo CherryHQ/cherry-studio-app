@@ -18,8 +18,8 @@
  * resuming it must call `finalizeDanglingToolApprovals`.
  */
 
-import type { CherryMessagePart } from '@/shared/data/types/message';
-import { withCherryMeta } from '@/shared/data/types/uiParts';
+import type { CherryMessagePart } from '@shared/data/types/message';
+import { withCherryMeta } from '@shared/data/types/uiParts';
 
 export type ApprovalDecision = {
   approvalId: string;

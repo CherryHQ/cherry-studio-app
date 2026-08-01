@@ -10,9 +10,9 @@ import type {
   AgentChannelEntity,
   CreateAgentChannelDto,
   UpdateAgentChannelDto,
-} from '@/shared/data/api/schemas/agentChannels';
-import type { AgentChannelType } from '@/shared/data/api/schemas/agentChannels';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
+} from '@cherrystudio/shared/data/api/schemas/agentChannels';
+import type { AgentChannelType } from '@cherrystudio/shared/data/api/schemas/agentChannels';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
 
 import { nullsToUndefined, timestampToISO } from './utils/rowMappers';
 

@@ -1,5 +1,5 @@
-import type { Painting } from '@/shared/data/types/painting';
-import type { Topic } from '@/shared/data/types/topic';
+import type { Painting } from '@shared/data/types/painting';
+import type { Topic } from '@shared/data/types/topic';
 import type { ApiClient, CursorPaginationResponse } from '../types';
 
 function compileTimeContract(client: ApiClient) {

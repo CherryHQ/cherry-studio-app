@@ -6,15 +6,15 @@ import {
   type AgentSessionMessageRow,
   agentSessionMessageTable,
 } from '@/backend/data/db/schemas/agentSessionMessage';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
 import {
   AGENT_SESSION_MESSAGES_DEFAULT_LIMIT,
   AGENT_SESSION_MESSAGES_MAX_LIMIT,
   type AgentSessionMessageEntity,
   type AgentSessionMessagesListQuery,
   type UpdateAgentSessionMessageDto,
-} from '@/shared/data/api/schemas/agentSessionMessages';
-import type { CursorPaginationResponse } from '@/shared/data/api/types';
+} from '@cherrystudio/shared/data/api/schemas/agentSessionMessages';
+import type { CursorPaginationResponse } from '@cherrystudio/shared/data/api/types';
 
 import { asNumericKey, decodeListCursor, encodeCursor } from './utils/keysetCursor';
 import { timestampToISO } from './utils/rowMappers';

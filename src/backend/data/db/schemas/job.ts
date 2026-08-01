@@ -1,5 +1,5 @@
-import type { CatchUpPolicy, Trigger } from '@/shared/data/api/schemas/jobs';
-import type { JobError } from '@/shared/data/api/schemas/jobs';
+import type { CatchUpPolicy, Trigger } from '@cherrystudio/shared/data/api/schemas/jobs';
+import type { JobError } from '@cherrystudio/shared/data/api/schemas/jobs';
 import { sql } from 'drizzle-orm';
 import {
   check,

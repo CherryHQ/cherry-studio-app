@@ -1,4 +1,4 @@
-import type { Model, RuntimeReasoning } from '@/shared/data/types/model';
+import type { Model, RuntimeReasoning } from '@shared/data/types/model';
 
 import { deriveThinkingOptions, nearestThinkingOption } from '../reasoning';
 

@@ -1,4 +1,7 @@
-import type { PreferenceDefaultScopeType, PreferenceKeyType } from '@/shared/data/preference';
+import type {
+  PreferenceDefaultScopeType,
+  PreferenceKeyType,
+} from '@cherrystudio/shared/data/preference';
 import {
   getProviderForCapability,
   getRuntimeConfig,

@@ -39,12 +39,12 @@ import type {
   AiUsageRecordTimelineQuery,
   AiUsageRecordTimelineQueryParams,
   AiUsageRecordTimelineResponse,
-} from '@/shared/data/api/schemas/aiUsageRecords';
+} from '@cherrystudio/shared/data/api/schemas/aiUsageRecords';
 import {
   AiUsageRecordListQuerySchema,
   AiUsageRecordStatsQuerySchema,
   AiUsageRecordTimelineQuerySchema,
-} from '@/shared/data/api/schemas/aiUsageRecords';
+} from '@cherrystudio/shared/data/api/schemas/aiUsageRecords';
 import type {
   AiUsageCostBreakdown,
   AiUsagePricingSnapshot,
@@ -54,10 +54,10 @@ import type {
   AiUsageRecordModality,
   AiUsageRecordSourceType,
   ServingCredentialReceipt,
-} from '@/shared/data/types/aiUsageRecord';
-import { getAiUsageRecordTotalTokens } from '@/shared/data/types/aiUsageRecord';
-import type { MessageStats } from '@/shared/data/types/message';
-import type { Currency } from '@/shared/data/types/model';
+} from '@cherrystudio/shared/data/types/aiUsageRecord';
+import { getAiUsageRecordTotalTokens } from '@cherrystudio/shared/data/types/aiUsageRecord';
+import type { MessageStats } from '@cherrystudio/shared/data/types/message';
+import type { Currency } from '@cherrystudio/shared/data/types/model';
 import { timestampToISO } from './utils/rowMappers';
 
 export { mergeMessageRuntimeStats } from './utils/messageStats';

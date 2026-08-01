@@ -1,4 +1,4 @@
-import type { WebSearchProvider } from '@/shared/data/preference';
+import type { WebSearchProvider } from '@cherrystudio/shared/data/preference';
 import { ApiKeyRotationState } from '../../../utils/provider';
 import { TavilyProvider } from '../TavilyProvider';
 

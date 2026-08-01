@@ -2,7 +2,7 @@ import type {
   AiUsageRecordListQueryParams,
   AiUsageRecordStatsQueryParams,
   AiUsageRecordTimelineQueryParams,
-} from '@/shared/data/api/schemas/aiUsageRecords';
+} from '@cherrystudio/shared/data/api/schemas/aiUsageRecords';
 
 export const aiUsageRecordQueryKeys = {
   list: (query: AiUsageRecordListQueryParams = {}) => ['/ai-usage-records', query] as const,

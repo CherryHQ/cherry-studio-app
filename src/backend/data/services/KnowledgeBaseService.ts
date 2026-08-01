@@ -2,13 +2,13 @@ import { and, asc, count, desc, eq, gte, ne, sql, type SQL } from 'drizzle-orm';
 
 import type { DbService } from '@/backend/data/db/DbService';
 import { knowledgeBaseTable, knowledgeItemTable } from '@/backend/data/db/schemas/knowledge';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/errors';
 import type {
   KnowledgeBaseListItem,
   ListKnowledgeBasesQuery,
   UpdateKnowledgeBaseDto,
-} from '@/shared/data/api/schemas/knowledges';
-import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+} from '@cherrystudio/shared/data/api/schemas/knowledges';
+import type { OffsetPaginationResponse } from '@cherrystudio/shared/data/api/types';
 import {
   type CreateKnowledgeBaseDto,
   DEFAULT_KNOWLEDGE_BASE_CHUNK_OVERLAP,
@@ -18,7 +18,7 @@ import {
   DEFAULT_KNOWLEDGE_CHUNK_STRATEGY,
   type KnowledgeBase,
   KnowledgeBaseSchema,
-} from '@/shared/data/types/knowledge';
+} from '@cherrystudio/shared/data/types/knowledge';
 
 import type { GroupService } from './GroupService';
 import { timestampToISO } from './utils/rowMappers';

@@ -1,6 +1,6 @@
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/preference';
+import type { WebSearchCapability, WebSearchProvider } from '@cherrystudio/shared/data/preference';
 import type {
   WebSearchCheckProviderRequest,
   WebSearchCheckProviderResponse,
@@ -8,7 +8,7 @@ import type {
   WebSearchFetchUrlsRequest,
   WebSearchResponse,
   WebSearchSearchKeywordsRequest,
-} from '@/shared/data/types/webSearch';
+} from '@cherrystudio/shared/data/types/webSearch';
 import { postProcessWebSearchResponse } from './postProcessing';
 import type { WebSearchProviderDriver } from './providers/factory';
 import { createWebSearchProvider } from './providers/factory';

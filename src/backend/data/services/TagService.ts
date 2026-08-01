@@ -3,10 +3,15 @@ import { and, asc, eq, inArray, or, type SQL } from 'drizzle-orm';
 import type { DbService } from '@/backend/data/db/DbService';
 import { entityTagTable, tagTable } from '@/backend/data/db/schemas';
 import type { TagRow } from '@/backend/data/db/schemas/tagging';
-import type { SetTagEntitiesDto } from '@/shared/data/api/schemas/tags';
-import { DataApiErrorFactory } from '@/shared/data/api/types';
-import type { EntityType } from '@/shared/data/types/entityType';
-import type { CreateTagDto, SyncEntityTagsDto, Tag, UpdateTagDto } from '@/shared/data/types/tag';
+import type { SetTagEntitiesDto } from '@cherrystudio/shared/data/api/schemas/tags';
+import { DataApiErrorFactory } from '@cherrystudio/shared/data/api/types';
+import type { EntityType } from '@cherrystudio/shared/data/types/entityType';
+import type {
+  CreateTagDto,
+  SyncEntityTagsDto,
+  Tag,
+  UpdateTagDto,
+} from '@cherrystudio/shared/data/types/tag';
 
 import { timestampToISO } from './utils/rowMappers';
 

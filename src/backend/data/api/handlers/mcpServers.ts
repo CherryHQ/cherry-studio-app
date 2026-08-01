@@ -4,9 +4,9 @@ import type {
   McpServerSchemas,
   McpUpdateServerResult,
   UpdateMcpServerDto,
-} from '@/shared/data/api/schemas/mcpServers';
-import type { HandlersFor, OffsetPaginationResponse } from '@/shared/data/api/types';
-import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
+} from '@cherrystudio/shared/data/api/schemas/mcpServers';
+import type { HandlersFor, OffsetPaginationResponse } from '@cherrystudio/shared/data/api/types';
+import type { StreamableHttpMcpServer } from '@cherrystudio/shared/data/types/mcpServer';
 
 export type McpServerData = {
   createServer(input: CreateMcpServerDto): Promise<StreamableHttpMcpServer>;

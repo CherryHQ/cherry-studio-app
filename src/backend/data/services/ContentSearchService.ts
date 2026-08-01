@@ -7,7 +7,7 @@ import {
   ErrorCode,
   isDataApiError,
   toDataApiError,
-} from '@/shared/data/api/errors';
+} from '@cherrystudio/shared/data/api/errors';
 import {
   CONTENT_SEARCH_DEFAULT_LIMIT_PER_SOURCE,
   CONTENT_SEARCH_MAX_LIMIT_PER_SOURCE,
@@ -18,12 +18,12 @@ import {
   contentSearchSourceTypes,
   type SessionMessageContentSearchItem,
   type TopicMessageContentSearchItem,
-} from '@/shared/data/api/schemas/search';
+} from '@cherrystudio/shared/data/api/schemas/search';
 import {
   AGENT_SESSION_MESSAGE_SEARCH_ROLES,
   coerceSearchRole,
   TOPIC_MESSAGE_SEARCH_ROLES,
-} from '@/shared/data/types/message';
+} from '@cherrystudio/shared/data/types/message';
 
 import { type SearchFetchContext, searchWithCursor } from './utils/ftsSearch';
 import { timestampToISO } from './utils/rowMappers';

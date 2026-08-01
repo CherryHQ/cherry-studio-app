@@ -1,13 +1,13 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
-import type { CreateModelDto } from '@/shared/data/api/schemas/models';
+import type { CreateModelDto } from '@cherrystudio/shared/data/api/schemas/models';
 import {
   createUniqueModelId,
   type EndpointType,
   type Model,
   type UniqueModelId,
-} from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+} from '@cherrystudio/shared/data/types/model';
+import type { Provider } from '@cherrystudio/shared/data/types/provider';
 
 export type ProviderModelAddFormState = {
   contextWindow: string;

@@ -1,7 +1,7 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
-import type { FileEntryId, ResolvedFile } from '@/shared/data/types/file';
-import type { UniqueModelId } from '@/shared/data/types/model';
-import type { Painting } from '@/shared/data/types/painting';
+import type { FileEntryId, ResolvedFile } from '@cherrystudio/shared/data/types/file';
+import type { UniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { Painting } from '@cherrystudio/shared/data/types/painting';
 
 export type PaintingSourceImage = {
   fileEntryId?: FileEntryId;

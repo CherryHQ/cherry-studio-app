@@ -4,7 +4,7 @@ import type {
   WebSearchExecutionConfig,
   WebSearchResponse,
   WebSearchResult,
-} from '@/shared/data/types/webSearch';
+} from '@cherrystudio/shared/data/types/webSearch';
 
 export type WebSearchPostProcessingResult = {
   response: WebSearchResponse;

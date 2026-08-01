@@ -10,9 +10,12 @@ import type { EmbeddingModelV3, ImageModelV3, LanguageModelV3, ProviderV3 } from
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 import { loadApiKey, withoutTrailingSlash } from '@ai-sdk/provider-utils';
 
-import type { Model } from '@/shared/data/types/model';
+import type { Model } from '@cherrystudio/shared/data/types/model';
 
-import { isOpenAIChatCompletionOnlyModel, isOpenAILLMModel } from '@/shared/utils/model';
+import {
+  isOpenAIChatCompletionOnlyModel,
+  isOpenAILLMModel,
+} from '@cherrystudio/shared/utils/model';
 
 export const AIHUBMIX_PROVIDER_NAME = 'aihubmix' as const;
 const APP_CODE_HEADER = { 'APP-Code': 'MLTG2087' };

@@ -1,4 +1,4 @@
-import type { ShortcutBinding } from '@/shared/utils/shortcut';
+import type { ShortcutBinding } from '@shared/utils/shortcut';
 import * as z from 'zod';
 
 import type { PreferenceSchemas } from './preferenceSchemas';
@@ -282,8 +282,8 @@ export interface WebSearchProvider {
 // CodeCLI Types
 // ============================================================================
 
-import type { UniqueModelId } from '@/shared/data/types/model';
-import { CodeCli } from '@/shared/types/codeCli';
+import type { UniqueModelId } from '@shared/data/types/model';
+import { CodeCli } from '@shared/types/codeCli';
 
 export const CODE_CLI_IDS = Object.values(CodeCli) as unknown as readonly [
   'claude-code',

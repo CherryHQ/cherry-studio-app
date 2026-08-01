@@ -13,7 +13,10 @@
 import { loggerService } from '@logger';
 import type { ProviderMetadata, UIMessageChunk } from 'ai';
 
-import { type CherryReasoningMeta, CherryReasoningMetaSchema } from '@/shared/data/types/uiParts';
+import {
+  type CherryReasoningMeta,
+  CherryReasoningMetaSchema,
+} from '@cherrystudio/shared/data/types/uiParts';
 
 const logger = loggerService.withContext('withReasoningTimingMetadata');
 

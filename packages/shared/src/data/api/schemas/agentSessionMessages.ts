@@ -8,7 +8,7 @@ import {
   MessageSnapshotSchema,
   MessageStatsSchema,
   MessageStatusSchema,
-} from '@/shared/data/types/message';
+} from '@shared/data/types/message';
 import * as z from 'zod';
 
 import type { CursorPaginationResponse } from '../types';

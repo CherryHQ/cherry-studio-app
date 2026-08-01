@@ -1,4 +1,4 @@
-import type { RuntimeReasoning } from '@/shared/data/types/model';
+import type { RuntimeReasoning } from '@shared/data/types/model';
 
 import { computeBudgetTokens, getThinkingBudget, nearestEffortForBudget } from '../reasoning';
 

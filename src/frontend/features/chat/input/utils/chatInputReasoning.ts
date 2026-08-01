@@ -3,8 +3,8 @@ import {
   REASONING_EFFORT,
   type ReasoningEffort,
 } from '@cherrystudio/provider-registry';
-import { deriveThinkingOptions } from '@/shared/ai/reasoning';
-import type { Model } from '@/shared/data/types/model';
+import { deriveThinkingOptions } from '@cherrystudio/shared/ai/reasoning';
+import type { Model } from '@cherrystudio/shared/data/types/model';
 
 export const CHAT_INPUT_DEFAULT_REASONING_EFFORT = 'default';
 

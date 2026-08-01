@@ -5,8 +5,8 @@ import type {
   WebSearchProvider,
   WebSearchProviderId,
   WebSearchProviderOverride,
-} from '@/shared/data/preference';
-import type { WebSearchProviderPreset } from '@/shared/data/presets/webSearchProviders';
+} from '@cherrystudio/shared/data/preference';
+import type { WebSearchProviderPreset } from '@cherrystudio/shared/data/presets/webSearchProviders';
 
 export type WebSearchApiManagementContextValue = {
   actions: {

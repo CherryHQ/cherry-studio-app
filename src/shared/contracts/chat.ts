@@ -1,6 +1,6 @@
-import type { CherryMessagePart, Message } from '@/shared/data/types/message';
-import type { UniqueModelId } from '@/shared/data/types/model';
-import type { ReasoningEffortOption } from '@/shared/types/aiSdk';
+import type { CherryMessagePart, Message } from '@cherrystudio/shared/data/types/message';
+import type { UniqueModelId } from '@cherrystudio/shared/data/types/model';
+import type { ReasoningEffortOption } from '@cherrystudio/shared/types/aiSdk';
 
 export const NEW_CHAT_SESSION_TOPIC_ID = '__new_topic__';
 
