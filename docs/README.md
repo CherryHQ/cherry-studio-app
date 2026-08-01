@@ -22,7 +22,7 @@ They are the source of truth for how the repository works today.
 | [Architecture Overview](./references/architecture-overview.md) | Runtime model, source ownership, dependency boundaries, and frontend/backend interfaces |
 | [Domain Language](./references/domain-language.md) | Shared product and architecture terminology |
 | [Naming Conventions](./references/naming-conventions.md) | File, directory, identifier, and documentation naming rules |
-| [Runtime Ownership](./references/runtime-ownership.md) | Bootstrap, startup gates, sessions, cleanup, and post-ready work |
+| [Runtime Ownership](./references/runtime-ownership.md) | Bootstrap, app runtimes, caller-owned sessions, cleanup, and post-ready work |
 | [Universal Package](./references/universal-package.md) | `@cherrystudio/universal` scope, admission criteria, aliasing, and desktop sync |
 | [Navigation And Insets](./references/navigation-and-insets.md) | Router structure, native gestures, sheets, safe areas, and edge-to-edge layout |
 | [UI Components](./references/ui-components.md) | Interaction component ownership and platform enhancement rules |
@@ -32,7 +32,7 @@ They are the source of truth for how the repository works today.
 | Document | Description |
 | --- | --- |
 | [AI Provider Integration](./references/ai/provider-integration.md) | Provider/model resolution, AI SDK adapters, options, and transport behavior |
-| [Chat Streaming And Rendering](./references/chat/streaming-and-rendering.md) | Streaming sessions, message windows, persistence, and rendering boundaries |
+| [Chat Streaming And Rendering](./references/chat/streaming-and-rendering.md) | Chat Runtime streaming, message windows, persistence, and rendering boundaries |
 | [Data Layer](./references/data/README.md) | Data API, preferences, caches, SQLite ownership, and service composition |
 | [Storage Engine](./references/data/storage-engine.md) | Current SQLite engine, workarounds, and migration criteria |
 | [Web Search](./references/web-search.md) | External search providers and provider-native web search |

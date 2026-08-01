@@ -9,14 +9,14 @@ Mobile data services migrated from the desktop `src/main/data/services` director
 - Mobile services receive the bootstrap-owned `DbService` through the constructor instead of using
   the desktop `application.get('DbService')` singleton.
 - Desktop logger calls are omitted here unless mobile has an equivalent logging service.
-- Full agent-session, knowledge, job, translate, miniapp, and agent-workspace services are not
-  migrated yet. MCP, file, and painting persistence services are implemented on mobile. Assistant
-  relation ids may exist before their corresponding deferred domains are implemented.
+- Keep the complete desktop business-service surface, including Agent, Knowledge, job, translate,
+  mini-app, MCP, file, and painting persistence, even when mobile has no corresponding UI or
+  execution runtime.
 
 ## Runtime
 
 Services that are part of the mobile data layer are instantiated by
 `src/bootstrap/composition/createBackendServices.ts`. That concrete graph is private to bootstrap;
-resource operations are exposed through handlers in `src/backend/data/api`, while
-`src/bootstrap/composition/createBackend.ts` exposes only multi-step workflow implementations through
-`src/shared/contracts`.
+resource operations are exposed directly through handlers in `src/backend/data/api`, while
+`src/bootstrap/composition/createBackend.ts` exposes only orchestration that qualifies for a
+frontend-visible `XxxModule` in `src/shared/contracts`.

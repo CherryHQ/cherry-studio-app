@@ -1,7 +1,7 @@
 # Naming Conventions
 
-> Version: 2.2
-> Last Updated: 2026-07
+> Version: 2.3
+> Last Updated: 2026-08
 > **This document is the authoritative source for repository naming rules.**
 
 This document defines naming rules for files, directories, and identifiers across the Cherry Studio mobile app (Expo / React Native). It encodes both industry consensus (React/TypeScript, Node.js) and project-specific conventions. Toolchain-binding rules come from Expo Router (file-based routing) and React Native (Metro platform-extension resolution) — not shadcn or Next.js.
@@ -32,7 +32,7 @@ The 90% case. See later sections for full rules and edge cases.
 | Expo Router route file (`src/app/`) | `kebab-case.tsx` + reserved tokens | `api-key-settings.tsx`, `_layout.tsx`, `index.tsx` |
 | Hook file | `useXxx.ts(x)` (camelCase, `use` prefix) | `useMessages.ts` |
 | Util / function file (function-as-default-export) | `camelCase.ts` | `messageQueryOptions.ts` |
-| Class-as-default-export file | `PascalCase.ts` (matches class name) | `AssistantService.ts`, `ChatSessionImpl.ts` |
+| Class-as-default-export file | `PascalCase.ts` (matches class name) | `AssistantService.ts`, `ChatRuntime.ts` |
 | Test file | `*.test.ts(x)` | `rowMappers.test.ts` |
 | Config file | `*.config.{ts,js}` | `metro.config.js`, `drizzle.config.ts` |
 | Type declaration | `*.d.ts` (lowercase / kebab) | `expo-env.d.ts` |
@@ -45,7 +45,7 @@ The 90% case. See later sections for full rules and edge cases.
 | Large multi-file domain subtree | `src/frontend/features/<name>/` (route-bound) or `camelCase/` (under an owning bucket) | `frontend/features/chat/`, `integrations/webSearch/` |
 | `packages/ui/` (icon registry) directory | `kebab-case` | `icons/`, `icons-webp/` |
 
-> Stateful classes use only `Service` (default) or `Manager` (instance pool) — see §5.2. Files placed inside any `utils/` directory drop the `Utils` suffix — the directory already declares the role; see §3.2. React Native platform-divergent files carry a `.ios`/`.android` suffix on the base name — see §3.8.
+> Stateful classes are named by architectural role, not by statefulness alone; see §5.2. Files placed inside any `utils/` directory drop the `Utils` suffix — the directory already declares the role; see §3.2. React Native platform-divergent files carry a `.ios`/`.android` suffix on the base name — see §3.8.
 
 ---
 
@@ -89,7 +89,7 @@ Choose based on **what the file's default / primary export is**:
 |---|---|---|
 | Hook function (`useXxx`) | `camelCase.ts(x)`, must start with `use` | `useMessages.ts` |
 | Plain function or function group | `camelCase.ts` | `messageQueryOptions.ts`, `rowMappers.ts` |
-| Class (especially services) | `PascalCase.ts` (matches class name) | `AssistantService.ts`, `ChatSessionImpl.ts`, `DbService.ts` |
+| Class | `PascalCase.ts` (matches class name) | `AssistantService.ts`, `ChatRuntime.ts`, `CherryInClient.ts` |
 | Constants / enums only | `camelCase.ts` | `errorCodes.ts` |
 | Re-export barrel | `index.ts` | — |
 
@@ -116,7 +116,7 @@ independent modules moves to the narrowest owning layer: `src/frontend/utils`, `
 or `src/shared/utils` when both layers consume it. There is no root `src/utils`. Multiple imports
 inside one screen tree do not establish cross-domain reuse.
 
-**Native module wrappers** — wrappers around custom native modules (under `modules/`, e.g. `modules/pdf-text-extractor/`) or Expo modules carry no `*Api`, `*Client`, or `*Bridge` suffix. Categorize them by module shape per §5.2 (a stateful wrapper → `Service`/`Manager`; a pure-function set → `utils/`).
+**Native module wrappers** — wrappers around custom native modules (under `modules/`, e.g. `modules/pdf-text-extractor/`) or Expo modules carry no generic `*Api`, `*Client`, or `*Bridge` suffix. Name a retained wrapper by the platform capability it adapts, such as `DevicePermissions`; use `Adapter` only when the translation role would otherwise be ambiguous. Pure-function wrappers belong in `utils/`.
 
 ### 3.3 Test Files
 
@@ -310,7 +310,7 @@ A **large multi-file domain** co-locates *everything* it owns — its components
 |---|---|---|
 | A large route-bound UI domain | `src/frontend/features/<name>/` | self-contained tree (`input/`, `workspace/`, `components/`, `hooks/`, `utils/`) |
 | A large shared UI domain | `src/frontend/components/<domain>/` | self-contained tree |
-| A large backend service domain | `src/backend/services/<domain>/` | service, adapter, provider, and utility subtree |
+| A large backend capability domain | `src/backend/services/<domain>/` | module, runtime, client, adapter, provider, and utility subtree |
 | One cohesive persistence service | `src/backend/data/services/<Domain>Service.ts` | a single file; its lone helper stays in the nearest `utils/` |
 | A small standalone helper | the owning module's or layer's `utils/` | a single file |
 
@@ -325,7 +325,7 @@ src/frontend/features/chat/
 ├── workspace/            # message list + scroll/layout sub-modules
 ├── messageContent/       # message part renderers
 ├── messageItem/          # user/assistant message items
-└── session/              # React owner for the backend ChatSession
+└── runtime/              # React subscription layer for the app-owned ChatRuntime
 ```
 
 Layer-level buckets such as `frontend/components`, `frontend/hooks`, `backend/services`,
@@ -387,45 +387,58 @@ Names inside source code — separate axis from filenames.
 | Function that mutates a collection | verb + plural object | `addUsers(...)`, `removeTags(...)` |
 | Event / handler name | follows the event subject | `onMessageReceived` (one), `onItemsLoaded` (many) |
 
-### 5.2 Suffix for Stateful Classes — `Service` (default) / `Manager` (instance pool)
+### 5.2 Architectural Role Names
 
-A class that owns state, resources, or a lifecycle MUST use one of exactly two suffixes:
+State is not a naming role. Name a mobile-owned capability by who can call it and who owns its
+lifetime. Do not use `Service` as the fallback for every stateful class.
 
-| Suffix | Use when the class… | Examples |
+Desktop alignment is checked first: a class that directly corresponds to a Cherry Desktop service
+keeps the desktop `XxxService` name and public methods. This includes `DbService`, `CacheService`,
+`PreferenceService`, persistence services, `DataApiService`, `AiService`, `McpRuntimeService`,
+`OAuthRuntimeService`, and `WebSearchService`. Do not rename these to repositories or mobile role
+names merely for local consistency.
+
+Use these roles for mobile-only code:
+
+| Role | Use when the type… | Examples |
 |---|---|---|
-| `Service` | Provides a cohesive **domain capability / API surface**. The **default** for any stateful class. | `AssistantService`, `MessageService`, `CherryInOauthService`, `DbService` |
-| `Manager` | Owns and coordinates a **pool / registry of many homogeneous instances**, and that coordination is its defining job. (Rare in this app — default to `Service` unless the pool-coordination is the point.) | `ConnectionManager`, `SubscriptionManager` |
+| `Module` | Is a frontend-visible workflow capability exposed through `Backend` | `ChatModule`, `ModelsModule`, `PaintingsModule` |
+| `Runtime` | Is one app- or bootstrap-owned executor with state that spans calls or routes | `ChatRuntime`, `AppBootstrapRuntime` |
+| `Session` | Is one caller-owned, isolated unit of work with explicit cancellation or disposal | `PaintingGenerationSession` |
+| `Client` | Speaks to one external account, protocol, or remote API | `CherryInClient`, `PkceOAuthClient` |
+| `Adapter` | Translates a platform or SDK boundary; a clear capability noun may stand alone | `DevicePermissions` (native permission adapter) |
+| `Manager` | Coordinates a pool or registry of many homogeneous instances as its defining job | `PluginManager`, `ConnectionManager` |
 
-**Decision rule:** ask "is this class's primary job to own and coordinate a *set of many like instances*?" — yes → `Manager`; otherwise → `Service` (default when unsure).
+`Backend`, `BackendProvider`, and `useBackendModule()` are intentional aggregate and React
+integration names. Leaf workflow contracts use `XxxModule`; do not add parallel `XxxBackend`,
+`XxxService`, and `XxxImpl` layers for the same operations.
 
-A `Service` / `Manager` class lives where its domain ownership lies (e.g.
-`src/backend/data/services/MessageService.ts`,
-`src/backend/services/oauth/CherryInOauthService.ts`,
-`src/shared/core/logger/LoggerService.ts`); placement under a directory named `services/` is not
-required.
+Factory-shaped modules use `createXxxModule()`. A caller-owned session exposes its lifecycle on the
+session itself. An app-owned runtime is created once by bootstrap and is not disposed by route or
+component unmount. `Manager` is not the fallback when none of the other roles fit; use a precise
+domain noun or a plain function instead.
 
-**Stateless modules are NOT classes for this rule** — pure function collections, queries, conversions, and SDK wrappers without retained state do not receive a `Service` / `Manager` suffix.
+The `Impl` suffix is forbidden. It only says that a type implements another type and adds no
+ownership information. Name the concrete type by its role; when a private class shares a contract
+name, alias the imported contract type rather than appending `Impl`.
 
-**If a module looks like it wants to be a `Service` but is not actually a stateful class, it belongs elsewhere. Route by shape:**
+Use this decision order:
 
-| Actual shape of the module | Right home | Naming |
-|---|---|---|
-| Pure-function collection (queries, conversions, predicates, formatters) | `utils/` (or feature-local `utils/` subdirectory) | `<topic>.ts` (camelCase; no `Utils` suffix — see §3.2) |
-| Depends on React lifecycle / state / context | `hooks/` (or co-located with the consuming feature) | `useXxx.ts(x)` (the `use` prefix is the role marker — see §3.2) |
-| Renders JSX / owns view markup | `frontend/components/` (shared UI) or `frontend/features/` (route-bound) | `Xxx.tsx` (PascalCase — see §3.1) |
-| Single-call pass-through to a native / Expo module | inlined at the call site | (no file) |
+1. Direct Cherry Desktop service counterpart? Keep its aligned `XxxService` name and spelling.
+2. Frontend-visible workflow contract? `XxxModule`.
+3. App- or bootstrap-owned long-lived executor? `XxxRuntime`.
+4. Caller-owned isolated lifecycle? `XxxSession`.
+5. External protocol or account API? `XxxClient`.
+6. Platform or SDK translation boundary? `XxxAdapter`, or the unambiguous capability noun.
+7. Homogeneous instance pool or registry? `XxxManager`.
+8. Otherwise use a domain noun, hook, component, or plain function; never default to `Service`.
 
-#### Two valid forms of a `Service`
+Pure-function collections, queries, conversions, and formatters stay in `utils/`. React lifecycle
+belongs in hooks or providers, JSX belongs in components/features, and a one-call pass-through
+should normally be inlined.
 
-The `Service` suffix names a **role** (a stateful domain capability), not a **mechanism**. A class earning the suffix may be implemented as either:
-
-| Form | Pattern | Used when |
-|---|---|---|
-| Direct-import singleton | `export const xxxService = new XxxService()` (or a `static getInstance()` singleton) | The service holds class-level state but no externally-wired dependencies — e.g. `loggerService`, `providerRegistryService`, `CherryInOauthService`. |
-| Factory-constructed service | instantiated by the bootstrap composition root — `createBackendServices(dbService)` | The service depends on a shared resource (the database) that must be injected and made ready before first use — e.g. `AssistantService`, `MessageService`, `TopicService`. |
-
-There is no main-process DI container in the mobile app. `src/bootstrap` is the only composition root,
-and readiness is coordinated by **startup gates**, not lifecycle phases. See
+There is no main-process DI container in the mobile app. `src/bootstrap` is the only composition
+root, and readiness is coordinated by startup gates rather than lifecycle phases. See
 [Runtime Ownership](./runtime-ownership.md), the [Architecture Overview](./architecture-overview.md),
 and [`src/bootstrap/README.md`](../../src/bootstrap/README.md).
 
@@ -462,12 +475,17 @@ services consume them instead of re-deriving `typeof xxxTable.$inferSelect` loca
 
 ### 6.1 Acronyms and Initialisms
 
-When an acronym (API, URL, ID, HTTP, MCP, AI, OAuth) appears inside `PascalCase` or `camelCase`:
+For new mobile-owned names, when an acronym (API, URL, ID, HTTP, MCP, AI, OAuth) appears inside
+`PascalCase` or `camelCase`:
 
 - **First letter uppercase, rest lowercase** — `HttpClient`, `UserId`, `ApiServer`, `McpService`, `Oauth`.
 - **Never all-caps** — `HTTPClient`, `UserID`, `APIServer`, `OAuth` (as in `CherryInOAuth`) are forbidden.
 - **At the start of `camelCase`** — entirely lowercase: `httpClient`, `userId`, `apiServer`.
 - **Same form applies to filenames** — `McpService.ts`, not `MCPService.ts`; `CherryInOauth.tsx`, not `CherryInOAuth.tsx`.
+
+Direct desktop-aligned names and public shared contracts keep their existing upstream spelling even
+when it differs from this local style, such as `OAuthRuntimeService`. Alignment takes precedence
+over cosmetic acronym normalization.
 
 ### 6.2 Case-Only Renames
 
@@ -535,7 +553,7 @@ Naming a new FILE
 │  ├─ Under packages/ui/ (icon registry)? → kebab-case.tsx                      (§4.6)
 │  └─ Under frontend components/features? → PascalCase.tsx                      (HeaderIconButton.tsx, ChatScreen.tsx)
 ├─ React hook?                    → useXxx.ts(x)    (useMessages.ts; .tsx only if it returns JSX)
-├─ Primary export is a class?     → PascalCase.ts   (AssistantService.ts)
+├─ Primary export is a class?     → PascalCase.ts   (ChatRuntime.ts; choose its role in §5.2)
 ├─ Primary export is function(s)? → camelCase.ts    (messageQueryOptions.ts)
 ├─ Type declaration?              → *.d.ts          (expo-env.d.ts)
 ├─ Test?                          → *.test.ts(x)

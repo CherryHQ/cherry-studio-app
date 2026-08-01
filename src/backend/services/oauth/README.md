@@ -95,5 +95,5 @@ Set `clearDisablesProvider` only when the OAuth session is the provider's *only*
 credential. CherryIN omits it because it can also hold a manually entered API
 key, which logging out must not disable.
 
-A provider-specific REST surface does not belong here: CherryIN's balance and
-profile live in `src/backend/services/cherryin`, behind their own contract.
+A provider-specific REST surface does not belong here: `CherryInClient` owns CherryIN balance and
+profile requests in `src/backend/services/cherryin`, behind `CherryInModule`.

@@ -11,9 +11,10 @@ desktop AI concepts to the in-process Expo app runtime.
 - `runtime/aiSdk/Agent.ts` keeps the desktop agent filename while narrowing behavior to plain AI SDK
   generate and stream calls.
 - `messages/` converts app messages into AI SDK message shapes.
-- `streamManager/` owns a chat turn end to end: `ChatSessionImpl` drives the turn, tracks abort and
-  tool-approval state, and persists the assistant message; `topicNaming`, `normalizeCitations`, and
+- `streamManager/` owns chat turns end to end: the app-owned `ChatRuntime` tracks per-Topic abort and
+  tool-approval state and persists assistant messages; `topicNaming`, `normalizeCitations`, and
   `MessageRuntimeTimingCollector` handle the surrounding concerns.
+- `tools/ToolResolver.ts` selects built-in, MCP, and external web-search tools for each AI request.
 - `types/` and `utils/` hold request types, merged provider types, and provider option helpers.
 
 ## Mobile Notes
@@ -25,9 +26,9 @@ desktop AI concepts to the in-process Expo app runtime.
 - Desktop IPC handlers, local MCP transports, and full agent sessions are not part of the current
   mobile slice.
 - `streamManager/` collapses desktop's split between the Main-process `AiStreamManager` and the
-  renderer's `Chat`/overlay: one process means listener fan-out becomes an in-memory snapshot, and
-  the ContextProvider strategies become methods. Persistence timing still matches desktop — the
-  assistant row is written only on a terminal state.
+  renderer's `Chat`/overlay: one app-owned runtime holds per-Topic turns, listener fan-out becomes
+  in-memory snapshots, and the ContextProvider strategies become methods. Persistence timing still
+  matches desktop — the assistant row is written only on a terminal state.
 
 ## Organization
 
@@ -37,7 +38,8 @@ mcp/            # Streamable HTTP MCP runtime and AI SDK tool adaptation
 messages/       # message and file-part conversion
 provider/       # provider config, endpoint, factory, extensions
 runtime/aiSdk/  # AI SDK agent adapter
-streamManager/  # chat session runtime: turn orchestration, persistence, topic naming, timing
+streamManager/  # app-owned chat runtime: turn orchestration, persistence, topic naming, timing
+tools/          # request-time tool resolution and AI SDK adapters
 types/          # request and provider type glue
 utils/          # provider/model option helpers
 ```
