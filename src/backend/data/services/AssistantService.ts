@@ -152,7 +152,10 @@ export class AssistantService {
         )
         .limit(query.limit)
         .offset(offset),
-      this.db.select({ count: sql<number>`count(*)` }).from(assistantTable).where(whereClause),
+      this.db
+        .select({ count: sql<number>`count(*)` })
+        .from(assistantTable)
+        .where(whereClause),
     ]);
 
     const assistantIds = rows.map((row) => row.assistant.id);

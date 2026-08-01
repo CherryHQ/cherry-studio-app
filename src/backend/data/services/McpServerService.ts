@@ -132,7 +132,10 @@ export class McpServerService {
         .from(mcpServerTable)
         .where(whereClause)
         .orderBy(asc(mcpServerTable.sortOrder), asc(mcpServerTable.createdAt)),
-      this.db.select({ count: sql<number>`count(*)` }).from(mcpServerTable).where(whereClause),
+      this.db
+        .select({ count: sql<number>`count(*)` })
+        .from(mcpServerTable)
+        .where(whereClause),
     ]);
     const items = rows.map(rowToMcpServer);
 

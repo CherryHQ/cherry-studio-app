@@ -55,8 +55,10 @@ export type BranchMessagesParams = {
   nodeId?: string;
 };
 
-export interface AssistantPlaceholder
-  extends Omit<CreateMessageDto, 'parentId' | 'setAsActive' | 'siblingsGroupId'> {
+export interface AssistantPlaceholder extends Omit<
+  CreateMessageDto,
+  'parentId' | 'setAsActive' | 'siblingsGroupId'
+> {
   id?: string;
 }
 

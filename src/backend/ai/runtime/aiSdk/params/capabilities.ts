@@ -41,8 +41,8 @@ export function resolveCapabilities(
   );
   const enableWebSearch = Boolean(
     !options.webSearchProviderId &&
-      ((assistant.settings?.enableWebSearch && model.capabilities.includes('web-search')) ||
-        isForcedNativeWebSearchModel(model)),
+    ((assistant.settings?.enableWebSearch && model.capabilities.includes('web-search')) ||
+      isForcedNativeWebSearchModel(model)),
   );
   const enableGenerateImage = model.capabilities.includes('image-generation');
   const streamOutput = assistant.settings.streamOutput !== false;

@@ -116,9 +116,9 @@ export async function buildAgentParams({
     : undefined;
   const shouldUseExternalWebSearch = Boolean(
     shouldIncludeExternalTools &&
-      assistant?.settings.enableWebSearch &&
-      isFunctionCallingModel(model) &&
-      (hasConfiguredExternalWebSearch || !capabilities?.webSearchPluginConfig),
+    assistant?.settings.enableWebSearch &&
+    isFunctionCallingModel(model) &&
+    (hasConfiguredExternalWebSearch || !capabilities?.webSearchPluginConfig),
   );
   const providerOptions =
     assistant && capabilities

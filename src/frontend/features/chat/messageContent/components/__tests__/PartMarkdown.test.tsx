@@ -41,21 +41,24 @@ describe('PartMarkdown', () => {
   test.each([
     [true, 'StreamdownText', 'EnrichedMarkdownText'],
     [false, 'EnrichedMarkdownText', 'StreamdownText'],
-  ] as const)('isStreaming=%p uses %s renderer', (isStreaming, expectedRenderer, excludedRenderer) => {
-    const renderer = render(<PartMarkdown isStreaming={isStreaming} markdown="Hello" />);
+  ] as const)(
+    'isStreaming=%p uses %s renderer',
+    (isStreaming, expectedRenderer, excludedRenderer) => {
+      const renderer = render(<PartMarkdown isStreaming={isStreaming} markdown="Hello" />);
 
-    expect(renderer.root.findByType(expectedRenderer).props).toEqual(
-      expect.objectContaining({
-        allowTrailingMargin: false,
-        flavor: 'github',
-        markdown: 'Hello',
-        md4cFlags: { latexMath: true, underline: false },
-        onLinkPress: mockHandleLinkPress,
-        selectable: true,
-      }),
-    );
-    expect(renderer.root.findAllByType(excludedRenderer)).toHaveLength(0);
-  });
+      expect(renderer.root.findByType(expectedRenderer).props).toEqual(
+        expect.objectContaining({
+          allowTrailingMargin: false,
+          flavor: 'github',
+          markdown: 'Hello',
+          md4cFlags: { latexMath: true, underline: false },
+          onLinkPress: mockHandleLinkPress,
+          selectable: true,
+        }),
+      );
+      expect(renderer.root.findAllByType(excludedRenderer)).toHaveLength(0);
+    },
+  );
 });
 
 function render(element: ReactElement): ReactTestRenderer {
