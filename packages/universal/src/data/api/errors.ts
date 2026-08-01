@@ -521,6 +521,7 @@ export class DataApiError<T extends ErrorCode = ErrorCode> extends Error {
  * })
  * ```
  */
+// oxlint-disable-next-line typescript/no-extraneous-class -- Mirrors Cherry shared DataApiErrorFactory API.
 export class DataApiErrorFactory {
   /**
    * Create a DataApiError with any error code.

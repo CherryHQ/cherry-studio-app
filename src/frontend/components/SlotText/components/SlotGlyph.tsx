@@ -87,8 +87,8 @@ export function SlotGlyph({
   // the layout effect can paint one native frame at the final pose first, which shows the
   // incoming glyph overlapping the outgoing one.
 
+  // Poses re-seed per transition; geometry changes re-seed in the layout effect below.
   /* eslint-disable react-hooks/exhaustive-deps */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Poses re-seed per transition; geometry changes re-seed in the layout effect below.
   const faces = useMemo(
     () => ({
       highlightOpacity: new Animated.Value(shouldAnimate && highlightColor ? 1 : 0),

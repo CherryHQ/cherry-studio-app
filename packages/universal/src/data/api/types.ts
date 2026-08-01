@@ -200,7 +200,7 @@ export class DataApiError extends Error {
   }
 }
 
-// biome-ignore lint/complexity/noStaticOnlyClass: Mirrors Cherry shared DataApiErrorFactory API.
+// oxlint-disable-next-line typescript/no-extraneous-class -- Mirrors Cherry shared DataApiErrorFactory API.
 export class DataApiErrorFactory {
   static conflict(message: string, resource?: string): DataApiError {
     return new DataApiError(ErrorCode.CONFLICT, message, { description: message, resource });

@@ -21,7 +21,7 @@ import { PROVIDERS } from '../providers';
 import { ReasoningFamilyRuleSchema } from '../schemas/model';
 import { readCatalogJson } from '../testing/catalogData';
 
-// biome-ignore lint/suspicious/noExplicitAny: catalog rows are re-typed per assertion below
+// Catalog rows are re-typed per assertion below.
 const read = (f: string) => readCatalogJson<any>(f);
 const models = read('models.json').models as Array<{
   id: string;

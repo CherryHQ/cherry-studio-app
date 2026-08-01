@@ -193,7 +193,7 @@ describe('catalog invariant: controls ↔ derived legacy fields', () => {
     }>;
   }>('models.json');
 
-  // Key-order-insensitive (the shipped JSON is biome key-sorted).
+  // Key-order-insensitive (the shipped JSON is formatter key-sorted).
   const canonical = (v: unknown): string =>
     JSON.stringify(v, (_, val) =>
       val && typeof val === 'object' && !Array.isArray(val)

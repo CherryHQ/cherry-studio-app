@@ -102,8 +102,9 @@ alias and extend `packages/ui/src/icons-webp/__tests__/providers.test.ts`.
 The app resolves `@cherrystudio/ui` through the workspace package and tsconfig
 paths.
 
-Generated icon directories are excluded from Biome checks in `biome.json`.
-Run Biome against hand-written package files instead of generated icon output.
+Generated icon directories are excluded from lint and format checks in
+`.oxlintrc.json` and `.oxfmtrc.json`. Run those against hand-written package
+files instead of generated icon output.
 
 The model picker and settings pages render resolver output with `expo-image`.
 
@@ -115,7 +116,8 @@ After syncing or changing icons, run:
 pnpm ui:icons:generate
 pnpm typecheck
 pnpm test packages/ui/src/icons/__tests__/registry.test.ts packages/ui/src/icons-webp/__tests__/providers.test.ts --runInBand
-pnpm exec biome check packages/ui
+pnpm exec oxlint packages/ui
+pnpm exec oxfmt --check packages/ui
 git diff --check
 ```
 

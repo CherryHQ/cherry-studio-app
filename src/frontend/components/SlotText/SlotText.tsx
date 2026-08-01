@@ -228,7 +228,7 @@ export function SlotText({
 
           return (
             <SlotGlyph
-              // biome-ignore lint/suspicious/noArrayIndexKey: Slot identity is positional by design.
+              // Slot identity is positional by design, so the index is the stable key.
               key={index}
               allowFontScaling={allowFontScaling}
               currentSegment={currentSegment}
