@@ -241,6 +241,21 @@ describe('listModels', () => {
     expect(compatibleModels.map((model) => model.apiModelId)).toEqual(data.map((item) => item.id));
   });
 
+  test('sends the Gemini key as a header, never in the URL', async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ models: [] }), { status: 200 }));
+
+    await listModels(createProvider({ id: 'gemini' }), {
+      getRotatedApiKey: jest.fn(async () => 'secret-key'),
+    });
+
+    // A failed request logs APICallError.url; a key in the query string would
+    // land in logs users attach to bug reports.
+    expect(requestUrl(fetchMock.mock.calls[0])).not.toContain('secret-key');
+    expect(requestHeaders(fetchMock.mock.calls[0]).get('x-goog-api-key')).toBe('secret-key');
+  });
+
   test('drops Gemini models that cannot serve generateContent', async () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

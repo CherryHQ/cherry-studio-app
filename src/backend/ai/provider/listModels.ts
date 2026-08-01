@@ -165,10 +165,14 @@ const geminiFetcher: ModelFetcher = {
     baseUrl = baseUrl.replace(/\/v1(beta)?$/, '');
     const apiKey = await context.getRotatedApiKey(provider.id);
     const response = await getFromApi({
-      url: `${baseUrl}/v1beta/models?key=${apiKey}`,
+      url: `${baseUrl}/v1beta/models`,
       headers: {
         'User-Agent': 'CherryStudioMobile/1.0',
         'X-App-Name': 'CherryStudioMobile',
+        // Pass the key via `x-goog-api-key` (same as `@ai-sdk/google`'s chat path)
+        // instead of the `?key=` query param: on failure `APICallError.url` is
+        // logged, which would persist the key into logs users attach to reports.
+        'x-goog-api-key': apiKey,
         ...provider.settings.extraHeaders,
       },
       responseSchema: GeminiModelsResponseSchema,
