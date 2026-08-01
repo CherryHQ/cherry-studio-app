@@ -247,8 +247,7 @@ describe('bundled SQLite migrations', () => {
       expect(topicIndexes.map((index) => index.name)).toEqual(
         expect.arrayContaining([
           'topic_assistant_id_idx',
-          'topic_group_id_order_key_idx',
-          'topic_group_updated_idx',
+          'topic_order_key_idx',
           'topic_updated_at_idx',
         ]),
       );
@@ -280,7 +279,6 @@ describe('bundled SQLite migrations', () => {
         expect.arrayContaining([
           expect.objectContaining({ name: 'pfr_entry_id_idx', unique: 0 }),
           expect.objectContaining({ name: 'pfr_source_id_idx', unique: 0 }),
-          expect.objectContaining({ name: 'pfr_source_role_idx', unique: 0 }),
           expect.objectContaining({ name: 'pfr_unique_idx', unique: 1 }),
         ]),
       );
@@ -350,6 +348,7 @@ describe('bundled SQLite migrations', () => {
           'painting_file_ref',
         ]),
       );
+      expect(tables.filter((table) => !table.name.startsWith('sqlite_'))).toHaveLength(40);
 
       database.exec(`
         INSERT INTO assistant (id, name, emoji, settings, order_key, created_at, updated_at)
@@ -467,6 +466,271 @@ describe('bundled SQLite migrations', () => {
 
       expect(database.prepare('SELECT * FROM assistant_mcp_server').all()).toEqual([]);
       expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test('0006 preserves populated chat/model data and opaque knowledge links', () => {
+    const database = new DatabaseSync(':memory:');
+
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      const migrationIndex = entries.findIndex(({ tag }) => tag === '0006_chubby_abomination');
+      expect(migrationIndex).toBeGreaterThan(0);
+
+      for (const { sql } of entries.slice(0, migrationIndex)) {
+        applyMigrationSql(database, sql);
+      }
+
+      database.exec(`
+        INSERT INTO user_provider (
+          provider_id, name, order_key, created_at, updated_at
+        ) VALUES ('provider-1', 'Provider', 'a0', 1, 1);
+        INSERT INTO user_model (
+          id, provider_id, model_id, preset_model_id, name, capabilities,
+          supports_streaming, order_key, created_at, updated_at
+        ) VALUES (
+          'provider-1::model-1', 'provider-1', 'model-1', 'model-1', 'Model',
+          '["reasoning"]', 1, 'a0', 1, 1
+        );
+        INSERT INTO assistant (
+          id, name, emoji, model_id, settings, order_key, created_at, updated_at
+        ) VALUES (
+          'assistant-1', 'Assistant', 'A', 'provider-1::model-1', '{}', 'a0', 1, 1
+        );
+        INSERT INTO topic (
+          id, name, assistant_id, order_key, created_at, updated_at
+        ) VALUES ('topic-1', 'Topic', 'assistant-1', 'a0', 1, 1);
+        INSERT INTO message (
+          id, parent_id, topic_id, role, data, status, created_at, updated_at
+        ) VALUES ('root-1', NULL, 'topic-1', 'root', '{}', 'success', 1, 1);
+        INSERT INTO message (
+          id, parent_id, topic_id, role, data, status, model_id, model_snapshot,
+          created_at, updated_at
+        ) VALUES (
+          'message-1', 'root-1', 'topic-1', 'assistant', '{}', 'success',
+          'provider-1::model-1', '{"id":"model-1","name":"Model","provider":"provider-1"}',
+          2, 2
+        );
+        INSERT INTO topic (
+          id, name, assistant_id, order_key, created_at, updated_at
+        ) VALUES ('topic-no-author', 'No author', NULL, 'a1', 1, 1);
+        INSERT INTO message (
+          id, parent_id, topic_id, role, data, status, created_at, updated_at
+        ) VALUES ('root-no-author', NULL, 'topic-no-author', 'root', '{}', 'success', 1, 1);
+        INSERT INTO message (
+          id, parent_id, topic_id, role, data, status, model_id, model_snapshot,
+          created_at, updated_at
+        ) VALUES (
+          'message-no-author', 'root-no-author', 'topic-no-author', 'assistant', '{}', 'success',
+          'provider-1::model-1', '{"id":"model-1","name":"Model","provider":"provider-1"}',
+          2, 2
+        );
+        INSERT INTO assistant_knowledge_base (
+          assistant_id, knowledge_base_id, created_at, updated_at
+        ) VALUES ('assistant-1', 'legacy-knowledge-1', 1, 2);
+      `);
+
+      applyMigrationsAsDrizzleWould(database, entries.slice(migrationIndex));
+
+      expect(database.prepare('SELECT id, model_id FROM assistant').get()).toEqual({
+        id: 'assistant-1',
+        model_id: 'provider-1::model-1',
+      });
+      expect(database.prepare('SELECT count(*) AS count FROM message').get()).toEqual({ count: 4 });
+      const migratedMessage = database
+        .prepare('SELECT message_snapshot FROM message WHERE id = ?')
+        .get('message-1') as { message_snapshot: string };
+      expect(JSON.parse(migratedMessage.message_snapshot)).toEqual({
+        emoji: 'A',
+        id: 'assistant-1',
+        model: { id: 'model-1', name: 'Model', provider: 'provider-1' },
+        name: 'Assistant',
+      });
+      expect(
+        database
+          .prepare('SELECT message_snapshot FROM message WHERE id = ?')
+          .get('message-no-author'),
+      ).toEqual({ message_snapshot: null });
+      expect(
+        database
+          .prepare('SELECT assistant_id, knowledge_base_id FROM assistant_knowledge_base')
+          .all(),
+      ).toEqual([{ assistant_id: 'assistant-1', knowledge_base_id: 'legacy-knowledge-1' }]);
+      expect(
+        database
+          .prepare('SELECT id, status, error FROM knowledge_base WHERE id = ?')
+          .get('legacy-knowledge-1'),
+      ).toEqual({
+        error: 'missing_vector_store',
+        id: 'legacy-knowledge-1',
+        status: 'failed',
+      });
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test('0006 preserves populated chat, model, knowledge, and MCP data', () => {
+    const database = new DatabaseSync(':memory:');
+
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      const syncIndex = entries.findIndex(({ tag }) => tag === '0006_chubby_abomination');
+      expect(syncIndex).toBeGreaterThan(0);
+
+      for (const { sql } of entries.slice(0, syncIndex)) {
+        applyMigrationSql(database, sql);
+      }
+
+      database.exec(`
+        INSERT INTO user_provider (
+          provider_id, preset_provider_id, name, order_key, created_at, updated_at
+        ) VALUES ('openai', 'openai', 'OpenAI', 'a0', 1, 1);
+
+        INSERT INTO user_model (
+          id, provider_id, model_id, preset_model_id, name, description, capabilities,
+          custom_endpoint_url, supports_streaming, reasoning, is_enabled, is_hidden,
+          is_deprecated, order_key, user_overrides, created_at, updated_at
+        ) VALUES (
+          'openai::gpt-old', 'openai', 'gpt-old', 'gpt-old', 'My GPT', 'legacy',
+          '["reasoning"]', 'https://legacy.example/v1', 1,
+          '{"type":"openai-chat","supportedEfforts":["low","high"]}',
+          1, 0, 0, 'a0', '["name"]', 1, 1
+        ), (
+          'openai::custom', 'openai', 'custom', NULL, 'Custom', NULL, '["reasoning"]',
+          'https://custom.example/v1', 1,
+          '{"type":"openai-chat","supportedEfforts":["low"]}',
+          1, 0, 0, 'a1', NULL, 1, 1
+        );
+
+        INSERT INTO assistant (
+          id, name, emoji, model_id, settings, order_key, created_at, updated_at
+        ) VALUES ('assistant-1', 'Assistant', 'x', 'openai::gpt-old', '{}', 'a0', 1, 1);
+        INSERT INTO "group" (id, entity_type, name, order_key, created_at, updated_at)
+        VALUES ('group-1', 'topic', 'Group', 'a0', 1, 1);
+        INSERT INTO topic (
+          id, name, assistant_id, active_node_id, group_id, order_key, created_at, updated_at
+        ) VALUES ('topic-1', 'Topic', 'assistant-1', 'message-assistant', 'group-1', 'a0', 1, 1);
+        INSERT INTO message (
+          id, parent_id, topic_id, role, data, status, siblings_group_id, model_id,
+          model_snapshot, fts_rowid, created_at, updated_at
+        ) VALUES (
+          'message-root', NULL, 'topic-1', 'root', '{"parts":[]}', 'success', 0,
+          NULL, NULL, 1, 1, 1
+        ), (
+          'message-user', 'message-root', 'topic-1', 'user', '{"parts":[{"type":"text","text":"hello"}]}',
+          'success', 0, 'openai::gpt-old',
+          '{"id":"gpt-old","name":"GPT Old","provider":"openai"}', 2, 1, 1
+        ), (
+          'message-assistant', 'message-user', 'topic-1', 'assistant',
+          '{"parts":[{"type":"text","text":"world"}]}', 'success', 0,
+          'openai::gpt-old', '{"id":"gpt-old","name":"GPT Old","provider":"openai"}',
+          3, 1, 1
+        );
+        INSERT INTO file_entry (
+          id, origin, name, ext, size, external_path, created_at, updated_at, deleted_at
+        ) VALUES ('file-1', 'internal', 'attachment', 'txt', 5, NULL, 1, 1, NULL);
+        INSERT INTO chat_message_file_ref (
+          id, file_entry_id, source_id, role, created_at, updated_at
+        ) VALUES ('message-file-1', 'file-1', 'message-user', 'attachment', 1, 1);
+        INSERT INTO assistant_knowledge_base (
+          assistant_id, knowledge_base_id, created_at, updated_at
+        ) VALUES ('assistant-1', 'knowledge-opaque', 1, 1);
+
+        INSERT INTO mcp_server (id, name, type, base_url, command, created_at, updated_at)
+        VALUES
+          ('mcp-stdio', 'stdio', 'stdio', NULL, 'server', 1, 1),
+          ('mcp-sse', 'sse', 'sse', 'https://example.com/sse', NULL, 1, 1),
+          ('mcp-http', 'http', 'streamableHttp', 'https://example.com/mcp', NULL, 1, 1),
+          ('mcp-memory', 'memory', 'inMemory', NULL, NULL, 1, 1);
+      `);
+
+      expect(() => {
+        applyMigrationsAsDrizzleWould(database, entries.slice(syncIndex));
+      }).not.toThrow();
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+
+      expect(database.prepare('SELECT id, model_id FROM assistant').all()).toEqual([
+        expect.objectContaining({ id: 'assistant-1', model_id: 'openai::gpt-old' }),
+      ]);
+      expect(
+        database.prepare('SELECT id, topic_id, model_id FROM message ORDER BY fts_rowid').all(),
+      ).toEqual([
+        expect.objectContaining({ id: 'message-root', model_id: null, topic_id: 'topic-1' }),
+        expect.objectContaining({
+          id: 'message-user',
+          model_id: 'openai::gpt-old',
+          topic_id: 'topic-1',
+        }),
+        expect.objectContaining({
+          id: 'message-assistant',
+          model_id: 'openai::gpt-old',
+          topic_id: 'topic-1',
+        }),
+      ]);
+      expect(database.prepare('SELECT * FROM chat_message_file_ref').all()).toHaveLength(1);
+      expect(
+        database.prepare('SELECT message_snapshot FROM message WHERE id = ?').get('message-user'),
+      ).toEqual({ message_snapshot: null });
+
+      const presetModel = database
+        .prepare('SELECT * FROM user_model WHERE id = ?')
+        .get('openai::gpt-old') as Record<string, unknown>;
+      expect(presetModel).toEqual(
+        expect.objectContaining({
+          capabilities: null,
+          name: 'My GPT',
+          reasoning: null,
+          supports_streaming: null,
+        }),
+      );
+      const customReasoning = JSON.parse(
+        String(
+          (
+            database
+              .prepare('SELECT reasoning FROM user_model WHERE id = ?')
+              .get('openai::custom') as { reasoning: string }
+          ).reasoning,
+        ),
+      ) as Record<string, unknown>;
+      expect(customReasoning).toEqual(expect.objectContaining({ selectableEfforts: ['low'] }));
+      expect(customReasoning).not.toHaveProperty('type');
+
+      expect(database.prepare('SELECT * FROM assistant_knowledge_base').all()).toHaveLength(1);
+      expect(database.prepare('SELECT id, status, error FROM knowledge_base').get()).toEqual({
+        error: 'missing_vector_store',
+        id: 'knowledge-opaque',
+        status: 'failed',
+      });
+      expect(database.prepare('SELECT type FROM mcp_server ORDER BY id').all()).toEqual([
+        { type: 'streamableHttp' },
+        { type: 'inMemory' },
+        { type: 'sse' },
+        { type: 'stdio' },
+      ]);
+
+      const retained = database
+        .prepare("SELECT value FROM app_state WHERE key = 'migration.0006.opaque-retention'")
+        .get() as { value: string };
+      expect(JSON.parse(retained.value)).toEqual(
+        expect.objectContaining({
+          messageModelSnapshots: expect.objectContaining({
+            'message-user': expect.objectContaining({ id: 'gpt-old' }),
+          }),
+          modelFields: expect.objectContaining({
+            'openai::gpt-old': expect.objectContaining({
+              customEndpointUrl: 'https://legacy.example/v1',
+              userOverrides: ['name'],
+            }),
+          }),
+          topicGroupIds: { 'topic-1': 'group-1' },
+        }),
+      );
     } finally {
       database.close();
     }

@@ -100,7 +100,56 @@ describe('listModels', () => {
       }),
     ]);
   });
+
+  test('adds X-Source to Radeon model listing without adding it to other providers', async () => {
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ data: [] }), {
+          headers: { 'Content-Type': 'application/json' },
+          status: 200,
+        }),
+      ),
+    );
+    const context = { getRotatedApiKey: jest.fn(async () => 'test-key') };
+
+    await listModels(
+      createProvider({
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+            baseUrl: 'https://developer.amd.com.cn/radeon/v1',
+          },
+        },
+        id: 'radeon-cloud',
+      }),
+      context,
+    );
+    await listModels(
+      createProvider({
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://api.example.com/v1' },
+        },
+        id: 'other-openai-compatible',
+      }),
+      context,
+    );
+
+    expect(requestUrl(fetchMock.mock.calls[0])).toBe(
+      'https://developer.amd.com.cn/radeon/v1/models',
+    );
+    expect(requestHeaders(fetchMock.mock.calls[0]).get('X-Source')).toBe('cherry-studio');
+    expect(requestHeaders(fetchMock.mock.calls[1]).has('X-Source')).toBe(false);
+  });
 });
+
+function requestUrl(call: Parameters<typeof fetch>): string {
+  const [input] = call;
+  return input instanceof Request ? input.url : String(input);
+}
+
+function requestHeaders(call: Parameters<typeof fetch>): Headers {
+  const [input, init] = call;
+  return input instanceof Request ? input.headers : new Headers(init?.headers);
+}
 
 function createProvider(overrides: Partial<Provider> = {}): Provider {
   return {

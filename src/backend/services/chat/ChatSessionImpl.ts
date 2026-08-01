@@ -15,6 +15,7 @@ import type {
   CherryUIMessage,
   Message,
   MessageRuntimeStatsInput,
+  MessageSnapshot,
   ModelSnapshot,
 } from '@/shared/data/types/message';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
@@ -26,6 +27,10 @@ import {
   withCherryMeta,
 } from '@/shared/data/types/uiParts';
 import { serializeError } from '@/shared/utils/serializeError';
+import {
+  buildFirstUserMessageTitle,
+  sanitizeConversationTitle,
+} from '@/shared/utils/conversationTitle';
 import type { ChatSessionDependencies } from './ChatSessionDependencies';
 import {
   applyStreamingMessage,
@@ -128,6 +133,7 @@ export class ChatSessionImpl implements ChatSession {
         activeTurn,
         model,
         parts,
+        reasoningEffort: input.reasoningEffort,
         topic,
       });
     } catch (error) {
@@ -200,6 +206,7 @@ export class ChatSessionImpl implements ChatSession {
         activeTurn,
         model,
         parts,
+        reasoningEffort: input.reasoningEffort,
         topic,
       });
     } catch (error) {
@@ -344,6 +351,7 @@ export class ChatSessionImpl implements ChatSession {
       ...(autoNameUserParts ? { autoNameUserParts } : {}),
       history,
       model,
+      reasoningEffort: message.data.turnOptions?.reasoningEffort,
       topic,
     });
   }
@@ -368,10 +376,28 @@ export class ChatSessionImpl implements ChatSession {
     return await this.resolveModel(undefined, topic);
   }
 
+  private async buildAssistantMessageSnapshot(
+    model: Model,
+    topic: Pick<Topic, 'assistantId'>,
+  ): Promise<MessageSnapshot | undefined> {
+    if (!topic.assistantId) {
+      return undefined;
+    }
+
+    const assistant = await this.dependencies.services.assistant.getById(topic.assistantId);
+    return {
+      emoji: assistant.emoji,
+      id: assistant.id,
+      model: toModelSnapshot(model),
+      name: assistant.name,
+    };
+  }
+
   private async runTopicTurn(input: {
     activeTurn: ActiveTurn;
     model: Model;
     parts: readonly CherryMessagePart[];
+    reasoningEffort?: ChatSendTextInput['reasoningEffort'];
     topic: Topic;
   }): Promise<void> {
     const { activeTurn, model, parts, topic } = input;
@@ -390,7 +416,7 @@ export class ChatSessionImpl implements ChatSession {
       const prepared = await this.dependencies.files.prepareParts(parts);
       preparedFiles = prepared.files;
       turnParts = prepared.parts;
-      const modelSnapshot = toModelSnapshot(model);
+      const messageSnapshot = await this.buildAssistantMessageSnapshot(model, topic);
       throwIfAborted(abortController.signal);
       const reservedTurn =
         await this.dependencies.services.message.createUserMessageWithPlaceholders({
@@ -401,7 +427,6 @@ export class ChatSessionImpl implements ChatSession {
             dto: {
               data: { parts: turnParts },
               modelId: model.id,
-              modelSnapshot,
               parentId: topic.activeNodeId ?? null,
               role: 'user',
               status: 'success',
@@ -409,9 +434,15 @@ export class ChatSessionImpl implements ChatSession {
           },
           placeholders: [
             {
-              data: { parts: [] },
+              data: {
+                parts: [],
+                turnOptions: {
+                  fastMode: false,
+                  reasoningEffort: input.reasoningEffort,
+                },
+              },
               modelId: model.id,
-              modelSnapshot,
+              ...(messageSnapshot ? { messageSnapshot } : {}),
               role: 'assistant',
               status: 'pending',
             },
@@ -455,6 +486,7 @@ export class ChatSessionImpl implements ChatSession {
         history,
         model,
         pendingUserMessage: userMessage,
+        reasoningEffort: input.reasoningEffort,
         topic,
       });
     } catch (error) {
@@ -548,6 +580,7 @@ export class ChatSessionImpl implements ChatSession {
     history: readonly Message[];
     model: Model;
     pendingUserMessage?: Message;
+    reasoningEffort?: ChatSendTextInput['reasoningEffort'];
     topic: Topic;
   }): Promise<void> {
     const { activeTurn, assistantMessage, history, model, topic } = input;
@@ -564,6 +597,7 @@ export class ChatSessionImpl implements ChatSession {
         messageId: assistantMessage.id,
         messages: history.map(toCherryUIMessage),
         requestOptions: { signal: abortController.signal },
+        reasoningEffort: input.reasoningEffort,
         runtimeTimingSink: runtimeTiming.sink,
         trigger: 'submit-message',
         uniqueModelId: model.id,
@@ -612,7 +646,6 @@ export class ChatSessionImpl implements ChatSession {
         void this.autoNameTopicFromSummary({
           assistantId: topic.assistantId,
           assistantParts: (latestAssistantMessage?.parts ?? []) as CherryMessagePart[],
-          defaultModelId: model.id,
           topicId,
           userParts: input.autoNameUserParts,
         });
@@ -662,7 +695,6 @@ export class ChatSessionImpl implements ChatSession {
   private async autoNameTopicFromSummary(input: {
     assistantId?: string;
     assistantParts: readonly CherryMessagePart[];
-    defaultModelId: UniqueModelId;
     topicId: string;
     userParts: readonly CherryMessagePart[];
   }): Promise<void> {
@@ -675,7 +707,6 @@ export class ChatSessionImpl implements ChatSession {
     const renamed = await maybeRenameTopicFromConversationSummary({
       assistantId: input.assistantId,
       assistantText,
-      defaultModelId: input.defaultModelId,
       services: this.dependencies.services,
       topicId: input.topicId,
       userText,
@@ -987,7 +1018,9 @@ function createTopicName(input: { parts: readonly CherryMessagePart[]; text: str
   const filePart = input.parts.find(
     (part): part is Extract<CherryMessagePart, { type: 'file' }> => part.type === 'file',
   );
-  const title = input.text || filePart?.filename || 'New chat';
+  const title = input.text
+    ? buildFirstUserMessageTitle(input.text)
+    : sanitizeConversationTitle(filePart?.filename || 'New chat');
 
   return title.slice(0, 255);
 }

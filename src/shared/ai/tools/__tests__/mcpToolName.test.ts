@@ -1,4 +1,11 @@
-import { buildFunctionCallToolName, parseFunctionCallToolName, toCamelCase } from '../mcpToolName';
+import {
+  buildFunctionCallToolName,
+  buildMcpToolName,
+  generateMcpToolFunctionName,
+  isFunctionCallToolNameForServer,
+  parseFunctionCallToolName,
+  toCamelCase,
+} from '../mcpToolName';
 
 describe('mcpToolName', () => {
   describe('toCamelCase', () => {
@@ -33,6 +40,36 @@ describe('mcpToolName', () => {
       expect(buildFunctionCallToolName(serverA, toolName)).not.toBe(
         buildFunctionCallToolName(serverB, toolName),
       );
+    });
+
+    it('attributes normal and truncated ids to exactly one server', () => {
+      const normal = buildFunctionCallToolName('github', 'search_issues');
+      expect(isFunctionCallToolNameForServer('github', normal)).toBe(true);
+      expect(isFunctionCallToolNameForServer('git', normal)).toBe(false);
+
+      const serverA = `${'a'.repeat(60)}Alpha`;
+      const serverB = `${'a'.repeat(60)}Bravo`;
+      const truncated = buildFunctionCallToolName(serverA, 'tool');
+      expect(isFunctionCallToolNameForServer(serverA, truncated)).toBe(true);
+      expect(isFunctionCallToolNameForServer(serverB, truncated)).toBe(false);
+    });
+  });
+
+  describe('generic MCP names', () => {
+    it('supports custom formatting and collision allocation', () => {
+      expect(buildMcpToolName('github', 'search_issues')).toBe('github_searchIssues');
+      expect(buildMcpToolName('github', 'search', { delimiter: '__', prefix: 'mcp__' })).toBe(
+        'mcp__github__search',
+      );
+
+      const existingNames = new Set<string>();
+      expect(generateMcpToolFunctionName('github', 'search', existingNames)).toBe('github_search');
+      expect(generateMcpToolFunctionName('github', 'search', existingNames)).toBe('github_search1');
+    });
+
+    it('keeps collision suffixes inside maxLength', () => {
+      const existingNames = new Set(['abcd', 'abc1', 'abc2']);
+      expect(buildMcpToolName('abcd', '', { existingNames, maxLength: 4 })).toBe('abc3');
     });
   });
 

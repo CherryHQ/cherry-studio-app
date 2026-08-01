@@ -1,6 +1,8 @@
-import type { ChatTransport, UIMessage } from 'ai';
+import type { ProviderOptions } from '@ai-sdk/provider-utils';
+import type { ChatTransport, ToolChoice, ToolSet, UIMessage } from 'ai';
 import type { MessageRuntimeTimingSink } from '@/shared/data/types/message';
 import type { UniqueModelId } from '@/shared/data/types/model';
+import type { ReasoningEffortOption } from '@/shared/types/aiSdk';
 
 /**
  * Per-request transport config. Mirrors desktop's IPC-safe shape, but
@@ -18,10 +20,29 @@ export interface AiTransportOptions {
 }
 
 export interface AiBaseRequest {
+  /** Selected API key override, currently used by provider health checks. */
+  apiKeyOverride?: string;
   assistantId?: string;
+  callOverrides?: CallOverrides;
+  fastMode?: boolean;
+  knowledgeBaseIds?: string[];
+  mcpToolIds?: string[];
+  reasoningEffort?: ReasoningEffortOption;
   /** "providerId::modelId" */
   uniqueModelId?: UniqueModelId;
   requestOptions?: AiTransportOptions;
+}
+
+/** In-process request overrides for assistant-less callers. */
+export interface CallOverrides {
+  maxOutputTokens?: number;
+  providerOptions?: ProviderOptions;
+  stopSequences?: string[];
+  temperature?: number;
+  toolChoice?: ToolChoice<ToolSet>;
+  tools?: ToolSet;
+  topK?: number;
+  topP?: number;
 }
 
 /**
@@ -44,6 +65,5 @@ export interface AiStreamRequest extends AiBaseRequest {
   trigger: ChatTrigger;
   messageId?: string;
   messages?: UIMessage[];
-  knowledgeBaseIds?: string[];
   runtimeTimingSink?: MessageRuntimeTimingSink;
 }

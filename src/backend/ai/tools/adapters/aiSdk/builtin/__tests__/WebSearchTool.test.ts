@@ -9,6 +9,33 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
 }));
 
 describe('createWebSearchTool', () => {
+  it('returns citation IDs that are unique across lookup calls', async () => {
+    const webSearchService = {
+      searchKeywords: jest.fn(async () => ({
+        results: [
+          { content: 'A', title: 'A', url: 'https://example.com/a' },
+          { content: 'B', title: 'B', url: 'https://example.com/b' },
+        ],
+      })),
+    } as unknown as WebSearchService;
+    const searchTool = createWebSearchTool(webSearchService);
+
+    const first = await searchTool.execute?.(
+      { query: 'Cherry Studio mobile' },
+      { messages: [], toolCallId: 'web-search-1' },
+    );
+    const second = await searchTool.execute?.(
+      { query: 'Cherry Studio desktop' },
+      { messages: [], toolCallId: 'web-search-2' },
+    );
+
+    expect(first).toEqual([
+      expect.objectContaining({ id: expect.stringMatching(/^[0-9a-f]{8}-1$/) }),
+      expect.objectContaining({ id: expect.stringMatching(/^[0-9a-f]{8}-2$/) }),
+    ]);
+    expect((first as { id: string }[])[0].id).not.toBe((second as { id: string }[])[0].id);
+  });
+
   it.each([
     'Default web search provider is not configured for capability searchKeywords',
     'Unknown web search provider: removed-provider',
@@ -34,6 +61,10 @@ describe('createWebSearchTool', () => {
       ),
     ).resolves.toEqual({
       error: expect.stringMatching(/configure.*Settings.*do not retry/i),
+      i18nKey: 'web_search_provider_not_configured',
+      retryable: false,
+      terminal: true,
+      userMessage: expect.stringMatching(/configure.*Settings.*do not retry/i),
     });
   });
 

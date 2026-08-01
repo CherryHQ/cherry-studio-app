@@ -41,10 +41,11 @@ export class ToolService {
     assistant: Assistant;
     contextWindow?: number;
     externalWebSearchEnabled: boolean;
+    mcpToolIds?: readonly string[];
   }): Promise<{ deferredEntries: ToolEntry[]; tools: ToolSet | undefined }> {
     const [deviceAccess, mcpEntries] = await Promise.all([
       this.getDeviceAccess(),
-      this.deps.mcpRuntime.getToolEntriesForAssistant(input.assistant),
+      this.deps.mcpRuntime.getToolEntriesForAssistant(input.assistant, input.mcpToolIds),
     ]);
     const activeBuiltins = this.builtinRegistry.selectActive({
       assistant: input.assistant,

@@ -1,147 +1,210 @@
-/**
- * Streaming agent loop. See `docs/references/ai/agent-loop.md` in desktop.
- *
- * Mobile first slice keeps the desktop filename while narrowing the behavior
- * to plain AI SDK generate/stream calls. Agent-session, MCP tools, pending
- * message steering, and hook observers are intentionally not ported here.
- * `plugins` does accept the same `AiPlugin`s desktop's request-feature
- * wiring uses (the pluginEngine is shared via `@cherrystudio/ai-core`) —
- * callers assemble the array themselves; there is no feature registry here.
- */
-
 import type { AiPlugin } from '@cherrystudio/ai-core';
 import { createAgent } from '@cherrystudio/ai-core';
 import type { StringKeys } from '@cherrystudio/ai-core/provider';
+import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type {
-  JSONValue,
   LanguageModelUsage,
   ModelMessage,
   StopCondition,
   ToolCallRepairFunction,
+  ToolChoice,
   ToolSet,
   UIMessage,
   UIMessageChunk,
 } from 'ai';
 import * as Crypto from 'expo-crypto';
 
+import { isAbortError } from '@/backend/services/webSearch/utils/errors';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { MediaCapabilities } from '../../messages/messageCapabilities';
 import { toModelMessages } from '../../messages/messageRules';
 import { withReasoningTimingMetadata } from '../../streamManager/withReasoningTimingMetadata';
 import type { RequestContext } from '../../tools';
 import type { AppProviderSettingsMap } from '../../types';
-import { type ToolExecutionHooks, wrapToolsWithExecutionHooks } from './loop/hookRunner';
+import { safeCall, wrapForwardedHook, wrapToolsWithExecutionHooks } from './loop/hookRunner';
+import { resolveToolLoopTerminalError } from './loop/toolLoopTermination';
+import type { AgentLoopHooks, ToolExecutionHooks } from './loop/types';
 import { mergeUsage, toMessageMetadataPatch, ZERO_USAGE } from './observers/usage';
+import { composeHooks } from './params/composeHooks';
 
 type AppProviderKey = StringKeys<AppProviderSettingsMap>;
+type ObserverMap = {
+  [Key in keyof AgentLoopHooks]?: Array<NonNullable<AgentLoopHooks[Key]>>;
+};
+
+const logger = loggerService.withContext('agentLoop');
 
 export interface AgentOptions {
-  maxOutputTokens?: number;
-  temperature?: number;
-  topP?: number;
-  topK?: number;
-  presencePenalty?: number;
+  activeTools?: string[];
   frequencyPenalty?: number;
-  stopSequences?: string[];
-  seed?: number;
-  maxRetries?: number;
-  timeout?: number;
   headers?: Record<string, string | undefined>;
-  providerOptions?: Record<string, Record<string, JSONValue>>;
+  maxOutputTokens?: number;
+  maxRetries?: number;
+  presencePenalty?: number;
+  providerOptions?: ProviderOptions;
+  seed?: number;
+  stopSequences?: string[];
   stopWhen?: StopCondition<ToolSet> | StopCondition<ToolSet>[];
+  temperature?: number;
+  timeout?: number;
+  toolChoice?: ToolChoice<ToolSet>;
+  topK?: number;
+  topP?: number;
 }
 
-export interface AgentParams<T extends AppProviderKey = AppProviderKey> {
-  providerId: T;
-  providerSettings: AppProviderSettingsMap[T];
-  modelId: string;
-  messageId?: string;
-  mediaCapabilities?: MediaCapabilities;
-  plugins?: AiPlugin[];
+export interface AgentParams<Key extends AppProviderKey = AppProviderKey> {
   context?: RequestContext;
+  hookParts?: ReadonlyArray<Partial<AgentLoopHooks>>;
+  mediaCapabilities?: MediaCapabilities;
+  messageId?: string;
+  modelId: string;
+  options?: AgentOptions;
+  plugins?: AiPlugin[];
+  providerId: Key;
+  providerSettings: AppProviderSettingsMap[Key];
   repairToolCall?: ToolCallRepairFunction<ToolSet>;
   system?: string;
-  tools?: ToolSet;
   toolExecutionHooks?: ToolExecutionHooks;
-  options?: AgentOptions;
+  tools?: ToolSet;
 }
 
-export class Agent<T extends AppProviderKey = AppProviderKey> {
-  constructor(public readonly params: AgentParams<T>) {}
+export class Agent<Key extends AppProviderKey = AppProviderKey> {
+  private readonly observers: ObserverMap = {};
+  private currentWriter?: WritableStreamDefaultWriter<UIMessageChunk>;
 
-  private async buildAiSdkAgent() {
-    const params = this.params;
-    const opts = params.options ?? {};
-    const tools = wrapToolsWithExecutionHooks(params.tools, params.toolExecutionHooks);
-    return createAgent<AppProviderSettingsMap, T, ToolSet>({
-      providerId: params.providerId,
-      providerSettings: params.providerSettings,
-      modelId: params.modelId,
-      plugins: params.plugins,
+  constructor(public readonly params: AgentParams<Key>) {}
+
+  on<Hook extends keyof AgentLoopHooks>(
+    hook: Hook,
+    observer: NonNullable<AgentLoopHooks[Hook]>,
+  ): () => void {
+    const observers = (this.observers[hook] ??= []) as Array<NonNullable<AgentLoopHooks[Hook]>>;
+    observers.push(observer);
+    return () => {
+      const index = observers.indexOf(observer);
+      if (index >= 0) observers.splice(index, 1);
+    };
+  }
+
+  write(chunk: UIMessageChunk): void {
+    void this.currentWriter?.write(chunk).catch(() => undefined);
+  }
+
+  private composedHooks(extraParts: ReadonlyArray<Partial<AgentLoopHooks>> = []): AgentLoopHooks {
+    const parts: Array<Partial<AgentLoopHooks>> = [];
+    for (const hook of Object.keys(this.observers) as Array<keyof AgentLoopHooks>) {
+      for (const observer of this.observers[hook] ?? []) {
+        parts.push({ [hook]: observer } as Partial<AgentLoopHooks>);
+      }
+    }
+    if (this.params.hookParts) parts.push(...this.params.hookParts);
+    if (this.params.toolExecutionHooks) parts.push(this.params.toolExecutionHooks);
+    parts.push(...extraParts);
+    return composeHooks(parts);
+  }
+
+  private async buildAiSdkAgent(hooks: AgentLoopHooks) {
+    const { options = {}, params } = { options: this.params.options, params: this.params };
+    const tools = wrapToolsWithExecutionHooks(params.tools, hooks);
+    return createAgent<AppProviderSettingsMap, Key, ToolSet>({
       agentSettings: {
+        activeTools: options.activeTools as Array<keyof ToolSet> | undefined,
         experimental_context: params.context,
         experimental_repairToolCall: params.repairToolCall,
-        tools,
-        // System
+        frequencyPenalty: options.frequencyPenalty,
+        headers: options.headers,
         instructions: params.system,
-        // CallSettings (model parameters)
-        maxOutputTokens: opts.maxOutputTokens,
-        temperature: opts.temperature,
-        topP: opts.topP,
-        topK: opts.topK,
-        presencePenalty: opts.presencePenalty,
-        frequencyPenalty: opts.frequencyPenalty,
-        stopSequences: opts.stopSequences,
-        seed: opts.seed,
-        maxRetries: opts.maxRetries,
-        timeout: opts.timeout,
-        headers: opts.headers,
-        // Provider-specific
-        providerOptions: opts.providerOptions,
-        stopWhen: opts.stopWhen,
+        maxOutputTokens: options.maxOutputTokens,
+        maxRetries: options.maxRetries,
+        onStepFinish: wrapForwardedHook('onStepFinish', hooks.onStepFinish),
+        prepareStep: wrapForwardedHook('prepareStep', hooks.prepareStep),
+        presencePenalty: options.presencePenalty,
+        providerOptions: options.providerOptions,
+        seed: options.seed,
+        stopSequences: options.stopSequences,
+        stopWhen: options.stopWhen,
+        temperature: options.temperature,
+        timeout: options.timeout,
+        toolChoice: options.toolChoice,
+        tools,
+        topK: options.topK,
+        topP: options.topP,
       },
+      modelId: params.modelId,
+      plugins: params.plugins,
+      providerId: params.providerId,
+      providerSettings: params.providerSettings,
     });
   }
 
   async generate(
-    input: { prompt: string } | { messages: ModelMessage[] },
+    input: { messages: ModelMessage[] } | { prompt: string },
     signal?: AbortSignal,
   ): Promise<{ text: string; usage: LanguageModelUsage }> {
-    const aiAgent = await this.buildAiSdkAgent();
-    const generateInput =
-      'prompt' in input
-        ? { prompt: input.prompt, ...(signal && { abortSignal: signal }) }
-        : { messages: input.messages, ...(signal && { abortSignal: signal }) };
-    const result = await aiAgent.generate(generateInput);
-    return { text: result.text, usage: result.usage };
+    const hooks = this.composedHooks();
+    try {
+      await safeCall('onStart', hooks.onStart);
+      signal?.throwIfAborted();
+      const aiAgent = await this.buildAiSdkAgent(hooks);
+      const generateInput =
+        'prompt' in input
+          ? { prompt: input.prompt, ...(signal ? { abortSignal: signal } : {}) }
+          : { messages: input.messages, ...(signal ? { abortSignal: signal } : {}) };
+      const result = await aiAgent.generate(generateInput);
+      signal?.throwIfAborted();
+      const terminalError = resolveToolLoopTerminalError({
+        steps: result.steps ?? [],
+        stopWhen: this.params.options?.stopWhen,
+      });
+      if (terminalError) throw terminalError;
+      await safeCall('onFinish', hooks.onFinish);
+      return { text: result.text, usage: result.usage };
+    } catch (error) {
+      const isCancellation =
+        signal?.aborted === true && (error === signal.reason || isAbortError(error));
+      if (isCancellation) {
+        await safeCall('onAbort', hooks.onAbort);
+        throw error;
+      }
+      logger.error('agent generate error', error as Error);
+      if (hooks.onError) {
+        try {
+          await hooks.onError({ error: toError(error) });
+        } catch (hookError) {
+          logger.error('hooks.onError threw; rethrowing original', hookError as Error);
+        }
+      }
+      throw error;
+    }
   }
 
   stream(initialMessages: UIMessage[], signal: AbortSignal): ReadableStream<UIMessageChunk> {
-    const params = this.params;
-    const { readable, writable } = new TransformStream<UIMessageChunk>();
-    const writer = writable.getWriter();
-
-    let writerSettled = false;
-    const settleWriter = async (err?: unknown): Promise<void> => {
-      if (writerSettled) return;
-      writerSettled = true;
-      try {
-        if (err === undefined) {
-          await writer.close();
-        } else {
-          await writer.abort(err);
-        }
-      } catch {
-        // The transform stream's writer may already be closing from a peer
-        // cancel; we only care that the terminal state was signalled once.
-      }
+    let outputController!: TransformStreamDefaultController<UIMessageChunk>;
+    let terminalOutcome: 'abort' | 'running' | 'success' = 'running';
+    let committingFinish = false;
+    const claimTerminalOutcome = (outcome: 'abort' | 'success') => {
+      if (terminalOutcome !== 'running') return false;
+      terminalOutcome = outcome;
+      return true;
     };
+    const { readable, writable } = new TransformStream<UIMessageChunk, UIMessageChunk>({
+      start(controller) {
+        outputController = controller;
+      },
+      transform(chunk, controller) {
+        if (committingFinish && chunk.type === 'finish' && !claimTerminalOutcome('success')) return;
+        controller.enqueue(chunk);
+      },
+    });
+    const writer = writable.getWriter();
+    this.currentWriter = writer;
 
-    (async () => {
-      const aiAgent = await this.buildAiSdkAgent();
-      let totalUsage = ZERO_USAGE;
-      const result = await aiAgent.stream({
-        messages: await toModelMessages(initialMessages, params.mediaCapabilities),
-        abortSignal: signal,
+    let totalUsage = ZERO_USAGE;
+    const hooks = this.composedHooks([
+      {
+        onStart: () => {
+          totalUsage = ZERO_USAGE;
+        },
         onStepFinish: async (step) => {
           if (!step.usage) return;
           totalUsage = mergeUsage(totalUsage, step.usage);
@@ -150,28 +213,159 @@ export class Agent<T extends AppProviderKey = AppProviderKey> {
             messageMetadata: toMessageMetadataPatch(totalUsage),
           });
         },
-      });
+      },
+    ]);
 
+    let writerSettled = false;
+    const settleWriter = async (failure?: { error: unknown }) => {
+      if (writerSettled) return;
+      writerSettled = true;
+      this.currentWriter = undefined;
+      try {
+        if (failure) await writer.abort(failure.error);
+        else await writer.close();
+      } catch {
+        // The readable side may already have been cancelled.
+      }
+    };
+
+    const invokeOnError = async (error: unknown) => {
+      if (!hooks.onError) return undefined;
+      try {
+        return await hooks.onError({ error: toError(error) });
+      } catch (hookError) {
+        logger.error('hooks.onError threw; aborting run', hookError as Error);
+        return 'abort' as const;
+      }
+    };
+
+    const commitFinish = async (finish: Extract<UIMessageChunk, { type: 'finish' }>) => {
+      const abortBeforeFinish = () => {
+        if (!claimTerminalOutcome('abort')) return;
+        try {
+          outputController.terminate();
+        } catch {
+          // The readable side may already have been cancelled.
+        }
+      };
+      signal.addEventListener('abort', abortBeforeFinish, { once: true });
+      try {
+        if (signal.aborted) abortBeforeFinish();
+        if (terminalOutcome === 'abort') return false;
+        committingFinish = true;
+        await writer.write(finish);
+        return terminalOutcome === 'success';
+      } catch (error) {
+        if (terminalOutcome === 'abort') return false;
+        throw error;
+      } finally {
+        committingFinish = false;
+        signal.removeEventListener('abort', abortBeforeFinish);
+      }
+    };
+
+    void (async () => {
+      await safeCall('onStart', hooks.onStart);
+      const aiAgent = await this.buildAiSdkAgent(hooks);
+      const modelMessages = await toModelMessages(
+        initialMessages,
+        this.params.mediaCapabilities,
+        this.params.tools,
+      );
+      let hasUsedProvidedMessageId = false;
+      const result = await aiAgent.stream({ messages: modelMessages, abortSignal: signal });
+      const capturedUiErrors: Array<{ error: unknown }> = [];
       const uiStream = result.toUIMessageStream({
+        generateMessageId: () => {
+          if (!hasUsedProvidedMessageId && this.params.messageId) {
+            hasUsedProvidedMessageId = true;
+            return this.params.messageId;
+          }
+          return Crypto.randomUUID();
+        },
+        onError: (error) => {
+          capturedUiErrors.push({ error });
+          return error instanceof Error ? error.message : String(error);
+        },
         originalMessages: initialMessages,
-        generateMessageId: () => params.messageId ?? Crypto.randomUUID(),
       });
-      // Must run before this stream is read so every consumer (live UI,
-      // persistence) sees the same computed startedAt/thinkingMs values.
       const reader = withReasoningTimingMetadata(uiStream).getReader();
+      let readFailure: { error: unknown } | undefined;
+      let pendingFinish: Extract<UIMessageChunk, { type: 'finish' }> | undefined;
       try {
         while (true) {
           const { done, value } = await reader.read();
-          if (done || signal.aborted) break;
+          if (done) break;
+          const capturedError =
+            value.type === 'tool-input-error' ||
+            (value.type === 'tool-output-error' && !value.providerExecuted) ||
+            value.type === 'error'
+              ? capturedUiErrors.shift()
+              : undefined;
+          if (value.type === 'error' && capturedError) {
+            await reader.cancel(capturedError.error).catch(() => undefined);
+            throw capturedError.error;
+          }
+          if (signal.aborted) break;
+          if (value.type === 'finish') {
+            pendingFinish = value;
+            continue;
+          }
           await writer.write(value);
         }
+      } catch (error) {
+        readFailure = { error };
       } finally {
         reader.releaseLock();
       }
+      if (readFailure) throw readFailure.error;
+      if (signal.aborted) {
+        await safeCall('onAbort', hooks.onAbort);
+        return;
+      }
+
+      const steps = await Promise.resolve(result.steps);
+      if (signal.aborted) {
+        await safeCall('onAbort', hooks.onAbort);
+        return;
+      }
+      const terminalError = resolveToolLoopTerminalError({
+        steps: steps ?? [],
+        stopWhen: this.params.options?.stopWhen,
+      });
+      if (terminalError) throw terminalError;
+      if (pendingFinish) {
+        if (!(await commitFinish(pendingFinish))) {
+          await safeCall('onAbort', hooks.onAbort);
+          return;
+        }
+      } else if (signal.aborted || !claimTerminalOutcome('success')) {
+        await safeCall('onAbort', hooks.onAbort);
+        return;
+      }
+      await safeCall('onFinish', hooks.onFinish);
     })()
       .then(() => settleWriter())
-      .catch((err) => settleWriter(err));
+      .catch(async (error) => {
+        const isCancellation = signal.aborted && (error === signal.reason || isAbortError(error));
+        if (isCancellation) {
+          await safeCall('onAbort', hooks.onAbort);
+          await settleWriter();
+          return;
+        }
+        const action = await invokeOnError(error);
+        if (action === 'retry') {
+          logger.warn('agentLoop onError returned retry; retry not implemented - aborting', error);
+        } else {
+          logger.error('agentLoop error', error as Error);
+        }
+        await settleWriter({ error });
+      });
 
     return readable;
   }
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }

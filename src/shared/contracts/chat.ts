@@ -1,5 +1,6 @@
 import type { CherryMessagePart, Message } from '@/shared/data/types/message';
 import type { UniqueModelId } from '@/shared/data/types/model';
+import type { ReasoningEffortOption } from '@/shared/types/aiSdk';
 
 export const NEW_CHAT_SESSION_TOPIC_ID = '__new_topic__';
 
@@ -21,6 +22,7 @@ export type ChatSessionTopicSnapshot = {
 export type ChatSendTextInput = {
   assistantId?: string | null;
   parts?: readonly CherryMessagePart[];
+  reasoningEffort?: ReasoningEffortOption;
   selectedModelId?: UniqueModelId | null;
   text: string;
   topicId: string;

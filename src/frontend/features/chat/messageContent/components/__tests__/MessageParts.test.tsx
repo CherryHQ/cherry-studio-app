@@ -23,6 +23,7 @@ describe('MessageParts', () => {
     const renderer = render(<MessageParts message={makeMessage(status)} />);
 
     expect(renderer.root.findByType('MessagePart').props.isStreaming).toBe(isStreaming);
+    expect(renderer.root.findByType('MessagePart').props.resolvedText).toBeUndefined();
   });
 });
 

@@ -15,7 +15,7 @@ import { TopicService } from '../TopicService';
 
 // Rows are inserted in bulk here, so unlike the fixed-id mocks elsewhere these
 // have to be distinct. `expo-crypto` is already mocked the same way globally.
-jest.mock('uuid', () => ({ v7: mockRandomUUID }));
+jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
 // `fractional-indexing` is ESM-only and outside jest's transform allowlist, so
 // importing the real TopicService fails to parse without this. Appending to the

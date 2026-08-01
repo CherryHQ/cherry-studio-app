@@ -38,7 +38,15 @@
       "targetPaths": ["src/shared/data"],
       "sourceCommit": null,
       "sourceSha256": null,
-      "explicitExclusions": []
+      "explicitExclusions": [],
+      "mobilePreferenceExtensions": [
+        "permissions.calendar_read",
+        "permissions.calendar_write",
+        "permissions.health_read",
+        "permissions.location_read",
+        "permissions.reminders_read",
+        "permissions.reminders_write"
+      ]
     },
     "data-main": {
       "strategy": "semantic-port",
@@ -107,7 +115,17 @@
       "targetPaths": ["src/shared/ai"],
       "sourceCommit": null,
       "sourceSha256": null,
-      "explicitExclusions": []
+      "explicitExclusions": [
+        "src/shared/ai/agentSessionApiRetry.ts",
+        "src/shared/ai/agentSessionBackgroundTasks.ts",
+        "src/shared/ai/agentSessionContextUsage.ts",
+        "src/shared/ai/agentSessionFlowParts.ts",
+        "src/shared/ai/agentSessionSlashCommands.ts",
+        "src/shared/ai/agentSlashCommands.ts",
+        "src/shared/ai/claudecode/**",
+        "src/shared/ai/slashCommands.ts",
+        "src/shared/ai/tool.ts"
+      ]
     },
     "services": {
       "strategy": "semantic-port",

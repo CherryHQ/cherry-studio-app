@@ -6,6 +6,7 @@ type MessageData = Pick<
   MessageService,
   | 'create'
   | 'createSibling'
+  | 'clearTopicMessages'
   | 'delete'
   | 'getBranchMessages'
   | 'getById'
@@ -26,6 +27,7 @@ export function createMessageHandlers(service: MessageData): HandlersFor<Message
       POST: ({ body, params }) => service.createSibling(params.id, body),
     },
     '/topics/:topicId/messages': {
+      DELETE: ({ params }) => service.clearTopicMessages(params.topicId),
       GET: ({ params, query }) => service.getBranchMessages(params.topicId, query),
       POST: ({ body, params }) => service.create(params.topicId, body),
     },

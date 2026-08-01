@@ -12,7 +12,7 @@ import type { ModelService } from '../ModelService';
 import type { PinService } from '../PinService';
 import type { TagService } from '../TagService';
 
-jest.mock('uuid', () => ({ v7: mockRandomUUID }));
+jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
 type MigrationJournal = { entries: { tag: string }[] };
 

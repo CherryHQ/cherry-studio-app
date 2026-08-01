@@ -183,8 +183,8 @@ function prefetchDefaultModelDetail(prefetch: ReturnType<typeof usePrefetch>, mo
     return;
   }
 
-  return prefetch('/models/:id', {
-    params: { id: modelId },
+  return prefetch('/models/:uniqueModelId*', {
+    params: { uniqueModelId: modelId },
     staleTime: MODEL_DETAIL_PREFETCH_STALE_TIME_MS,
   });
 }

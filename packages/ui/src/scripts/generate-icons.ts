@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -11,6 +12,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+
+import { CATALOG_ONLY_PROVIDER_ICONS } from './catalog-only-provider-icons.generated';
 
 type IconGroup = 'general' | 'models' | 'providers';
 
@@ -101,14 +104,14 @@ function normalizeCurrentColor(svg: string, color: string) {
   return svg.replace(/currentColor/g, color);
 }
 
-async function renderIcon(
-  sourcePath: string,
+async function renderSvg(
+  svg: string,
   outputPath: string,
   foregroundColor: string,
   options: { trim?: boolean } = {},
 ) {
-  const svg = normalizeCurrentColor(readFileSync(sourcePath, 'utf-8'), foregroundColor);
-  const pipeline = sharp(Buffer.from(svg), { density: 192 });
+  const normalizedSvg = normalizeCurrentColor(svg, foregroundColor);
+  const pipeline = sharp(Buffer.from(normalizedSvg), { density: 192 });
 
   // Crop transparent safe-area without treating a full-bleed brand color as
   // removable background when the SVG's top-left pixel is opaque.
@@ -126,6 +129,15 @@ async function renderIcon(
       lossless: true,
     })
     .toFile(outputPath);
+}
+
+async function renderIcon(
+  sourcePath: string,
+  outputPath: string,
+  foregroundColor: string,
+  options: { trim?: boolean } = {},
+) {
+  await renderSvg(readFileSync(sourcePath, 'utf-8'), outputPath, foregroundColor, options);
 }
 
 function buildRegistrySource(group: IconGroup, entries: IconEntry[]) {
@@ -265,6 +277,27 @@ export async function generateGroup(group: IconGroup, targetRoot = outputRoot, l
       hasDark: shouldRenderDark,
       key: assetName,
     });
+  }
+
+  if (group === 'providers') {
+    const catalogOnlyManifest = [];
+    for (const [assetName, source] of Object.entries(CATALOG_ONLY_PROVIDER_ICONS)) {
+      const outputPath = join(lightAssetDir, `${assetName}.webp`);
+      await renderSvg(source.svg, outputPath, foregroundLight, { trim: true });
+      const outputSha256 = createHash('sha256').update(readFileSync(outputPath)).digest('hex');
+      entries.push({ fileName: assetName, hasDark: false, key: assetName });
+      catalogOnlyManifest.push({
+        id: assetName,
+        outputPath: `light/${assetName}.webp`,
+        outputSha256,
+        ...source.provenance,
+      });
+    }
+    writeFileSync(
+      join(targetRoot, group, 'catalog-only-manifest.json'),
+      `${JSON.stringify(catalogOnlyManifest, null, 2)}\n`,
+    );
+    entries.sort((left, right) => left.key.localeCompare(right.key));
   }
 
   writeFileSync(join(targetRoot, group, 'index.ts'), buildRegistrySource(group, entries));

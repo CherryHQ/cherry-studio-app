@@ -60,6 +60,7 @@ export function ProviderApiServiceEndpointForm({
   onAddEndpoint,
   onBaseUrlChange,
   onBaseUrlCommit,
+  onPrimaryEndpointChange,
   onRemoveEndpoint,
 }: {
   addableEndpointOptions: EndpointType[];
@@ -71,6 +72,7 @@ export function ProviderApiServiceEndpointForm({
   onAddEndpoint: (endpoint: EndpointType) => void;
   onBaseUrlChange: (endpoint: EndpointType, value: string) => void;
   onBaseUrlCommit: (endpoint: EndpointType, value: string) => void;
+  onPrimaryEndpointChange: (endpoint: EndpointType) => void;
   onRemoveEndpoint: (endpoint: EndpointType) => void;
 }) {
   const { t } = useTranslation();
@@ -78,9 +80,18 @@ export function ProviderApiServiceEndpointForm({
     primaryEndpoint,
     ...visibleEndpointTypes.filter((endpoint) => endpoint !== primaryEndpoint),
   ];
+  const primaryEndpointOptions = visibleEndpointTypes.filter((endpoint) =>
+    Boolean(baseUrlByEndpoint[endpoint]?.trim()),
+  );
 
   return (
     <View className="gap-3">
+      <EndpointSelect
+        label={t('settings.provider.apiService.defaultEndpoint')}
+        options={primaryEndpointOptions}
+        value={primaryEndpoint}
+        onValueChange={onPrimaryEndpointChange}
+      />
       {sheetEndpointTypes.length > 0 ? (
         <View className="gap-3">
           {sheetEndpointTypes.map((endpoint) => {
@@ -131,6 +142,52 @@ export function ProviderApiServiceEndpointForm({
           onValueChange={onAddEndpoint}
         />
       ) : null}
+    </View>
+  );
+}
+
+function EndpointSelect({
+  label,
+  onValueChange,
+  options,
+  value,
+}: {
+  label: string;
+  onValueChange: (value: EndpointType) => void;
+  options: EndpointType[];
+  value: EndpointType;
+}) {
+  const handleValueChange = useCallback(
+    (nextOption?: { label: string; value: string }) => {
+      const endpoint = nextOption?.value as EndpointType | undefined;
+      if (endpoint && options.includes(endpoint)) onValueChange(endpoint);
+    },
+    [onValueChange, options],
+  );
+
+  return (
+    <View className="gap-1">
+      <Text className="font-medium text-default-foreground text-sm">{label}</Text>
+      <Select value={{ label: getEndpointLabel(value), value }} onValueChange={handleValueChange}>
+        <Select.Trigger
+          accessibilityLabel={label}
+          className="h-10 min-h-10 rounded-xl bg-settings-grouped-surface px-3 py-0"
+        >
+          <Select.Value className="flex-1 text-base text-foreground" placeholder={label} />
+          <Select.TriggerIndicator />
+        </Select.Trigger>
+        <Select.Portal>
+          <Select.Overlay />
+          <Select.Content className="p-2" presentation="popover" width="trigger" placement="bottom">
+            {options.map((option) => (
+              <Select.Item key={option} label={getEndpointLabel(option)} value={option}>
+                <Select.ItemLabel className="flex-1" numberOfLines={1} />
+                <Select.ItemIndicator />
+              </Select.Item>
+            ))}
+          </Select.Content>
+        </Select.Portal>
+      </Select>
     </View>
   );
 }

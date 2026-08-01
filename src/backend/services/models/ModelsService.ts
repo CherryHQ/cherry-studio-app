@@ -272,7 +272,7 @@ function modelToAddInput(model: Model): AddModelInput {
     outputModalities: model.outputModalities,
     ownedBy: model.ownedBy,
     parameters: model.parameters,
-    presetModelId: model.presetModelId,
+    presetModelId: model.presetModelId ?? undefined,
     pricing: model.pricing,
     providerId: model.providerId,
     reasoning: model.reasoning,

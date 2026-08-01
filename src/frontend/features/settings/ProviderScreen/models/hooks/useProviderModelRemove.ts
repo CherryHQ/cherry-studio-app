@@ -19,7 +19,9 @@ const emptyModelIdSet: ReadonlySet<UniqueModelId> = new Set();
 export function useProviderModelRemove() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const removeModelMutation = useMutation('DELETE', '/models/:id', { refresh: ['/models'] });
+  const removeModelMutation = useMutation('DELETE', '/models/:uniqueModelId*', {
+    refresh: ['/models'],
+  });
   const deleteModel = removeModelMutation.trigger;
   const [defaultModelId] = usePreference('chat.default_model_id');
   const [removingIds, setRemovingIds] = useState<ReadonlySet<UniqueModelId>>(emptyModelIdSet);
@@ -32,11 +34,7 @@ export function useProviderModelRemove() {
 
       setRemovingIds((current) => new Set(current).add(model.id));
       try {
-        const didRemove = await deleteModel({ params: { id: model.id } });
-        if (!didRemove) {
-          toast.show({ label: t('settings.provider.models.removeFailed'), variant: 'danger' });
-          return;
-        }
+        await deleteModel({ params: { uniqueModelId: model.id } });
       } catch {
         toast.show({ label: t('settings.provider.models.removeFailed'), variant: 'danger' });
       } finally {

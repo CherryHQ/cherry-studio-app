@@ -61,6 +61,7 @@ export function createBackend(services: BackendServices): BackendComposition {
       message: services.message,
       model: services.model,
       preference: services.preference,
+      provider: services.provider,
       topic: services.topic,
     },
   });
@@ -193,12 +194,12 @@ function providerConfiguration(provider: {
   defaultChatEndpoint?: NonNullable<
     Parameters<BackendServices['model']['createFromRegistry']>[1]
   >['defaultChatEndpoint'];
-  endpointConfigs?: NonNullable<
+  presetProviderId?: NonNullable<
     Parameters<BackendServices['model']['createFromRegistry']>[1]
-  >['endpointConfigs'];
+  >['presetProviderId'];
 }) {
   return {
     defaultChatEndpoint: provider.defaultChatEndpoint,
-    endpointConfigs: provider.endpointConfigs,
+    presetProviderId: provider.presetProviderId,
   };
 }

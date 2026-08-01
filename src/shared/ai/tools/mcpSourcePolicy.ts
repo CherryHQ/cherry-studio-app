@@ -13,10 +13,15 @@
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import { buildFunctionCallToolName, toCamelCase } from './mcpToolName';
 
-type McpPolicyTool = {
+export type McpPolicyTool = {
   /** The minted `mcp__server__tool` id, when the caller already has one. */
   id?: string;
   name: string;
+};
+
+export type McpSourceToolAccess = {
+  enabled: boolean;
+  approval: 'auto' | 'prompt';
 };
 
 export function buildMcpWireToolId(serverName: string, toolName: string): string {
@@ -65,6 +70,19 @@ export function isMcpToolForcePromptBySource(server: McpServer, tool: McpPolicyT
   return (server.disabledAutoApproveTools ?? []).some((value) =>
     matchesMcpSourceToolRule(value, server, tool),
   );
+}
+
+export function resolveMcpSourceToolAccess(
+  server: McpServer,
+  tool: McpPolicyTool,
+): McpSourceToolAccess {
+  if (isMcpToolDisabledBySource(server, tool)) {
+    return { enabled: false, approval: 'prompt' };
+  }
+  if (isMcpToolForcePromptBySource(server, tool)) {
+    return { enabled: true, approval: 'prompt' };
+  }
+  return { enabled: true, approval: 'auto' };
 }
 
 /**

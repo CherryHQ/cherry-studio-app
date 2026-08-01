@@ -16,7 +16,9 @@ import type {
   MessageRuntimeTimingSink,
 } from '@/shared/data/types/message';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 import type { Topic } from '@/shared/data/types/topic';
+import type { ReasoningEffortOption } from '@/shared/types/aiSdk';
 
 export type ChatStreamRequest = {
   assistantId?: string;
@@ -24,6 +26,7 @@ export type ChatStreamRequest = {
   messageId: string;
   messages: CherryUIMessage[];
   requestOptions: { signal: AbortSignal };
+  reasoningEffort?: ReasoningEffortOption;
   runtimeTimingSink?: MessageRuntimeTimingSink;
   trigger: 'submit-message';
   uniqueModelId: UniqueModelId;
@@ -92,6 +95,9 @@ export type ChatSessionServices = {
     get(key: 'topic.naming.enabled'): Promise<boolean>;
     get(key: 'topic.naming.model_id'): Promise<string>;
     get(key: 'topic.naming_prompt'): Promise<string>;
+  };
+  provider: {
+    getByProviderId(id: string): Promise<Provider>;
   };
   topic: {
     create(input: CreateTopicDto): Promise<Topic>;

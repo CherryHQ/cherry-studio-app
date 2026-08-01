@@ -139,34 +139,68 @@ function matchSegments(
   templateSegments: readonly string[],
   pathSegments: readonly string[],
 ): Record<string, string> | null {
-  if (templateSegments.length !== pathSegments.length) {
+  return matchFrom(templateSegments, pathSegments, 0, 0, {});
+}
+
+function matchFrom(
+  templateSegments: readonly string[],
+  pathSegments: readonly string[],
+  templateIndex: number,
+  pathIndex: number,
+  params: Record<string, string>,
+): Record<string, string> | null {
+  if (templateIndex === templateSegments.length) {
+    return pathIndex === pathSegments.length ? params : null;
+  }
+
+  const templateSegment = templateSegments[templateIndex];
+  if (!templateSegment) {
     return null;
   }
 
-  const params: Record<string, string> = {};
-  for (let index = 0; index < templateSegments.length; index += 1) {
-    const templateSegment = templateSegments[index];
-    const pathSegment = pathSegments[index];
-    if (!templateSegment || pathSegment === undefined) {
-      return null;
-    }
-
-    if (templateSegment.startsWith(':')) {
-      try {
-        params[templateSegment.slice(1)] = decodeURIComponent(pathSegment);
-      } catch {
-        throw new DataApiError(
-          ErrorCode.BAD_REQUEST,
-          ['Invalid encoded path segment:', pathSegment].join(' '),
-        );
+  if (templateSegment.startsWith(':') && templateSegment.endsWith('*')) {
+    const key = templateSegment.slice(1, -1);
+    const suffixLength = templateSegments.length - templateIndex - 1;
+    const maxConsumed = pathSegments.length - pathIndex - suffixLength;
+    for (let consumed = maxConsumed; consumed >= 1; consumed -= 1) {
+      const captured = pathSegments.slice(pathIndex, pathIndex + consumed);
+      const next = matchFrom(
+        templateSegments,
+        pathSegments,
+        templateIndex + 1,
+        pathIndex + consumed,
+        { ...params, [key]: captured.map(decodePathSegment).join('/') },
+      );
+      if (next) {
+        return next;
       }
-      continue;
     }
-
-    if (templateSegment !== pathSegment) {
-      return null;
-    }
+    return null;
   }
 
-  return params;
+  const pathSegment = pathSegments[pathIndex];
+  if (pathSegment === undefined) {
+    return null;
+  }
+  if (templateSegment.startsWith(':')) {
+    return matchFrom(templateSegments, pathSegments, templateIndex + 1, pathIndex + 1, {
+      ...params,
+      [templateSegment.slice(1)]: decodePathSegment(pathSegment),
+    });
+  }
+  if (templateSegment !== pathSegment) {
+    return null;
+  }
+  return matchFrom(templateSegments, pathSegments, templateIndex + 1, pathIndex + 1, params);
+}
+
+function decodePathSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    throw new DataApiError(
+      ErrorCode.BAD_REQUEST,
+      ['Invalid encoded path segment:', segment].join(' '),
+    );
+  }
 }

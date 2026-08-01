@@ -1,3 +1,4 @@
+import type { EndpointType } from '@/shared/data/types/model';
 import type { EndpointConfigs, Provider } from '@/shared/data/types/provider';
 
 import type { EndpointDraft } from './providerApiServiceEndpointDraft';
@@ -15,10 +16,11 @@ export function buildProviderApiServiceEndpointUpdates({
 }: {
   draft: EndpointDraft;
   provider: Provider;
-}): { endpointConfigs: EndpointConfigs } {
+}): { defaultChatEndpoint: EndpointType; endpointConfigs: EndpointConfigs } {
   validateEndpointDraft(draft);
 
   return {
+    defaultChatEndpoint: draft.primaryEndpoint,
     endpointConfigs: mergeEndpointConfigs(
       provider.endpointConfigs,
       draft.baseUrlByEndpoint,
@@ -29,6 +31,11 @@ export function buildProviderApiServiceEndpointUpdates({
 }
 
 function validateEndpointDraft(draft: EndpointDraft) {
+  const primaryBaseUrl = draft.baseUrlByEndpoint[draft.primaryEndpoint]?.trim() ?? '';
+  if (!primaryBaseUrl || !isValidEndpointBaseUrl(primaryBaseUrl)) {
+    throw new ProviderApiServiceSaveError('invalid-base-url');
+  }
+
   for (const endpoint of new Set([draft.primaryEndpoint, ...draft.visibleEndpointTypes])) {
     const baseUrl = draft.baseUrlByEndpoint[endpoint] ?? '';
 

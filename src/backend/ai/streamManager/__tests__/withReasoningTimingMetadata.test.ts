@@ -141,6 +141,35 @@ describe('withReasoningTimingMetadata', () => {
     });
   });
 
+  it('merges reasoning-delta provider metadata into the reasoning-end chunk', async () => {
+    jest.spyOn(performance, 'now').mockReturnValueOnce(10).mockReturnValueOnce(35);
+
+    const chunks = await collect(
+      withReasoningTimingMetadata(
+        streamFrom([
+          { type: 'reasoning-start', id: 'r1' } as UIMessageChunk,
+          { type: 'reasoning-delta', id: 'r1', delta: 'thinking' } as UIMessageChunk,
+          {
+            type: 'reasoning-delta',
+            id: 'r1',
+            delta: '',
+            providerMetadata: { anthropic: { signature: 'sig-abc' } },
+          } as UIMessageChunk,
+          { type: 'reasoning-end', id: 'r1' } as UIMessageChunk,
+        ]),
+      ),
+    );
+
+    const reasoningEnd = chunks[3] as UIMessageChunk & {
+      providerMetadata: { anthropic: Record<string, unknown>; cherry: Record<string, unknown> };
+    };
+    expect(reasoningEnd.providerMetadata.anthropic).toEqual({ signature: 'sig-abc' });
+    expect(reasoningEnd.providerMetadata.cherry).toEqual({
+      thinkingMs: 25,
+      startedAt: expect.any(Number),
+    });
+  });
+
   it('tracks multiple reasoning ids independently', async () => {
     jest
       .spyOn(performance, 'now')

@@ -31,7 +31,8 @@ export default function ProviderEndpointSettingsScreen() {
     providerId ?? '',
   );
   const saveEndpointConfigs = useCallback(
-    (updates: { endpointConfigs: EndpointConfigs }) => saveProviderMutation.mutateAsync(updates),
+    (updates: { defaultChatEndpoint: EndpointType; endpointConfigs: EndpointConfigs }) =>
+      saveProviderMutation.mutateAsync(updates),
     [saveProviderMutation],
   );
 
@@ -66,14 +67,17 @@ function ProviderEndpointSettingsForm({
   onSave,
   provider,
 }: {
-  onSave: (updates: { endpointConfigs: EndpointConfigs }) => Promise<unknown>;
+  onSave: (updates: {
+    defaultChatEndpoint: EndpointType;
+    endpointConfigs: EndpointConfigs;
+  }) => Promise<unknown>;
   provider: Provider;
 }) {
   const { t } = useTranslation();
   const [endpointErrors, setEndpointErrors] = useState<Partial<Record<EndpointType, string>>>({});
   const [pendingEndpoint, setPendingEndpoint] = useState<EndpointType | null>(null);
   const pendingEndpointRef = useRef<EndpointType | null>(null);
-  const { addEndpoint, draft, removeEndpoint, updateBaseUrl } =
+  const { addEndpoint, draft, removeEndpoint, updateBaseUrl, updatePrimaryEndpoint } =
     useProviderApiServiceEndpointDraft(provider);
   const hasUnsavedChanges =
     Object.keys(endpointErrors).length > 0 ||
@@ -197,6 +201,22 @@ function ProviderEndpointSettingsForm({
     [draft, removeEndpoint, requestConfirm, saveEndpointDraft, t],
   );
 
+  const handlePrimaryEndpointChange = useCallback(
+    (endpoint: EndpointType) => {
+      if (endpoint === draft.primaryEndpoint) return;
+
+      const previousEndpoint = draft.primaryEndpoint;
+      const nextDraft = { ...draft, primaryEndpoint: endpoint };
+      updatePrimaryEndpoint(endpoint);
+
+      void (async () => {
+        const didSave = await saveEndpointDraft({ endpoint, nextDraft });
+        if (!didSave) updatePrimaryEndpoint(previousEndpoint);
+      })();
+    },
+    [draft, saveEndpointDraft, updatePrimaryEndpoint],
+  );
+
   const handleAddEndpoint = useCallback(
     (endpoint: EndpointType) => {
       addEndpoint(endpoint);
@@ -233,6 +253,7 @@ function ProviderEndpointSettingsForm({
             onAddEndpoint={handleAddEndpoint}
             onBaseUrlChange={handleBaseUrlChange}
             onBaseUrlCommit={handleBaseUrlCommit}
+            onPrimaryEndpointChange={handlePrimaryEndpointChange}
             onRemoveEndpoint={handleRemoveEndpoint}
           />
         </View>

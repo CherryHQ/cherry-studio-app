@@ -31,6 +31,7 @@ type AuditStatus = BaselineStatus | 'drift';
 export type DesktopSyncDomain = {
   blocker?: string;
   explicitExclusions?: string[];
+  mobilePreferenceExtensions?: string[];
   sourceCommit: string | null;
   sourcePaths: string[];
   sourceSha256: string | null;
@@ -277,6 +278,25 @@ function validateDomain(id: string, value: unknown): DesktopSyncDomain {
     assertRelativeRepoPath(exclusion, `${id}.explicitExclusions`);
   }
 
+  const mobilePreferenceExtensions = value.mobilePreferenceExtensions;
+  if (
+    mobilePreferenceExtensions !== undefined &&
+    (!Array.isArray(mobilePreferenceExtensions) ||
+      !mobilePreferenceExtensions.every(
+        (entry) => typeof entry === 'string' && /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/.test(entry),
+      ))
+  ) {
+    throw new Error(
+      `[desktop-sync-audit] ${id}.mobilePreferenceExtensions must be preference keys`,
+    );
+  }
+  if (
+    mobilePreferenceExtensions !== undefined &&
+    new Set(mobilePreferenceExtensions).size !== mobilePreferenceExtensions.length
+  ) {
+    throw new Error(`[desktop-sync-audit] ${id}.mobilePreferenceExtensions must be unique`);
+  }
+
   if (status === 'aligned') {
     if (typeof sourceCommit !== 'string' || !/^[0-9a-f]{40}$/.test(sourceCommit)) {
       throw new Error(`[desktop-sync-audit] aligned domain ${id} needs a full sourceCommit`);
@@ -307,6 +327,7 @@ function validateDomain(id: string, value: unknown): DesktopSyncDomain {
   return {
     blocker: value.blocker as string | undefined,
     explicitExclusions: explicitExclusions as string[] | undefined,
+    mobilePreferenceExtensions: mobilePreferenceExtensions as string[] | undefined,
     sourceCommit: sourceCommit as string | null,
     sourcePaths: sourcePaths as string[],
     sourceSha256: sourceSha256 as string | null,
@@ -922,6 +943,32 @@ async function auditSharedData(desktopRoot: string, mobileRoot: string) {
   };
 }
 
+export function evaluatePreferenceAlignment(
+  desktopKeys: readonly string[],
+  mobileKeys: readonly string[],
+  declaredMobileExtensions: readonly string[],
+) {
+  const sourceOnly = desktopKeys.filter((key) => !mobileKeys.includes(key));
+  const targetOnly = mobileKeys.filter((key) => !desktopKeys.includes(key));
+  const extensionSet = new Set(declaredMobileExtensions);
+  const mobileExtensions = targetOnly.filter((key) => extensionSet.has(key));
+  const unexpectedMobileKeys = targetOnly.filter((key) => !extensionSet.has(key));
+  const staleExtensionDeclarations = declaredMobileExtensions.filter(
+    (key) => !targetOnly.includes(key),
+  );
+
+  return {
+    mobileExtensions,
+    ok:
+      sourceOnly.length === 0 &&
+      unexpectedMobileKeys.length === 0 &&
+      staleExtensionDeclarations.length === 0,
+    sourceOnly,
+    staleExtensionDeclarations,
+    unexpectedMobileKeys,
+  };
+}
+
 async function providerRegistryIds(root: string): Promise<string[]> {
   const file = 'packages/provider-registry/src/providers/index.ts';
   return extractRegistryModules(await readFile(path.join(root, file), 'utf8'), 'PROVIDERS', file);
@@ -1143,19 +1190,27 @@ async function auditDomain(
   if (id === 'shared-data') {
     const sharedData = await auditSharedData(desktopRoot, mobileRoot);
     const mcp = await auditMcpRetention(desktopRoot, mobileRoot);
-    details = { ...sharedData, mcp };
+    const preferenceAlignment = evaluatePreferenceAlignment(
+      sharedData.preferences.desktopKeys,
+      sharedData.preferences.mobileKeys,
+      domain.mobilePreferenceExtensions ?? [],
+    );
+    details = { ...sharedData, mcp, preferenceAlignment };
     addClassification(
       classifications,
       'blocked',
       sharedData.dataApi.missingRoutes.map((route) => `route:${route}`),
     );
+    addClassification(
+      classifications,
+      'mobile-extension',
+      preferenceAlignment.mobileExtensions.map((key) => `preference:${key}`),
+    );
     addInvariant(invariants, {
       domain: id,
       id: 'preference-key-set-aligned',
       message: 'Preference key additions and removals require an explicit value migration.',
-      ok:
-        sharedData.preferences.sourceOnly.length === 0 &&
-        sharedData.preferences.targetOnly.length === 0,
+      ok: preferenceAlignment.ok,
     });
     addInvariant(invariants, {
       domain: id,

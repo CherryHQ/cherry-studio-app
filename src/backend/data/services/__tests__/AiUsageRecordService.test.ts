@@ -3,7 +3,10 @@ import { aiUsageRecordTable } from '@/backend/data/db/schemas';
 import type { AiUsageCaptureContext, RecordAiInvocationInput } from '../AiUsageRecordService';
 import { AiUsageRecordService, mergeMessageRuntimeStats } from '../AiUsageRecordService';
 
-jest.mock('uuid', () => ({ v7: jest.fn(() => '00000000-0000-7000-8000-000000000000') }));
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
+  v7: jest.fn(() => '00000000-0000-7000-8000-000000000000'),
+}));
 
 describe('AiUsageRecordService', () => {
   it('writes immutable identity, usage, metrics, and cache-aware computed cost', async () => {

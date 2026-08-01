@@ -33,12 +33,10 @@ export class DefaultAssistantSeeder implements DatabaseSeeder {
         {
           activeNodeId: null,
           assistantId: assistant.id as string,
-          groupId: null,
           name: '',
         },
         {
           pkColumn: topicTable.id,
-          scope: isNull(topicTable.groupId),
         },
       );
 

@@ -89,11 +89,12 @@ export function ChatInput({ assistantId, topicId }: ChatInputProps) {
       return chatSession.sendText({
         assistantId: selectedAssistantId,
         parts,
+        reasoningEffort,
         selectedModelId,
         text: payload.text,
       });
     },
-    [chatSession, selectedAssistantId, selectedModelId],
+    [chatSession, reasoningEffort, selectedAssistantId, selectedModelId],
   );
 
   return (

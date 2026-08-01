@@ -2,7 +2,7 @@
  * Topic entity types
  *
  * Topics are containers for messages. They reference the last-used assistant
- * and can be organized into groups.
+ * and reference the last-used assistant.
  */
 
 import * as z from 'zod';
@@ -10,6 +10,7 @@ import * as z from 'zod';
 import { TraceIdSchema } from './trace';
 
 export const TopicIdSchema = z.uuidv4();
+export const TopicNameSchema = z.string().min(1).max(255);
 /** Entity-side name validator: DB DEFAULT '' means a stored row may have an empty name. */
 export const TopicNameEntitySchema = z.string().max(255);
 
@@ -27,11 +28,9 @@ export const TopicSchema = z.strictObject({
   assistantId: z.string().optional(),
   /** Active node ID in the message tree */
   activeNodeId: z.string().optional(),
-  /** Group ID for organization */
-  groupId: z.string().optional(),
   /** Container-level OTel trace ID */
   traceId: TraceIdSchema.optional(),
-  /** Fractional-indexing order key, partitioned by groupId. */
+  /** Global fractional-indexing order key. */
   orderKey: z.string(),
   /** Creation timestamp (ISO string) */
   createdAt: z.iso.datetime(),

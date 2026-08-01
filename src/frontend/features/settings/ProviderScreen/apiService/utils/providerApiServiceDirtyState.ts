@@ -5,6 +5,7 @@ import { apiKeyEntriesSignature, normalizeApiKeyEntries } from './providerApiSer
 import type { EndpointDraft } from './providerApiServiceEndpointDraft';
 import {
   canEditProviderEndpoint,
+  getPrimaryEndpoint,
   mergeEndpointConfigs,
   resolveVisibleEndpointTypes,
 } from './providerApiServiceEndpointRules';
@@ -21,6 +22,7 @@ export function getProviderApiServiceEndpointDirtyState({
   }
 
   return (
+    draft.primaryEndpoint !== getPrimaryEndpoint(provider) ||
     endpointVisibilitySignature(getPersistableEndpointTypes(draft, provider)) !==
       endpointVisibilitySignature(resolveVisibleEndpointTypes(provider)) ||
     endpointConfigsSignature(

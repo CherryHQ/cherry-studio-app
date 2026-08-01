@@ -14,6 +14,7 @@ import type {
 import * as z from 'zod';
 
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import { type ReasoningEffortOption, ReasoningEffortOptionSchema } from '@/shared/types/aiSdk';
 import type { CherryDataPartTypes } from './uiParts';
 
 export const MessageIdSchema = z.uuid();
@@ -109,8 +110,14 @@ export interface MessageRuntimeTimingSink {
 
 export type CherryMessagePart = UIMessagePart<CherryDataPartTypes, UITools>;
 
+export interface AssistantTurnOptions {
+  fastMode?: boolean;
+  reasoningEffort?: ReasoningEffortOption;
+}
+
 export interface MessageData {
   parts?: CherryMessagePart[];
+  turnOptions?: AssistantTurnOptions;
 }
 
 export interface CherryUIMessageMetadata {
@@ -119,13 +126,14 @@ export interface CherryUIMessageMetadata {
   completionTokens?: number;
   createdAt?: string;
   modelId?: string;
-  modelSnapshot?: ModelSnapshot;
+  messageSnapshot?: MessageSnapshot;
   noCacheTokens?: number;
   parentId?: string | null;
   promptTokens?: number;
   siblingsGroupId?: number;
   stats?: MessageStats;
   status?: MessageStatus;
+  turnOptions?: AssistantTurnOptions;
   thoughtsTokens?: number;
   totalTokens?: number;
 }
@@ -223,6 +231,12 @@ export interface SerializedErrorData {
 
 export const MessageDataSchema: z.ZodType<MessageData> = z.strictObject({
   parts: z.array(z.custom<CherryMessagePart>()).optional(),
+  turnOptions: z
+    .strictObject({
+      fastMode: z.boolean().optional(),
+      reasoningEffort: ReasoningEffortOptionSchema.optional(),
+    })
+    .optional(),
 });
 
 export const ModelSnapshotSchema = z.strictObject({
@@ -233,8 +247,32 @@ export const ModelSnapshotSchema = z.strictObject({
 });
 export type ModelSnapshot = z.infer<typeof ModelSnapshotSchema>;
 
+export const MessageSnapshotSchema = z.strictObject({
+  emoji: z.string().optional(),
+  id: z.string(),
+  model: ModelSnapshotSchema,
+  name: z.string(),
+});
+export type MessageSnapshot = z.infer<typeof MessageSnapshotSchema>;
+
 export const MessageRoleSchema = z.enum(['user', 'assistant', 'system', 'root']);
 export type MessageRole = z.infer<typeof MessageRoleSchema>;
+
+export const ContentMessageRoleSchema = z.enum(['user', 'assistant', 'system']);
+export type ContentMessageRole = z.infer<typeof ContentMessageRoleSchema>;
+
+export const TOPIC_MESSAGE_SEARCH_ROLES = ['user', 'assistant'] as const;
+export type TopicMessageSearchRole = (typeof TOPIC_MESSAGE_SEARCH_ROLES)[number];
+
+export const AGENT_SESSION_MESSAGE_SEARCH_ROLES = ['user', 'assistant', 'system'] as const;
+export type AgentSessionMessageSearchRole = (typeof AGENT_SESSION_MESSAGE_SEARCH_ROLES)[number];
+
+export function coerceSearchRole<TRole extends MessageRole>(
+  role: string,
+  allowedRoles: readonly TRole[],
+): TRole | undefined {
+  return allowedRoles.includes(role as TRole) ? (role as TRole) : undefined;
+}
 
 export const MessageStatusSchema = z.enum(['pending', 'success', 'error', 'paused']);
 export type MessageStatus = z.infer<typeof MessageStatusSchema>;
@@ -244,7 +282,7 @@ export const MessageSchema = z.strictObject({
   data: MessageDataSchema,
   id: MessageIdSchema,
   modelId: z.string().nullable().optional(),
-  modelSnapshot: ModelSnapshotSchema.nullable().optional(),
+  messageSnapshot: MessageSnapshotSchema.nullable().optional(),
   parentId: z.string().nullable(),
   role: MessageRoleSchema,
   searchableText: z.string(),

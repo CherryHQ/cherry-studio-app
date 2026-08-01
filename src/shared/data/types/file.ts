@@ -69,6 +69,28 @@ export type ResolvedFile = {
 export const chatMessageRoles = ['attachment'] as const;
 export type ChatMessageFileRole = (typeof chatMessageRoles)[number];
 
+export const tempSessionSourceType = 'temp_session' as const;
+export const chatMessageSourceType = 'chat_message' as const;
+export const paintingSourceType = 'painting' as const;
+export const paintingRoles = ['output', 'input'] as const;
+
+function defineSingleFileRef<const TSourceType extends string>(sourceType: TSourceType) {
+  return { sourceType } as const;
+}
+
+export const providerLogoRef = defineSingleFileRef('provider_logo');
+export const miniAppLogoRef = defineSingleFileRef('mini_app_logo');
+
+export const allFileRefSourceTypes = [
+  tempSessionSourceType,
+  chatMessageSourceType,
+  paintingSourceType,
+  providerLogoRef.sourceType,
+  miniAppLogoRef.sourceType,
+] as const;
+export type FileRefSourceType = (typeof allFileRefSourceTypes)[number];
+export const FileRefSourceTypeSchema = z.enum(allFileRefSourceTypes);
+
 export type PreparedInternalFile = {
   ext: string | null;
   id: FileEntryId;

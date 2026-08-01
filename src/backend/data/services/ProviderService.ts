@@ -237,6 +237,7 @@ function rowToProvider(row: UserProviderRow): Provider {
     defaultChatEndpoint: row.defaultChatEndpoint ?? undefined,
     description: metadata.description,
     endpointConfigs: row.endpointConfigs as EndpointConfigs | undefined,
+    fastMode: metadata.fastMode,
     id: row.providerId,
     isEnabled: row.isEnabled,
     modelListSource: metadata.modelListSource,

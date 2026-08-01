@@ -1,11 +1,10 @@
 import { useQuery } from '@/frontend/data';
+import type { ListModelsQuery } from '@/shared/data/api/schemas/models';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
 const EMPTY_MODELS: readonly Model[] = Object.freeze([]);
 
-export function useModels(
-  query: { capability?: string; enabled?: boolean; providerId?: string } = {},
-) {
+export function useModels(query: ListModelsQuery = {}) {
   const modelsQuery = useQuery('/models', {
     query,
   });
@@ -20,9 +19,9 @@ export function useModels(
 
 export function useModelById(uniqueModelId: UniqueModelId | null | undefined) {
   const modelKey = uniqueModelId ?? '';
-  const modelQuery = useQuery('/models/:id', {
+  const modelQuery = useQuery('/models/:uniqueModelId*', {
     enabled: Boolean(modelKey),
-    params: { id: modelKey as UniqueModelId },
+    params: { uniqueModelId: modelKey as UniqueModelId },
   });
 
   return {

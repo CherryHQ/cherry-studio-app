@@ -1,4 +1,5 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { JSONValue } from 'ai';
 
 import type { Assistant } from '@/shared/data/types/assistant';
@@ -43,6 +44,25 @@ const AI_SDK_PARAMS = new Set([
 
 const OpenAIServiceTiers = ['auto', 'default', 'flex', 'priority'] as const;
 const GroqServiceTiers = ['auto', 'on_demand', 'flex'] as const;
+
+export function applyFastModeToProviderOptions(
+  provider: Pick<Provider, 'fastMode'>,
+  model: Pick<Model, 'supportsFastMode'>,
+  providerOptions: ProviderOptions,
+  fastMode: boolean,
+): ProviderOptions {
+  if (!fastMode || !model.supportsFastMode || provider.fastMode?.transport !== 'openai-priority') {
+    return providerOptions;
+  }
+
+  return {
+    ...providerOptions,
+    openai: {
+      ...providerOptions.openai,
+      serviceTier: 'priority',
+    },
+  };
+}
 
 type GroqProvider = Provider & { id: 'groq' };
 type NonGroqProvider = Provider & { id: Exclude<string, 'groq'> };

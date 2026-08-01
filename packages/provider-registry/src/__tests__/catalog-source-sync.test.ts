@@ -12,24 +12,22 @@
  * (pricing on md-derived rows, inferred metadata) remain out of scope. Runs in the network-free
  * `provider-registry` test project (CI: test:provider-registry).
  */
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { describe, expect, it } from 'vitest';
 
 import { canonOf } from '../../scripts/canonicalize';
 import { CREATORS } from '../creators';
+import { REASONING_FAMILY_RULES } from '../patterns/reasoning-families.gen';
 import { PROVIDERS } from '../providers';
+import { ReasoningFamilyRuleSchema } from '../schemas/model';
+import { readCatalogJson } from '../testing/catalogData';
 
-// Resolve this module's directory under both runners: vitest runs as ESM
-// (import.meta.url is available, __dirname is not) while the app's root jest
-// transpiles to CJS (__dirname is available, babel turns import.meta.url null).
-const moduleDir =
-  typeof __dirname === 'undefined' ? dirname(fileURLToPath(import.meta.url)) : __dirname;
-const dataDir = join(moduleDir, '..', '..', 'data');
-const read = (f: string) => JSON.parse(readFileSync(join(dataDir, f), 'utf8'));
-const models = read('models.json').models as Array<{ id: string; name?: string; ownedBy: string }>;
+// biome-ignore lint/suspicious/noExplicitAny: catalog rows are re-typed per assertion below
+const read = (f: string) => readCatalogJson<any>(f);
+const models = read('models.json').models as Array<{
+  id: string;
+  name?: string;
+  ownedBy: string;
+}>;
 const providers = read('providers.json').providers as Array<
   Record<string, unknown> & { id: string }
 >;
@@ -119,6 +117,18 @@ describe('catalog ↔ source sync (regenerate guard)', () => {
     for (const p of PROVIDERS)
       for (const ov of p.overrides ?? []) {
         if (!ov.modelId) continue;
+        if (p.modelsDevProvider && !ov.apiModelId && ov.reasoningContracts) {
+          const rows = overrides.filter(
+            (row) => row.providerId === p.id && row.modelId === ov.modelId,
+          );
+          if (rows.length === 0) problems.push(`missing ${p.id}/${ov.modelId}/reasoning-template`);
+          else if (
+            rows.some((row) => stable(row.reasoningContracts) !== stable(ov.reasoningContracts))
+          ) {
+            problems.push(`stale ${p.id}/${ov.modelId}/reasoning-template`);
+          }
+          continue;
+        }
         const expected = { providerId: p.id, ...ov };
         const row = rowByIdentity.get(
           overrideIdentity(expected as Parameters<typeof overrideIdentity>[0]),
@@ -127,6 +137,25 @@ describe('catalog ↔ source sync (regenerate guard)', () => {
         else if (stable(row) !== stable(expected))
           problems.push(`stale ${p.id}/${ov.modelId}/${ov.apiModelId ?? ''}`);
       }
+    expect(problems).toEqual([]);
+  });
+
+  it('reasoning-families.gen.ts mirrors the creator reasoningFamilies declarations exactly', () => {
+    // The runtime artifact is 100% source-derived (no upstream), so a full
+    // ordered deep-compare is deterministic: a creator edit without
+    // `pnpm generate` — or a hand edit of the .gen file — both fail here.
+    const expected = CREATORS.flatMap((c) => c.reasoningFamilies ?? []);
+    expect(REASONING_FAMILY_RULES.map(stable)).toEqual(expected.map(stable));
+  });
+
+  it('every creator reasoningFamilies rule is schema-valid', () => {
+    const problems: string[] = [];
+    for (const creator of CREATORS) {
+      for (const rule of creator.reasoningFamilies ?? []) {
+        const parsed = ReasoningFamilyRuleSchema.safeParse(rule);
+        if (!parsed.success) problems.push(`${creator.id}: ${rule.pattern}`);
+      }
+    }
     expect(problems).toEqual([]);
   });
 });

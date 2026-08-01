@@ -1,5 +1,6 @@
 import type { AiPlugin } from '@cherrystudio/ai-core';
-import { stepCountIs, type ToolCallRepairFunction, type ToolSet } from 'ai';
+import type { ProviderOptions } from '@ai-sdk/provider-utils';
+import { type ToolCallRepairFunction, type ToolSet } from 'ai';
 import * as Crypto from 'expo-crypto';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type {
@@ -27,7 +28,7 @@ import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/adapters/aiSdk/meta/toolSe
 import { createAiRepair } from '../../../tools/adapters/aiSdk/repair';
 import type { RequestContext } from '../../../tools/adapters/aiSdk/types';
 import type { ProviderConfig } from '../../../types';
-import type { AiBaseRequest } from '../../../types/requests';
+import type { AiBaseRequest, CallOverrides } from '../../../types/requests';
 import { addAnthropicHeaders } from '../../../utils/anthropicHeaders';
 import {
   filterStandardParams,
@@ -37,6 +38,7 @@ import {
   getTopP,
 } from '../../../utils/modelParameters';
 import {
+  applyFastModeToProviderOptions,
   buildCapabilityProviderOptions,
   extractAiSdkStandardParams,
   mergeCustomProviderParameters,
@@ -44,6 +46,11 @@ import {
 import { replacePromptVariables } from '../../../utils/promptVariables';
 import { createAiUsageCaptureContext } from '../../../utils/usageCapture';
 import type { AgentOptions } from '../Agent';
+import {
+  createToolCallLimitStopCondition,
+  stopOnTerminalToolFailure,
+} from '../loop/toolLoopTermination';
+import { CITATIONS_SYSTEM_PROMPT } from '../prompts/citations';
 import { getDeferredToolsSystemPrompt } from '../prompts/deferredTools';
 import { buildAgentPlugins } from './buildAgentPlugins';
 import { resolveCapabilities } from './capabilities';
@@ -89,6 +96,7 @@ export async function buildAgentParams({
   usageMessageRef = null,
 }: BuildAgentParamsInput): Promise<BuiltAgentParams> {
   const { provider, model, assistant } = await getProviderAndModel(request, services);
+  const settingsAssistant = createSettingsAssistant(assistant, request.reasoningEffort);
   const { config: sdkConfig, credentialReceipt } = await resolveProviderAiSdkConfig(
     provider,
     model,
@@ -107,12 +115,19 @@ export async function buildAgentParams({
   const hasConfiguredExternalWebSearch = Boolean(
     externalWebSearchProviderId && isFunctionCallingModel(model) && !shouldForceNativeWebSearch,
   );
-  const capabilities = assistant
-    ? resolveCapabilities(model, provider, assistant, sdkConfig.providerId, services.preference, {
-        webSearchProviderId: hasConfiguredExternalWebSearch
-          ? (externalWebSearchProviderId ?? undefined)
-          : undefined,
-      })
+  const capabilities = settingsAssistant
+    ? resolveCapabilities(
+        model,
+        provider,
+        settingsAssistant,
+        sdkConfig.providerId,
+        services.preference,
+        {
+          webSearchProviderId: hasConfiguredExternalWebSearch
+            ? (externalWebSearchProviderId ?? undefined)
+            : undefined,
+        },
+      )
     : undefined;
   const shouldUseExternalWebSearch = Boolean(
     shouldIncludeExternalTools &&
@@ -120,21 +135,23 @@ export async function buildAgentParams({
       isFunctionCallingModel(model) &&
       (hasConfiguredExternalWebSearch || !capabilities?.webSearchPluginConfig),
   );
-  const providerOptions =
-    assistant && capabilities
-      ? buildCapabilityProviderOptions(assistant, model, provider, capabilities)
+  let providerOptions =
+    settingsAssistant && capabilities
+      ? buildCapabilityProviderOptions(settingsAssistant, model, provider, capabilities)
       : {};
   const standardParams = assistant ? getAssistantStandardParams(assistant, model, provider) : {};
   const customParams = assistant ? getCustomParameters(assistant) : {};
   const split = extractAiSdkStandardParams(customParams);
   const filteredStandardParams = filterStandardParams(split.standardParams, model);
-  const mergedProviderOptions = mergeCustomProviderParameters(
+  providerOptions = mergeCustomProviderParameters(
     providerOptions,
     split.providerParams,
     sdkConfig.providerId,
   );
   const anthropicBetaHeaders =
-    assistant && isAnthropicModel(model) ? addAnthropicHeaders(assistant, model, provider) : [];
+    settingsAssistant && isAnthropicModel(model)
+      ? addAnthropicHeaders(settingsAssistant, model, provider)
+      : [];
   const headers =
     request.requestOptions?.headers || anthropicBetaHeaders.length > 0
       ? {
@@ -175,9 +192,10 @@ export async function buildAgentParams({
         assistant,
         contextWindow: model.contextWindow,
         externalWebSearchEnabled: shouldUseExternalWebSearch,
+        mcpToolIds: request.mcpToolIds,
       })
     : { deferredEntries: [], tools: undefined };
-  const tools = resolvedTools.tools;
+  const tools = mergeToolSets(resolvedTools.tools, request.callOverrides?.tools);
   const baseSystem = assistant?.prompt
     ? await replacePromptVariables(assistant.prompt, model.name, services.preference)
     : undefined;
@@ -185,7 +203,13 @@ export async function buildAgentParams({
     tools && TOOL_SEARCH_TOOL_NAME in tools
       ? getDeferredToolsSystemPrompt(resolvedTools.deferredEntries)
       : undefined;
-  const system = [baseSystem, deferredSystem].filter(Boolean).join('\n\n') || undefined;
+  const hasCitableTools = Boolean(
+    tools?.web_search || resolvedTools.deferredEntries.some((entry) => entry.name === 'web_search'),
+  );
+  const system =
+    [baseSystem, deferredSystem, hasCitableTools && CITATIONS_SYSTEM_PROMPT]
+      .filter(Boolean)
+      .join('\n\n') || undefined;
   const context: RequestContext = {
     abortSignal: request.requestOptions?.signal,
     assistant,
@@ -201,6 +225,20 @@ export async function buildAgentParams({
     providerSettings: sdkConfig.providerSettings,
     getUsagePlugins: () => [usagePlugin],
   });
+  const overridden = applyCallOverrides(
+    {
+      providerOptions,
+      standardParams: { ...standardParams, ...filteredStandardParams },
+    },
+    request.callOverrides,
+    model,
+  );
+  const effectiveProviderOptions = applyFastModeToProviderOptions(
+    provider,
+    model,
+    overridden.providerOptions,
+    request.fastMode === true,
+  );
 
   return {
     credentialReceipt,
@@ -218,15 +256,20 @@ export async function buildAgentParams({
       maxRetries: request.requestOptions?.maxRetries ?? 0,
       timeout: request.requestOptions?.timeout ?? getTimeout(model),
       ...(headers && { headers }),
-      ...(Object.keys(mergedProviderOptions).length > 0 && {
-        providerOptions: mergedProviderOptions,
+      ...(request.callOverrides?.toolChoice && {
+        toolChoice: request.callOverrides.toolChoice,
       }),
-      ...standardParams,
-      ...filteredStandardParams,
+      ...(Object.keys(effectiveProviderOptions).length > 0 && {
+        providerOptions: effectiveProviderOptions,
+      }),
+      ...overridden.standardParams,
       ...(tools && {
-        stopWhen: stepCountIs(
-          assistant?.settings.enableMaxToolCalls ? assistant.settings.maxToolCalls : 20,
-        ),
+        stopWhen: [
+          createToolCallLimitStopCondition(
+            assistant?.settings.enableMaxToolCalls ? assistant.settings.maxToolCalls : 20,
+          ),
+          stopOnTerminalToolFailure,
+        ],
       }),
     },
   };
@@ -238,6 +281,71 @@ export function getCustomParameters(assistant: Assistant): Record<string, unknow
     params[item.name] = item.value;
   }
   return params;
+}
+
+function createSettingsAssistant(
+  assistant: Assistant | undefined,
+  reasoningEffort: AiBaseRequest['reasoningEffort'],
+): Assistant | undefined {
+  if (reasoningEffort === undefined) return assistant;
+
+  return {
+    ...assistant,
+    settings: {
+      ...assistant?.settings,
+      reasoning_effort: reasoningEffort,
+    },
+  } as Assistant;
+}
+
+function mergeToolSets(
+  base: ToolSet | undefined,
+  overrides: ToolSet | undefined,
+): ToolSet | undefined {
+  if (!overrides || Object.keys(overrides).length === 0) return base;
+  return { ...base, ...overrides };
+}
+
+export function applyCallOverrides(
+  base: {
+    providerOptions: ProviderOptions;
+    standardParams: Partial<Record<string, unknown>>;
+  },
+  callOverrides: CallOverrides | undefined,
+  model: Model,
+): {
+  providerOptions: ProviderOptions;
+  standardParams: Partial<Record<string, unknown>>;
+} {
+  if (!callOverrides) return base;
+
+  const sampling: Partial<Record<string, unknown>> = {};
+  if (callOverrides.temperature !== undefined) sampling.temperature = callOverrides.temperature;
+  if (callOverrides.maxOutputTokens !== undefined) {
+    sampling.maxOutputTokens = callOverrides.maxOutputTokens;
+  }
+  if (callOverrides.topP !== undefined) sampling.topP = callOverrides.topP;
+  if (callOverrides.topK !== undefined) sampling.topK = callOverrides.topK;
+  if (callOverrides.stopSequences !== undefined) {
+    sampling.stopSequences = callOverrides.stopSequences;
+  }
+  const standardParams = {
+    ...base.standardParams,
+    ...filterStandardParams(sampling, model),
+  };
+
+  let providerOptions = base.providerOptions;
+  if (callOverrides.providerOptions) {
+    providerOptions = { ...providerOptions };
+    for (const [providerId, options] of Object.entries(callOverrides.providerOptions)) {
+      providerOptions[providerId] = {
+        ...providerOptions[providerId],
+        ...options,
+      };
+    }
+  }
+
+  return { providerOptions, standardParams };
 }
 
 function getAssistantStandardParams(

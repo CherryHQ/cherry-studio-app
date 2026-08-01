@@ -8,7 +8,7 @@ import { schema } from '@/backend/data/db/schemas';
 
 import { McpServerService } from '../McpServerService';
 
-jest.mock('uuid', () => ({ v7: mockRandomUUID }));
+jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
 type MigrationJournal = { entries: { tag: string }[] };
 

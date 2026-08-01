@@ -63,7 +63,7 @@ export function materializeRemoteModels(
 function enrichFromRegistry(model: Model, provider: Provider): Model {
   const registryData = providerRegistryService.lookupModel(provider.id, model.modelId, {
     defaultChatEndpoint: provider.defaultChatEndpoint,
-    endpointConfigs: provider.endpointConfigs,
+    presetProviderId: provider.presetProviderId,
   });
   if (!registryData.presetModel) {
     return model;
@@ -73,8 +73,8 @@ function enrichFromRegistry(model: Model, provider: Provider): Model {
     registryData.presetModel,
     registryData.registryOverride,
     model.providerId,
-    registryData.reasoningFormatTypes,
-    registryData.defaultChatEndpoint,
+    registryData.reasoningProfile.wire,
+    registryData.reasoningProfile.support,
   );
 
   return {

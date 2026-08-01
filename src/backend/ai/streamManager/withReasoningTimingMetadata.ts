@@ -47,6 +47,21 @@ export function withReasoningTimingMetadata(
           return;
         }
 
+        if (chunk.type === 'reasoning-delta') {
+          const deltaMetadata = toProviderMetadata(chunk.providerMetadata);
+          if (deltaMetadata) {
+            const reasoning = reasoningById.get(chunk.id);
+            if (reasoning) {
+              reasoning.providerMetadata = {
+                ...reasoning.providerMetadata,
+                ...deltaMetadata,
+              };
+            }
+          }
+          controller.enqueue(chunk);
+          return;
+        }
+
         if (chunk.type === 'reasoning-end') {
           const reasoning = reasoningById.get(chunk.id);
           if (reasoning) {

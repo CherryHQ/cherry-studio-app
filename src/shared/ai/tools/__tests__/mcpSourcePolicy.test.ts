@@ -5,6 +5,7 @@ import {
   hasMcpServerWildcardRule,
   isMcpToolDisabledBySource,
   isMcpToolForcePromptBySource,
+  resolveMcpSourceToolAccess,
   withMcpToolRuleAdded,
   withMcpToolRuleCleared,
 } from '../mcpSourcePolicy';
@@ -104,6 +105,20 @@ describe('isMcpToolForcePromptBySource', () => {
     // each other's semantics.
     expect(isMcpToolForcePromptBySource(makeServer(['search']), { name: 'search' })).toBe(false);
     expect(isMcpToolDisabledBySource(makeServer([], ['search']), { name: 'search' })).toBe(false);
+  });
+
+  it('resolves disabled before forced prompt, then defaults to auto', () => {
+    expect(
+      resolveMcpSourceToolAccess(makeServer(['search'], ['search']), { name: 'search' }),
+    ).toEqual({ approval: 'prompt', enabled: false });
+    expect(resolveMcpSourceToolAccess(makeServer([], ['search']), { name: 'search' })).toEqual({
+      approval: 'prompt',
+      enabled: true,
+    });
+    expect(resolveMcpSourceToolAccess(makeServer([]), { name: 'search' })).toEqual({
+      approval: 'auto',
+      enabled: true,
+    });
   });
 });
 

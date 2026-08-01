@@ -148,8 +148,12 @@ async function warmedToolSet(service: McpRuntimeService, assistant = makeAssista
   return getProjectedToolSet(service, assistant);
 }
 
-async function getProjectedToolSet(service: McpRuntimeService, assistant: Assistant) {
-  const entries = await service.getToolEntriesForAssistant(assistant);
+async function getProjectedToolSet(
+  service: McpRuntimeService,
+  assistant: Assistant,
+  selectedToolIds?: readonly string[],
+) {
+  const entries = await service.getToolEntriesForAssistant(assistant, selectedToolIds);
   return entries.length
     ? Object.fromEntries(entries.map((entry) => [entry.name, entry.tool]))
     : undefined;
@@ -201,6 +205,15 @@ describe('assistant tool preparation', () => {
     const { service } = makeService([makeServer()]);
 
     const tools = await getProjectedToolSet(service, makeAssistant());
+
+    expect(Object.keys(tools ?? {})).toEqual(['mcp__serverone__search']);
+  });
+
+  it('projects only explicitly selected MCP tools for the request', async () => {
+    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search', 'read'])));
+    const { service } = makeService([makeServer()]);
+
+    const tools = await getProjectedToolSet(service, makeAssistant(), ['mcp__serverone__search']);
 
     expect(Object.keys(tools ?? {})).toEqual(['mcp__serverone__search']);
   });

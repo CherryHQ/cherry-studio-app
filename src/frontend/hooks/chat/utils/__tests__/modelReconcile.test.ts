@@ -23,35 +23,29 @@ describe('reconcileReasoningEffortForModel', () => {
   test('keeps the current effort when the next model supports it', () => {
     const model = createModel({
       reasoning: {
-        supportedEfforts: [REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
-        type: 'openai-chat',
+        selectableEfforts: [REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
       },
     });
 
-    expect(
-      reconcileReasoningEffortForModel(model, REASONING_EFFORT.HIGH, 'assistant-1'),
-    ).toBeNull();
+    expect(reconcileReasoningEffortForModel(model, REASONING_EFFORT.HIGH)).toBeNull();
   });
 
   test('falls back to a supported effort when the current effort is unavailable', () => {
     const model = createModel({
       reasoning: {
-        supportedEfforts: [REASONING_EFFORT.NONE, REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
-        type: 'openai-chat',
+        selectableEfforts: [REASONING_EFFORT.NONE, REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
       },
     });
 
-    expect(reconcileReasoningEffortForModel(model, REASONING_EFFORT.MEDIUM, 'assistant-1')).toEqual(
-      {
-        reasoning_effort: REASONING_EFFORT.LOW,
-      },
-    );
+    expect(reconcileReasoningEffortForModel(model, REASONING_EFFORT.MEDIUM)).toEqual({
+      reasoning_effort: REASONING_EFFORT.HIGH,
+    });
   });
 
   test('clears reasoning effort when the next model has no configurable reasoning', () => {
     const model = createModel();
 
-    expect(reconcileReasoningEffortForModel(model, REASONING_EFFORT.HIGH, 'assistant-1')).toEqual({
+    expect(reconcileReasoningEffortForModel(model, REASONING_EFFORT.HIGH)).toEqual({
       reasoning_effort: undefined,
     });
   });

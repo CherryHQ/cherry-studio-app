@@ -210,7 +210,7 @@ describe('getMaxTokens', () => {
     const a = createAssistant({ enableMaxTokens: true, maxTokens: 8000, reasoning_effort: 'high' });
     const model = createModel('claude-3-7-sonnet-20250219', {
       providerId: 'anthropic',
-      reasoning: { type: 'thinking', thinkingTokenLimits: { min: 1024, max: 64000 } },
+      reasoning: { selectableEfforts: [], thinkingTokenLimits: { min: 1024, max: 64000 } },
     });
     const provider = createProvider({ id: 'anthropic', presetProviderId: 'anthropic' });
     expect(getMaxTokens(a, model, provider)).toBeLessThan(8000);
@@ -222,7 +222,7 @@ describe('getMaxTokens', () => {
     const a = createAssistant({ enableMaxTokens: true, maxTokens: 8000, reasoning_effort: 'high' });
     const model = createModel('claude-3-7-sonnet-20250219', {
       providerId: 'anthropic',
-      reasoning: { type: 'thinking', thinkingTokenLimits: { min: 1024, max: 64000 } },
+      reasoning: { selectableEfforts: [], thinkingTokenLimits: { min: 1024, max: 64000 } },
     });
     const provider = createProvider({ id: 'openrouter' });
     expect(getMaxTokens(a, model, provider)).toBe(8000);

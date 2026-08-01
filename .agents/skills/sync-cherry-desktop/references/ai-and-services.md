@@ -24,6 +24,11 @@ Exclude only these application-level Agent paths declared by the Manifest:
 - `src/main/ai/runtime/claudeCode/**`
 - `src/main/ai/tools/adapters/claudeCode/**`
 
+The Manifest may also exclude shared contracts used only by those Agent surfaces, such as
+`src/shared/ai/agentSession*`, `src/shared/ai/claudecode/**`, Agent slash-command catalogs, and
+Agent tool-policy DTOs. Retain any shared file reached by ordinary chat or persisted mobile data;
+`agentSessionCompaction.ts` remains in scope because mobile can retain compaction-anchor parts.
+
 Synchronize ordinary chat `src/main/ai/runtime/aiSdk/Agent.ts` and `packages/aiCore/**/agents/createAgent.ts`. Do not infer an exclusion from the word `Agent`. For channels, inference, observability, stream management, local MCP, browser, file tools, or any other non-Agent gap, implement it, prove an existing equivalent, or classify the domain as `blocked` with evidence.
 
 ## Port Used Services And Shared Code

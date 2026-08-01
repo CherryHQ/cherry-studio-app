@@ -6,31 +6,30 @@
  * `scripts/generate-catalog.ts` (from the `src/creators/` + `src/providers/` registries); this test
  * catches the regressions a structural check can (underscores, casing, custom SKUs, broken refs).
  */
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { describe, expect, it } from 'vitest';
 
-import { canonOf } from '../../scripts/canonicalize';
+import { canonOf, prefixHit } from '../../scripts/canonicalize';
+import { CREATORS } from '../creators';
 import { ModelListSchema } from '../schemas/model';
+import { ProviderListSchema } from '../schemas/provider';
 import { ProviderModelListSchema } from '../schemas/provider-models';
+import { ReasoningWireProfileSchema } from '../schemas/reasoningWire';
+import { readCatalogJson } from '../testing/catalogData';
 
-// Resolve this module's directory under both runners: vitest runs as ESM
-// (import.meta.url is available, __dirname is not) while the app's root jest
-// transpiles to CJS (__dirname is available, babel turns import.meta.url null).
-const moduleDir =
-  typeof __dirname === 'undefined' ? dirname(fileURLToPath(import.meta.url)) : __dirname;
-const dataDir = join(moduleDir, '..', '..', 'data');
-const modelsRaw = JSON.parse(readFileSync(join(dataDir, 'models.json'), 'utf8'));
-const providerModelsRaw = JSON.parse(readFileSync(join(dataDir, 'provider-models.json'), 'utf8'));
+const modelsRaw = readCatalogJson<{ models: Record<string, unknown>[] }>('models.json');
+const providerModelsRaw = readCatalogJson<{ overrides: Record<string, unknown>[] }>(
+  'provider-models.json',
+);
+const providersRaw = readCatalogJson('providers.json');
 const models = modelsRaw.models as Array<{
   id: string;
+  name: string;
   contextWindow?: number;
   maxOutputTokens?: number;
   capabilities?: string[];
   inputModalities?: string[];
   outputModalities?: string[];
+  ownedBy?: string;
 }>;
 const overrides = providerModelsRaw.overrides as Array<{
   providerId: string;
@@ -38,6 +37,8 @@ const overrides = providerModelsRaw.overrides as Array<{
   apiModelId?: string;
   name?: string;
 }>;
+const providers = ProviderListSchema.parse(providersRaw).providers;
+const providerModelOverrides = ProviderModelListSchema.parse(providerModelsRaw).overrides;
 
 // normalized creator id: lowercase, alphanumerics joined by single hyphens (size/version kept)
 const NORMALIZED = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -48,8 +49,26 @@ describe('catalog invariants (data/*.json)', () => {
   const ids = models.map((m) => m.id);
   const baseIds = new Set(ids);
 
+  it.each([
+    ['mai-image-2-5', 'microsoft', 'Microsoft: MAI-Image-2.5'],
+    ['recraft-v4-1-vector', 'recraft', 'Recraft: Recraft V4.1 Vector'],
+    ['riverflow-v2-5-fast', 'sourceful', 'Sourceful: Riverflow V2.5 Fast'],
+    ['seedream-4-5', 'bytedance', 'Seedream 4.5'],
+  ])('catalogs OpenRouter image model %s under its creator with its display name', (modelId, ownedBy, name) => {
+    expect(models.find((model) => model.id === modelId)).toMatchObject({
+      capabilities: expect.arrayContaining(['image-generation']),
+      name,
+      ownedBy,
+    });
+  });
+
   it('base model ids are unique', () => {
     expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+  });
+
+  it('base models are sorted by creator and id', () => {
+    const keys = models.map((model) => `${model.ownedBy ?? ''}\0${model.id}`);
+    expect(keys).toEqual([...keys].sort());
   });
 
   it('every base id is a normalized creator id (lowercase, single-hyphen separated)', () => {
@@ -65,6 +84,22 @@ describe('catalog invariants (data/*.json)', () => {
   // and coexists with (or shadows) its true base row.
   it('every base id is a canonicalization fixpoint (id === canonOf(id))', () => {
     expect(ids.filter((id) => canonOf(id) !== id)).toEqual([]);
+  });
+
+  it('assigns overlapping creator prefixes to the most specific owner', () => {
+    const wrongOwner = models
+      .map((model) => {
+        const mostSpecific = CREATORS.flatMap((creator) =>
+          (creator.idPrefixes ?? [])
+            .filter((prefix) => prefixHit(model.id, prefix))
+            .map((prefix) => ({ creatorId: creator.id, prefix })),
+        ).sort((a, b) => b.prefix.length - a.prefix.length)[0];
+        return mostSpecific && mostSpecific.creatorId !== model.ownedBy
+          ? `${model.id}: ${model.ownedBy} != ${mostSpecific.creatorId} (${mostSpecific.prefix})`
+          : undefined;
+      })
+      .filter(Boolean);
+    expect(wrongOwner).toEqual([]);
   });
 
   it('every override resolves to a base row or carries a standalone name', () => {
@@ -126,6 +161,29 @@ describe('catalog invariants (data/*.json)', () => {
     expect(orderDependent).toEqual([]);
   });
 
+  // `[1m]` is a Claude Code CLI suffix that raises the session's context budget: it never reaches an
+  // API, so it may only appear as an apiModelId, only on that provider, only paired with the plain
+  // row users pick when they don't want the extended window, and only on a model that has 1M to give.
+  it('every [1m] apiModelId is a claude-code twin of a plain 1M-context row', () => {
+    const contextWindowById = new Map(models.map((m) => [m.id, m.contextWindow]));
+    const plainRows = new Set(
+      overrides
+        .filter((o) => (o.apiModelId ?? o.modelId) === o.modelId)
+        .map((o) => `${o.providerId}::${o.modelId}`),
+    );
+    const broken = overrides
+      .filter((o) => (o.apiModelId ?? '').endsWith('[1m]'))
+      .filter(
+        (o) =>
+          o.providerId !== 'claude-code' ||
+          o.apiModelId !== `${o.modelId}[1m]` ||
+          !plainRows.has(`${o.providerId}::${o.modelId}`) ||
+          (contextWindowById.get(o.modelId) ?? 0) < 1_000_000,
+      )
+      .map((o) => `${o.providerId}/${o.apiModelId}`);
+    expect(broken).toEqual([]);
+  });
+
   // sequentialImageGeneration is a string enum in the central catalog
   // (imageParamCatalog.ts) and the Doubao API only accepts 'auto'/'disabled' — a
   // `switch` support spec here renders a boolean UI control that gets coerced
@@ -168,6 +226,32 @@ describe('catalog invariants (data/*.json)', () => {
   it('provider-models.json conforms to ProviderModelListSchema', () => {
     const r = ProviderModelListSchema.safeParse(providerModelsRaw);
     expect(r.success ? [] : r.error.issues.slice(0, 5)).toEqual([]);
+  });
+
+  it('Fast transports belong only to Codex and Claude Code', () => {
+    expect(
+      providers.filter((provider) => provider.fastMode).map((provider) => provider.id),
+    ).toEqual(['claude-code', 'openai-codex']);
+  });
+
+  it('Fast provider-model declarations require a provider transport', () => {
+    const fastProviders = new Set(
+      providers.filter((provider) => provider.fastMode).map((provider) => provider.id),
+    );
+    expect(
+      providerModelOverrides
+        .filter((override) => override.supportsFastMode && !fastProviders.has(override.providerId))
+        .map((override) => `${override.providerId}/${override.modelId}`),
+    ).toEqual([]);
+  });
+
+  it('budget wire operations require an explicit budget policy', () => {
+    const result = ReasoningWireProfileSchema.safeParse({
+      effort: {
+        operations: [{ target: 'thinking_budget', value: { source: 'budget' } }],
+      },
+    });
+    expect(result.success).toBe(false);
   });
 
   it('the validators actually reject known-bad shapes', () => {

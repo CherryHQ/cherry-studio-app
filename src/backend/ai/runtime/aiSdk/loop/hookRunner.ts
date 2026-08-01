@@ -1,27 +1,18 @@
-import type { ModelMessage, ToolSet } from 'ai';
+import type { ToolSet } from 'ai';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 const logger = loggerService.withContext('agentLoop');
 
-export interface ToolExecutionStartEvent {
-  callId: string;
-  toolName: string;
-  input: unknown;
-  messages: ModelMessage[];
-}
+import type { AgentLoopHooks, ToolExecutionHooks, ToolExecutionStartEvent } from './types';
 
-export type ToolExecutionEndEvent = ToolExecutionStartEvent & {
-  durationMs: number;
-  toolOutput: { type: 'tool-result'; output: unknown } | { type: 'tool-error'; error: unknown };
-};
+export type {
+  ToolExecutionEndEvent,
+  ToolExecutionHooks,
+  ToolExecutionStartEvent,
+} from './types';
 
-export interface ToolExecutionHooks {
-  onToolExecutionStart?: (event: ToolExecutionStartEvent) => Promise<void> | void;
-  onToolExecutionEnd?: (event: ToolExecutionEndEvent) => Promise<void> | void;
-}
-
-async function safeCall<F extends (...args: never[]) => unknown>(
+export async function safeCall<F extends (...args: never[]) => unknown>(
   name: string,
   callback: F | undefined,
   ...args: Parameters<F>
@@ -35,13 +26,21 @@ async function safeCall<F extends (...args: never[]) => unknown>(
   }
 }
 
+export function wrapForwardedHook<F extends (...args: never[]) => unknown>(
+  name: string,
+  callback: F | undefined,
+): F | undefined {
+  if (!callback) return undefined;
+  return ((...args: Parameters<F>) => safeCall(name, callback, ...args)) as F;
+}
+
 /**
  * Brackets each tool's `execute` with start/end hooks. `durationMs` excludes
  * hook latency, matching the desktop runtime and AI SDK v7 event semantics.
  */
 export function wrapToolsWithExecutionHooks(
   tools: ToolSet | undefined,
-  hooks: ToolExecutionHooks | undefined,
+  hooks: AgentLoopHooks | ToolExecutionHooks | undefined,
 ): ToolSet | undefined {
   if (!tools || !hooks) return tools;
   if (!hooks.onToolExecutionStart && !hooks.onToolExecutionEnd) return tools;

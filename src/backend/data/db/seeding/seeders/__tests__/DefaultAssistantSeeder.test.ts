@@ -5,7 +5,10 @@ import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 
 import { DefaultAssistantSeeder } from '../DefaultAssistantSeeder';
 
-jest.mock('uuid', () => ({ v7: jest.fn(() => '00000000-0000-7000-8000-000000000000') }));
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
+  v7: jest.fn(() => '00000000-0000-7000-8000-000000000000'),
+}));
 jest.mock('@/backend/data/services/MessageService', () => ({
   createRootMessageTx: jest.fn(),
 }));

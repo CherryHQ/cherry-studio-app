@@ -15,7 +15,8 @@ import { EntityTypeSchema } from './entityType';
 // ============================================================================
 
 export const GroupIdSchema = z.uuidv4();
-export const GroupNameSchema = z.string().trim().min(1).max(64);
+export const GroupNameSchema = z.string().trim().min(1);
+export const GroupNameInputSchema = GroupNameSchema.max(64);
 
 /**
  * Complete Group entity as returned by the API.

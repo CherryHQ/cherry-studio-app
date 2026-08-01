@@ -5,6 +5,7 @@ import { GENERAL_ICONS } from '../../icons-webp/general';
 import { MODEL_ICONS } from '../../icons-webp/models';
 import { PROVIDER_ICONS } from '../../icons-webp/providers';
 import { resolveProviderIcon } from '../registry';
+import { CATALOG_ONLY_PROVIDER_ICONS } from '../../scripts/catalog-only-provider-icons.generated';
 
 const iconSourceRoot = join(process.cwd(), 'packages/ui/icons');
 
@@ -18,7 +19,9 @@ function svgKeys(relativePath: string) {
 describe('desktop icon alignment', () => {
   test('keeps generated model and provider keys aligned with raw light sources', () => {
     expect(Object.keys(MODEL_ICONS).sort()).toEqual(svgKeys('models/light'));
-    expect(Object.keys(PROVIDER_ICONS).sort()).toEqual(svgKeys('providers/light'));
+    expect(Object.keys(PROVIDER_ICONS).sort()).toEqual(
+      [...svgKeys('providers/light'), ...Object.keys(CATALOG_ONLY_PROVIDER_ICONS)].sort(),
+    );
   });
 
   test('uses the desktop general icon set', () => {

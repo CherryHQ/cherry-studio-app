@@ -37,6 +37,7 @@ describe('ChatSessionImpl', () => {
     mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
 
     await runtime.sendText({
+      reasoningEffort: 'high',
       selectedModelId: 'provider::model' as UniqueModelId,
       text: '  hi  ',
       topicId: 'topic-1',
@@ -54,11 +55,25 @@ describe('ChatSessionImpl', () => {
         }),
       }),
     );
+    const reservation = (services.message.createUserMessageWithPlaceholders as jest.Mock).mock
+      .calls[0]?.[0];
+    expect(reservation.userMessage.dto.messageSnapshot).toBeUndefined();
+    expect(reservation.placeholders[0].messageSnapshot).toEqual({
+      emoji: '🌟',
+      id: 'assistant-1',
+      model: { id: 'model', name: 'Model', provider: 'provider' },
+      name: 'Assistant',
+    });
+    expect(reservation.placeholders[0].data.turnOptions).toEqual({
+      fastMode: false,
+      reasoningEffort: 'high',
+    });
     expect(services.ai.streamText).toHaveBeenCalledWith(
       expect.objectContaining({
         assistantId: 'assistant-1',
         chatId: 'topic-1',
         messageId: 'assistant-1',
+        reasoningEffort: 'high',
         uniqueModelId: 'provider::model',
       }),
     );
@@ -790,6 +805,7 @@ describe('ChatSessionImpl', () => {
 
   test('auto-names the topic from the conversation summary after the first exchange', async () => {
     const services = createServices();
+    services.topic.getById = jest.fn(async () => createTopic({ name: 'hi' }));
     const preferences: Record<string, unknown> = {
       'app.language': 'en-US',
       'topic.naming.enabled': true,
@@ -1226,6 +1242,7 @@ describe('ChatSessionImpl', () => {
 
   test('catches up auto-naming after a first-exchange approval resume succeeds', async () => {
     const services = createServices();
+    services.topic.getById = jest.fn(async () => createTopic({ name: 'hi' }));
     const preferences: Record<string, unknown> = {
       'app.language': 'en-US',
       'topic.naming.enabled': true,
@@ -1645,7 +1662,7 @@ function createServices() {
       streamText: jest.fn(async () => new ReadableStream()),
     },
     assistant: {
-      getById: jest.fn(),
+      getById: jest.fn(async (id: string) => createAssistant(id, model.id)),
     },
     message: {
       applyToolApprovalDecisions: jest.fn(async () => ({
@@ -1670,6 +1687,9 @@ function createServices() {
     },
     preference: {
       get: jest.fn(async () => model.id),
+    },
+    provider: {
+      getByProviderId: jest.fn(async () => ({ authMethods: ['api-key'] })),
     },
     topic: {
       create: jest.fn(async () => ({
@@ -1750,7 +1770,7 @@ function createMessage(id: string, role: Message['role']): Message {
     data: { parts: [] },
     id,
     modelId: role === 'assistant' ? ('provider::model' as UniqueModelId) : null,
-    modelSnapshot: null,
+    messageSnapshot: null,
     parentId: role === 'assistant' ? 'user-1' : 'active-node',
     role,
     searchableText: '',

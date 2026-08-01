@@ -1,5 +1,5 @@
 /**
- * Generated from desktop icon routing at commit 28c5efb4deb994aee54472a7dd89cd983136965a.
+ * Generated from desktop icon routing at commit 55feedb21473daf04792962db81ca66ab53e58a0.
  * Do not edit directly. Run `pnpm design:sync --desktop-root <path>`.
  */
 

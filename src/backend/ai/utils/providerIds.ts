@@ -2,6 +2,7 @@ import * as z from 'zod';
 
 const systemProviderIds = [
   'cherryin',
+  'radeon-cloud',
   'silicon',
   'aihubmix',
   'deepseek',

@@ -373,6 +373,7 @@
   "settings.provider.apiService.baseUrlPlaceholder": "Enter Base URL",
   "settings.provider.apiService.credentials": "Credentials JSON",
   "settings.provider.apiService.credentialsHelp": "Enter a JSON object.",
+  "settings.provider.apiService.defaultEndpoint": "Default endpoint",
   "settings.provider.apiService.copyApiKey": "Copy API Key",
   "settings.provider.apiService.deploymentId": "Deployment ID",
   "settings.provider.apiService.discardMessage": "Your changes have not been saved.",

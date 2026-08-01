@@ -1,15 +1,19 @@
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@/shared/data/presets/cherryai';
 
-import { extractMainText, maybeRenameTopicFromConversationSummary } from '../topicNaming';
-
-const defaultModelId = 'openai::gpt-4o' as UniqueModelId;
+import {
+  extractMainText,
+  inFlightTopicNamingWrites,
+  maybeRenameTopicFromConversationSummary,
+} from '../topicNaming';
 
 function createServices(
   overrides: {
     generateText?: jest.Mock;
     modelGetById?: jest.Mock;
     preferences?: Record<string, unknown>;
+    providerGetById?: jest.Mock;
     topicGetById?: jest.Mock;
     topicUpdate?: jest.Mock;
   } = {},
@@ -32,10 +36,14 @@ function createServices(
     preference: {
       get: jest.fn(async (key: string) => preferences[key]),
     },
+    provider: {
+      getByProviderId:
+        overrides.providerGetById ?? jest.fn(async () => ({ authMethods: ['api-key'] })),
+    },
     topic: {
       getById:
         overrides.topicGetById ??
-        jest.fn(async () => ({ id: 'topic-1', isNameManuallyEdited: false, name: 'Old name' })),
+        jest.fn(async () => ({ id: 'topic-1', isNameManuallyEdited: false, name: '' })),
       update: overrides.topicUpdate ?? jest.fn(async () => undefined),
     },
   } as any;
@@ -79,7 +87,6 @@ describe('maybeRenameTopicFromConversationSummary', () => {
     const renamed = await maybeRenameTopicFromConversationSummary({
       assistantId: 'assistant-1',
       assistantText: 'Sure, here is how...',
-      defaultModelId,
       services,
       topicId: 'topic-1',
       userText: 'How do I set up CI?',
@@ -89,7 +96,7 @@ describe('maybeRenameTopicFromConversationSummary', () => {
     expect(services.ai.generateText).toHaveBeenCalledWith(
       expect.objectContaining({
         assistantId: 'assistant-1',
-        uniqueModelId: defaultModelId,
+        uniqueModelId: CHERRYAI_DEFAULT_UNIQUE_MODEL_ID,
       }),
     );
     expect(services.topic.update).toHaveBeenCalledWith('topic-1', {
@@ -103,7 +110,6 @@ describe('maybeRenameTopicFromConversationSummary', () => {
 
     const renamed = await maybeRenameTopicFromConversationSummary({
       assistantText: 'reply',
-      defaultModelId,
       services,
       topicId: 'topic-1',
       userText: 'question',
@@ -124,7 +130,6 @@ describe('maybeRenameTopicFromConversationSummary', () => {
 
     const renamed = await maybeRenameTopicFromConversationSummary({
       assistantText: 'reply',
-      defaultModelId,
       services,
       topicId: 'topic-1',
       userText: 'question',
@@ -134,10 +139,54 @@ describe('maybeRenameTopicFromConversationSummary', () => {
     expect(services.ai.generateText).not.toHaveBeenCalled();
   });
 
+  it('does not rename a topic that already has a generated title', async () => {
+    const services = createServices({
+      topicGetById: jest.fn(async () => ({
+        id: 'topic-1',
+        isNameManuallyEdited: false,
+        name: 'Existing generated title',
+      })),
+    });
+
+    await expect(
+      maybeRenameTopicFromConversationSummary({
+        assistantText: 'reply',
+        services,
+        topicId: 'topic-1',
+        userText: 'question',
+      }),
+    ).resolves.toBe(false);
+    expect(services.ai.generateText).not.toHaveBeenCalled();
+  });
+
+  it('coalesces concurrent summary naming for the same topic and tracks the write', async () => {
+    let resolveGeneration!: (value: { text: string }) => void;
+    const generation = new Promise<{ text: string }>((resolve) => {
+      resolveGeneration = resolve;
+    });
+    const services = createServices({ generateText: jest.fn(() => generation) });
+    const input = {
+      assistantText: 'reply',
+      services,
+      topicId: 'topic-1',
+      userText: 'question',
+    };
+
+    const first = maybeRenameTopicFromConversationSummary(input);
+    const second = maybeRenameTopicFromConversationSummary(input);
+    expect(inFlightTopicNamingWrites().size).toBe(2);
+    await expect(second).resolves.toBe(false);
+    resolveGeneration({ text: 'Generated Title' });
+    await expect(first).resolves.toBe(true);
+    await Promise.resolve();
+    expect(services.ai.generateText).toHaveBeenCalledTimes(1);
+    expect(inFlightTopicNamingWrites().size).toBe(0);
+  });
+
   it('re-checks for a manual rename race after the LLM call resolves', async () => {
     const topicGetById = jest
       .fn()
-      .mockResolvedValueOnce({ id: 'topic-1', isNameManuallyEdited: false, name: 'Old name' })
+      .mockResolvedValueOnce({ id: 'topic-1', isNameManuallyEdited: false, name: '' })
       .mockResolvedValueOnce({
         id: 'topic-1',
         isNameManuallyEdited: true,
@@ -147,7 +196,6 @@ describe('maybeRenameTopicFromConversationSummary', () => {
 
     const renamed = await maybeRenameTopicFromConversationSummary({
       assistantText: 'reply',
-      defaultModelId,
       services,
       topicId: 'topic-1',
       userText: 'question',
@@ -165,7 +213,6 @@ describe('maybeRenameTopicFromConversationSummary', () => {
 
     await maybeRenameTopicFromConversationSummary({
       assistantText: 'reply',
-      defaultModelId,
       services,
       topicId: 'topic-1',
       userText: 'question',
@@ -177,7 +224,7 @@ describe('maybeRenameTopicFromConversationSummary', () => {
     );
   });
 
-  it('falls back to the turn model when the configured naming model no longer exists', async () => {
+  it('falls back to managed CherryAI when the configured naming model no longer exists', async () => {
     const configuredModelId = 'anthropic::deleted-model' as UniqueModelId;
     const services = createServices({
       modelGetById: jest.fn(async () => null),
@@ -186,14 +233,32 @@ describe('maybeRenameTopicFromConversationSummary', () => {
 
     await maybeRenameTopicFromConversationSummary({
       assistantText: 'reply',
-      defaultModelId,
       services,
       topicId: 'topic-1',
       userText: 'question',
     });
 
     expect(services.ai.generateText).toHaveBeenCalledWith(
-      expect.objectContaining({ uniqueModelId: defaultModelId }),
+      expect.objectContaining({ uniqueModelId: CHERRYAI_DEFAULT_UNIQUE_MODEL_ID }),
+    );
+  });
+
+  it('falls back to managed CherryAI for external CLI providers', async () => {
+    const configuredModelId = 'claude-code::haiku' as UniqueModelId;
+    const services = createServices({
+      preferences: { 'topic.naming.model_id': configuredModelId },
+      providerGetById: jest.fn(async () => ({ authMethods: ['external-cli'] })),
+    });
+
+    await maybeRenameTopicFromConversationSummary({
+      assistantText: 'reply',
+      services,
+      topicId: 'topic-1',
+      userText: 'question',
+    });
+
+    expect(services.ai.generateText).toHaveBeenCalledWith(
+      expect.objectContaining({ uniqueModelId: CHERRYAI_DEFAULT_UNIQUE_MODEL_ID }),
     );
   });
 
@@ -204,7 +269,6 @@ describe('maybeRenameTopicFromConversationSummary', () => {
 
     await maybeRenameTopicFromConversationSummary({
       assistantText: 'reply',
-      defaultModelId,
       services,
       topicId: 'topic-1',
       userText: 'question',
@@ -222,7 +286,6 @@ describe('maybeRenameTopicFromConversationSummary', () => {
 
     await maybeRenameTopicFromConversationSummary({
       assistantText: 'reply',
-      defaultModelId,
       services,
       topicId: 'topic-1',
       userText: 'question',
@@ -239,7 +302,6 @@ describe('maybeRenameTopicFromConversationSummary', () => {
 
     const renamed = await maybeRenameTopicFromConversationSummary({
       assistantText: 'reply',
-      defaultModelId,
       services,
       topicId: 'topic-1',
       userText: 'question',
@@ -258,7 +320,6 @@ describe('maybeRenameTopicFromConversationSummary', () => {
 
     const renamed = await maybeRenameTopicFromConversationSummary({
       assistantText: 'reply',
-      defaultModelId,
       services,
       topicId: 'topic-1',
       userText: 'question',

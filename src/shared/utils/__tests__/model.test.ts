@@ -12,13 +12,11 @@ describe('model reasoning support', () => {
     const model = createModel('gpt-5', {
       capabilities: [MODEL_CAPABILITY.REASONING],
       reasoning: {
-        supportedEfforts: [REASONING_EFFORT.MINIMAL, REASONING_EFFORT.LOW],
-        type: 'openai-chat',
+        selectableEfforts: [REASONING_EFFORT.MINIMAL, REASONING_EFFORT.LOW],
       },
     });
 
     expect(getModelSupportedReasoningEffortOptions(model)).toEqual([
-      'default',
       REASONING_EFFORT.MINIMAL,
       REASONING_EFFORT.LOW,
     ]);
@@ -29,13 +27,11 @@ describe('model reasoning support', () => {
       capabilities: [MODEL_CAPABILITY.REASONING],
       providerId: 'openrouter',
       reasoning: {
-        supportedEfforts: [],
-        type: 'openrouter',
+        selectableEfforts: [REASONING_EFFORT.NONE, REASONING_EFFORT.AUTO],
       },
     });
 
     expect(getModelSupportedReasoningEffortOptions(model)).toEqual([
-      'default',
       REASONING_EFFORT.NONE,
       REASONING_EFFORT.AUTO,
     ]);

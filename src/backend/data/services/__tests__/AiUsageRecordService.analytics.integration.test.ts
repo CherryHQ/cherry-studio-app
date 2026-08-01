@@ -13,7 +13,7 @@ import { schema } from '@/backend/data/db/schemas';
 import type { AiUsageCaptureContext, RecordAiInvocationInput } from '../AiUsageRecordService';
 import { AiUsageRecordService } from '../AiUsageRecordService';
 
-jest.mock('uuid', () => ({ v7: mockRandomUUID }));
+jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
 type MigrationJournal = { entries: { tag: string }[] };
 

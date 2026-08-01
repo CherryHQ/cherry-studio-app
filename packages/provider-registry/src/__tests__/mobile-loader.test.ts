@@ -43,4 +43,15 @@ describe('MobileRegistryLoader', () => {
       name: 'TokenHub',
     });
   });
+
+  it('preserves the mobile-only provider extensions', () => {
+    const loader = new MobileRegistryLoader();
+    const providerIds = new Set(loader.loadProviders().map((provider) => provider.id));
+
+    expect(
+      ['hunyuan', 'hyperbolic', 'infini', 'tencent-cloud-ti', 'yi'].filter((id) =>
+        providerIds.has(id),
+      ),
+    ).toEqual(['hunyuan', 'hyperbolic', 'infini', 'tencent-cloud-ti', 'yi']);
+  });
 });

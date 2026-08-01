@@ -123,8 +123,8 @@ describe('TopicListProvider', () => {
     await renderProvider(topics);
 
     expect(mockPrefetch).toHaveBeenCalledTimes(1);
-    expect(mockPrefetch).toHaveBeenCalledWith('/models/:id', {
-      params: { id: defaultModelId },
+    expect(mockPrefetch).toHaveBeenCalledWith('/models/:uniqueModelId*', {
+      params: { uniqueModelId: defaultModelId },
       staleTime: 1000 * 60 * 5,
     });
     expect(mockPrefetch.mock.invocationCallOrder[0]).toBeLessThan(

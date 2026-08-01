@@ -2,6 +2,7 @@ import type { Database, DbService } from '@/backend/data/db/DbService';
 import { FileEntryService } from '../FileEntryService';
 
 jest.mock('uuid', () => ({
+  v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
   v7: jest.fn(() => '00000000-0000-7000-8000-000000000000'),
 }));
 

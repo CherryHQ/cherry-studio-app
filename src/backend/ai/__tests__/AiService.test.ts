@@ -469,6 +469,34 @@ describe('AiService usage ownership', () => {
     });
   });
 
+  it('applies an assistant-less per-turn reasoning selection at the provider boundary', async () => {
+    const model = createModel('o3', {
+      capabilities: [MODEL_CAPABILITY.REASONING],
+      reasoning: { selectableEfforts: ['none', 'low', 'high'] },
+    });
+    const services = createServices({ model });
+
+    await new AiService(services).streamText({
+      chatId: 'topic-1',
+      messageId: 'message-1',
+      messages: [],
+      reasoningEffort: 'high',
+      requestOptions: { signal: new AbortController().signal },
+      trigger: 'submit-message',
+      uniqueModelId: model.id,
+    });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          providerOptions: expect.objectContaining({
+            'openai-compatible': expect.objectContaining({ reasoningEffort: 'high' }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it('does not bind non-stream generation usage to a chat message', async () => {
     const model = createModel('gpt-4o-mini');
     const services = createServices({ model });
@@ -613,14 +641,21 @@ describe('AiService web search plugin wiring', () => {
           chatId: 'topic-1',
           requestId: expect.any(String),
         }),
-        options: expect.objectContaining({ stopWhen: expect.any(Function) }),
+        options: expect.objectContaining({
+          stopWhen: expect.arrayContaining([expect.any(Function), expect.any(Function)]),
+        }),
         plugins: expect.not.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
         repairToolCall: expect.any(Function),
         tools: expect.objectContaining({ web_search: expect.any(Object) }),
       }),
     );
-    expect(params.options.stopWhen({ steps: Array.from({ length: 2 }, () => ({})) })).toBe(false);
-    expect(params.options.stopWhen({ steps: Array.from({ length: 3 }, () => ({})) })).toBe(true);
+    const [toolCallLimit] = params.options.stopWhen;
+    await expect(toolCallLimit({ steps: Array.from({ length: 2 }, () => ({})) })).resolves.toBe(
+      false,
+    );
+    await expect(toolCallLimit({ steps: Array.from({ length: 3 }, () => ({})) })).resolves.toBe(
+      true,
+    );
 
     const result = await params.tools.web_search.execute(
       { query: 'Cherry Studio mobile' },
@@ -634,11 +669,12 @@ describe('AiService web search plugin wiring', () => {
     expect(result).toEqual([
       {
         content: 'Mobile result',
-        id: 1,
+        id: expect.stringMatching(/^[0-9a-f]{8}-1$/),
         title: 'Cherry Studio',
         url: 'https://example.com/cherry',
       },
     ]);
+    expect(params.system).toContain('<citations>');
   });
 
   it('uses provider-native web search alone when no external provider is configured', async () => {
@@ -660,6 +696,7 @@ describe('AiService web search plugin wiring', () => {
     expect(mockAgentConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
         plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+        system: undefined,
         tools: undefined,
       }),
     );
@@ -774,8 +811,13 @@ describe('AiService MCP tool injection', () => {
     expect(params.tools).toEqual(
       expect.objectContaining({ mcp__serverone__search: expect.any(Object) }),
     );
-    expect(params.options.stopWhen({ steps: Array.from({ length: 2 }, () => ({})) })).toBe(false);
-    expect(params.options.stopWhen({ steps: Array.from({ length: 3 }, () => ({})) })).toBe(true);
+    const [toolCallLimit] = params.options.stopWhen;
+    await expect(toolCallLimit({ steps: Array.from({ length: 2 }, () => ({})) })).resolves.toBe(
+      false,
+    );
+    await expect(toolCallLimit({ steps: Array.from({ length: 3 }, () => ({})) })).resolves.toBe(
+      true,
+    );
   });
 
   it('does not even ask for MCP tools when the model cannot call functions', async () => {

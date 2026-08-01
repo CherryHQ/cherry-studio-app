@@ -15,6 +15,10 @@ const repoRoot = path.resolve(packageRoot, '../..');
 const stylesDestination = path.join(packageRoot, 'src/styles');
 const manifestPath = path.join(packageRoot, 'src/sync-manifest.json');
 const routingDestination = path.join(repoRoot, 'packages/ui/src/icons/desktop-routing.ts');
+const catalogOnlyProviderDestination = path.join(
+  repoRoot,
+  'packages/ui/src/scripts/catalog-only-provider-icons.generated.ts',
+);
 
 function parseArguments() {
   const args = process.argv.slice(2);
@@ -165,6 +169,132 @@ export const PROVIDER_ID_ALIASES: Readonly<Record<string, string>> = ${aliases};
 `;
 }
 
+function extractJoinedDataUri(source: string, sourcePath: string): string {
+  const sourceFile = ts.createSourceFile(
+    sourcePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      const initializer = declaration.initializer;
+      if (
+        !initializer ||
+        !ts.isCallExpression(initializer) ||
+        !ts.isPropertyAccessExpression(initializer.expression) ||
+        initializer.expression.name.text !== 'join' ||
+        !ts.isArrayLiteralExpression(initializer.expression.expression)
+      ) {
+        continue;
+      }
+
+      const parts = initializer.expression.expression.elements;
+      if (!parts.every(ts.isStringLiteralLike)) continue;
+      const value = parts.map((part) => (ts.isStringLiteralLike(part) ? part.text : '')).join('');
+      if (value.startsWith('data:image/png;base64,')) return value;
+    }
+  }
+
+  throw new Error(`[design-sync] catalog-only provider is missing an embedded PNG: ${sourcePath}`);
+}
+
+function assertRadeonCloudVisualContract(source: string, sourcePath: string): void {
+  const sourceFile = ts.createSourceFile(
+    sourcePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const tags = new Map<string, Map<string, string>>();
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isJsxSelfClosingElement(node) || ts.isJsxElement(node)) {
+      const opening = ts.isJsxElement(node) ? node.openingElement : node;
+      const tagName = opening.tagName.getText(sourceFile);
+      if (tagName === 'svg' || tagName === 'rect' || tagName === 'image') {
+        const attributes = new Map<string, string>();
+        for (const property of opening.attributes.properties) {
+          if (!ts.isJsxAttribute(property) || !property.initializer) continue;
+          const name = property.name.getText(sourceFile);
+          if (ts.isStringLiteral(property.initializer)) {
+            attributes.set(name, property.initializer.text);
+            continue;
+          }
+          if (!ts.isJsxExpression(property.initializer)) continue;
+          const expression = property.initializer.expression;
+          if (expression && (ts.isNumericLiteral(expression) || ts.isStringLiteral(expression))) {
+            attributes.set(name, expression.text);
+          }
+        }
+        tags.set(tagName, attributes);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  const expected = {
+    image: { height: '22', preserveAspectRatio: 'xMidYMid meet', width: '92', x: '14', y: '49' },
+    rect: { fill: '#fff', height: '120', rx: '24', width: '120' },
+    svg: { viewBox: '0 0 120 120' },
+  } as const;
+  for (const [tagName, attributes] of Object.entries(expected)) {
+    const actual = tags.get(tagName);
+    for (const [name, value] of Object.entries(attributes)) {
+      if (actual?.get(name) !== value) {
+        throw new Error(
+          `[design-sync] Radeon Cloud ${tagName}.${name} changed; update the explicit mobile adapter`,
+        );
+      }
+    }
+  }
+}
+
+async function buildCatalogOnlyProviderSource(
+  desktopRoot: string,
+  commit: string,
+): Promise<{ source: string; sourcePath: string }> {
+  const sourcePath = 'packages/ui/src/components/icons/providers/radeon-cloud/light.tsx';
+  const absolutePath = path.join(desktopRoot, sourcePath);
+  const source = await readFile(absolutePath, 'utf8');
+  assertRadeonCloudVisualContract(source, sourcePath);
+  const dataUri = extractJoinedDataUri(source, sourcePath);
+  const decodedRaster = Buffer.from(dataUri.slice(dataUri.indexOf(',') + 1), 'base64');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" fill="#fff" rx="24"/><image href="${dataUri}" x="14" y="49" width="92" height="22" preserveAspectRatio="xMidYMid meet"/></svg>`;
+  const provenance = {
+    decodedRasterSha256: createHash('sha256').update(decodedRaster).digest('hex'),
+    desktopCommit: commit,
+    desktopSourcePath: sourcePath,
+    desktopSourceSha256: await hashFiles([absolutePath], desktopRoot),
+  };
+  const svgLiteral = `'${svg.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+
+  return {
+    source: `/**
+ * Generated by the desktop design sync. Do not edit directly.
+ */
+
+export const CATALOG_ONLY_PROVIDER_ICONS = {
+  'radeon-cloud': {
+    provenance: {
+      decodedRasterSha256: '${provenance.decodedRasterSha256}',
+      desktopCommit: '${provenance.desktopCommit}',
+      desktopSourcePath: '${provenance.desktopSourcePath}',
+      desktopSourceSha256: '${provenance.desktopSourceSha256}',
+    },
+    svg: ${svgLiteral},
+  },
+} as const;
+`,
+    sourcePath,
+  };
+}
+
 async function hashFiles(files: string[], baseRoot: string): Promise<string> {
   const hash = createHash('sha256');
   for (const file of files.sort()) {
@@ -203,6 +333,7 @@ async function main() {
     'packages/ui/scripts/theme-contract.ts',
     'packages/ui/icons',
     'packages/ui/src/components/icons/registry.ts',
+    'packages/ui/src/components/icons/providers/radeon-cloud',
   ];
   const dirty = run('git', ['status', '--porcelain', '--', ...trackedSources], desktopRoot);
   if (dirty) {
@@ -250,6 +381,8 @@ async function main() {
   const desktopRegistryPath = path.join(desktopUi, 'src/components/icons/registry.ts');
   const desktopRegistry = await readFile(desktopRegistryPath, 'utf8');
   await writeOrCheckText(routingDestination, buildRoutingSource(desktopRegistry, commit), check);
+  const catalogOnlyProvider = await buildCatalogOnlyProviderSource(desktopRoot, commit);
+  await writeOrCheckText(catalogOnlyProviderDestination, catalogOnlyProvider.source, check);
 
   const styleFiles = [
     ...(await listFiles(path.join(desktopStyles, 'tokens'), '.css')).map((file) =>
@@ -270,6 +403,10 @@ async function main() {
       schemaVersion: 1,
       sources: {
         iconRouting: await hashFiles([desktopRegistryPath], desktopRoot),
+        catalogOnlyIcons: await hashFiles(
+          [path.join(desktopRoot, catalogOnlyProvider.sourcePath)],
+          desktopRoot,
+        ),
         icons: await hashFiles(iconFiles, desktopRoot),
         tokens: await hashFiles(styleFiles, desktopRoot),
       },

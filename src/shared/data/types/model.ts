@@ -1,3 +1,15 @@
+/**
+ * Model - Merged runtime model type
+ *
+ * This is the "final state" after merging from all data sources.
+ * Consumers don't need to know the source - they just use the merged config.
+ *
+ * Data source priority:
+ * 1. user_model (user customization)
+ * 2. provider-models.json (catalog provider-level override)
+ * 3. models.json (catalog base definition)
+ */
+
 import type {
   CanonicalParamKey,
   Currency,
@@ -11,14 +23,34 @@ import type {
   SupportSpec,
 } from '@cherrystudio/provider-registry';
 import {
+  CANONICAL_PARAM_KEY,
   CURRENCY,
   ENDPOINT_TYPE,
+  endpointImpliedCapability,
+  ImageGenerationModeSchema,
+  ImageGenerationSupportSchema,
+  MODALITY,
   MODEL_CAPABILITY,
   objectValues,
   REASONING_EFFORT,
+  ReasoningControlSchema,
 } from '@cherrystudio/provider-registry';
 import * as z from 'zod';
 
+// Re-export const objects for consumers
+export {
+  CANONICAL_PARAM_KEY,
+  CURRENCY,
+  ENDPOINT_TYPE,
+  endpointImpliedCapability,
+  ImageGenerationModeSchema,
+  MODALITY,
+  MODEL_CAPABILITY,
+  objectValues,
+  REASONING_EFFORT,
+};
+
+// Re-export types for consumers
 export type {
   CanonicalParamKey,
   Currency,
@@ -31,83 +63,19 @@ export type {
   ReasoningEffort,
   SupportSpec,
 };
-export { CURRENCY, ENDPOINT_TYPE, MODEL_CAPABILITY, objectValues, REASONING_EFFORT };
 
-export const UNIQUE_MODEL_ID_SEPARATOR = '::';
-const RESERVED_UNIQUE_MODEL_ID_ROUTE_CHARS = ['?', '#'] as const;
-
-export type UniqueModelId = `${string}${typeof UNIQUE_MODEL_ID_SEPARATOR}${string}`;
-
-export function isUniqueModelId(value: unknown): value is UniqueModelId {
-  return typeof value === 'string' && value.includes(UNIQUE_MODEL_ID_SEPARATOR);
-}
-
-export const UniqueModelIdSchema = z.custom<UniqueModelId>(
-  (value) => {
-    if (typeof value !== 'string') {
-      return false;
-    }
-
-    const index = value.indexOf(UNIQUE_MODEL_ID_SEPARATOR);
-    if (index <= 0) {
-      return false;
-    }
-
-    const modelId = value.slice(index + UNIQUE_MODEL_ID_SEPARATOR.length);
-    if (modelId.length === 0) {
-      return false;
-    }
-
-    return !RESERVED_UNIQUE_MODEL_ID_ROUTE_CHARS.some((char) => modelId.includes(char));
-  },
-  { message: `Must be a valid UniqueModelId (providerId${UNIQUE_MODEL_ID_SEPARATOR}modelId)` },
-);
-
-export function createUniqueModelId(providerId: string, modelId: string): UniqueModelId {
-  if (providerId.length === 0) {
-    throw new Error('providerId cannot be empty');
-  }
-
-  if (providerId.includes(UNIQUE_MODEL_ID_SEPARATOR)) {
-    throw new Error(`providerId cannot contain "${UNIQUE_MODEL_ID_SEPARATOR}": ${providerId}`);
-  }
-
-  if (modelId.length === 0) {
-    throw new Error('modelId cannot be empty');
-  }
-
-  const reservedChar = RESERVED_UNIQUE_MODEL_ID_ROUTE_CHARS.find((char) => modelId.includes(char));
-  if (reservedChar) {
-    throw new Error(
-      `modelId cannot contain reserved route character "${reservedChar}": ${modelId}`,
-    );
-  }
-
-  return `${providerId}${UNIQUE_MODEL_ID_SEPARATOR}${modelId}`;
-}
-
-export function parseUniqueModelId(uniqueId: UniqueModelId) {
-  const index = uniqueId.indexOf(UNIQUE_MODEL_ID_SEPARATOR);
-  if (index === -1) {
-    throw new Error(`Invalid UniqueModelId format: ${uniqueId}`);
-  }
-
-  return {
-    modelId: uniqueId.slice(index + UNIQUE_MODEL_ID_SEPARATOR.length),
-    providerId: uniqueId.slice(0, index),
-  };
-}
-
+/** Price per token schema */
 export const PricePerTokenSchema = z.object({
-  currency: z.enum(objectValues(CURRENCY)).default(CURRENCY.USD).optional(),
   perMillionTokens: z.number().nonnegative().nullable(),
+  currency: z.enum(objectValues(CURRENCY)).default(CURRENCY.USD).optional(),
 });
 
+/** Thinking token limits */
 export const ThinkingTokenLimitsSchema = z
   .object({
-    default: z.number().nonnegative().optional(),
-    max: z.number().positive().optional(),
     min: z.number().nonnegative().optional(),
+    max: z.number().positive().optional(),
+    default: z.number().nonnegative().optional(),
   })
   .refine(
     (limits) => limits.min === undefined || limits.max === undefined || limits.min <= limits.max,
@@ -117,40 +85,210 @@ export const ThinkingTokenLimitsSchema = z
     },
   );
 
-export const ReasoningEffortSchema = z.enum(objectValues(REASONING_EFFORT));
+/** Reasoning effort levels */
+const ReasoningEffortSchema = z.enum(objectValues(REASONING_EFFORT));
 
-export const ReasoningConfigSchema = z.object({
-  interleaved: z.boolean().optional(),
-  supportedEfforts: z.array(ReasoningEffortSchema).optional(),
+/** Common reasoning fields shared across all reasoning type variants */
+const CommonReasoningFieldsSchema = {
+  /** Source declaration of the model's reasoning knobs (effort/budget/toggle). */
+  controls: z.array(ReasoningControlSchema).optional(),
   thinkingTokenLimits: ThinkingTokenLimitsSchema.optional(),
-  type: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  /** Endpoint-projected choices exposed to the renderer. */
+  selectableEfforts: z.array(ReasoningEffortSchema).optional(),
+  /** Mobile compatibility alias retained while callers move to selectableEfforts. */
+  supportedEfforts: z.array(ReasoningEffortSchema).optional(),
+  /** What the API does when no reasoning param is sent. */
+  defaultEffort: ReasoningEffortSchema.optional(),
+  interleaved: z.boolean().optional(),
+};
+
+/** Parameter support (DB form) */
+const NumericRangeSchema = z.object({
+  min: z.number(),
+  max: z.number(),
+});
+
+export const ParameterSupportDbSchema = z.object({
+  temperature: z
+    .object({ supported: z.boolean(), range: NumericRangeSchema.optional() })
+    .optional(),
+  topP: z.object({ supported: z.boolean(), range: NumericRangeSchema.optional() }).optional(),
+  topK: z.object({ supported: z.boolean(), range: NumericRangeSchema.optional() }).optional(),
+  frequencyPenalty: z.boolean().optional(),
+  presencePenalty: z.boolean().optional(),
+  maxTokens: z.boolean().optional(),
+  stopSequences: z.boolean().optional(),
+  systemMessage: z.boolean().optional(),
+});
+
+/** Separator used in UniqueModelId */
+export const UNIQUE_MODEL_ID_SEPARATOR = '::';
+const RESERVED_UNIQUE_MODEL_ID_ROUTE_CHARS = ['?', '#'] as const;
+
+/** UniqueModelId type: "providerId::modelId" */
+export type UniqueModelId = `${string}${typeof UNIQUE_MODEL_ID_SEPARATOR}${string}`;
+
+/**
+ * Syntactic check for "looks like an encoded UniqueModelId" — value is a
+ * string and contains the separator. Permissive on purpose: empty providerId
+ * or modelId parts are accepted here so handler boundaries that legitimately
+ * forward partial ids (e.g. delete-by-prefix probes) can use this as a cheap
+ * upfront guard. For round-trip-strict validation (matches the contract of
+ * `createUniqueModelId`), use `UniqueModelIdSchema`.
+ */
+export function isUniqueModelId(value: unknown): value is UniqueModelId {
+  return typeof value === 'string' && value.includes(UNIQUE_MODEL_ID_SEPARATOR);
+}
+
+/**
+ * Zod schema for UniqueModelId — the strict form that mirrors
+ * `createUniqueModelId`'s contract: separator at a real position, both parts
+ * non-empty, and no reserved route characters in the modelId. Used at API
+ * boundaries that accept fully-formed ids in DTO bodies.
+ */
+export const UniqueModelIdSchema = z.custom<UniqueModelId>(
+  (value) => {
+    if (typeof value !== 'string') return false;
+    const idx = value.indexOf(UNIQUE_MODEL_ID_SEPARATOR);
+    if (idx <= 0) return false;
+    const modelId = value.slice(idx + UNIQUE_MODEL_ID_SEPARATOR.length);
+    if (modelId.length === 0) return false;
+    return !RESERVED_UNIQUE_MODEL_ID_ROUTE_CHARS.some((char) => modelId.includes(char));
+  },
+  { message: `Must be a valid UniqueModelId (providerId${UNIQUE_MODEL_ID_SEPARATOR}modelId)` },
+);
+
+/**
+ * Create a UniqueModelId from provider and model IDs.
+ * @throws Error with a per-field reason when either id is empty, providerId
+ * contains the separator, or modelId contains a reserved route character.
+ */
+export function createUniqueModelId(providerId: string, modelId: string): UniqueModelId {
+  if (providerId.length === 0) {
+    throw new Error('providerId cannot be empty');
+  }
+  if (providerId.includes(UNIQUE_MODEL_ID_SEPARATOR)) {
+    throw new Error(`providerId cannot contain "${UNIQUE_MODEL_ID_SEPARATOR}": ${providerId}`);
+  }
+  if (modelId.length === 0) {
+    throw new Error('modelId cannot be empty');
+  }
+  const reservedChar = RESERVED_UNIQUE_MODEL_ID_ROUTE_CHARS.find((char) => modelId.includes(char));
+  if (reservedChar) {
+    throw new Error(
+      `modelId cannot contain reserved route character "${reservedChar}": ${modelId}`,
+    );
+  }
+  return `${providerId}${UNIQUE_MODEL_ID_SEPARATOR}${modelId}`;
+}
+
+/**
+ * Parse a UniqueModelId into its components — splits on the FIRST separator.
+ * Same permissive semantics as `isUniqueModelId`: empty `providerId` or
+ * `modelId` parts pass through, callers decide whether to reject them. For
+ * strict, fully-formed validation use `UniqueModelIdSchema`.
+ *
+ * @throws Error if the value does not contain `${UNIQUE_MODEL_ID_SEPARATOR}`.
+ */
+export function parseUniqueModelId(uniqueId: UniqueModelId): {
+  providerId: string;
+  modelId: string;
+} {
+  const idx = uniqueId.indexOf(UNIQUE_MODEL_ID_SEPARATOR);
+  if (idx === -1) {
+    throw new Error(`Invalid UniqueModelId format: ${uniqueId}`);
+  }
+  return {
+    providerId: uniqueId.slice(0, idx),
+    modelId: uniqueId.slice(idx + UNIQUE_MODEL_ID_SEPARATOR.length),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UI Tag Constants
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Capabilities surfaced as filter tags in the UI */
+export const UI_CAPABILITY_TAGS = [
+  MODEL_CAPABILITY.IMAGE_RECOGNITION,
+  MODEL_CAPABILITY.IMAGE_GENERATION,
+  MODEL_CAPABILITY.AUDIO_RECOGNITION,
+  MODEL_CAPABILITY.AUDIO_GENERATION,
+  MODEL_CAPABILITY.VIDEO_RECOGNITION,
+  MODEL_CAPABILITY.VIDEO_GENERATION,
+  MODEL_CAPABILITY.EMBEDDING,
+  MODEL_CAPABILITY.REASONING,
+  MODEL_CAPABILITY.FUNCTION_CALL,
+  MODEL_CAPABILITY.WEB_SEARCH,
+  MODEL_CAPABILITY.RERANK,
+] as const;
+
+/** A capability that is shown as a UI tag */
+export type ModelCapabilityTag = (typeof UI_CAPABILITY_TAGS)[number];
+
+/** All UI-visible model tags: capability-derived + business tags */
+export type ModelTag = ModelCapabilityTag | 'free';
+
+/** All possible ModelTag values (for iteration) */
+export const ALL_MODEL_TAGS: readonly ModelTag[] = [...UI_CAPABILITY_TAGS, 'free'] as const;
+
+export type ThinkingTokenLimits = z.infer<typeof ThinkingTokenLimitsSchema>;
+
+/** Persistable intrinsic reasoning metadata. Provider wire details are excluded. */
+export const ReasoningConfigSchema = z.object({
+  ...CommonReasoningFieldsSchema,
 });
 export type ReasoningConfig = z.infer<typeof ReasoningConfigSchema>;
 
-export const NumericRangeSchema = z.object({
-  max: z.number(),
-  min: z.number(),
-});
+/** Runtime form: renderer choices are always materialized, even when empty. */
+export const RuntimeReasoningSchema = ReasoningConfigSchema.required({ selectableEfforts: true });
 
-export const ParameterSupportSchema = z.object({
-  frequencyPenalty: z.boolean().optional(),
-  maxTokens: z.boolean().optional(),
-  presencePenalty: z.boolean().optional(),
-  stopSequences: z.boolean().optional(),
-  systemMessage: z.boolean().optional(),
+export type RuntimeReasoning = z.infer<typeof RuntimeReasoningSchema>;
+
+export type ParameterSupport = z.infer<typeof ParameterSupportDbSchema>;
+
+/** Runtime form: strict parameter support with more fields (not derivable from DB form — different shape) */
+export const RuntimeParameterSupportSchema = z.object({
   temperature: z
-    .object({ range: NumericRangeSchema.optional(), supported: z.boolean() })
+    .object({
+      supported: z.boolean(),
+      min: z.number(),
+      max: z.number(),
+      default: z.number().optional(),
+    })
     .optional(),
-  topK: z.object({ range: NumericRangeSchema.optional(), supported: z.boolean() }).optional(),
-  topP: z.object({ range: NumericRangeSchema.optional(), supported: z.boolean() }).optional(),
+  topP: z
+    .object({
+      supported: z.boolean(),
+      min: z.number(),
+      max: z.number(),
+      default: z.number().optional(),
+    })
+    .optional(),
+  topK: z
+    .object({
+      supported: z.boolean(),
+      min: z.number(),
+      max: z.number(),
+    })
+    .optional(),
+  frequencyPenalty: z.boolean().optional(),
+  presencePenalty: z.boolean().optional(),
+  maxTokens: z.boolean(),
+  stopSequences: z.boolean(),
+  systemMessage: z.boolean(),
 });
-export type ParameterSupport = z.infer<typeof ParameterSupportSchema>;
+export type RuntimeParameterSupport = z.infer<typeof RuntimeParameterSupportSchema>;
+
+/** Pricing tier imported from catalog (source of truth) */
+export const PricingTierSchema = PricePerTokenSchema;
+export type PricingTier = z.infer<typeof PricingTierSchema>;
 
 export const RuntimeModelPricingSchema = z.object({
-  cacheRead: PricePerTokenSchema.optional(),
-  cacheWrite: PricePerTokenSchema.optional(),
   input: PricePerTokenSchema,
   output: PricePerTokenSchema,
+  cacheRead: PricePerTokenSchema.optional(),
+  cacheWrite: PricePerTokenSchema.optional(),
   perImage: z
     .object({
       price: z.number(),
@@ -160,38 +298,88 @@ export const RuntimeModelPricingSchema = z.object({
   perMinute: z
     .object({
       price: z.number(),
-      unit: z.enum(['audio', 'video']).optional(),
     })
     .optional(),
 });
 export type RuntimeModelPricing = z.infer<typeof RuntimeModelPricingSchema>;
 
-export type Model = {
-  apiModelId?: string;
-  capabilities: ModelCapability[];
-  contextWindow?: number;
-  customEndpointUrl?: string;
-  description?: string;
-  endpointTypes?: EndpointType[];
-  family?: string;
-  group?: string;
-  id: UniqueModelId;
-  inputModalities?: Modality[];
-  isDeprecated: boolean;
-  isEnabled: boolean;
-  isHidden: boolean;
-  maxInputTokens?: number;
-  maxOutputTokens?: number;
-  modelId: string;
-  name: string;
-  outputModalities?: Modality[];
-  ownedBy?: string;
-  parameters?: ParameterSupport;
-  presetModelId?: string;
-  pricing?: RuntimeModelPricing;
-  providerId: string;
-  reasoning?: ReasoningConfig;
-  imageGeneration?: ImageGenerationSupport;
-  replaceWith?: UniqueModelId;
-  supportsStreaming: boolean;
-};
+export const ModelSchema = z.object({
+  /** Unique identifier: "providerId::modelId" */
+  id: UniqueModelIdSchema,
+  /** Provider ID */
+  providerId: z.string(),
+  /** Raw provider model id retained for mobile call sites. */
+  modelId: z.string(),
+  /** API Model ID - The actual ID used when calling the provider's API */
+  apiModelId: z.string().optional(),
+  /** Preset catalog model ID this row was created from, if any */
+  presetModelId: z.string().nullable().optional(),
+
+  // Display Information
+  /** Display name */
+  name: z.string(),
+  /** Description */
+  description: z.string().optional(),
+  /** UI grouping */
+  group: z.string().optional(),
+  /** Model family */
+  family: z.string().optional(),
+  /** Organization that owns the model */
+  ownedBy: z.string().optional(),
+
+  // Capabilities
+  /** Final capability list after all merges */
+  capabilities: z.array(z.enum(objectValues(MODEL_CAPABILITY))),
+  /** Supported input modalities */
+  inputModalities: z.array(z.enum(objectValues(MODALITY))).optional(),
+  /** Supported output modalities */
+  outputModalities: z.array(z.enum(objectValues(MODALITY))).optional(),
+
+  // Configuration
+  /** Context window size */
+  contextWindow: z.number().optional(),
+  /** Maximum output tokens */
+  maxOutputTokens: z.number().optional(),
+  /** Maximum input tokens */
+  maxInputTokens: z.number().optional(),
+  /** Supported endpoint types */
+  endpointTypes: z.array(z.enum(objectValues(ENDPOINT_TYPE))).optional(),
+  customEndpointUrl: z.string().optional(),
+  /** Whether streaming is supported */
+  supportsStreaming: z.boolean(),
+  /** Reasoning configuration */
+  reasoning: RuntimeReasoningSchema.optional(),
+  /** Whether this exact provider-model pair supports the provider's Fast transport. */
+  supportsFastMode: z.boolean().optional(),
+  /** Parameter support */
+  parameterSupport: RuntimeParameterSupportSchema.optional(),
+  /** Persisted parameter support compatibility name. */
+  parameters: ParameterSupportDbSchema.optional(),
+
+  pricing: RuntimeModelPricingSchema.optional(),
+
+  /**
+   * Painting-page metadata (per-mode `supports.*` widget specs).
+   * Sourced from the registry preset at read time — not persisted in
+   * user_model. Lets the painting page render the model's form
+   * (per-vendor sizes, custom-size range) without a side-channel
+   * catalog fetch.
+   */
+  imageGeneration: ImageGenerationSupportSchema.optional(),
+
+  // Status
+  /** Whether this model is available for use */
+  isEnabled: z.boolean(),
+  /** Whether this model is hidden from lists */
+  isHidden: z.boolean(),
+  /** Whether this model has been deprecated by provider sync */
+  isDeprecated: z.boolean().optional(),
+  /** Replacement model if this one is deprecated */
+  replaceWith: UniqueModelIdSchema.optional(),
+
+  // UI metadata
+  /** User notes about this model */
+  notes: z.string().optional(),
+});
+
+export type Model = z.infer<typeof ModelSchema>;

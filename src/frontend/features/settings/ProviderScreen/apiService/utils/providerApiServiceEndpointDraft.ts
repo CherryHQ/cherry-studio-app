@@ -37,3 +37,10 @@ export function canAddEndpointToDraft(draft: EndpointDraft, endpoint: EndpointTy
     !draft.visibleEndpointTypes.includes(endpoint)
   );
 }
+
+export function canUseEndpointAsPrimary(draft: EndpointDraft, endpoint: EndpointType): boolean {
+  return (
+    draft.visibleEndpointTypes.includes(endpoint) &&
+    Boolean(draft.baseUrlByEndpoint[endpoint]?.trim())
+  );
+}

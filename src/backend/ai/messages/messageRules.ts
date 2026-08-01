@@ -4,7 +4,7 @@
  * Ported from desktop's `src/main/ai/messages/messageRules.ts`.
  */
 
-import { convertToModelMessages, type ModelMessage, type UIMessage } from 'ai';
+import { convertToModelMessages, type ModelMessage, type ToolSet, type UIMessage } from 'ai';
 
 import { ALL_MEDIA, type MediaCapabilities, stripUnsupportedMedia } from './messageCapabilities';
 
@@ -76,8 +76,12 @@ export function ensureNonEmptyAssistantContent(messages: ModelMessage[]): ModelM
 export async function toModelMessages(
   messages: UIMessage[],
   caps?: MediaCapabilities,
+  tools?: ToolSet,
 ): Promise<ModelMessage[]> {
   const shaped = stripUnsupportedMedia(messages, caps ?? ALL_MEDIA);
-  const model = await convertToModelMessages(shaped, { ignoreIncompleteToolCalls: true });
+  const model = await convertToModelMessages(shaped, {
+    ignoreIncompleteToolCalls: true,
+    tools,
+  });
   return ensureNonEmptyAssistantContent(coalesceConsecutiveSameRole(model));
 }

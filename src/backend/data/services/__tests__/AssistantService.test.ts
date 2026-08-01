@@ -8,7 +8,10 @@ import type { PinService } from '../PinService';
 import type { TagService } from '../TagService';
 import { applyMoves, insertWithOrderKey } from '../utils/orderKey';
 
-jest.mock('uuid', () => ({ v7: jest.fn(() => '00000000-0000-7000-8000-000000000000') }));
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
+  v7: jest.fn(() => '00000000-0000-7000-8000-000000000000'),
+}));
 jest.mock('../utils/orderKey', () => ({
   applyMoves: jest.fn(),
   insertWithOrderKey: jest.fn(),
@@ -205,6 +208,7 @@ function createAssistantRow(overrides: Partial<AssistantRow> = {}): AssistantRow
     deletedAt: null,
     description: '',
     emoji: '😀',
+    groupId: null,
     id: '00000000-0000-4000-8000-000000000001',
     modelId: null,
     name: 'Assistant',

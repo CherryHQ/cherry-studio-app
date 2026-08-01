@@ -5,6 +5,7 @@ import type { Provider } from '@/shared/data/types/provider';
 
 import {
   canAddEndpointToDraft,
+  canUseEndpointAsPrimary,
   createEndpointDraft,
   type EndpointDraft,
 } from '../utils/providerApiServiceEndpointDraft';
@@ -58,10 +59,19 @@ export function useProviderApiServiceEndpointDraft(provider: Provider) {
     });
   }, []);
 
+  const updatePrimaryEndpoint = useCallback((endpoint: EndpointType) => {
+    setDraft((current) =>
+      canUseEndpointAsPrimary(current, endpoint)
+        ? { ...current, primaryEndpoint: endpoint }
+        : current,
+    );
+  }, []);
+
   return {
     addEndpoint,
     draft,
     removeEndpoint,
     updateBaseUrl,
+    updatePrimaryEndpoint,
   };
 }

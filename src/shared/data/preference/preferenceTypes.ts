@@ -1,3 +1,5 @@
+import type { BootConfigPreferenceKeys } from '@/shared/data/bootConfig/bootConfigTypes';
+import type { ShortcutBinding } from '@/shared/utils/shortcut';
 import * as z from 'zod';
 
 import type { PreferenceSchemas } from './preferenceSchemas';
@@ -7,6 +9,17 @@ export type PreferenceDefaultScopeType = PreferenceSchemas['default'];
 export type PreferenceKeyType = keyof PreferenceDefaultScopeType;
 export type PermissionPreferenceKey = Extract<PreferenceKeyType, `permissions.${string}`>;
 
+/** Unified type: DB-backed preferences + file-backed boot config (BootConfig.* prefix) */
+export type UnifiedPreferenceType = PreferenceDefaultScopeType & BootConfigPreferenceKeys;
+export type UnifiedPreferenceKeyType = keyof UnifiedPreferenceType;
+
+/**
+ * Result type for getMultipleRaw - maps requested keys to their values
+ */
+export type UnifiedPreferenceMultipleResultType<K extends UnifiedPreferenceKeyType> = {
+  [P in K]: UnifiedPreferenceType[P];
+};
+
 export type PreferenceUpdateOptions = {
   optimistic: boolean;
 };
@@ -14,9 +27,14 @@ export type PreferenceUpdateOptions = {
 export type PermissionMode = 'never' | 'ask' | 'always';
 
 export type PreferenceShortcutType = {
-  binding: string[];
+  binding: ShortcutBinding;
   enabled: boolean;
 };
+
+/** Global menu presentation mode: native system menus or Cherry custom menus. */
+export type MenuPresentationMode = 'native' | 'cherry';
+
+export type OnboardingProviderSetupStatus = 'pending' | 'completed' | 'skipped';
 
 export enum SelectionTriggerMode {
   Selected = 'selected',
@@ -74,26 +92,50 @@ export type SendMessageShortcut =
 
 export type AssistantTabSortType = 'tags' | 'list';
 
-export type SidebarIcon =
-  | 'assistants'
-  | 'agents'
-  | 'store'
-  | 'paintings'
-  | 'translate'
-  | 'mini_app'
-  | 'knowledge'
-  | 'files'
-  | 'code_tools'
-  | 'notes'
-  | 'openclaw';
+export type TopicDisplayMode = 'time' | 'assistant';
+
+export type TopicTabPosition = 'left' | 'right';
+
+export type AgentSessionDisplayMode = 'time' | 'agent' | 'workdir';
+
+export const SIDEBAR_FAVORITES = [
+  'assistants',
+  'agents',
+  'paintings',
+  'translate',
+  'mini_app',
+  'knowledge',
+  'files',
+  'code_tools',
+  'notes',
+  'openclaw',
+] as const;
+
+export type SidebarFavorite = (typeof SIDEBAR_FAVORITES)[number];
+
+/**
+ * Group-ready sidebar storage contract.
+ *
+ * Leaf items are stored as tagged objects, not bare ids. Keep the `type` values,
+ * id semantics, and one ordered heterogeneous top-level array stable: a future
+ * `group` variant can then be added as another top-level item without migrating
+ * existing flat `SidebarFavoriteItem[]` values.
+ */
+export type SidebarFavoriteItem =
+  | {
+      type: 'app';
+      id: SidebarFavorite;
+    }
+  | {
+      type: 'mini_app';
+      id: string;
+    };
 
 export type AssistantIconType = 'model' | 'emoji' | 'none';
 
 export type ProxyMode = 'system' | 'custom' | 'none';
 
 export type MultiModelFoldDisplayMode = 'expanded' | 'compact';
-
-export type MathEngine = 'KaTeX' | 'MathJax' | 'none';
 
 export enum UpgradeChannel {
   LATEST = 'latest', // 最新稳定版本
@@ -130,6 +172,8 @@ export const PersistedLangCodeSchema = z
   .regex(/^[a-z]{2,3}(-[a-z]{2,4})?$/)
   .brand<'PersistedLangCode'>();
 export type PersistedLangCode = z.infer<typeof PersistedLangCodeSchema>;
+export const parsePersistedLangCode = (value: string): PersistedLangCode =>
+  PersistedLangCodeSchema.parse(value);
 
 const TranslateLangCodePatternSchema = z.string().regex(/^[a-z]{2,3}(-[a-z]{2,4})?$/);
 
@@ -144,8 +188,18 @@ export const TranslateLangCodeSchema = z.union([
   TranslateLangCodePatternSchema,
 ]);
 export type TranslateLangCode = z.infer<typeof TranslateLangCodeSchema>;
+export const parseTranslateLangCode = (value: string): TranslateLangCode =>
+  TranslateLangCodeSchema.parse(value);
+export const isTranslateLangCode = (value: unknown): value is TranslateLangCode =>
+  TranslateLangCodeSchema.safeParse(value).success;
 export type TranslateSourceLanguage = TranslateLangCode | 'auto';
 export type TranslateBidirectionalPair = [TranslateLangCode, TranslateLangCode];
+export const parseTranslateBidirectionalPair = (
+  value: readonly [string, string],
+): TranslateBidirectionalPair => [
+  parseTranslateLangCode(value[0]),
+  parseTranslateLangCode(value[1]),
+];
 
 // ============================================================================
 // WebSearch Types
@@ -208,11 +262,11 @@ export interface WebSearchProvider {
   /** API keys (from user overrides) */
   apiKeys: string[];
   /** Capability API settings (user override merged into preset capabilities) */
-  capabilities: {
+  capabilities: Array<{
     feature: WebSearchCapability;
     /** Can be empty for self-hosted or hostless providers; resolve and validate via resolveProviderApiHost. */
     apiHost?: string;
-  }[];
+  }>;
   /** Search engines (from user overrides) */
   engines: string[];
   /** Basic auth username (from user overrides) */
@@ -225,41 +279,50 @@ export interface WebSearchProvider {
 // CodeCLI Types
 // ============================================================================
 
-export enum codeCLI {
-  qwenCode = 'qwen-code',
-  claudeCode = 'claude-code',
-  geminiCli = 'gemini-cli',
-  openaiCodex = 'openai-codex',
-  iFlowCli = 'iflow-cli',
-  githubCopilotCli = 'github-copilot-cli',
-  kimiCli = 'kimi-cli',
-  openCode = 'opencode',
-}
+import type { UniqueModelId } from '@/shared/data/types/model';
+import { CodeCli } from '@/shared/types/codeCli';
 
-export const CODE_CLI_IDS = Object.values(codeCLI) as unknown as readonly [
-  'qwen-code',
+export const CODE_CLI_IDS = Object.values(CodeCli) as unknown as readonly [
   'claude-code',
-  'gemini-cli',
   'openai-codex',
-  'iflow-cli',
-  'github-copilot-cli',
-  'kimi-cli',
   'opencode',
+  'openclaw',
+  'gemini-cli',
+  'qwen-code',
+  'kimi-code',
+  'qoder-cli',
+  'github-copilot-cli',
 ];
 
 export type CodeCliId = (typeof CODE_CLI_IDS)[number];
 
-export type CodeCliOverride = {
-  enabled?: boolean;
-  modelId?: string | null;
-  envVars?: string;
-  /** Terminal app name — should match `terminalApps` enum values */
-  terminal?: string;
-  currentDirectory?: string;
-  directories?: string[];
-};
+/** A per-tool provider entry, keyed by providerId in `CodeCliToolState.providers`. */
+export interface CliProviderConfig {
+  /**
+   * Unique model id ("providerId::modelId"), or null for the two legal
+   * model-less states: the own-login placeholder and a Claude detailed-models
+   * config with no common model.
+   */
+  modelId: UniqueModelId | null;
+  /** User-edited tool-specific config blob. */
+  config?: Record<string, unknown>;
+  /** Sort order in the provider list (lower = first). */
+  sortIndex?: number;
+}
 
-export type CodeCliOverrides = Partial<Record<CodeCliId, CodeCliOverride>>;
+/** Per-CLI-tool state: per-provider configs (keyed by providerId) + the active one. */
+export interface CodeCliToolState {
+  providers: Record<string, CliProviderConfig>;
+  /** Currently enabled providerId (single-select). */
+  current: string | null;
+  /** Terminal app — an id from `code_cli.get_available_terminals`. */
+  terminal?: string;
+  /** Working directory for this CLI tool (shared across all its providers). */
+  directory?: string;
+}
+
+/** Preference value for `feature.code_cli.configs`. */
+export type CodeCliConfigs = Partial<Record<CodeCliId, CodeCliToolState>>;
 
 // ============================================================================
 // WebSearch Compression Types (v2 - Flattened)
@@ -287,6 +350,7 @@ export const FILE_PROCESSOR_IDS = [
   'tesseract',
   'system',
   'paddleocr',
+  'local-paddleocr',
   'ovocr',
   'mineru',
   'doc2x',
@@ -321,3 +385,19 @@ export type FileProcessorOverrides = Partial<Record<FileProcessorId, FileProcess
 export type MiniAppRegion = 'CN' | 'Global';
 
 export type MiniAppRegionFilter = 'auto' | MiniAppRegion;
+
+/** User-configurable settings for BinaryManager's isolated mise install environment. */
+export type BinaryInstallSettings = {
+  githubMirror: string;
+  githubToken: string;
+  npmRegistry: string;
+  pipIndexUrl: string;
+  verifySignatures: boolean;
+};
+
+/** A user-added custom tool definition persisted in the BinaryManager custom registry. */
+export type CustomToolDefinition = {
+  name: string;
+  tool: string;
+  requestedVersion?: string;
+};

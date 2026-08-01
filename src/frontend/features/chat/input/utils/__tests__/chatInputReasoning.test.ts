@@ -34,8 +34,7 @@ describe('chat input reasoning', () => {
   test('maps model-supported reasoning efforts into input options', () => {
     const model = createModel({
       reasoning: {
-        supportedEfforts: [REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
-        type: 'openai-chat',
+        selectableEfforts: [REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
       },
     });
 
@@ -49,8 +48,7 @@ describe('chat input reasoning', () => {
   test('normalizes xhigh model options to the mobile max effort', () => {
     const model = createModel({
       reasoning: {
-        supportedEfforts: ['xhigh' as typeof REASONING_EFFORT.MAX],
-        type: 'openai-chat',
+        selectableEfforts: [REASONING_EFFORT.XHIGH],
       },
     });
 

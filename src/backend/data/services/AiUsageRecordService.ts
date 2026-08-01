@@ -1056,6 +1056,14 @@ async function getAiUsageRecordTimeline(
 export class AiUsageRecordService {
   constructor(private readonly dbService: DbService) {}
 
+  async getMessageUsageProjection(ref: MessageRef): Promise<MessageUsageProjection> {
+    return await getMessageUsageProjectionTx(this.dbService.getDb(), ref);
+  }
+
+  async refreshMessageProjection(ref: MessageRef): Promise<void> {
+    await this.dbService.withWriteTx((tx) => rebuildMessageUsageProjectionTx(tx, ref));
+  }
+
   async recordInvocation(input: RecordAiInvocationInput): Promise<void> {
     await this.recordInvocations([input]);
   }

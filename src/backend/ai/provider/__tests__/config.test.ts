@@ -90,6 +90,47 @@ describe('providerToAiSdkConfig', () => {
     expect(config.providerSettings.fetch).toBeUndefined();
   });
 
+  it('adds X-Source only to Radeon Cloud chat request headers', async () => {
+    const radeonProvider = createProvider({
+      id: 'radeon-cloud',
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          adapterFamily: 'openai-compatible',
+          baseUrl: 'https://developer.amd.com.cn/radeon/v1',
+        },
+      },
+    });
+    const openAIProvider = createProvider({
+      id: 'openai',
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          adapterFamily: 'openai-compatible',
+          baseUrl: 'https://api.openai.com/v1',
+        },
+      },
+    });
+
+    const radeonConfig = await providerToAiSdkConfig(
+      radeonProvider,
+      createModel(radeonProvider.id, 'DeepSeek-V4-Flash'),
+      createRuntime(),
+    );
+    const openAIConfig = await providerToAiSdkConfig(
+      openAIProvider,
+      createModel(openAIProvider.id, 'gpt-4o'),
+      createRuntime(),
+    );
+
+    expect(radeonConfig.providerSettings.headers).toMatchObject({
+      'X-Source': 'cherry-studio',
+    });
+    expect(openAIConfig.providerSettings.headers).not.toHaveProperty('X-Source');
+    expect(radeonConfig.providerSettings).not.toHaveProperty('source');
+    expect(radeonConfig.providerSettings).not.toHaveProperty('request_source');
+  });
+
   it('returns the exact serving credential receipt with the provider config', async () => {
     const provider = createProvider({ id: 'custom-openai' });
     const model = createModel(provider.id, 'custom-model');

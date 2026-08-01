@@ -3,6 +3,7 @@ import { DefaultPreferences } from '@/shared/data/preference';
 
 import { hashObject } from '../hashObject';
 import type { DatabaseSeeder } from '../types';
+import { collectPreferenceValueMigrations } from './preferenceValueMigrations';
 
 export class PreferenceSeeder implements DatabaseSeeder {
   readonly name = 'preference';
@@ -19,6 +20,7 @@ export class PreferenceSeeder implements DatabaseSeeder {
       .select({
         scope: preferenceTable.scope,
         key: preferenceTable.key,
+        value: preferenceTable.value,
       })
       .from(preferenceTable);
 
@@ -31,7 +33,11 @@ export class PreferenceSeeder implements DatabaseSeeder {
       scope: string;
       key: string;
       value: unknown;
-    }[] = [];
+    }[] = collectPreferenceValueMigrations(preferences);
+
+    for (const preference of newPreferences) {
+      existingPreferences.add(`${preference.scope}.${preference.key}`);
+    }
 
     // Process each scope in DefaultPreferences.
     for (const [scope, scopeData] of Object.entries(DefaultPreferences)) {

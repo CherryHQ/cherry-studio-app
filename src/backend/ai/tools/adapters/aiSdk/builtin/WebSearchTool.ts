@@ -5,6 +5,8 @@ import {
   isPermanentWebSearchConfigError,
 } from '@/backend/services/webSearch/utils/errors';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
+import { citeId, newCitePrefix } from '@/backend/ai/utils/citationIds';
+import { markTrustedLocalToolTerminalFailure } from '@/backend/ai/runtime/aiSdk/loop/localToolTerminalOutcome';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { ToolEntry } from '../types';
@@ -27,15 +29,16 @@ Don't use for:
 - Math, code reasoning, or things you can answer from your training
 - Well-known facts unlikely to have changed
 
-You may call this multiple times with different queries to broaden coverage. Cite sources by [id] in
-your final answer.`;
+You may call this multiple times with different queries to broaden coverage.
+
+Cite: append [cite:id] immediately after each statement a result supports, using the result's exact \`id\` field.`;
 
 export const WEB_LOOKUP_ERROR_NOTE =
   'Web lookup failed (network/provider error); retry or inform the user.';
 
 const webSearchResultSchema = z.object({
   content: z.string(),
-  id: z.number().int().positive(),
+  id: z.union([z.string(), z.number().int().positive()]),
   title: z.string(),
   url: z.url(),
 });
@@ -69,9 +72,10 @@ export function createWebSearchTool(webSearchService: WebSearchService) {
           { signal: options.abortSignal },
         );
 
+        const prefix = newCitePrefix();
         return response.results.map((result, index) => ({
           content: result.content,
-          id: index + 1,
+          id: citeId(prefix, index),
           title: result.title,
           url: result.url,
         }));
@@ -82,11 +86,16 @@ export function createWebSearchTool(webSearchService: WebSearchService) {
 
         const message = error instanceof Error ? error.message : String(error);
         logger.warn('External web search failed', { error: message, query });
-        return {
-          error: isPermanentWebSearchConfigError(message)
-            ? WEB_SEARCH_PROVIDER_NOT_CONFIGURED_MESSAGE
-            : WEB_LOOKUP_ERROR_NOTE,
-        };
+        if (isPermanentWebSearchConfigError(message)) {
+          return markTrustedLocalToolTerminalFailure({
+            error: WEB_SEARCH_PROVIDER_NOT_CONFIGURED_MESSAGE,
+            i18nKey: 'web_search_provider_not_configured',
+            retryable: false as const,
+            terminal: true as const,
+            userMessage: WEB_SEARCH_PROVIDER_NOT_CONFIGURED_MESSAGE,
+          }) as { error: string };
+        }
+        return { error: WEB_LOOKUP_ERROR_NOTE };
       }
     },
     toModelOutput: ({ output }) =>

@@ -7,7 +7,7 @@ function compileTimeContract(client: ApiClient) {
     query: { limit: 20, q: 'work' },
   });
   const painting: Promise<Painting> = client.get('/paintings/painting-1');
-  const removed: Promise<boolean> = client.delete('/models/provider::model');
+  const removed: Promise<void> = client.delete('/models/provider::model');
 
   // @ts-expect-error topics only accepts its declared query fields
   void client.get('/topics', { query: { page: 1 } });

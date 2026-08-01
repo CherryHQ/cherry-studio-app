@@ -1,24 +1,17 @@
-import { ENDPOINT_TYPE, MODEL_CAPABILITY, REASONING_EFFORT } from '@cherrystudio/provider-registry';
+import {
+  ENDPOINT_TYPE,
+  MODEL_CAPABILITY,
+  REASONING_EFFORT,
+  REASONING_FORMAT_PROFILES,
+} from '@cherrystudio/provider-registry';
 
 import {
-  extractReasoningFormatTypes,
   mergePresetModel,
   ProviderRegistryService,
   providerRegistryService,
 } from '../ProviderRegistryService';
 
 describe('provider-registry-service', () => {
-  test('extracts typed reasoning formats from endpoint configs', () => {
-    expect(
-      extractReasoningFormatTypes({
-        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { reasoningFormatType: 'openai-chat' },
-        [ENDPOINT_TYPE.OPENAI_RESPONSES]: { reasoningFormatType: 'not-a-format' },
-      }),
-    ).toEqual({
-      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: 'openai-chat',
-    });
-  });
-
   test('merges preset model and provider override into runtime model', () => {
     const model = mergePresetModel(
       {
@@ -46,8 +39,7 @@ describe('provider-registry-service', () => {
         replaceWith: 'gpt-4o-mini',
       },
       'openai',
-      { [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: 'openai-chat' },
-      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      REASONING_FORMAT_PROFILES['openai-chat'].wire,
     );
 
     expect(model).toMatchObject({
@@ -60,8 +52,7 @@ describe('provider-registry-service', () => {
       providerId: 'openai',
       replaceWith: 'openai::gpt-4o-mini',
       reasoning: {
-        supportedEfforts: [REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
-        type: 'openai-chat',
+        selectableEfforts: [REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
       },
     });
   });
@@ -86,6 +77,31 @@ describe('provider-registry-service', () => {
     expect(
       providerRegistryService.getImageGenerationSupport('dashscope', 'qwen-image'),
     ).toBeDefined();
+  });
+
+  test('lists the seven Radeon Cloud provider-registry models', () => {
+    const models = providerRegistryService.listProviderRegistryModels({
+      providerId: 'radeon-cloud',
+    });
+
+    expect(models.map(({ presetModelId, apiModelId }) => [presetModelId, apiModelId])).toEqual([
+      ['deepseek-v4-flash', 'DeepSeek-V4-Flash'],
+      ['deepseek-v4-pro', 'DeepSeek-V4-Pro'],
+      ['glm-5-1', 'GLM-5.1'],
+      ['glm-5-2', 'GLM-5.2'],
+      ['gpt-oss-120b', 'gpt-oss-120b'],
+      ['kimi-k2-6', 'Kimi-K2.6'],
+      ['qwen3-6-35b-a3b', 'Qwen3.6-35B-A3B'],
+    ]);
+  });
+
+  test('loads Radeon Cloud after CherryIN while retaining mobile provider extensions', () => {
+    const providerIds = providerRegistryService.loadProviders().map(({ id }) => id);
+
+    expect(providerIds.slice(0, 2)).toEqual(['cherryin', 'radeon-cloud']);
+    expect(providerIds).toEqual(
+      expect.arrayContaining(['hunyuan', 'hyperbolic', 'infini', 'tencent-cloud-ti', 'yi']),
+    );
   });
 
   test('exposes provider model-list and auth metadata', () => {

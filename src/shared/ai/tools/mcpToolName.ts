@@ -27,6 +27,58 @@ export function toCamelCase(str: string): string {
   return result;
 }
 
+export type McpToolNameOptions = {
+  /** Prefix added before the name (e.g. `mcp__`). Must be identifier-safe. */
+  prefix?: string;
+  /** Delimiter between server and tool parts. Must be identifier-safe. */
+  delimiter?: string;
+  /** Maximum final name length, including a collision suffix. */
+  maxLength?: number;
+  /** Mutable set used to allocate a collision-free name. */
+  existingNames?: Set<string>;
+};
+
+/** Build a JavaScript-safe MCP name with configurable wire formatting. */
+export function buildMcpToolName(
+  serverName: string | undefined,
+  toolName: string,
+  options: McpToolNameOptions = {},
+): string {
+  const { prefix = '', delimiter = '_', maxLength, existingNames } = options;
+  const serverPart = serverName ? toCamelCase(serverName) : '';
+  const toolPart = toCamelCase(toolName);
+  const baseName = serverPart
+    ? `${prefix}${serverPart}${delimiter}${toolPart}`
+    : `${prefix}${toolPart}`;
+
+  if (!existingNames) {
+    return maxLength ? truncateToLength(baseName, maxLength) : baseName;
+  }
+
+  let name = maxLength ? truncateToLength(baseName, maxLength) : baseName;
+  let counter = 1;
+  while (existingNames.has(name)) {
+    const suffix = String(counter);
+    const truncatedBase = maxLength
+      ? truncateToLength(baseName, maxLength - suffix.length)
+      : baseName;
+    name = `${truncatedBase}${suffix}`;
+    counter += 1;
+  }
+
+  existingNames.add(name);
+  return name;
+}
+
+/** Generate the legacy `serverName_toolName` function-call identifier. */
+export function generateMcpToolFunctionName(
+  serverName: string | undefined,
+  toolName: string,
+  existingNames?: Set<string>,
+): string {
+  return buildMcpToolName(serverName, toolName, { existingNames });
+}
+
 const FUNCTION_CALL_TOOL_NAME_MAX_LENGTH = 63;
 /** `_` + a fixed-width base36 hash of the server name, reserved on truncation. */
 const SERVER_DISAMBIGUATOR_LENGTH = 7;
@@ -71,7 +123,7 @@ export function buildFunctionCallToolName(serverName: string, toolName: string):
   return `${body}${suffix}`;
 }
 
-type McpFunctionCallToolNameParts = {
+export type McpFunctionCallToolNameParts = {
   serverPart: string;
   toolPart: string;
 };
@@ -88,4 +140,17 @@ export function parseFunctionCallToolName(toolName: string): McpFunctionCallTool
     serverPart: rest.slice(0, delimiterIndex),
     toolPart: rest.slice(delimiterIndex + 2),
   };
+}
+
+/** Test whether a minted function-call id belongs to the named MCP server. */
+export function isFunctionCallToolNameForServer(serverName: string, toolId: string): boolean {
+  const serverPart = toCamelCase(serverName);
+  if (toolId.startsWith(`mcp__${serverPart}__`)) return true;
+
+  const suffix = `_${hashServerName(serverName)}`;
+  if (!toolId.endsWith(suffix)) return false;
+
+  const body = toolId.slice(0, toolId.length - suffix.length);
+  const serverCore = `mcp__${serverPart}`;
+  return serverCore.startsWith(body) || body.startsWith(serverCore);
 }

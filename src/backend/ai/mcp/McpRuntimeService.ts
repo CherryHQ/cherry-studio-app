@@ -229,7 +229,10 @@ export class McpRuntimeService {
    * tools are returned immediately while they refresh in the background.
    * Returns an empty list when nothing applies and never surfaces MCP failures.
    */
-  async getToolEntriesForAssistant(assistant: Assistant): Promise<ToolEntry[]> {
+  async getToolEntriesForAssistant(
+    assistant: Assistant,
+    selectedToolIds?: readonly string[],
+  ): Promise<ToolEntry[]> {
     let activeServers: StreamableHttpMcpServer[];
     try {
       ({ items: activeServers } = await this.deps.mcpServer.list({
@@ -250,6 +253,7 @@ export class McpRuntimeService {
     }));
     await this.warmColdToolCaches(preparedServers);
 
+    const selectedToolIdSet = selectedToolIds ? new Set(selectedToolIds) : undefined;
     const entries: ToolEntry[] = [];
     const registeredNames = new Set<string>();
     for (const { server, state } of preparedServers) {
@@ -269,6 +273,9 @@ export class McpRuntimeService {
         }
 
         const key = buildFunctionCallToolName(server.name, rawName);
+        if (selectedToolIdSet && !selectedToolIdSet.has(key)) {
+          continue;
+        }
         if (registeredNames.has(key)) {
           logger.warn('Duplicate MCP tool key, skipping', { key, server: server.name });
           continue;

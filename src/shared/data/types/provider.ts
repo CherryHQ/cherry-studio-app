@@ -148,6 +148,11 @@ export type EndpointConfig = {
   reasoningFormatType?: string;
 };
 
+export const EndpointConfigOverrideSchema = z.object({
+  baseUrl: z.string().optional(),
+});
+export type EndpointConfigOverride = z.infer<typeof EndpointConfigOverrideSchema>;
+
 export type EndpointConfigs = Partial<Record<EndpointType, EndpointConfig>>;
 
 export type ProviderWebsites = {
@@ -170,6 +175,7 @@ export type Provider = {
   defaultChatEndpoint?: EndpointType;
   description?: string;
   endpointConfigs?: EndpointConfigs;
+  fastMode?: { transport: 'claude-code' | 'openai-priority' };
   id: string;
   isEnabled: boolean;
   modelListSource?: ProviderModelListSource;

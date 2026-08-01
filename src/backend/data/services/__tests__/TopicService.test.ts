@@ -3,7 +3,6 @@ import * as Crypto from 'expo-crypto';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PinService } from '@/backend/data/services/PinService';
 import type { TagService } from '@/backend/data/services/TagService';
-import type { Topic } from '@/shared/data/types/topic';
 import { TopicService } from '../TopicService';
 
 jest.mock('@/backend/data/db/schemas', () => ({
@@ -66,12 +65,25 @@ describe('TopicService', () => {
       delete: () => {
         where: () => Promise<void>;
       };
+      select: () => {
+        from: () => {
+          where: () => Promise<{ id: string }[]>;
+        };
+      };
     };
     const tx: Tx = {
       delete: () => ({
         where: async () => {
           operations.push('delete');
         },
+      }),
+      select: () => ({
+        from: () => ({
+          where: async () => [
+            { id: '550e8400-e29b-41d4-a716-446655440000' },
+            { id: '650e8400-e29b-41d4-a716-446655440000' },
+          ],
+        }),
       }),
     };
     const dbService = {
@@ -88,12 +100,10 @@ describe('TopicService', () => {
       }),
     } as unknown as TagService;
     const service = new TopicService(dbService, pinService, tagService);
-    jest.spyOn(service, 'getById').mockResolvedValue(createTopic());
     const ids = ['550e8400-e29b-41d4-a716-446655440000', '650e8400-e29b-41d4-a716-446655440000'];
 
     await service.deleteMany([...ids, ids[0]]);
 
-    expect(service.getById).toHaveBeenCalledTimes(2);
     expect(tagService.purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'topic', ids);
     expect(pinService.purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'topic', ids);
     expect(operations).toEqual(['delete', 'tag', 'pin', 'delete']);
@@ -108,16 +118,3 @@ describe('TopicService', () => {
     expect(dbService.withWriteTx).not.toHaveBeenCalled();
   });
 });
-
-function createTopic(): Topic {
-  const now = '2026-05-15T00:00:00.000Z';
-
-  return {
-    createdAt: now,
-    id: '550e8400-e29b-41d4-a716-446655440000',
-    isNameManuallyEdited: false,
-    name: 'Topic',
-    orderKey: 'a0',
-    updatedAt: now,
-  };
-}
