@@ -1,7 +1,20 @@
 import { MODEL_CAPABILITY, REASONING_EFFORT } from '@cherrystudio/provider-registry';
 import { createUniqueModelId, type Model } from '@shared/data/types/model';
 
-import { getModelSupportedReasoningEffortOptions } from '../model';
+import { deriveModelGroupName, getModelSupportedReasoningEffortOptions } from '../model';
+
+describe('deriveModelGroupName', () => {
+  test.each([
+    ['openai/gpt-4o', 'openai'],
+    ['deepseek-v4-pro', 'deepseek'],
+    ['gpt-5.6-sol', 'gpt'],
+    ['codex-auto-review', 'codex'],
+    ['hy3', undefined],
+    ['  ', undefined],
+  ])('derives %s as %s', (modelId, expected) => {
+    expect(deriveModelGroupName(modelId)).toBe(expected);
+  });
+});
 
 describe('model reasoning support', () => {
   test('returns undefined for missing or non-reasoning models', () => {

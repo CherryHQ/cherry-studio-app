@@ -7,6 +7,7 @@ import {
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
+import { deriveModelGroupName } from '@cherrystudio/universal/utils/model';
 import * as z from 'zod';
 
 import { defaultHeaders, formatApiHost, getBaseUrl } from '../utils/provider';
@@ -79,8 +80,7 @@ async function providerHeaders(
 }
 
 function defaultGroup(modelId: string, providerId: string): string {
-  const parts = modelId.split('/');
-  return parts.length > 1 ? parts[0] : providerId;
+  return deriveModelGroupName(modelId) ?? providerId;
 }
 
 function toModel(apiModelId: string, provider: Provider, extra?: Partial<Model>): Partial<Model> {
