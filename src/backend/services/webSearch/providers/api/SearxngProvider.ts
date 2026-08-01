@@ -5,6 +5,7 @@ import type {
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { isValidUrl } from '../../utils/url';
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { UrlSearchContext } from '../base/context';
 import { assertRecord, readObjectArray, readOptionalString } from './schemaUtils';
@@ -108,7 +109,10 @@ export class SearxngProvider extends BaseWebSearchProvider {
     searchPayload: SearxngSearchResponse,
   ): WebSearchResponse {
     const results = searchPayload.results
-      .filter((item) => item.url?.trim())
+      // These URLs are rendered as tappable citations, and a Searxng instance is
+      // whatever host the user pointed at, so require http(s) rather than just
+      // non-empty (desktop SearxngProvider.ts:152).
+      .filter((item) => isValidUrl(item.url ?? ''))
       .slice(0, context.maxResults)
       .map((item) => ({
         title: item.title?.trim() || '',

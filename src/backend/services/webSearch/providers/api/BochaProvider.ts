@@ -23,7 +23,8 @@ type BochaSearchRequest = {
 
 type BochaSearchResponse = {
   code: number;
-  msg: string;
+  /** Bocha sends `"msg": null` on success; rejecting it lost the whole result set. */
+  msg?: string;
   data: {
     queryContext: {
       originalQuery: string;
@@ -125,7 +126,7 @@ function parseBochaSearchResponse(payload: unknown): BochaSearchResponse {
 
   return {
     code: readNumber(record.code, 'payload.code'),
-    msg: readString(record.msg, 'payload.msg'),
+    msg: readOptionalString(record.msg, 'payload.msg'),
     data: {
       queryContext: {
         originalQuery: readString(
