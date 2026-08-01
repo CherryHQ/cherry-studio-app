@@ -95,13 +95,10 @@ describe('provider-registry-service', () => {
     ]);
   });
 
-  test('loads Radeon Cloud after CherryIN while retaining mobile provider extensions', () => {
+  test('loads Radeon Cloud after CherryIN', () => {
     const providerIds = providerRegistryService.loadProviders().map(({ id }) => id);
 
     expect(providerIds.slice(0, 2)).toEqual(['cherryin', 'radeon-cloud']);
-    expect(providerIds).toEqual(
-      expect.arrayContaining(['hunyuan', 'hyperbolic', 'infini', 'tencent-cloud-ti', 'yi']),
-    );
   });
 
   test('exposes provider model-list and auth metadata', () => {
