@@ -2,6 +2,7 @@ import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { readUIMessageStream, type UIMessageChunk } from 'ai';
 
+import { ChatService } from '@/backend/ai/streamManager/ChatService';
 import {
   discardPreparedFiles,
   imageUriToDataUrl,
@@ -11,7 +12,6 @@ import {
 } from '@/backend/data/services/fileStorage';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
-import { ChatService } from '@/backend/services/chat/ChatService';
 import { CherryInService } from '@/backend/services/cherryin/CherryInService';
 import { McpService } from '@/backend/services/mcp/McpService';
 import { ModelsService } from '@/backend/services/models/ModelsService';

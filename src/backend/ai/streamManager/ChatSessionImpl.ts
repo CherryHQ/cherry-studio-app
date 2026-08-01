@@ -21,7 +21,6 @@ import {
 } from '@cherrystudio/universal/utils/conversationTitle';
 import { isToolUIPart } from 'ai';
 
-import { serializeError } from '@/backend/ai/utils/serializeError';
 import type {
   ChatSendNewTopicTextInput,
   ChatSendTextInput,
@@ -33,6 +32,7 @@ import type {
 import { NEW_CHAT_SESSION_TOPIC_ID } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { serializeError } from '../utils/serializeError';
 import type { ChatSessionDependencies } from './ChatSessionDependencies';
 import {
   applyStreamingMessage,

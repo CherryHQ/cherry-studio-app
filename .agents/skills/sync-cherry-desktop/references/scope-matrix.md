@@ -15,7 +15,7 @@ Use `desktop-sync-manifest.json` as the versioned domain inventory. Let the desi
 | `ai-core` | `packages/aiCore` | `packages/ai-core` | `mirror` |
 | `ai-sdk-provider` | `packages/ai-sdk-provider` | same path | `mirror` |
 | `provider-registry` | `packages/provider-registry` | same path | `semantic-port` with a narrow mobile loader |
-| `ai-runtime` | `src/main/ai` | `src/backend/ai`, chat service | `semantic-port` except explicit Manifest exclusions |
+| `ai-runtime` | `src/main/ai` | `src/backend/ai` | `semantic-port` except explicit Manifest exclusions |
 | `shared-ai` | `src/shared/ai` | `packages/universal/src/ai` | `semantic-port` |
 | `services` | `src/main/services` | `src/backend/services`, reached data and AI services | `semantic-port` |
 | `dependencies` | manifests, lockfile, patches | mobile equivalents | `semantic-port`; retain Expo-compatible resolution |

@@ -10,14 +10,16 @@ rules here when they belong behind the in-process Data API or workflow seam.
 
 ## Ownership
 
-- `chat`, `models`, `paintings`, `mcp`, `providers`, `permissions`, and `profile` implement
-  multi-step contract behavior.
+- `models`, `paintings`, `mcp`, `providers`, `permissions`, and `profile` implement multi-step
+  contract behavior.
 - `oauth`, `cherryin`, `webSearch`, device permissions, and avatar storage own platform or
   third-party runtime behavior. `oauth` holds the provider-generic OAuth runtime (see its
   [README](./oauth/README.md)); `cherryin` holds that one provider's own REST surface.
 - `src/backend/data/services` remains reserved for entity persistence and data-specific
   transformations.
 - `src/backend/ai` remains reserved for AI SDK, provider, MCP runtime, message, and tool behavior.
+  The chat session runtime lives there too, in `streamManager/`, because it mirrors desktop's
+  `src/main/ai/streamManager` rather than anything under `src/main/services`.
 
 Workflow services accept coordinated capabilities through constructor interfaces. Concrete graph
 assembly and lifecycle ownership remain in `src/bootstrap`.

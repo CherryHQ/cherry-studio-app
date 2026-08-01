@@ -158,7 +158,7 @@
       "strategy": "semantic-port",
       "status": "unbaselined",
       "sourcePaths": ["src/main/ai"],
-      "targetPaths": ["src/backend/ai", "src/backend/services/chat"],
+      "targetPaths": ["src/backend/ai"],
       "sourceCommit": null,
       "sourceSha256": null,
       "explicitExclusions": [
