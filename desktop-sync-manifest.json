@@ -7,7 +7,7 @@
   "domains": {
     "design-catalog": {
       "strategy": "semantic-port",
-      "status": "unbaselined",
+      "status": "aligned",
       "sourcePaths": [
         "packages/ui/icons",
         "packages/ui/src/components/icons/registry.ts",
@@ -15,8 +15,8 @@
         "packages/ui/src/components/icons/providers"
       ],
       "targetPaths": ["packages/ui/icons", "packages/ui/src/icons", "packages/ui/src/icons-webp"],
-      "sourceCommit": null,
-      "sourceSha256": null,
+      "sourceCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
+      "sourceSha256": "40d8b7c58f87db799768b3f9fe27bb79ef3d16e945f3064ab1575e4ec4bcdb85",
       "explicitExclusions": [],
       "virtualIconAdapters": {
         "opencode": "general/open-code"
@@ -97,6 +97,11 @@
       "sourceSha256": null,
       "explicitExclusions": [],
       "shapeOnlyPorts": [
+        {
+          "path": "src/shared/types/aiSdk.ts",
+          "keeps": "ReasoningEffortOption plus its Zod schema, and the AiSdkParam standard-parameter vocabulary with its isAiSdkParam guard",
+          "drops": "OpenAIVerbosity/ValidOpenAIVerbosity/OpenAIReasoningSummary/OpenAICompletionsStreamOptions, which alias into the @cherrystudio/openai SDK that mobile does not depend on; backend/ai/utils/options.ts re-declares the verbosity union it needs as a literal type"
+        },
         {
           "path": "src/shared/types/codeCli.ts",
           "keeps": "CodeCli enum backing the seeded feature.code_cli.configs preference value",
