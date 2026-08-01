@@ -5,12 +5,10 @@ describe('isHttpUrl', () => {
     expect(isHttpUrl(value)).toBe(true);
   });
 
-  test.each([
-    'file:///tmp/a',
-    'ftp://example.com',
-    '/relative',
-    'not a URL',
-  ])('rejects %s', (value) => {
-    expect(isHttpUrl(value)).toBe(false);
-  });
+  test.each(['file:///tmp/a', 'ftp://example.com', '/relative', 'not a URL'])(
+    'rejects %s',
+    (value) => {
+      expect(isHttpUrl(value)).toBe(false);
+    },
+  );
 });

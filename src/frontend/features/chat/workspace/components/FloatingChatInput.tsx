@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { type LayoutChangeEvent, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { ChatInput } from '../../input';
 import {
   chatInputHorizontalScreenInset,

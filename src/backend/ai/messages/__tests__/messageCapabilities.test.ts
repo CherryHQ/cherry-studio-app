@@ -1,7 +1,6 @@
 import { MODALITY } from '@cherrystudio/provider-registry';
-import type { UIMessage } from 'ai';
-
 import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { UIMessage } from 'ai';
 
 import { resolveMediaCapabilities, stripUnsupportedMedia } from '../messageCapabilities';
 

@@ -1,5 +1,4 @@
 import { ENDPOINT_TYPE, MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-
 import {
   createUniqueModelId,
   type Model,
@@ -11,6 +10,7 @@ import {
   DEFAULT_PROVIDER_SETTINGS,
   type Provider,
 } from '@cherrystudio/universal/data/types/provider';
+
 import {
   buildModelPickerGroups,
   filterModelsByModelPickerTags,

@@ -1,12 +1,9 @@
-import { isToolUIPart } from 'ai';
-import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import {
   type ApprovalDecision,
   applyToolApprovalDecisionsToParts,
   countPendingToolApprovals,
   finalizeDanglingToolApprovals,
 } from '@cherrystudio/universal/ai/transport/toolApprovals';
-import { loggerService } from '@/shared/core/logger/LoggerService';
 import type {
   ActiveNodeStrategy,
   ClearTopicMessagesResponse,
@@ -30,6 +27,11 @@ import type {
 } from '@cherrystudio/universal/data/types/message';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
+import { isToolUIPart } from 'ai';
+import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+
+import { loggerService } from '@/shared/core/logger/LoggerService';
+
 import type { Database, DbService } from '../db/DbService';
 import {
   chatMessageFileRefTable,
@@ -56,8 +58,10 @@ export type BranchMessagesParams = {
   nodeId?: string;
 };
 
-export interface AssistantPlaceholder
-  extends Omit<CreateMessageDto, 'parentId' | 'setAsActive' | 'siblingsGroupId'> {
+export interface AssistantPlaceholder extends Omit<
+  CreateMessageDto,
+  'parentId' | 'setAsActive' | 'siblingsGroupId'
+> {
   id?: string;
 }
 

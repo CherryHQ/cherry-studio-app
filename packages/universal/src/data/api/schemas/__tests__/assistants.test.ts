@@ -38,16 +38,16 @@ describe('assistant api schemas', () => {
     });
   });
 
-  test.each([
-    CreateAssistantSchema,
-    UpdateAssistantSchema,
-  ])('rejects MCP and knowledge-base relation writes', (schema) => {
-    expect(
-      schema.safeParse({
-        name: 'Assistant',
-        knowledgeBaseIds: ['knowledge-1'],
-        mcpServerIds: ['mcp-1'],
-      }).success,
-    ).toBe(false);
-  });
+  test.each([CreateAssistantSchema, UpdateAssistantSchema])(
+    'rejects MCP and knowledge-base relation writes',
+    (schema) => {
+      expect(
+        schema.safeParse({
+          name: 'Assistant',
+          knowledgeBaseIds: ['knowledge-1'],
+          mcpServerIds: ['mcp-1'],
+        }).success,
+      ).toBe(false);
+    },
+  );
 });

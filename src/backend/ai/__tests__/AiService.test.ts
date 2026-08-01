@@ -6,9 +6,6 @@ import {
   type RuntimeProviderCallEvent,
 } from '@cherrystudio/ai-core';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { InvalidToolInputError, type ToolSet } from 'ai';
-import { AiService, type AiServiceDependencies } from '@/backend/ai/AiService';
-import { createWebSearchTool } from '@/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool';
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
@@ -19,6 +16,10 @@ import {
   type UniqueModelId,
 } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
+import { InvalidToolInputError, type ToolSet } from 'ai';
+
+import { AiService, type AiServiceDependencies } from '@/backend/ai/AiService';
+import { createWebSearchTool } from '@/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool';
 
 const mockGenerate = jest.fn(async () => ({ text: 'ok', usage: undefined }));
 const mockStream = jest.fn(

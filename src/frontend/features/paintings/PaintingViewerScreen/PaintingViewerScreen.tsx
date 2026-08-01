@@ -1,14 +1,15 @@
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
+
 import { paintingViewer } from '@/frontend/utils/constants';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
+
 import {
   type ResolvedPaintingAttachment,
   usePainting,
   useResolvedPaintingFiles,
 } from '../hooks/usePaintings';
-
 import { PaintingViewerChrome } from './components/PaintingViewerChrome';
 import { ViewerImage } from './components/ViewerImage';
 import { usePaintingViewerActions } from './hooks/usePaintingViewerActions';

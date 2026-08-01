@@ -1,10 +1,11 @@
-import type { AgentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
 import { DataApiErrorFactory, toDataApiError } from '@cherrystudio/universal/data/api/errors';
 import {
   ListSkillsQuerySchema,
   type SkillSchemas,
 } from '@cherrystudio/universal/data/api/schemas/skills';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { AgentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
 
 export function createSkillHandlers(service: AgentGlobalSkillService): HandlersFor<SkillSchemas> {
   return {

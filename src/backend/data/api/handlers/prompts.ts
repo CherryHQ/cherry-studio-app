@@ -1,4 +1,3 @@
-import type { PromptService } from '@/backend/data/services/PromptService';
 import {
   OrderBatchRequestSchema,
   OrderRequestSchema,
@@ -11,6 +10,8 @@ import {
   UpdatePromptSchema,
 } from '@cherrystudio/universal/data/api/schemas/prompts';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { PromptService } from '@/backend/data/services/PromptService';
 
 export function createPromptHandlers(service: PromptService): HandlersFor<PromptSchemas> {
   return {

@@ -1,6 +1,9 @@
+import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { useQueryClient } from '@tanstack/react-query';
 import { useIsFocused, useRouter } from 'expo-router';
 import { createContext, type PropsWithChildren, use, useCallback, useEffect, useMemo } from 'react';
+
 import { MODEL_SETTING_PREFERENCE_KEYS } from '@/frontend/components/modelPicker/utils/modelSettings';
 import {
   queryKeys,
@@ -16,8 +19,6 @@ import {
 } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPolicy';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
 
 const MODEL_DETAIL_PREFETCH_STALE_TIME_MS = 1000 * 60 * 5;
 

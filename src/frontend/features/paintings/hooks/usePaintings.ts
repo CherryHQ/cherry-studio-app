@@ -1,3 +1,5 @@
+import { imageMediaTypeFromExtension } from '@cherrystudio/universal/data/types/file';
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import {
   keepPreviousData,
   useQueryClient,
@@ -5,6 +7,7 @@ import {
 } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
 import { useCallback, useMemo } from 'react';
+
 import {
   queryKeys,
   useBackendModule,
@@ -13,8 +16,6 @@ import {
   useQuery,
 } from '@/frontend/data';
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
-import { imageMediaTypeFromExtension } from '@cherrystudio/universal/data/types/file';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
 const pageSize = 20;
 

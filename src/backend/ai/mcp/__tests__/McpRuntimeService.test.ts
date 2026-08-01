@@ -1,8 +1,9 @@
-import type { ToolSet } from 'ai';
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import type { ToolSet } from 'ai';
+
 import { McpRuntimeService } from '../McpRuntimeService';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));

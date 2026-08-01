@@ -20,7 +20,10 @@ export const agentTable = sqliteTable(
     model: text().references(() => userModelTable.id, { onDelete: 'set null' }),
     planModel: text().references(() => userModelTable.id, { onDelete: 'set null' }),
     smallModel: text().references(() => userModelTable.id, { onDelete: 'set null' }),
-    disabledTools: text({ mode: 'json' }).$type<string[]>().notNull().default(sql`'[]'`),
+    disabledTools: text({ mode: 'json' })
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'`),
     configuration: text({ mode: 'json' })
       .$type<Record<string, unknown>>()
       .notNull()

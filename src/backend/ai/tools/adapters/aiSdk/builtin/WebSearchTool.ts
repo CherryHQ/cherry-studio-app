@@ -1,12 +1,13 @@
 import { tool } from 'ai';
 import * as z from 'zod';
+
+import { markTrustedLocalToolTerminalFailure } from '@/backend/ai/runtime/aiSdk/loop/localToolTerminalOutcome';
+import { citeId, newCitePrefix } from '@/backend/ai/utils/citationIds';
 import {
   isAbortError,
   isPermanentWebSearchConfigError,
 } from '@/backend/services/webSearch/utils/errors';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
-import { citeId, newCitePrefix } from '@/backend/ai/utils/citationIds';
-import { markTrustedLocalToolTerminalFailure } from '@/backend/ai/runtime/aiSdk/loop/localToolTerminalOutcome';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { ToolEntry } from '../types';

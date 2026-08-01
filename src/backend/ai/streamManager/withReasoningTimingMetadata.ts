@@ -10,13 +10,12 @@
  * of the resulting stream sees the same computed values.
  */
 
-import { loggerService } from '@logger';
-import type { ProviderMetadata, UIMessageChunk } from 'ai';
-
 import {
   type CherryReasoningMeta,
   CherryReasoningMetaSchema,
 } from '@cherrystudio/universal/data/types/uiParts';
+import { loggerService } from '@logger';
+import type { ProviderMetadata, UIMessageChunk } from 'ai';
 
 const logger = loggerService.withContext('withReasoningTimingMetadata');
 

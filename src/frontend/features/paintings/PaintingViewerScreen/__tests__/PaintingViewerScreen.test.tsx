@@ -1,8 +1,7 @@
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import type { ResolvedPaintingFiles } from '../../hooks/usePaintings';
-
 import { PaintingViewerScreen } from '../PaintingViewerScreen';
 
 const mockRouterBack = jest.fn();

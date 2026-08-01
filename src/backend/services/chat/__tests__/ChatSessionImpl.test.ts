@@ -1,5 +1,3 @@
-import { NEW_CHAT_SESSION_TOPIC_ID } from '@/shared/contracts';
-import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
@@ -11,6 +9,10 @@ import type {
   Message,
 } from '@cherrystudio/universal/data/types/message';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
+
+import { NEW_CHAT_SESSION_TOPIC_ID } from '@/shared/contracts';
+import { loggerService } from '@/shared/core/logger/LoggerService';
+
 import type { ChatSessionServices, ChatStreamRequest } from '../ChatSessionDependencies';
 import { ChatSessionImpl } from '../ChatSessionImpl';
 

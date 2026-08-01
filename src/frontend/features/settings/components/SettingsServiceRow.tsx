@@ -3,7 +3,9 @@ import { cn } from 'heroui-native/utils';
 import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { memo, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
+
 import { Image } from '@/frontend/components/nativePrimitives';
+
 import { SettingsGroupedSeparator } from './SettingsGroupedSeparator';
 
 export type SettingsServiceRowProps = {

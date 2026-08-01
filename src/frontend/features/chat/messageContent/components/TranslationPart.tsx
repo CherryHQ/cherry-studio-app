@@ -1,7 +1,6 @@
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { LanguagesIcon } from 'lucide-uniwind/png';
 import { View } from 'react-native';
-
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 
 import { PartMarkdown } from './PartMarkdown';
 

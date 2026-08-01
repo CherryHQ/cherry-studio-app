@@ -1,10 +1,3 @@
-import type {
-  PaintingGenerationInput,
-  PaintingGenerationResult,
-  PaintingGenerationSession,
-  PaintingsBackend,
-  ResolvedPaintingFiles,
-} from '@/shared/contracts';
 import type { PaintingListQuery } from '@cherrystudio/universal/data/api/schemas/paintings';
 import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import type {
@@ -14,6 +7,14 @@ import type {
 } from '@cherrystudio/universal/data/types/file';
 import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
+
+import type {
+  PaintingGenerationInput,
+  PaintingGenerationResult,
+  PaintingGenerationSession,
+  PaintingsBackend,
+  ResolvedPaintingFiles,
+} from '@/shared/contracts';
 
 type PaintingRepository = {
   create(input: {

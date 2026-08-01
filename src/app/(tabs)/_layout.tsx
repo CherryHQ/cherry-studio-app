@@ -7,6 +7,7 @@ import { withLayoutContext } from 'expo-router';
 import type { ParamListBase, TabNavigationState } from 'expo-router/react-navigation';
 import { useNavigationState } from 'expo-router/react-navigation';
 import { useTranslation } from 'react-i18next';
+
 import {
   BottomTabBarVisibilityProvider,
   useBottomTabBarHidden,

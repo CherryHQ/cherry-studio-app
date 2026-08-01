@@ -1,14 +1,3 @@
-import {
-  type InfiniteData,
-  type QueryClient,
-  useQueryClient,
-  useInfiniteQuery as useTanStackInfiniteQuery,
-  useMutation as useTanStackMutation,
-  useQuery as useTanStackQuery,
-} from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
-
-import { useApiClient } from '@/frontend/data/DataApiProvider';
 import type {
   ApiPath,
   BodyForPath,
@@ -23,6 +12,17 @@ import type {
   CursorPaginationResponse,
   InferPaginationMode,
 } from '@cherrystudio/universal/data/api/types';
+import {
+  type InfiniteData,
+  type QueryClient,
+  useQueryClient,
+  useInfiniteQuery as useTanStackInfiniteQuery,
+  useMutation as useTanStackMutation,
+  useQuery as useTanStackQuery,
+} from '@tanstack/react-query';
+import { useCallback, useMemo } from 'react';
+
+import { useApiClient } from '@/frontend/data/DataApiProvider';
 
 type DataApiQueryKey = readonly [string] | readonly [string, unknown];
 type MutationMethod = 'DELETE' | 'PATCH' | 'POST' | 'PUT';

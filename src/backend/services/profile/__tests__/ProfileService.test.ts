@@ -1,4 +1,5 @@
 import type { ProfileBackend } from '@/shared/contracts';
+
 import { ProfileService, type ProfileServiceDependencies } from '../ProfileService';
 
 describe('ProfileService', () => {

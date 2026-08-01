@@ -1,9 +1,8 @@
-import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
 } from '@cherrystudio/universal/data/types/assistant';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { MainHeaderAssistantButton, useMainHeaderAssistant } from '../MainHeaderAssistantButton';
 

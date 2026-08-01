@@ -2,6 +2,7 @@ import { TextArea } from 'heroui-native/text-area';
 import { cn } from 'heroui-native/utils';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet } from 'react-native';
+
 import { chatInputMaxTextAreaHeight, chatInputMinTextAreaHeight } from '../chatInputLayout';
 import {
   useChatInputActions,

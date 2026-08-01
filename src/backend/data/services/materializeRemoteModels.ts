@@ -1,13 +1,14 @@
 import {
-  mergePresetModel,
-  providerRegistryService,
-} from '@/backend/data/services/ProviderRegistryService';
-import {
   createUniqueModelId,
   type Model,
   type UniqueModelId,
 } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
+
+import {
+  mergePresetModel,
+  providerRegistryService,
+} from '@/backend/data/services/ProviderRegistryService';
 
 export function materializeRemoteModels(
   provider: Provider,

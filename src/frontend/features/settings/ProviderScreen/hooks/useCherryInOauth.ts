@@ -3,6 +3,7 @@ import * as AuthSession from 'expo-auth-session';
 import { useToast } from 'heroui-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
 import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
 import type { CompleteOAuthAuthorizationInput } from '@/shared/contracts';
 import { resolveAuthorizeConfig } from '@/shared/oauth';

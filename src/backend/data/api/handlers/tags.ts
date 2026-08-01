@@ -1,4 +1,3 @@
-import type { TagService } from '@/backend/data/services/TagService';
 import {
   CreateTagSchema,
   SetTagEntitiesSchema,
@@ -9,6 +8,8 @@ import {
 } from '@cherrystudio/universal/data/api/schemas/tags';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
 import { EntityIdSchema, EntityTypeSchema } from '@cherrystudio/universal/data/types/entityType';
+
+import type { TagService } from '@/backend/data/services/TagService';
 
 export function createTagHandlers(service: TagService): HandlersFor<TagSchemas> {
   return {

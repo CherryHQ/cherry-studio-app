@@ -1,8 +1,3 @@
-import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
-
-import type { DbService } from '@/backend/data/db/DbService';
-import type { InsertUserModelRow, UserModelRow } from '@/backend/data/db/schemas/userModel';
-import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import type {
   CreateModelDto,
   ListModelsQuery,
@@ -22,6 +17,12 @@ import {
   parseUniqueModelId,
   type UniqueModelId,
 } from '@cherrystudio/universal/data/types/model';
+import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
+
+import type { DbService } from '@/backend/data/db/DbService';
+import type { InsertUserModelRow, UserModelRow } from '@/backend/data/db/schemas/userModel';
+import { userModelTable } from '@/backend/data/db/schemas/userModel';
+
 import type { PreferenceService } from '../PreferenceService';
 import type { PinService } from './PinService';
 import {

@@ -1,4 +1,5 @@
 import type { ApiKeyEntry, AuthConfig } from '@cherrystudio/universal/data/types/provider';
+
 import { OAuthTransientError } from '@/shared/oauth';
 import type { OAuthProviderDefinition } from '@/shared/oauth';
 

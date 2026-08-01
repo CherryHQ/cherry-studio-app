@@ -1,9 +1,3 @@
-import { loggerService } from '@logger';
-import { eq, isNull } from 'drizzle-orm';
-import { v4 as uuidv4, v7 as uuidv7 } from 'uuid';
-
-import type { DbService } from '@/backend/data/db/DbService';
-import { messageTable, topicTable } from '@/backend/data/db/schemas';
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
 import type { CreateMessageDto } from '@cherrystudio/universal/data/api/schemas/messages';
 import type { CreateTopicDto } from '@cherrystudio/universal/data/api/schemas/topics';
@@ -14,6 +8,12 @@ import type {
   MessageStatus,
 } from '@cherrystudio/universal/data/types/message';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
+import { loggerService } from '@logger';
+import { eq, isNull } from 'drizzle-orm';
+import { v4 as uuidv4, v7 as uuidv7 } from 'uuid';
+
+import type { DbService } from '@/backend/data/db/DbService';
+import { messageTable, topicTable } from '@/backend/data/db/schemas';
 
 import { type AiUsageRecordService, mergeMessageUsageProjection } from './AiUsageRecordService';
 import { createRootMessageTx } from './MessageService';

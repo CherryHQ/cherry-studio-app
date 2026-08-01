@@ -1,5 +1,6 @@
-import { View } from 'react-native';
 import type { Message } from '@cherrystudio/universal/data/types/message';
+import { View } from 'react-native';
+
 import { MessageParts } from '../../messageContent';
 import { PrismSweep } from '../../prismSweep';
 

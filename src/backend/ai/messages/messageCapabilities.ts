@@ -13,11 +13,9 @@
  * Ported from desktop's `src/main/ai/messages/messageCapabilities.ts`.
  */
 
-import type { UIMessage } from 'ai';
-
 import type { Model } from '@cherrystudio/universal/data/types/model';
-
 import { isAudioModel, isVideoModel, isVisionModel } from '@cherrystudio/universal/utils/model';
+import type { UIMessage } from 'ai';
 
 export interface MediaCapabilities {
   image: boolean;

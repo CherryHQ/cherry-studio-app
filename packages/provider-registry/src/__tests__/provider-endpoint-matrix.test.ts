@@ -34,31 +34,28 @@ describe('dashscope (Bailian) endpoint matrix', () => {
    * qwen3-max" (a statement about which models the Responses *web-search tool* covers) as if it
    * said those models support only Responses.
    */
-  it.each([
-    'qwen3-7-max',
-    'qwen3-6-plus',
-    'qwen3-6-flash',
-    'qwen3-8-max-preview',
-  ])('prefers Responses but keeps Chat Completions selectable for %s', (modelId) => {
-    expect(endpointsOf('dashscope', modelId)).toEqual([
-      'openai-responses',
-      'openai-chat-completions',
-    ]);
-  });
+  it.each(['qwen3-7-max', 'qwen3-6-plus', 'qwen3-6-flash', 'qwen3-8-max-preview'])(
+    'prefers Responses but keeps Chat Completions selectable for %s',
+    (modelId) => {
+      expect(endpointsOf('dashscope', modelId)).toEqual([
+        'openai-responses',
+        'openai-chat-completions',
+      ]);
+    },
+  );
 
   // These search via Chat's `enable_search` (the Responses web_search tool is Qwen3.x-only), so
   // Chat leads — but Responses stays reachable. See `servesResponsesWebSearch` in
   // src/main/ai/utils/websearch.ts.
-  it.each([
-    'qwen-plus',
-    'qwen-flash',
-    'qwen-plus-character',
-  ])('orders Chat Completions first for %s, whose built-in search is Chat-only', (modelId) => {
-    expect(endpointsOf('dashscope', modelId)).toEqual([
-      'openai-chat-completions',
-      'openai-responses',
-    ]);
-  });
+  it.each(['qwen-plus', 'qwen-flash', 'qwen-plus-character'])(
+    'orders Chat Completions first for %s, whose built-in search is Chat-only',
+    (modelId) => {
+      expect(endpointsOf('dashscope', modelId)).toEqual([
+        'openai-chat-completions',
+        'openai-responses',
+      ]);
+    },
+  );
 
   it('never pins any dashscope model to a single endpoint', () => {
     const singlePinned = (provider('dashscope').overrides ?? [])
@@ -84,25 +81,26 @@ describe('deepseek endpoint matrix', () => {
     ]);
   });
 
-  it.each([
-    'deepseek-v4-pro',
-    'deepseek-chat',
-    'deepseek-reasoner',
-  ])('pins %s to Chat Completions while DeepSeek Responses does not serve it', (modelId) => {
-    expect(endpointsOf('deepseek', modelId)).toEqual(['openai-chat-completions']);
-  });
+  it.each(['deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'])(
+    'pins %s to Chat Completions while DeepSeek Responses does not serve it',
+    (modelId) => {
+      expect(endpointsOf('deepseek', modelId)).toEqual(['openai-chat-completions']);
+    },
+  );
 });
 
 describe('doubao (Ark) endpoint matrix', () => {
   // Ark serves /responses for the 250615+ line only (docs/82379/1585128), so here a single-element
   // pin IS correct — the vendor genuinely does not serve the other endpoint.
-  it.each([
-    'doubao-seed-2-1-pro',
-    'doubao-seed-1-6',
-    'seed-1-8',
-  ])('prefers Responses with Chat selectable for the 250615+ SKU %s', (modelId) => {
-    expect(endpointsOf('doubao', modelId)).toEqual(['openai-responses', 'openai-chat-completions']);
-  });
+  it.each(['doubao-seed-2-1-pro', 'doubao-seed-1-6', 'seed-1-8'])(
+    'prefers Responses with Chat selectable for the 250615+ SKU %s',
+    (modelId) => {
+      expect(endpointsOf('doubao', modelId)).toEqual([
+        'openai-responses',
+        'openai-chat-completions',
+      ]);
+    },
+  );
 
   it.each([
     'doubao-seed-1-6-flash', // built-in tools discouraged on flash

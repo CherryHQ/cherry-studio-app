@@ -1,6 +1,5 @@
-import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
 import type { EndpointConfigs, Provider } from '@cherrystudio/universal/data/types/provider';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { getProviderApiServiceEndpointDirtyState } from '../../utils/providerApiServiceDirtyState';
 import { useProviderApiServiceEndpointDraft } from '../useProviderApiServiceEndpointDraft';

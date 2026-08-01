@@ -1,6 +1,3 @@
-import { loggerService } from '@logger';
-import { useCallback, useEffect, useSyncExternalStore } from 'react';
-import { cacheService } from '@/frontend/data/CacheService';
 import type {
   InferUseCacheValue,
   PersistCacheKey,
@@ -8,6 +5,10 @@ import type {
   UseCacheKey,
 } from '@cherrystudio/universal/data/cache/cacheSchemas';
 import { getUseCacheDefaultValue } from '@cherrystudio/universal/data/cache/templateKey';
+import { loggerService } from '@logger';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
+
+import { cacheService } from '@/frontend/data/CacheService';
 
 const logger = loggerService.withContext('useCache');
 

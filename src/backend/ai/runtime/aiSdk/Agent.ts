@@ -1,7 +1,7 @@
+import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiPlugin } from '@cherrystudio/ai-core';
 import { createAgent } from '@cherrystudio/ai-core';
 import type { StringKeys } from '@cherrystudio/ai-core/provider';
-import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type {
   LanguageModelUsage,
   ModelMessage,
@@ -16,6 +16,7 @@ import * as Crypto from 'expo-crypto';
 
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+
 import type { MediaCapabilities } from '../../messages/messageCapabilities';
 import { toModelMessages } from '../../messages/messageRules';
 import { withReasoningTimingMetadata } from '../../streamManager/withReasoningTimingMetadata';

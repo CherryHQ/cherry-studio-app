@@ -11,9 +11,8 @@
  * Ported from desktop's `src/main/ai/runtime/aiSdk/observers/usage.ts`.
  */
 
-import type { LanguageModelUsage } from 'ai';
-
 import type { CherryUIMessageMetadata } from '@cherrystudio/universal/data/types/message';
+import type { LanguageModelUsage } from 'ai';
 
 export const ZERO_USAGE: LanguageModelUsage = {
   inputTokens: 0,

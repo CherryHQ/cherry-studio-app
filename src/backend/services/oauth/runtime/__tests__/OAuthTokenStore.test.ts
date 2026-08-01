@@ -1,4 +1,5 @@
 import type { AuthConfig } from '@cherrystudio/universal/data/types/provider';
+
 import {
   ProviderAuthConfigOAuthTokenStore,
   type OAuthTokenStoreProviderRepository,

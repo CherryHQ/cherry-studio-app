@@ -3,6 +3,7 @@ import * as Crypto from 'expo-crypto';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PinService } from '@/backend/data/services/PinService';
 import type { TagService } from '@/backend/data/services/TagService';
+
 import { TopicService } from '../TopicService';
 
 jest.mock('@/backend/data/db/schemas', () => ({

@@ -68,8 +68,4 @@ export {
   UpgradeChannel,
   WEB_SEARCH_PROVIDER_IDS,
 } from './preferenceTypes';
-export {
-  getDefaultValue,
-  getPreferenceKeys,
-  isPreferenceKey,
-} from './preferenceUtils';
+export { getDefaultValue, getPreferenceKeys, isPreferenceKey } from './preferenceUtils';

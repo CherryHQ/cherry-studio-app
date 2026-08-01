@@ -1,12 +1,14 @@
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
+import type { WebSearchProviderId } from '@cherrystudio/universal/data/preference';
+import { MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS } from '@cherrystudio/universal/data/presets/webSearchProviders';
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
+
 import { BackHeader } from '@/frontend/components/headers';
-import type { WebSearchProviderId } from '@cherrystudio/universal/data/preference';
-import { MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS } from '@cherrystudio/universal/data/presets/webSearchProviders';
+
 import { SettingNumberInput } from '../components/SettingNumberInput';
 import { SettingSelect, type SettingSelectOption } from '../components/SettingSelect';
 import { SettingsSection } from '../components/SettingsSection';

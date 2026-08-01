@@ -1,10 +1,10 @@
-import { Text } from 'react-native';
-import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
 } from '@cherrystudio/universal/data/types/assistant';
+import { Text } from 'react-native';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
 import AssistantDetailScreen from '../AssistantDetailScreen';
 
 type HeaderAction = { key: string; label?: string; onPress?: () => void };

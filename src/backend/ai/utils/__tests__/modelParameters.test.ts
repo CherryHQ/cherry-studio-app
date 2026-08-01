@@ -3,6 +3,7 @@ import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
 import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
+
 import { filterStandardParams, getMaxTokens, getTemperature, getTopP } from '../modelParameters';
 
 // modelParameters tests treat `enableTemperature: true` as the baseline,

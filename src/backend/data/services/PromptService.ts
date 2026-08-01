@@ -6,9 +6,6 @@
  *   through `applyMoves`; callers never touch `orderKey` directly.
  */
 
-import { and, asc, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
-import type { DbService } from '@/backend/data/db/DbService';
-import { type PromptRow, promptTable } from '@/backend/data/db/schemas';
 import type { OrderRequest } from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
 import type {
@@ -17,6 +14,10 @@ import type {
   Prompt,
   UpdatePromptDto,
 } from '@cherrystudio/universal/data/types/prompt';
+import { and, asc, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
+
+import type { DbService } from '@/backend/data/db/DbService';
+import { type PromptRow, promptTable } from '@/backend/data/db/schemas';
 
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';

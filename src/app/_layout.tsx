@@ -2,7 +2,6 @@ import '../frontend/styles/global.css';
 import '@/bootstrap/preboot/abortSignal';
 import '@/bootstrap/preboot/blob';
 import '@/bootstrap/preboot/webCrypto';
-
 import { BottomSheetProvider } from '@swmansion/react-native-bottom-sheet';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -10,6 +9,7 @@ import { HeroUINativeProvider } from 'heroui-native/provider';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
+
 import { AppBootstrapGate, AppBootstrapProvider } from '@/bootstrap';
 import { NavigationThemeProvider } from '@/frontend/components/navigation';
 import { QueryProvider } from '@/frontend/data';

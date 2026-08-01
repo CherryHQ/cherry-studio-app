@@ -1,7 +1,5 @@
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
-import type { JSONValue } from 'ai';
-
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type {
@@ -19,6 +17,8 @@ import {
   isSupportFlexServiceTierModel,
   isSupportVerbosityModel,
 } from '@cherrystudio/universal/utils/model';
+import type { JSONValue } from 'ai';
+
 import { getAiSdkProviderId } from '../provider/factory';
 import type { ProviderCapabilities } from '../types';
 import { buildGeminiGenerateImageParams } from './image';

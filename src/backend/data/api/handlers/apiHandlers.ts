@@ -1,4 +1,5 @@
 import type { ApiImplementation } from '@cherrystudio/universal/data/api/types';
+
 import type { AgentChannelService } from '../../services/AgentChannelService';
 import type { AgentGlobalSkillService } from '../../services/AgentGlobalSkillService';
 import type { AgentService } from '../../services/AgentService';
@@ -26,9 +27,9 @@ import type { TopicService } from '../../services/TopicService';
 import type { TranslateHistoryService } from '../../services/TranslateHistoryService';
 import type { TranslateLanguageService } from '../../services/TranslateLanguageService';
 import { createAgentChannelHandlers } from './agentChannels';
+import { createAgentHandlers } from './agents';
 import { createAgentSessionMessageHandlers } from './agentSessionMessages';
 import { createAgentSessionHandlers } from './agentSessions';
-import { createAgentHandlers } from './agents';
 import { createAgentWorkspaceHandlers } from './agentWorkspaces';
 import { createAiUsageRecordHandlers } from './aiUsageRecords';
 import { createAssistantHandlers } from './assistants';

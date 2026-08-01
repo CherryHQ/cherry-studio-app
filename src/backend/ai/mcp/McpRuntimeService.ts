@@ -1,9 +1,5 @@
 import type { ListToolsResult, MCPClient } from '@ai-sdk/mcp';
 import { createMCPClient } from '@ai-sdk/mcp';
-import type { Tool, ToolSet } from 'ai';
-import { fetch as expoFetch } from 'expo/fetch';
-import type { ToolEntry } from '@/backend/ai/tools';
-import type { McpServerService } from '@/backend/data/services/McpServerService';
 import type { McpCallToolResult } from '@cherrystudio/universal/ai/tools/mcpResult';
 import { mcpResultToTextSummary } from '@cherrystudio/universal/ai/tools/mcpResult';
 import {
@@ -11,13 +7,6 @@ import {
   isMcpToolForcePromptBySource,
 } from '@cherrystudio/universal/ai/tools/mcpSourcePolicy';
 import { buildFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
-import type {
-  McpConnectionConfig,
-  McpServerInfo,
-  McpServerRuntimeSummary,
-  McpToolSummary,
-} from '@/shared/contracts';
-import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiError, ErrorCode } from '@cherrystudio/universal/data/api/types';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import {
@@ -25,6 +14,18 @@ import {
   type StreamableHttpMcpServer,
 } from '@cherrystudio/universal/data/types/mcpServer';
 import { fnv1a32 } from '@cherrystudio/universal/utils/fnv1a';
+import type { Tool, ToolSet } from 'ai';
+import { fetch as expoFetch } from 'expo/fetch';
+
+import type { ToolEntry } from '@/backend/ai/tools';
+import type { McpServerService } from '@/backend/data/services/McpServerService';
+import type {
+  McpConnectionConfig,
+  McpServerInfo,
+  McpServerRuntimeSummary,
+  McpToolSummary,
+} from '@/shared/contracts';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { resolveServersForAssistant } from './resolveAssistantMcpServers';
 

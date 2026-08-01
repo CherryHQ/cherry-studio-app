@@ -1,4 +1,5 @@
 import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
+
 import { getPendingToolApprovals, mergeMessagesWithOverlay } from '../chatSessionProjection';
 
 describe('chat runtime message projection', () => {

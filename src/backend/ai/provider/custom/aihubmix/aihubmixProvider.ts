@@ -1,17 +1,15 @@
 import { AnthropicMessagesLanguageModel } from '@ai-sdk/anthropic/internal';
 import { GoogleGenerativeAILanguageModel } from '@ai-sdk/google/internal';
-import { OpenAIChatLanguageModel, OpenAIResponsesLanguageModel } from '@ai-sdk/openai/internal';
 import {
   OpenAICompatibleChatLanguageModel,
   OpenAICompatibleEmbeddingModel,
   OpenAICompatibleImageModel,
 } from '@ai-sdk/openai-compatible';
+import { OpenAIChatLanguageModel, OpenAIResponsesLanguageModel } from '@ai-sdk/openai/internal';
 import type { EmbeddingModelV3, ImageModelV3, LanguageModelV3, ProviderV3 } from '@ai-sdk/provider';
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 import { loadApiKey, withoutTrailingSlash } from '@ai-sdk/provider-utils';
-
 import type { Model } from '@cherrystudio/universal/data/types/model';
-
 import {
   isOpenAIChatCompletionOnlyModel,
   isOpenAILLMModel,

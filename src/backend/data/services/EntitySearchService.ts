@@ -1,14 +1,3 @@
-import { loggerService } from '@logger';
-import { and, asc, desc, eq, gte, isNull, or, type SQL, sql } from 'drizzle-orm';
-
-import type { DbService } from '@/backend/data/db/DbService';
-import {
-  agentSessionTable,
-  agentTable,
-  assistantTable,
-  knowledgeBaseTable,
-  topicTable,
-} from '@/backend/data/db/schemas';
 import {
   DataApiErrorFactory,
   isDataApiError,
@@ -23,6 +12,17 @@ import {
   type EntitySearchType,
   entitySearchTypes,
 } from '@cherrystudio/universal/data/api/schemas/search';
+import { loggerService } from '@logger';
+import { and, asc, desc, eq, gte, isNull, or, type SQL, sql } from 'drizzle-orm';
+
+import type { DbService } from '@/backend/data/db/DbService';
+import {
+  agentSessionTable,
+  agentTable,
+  assistantTable,
+  knowledgeBaseTable,
+  topicTable,
+} from '@/backend/data/db/schemas';
 
 import { timestampToISO } from './utils/rowMappers';
 

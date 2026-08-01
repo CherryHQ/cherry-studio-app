@@ -1,5 +1,4 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-
 import type { CreateModelDto } from '@cherrystudio/universal/data/api/schemas/models';
 import {
   createUniqueModelId,

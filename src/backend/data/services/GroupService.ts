@@ -12,10 +12,6 @@
  *   scope inference and enforces "batch stays within one entityType".
  */
 
-import { asc, eq } from 'drizzle-orm';
-import type { DbService } from '@/backend/data/db/DbService';
-import { groupTable } from '@/backend/data/db/schemas';
-import type { GroupRow } from '@/backend/data/db/schemas/group';
 import type { OrderRequest } from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
 import type { EntityType } from '@cherrystudio/universal/data/types/entityType';
@@ -24,6 +20,11 @@ import type {
   Group,
   UpdateGroupDto,
 } from '@cherrystudio/universal/data/types/group';
+import { asc, eq } from 'drizzle-orm';
+
+import type { DbService } from '@/backend/data/db/DbService';
+import { groupTable } from '@/backend/data/db/schemas';
+import type { GroupRow } from '@/backend/data/db/schemas/group';
 
 import { applyScopedMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';

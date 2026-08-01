@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { access, readdir, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
+
 import ts from 'typescript';
 
 const REPO_ROOT = path.resolve(__dirname, '..');

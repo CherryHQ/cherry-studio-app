@@ -1,4 +1,3 @@
-import type { GroupService } from '@/backend/data/services/GroupService';
 import {
   OrderBatchRequestSchema,
   OrderRequestSchema,
@@ -11,6 +10,8 @@ import {
   UpdateGroupSchema,
 } from '@cherrystudio/universal/data/api/schemas/groups';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { GroupService } from '@/backend/data/services/GroupService';
 
 export function createGroupHandlers(service: GroupService): HandlersFor<GroupSchemas> {
   return {

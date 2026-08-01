@@ -1,7 +1,6 @@
-import { useCallback, useState } from 'react';
-
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
+import { useCallback, useState } from 'react';
 
 import {
   canAddEndpointToDraft,

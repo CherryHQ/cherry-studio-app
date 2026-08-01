@@ -1,4 +1,3 @@
-import type { ChatToolApprovalInput } from '@/shared/contracts';
 import type {
   BranchMessagesQueryParams,
   CreateMessageDto,
@@ -22,6 +21,8 @@ import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/mo
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
+
+import type { ChatToolApprovalInput } from '@/shared/contracts';
 
 export type ChatStreamRequest = {
   assistantId?: string;

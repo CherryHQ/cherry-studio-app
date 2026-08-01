@@ -1,6 +1,3 @@
-import { loggerService } from '@logger';
-import { type SQL, sql } from 'drizzle-orm';
-
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
 import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import {
@@ -8,6 +5,8 @@ import {
   type KeywordMatchMode,
   splitKeywordsToTerms,
 } from '@cherrystudio/universal/utils/keywordSearch';
+import { loggerService } from '@logger';
+import { type SQL, sql } from 'drizzle-orm';
 
 import { asNumericKey, encodeCursor, parseCursor } from './keysetCursor';
 import { stripMarkdownFormatting } from './searchSnippet';

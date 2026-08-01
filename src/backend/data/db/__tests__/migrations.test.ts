@@ -736,30 +736,31 @@ describe('bundled SQLite migrations', () => {
     }
   });
 
-  test.each(
-    readMigrationEntries().map((entry, index) => [index, entry.tag]),
-  )('upgrading from %i (%s) commits in one transaction with foreign keys intact', (resumeIndex) => {
-    // Every install resumes from wherever it last stopped, and drizzle replays
-    // the whole tail inside one transaction with foreign keys on. Looping over
-    // resume points means the next table-rebuild migration is checked here by
-    // construction, instead of only if someone remembers to add a case.
-    const database = new DatabaseSync(':memory:');
+  test.each(readMigrationEntries().map((entry, index) => [index, entry.tag]))(
+    'upgrading from %i (%s) commits in one transaction with foreign keys intact',
+    (resumeIndex) => {
+      // Every install resumes from wherever it last stopped, and drizzle replays
+      // the whole tail inside one transaction with foreign keys on. Looping over
+      // resume points means the next table-rebuild migration is checked here by
+      // construction, instead of only if someone remembers to add a case.
+      const database = new DatabaseSync(':memory:');
 
-    try {
-      database.exec('PRAGMA foreign_keys = ON');
-      const entries = readMigrationEntries();
-      for (const { sql } of entries.slice(0, resumeIndex)) {
-        applyMigrationSql(database, sql);
+      try {
+        database.exec('PRAGMA foreign_keys = ON');
+        const entries = readMigrationEntries();
+        for (const { sql } of entries.slice(0, resumeIndex)) {
+          applyMigrationSql(database, sql);
+        }
+
+        expect(() => {
+          applyMigrationsAsDrizzleWould(database, entries.slice(resumeIndex));
+        }).not.toThrow();
+        expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      } finally {
+        database.close();
       }
-
-      expect(() => {
-        applyMigrationsAsDrizzleWould(database, entries.slice(resumeIndex));
-      }).not.toThrow();
-      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally {
-      database.close();
-    }
-  });
+    },
+  );
 });
 
 /**

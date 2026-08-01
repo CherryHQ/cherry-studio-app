@@ -1,12 +1,3 @@
-/**
- * Projects `source-url` parts and inline `[1][2]`-style citation markers in
- * assistant text into structured `ContentReference`s under cherry metadata,
- * so the UI can render a citation list instead of raw markdown/source parts.
- *
- * Ported from desktop's `streamManager/persistence/normalizeCitations.ts`.
- */
-import type { SourceUrlUIPart } from 'ai';
-
 import {
   type CherryMessagePart,
   type CherryUIMessage,
@@ -15,6 +6,14 @@ import {
   ReferenceCategory,
 } from '@cherrystudio/universal/data/types/message';
 import { readCherryMeta, withCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
+/**
+ * Projects `source-url` parts and inline `[1][2]`-style citation markers in
+ * assistant text into structured `ContentReference`s under cherry metadata,
+ * so the UI can render a citation list instead of raw markdown/source parts.
+ *
+ * Ported from desktop's `streamManager/persistence/normalizeCitations.ts`.
+ */
+import type { SourceUrlUIPart } from 'ai';
 
 type TextPart = CherryMessagePart & { type: 'text'; text?: string };
 

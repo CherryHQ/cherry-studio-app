@@ -1,3 +1,4 @@
+import type { Message } from '@cherrystudio/universal/data/types/message';
 import type { LegendListRef } from '@legendapp/list/react-native';
 import * as Crypto from 'expo-crypto';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -8,6 +9,7 @@ import { ActivityIndicator, type LayoutChangeEvent, Text, View } from 'react-nat
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { ChatInputProvider } from '@/frontend/features/chat/input';
 import {
   chatInputHorizontalScreenInset,
@@ -21,7 +23,7 @@ import {
   useFloatingChatInputLayout,
 } from '@/frontend/features/chat/workspace';
 import { isIOS } from '@/frontend/utils/constants';
-import type { Message } from '@cherrystudio/universal/data/types/message';
+
 import { PaintingInput } from '../components/PaintingInput';
 import {
   type PaintingGenerationInput,
@@ -29,7 +31,6 @@ import {
   usePaintingGeneration,
 } from '../hooks/usePaintingGeneration';
 import { usePainting, useResolvedPaintingFiles } from '../hooks/usePaintings';
-
 import {
   createPaintingConversationMessages,
   createPendingPaintingConversationMessages,

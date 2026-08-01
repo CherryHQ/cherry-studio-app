@@ -1,6 +1,7 @@
 import { cn } from 'heroui-native/utils';
 import type { ReactNode } from 'react';
 import { type AccessibilityState, Pressable, View } from 'react-native';
+
 import { Image } from '@/frontend/components/nativePrimitives';
 
 type ImageTileProps = {

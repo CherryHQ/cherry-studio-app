@@ -1,14 +1,3 @@
-import { isToolUIPart } from 'ai';
-import type {
-  ChatSendNewTopicTextInput,
-  ChatSendTextInput,
-  ChatSession,
-  ChatSessionListener,
-  ChatSessionTopicSnapshot,
-  ChatToolApprovalInput,
-} from '@/shared/contracts';
-import { NEW_CHAT_SESSION_TOPIC_ID } from '@/shared/contracts';
-import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
 import type {
   CherryMessagePart,
@@ -26,11 +15,24 @@ import {
   readCherryMeta,
   withCherryMeta,
 } from '@cherrystudio/universal/data/types/uiParts';
-import { serializeError } from '@/backend/ai/utils/serializeError';
 import {
   buildFirstUserMessageTitle,
   sanitizeConversationTitle,
 } from '@cherrystudio/universal/utils/conversationTitle';
+import { isToolUIPart } from 'ai';
+
+import { serializeError } from '@/backend/ai/utils/serializeError';
+import type {
+  ChatSendNewTopicTextInput,
+  ChatSendTextInput,
+  ChatSession,
+  ChatSessionListener,
+  ChatSessionTopicSnapshot,
+  ChatToolApprovalInput,
+} from '@/shared/contracts';
+import { NEW_CHAT_SESSION_TOPIC_ID } from '@/shared/contracts';
+import { loggerService } from '@/shared/core/logger/LoggerService';
+
 import type { ChatSessionDependencies } from './ChatSessionDependencies';
 import {
   applyStreamingMessage,

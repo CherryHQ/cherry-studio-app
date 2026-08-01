@@ -1,3 +1,4 @@
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { Select } from 'heroui-native';
 import { ChevronDownIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo } from 'react';
@@ -6,7 +7,6 @@ import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/frontend/components/bottomSheet';
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 
 import { SettingsDialogActionButton } from '../../../components/SettingsDialogActionButton';
 import type { ProviderModelCheckApiKeyOption } from '../hooks/useProviderModelCheck';

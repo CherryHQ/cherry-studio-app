@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { type LayoutChangeEvent, View } from 'react-native';
 import { type DerivedValue, useDerivedValue, useReducedMotion } from 'react-native-reanimated';
 import { useUniwind } from 'uniwind';
+
 import { useShaderClock } from '@/frontend/hooks/useShaderClock';
 import { paintingSkeleton } from '@/frontend/utils/constants';
 

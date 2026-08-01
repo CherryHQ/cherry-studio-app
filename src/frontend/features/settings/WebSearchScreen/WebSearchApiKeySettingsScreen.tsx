@@ -1,14 +1,16 @@
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
-import { useConfirmDialog } from '@/frontend/components/confirmDialog';
-import { BackHeader } from '@/frontend/components/headers';
 import {
   WEB_SEARCH_PROVIDER_IDS,
   type WebSearchProviderId,
 } from '@cherrystudio/universal/data/preference';
 import { isMobileSupportedWebSearchProviderId } from '@cherrystudio/universal/data/presets/webSearchProviders';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ScrollView, View } from 'react-native';
+
+import { useConfirmDialog } from '@/frontend/components/confirmDialog';
+import { BackHeader } from '@/frontend/components/headers';
+
 import {
   normalizeWebSearchApiKeys,
   useWebSearchApiKeySettings,

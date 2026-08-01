@@ -6,11 +6,7 @@ const logger = loggerService.withContext('agentLoop');
 
 import type { AgentLoopHooks, ToolExecutionHooks, ToolExecutionStartEvent } from './types';
 
-export type {
-  ToolExecutionEndEvent,
-  ToolExecutionHooks,
-  ToolExecutionStartEvent,
-} from './types';
+export type { ToolExecutionEndEvent, ToolExecutionHooks, ToolExecutionStartEvent } from './types';
 
 export async function safeCall<F extends (...args: never[]) => unknown>(
   name: string,

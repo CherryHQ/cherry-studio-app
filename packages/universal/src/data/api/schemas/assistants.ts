@@ -1,5 +1,3 @@
-import * as z from 'zod';
-
 import type { OffsetPaginationParams, OffsetPaginationResponse } from '@shared/data/api/types';
 import {
   type Assistant,
@@ -7,6 +5,7 @@ import {
   AssistantSettingsSchema,
 } from '@shared/data/types/assistant';
 import { TagIdSchema } from '@shared/data/types/tag';
+import * as z from 'zod';
 
 import { type OrderEndpoints } from './_endpointHelpers';
 

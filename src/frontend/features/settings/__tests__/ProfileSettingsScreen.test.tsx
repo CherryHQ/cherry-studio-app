@@ -2,6 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
 import type { Backend } from '@/shared/contracts';
+
 import ProfileSettingsScreen from '../ProfileSettingsScreen';
 
 type HeaderAction = { key: string; onPress?: () => void };

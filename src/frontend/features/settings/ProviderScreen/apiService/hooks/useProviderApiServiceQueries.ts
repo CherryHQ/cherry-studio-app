@@ -1,7 +1,8 @@
-import { useCallback, useMemo } from 'react';
-import { useMutation, useQuery } from '@/frontend/data';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry, EndpointConfigs } from '@cherrystudio/universal/data/types/provider';
+import { useCallback, useMemo } from 'react';
+
+import { useMutation, useQuery } from '@/frontend/data';
 
 export function useProviderApiServiceQueries(providerId: string) {
   const providerQuery = useQuery('/providers/:id', {

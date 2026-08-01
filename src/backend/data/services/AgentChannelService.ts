@@ -1,3 +1,10 @@
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
+import type {
+  AgentChannelEntity,
+  CreateAgentChannelDto,
+  UpdateAgentChannelDto,
+} from '@cherrystudio/universal/data/api/schemas/agentChannels';
+import type { AgentChannelType } from '@cherrystudio/universal/data/api/schemas/agentChannels';
 import { and, eq, inArray, type SQL } from 'drizzle-orm';
 
 import type { DbService } from '@/backend/data/db/DbService';
@@ -6,13 +13,6 @@ import {
   agentChannelTable,
   agentChannelTaskTable,
 } from '@/backend/data/db/schemas/agentChannel';
-import type {
-  AgentChannelEntity,
-  CreateAgentChannelDto,
-  UpdateAgentChannelDto,
-} from '@cherrystudio/universal/data/api/schemas/agentChannels';
-import type { AgentChannelType } from '@cherrystudio/universal/data/api/schemas/agentChannels';
-import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
 
 import { nullsToUndefined, timestampToISO } from './utils/rowMappers';
 

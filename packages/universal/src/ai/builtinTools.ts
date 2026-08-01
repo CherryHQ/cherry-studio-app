@@ -1,6 +1,6 @@
-import * as z from 'zod';
 import { KnowledgeItemStatusSchema } from '@shared/data/types/knowledge';
 import { isHttpUrl } from '@shared/utils/url';
+import * as z from 'zod';
 
 /**
  * Wire contracts for builtin agent tools.

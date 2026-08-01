@@ -2,6 +2,7 @@ import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
+
 import { Image } from '@/frontend/components/nativePrimitives';
 import { useBackendModule } from '@/frontend/data';
 

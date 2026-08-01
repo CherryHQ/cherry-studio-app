@@ -1,5 +1,6 @@
-import type { ModelHealthResult } from '@/shared/contracts';
 import type { Model } from '@cherrystudio/universal/data/types/model';
+
+import type { ModelHealthResult } from '@/shared/contracts';
 
 export const providerModelCheckTimeoutMs = 15_000;
 

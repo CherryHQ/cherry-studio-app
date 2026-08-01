@@ -1,5 +1,6 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
+
 import {
   buildProviderBuiltinWebSearchConfig,
   type CherryWebSearchConfig,

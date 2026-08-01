@@ -9,6 +9,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
+
 import { Image } from '@/frontend/components/nativePrimitives';
 import { useAvatar } from '@/frontend/hooks/useAvatar';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';

@@ -26,7 +26,10 @@ export const agentChannelTable = sqliteTable(
     workspace: text({ mode: 'json' }).$type<AgentSessionWorkspaceSource>().notNull(),
     config: text({ mode: 'json' }).$type<Record<string, unknown>>().notNull(),
     isActive: integer({ mode: 'boolean' }).notNull().default(true),
-    activeChatIds: text({ mode: 'json' }).$type<string[]>().notNull().default(sql`'[]'`),
+    activeChatIds: text({ mode: 'json' })
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'`),
     permissionMode: text().$type<AgentPermissionMode | null>(),
     ...createUpdateTimestamps,
   },

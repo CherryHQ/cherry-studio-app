@@ -1,11 +1,4 @@
 import type {
-  McpBackend,
-  McpConnectionConfig,
-  McpServerInfo,
-  McpServerRuntimeSummary,
-  McpToolSummary,
-} from '@/shared/contracts';
-import type {
   CreateMcpServerDto,
   ListMcpServersQueryParams,
   McpUpdateServerResult,
@@ -13,6 +6,14 @@ import type {
 } from '@cherrystudio/universal/data/api/schemas/mcpServers';
 import type { OffsetPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
+
+import type {
+  McpBackend,
+  McpConnectionConfig,
+  McpServerInfo,
+  McpServerRuntimeSummary,
+  McpToolSummary,
+} from '@/shared/contracts';
 
 type McpServerRepository = {
   create(input: CreateMcpServerDto): Promise<StreamableHttpMcpServer>;

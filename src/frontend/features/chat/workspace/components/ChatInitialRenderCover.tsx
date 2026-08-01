@@ -1,5 +1,6 @@
 import { ActivityIndicator } from 'react-native';
 import Animated, { Easing, FadeOut } from 'react-native-reanimated';
+
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 type ChatInitialRenderCoverProps = {

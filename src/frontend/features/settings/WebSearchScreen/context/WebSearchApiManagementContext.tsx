@@ -1,5 +1,3 @@
-import { createContext, use } from 'react';
-import type { useTranslation } from 'react-i18next';
 import type {
   WebSearchCapability,
   WebSearchProvider,
@@ -7,6 +5,8 @@ import type {
   WebSearchProviderOverride,
 } from '@cherrystudio/universal/data/preference';
 import type { WebSearchProviderPreset } from '@cherrystudio/universal/data/presets/webSearchProviders';
+import { createContext, use } from 'react';
+import type { useTranslation } from 'react-i18next';
 
 export type WebSearchApiManagementContextValue = {
   actions: {

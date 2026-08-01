@@ -1,5 +1,3 @@
-import type { ContentSearchService } from '@/backend/data/services/ContentSearchService';
-import type { EntitySearchService } from '@/backend/data/services/EntitySearchService';
 import { toDataApiError } from '@cherrystudio/universal/data/api/errors';
 import {
   ContentSearchQuerySchema,
@@ -7,6 +5,9 @@ import {
   type SearchSchemas,
 } from '@cherrystudio/universal/data/api/schemas/search';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { ContentSearchService } from '@/backend/data/services/ContentSearchService';
+import type { EntitySearchService } from '@/backend/data/services/EntitySearchService';
 
 export function createSearchHandlers(
   contentSearch: ContentSearchService,

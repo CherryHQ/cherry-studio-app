@@ -1,10 +1,11 @@
+import { parseFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
 import { Button } from 'heroui-native/button';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/frontend/components/bottomSheet';
-import { parseFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
+
 import type { PendingToolApproval } from '../session/chatSessionProjection';
 import { getBuiltInToolPresentation } from '../utils/builtInToolPresentation';
 

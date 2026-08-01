@@ -1,7 +1,3 @@
-import { and, asc, count, desc, eq, gt, isNull, lt, ne, or, sql, type SQL } from 'drizzle-orm';
-
-import type { DbService } from '@/backend/data/db/DbService';
-import { knowledgeItemTable } from '@/backend/data/db/schemas/knowledge';
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
 import type {
   KnowledgeItemListResponse,
@@ -13,6 +9,10 @@ import {
   KnowledgeItemSchema,
   type KnowledgeItemStatus,
 } from '@cherrystudio/universal/data/types/knowledge';
+import { and, asc, count, desc, eq, gt, isNull, lt, ne, or, sql, type SQL } from 'drizzle-orm';
+
+import type { DbService } from '@/backend/data/db/DbService';
+import { knowledgeItemTable } from '@/backend/data/db/schemas/knowledge';
 
 import type { KnowledgeBaseService } from './KnowledgeBaseService';
 import { timestampToISO } from './utils/rowMappers';

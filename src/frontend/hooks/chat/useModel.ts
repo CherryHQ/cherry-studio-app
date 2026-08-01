@@ -1,6 +1,7 @@
-import { useQuery } from '@/frontend/data';
 import type { ListModelsQuery } from '@cherrystudio/universal/data/api/schemas/models';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
+
+import { useQuery } from '@/frontend/data';
 
 const EMPTY_MODELS: readonly Model[] = Object.freeze([]);
 

@@ -1,7 +1,3 @@
-import { useEffect } from 'react';
-import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 import type {
   PreferenceClient,
   PreferenceDefaultScopeType,
@@ -10,6 +6,10 @@ import type {
   PreferenceMapping,
 } from '@cherrystudio/universal/data/preference';
 import { getDefaultValue, ThemeMode } from '@cherrystudio/universal/data/preference';
+import { useEffect } from 'react';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 
 import { useMultiplePreferences, usePreference } from '../usePreference';
 

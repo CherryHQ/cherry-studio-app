@@ -1,7 +1,7 @@
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import ProviderModelAddScreen from '../ProviderModelAddScreen';
 
 const endpointTypeLabel = 'settings.provider.models.addEndpointTypeLabel';

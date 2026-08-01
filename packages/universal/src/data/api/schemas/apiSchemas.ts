@@ -1,10 +1,10 @@
-import type { AssistantSchemas } from './assistants';
 import type { AgentChannelSchemas } from './agentChannels';
 import type { AgentSchemas } from './agents';
 import type { AgentSessionMessageSchemas } from './agentSessionMessages';
 import type { AgentSessionSchemas } from './agentSessions';
 import type { AgentWorkspaceSchemas } from './agentWorkspaces';
 import type { AiUsageRecordSchemas } from './aiUsageRecords';
+import type { AssistantSchemas } from './assistants';
 import type { FileSchemas } from './files';
 import type { GroupSchemas } from './groups';
 import type { JobSchemas } from './jobs';

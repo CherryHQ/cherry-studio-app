@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import sharp from 'sharp';
 
 import { CATALOG_ONLY_PROVIDER_ICONS } from './catalog-only-provider-icons.generated';

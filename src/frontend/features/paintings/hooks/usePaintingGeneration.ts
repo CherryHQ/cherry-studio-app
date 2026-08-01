@@ -1,12 +1,14 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { useBackendModule } from '@/frontend/data';
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
 import type {
   PaintingGenerationResult as BackendPaintingGenerationResult,
   PaintingGenerationOutput,
 } from '@/shared/contracts';
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
+
 import { useSyncPaintingQueries } from './usePaintings';
 
 export type PaintingGenerationStatus = 'idle' | 'generating' | 'revealing';

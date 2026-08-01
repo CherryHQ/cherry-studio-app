@@ -1,4 +1,5 @@
 import type { CherryInBackend } from '@/shared/contracts';
+
 import { CherryInService, type CherryInServiceDependencies } from '../CherryInService';
 
 function createSubject() {

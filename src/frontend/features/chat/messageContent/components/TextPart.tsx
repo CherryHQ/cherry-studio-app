@@ -1,5 +1,6 @@
-import { Text } from 'heroui-native/text';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
+import { Text } from 'heroui-native/text';
+
 import type { ResolvedCitationText } from '../citations';
 import type { MessagePartRenderMode } from './MessageParts';
 import { PartMarkdown } from './PartMarkdown';

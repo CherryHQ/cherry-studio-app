@@ -1,4 +1,3 @@
-import type { ProvidersBackend } from '@/shared/contracts';
 import type {
   CreateProviderInput,
   UpdateProviderApiKeyInput,
@@ -9,6 +8,8 @@ import type {
   AuthConfig,
   Provider,
 } from '@cherrystudio/universal/data/types/provider';
+
+import type { ProvidersBackend } from '@/shared/contracts';
 
 type ProviderRepository = {
   canRemove(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean;

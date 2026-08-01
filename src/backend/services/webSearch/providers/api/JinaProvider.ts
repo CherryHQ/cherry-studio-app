@@ -2,6 +2,7 @@ import type {
   WebSearchExecutionConfig,
   WebSearchResponse,
 } from '@cherrystudio/universal/data/types/webSearch';
+
 import { resolveProviderApiHost } from '../../utils/provider';
 import { withoutTrailingSlash } from '../../utils/url';
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';

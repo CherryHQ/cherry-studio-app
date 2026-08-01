@@ -1,7 +1,8 @@
+import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
+
 import type { DbService } from '@/backend/data/db/DbService';
 import { createRootMessageTx } from '@/backend/data/services/MessageService';
 import { insertWithOrderKey } from '@/backend/data/services/utils/orderKey';
-import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
 
 import { DefaultAssistantSeeder } from '../DefaultAssistantSeeder';
 

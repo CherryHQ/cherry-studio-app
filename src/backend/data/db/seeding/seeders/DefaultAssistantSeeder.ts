@@ -1,9 +1,9 @@
+import { DEFAULT_ASSISTANT_SEED } from '@cherrystudio/universal/data/presets/defaultAssistant';
 import { isNull } from 'drizzle-orm';
 
 import { assistantTable, messageTable, topicTable } from '@/backend/data/db/schemas';
 import { createRootMessageTx } from '@/backend/data/services/MessageService';
 import { insertWithOrderKey } from '@/backend/data/services/utils/orderKey';
-import { DEFAULT_ASSISTANT_SEED } from '@cherrystudio/universal/data/presets/defaultAssistant';
 
 import { hashObject } from '../hashObject';
 import type { DatabaseSeeder } from '../types';

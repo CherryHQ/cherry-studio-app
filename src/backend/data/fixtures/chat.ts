@@ -1,9 +1,8 @@
 import type { ModelCapability } from '@cherrystudio/provider-registry';
-import { generateNKeysBetween } from 'fractional-indexing';
-
 import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
 import { type CherryMessagePart, type Message } from '@cherrystudio/universal/data/types/message';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
+import { generateNKeysBetween } from 'fractional-indexing';
 
 const baseDateMs = Date.parse('2026-05-15T00:00:00.000Z');
 // Must exceed the largest topic's messageCount (1000) * the per-message offset

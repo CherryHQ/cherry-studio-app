@@ -1,4 +1,3 @@
-import type { MiniAppService } from '@/backend/data/services/MiniAppService';
 import {
   OrderBatchRequestSchema,
   OrderRequestSchema,
@@ -10,6 +9,8 @@ import {
   UpdateMiniAppSchema,
 } from '@cherrystudio/universal/data/api/schemas/miniApps';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { MiniAppService } from '@/backend/data/services/MiniAppService';
 
 export function createMiniAppHandlers(service: MiniAppService): HandlersFor<MiniAppSchemas> {
   return {

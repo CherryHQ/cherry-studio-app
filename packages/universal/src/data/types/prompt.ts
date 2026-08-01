@@ -5,9 +5,8 @@
  * Replaces the legacy QuickPhrase system.
  */
 
-import * as z from 'zod';
-
 import type { SearchParams } from '@shared/data/api/types';
+import * as z from 'zod';
 
 // ============================================================================
 // Prompt Schemas

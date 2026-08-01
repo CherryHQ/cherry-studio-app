@@ -1,4 +1,3 @@
-import type { TopicService } from '@/backend/data/services/TopicService';
 import {
   OrderBatchRequestSchema,
   OrderRequestSchema,
@@ -13,6 +12,8 @@ import {
   UpdateTopicSchema,
 } from '@cherrystudio/universal/data/api/schemas/topics';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { TopicService } from '@/backend/data/services/TopicService';
 
 export function createTopicHandlers(service: TopicService): HandlersFor<TopicSchemas> {
   return {

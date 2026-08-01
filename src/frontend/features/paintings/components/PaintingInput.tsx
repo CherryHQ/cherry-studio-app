@@ -1,5 +1,7 @@
 import { type ImageGenerationMode, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { resolveIcon } from '@cherrystudio/ui/icons';
+import { isUniqueModelId, type UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,8 +17,6 @@ import {
   useChatInputState,
 } from '@/frontend/features/chat/input';
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
-import { isUniqueModelId, type UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
 import type {
   PaintingGenerationInput,

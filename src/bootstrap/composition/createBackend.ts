@@ -1,4 +1,7 @@
+import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { readUIMessageStream, type UIMessageChunk } from 'ai';
+
 import {
   discardPreparedFiles,
   imageUriToDataUrl,
@@ -21,15 +24,13 @@ import {
   replaceUserAvatar,
   resolveUserAvatarUri,
 } from '@/backend/services/profile/userAvatarStorage';
-import { ProvidersService } from '@/backend/services/providers/ProvidersService';
 import {
   getProviderAvatarUri,
   saveProviderAvatar,
 } from '@/backend/services/providers/providerAvatarStorage';
+import { ProvidersService } from '@/backend/services/providers/ProvidersService';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
-import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message';
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 
 export type BackendComposition = {
   backend: Backend;

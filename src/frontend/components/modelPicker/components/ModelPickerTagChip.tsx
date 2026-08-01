@@ -15,6 +15,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+
 import type { ModelPickerTag } from '../utils/modelPickerData';
 import { getModelPickerTagLabelKey } from '../utils/modelPickerData';
 

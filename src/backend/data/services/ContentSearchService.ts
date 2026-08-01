@@ -1,7 +1,3 @@
-import { loggerService } from '@logger';
-import { sql } from 'drizzle-orm';
-
-import type { DbService } from '@/backend/data/db/DbService';
 import {
   DataApiErrorFactory,
   ErrorCode,
@@ -24,6 +20,10 @@ import {
   coerceSearchRole,
   TOPIC_MESSAGE_SEARCH_ROLES,
 } from '@cherrystudio/universal/data/types/message';
+import { loggerService } from '@logger';
+import { sql } from 'drizzle-orm';
+
+import type { DbService } from '@/backend/data/db/DbService';
 
 import { type SearchFetchContext, searchWithCursor } from './utils/ftsSearch';
 import { timestampToISO } from './utils/rowMappers';

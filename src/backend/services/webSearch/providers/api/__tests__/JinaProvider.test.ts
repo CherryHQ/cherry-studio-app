@@ -1,6 +1,7 @@
-import { ApiKeyRotationState } from '@/backend/services/webSearch/utils/provider';
 import type { WebSearchProvider } from '@cherrystudio/universal/data/preference';
 import type { WebSearchExecutionConfig } from '@cherrystudio/universal/data/types/webSearch';
+
+import { ApiKeyRotationState } from '@/backend/services/webSearch/utils/provider';
 
 import { JinaProvider } from '../JinaProvider';
 
@@ -26,21 +27,21 @@ describe('JinaProvider', () => {
       invoke: (provider: JinaProvider) => provider.fetchUrls('https://example.com', config),
       response: { data: { content: 'Example content', title: 'Example' } },
     },
-  ])('allows anonymous Jina requests without an Authorization header', async ({
-    invoke,
-    response,
-  }) => {
-    const fetchMock = jest.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit) =>
-        new Response(JSON.stringify(response), { status: 200 }),
-    );
-    global.fetch = fetchMock;
+  ])(
+    'allows anonymous Jina requests without an Authorization header',
+    async ({ invoke, response }) => {
+      const fetchMock = jest.fn(
+        async (_input: RequestInfo | URL, _init?: RequestInit) =>
+          new Response(JSON.stringify(response), { status: 200 }),
+      );
+      global.fetch = fetchMock;
 
-    await expect(invoke(createProvider([]))).resolves.toBeDefined();
+      await expect(invoke(createProvider([]))).resolves.toBeDefined();
 
-    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
-    expect(headers.has('Authorization')).toBe(false);
-  });
+      const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
+      expect(headers.has('Authorization')).toBe(false);
+    },
+  );
 
   test('uses a configured API key when available', async () => {
     const fetchMock = jest.fn(

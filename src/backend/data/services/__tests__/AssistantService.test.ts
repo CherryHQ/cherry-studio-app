@@ -1,6 +1,8 @@
+import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
+
 import type { DbService } from '@/backend/data/db/DbService';
 import type { AssistantRow } from '@/backend/data/db/schemas';
-import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
+
 import type { PreferenceService } from '../../PreferenceService';
 import { AssistantService } from '../AssistantService';
 import type { ModelService } from '../ModelService';

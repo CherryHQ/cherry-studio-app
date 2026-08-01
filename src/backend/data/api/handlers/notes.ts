@@ -1,4 +1,3 @@
-import type { NoteService } from '@/backend/data/services/NoteService';
 import {
   DeleteNoteQuerySchema,
   ListNoteQuerySchema,
@@ -7,6 +6,8 @@ import {
   UpsertNoteSchema,
 } from '@cherrystudio/universal/data/api/schemas/notes';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { NoteService } from '@/backend/data/services/NoteService';
 
 export function createNoteHandlers(service: NoteService): HandlersFor<NoteSchemas> {
   return {

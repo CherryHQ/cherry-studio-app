@@ -1,6 +1,7 @@
-import type { PinService } from '@/backend/data/services/PinService';
 import type { PinSchemas } from '@cherrystudio/universal/data/api/schemas/pins';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { PinService } from '@/backend/data/services/PinService';
 
 type PinData = Pick<PinService, 'list' | 'pin' | 'unpin'>;
 

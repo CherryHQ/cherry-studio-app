@@ -13,10 +13,9 @@
 
 import type { LanguageModelV3Message } from '@ai-sdk/provider';
 import { definePlugin } from '@cherrystudio/ai-core';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { LanguageModelMiddleware } from 'ai';
 import { estimateTokenCount } from 'tokenx';
-
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 const cacheProviderOptions = {
   anthropic: { cacheControl: { type: 'ephemeral' } },

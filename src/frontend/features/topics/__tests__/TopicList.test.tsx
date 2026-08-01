@@ -1,7 +1,6 @@
+import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
 
 import { TopicList } from '../TopicList';
 

@@ -2,7 +2,6 @@ import type { AnthropicProviderOptions } from '@ai-sdk/anthropic';
 import type { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 import type { OpenAIResponsesProviderOptions } from '@ai-sdk/openai';
 import type { XaiResponsesProviderOptions } from '@ai-sdk/xai';
-
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
@@ -43,6 +42,7 @@ import {
   isSupportedThinkingTokenZhipuModel,
   isSupportNoneReasoningEffortModel,
 } from '@cherrystudio/universal/utils/model';
+
 import {
   EFFORT_RATIO,
   isSystemProviderId,

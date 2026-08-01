@@ -1,8 +1,3 @@
-import { and, asc, eq, inArray, or, type SQL } from 'drizzle-orm';
-
-import type { DbService } from '@/backend/data/db/DbService';
-import { entityTagTable, tagTable } from '@/backend/data/db/schemas';
-import type { TagRow } from '@/backend/data/db/schemas/tagging';
 import type { SetTagEntitiesDto } from '@cherrystudio/universal/data/api/schemas/tags';
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
 import type { EntityType } from '@cherrystudio/universal/data/types/entityType';
@@ -12,6 +7,11 @@ import type {
   Tag,
   UpdateTagDto,
 } from '@cherrystudio/universal/data/types/tag';
+import { and, asc, eq, inArray, or, type SQL } from 'drizzle-orm';
+
+import type { DbService } from '@/backend/data/db/DbService';
+import { entityTagTable, tagTable } from '@/backend/data/db/schemas';
+import type { TagRow } from '@/backend/data/db/schemas/tagging';
 
 import { timestampToISO } from './utils/rowMappers';
 

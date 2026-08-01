@@ -1,10 +1,3 @@
-import { and, asc, eq } from 'drizzle-orm';
-
-import type { DbService } from '@/backend/data/db/DbService';
-import {
-  type AgentWorkspaceRow,
-  agentWorkspaceTable,
-} from '@/backend/data/db/schemas/agentWorkspace';
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
 import type { OrderRequest } from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
 import {
@@ -13,6 +6,13 @@ import {
   AgentWorkspaceTypeSchema,
   type UpdateAgentWorkspaceDto,
 } from '@cherrystudio/universal/data/api/schemas/agentWorkspaces';
+import { and, asc, eq } from 'drizzle-orm';
+
+import type { DbService } from '@/backend/data/db/DbService';
+import {
+  type AgentWorkspaceRow,
+  agentWorkspaceTable,
+} from '@/backend/data/db/schemas/agentWorkspace';
 
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';

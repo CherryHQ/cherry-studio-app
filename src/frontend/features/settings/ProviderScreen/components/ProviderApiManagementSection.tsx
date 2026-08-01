@@ -1,7 +1,8 @@
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { View } from 'react-native';
 
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { isOAuthProvider } from '@/shared/oauth';
+
 import { ProviderApiServiceApiKeysField, ProviderApiServiceEndpointField } from '../apiService';
 import { CherryInOauth } from './CherryInOauth';
 

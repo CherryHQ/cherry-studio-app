@@ -1,3 +1,4 @@
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useRouter } from 'expo-router';
 import { PlusIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo } from 'react';
@@ -7,7 +8,7 @@ import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
-import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
+
 import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { SettingsServiceRow } from '../components/SettingsServiceRow';
 

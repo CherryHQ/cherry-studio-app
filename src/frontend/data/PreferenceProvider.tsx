@@ -1,6 +1,5 @@
-import { createContext, type PropsWithChildren, use } from 'react';
-
 import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
+import { createContext, type PropsWithChildren, use } from 'react';
 
 const PreferenceContext = createContext<PreferenceClient | null>(null);
 

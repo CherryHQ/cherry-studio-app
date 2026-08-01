@@ -1,15 +1,4 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
-import { asc, eq, inArray } from 'drizzle-orm';
-import * as Crypto from 'expo-crypto';
-
-import type { CacheService } from '@/backend/data/CacheService';
-import type { DbService } from '@/backend/data/db/DbService';
-import { userModelTable } from '@/backend/data/db/schemas/userModel';
-import type {
-  InsertUserProviderRow,
-  UserProviderRow,
-} from '@/backend/data/db/schemas/userProvider';
-import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type {
@@ -26,6 +15,17 @@ import {
   DEFAULT_API_FEATURES as DEFAULT_FEATURES,
   DEFAULT_PROVIDER_SETTINGS,
 } from '@cherrystudio/universal/data/types/provider';
+import { asc, eq, inArray } from 'drizzle-orm';
+import * as Crypto from 'expo-crypto';
+
+import type { CacheService } from '@/backend/data/CacheService';
+import type { DbService } from '@/backend/data/db/DbService';
+import { userModelTable } from '@/backend/data/db/schemas/userModel';
+import type {
+  InsertUserProviderRow,
+  UserProviderRow,
+} from '@/backend/data/db/schemas/userProvider';
+import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
 
 import type { PinService } from './PinService';
 import { providerRegistryService } from './ProviderRegistryService';

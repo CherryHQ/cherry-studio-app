@@ -14,6 +14,7 @@ import { ScrollView, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
 import { isAndroid } from '@/frontend/utils/constants';
+
 import { SettingsSection } from './components/SettingsSection';
 
 const ANDROID_GRANT_READ_URI_PERMISSION_FLAG = 1;

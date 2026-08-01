@@ -5,9 +5,9 @@ import {
   zodSchema,
 } from '@ai-sdk/provider-utils';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import * as z from 'zod';
 import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
+import * as z from 'zod';
 
 import { defaultHeaders, formatApiHost, getBaseUrl } from '../utils/provider';
 import {

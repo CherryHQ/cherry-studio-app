@@ -1,6 +1,7 @@
-import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import type { FileSchemas } from '@cherrystudio/universal/data/api/schemas/files';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 
 type FileData = Pick<FileEntryService, 'get' | 'resolve' | 'resolveRenderableUri'>;
 

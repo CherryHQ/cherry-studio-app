@@ -1,3 +1,4 @@
+import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import * as Clipboard from 'expo-clipboard';
 import { Button } from 'heroui-native/button';
 import { Input } from 'heroui-native/input';
@@ -15,7 +16,6 @@ import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
 import { Pressable, Text, View } from 'react-native';
 
-import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import { normalizeApiKeySingleLine } from '../utils/providerApiServiceApiKeys';
 import { providerApiServiceStyles } from '../utils/providerApiServiceStyles';

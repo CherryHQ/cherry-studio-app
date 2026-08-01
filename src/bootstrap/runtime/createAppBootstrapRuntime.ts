@@ -1,3 +1,6 @@
+import type { ApiClient } from '@cherrystudio/universal/data/api/types';
+import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
+
 import { createDataApiHandlers } from '@/backend/data/api/handlers/apiHandlers';
 import { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
@@ -7,8 +10,6 @@ import { createBackendServices } from '@/bootstrap/composition/createBackendServ
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
 import { runPostReadyTasks } from '@/bootstrap/runtime/runPostReadyTasks';
 import type { Backend } from '@/shared/contracts';
-import type { ApiClient } from '@cherrystudio/universal/data/api/types';
-import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
 
 export type AppBootstrapRuntime = {
   readonly backend: Backend;

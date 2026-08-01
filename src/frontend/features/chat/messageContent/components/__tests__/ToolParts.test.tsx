@@ -1,9 +1,9 @@
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { BellRingIcon } from 'lucide-uniwind/png';
 import type { ReactElement, ReactNode } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { McpToolPart } from '../McpToolPart';
 import { MetaToolPart } from '../MetaToolPart';
 import { ToolPart } from '../ToolPart';

@@ -1,5 +1,3 @@
-import type { TranslateHistoryService } from '@/backend/data/services/TranslateHistoryService';
-import type { TranslateLanguageService } from '@/backend/data/services/TranslateLanguageService';
 import {
   CreateTranslateHistorySchema,
   CreateTranslateLanguageSchema,
@@ -9,6 +7,9 @@ import {
   UpdateTranslateLanguageSchema,
 } from '@cherrystudio/universal/data/api/schemas/translate';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { TranslateHistoryService } from '@/backend/data/services/TranslateHistoryService';
+import type { TranslateLanguageService } from '@/backend/data/services/TranslateLanguageService';
 
 export function createTranslateHandlers(
   history: TranslateHistoryService,

@@ -1,7 +1,7 @@
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import type { ReactElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { FilePart } from '../FilePart';
 
 const mockPreviewFile = jest.fn(async (_input: unknown) => undefined);

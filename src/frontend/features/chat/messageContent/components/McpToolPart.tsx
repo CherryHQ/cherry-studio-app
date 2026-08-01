@@ -1,6 +1,3 @@
-import { Image } from 'expo-image';
-import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
 import {
   type NormalizedMcpContent,
   normalizeMcpResult,
@@ -12,6 +9,10 @@ import {
   readCherryMeta,
   readCherryToolMetadata,
 } from '@cherrystudio/universal/data/types/uiParts';
+import { Image } from 'expo-image';
+import { useTranslation } from 'react-i18next';
+import { Text, View } from 'react-native';
+
 import { ToolPartSectionTitle, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';
 

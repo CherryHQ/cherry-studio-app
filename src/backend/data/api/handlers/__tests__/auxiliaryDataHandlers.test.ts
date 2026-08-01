@@ -2,6 +2,7 @@ import type { AgentGlobalSkillService } from '@/backend/data/services/AgentGloba
 import type { ContentSearchService } from '@/backend/data/services/ContentSearchService';
 import type { EntitySearchService } from '@/backend/data/services/EntitySearchService';
 import type { TemporaryChatService } from '@/backend/data/services/TemporaryChatService';
+
 import { createSearchHandlers } from '../search';
 import { createSkillHandlers } from '../skills';
 import { createTemporaryChatHandlers } from '../temporaryChats';

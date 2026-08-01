@@ -1,9 +1,8 @@
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { Accordion } from 'heroui-native/accordion';
 import { SearchIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Text, View } from 'react-native';
-
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 
 import { SourceUrlItem } from './SourceUrlItem';
 

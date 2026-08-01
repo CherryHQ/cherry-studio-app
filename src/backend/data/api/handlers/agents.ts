@@ -1,5 +1,3 @@
-import type { AgentService } from '@/backend/data/services/AgentService';
-import type { AgentTaskService } from '@/backend/data/services/AgentTaskService';
 import { DataApiErrorFactory, toDataApiError } from '@cherrystudio/universal/data/api/errors';
 import {
   OrderBatchRequestSchema,
@@ -14,6 +12,9 @@ import {
   UpdateAgentSchema,
 } from '@cherrystudio/universal/data/api/schemas/agents';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { AgentService } from '@/backend/data/services/AgentService';
+import type { AgentTaskService } from '@/backend/data/services/AgentTaskService';
 
 function pagination(query: ListQuery) {
   const page = query.page ?? 1;

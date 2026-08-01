@@ -1,5 +1,4 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-
 import { resolveReasoningEffortForModel } from '@cherrystudio/universal/ai/reasoning';
 import type { AssistantSettings } from '@cherrystudio/universal/data/types/assistant';
 import type { Model } from '@cherrystudio/universal/data/types/model';

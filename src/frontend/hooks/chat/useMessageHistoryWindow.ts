@@ -1,6 +1,8 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { useInfiniteQuery } from '@/frontend/data';
 import type { BranchMessagesResponse, Message } from '@cherrystudio/universal/data/types/message';
+import { useCallback, useMemo, useRef, useState } from 'react';
+
+import { useInfiniteQuery } from '@/frontend/data';
+
 import { useMessageRenderWindow } from './useMessageRenderWindow';
 import {
   getOlderLoadAction,

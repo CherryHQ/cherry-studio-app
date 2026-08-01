@@ -3,9 +3,9 @@
  * paths share one {@link deferToolOutput} call so the policy cannot drift between them.
  */
 
+import type { CherryMessagePart } from '@shared/data/types/message';
 import type { UIMessageChunk } from 'ai';
 import { isToolUIPart } from 'ai';
-import type { CherryMessagePart } from '@shared/data/types/message';
 
 import { deferToolOutput } from './deferredToolResult';
 

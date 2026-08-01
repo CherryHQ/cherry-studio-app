@@ -1,6 +1,3 @@
-import { useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useMultiplePreferences } from '@/frontend/data/hooks';
 import type {
   WebSearchCapability,
   WebSearchCompressionMethod,
@@ -11,6 +8,11 @@ import {
   getMobileSupportedWebSearchProvidersByCapability,
   type WebSearchProviderPreset,
 } from '@cherrystudio/universal/data/presets/webSearchProviders';
+import { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useMultiplePreferences } from '@/frontend/data/hooks';
+
 import type { SettingSelectOption } from '../components/SettingSelect';
 import { mergeWebSearchProviderOverride } from '../WebSearchScreen/utils/providerSettings';
 

@@ -25,7 +25,6 @@ import {
   getMobileRegistryLoader,
   type MobileRegistryLoader,
 } from '@cherrystudio/provider-registry/mobile';
-
 import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
 import type {
   ApiFeatures,

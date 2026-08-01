@@ -1,9 +1,8 @@
+import type { PermissionPreferenceKey } from '@cherrystudio/universal/data/preference';
 import * as Calendar from 'expo-calendar';
 import * as Location from 'expo-location';
 import { AppState, Linking, Platform } from 'react-native';
 import type { HealthKit } from 'react-native-nitro-healthkit';
-
-import type { PermissionPreferenceKey } from '@cherrystudio/universal/data/preference';
 
 export type DevicePermission = 'calendar' | 'health' | 'location' | 'reminders';
 export type DevicePermissionAccess = 'read' | 'write';

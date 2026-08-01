@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useRef } from 'react';
-import { useMutation, useQuery } from '@/frontend/data';
 import type { EntityType } from '@cherrystudio/universal/data/types/entityType';
 import type { Pin } from '@cherrystudio/universal/data/types/pin';
+import { useCallback, useMemo, useRef } from 'react';
+
+import { useMutation, useQuery } from '@/frontend/data';
 
 const EMPTY_PINS: readonly Pin[] = Object.freeze([]);
 

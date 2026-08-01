@@ -1,6 +1,8 @@
-import { useCallback, useState } from 'react';
-import { usePreference } from '@/frontend/data/hooks';
 import type { WebSearchProviderId } from '@cherrystudio/universal/data/preference';
+import { useCallback, useState } from 'react';
+
+import { usePreference } from '@/frontend/data/hooks';
+
 import {
   buildWebSearchApiKeyEntries,
   createEmptyWebSearchApiKeyEntry,

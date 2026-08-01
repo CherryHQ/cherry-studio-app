@@ -4,7 +4,6 @@ import {
   MODALITY,
   MODEL_CAPABILITY,
 } from '@cherrystudio/provider-registry';
-
 import type { Model } from '@cherrystudio/universal/data/types/model';
 
 /**

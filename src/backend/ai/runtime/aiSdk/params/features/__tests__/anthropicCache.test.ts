@@ -1,7 +1,6 @@
 import type { LanguageModelV3CallOptions, LanguageModelV3Prompt } from '@ai-sdk/provider';
-import type { LanguageModelMiddleware } from 'ai';
-
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
+import type { LanguageModelMiddleware } from 'ai';
 
 import { createAnthropicCachePlugin } from '../anthropicCache';
 

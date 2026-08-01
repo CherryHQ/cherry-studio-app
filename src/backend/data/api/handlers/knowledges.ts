@@ -1,5 +1,3 @@
-import type { KnowledgeBaseService } from '@/backend/data/services/KnowledgeBaseService';
-import type { KnowledgeItemService } from '@/backend/data/services/KnowledgeItemService';
 import {
   type KnowledgeSchemas,
   ListKnowledgeBasesQuerySchema,
@@ -7,6 +5,9 @@ import {
   UpdateKnowledgeBaseSchema,
 } from '@cherrystudio/universal/data/api/schemas/knowledges';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { KnowledgeBaseService } from '@/backend/data/services/KnowledgeBaseService';
+import type { KnowledgeItemService } from '@/backend/data/services/KnowledgeItemService';
 
 export function createKnowledgeHandlers(
   bases: KnowledgeBaseService,

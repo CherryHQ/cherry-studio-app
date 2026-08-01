@@ -15,7 +15,6 @@ import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { resolveProviderType } from '@cherrystudio/universal/data/types/provider';
-
 import {
   isClaude4SeriesModel,
   isClaude45ReasoningModel,

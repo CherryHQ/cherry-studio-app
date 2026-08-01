@@ -1,3 +1,5 @@
+import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
+import type { ApiKeyEntry, EndpointConfigs } from '@cherrystudio/universal/data/types/provider';
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,12 +13,12 @@ import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { Image } from '@/frontend/components/nativePrimitives';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
-import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
-import type { ApiKeyEntry, EndpointConfigs } from '@cherrystudio/universal/data/types/provider';
+
 import { SettingsIconButton } from '../components/SettingsIconButton';
 import { normalizeApiKeySingleLine } from './apiService/utils/providerApiServiceApiKeys';
 import { providerApiServiceStyles } from './apiService/utils/providerApiServiceStyles';

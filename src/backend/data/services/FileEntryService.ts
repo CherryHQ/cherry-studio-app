@@ -1,7 +1,3 @@
-import { eq } from 'drizzle-orm';
-
-import type { Database, DbService } from '@/backend/data/db/DbService';
-import { type FileEntryRow, fileEntryTable } from '@/backend/data/db/schemas';
 import {
   type FileEntry,
   type FileEntryId,
@@ -9,6 +5,10 @@ import {
   type PreparedInternalFile,
   type ResolvedFile,
 } from '@cherrystudio/universal/data/types/file';
+import { eq } from 'drizzle-orm';
+
+import type { Database, DbService } from '@/backend/data/db/DbService';
+import { type FileEntryRow, fileEntryTable } from '@/backend/data/db/schemas';
 
 import { resolveInternalFileUri } from './fileStorage';
 

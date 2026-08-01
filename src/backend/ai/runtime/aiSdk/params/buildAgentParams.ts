@@ -1,16 +1,5 @@
-import type { AiPlugin } from '@cherrystudio/ai-core';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
-import { type ToolCallRepairFunction, type ToolSet } from 'ai';
-import * as Crypto from 'expo-crypto';
-import type { PreferenceService } from '@/backend/data/PreferenceService';
-import type {
-  AiUsageCaptureContext,
-  AiUsageRecordService,
-  MessageRef,
-} from '@/backend/data/services/AiUsageRecordService';
-import type { AssistantService } from '@/backend/data/services/AssistantService';
-import type { ModelService } from '@/backend/data/services/ModelService';
-import type { ProviderService } from '@/backend/data/services/ProviderService';
+import type { AiPlugin } from '@cherrystudio/ai-core';
 import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
@@ -21,6 +10,19 @@ import {
   isForcedNativeWebSearchModel,
   isFunctionCallingModel,
 } from '@cherrystudio/universal/utils/model';
+import { type ToolCallRepairFunction, type ToolSet } from 'ai';
+import * as Crypto from 'expo-crypto';
+
+import type { PreferenceService } from '@/backend/data/PreferenceService';
+import type {
+  AiUsageCaptureContext,
+  AiUsageRecordService,
+  MessageRef,
+} from '@/backend/data/services/AiUsageRecordService';
+import type { AssistantService } from '@/backend/data/services/AssistantService';
+import type { ModelService } from '@/backend/data/services/ModelService';
+import type { ProviderService } from '@/backend/data/services/ProviderService';
+
 import { createAiUsagePlugin } from '../../../hooks/billingHook';
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
 import type { ToolService } from '../../../tools';
@@ -131,9 +133,9 @@ export async function buildAgentParams({
     : undefined;
   const shouldUseExternalWebSearch = Boolean(
     shouldIncludeExternalTools &&
-      assistant?.settings.enableWebSearch &&
-      isFunctionCallingModel(model) &&
-      (hasConfiguredExternalWebSearch || !capabilities?.webSearchPluginConfig),
+    assistant?.settings.enableWebSearch &&
+    isFunctionCallingModel(model) &&
+    (hasConfiguredExternalWebSearch || !capabilities?.webSearchPluginConfig),
   );
   let providerOptions =
     settingsAssistant && capabilities

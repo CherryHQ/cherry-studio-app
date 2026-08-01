@@ -3,6 +3,7 @@ import type {
   WebSearchExecutionConfig,
   WebSearchResponse,
 } from '@cherrystudio/universal/data/types/webSearch';
+
 import type { ApiKeyRotationState } from '../utils/provider';
 import type { BaseWebSearchProvider } from './base/BaseWebSearchProvider';
 import { WEB_SEARCH_PROVIDER_REGISTRY } from './registry';

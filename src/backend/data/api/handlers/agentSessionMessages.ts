@@ -1,4 +1,3 @@
-import type { AgentSessionMessageService } from '@/backend/data/services/AgentSessionMessageService';
 import { projectMessagePartsForRenderer } from '@cherrystudio/universal/ai/transport';
 import { toDataApiError } from '@cherrystudio/universal/data/api/errors';
 import {
@@ -8,6 +7,8 @@ import {
   UpdateAgentSessionMessageSchema,
 } from '@cherrystudio/universal/data/api/schemas/agentSessionMessages';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { AgentSessionMessageService } from '@/backend/data/services/AgentSessionMessageService';
 
 function projectForRenderer(
   message: AgentSessionMessageEntity,

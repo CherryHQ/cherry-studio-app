@@ -16,8 +16,10 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useUniwind } from 'uniwind';
+
 import { Image } from '@/frontend/components/nativePrimitives';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+
 import {
   chatInputBottomToolbarHeight,
   chatInputMinComposerHeight,

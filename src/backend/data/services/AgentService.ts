@@ -1,16 +1,3 @@
-import { and, asc, count, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
-
-import type { DbService } from '@/backend/data/db/DbService';
-import { type AgentRow, agentTable } from '@/backend/data/db/schemas/agent';
-import { agentSkillTable } from '@/backend/data/db/schemas/agentSkill';
-import {
-  agentKnowledgeBaseTable,
-  agentMcpServerTable,
-} from '@/backend/data/db/schemas/assistantRelations';
-import { agentGlobalSkillTable } from '@/backend/data/db/schemas/agentGlobalSkill';
-import { knowledgeBaseTable } from '@/backend/data/db/schemas/knowledge';
-import { pinTable } from '@/backend/data/db/schemas/pin';
-import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
 import type { OrderRequest } from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
 import {
@@ -20,9 +7,22 @@ import {
   type UpdateAgentDto,
 } from '@cherrystudio/universal/data/api/schemas/agents';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import { and, asc, count, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 
-import type { PinService } from './PinService';
+import type { DbService } from '@/backend/data/db/DbService';
+import { type AgentRow, agentTable } from '@/backend/data/db/schemas/agent';
+import { agentGlobalSkillTable } from '@/backend/data/db/schemas/agentGlobalSkill';
+import { agentSkillTable } from '@/backend/data/db/schemas/agentSkill';
+import {
+  agentKnowledgeBaseTable,
+  agentMcpServerTable,
+} from '@/backend/data/db/schemas/assistantRelations';
+import { knowledgeBaseTable } from '@/backend/data/db/schemas/knowledge';
+import { pinTable } from '@/backend/data/db/schemas/pin';
+import { userModelTable } from '@/backend/data/db/schemas/userModel';
+
 import type { AgentSessionService } from './AgentSessionService';
+import type { PinService } from './PinService';
 import { applyMoves } from './utils/orderKey';
 import { nullsToUndefined, timestampToISO } from './utils/rowMappers';
 

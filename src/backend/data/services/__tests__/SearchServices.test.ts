@@ -1,4 +1,5 @@
 import type { DbService } from '@/backend/data/db/DbService';
+
 import { ContentSearchService } from '../ContentSearchService';
 import { EntitySearchService } from '../EntitySearchService';
 

@@ -1,3 +1,11 @@
+import type { CreateAssistantDto } from '@cherrystudio/universal/data/api/schemas/assistants';
+import {
+  type Assistant,
+  type AssistantSettings,
+  DEFAULT_ASSISTANT_SETTINGS,
+  type McpMode,
+} from '@cherrystudio/universal/data/types/assistant';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Input } from 'heroui-native/input';
 import { Switch } from 'heroui-native/switch';
@@ -8,6 +16,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import {
   ModelPickerBottomSheet,
@@ -20,14 +29,7 @@ import { SettingSelect } from '@/frontend/features/settings/components/SettingSe
 import { useAssistantApiById, useAssistantMutations } from '@/frontend/hooks/chat';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
-import type { CreateAssistantDto } from '@cherrystudio/universal/data/api/schemas/assistants';
-import {
-  type Assistant,
-  type AssistantSettings,
-  DEFAULT_ASSISTANT_SETTINGS,
-  type McpMode,
-} from '@cherrystudio/universal/data/types/assistant';
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
+
 import { EmojiPickerBottomSheet } from './components/EmojiPickerBottomSheet';
 
 type AssistantFormState = {

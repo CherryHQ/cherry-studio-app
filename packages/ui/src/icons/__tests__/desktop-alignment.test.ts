@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { GENERAL_ICONS } from '../../icons-webp/general';
 import { MODEL_ICONS } from '../../icons-webp/models';
 import { PROVIDER_ICONS } from '../../icons-webp/providers';
-import { resolveProviderIcon } from '../registry';
 import { CATALOG_ONLY_PROVIDER_ICONS } from '../../scripts/catalog-only-provider-icons.generated';
+import { resolveProviderIcon } from '../registry';
 
 const iconSourceRoot = join(process.cwd(), 'packages/ui/icons');
 

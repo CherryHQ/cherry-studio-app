@@ -54,13 +54,16 @@ describe('catalog invariants (data/*.json)', () => {
     ['recraft-v4-1-vector', 'recraft', 'Recraft: Recraft V4.1 Vector'],
     ['riverflow-v2-5-fast', 'sourceful', 'Sourceful: Riverflow V2.5 Fast'],
     ['seedream-4-5', 'bytedance', 'Seedream 4.5'],
-  ])('catalogs OpenRouter image model %s under its creator with its display name', (modelId, ownedBy, name) => {
-    expect(models.find((model) => model.id === modelId)).toMatchObject({
-      capabilities: expect.arrayContaining(['image-generation']),
-      name,
-      ownedBy,
-    });
-  });
+  ])(
+    'catalogs OpenRouter image model %s under its creator with its display name',
+    (modelId, ownedBy, name) => {
+      expect(models.find((model) => model.id === modelId)).toMatchObject({
+        capabilities: expect.arrayContaining(['image-generation']),
+        name,
+        ownedBy,
+      });
+    },
+  );
 
   it('base model ids are unique', () => {
     expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);

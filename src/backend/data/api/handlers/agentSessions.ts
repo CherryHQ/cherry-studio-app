@@ -1,4 +1,3 @@
-import type { AgentSessionService } from '@/backend/data/services/AgentSessionService';
 import { toDataApiError } from '@cherrystudio/universal/data/api/errors';
 import {
   OrderBatchRequestSchema,
@@ -13,6 +12,8 @@ import {
   UpdateAgentSessionSchema,
 } from '@cherrystudio/universal/data/api/schemas/agentSessions';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { AgentSessionService } from '@/backend/data/services/AgentSessionService';
 
 export function createAgentSessionHandlers(
   service: AgentSessionService,

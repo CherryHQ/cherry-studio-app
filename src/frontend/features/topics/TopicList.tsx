@@ -1,3 +1,5 @@
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useToast } from 'heroui-native/toast';
 import { CheckIcon, PencilIcon, PinIcon, PinOffIcon, Trash2Icon } from 'lucide-uniwind/png';
@@ -25,8 +27,7 @@ import {
 } from '@/frontend/components/messageTabs';
 import { useAssistantsApi } from '@/frontend/hooks/chat';
 import { useExclusiveSwipeable } from '@/frontend/hooks/useExclusiveSwipeable';
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
+
 import { useTopicActionDialogs } from './components/TopicActionDialogs';
 import {
   TopicListProvider,

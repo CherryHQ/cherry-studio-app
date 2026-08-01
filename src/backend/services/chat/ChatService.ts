@@ -1,4 +1,5 @@
 import type { ChatBackend, ChatSession } from '@/shared/contracts';
+
 import type { ChatSessionDependencies } from './ChatSessionDependencies';
 import { ChatSessionImpl } from './ChatSessionImpl';
 

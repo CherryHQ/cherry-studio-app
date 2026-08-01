@@ -1,14 +1,3 @@
-import { and, asc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
-import type { DbService } from '@/backend/data/db/DbService';
-import {
-  type AssistantRow,
-  assistantKnowledgeBaseTable,
-  assistantMcpServerTable,
-  assistantTable,
-  pinTable,
-  userModelTable,
-} from '@/backend/data/db/schemas';
-import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { OrderRequest } from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
 import {
   type CreateAssistantDto,
@@ -26,6 +15,19 @@ import {
 } from '@cherrystudio/universal/data/types/assistant';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Tag } from '@cherrystudio/universal/data/types/tag';
+import { and, asc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
+
+import type { DbService } from '@/backend/data/db/DbService';
+import {
+  type AssistantRow,
+  assistantKnowledgeBaseTable,
+  assistantMcpServerTable,
+  assistantTable,
+  pinTable,
+  userModelTable,
+} from '@/backend/data/db/schemas';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
+
 import type { ModelService } from './ModelService';
 import type { PinService } from './PinService';
 import type { TagService } from './TagService';
@@ -158,7 +160,10 @@ export class AssistantService {
         )
         .limit(query.limit)
         .offset(offset),
-      this.db.select({ count: sql<number>`count(*)` }).from(assistantTable).where(whereClause),
+      this.db
+        .select({ count: sql<number>`count(*)` })
+        .from(assistantTable)
+        .where(whereClause),
     ]);
 
     const assistantIds = rows.map((row) => row.assistant.id);

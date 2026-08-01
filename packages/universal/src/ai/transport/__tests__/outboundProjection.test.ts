@@ -1,5 +1,5 @@
-import type { UIMessageChunk } from 'ai';
 import type { CherryMessagePart } from '@shared/data/types/message';
+import type { UIMessageChunk } from 'ai';
 
 import { DEFER_TOOL_OUTPUT_BYTES, isDeferredToolOutput } from '../deferredToolResult';
 import {

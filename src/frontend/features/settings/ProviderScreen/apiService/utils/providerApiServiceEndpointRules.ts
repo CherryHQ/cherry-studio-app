@@ -1,5 +1,4 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type {
   AuthType,

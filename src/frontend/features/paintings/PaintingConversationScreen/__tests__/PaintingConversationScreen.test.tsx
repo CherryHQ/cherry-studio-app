@@ -1,13 +1,12 @@
-import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
 import type { Message } from '@cherrystudio/universal/data/types/message';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
 import type {
   PaintingGenerationInput,
   PaintingGenerationResult,
 } from '../../hooks/usePaintingGeneration';
 import type { ResolvedPaintingFiles } from '../../hooks/usePaintings';
-
 import { PaintingConversationScreen } from '../PaintingConversationScreen';
 
 type PaintingInputProps = {

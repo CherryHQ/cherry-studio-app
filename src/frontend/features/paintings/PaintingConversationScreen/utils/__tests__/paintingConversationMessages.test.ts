@@ -1,7 +1,7 @@
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
-import type { ResolvedPaintingFiles } from '../../../hooks/usePaintings';
 
+import type { ResolvedPaintingFiles } from '../../../hooks/usePaintings';
 import {
   createPaintingConversationMessages,
   createPendingPaintingConversationMessages,

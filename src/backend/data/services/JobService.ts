@@ -1,13 +1,13 @@
-import { and, desc, eq, inArray, type SQL } from 'drizzle-orm';
-
-import type { DbService } from '@/backend/data/db/DbService';
-import { type InsertJobRow, type JobRow, jobTable } from '@/backend/data/db/schemas/job';
 import {
   type JobError,
   JobErrorSchema,
   type JobSnapshot,
   type JobStatus,
 } from '@cherrystudio/universal/data/api/schemas/jobs';
+import { and, desc, eq, inArray, type SQL } from 'drizzle-orm';
+
+import type { DbService } from '@/backend/data/db/DbService';
+import { type InsertJobRow, type JobRow, jobTable } from '@/backend/data/db/schemas/job';
 
 import { timestampToISO } from './utils/rowMappers';
 

@@ -1,4 +1,5 @@
 import * as z from 'zod';
+
 import type { CherryInAccount, CherryInBackend, CherryInProfile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { OAuthServiceError } from '@/shared/oauth';

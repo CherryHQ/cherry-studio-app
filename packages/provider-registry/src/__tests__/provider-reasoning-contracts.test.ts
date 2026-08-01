@@ -53,20 +53,20 @@ describe('provider reasoning contracts', () => {
     });
   });
 
-  it.each([
-    'anthropic',
-    'aws-bedrock',
-  ])('keeps Claude Opus 4.5 on budget thinking for %s', (providerId) => {
-    const contract = override(providerId, 'claude-opus-4-5').reasoningContracts?.[
-      'anthropic-messages'
-    ];
-    expect(contract?.wire?.effort).toMatchObject({
-      budget: expect.any(Object),
-      operations: expect.arrayContaining([
-        expect.objectContaining({ value: { source: 'budget' } }),
-      ]),
-    });
-  });
+  it.each(['anthropic', 'aws-bedrock'])(
+    'keeps Claude Opus 4.5 on budget thinking for %s',
+    (providerId) => {
+      const contract = override(providerId, 'claude-opus-4-5').reasoningContracts?.[
+        'anthropic-messages'
+      ];
+      expect(contract?.wire?.effort).toMatchObject({
+        budget: expect.any(Object),
+        operations: expect.arrayContaining([
+          expect.objectContaining({ value: { source: 'budget' } }),
+        ]),
+      });
+    },
+  );
 
   it('keeps NVIDIA unknown models fail-closed and declares audited controls per exact model', () => {
     const nvidia = provider('nvidia');
@@ -163,14 +163,14 @@ describe('provider reasoning contracts', () => {
     ).toEqual([{ target: 'extra_body.thinking_budget', value: { source: 'budget' } }]);
   });
 
-  it.each([
-    'qwen3-coder',
-    'qwen3-coder-next',
-  ])('does not declare a DashScope reasoning contract for %s', (modelId) => {
-    expect(
-      provider('dashscope').overrides?.some(
-        (entry) => entry.modelId === modelId && entry.reasoningContracts,
-      ),
-    ).toBe(false);
-  });
+  it.each(['qwen3-coder', 'qwen3-coder-next'])(
+    'does not declare a DashScope reasoning contract for %s',
+    (modelId) => {
+      expect(
+        provider('dashscope').overrides?.some(
+          (entry) => entry.modelId === modelId && entry.reasoningContracts,
+        ),
+      ).toBe(false);
+    },
+  );
 });
