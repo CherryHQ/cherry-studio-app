@@ -19,7 +19,7 @@ import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRunti
 import { ProviderAuthConfigOAuthTokenStore } from '@/backend/services/oauth/runtime/OAuthTokenStore';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
 import { createPermissionsModule } from '@/backend/services/permissions/createPermissionsModule';
-import { ProfileService } from '@/backend/services/profile/ProfileService';
+import { createProfileModule } from '@/backend/services/profile/createProfileModule';
 import {
   replaceUserAvatar,
   resolveUserAvatarUri,
@@ -148,7 +148,7 @@ export function createBackend(services: BackendServices): BackendComposition {
       set: (key, value) => services.preference.set(key, value),
     },
   });
-  const profile = new ProfileService({
+  const profile = createProfileModule({
     avatars: {
       replace: replaceUserAvatar,
       resolve: resolveUserAvatarUri,

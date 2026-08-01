@@ -1,10 +1,10 @@
 import type { ProfileModule } from '@/shared/contracts';
 
-import { ProfileService, type ProfileServiceDependencies } from '../ProfileService';
+import { createProfileModule, type ProfileModuleDependencies } from '../createProfileModule';
 
-describe('ProfileService', () => {
+describe('createProfileModule', () => {
   it('replaces the file and persists its stable reference through one call', async () => {
-    const dependencies: ProfileServiceDependencies = {
+    const dependencies: ProfileModuleDependencies = {
       avatars: {
         replace: jest.fn(async (_source, _previous, persist) => persist('file:next')),
         resolve: jest.fn((avatar) => (avatar === 'file:next' ? 'file:///next.png' : undefined)),
@@ -14,7 +14,7 @@ describe('ProfileService', () => {
         writeAvatar: jest.fn(async () => undefined),
       },
     };
-    const backend: ProfileModule = new ProfileService(dependencies);
+    const backend: ProfileModule = createProfileModule(dependencies);
 
     await backend.persistAvatar('file:///picker.png');
 
