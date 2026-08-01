@@ -3,10 +3,8 @@ import * as z from 'zod';
 
 import { markTrustedLocalToolTerminalFailure } from '@/backend/ai/runtime/aiSdk/loop/localToolTerminalOutcome';
 import { citeId, newCitePrefix } from '@/backend/ai/utils/citationIds';
-import {
-  isAbortError,
-  isPermanentWebSearchConfigError,
-} from '@/backend/services/webSearch/utils/errors';
+import { isPermanentWebSearchConfigError } from '@/backend/services/webSearch/utils/config';
+import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -87,7 +85,7 @@ export function createWebSearchTool(webSearchService: WebSearchService) {
 
         const message = error instanceof Error ? error.message : String(error);
         logger.warn('External web search failed', { error: message, query });
-        if (isPermanentWebSearchConfigError(message)) {
+        if (isPermanentWebSearchConfigError(error)) {
           return markTrustedLocalToolTerminalFailure({
             error: WEB_SEARCH_PROVIDER_NOT_CONFIGURED_MESSAGE,
             i18nKey: 'web_search_provider_not_configured',

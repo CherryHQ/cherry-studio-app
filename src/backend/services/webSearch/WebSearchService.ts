@@ -22,6 +22,7 @@ import { getProviderForCapability, getRuntimeConfig } from './utils/config';
 import { isAbortError } from './utils/errors';
 import { normalizeWebSearchKeywords, normalizeWebSearchUrls } from './utils/input';
 import { ApiKeyRotationState } from './utils/provider';
+import { WebSearchConfigError } from './WebSearchConfigError';
 
 const logger = loggerService.withContext('WebSearchService');
 
@@ -72,7 +73,8 @@ export class WebSearchService {
     const capabilityRunner = context.providerDriver[context.capability];
 
     if (!capabilityRunner) {
-      throw new Error(
+      throw new WebSearchConfigError(
+        'capability_unsupported',
         `Web search provider ${context.provider.id} does not implement capability ${context.capability}`,
       );
     }

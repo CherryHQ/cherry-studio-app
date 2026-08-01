@@ -1,3 +1,5 @@
+import type { WebSearchConfigErrorCode } from '@/backend/services/webSearch/WebSearchConfigError';
+import { WebSearchConfigError } from '@/backend/services/webSearch/WebSearchConfigError';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import { createWebSearchTool, WEB_LOOKUP_ERROR_NOTE, webSearchInputSchema } from '../WebSearchTool';
@@ -37,36 +39,41 @@ describe('createWebSearchTool', () => {
   });
 
   it.each([
-    'Default web search provider is not configured for capability searchKeywords',
-    'Unknown web search provider: removed-provider',
-    'Web search provider jina does not support capability searchKeywords',
-    'Web search provider jina does not implement capability searchKeywords',
-    'Web search provider firecrawl is not supported on mobile',
-  ])('marks permanent configuration errors as non-retryable: %s', async (message) => {
-    const webSearchService = {
-      searchKeywords: jest.fn(async () => {
-        throw new Error(message);
-      }),
-    } as unknown as WebSearchService;
-    const searchTool = createWebSearchTool(webSearchService);
+    'provider_not_configured',
+    'provider_unknown',
+    'capability_unsupported',
+    'api_key_missing',
+    'api_host_missing',
+    'api_host_invalid',
+    'provider_unsupported_on_platform',
+  ] satisfies WebSearchConfigErrorCode[])(
+    'marks permanent configuration errors as non-retryable: %s',
+    async (code) => {
+      const webSearchService = {
+        searchKeywords: jest.fn(async () => {
+          throw new WebSearchConfigError(code, `web search failed with ${code}`);
+        }),
+      } as unknown as WebSearchService;
+      const searchTool = createWebSearchTool(webSearchService);
 
-    await expect(
-      searchTool.execute?.(
-        { query: 'Cherry Studio mobile' },
-        {
-          abortSignal: new AbortController().signal,
-          messages: [],
-          toolCallId: 'web-search-1',
-        },
-      ),
-    ).resolves.toEqual({
-      error: expect.stringMatching(/configure.*Settings.*do not retry/i),
-      i18nKey: 'web_search_provider_not_configured',
-      retryable: false,
-      terminal: true,
-      userMessage: expect.stringMatching(/configure.*Settings.*do not retry/i),
-    });
-  });
+      await expect(
+        searchTool.execute?.(
+          { query: 'Cherry Studio mobile' },
+          {
+            abortSignal: new AbortController().signal,
+            messages: [],
+            toolCallId: 'web-search-1',
+          },
+        ),
+      ).resolves.toEqual({
+        error: expect.stringMatching(/configure.*Settings.*do not retry/i),
+        i18nKey: 'web_search_provider_not_configured',
+        retryable: false,
+        terminal: true,
+        userMessage: expect.stringMatching(/configure.*Settings.*do not retry/i),
+      });
+    },
+  );
 
   it('returns a stable retry note for transient provider failures', async () => {
     const webSearchService = {
