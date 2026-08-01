@@ -13,7 +13,7 @@ import {
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
 import { CherryInService } from '@/backend/services/cherryin/CherryInService';
-import { McpService } from '@/backend/services/mcp/McpService';
+import { createMcpModule, type McpServerMutations } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { ProviderAuthConfigOAuthTokenStore } from '@/backend/services/oauth/runtime/OAuthTokenStore';
@@ -35,7 +35,7 @@ import type { Backend } from '@/shared/contracts';
 export type BackendComposition = {
   backend: Backend;
   dataApiDependencies: {
-    mcpServers: McpService;
+    mcpServerMutations: McpServerMutations;
   };
   dispose(): Promise<void>;
 };
@@ -114,7 +114,7 @@ export function createBackend(services: BackendServices): BackendComposition {
       readDataUrl: imageUriToDataUrl,
     },
   });
-  const mcp = new McpService({
+  const mcp = createMcpModule({
     runtime: {
       getRuntimeSummaries: (servers) => services.mcpRuntime.getRuntimeSummaries(servers),
       getServerInfo: (config) => services.mcpRuntime.getServerInfo(config),
@@ -126,7 +126,6 @@ export function createBackend(services: BackendServices): BackendComposition {
     servers: {
       create: (input) => services.mcpServer.create(input, 'streamableHttp'),
       get: (id) => services.mcpServer.getById(id, 'streamableHttp'),
-      list: (query) => services.mcpServer.list({ ...query, type: 'streamableHttp' }),
       remove: (id) => services.mcpServer.delete(id, 'streamableHttp'),
       update: (id, input) => services.mcpServer.update(id, input, 'streamableHttp'),
     },
@@ -174,7 +173,7 @@ export function createBackend(services: BackendServices): BackendComposition {
       webSearch: services.webSearch,
     },
     dataApiDependencies: {
-      mcpServers: mcp,
+      mcpServerMutations: mcp,
     },
     dispose: () => chat.dispose(),
   };

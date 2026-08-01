@@ -1,10 +1,8 @@
 import type {
   CreateMcpServerDto,
-  ListMcpServersQueryParams,
   McpUpdateServerResult,
   UpdateMcpServerDto,
 } from '@cherrystudio/universal/data/api/schemas/mcpServers';
-import type { OffsetPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
 import type {
@@ -15,12 +13,9 @@ import type {
   McpToolSummary,
 } from '@/shared/contracts';
 
-type McpServerRepository = {
+type McpServerData = {
   create(input: CreateMcpServerDto): Promise<StreamableHttpMcpServer>;
   get(id: string): Promise<StreamableHttpMcpServer>;
-  list(
-    query?: ListMcpServersQueryParams,
-  ): Promise<OffsetPaginationResponse<StreamableHttpMcpServer>>;
   remove(id: string): Promise<void>;
   update(id: string, input: UpdateMcpServerDto): Promise<StreamableHttpMcpServer>;
 };
@@ -36,69 +31,63 @@ type McpRuntime = {
   warm(server: StreamableHttpMcpServer): Promise<void>;
 };
 
-export type McpServiceDependencies = {
+export type McpModuleDependencies = {
   runtime: McpRuntime;
-  servers: McpServerRepository;
+  servers: McpServerData;
 };
 
-export class McpService implements McpModule {
-  constructor(private readonly dependencies: McpServiceDependencies) {}
+export type McpServerMutations = {
+  createServer(input: CreateMcpServerDto): Promise<StreamableHttpMcpServer>;
+  removeServer(id: string): Promise<void>;
+  updateServer(id: string, input: UpdateMcpServerDto): Promise<McpUpdateServerResult>;
+};
 
-  async createServer(input: CreateMcpServerDto): Promise<StreamableHttpMcpServer> {
-    const server = await this.dependencies.servers.create(input);
+export function createMcpModule(
+  dependencies: McpModuleDependencies,
+): McpModule & McpServerMutations {
+  const createServer = async (input: CreateMcpServerDto): Promise<StreamableHttpMcpServer> => {
+    const server = await dependencies.servers.create(input);
     if (server.isActive) {
-      void this.dependencies.runtime.warm(server);
+      void dependencies.runtime.warm(server);
     }
     return server;
-  }
+  };
 
-  getRuntimeSummaries(
+  const getRuntimeSummaries = (
     servers: readonly StreamableHttpMcpServer[],
-  ): Promise<Record<string, McpServerRuntimeSummary>> {
-    return this.dependencies.runtime.getRuntimeSummaries(servers);
-  }
+  ): Promise<Record<string, McpServerRuntimeSummary>> =>
+    dependencies.runtime.getRuntimeSummaries(servers);
 
-  getServer(id: string): Promise<StreamableHttpMcpServer> {
-    return this.dependencies.servers.get(id);
-  }
+  const getServerInfo = (config: McpConnectionConfig): Promise<McpServerInfo> =>
+    dependencies.runtime.getServerInfo(config);
 
-  getServerInfo(config: McpConnectionConfig): Promise<McpServerInfo> {
-    return this.dependencies.runtime.getServerInfo(config);
-  }
+  const invalidate = (serverId: string): void => dependencies.runtime.invalidate(serverId);
 
-  invalidate(serverId: string): void {
-    this.dependencies.runtime.invalidate(serverId);
-  }
+  const listTools = async (serverId: string): Promise<McpToolSummary[]> => {
+    const server = await dependencies.servers.get(serverId);
+    return dependencies.runtime.listTools(server);
+  };
 
-  listServers(
-    query?: ListMcpServersQueryParams,
-  ): Promise<OffsetPaginationResponse<StreamableHttpMcpServer>> {
-    return this.dependencies.servers.list(query);
-  }
+  const removeServer = async (id: string): Promise<void> => {
+    await dependencies.servers.remove(id);
+    dependencies.runtime.invalidate(id);
+  };
 
-  async listTools(serverId: string): Promise<McpToolSummary[]> {
-    const server = await this.dependencies.servers.get(serverId);
-    return this.dependencies.runtime.listTools(server);
-  }
+  const test = (config: McpConnectionConfig): Promise<McpToolSummary[]> =>
+    dependencies.runtime.test(config);
 
-  async removeServer(id: string): Promise<void> {
-    await this.dependencies.servers.remove(id);
-    this.dependencies.runtime.invalidate(id);
-  }
-
-  test(config: McpConnectionConfig): Promise<McpToolSummary[]> {
-    return this.dependencies.runtime.test(config);
-  }
-
-  async updateServer(id: string, input: UpdateMcpServerDto): Promise<McpUpdateServerResult> {
+  const updateServer = async (
+    id: string,
+    input: UpdateMcpServerDto,
+  ): Promise<McpUpdateServerResult> => {
     if (!id) {
       throw new Error('updateServer requires a server id');
     }
 
     const previous = hasRuntimeRelevantPatch(input)
-      ? await this.dependencies.servers.get(id)
+      ? await dependencies.servers.get(id)
       : undefined;
-    const server = await this.dependencies.servers.update(id, input);
+    const server = await dependencies.servers.update(id, input);
 
     let toolsChanged = false;
     if (previous) {
@@ -108,18 +97,29 @@ export class McpService implements McpModule {
       const becameInactive = previous.isActive && !server.isActive;
 
       if (transportChanged) {
-        this.dependencies.runtime.invalidate(id);
+        dependencies.runtime.invalidate(id);
       } else if (becameInactive) {
-        this.dependencies.runtime.invalidate(id, { preserveSnapshot: true });
+        dependencies.runtime.invalidate(id, { preserveSnapshot: true });
       }
 
       if (server.isActive && (transportChanged || becameActive)) {
-        void this.dependencies.runtime.warm(server);
+        void dependencies.runtime.warm(server);
       }
     }
 
     return { server, toolsChanged };
-  }
+  };
+
+  return {
+    createServer,
+    getRuntimeSummaries,
+    getServerInfo,
+    invalidate,
+    listTools,
+    removeServer,
+    test,
+    updateServer,
+  };
 }
 
 function hasRuntimeRelevantPatch(input: UpdateMcpServerDto): boolean {

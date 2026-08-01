@@ -1,5 +1,7 @@
 import type { ApiImplementation } from '@cherrystudio/universal/data/api/types';
 
+import type { McpServerMutations } from '@/backend/services/mcp/createMcpModule';
+
 import type { AgentChannelService } from '../../services/AgentChannelService';
 import type { AgentGlobalSkillService } from '../../services/AgentGlobalSkillService';
 import type { AgentService } from '../../services/AgentService';
@@ -16,6 +18,7 @@ import type { GroupService } from '../../services/GroupService';
 import type { JobService } from '../../services/JobService';
 import type { KnowledgeBaseService } from '../../services/KnowledgeBaseService';
 import type { KnowledgeItemService } from '../../services/KnowledgeItemService';
+import type { McpServerService } from '../../services/McpServerService';
 import type { MessageService } from '../../services/MessageService';
 import type { MiniAppService } from '../../services/MiniAppService';
 import type { NoteService } from '../../services/NoteService';
@@ -39,7 +42,7 @@ import { createFileHandlers } from './files';
 import { createGroupHandlers } from './groups';
 import { createJobHandlers } from './jobs';
 import { createKnowledgeHandlers } from './knowledges';
-import { createMcpServerHandlers, type McpServerData } from './mcpServers';
+import { createMcpServerHandlers } from './mcpServers';
 import { createMessageHandlers } from './messages';
 import { createMiniAppHandlers } from './miniApps';
 import { createModelHandlers } from './models';
@@ -72,7 +75,8 @@ export type DataApiDependencies = {
   jobs: JobService;
   knowledgeBases: KnowledgeBaseService;
   knowledgeItems: KnowledgeItemService;
-  mcpServers: McpServerData;
+  mcpServerMutations: McpServerMutations;
+  mcpServers: McpServerService;
   messages: MessageService;
   miniApps: MiniAppService;
   models: import('../../services/ModelService').ModelService;
@@ -101,7 +105,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createGroupHandlers(dependencies.groups),
     ...createJobHandlers(dependencies.jobs),
     ...createKnowledgeHandlers(dependencies.knowledgeBases, dependencies.knowledgeItems),
-    ...createMcpServerHandlers(dependencies.mcpServers),
+    ...createMcpServerHandlers(dependencies.mcpServers, dependencies.mcpServerMutations),
     ...createMessageHandlers(dependencies.messages),
     ...createMiniAppHandlers(dependencies.miniApps),
     ...createModelHandlers(dependencies.models),

@@ -1,6 +1,6 @@
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
-import { McpService, type McpServiceDependencies } from '../McpService';
+import { createMcpModule, type McpModuleDependencies } from '../createMcpModule';
 
 function server(overrides: Partial<StreamableHttpMcpServer> = {}): StreamableHttpMcpServer {
   return {
@@ -22,7 +22,7 @@ function server(overrides: Partial<StreamableHttpMcpServer> = {}): StreamableHtt
 
 function createSubject() {
   const current = server();
-  const dependencies: McpServiceDependencies = {
+  const dependencies: McpModuleDependencies = {
     runtime: {
       getRuntimeSummaries: jest.fn(async () => ({})),
       getServerInfo: jest.fn(async () => ({ name: 'Server', version: '1' })),
@@ -34,18 +34,17 @@ function createSubject() {
     servers: {
       create: jest.fn(async () => current),
       get: jest.fn(async () => current),
-      list: jest.fn(async () => ({ items: [current], page: 1, total: 1 })),
       remove: jest.fn(async () => undefined),
       update: jest.fn(async (_id, input) =>
         server({ ...input, timeout: input.timeout ?? undefined }),
       ),
     },
   };
-  const backend = new McpService(dependencies);
+  const backend = createMcpModule(dependencies);
   return { backend, dependencies };
 }
 
-describe('McpService', () => {
+describe('createMcpModule', () => {
   it('warms an active server after creation', async () => {
     const { backend, dependencies } = createSubject();
 
@@ -102,5 +101,14 @@ describe('McpService', () => {
         id: 'server-1',
       }),
     );
+  });
+
+  it('invalidates runtime state after removing a server', async () => {
+    const { backend, dependencies } = createSubject();
+
+    await backend.removeServer('server-1');
+
+    expect(dependencies.servers.remove).toHaveBeenCalledWith('server-1');
+    expect(dependencies.runtime.invalidate).toHaveBeenCalledWith('server-1');
   });
 });
