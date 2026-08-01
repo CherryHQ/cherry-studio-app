@@ -2,25 +2,31 @@ import type {
   WebSearchExecutionConfig,
   WebSearchResponse,
 } from '@cherrystudio/universal/data/types/webSearch';
+import * as z from 'zod';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { isValidUrl } from '../../utils/url';
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { UrlSearchContext } from '../base/context';
-import { assertRecord, readObjectArray, readOptionalString } from './schemaUtils';
 
 const logger = loggerService.withContext('SearxngProvider');
 
-type SearxngSearchResponse = {
-  query?: string;
-  results: {
-    title?: string;
-    content?: string;
-    snippet?: string;
-    url?: string;
-  }[];
-};
+type SearxngSearchContext = UrlSearchContext;
+
+const SearxngSearchResponseSchema = z.object({
+  query: z.string().optional(),
+  results: z
+    .array(
+      z.object({
+        title: z.string().optional(),
+        content: z.string().optional(),
+        snippet: z.string().optional(),
+        url: z.string().optional(),
+      }),
+    )
+    .default([]),
+});
 
 function trimStringList(values: readonly string[]): string[] {
   return values.flatMap((value) => value.trim() || []);
@@ -68,7 +74,7 @@ export class SearxngProvider extends BaseWebSearchProvider {
     query: string,
     config: WebSearchExecutionConfig,
     httpOptions?: RequestInit,
-  ): UrlSearchContext {
+  ): SearxngSearchContext {
     const searchParams = new URLSearchParams({
       q: query,
       language: 'auto',
@@ -87,7 +93,7 @@ export class SearxngProvider extends BaseWebSearchProvider {
     };
   }
 
-  private async executeSearch(context: UrlSearchContext): Promise<SearxngSearchResponse> {
+  private async executeSearch(context: SearxngSearchContext) {
     const response = await fetch(context.searchUrl, {
       method: 'GET',
       headers: this.buildHeaders(this.getBasicAuthHeaders()),
@@ -98,15 +104,15 @@ export class SearxngProvider extends BaseWebSearchProvider {
       await this.throwHttpError('Searxng search failed', response);
     }
 
-    return this.parseJsonResponse(response, parseSearxngSearchResponse, {
+    return this.parseJsonResponse(response, SearxngSearchResponseSchema, {
       operation: 'search',
       requestUrl: context.searchUrl,
     });
   }
 
   private buildFinalResponse(
-    context: UrlSearchContext,
-    searchPayload: SearxngSearchResponse,
+    context: SearxngSearchContext,
+    searchPayload: z.infer<typeof SearxngSearchResponseSchema>,
   ): WebSearchResponse {
     const results = searchPayload.results
       // These URLs are rendered as tappable citations, and a Searxng instance is
@@ -136,18 +142,4 @@ export class SearxngProvider extends BaseWebSearchProvider {
       results,
     };
   }
-}
-
-function parseSearxngSearchResponse(payload: unknown): SearxngSearchResponse {
-  const record = assertRecord(payload);
-
-  return {
-    query: readOptionalString(record.query, 'payload.query'),
-    results: readObjectArray(record.results ?? [], 'payload.results').map((item, index) => ({
-      title: readOptionalString(item.title, `payload.results[${index}].title`),
-      content: readOptionalString(item.content, `payload.results[${index}].content`),
-      snippet: readOptionalString(item.snippet, `payload.results[${index}].snippet`),
-      url: readOptionalString(item.url, `payload.results[${index}].url`),
-    })),
-  };
 }

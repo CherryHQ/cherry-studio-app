@@ -2,39 +2,55 @@ import type {
   WebSearchExecutionConfig,
   WebSearchResponse,
 } from '@cherrystudio/universal/data/types/webSearch';
+import * as z from 'zod';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { resolveProviderApiHost } from '../../utils/provider';
-import { assertRecord, readObject, readObjectArray, readString } from '../api/schemaUtils';
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { RequestSearchContext } from '../base/context';
 
-type McpSearchRequest = {
-  jsonrpc: string;
-  id: number;
-  method: string;
-  params: {
-    name: string;
-    arguments: {
-      query: string;
-      numResults: number;
-      livecrawl: 'fallback' | 'preferred';
-      type: 'auto' | 'fast' | 'deep';
-    };
-  };
-};
+const McpSearchRequestSchema = z.object({
+  jsonrpc: z.string(),
+  id: z.number().int(),
+  method: z.string(),
+  params: z.object({
+    name: z.string(),
+    arguments: z.object({
+      query: z.string(),
+      numResults: z.number().int().positive().optional(),
+      livecrawl: z.enum(['fallback', 'preferred']).optional(),
+      type: z.enum(['auto', 'fast', 'deep']).optional(),
+    }),
+  }),
+});
 
-type ExaSearchResult = {
-  title: string;
-  url: string;
-  text: string;
-};
+const McpSearchResponseSchema = z.object({
+  result: z.object({
+    content: z.array(
+      z.object({
+        type: z.string(),
+        text: z.string(),
+      }),
+    ),
+  }),
+});
+
+const ExaSearchResultSchema = z.object({
+  title: z.string().optional(),
+  url: z.string().optional(),
+  text: z.string().optional(),
+});
+
+const ExaSearchResultsSchema = z.object({
+  results: z.array(ExaSearchResultSchema).default([]),
+  autopromptString: z.string().optional(),
+});
 
 const REQUEST_TIMEOUT_MS = 25000;
 const logger = loggerService.withContext('ExaMcpProvider');
 
-type ExaMcpSearchContext = RequestSearchContext<McpSearchRequest> & {
+type ExaMcpSearchContext = RequestSearchContext<z.infer<typeof McpSearchRequestSchema>> & {
   upstreamSignal?: AbortSignal;
 };
 
@@ -59,7 +75,7 @@ export class ExaMcpProvider extends BaseWebSearchProvider {
       query,
       maxResults: config.maxResults,
       requestUrl: resolveProviderApiHost(this.provider, 'searchKeywords'),
-      requestBody: {
+      requestBody: McpSearchRequestSchema.parse({
         jsonrpc: '2.0',
         id: 1,
         method: 'tools/call',
@@ -72,7 +88,7 @@ export class ExaMcpProvider extends BaseWebSearchProvider {
             livecrawl: 'fallback',
           },
         },
-      },
+      }),
       upstreamSignal: httpOptions?.signal ?? undefined,
     };
   }
@@ -81,24 +97,24 @@ export class ExaMcpProvider extends BaseWebSearchProvider {
     context: ExaMcpSearchContext,
     responseText: string,
   ): WebSearchResponse {
-    const results = this.parseResponse(responseText);
+    const searchResults = this.parseResponse(responseText);
 
     return {
       query: context.query,
       providerId: this.provider.id,
       capability: 'searchKeywords',
       inputs: [context.query],
-      results: results.slice(0, context.maxResults).map((result) => ({
-        title: result.title.trim() || '',
-        content: result.text.trim() || '',
+      results: (searchResults.results || []).slice(0, context.maxResults).map((result) => ({
+        title: result.title?.trim() || '',
+        content: result.text?.trim() || '',
         url: result.url || '',
         sourceInput: context.query,
       })),
     };
   }
 
-  private parseTextChunk(raw: string): ExaSearchResult[] {
-    const items: ExaSearchResult[] = [];
+  private parseTextChunk(raw: string) {
+    const items: z.input<typeof ExaSearchResultSchema>[] = [];
 
     for (const chunk of raw.split('\n\n')) {
       const lines = chunk.split('\n');
@@ -130,10 +146,10 @@ export class ExaMcpProvider extends BaseWebSearchProvider {
       }
     }
 
-    return items;
+    return z.array(ExaSearchResultSchema).parse(items);
   }
 
-  private parseResponse(responseText: string): ExaSearchResult[] {
+  private parseResponse(responseText: string) {
     const payloadTexts: string[] = [];
 
     for (const line of responseText.split('\n')) {
@@ -180,20 +196,22 @@ export class ExaMcpProvider extends BaseWebSearchProvider {
       throw new Error('Exa MCP response parsing failed: no parseable content found');
     }
 
-    return this.parseTextChunk(payloadTexts.join('\n\n')).filter((item) =>
-      Boolean(item.title || item.url || item.text),
-    );
+    return ExaSearchResultsSchema.parse({
+      results: this.parseTextChunk(payloadTexts.join('\n\n')).filter((item) =>
+        Boolean(item.title || item.url || item.text),
+      ),
+    });
   }
 
   private extractContentText(payload: string): string | null {
     // JSON.parse throws on purpose: a malformed line is worth a warning, while a
     // well-formed line that simply is not a tool result is skipped silently.
-    const content = readMcpContent(JSON.parse(payload));
-    if (!content) {
+    const parsedPayload = McpSearchResponseSchema.safeParse(JSON.parse(payload));
+    if (!parsedPayload.success) {
       return null;
     }
 
-    const text = content
+    const text = parsedPayload.data.result.content
       .map((item) => item.text.trim())
       .filter(Boolean)
       .join('\n\n');
@@ -241,20 +259,5 @@ export class ExaMcpProvider extends BaseWebSearchProvider {
     } finally {
       clearTimeout(timeoutId);
     }
-  }
-}
-
-/** Returns null when the payload is not a JSON-RPC tool result, matching desktop's safeParse. */
-function readMcpContent(payload: unknown): { type: string; text: string }[] | null {
-  try {
-    const record = assertRecord(payload);
-    const result = readObject(record.result, 'payload.result');
-
-    return readObjectArray(result.content, 'payload.result.content').map((item, index) => ({
-      type: readString(item.type, `payload.result.content[${index}].type`),
-      text: readString(item.text, `payload.result.content[${index}].text`),
-    }));
-  } catch {
-    return null;
   }
 }

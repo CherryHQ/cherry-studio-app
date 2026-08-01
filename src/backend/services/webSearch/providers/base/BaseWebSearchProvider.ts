@@ -2,6 +2,7 @@ import type {
   WebSearchCapability,
   WebSearchProvider,
 } from '@cherrystudio/universal/data/preference';
+import type * as z from 'zod';
 
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 
@@ -41,7 +42,7 @@ export abstract class BaseWebSearchProvider {
 
   protected async parseJsonResponse<T>(
     response: Response,
-    validate: (payload: unknown) => T,
+    schema: z.ZodType<T>,
     context: {
       operation: string;
       requestUrl: string;
@@ -60,16 +61,18 @@ export abstract class BaseWebSearchProvider {
       );
     }
 
-    try {
-      return validate(payload);
-    } catch (error) {
+    const result = schema.safeParse(payload);
+
+    if (!result.success) {
       throw new Error(
-        `${this.provider.id} ${context.operation} response validation failed for ${context.requestUrl}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        { cause: error },
+        `${this.provider.id} ${context.operation} response validation failed for ${context.requestUrl}: ${result.error.message}`,
+        {
+          cause: result.error,
+        },
       );
     }
+
+    return result.data;
   }
 
   protected async throwHttpError(message: string, response: Response): Promise<never> {

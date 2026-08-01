@@ -2,51 +2,58 @@ import type {
   WebSearchExecutionConfig,
   WebSearchResponse,
 } from '@cherrystudio/universal/data/types/webSearch';
+import * as z from 'zod';
 
 import { resolveProviderApiHost } from '../../utils/provider';
 import { withoutTrailingSlash } from '../../utils/url';
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { BaseSearchContext } from '../base/context';
-import {
-  assertRecord,
-  readNumberOrString,
-  readOptionalObject,
-  readOptionalObjectArray,
-  readOptionalString,
-} from './schemaUtils';
+
+const JinaReaderResponseSchema = z.looseObject({
+  code: z.union([z.number(), z.string()]).optional(),
+  status: z.union([z.number(), z.string()]).optional(),
+  data: z
+    .looseObject({
+      title: z.string().optional(),
+      content: z.string().optional(),
+      text: z.string().optional(),
+      url: z.string().optional(),
+    })
+    .optional(),
+  title: z.string().optional(),
+  content: z.string().optional(),
+  text: z.string().optional(),
+  url: z.string().optional(),
+});
+
+const JinaSearchResponseSchema = z.looseObject({
+  code: z.union([z.number(), z.string()]).optional(),
+  status: z.union([z.number(), z.string()]).optional(),
+  data: z
+    .array(
+      z.looseObject({
+        title: z.string().optional(),
+        content: z.string().optional(),
+        description: z.string().optional(),
+        url: z.string().optional(),
+      }),
+    )
+    .optional(),
+  results: z
+    .array(
+      z.looseObject({
+        title: z.string().optional(),
+        content: z.string().optional(),
+        description: z.string().optional(),
+        url: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
 
 type JinaContext = BaseSearchContext & {
   apiKey: string;
   requestUrl: string;
-};
-
-type JinaSearchResult = {
-  title?: string;
-  content?: string;
-  description?: string;
-  url?: string;
-};
-
-type JinaSearchResponse = {
-  code?: number | string;
-  status?: number | string;
-  data?: JinaSearchResult[];
-  results?: JinaSearchResult[];
-};
-
-type JinaReaderResponse = {
-  code?: number | string;
-  status?: number | string;
-  data?: {
-    title?: string;
-    content?: string;
-    text?: string;
-    url?: string;
-  };
-  title?: string;
-  content?: string;
-  text?: string;
-  url?: string;
 };
 
 export class JinaProvider extends BaseWebSearchProvider {
@@ -106,7 +113,7 @@ export class JinaProvider extends BaseWebSearchProvider {
     };
   }
 
-  private async executeSearchKeywords(context: JinaContext): Promise<JinaSearchResponse> {
+  private async executeSearchKeywords(context: JinaContext) {
     const response = await fetch(context.requestUrl, {
       method: 'GET',
       headers: this.buildHeaders({
@@ -120,13 +127,13 @@ export class JinaProvider extends BaseWebSearchProvider {
       await this.throwHttpError('Jina search failed', response);
     }
 
-    return this.parseJsonResponse(response, parseJinaSearchResponse, {
+    return this.parseJsonResponse(response, JinaSearchResponseSchema, {
       operation: 'search',
       requestUrl: context.requestUrl,
     });
   }
 
-  private async executeFetchUrls(context: JinaContext): Promise<JinaReaderResponse> {
+  private async executeFetchUrls(context: JinaContext) {
     const response = await fetch(context.requestUrl, {
       method: 'GET',
       headers: this.buildHeaders({
@@ -141,7 +148,7 @@ export class JinaProvider extends BaseWebSearchProvider {
       await this.throwHttpError('Jina Reader fetch failed', response);
     }
 
-    return this.parseJsonResponse(response, parseJinaReaderResponse, {
+    return this.parseJsonResponse(response, JinaReaderResponseSchema, {
       operation: 'reader',
       requestUrl: context.requestUrl,
     });
@@ -149,7 +156,7 @@ export class JinaProvider extends BaseWebSearchProvider {
 
   private buildSearchKeywordsResponse(
     context: JinaContext,
-    payload: JinaSearchResponse,
+    payload: z.infer<typeof JinaSearchResponseSchema>,
   ): WebSearchResponse {
     const results = payload.data || payload.results || [];
 
@@ -169,7 +176,7 @@ export class JinaProvider extends BaseWebSearchProvider {
 
   private buildFetchUrlsResponse(
     context: JinaContext,
-    payload: JinaReaderResponse,
+    payload: z.infer<typeof JinaReaderResponseSchema>,
   ): WebSearchResponse {
     const data = payload.data || payload;
     const content = data.content?.trim() || data.text?.trim() || '';
@@ -193,48 +200,4 @@ export class JinaProvider extends BaseWebSearchProvider {
       ],
     };
   }
-}
-
-function parseJinaSearchResponse(payload: unknown): JinaSearchResponse {
-  const record = assertRecord(payload);
-
-  return {
-    code: record.code === undefined ? undefined : readNumberOrString(record.code, 'payload.code'),
-    status:
-      record.status === undefined ? undefined : readNumberOrString(record.status, 'payload.status'),
-    data: parseJinaSearchResults(record.data, 'payload.data'),
-    results: parseJinaSearchResults(record.results, 'payload.results'),
-  };
-}
-
-function parseJinaSearchResults(value: unknown, path: string): JinaSearchResult[] | undefined {
-  return readOptionalObjectArray(value, path)?.map((item, index) => ({
-    title: readOptionalString(item.title, `${path}[${index}].title`),
-    content: readOptionalString(item.content, `${path}[${index}].content`),
-    description: readOptionalString(item.description, `${path}[${index}].description`),
-    url: readOptionalString(item.url, `${path}[${index}].url`),
-  }));
-}
-
-function parseJinaReaderResponse(payload: unknown): JinaReaderResponse {
-  const record = assertRecord(payload);
-  const data = readOptionalObject(record.data, 'payload.data');
-
-  return {
-    code: record.code === undefined ? undefined : readNumberOrString(record.code, 'payload.code'),
-    status:
-      record.status === undefined ? undefined : readNumberOrString(record.status, 'payload.status'),
-    data: data
-      ? {
-          title: readOptionalString(data.title, 'payload.data.title'),
-          content: readOptionalString(data.content, 'payload.data.content'),
-          text: readOptionalString(data.text, 'payload.data.text'),
-          url: readOptionalString(data.url, 'payload.data.url'),
-        }
-      : undefined,
-    title: readOptionalString(record.title, 'payload.title'),
-    content: readOptionalString(record.content, 'payload.content'),
-    text: readOptionalString(record.text, 'payload.text'),
-    url: readOptionalString(record.url, 'payload.url'),
-  };
 }

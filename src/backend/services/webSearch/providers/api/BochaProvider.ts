@@ -2,45 +2,40 @@ import type {
   WebSearchExecutionConfig,
   WebSearchResponse,
 } from '@cherrystudio/universal/data/types/webSearch';
+import * as z from 'zod';
 
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { ApiKeyRequestSearchContext } from '../base/context';
-import {
-  assertRecord,
-  readNumber,
-  readObject,
-  readObjectArray,
-  readOptionalString,
-  readString,
-} from './schemaUtils';
 
-type BochaSearchRequest = {
-  query: string;
-  count: number;
-  exclude: string;
-  summary: boolean;
-};
+const BochaSearchParamsSchema = z.object({
+  query: z.string(),
+  count: z.number().int().positive(),
+  exclude: z.string(),
+  summary: z.boolean(),
+});
 
-type BochaSearchResponse = {
-  code: number;
+const BochaSearchResponseSchema = z.object({
+  code: z.number(),
   /** Bocha sends `"msg": null` on success; rejecting it lost the whole result set. */
-  msg?: string;
-  data: {
-    queryContext: {
-      originalQuery: string;
-    };
-    webPages: {
-      value: {
-        name: string;
-        summary?: string;
-        snippet?: string;
-        url: string;
-      }[];
-    };
-  };
-};
+  msg: z.string().nullable(),
+  data: z.object({
+    queryContext: z.object({
+      originalQuery: z.string(),
+    }),
+    webPages: z.object({
+      value: z.array(
+        z.object({
+          name: z.string(),
+          summary: z.string().nullable().optional(),
+          snippet: z.string().nullable().optional(),
+          url: z.string(),
+        }),
+      ),
+    }),
+  }),
+});
 
-type BochaSearchContext = ApiKeyRequestSearchContext<BochaSearchRequest>;
+type BochaSearchContext = ApiKeyRequestSearchContext<z.infer<typeof BochaSearchParamsSchema>>;
 
 export class BochaProvider extends BaseWebSearchProvider {
   async searchKeywords(
@@ -64,17 +59,17 @@ export class BochaProvider extends BaseWebSearchProvider {
       query,
       maxResults: config.maxResults,
       requestUrl: this.resolveApiUrl('searchKeywords', '/v1/web-search'),
-      requestBody: {
+      requestBody: BochaSearchParamsSchema.parse({
         query,
         count: config.maxResults,
         exclude: config.excludeDomains.join(','),
         summary: true,
-      },
+      }),
       signal: httpOptions?.signal ?? undefined,
     };
   }
 
-  private async executeSearch(context: BochaSearchContext): Promise<BochaSearchResponse> {
+  private async executeSearch(context: BochaSearchContext) {
     const response = await fetch(context.requestUrl, {
       method: 'POST',
       body: JSON.stringify(context.requestBody),
@@ -89,7 +84,7 @@ export class BochaProvider extends BaseWebSearchProvider {
       await this.throwHttpError('Bocha search failed', response);
     }
 
-    return this.parseJsonResponse(response, parseBochaSearchResponse, {
+    return this.parseJsonResponse(response, BochaSearchResponseSchema, {
       operation: 'search',
       requestUrl: context.requestUrl,
     });
@@ -97,7 +92,7 @@ export class BochaProvider extends BaseWebSearchProvider {
 
   private buildFinalResponse(
     context: BochaSearchContext,
-    searchPayload: BochaSearchResponse,
+    searchPayload: z.infer<typeof BochaSearchResponseSchema>,
   ): WebSearchResponse {
     if (searchPayload.code !== 200) {
       throw new Error(`Bocha search failed: ${searchPayload.msg}`);
@@ -116,40 +111,4 @@ export class BochaProvider extends BaseWebSearchProvider {
       })),
     };
   }
-}
-
-function parseBochaSearchResponse(payload: unknown): BochaSearchResponse {
-  const record = assertRecord(payload);
-  const data = readObject(record.data, 'payload.data');
-  const queryContext = readObject(data.queryContext, 'payload.data.queryContext');
-  const webPages = readObject(data.webPages, 'payload.data.webPages');
-
-  return {
-    code: readNumber(record.code, 'payload.code'),
-    msg: readOptionalString(record.msg, 'payload.msg'),
-    data: {
-      queryContext: {
-        originalQuery: readString(
-          queryContext.originalQuery,
-          'payload.data.queryContext.originalQuery',
-        ),
-      },
-      webPages: {
-        value: readObjectArray(webPages.value, 'payload.data.webPages.value').map(
-          (item, index) => ({
-            name: readString(item.name, `payload.data.webPages.value[${index}].name`),
-            summary: readOptionalString(
-              item.summary,
-              `payload.data.webPages.value[${index}].summary`,
-            ),
-            snippet: readOptionalString(
-              item.snippet,
-              `payload.data.webPages.value[${index}].snippet`,
-            ),
-            url: readString(item.url, `payload.data.webPages.value[${index}].url`),
-          }),
-        ),
-      },
-    },
-  };
 }

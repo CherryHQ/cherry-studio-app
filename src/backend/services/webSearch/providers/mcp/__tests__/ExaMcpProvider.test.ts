@@ -36,21 +36,25 @@ describe('ExaMcpProvider', () => {
     expect(fetchMock).toHaveBeenCalledWith('https://mcp.exa.ai/mcp', {
       method: 'POST',
       headers: expect.any(Headers),
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: {
-          name: 'web_search_exa',
-          arguments: {
-            query: 'hello',
-            type: 'auto',
-            numResults: 4,
-            livecrawl: 'fallback',
-          },
-        },
-      }),
+      body: expect.any(String),
       signal: expect.any(AbortSignal),
+    });
+    // Decode before asserting: the request schema's `parse` rebuilds the object
+    // in schema-shape order, and pinning the serialized string would pin a key
+    // order that neither JSON-RPC nor the server cares about.
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'web_search_exa',
+        arguments: {
+          query: 'hello',
+          type: 'auto',
+          numResults: 4,
+          livecrawl: 'fallback',
+        },
+      },
     });
     const headers = fetchMock.mock.calls[0][1].headers as Headers;
     expect(headers.get('accept')).toBe('application/json, text/event-stream');

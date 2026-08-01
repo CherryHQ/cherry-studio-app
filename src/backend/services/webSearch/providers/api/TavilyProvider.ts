@@ -2,28 +2,32 @@ import type {
   WebSearchExecutionConfig,
   WebSearchResponse,
 } from '@cherrystudio/universal/data/types/webSearch';
+import * as z from 'zod';
 
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { ApiKeyRequestSearchContext } from '../base/context';
-import { assertRecord, readObjectArray, readOptionalString, readString } from './schemaUtils';
 
-type TavilySearchRequest = {
-  query: string;
-  max_results: number;
-};
+const TavilySearchRequestSchema = z.object({
+  query: z.string(),
+  max_results: z.number().int().positive(),
+});
 
-type TavilySearchResponse = {
-  query: string;
-  request_id?: string;
-  response_time?: number | string;
-  results: {
-    title?: string;
-    content?: string;
-    url?: string;
-  }[];
-};
+const TavilySearchResponseSchema = z.object({
+  query: z.string(),
+  request_id: z.string(),
+  response_time: z.union([z.number(), z.string()]),
+  results: z
+    .array(
+      z.object({
+        title: z.string().optional(),
+        content: z.string().optional(),
+        url: z.string().optional(),
+      }),
+    )
+    .default([]),
+});
 
-type TavilySearchContext = ApiKeyRequestSearchContext<TavilySearchRequest>;
+type TavilySearchContext = ApiKeyRequestSearchContext<z.infer<typeof TavilySearchRequestSchema>>;
 
 export class TavilyProvider extends BaseWebSearchProvider {
   async searchKeywords(
@@ -47,15 +51,15 @@ export class TavilyProvider extends BaseWebSearchProvider {
       query,
       maxResults: config.maxResults,
       requestUrl: this.resolveApiUrl('searchKeywords', '/search'),
-      requestBody: {
+      requestBody: TavilySearchRequestSchema.parse({
         query,
         max_results: config.maxResults,
-      },
+      }),
       signal: httpOptions?.signal ?? undefined,
     };
   }
 
-  private async executeSearch(context: TavilySearchContext): Promise<TavilySearchResponse> {
+  private async executeSearch(context: TavilySearchContext) {
     const response = await fetch(context.requestUrl, {
       method: 'POST',
       headers: this.buildHeaders({
@@ -70,7 +74,7 @@ export class TavilyProvider extends BaseWebSearchProvider {
       await this.throwHttpError('Tavily search failed', response);
     }
 
-    return this.parseJsonResponse(response, parseTavilySearchResponse, {
+    return this.parseJsonResponse(response, TavilySearchResponseSchema, {
       operation: 'search',
       requestUrl: context.requestUrl,
     });
@@ -78,7 +82,7 @@ export class TavilyProvider extends BaseWebSearchProvider {
 
   private buildFinalResponse(
     context: TavilySearchContext,
-    searchPayload: TavilySearchResponse,
+    searchPayload: z.infer<typeof TavilySearchResponseSchema>,
   ): WebSearchResponse {
     return {
       query: context.query,
@@ -93,22 +97,4 @@ export class TavilyProvider extends BaseWebSearchProvider {
       })),
     };
   }
-}
-
-function parseTavilySearchResponse(payload: unknown): TavilySearchResponse {
-  const record = assertRecord(payload);
-
-  return {
-    query: readString(record.query, 'payload.query'),
-    request_id: readOptionalString(record.request_id, 'payload.request_id'),
-    response_time:
-      typeof record.response_time === 'number' || typeof record.response_time === 'string'
-        ? record.response_time
-        : undefined,
-    results: readObjectArray(record.results ?? [], 'payload.results').map((item, index) => ({
-      title: readOptionalString(item.title, `payload.results[${index}].title`),
-      content: readOptionalString(item.content, `payload.results[${index}].content`),
-      url: readOptionalString(item.url, `payload.results[${index}].url`),
-    })),
-  };
 }

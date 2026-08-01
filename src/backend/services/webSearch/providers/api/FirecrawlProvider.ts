@@ -2,37 +2,43 @@ import type {
   WebSearchExecutionConfig,
   WebSearchResponse,
 } from '@cherrystudio/universal/data/types/webSearch';
+import * as z from 'zod';
 
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { ApiKeyRequestSearchContext } from '../base/context';
-import {
-  assertRecord,
-  readObjectArray,
-  readOptionalBoolean,
-  readOptionalObject,
-  readOptionalString,
-} from './schemaUtils';
 
-type FirecrawlSearchRequest = {
-  query: string;
-  limit: number;
-  scrapeOptions: {
-    formats: string[];
-  };
-};
+const FirecrawlSearchRequestSchema = z.object({
+  query: z.string(),
+  limit: z.number().int().positive().optional(),
+  scrapeOptions: z
+    .object({
+      formats: z.array(z.string()).optional(),
+    })
+    .optional(),
+});
 
-type FirecrawlSearchResponse = {
-  success?: boolean;
-  error?: string;
-  web: {
-    title?: string;
-    markdown?: string;
-    description?: string;
-    url?: string;
-  }[];
-};
+const FirecrawlSearchResponseSchema = z.object({
+  success: z.boolean().optional(),
+  error: z.string().optional(),
+  data: z
+    .object({
+      web: z
+        .array(
+          z.object({
+            title: z.string().optional(),
+            markdown: z.string().optional(),
+            description: z.string().optional(),
+            url: z.string().optional(),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
+});
 
-type FirecrawlSearchContext = ApiKeyRequestSearchContext<FirecrawlSearchRequest>;
+type FirecrawlSearchContext = ApiKeyRequestSearchContext<
+  z.infer<typeof FirecrawlSearchRequestSchema>
+>;
 
 export class FirecrawlProvider extends BaseWebSearchProvider {
   async searchKeywords(
@@ -56,18 +62,18 @@ export class FirecrawlProvider extends BaseWebSearchProvider {
       query,
       maxResults: config.maxResults,
       requestUrl: this.resolveApiUrl('searchKeywords', '/v2/search'),
-      requestBody: {
+      requestBody: FirecrawlSearchRequestSchema.parse({
         query,
         limit: config.maxResults,
         scrapeOptions: {
           formats: ['markdown'],
         },
-      },
+      }),
       signal: httpOptions?.signal ?? undefined,
     };
   }
 
-  private async executeSearch(context: FirecrawlSearchContext): Promise<FirecrawlSearchResponse> {
+  private async executeSearch(context: FirecrawlSearchContext) {
     const headers = this.buildHeaders({ 'Content-Type': 'application/json' });
 
     if (context.apiKey) {
@@ -85,7 +91,7 @@ export class FirecrawlProvider extends BaseWebSearchProvider {
       await this.throwHttpError('Firecrawl search failed', response);
     }
 
-    return this.parseJsonResponse(response, parseFirecrawlSearchResponse, {
+    return this.parseJsonResponse(response, FirecrawlSearchResponseSchema, {
       operation: 'search',
       requestUrl: context.requestUrl,
     });
@@ -93,18 +99,20 @@ export class FirecrawlProvider extends BaseWebSearchProvider {
 
   private buildFinalResponse(
     context: FirecrawlSearchContext,
-    searchPayload: FirecrawlSearchResponse,
+    searchPayload: z.infer<typeof FirecrawlSearchResponseSchema>,
   ): WebSearchResponse {
     if (searchPayload.success === false) {
       throw new Error(`Firecrawl search failed: ${searchPayload.error ?? 'unknown error'}`);
     }
+
+    const webResults = searchPayload.data?.web ?? [];
 
     return {
       query: context.query,
       providerId: this.provider.id,
       capability: 'searchKeywords',
       inputs: [context.query],
-      results: searchPayload.web.slice(0, context.maxResults).map((item) => ({
+      results: webResults.slice(0, context.maxResults).map((item) => ({
         title: item.title?.trim() || '',
         content: item.markdown?.trim() || item.description?.trim() || '',
         url: item.url || '',
@@ -112,20 +120,4 @@ export class FirecrawlProvider extends BaseWebSearchProvider {
       })),
     };
   }
-}
-
-function parseFirecrawlSearchResponse(payload: unknown): FirecrawlSearchResponse {
-  const record = assertRecord(payload);
-  const data = readOptionalObject(record.data, 'payload.data');
-
-  return {
-    success: readOptionalBoolean(record.success, 'payload.success'),
-    error: readOptionalString(record.error, 'payload.error'),
-    web: readObjectArray(data?.web ?? [], 'payload.data.web').map((item, index) => ({
-      title: readOptionalString(item.title, `payload.data.web[${index}].title`),
-      markdown: readOptionalString(item.markdown, `payload.data.web[${index}].markdown`),
-      description: readOptionalString(item.description, `payload.data.web[${index}].description`),
-      url: readOptionalString(item.url, `payload.data.web[${index}].url`),
-    })),
-  };
 }
