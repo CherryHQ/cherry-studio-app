@@ -52,7 +52,7 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
       paintings: services.painting,
       pins: services.pin,
       prompts: services.prompt,
-      providers: dataApiDependencies.providers,
+      providers: services.provider,
       tags: services.tag,
       temporaryChats: services.temporaryChat,
       topics: services.topic,

@@ -2,43 +2,28 @@ import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import type { ProvidersModule } from '@/shared/contracts';
 
-import { ProvidersService, type ProvidersServiceDependencies } from '../ProvidersService';
+import { createProvidersModule, type ProvidersModuleDependencies } from '../createProvidersModule';
 
 const provider = { id: 'cherryin', isEnabled: false } as Provider;
 
 function createSubject() {
-  const dependencies: ProvidersServiceDependencies = {
+  const dependencies: ProvidersModuleDependencies = {
     avatars: {
       persist: jest.fn(async () => 'file:///avatar'),
       resolve: jest.fn(() => 'file:///avatar'),
     },
-    providers: {
-      canRemove: jest.fn(() => true),
-      create: jest.fn(async () => provider),
-      get: jest.fn(async () => provider),
-      getAuth: jest.fn(async () => ({
-        accessToken: 'token',
-        clientId: 'client',
-        type: 'oauth' as const,
-      })),
-      list: jest.fn(async () => [provider]),
-      listApiKeys: jest.fn(async () => []),
-      remove: jest.fn(async () => undefined),
-      replaceApiKeys: jest.fn(async () => provider),
-      update: jest.fn(async () => provider),
-      updateApiKey: jest.fn(async () => provider),
-    },
+    canRemove: jest.fn(() => true),
   };
-  const backend: ProvidersModule = new ProvidersService(dependencies);
+  const backend: ProvidersModule = createProvidersModule(dependencies);
   return { backend, dependencies };
 }
 
-describe('ProvidersService', () => {
-  it('delegates provider removal policy to its repository port', () => {
+describe('createProvidersModule', () => {
+  it('delegates provider removal policy', () => {
     const { backend, dependencies } = createSubject();
 
     expect(backend.canRemove(provider)).toBe(true);
-    expect(dependencies.providers.canRemove).toHaveBeenCalledWith(provider);
+    expect(dependencies.canRemove).toHaveBeenCalledWith(provider);
   });
 
   it('delegates avatar storage to its avatar port', async () => {

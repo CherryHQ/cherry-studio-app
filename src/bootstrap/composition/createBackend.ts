@@ -24,11 +24,11 @@ import {
   replaceUserAvatar,
   resolveUserAvatarUri,
 } from '@/backend/services/profile/userAvatarStorage';
+import { createProvidersModule } from '@/backend/services/providers/createProvidersModule';
 import {
   getProviderAvatarUri,
   saveProviderAvatar,
 } from '@/backend/services/providers/providerAvatarStorage';
-import { ProvidersService } from '@/backend/services/providers/ProvidersService';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 
@@ -37,7 +37,6 @@ export type BackendComposition = {
   dataApiDependencies: {
     mcpServers: McpService;
     models: ModelsService;
-    providers: ProvidersService;
   };
   dispose(): Promise<void>;
 };
@@ -136,23 +135,12 @@ export function createBackend(services: BackendServices): BackendComposition {
       update: (id, input) => services.mcpServer.update(id, input, 'streamableHttp'),
     },
   });
-  const providers = new ProvidersService({
+  const providers = createProvidersModule({
     avatars: {
       persist: saveProviderAvatar,
       resolve: getProviderAvatarUri,
     },
-    providers: {
-      canRemove: canDeleteProvider,
-      create: (input) => services.provider.create(input),
-      get: (id) => services.provider.getByProviderId(id),
-      getAuth: (id) => services.provider.getAuthConfig(id),
-      list: (query) => services.provider.list(query),
-      listApiKeys: async (id, query) => (await services.provider.listApiKeys(id, query)).keys,
-      remove: (id) => services.provider.delete(id),
-      replaceApiKeys: (id, keys) => services.provider.replaceApiKeys(id, keys),
-      update: (id, input) => services.provider.update(id, input),
-      updateApiKey: (id, keyId, input) => services.provider.updateApiKey(id, keyId, input),
-    },
+    canRemove: canDeleteProvider,
   });
   const permissions = new PermissionsService({
     device: {
@@ -192,7 +180,6 @@ export function createBackend(services: BackendServices): BackendComposition {
     dataApiDependencies: {
       mcpServers: mcp,
       models,
-      providers,
     },
     dispose: () => chat.dispose(),
   };
