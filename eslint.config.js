@@ -222,7 +222,7 @@ module.exports = defineConfig([
     ],
   ),
   restrictedImports(
-    ['src/shared/contracts/**/*.{ts,tsx}', 'src/shared/utils/**/*.{ts,tsx}'],
+    ['src/shared/contracts/**/*.{ts,tsx}', 'src/shared/oauth/**/*.{ts,tsx}'],
     [
       {
         group: [
