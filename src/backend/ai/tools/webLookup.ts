@@ -1,12 +1,9 @@
 /**
- * Web search core — mirrors desktop `src/main/ai/tools/webLookup.ts`.
+ * Web search / fetch core — mirrors desktop `src/main/ai/tools/webLookup.ts`.
  *
  * Desktop shares this between the AI-SDK builtin tools and its Claude Code MCP
  * bridge, so the tool file there is a thin wrapper; mobile keeps the same split
- * to make the two readable side by side. Two desktop pieces are left out:
- * `fetchWeb` (no `web_fetch` tool here) and the Clash Fake-IP branch, which
- * classifies a message desktop's `remoteUrlSafety` raises and mobile never
- * produces.
+ * to make the two readable side by side.
  *
  * Never throws on lookup failure: a failed lookup returns a structured error so
  * callers can distinguish transient failures from failures that cannot succeed
@@ -38,7 +35,23 @@ Don't use for:
 - Math, code reasoning, or things you can answer from your training
 - Well-known facts unlikely to have changed
 
-You may call this multiple times with different queries to broaden coverage.
+You may call this multiple times with different queries to broaden coverage:
+- If the topic likely has more authoritative sources in another language
+  (English for tech / scientific topics, the local language for regional news,
+  Japanese for anime / manga, etc.), repeat the search with the topic translated
+  into the most likely source language.
+- If the first results miss an angle, refine with synonyms or sub-aspects.
+
+Cite: append [cite:id] immediately after each statement a result supports, using the result's exact \`id\` field.`;
+
+export const WEB_FETCH_DESCRIPTION = `Fetch the readable content from one or more known web page URLs.
+
+Use this when:
+- You already have specific URLs from the user, prior context, or web_search
+- You need page content from an article, documentation page, or reference URL
+- Search snippets are not enough and you need the source page text
+
+Don't use this when you only have a topic or question; call web_search first.
 
 Cite: append [cite:id] immediately after each statement a result supports, using the result's exact \`id\` field.`;
 
@@ -71,6 +84,10 @@ export const WEB_PROVIDER_NOT_CONFIGURED_NOTE =
 export const WEB_PROVIDER_CONFIGURATION_ERROR_NOTE =
   'The configured web search provider has a missing API key or a missing/invalid API host. Tell the user to fix it in Settings (Web Search); do not retry — it cannot succeed until then.';
 
+export const WEB_NETWORK_ERROR_NOTE =
+  'Web access failed because of the current network environment. Tell the user to check their network connection and try again; do not retry automatically or provide configuration-specific guidance.';
+
+const WEB_NETWORK_ERROR_MESSAGE = 'Web access failed. Check your network connection and try again.';
 const WEB_PROVIDER_NOT_CONFIGURED_MESSAGE =
   'Web search is unavailable because no compatible provider is configured. Configure one in Settings → Web Search, then try again.';
 const WEB_API_KEY_MISSING_MESSAGE =
@@ -118,6 +135,13 @@ const WEB_CONFIG_ERROR_PRESENTATION: Record<
   },
 };
 
+function isProxyFakeIpError(message: string): boolean {
+  return (
+    /Unsafe remote url: DNS resolved to local or private address/i.test(message) &&
+    /\b198\.(?:18|19)\.(?:\d{1,3})\.(?:\d{1,3})\b/.test(message)
+  );
+}
+
 function classifyWebLookupError(error: unknown): WebLookupError {
   const message = error instanceof Error ? error.message : String(error);
 
@@ -130,11 +154,24 @@ function classifyWebLookupError(error: unknown): WebLookupError {
     };
   }
 
+  if (isProxyFakeIpError(message)) {
+    return {
+      error: WEB_NETWORK_ERROR_MESSAGE,
+      retryable: false,
+      terminal: true,
+      userMessage: WEB_NETWORK_ERROR_MESSAGE,
+      i18nKey: 'web_lookup_network_error',
+    };
+  }
+
   return { error: message, retryable: true };
 }
 
 /** Branch the model-facing note: permanent failures must not trigger a retry loop. */
 function webLookupNote(error: WebLookupError): string {
+  if (error.i18nKey === 'web_lookup_network_error' || isProxyFakeIpError(error.error)) {
+    return WEB_NETWORK_ERROR_NOTE;
+  }
   if (error.i18nKey === 'web_search_provider_unavailable') {
     return WEB_PROVIDER_NOT_CONFIGURED_NOTE;
   }
@@ -187,6 +224,21 @@ export async function searchWeb(
     // retryable error that keeps the tool loop running after the request was already aborted.
     if (signal?.aborted || isAbortError(error)) throw error;
     logger.error('webSearchService.searchKeywords failed', error as Error, { query });
+    return classifyWebLookupError(error);
+  }
+}
+
+export async function fetchWeb(
+  webSearchService: WebSearchService,
+  urls: string[],
+  signal?: AbortSignal,
+): Promise<WebLookupResult> {
+  try {
+    const response = await webSearchService.fetchUrls({ urls }, { signal });
+    return mapResponse(response);
+  } catch (error) {
+    if (signal?.aborted || isAbortError(error)) throw error;
+    logger.error('webSearchService.fetchUrls failed', error as Error, { urls });
     return classifyWebLookupError(error);
   }
 }

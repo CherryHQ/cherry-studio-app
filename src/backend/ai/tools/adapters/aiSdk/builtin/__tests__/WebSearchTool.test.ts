@@ -1,6 +1,7 @@
 import { getTrustedLocalToolTerminalFailure } from '@/backend/ai/runtime/aiSdk/loop/localToolTerminalOutcome';
 import {
   WEB_LOOKUP_ERROR_NOTE,
+  WEB_NETWORK_ERROR_NOTE,
   WEB_PROVIDER_CONFIGURATION_ERROR_NOTE,
   WEB_PROVIDER_NOT_CONFIGURED_NOTE,
 } from '@/backend/ai/tools/webLookup';
@@ -8,6 +9,7 @@ import type { WebSearchConfigErrorCode } from '@/backend/services/webSearch/WebS
 import { WebSearchConfigError } from '@/backend/services/webSearch/WebSearchConfigError';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
+import { createWebFetchTool, webFetchInputSchema } from '../WebFetchTool';
 import { createWebSearchTool, webSearchInputSchema } from '../WebSearchTool';
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
@@ -20,10 +22,21 @@ function createTool(searchKeywords: jest.Mock) {
   return createWebSearchTool({ searchKeywords } as unknown as WebSearchService);
 }
 
+function createFetchTool(fetchUrls: jest.Mock) {
+  return createWebFetchTool({ fetchUrls } as unknown as WebSearchService);
+}
+
 function execute(tool: ReturnType<typeof createTool>, abortSignal?: AbortSignal) {
   return tool.execute?.(
     { query: 'Cherry Studio mobile' },
     { abortSignal, messages: [], toolCallId: 'web-search-1' },
+  );
+}
+
+function executeFetch(tool: ReturnType<typeof createFetchTool>, abortSignal?: AbortSignal) {
+  return tool.execute?.(
+    { urls: ['https://example.com'] },
+    { abortSignal, messages: [], toolCallId: 'web-fetch-1' },
   );
 }
 
@@ -167,5 +180,85 @@ describe('createWebSearchTool', () => {
     expect(webSearchInputSchema.safeParse({ query: 'current Cherry Studio release' }).success).toBe(
       true,
     );
+  });
+});
+
+describe('createWebFetchTool', () => {
+  it('passes URLs and the request abort signal to WebSearchService', async () => {
+    const abortSignal = new AbortController().signal;
+    const fetchUrls = jest.fn(async () => ({
+      results: [{ content: 'Page', title: 'Example', url: 'https://example.com' }],
+    }));
+
+    const output = await executeFetch(createFetchTool(fetchUrls), abortSignal);
+
+    expect(fetchUrls).toHaveBeenCalledWith(
+      { urls: ['https://example.com'] },
+      { signal: abortSignal },
+    );
+    expect(output).toEqual([
+      expect.objectContaining({
+        content: 'Page',
+        id: expect.stringMatching(/^[0-9a-f]{8}-1$/),
+        url: 'https://example.com',
+      }),
+    ]);
+  });
+
+  it('returns transient fetch failures without disguising them as empty results', async () => {
+    const fetchTool = createFetchTool(
+      jest.fn(async () => {
+        throw new Error('HTTP 503 upstream unavailable');
+      }),
+    );
+
+    await expect(executeFetch(fetchTool)).resolves.toEqual({
+      error: 'HTTP 503 upstream unavailable',
+      retryable: true,
+    });
+  });
+
+  it('marks proxy Fake-IP rejection as a terminal network error', async () => {
+    const fetchTool = createFetchTool(
+      jest.fn(async () => {
+        throw new Error(
+          'Unsafe remote url: DNS resolved to local or private address (example.com -> 198.18.1.14)',
+        );
+      }),
+    );
+
+    const output = await executeFetch(fetchTool);
+
+    expect(output).toEqual({
+      error: 'Web access failed. Check your network connection and try again.',
+      i18nKey: 'web_lookup_network_error',
+      retryable: false,
+      terminal: true,
+      userMessage: 'Web access failed. Check your network connection and try again.',
+    });
+    expect(fetchTool.toModelOutput?.({ output } as never)).toEqual({
+      type: 'text',
+      value: WEB_NETWORK_ERROR_NOTE,
+    });
+    expect(getTrustedLocalToolTerminalFailure(output)).toMatchObject({
+      i18nKey: 'web_lookup_network_error',
+    });
+  });
+
+  it('rethrows aborts', async () => {
+    const abortError = Object.assign(new Error('Aborted'), { name: 'AbortError' });
+    const fetchTool = createFetchTool(
+      jest.fn(async () => {
+        throw abortError;
+      }),
+    );
+
+    await expect(executeFetch(fetchTool)).rejects.toBe(abortError);
+  });
+
+  it('accepts only HTTP(S) URL input', () => {
+    expect(webFetchInputSchema.safeParse({ urls: ['https://example.com'] }).success).toBe(true);
+    expect(webFetchInputSchema.safeParse({ urls: ['example.com'] }).success).toBe(false);
+    expect(webFetchInputSchema.safeParse({ urls: ['file:///etc/passwd'] }).success).toBe(false);
   });
 });

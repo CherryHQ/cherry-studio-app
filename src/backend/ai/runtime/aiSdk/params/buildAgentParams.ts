@@ -243,7 +243,11 @@ export async function buildAgentParams({
       ? getDeferredToolsSystemPrompt(resolvedTools.deferredEntries)
       : undefined;
   const hasCitableTools = Boolean(
-    tools?.web_search || resolvedTools.deferredEntries.some((entry) => entry.name === 'web_search'),
+    tools?.web_search ||
+    tools?.web_fetch ||
+    resolvedTools.deferredEntries.some(
+      (entry) => entry.name === 'web_search' || entry.name === 'web_fetch',
+    ),
   );
   const system =
     [baseSystem, deferredSystem, hasCitableTools && CITATIONS_SYSTEM_PROMPT]

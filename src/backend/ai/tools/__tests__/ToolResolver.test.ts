@@ -40,6 +40,7 @@ describe('ToolResolver', () => {
         'reminder_list_collections',
         'reminder_list_items',
         'reminder_update_item',
+        'web_fetch',
         'web_search',
       ].sort(),
     );
@@ -60,6 +61,7 @@ describe('ToolResolver', () => {
       assistant: assistant(),
     });
     expect(result.tools).not.toHaveProperty('web_search');
+    expect(result.tools).not.toHaveProperty('web_fetch');
     expect(result.hasMcpTools).toBe(false);
   });
 

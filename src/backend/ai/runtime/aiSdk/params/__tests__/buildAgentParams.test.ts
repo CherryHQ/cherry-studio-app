@@ -78,7 +78,7 @@ function createServices(
   provider: Provider,
   model: Model,
   assistant?: Assistant,
-  options: { hasMcpTools?: boolean } = {},
+  options: { hasMcpTools?: boolean; tools?: Record<string, never> } = {},
 ) {
   return {
     aiUsageRecord: { recordInvocation: jest.fn(async () => undefined) },
@@ -113,7 +113,7 @@ function createServices(
       resolveForRequest: jest.fn(async () => ({
         deferredEntries: [],
         hasMcpTools: options.hasMcpTools ?? false,
-        tools: undefined,
+        tools: options.tools,
       })),
     },
   } as never;
@@ -281,5 +281,23 @@ describe('buildAgentParams reasoning contract', () => {
     });
 
     expect(result.plugins.map((plugin) => plugin.name)).toContain('no-think');
+  });
+
+  it('adds citation instructions when web_fetch is the only active web tool', async () => {
+    const provider = createProvider('openai');
+    const model = {
+      ...resolveModel(provider, 'gpt-4o'),
+      capabilities: ['function-call' as const],
+    };
+    const assistant = createAssistant(model, 'default');
+    const result = await buildAgentParams({
+      request: { assistantId: assistant.id, uniqueModelId: model.id },
+      services: createServices(provider, model, assistant, {
+        tools: { web_fetch: {} as never },
+      }),
+      shouldIncludeExternalTools: true,
+    });
+
+    expect(result.system).toContain('<citations>');
   });
 });
