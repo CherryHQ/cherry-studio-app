@@ -1,12 +1,12 @@
-import { homeActivityCalendar } from '@/frontend/utils/constants';
+import { homeAiUsageCalendar } from '@/frontend/utils/constants';
 
-import type { ActivityCalendarDay, ActivityData } from '../types';
+import type { AiUsageCalendarDay, AiUsageData } from '../types';
 
-export const activityCalendarRowCount = 7;
+export const aiUsageCalendarRowCount = 7;
 
 const weekMs = 7 * 24 * 60 * 60 * 1000;
 
-export type ActivitySummary = {
+export type AiUsageSummary = {
   weekActiveDays: number;
   weekElapsedDays: number;
   yearActiveDays: number;
@@ -16,7 +16,7 @@ export type ActivitySummary = {
  * Lays the dated range out as GitHub does: full Monday-start weeks covering the
  * first through last data day. Days outside the range render as blank spacers.
  */
-export function buildActivityCalendarWeeks(data: ActivityData): ActivityCalendarDay[][] {
+export function buildAiUsageCalendarWeeks(data: AiUsageData): AiUsageCalendarDay[][] {
   const dateKeys = Object.keys(data).sort();
   if (dateKeys.length === 0) {
     return [];
@@ -29,7 +29,7 @@ export function buildActivityCalendarWeeks(data: ActivityData): ActivityCalendar
   const weekCount = Math.round((lastWeekStart.getTime() - calendarStart.getTime()) / weekMs) + 1;
 
   return Array.from({ length: weekCount }, (_, weekIndex) =>
-    Array.from({ length: activityCalendarRowCount }, (_, dayIndex) => {
+    Array.from({ length: aiUsageCalendarRowCount }, (_, dayIndex) => {
       const dateKey = toLocalDateKey(addCalendarDays(calendarStart, weekIndex * 7 + dayIndex));
 
       return {
@@ -40,7 +40,7 @@ export function buildActivityCalendarWeeks(data: ActivityData): ActivityCalendar
   );
 }
 
-export function getActivitySummary(data: ActivityData): ActivitySummary {
+export function getAiUsageSummary(data: AiUsageData): AiUsageSummary {
   const dateKeys = Object.keys(data).sort();
   if (dateKeys.length === 0) {
     return { weekActiveDays: 0, weekElapsedDays: 0, yearActiveDays: 0 };
@@ -74,8 +74,8 @@ export function getActivitySummary(data: ActivityData): ActivitySummary {
 }
 
 // Bottom-left to top-right wave: the first week's Sunday fires first.
-export function getActivitySweepDelayMs(weekIndex: number, dayIndex: number): number {
-  return homeActivityCalendar.sweepStepMs * (weekIndex + (activityCalendarRowCount - 1 - dayIndex));
+export function getAiUsageSweepDelayMs(weekIndex: number, dayIndex: number): number {
+  return homeAiUsageCalendar.sweepStepMs * (weekIndex + (aiUsageCalendarRowCount - 1 - dayIndex));
 }
 
 export function addCalendarDays(date: Date, days: number): Date {

@@ -5,20 +5,16 @@ import { ScrollView, useWindowDimensions, View } from 'react-native';
 import { TabRootHeader } from '@/frontend/components/headers';
 import type { HeaderToolbarAction } from '@/frontend/components/headers/BackHeader/BackHeader.types';
 
-import {
-  createPreviewActivityData,
-  getPreviewActivityDayCount,
-  HomeActivityCard,
-} from './activity';
+import { AiUsageCard, createPreviewAiUsageData, getPreviewAiUsageDayCount } from './aiUsage';
 import { HomeHeaderAvatarButton } from './components/HomeHeaderAvatarButton';
 
 export default function HomeScreen() {
   const { t } = useTranslation();
   const { width: windowWidth } = useWindowDimensions();
-  const [activityEndDate] = useState(() => new Date());
-  const activityData = useMemo(
-    () => createPreviewActivityData(activityEndDate, getPreviewActivityDayCount(windowWidth)),
-    [activityEndDate, windowWidth],
+  const [aiUsageEndDate] = useState(() => new Date());
+  const aiUsageData = useMemo(
+    () => createPreviewAiUsageData(aiUsageEndDate, getPreviewAiUsageDayCount(windowWidth)),
+    [aiUsageEndDate, windowWidth],
   );
 
   const rightActions = useMemo<HeaderToolbarAction[]>(
@@ -36,7 +32,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-3 px-2 pt-3">
-          <HomeActivityCard data={activityData} />
+          <AiUsageCard data={aiUsageData} />
         </View>
       </ScrollView>
     </>

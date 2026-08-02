@@ -1,8 +1,8 @@
 {
-  "home.activity.toggleHint": "Plays or rewinds the activity animation.",
-  "home.activity.title": "Activity",
-  "home.activity.weeklyDays": "{{count}} of {{total}} this week",
-  "home.activity.yearlyDays": "{{count}} days this year",
+  "home.aiUsage.toggleHint": "Plays or rewinds the AI usage animation.",
+  "home.aiUsage.title": "AI Usage",
+  "home.aiUsage.weeklyDays": "{{count}} of {{total}} this week",
+  "home.aiUsage.yearlyDays": "{{count}} days this year",
   "chat.actions.createImage": "Create image",
   "chat.actions.webSearch": "Web search",
   "chat.builtinTool.calendar.createEvent": "Create calendar event",

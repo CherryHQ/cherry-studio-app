@@ -5,28 +5,28 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useUniwind } from 'uniwind';
 
-import { homeActivityCalendar } from '@/frontend/utils/constants';
+import { homeAiUsageCalendar } from '@/frontend/utils/constants';
 
-import type { ActivityAnimationControls, ActivityData } from '../types';
-import { buildActivityCalendarWeeks, getActivitySummary } from '../utils/calendarLayout';
-import { ActivitySquare } from './ActivitySquare';
+import type { AiUsageAnimationControls, AiUsageData } from '../types';
+import { buildAiUsageCalendarWeeks, getAiUsageSummary } from '../utils/aiUsageCalendar';
+import { AiUsageSquare } from './AiUsageSquare';
 
-export type HomeActivityCardProps = {
-  data: ActivityData;
+export type AiUsageCardProps = {
+  data: AiUsageData;
 };
 
-export function HomeActivityCard({ data }: HomeActivityCardProps) {
+export function AiUsageCard({ data }: AiUsageCardProps) {
   const { t } = useTranslation();
-  const squareRefs = useRef(new Map<string, ActivityAnimationControls>());
+  const squareRefs = useRef(new Map<string, AiUsageAnimationControls>());
   const isAnimatingRef = useRef(false);
   const pressed = useSharedValue(false);
   // useUniwind, not useColorScheme: the app theme preference can pin dark/light
   // independently of the system appearance, and the squares must match the card.
   const { theme } = useUniwind();
-  const levelColors = homeActivityCalendar.levelColors[theme === 'dark' ? 'dark' : 'light'];
+  const levelColors = homeAiUsageCalendar.levelColors[theme === 'dark' ? 'dark' : 'light'];
 
-  const weeks = useMemo(() => buildActivityCalendarWeeks(data), [data]);
-  const activitySummary = useMemo(() => getActivitySummary(data), [data]);
+  const weeks = useMemo(() => buildAiUsageCalendarWeeks(data), [data]);
+  const aiUsageSummary = useMemo(() => getAiUsageSummary(data), [data]);
 
   const startAnimation = useCallback(() => {
     isAnimatingRef.current = true;
@@ -69,7 +69,7 @@ export function HomeActivityCard({ data }: HomeActivityCardProps) {
   const pressAnimatedStyle = useAnimatedStyle(() => ({
     transform: [
       {
-        scale: withTiming(pressed.get() ? homeActivityCalendar.pressedScale : 1, {
+        scale: withTiming(pressed.get() ? homeAiUsageCalendar.pressedScale : 1, {
           duration: 120,
         }),
       },
@@ -78,8 +78,8 @@ export function HomeActivityCard({ data }: HomeActivityCardProps) {
 
   return (
     <Pressable
-      accessibilityHint={t('home.activity.toggleHint')}
-      accessibilityLabel={t('home.activity.title')}
+      accessibilityHint={t('home.aiUsage.toggleHint')}
+      accessibilityLabel={t('home.aiUsage.title')}
       accessibilityRole="button"
       onPress={toggleAnimation}
       onPressIn={handlePressIn}
@@ -93,7 +93,7 @@ export function HomeActivityCard({ data }: HomeActivityCardProps) {
               <View key={week[0].dateKey} style={styles.week}>
                 {week.map((day, dayIndex) =>
                   day.inRange ? (
-                    <ActivitySquare
+                    <AiUsageSquare
                       dayIndex={dayIndex}
                       key={day.dateKey}
                       level={data[day.dateKey] ?? 0}
@@ -123,7 +123,7 @@ export function HomeActivityCard({ data }: HomeActivityCardProps) {
                 numberOfLines={1}
                 style={styles.statText}
               >
-                {t('home.activity.yearlyDays', { count: activitySummary.yearActiveDays })}
+                {t('home.aiUsage.yearlyDays', { count: aiUsageSummary.yearActiveDays })}
               </Text>
             </View>
             <View className="min-w-0 shrink rounded-full bg-surface-secondary px-3 py-1">
@@ -132,9 +132,9 @@ export function HomeActivityCard({ data }: HomeActivityCardProps) {
                 numberOfLines={1}
                 style={styles.statText}
               >
-                {t('home.activity.weeklyDays', {
-                  count: activitySummary.weekActiveDays,
-                  total: activitySummary.weekElapsedDays,
+                {t('home.aiUsage.weeklyDays', {
+                  count: aiUsageSummary.weekActiveDays,
+                  total: aiUsageSummary.weekElapsedDays,
                 })}
               </Text>
             </View>
@@ -148,15 +148,15 @@ export function HomeActivityCard({ data }: HomeActivityCardProps) {
 const styles = StyleSheet.create({
   card: {
     borderCurve: 'continuous',
-    boxShadow: homeActivityCalendar.cardShadow,
+    boxShadow: homeAiUsageCalendar.cardShadow,
   },
   emptySquare: {
-    height: homeActivityCalendar.cellSize,
-    width: homeActivityCalendar.cellSize,
+    height: homeAiUsageCalendar.cellSize,
+    width: homeAiUsageCalendar.cellSize,
   },
   grid: {
     flexDirection: 'row',
-    gap: homeActivityCalendar.cellGap,
+    gap: homeAiUsageCalendar.cellGap,
   },
   pressable: {
     alignSelf: 'center',
@@ -165,6 +165,6 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   week: {
-    gap: homeActivityCalendar.cellGap,
+    gap: homeAiUsageCalendar.cellGap,
   },
 });

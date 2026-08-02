@@ -10,26 +10,26 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 
-import { homeActivityCalendar } from '@/frontend/utils/constants';
+import { homeAiUsageCalendar } from '@/frontend/utils/constants';
 
-import type { ActivityAnimationControls, ActivityLevel } from '../types';
-import { getActivitySweepDelayMs } from '../utils/calendarLayout';
+import type { AiUsageAnimationControls, AiUsageLevel } from '../types';
+import { getAiUsageSweepDelayMs } from '../utils/aiUsageCalendar';
 
-type ActivitySquareProps = {
+type AiUsageSquareProps = {
   dayIndex: number;
-  level: ActivityLevel;
+  level: AiUsageLevel;
   levelColors: readonly string[];
-  ref: Ref<ActivityAnimationControls>;
+  ref: Ref<AiUsageAnimationControls>;
   weekIndex: number;
 };
 
-export function ActivitySquare({
+export function AiUsageSquare({
   dayIndex,
   level,
   levelColors,
   ref,
   weekIndex,
-}: ActivitySquareProps) {
+}: AiUsageSquareProps) {
   const progress = useSharedValue(0);
   const restingColor = levelColors[0];
   const activeColor = levelColors[level];
@@ -38,8 +38,8 @@ export function ActivitySquare({
     cancelAnimation(progress);
     progress.set(
       withDelay(
-        getActivitySweepDelayMs(weekIndex, dayIndex),
-        withSpring(1, homeActivityCalendar.enterSpring),
+        getAiUsageSweepDelayMs(weekIndex, dayIndex),
+        withSpring(1, homeAiUsageCalendar.enterSpring),
       ),
     );
   }, [dayIndex, progress, weekIndex]);
@@ -48,8 +48,8 @@ export function ActivitySquare({
     cancelAnimation(progress);
     progress.set(
       withDelay(
-        Math.random() * homeActivityCalendar.resetMaxDelayMs,
-        withSpring(0, homeActivityCalendar.exitSpring),
+        Math.random() * homeAiUsageCalendar.resetMaxDelayMs,
+        withSpring(0, homeAiUsageCalendar.exitSpring),
       ),
     );
   }, [progress]);
@@ -74,8 +74,8 @@ export function ActivitySquare({
 const styles = StyleSheet.create({
   square: {
     borderCurve: 'continuous',
-    borderRadius: homeActivityCalendar.cellRadius,
-    height: homeActivityCalendar.cellSize,
-    width: homeActivityCalendar.cellSize,
+    borderRadius: homeAiUsageCalendar.cellRadius,
+    height: homeAiUsageCalendar.cellSize,
+    width: homeAiUsageCalendar.cellSize,
   },
 });
