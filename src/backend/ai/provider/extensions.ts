@@ -31,6 +31,7 @@ import { ProviderExtension, type ProviderExtensionConfig } from '@cherrystudio/a
 import { createOllama, type OllamaProviderSettings } from 'ollama-ai-provider-v2';
 
 import { type AihubmixProviderSettings, createAihubmix } from './custom/aihubmix/aihubmixProvider';
+import { createDmxapiProvider, type DmxapiProviderSettings } from './custom/dmxapi/dmxapiProvider';
 import { createNewApi, type NewApiProviderSettings } from './custom/newapiProvider';
 
 export const GoogleVertexExtension = ProviderExtension.create({
@@ -174,6 +175,12 @@ export const NewApiExtension = ProviderExtension.create({
   create: createNewApi,
 } as const satisfies ProviderExtensionConfig<NewApiProviderSettings, ProviderV3, 'newapi'>);
 
+export const DmxapiExtension = ProviderExtension.create({
+  name: 'dmxapi',
+  supportsImageGeneration: false,
+  create: createDmxapiProvider,
+} as const satisfies ProviderExtensionConfig<DmxapiProviderSettings, ProviderV3, 'dmxapi'>);
+
 export const TogetherAIExtension = ProviderExtension.create({
   name: 'togetherai',
   aliases: ['together'] as const,
@@ -194,6 +201,7 @@ export const extensions = [
   CerebrasExtension,
   AiHubMixExtension,
   NewApiExtension,
+  DmxapiExtension,
   TogetherAIExtension,
   GroqExtension,
 ] as const;

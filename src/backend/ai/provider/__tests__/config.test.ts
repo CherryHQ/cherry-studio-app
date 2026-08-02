@@ -407,6 +407,41 @@ describe('providerToAiSdkConfig', () => {
       [ENDPOINT_TYPE.OPENAI_RESPONSES]: 'https://proxy.example.com/responses/v1',
     });
   });
+
+  it('passes every configured DMXAPI endpoint base URL to its routed factory', async () => {
+    const provider = createProvider({
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: {
+          adapterFamily: 'dmxapi',
+          baseUrl: 'https://proxy.example.com/anthropic/v1',
+        },
+        [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: {
+          adapterFamily: 'dmxapi',
+          baseUrl: 'https://proxy.example.com/gemini/v1beta',
+        },
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          adapterFamily: 'dmxapi',
+          baseUrl: 'https://proxy.example.com/chat/v1',
+        },
+      },
+      id: 'dmxapi',
+      presetProviderId: 'dmxapi',
+    });
+
+    const config = await providerToAiSdkConfig(
+      provider,
+      createModel(provider.id, 'gemini-2.5-pro'),
+      createRuntime({ value: 'sk-test', apiKeySelection: { attribution: 'unknown' } }),
+    );
+
+    expect(config.providerId).toBe('dmxapi');
+    expect((config.providerSettings as Record<string, unknown>).endpointBaseURLs).toEqual({
+      [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: 'https://proxy.example.com/anthropic/v1',
+      [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: 'https://proxy.example.com/gemini/v1beta',
+      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: 'https://proxy.example.com/chat/v1',
+    });
+  });
 });
 
 function createRuntime(

@@ -195,6 +195,7 @@ export async function resolveProviderAiSdkConfig(
     { match: (_, id) => id === 'cherryin', build: withSelectedApiKey(buildRoutedGatewayConfig) },
     { match: (_, id) => id === 'newapi', build: withSelectedApiKey(buildRoutedGatewayConfig) },
     { match: (_, id) => id === 'aihubmix', build: withSelectedApiKey(buildAiHubMixConfig) },
+    { match: (_, id) => id === 'dmxapi', build: withSelectedApiKey(buildDmxapiConfig) },
     { match: (_, id) => id === 'gateway', build: withSelectedApiKey(buildGenericProviderConfig) },
     { match: (_, id) => id === 'bedrock', build: buildBedrockConfig },
     {
@@ -511,6 +512,18 @@ function buildEndpointBaseURLs(provider: Provider): Partial<Record<EndpointType,
 function buildAiHubMixConfig(ctx: BuilderContext): ProviderConfig<'aihubmix'> {
   return {
     providerId: 'aihubmix',
+    endpoint: ctx.endpoint,
+    providerSettings: {
+      ...ctx.baseConfig,
+      endpointBaseURLs: buildEndpointBaseURLs(ctx.actualProvider),
+      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+    },
+  };
+}
+
+function buildDmxapiConfig(ctx: BuilderContext): ProviderConfig<'dmxapi'> {
+  return {
+    providerId: 'dmxapi',
     endpoint: ctx.endpoint,
     providerSettings: {
       ...ctx.baseConfig,

@@ -85,6 +85,42 @@ describe('AiHubMix effective endpoint and provider-options namespace', () => {
   });
 });
 
+describe('DMXAPI effective endpoint and provider-options namespace', () => {
+  const dmxapi = {
+    ...provider,
+    endpointConfigs: {
+      [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: {
+        adapterFamily: 'dmxapi',
+        baseUrl: 'https://dmx.example.com/v1',
+      },
+      [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: {
+        adapterFamily: 'dmxapi',
+        baseUrl: 'https://dmx.example.com/v1beta',
+      },
+      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+        adapterFamily: 'dmxapi',
+        baseUrl: 'https://dmx.example.com/v1',
+      },
+    },
+    id: 'dmxapi',
+    name: 'DMXAPI',
+    presetProviderId: 'dmxapi',
+  } as Provider;
+
+  test.each([
+    ['claude-opus-4-6', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'anthropic'],
+    ['gemini-2.5-pro', ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT, 'google'],
+    ['gpt-5', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'openai'],
+    ['qwen3.5-plus', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'dmxapi'],
+  ])('routes %s to %s using %s options', (modelId, endpointType, providerOptionsKey) => {
+    expect(resolveEffectiveEndpoint(dmxapi, createModel(modelId))).toEqual({
+      baseUrl: dmxapi.endpointConfigs?.[endpointType]?.baseUrl,
+      endpointType,
+      providerOptionsKey,
+    });
+  });
+});
+
 describe('native reasoning adapter resolution', () => {
   it.each([
     ['aws-bedrock', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'bedrock', 'bedrock'],

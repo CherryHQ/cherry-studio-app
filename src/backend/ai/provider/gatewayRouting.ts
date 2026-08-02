@@ -2,6 +2,7 @@ import type { EndpointType, Model } from '@cherrystudio/universal/data/types/mod
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import { resolveAihubmixChatRoute } from './custom/aihubmix/aihubmixRouting';
+import { resolveDmxapiChatRoute } from './custom/dmxapi/dmxapiRouting';
 
 export interface GatewayModelRoute {
   endpointType: EndpointType;
@@ -12,8 +13,7 @@ type GatewayModelRouter = (modelId: string) => GatewayModelRoute;
 
 const gatewayModelRouters: Partial<Record<string, GatewayModelRouter>> = {
   aihubmix: resolveAihubmixChatRoute,
-  // Desktop also registers DMXAPI here. Mobile has no DMXAPI runtime extension yet; adding only
-  // its route would select an adapter the mobile factory cannot construct.
+  dmxapi: resolveDmxapiChatRoute,
 };
 
 export function resolveGatewayRoute(
