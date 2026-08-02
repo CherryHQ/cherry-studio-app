@@ -10,6 +10,7 @@ export type ChatTopicSnapshot = {
   error?: Error;
   hasHistoryBeforePendingTurn?: boolean;
   overlayMessage?: Message;
+  overlayMessages?: readonly Message[];
   pendingUserMessage?: Message;
   status: ChatTopicStatus;
 };
@@ -25,6 +26,38 @@ export type ChatSendTextInput = {
 };
 
 export type ChatSendNewTopicTextInput = Omit<ChatSendTextInput, 'topicId'>;
+
+export type ChatSendMultiModelTextInput = Omit<ChatSendTextInput, 'selectedModelId'> & {
+  selectedModelIds: readonly UniqueModelId[];
+};
+
+export type ChatRegenerateInput = {
+  fastMode?: boolean;
+  messageId: string;
+  reasoningEffort?: ReasoningEffortOption;
+  selectedModelIds?: readonly UniqueModelId[];
+  topicId: string;
+};
+
+export type ChatEditAndResendInput = {
+  fastMode?: boolean;
+  messageId: string;
+  parts?: readonly CherryMessagePart[];
+  reasoningEffort?: ReasoningEffortOption;
+  selectedModelIds?: readonly UniqueModelId[];
+  text: string;
+  topicId: string;
+};
+
+export type ChatSetActiveBranchInput = {
+  throughNodeId: string;
+  topicId: string;
+};
+
+export type ChatCancelExecutionInput = {
+  executionId: UniqueModelId;
+  topicId: string;
+};
 
 export type ChatToolApprovalInput = {
   approvalId: string;
@@ -45,9 +78,14 @@ export type ChatListener = (event: ChatEvent) => Promise<void> | void;
 
 export interface ChatModule {
   abort(topicId: string): void;
+  cancelExecution(input: ChatCancelExecutionInput): void;
+  editAndResend(input: ChatEditAndResendInput): Promise<void>;
   getTopicSnapshot(topicId: string): ChatTopicSnapshot;
+  regenerate(input: ChatRegenerateInput): Promise<void>;
   respondToolApproval(input: ChatToolApprovalInput): Promise<void>;
+  sendMultiModelText(input: ChatSendMultiModelTextInput): Promise<void>;
   sendNewTopicText(input: ChatSendNewTopicTextInput): Promise<void>;
   sendText(input: ChatSendTextInput): Promise<void>;
+  setActiveBranch(input: ChatSetActiveBranchInput): Promise<void>;
   subscribe(listener: ChatListener): () => void;
 }

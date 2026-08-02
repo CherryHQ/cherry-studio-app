@@ -1715,6 +1715,260 @@ describe('ChatRuntime', () => {
     unsubscribeNextRoute();
   });
 
+  test('runs multi-model siblings independently and preserves a partial failure', async () => {
+    const services = createServices();
+    const modelIds = [
+      'provider-a::model-a' as UniqueModelId,
+      'provider-b::model-b' as UniqueModelId,
+    ];
+    configureDynamicReservation(services);
+    mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
+      message.id === 'assistant-reserved-2'
+        ? failingAsyncIterable(new Error('model-b failed'))
+        : asyncIterable([createUiMessage(message.id, 'model-a succeeded')]),
+    );
+    const runtime = createRuntime({ services });
+
+    await runtime.sendMultiModelText({
+      selectedModelIds: modelIds,
+      text: 'compare',
+      topicId: 'topic-1',
+    });
+
+    const reservation = (services.message.createUserMessageWithPlaceholders as jest.Mock).mock
+      .calls[0][0];
+    expect(reservation.siblingsGroupId).toEqual(expect.any(Number));
+    expect(
+      reservation.placeholders.map(
+        (placeholder: { modelId: UniqueModelId }) => placeholder.modelId,
+      ),
+    ).toEqual(modelIds);
+    expect(services.ai.streamText).toHaveBeenCalledTimes(2);
+    expect(
+      (services.ai.streamText as jest.Mock).mock.calls.map(([request]) => request.uniqueModelId),
+    ).toEqual(modelIds);
+    expect(services.message.finalizeAssistantMessage).toHaveBeenCalledWith(
+      'assistant-reserved-1',
+      expect.objectContaining({ status: 'success' }),
+    );
+    expect(services.message.finalizeAssistantMessage).toHaveBeenCalledWith(
+      'assistant-reserved-2',
+      expect.objectContaining({ status: 'error' }),
+    );
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  test('rejects duplicate model IDs before reserving a multi-model turn', async () => {
+    const services = createServices();
+    const runtime = createRuntime({ services });
+    const modelId = 'provider::model' as UniqueModelId;
+
+    await expect(
+      runtime.sendMultiModelText({
+        selectedModelIds: [modelId, modelId],
+        text: 'compare',
+        topicId: 'topic-1',
+      }),
+    ).rejects.toThrow('duplicate model IDs');
+
+    expect(services.message.createUserMessageWithPlaceholders).not.toHaveBeenCalled();
+  });
+
+  test('cancels one multi-model execution without aborting its sibling', async () => {
+    const services = createServices();
+    const modelIds = [
+      'provider-a::model-a' as UniqueModelId,
+      'provider-b::model-b' as UniqueModelId,
+    ];
+    configureDynamicReservation(services);
+    services.ai.streamText = jest.fn(async (request: ChatStreamRequest) =>
+      Promise.resolve(request.requestOptions.signal),
+    );
+    const modelAGate = createDeferred();
+    mockReadUIMessageStream.mockImplementation(
+      ({ message, stream }: { message: CherryUIMessage; stream: AbortSignal }) =>
+        message.id === 'assistant-reserved-1'
+          ? gatedAsyncIterable([createUiMessage(message.id, 'model-a')], modelAGate.promise)
+          : abortableAsyncIterable(createUiMessage(message.id, 'model-b'), stream),
+    );
+    const runtime = createRuntime({ services });
+
+    const send = runtime.sendMultiModelText({
+      selectedModelIds: modelIds,
+      text: 'compare',
+      topicId: 'topic-1',
+    });
+    await waitUntil(() => (services.ai.streamText as jest.Mock).mock.calls.length === 2);
+    const modelASignal = (services.ai.streamText as jest.Mock).mock.calls[0][0].requestOptions
+      .signal as AbortSignal;
+    const modelBSignal = (services.ai.streamText as jest.Mock).mock.calls[1][0].requestOptions
+      .signal as AbortSignal;
+
+    runtime.cancelExecution({ executionId: modelIds[1], topicId: 'topic-1' });
+    expect(modelASignal.aborted).toBe(false);
+    expect(modelBSignal.aborted).toBe(true);
+
+    modelAGate.resolve();
+    await send;
+    expect(services.message.finalizeAssistantMessage).toHaveBeenCalledWith(
+      'assistant-reserved-1',
+      expect.objectContaining({ status: 'success' }),
+    );
+    expect(services.message.finalizeAssistantMessage).toHaveBeenCalledWith(
+      'assistant-reserved-2',
+      expect.objectContaining({ status: 'paused' }),
+    );
+  });
+
+  test('regenerates as an assistant sibling with the source model and turn options', async () => {
+    const services = createServices();
+    const sourceModelId = 'source-provider::source-model' as UniqueModelId;
+    const userMessage = { ...createMessage('user-source', 'user'), parentId: 'branch-parent' };
+    const sourceAssistant: Message = {
+      ...createMessage('assistant-source', 'assistant'),
+      data: {
+        parts: [{ type: 'text', text: 'old' } as CherryMessagePart],
+        turnOptions: { fastMode: true, reasoningEffort: 'high' },
+      },
+      modelId: sourceModelId,
+      parentId: userMessage.id,
+      status: 'success' as const,
+    };
+    services.message.getById = jest.fn(async (id: string) => {
+      if (id === sourceAssistant.id) return sourceAssistant;
+      if (id === userMessage.id) return userMessage;
+      return createMessage(id, 'assistant');
+    });
+    services.message.getChildrenByParentId = jest.fn(async () => [sourceAssistant]);
+    services.message.getPathToNode = jest.fn(async () => [userMessage]);
+    configureDynamicReservation(services);
+    mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
+      asyncIterable([createUiMessage(message.id, 'new')]),
+    );
+    const runtime = createRuntime({ services });
+
+    await runtime.regenerate({ messageId: sourceAssistant.id, topicId: 'topic-1' });
+
+    const reservation = (services.message.createUserMessageWithPlaceholders as jest.Mock).mock
+      .calls[0][0];
+    expect(reservation.userMessage).toEqual({ id: userMessage.id, mode: 'existing' });
+    expect(reservation.siblingsGroupId).toEqual(expect.any(Number));
+    expect(reservation.placeholders[0]).toEqual(
+      expect.objectContaining({
+        modelId: sourceModelId,
+        data: {
+          parts: [],
+          turnOptions: { fastMode: true, reasoningEffort: 'high' },
+        },
+      }),
+    );
+    expect(services.topic.update).not.toHaveBeenCalled();
+  });
+
+  test('uses an explicit regenerate model without changing topic or assistant ownership', async () => {
+    const services = createServices();
+    const overrideModelId = 'override-provider::override-model' as UniqueModelId;
+    const userMessage = createMessage('user-source', 'user');
+    const sourceAssistant = {
+      ...createMessage('assistant-source', 'assistant'),
+      modelId: 'source-provider::source-model' as UniqueModelId,
+      parentId: userMessage.id,
+      status: 'success' as const,
+    };
+    services.message.getById = jest.fn(async (id: string) =>
+      id === sourceAssistant.id ? sourceAssistant : userMessage,
+    );
+    services.message.getChildrenByParentId = jest.fn(async () => [sourceAssistant]);
+    services.message.getPathToNode = jest.fn(async () => [userMessage]);
+    configureDynamicReservation(services);
+    mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
+      asyncIterable([createUiMessage(message.id, 'override')]),
+    );
+    const runtime = createRuntime({ services });
+
+    await runtime.regenerate({
+      messageId: sourceAssistant.id,
+      selectedModelIds: [overrideModelId],
+      topicId: 'topic-1',
+    });
+
+    const reservation = (services.message.createUserMessageWithPlaceholders as jest.Mock).mock
+      .calls[0][0];
+    expect(reservation.placeholders[0].modelId).toBe(overrideModelId);
+    expect(services.topic.update).not.toHaveBeenCalled();
+    expect(services.preference.get).not.toHaveBeenCalled();
+  });
+
+  test('edits into a new user branch and preserves inherited multi-model children', async () => {
+    const services = createServices();
+    const modelIds = [
+      'provider-a::model-a' as UniqueModelId,
+      'provider-b::model-b' as UniqueModelId,
+    ];
+    const source = {
+      ...createMessage('user-source', 'user'),
+      parentId: 'branch-parent',
+      siblingsGroupId: 0,
+    };
+    const children = modelIds.map((modelId, index) => ({
+      ...createMessage(`assistant-source-${index + 1}`, 'assistant'),
+      data: { parts: [], turnOptions: { fastMode: index === 0 } },
+      modelId,
+      parentId: source.id,
+      status: 'success' as const,
+    }));
+    services.topic.getById = jest.fn(async () => createTopic({ assistantId: undefined }));
+    services.message.getById = jest.fn(async () => source);
+    services.message.getChildrenByParentId = jest.fn(async () => children);
+    services.message.getPathToNode = jest.fn(async () => [source]);
+    configureDynamicReservation(services);
+    mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
+      asyncIterable([createUiMessage(message.id, 'new branch')]),
+    );
+    const runtime = createRuntime({ services });
+
+    await runtime.editAndResend({
+      messageId: source.id,
+      parts: [{ type: 'text', text: 'edited' }],
+      text: 'edited',
+      topicId: 'topic-1',
+    });
+
+    const reservation = (services.message.createUserMessageWithPlaceholders as jest.Mock).mock
+      .calls[0][0];
+    expect(services.message.updateSiblingsGroupId).toHaveBeenCalledWith(
+      source.id,
+      reservation.userMessage.dto.siblingsGroupId,
+    );
+    expect(reservation.userMessage).toEqual(
+      expect.objectContaining({
+        mode: 'create',
+        dto: expect.objectContaining({
+          data: { parts: [{ type: 'text', text: 'edited' }] },
+          parentId: source.parentId,
+        }),
+      }),
+    );
+    expect(
+      reservation.placeholders.map(
+        (placeholder: { modelId: UniqueModelId }) => placeholder.modelId,
+      ),
+    ).toEqual(modelIds);
+    expect(services.message.delete).not.toHaveBeenCalled();
+  });
+
+  test('switches an active branch to the latest descendant through the selected node', async () => {
+    const services = createServices();
+    const selected = createMessage('assistant-selected', 'assistant');
+    const leaf = createMessage('assistant-leaf', 'assistant');
+    services.message.getPathThrough = jest.fn(async () => [selected, leaf]);
+    const runtime = createRuntime({ services });
+
+    await runtime.setActiveBranch({ throughNodeId: selected.id, topicId: 'topic-1' });
+
+    expect(services.topic.setActiveNode).toHaveBeenCalledWith('topic-1', leaf.id);
+  });
+
   test('aborts and awaits active turns before completing dispose', async () => {
     const services = createServices();
     const finalizationStarted = createDeferred();
@@ -1944,7 +2198,10 @@ function createServices() {
       })),
       finalizeAssistantMessage,
       getById: jest.fn(async () => assistantMessage),
+      getChildrenByParentId: jest.fn(async () => []),
       getPathToNode: jest.fn(async () => [userMessage]),
+      getPathThrough: jest.fn(async () => [userMessage, assistantMessage]),
+      updateSiblingsGroupId: jest.fn(async () => undefined),
     },
     model: {
       getById: jest.fn(async () => model),
@@ -1962,9 +2219,54 @@ function createServices() {
         name: 'first message from empty topic',
       })),
       getById: jest.fn(async () => createTopic()),
+      setActiveNode: jest.fn(async (_topicId: string, nodeId: string) => ({
+        activeNodeId: nodeId,
+      })),
       update: jest.fn(async () => createTopic()),
     },
   } as unknown as ChatRuntimeServices;
+}
+
+function configureDynamicReservation(services: ChatRuntimeServices) {
+  const messages = new Map<string, Message>();
+  services.model.getById = jest.fn(async (id: string) => createModel(id as UniqueModelId));
+  services.message.createUserMessageWithPlaceholders = jest.fn(async (input) => {
+    const userMessage =
+      input.userMessage.mode === 'existing'
+        ? await services.message.getById(input.userMessage.id)
+        : {
+            ...createMessage('user-reserved', 'user'),
+            data: input.userMessage.dto.data,
+            modelId: input.userMessage.dto.modelId ?? null,
+            parentId: input.userMessage.dto.parentId ?? 'active-node',
+            siblingsGroupId: input.userMessage.dto.siblingsGroupId ?? 0,
+          };
+    const placeholders = input.placeholders.map((placeholder, index) => {
+      const message = {
+        ...createMessage(`assistant-reserved-${index + 1}`, 'assistant'),
+        data: placeholder.data,
+        messageSnapshot: placeholder.messageSnapshot ?? null,
+        modelId: placeholder.modelId ?? null,
+        parentId: userMessage.id,
+        siblingsGroupId: input.siblingsGroupId ?? 0,
+      };
+      messages.set(message.id, message);
+      return message;
+    });
+    messages.set(userMessage.id, userMessage);
+    return { placeholders, userMessage };
+  });
+  services.message.finalizeAssistantMessage = jest.fn(async (id, input) => {
+    const message = messages.get(id) ?? createMessage(id, 'assistant');
+    const finalized = {
+      ...message,
+      data: input.data,
+      stats: input.runtimeStats ?? message.stats,
+      status: input.status,
+    };
+    messages.set(id, finalized);
+    return finalized;
+  });
 }
 
 function createTopic(patch: Partial<ReturnType<typeof createTopicBase>> = {}) {

@@ -17,8 +17,13 @@ import {
 import { isToolUIPart } from 'ai';
 
 import type {
+  ChatCancelExecutionInput,
+  ChatEditAndResendInput,
+  ChatRegenerateInput,
   ChatSendNewTopicTextInput,
+  ChatSendMultiModelTextInput,
   ChatSendTextInput,
+  ChatSetActiveBranchInput,
   ChatListener,
   ChatModule,
   ChatTopicSnapshot,
@@ -40,8 +45,19 @@ import {
 import { MessageRuntimeTimingCollector } from './MessageRuntimeTimingCollector';
 import { extractMainText, maybeRenameTopicFromConversationSummary } from './topicNaming';
 
+type ActiveExecution = {
+  abortController: AbortController;
+  assistantMessage: Message;
+  model: Model;
+  status: 'aborted' | 'done' | 'error' | 'streaming';
+};
+
 type ActiveTurn = {
   abortController: AbortController;
+  executions: Map<UniqueModelId, ActiveExecution>;
+  hasHistoryBeforePendingTurn?: boolean;
+  overlays: Map<UniqueModelId, Message>;
+  pendingUserMessage?: Message;
 };
 
 const idleTopicSnapshot: ChatTopicSnapshot = Object.freeze({ status: 'idle' });
@@ -94,7 +110,25 @@ export class ChatRuntime implements ChatModule {
       ...this.getTopicSnapshot(runtimeTopicId),
       status: 'aborting',
     });
-    activeTurn.abortController.abort(new Error('Chat stream aborted'));
+    const reason = new Error('Chat stream aborted');
+    activeTurn.abortController.abort(reason);
+    for (const execution of activeTurn.executions.values()) {
+      if (execution.status === 'streaming') {
+        execution.status = 'aborted';
+        execution.abortController.abort(reason);
+      }
+    }
+  }
+
+  cancelExecution(input: ChatCancelExecutionInput): void {
+    const activeTurn = this.activeTurns.get(this.resolveRuntimeTopicId(input.topicId));
+    const execution = activeTurn?.executions.get(input.executionId);
+    if (!execution || execution.status !== 'streaming') {
+      return;
+    }
+
+    execution.status = 'aborted';
+    execution.abortController.abort(new Error('Chat execution aborted'));
   }
 
   dispose(): Promise<void> {
@@ -110,6 +144,22 @@ export class ChatRuntime implements ChatModule {
     return this.startTask(() => this.sendTextTask(input));
   }
 
+  sendMultiModelText(input: ChatSendMultiModelTextInput): Promise<void> {
+    return this.startTask(() => this.sendMultiModelTextTask(input));
+  }
+
+  regenerate(input: ChatRegenerateInput): Promise<void> {
+    return this.startTask(() => this.regenerateTask(input));
+  }
+
+  editAndResend(input: ChatEditAndResendInput): Promise<void> {
+    return this.startTask(() => this.editAndResendTask(input));
+  }
+
+  setActiveBranch(input: ChatSetActiveBranchInput): Promise<void> {
+    return this.startTask(() => this.setActiveBranchTask(input));
+  }
+
   sendNewTopicText(input: ChatSendNewTopicTextInput): Promise<void> {
     return this.startTask(() => this.sendNewTopicTextTask(input));
   }
@@ -120,7 +170,11 @@ export class ChatRuntime implements ChatModule {
 
   private async disposeRuntime(): Promise<void> {
     for (const activeTurn of this.activeTurns.values()) {
-      activeTurn.abortController.abort(new Error('Chat runtime disposed'));
+      const reason = new Error('Chat runtime disposed');
+      activeTurn.abortController.abort(reason);
+      for (const execution of activeTurn.executions.values()) {
+        execution.abortController.abort(reason);
+      }
     }
 
     await Promise.allSettled([...this.activeTasks]);
@@ -143,8 +197,8 @@ export class ChatRuntime implements ChatModule {
       throw new Error('A response is already streaming for this topic.');
     }
 
-    const abortController = new AbortController();
-    const activeTurn: ActiveTurn = { abortController };
+    const activeTurn = createActiveTurn();
+    const { abortController } = activeTurn;
     this.activeTurns.set(input.topicId, activeTurn);
     this.setTopicSnapshot(input.topicId, { status: 'reserving' });
 
@@ -155,7 +209,7 @@ export class ChatRuntime implements ChatModule {
       await this.runTopicTurn({
         activeTurn,
         fastMode: input.fastMode,
-        model,
+        models: [model],
         parts,
         reasoningEffort: input.reasoningEffort,
         topic,
@@ -170,6 +224,196 @@ export class ChatRuntime implements ChatModule {
         throw toError(error);
       }
     }
+  }
+
+  private async sendMultiModelTextTask(input: ChatSendMultiModelTextInput): Promise<void> {
+    const text = input.text.trim();
+    const parts = getTurnParts({ parts: input.parts, text });
+
+    if (parts.length === 0) {
+      return;
+    }
+    if (input.selectedModelIds.length < 2) {
+      throw new Error('Multi-model sends require at least two models.');
+    }
+    if (this.activeTurns.has(input.topicId)) {
+      throw new Error('A response is already streaming for this topic.');
+    }
+
+    const activeTurn = createActiveTurn();
+    this.activeTurns.set(input.topicId, activeTurn);
+    this.setTopicSnapshot(input.topicId, { status: 'reserving' });
+
+    try {
+      const topic = await this.resolveTopicForTurn(input);
+      const models = await this.resolveModels(input.selectedModelIds, topic);
+      throwIfAborted(activeTurn.abortController.signal);
+
+      await this.runTopicTurn({
+        activeTurn,
+        fastMode: input.fastMode,
+        models,
+        parts,
+        reasoningEffort: input.reasoningEffort,
+        siblingsGroupId: nextSiblingsGroupId(),
+        topic,
+      });
+    } catch (error) {
+      this.activeTurns.delete(input.topicId);
+      await this.invalidateTopicMessagesSafely(input.topicId);
+      this.setTopicSnapshot(input.topicId, idleTopicSnapshot);
+
+      if (!activeTurn.abortController.signal.aborted) {
+        logger.warn('Multi-model chat stream failed before reservation', toError(error));
+        throw toError(error);
+      }
+    }
+  }
+
+  private async regenerateTask(input: ChatRegenerateInput): Promise<void> {
+    if (this.activeTurns.has(input.topicId)) {
+      throw new Error('A response is already streaming for this topic.');
+    }
+
+    const activeTurn = createActiveTurn();
+    this.activeTurns.set(input.topicId, activeTurn);
+    this.setTopicSnapshot(input.topicId, { status: 'reserving' });
+
+    try {
+      const topic = await this.dependencies.services.topic.getById(input.topicId);
+      const target = await this.dependencies.services.message.getById(input.messageId);
+      assertMessageBelongsToTopic(target, topic.id);
+      const userMessage = await this.resolveRegenerateUserMessage(target);
+      assertMessageBelongsToTopic(userMessage, topic.id);
+      const children = await this.dependencies.services.message.getChildrenByParentId(
+        userMessage.id,
+      );
+      const inheritedAssistant =
+        target.role === 'assistant'
+          ? target
+          : await this.resolveActiveAssistantChild(topic, children);
+      const selectedModelIds =
+        input.selectedModelIds?.length || !inheritedAssistant?.modelId
+          ? input.selectedModelIds
+          : [inheritedAssistant.modelId as UniqueModelId];
+      const models = await this.resolveModels(selectedModelIds, topic);
+      const siblingsGroupId = await this.resolveAssistantSiblingsGroupId({
+        isRegenerate: true,
+        models,
+        userMessageId: userMessage.id,
+      });
+      throwIfAborted(activeTurn.abortController.signal);
+
+      await this.runExistingUserTurn({
+        activeTurn,
+        fastMode: input.fastMode ?? inheritedAssistant?.data.turnOptions?.fastMode,
+        models,
+        reasoningEffort:
+          input.reasoningEffort ?? inheritedAssistant?.data.turnOptions?.reasoningEffort,
+        siblingsGroupId,
+        topic,
+        userMessage,
+      });
+    } catch (error) {
+      this.activeTurns.delete(input.topicId);
+      await this.invalidateTopicMessagesSafely(input.topicId);
+      this.setTopicSnapshot(input.topicId, idleTopicSnapshot);
+
+      if (!activeTurn.abortController.signal.aborted) {
+        logger.warn('Regenerate chat stream failed before reservation', toError(error));
+        throw toError(error);
+      }
+    }
+  }
+
+  private async editAndResendTask(input: ChatEditAndResendInput): Promise<void> {
+    const text = input.text.trim();
+    const parts = getTurnParts({ parts: input.parts, text });
+    if (parts.length === 0) {
+      return;
+    }
+    if (this.activeTurns.has(input.topicId)) {
+      throw new Error('A response is already streaming for this topic.');
+    }
+
+    const activeTurn = createActiveTurn();
+    this.activeTurns.set(input.topicId, activeTurn);
+    this.setTopicSnapshot(input.topicId, { status: 'reserving' });
+
+    try {
+      const topic = await this.dependencies.services.topic.getById(input.topicId);
+      const source = await this.dependencies.services.message.getById(input.messageId);
+      assertMessageBelongsToTopic(source, topic.id);
+      if (source.role !== 'user') {
+        throw new Error('Only user messages can be edited and resent.');
+      }
+      const children = await this.dependencies.services.message.getChildrenByParentId(source.id);
+      const inheritedAssistant = await this.resolveActiveAssistantChild(topic, children);
+      const inheritedModelIds = uniqueModelIds(
+        children.flatMap((message) =>
+          message.role === 'assistant' && message.modelId ? [message.modelId as UniqueModelId] : [],
+        ),
+      );
+      const selectedModelIds =
+        input.selectedModelIds?.length ||
+        inheritedModelIds.length > 1 ||
+        (!topic.assistantId && inheritedModelIds.length === 1)
+          ? (input.selectedModelIds ?? inheritedModelIds)
+          : undefined;
+      const models = await this.resolveModels(selectedModelIds, topic);
+      const assistantSiblingsGroupId = await this.resolveAssistantSiblingsGroupId({
+        isRegenerate: false,
+        models,
+        userMessageId: source.id,
+      });
+      const userSiblingsGroupId = source.siblingsGroupId || nextSiblingsGroupId();
+      if (source.siblingsGroupId === 0) {
+        await this.dependencies.services.message.updateSiblingsGroupId(
+          source.id,
+          userSiblingsGroupId,
+        );
+      }
+      throwIfAborted(activeTurn.abortController.signal);
+
+      await this.runTopicTurn({
+        activeTurn,
+        allowAutoName: false,
+        fastMode: input.fastMode ?? inheritedAssistant?.data.turnOptions?.fastMode,
+        hasHistoryBeforePendingTurn: true,
+        models,
+        parentId: source.parentId,
+        parts,
+        reasoningEffort:
+          input.reasoningEffort ?? inheritedAssistant?.data.turnOptions?.reasoningEffort,
+        siblingsGroupId: assistantSiblingsGroupId,
+        topic,
+        userSiblingsGroupId,
+      });
+    } catch (error) {
+      this.activeTurns.delete(input.topicId);
+      await this.invalidateTopicMessagesSafely(input.topicId);
+      this.setTopicSnapshot(input.topicId, idleTopicSnapshot);
+
+      if (!activeTurn.abortController.signal.aborted) {
+        logger.warn('Edit-and-resend chat stream failed before reservation', toError(error));
+        throw toError(error);
+      }
+    }
+  }
+
+  private async setActiveBranchTask(input: ChatSetActiveBranchInput): Promise<void> {
+    const path = await this.dependencies.services.message.getPathThrough(
+      input.topicId,
+      input.throughNodeId,
+    );
+    const leaf = path.at(-1);
+    if (!leaf) {
+      throw new Error(`Cannot resolve branch through message: ${input.throughNodeId}`);
+    }
+
+    await this.dependencies.services.topic.setActiveNode(input.topicId, leaf.id);
+    await this.emitAndWait({ topicId: input.topicId, type: 'invalidate-topic-messages' });
+    await this.emitAndWait({ type: 'invalidate-topics' });
   }
 
   private async sendNewTopicTextTask(input: ChatSendNewTopicTextInput): Promise<void> {
@@ -196,8 +440,8 @@ export class ChatRuntime implements ChatModule {
     // Hand the new-topic snapshot slot over to this turn; the previous topic's
     // stream keeps writing to its own id.
     this.newTopicHandoffTopicId = undefined;
-    const abortController = new AbortController();
-    const activeTurn: ActiveTurn = { abortController };
+    const activeTurn = createActiveTurn();
+    const { abortController } = activeTurn;
     this.activeTurns.set(NEW_TOPIC_SNAPSHOT_KEY, activeTurn);
     this.setTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY, { status: 'reserving' });
 
@@ -229,7 +473,7 @@ export class ChatRuntime implements ChatModule {
       await this.runTopicTurn({
         activeTurn,
         fastMode: input.fastMode,
-        model,
+        models: [model],
         parts,
         reasoningEffort: input.reasoningEffort,
         topic,
@@ -267,8 +511,8 @@ export class ChatRuntime implements ChatModule {
       throw new Error('A response is already streaming for this topic.');
     }
 
-    const abortController = new AbortController();
-    const activeTurn: ActiveTurn = { abortController };
+    const activeTurn = createActiveTurn();
+    const { abortController } = activeTurn;
     this.activeTurns.set(topicId, activeTurn);
     this.setTopicSnapshot(topicId, { status: 'reserving' });
 
@@ -364,22 +608,41 @@ export class ChatRuntime implements ChatModule {
     // once the resumed segment succeeds so the topic doesn't stay "New chat".
     const isFirstExchange = history.length === 2 && history[0]?.role === 'user';
     const autoNameUserParts = isFirstExchange ? history[0]?.data.parts : undefined;
-
-    this.setTurnSnapshot(topic.id, {
-      overlayMessage: message,
+    const executionAbortController = createExecutionAbortController(activeTurn.abortController);
+    activeTurn.executions.set(model.id, {
+      abortController: executionAbortController,
+      assistantMessage: message,
+      model,
       status: 'streaming',
     });
+    activeTurn.overlays.set(model.id, message);
+    this.publishTurnSnapshot(topic.id, activeTurn, 'streaming');
 
-    await this.streamAssistantTurn({
-      activeTurn,
-      assistantMessage: message,
-      ...(autoNameUserParts ? { autoNameUserParts } : {}),
-      fastMode: message.data.turnOptions?.fastMode,
-      history,
-      model,
-      reasoningEffort: message.data.turnOptions?.reasoningEffort,
-      topic,
-    });
+    try {
+      await this.streamAssistantTurn({
+        activeTurn,
+        assistantMessage: message,
+        ...(autoNameUserParts ? { autoNameUserParts } : {}),
+        fastMode: message.data.turnOptions?.fastMode,
+        history,
+        model,
+        reasoningEffort: message.data.turnOptions?.reasoningEffort,
+        topic,
+      });
+    } finally {
+      const terminalMessage = activeTurn.overlays.get(model.id);
+      await this.releaseTurn({
+        activeTurn,
+        terminalSnapshot: terminalMessage && {
+          overlayMessage: terminalMessage,
+          overlayMessages: [terminalMessage],
+          status: hasPendingToolApproval(terminalMessage.data.parts ?? [])
+            ? 'awaiting-approval'
+            : 'idle',
+        },
+        topicId: topic.id,
+      });
+    }
   }
 
   /**
@@ -421,19 +684,25 @@ export class ChatRuntime implements ChatModule {
 
   private async runTopicTurn(input: {
     activeTurn: ActiveTurn;
+    allowAutoName?: boolean;
     fastMode?: boolean;
-    model: Model;
+    hasHistoryBeforePendingTurn?: boolean;
+    models: readonly Model[];
+    parentId?: string | null;
     parts: readonly CherryMessagePart[];
     reasoningEffort?: ChatSendTextInput['reasoningEffort'];
+    siblingsGroupId?: number;
     topic: Topic;
+    userSiblingsGroupId?: number;
   }): Promise<void> {
-    const { activeTurn, model, parts, topic } = input;
+    const { activeTurn, models, parts, topic } = input;
     const topicId = topic.id;
-    const hasHistoryBeforePendingTurn = Boolean(topic.activeNodeId);
+    const hasHistoryBeforePendingTurn =
+      input.hasHistoryBeforePendingTurn ?? Boolean(topic.activeNodeId);
     const { abortController } = activeTurn;
     let userMessage: Message | undefined;
-    let assistantPlaceholder: Message | undefined;
-    let terminalAssistantMessage: Message | undefined;
+    let assistantPlaceholders: Message[] = [];
+    let terminalAssistantMessages: Message[] = [];
     let preparedFilesCommitted = false;
     let preparedFiles: PreparedInternalFile[] = [];
     let turnParts = [...parts];
@@ -443,24 +712,34 @@ export class ChatRuntime implements ChatModule {
       const prepared = await this.dependencies.files.prepareParts(parts);
       preparedFiles = prepared.files;
       turnParts = prepared.parts;
-      const messageSnapshot = await this.buildAssistantMessageSnapshot(model, topic);
+      const messageSnapshots = await Promise.all(
+        models.map((model) => this.buildAssistantMessageSnapshot(model, topic)),
+      );
       throwIfAborted(abortController.signal);
       const reservedTurn =
         await this.dependencies.services.message.createUserMessageWithPlaceholders({
           ...(preparedFiles.length > 0 ? { preparedFiles } : {}),
+          ...(input.siblingsGroupId !== undefined
+            ? { siblingsGroupId: input.siblingsGroupId }
+            : {}),
           topicId,
           userMessage: {
             mode: 'create',
             dto: {
               data: { parts: turnParts },
-              modelId: model.id,
-              parentId: topic.activeNodeId ?? null,
+              modelId: models[0]?.id,
+              parentId:
+                input.parentId === undefined ? (topic.activeNodeId ?? null) : input.parentId,
               role: 'user',
+              ...(input.userSiblingsGroupId !== undefined
+                ? { siblingsGroupId: input.userSiblingsGroupId }
+                : {}),
               status: 'success',
             },
           },
-          placeholders: [
-            {
+          placeholders: models.map((model, index) => {
+            const messageSnapshot = messageSnapshots[index];
+            return {
               data: {
                 parts: [],
                 turnOptions: {
@@ -472,8 +751,8 @@ export class ChatRuntime implements ChatModule {
               ...(messageSnapshot ? { messageSnapshot } : {}),
               role: 'assistant',
               status: 'pending',
-            },
-          ],
+            };
+          }),
         });
       preparedFilesCommitted = true;
       if (abortController.signal.aborted) {
@@ -485,37 +764,20 @@ export class ChatRuntime implements ChatModule {
       }
 
       userMessage = reservedTurn.userMessage;
-      assistantPlaceholder = reservedTurn.placeholders[0];
-      throwIfAborted(abortController.signal);
-      // Overlay the freshly created user message immediately so it renders
-      // without waiting for the invalidate -> refetch round trip below.
-      this.setTurnSnapshot(topicId, {
-        hasHistoryBeforePendingTurn,
-        overlayMessage: assistantPlaceholder,
-        pendingUserMessage: userMessage,
-        status: 'streaming',
-      });
-      await this.emitAndWait({ topicId, type: 'invalidate-topic-messages' });
-      throwIfAborted(abortController.signal);
-
-      const history = await this.dependencies.services.message.getPathToNode(
-        reservedTurn.userMessage.id,
-      );
-      const isFirstExchange = history.length === 1;
-      throwIfAborted(abortController.signal);
-
+      assistantPlaceholders = reservedTurn.placeholders;
       handedOffToStream = true;
-      await this.streamAssistantTurn({
+      await this.runReservedExecutions({
         activeTurn,
-        assistantMessage: assistantPlaceholder,
-        ...(isFirstExchange ? { autoNameUserParts: turnParts } : {}),
-        hasHistoryBeforePendingTurn,
-        history,
-        model,
-        pendingUserMessage: userMessage,
+        allowAutoName: input.allowAutoName !== false,
+        assistantPlaceholders,
+        autoNameUserParts: turnParts,
         fastMode: input.fastMode,
+        hasHistoryBeforePendingTurn,
+        models,
+        pendingUserMessage: userMessage,
         reasoningEffort: input.reasoningEffort,
         topic,
+        userMessage,
       });
     } catch (error) {
       // Past the handoff the stream owns the row: it has already persisted its
@@ -524,12 +786,18 @@ export class ChatRuntime implements ChatModule {
       // everything that streamed in.
       if (handedOffToStream) {
         logger.warn('Chat turn failed after the stream took over', toError(error));
-      } else if (assistantPlaceholder) {
-        terminalAssistantMessage = await this.settleFailedTurn({
-          assistantMessage: assistantPlaceholder,
-          error,
-          wasAborted: abortController.signal.aborted,
-        });
+      } else if (assistantPlaceholders.length > 0) {
+        terminalAssistantMessages = (
+          await Promise.all(
+            assistantPlaceholders.map((assistantMessage) =>
+              this.settleFailedTurn({
+                assistantMessage,
+                error,
+                wasAborted: abortController.signal.aborted,
+              }),
+            ),
+          )
+        ).filter((message): message is Message => message !== undefined);
 
         if (!abortController.signal.aborted) {
           logger.warn('Chat stream failed', toError(error));
@@ -545,14 +813,171 @@ export class ChatRuntime implements ChatModule {
       if (!handedOffToStream) {
         await this.releaseTurn({
           activeTurn,
-          terminalSnapshot: terminalAssistantMessage && {
-            overlayMessage: terminalAssistantMessage,
-            pendingUserMessage: userMessage,
-            status: 'idle',
-          },
+          terminalSnapshot:
+            terminalAssistantMessages.length > 0
+              ? {
+                  overlayMessage: terminalAssistantMessages.at(-1),
+                  overlayMessages: terminalAssistantMessages,
+                  pendingUserMessage: userMessage,
+                  status: 'idle',
+                }
+              : undefined,
           topicId,
         });
       }
+    }
+  }
+
+  private async runExistingUserTurn(input: {
+    activeTurn: ActiveTurn;
+    fastMode?: boolean;
+    models: readonly Model[];
+    reasoningEffort?: ChatSendTextInput['reasoningEffort'];
+    siblingsGroupId?: number;
+    topic: Topic;
+    userMessage: Message;
+  }): Promise<void> {
+    const { activeTurn, models, topic, userMessage } = input;
+    const messageSnapshots = await Promise.all(
+      models.map((model) => this.buildAssistantMessageSnapshot(model, topic)),
+    );
+    throwIfAborted(activeTurn.abortController.signal);
+    const reservedTurn = await this.dependencies.services.message.createUserMessageWithPlaceholders(
+      {
+        ...(input.siblingsGroupId !== undefined ? { siblingsGroupId: input.siblingsGroupId } : {}),
+        topicId: topic.id,
+        userMessage: { id: userMessage.id, mode: 'existing' },
+        placeholders: models.map((model, index) => {
+          const messageSnapshot = messageSnapshots[index];
+          return {
+            data: {
+              parts: [],
+              turnOptions: {
+                fastMode: input.fastMode === true,
+                reasoningEffort: input.reasoningEffort,
+              },
+            },
+            modelId: model.id,
+            ...(messageSnapshot ? { messageSnapshot } : {}),
+            role: 'assistant',
+            status: 'pending',
+          };
+        }),
+      },
+    );
+
+    await this.runReservedExecutions({
+      activeTurn,
+      allowAutoName: false,
+      assistantPlaceholders: reservedTurn.placeholders,
+      fastMode: input.fastMode,
+      hasHistoryBeforePendingTurn: true,
+      models,
+      reasoningEffort: input.reasoningEffort,
+      topic,
+      userMessage: reservedTurn.userMessage,
+    });
+  }
+
+  private async runReservedExecutions(input: {
+    activeTurn: ActiveTurn;
+    allowAutoName: boolean;
+    assistantPlaceholders: readonly Message[];
+    autoNameUserParts?: readonly CherryMessagePart[];
+    fastMode?: boolean;
+    hasHistoryBeforePendingTurn: boolean;
+    models: readonly Model[];
+    pendingUserMessage?: Message;
+    reasoningEffort?: ChatSendTextInput['reasoningEffort'];
+    topic: Topic;
+    userMessage: Message;
+  }): Promise<void> {
+    const { activeTurn, assistantPlaceholders, models, topic, userMessage } = input;
+    if (assistantPlaceholders.length !== models.length) {
+      throw new Error(
+        `Reserved ${assistantPlaceholders.length} assistant messages for ${models.length} models.`,
+      );
+    }
+
+    activeTurn.hasHistoryBeforePendingTurn = input.hasHistoryBeforePendingTurn;
+    activeTurn.pendingUserMessage = input.pendingUserMessage;
+    for (let index = 0; index < models.length; index += 1) {
+      const model = models[index];
+      const assistantMessage = assistantPlaceholders[index];
+      const abortController = createExecutionAbortController(activeTurn.abortController);
+      activeTurn.executions.set(model.id, {
+        abortController,
+        assistantMessage,
+        model,
+        status: 'streaming',
+      });
+      activeTurn.overlays.set(model.id, assistantMessage);
+    }
+    this.publishTurnSnapshot(topic.id, activeTurn, 'streaming');
+
+    let terminalMessages: Message[] = [];
+    try {
+      await this.emitAndWait({ topicId: topic.id, type: 'invalidate-topic-messages' });
+      throwIfAborted(activeTurn.abortController.signal);
+      const history = await this.dependencies.services.message.getPathToNode(userMessage.id);
+      const shouldAutoName = input.allowAutoName && history.length === 1;
+      throwIfAborted(activeTurn.abortController.signal);
+
+      await Promise.allSettled(
+        models.map((model, index) =>
+          this.streamAssistantTurn({
+            activeTurn,
+            assistantMessage: assistantPlaceholders[index],
+            ...(shouldAutoName && index === 0 && input.autoNameUserParts
+              ? { autoNameUserParts: input.autoNameUserParts }
+              : {}),
+            fastMode: input.fastMode,
+            history,
+            model,
+            reasoningEffort: input.reasoningEffort,
+            topic,
+          }),
+        ),
+      );
+      terminalMessages = [...activeTurn.overlays.values()];
+    } catch (error) {
+      terminalMessages = (
+        await Promise.all(
+          assistantPlaceholders.map(async (assistantMessage, index) => {
+            const model = models[index];
+            const execution = activeTurn.executions.get(model.id);
+            if (execution?.status !== 'streaming') {
+              return activeTurn.overlays.get(model.id);
+            }
+            execution.status = activeTurn.abortController.signal.aborted ? 'aborted' : 'error';
+            const terminal = await this.settleFailedTurn({
+              assistantMessage,
+              error,
+              wasAborted: activeTurn.abortController.signal.aborted,
+            });
+            if (terminal) activeTurn.overlays.set(model.id, terminal);
+            return terminal;
+          }),
+        )
+      ).filter((message): message is Message => message !== undefined);
+    } finally {
+      const hasPendingApproval = terminalMessages.some((message) =>
+        hasPendingToolApproval(message.data.parts ?? []),
+      );
+      await this.releaseTurn({
+        activeTurn,
+        terminalSnapshot:
+          terminalMessages.length > 0
+            ? {
+                hasHistoryBeforePendingTurn: input.hasHistoryBeforePendingTurn,
+                overlayMessage: terminalMessages.at(-1),
+                overlayMessages: terminalMessages,
+                pendingUserMessage: input.pendingUserMessage,
+                status: hasPendingApproval ? 'awaiting-approval' : 'idle',
+              }
+            : undefined,
+        topicId: topic.id,
+      });
     }
   }
 
@@ -596,25 +1021,26 @@ export class ChatRuntime implements ChatModule {
    * last — when its tip is `assistantMessage` itself (resume), the SDK
    * continues that message id instead of minting a new one.
    *
-   * Owns the turn teardown (terminal overlay, invalidate, activeTurns
-   * release), so callers must not clean up again after it returns.
+   * The topic-level coordinator owns teardown after every sibling execution
+   * reaches a terminal state.
    */
   private async streamAssistantTurn(input: {
     activeTurn: ActiveTurn;
     assistantMessage: Message;
     autoNameUserParts?: readonly CherryMessagePart[];
     fastMode?: boolean;
-    /** Rides with `pendingUserMessage`: only meaningful while it is overlaid. */
-    hasHistoryBeforePendingTurn?: boolean;
     history: readonly Message[];
     model: Model;
-    pendingUserMessage?: Message;
     reasoningEffort?: ChatSendTextInput['reasoningEffort'];
     topic: Topic;
   }): Promise<void> {
     const { activeTurn, assistantMessage, history, model, topic } = input;
     const topicId = topic.id;
-    const { abortController } = activeTurn;
+    const execution = activeTurn.executions.get(model.id);
+    if (!execution || execution.assistantMessage.id !== assistantMessage.id) {
+      throw new Error(`No active execution for model: ${model.id}`);
+    }
+    const { abortController } = execution;
     let latestAssistantMessage: CherryUIMessage | undefined;
     let terminalAssistantMessage: Message | undefined;
     const runtimeTiming = new MessageRuntimeTimingCollector(assistantMessage.stats?.runtimeTiming);
@@ -641,12 +1067,11 @@ export class ChatRuntime implements ChatModule {
         latestAssistantMessage = nextAssistantMessage;
         captureApprovalTiming(runtimeTiming, nextAssistantMessage.parts as CherryMessagePart[]);
         throwIfAborted(abortController.signal);
-        this.setTurnSnapshot(topicId, {
-          hasHistoryBeforePendingTurn: input.hasHistoryBeforePendingTurn,
-          overlayMessage: applyStreamingMessage(assistantMessage, nextAssistantMessage),
-          pendingUserMessage: input.pendingUserMessage,
-          status: 'streaming',
-        });
+        activeTurn.overlays.set(
+          model.id,
+          applyStreamingMessage(assistantMessage, nextAssistantMessage),
+        );
+        this.publishTurnSnapshot(topicId, activeTurn, 'streaming');
       }
 
       throwIfAborted(abortController.signal);
@@ -671,6 +1096,7 @@ export class ChatRuntime implements ChatModule {
         latestAssistantMessage,
         runtimeStats: { runtimeTiming: runtimeTiming.snapshot() },
       });
+      execution.status = 'done';
 
       if (!this.isDisposed && !isAwaitingApproval && input.autoNameUserParts) {
         const namingTask = this.autoNameTopicFromSummary({
@@ -694,23 +1120,20 @@ export class ChatRuntime implements ChatModule {
         runtimeStats: { runtimeTiming: runtimeTiming.snapshot() },
         wasAborted: abortController.signal.aborted,
       });
+      execution.status = abortController.signal.aborted ? 'aborted' : 'error';
 
       if (!abortController.signal.aborted) {
         logger.warn('Chat stream failed', toError(error));
       }
     } finally {
-      await this.releaseTurn({
-        activeTurn,
-        terminalSnapshot: terminalAssistantMessage && {
-          hasHistoryBeforePendingTurn: input.hasHistoryBeforePendingTurn,
-          overlayMessage: terminalAssistantMessage,
-          pendingUserMessage: input.pendingUserMessage,
-          status: hasPendingToolApproval(terminalAssistantMessage.data.parts ?? [])
-            ? 'awaiting-approval'
-            : 'idle',
-        },
-        topicId,
-      });
+      if (terminalAssistantMessage) {
+        activeTurn.overlays.set(model.id, terminalAssistantMessage);
+      }
+      if (
+        [...activeTurn.executions.values()].some((candidate) => candidate.status === 'streaming')
+      ) {
+        this.publishTurnSnapshot(topicId, activeTurn, 'streaming');
+      }
     }
   }
 
@@ -859,6 +1282,15 @@ export class ChatRuntime implements ChatModule {
   }
 
   private async resolveTurnContext(input: ChatSendTextInput) {
+    const topic = await this.resolveTopicForTurn(input);
+    const model = await this.resolveModel(input.selectedModelId, topic);
+
+    return { model, topic };
+  }
+
+  private async resolveTopicForTurn(
+    input: Pick<ChatSendTextInput, 'assistantId' | 'topicId'>,
+  ): Promise<Topic> {
     let topic = await this.dependencies.services.topic.getById(input.topicId);
 
     if (topic.activeNodeId) {
@@ -879,9 +1311,83 @@ export class ChatRuntime implements ChatModule {
       });
     }
 
-    const model = await this.resolveModel(input.selectedModelId, topic);
+    return topic;
+  }
 
-    return { model, topic };
+  private async resolveModels(
+    selectedModelIds: readonly UniqueModelId[] | undefined,
+    topic: Pick<Topic, 'assistantId'>,
+  ): Promise<Model[]> {
+    const modelIds =
+      selectedModelIds && selectedModelIds.length > 0
+        ? [...selectedModelIds]
+        : [await this.resolveModelId(undefined, topic)];
+    const uniqueIds = uniqueModelIds(modelIds);
+    if (uniqueIds.length !== modelIds.length) {
+      throw new Error('A multi-model request cannot contain duplicate model IDs.');
+    }
+
+    return await Promise.all(
+      uniqueIds.map(async (modelId) => {
+        const model = await this.dependencies.services.model.getById(modelId);
+        if (!model) {
+          throw new Error(`Cannot resolve model: ${modelId}`);
+        }
+        return model;
+      }),
+    );
+  }
+
+  private async resolveAssistantSiblingsGroupId(input: {
+    isRegenerate: boolean;
+    models: readonly Model[];
+    userMessageId: string;
+  }): Promise<number | undefined> {
+    if (input.models.length > 1) {
+      return nextSiblingsGroupId();
+    }
+    if (!input.isRegenerate) {
+      return undefined;
+    }
+
+    const children = await this.dependencies.services.message.getChildrenByParentId(
+      input.userMessageId,
+    );
+    return (
+      children.find((message) => message.siblingsGroupId > 0)?.siblingsGroupId ??
+      nextSiblingsGroupId()
+    );
+  }
+
+  private async resolveRegenerateUserMessage(target: Message): Promise<Message> {
+    if (target.role === 'user') {
+      return target;
+    }
+    if (target.role !== 'assistant' || !target.parentId) {
+      throw new Error('Regenerate requires a user or assistant message.');
+    }
+
+    const parent = await this.dependencies.services.message.getById(target.parentId);
+    if (parent.role !== 'user') {
+      throw new Error('The assistant message is not attached to a user message.');
+    }
+    return parent;
+  }
+
+  private async resolveActiveAssistantChild(
+    topic: Pick<Topic, 'activeNodeId'>,
+    children: readonly Message[],
+  ): Promise<Message | undefined> {
+    const assistantChildren = children.filter((message) => message.role === 'assistant');
+    if (!topic.activeNodeId || assistantChildren.length < 2) {
+      return assistantChildren.at(-1);
+    }
+
+    const activePath = await this.dependencies.services.message.getPathToNode(topic.activeNodeId);
+    const activeIds = new Set(activePath.map((message) => message.id));
+    return (
+      assistantChildren.find((message) => activeIds.has(message.id)) ?? assistantChildren.at(-1)
+    );
   }
 
   private resolveRuntimeTopicId(topicId: string): string {
@@ -890,6 +1396,21 @@ export class ChatRuntime implements ChatModule {
     }
 
     return topicId;
+  }
+
+  private publishTurnSnapshot(
+    topicId: string,
+    activeTurn: ActiveTurn,
+    status: Extract<ChatTopicSnapshot['status'], 'reserving' | 'streaming'>,
+  ): void {
+    const overlayMessages = [...activeTurn.overlays.values()];
+    this.setTurnSnapshot(topicId, {
+      hasHistoryBeforePendingTurn: activeTurn.hasHistoryBeforePendingTurn,
+      overlayMessage: overlayMessages.at(-1),
+      overlayMessages,
+      pendingUserMessage: activeTurn.pendingUserMessage,
+      status,
+    });
   }
 
   private setTurnSnapshot(topicId: string, snapshot: ChatTopicSnapshot): void {
@@ -970,6 +1491,42 @@ export class ChatRuntime implements ChatModule {
       () => this.activeTasks.delete(task),
       () => this.activeTasks.delete(task),
     );
+  }
+}
+
+let siblingsGroupCounter = 0;
+
+function nextSiblingsGroupId(): number {
+  siblingsGroupCounter = (siblingsGroupCounter + 1) % 1000;
+  return Date.now() * 1000 + siblingsGroupCounter;
+}
+
+function createActiveTurn(): ActiveTurn {
+  return {
+    abortController: new AbortController(),
+    executions: new Map(),
+    overlays: new Map(),
+  };
+}
+
+function createExecutionAbortController(parent: AbortController): AbortController {
+  const controller = new AbortController();
+  const abort = () => controller.abort(parent.signal.reason);
+  if (parent.signal.aborted) {
+    abort();
+  } else {
+    parent.signal.addEventListener('abort', abort, { once: true });
+  }
+  return controller;
+}
+
+function uniqueModelIds(modelIds: readonly UniqueModelId[]): UniqueModelId[] {
+  return [...new Set(modelIds)];
+}
+
+function assertMessageBelongsToTopic(message: Message, topicId: string): void {
+  if (message.topicId !== topicId) {
+    throw new Error(`Message ${message.id} does not belong to topic ${topicId}.`);
   }
 }
 
