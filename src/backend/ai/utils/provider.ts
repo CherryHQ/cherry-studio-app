@@ -58,7 +58,7 @@ export function getExtraHeaders(provider: Provider): Record<string, string> {
 }
 
 export function isAwsBedrockProvider(provider: Provider): boolean {
-  return provider.authType === 'iam-aws';
+  return provider.authType === 'iam-aws' || provider.authType === 'api-key-aws';
 }
 
 export function defaultHeaders(provider: Provider, apiKey = ''): Record<string, string> {
@@ -99,14 +99,29 @@ export function formatApiHost(baseURL = '', appendApiVersion = true, apiVersion 
   if (!trimmed) return '';
   if (trimmed.endsWith('#')) return trimmed;
   const withoutTrailingSlash = trimmed.replace(/\/+$/, '');
-  if (!appendApiVersion || new RegExp(`/${apiVersion}$`).test(withoutTrailingSlash)) {
+  if (!appendApiVersion || hasApiVersion(withoutTrailingSlash)) {
     return withoutTrailingSlash;
   }
   return `${withoutTrailingSlash}/${apiVersion}`;
 }
 
 export function formatOllamaApiHost(baseURL = ''): string {
-  return baseURL.trim().replace(/\/+$/, '');
+  const normalized = baseURL
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/v1$/, '')
+    .replace(/\/api$/, '')
+    .replace(/\/chat$/, '');
+  return normalized ? `${normalized}/api` : '';
+}
+
+function hasApiVersion(value: string): boolean {
+  const versionPattern = /\/v\d+(?:alpha|beta)?(?:\/|$)/i;
+  try {
+    return versionPattern.test(new URL(value).pathname);
+  } catch {
+    return versionPattern.test(value);
+  }
 }
 
 export function isWithTrailingSharp(baseURL = ''): boolean {

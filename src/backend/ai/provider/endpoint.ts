@@ -7,7 +7,7 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { EndpointType, Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
-import { type AppProviderId, appProviderIds, isRegisteredProviderId } from '../types';
+import { type AppProviderId, appProviderIds } from '../types';
 import { getBaseUrl } from '../utils/provider';
 import { resolveGatewayRoute } from './gatewayRouting';
 
@@ -66,8 +66,7 @@ function resolveKnownProviderId(id: string | undefined): AppProviderId | undefin
     return undefined;
   }
 
-  const providerId = appProviderIdMap[id];
-  return isRegisteredProviderId(providerId) ? providerId : undefined;
+  return appProviderIdMap[id];
 }
 
 export function resolveAiSdkProviderId(
@@ -80,12 +79,6 @@ export function resolveAiSdkProviderId(
   const adapterProviderId = resolveKnownProviderId(adapterFamily);
   if (adapterProviderId) {
     return resolveProviderVariant(adapterProviderId, endpointType);
-  }
-
-  const presetId = provider.presetProviderId ?? provider.id;
-  const providerId = resolveKnownProviderId(presetId);
-  if (providerId) {
-    return resolveProviderVariant(providerId, endpointType);
   }
 
   return appProviderIdMap['openai-compatible'];

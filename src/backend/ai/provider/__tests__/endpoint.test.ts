@@ -2,7 +2,11 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
-import { resolveEffectiveEndpoint, resolveProviderOptionsKey } from '../endpoint';
+import {
+  resolveAiSdkProviderId,
+  resolveEffectiveEndpoint,
+  resolveProviderOptionsKey,
+} from '../endpoint';
 
 const endpointConfigs = {
   [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: {
@@ -77,6 +81,52 @@ describe('AiHubMix effective endpoint and provider-options namespace', () => {
     expect(resolveProviderOptionsKey('google')).toBe('google');
     expect(resolveProviderOptionsKey('openai-compatible', { actualProviderId: 'custom' })).toBe(
       'custom',
+    );
+  });
+});
+
+describe('native reasoning adapter resolution', () => {
+  it.each([
+    ['aws-bedrock', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'bedrock', 'bedrock'],
+    ['ollama', ENDPOINT_TYPE.OLLAMA_CHAT, 'ollama', 'ollama'],
+    ['vertexai', ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT, 'google-vertex', 'google-vertex'],
+    [
+      'vertexai',
+      ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      'google-vertex-anthropic',
+      'google-vertex-anthropic',
+    ],
+  ])(
+    'routes %s %s through the %s extension',
+    (providerId, endpointType, adapterFamily, expectedProviderId) => {
+      const nativeProvider = {
+        ...provider,
+        defaultChatEndpoint: endpointType,
+        endpointConfigs: {
+          [endpointType]: { adapterFamily, baseUrl: 'https://example.com' },
+        },
+        id: providerId,
+        presetProviderId: providerId,
+      } as Provider;
+
+      expect(resolveAiSdkProviderId(nativeProvider, endpointType)).toBe(expectedProviderId);
+    },
+  );
+
+  it('does not infer an adapter from the provider preset when the endpoint omits it', () => {
+    const incompleteProvider = {
+      ...provider,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          baseUrl: 'https://example.com/v1',
+        },
+      },
+      id: 'custom-openai',
+      presetProviderId: 'openai',
+    } as Provider;
+
+    expect(resolveAiSdkProviderId(incompleteProvider, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS)).toBe(
+      'openai-compatible',
     );
   });
 });

@@ -46,10 +46,12 @@
     "prepare": "prek install"
   },
   "dependencies": {
+    "@ai-sdk/amazon-bedrock": "^4.0.96",
     "@ai-sdk/anthropic": "^3.0.79",
     "@ai-sdk/cerebras": "^2.0.54",
     "@ai-sdk/gateway": "^3.0.121",
     "@ai-sdk/google": "^3.0.64",
+    "@ai-sdk/google-vertex": "^4.0.112",
     "@ai-sdk/groq": "^3.0.39",
     "@ai-sdk/huggingface": "^1.0.50",
     "@ai-sdk/mcp": "1.0.64",
@@ -117,6 +119,7 @@
     "i18next": "^26.1.0",
     "katex": "0.17.0",
     "lucide-uniwind": "workspace:*",
+    "ollama-ai-provider-v2": "3.3.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-i18next": "^17.0.7",

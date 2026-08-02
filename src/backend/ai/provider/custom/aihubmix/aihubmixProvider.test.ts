@@ -1,4 +1,5 @@
 import type { LanguageModelV3CallOptions } from '@ai-sdk/provider';
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import { createAihubmix } from './aihubmixProvider';
 
@@ -55,5 +56,28 @@ describe('AiHubMix chat reasoning HTTP boundary', () => {
       reasoning_effort: 'high',
       enable_thinking: true,
     });
+  });
+
+  it.each([
+    [
+      'gemini-3-flash-preview',
+      'https://proxy.example.com/gemini/v1beta/models/gemini-3-flash-preview:generateContent',
+    ],
+    ['gpt-5.4', 'https://proxy.example.com/responses/v1/responses'],
+  ])('uses the resolved endpoint base URL for %s', async (modelId, expectedUrl) => {
+    const request = await captureRequest((fetch) =>
+      createAihubmix({
+        apiKey: 'sk',
+        endpointBaseURLs: {
+          [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: 'https://proxy.example.com/gemini/v1beta',
+          [ENDPOINT_TYPE.OPENAI_RESPONSES]: 'https://proxy.example.com/responses/v1',
+        },
+        fetch,
+      })
+        .languageModel(modelId)
+        .doGenerate({ prompt } as LanguageModelV3CallOptions),
+    );
+
+    expect(request.url).toBe(expectedUrl);
   });
 });
