@@ -19,6 +19,7 @@ import { isToolUIPart } from 'ai';
 import type {
   ChatCancelExecutionInput,
   ChatEditAndResendInput,
+  ChatFollowUpInput,
   ChatRegenerateInput,
   ChatSendNewTopicTextInput,
   ChatSendMultiModelTextInput,
@@ -32,6 +33,7 @@ import type {
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { wrapSteerReminder } from '../steerReminder';
 import { serializeError } from '../utils/serializeError';
 import type { ChatRuntimeDependencies } from './ChatRuntimeDependencies';
 import {
@@ -60,6 +62,12 @@ type ActiveTurn = {
   pendingUserMessage?: Message;
 };
 
+type PendingSteer = {
+  fastMode: boolean;
+  reasoningEffort?: ChatSendTextInput['reasoningEffort'];
+  userMessageId: string;
+};
+
 const idleTopicSnapshot: ChatTopicSnapshot = Object.freeze({ status: 'idle' });
 const logger = loggerService.withContext('ChatRuntime');
 
@@ -72,10 +80,13 @@ const interruptedTurnApprovalReason = 'The turn ended before this tool call comp
 export class ChatRuntime implements ChatModule {
   private activeTasks = new Set<Promise<unknown>>();
   private activeTurns = new Map<string, ActiveTurn>();
+  private continuingTopics = new Set<string>();
   private disposePromise: Promise<void> | undefined;
   private isDisposed = false;
   private listeners = new Set<ChatListener>();
   private newTopicHandoffTopicId: string | undefined;
+  private pendingSteers = new Map<string, PendingSteer[]>();
+  private followUpQueues = new Map<string, ChatFollowUpInput['payload'][]>();
   private topicSnapshots = new Map<string, ChatTopicSnapshot>();
 
   constructor(private readonly dependencies: ChatRuntimeDependencies) {}
@@ -148,6 +159,14 @@ export class ChatRuntime implements ChatModule {
     return this.startTask(() => this.sendMultiModelTextTask(input));
   }
 
+  steer(input: ChatFollowUpInput): Promise<void> {
+    return this.startTask(() => this.steerTask(input));
+  }
+
+  queueFollowUp(input: ChatFollowUpInput): Promise<void> {
+    return this.startTask(() => this.queueFollowUpTask(input));
+  }
+
   regenerate(input: ChatRegenerateInput): Promise<void> {
     return this.startTask(() => this.regenerateTask(input));
   }
@@ -180,7 +199,10 @@ export class ChatRuntime implements ChatModule {
     await Promise.allSettled([...this.activeTasks]);
     this.activeTasks.clear();
     this.activeTurns.clear();
+    this.continuingTopics.clear();
+    this.followUpQueues.clear();
     this.newTopicHandoffTopicId = undefined;
+    this.pendingSteers.clear();
     this.topicSnapshots.clear();
     this.listeners.clear();
   }
@@ -193,7 +215,7 @@ export class ChatRuntime implements ChatModule {
       return;
     }
 
-    if (this.activeTurns.has(input.topicId)) {
+    if (this.isTopicBusy(input.topicId)) {
       throw new Error('A response is already streaming for this topic.');
     }
 
@@ -226,6 +248,93 @@ export class ChatRuntime implements ChatModule {
     }
   }
 
+  private async steerTask(input: ChatFollowUpInput): Promise<void> {
+    if (!this.isTopicBusy(input.topicId)) {
+      await this.sendFollowUpPayloadTask(input.topicId, input.payload);
+      return;
+    }
+
+    const parts = getFollowUpParts(input.payload);
+    if (parts.length === 0) {
+      return;
+    }
+
+    let preparedFilesCommitted = false;
+    let preparedFiles: PreparedInternalFile[] = [];
+    try {
+      const topic = await this.dependencies.services.topic.getById(input.topicId);
+      const modelId =
+        input.payload.mentionedModels?.[0] ?? (await this.resolveModelId(undefined, topic));
+      const prepared = await this.dependencies.files.prepareParts(parts);
+      preparedFiles = prepared.files;
+      const reserved = await this.dependencies.services.message.createUserMessageWithPlaceholders({
+        ...(preparedFiles.length > 0 ? { preparedFiles } : {}),
+        placeholders: [],
+        topicId: input.topicId,
+        userMessage: {
+          mode: 'create',
+          dto: {
+            data: { parts: prepared.parts },
+            modelId,
+            parentId: topic.activeNodeId ?? null,
+            role: 'user',
+            status: 'success',
+          },
+        },
+      });
+      preparedFilesCommitted = true;
+      this.appendPendingSteer(input.topicId, {
+        fastMode: input.payload.fastMode === true,
+        reasoningEffort: input.payload.reasoningEffort,
+        userMessageId: reserved.userMessage.id,
+      });
+      await this.emitAndWait({ topicId: input.topicId, type: 'invalidate-topic-messages' });
+
+      if (!this.activeTurns.has(input.topicId) && !this.continuingTopics.has(input.topicId)) {
+        await this.startNextPendingTurn(input.topicId);
+      }
+    } finally {
+      if (!preparedFilesCommitted) {
+        this.dependencies.files.discard(preparedFiles);
+      }
+    }
+  }
+
+  private async queueFollowUpTask(input: ChatFollowUpInput): Promise<void> {
+    if (!this.isTopicBusy(input.topicId)) {
+      await this.sendFollowUpPayloadTask(input.topicId, input.payload);
+      return;
+    }
+
+    const queue = this.followUpQueues.get(input.topicId);
+    if (queue) {
+      queue.push(input.payload);
+    } else {
+      this.followUpQueues.set(input.topicId, [input.payload]);
+    }
+    this.publishQueuedMessages(input.topicId);
+  }
+
+  private async sendFollowUpPayloadTask(
+    topicId: string,
+    payload: ChatFollowUpInput['payload'],
+  ): Promise<void> {
+    const modelIds = uniqueModelIds(payload.mentionedModels ?? []);
+    const input = {
+      fastMode: payload.fastMode,
+      parts: payload.userMessageParts,
+      reasoningEffort: payload.reasoningEffort,
+      text: payload.text,
+      topicId,
+    };
+    if (modelIds.length > 1) {
+      await this.sendMultiModelTextTask({ ...input, selectedModelIds: modelIds });
+      return;
+    }
+
+    await this.sendTextTask({ ...input, selectedModelId: modelIds[0] });
+  }
+
   private async sendMultiModelTextTask(input: ChatSendMultiModelTextInput): Promise<void> {
     const text = input.text.trim();
     const parts = getTurnParts({ parts: input.parts, text });
@@ -236,7 +345,7 @@ export class ChatRuntime implements ChatModule {
     if (input.selectedModelIds.length < 2) {
       throw new Error('Multi-model sends require at least two models.');
     }
-    if (this.activeTurns.has(input.topicId)) {
+    if (this.isTopicBusy(input.topicId)) {
       throw new Error('A response is already streaming for this topic.');
     }
 
@@ -271,7 +380,7 @@ export class ChatRuntime implements ChatModule {
   }
 
   private async regenerateTask(input: ChatRegenerateInput): Promise<void> {
-    if (this.activeTurns.has(input.topicId)) {
+    if (this.isTopicBusy(input.topicId)) {
       throw new Error('A response is already streaming for this topic.');
     }
 
@@ -332,7 +441,7 @@ export class ChatRuntime implements ChatModule {
     if (parts.length === 0) {
       return;
     }
-    if (this.activeTurns.has(input.topicId)) {
+    if (this.isTopicBusy(input.topicId)) {
       throw new Error('A response is already streaming for this topic.');
     }
 
@@ -507,7 +616,7 @@ export class ChatRuntime implements ChatModule {
   private async respondToolApprovalTask(input: ChatToolApprovalInput): Promise<void> {
     const { messageId, topicId } = input;
 
-    if (this.activeTurns.has(topicId)) {
+    if (this.isTopicBusy(topicId)) {
       throw new Error('A response is already streaming for this topic.');
     }
 
@@ -631,15 +740,9 @@ export class ChatRuntime implements ChatModule {
       });
     } finally {
       const terminalMessage = activeTurn.overlays.get(model.id);
-      await this.releaseTurn({
+      await this.finishTurn({
         activeTurn,
-        terminalSnapshot: terminalMessage && {
-          overlayMessage: terminalMessage,
-          overlayMessages: [terminalMessage],
-          status: hasPendingToolApproval(terminalMessage.data.parts ?? [])
-            ? 'awaiting-approval'
-            : 'idle',
-        },
+        terminalMessages: terminalMessage ? [terminalMessage] : [],
         topicId: topic.id,
       });
     }
@@ -831,6 +934,7 @@ export class ChatRuntime implements ChatModule {
   private async runExistingUserTurn(input: {
     activeTurn: ActiveTurn;
     fastMode?: boolean;
+    isSteer?: boolean;
     models: readonly Model[];
     reasoningEffort?: ChatSendTextInput['reasoningEffort'];
     siblingsGroupId?: number;
@@ -872,6 +976,7 @@ export class ChatRuntime implements ChatModule {
       assistantPlaceholders: reservedTurn.placeholders,
       fastMode: input.fastMode,
       hasHistoryBeforePendingTurn: true,
+      isSteer: input.isSteer === true,
       models,
       reasoningEffort: input.reasoningEffort,
       topic,
@@ -886,6 +991,7 @@ export class ChatRuntime implements ChatModule {
     autoNameUserParts?: readonly CherryMessagePart[];
     fastMode?: boolean;
     hasHistoryBeforePendingTurn: boolean;
+    isSteer?: boolean;
     models: readonly Model[];
     pendingUserMessage?: Message;
     reasoningEffort?: ChatSendTextInput['reasoningEffort'];
@@ -919,7 +1025,8 @@ export class ChatRuntime implements ChatModule {
     try {
       await this.emitAndWait({ topicId: topic.id, type: 'invalidate-topic-messages' });
       throwIfAborted(activeTurn.abortController.signal);
-      const history = await this.dependencies.services.message.getPathToNode(userMessage.id);
+      const storedHistory = await this.dependencies.services.message.getPathToNode(userMessage.id);
+      const history = input.isSteer ? withSteerReminder(storedHistory) : storedHistory;
       const shouldAutoName = input.allowAutoName && history.length === 1;
       throwIfAborted(activeTurn.abortController.signal);
 
@@ -961,23 +1068,122 @@ export class ChatRuntime implements ChatModule {
         )
       ).filter((message): message is Message => message !== undefined);
     } finally {
-      const hasPendingApproval = terminalMessages.some((message) =>
-        hasPendingToolApproval(message.data.parts ?? []),
-      );
-      await this.releaseTurn({
+      await this.finishTurn({
         activeTurn,
-        terminalSnapshot:
-          terminalMessages.length > 0
-            ? {
-                hasHistoryBeforePendingTurn: input.hasHistoryBeforePendingTurn,
-                overlayMessage: terminalMessages.at(-1),
-                overlayMessages: terminalMessages,
-                pendingUserMessage: input.pendingUserMessage,
-                status: hasPendingApproval ? 'awaiting-approval' : 'idle',
-              }
-            : undefined,
+        hasHistoryBeforePendingTurn: input.hasHistoryBeforePendingTurn,
+        pendingUserMessage: input.pendingUserMessage,
+        terminalMessages,
         topicId: topic.id,
       });
+    }
+  }
+
+  private async finishTurn(input: {
+    activeTurn: ActiveTurn;
+    hasHistoryBeforePendingTurn?: boolean;
+    pendingUserMessage?: Message;
+    terminalMessages: readonly Message[];
+    topicId: string;
+  }): Promise<void> {
+    const outcome = resolveTurnOutcome(input.activeTurn, input.terminalMessages);
+    if (outcome === 'aborted' || outcome === 'error') {
+      this.pendingSteers.delete(input.topicId);
+    }
+    const shouldContinue = outcome === 'done' && this.hasPendingContinuation(input.topicId);
+    if (shouldContinue) {
+      this.continuingTopics.add(input.topicId);
+    }
+
+    await this.releaseTurn({
+      activeTurn: input.activeTurn,
+      preserveSnapshot: shouldContinue,
+      terminalSnapshot:
+        input.terminalMessages.length > 0
+          ? {
+              hasHistoryBeforePendingTurn: input.hasHistoryBeforePendingTurn,
+              overlayMessage: input.terminalMessages.at(-1),
+              overlayMessages: input.terminalMessages,
+              pendingUserMessage: input.pendingUserMessage,
+              status:
+                outcome === 'awaiting-approval'
+                  ? 'awaiting-approval'
+                  : shouldContinue
+                    ? 'streaming'
+                    : 'idle',
+            }
+          : undefined,
+      topicId: input.topicId,
+    });
+
+    if (!shouldContinue) {
+      return;
+    }
+
+    try {
+      await this.startNextPendingTurn(input.topicId);
+    } catch (error) {
+      this.pendingSteers.delete(input.topicId);
+      this.continuingTopics.delete(input.topicId);
+      logger.error('Failed to start queued chat continuation', toError(error));
+      this.setTurnSnapshot(input.topicId, { error: toError(error), status: 'idle' });
+    }
+  }
+
+  private async startNextPendingTurn(topicId: string): Promise<void> {
+    const pendingSteers = this.pendingSteers.get(topicId);
+    const pendingSteer = pendingSteers?.shift();
+    if (pendingSteers?.length === 0) {
+      this.pendingSteers.delete(topicId);
+    }
+
+    this.continuingTopics.delete(topicId);
+    if (pendingSteer) {
+      await this.startSteerContinuation(topicId, pendingSteer);
+      return;
+    }
+
+    const followUps = this.followUpQueues.get(topicId);
+    const followUp = followUps?.shift();
+    if (followUps?.length === 0) {
+      this.followUpQueues.delete(topicId);
+    }
+    this.publishQueuedMessages(topicId);
+    if (followUp) {
+      await this.sendFollowUpPayloadTask(topicId, followUp);
+    }
+  }
+
+  private async startSteerContinuation(topicId: string, pending: PendingSteer): Promise<void> {
+    const activeTurn = createActiveTurn();
+    this.activeTurns.set(topicId, activeTurn);
+    this.setTurnSnapshot(topicId, { status: 'reserving' });
+
+    try {
+      const topic = await this.dependencies.services.topic.getById(topicId);
+      const userMessage = await this.dependencies.services.message.getById(pending.userMessageId);
+      assertMessageBelongsToTopic(userMessage, topicId);
+      if (userMessage.role !== 'user') {
+        throw new Error('A steer continuation must be anchored on a user message.');
+      }
+      const model = await this.resolveResumeModel(userMessage, topic);
+      throwIfAborted(activeTurn.abortController.signal);
+      await this.runExistingUserTurn({
+        activeTurn,
+        fastMode: pending.fastMode,
+        isSteer: true,
+        models: [model],
+        reasoningEffort: pending.reasoningEffort,
+        topic,
+        userMessage,
+      });
+    } catch (error) {
+      if (this.activeTurns.get(topicId) === activeTurn) {
+        this.activeTurns.delete(topicId);
+      }
+      await this.invalidateTopicMessagesSafely(topicId);
+      if (!activeTurn.abortController.signal.aborted) {
+        throw toError(error);
+      }
     }
   }
 
@@ -989,6 +1195,7 @@ export class ChatRuntime implements ChatModule {
    */
   private async releaseTurn(input: {
     activeTurn: ActiveTurn;
+    preserveSnapshot?: boolean;
     terminalSnapshot?: ChatTopicSnapshot;
     topicId: string;
   }): Promise<void> {
@@ -1009,7 +1216,11 @@ export class ChatRuntime implements ChatModule {
     await waitForNextPaint();
     // A send that started during the wait owns the topic now; overwriting its
     // snapshot with `idle` would strip the spinner off a live turn.
-    if (!this.activeTurns.has(topicId) && input.terminalSnapshot?.status !== 'awaiting-approval') {
+    if (
+      !input.preserveSnapshot &&
+      !this.activeTurns.has(topicId) &&
+      input.terminalSnapshot?.status !== 'awaiting-approval'
+    ) {
       this.setTurnSnapshot(topicId, idleTopicSnapshot);
     }
   }
@@ -1055,6 +1266,7 @@ export class ChatRuntime implements ChatModule {
         requestOptions: { signal: abortController.signal },
         reasoningEffort: input.reasoningEffort,
         runtimeTimingSink: runtimeTiming.sink,
+        shouldYield: () => this.hasPendingSteer(topicId),
         trigger: 'submit-message',
         uniqueModelId: model.id,
       });
@@ -1398,6 +1610,37 @@ export class ChatRuntime implements ChatModule {
     return topicId;
   }
 
+  private isTopicBusy(topicId: string): boolean {
+    const runtimeTopicId = this.resolveRuntimeTopicId(topicId);
+    return this.activeTurns.has(runtimeTopicId) || this.continuingTopics.has(runtimeTopicId);
+  }
+
+  private appendPendingSteer(topicId: string, pending: PendingSteer): void {
+    const queue = this.pendingSteers.get(topicId);
+    if (queue) {
+      queue.push(pending);
+    } else {
+      this.pendingSteers.set(topicId, [pending]);
+    }
+  }
+
+  private hasPendingSteer(topicId: string): boolean {
+    return (this.pendingSteers.get(topicId)?.length ?? 0) > 0;
+  }
+
+  private hasPendingContinuation(topicId: string): boolean {
+    return this.hasPendingSteer(topicId) || (this.followUpQueues.get(topicId)?.length ?? 0) > 0;
+  }
+
+  private publishQueuedMessages(topicId: string): void {
+    const { queuedMessages: _queuedMessages, ...snapshot } = this.getTopicSnapshot(topicId);
+    const queuedMessages = this.followUpQueues.get(topicId);
+    this.setTurnSnapshot(topicId, {
+      ...snapshot,
+      ...(queuedMessages?.length ? { queuedMessages: [...queuedMessages] } : {}),
+    });
+  }
+
   private publishTurnSnapshot(
     topicId: string,
     activeTurn: ActiveTurn,
@@ -1409,6 +1652,9 @@ export class ChatRuntime implements ChatModule {
       overlayMessage: overlayMessages.at(-1),
       overlayMessages,
       pendingUserMessage: activeTurn.pendingUserMessage,
+      ...(this.followUpQueues.get(topicId)?.length
+        ? { queuedMessages: [...(this.followUpQueues.get(topicId) ?? [])] }
+        : {}),
       status,
     });
   }
@@ -1461,15 +1707,21 @@ export class ChatRuntime implements ChatModule {
   }
 
   private setTopicSnapshot(topicId: string, snapshot: ChatTopicSnapshot): void {
+    const queuedMessages = this.followUpQueues.get(topicId);
+    const resolvedSnapshot =
+      queuedMessages?.length && !snapshot.queuedMessages
+        ? { ...snapshot, queuedMessages: [...queuedMessages] }
+        : snapshot;
     if (
-      snapshot.status === 'idle' &&
-      !snapshot.overlayMessage &&
-      !snapshot.pendingUserMessage &&
-      !snapshot.error
+      resolvedSnapshot.status === 'idle' &&
+      !resolvedSnapshot.overlayMessage &&
+      !resolvedSnapshot.pendingUserMessage &&
+      !resolvedSnapshot.queuedMessages?.length &&
+      !resolvedSnapshot.error
     ) {
       this.topicSnapshots.delete(topicId);
     } else {
-      this.topicSnapshots.set(topicId, snapshot);
+      this.topicSnapshots.set(topicId, resolvedSnapshot);
     }
 
     this.emit({ topicId, type: 'snapshot-changed' });
@@ -1528,6 +1780,55 @@ function assertMessageBelongsToTopic(message: Message, topicId: string): void {
   if (message.topicId !== topicId) {
     throw new Error(`Message ${message.id} does not belong to topic ${topicId}.`);
   }
+}
+
+function resolveTurnOutcome(
+  activeTurn: ActiveTurn,
+  terminalMessages: readonly Message[],
+): 'aborted' | 'awaiting-approval' | 'done' | 'error' {
+  if (terminalMessages.some((message) => hasPendingToolApproval(message.data.parts ?? []))) {
+    return 'awaiting-approval';
+  }
+
+  const executions = [...activeTurn.executions.values()];
+  if (executions.length === 0) {
+    return 'error';
+  }
+  if (executions.every((execution) => execution.status === 'aborted')) {
+    return 'aborted';
+  }
+  if (executions.some((execution) => execution.status === 'error')) {
+    return 'error';
+  }
+  return 'done';
+}
+
+function getFollowUpParts(payload: ChatFollowUpInput['payload']): CherryMessagePart[] {
+  if (payload.userMessageParts.length > 0) {
+    return [...payload.userMessageParts];
+  }
+  return payload.text ? ([{ type: 'text', text: payload.text }] as CherryMessagePart[]) : [];
+}
+
+function withSteerReminder(history: readonly Message[]): Message[] {
+  const next = [...history];
+  for (let index = next.length - 1; index >= 0; index -= 1) {
+    const message = next[index];
+    if (message.role !== 'user') continue;
+    next[index] = {
+      ...message,
+      data: {
+        ...message.data,
+        parts: (message.data.parts ?? []).map((part) =>
+          part.type === 'text' && part.text.trim()
+            ? { ...part, text: wrapSteerReminder(part.text) }
+            : part,
+        ),
+      },
+    };
+    break;
+  }
+  return next;
 }
 
 function captureApprovalTiming(

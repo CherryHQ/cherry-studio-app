@@ -959,6 +959,30 @@ describe('AiService MCP tool injection', () => {
     expect(params.options.stopWhen).toBeUndefined();
   });
 
+  it('adds a clean step-boundary yield condition without requiring tools', async () => {
+    const model = createModel('gpt-4o-mini', { capabilities: [] });
+    const assistant = createAssistant(model.id);
+    const services = createServices({ assistant, model });
+    let shouldYield = false;
+
+    await new AiService(services).streamText({
+      assistantId: assistant.id,
+      chatId: 'topic-1',
+      messages: [],
+      requestOptions: { signal: new AbortController().signal },
+      shouldYield: () => shouldYield,
+      trigger: 'submit-message',
+    });
+
+    const params = mockAgentConstructor.mock.calls.at(-1)?.[0];
+    expect(params.tools).toBeUndefined();
+    expect(params.options.stopWhen).toHaveLength(1);
+    const [steerYield] = params.options.stopWhen;
+    await expect(steerYield({ steps: [{}] })).resolves.toBe(false);
+    shouldYield = true;
+    await expect(steerYield({ steps: [{}] })).resolves.toBe(true);
+  });
+
   it('appends deferred-tool guidance only when tool_search is exposed', async () => {
     const model = createModel('gpt-4o-mini', {
       capabilities: [MODEL_CAPABILITY.FUNCTION_CALL],

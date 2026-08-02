@@ -28,6 +28,8 @@ export interface AiBaseRequest {
   knowledgeBaseIds?: string[];
   mcpToolIds?: string[];
   reasoningEffort?: ReasoningEffortOption;
+  /** In-process chat runtime hook for yielding at the next Agent step boundary. */
+  shouldYield?: () => boolean;
   /** "providerId::modelId" */
   uniqueModelId?: UniqueModelId;
   requestOptions?: AiTransportOptions;

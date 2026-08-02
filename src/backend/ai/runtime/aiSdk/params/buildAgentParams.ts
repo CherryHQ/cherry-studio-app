@@ -66,6 +66,7 @@ import type { AgentOptions } from '../Agent';
 import {
   createToolCallLimitStopCondition,
   stopOnTerminalToolFailure,
+  trackSteerYieldStopCondition,
 } from '../loop/toolLoopTermination';
 import { CITATIONS_SYSTEM_PROMPT } from '../prompts/citations';
 import { getDeferredToolsSystemPrompt } from '../prompts/deferredTools';
@@ -285,6 +286,19 @@ export async function buildAgentParams({
     overridden.providerOptions,
     request.fastMode === true,
   );
+  const stopWhen = [
+    ...(tools
+      ? [
+          createToolCallLimitStopCondition(
+            assistant?.settings.enableMaxToolCalls ? assistant.settings.maxToolCalls : 20,
+          ),
+          stopOnTerminalToolFailure,
+        ]
+      : []),
+    ...(request.shouldYield
+      ? [trackSteerYieldStopCondition(() => request.shouldYield?.() === true)]
+      : []),
+  ];
 
   return {
     credentialReceipt,
@@ -310,14 +324,7 @@ export async function buildAgentParams({
         providerOptions: effectiveProviderOptions,
       }),
       ...overridden.standardParams,
-      ...(tools && {
-        stopWhen: [
-          createToolCallLimitStopCondition(
-            assistant?.settings.enableMaxToolCalls ? assistant.settings.maxToolCalls : 20,
-          ),
-          stopOnTerminalToolFailure,
-        ],
-      }),
+      ...(stopWhen.length > 0 && { stopWhen }),
     },
   };
 }

@@ -33,6 +33,7 @@ export type ChatStreamRequest = {
   requestOptions: { signal: AbortSignal };
   reasoningEffort?: ReasoningEffortOption;
   runtimeTimingSink?: MessageRuntimeTimingSink;
+  shouldYield?: () => boolean;
   trigger: 'submit-message';
   uniqueModelId: UniqueModelId;
 };

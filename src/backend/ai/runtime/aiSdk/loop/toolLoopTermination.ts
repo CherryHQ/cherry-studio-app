@@ -3,7 +3,7 @@ import { stepCountIs, type StepResult, type StopCondition, type ToolSet } from '
 import { getTrustedLocalToolTerminalFailure } from './localToolTerminalOutcome';
 
 type ToolLoopStopWhen = StopCondition<ToolSet> | StopCondition<ToolSet>[] | undefined;
-type StopReason = 'tool-call-limit';
+type StopReason = 'steer-yield' | 'tool-call-limit';
 type StopState = { reason: StopReason; step: StepResult<ToolSet> | undefined };
 
 const trackedStopConditions = new WeakMap<StopCondition<ToolSet>, StopState>();
@@ -26,6 +26,26 @@ function trackStopCondition(
 
 export function createToolCallLimitStopCondition(limit: number): StopCondition<ToolSet> {
   return trackStopCondition('tool-call-limit', stepCountIs(limit));
+}
+
+export function trackSteerYieldStopCondition(
+  condition: StopCondition<ToolSet>,
+): StopCondition<ToolSet> {
+  return trackStopCondition('steer-yield', condition);
+}
+
+function wasStopReasonTriggered(
+  stopWhen: ToolLoopStopWhen,
+  reason: StopReason,
+  steps: StepResult<ToolSet>[],
+): boolean {
+  const finalStep = steps.at(-1);
+  if (!finalStep || !stopWhen) return false;
+  const conditions = Array.isArray(stopWhen) ? stopWhen : [stopWhen];
+  return conditions.some((condition) => {
+    const state = trackedStopConditions.get(condition);
+    return state?.reason === reason && state.step === finalStep;
+  });
 }
 
 export function getLastTerminalToolFailure(steps: StepResult<ToolSet>[]) {
@@ -64,14 +84,11 @@ export function resolveToolLoopTerminalError(input: {
     );
   }
 
-  const finalStep = input.steps.at(-1);
-  if (!finalStep || !input.stopWhen) return undefined;
-  const conditions = Array.isArray(input.stopWhen) ? input.stopWhen : [input.stopWhen];
-  const reachedLimit = conditions.some((condition) => {
-    const state = trackedStopConditions.get(condition);
-    return state?.reason === 'tool-call-limit' && state.step === finalStep;
-  });
-  return reachedLimit
+  if (wasStopReasonTriggered(input.stopWhen, 'steer-yield', input.steps)) {
+    return undefined;
+  }
+
+  return wasStopReasonTriggered(input.stopWhen, 'tool-call-limit', input.steps)
     ? new ToolLoopTerminalError(TOOL_CALL_LIMIT_MESSAGE, 'tool_call_limit_reached')
     : undefined;
 }

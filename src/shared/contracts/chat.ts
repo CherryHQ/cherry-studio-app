@@ -1,3 +1,4 @@
+import type { ComposerQueuedMessagePayload } from '@cherrystudio/universal/ai/transport/stream';
 import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
@@ -12,6 +13,7 @@ export type ChatTopicSnapshot = {
   overlayMessage?: Message;
   overlayMessages?: readonly Message[];
   pendingUserMessage?: Message;
+  queuedMessages?: readonly ComposerQueuedMessagePayload[];
   status: ChatTopicStatus;
 };
 
@@ -59,6 +61,11 @@ export type ChatCancelExecutionInput = {
   topicId: string;
 };
 
+export type ChatFollowUpInput = {
+  payload: ComposerQueuedMessagePayload;
+  topicId: string;
+};
+
 export type ChatToolApprovalInput = {
   approvalId: string;
   approved: boolean;
@@ -81,11 +88,13 @@ export interface ChatModule {
   cancelExecution(input: ChatCancelExecutionInput): void;
   editAndResend(input: ChatEditAndResendInput): Promise<void>;
   getTopicSnapshot(topicId: string): ChatTopicSnapshot;
+  queueFollowUp(input: ChatFollowUpInput): Promise<void>;
   regenerate(input: ChatRegenerateInput): Promise<void>;
   respondToolApproval(input: ChatToolApprovalInput): Promise<void>;
   sendMultiModelText(input: ChatSendMultiModelTextInput): Promise<void>;
   sendNewTopicText(input: ChatSendNewTopicTextInput): Promise<void>;
   sendText(input: ChatSendTextInput): Promise<void>;
   setActiveBranch(input: ChatSetActiveBranchInput): Promise<void>;
+  steer(input: ChatFollowUpInput): Promise<void>;
   subscribe(listener: ChatListener): () => void;
 }

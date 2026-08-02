@@ -1,3 +1,4 @@
+import type { ComposerQueuedMessagePayload } from '@cherrystudio/universal/ai/transport';
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
@@ -1969,6 +1970,178 @@ describe('ChatRuntime', () => {
     expect(services.topic.setActiveNode).toHaveBeenCalledWith('topic-1', leaf.id);
   });
 
+  test('persists steers immediately and answers them in FIFO order after clean step boundaries', async () => {
+    const services = createServices();
+    configureDynamicReservation(services);
+    services.message.getPathToNode = jest.fn(async (id: string) => {
+      const text = id.includes('turn-2')
+        ? 'steer one'
+        : id.includes('turn-3')
+          ? 'steer two'
+          : 'initial';
+      return [
+        {
+          ...createMessage(id, 'user'),
+          data: { parts: [{ type: 'text', text } as CherryMessagePart] },
+        },
+      ];
+    });
+    const initialGate = createDeferred();
+    const firstSteerGate = createDeferred();
+    let streamIndex = 0;
+    mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) => {
+      streamIndex += 1;
+      if (streamIndex === 1) {
+        return gatedAsyncIterable(
+          [createUiMessage(message.id, 'initial response')],
+          initialGate.promise,
+        );
+      }
+      if (streamIndex === 2) {
+        return gatedAsyncIterable(
+          [createUiMessage(message.id, 'first redirect')],
+          firstSteerGate.promise,
+        );
+      }
+      return asyncIterable([createUiMessage(message.id, 'second redirect')]);
+    });
+    const runtime = createRuntime({ services });
+
+    const initialSend = runtime.sendText({ text: 'initial', topicId: 'topic-1' });
+    await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'streaming');
+    await runtime.steer({ payload: createFollowUpPayload('steer one'), topicId: 'topic-1' });
+    await runtime.steer({ payload: createFollowUpPayload('steer two'), topicId: 'topic-1' });
+
+    const reservations = (services.message.createUserMessageWithPlaceholders as jest.Mock).mock
+      .calls;
+    expect(reservations).toHaveLength(3);
+    expect(reservations[1][0].placeholders).toEqual([]);
+    expect(reservations[1][0].userMessage.dto.data.parts).toEqual([
+      { type: 'text', text: 'steer one' },
+    ]);
+    expect(reservations[2][0].userMessage.dto.data.parts).toEqual([
+      { type: 'text', text: 'steer two' },
+    ]);
+    const initialRequest = (services.ai.streamText as jest.Mock).mock.calls[0][0];
+    expect(initialRequest.shouldYield()).toBe(true);
+    expect(services.ai.streamText).toHaveBeenCalledTimes(1);
+
+    initialGate.resolve();
+    await waitUntil(() => (services.ai.streamText as jest.Mock).mock.calls.length === 2);
+    const firstSteerRequest = (services.ai.streamText as jest.Mock).mock.calls[1][0];
+    expect(readLastText(firstSteerRequest.messages)).toContain('steer one');
+    expect(readLastText(firstSteerRequest.messages)).toContain('<system-reminder>');
+    expect(firstSteerRequest.shouldYield()).toBe(true);
+    expect(services.ai.streamText).toHaveBeenCalledTimes(2);
+
+    firstSteerGate.resolve();
+    await initialSend;
+    expect(services.ai.streamText).toHaveBeenCalledTimes(3);
+    const secondSteerRequest = (services.ai.streamText as jest.Mock).mock.calls[2][0];
+    expect(readLastText(secondSteerRequest.messages)).toContain('steer two');
+    expect(secondSteerRequest.shouldYield()).toBe(false);
+  });
+
+  test('drains queued follow-ups one per successful topic completion', async () => {
+    const services = createServices();
+    configureDynamicReservation(services);
+    const gates = [createDeferred(), createDeferred(), createDeferred()];
+    let streamIndex = 0;
+    mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) => {
+      const gate = gates[streamIndex];
+      streamIndex += 1;
+      return gatedAsyncIterable(
+        [createUiMessage(message.id, `response ${streamIndex}`)],
+        gate.promise,
+      );
+    });
+    const runtime = createRuntime({ services });
+    const queuedModelId = 'queued-provider::queued-model' as UniqueModelId;
+
+    const initialSend = runtime.sendText({ text: 'initial', topicId: 'topic-1' });
+    await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'streaming');
+    await runtime.queueFollowUp({
+      payload: createFollowUpPayload('queued one', {
+        fastMode: true,
+        mentionedModels: [queuedModelId],
+        reasoningEffort: 'high',
+      }),
+      topicId: 'topic-1',
+    });
+    await runtime.queueFollowUp({
+      payload: createFollowUpPayload('queued two'),
+      topicId: 'topic-1',
+    });
+
+    expect(services.message.createUserMessageWithPlaceholders).toHaveBeenCalledTimes(1);
+    expect(runtime.getTopicSnapshot('topic-1').queuedMessages).toHaveLength(2);
+
+    gates[0].resolve();
+    await waitUntil(
+      () =>
+        (services.message.createUserMessageWithPlaceholders as jest.Mock).mock.calls.length === 2,
+    );
+    expect(services.message.createUserMessageWithPlaceholders).toHaveBeenCalledTimes(2);
+    expect(runtime.getTopicSnapshot('topic-1').queuedMessages).toHaveLength(1);
+    const firstQueuedReservation = (services.message.createUserMessageWithPlaceholders as jest.Mock)
+      .mock.calls[1][0];
+    expect(firstQueuedReservation.userMessage.dto.data.parts).toEqual([
+      { type: 'text', text: 'queued one' },
+    ]);
+    expect(firstQueuedReservation.placeholders[0]).toEqual(
+      expect.objectContaining({
+        modelId: queuedModelId,
+        data: { parts: [], turnOptions: { fastMode: true, reasoningEffort: 'high' } },
+      }),
+    );
+
+    gates[1].resolve();
+    await waitUntil(
+      () =>
+        (services.message.createUserMessageWithPlaceholders as jest.Mock).mock.calls.length === 3,
+    );
+    expect(runtime.getTopicSnapshot('topic-1').queuedMessages).toBeUndefined();
+    expect(
+      (services.message.createUserMessageWithPlaceholders as jest.Mock).mock.calls[2][0].userMessage
+        .dto.data.parts,
+    ).toEqual([{ type: 'text', text: 'queued two' }]);
+
+    gates[2].resolve();
+    await initialSend;
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  test('retains queued follow-ups without launching them after a failed turn', async () => {
+    const services = createServices();
+    configureDynamicReservation(services);
+    const streamGate = createDeferred();
+    mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
+      gatedFailingAsyncIterable(
+        [createUiMessage(message.id, 'partial')],
+        streamGate.promise,
+        new Error('provider failed'),
+      ),
+    );
+    const runtime = createRuntime({ services });
+
+    const initialSend = runtime.sendText({ text: 'initial', topicId: 'topic-1' });
+    await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'streaming');
+    await runtime.queueFollowUp({
+      payload: createFollowUpPayload('keep queued'),
+      topicId: 'topic-1',
+    });
+    streamGate.resolve();
+    await initialSend;
+
+    expect(services.message.createUserMessageWithPlaceholders).toHaveBeenCalledTimes(1);
+    expect(runtime.getTopicSnapshot('topic-1')).toEqual(
+      expect.objectContaining({
+        queuedMessages: [expect.objectContaining({ text: 'keep queued' })],
+        status: 'idle',
+      }),
+    );
+  });
+
   test('aborts and awaits active turns before completing dispose', async () => {
     const services = createServices();
     const finalizationStarted = createDeferred();
@@ -2044,6 +2217,17 @@ function gatedAsyncIterable<T>(items: T[], gate: Promise<void>) {
   })();
 }
 
+function gatedFailingAsyncIterable<T>(items: T[], gate: Promise<void>, error: Error) {
+  return (async function* () {
+    for (const item of items) {
+      yield item;
+    }
+
+    await gate;
+    throw error;
+  })();
+}
+
 function abortableAsyncIterable<T>(item: T, signal: AbortSignal) {
   return (async function* () {
     yield item;
@@ -2112,6 +2296,25 @@ function createDeferredInvalidation(options: { blockOnCall?: number } = {}) {
     },
     resolve: deferred.resolve,
   };
+}
+
+function createFollowUpPayload(
+  text: string,
+  patch: Partial<ComposerQueuedMessagePayload> = {},
+): ComposerQueuedMessagePayload {
+  return {
+    text,
+    userMessageParts: [{ type: 'text', text } as CherryMessagePart],
+    ...patch,
+  };
+}
+
+function readLastText(messages: readonly CherryUIMessage[]): string {
+  const last = messages.at(-1);
+  return (last?.parts ?? [])
+    .filter((part): part is Extract<CherryMessagePart, { type: 'text' }> => part.type === 'text')
+    .map((part) => part.text)
+    .join('\n');
 }
 
 async function waitUntil(predicate: () => boolean) {
@@ -2229,13 +2432,17 @@ function createServices() {
 
 function configureDynamicReservation(services: ChatRuntimeServices) {
   const messages = new Map<string, Message>();
+  const getById = services.message.getById.bind(services.message);
+  let reservationCount = 0;
   services.model.getById = jest.fn(async (id: string) => createModel(id as UniqueModelId));
   services.message.createUserMessageWithPlaceholders = jest.fn(async (input) => {
+    reservationCount += 1;
+    const turnSuffix = reservationCount === 1 ? '' : `-turn-${reservationCount}`;
     const userMessage =
       input.userMessage.mode === 'existing'
         ? await services.message.getById(input.userMessage.id)
         : {
-            ...createMessage('user-reserved', 'user'),
+            ...createMessage(`user-reserved${turnSuffix}`, 'user'),
             data: input.userMessage.dto.data,
             modelId: input.userMessage.dto.modelId ?? null,
             parentId: input.userMessage.dto.parentId ?? 'active-node',
@@ -2243,7 +2450,7 @@ function configureDynamicReservation(services: ChatRuntimeServices) {
           };
     const placeholders = input.placeholders.map((placeholder, index) => {
       const message = {
-        ...createMessage(`assistant-reserved-${index + 1}`, 'assistant'),
+        ...createMessage(`assistant-reserved-${index + 1}${turnSuffix}`, 'assistant'),
         data: placeholder.data,
         messageSnapshot: placeholder.messageSnapshot ?? null,
         modelId: placeholder.modelId ?? null,
@@ -2256,6 +2463,7 @@ function configureDynamicReservation(services: ChatRuntimeServices) {
     messages.set(userMessage.id, userMessage);
     return { placeholders, userMessage };
   });
+  services.message.getById = jest.fn(async (id: string) => messages.get(id) ?? getById(id));
   services.message.finalizeAssistantMessage = jest.fn(async (id, input) => {
     const message = messages.get(id) ?? createMessage(id, 'assistant');
     const finalized = {
