@@ -78,6 +78,15 @@ describe('addAnthropicHeaders', () => {
     expect(headers).toEqual([]);
   });
 
+  it('omits interleaved-thinking for a Claude 4.5 reasoning model on Bedrock', () => {
+    const headers = addAnthropicHeaders(
+      createAssistant(),
+      createModel('claude-sonnet-4-5'),
+      createProvider({ authType: 'iam-aws' }),
+    );
+    expect(headers).toEqual([]);
+  });
+
   it('adds web-search for a Claude 4 series model on Vertex with web search enabled', () => {
     const headers = addAnthropicHeaders(
       createAssistant({ enableWebSearch: true }),

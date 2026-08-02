@@ -1,5 +1,6 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiPlugin } from '@cherrystudio/ai-core';
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
 import {
   type Assistant,
@@ -8,7 +9,6 @@ import {
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import {
   isAnthropicModel,
   isForcedNativeWebSearchModel,
@@ -135,10 +135,14 @@ export async function buildAgentParams({
     endpointType,
     gatewayProviderOptionsKey: resolvedEndpoint.providerOptionsKey,
   });
+  const reasoningEndpointType =
+    sdkConfig.providerId === 'google-vertex-maas'
+      ? ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS
+      : endpointType;
   const reasoningProfile = providerRegistryService.resolveReasoningProfile(
     provider,
     model,
-    endpointType,
+    reasoningEndpointType,
   );
   const invocationModel = reasoningProfile.support
     ? {
@@ -147,10 +151,7 @@ export async function buildAgentParams({
       }
     : model;
   const reasoning = resolveReasoningInvocation({
-    selection:
-      request.reasoningEffort ??
-      (assistant?.settings.reasoning_effort as ReasoningEffortOption | undefined) ??
-      'default',
+    selection: request.reasoningEffort ?? assistant?.settings.reasoning_effort ?? 'default',
     model: invocationModel,
     profile: reasoningProfile.wire,
     maxTokens: resolveReasoningMaxTokens(request.callOverrides?.maxOutputTokens, assistant, model),
@@ -205,7 +206,7 @@ export async function buildAgentParams({
     providerOptions,
     split.providerParams,
     provider.id,
-    aiSdkProviderId,
+    sdkConfig.providerId === 'google-vertex-maas' ? 'openai-compatible' : aiSdkProviderId,
   );
   const anthropicBetaHeaders =
     assistant && isAnthropicModel(model) ? addAnthropicHeaders(assistant, model, provider) : [];
@@ -233,16 +234,6 @@ export async function buildAgentParams({
     messageRef: usageMessageRef,
   });
   const usagePlugin = createAiUsagePlugin(usageCaptureContext, services.aiUsageRecord);
-  const plugins = [
-    ...buildAgentPlugins({
-      aiSdkProviderId: sdkConfig.providerId,
-      model,
-      provider,
-      streamOutput: capabilities?.streamOutput ?? true,
-      webSearchPluginConfig: capabilities?.webSearchPluginConfig,
-    }),
-    usagePlugin,
-  ];
   const shouldLoadTools = shouldIncludeExternalTools && assistant && isFunctionCallingModel(model);
   const resolvedTools = shouldLoadTools
     ? await services.tools.resolveForRequest({
@@ -251,7 +242,21 @@ export async function buildAgentParams({
         externalWebSearchEnabled: shouldUseExternalWebSearch,
         mcpToolIds: request.mcpToolIds,
       })
-    : { deferredEntries: [], tools: undefined };
+    : { deferredEntries: [], hasMcpTools: false, tools: undefined };
+  const plugins = [
+    ...buildAgentPlugins({
+      aiSdkProviderId: sdkConfig.providerId,
+      endpointType,
+      hasMcpTools: resolvedTools.hasMcpTools,
+      hasReasoningSelectionSource: Boolean(assistant) || request.reasoningEffort !== undefined,
+      model,
+      provider,
+      reasoning,
+      streamOutput: capabilities?.streamOutput ?? true,
+      webSearchPluginConfig: capabilities?.webSearchPluginConfig,
+    }),
+    usagePlugin,
+  ];
   const tools = mergeToolSets(resolvedTools.tools, request.callOverrides?.tools);
   const baseSystem = assistant?.prompt
     ? await replacePromptVariables(assistant.prompt, model.name, services.preference)

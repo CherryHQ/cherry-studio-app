@@ -192,6 +192,11 @@ export const isOpenRouterBuiltInWebSearchModel = (model: Model): boolean =>
   (isOpenAIWebSearchModel(model) || model.modelId.toLowerCase().includes('sonar'));
 
 /**
+ * MOBILE SYNC EXTENSION: desktop expresses this through
+ * `isOpenRouterBuiltInWebSearchModel` plus a separate Sonar check. Mobile keeps
+ * one predicate because external-search selection and capability resolution
+ * both need the same force-native decision.
+ *
  * Models whose provider-native web search stays on regardless of the assistant
  * toggle or a configured external search provider (mirrors desktop). Single
  * source of truth: the "force native" gate and the capability resolution must

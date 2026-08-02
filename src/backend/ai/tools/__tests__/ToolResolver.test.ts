@@ -44,6 +44,7 @@ describe('ToolResolver', () => {
         'web_search',
       ].sort(),
     );
+    expect(result.hasMcpTools).toBe(true);
   });
 
   test('fails closed when a preference lookup fails', async () => {
@@ -62,6 +63,7 @@ describe('ToolResolver', () => {
       externalWebSearchEnabled: false,
     });
     expect(result.tools).not.toHaveProperty('web_search');
+    expect(result.hasMcpTools).toBe(false);
   });
 
   test('does not query native permission status for disabled scopes', async () => {

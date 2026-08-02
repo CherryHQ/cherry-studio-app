@@ -17,6 +17,7 @@ import {
 import type { JSONValue } from 'ai';
 
 import type { AppProviderId, ProviderCapabilities } from '../types';
+import { addAnthropicHeaders } from './anthropicHeaders';
 import { buildGeminiGenerateImageParams } from './image';
 import { SystemProviderIds } from './providerIds';
 import {
@@ -181,7 +182,7 @@ function shouldNormalizeOpenAICompatibleReasoning(
 }
 
 export function buildCapabilityProviderOptions(
-  _assistant: Assistant,
+  assistant: Assistant,
   model: Model,
   actualProvider: Provider,
   capabilities: Pick<
@@ -237,6 +238,12 @@ export function buildCapabilityProviderOptions(
     case 'azure-anthropic':
       providerSpecificOptions = buildAnthropicProviderOptions(reasoningOptions.options);
       break;
+    case 'google-vertex-anthropic':
+      providerSpecificOptions = buildAnthropicProviderOptions(
+        reasoningOptions.options,
+        providerOptionsKey,
+      );
+      break;
     case 'google':
       providerSpecificOptions = buildGeminiProviderOptions(
         model,
@@ -244,9 +251,28 @@ export function buildCapabilityProviderOptions(
         reasoningOptions.options,
       );
       break;
+    case 'google-vertex':
+      providerSpecificOptions = buildGeminiProviderOptions(
+        model,
+        capabilities,
+        reasoningOptions.options,
+        providerOptionsKey,
+      );
+      break;
     case 'xai':
     case 'xai-responses':
       providerSpecificOptions = buildXAIProviderOptions(reasoningOptions.options);
+      break;
+    case 'bedrock':
+      providerSpecificOptions = buildBedrockProviderOptions(
+        assistant,
+        model,
+        actualProvider,
+        reasoningOptions.options,
+      );
+      break;
+    case 'ollama':
+      providerSpecificOptions = buildOllamaProviderOptions(model, reasoningOptions.options);
       break;
     case 'cherryin':
     case 'cherryin-chat':
@@ -428,8 +454,9 @@ function buildOpenAIProviderOptions(
 
 function buildAnthropicProviderOptions(
   reasoningOptions: Record<string, unknown>,
+  providerOptionsKey = 'anthropic',
 ): Record<string, Record<string, unknown>> {
-  return { anthropic: { ...reasoningOptions } };
+  return { [providerOptionsKey]: { ...reasoningOptions } };
 }
 
 function buildGeminiProviderOptions(
@@ -439,6 +466,7 @@ function buildGeminiProviderOptions(
     'enableReasoning' | 'enableWebSearch' | 'enableGenerateImage'
   >,
   reasoningOptions: Record<string, unknown>,
+  providerOptionsKey = 'google',
 ): Record<string, Record<string, unknown>> {
   let providerOptions: Record<string, unknown> = {
     safetySettings: [
@@ -456,13 +484,41 @@ function buildGeminiProviderOptions(
   if (capabilities.enableGenerateImage) {
     providerOptions = { ...providerOptions, ...buildGeminiGenerateImageParams() };
   }
-  return { google: providerOptions };
+  return { [providerOptionsKey]: providerOptions };
 }
 
 function buildXAIProviderOptions(
   reasoningOptions: Record<string, unknown>,
 ): Record<string, Record<string, unknown>> {
   return { xai: { ...reasoningOptions } };
+}
+
+function buildBedrockProviderOptions(
+  assistant: Assistant,
+  model: Model,
+  provider: Provider,
+  reasoningOptions: Record<string, unknown>,
+): Record<string, Record<string, unknown>> {
+  const providerOptions: Record<string, unknown> = { ...reasoningOptions };
+  // MOBILE SYNC DIVERGENCE: desktop currently omits `provider` here and leaks a
+  // direct-Anthropic beta header into Bedrock, contradicting its own resolver contract.
+  const betaHeaders = addAnthropicHeaders(assistant, model, provider);
+  if (betaHeaders.length > 0) {
+    providerOptions.anthropicBeta = betaHeaders;
+  }
+  return { bedrock: providerOptions };
+}
+
+function buildOllamaProviderOptions(
+  model: Model,
+  reasoningOptions: Record<string, unknown>,
+): Record<string, Record<string, unknown>> {
+  return {
+    ollama: {
+      ...reasoningOptions,
+      ...(model.contextWindow ? { options: { num_ctx: model.contextWindow } } : {}),
+    },
+  };
 }
 
 function buildGenericProviderOptions(

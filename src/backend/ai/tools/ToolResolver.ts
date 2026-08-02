@@ -43,7 +43,7 @@ export class ToolResolver {
     contextWindow?: number;
     externalWebSearchEnabled: boolean;
     mcpToolIds?: readonly string[];
-  }): Promise<{ deferredEntries: ToolEntry[]; tools: ToolSet | undefined }> {
+  }): Promise<{ deferredEntries: ToolEntry[]; hasMcpTools: boolean; tools: ToolSet | undefined }> {
     const [deviceAccess, mcpEntries] = await Promise.all([
       this.getDeviceAccess(),
       this.deps.mcpRuntime.getToolEntriesForAssistant(input.assistant, input.mcpToolIds),
@@ -58,7 +58,12 @@ export class ToolResolver {
     const requestRegistry = new ToolRegistry();
     for (const entry of [...activeBuiltins, ...mcpEntries]) requestRegistry.register(entry);
     const tools = toToolSet(requestRegistry.getAll());
-    return applyDeferExposition(tools, requestRegistry, input.contextWindow);
+    return {
+      ...applyDeferExposition(tools, requestRegistry, input.contextWindow),
+      // MOBILE SYNC DIVERGENCE: desktop gates OVMS `/no_think` on selected MCP ids. Mobile uses
+      // materialized entries so a missing or filtered tool cannot change the model prompt.
+      hasMcpTools: mcpEntries.length > 0,
+    };
   }
 
   private async getDeviceAccess(): Promise<DeviceToolAccess> {

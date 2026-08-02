@@ -286,6 +286,27 @@ describe('getMaxTokens', () => {
     expect(getMaxTokens(a, model, provider, budgetReasoning)).toBeLessThan(8000);
   });
 
+  it.each(['iam-aws', 'api-key-aws'] as const)(
+    'subtracts the thinking budget for Bedrock auth type %s',
+    (authType) => {
+      const assistant = createAssistant({
+        enableMaxTokens: true,
+        maxTokens: 8000,
+        reasoning_effort: 'high',
+      });
+      const model = createModel('claude-3-7-sonnet-20250219', {
+        providerId: 'aws-bedrock',
+        reasoning: {
+          selectableEfforts: [],
+          thinkingTokenLimits: { min: 1024, max: 64_000 },
+        },
+      });
+      const provider = createProvider({ authType, id: 'aws-bedrock' });
+
+      expect(getMaxTokens(assistant, model, provider, budgetReasoning)).toBe(6976);
+    },
+  );
+
   it('skips budget subtraction on non-Anthropic-like providers even for Claude-named thinking models', () => {
     // e.g. a Claude model relayed through an openai-compatible aggregator —
     // the AI SDK doesn't add a Claude thinking budget on top there.

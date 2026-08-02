@@ -74,7 +74,12 @@ function createAssistant(
   };
 }
 
-function createServices(provider: Provider, model: Model, assistant?: Assistant) {
+function createServices(
+  provider: Provider,
+  model: Model,
+  assistant?: Assistant,
+  options: { hasMcpTools?: boolean } = {},
+) {
   return {
     aiUsageRecord: { recordInvocation: jest.fn(async () => undefined) },
     assistant: { getById: jest.fn(async () => assistant) },
@@ -84,7 +89,19 @@ function createServices(provider: Provider, model: Model, assistant?: Assistant)
       getMultipleRawCached: jest.fn(() => ({})),
     },
     provider: {
-      getAuthConfig: jest.fn(async () => null),
+      getAuthConfig: jest.fn(async () =>
+        provider.authType === 'iam-gcp'
+          ? {
+              credentials: {
+                client_email: 'svc@example.com',
+                private_key: '-----BEGIN PRIVATE KEY-----\nMIIabc\n-----END PRIVATE KEY-----',
+              },
+              location: 'us-central1',
+              project: 'project-id',
+              type: 'iam-gcp' as const,
+            }
+          : null,
+      ),
       getByProviderId: jest.fn(async () => provider),
       getRotatedApiKey: jest.fn(async () => 'test-key'),
       resolveApiKey: jest.fn(async () => ({
@@ -93,7 +110,11 @@ function createServices(provider: Provider, model: Model, assistant?: Assistant)
       })),
     },
     tools: {
-      resolveForRequest: jest.fn(async () => ({ deferredEntries: [], tools: undefined })),
+      resolveForRequest: jest.fn(async () => ({
+        deferredEntries: [],
+        hasMcpTools: options.hasMcpTools ?? false,
+        tools: undefined,
+      })),
     },
   } as never;
 }
@@ -206,5 +227,59 @@ describe('buildAgentParams reasoning contract', () => {
         providerId: 'zhipu',
       }),
     ).resolves.toEqual({});
+  });
+
+  it('uses the OpenAI chat reasoning profile for Vertex MaaS requests', async () => {
+    const provider = { ...createProvider('vertexai'), authType: 'iam-gcp' as const };
+    const model = resolveModel(provider, 'zai-org/glm-5-maas');
+    const assistant = createAssistant(model, 'auto');
+
+    const result = await buildAgentParams({
+      request: {
+        assistantId: assistant.id,
+        reasoningEffort: 'auto',
+        uniqueModelId: model.id,
+      },
+      services: createServices(provider, model, assistant),
+    });
+
+    expect(result.sdkConfig.providerId).toBe('google-vertex-maas');
+    expect(result.options.providerOptions).toMatchObject({
+      vertex: { reasoningEffort: 'medium' },
+    });
+    expect(result.options.providerOptions?.vertex).not.toHaveProperty('thinkingConfig');
+  });
+
+  it('normalizes Vertex MaaS custom reasoning parameters for its OpenAI-compatible adapter', async () => {
+    const provider = { ...createProvider('vertexai'), authType: 'iam-gcp' as const };
+    const model = resolveModel(provider, 'zai-org/glm-5-maas');
+    const assistant = createAssistant(model, 'auto', [
+      { name: 'reasoning_effort', type: 'string', value: 'high' },
+    ]);
+
+    const result = await buildAgentParams({
+      request: { assistantId: assistant.id, uniqueModelId: model.id },
+      services: createServices(provider, model, assistant),
+    });
+
+    expect(result.options.providerOptions?.vertex).toMatchObject({ reasoningEffort: 'high' });
+    expect(result.options.providerOptions?.vertex).not.toHaveProperty('reasoning_effort');
+  });
+
+  it('adds the OVMS no-think adapter when the resolved request contains MCP tools', async () => {
+    const provider = createProvider('ovms');
+    const model = {
+      ...resolveModel(provider, 'qwen3-8b'),
+      capabilities: ['function-call' as const],
+    };
+    const assistant = createAssistant(model, 'default');
+
+    const result = await buildAgentParams({
+      request: { assistantId: assistant.id, uniqueModelId: model.id },
+      services: createServices(provider, model, assistant, { hasMcpTools: true }),
+      shouldIncludeExternalTools: true,
+    });
+
+    expect(result.plugins.map((plugin) => plugin.name)).toContain('no-think');
   });
 });
