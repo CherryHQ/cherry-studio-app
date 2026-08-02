@@ -5,6 +5,7 @@
 > Mobile baseline: `CherryHQ/cherry-studio-app@c5896682d900298bde11d944bcb4aef4183ae9c1`
 > Background-reply experiment: draft PR [#473](https://github.com/CherryHQ/cherry-studio-app/pull/473),
 > head `919dda1d229eb3fbd497f1e185909cc4598f9d3f`
+> Android reference: `OpenMinis/OpenMinis@9cf3a855fecd27bb5735b84cacbd56852a3ab8dd`
 
 ## Decision
 
@@ -12,8 +13,10 @@
 
 Mobile can support a persistent job ledger, typed handlers, queue concurrency, cancellation, retry,
 restart recovery, run-now, job history, and catch-up when the app next gets an execution window. It
-cannot provide desktop-equivalent guarantees that a cron callback fires on time, that JavaScript
-keeps running after suspension, or that work continues after a person force-quits the app.
+cannot provide cross-platform desktop-equivalent guarantees that a cron callback fires on time, that
+JavaScript keeps running after suspension, or that work continues after a person force-quits the
+app. Android can add permission-gated, user-facing exact alarm wakeups, but that is a platform adapter
+with a narrower reliability contract, not a reason to treat desktop timers as portable.
 
 PR #473 improves one important case: an iOS job that a person starts while the app is active may
 continue after the app moves to the background. It does not wake a suspended app for a future job,
@@ -26,10 +29,13 @@ The recommended product contract is therefore:
   or resume.
 - **Supported opportunistically:** short, idempotent background-eligible jobs when the operating
   system grants a background window.
+- **Supported as an optional Android-only tier:** user-created wall-clock schedules through an exact
+  alarm adapter when special access is granted, with an explicitly disclosed inexact fallback.
 - **Supported for already-running iOS work, after platform validation:** continuation through a
   user-visible background execution lease derived from PR #473.
-- **Not promised locally:** exact cron timing, sub-15-minute background cadence, execution after
-  force-quit, or unattended long-running AI work. These require a server-side scheduler/executor.
+- **Not promised locally:** cross-platform exact cron timing, sub-15-minute periodic cadence,
+  execution after force-quit, or reliable unattended long-running AI work. These require a
+  server-side scheduler/executor.
 
 If the only near-term requirement is to let painting generation survive navigation, a dedicated
 app-owned painting operation is smaller than porting the whole Job Manager. The generic runtime
@@ -103,6 +109,108 @@ Two implementation facts matter before reusing it:
    an in-flight stream across app backgrounding, but not necessarily across navigation that unmounts
    the provider.
 
+### OpenMinis Android Reference
+
+OpenMinis is a useful native proof of the Android half of this design, but it is not an Android Job
+Manager. The inspected revision is a Kotlin/Compose app targeting Android 15 (API 35), distributed as
+an APK from GitHub rather than through Google Play
+([build configuration](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/build.gradle.kts#L25-L40),
+[distribution](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/README.md#L106-L115)).
+
+Its scheduled-agent path is:
+
+```text
+ScheduledTask JSON in SharedPreferences
+  -> one AlarmManager RTC_WAKEUP PendingIntent per task
+  -> ScheduledTaskAlarmReceiver
+  -> re-arm the next occurrence before execution
+  -> AgentForegroundService + PARTIAL_WAKE_LOCK
+  -> process-scoped HeadlessChatRunner / ChatViewModel
+  -> run-history row + completion notification + session deep link
+```
+
+The pieces are concrete:
+
+- `ScheduledTaskStore` persists a small JSON array in `SharedPreferences`; each row contains schedule,
+  prompt/target/model information and at most 50 result summaries
+  ([store](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledTaskStore.kt#L10-L55),
+  [model](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledTask.kt#L102-L148)).
+- `ScheduledTaskManager` calls `setExactAndAllowWhileIdle(RTC_WAKEUP)` and catches a denied exact-alarm
+  permission by falling back to `setAndAllowWhileIdle`. Recurrence is implemented as a new exact
+  one-shot alarm after each fire, not `setRepeating`
+  ([manager](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledTaskManager.kt#L12-L21),
+  [registration](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledTaskManager.kt#L115-L136)).
+- The alarm receiver looks up the persisted definition, skips disabled/deleted rows, re-arms the next
+  occurrence first, then invokes the agent runner
+  ([receiver](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledTaskAlarmReceiver.kt#L21-L50)).
+  A `BOOT_COMPLETED` receiver re-registers enabled schedules because Android clears alarms on reboot
+  ([boot receiver](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/offload/AlarmReceiver.kt#L21-L38)).
+- `ScheduledAgentRunner` starts the foreground service before resolving a chat, reuses the normal
+  `ChatViewModel` agent loop through a process-scoped headless wrapper, waits up to ten minutes, then
+  records a preview and posts a deep-link notification
+  ([runner](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledAgentRunner.kt#L31-L108),
+  [headless wrapper](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/debug/HeadlessChatRunner.kt#L16-L69)).
+- `SessionActivityTracker` keeps the same service alive while any chat is streaming, wires its Stop
+  action to every active stream, and stops the service when no active or visible chat remains
+  ([tracking](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/service/SessionActivityTracker.kt#L248-L329),
+  [service updates](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/service/SessionActivityTracker.kt#L494-L569)).
+- The foreground service posts an ongoing notification, returns `START_STICKY`, survives removal of the
+  activity task while a stream is active, and holds a non-reference-counted `PARTIAL_WAKE_LOCK` with
+  no timeout until service destruction
+  ([lifecycle](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/service/AgentForegroundService.kt#L124-L278),
+  [wake lock](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/service/AgentForegroundService.kt#L556-L587)).
+- A settings screen helps the user request a battery-optimization exemption and find OEM autostart
+  controls, acknowledging that foreground-service behavior alone is not uniform across devices
+  ([settings](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/ui/settings/BackgroundSettingsScreen.kt#L62-L72),
+  [power adapter](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/power/PowerOptimizationManager.kt#L14-L37)).
+
+This proves that Android can wake a native receiver at a user-selected time and continue an already
+dispatched agent loop under a visible foreground execution lease. It does not provide the desktop
+Job Manager's durable execution semantics. In particular, the inspected implementation has no
+persisted `pending/running/retry/terminal` state machine, transactional claim, retry/backoff,
+idempotency key, missed-run catch-up, or process-death resume. `START_STICKY` can recreate the service,
+but it cannot recreate the coroutine, `ViewModel`, or network/tool call that was in memory.
+
+Six implementation details must not be copied into Cherry unchanged:
+
+1. The receiver holds its `goAsync()` pending result until the whole agent run returns, potentially
+   ten minutes. Android still applies the broadcast execution limit after `goAsync()` and expects
+   completion in under ten seconds. Cherry's receiver must hand a durable job ID to a service or
+   worker and call `finish()` immediately
+   ([Android broadcast guidance](https://developer.android.com/develop/background-work/background-tasks/broadcasts#security-considerations)).
+2. OpenMinis declares `mediaPlayback` specifically to avoid the Android 15 `dataSync` six-hour cap,
+   while its own manifest notes that actual playback is a Play policy rather than its sideload
+   runtime requirement
+   ([manifest](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/AndroidManifest.xml#L11-L26)).
+   Android defines that type for continuing audio/video playback, and Google Play requires the
+   declared use case to match. Cherry must select a legitimate type per handler and implement its
+   timeout/policy contract; it cannot use a fake media session as a generic keep-alive.
+3. The app declares `SCHEDULE_EXACT_ALARM`, but the inspected scheduled-task surface does not call
+   `canScheduleExactAlarms()`, open `ACTION_REQUEST_SCHEDULE_EXACT_ALARM`, or reschedule when the grant
+   changes. Fresh installs targeting API 33+ do not receive this special access automatically.
+   Silently falling back to an inexact alarm is acceptable only if the product labels that behavior;
+   that fallback also loses the exact-alarm exemption from Android's background foreground-service
+   start restriction, so the subsequent `startForegroundService()` can be refused.
+4. The runner starts the sticky foreground service before it resolves the target session/provider.
+   Early failure has no corresponding stop, and a normal sticky restart receives a null intent but
+   has no empty-session stop condition. Either path can leave an idle notification and the no-timeout
+   wake lock alive without an agent run
+   ([runner startup](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledAgentRunner.kt#L62-L78),
+   [sticky service](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/service/AgentForegroundService.kt#L148-L210)).
+5. The ten-minute runner timeout only stops waiting for `isStreaming`; it does not cancel the
+   underlying stream. History and completion notifications can report a timeout while the agent keeps
+   executing. A Job Manager timeout must instead have an explicit cancel-or-checkpoint policy
+   ([timeout wait](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/debug/HeadlessChatRunner.kt#L219-L246)).
+6. The no-timeout wake lock and in-memory app scope improve survival, not correctness. Cherry should
+   acquire a bounded lease only after a durable claim, checkpoint before expiration, and treat every
+   process restart as recovery from SQLite. A force-stopped package cannot self-start; on Android 15+
+   force-stop also cancels its pending intents. This differs from Android 13's foreground-service Task
+   Manager Stop action, after which alarms and scheduled jobs remain eligible to fire.
+
+No focused unit or instrumentation tests for these scheduled-task, alarm-receiver, foreground-service,
+or power-management classes were present in the inspected OpenMinis revision. Its code is therefore
+architecture evidence, not device-level reliability evidence.
+
 ## Capability Matrix
 
 | Capability | Direct source reuse | Mobile result | Decision |
@@ -116,8 +224,9 @@ Two implementation facts matter before reusing it:
 | Job state/progress observation | Medium | Desktop shared-window cache has no mobile/headless equivalent | Keep state in SQLite; use queries plus live events while active |
 | PR #473 audio keep-alive | Low as-is, useful pattern | Can extend an already-started iOS execution window | Extract behind a lease interface after gates pass |
 | PR #473 Live Activity | Medium | Good user-visible progress surface; does not grant execution time itself | Keep as an optional observer |
-| Exact unattended schedules | None | OS scheduling is inexact and force-quit stops local work | Use a server scheduler |
-| Android long-running continuation | None in PR #473 | Requires WorkManager/foreground-service behavior and a persistent notification | Build a separate Android adapter |
+| Android exact schedule wake | None from desktop; OpenMinis is a reference | `AlarmManager` can wake a receiver for a user-requested exact alarm when special access is granted | Optional native adapter; disclose fallback and keep SQLite authoritative |
+| Cross-platform exact unattended schedules | None | iOS has no equivalent exact local wake, and force-quit stops local work | Use a server scheduler |
+| Android long-running continuation | None in PR #473; pattern proven by OpenMinis | Requires valid WorkManager/foreground-service behavior and a persistent notification | Build a policy-compliant Android lease adapter |
 | Backup pause/drain | Low current value | No matching mobile restore orchestrator exists today | Defer until a real consumer appears |
 
 ## Why A File Copy Is Unsafe
@@ -235,7 +344,8 @@ UI / business workflow ->| MobileJobCoordinator    |-> return job id
                                       |
        +------------------------------+------------------------------+
        |                              |                              |
- cold start / AppState.active   OS opportunistic wake         explicit Run Now
+ cold start / AppState.active       OS wake adapter            explicit Run Now
+                              Expo task / Android alarm
        |                              |                              |
        +------------------------------+------------------------------+
                                       |
@@ -252,7 +362,7 @@ UI / business workflow ->| MobileJobCoordinator    |-> return job id
           bounded OS execution window       optional execution lease
                                                        |
                                       iOS 26 continued task / PR #473
-                                      Android foreground adapter
+                                      Android foreground lease
 ```
 
 Recommended module ownership:
@@ -265,6 +375,8 @@ Recommended module ownership:
 - `src/bootstrap/composition`: explicit construction and handler registration.
 - `src/bootstrap/runtime`: foreground start/resume/disposal ownership.
 - a global TaskManager entry module: minimal headless initialization and a bounded due-job pump.
+- an Android local Expo module plus config plugin: exact-alarm permission flow, receiver/service
+  declarations, reboot/time-change re-arming, and a foreground execution lease.
 
 Do not create a second lifecycle framework or expose the concrete runner through React context.
 Business workflows enqueue through narrow backend interfaces; job reads use Data API endpoints.
@@ -300,6 +412,35 @@ Register one `cherry.jobs.pump` task. On each wake, initialize only the headless
 recover stale work, enqueue due schedule occurrences, run a bounded number of eligible jobs, persist
 checkpoints, and return before expiration. Do not register one native task per job or schedule.
 
+### Optional Android exact-alarm tier
+
+OpenMinis demonstrates why `AlarmManager` belongs beside, rather than inside, the job runtime. If
+product requirements justify precise Android wall-clock schedules, add a native adapter with these
+rules:
+
+- SQLite remains the source of truth. Arm only the earliest next due occurrence, then recompute and
+  replace that alarm whenever schedules change or an alarm fires. Do not mirror full job state into
+  `SharedPreferences` or treat `PendingIntent` existence as job state.
+- Check `canScheduleExactAlarms()` before registering, explain the special access in product UI, open
+  `ACTION_REQUEST_SCHEDULE_EXACT_ALARM` only after a user asks for precise scheduling, and re-arm when
+  the permission-state broadcast arrives. Fall back to an inexact wake with visible reliability
+  wording when access is absent.
+- The `BroadcastReceiver` validates the wake, starts or hands off to the execution owner, and finishes
+  within the broadcast budget. It never waits for JavaScript, networking, or an agent loop.
+- Re-arm after boot, app replacement, clock changes, and time-zone changes. On each wake, evaluate all
+  due schedules transactionally so delayed or coalesced delivery cannot duplicate occurrences.
+- Starting a foreground service from an exact alarm is exempt from Android 12's background-start ban
+  only when completing a user-requested action. Each handler still needs an eligible foreground
+  service type, notification, cancellation, timeout, and Play declaration. A generic agent task must
+  not claim `mediaPlayback` unless it is actually playing media.
+
+Cherry uses Expo CNG with no committed application-level `android/` directory and targets API 36.
+Implement this as a local Expo module plus config plugin, following the repository's existing native
+module/plugin pattern. The capability spike must prove that an alarm-launched native owner can bring
+up the headless JavaScript runtime, open the same Expo SQLite database, and atomically claim work
+without racing the foreground runtime. If that bootstrap is not reliable, the alarm should notify the
+user or wake a server-owned workflow rather than pretending a local agent ran.
+
 For Android long-running user-visible work, use the platform's documented long-running WorkManager
 or foreground-service path with a persistent notification. This is separate from PR #473 and needs
 Android-specific product and permission design. Android's
@@ -314,7 +455,8 @@ also has a 15-minute minimum and does not promise an exact execution time.
 | Work survives app/process restart and resumes or abandons by policy | Yes, from the SQLite ledger |
 | A user-started iOS task continues after backgrounding | Conditional: PR #473 pattern, preferably iOS 26 continued processing |
 | A short task eventually runs in an OS-granted background window | Best effort only |
-| A task runs exactly at 08:00 or every 5 minutes | No |
+| A user-created Android task wakes near 08:00 | Conditional: exact-alarm access plus native adapter; execution can still fail or be delayed |
+| A cross-platform task runs exactly at 08:00 or every 5 minutes | No; use a server |
 | A task runs after the person force-quits the app | No |
 | A 30-minute paid AI request always finishes in the background | No; use a server or provider-side durable task |
 | Scheduled agent automation runs while the app is unopened for days | Server required |
@@ -331,8 +473,11 @@ Use a physical iPhone and a representative Android device. Add a disposable proo
 3. Expo's test-triggered background worker;
 4. PR #473-style iOS continuation;
 5. iOS 26 `BGContinuedProcessingTask`, if a native adapter is acceptable;
-6. expiration/cancellation, network loss, lock screen, low-power mode, audio interruption, reboot,
-   and force-quit.
+6. an Android exact-alarm receiver handing off to a valid foreground-service or WorkManager owner;
+7. denied/granted/revoked exact-alarm access, receiver timeout, target-SDK-36 foreground-service
+   restrictions, Android Task Manager Stop, force-stop, reboot, clock/time-zone changes, and OEM
+   battery controls;
+8. expiration/cancellation, network loss, lock screen, low-power mode, and audio interruption.
 
 This phase is a go/no-go gate, not production code. In particular, verify that a foreground runtime
 and headless runtime cannot double-claim one row.
@@ -358,7 +503,8 @@ path correct when the platform refuses or expires background execution.
 
 Add schedule CRUD, foreground Croner optimization, due-schedule evaluation on every wake, and an
 explicit product distinction between local best-effort schedules and server-backed reliable
-schedules. Do not present the former as exact automation.
+schedules. Add the exact-alarm adapter only for an explicitly Android-only precision tier and do not
+present it as a guarantee that the underlying agent work completed.
 
 Rough one-engineer sizing, excluding server work and full product UI:
 
@@ -381,6 +527,8 @@ Proceed with the generic runtime only when all of these are true:
   policy;
 - a physical iPhone and Android device prove no double claims, correct expiration recovery, and
   acceptable power behavior;
+- every Android handler has a valid foreground-service type or uses WorkManager, and its exact-alarm
+  request/background-start behavior passes target-SDK-36 and Play policy review;
 - PR #473's Debug-vs-production mismatch is resolved;
 - silent-audio use receives an App Review/policy decision, or production uses a sanctioned continued
   processing mechanism instead;
@@ -406,6 +554,9 @@ attempted, so this assessment does not claim a fresh green run for the DB-backed
 - [Mobile runtime ownership](./runtime-ownership.md)
 - [Mobile `DbService`](../../src/backend/data/db/DbService.ts)
 - [PR #473](https://github.com/CherryHQ/cherry-studio-app/pull/473)
+- [OpenMinis Android scheduled-task manager](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledTaskManager.kt)
+- [OpenMinis Android scheduled-agent runner](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledAgentRunner.kt)
+- [OpenMinis Android foreground service](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/service/AgentForegroundService.kt)
 - [Expo BackgroundTask](https://docs.expo.dev/versions/latest/sdk/background-task/)
 - [Expo TaskManager](https://docs.expo.dev/versions/latest/sdk/task-manager/)
 - [Apple BGContinuedProcessingTask](https://developer.apple.com/documentation/backgroundtasks/bgcontinuedprocessingtask)
@@ -414,3 +565,11 @@ attempted, so this assessment does not claim a fresh green run for the DB-backed
 - [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/#multitasking)
 - [Android WorkManager periodic work](https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work#schedule_periodic_work)
 - [Android long-running workers](https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/long-running)
+- [Android exact alarms](https://developer.android.com/develop/background-work/services/alarms/schedule)
+- [Android foreground-service background-start restrictions](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start)
+- [Android foreground-service types](https://developer.android.com/develop/background-work/services/fgs/service-types)
+- [Android foreground-service timeouts](https://developer.android.com/develop/background-work/services/fgs/timeout)
+- [Android broadcast receiver guidance](https://developer.android.com/develop/background-work/background-tasks/broadcasts)
+- [Android foreground-service Task Manager Stop](https://developer.android.com/develop/background-work/services/fgs/handle-user-stopping)
+- [Android 15 force-stop behavior](https://developer.android.com/about/versions/15/behavior-changes-all#enhanced-stop-states)
+- [Google Play foreground-service requirements](https://support.google.com/googleplay/android-developer/answer/13392821)
