@@ -2,7 +2,7 @@ import { homeAiUsageCalendar } from '@/frontend/utils/constants';
 
 import {
   buildAiUsageCalendarWeeks,
-  getAiUsageSummary,
+  getAiUsageMonthLabelKeys,
   getAiUsageSweepDelayMs,
   startOfMondayWeek,
   toLocalDateKey,
@@ -56,28 +56,34 @@ describe('AI usage calendar layout', () => {
     expect(getAiUsageSweepDelayMs(1, 0)).toBe(homeAiUsageCalendar.sweepStepMs * 7);
   });
 
-  test('summarizes lit days for the current year and Monday-start week', () => {
-    expect(
-      getAiUsageSummary({
-        '2025-12-31': 4,
-        '2026-01-01': 1,
-        '2026-07-19': 3,
-        '2026-07-20': 2,
-        '2026-07-21': 0,
-        '2026-07-22': 4,
-      }),
-    ).toEqual({
-      weekActiveDays: 2,
-      weekElapsedDays: 3,
-      yearActiveDays: 4,
+  test('labels month changes without crowding adjacent weeks', () => {
+    const weeks = buildAiUsageCalendarWeeks({
+      '2026-01-26': 1,
+      '2026-03-08': 1,
     });
+
+    expect(getAiUsageMonthLabelKeys(weeks)).toEqual([
+      '2026-01-26',
+      undefined,
+      undefined,
+      undefined,
+      '2026-03-01',
+      undefined,
+    ]);
   });
 
-  test('returns zero counts for empty AI usage data', () => {
-    expect(getAiUsageSummary({})).toEqual({
-      weekActiveDays: 0,
-      weekElapsedDays: 0,
-      yearActiveDays: 0,
+  test('labels a new month when it starts in the middle of a week', () => {
+    const weeks = buildAiUsageCalendarWeeks({
+      '2026-07-04': 1,
+      '2026-08-02': 1,
     });
+
+    expect(getAiUsageMonthLabelKeys(weeks)).toEqual([
+      '2026-07-04',
+      undefined,
+      undefined,
+      undefined,
+      '2026-08-01',
+    ]);
   });
 });

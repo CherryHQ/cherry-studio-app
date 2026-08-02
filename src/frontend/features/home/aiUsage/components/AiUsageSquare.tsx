@@ -34,8 +34,9 @@ export function AiUsageSquare({
   const restingColor = levelColors[0];
   const activeColor = levelColors[level];
 
-  const startAnimation = useCallback(() => {
+  const replayAnimation = useCallback(() => {
     cancelAnimation(progress);
+    progress.set(0);
     progress.set(
       withDelay(
         getAiUsageSweepDelayMs(weekIndex, dayIndex),
@@ -44,20 +45,7 @@ export function AiUsageSquare({
     );
   }, [dayIndex, progress, weekIndex]);
 
-  const resetAnimation = useCallback(() => {
-    cancelAnimation(progress);
-    progress.set(
-      withDelay(
-        Math.random() * homeAiUsageCalendar.resetMaxDelayMs,
-        withSpring(0, homeAiUsageCalendar.exitSpring),
-      ),
-    );
-  }, [progress]);
-
-  useImperativeHandle(ref, () => ({ resetAnimation, startAnimation }), [
-    resetAnimation,
-    startAnimation,
-  ]);
+  useImperativeHandle(ref, () => ({ replayAnimation }), [replayAnimation]);
 
   const animatedStyle = useAnimatedStyle(() => {
     return {

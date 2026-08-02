@@ -6,12 +6,6 @@ export const aiUsageCalendarRowCount = 7;
 
 const weekMs = 7 * 24 * 60 * 60 * 1000;
 
-export type AiUsageSummary = {
-  weekActiveDays: number;
-  weekElapsedDays: number;
-  yearActiveDays: number;
-};
-
 /**
  * Lays the dated range out as GitHub does: full Monday-start weeks covering the
  * first through last data day. Days outside the range render as blank spacers.
@@ -40,42 +34,31 @@ export function buildAiUsageCalendarWeeks(data: AiUsageData): AiUsageCalendarDay
   );
 }
 
-export function getAiUsageSummary(data: AiUsageData): AiUsageSummary {
-  const dateKeys = Object.keys(data).sort();
-  if (dateKeys.length === 0) {
-    return { weekActiveDays: 0, weekElapsedDays: 0, yearActiveDays: 0 };
-  }
-
-  const referenceDate = parseLocalDateKey(dateKeys[dateKeys.length - 1]);
-  const referenceDateKey = toLocalDateKey(referenceDate);
-  const yearStartKey = toLocalDateKey(new Date(referenceDate.getFullYear(), 0, 1, 12));
-  const weekStartKey = toLocalDateKey(startOfMondayWeek(referenceDate));
-  let weekActiveDays = 0;
-  let yearActiveDays = 0;
-
-  for (const [dateKey, level] of Object.entries(data)) {
-    if (level === 0 || dateKey > referenceDateKey) {
-      continue;
-    }
-
-    if (dateKey >= yearStartKey) {
-      yearActiveDays += 1;
-    }
-    if (dateKey >= weekStartKey) {
-      weekActiveDays += 1;
-    }
-  }
-
-  return {
-    weekActiveDays,
-    weekElapsedDays: ((referenceDate.getDay() + 6) % 7) + 1,
-    yearActiveDays,
-  };
-}
-
 // Bottom-left to top-right wave: the first week's Sunday fires first.
 export function getAiUsageSweepDelayMs(weekIndex: number, dayIndex: number): number {
   return homeAiUsageCalendar.sweepStepMs * (weekIndex + (aiUsageCalendarRowCount - 1 - dayIndex));
+}
+
+export function getAiUsageMonthLabelKeys(weeks: AiUsageCalendarDay[][]): (string | undefined)[] {
+  let previousMonth = '';
+  let previousLabelIndex = -Infinity;
+
+  return weeks.map((week, weekIndex) => {
+    const firstDayInNewMonth = week.find(
+      (day) => day.inRange && day.dateKey.slice(0, 7) !== previousMonth,
+    );
+    if (!firstDayInNewMonth) {
+      return undefined;
+    }
+
+    previousMonth = firstDayInNewMonth.dateKey.slice(0, 7);
+    if (weekIndex - previousLabelIndex < 3) {
+      return undefined;
+    }
+
+    previousLabelIndex = weekIndex;
+    return firstDayInNewMonth.dateKey;
+  });
 }
 
 export function addCalendarDays(date: Date, days: number): Date {
