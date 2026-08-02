@@ -131,7 +131,7 @@ function AssistantSummary({ assistant }: { assistant: Assistant }) {
           <Text className="font-medium text-default-foreground text-sm">
             {t('assistant.form.prompt')}
           </Text>
-          <Text className="text-base text-foreground leading-6" selectable>
+          <Text className="text-base text-foreground" selectable>
             {prompt}
           </Text>
         </View>

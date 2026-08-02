@@ -4,6 +4,9 @@ export type {
   PreferenceMapping,
   PreferenceUpdates,
 } from './preferenceClient';
+export type { FontSizeStep, MobilePreferenceSchema } from './mobilePreferenceSchemas';
+export { FONT_SIZE_STEPS, MobileDefaultPreferences } from './mobilePreferenceSchemas';
+export { PreferenceDefaults } from './preferenceDefaults';
 export type { PreferenceSchemas } from './preferenceSchemas';
 export { DefaultPreferences } from './preferenceSchemas';
 export type {

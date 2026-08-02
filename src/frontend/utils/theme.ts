@@ -1,8 +1,18 @@
 import { Uniwind } from 'uniwind';
 
-import { ThemeMode } from '@/shared/data/preference';
+import { type FontSizeStep, ThemeMode } from '@/shared/data/preference';
+
+import { createTypographyCSSVariables, normalizeFontSizeStep } from './typographyScale';
 
 export const DEFAULT_PRIMARY_COLOR = '#00b96b';
+
+function updateBothThemes(variables: Record<string, string | number>) {
+  const activeTheme = Uniwind.currentTheme === 'dark' ? 'dark' : 'light';
+  const inactiveTheme = activeTheme === 'light' ? 'dark' : 'light';
+
+  Uniwind.updateCSSVariables(inactiveTheme, variables);
+  Uniwind.updateCSSVariables(activeTheme, variables);
+}
 
 export function applyThemeModePreference(themeMode: ThemeMode) {
   switch (themeMode) {
@@ -53,14 +63,20 @@ export function applyPrimaryColorPreference(primaryColor: string) {
     '--cs-theme-primary': normalized,
     '--cs-theme-primary-foreground': getPrimaryForeground(normalized),
   };
-  const activeTheme = Uniwind.currentTheme === 'dark' ? 'dark' : 'light';
-  const inactiveTheme = activeTheme === 'light' ? 'dark' : 'light';
 
-  Uniwind.updateCSSVariables(inactiveTheme, variables);
-  Uniwind.updateCSSVariables(activeTheme, variables);
+  updateBothThemes(variables);
 }
 
-export function applyThemePreferences(themeMode: ThemeMode, primaryColor: string) {
+export function applyFontSizeStepPreference(fontSizeStep: FontSizeStep) {
+  updateBothThemes(createTypographyCSSVariables(normalizeFontSizeStep(fontSizeStep)));
+}
+
+export function applyThemePreferences(
+  themeMode: ThemeMode,
+  primaryColor: string,
+  fontSizeStep: FontSizeStep,
+) {
   applyThemeModePreference(themeMode);
   applyPrimaryColorPreference(primaryColor);
+  applyFontSizeStepPreference(fontSizeStep);
 }

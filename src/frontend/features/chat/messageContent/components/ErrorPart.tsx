@@ -21,7 +21,7 @@ export function ErrorPart({ part }: ErrorPartProps) {
           {title}
         </Text>
       </View>
-      <Text className="text-danger text-sm leading-5" selectable>
+      <Text className="text-danger text-sm" selectable>
         {message}
       </Text>
     </View>

@@ -13,11 +13,7 @@ type TextPartProps = {
 
 export function TextPart({ isStreaming, part, renderMode = 'markdown' }: TextPartProps) {
   if (renderMode === 'plainText') {
-    return (
-      <Text className="leading-6" type="body">
-        {part.text}
-      </Text>
-    );
+    return <Text type="body">{part.text}</Text>;
   }
 
   return <PartMarkdown isStreaming={isStreaming} markdown={part.text} />;

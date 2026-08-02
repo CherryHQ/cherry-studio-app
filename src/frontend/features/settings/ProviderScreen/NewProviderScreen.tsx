@@ -203,7 +203,7 @@ export default function NewProviderScreen() {
             <Input
               autoCapitalize="none"
               autoCorrect={false}
-              className="h-10 min-h-0 rounded-xl px-3 py-0 text-base leading-5"
+              className="h-10 min-h-0 rounded-xl px-3 py-0 text-base"
               onChangeText={setName}
               placeholder={t('settings.provider.add.namePlaceholder')}
               style={providerApiServiceStyles.input}
@@ -216,7 +216,7 @@ export default function NewProviderScreen() {
             <Input
               autoCapitalize="none"
               autoCorrect={false}
-              className="h-10 min-h-0 rounded-xl px-3 py-0 text-base leading-5"
+              className="h-10 min-h-0 rounded-xl px-3 py-0 text-base"
               keyboardType="url"
               onChangeText={setBaseUrl}
               placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
@@ -232,7 +232,7 @@ export default function NewProviderScreen() {
                 <Input
                   autoCapitalize="none"
                   autoCorrect={false}
-                  className="h-10 max-h-10 min-h-0 w-full rounded-xl px-3 py-0 text-base leading-5"
+                  className="h-10 max-h-10 min-h-0 w-full rounded-xl px-3 py-0 text-base"
                   lineBreakModeIOS="clip"
                   multiline={false}
                   numberOfLines={1}
@@ -464,7 +464,7 @@ function EndpointField({
       <Input
         autoCapitalize="none"
         autoCorrect={false}
-        className="h-10 min-h-0 rounded-xl px-3 py-0 text-base leading-5"
+        className="h-10 min-h-0 rounded-xl px-3 py-0 text-base"
         keyboardType="url"
         onChangeText={onChangeText}
         placeholder="https://api.example.com"

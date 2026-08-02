@@ -50,8 +50,8 @@ export function ToolPartTextSection({
       <Text
         className={
           tone === 'error'
-            ? 'font-mono text-danger text-md leading-5'
-            : 'font-mono text-default-foreground text-md leading-5'
+            ? 'font-mono text-danger text-md'
+            : 'font-mono text-default-foreground text-md'
         }
         selectable
       >

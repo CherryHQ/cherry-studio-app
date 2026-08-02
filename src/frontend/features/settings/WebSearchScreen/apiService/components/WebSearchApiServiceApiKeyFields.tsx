@@ -147,7 +147,7 @@ function ApiKeysCommitInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base leading-5"
+      className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base"
       onBlur={handleCommitEvent}
       onChangeText={handleChangeText}
       onEndEditing={handleEndEditing}
@@ -301,7 +301,7 @@ function ApiKeyInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base leading-5"
+      className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base"
       isDisabled={isDisabled}
       onBlur={handleCommitEvent}
       onChangeText={onChangeText}

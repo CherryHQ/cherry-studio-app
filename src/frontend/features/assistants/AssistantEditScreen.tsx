@@ -228,7 +228,7 @@ function AssistantEditForm({
                 accessibilityLabel={t('assistant.form.name')}
                 autoCorrect={false}
                 variant="secondary"
-                className="rounded-2xl px-4 text-base text-foreground leading-5"
+                className="rounded-2xl px-4 text-base text-foreground"
                 onChangeText={(value) => updateForm('name', value)}
                 placeholder={t('assistant.form.namePlaceholder')}
                 placeholderColorClassName="accent-muted-foreground"
@@ -243,7 +243,7 @@ function AssistantEditForm({
               accessibilityLabel={t('assistant.form.description')}
               autoCorrect
               variant="secondary"
-              className="rounded-2xl px-4 text-base text-foreground leading-5"
+              className="rounded-2xl px-4 text-base text-foreground"
               onChangeText={(value) => updateForm('description', value)}
               placeholder={t('assistant.form.descriptionPlaceholder')}
               placeholderColorClassName="accent-muted-foreground"
@@ -256,7 +256,7 @@ function AssistantEditForm({
               accessibilityLabel={t('assistant.form.prompt')}
               autoCorrect
               variant="secondary"
-              className="min-h-32 rounded-2xl px-4 text-base text-foreground leading-5"
+              className="min-h-32 rounded-2xl px-4 text-base text-foreground"
               multiline
               onChangeText={(value) => updateForm('prompt', value)}
               placeholder={t('assistant.form.promptPlaceholder')}
@@ -347,7 +347,7 @@ function AssistantEditForm({
               autoCapitalize="none"
               variant="secondary"
               autoCorrect={false}
-              className="min-h-28 rounded-2xl px-4 font-mono text-sm text-foreground leading-5"
+              className="min-h-28 rounded-2xl px-4 font-mono text-sm text-foreground"
               multiline
               onChangeText={(value) => updateForm('customParametersJson', value)}
               placeholder="[]"
@@ -469,7 +469,7 @@ function NumberField({
   return (
     <Input
       accessibilityLabel={accessibilityLabel}
-      className="rounded-2xl px-4 text-base text-foreground leading-5"
+      className="rounded-2xl px-4 text-base text-foreground"
       variant="secondary"
       inputMode={inputMode}
       keyboardType={inputMode === 'numeric' ? 'number-pad' : 'decimal-pad'}

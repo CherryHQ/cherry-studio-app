@@ -14,6 +14,33 @@
 @theme static {
   --color-settings-grouped-surface: var(--settings-grouped-surface);
 
+  --ui-text-xs: 12px;
+  --ui-text-xs--line-height: 16px;
+  --ui-text-sm: 14px;
+  --ui-text-sm--line-height: 20px;
+  --ui-text-base: 16px;
+  --ui-text-base--line-height: 24px;
+  --ui-text-lg: 18px;
+  --ui-text-lg--line-height: 28px;
+  --ui-text-xl: 20px;
+  --ui-text-xl--line-height: 28px;
+  --ui-text-2xl: 24px;
+  --ui-text-2xl--line-height: 32px;
+  --ui-text-3xl: 30px;
+  --ui-text-3xl--line-height: 36px;
+  --ui-text-4xl: 36px;
+  --ui-text-4xl--line-height: 40px;
+  --ui-text-5xl: 48px;
+  --ui-text-5xl--line-height: 48px;
+  --ui-text-6xl: 60px;
+  --ui-text-6xl--line-height: 60px;
+  --ui-text-7xl: 72px;
+  --ui-text-7xl--line-height: 72px;
+  --ui-text-8xl: 96px;
+  --ui-text-8xl--line-height: 96px;
+  --ui-text-9xl: 128px;
+  --ui-text-9xl--line-height: 128px;
+
   /* HeroUI 1.x calls its brand role `accent` and its secondary text role `muted`. */
   --color-accent: var(--primary);
   --color-accent-foreground: var(--primary-foreground);
@@ -22,6 +49,35 @@
   --color-accent-soft-foreground: color-mix(in oklab, var(--primary) 80%, var(--foreground) 20%);
   --color-accent-soft-hover: color-mix(in oklab, var(--primary) 20%, transparent);
   --color-muted: var(--muted-foreground);
+}
+
+@theme inline static {
+  --text-xs: var(--ui-text-xs);
+  --text-xs--line-height: var(--ui-text-xs--line-height);
+  --text-sm: var(--ui-text-sm);
+  --text-sm--line-height: var(--ui-text-sm--line-height);
+  --text-base: var(--ui-text-base);
+  --text-base--line-height: var(--ui-text-base--line-height);
+  --text-lg: var(--ui-text-lg);
+  --text-lg--line-height: var(--ui-text-lg--line-height);
+  --text-xl: var(--ui-text-xl);
+  --text-xl--line-height: var(--ui-text-xl--line-height);
+  --text-2xl: var(--ui-text-2xl);
+  --text-2xl--line-height: var(--ui-text-2xl--line-height);
+  --text-3xl: var(--ui-text-3xl);
+  --text-3xl--line-height: var(--ui-text-3xl--line-height);
+  --text-4xl: var(--ui-text-4xl);
+  --text-4xl--line-height: var(--ui-text-4xl--line-height);
+  --text-5xl: var(--ui-text-5xl);
+  --text-5xl--line-height: var(--ui-text-5xl--line-height);
+  --text-6xl: var(--ui-text-6xl);
+  --text-6xl--line-height: var(--ui-text-6xl--line-height);
+  --text-7xl: var(--ui-text-7xl);
+  --text-7xl--line-height: var(--ui-text-7xl--line-height);
+  --text-8xl: var(--ui-text-8xl);
+  --text-8xl--line-height: var(--ui-text-8xl--line-height);
+  --text-9xl: var(--ui-text-9xl);
+  --text-9xl--line-height: var(--ui-text-9xl--line-height);
 }
 
 /* HeroUI's structural roles remain host-owned; brand and content roles use the shared contract. */

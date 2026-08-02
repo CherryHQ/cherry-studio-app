@@ -98,7 +98,7 @@ function ApiKeysVisiblePreview({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base leading-5"
+      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base"
       editable={false}
       lineBreakModeIOS="clip"
       multiline={false}
@@ -304,7 +304,7 @@ function ApiKeyInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base leading-5"
+      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base"
       isDisabled={isDisabled}
       lineBreakModeIOS="clip"
       multiline={false}

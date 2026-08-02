@@ -80,7 +80,7 @@ export function WebSearchApiServiceCheckSheet({
                 className="flex-row items-center rounded-xl bg-settings-grouped-surface px-3 py-2 shadow-none"
               >
                 <Select.Value
-                  className="min-w-0 flex-1 text-foreground text-sm leading-5"
+                  className="min-w-0 flex-1 text-foreground text-sm"
                   numberOfLines={1}
                   placeholder={t('settings.websearch.provider.checkNoApiKeys')}
                 >
