@@ -643,6 +643,35 @@ describe('ChatRuntime', () => {
     );
   });
 
+  test('creates one new topic with sibling executions for a multi-model send', async () => {
+    const services = createServices();
+    configureDynamicReservation(services);
+    const modelIds = [
+      'provider-a::model-a' as UniqueModelId,
+      'provider-b::model-b' as UniqueModelId,
+    ];
+    mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
+      asyncIterable([createUiMessage(message.id, 'done')]),
+    );
+    const runtime = createRuntime({ services });
+
+    await runtime.sendNewTopicMultiModelText({
+      selectedModelIds: modelIds,
+      text: 'compare',
+    });
+
+    expect(services.topic.create).toHaveBeenCalledTimes(1);
+    const reservation = (services.message.createUserMessageWithPlaceholders as jest.Mock).mock
+      .calls[0][0];
+    expect(reservation.siblingsGroupId).toEqual(expect.any(Number));
+    expect(
+      reservation.placeholders.map(
+        (placeholder: { modelId: UniqueModelId }) => placeholder.modelId,
+      ),
+    ).toEqual(modelIds);
+    expect(services.ai.streamText).toHaveBeenCalledTimes(2);
+  });
+
   test('updates an existing topic assistant before sending when provided', async () => {
     const services = createServices();
     services.topic.getById = jest.fn(async () => createTopic({ assistantId: 'assistant-old' }));

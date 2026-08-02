@@ -1,3 +1,8 @@
+import type {
+  AiStreamAttachResponse,
+  ComposerQueuedMessagePayload,
+} from '@cherrystudio/universal/ai/transport';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'expo-router';
 import {
@@ -12,13 +17,30 @@ import {
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { getMessagesQueryKey } from '@/frontend/hooks/chat/utils/messageQueryOptions';
-import type { ChatModule, ChatSendNewTopicTextInput, ChatTopicSnapshot } from '@/shared/contracts';
+import type {
+  ChatEditAndResendInput,
+  ChatModule,
+  ChatRegenerateInput,
+  ChatSendNewTopicMultiModelTextInput,
+  ChatSendNewTopicTextInput,
+  ChatStreamListener,
+  ChatTopicSnapshot,
+} from '@/shared/contracts';
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 
 type ChatTopicValue = ChatTopicSnapshot & {
   abort: () => void;
+  attachStream: (listener: ChatStreamListener) => AiStreamAttachResponse;
+  cancelExecution: (executionId: UniqueModelId) => void;
+  detachStream: (listener: ChatStreamListener) => void;
+  editAndResend: (input: Omit<ChatEditAndResendInput, 'topicId'>) => Promise<void>;
   isBusy: boolean;
+  queueFollowUp: (payload: ComposerQueuedMessagePayload) => Promise<void>;
+  regenerate: (input: Omit<ChatRegenerateInput, 'topicId'>) => Promise<void>;
+  sendMultiModelText: (input: ChatSendNewTopicMultiModelTextInput) => Promise<void>;
   sendText: (input: ChatSendNewTopicTextInput) => Promise<void>;
+  setActiveBranch: (throughNodeId: string) => Promise<void>;
+  steer: (payload: ComposerQueuedMessagePayload) => Promise<void>;
 };
 
 const ChatContext = createContext<ChatModule | null>(null);
@@ -105,6 +127,18 @@ export function useChatTopic(topicId?: string): ChatTopicValue {
     () => chat.getTopicSnapshot(runtimeTopicId),
   );
   const abort = useCallback(() => chat.abort(runtimeTopicId), [chat, runtimeTopicId]);
+  const attachStream = useCallback(
+    (listener: ChatStreamListener) => chat.attachStream({ topicId: runtimeTopicId }, listener),
+    [chat, runtimeTopicId],
+  );
+  const detachStream = useCallback(
+    (listener: ChatStreamListener) => chat.detachStream({ topicId: runtimeTopicId }, listener),
+    [chat, runtimeTopicId],
+  );
+  const cancelExecution = useCallback(
+    (executionId: UniqueModelId) => chat.cancelExecution({ executionId, topicId: runtimeTopicId }),
+    [chat, runtimeTopicId],
+  );
   const sendText = useCallback(
     (input: ChatSendNewTopicTextInput) => {
       if (!topicId) {
@@ -112,6 +146,51 @@ export function useChatTopic(topicId?: string): ChatTopicValue {
       }
 
       return chat.sendText({ ...input, topicId });
+    },
+    [chat, topicId],
+  );
+  const sendMultiModelText = useCallback(
+    (input: ChatSendNewTopicMultiModelTextInput) => {
+      if (!topicId) {
+        return chat.sendNewTopicMultiModelText(input);
+      }
+      return chat.sendMultiModelText({ ...input, topicId });
+    },
+    [chat, topicId],
+  );
+  const regenerate = useCallback(
+    (input: Omit<ChatRegenerateInput, 'topicId'>) => {
+      if (!topicId) return Promise.reject(new Error('Regenerate requires an existing topic.'));
+      return chat.regenerate({ ...input, topicId });
+    },
+    [chat, topicId],
+  );
+  const editAndResend = useCallback(
+    (input: Omit<ChatEditAndResendInput, 'topicId'>) => {
+      if (!topicId) return Promise.reject(new Error('Edit-and-resend requires an existing topic.'));
+      return chat.editAndResend({ ...input, topicId });
+    },
+    [chat, topicId],
+  );
+  const setActiveBranch = useCallback(
+    (throughNodeId: string) => {
+      if (!topicId)
+        return Promise.reject(new Error('Branch selection requires an existing topic.'));
+      return chat.setActiveBranch({ throughNodeId, topicId });
+    },
+    [chat, topicId],
+  );
+  const steer = useCallback(
+    (payload: ComposerQueuedMessagePayload) => {
+      if (!topicId) return Promise.reject(new Error('Steer requires an existing topic.'));
+      return chat.steer({ payload, topicId });
+    },
+    [chat, topicId],
+  );
+  const queueFollowUp = useCallback(
+    (payload: ComposerQueuedMessagePayload) => {
+      if (!topicId) return Promise.reject(new Error('Follow-up queue requires an existing topic.'));
+      return chat.queueFollowUp({ payload, topicId });
     },
     [chat, topicId],
   );
@@ -123,7 +202,16 @@ export function useChatTopic(topicId?: string): ChatTopicValue {
   return {
     ...snapshot,
     abort,
+    attachStream,
+    cancelExecution,
+    detachStream,
+    editAndResend,
     isBusy,
+    queueFollowUp,
+    regenerate,
+    sendMultiModelText,
     sendText,
+    setActiveBranch,
+    steer,
   };
 }

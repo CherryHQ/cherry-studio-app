@@ -31,8 +31,9 @@ import type {
   ChatEditAndResendInput,
   ChatFollowUpInput,
   ChatRegenerateInput,
-  ChatSendNewTopicTextInput,
   ChatSendMultiModelTextInput,
+  ChatSendNewTopicMultiModelTextInput,
+  ChatSendNewTopicTextInput,
   ChatSendTextInput,
   ChatSetActiveBranchInput,
   ChatListener,
@@ -284,6 +285,10 @@ export class ChatRuntime implements ChatModule {
 
   sendNewTopicText(input: ChatSendNewTopicTextInput): Promise<void> {
     return this.startTask(() => this.sendNewTopicTextTask(input));
+  }
+
+  sendNewTopicMultiModelText(input: ChatSendNewTopicMultiModelTextInput): Promise<void> {
+    return this.startTask(() => this.sendNewTopicMultiModelTextTask(input));
   }
 
   respondToolApproval(input: ChatToolApprovalInput): Promise<void> {
@@ -634,6 +639,25 @@ export class ChatRuntime implements ChatModule {
   }
 
   private async sendNewTopicTextTask(input: ChatSendNewTopicTextInput): Promise<void> {
+    await this.sendNewTopicTurnTask(
+      input,
+      input.selectedModelId ? [input.selectedModelId] : undefined,
+    );
+  }
+
+  private async sendNewTopicMultiModelTextTask(
+    input: ChatSendNewTopicMultiModelTextInput,
+  ): Promise<void> {
+    if (input.selectedModelIds.length < 2) {
+      throw new Error('Multi-model sends require at least two models.');
+    }
+    await this.sendNewTopicTurnTask(input, input.selectedModelIds);
+  }
+
+  private async sendNewTopicTurnTask(
+    input: ChatSendNewTopicTextInput,
+    selectedModelIds: readonly UniqueModelId[] | undefined,
+  ): Promise<void> {
     const text = input.text.trim();
     const parts = getTurnParts({ parts: input.parts, text });
 
@@ -665,7 +689,7 @@ export class ChatRuntime implements ChatModule {
     let createdTopicId: string | undefined;
 
     try {
-      const model = await this.resolveModel(input.selectedModelId, {
+      const models = await this.resolveModels(selectedModelIds, {
         assistantId: input.assistantId ?? undefined,
       });
       throwIfAborted(abortController.signal);
@@ -691,9 +715,10 @@ export class ChatRuntime implements ChatModule {
       await this.runTopicTurn({
         activeTurn,
         fastMode: input.fastMode,
-        models: [model],
+        models,
         parts,
         reasoningEffort: input.reasoningEffort,
+        ...(models.length > 1 ? { siblingsGroupId: nextSiblingsGroupId() } : {}),
         topic,
       });
     } catch (error) {

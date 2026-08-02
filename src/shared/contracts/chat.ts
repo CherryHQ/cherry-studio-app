@@ -43,6 +43,8 @@ export type ChatSendMultiModelTextInput = Omit<ChatSendTextInput, 'selectedModel
   selectedModelIds: readonly UniqueModelId[];
 };
 
+export type ChatSendNewTopicMultiModelTextInput = Omit<ChatSendMultiModelTextInput, 'topicId'>;
+
 export type ChatRegenerateInput = {
   fastMode?: boolean;
   messageId: string;
@@ -111,6 +113,7 @@ export interface ChatModule {
   regenerate(input: ChatRegenerateInput): Promise<void>;
   respondToolApproval(input: ChatToolApprovalInput): Promise<void>;
   sendMultiModelText(input: ChatSendMultiModelTextInput): Promise<void>;
+  sendNewTopicMultiModelText(input: ChatSendNewTopicMultiModelTextInput): Promise<void>;
   sendNewTopicText(input: ChatSendNewTopicTextInput): Promise<void>;
   sendText(input: ChatSendTextInput): Promise<void>;
   setActiveBranch(input: ChatSetActiveBranchInput): Promise<void>;

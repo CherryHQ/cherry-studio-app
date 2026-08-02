@@ -113,14 +113,15 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
 
 Chat's public state vocabulary is `ChatTopicStatus`, `ChatTopicSnapshot`, `ChatEvent`, and
 `ChatListener`; the temporary new-Topic projection uses `NEW_TOPIC_SNAPSHOT_KEY`. `ChatModule`
-exposes send, approval, abort, snapshot, and subscription operations directly. Do not reintroduce
-`createSession()` or a public Chat session object.
+exposes send, branch selection, regeneration, edit-and-resend, multi-model execution, steering,
+follow-up queuing, approval, cancellation, reconnectable streams, snapshots, and subscriptions
+directly. Do not reintroduce `createSession()` or a public Chat session object.
 
 ## Current Modules
 
 | Module | Why it qualifies |
 | --- | --- |
-| `chat` | Projects the app-owned, multi-Topic Chat Runtime through send, approval, abort, snapshots, and subscriptions |
+| `chat` | Projects the app-owned, multi-Topic Chat Runtime through branching, multi-model sends, queued turns, cancellation, stream recovery, and subscriptions |
 | `cherryin` | Encapsulates authenticated CherryIN account and balance requests through the external account client |
 | `mcp` | Coordinates MCP runtime state, connection testing, tool discovery, and invalidation |
 | `models` | Coordinates provider model pull, preview, reconcile, timeout, and health-check workflows |
