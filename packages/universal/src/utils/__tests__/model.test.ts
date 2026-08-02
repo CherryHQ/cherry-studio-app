@@ -1,7 +1,11 @@
 import { MODEL_CAPABILITY, REASONING_EFFORT } from '@cherrystudio/provider-registry';
 import { createUniqueModelId, type Model } from '@shared/data/types/model';
 
-import { deriveModelGroupName, getModelSupportedReasoningEffortOptions } from '../model';
+import {
+  deriveModelGroupName,
+  getModelSupportedReasoningEffortOptions,
+  isOpenRouterBuiltInWebSearchModel,
+} from '../model';
 
 describe('deriveModelGroupName', () => {
   test.each([
@@ -49,6 +53,40 @@ describe('model reasoning support', () => {
       REASONING_EFFORT.NONE,
       REASONING_EFFORT.AUTO,
     ]);
+  });
+});
+
+describe('OpenRouter built-in web search', () => {
+  test('recognizes search-preview and Sonar model ids', () => {
+    expect(
+      isOpenRouterBuiltInWebSearchModel(
+        createModel('openai/gpt-4o-search-preview', { providerId: 'openrouter' }),
+      ),
+    ).toBe(true);
+    expect(
+      isOpenRouterBuiltInWebSearchModel(
+        createModel('perplexity/sonar-pro', { providerId: 'openrouter' }),
+      ),
+    ).toBe(true);
+  });
+
+  test('does not infer support from a generic web-search capability', () => {
+    expect(
+      isOpenRouterBuiltInWebSearchModel(
+        createModel('openai/gpt-5', {
+          capabilities: [MODEL_CAPABILITY.WEB_SEARCH],
+          providerId: 'openrouter',
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  test('does not classify Sonar outside OpenRouter', () => {
+    expect(
+      isOpenRouterBuiltInWebSearchModel(
+        createModel('perplexity/sonar-pro', { providerId: 'perplexity' }),
+      ),
+    ).toBe(false);
   });
 });
 

@@ -19,7 +19,6 @@ export type DeviceToolAccess = Readonly<
 export interface ToolApplyScope {
   readonly assistant?: Assistant;
   readonly deviceAccess: DeviceToolAccess;
-  readonly externalWebSearchEnabled: boolean;
   readonly platform: string;
 }
 

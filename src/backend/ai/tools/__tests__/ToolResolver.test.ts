@@ -20,9 +20,8 @@ describe('ToolResolver', () => {
     const resolver = createResolver({ mcpEntries: [mcpEntry] });
 
     const result = await resolver.resolveForRequest({
-      assistant: assistant(),
+      assistant: assistant(true),
       contextWindow: 1_000_000,
-      externalWebSearchEnabled: true,
     });
 
     expect(Object.keys(result.tools ?? {}).sort()).toEqual(
@@ -51,16 +50,14 @@ describe('ToolResolver', () => {
     const resolver = createResolver({ failingKey: 'permissions.location_read' });
     const result = await resolver.resolveForRequest({
       assistant: assistant(),
-      externalWebSearchEnabled: false,
     });
     expect(result.tools).not.toHaveProperty('location_get_current');
     expect(result.tools).toHaveProperty('calendar_list_events');
   });
 
-  test('does not register web search when the request uses provider-native search', async () => {
+  test('does not register web search when the assistant disables it', async () => {
     const result = await createResolver({}).resolveForRequest({
       assistant: assistant(),
-      externalWebSearchEnabled: false,
     });
     expect(result.tools).not.toHaveProperty('web_search');
     expect(result.hasMcpTools).toBe(false);
@@ -75,7 +72,6 @@ describe('ToolResolver', () => {
 
     await resolver.resolveForRequest({
       assistant: assistant(),
-      externalWebSearchEnabled: false,
     });
 
     expect(getStatus).not.toHaveBeenCalledWith('permissions.health_read');
@@ -104,7 +100,7 @@ function createResolver(options: {
   } as never);
 }
 
-function assistant(): Assistant {
+function assistant(enableWebSearch = false): Assistant {
   return {
     createdAt: '2026-01-01T00:00:00.000Z',
     description: '',
@@ -117,7 +113,7 @@ function assistant(): Assistant {
     name: 'Assistant',
     orderKey: 'a0',
     prompt: '',
-    settings: { ...DEFAULT_ASSISTANT_SETTINGS },
+    settings: { ...DEFAULT_ASSISTANT_SETTINGS, enableWebSearch },
     tags: [],
     updatedAt: '2026-01-01T00:00:00.000Z',
   };

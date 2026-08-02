@@ -187,23 +187,11 @@ export const isQwen35to39Model = (model: Model): boolean =>
 export const isOpenAIWebSearchModel = (model: Model): boolean =>
   isOpenAIModel(model) && isWebSearchModel(model);
 
-export const isOpenRouterBuiltInWebSearchModel = (model: Model): boolean =>
-  model.providerId === 'openrouter' &&
-  (isOpenAIWebSearchModel(model) || model.modelId.toLowerCase().includes('sonar'));
-
-/**
- * MOBILE SYNC EXTENSION: desktop expresses this through
- * `isOpenRouterBuiltInWebSearchModel` plus a separate Sonar check. Mobile keeps
- * one predicate because external-search selection and capability resolution
- * both need the same force-native decision.
- *
- * Models whose provider-native web search stays on regardless of the assistant
- * toggle or a configured external search provider (mirrors desktop). Single
- * source of truth: the "force native" gate and the capability resolution must
- * agree, or a model can end up with neither native nor external search.
- */
-export const isForcedNativeWebSearchModel = (model: Model): boolean =>
-  isOpenRouterBuiltInWebSearchModel(model) || model.id.toLowerCase().includes('sonar');
+export const isOpenRouterBuiltInWebSearchModel = (model: Model): boolean => {
+  if (model.providerId !== 'openrouter') return false;
+  const id = getLowerBaseModelName(getRawModelId(model));
+  return isOpenAIWebSearchChatCompletionOnlyModel(model) || id.includes('sonar');
+};
 
 export const getModelSupportedVerbosity = (
   model: Model | undefined | null,

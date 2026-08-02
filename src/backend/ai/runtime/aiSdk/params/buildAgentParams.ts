@@ -9,11 +9,7 @@ import {
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { isUniqueModelId, parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import {
-  isAnthropicModel,
-  isForcedNativeWebSearchModel,
-  isFunctionCallingModel,
-} from '@cherrystudio/universal/utils/model';
+import { isAnthropicModel, isFunctionCallingModel } from '@cherrystudio/universal/utils/model';
 import { type ToolCallRepairFunction, type ToolSet } from 'ai';
 import * as Crypto from 'expo-crypto';
 
@@ -158,27 +154,9 @@ export async function buildAgentParams({
     assistantSummary:
       typeof provider.settings.summaryText === 'string' ? provider.settings.summaryText : undefined,
   });
-  const externalWebSearchProviderId =
-    shouldIncludeExternalTools && assistant?.settings.enableWebSearch
-      ? await services.preference.get('chat.web_search.default_search_keywords_provider')
-      : null;
-  const shouldForceNativeWebSearch = isForcedNativeWebSearchModel(model);
-  const hasConfiguredExternalWebSearch = Boolean(
-    externalWebSearchProviderId && isFunctionCallingModel(model) && !shouldForceNativeWebSearch,
-  );
   const capabilities = assistant
-    ? resolveCapabilities(model, provider, assistant, sdkConfig.providerId, services.preference, {
-        webSearchProviderId: hasConfiguredExternalWebSearch
-          ? (externalWebSearchProviderId ?? undefined)
-          : undefined,
-      })
+    ? resolveCapabilities(model, provider, assistant, aiSdkProviderId, services.preference)
     : undefined;
-  const shouldUseExternalWebSearch = Boolean(
-    shouldIncludeExternalTools &&
-    assistant?.settings.enableWebSearch &&
-    isFunctionCallingModel(model) &&
-    (hasConfiguredExternalWebSearch || !capabilities?.webSearchPluginConfig),
-  );
   let providerOptions =
     assistant && capabilities
       ? buildCapabilityProviderOptions(assistant, model, provider, capabilities, {
@@ -239,7 +217,6 @@ export async function buildAgentParams({
     ? await services.tools.resolveForRequest({
         assistant,
         contextWindow: model.contextWindow,
-        externalWebSearchEnabled: shouldUseExternalWebSearch,
         mcpToolIds: request.mcpToolIds,
       })
     : { deferredEntries: [], hasMcpTools: false, tools: undefined };

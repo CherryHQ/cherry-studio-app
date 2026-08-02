@@ -49,7 +49,7 @@ export function createWebSearchTool(webSearchService: WebSearchService) {
 
 export function createWebSearchToolEntry(webSearch: WebSearchService): ToolEntry {
   return {
-    applies: (scope) => scope.externalWebSearchEnabled,
+    applies: (scope) => Boolean(scope.assistant?.settings?.enableWebSearch),
     defer: 'auto',
     description: WEB_SEARCH_DESCRIPTION,
     name: WEB_SEARCH_TOOL_NAME,

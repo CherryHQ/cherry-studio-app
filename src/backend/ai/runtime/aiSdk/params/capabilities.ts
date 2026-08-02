@@ -5,10 +5,11 @@ import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import {
   isAnthropicModel,
-  isForcedNativeWebSearchModel,
   isGeminiModel,
   isGrokModel,
   isOpenAIModel,
+  isOpenRouterBuiltInWebSearchModel,
+  isWebSearchModel,
 } from '@cherrystudio/universal/utils/model';
 
 import type { PreferenceService } from '@/backend/data/PreferenceService';
@@ -29,22 +30,28 @@ export interface ResolvedCapabilities {
   webSearchPluginConfig?: WebSearchPluginConfig;
 }
 
+export interface ResolveCapabilitiesOptions {
+  /** Caller-supplied external web search provider id. When set, disables built-in web search. */
+  webSearchProviderId?: string;
+}
+
 export function resolveCapabilities(
   model: Model,
   provider: Provider,
   assistant: Assistant,
   aiSdkProviderId: string,
   preference: Pick<PreferenceService, 'getMultipleRawCached'>,
-  options: { webSearchProviderId?: string } = {},
+  options: ResolveCapabilitiesOptions = {},
 ): ResolvedCapabilities {
   // The descriptor says whether the model exposes reasoning. The per-request resolver decides
   // whether `default`, `none`, or an effort emits anything for this invocation.
   const enableReasoning = Boolean(model.reasoning);
-  const enableWebSearch = Boolean(
-    !options.webSearchProviderId &&
-    ((assistant.settings?.enableWebSearch && model.capabilities.includes('web-search')) ||
-      isForcedNativeWebSearchModel(model)),
-  );
+  const hasExternalSearch = !!options.webSearchProviderId;
+  const enableWebSearch =
+    !hasExternalSearch &&
+    ((!!assistant.settings?.enableWebSearch && isWebSearchModel(model)) ||
+      isOpenRouterBuiltInWebSearchModel(model) ||
+      model.id.includes('sonar'));
   const enableGenerateImage = model.capabilities.includes('image-generation');
   const streamOutput = assistant.settings.streamOutput !== false;
 

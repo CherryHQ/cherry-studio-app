@@ -100,7 +100,6 @@ function access(
 function scope(overrides: Partial<ToolApplyScope> = {}): ToolApplyScope {
   return {
     deviceAccess: access(),
-    externalWebSearchEnabled: false,
     platform: 'ios',
     ...overrides,
   };

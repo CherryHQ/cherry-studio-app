@@ -41,7 +41,6 @@ export class ToolResolver {
   async resolveForRequest(input: {
     assistant: Assistant;
     contextWindow?: number;
-    externalWebSearchEnabled: boolean;
     mcpToolIds?: readonly string[];
   }): Promise<{ deferredEntries: ToolEntry[]; hasMcpTools: boolean; tools: ToolSet | undefined }> {
     const [deviceAccess, mcpEntries] = await Promise.all([
@@ -51,7 +50,6 @@ export class ToolResolver {
     const activeBuiltins = this.builtinRegistry.selectActive({
       assistant: input.assistant,
       deviceAccess,
-      externalWebSearchEnabled: input.externalWebSearchEnabled,
       platform: Platform.OS,
     });
 

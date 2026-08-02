@@ -645,7 +645,7 @@ describe('AiService web search plugin wiring', () => {
     );
   });
 
-  it('exposes configured external web search as a bounded agent tool', async () => {
+  it('exposes provider-native and configured external search together', async () => {
     const model = createModel('gpt-4o-mini', {
       capabilities: [MODEL_CAPABILITY.FUNCTION_CALL, MODEL_CAPABILITY.WEB_SEARCH],
     });
@@ -677,7 +677,7 @@ describe('AiService web search plugin wiring', () => {
         options: expect.objectContaining({
           stopWhen: expect.arrayContaining([expect.any(Function), expect.any(Function)]),
         }),
-        plugins: expect.not.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+        plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
         repairToolCall: expect.any(Function),
         tools: expect.objectContaining({ web_search: expect.any(Object) }),
       }),
@@ -710,7 +710,7 @@ describe('AiService web search plugin wiring', () => {
     expect(params.system).toContain('<citations>');
   });
 
-  it('uses provider-native web search alone when no external provider is configured', async () => {
+  it('keeps the agentic search tool available when no external provider is configured', async () => {
     const model = createModel('gpt-4o-mini', {
       capabilities: [MODEL_CAPABILITY.FUNCTION_CALL, MODEL_CAPABILITY.WEB_SEARCH],
     });
@@ -729,8 +729,8 @@ describe('AiService web search plugin wiring', () => {
     expect(mockAgentConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
         plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
-        system: undefined,
-        tools: undefined,
+        system: expect.stringContaining('<citations>'),
+        tools: expect.objectContaining({ web_search: expect.any(Object) }),
       }),
     );
   });
@@ -785,10 +785,14 @@ describe('AiService web search plugin wiring', () => {
     );
   });
 
-  it('forces provider-native search for OpenRouter sonar models even when external search is configured', async () => {
+  it('exposes provider-native and agentic search together for OpenRouter Sonar', async () => {
     const provider = createProvider({ id: 'openrouter', presetProviderId: 'openrouter' });
-    const model = createModel('perplexity/sonar-pro', { providerId: 'openrouter' });
+    const model = createModel('perplexity/sonar-pro', {
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL],
+      providerId: 'openrouter',
+    });
     const assistant = createAssistant(model.id);
+    assistant.settings.enableWebSearch = true;
     const service = new AiService(
       createServices({ assistant, model, provider, webSearchProviderId: 'tavily' }),
     );
@@ -804,7 +808,36 @@ describe('AiService web search plugin wiring', () => {
     expect(mockAgentConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
         plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
-        tools: undefined,
+        tools: expect.objectContaining({ web_search: expect.any(Object) }),
+      }),
+    );
+  });
+
+  it('forces provider-native search for OpenRouter search-preview models', async () => {
+    const provider = createProvider({ id: 'openrouter', presetProviderId: 'openrouter' });
+    const model = createModel('openai/gpt-4o-search-preview', { providerId: 'openrouter' });
+    const assistant = createAssistant(model.id);
+    const service = new AiService(createServices({ assistant, model, provider }));
+
+    await service.checkModel({ assistantId: assistant.id, timeout: 1000 });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+      }),
+    );
+  });
+
+  it('forces provider-native search for Sonar outside OpenRouter', async () => {
+    const model = createModel('perplexity/sonar-pro');
+    const assistant = createAssistant(model.id);
+    const service = new AiService(createServices({ assistant, model }));
+
+    await service.checkModel({ assistantId: assistant.id, timeout: 1000 });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
       }),
     );
   });
@@ -1008,11 +1041,11 @@ function createServices({
     })),
   };
   const tools = {
-    resolveForRequest: jest.fn(async ({ externalWebSearchEnabled }) => {
+    resolveForRequest: jest.fn(async ({ assistant: requestAssistant }) => {
       const resolved = {
         ...builtInTools,
         ...mcpTools,
-        ...(externalWebSearchEnabled
+        ...(requestAssistant.settings.enableWebSearch
           ? { web_search: createWebSearchTool(webSearch as never) }
           : {}),
       };
