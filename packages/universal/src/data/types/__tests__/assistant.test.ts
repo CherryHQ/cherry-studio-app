@@ -5,6 +5,15 @@ describe('assistant data schemas', () => {
     expect(DEFAULT_ASSISTANT_SETTINGS.reasoning_effort).toBe('default');
   });
 
+  test('rejects non-canonical reasoning effort values', () => {
+    expect(
+      AssistantSettingsSchema.safeParse({
+        ...DEFAULT_ASSISTANT_SETTINGS,
+        reasoning_effort: 'turbo',
+      }).success,
+    ).toBe(false);
+  });
+
   test('round-trips settings fields introduced by another Cherry client', () => {
     const parsed = AssistantSettingsSchema.parse({
       ...DEFAULT_ASSISTANT_SETTINGS,

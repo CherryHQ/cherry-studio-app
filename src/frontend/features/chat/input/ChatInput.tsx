@@ -9,7 +9,7 @@ import {
   useModelSettingSelections,
   usePrefetchModelPickerData,
 } from '@/frontend/components/modelPicker';
-import { useModelById, useProviders, useTopic } from '@/frontend/hooks/chat';
+import { useAssistantApiById, useModelById, useProviders, useTopic } from '@/frontend/hooks/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useChatTopic } from '../runtime';
@@ -20,6 +20,7 @@ import { useChatInputActions, useChatInputState } from './context/ChatInputProvi
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSync } from './hooks/useChatInputReasoningEffortSync';
 import { createChatInputMessageParts } from './utils/chatInputAttachments';
+import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
 
 type ChatInputProps = {
   /**
@@ -44,6 +45,7 @@ export function ChatInput({ assistantId, topicId }: ChatInputProps) {
   const selectedAssistantId = topicId
     ? (topicQuery.data?.assistantId ?? null)
     : (assistantId ?? null);
+  const { assistant: selectedAssistant } = useAssistantApiById(selectedAssistantId ?? undefined);
   const { model: selectedModel } = useModelById(selectedModelId);
   const selectedModelLabel = selectedModel?.name;
 
@@ -68,12 +70,16 @@ export function ChatInput({ assistantId, topicId }: ChatInputProps) {
       )
     : undefined;
   const reasoningEfforts = useChatInputReasoningEfforts();
-  useChatInputReasoningEffortSync(reasoningEfforts);
+  useChatInputReasoningEffortSync(
+    reasoningEfforts,
+    selectedAssistant?.settings.reasoning_effort,
+    selectedAssistantId,
+  );
 
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
-  const { isActionSheetOpen, reasoningEffort } = useChatInputState();
+  const { isActionSheetOpen, isReasoningEffortSelected, reasoningEffort } = useChatInputState();
   const { selectReasoningEffort } = useChatInputActions();
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
@@ -91,12 +97,25 @@ export function ChatInput({ assistantId, topicId }: ChatInputProps) {
       return chatTopic.sendText({
         assistantId: selectedAssistantId,
         parts,
-        reasoningEffort,
+        reasoningEffort: getChatInputReasoningEffortSnapshot(
+          reasoningEffort,
+          isReasoningEffortSelected,
+          selectedAssistant?.settings.reasoning_effort,
+          reasoningEfforts,
+        ),
         selectedModelId,
         text: payload.text,
       });
     },
-    [chatTopic, reasoningEffort, selectedAssistantId, selectedModelId],
+    [
+      chatTopic,
+      isReasoningEffortSelected,
+      reasoningEffort,
+      reasoningEfforts,
+      selectedAssistant?.settings.reasoning_effort,
+      selectedAssistantId,
+      selectedModelId,
+    ],
   );
 
   return (

@@ -6,6 +6,7 @@ import {
   type McpMode,
 } from '@cherrystudio/universal/data/types/assistant';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Input } from 'heroui-native/input';
 import { Switch } from 'heroui-native/switch';
@@ -46,7 +47,7 @@ type AssistantFormState = {
   modelId: UniqueModelId | null;
   name: string;
   prompt: string;
-  reasoningEffort: string;
+  reasoningEffort: ReasoningEffortOption;
   temperature: string;
   topP: string;
 };

@@ -5,6 +5,7 @@ import {
   CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   chatInputReasoningEffortOptions,
   getChatInputReasoningEffortOption,
+  getChatInputReasoningEffortSnapshot,
   getChatInputReasoningEffortsForModel,
 } from '../chatInputReasoning';
 
@@ -57,6 +58,18 @@ describe('chat input reasoning', () => {
       CHAT_INPUT_DEFAULT_REASONING_EFFORT,
       REASONING_EFFORT.MAX,
     ]);
+  });
+
+  test('snapshots the assistant effort until the user selects a request override', () => {
+    expect(getChatInputReasoningEffortSnapshot('high', false)).toBe('default');
+    expect(
+      getChatInputReasoningEffortSnapshot('default', false, 'high', ['default', 'low', 'high']),
+    ).toBe('high');
+    expect(
+      getChatInputReasoningEffortSnapshot('high', false, 'max', ['default', 'low', 'high']),
+    ).toBe('high');
+    expect(getChatInputReasoningEffortSnapshot('high', true)).toBe('high');
+    expect(getChatInputReasoningEffortSnapshot('low', true, 'high')).toBe('low');
   });
 });
 

@@ -1,5 +1,6 @@
 import * as z from 'zod';
 
+import { ReasoningEffortOptionSchema } from '../../types/aiSdk';
 import { UniqueModelIdSchema } from './model';
 import { TagSchema } from './tag';
 
@@ -23,7 +24,7 @@ export const AssistantSettingsSchema = z.looseObject({
   maxTokens: z.number().int().positive(),
   maxToolCalls: z.number().int().positive(),
   mcpMode: McpModeSchema,
-  reasoning_effort: z.string(),
+  reasoning_effort: ReasoningEffortOptionSchema,
   streamOutput: z.boolean(),
   temperature: z.number().min(0).max(2),
   topP: z.number().min(0).max(1),
