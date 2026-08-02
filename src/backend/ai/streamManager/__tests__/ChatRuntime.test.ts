@@ -10,11 +10,12 @@ import type {
   Message,
 } from '@cherrystudio/universal/data/types/message';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { UIMessageChunk } from 'ai';
 
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { ChatRuntime } from '../ChatRuntime';
+import { ChatRuntime, type ChatRuntimeConfig } from '../ChatRuntime';
 import type { ChatRuntimeServices, ChatStreamRequest } from '../ChatRuntimeDependencies';
 
 const mockReadUIMessageStream = jest.fn();
@@ -1716,6 +1717,157 @@ describe('ChatRuntime', () => {
     unsubscribeNextRoute();
   });
 
+  test('replays compact raw chunks, continues live delivery, and expires terminal recovery', async () => {
+    const services = createServices();
+    configureDynamicReservation(services);
+    const source = createControllableChunkStream();
+    services.ai.streamText = jest.fn(async () => source.stream);
+    services.ai.readMessageStream = jest.fn(accumulateTextChunks);
+    const runtime = createRuntime({
+      config: { gracePeriodMs: 20 },
+      services,
+    });
+    const firstListener = jest.fn();
+
+    const send = runtime.sendText({ text: 'stream', topicId: 'topic-1' });
+    await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'streaming');
+    expect(runtime.attachStream({ topicId: 'topic-1' }, firstListener)).toEqual({
+      bufferedChunks: [],
+      status: 'attached',
+    });
+
+    source.push({ id: 'text-1', type: 'text-start' } as UIMessageChunk);
+    source.push({ delta: 'hel', id: 'text-1', type: 'text-delta' } as UIMessageChunk);
+    source.push({ delta: 'lo', id: 'text-1', type: 'text-delta' } as UIMessageChunk);
+    await waitUntil(() => firstListener.mock.calls.length === 3);
+    runtime.detachStream({ topicId: 'topic-1' }, firstListener);
+    source.push({ delta: '!', id: 'text-1', type: 'text-delta' } as UIMessageChunk);
+    await delay(0);
+    expect(firstListener).toHaveBeenCalledTimes(3);
+
+    const secondListener = jest.fn();
+    expect(runtime.attachStream({ topicId: 'topic-1' }, secondListener)).toEqual({
+      status: 'attached',
+      bufferedChunks: [
+        expect.objectContaining({ chunk: { id: 'text-1', type: 'text-start' } }),
+        expect.objectContaining({
+          chunk: { delta: 'hello!', id: 'text-1', type: 'text-delta' },
+        }),
+      ],
+    });
+    source.push({ id: 'text-1', type: 'text-end' } as UIMessageChunk);
+    source.close();
+    await send;
+    expect(secondListener).toHaveBeenCalledWith({
+      payload: expect.objectContaining({
+        chunk: { id: 'text-1', type: 'text-end' },
+        executionId: 'provider::model',
+      }),
+      type: 'chunk',
+    });
+    expect(secondListener).toHaveBeenCalledWith({
+      payload: expect.objectContaining({ status: 'success' }),
+      type: 'done',
+    });
+
+    const terminal = runtime.attachStream({ topicId: 'topic-1' }, jest.fn());
+    expect(terminal).toEqual(
+      expect.objectContaining({
+        finalMessages: {
+          'provider::model': expect.objectContaining({
+            parts: [{ type: 'text', text: 'hello!' }],
+          }),
+        },
+        status: 'done',
+      }),
+    );
+    await delay(30);
+    expect(runtime.attachStream({ topicId: 'topic-1' }, jest.fn())).toEqual({
+      status: 'not-found',
+    });
+  });
+
+  test('caps each execution replay buffer independently', async () => {
+    const services = createServices();
+    configureDynamicReservation(services);
+    const source = createControllableChunkStream();
+    services.ai.streamText = jest.fn(async () => source.stream);
+    services.ai.readMessageStream = jest.fn(accumulateTextChunks);
+    const runtime = createRuntime({ config: { maxBufferChunks: 2 }, services });
+    const send = runtime.sendText({ text: 'stream', topicId: 'topic-1' });
+    await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'streaming');
+
+    source.push({ id: 'text-1', type: 'text-start' } as UIMessageChunk);
+    source.push({ delta: 'answer', id: 'text-1', type: 'text-delta' } as UIMessageChunk);
+    source.push({ id: 'text-1', type: 'text-end' } as UIMessageChunk);
+    await delay(0);
+    const replay = runtime.attachStream({ topicId: 'topic-1' }, jest.fn());
+    expect(replay).toEqual({
+      status: 'attached',
+      bufferedChunks: [
+        expect.objectContaining({ chunk: { delta: 'answer', id: 'text-1', type: 'text-delta' } }),
+        expect.objectContaining({ chunk: { id: 'text-1', type: 'text-end' } }),
+      ],
+    });
+
+    source.close();
+    await send;
+  });
+
+  test('aborts and pauses an execution after its raw stream stays idle', async () => {
+    const services = createServices();
+    let requestSignal: AbortSignal | undefined;
+    services.ai.streamText = jest.fn(async (request: ChatStreamRequest) => {
+      requestSignal = request.requestOptions.signal;
+      return new ReadableStream<UIMessageChunk>({
+        start(controller) {
+          request.requestOptions.signal.addEventListener('abort', () => controller.close(), {
+            once: true,
+          });
+        },
+      });
+    });
+    services.ai.readMessageStream = jest.fn(accumulateTextChunks);
+    const runtime = createRuntime({ config: { idleTimeoutMs: 10 }, services });
+
+    await runtime.sendText({ text: 'wait', topicId: 'topic-1' });
+
+    expect(requestSignal?.aborted).toBe(true);
+    expect((requestSignal?.reason as DOMException).name).toBe('TimeoutError');
+    expect(services.message.finalizeAssistantMessage).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ status: 'paused' }),
+    );
+  });
+
+  test('extends the idle window while a raw tool approval is pending', async () => {
+    const services = createServices();
+    const source = createControllableChunkStream();
+    let requestSignal: AbortSignal | undefined;
+    services.ai.streamText = jest.fn(async (request: ChatStreamRequest) => {
+      requestSignal = request.requestOptions.signal;
+      return source.stream;
+    });
+    services.ai.readMessageStream = jest.fn(accumulateTextChunks);
+    const runtime = createRuntime({
+      config: { approvalIdleTimeoutMs: 100, idleTimeoutMs: 10 },
+      services,
+    });
+
+    const send = runtime.sendText({ text: 'approve', topicId: 'topic-1' });
+    await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'streaming');
+    source.push({
+      approvalId: 'approval-1',
+      toolCallId: 'call-1',
+      type: 'tool-approval-request',
+    } as UIMessageChunk);
+    await delay(25);
+    expect(requestSignal?.aborted).toBe(false);
+
+    source.close();
+    await send;
+  });
+
   test('runs multi-model siblings independently and preserves a partial failure', async () => {
     const services = createServices();
     const modelIds = [
@@ -1782,15 +1934,19 @@ describe('ChatRuntime', () => {
       'provider-b::model-b' as UniqueModelId,
     ];
     configureDynamicReservation(services);
-    services.ai.streamText = jest.fn(async (request: ChatStreamRequest) =>
-      Promise.resolve(request.requestOptions.signal),
-    );
+    const signals = new Map<UniqueModelId, AbortSignal>();
+    services.ai.streamText = jest.fn(async (request: ChatStreamRequest) => {
+      signals.set(request.uniqueModelId, request.requestOptions.signal);
+      return new ReadableStream<UIMessageChunk>();
+    });
     const modelAGate = createDeferred();
-    mockReadUIMessageStream.mockImplementation(
-      ({ message, stream }: { message: CherryUIMessage; stream: AbortSignal }) =>
-        message.id === 'assistant-reserved-1'
-          ? gatedAsyncIterable([createUiMessage(message.id, 'model-a')], modelAGate.promise)
-          : abortableAsyncIterable(createUiMessage(message.id, 'model-b'), stream),
+    mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
+      message.id === 'assistant-reserved-1'
+        ? gatedAsyncIterable([createUiMessage(message.id, 'model-a')], modelAGate.promise)
+        : abortableAsyncIterable(
+            createUiMessage(message.id, 'model-b'),
+            signals.get(modelIds[1]) as AbortSignal,
+          ),
     );
     const runtime = createRuntime({ services });
 
@@ -2146,9 +2302,11 @@ describe('ChatRuntime', () => {
     const services = createServices();
     const finalizationStarted = createDeferred();
     const finalizationGate = createDeferred();
-    services.ai.streamText = jest.fn(async (request: ChatStreamRequest) =>
-      Promise.resolve(request.requestOptions.signal),
-    );
+    let streamSignal: AbortSignal | undefined;
+    services.ai.streamText = jest.fn(async (request: ChatStreamRequest) => {
+      streamSignal = request.requestOptions.signal;
+      return new ReadableStream<UIMessageChunk>();
+    });
     services.message.finalizeAssistantMessage = jest.fn(async (_id, input) => {
       finalizationStarted.resolve();
       await finalizationGate.promise;
@@ -2158,8 +2316,11 @@ describe('ChatRuntime', () => {
         status: input.status,
       };
     });
-    mockReadUIMessageStream.mockImplementation(({ stream }: { stream: AbortSignal }) =>
-      abortableAsyncIterable(createUiMessage('assistant-1', 'streaming'), stream),
+    mockReadUIMessageStream.mockImplementation(() =>
+      abortableAsyncIterable(
+        createUiMessage('assistant-1', 'streaming'),
+        streamSignal as AbortSignal,
+      ),
     );
     const runtime = createRuntime({ services });
 
@@ -2204,6 +2365,44 @@ function asyncIterable<T>(items: T[]) {
       yield item;
     }
   })();
+}
+
+function accumulateTextChunks(input: {
+  message: CherryUIMessage;
+  stream: ReadableStream<UIMessageChunk>;
+}): AsyncIterable<CherryUIMessage> {
+  return (async function* () {
+    const reader = input.stream.getReader();
+    let text = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) return;
+        if (value.type !== 'text-delta') continue;
+        text += value.delta;
+        yield createUiMessage(input.message.id, text);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  })();
+}
+
+function createControllableChunkStream() {
+  let controller!: ReadableStreamDefaultController<UIMessageChunk>;
+  return {
+    close() {
+      controller.close();
+    },
+    push(chunk: UIMessageChunk) {
+      controller.enqueue(chunk);
+    },
+    stream: new ReadableStream<UIMessageChunk>({
+      start(nextController) {
+        controller = nextController;
+      },
+    }),
+  };
 }
 
 /** Yields `items`, then stalls until `gate` settles, keeping the turn streaming. */
@@ -2276,6 +2475,10 @@ function createDeferred<T = void>() {
   };
 }
 
+function delay(durationMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, durationMs));
+}
+
 function createDeferredInvalidation(options: { blockOnCall?: number } = {}) {
   const deferred = createDeferred();
   const blockOnCall = options.blockOnCall ?? 2;
@@ -2330,18 +2533,22 @@ async function waitUntil(predicate: () => boolean) {
 }
 
 function createRuntime(input: {
+  config?: Partial<ChatRuntimeConfig>;
   invalidateTopicMessages?: (topicId: string) => Promise<void>;
   invalidateTopics?: () => Promise<void>;
   openTopic?: (topicId: string) => void;
   services: ChatRuntimeServices;
 }) {
-  const runtime = new ChatRuntime({
-    files: {
-      discard: (...args) => mockDiscardPreparedFiles(...args),
-      prepareParts: (parts) => mockPrepareMessageParts(parts),
+  const runtime = new ChatRuntime(
+    {
+      files: {
+        discard: (...args) => mockDiscardPreparedFiles(...args),
+        prepareParts: (parts) => mockPrepareMessageParts(parts),
+      },
+      services: input.services,
     },
-    services: input.services,
-  });
+    input.config,
+  );
   runtime.subscribe(async (event) => {
     switch (event.type) {
       case 'invalidate-topic-messages':

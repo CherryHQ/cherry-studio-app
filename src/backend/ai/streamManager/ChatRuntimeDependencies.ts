@@ -21,6 +21,7 @@ import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/mo
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
+import type { UIMessageChunk } from 'ai';
 
 import type { ChatToolApprovalInput } from '@/shared/contracts';
 
@@ -58,9 +59,9 @@ export type ChatRuntimeServices = {
     }): Promise<{ text: string }>;
     readMessageStream(input: {
       message: CherryUIMessage;
-      stream: unknown;
+      stream: ReadableStream<UIMessageChunk>;
     }): AsyncIterable<CherryUIMessage>;
-    streamText(input: ChatStreamRequest): Promise<unknown>;
+    streamText(input: ChatStreamRequest): Promise<ReadableStream<UIMessageChunk>>;
   };
   assistant: {
     getById(id: string): Promise<Assistant>;

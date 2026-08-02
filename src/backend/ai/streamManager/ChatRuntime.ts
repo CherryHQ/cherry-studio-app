@@ -1,3 +1,13 @@
+import type {
+  AiStreamAttachRequest,
+  AiStreamAttachResponse,
+  AiStreamDetachRequest,
+  StreamChunkPayload,
+  StreamDonePayload,
+  StreamErrorPayload,
+  TopicStatusSnapshotEntry,
+  TopicStreamStatus,
+} from '@cherrystudio/universal/ai/transport';
 import type { PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
 import type {
   CherryMessagePart,
@@ -14,7 +24,7 @@ import {
   buildFirstUserMessageTitle,
   sanitizeConversationTitle,
 } from '@cherrystudio/universal/utils/conversationTitle';
-import { isToolUIPart } from 'ai';
+import { isToolUIPart, type UIMessageChunk } from 'ai';
 
 import type {
   ChatCancelExecutionInput,
@@ -27,6 +37,7 @@ import type {
   ChatSetActiveBranchInput,
   ChatListener,
   ChatModule,
+  ChatStreamListener,
   ChatTopicSnapshot,
   ChatToolApprovalInput,
 } from '@/shared/contracts';
@@ -35,6 +46,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { wrapSteerReminder } from '../steerReminder';
 import { serializeError } from '../utils/serializeError';
+import { buildCompactReplay } from './buildCompactReplay';
 import type { ChatRuntimeDependencies } from './ChatRuntimeDependencies';
 import {
   applyStreamingMessage,
@@ -46,11 +58,17 @@ import {
 } from './chatRuntimeMessages';
 import { MessageRuntimeTimingCollector } from './MessageRuntimeTimingCollector';
 import { extractMainText, maybeRenameTopicFromConversationSummary } from './topicNaming';
+import { withIdleTimeout } from './withIdleTimeout';
 
 type ActiveExecution = {
   abortController: AbortController;
   assistantMessage: Message;
+  buffer: StreamChunkPayload[];
+  droppedChunks: number;
+  error?: ReturnType<typeof serializeError>;
+  finalMessage?: CherryUIMessage;
   model: Model;
+  pendingApprovalToolCallIds: Set<string>;
   status: 'aborted' | 'done' | 'error' | 'streaming';
 };
 
@@ -60,6 +78,11 @@ type ActiveTurn = {
   hasHistoryBeforePendingTurn?: boolean;
   overlays: Map<UniqueModelId, Message>;
   pendingUserMessage?: Message;
+  cleanupTimer?: ReturnType<typeof setTimeout>;
+  expiresAt?: number;
+  lastCompletedAt?: number;
+  streamStatus: TopicStreamStatus;
+  turnId: string;
 };
 
 type PendingSteer = {
@@ -77,6 +100,20 @@ const logger = loggerService.withContext('ChatRuntime');
  */
 const interruptedTurnApprovalReason = 'The turn ended before this tool call completed.';
 
+export type ChatRuntimeConfig = {
+  approvalIdleTimeoutMs: number;
+  gracePeriodMs: number;
+  idleTimeoutMs: number;
+  maxBufferChunks: number;
+};
+
+const defaultChatRuntimeConfig: ChatRuntimeConfig = {
+  approvalIdleTimeoutMs: 2 * 60 * 60 * 1000,
+  gracePeriodMs: 30_000,
+  idleTimeoutMs: 30 * 60 * 1000,
+  maxBufferChunks: 10_000,
+};
+
 export class ChatRuntime implements ChatModule {
   private activeTasks = new Set<Promise<unknown>>();
   private activeTurns = new Map<string, ActiveTurn>();
@@ -86,10 +123,19 @@ export class ChatRuntime implements ChatModule {
   private listeners = new Set<ChatListener>();
   private newTopicHandoffTopicId: string | undefined;
   private pendingSteers = new Map<string, PendingSteer[]>();
+  private retainedTurns = new Map<string, ActiveTurn>();
+  private streamListeners = new Map<string, Set<ChatStreamListener>>();
   private followUpQueues = new Map<string, ChatFollowUpInput['payload'][]>();
   private topicSnapshots = new Map<string, ChatTopicSnapshot>();
 
-  constructor(private readonly dependencies: ChatRuntimeDependencies) {}
+  private readonly config: ChatRuntimeConfig;
+
+  constructor(
+    private readonly dependencies: ChatRuntimeDependencies,
+    config: Partial<ChatRuntimeConfig> = {},
+  ) {
+    this.config = { ...defaultChatRuntimeConfig, ...config };
+  }
 
   subscribe = (listener: ChatListener) => {
     this.listeners.add(listener);
@@ -109,6 +155,61 @@ export class ChatRuntime implements ChatModule {
     return this.topicSnapshots.get(topicId) ?? idleTopicSnapshot;
   }
 
+  attachStream(input: AiStreamAttachRequest, listener: ChatStreamListener): AiStreamAttachResponse {
+    const topicId = this.resolveRuntimeTopicId(input.topicId);
+    const turn = this.activeTurns.get(topicId) ?? this.retainedTurns.get(topicId);
+    if (!turn) {
+      return { status: 'not-found' };
+    }
+
+    if (turn.streamStatus === 'done' || turn.streamStatus === 'aborted') {
+      const finalMessages: Partial<Record<UniqueModelId, CherryUIMessage>> = {};
+      let finalMessage: CherryUIMessage | undefined;
+      for (const execution of turn.executions.values()) {
+        if (!execution.finalMessage) continue;
+        finalMessages[execution.model.id] = execution.finalMessage;
+        finalMessage ??= execution.finalMessage;
+      }
+      return {
+        finalMessage,
+        finalMessages,
+        status: turn.streamStatus === 'aborted' ? 'paused' : 'done',
+      };
+    }
+    if (turn.streamStatus === 'error') {
+      return {
+        error: [...turn.executions.values()].find((execution) => execution.error)?.error,
+        status: 'error',
+      };
+    }
+
+    const listeners = this.streamListeners.get(topicId);
+    if (listeners) listeners.add(listener);
+    else this.streamListeners.set(topicId, new Set([listener]));
+    const droppedChunks = [...turn.executions.values()].reduce(
+      (total, execution) => total + execution.droppedChunks,
+      0,
+    );
+    if (droppedChunks > 0) {
+      logger.warn('Stream replay has gaps due to buffer overflow', { droppedChunks, topicId });
+    }
+    return {
+      bufferedChunks: [...turn.executions.values()].flatMap((execution) =>
+        buildCompactReplay(execution.buffer),
+      ),
+      status: 'attached',
+    };
+  }
+
+  detachStream(input: AiStreamDetachRequest, listener: ChatStreamListener): void {
+    const topicId = this.resolveRuntimeTopicId(input.topicId);
+    const listeners = this.streamListeners.get(topicId);
+    listeners?.delete(listener);
+    if (listeners?.size === 0) {
+      this.streamListeners.delete(topicId);
+    }
+  }
+
   abort(topicId: string): void {
     const runtimeTopicId = this.resolveRuntimeTopicId(topicId);
     const activeTurn = this.activeTurns.get(runtimeTopicId);
@@ -117,10 +218,6 @@ export class ChatRuntime implements ChatModule {
       return;
     }
 
-    this.setTurnSnapshot(runtimeTopicId, {
-      ...this.getTopicSnapshot(runtimeTopicId),
-      status: 'aborting',
-    });
     const reason = new Error('Chat stream aborted');
     activeTurn.abortController.abort(reason);
     for (const execution of activeTurn.executions.values()) {
@@ -129,6 +226,12 @@ export class ChatRuntime implements ChatModule {
         execution.abortController.abort(reason);
       }
     }
+    activeTurn.streamStatus = 'aborted';
+    this.setTurnSnapshot(runtimeTopicId, {
+      ...this.getTopicSnapshot(runtimeTopicId),
+      status: 'aborting',
+      stream: buildStreamStatusSnapshot(activeTurn),
+    });
   }
 
   cancelExecution(input: ChatCancelExecutionInput): void {
@@ -197,12 +300,17 @@ export class ChatRuntime implements ChatModule {
     }
 
     await Promise.allSettled([...this.activeTasks]);
+    for (const turn of this.retainedTurns.values()) {
+      if (turn.cleanupTimer) clearTimeout(turn.cleanupTimer);
+    }
     this.activeTasks.clear();
     this.activeTurns.clear();
     this.continuingTopics.clear();
     this.followUpQueues.clear();
     this.newTopicHandoffTopicId = undefined;
     this.pendingSteers.clear();
+    this.retainedTurns.clear();
+    this.streamListeners.clear();
     this.topicSnapshots.clear();
     this.listeners.clear();
   }
@@ -221,7 +329,7 @@ export class ChatRuntime implements ChatModule {
 
     const activeTurn = createActiveTurn();
     const { abortController } = activeTurn;
-    this.activeTurns.set(input.topicId, activeTurn);
+    this.activateTurn(input.topicId, activeTurn);
     this.setTopicSnapshot(input.topicId, { status: 'reserving' });
 
     try {
@@ -350,7 +458,7 @@ export class ChatRuntime implements ChatModule {
     }
 
     const activeTurn = createActiveTurn();
-    this.activeTurns.set(input.topicId, activeTurn);
+    this.activateTurn(input.topicId, activeTurn);
     this.setTopicSnapshot(input.topicId, { status: 'reserving' });
 
     try {
@@ -385,7 +493,7 @@ export class ChatRuntime implements ChatModule {
     }
 
     const activeTurn = createActiveTurn();
-    this.activeTurns.set(input.topicId, activeTurn);
+    this.activateTurn(input.topicId, activeTurn);
     this.setTopicSnapshot(input.topicId, { status: 'reserving' });
 
     try {
@@ -446,7 +554,7 @@ export class ChatRuntime implements ChatModule {
     }
 
     const activeTurn = createActiveTurn();
-    this.activeTurns.set(input.topicId, activeTurn);
+    this.activateTurn(input.topicId, activeTurn);
     this.setTopicSnapshot(input.topicId, { status: 'reserving' });
 
     try {
@@ -551,7 +659,7 @@ export class ChatRuntime implements ChatModule {
     this.newTopicHandoffTopicId = undefined;
     const activeTurn = createActiveTurn();
     const { abortController } = activeTurn;
-    this.activeTurns.set(NEW_TOPIC_SNAPSHOT_KEY, activeTurn);
+    this.activateTurn(NEW_TOPIC_SNAPSHOT_KEY, activeTurn);
     this.setTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY, { status: 'reserving' });
 
     let createdTopicId: string | undefined;
@@ -572,7 +680,8 @@ export class ChatRuntime implements ChatModule {
 
       this.activeTurns.delete(NEW_TOPIC_SNAPSHOT_KEY);
       this.newTopicHandoffTopicId = topic.id;
-      this.activeTurns.set(topic.id, activeTurn);
+      this.activateTurn(topic.id, activeTurn);
+      this.moveStreamListeners(NEW_TOPIC_SNAPSHOT_KEY, topic.id);
       this.setTurnSnapshot(topic.id, { status: 'reserving' });
       await this.emitAndWait({ type: 'invalidate-topics' });
       throwIfAborted(abortController.signal);
@@ -622,7 +731,7 @@ export class ChatRuntime implements ChatModule {
 
     const activeTurn = createActiveTurn();
     const { abortController } = activeTurn;
-    this.activeTurns.set(topicId, activeTurn);
+    this.activateTurn(topicId, activeTurn);
     this.setTopicSnapshot(topicId, { status: 'reserving' });
 
     let settledMessage: Message | undefined;
@@ -721,7 +830,10 @@ export class ChatRuntime implements ChatModule {
     activeTurn.executions.set(model.id, {
       abortController: executionAbortController,
       assistantMessage: message,
+      buffer: [],
+      droppedChunks: 0,
       model,
+      pendingApprovalToolCallIds: new Set(),
       status: 'streaming',
     });
     activeTurn.overlays.set(model.id, message);
@@ -1014,7 +1126,10 @@ export class ChatRuntime implements ChatModule {
       activeTurn.executions.set(model.id, {
         abortController,
         assistantMessage,
+        buffer: [],
+        droppedChunks: 0,
         model,
+        pendingApprovalToolCallIds: new Set(),
         status: 'streaming',
       });
       activeTurn.overlays.set(model.id, assistantMessage);
@@ -1086,12 +1201,18 @@ export class ChatRuntime implements ChatModule {
     topicId: string;
   }): Promise<void> {
     const outcome = resolveTurnOutcome(input.activeTurn, input.terminalMessages);
+    input.activeTurn.streamStatus = outcome === 'awaiting-approval' ? 'awaiting-approval' : outcome;
+    if (outcome === 'done') {
+      input.activeTurn.lastCompletedAt = Date.now();
+    }
     if (outcome === 'aborted' || outcome === 'error') {
       this.pendingSteers.delete(input.topicId);
     }
     const shouldContinue = outcome === 'done' && this.hasPendingContinuation(input.topicId);
     if (shouldContinue) {
       this.continuingTopics.add(input.topicId);
+    } else {
+      this.retainTurn(input.topicId, input.activeTurn);
     }
 
     await this.releaseTurn({
@@ -1104,6 +1225,7 @@ export class ChatRuntime implements ChatModule {
               overlayMessage: input.terminalMessages.at(-1),
               overlayMessages: input.terminalMessages,
               pendingUserMessage: input.pendingUserMessage,
+              stream: buildStreamStatusSnapshot(input.activeTurn),
               status:
                 outcome === 'awaiting-approval'
                   ? 'awaiting-approval'
@@ -1155,7 +1277,7 @@ export class ChatRuntime implements ChatModule {
 
   private async startSteerContinuation(topicId: string, pending: PendingSteer): Promise<void> {
     const activeTurn = createActiveTurn();
-    this.activeTurns.set(topicId, activeTurn);
+    this.activateTurn(topicId, activeTurn);
     this.setTurnSnapshot(topicId, { status: 'reserving' });
 
     try {
@@ -1254,10 +1376,11 @@ export class ChatRuntime implements ChatModule {
     const { abortController } = execution;
     let latestAssistantMessage: CherryUIMessage | undefined;
     let terminalAssistantMessage: Message | undefined;
+    let cleanupIdleTimer: (() => void) | undefined;
     const runtimeTiming = new MessageRuntimeTimingCollector(assistantMessage.stats?.runtimeTiming);
 
     try {
-      const stream = await this.dependencies.services.ai.streamText({
+      const rawStream = await this.dependencies.services.ai.streamText({
         assistantId: topic.assistantId,
         chatId: topicId,
         fastMode: input.fastMode === true,
@@ -1271,12 +1394,21 @@ export class ChatRuntime implements ChatModule {
         uniqueModelId: model.id,
       });
       throwIfAborted(abortController.signal);
+      const idleWrapped = withIdleTimeout(rawStream, abortController, this.config.idleTimeoutMs);
+      cleanupIdleTimer = idleWrapped.idle.cleanup;
+      const stream = tapReadableStream(idleWrapped.stream, (chunk) => {
+        this.handleStreamChunk(topicId, activeTurn, execution, chunk);
+        if (execution.pendingApprovalToolCallIds.size > 0) {
+          idleWrapped.idle.reset(this.config.approvalIdleTimeoutMs);
+        }
+      });
 
       for await (const nextAssistantMessage of this.dependencies.services.ai.readMessageStream({
         message: toCherryUIMessage(assistantMessage),
         stream,
       })) {
         latestAssistantMessage = nextAssistantMessage;
+        execution.finalMessage = nextAssistantMessage;
         captureApprovalTiming(runtimeTiming, nextAssistantMessage.parts as CherryMessagePart[]);
         throwIfAborted(abortController.signal);
         activeTurn.overlays.set(
@@ -1298,6 +1430,7 @@ export class ChatRuntime implements ChatModule {
       }
 
       const isAwaitingApproval = hasPendingToolApproval(finalParts);
+      syncPendingApprovalToolCallIds(execution, finalParts);
       runtimeTiming.closeOpenToolSpans();
       if (!isAwaitingApproval) {
         runtimeTiming.closeOpenSpans();
@@ -1308,6 +1441,7 @@ export class ChatRuntime implements ChatModule {
         latestAssistantMessage,
         runtimeStats: { runtimeTiming: runtimeTiming.snapshot() },
       });
+      execution.finalMessage = toCherryUIMessage(terminalAssistantMessage);
       execution.status = 'done';
 
       if (!this.isDisposed && !isAwaitingApproval && input.autoNameUserParts) {
@@ -1333,18 +1467,116 @@ export class ChatRuntime implements ChatModule {
         wasAborted: abortController.signal.aborted,
       });
       execution.status = abortController.signal.aborted ? 'aborted' : 'error';
+      execution.pendingApprovalToolCallIds.clear();
+      if (terminalAssistantMessage) {
+        execution.finalMessage = toCherryUIMessage(terminalAssistantMessage);
+      }
+      if (!abortController.signal.aborted) {
+        execution.error = serializeError(error);
+      }
 
       if (!abortController.signal.aborted) {
         logger.warn('Chat stream failed', toError(error));
       }
     } finally {
+      cleanupIdleTimer?.();
       if (terminalAssistantMessage) {
         activeTurn.overlays.set(model.id, terminalAssistantMessage);
       }
+      this.emitExecutionTerminal(topicId, activeTurn, execution);
       if (
         [...activeTurn.executions.values()].some((candidate) => candidate.status === 'streaming')
       ) {
         this.publishTurnSnapshot(topicId, activeTurn, 'streaming');
+      }
+    }
+  }
+
+  private handleStreamChunk(
+    topicId: string,
+    activeTurn: ActiveTurn,
+    execution: ActiveExecution,
+    chunk: UIMessageChunk,
+  ): void {
+    if (this.activeTurns.get(topicId) !== activeTurn || execution.status !== 'streaming') {
+      return;
+    }
+
+    const hadPendingApproval = execution.pendingApprovalToolCallIds.size > 0;
+    if (chunk.type === 'tool-approval-request') {
+      execution.pendingApprovalToolCallIds.add(chunk.toolCallId);
+    } else if (
+      chunk.type === 'tool-output-available' ||
+      chunk.type === 'tool-output-denied' ||
+      chunk.type === 'tool-output-error'
+    ) {
+      execution.pendingApprovalToolCallIds.delete(chunk.toolCallId);
+    }
+
+    const payload: StreamChunkPayload = {
+      anchorMessageId: execution.assistantMessage.id,
+      chunk,
+      executionId: execution.model.id,
+      topicId,
+    };
+    if (execution.buffer.length >= this.config.maxBufferChunks) {
+      execution.buffer.shift();
+      execution.droppedChunks += 1;
+    }
+    execution.buffer.push(payload);
+
+    const approvalStateChanged =
+      hadPendingApproval !== execution.pendingApprovalToolCallIds.size > 0;
+    if (activeTurn.streamStatus === 'pending') {
+      activeTurn.streamStatus = 'streaming';
+      this.publishTurnSnapshot(topicId, activeTurn, 'streaming');
+    } else if (approvalStateChanged) {
+      this.publishTurnSnapshot(topicId, activeTurn, 'streaming');
+    }
+    this.emitStreamEvent(topicId, { payload, type: 'chunk' });
+  }
+
+  private emitExecutionTerminal(
+    topicId: string,
+    activeTurn: ActiveTurn,
+    execution: ActiveExecution,
+  ): void {
+    const isAllTerminal = [...activeTurn.executions.values()].every(
+      (candidate) => candidate.status !== 'streaming',
+    );
+    const terminalMessages = [...activeTurn.overlays.values()];
+    const outcome = isAllTerminal ? resolveTurnOutcome(activeTurn, terminalMessages) : undefined;
+    const isTopicDone =
+      isAllTerminal && !(outcome === 'done' && this.hasPendingContinuation(topicId));
+
+    if (execution.status === 'error') {
+      const payload: StreamErrorPayload = {
+        anchorMessageId: execution.assistantMessage.id,
+        error: execution.error ?? serializeError(new Error('Chat execution failed')),
+        executionId: execution.model.id,
+        isTopicDone,
+        topicId,
+      };
+      this.emitStreamEvent(topicId, { payload, type: 'error' });
+      return;
+    }
+
+    const payload: StreamDonePayload = {
+      anchorMessageId: execution.assistantMessage.id,
+      executionId: execution.model.id,
+      isTopicDone,
+      status: execution.status === 'aborted' ? 'paused' : 'success',
+      topicId,
+    };
+    this.emitStreamEvent(topicId, { payload, type: 'done' });
+  }
+
+  private emitStreamEvent(topicId: string, event: Parameters<ChatStreamListener>[0]): void {
+    for (const listener of this.streamListeners.get(topicId) ?? []) {
+      try {
+        listener(event);
+      } catch (error) {
+        logger.warn('Chat stream listener failed', toError(error));
       }
     }
   }
@@ -1615,6 +1847,43 @@ export class ChatRuntime implements ChatModule {
     return this.activeTurns.has(runtimeTopicId) || this.continuingTopics.has(runtimeTopicId);
   }
 
+  private activateTurn(topicId: string, turn: ActiveTurn): void {
+    this.evictRetainedTurn(topicId, false);
+    this.activeTurns.set(topicId, turn);
+  }
+
+  private moveStreamListeners(sourceTopicId: string, destinationTopicId: string): void {
+    const source = this.streamListeners.get(sourceTopicId);
+    if (!source) return;
+    const destination = this.streamListeners.get(destinationTopicId);
+    if (destination) {
+      for (const listener of source) destination.add(listener);
+    } else {
+      this.streamListeners.set(destinationTopicId, source);
+    }
+    this.streamListeners.delete(sourceTopicId);
+  }
+
+  private evictRetainedTurn(topicId: string, dropListeners: boolean): void {
+    const retained = this.retainedTurns.get(topicId);
+    if (retained?.cleanupTimer) clearTimeout(retained.cleanupTimer);
+    this.retainedTurns.delete(topicId);
+    if (dropListeners) this.streamListeners.delete(topicId);
+  }
+
+  private retainTurn(topicId: string, turn: ActiveTurn): void {
+    this.evictRetainedTurn(topicId, false);
+    turn.expiresAt = Date.now() + this.config.gracePeriodMs;
+    turn.cleanupTimer = setTimeout(() => {
+      if (this.retainedTurns.get(topicId) === turn) {
+        this.retainedTurns.delete(topicId);
+        this.streamListeners.delete(topicId);
+      }
+    }, this.config.gracePeriodMs);
+    (turn.cleanupTimer as ReturnType<typeof setTimeout> & { unref?: () => void }).unref?.();
+    this.retainedTurns.set(topicId, turn);
+  }
+
   private appendPendingSteer(topicId: string, pending: PendingSteer): void {
     const queue = this.pendingSteers.get(topicId);
     if (queue) {
@@ -1656,6 +1925,7 @@ export class ChatRuntime implements ChatModule {
         ? { queuedMessages: [...(this.followUpQueues.get(topicId) ?? [])] }
         : {}),
       status,
+      stream: buildStreamStatusSnapshot(activeTurn),
     });
   }
 
@@ -1747,6 +2017,7 @@ export class ChatRuntime implements ChatModule {
 }
 
 let siblingsGroupCounter = 0;
+let streamTurnSequence = 0;
 
 function nextSiblingsGroupId(): number {
   siblingsGroupCounter = (siblingsGroupCounter + 1) % 1000;
@@ -1758,6 +2029,8 @@ function createActiveTurn(): ActiveTurn {
     abortController: new AbortController(),
     executions: new Map(),
     overlays: new Map(),
+    streamStatus: 'pending',
+    turnId: `${Date.now()}:${++streamTurnSequence}`,
   };
 }
 
@@ -1803,6 +2076,28 @@ function resolveTurnOutcome(
   return 'done';
 }
 
+function buildStreamStatusSnapshot(turn: ActiveTurn): TopicStatusSnapshotEntry {
+  const activeExecutions = [...turn.executions.values()]
+    .filter((execution) => execution.status === 'streaming')
+    .map((execution) => ({
+      anchorMessageId: execution.assistantMessage.id,
+      executionId: execution.model.id,
+    }));
+  const awaitingApprovalAnchors = [...turn.executions.values()]
+    .filter((execution) => execution.pendingApprovalToolCallIds.size > 0)
+    .map((execution) => ({
+      anchorMessageId: execution.assistantMessage.id,
+      executionId: execution.model.id,
+    }));
+  return {
+    activeExecutions,
+    awaitingApprovalAnchors,
+    ...(turn.lastCompletedAt !== undefined ? { lastCompletedAt: turn.lastCompletedAt } : {}),
+    status: turn.streamStatus,
+    turnId: turn.turnId,
+  };
+}
+
 function getFollowUpParts(payload: ChatFollowUpInput['payload']): CherryMessagePart[] {
   if (payload.userMessageParts.length > 0) {
     return [...payload.userMessageParts];
@@ -1829,6 +2124,43 @@ function withSteerReminder(history: readonly Message[]): Message[] {
     break;
   }
   return next;
+}
+
+function syncPendingApprovalToolCallIds(
+  execution: ActiveExecution,
+  parts: readonly CherryMessagePart[],
+): void {
+  execution.pendingApprovalToolCallIds.clear();
+  for (const part of parts) {
+    if (isToolUIPart(part) && part.state === 'approval-requested') {
+      execution.pendingApprovalToolCallIds.add(part.toolCallId);
+    }
+  }
+}
+
+function tapReadableStream<T>(
+  source: ReadableStream<T>,
+  onChunk: (chunk: T) => void,
+): ReadableStream<T> {
+  const reader = source.getReader();
+  return new ReadableStream<T>({
+    async pull(destination) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          destination.close();
+          return;
+        }
+        onChunk(value);
+        destination.enqueue(value);
+      } catch (error) {
+        destination.error(error);
+      }
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
 }
 
 function captureApprovalTiming(

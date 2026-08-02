@@ -1,6 +1,6 @@
 import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import { readUIMessageStream, type UIMessageChunk } from 'ai';
+import { readUIMessageStream } from 'ai';
 
 import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
@@ -71,7 +71,7 @@ export function createBackend(services: BackendServices): BackendComposition {
         readMessageStream: ({ message, stream }) =>
           readUIMessageStream<CherryUIMessage>({
             message,
-            stream: stream as ReadableStream<UIMessageChunk>,
+            stream,
             terminateOnError: true,
           }),
         streamText: (input) => services.ai.streamText(input),
