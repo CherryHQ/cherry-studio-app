@@ -1,7 +1,10 @@
 import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { Model } from '@cherrystudio/universal/data/types/model';
-import { isOpenAIDeepResearchModel } from '@cherrystudio/universal/utils/model';
+import {
+  isOpenAIDeepResearchModel,
+  isOpenAIWebSearchChatCompletionOnlyModel,
+} from '@cherrystudio/universal/utils/model';
 
 import type { AppProviderId } from '../types';
 
@@ -17,10 +20,13 @@ export function getWebSearchParams(model: Model): Record<string, unknown> {
   }
 
   if (model.providerId === 'dashscope') {
+    const apiModelId = model.apiModelId ?? model.id;
+    const needsAgentStrategy = /qwen3-max|omni|qwen3-vl/.test(apiModelId);
     return {
       enable_search: true,
       search_options: {
         forced_search: true,
+        ...(needsAgentStrategy ? { search_strategy: 'agent' } : {}),
       },
     };
   }
@@ -33,16 +39,18 @@ export function getWebSearchParams(model: Model): Record<string, unknown> {
     };
   }
 
-  if (
-    model.endpointTypes?.[0] === ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS &&
-    model.capabilities.includes('web-search')
-  ) {
+  if (isOpenAIWebSearchChatCompletionOnlyModel(model)) {
     return {
       web_search_options: {},
     };
   }
 
   return {};
+}
+
+function servesResponsesWebSearch(model: Model): boolean {
+  // Bailian serves the Responses web_search tool only for the Qwen 3.x line.
+  return /^qwen3[.-]/.test(model.apiModelId ?? '');
 }
 
 /**
@@ -97,6 +105,13 @@ export function buildProviderBuiltinWebSearchConfig(
   switch (providerId) {
     case 'azure-responses':
     case 'openai': {
+      if (model?.providerId === 'doubao') {
+        return { openai: {} };
+      }
+      if (model?.providerId === 'dashscope') {
+        // `undefined` suppresses the plugin; `{}` would still attach a provider tool.
+        return servesResponsesWebSearch(model) ? { openai: {} } : undefined;
+      }
       const searchContextSize =
         model && isOpenAIDeepResearchModel(model)
           ? 'medium'
