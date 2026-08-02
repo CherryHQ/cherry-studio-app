@@ -94,6 +94,36 @@ describe('buildAgentPlugins reasoning features', () => {
     expect(names.indexOf('reasoning-extraction')).toBeLessThan(names.indexOf('simulate-streaming'));
   });
 
+  test('installs the DeepSeek DSML parser before reasoning extraction', () => {
+    const names = buildAgentPlugins({
+      aiSdkProviderId: 'openai-compatible',
+      endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      hasMcpTools: false,
+      hasReasoningSelectionSource: true,
+      model: createModel('custom', 'deepseek-v3'),
+      provider: createProvider('custom'),
+      reasoning: onInvocation(),
+      streamOutput: true,
+    }).map((plugin) => plugin.name);
+
+    expect(names.indexOf('deepseekDsmlParser')).toBeLessThan(names.indexOf('reasoning-extraction'));
+  });
+
+  test('does not install the DSML parser for unrelated models', () => {
+    expect(
+      buildAgentPlugins({
+        aiSdkProviderId: 'openai-compatible',
+        endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        hasMcpTools: false,
+        hasReasoningSelectionSource: true,
+        model: createModel('openai', 'gpt-4o'),
+        provider: createProvider('openai'),
+        reasoning: onInvocation(),
+        streamOutput: true,
+      }).map((plugin) => plugin.name),
+    ).not.toContain('deepseekDsmlParser');
+  });
+
   test('adds the OVMS no-think suffix only when MCP tools participate', async () => {
     const plugins = buildAgentPlugins({
       aiSdkProviderId: 'openai-compatible',

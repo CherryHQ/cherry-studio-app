@@ -82,6 +82,13 @@ export const isGrokModel = vendorCheck(VENDOR_PATTERNS.grok);
 export const isOpenAIModel = vendorCheck(VENDOR_PATTERNS.openai);
 export const isQwenModel = vendorCheck(VENDOR_PATTERNS.qwen);
 
+export const isDeepSeekModel = (model?: Model): boolean => {
+  if (!model) return false;
+  if (VENDOR_PATTERNS.deepseek.test(getLowerBaseModelName(getRawModelId(model), '/'))) return true;
+  if (model.providerId === 'deepseek') return true;
+  return model.name ? VENDOR_PATTERNS.deepseek.test(model.name.toLowerCase()) : false;
+};
+
 export const isOpenAILLMModel = (model: Model): boolean =>
   isOpenAIModel(model) && !getLowerBaseModelName(getRawModelId(model)).includes('gpt-4o-image');
 

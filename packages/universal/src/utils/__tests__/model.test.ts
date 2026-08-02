@@ -4,6 +4,7 @@ import { createUniqueModelId, type Model } from '@shared/data/types/model';
 import {
   deriveModelGroupName,
   getModelSupportedReasoningEffortOptions,
+  isDeepSeekModel,
   isOpenRouterBuiltInWebSearchModel,
 } from '../model';
 
@@ -17,6 +18,19 @@ describe('deriveModelGroupName', () => {
     ['  ', undefined],
   ])('derives %s as %s', (modelId, expected) => {
     expect(deriveModelGroupName(modelId)).toBe(expected);
+  });
+});
+
+describe('DeepSeek model detection', () => {
+  test('recognizes model ids, providers, and display names', () => {
+    expect(isDeepSeekModel(createModel('deepseek-v3'))).toBe(true);
+    expect(isDeepSeekModel(createModel('custom-v3', { providerId: 'deepseek' }))).toBe(true);
+    expect(isDeepSeekModel(createModel('custom-v3', { name: 'DeepSeek V3' }))).toBe(true);
+  });
+
+  test('rejects missing and unrelated models', () => {
+    expect(isDeepSeekModel(undefined)).toBe(false);
+    expect(isDeepSeekModel(createModel('gpt-4o'))).toBe(false);
   });
 });
 

@@ -4,12 +4,17 @@ import { providerToolPlugin } from '@cherrystudio/ai-core/built-in/plugins';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { EndpointType, Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import { isAnthropicModel, isGemini3Model } from '@cherrystudio/universal/utils/model';
+import {
+  isAnthropicModel,
+  isDeepSeekModel,
+  isGemini3Model,
+} from '@cherrystudio/universal/utils/model';
 
 import { SystemProviderIds } from '../../../utils/providerIds';
 import { getReasoningTagName } from '../../../utils/reasoning';
 import type { ResolvedReasoningInvocation } from '../../../utils/reasoningSerializers';
 import { createAnthropicCachePlugin } from './features/anthropicCache';
+import { createDeepseekDsmlParserPlugin } from './features/deepseekDsmlParserPlugin';
 import { createGatewayUsageNormalizePlugin } from './features/gatewayUsageNormalize';
 import { createNoThinkPlugin } from './features/noThink';
 import { createOpenrouterReasoningPlugin } from './features/openrouterReasoning';
@@ -44,6 +49,10 @@ export function buildAgentPlugins(input: BuildAgentPluginsInput): AiPlugin[] {
 
   if (aiSdkProviderId === SystemProviderIds.gateway) {
     plugins.push(createGatewayUsageNormalizePlugin());
+  }
+
+  if (isDeepSeekModel(model)) {
+    plugins.push(createDeepseekDsmlParserPlugin());
   }
 
   if (endpointType === ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS) {
