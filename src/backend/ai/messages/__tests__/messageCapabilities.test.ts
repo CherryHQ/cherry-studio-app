@@ -86,4 +86,16 @@ describe('stripUnsupportedMedia', () => {
       { type: 'text', text: expect.stringContaining('image attachment omitted') },
     ]);
   });
+
+  it('gates PDF only when the provider-aware support explicitly disables it', () => {
+    const message = fileMsg('application/pdf');
+
+    expect(stripUnsupportedMedia([message], { image: true, video: true, audio: true })[0]).toBe(
+      message,
+    );
+    expect(
+      stripUnsupportedMedia([message], { image: true, video: true, audio: true, pdf: false })[0]
+        .parts,
+    ).toEqual([{ type: 'text', text: expect.stringContaining('pdf attachment omitted') }]);
+  });
 });

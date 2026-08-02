@@ -18,7 +18,6 @@ import { fetch as expoFetch } from 'expo/fetch';
 import type { AiUsageCaptureContext } from '@/backend/data/services/AiUsageRecordService';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 
-import { resolveMediaCapabilities } from './messages/messageCapabilities';
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { listModels as listProviderModels } from './provider/listModels';
 import { Agent, buildAgentParams } from './runtime/aiSdk';
@@ -130,7 +129,7 @@ export class AiService {
     }
 
     const [
-      { context, sdkConfig, model, repairToolCall, system, tools, plugins, options },
+      { context, sdkConfig, nativeFileSupport, repairToolCall, system, tools, plugins, options },
       preparedMessages,
     ] = await Promise.all([
       buildAgentParams({
@@ -149,7 +148,7 @@ export class AiService {
       providerSettings: sdkConfig.providerSettings,
       modelId: sdkConfig.modelId,
       messageId: request.messageId,
-      mediaCapabilities: resolveMediaCapabilities(model),
+      mediaCapabilities: nativeFileSupport,
       plugins,
       context,
       repairToolCall,

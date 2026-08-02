@@ -71,6 +71,7 @@ import { CITATIONS_SYSTEM_PROMPT } from '../prompts/citations';
 import { getDeferredToolsSystemPrompt } from '../prompts/deferredTools';
 import { buildAgentPlugins } from './buildAgentPlugins';
 import { resolveCapabilities } from './capabilities';
+import { type NativeFileSupport, resolveNativeFileSupport } from './nativeFileSupport';
 
 export interface BuildAgentParamsDependencies {
   aiUsageRecord: Pick<AiUsageRecordService, 'recordInvocation'>;
@@ -95,6 +96,7 @@ export interface BuiltAgentParams {
   sdkConfig: ProviderConfig & { modelId: string };
   provider: Provider;
   model: Model;
+  nativeFileSupport: NativeFileSupport;
   assistant: Assistant | undefined;
   context: RequestContext;
   system: string | undefined;
@@ -126,6 +128,7 @@ export async function buildAgentParams({
   );
   const endpointType = resolvedEndpoint.endpointType;
   const aiSdkProviderId = resolveAiSdkProviderId(provider, endpointType);
+  const nativeFileSupport = resolveNativeFileSupport(provider, model, aiSdkProviderId);
   const providerOptionsKey = resolveProviderOptionsKey(sdkConfig.providerId, {
     actualProviderId: provider.id,
     endpointType,
@@ -289,6 +292,7 @@ export async function buildAgentParams({
     sdkConfig: { ...sdkConfig, modelId: model.apiModelId ?? model.modelId },
     provider,
     model,
+    nativeFileSupport,
     assistant,
     context,
     system,
