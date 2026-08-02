@@ -46,6 +46,7 @@ describe('ChatRuntime', () => {
     mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
 
     await runtime.sendText({
+      fastMode: true,
       reasoningEffort: 'high',
       selectedModelId: 'provider::model' as UniqueModelId,
       text: '  hi  ',
@@ -74,13 +75,14 @@ describe('ChatRuntime', () => {
       name: 'Assistant',
     });
     expect(reservation.placeholders[0].data.turnOptions).toEqual({
-      fastMode: false,
+      fastMode: true,
       reasoningEffort: 'high',
     });
     expect(services.ai.streamText).toHaveBeenCalledWith(
       expect.objectContaining({
         assistantId: 'assistant-1',
         chatId: 'topic-1',
+        fastMode: true,
         messageId: 'assistant-1',
         reasoningEffort: 'high',
         uniqueModelId: 'provider::model',
@@ -1023,7 +1025,10 @@ describe('ChatRuntime', () => {
     const services = createServices();
     const settledMessage = {
       ...createMessage('assistant-1', 'assistant'),
-      data: { parts: [createRespondedApprovalPart('approval-1')] },
+      data: {
+        parts: [createRespondedApprovalPart('approval-1')],
+        turnOptions: { fastMode: true, reasoningEffort: 'high' as const },
+      },
       modelId: 'provider::pinned' as UniqueModelId,
       stats: {
         runtimeTiming: {
@@ -1073,7 +1078,9 @@ describe('ChatRuntime', () => {
     expect(services.ai.streamText).toHaveBeenCalledWith(
       expect.objectContaining({
         chatId: 'topic-1',
+        fastMode: true,
         messageId: 'assistant-1',
+        reasoningEffort: 'high',
         uniqueModelId: 'provider::pinned',
       }),
     );

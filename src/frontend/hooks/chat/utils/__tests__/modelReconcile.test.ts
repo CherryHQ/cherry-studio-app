@@ -69,4 +69,25 @@ describe('reconcileWebSearchForModel', () => {
       }),
     ).toBeNull();
   });
+
+  test('keeps web search for a function-calling model', () => {
+    expect(
+      reconcileWebSearchForModel(createModel({ capabilities: [MODEL_CAPABILITY.FUNCTION_CALL] }), {
+        enableWebSearch: true,
+      }),
+    ).toBeNull();
+  });
+
+  test('keeps web search for OpenRouter built-in search models', () => {
+    expect(
+      reconcileWebSearchForModel(
+        createModel({
+          id: 'openrouter::openai/gpt-4o-search-preview' as UniqueModelId,
+          modelId: 'openai/gpt-4o-search-preview',
+          providerId: 'openrouter',
+        }),
+        { enableWebSearch: true },
+      ),
+    ).toBeNull();
+  });
 });

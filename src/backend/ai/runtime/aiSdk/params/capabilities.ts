@@ -52,7 +52,9 @@ export function resolveCapabilities(
     ((!!assistant.settings?.enableWebSearch && isWebSearchModel(model)) ||
       isOpenRouterBuiltInWebSearchModel(model) ||
       model.id.includes('sonar'));
-  const enableGenerateImage = model.capabilities.includes('image-generation');
+  // Ordinary chat never requests provider-native image output. Image generation
+  // belongs to the separate tool/job flow, which mobile does not expose yet.
+  const enableGenerateImage = false;
   const streamOutput = assistant.settings.streamOutput !== false;
 
   const webSearchPluginConfig = enableWebSearch

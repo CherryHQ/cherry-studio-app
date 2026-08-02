@@ -154,6 +154,7 @@ export class ChatRuntime implements ChatModule {
 
       await this.runTopicTurn({
         activeTurn,
+        fastMode: input.fastMode,
         model,
         parts,
         reasoningEffort: input.reasoningEffort,
@@ -227,6 +228,7 @@ export class ChatRuntime implements ChatModule {
 
       await this.runTopicTurn({
         activeTurn,
+        fastMode: input.fastMode,
         model,
         parts,
         reasoningEffort: input.reasoningEffort,
@@ -372,6 +374,7 @@ export class ChatRuntime implements ChatModule {
       activeTurn,
       assistantMessage: message,
       ...(autoNameUserParts ? { autoNameUserParts } : {}),
+      fastMode: message.data.turnOptions?.fastMode,
       history,
       model,
       reasoningEffort: message.data.turnOptions?.reasoningEffort,
@@ -418,6 +421,7 @@ export class ChatRuntime implements ChatModule {
 
   private async runTopicTurn(input: {
     activeTurn: ActiveTurn;
+    fastMode?: boolean;
     model: Model;
     parts: readonly CherryMessagePart[];
     reasoningEffort?: ChatSendTextInput['reasoningEffort'];
@@ -460,7 +464,7 @@ export class ChatRuntime implements ChatModule {
               data: {
                 parts: [],
                 turnOptions: {
-                  fastMode: false,
+                  fastMode: input.fastMode === true,
                   reasoningEffort: input.reasoningEffort,
                 },
               },
@@ -509,6 +513,7 @@ export class ChatRuntime implements ChatModule {
         history,
         model,
         pendingUserMessage: userMessage,
+        fastMode: input.fastMode,
         reasoningEffort: input.reasoningEffort,
         topic,
       });
@@ -598,6 +603,7 @@ export class ChatRuntime implements ChatModule {
     activeTurn: ActiveTurn;
     assistantMessage: Message;
     autoNameUserParts?: readonly CherryMessagePart[];
+    fastMode?: boolean;
     /** Rides with `pendingUserMessage`: only meaningful while it is overlaid. */
     hasHistoryBeforePendingTurn?: boolean;
     history: readonly Message[];
@@ -617,6 +623,7 @@ export class ChatRuntime implements ChatModule {
       const stream = await this.dependencies.services.ai.streamText({
         assistantId: topic.assistantId,
         chatId: topicId,
+        fastMode: input.fastMode === true,
         messageId: assistantMessage.id,
         messages: history.map(toCherryUIMessage),
         requestOptions: { signal: abortController.signal },

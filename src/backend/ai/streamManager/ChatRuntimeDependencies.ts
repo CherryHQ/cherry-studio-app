@@ -27,6 +27,7 @@ import type { ChatToolApprovalInput } from '@/shared/contracts';
 export type ChatStreamRequest = {
   assistantId?: string;
   chatId: string;
+  fastMode?: boolean;
   messageId: string;
   messages: CherryUIMessage[];
   requestOptions: { signal: AbortSignal };

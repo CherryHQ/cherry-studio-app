@@ -16,6 +16,7 @@ export type ChatTopicSnapshot = {
 
 export type ChatSendTextInput = {
   assistantId?: string | null;
+  fastMode?: boolean;
   parts?: readonly CherryMessagePart[];
   reasoningEffort?: ReasoningEffortOption;
   selectedModelId?: UniqueModelId | null;
