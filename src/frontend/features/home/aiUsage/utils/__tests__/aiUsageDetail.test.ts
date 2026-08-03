@@ -8,8 +8,12 @@ import {
   buildAiUsageModelUsage,
   buildAiUsageWeeklyData,
   displayAiUsageModelId,
+  getAiUsageDayStatsQuery,
   getAiUsageDayRange,
+  getAiUsageRecentWeekPages,
+  getAiUsageWeekDefaultDateKey,
   getAiUsageWeekRange,
+  getAiUsageWeekTimelineQuery,
 } from '../aiUsageDetail';
 
 describe('AI usage detail', () => {
@@ -30,6 +34,7 @@ describe('AI usage detail', () => {
     try {
       const range = getAiUsageWeekRange(new Date(2026, 2, 8, 12));
       const data = buildAiUsageWeeklyData([], range, '2026-03-08');
+      const pages = getAiUsageRecentWeekPages(new Date(2026, 2, 8, 12));
 
       expect(data.days.map((day) => day.dateKey)).toEqual([
         '2026-03-02',
@@ -40,10 +45,72 @@ describe('AI usage detail', () => {
         '2026-03-07',
         '2026-03-08',
       ]);
+      expect(pages.at(-1)?.key).toBe('2026-03-02');
+      expect(pages.at(-2)?.key).toBe('2026-02-23');
     } finally {
       if (originalTimeZone === undefined) delete process.env.TZ;
       else process.env.TZ = originalTimeZone;
     }
+  });
+
+  test('builds eight oldest-to-current week pages with matching weekdays', () => {
+    const referenceDate = new Date(2026, 7, 2, 12);
+    const pages = getAiUsageRecentWeekPages(referenceDate);
+
+    expect(pages).toHaveLength(8);
+    expect(pages.map((page) => page.key)).toEqual([
+      '2026-06-08',
+      '2026-06-15',
+      '2026-06-22',
+      '2026-06-29',
+      '2026-07-06',
+      '2026-07-13',
+      '2026-07-20',
+      '2026-07-27',
+    ]);
+    expect(pages.map((page) => page.weeksAgo)).toEqual([7, 6, 5, 4, 3, 2, 1, 0]);
+    expect(pages.map((page) => getAiUsageWeekDefaultDateKey(referenceDate, page.weeksAgo))).toEqual(
+      [
+        '2026-06-14',
+        '2026-06-21',
+        '2026-06-28',
+        '2026-07-05',
+        '2026-07-12',
+        '2026-07-19',
+        '2026-07-26',
+        '2026-08-02',
+      ],
+    );
+  });
+
+  test('keeps week keys and corresponding weekdays across a year boundary', () => {
+    const referenceDate = new Date(2026, 0, 2, 12);
+    const pages = getAiUsageRecentWeekPages(referenceDate);
+
+    expect(pages[0]?.key).toBe('2025-11-10');
+    expect(pages.at(-1)?.key).toBe('2025-12-29');
+    expect(getAiUsageWeekDefaultDateKey(referenceDate, 1)).toBe('2025-12-26');
+    expect(getAiUsageWeekDefaultDateKey(referenceDate, 0)).toBe('2026-01-02');
+  });
+
+  test('builds aggregate query parameters from week and local day ranges', () => {
+    const weekRange = getAiUsageWeekRange(new Date(2026, 7, 2, 12));
+    const dayRange = getAiUsageDayRange('2026-07-29');
+
+    expect(getAiUsageWeekTimelineQuery(weekRange)).toEqual({
+      from: weekRange.from,
+      groupBy: 'model',
+      limit: 3,
+      metric: 'tokens',
+      to: weekRange.to,
+    });
+    expect(getAiUsageDayStatsQuery('2026-07-29')).toEqual({
+      from: dayRange.from,
+      groupBy: 'model',
+      limit: 50,
+      metric: 'tokens',
+      to: dayRange.to,
+    });
   });
 
   test('fills missing days, ranks three models, and merges overflow with server other', () => {

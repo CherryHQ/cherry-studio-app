@@ -7,6 +7,12 @@ export type AiUsageTimeRange = {
   to: number;
 };
 
+export type AiUsageWeekPage = {
+  key: string;
+  range: AiUsageTimeRange;
+  weeksAgo: number;
+};
+
 export type AiUsageCalendarDay = {
   dateKey: string;
   inRange: boolean;

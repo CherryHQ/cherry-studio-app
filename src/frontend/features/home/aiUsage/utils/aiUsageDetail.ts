@@ -1,12 +1,15 @@
 import type {
+  AiUsageRecordStatsQueryParams,
   AiUsageRecordStatsResponse,
   AiUsageRecordTimelineBucket,
+  AiUsageRecordTimelineQueryParams,
 } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 
 import type {
   AiUsageModelIdentity,
   AiUsageModelUsage,
   AiUsageTimeRange,
+  AiUsageWeekPage,
   AiUsageWeeklyData,
   AiUsageWeekSeries,
 } from '../types';
@@ -19,6 +22,9 @@ import {
 
 const WEEK_DAY_COUNT = 7;
 const TOP_MODEL_COUNT = 3;
+
+export const AI_USAGE_WEEK_PAGE_COUNT = 8;
+export const AI_USAGE_CURRENT_WEEK_PAGE_INDEX = AI_USAGE_WEEK_PAGE_COUNT - 1;
 
 export function getAiUsageWeekRange(referenceDate = new Date()): AiUsageTimeRange {
   const today = normalizeLocalDate(referenceDate);
@@ -47,6 +53,46 @@ export function getAiUsageDayRange(dateKey: string): AiUsageTimeRange {
     from: new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime(),
     to: new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999).getTime(),
   };
+}
+
+export function getAiUsageRecentWeekPages(referenceDate = new Date()): AiUsageWeekPage[] {
+  return Array.from({ length: AI_USAGE_WEEK_PAGE_COUNT }, (_, index) => {
+    const weeksAgo = AI_USAGE_CURRENT_WEEK_PAGE_INDEX - index;
+    const correspondingDate = addCalendarDays(referenceDate, -weeksAgo * WEEK_DAY_COUNT);
+    const range = getAiUsageWeekRange(correspondingDate);
+
+    return {
+      key: toLocalDateKey(new Date(range.from)),
+      range,
+      weeksAgo,
+    };
+  });
+}
+
+export function getAiUsageWeekDefaultDateKey(referenceDate: Date, weeksAgo: number): string {
+  return toLocalDateKey(addCalendarDays(referenceDate, -weeksAgo * WEEK_DAY_COUNT));
+}
+
+export function getAiUsageWeekTimelineQuery(range: AiUsageTimeRange) {
+  return {
+    from: range.from,
+    groupBy: 'model',
+    limit: TOP_MODEL_COUNT,
+    metric: 'tokens',
+    to: range.to,
+  } satisfies AiUsageRecordTimelineQueryParams;
+}
+
+export function getAiUsageDayStatsQuery(dateKey: string) {
+  const range = getAiUsageDayRange(dateKey);
+
+  return {
+    from: range.from,
+    groupBy: 'model',
+    limit: 50,
+    metric: 'tokens',
+    to: range.to,
+  } satisfies AiUsageRecordStatsQueryParams;
 }
 
 export function displayAiUsageModelId(modelId: string | null | undefined): string {
