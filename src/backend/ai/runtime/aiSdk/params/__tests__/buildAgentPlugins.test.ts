@@ -1,4 +1,5 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { LanguageModelMiddleware } from 'ai';
@@ -7,6 +8,65 @@ import type { ResolvedReasoningInvocation } from '../../../../utils/reasoningSer
 import { buildAgentPlugins } from '../buildAgentPlugins';
 
 describe('buildAgentPlugins reasoning features', () => {
+  test('installs Anthropic caching from endpoint semantics with shared defaults', () => {
+    const names = buildAgentPlugins({
+      aiSdkProviderId: 'anthropic',
+      endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      hasMcpTools: false,
+      hasReasoningSelectionSource: false,
+      model: createModel('proxy', 'custom-model'),
+      provider: createProvider('proxy'),
+      reasoning: omitInvocation(),
+      streamOutput: true,
+    }).map((plugin) => plugin.name);
+
+    expect(names).toContain('anthropic-cache');
+  });
+
+  test.each([
+    [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, undefined],
+    [ENDPOINT_TYPE.ANTHROPIC_MESSAGES, { enabled: false, tokenThreshold: 1024 }],
+    [ENDPOINT_TYPE.ANTHROPIC_MESSAGES, { enabled: true, tokenThreshold: 0 }],
+  ])(
+    'does not install Anthropic caching for endpoint/settings case %#',
+    (endpointType, cacheControl) => {
+      const provider = createProvider('proxy');
+      provider.settings.cacheControl = cacheControl;
+
+      expect(
+        buildAgentPlugins({
+          aiSdkProviderId: 'anthropic',
+          endpointType,
+          hasMcpTools: false,
+          hasReasoningSelectionSource: false,
+          model: createModel('proxy', 'claude-compatible'),
+          provider,
+          reasoning: omitInvocation(),
+          streamOutput: true,
+        }).map((plugin) => plugin.name),
+      ).not.toContain('anthropic-cache');
+    },
+  );
+
+  test('threads the raw assistant prompt into Anthropic caching', async () => {
+    const plugins = buildAgentPlugins({
+      aiSdkProviderId: 'anthropic',
+      assistant: { prompt: 'Current time: {{datetime}}' } as Assistant,
+      endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      hasMcpTools: false,
+      hasReasoningSelectionSource: false,
+      model: createModel('anthropic', 'claude-sonnet'),
+      provider: createProvider('anthropic'),
+      reasoning: omitInvocation(),
+      streamOutput: true,
+    });
+    const result = await transformPrompt(plugins, 'anthropic-cache', [
+      { content: 'x '.repeat(3000), role: 'system' },
+    ]);
+
+    expect(result?.prompt?.[0]?.providerOptions).toBeUndefined();
+  });
+
   test.each([
     [offInvocation(), 'hello /no_think'],
     [onInvocation(), 'hello /think'],

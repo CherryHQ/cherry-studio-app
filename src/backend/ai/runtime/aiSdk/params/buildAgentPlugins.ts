@@ -2,13 +2,11 @@ import type { AiPlugin } from '@cherrystudio/ai-core';
 import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
 import { providerToolPlugin } from '@cherrystudio/ai-core/built-in/plugins';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { resolveAnthropicCacheSettings } from '@cherrystudio/universal/ai/anthropicCache';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { EndpointType, Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import {
-  isAnthropicModel,
-  isDeepSeekModel,
-  isGemini3Model,
-} from '@cherrystudio/universal/utils/model';
+import { isDeepSeekModel, isGemini3Model } from '@cherrystudio/universal/utils/model';
 
 import { SystemProviderIds } from '../../../utils/providerIds';
 import { getReasoningTagName } from '../../../utils/reasoning';
@@ -25,6 +23,7 @@ import { createSkipGeminiThoughtSignaturePlugin } from './features/skipGeminiTho
 
 interface BuildAgentPluginsInput {
   aiSdkProviderId: string;
+  assistant?: Assistant;
   endpointType: EndpointType | undefined;
   hasMcpTools: boolean;
   hasReasoningSelectionSource: boolean;
@@ -38,6 +37,7 @@ interface BuildAgentPluginsInput {
 export function buildAgentPlugins(input: BuildAgentPluginsInput): AiPlugin[] {
   const {
     aiSdkProviderId,
+    assistant,
     endpointType,
     model,
     provider,
@@ -66,11 +66,10 @@ export function buildAgentPlugins(input: BuildAgentPluginsInput): AiPlugin[] {
   }
 
   if (
-    isAnthropicModel(model) &&
-    provider.settings.cacheControl?.enabled &&
-    provider.settings.cacheControl.tokenThreshold
+    endpointType === ENDPOINT_TYPE.ANTHROPIC_MESSAGES &&
+    resolveAnthropicCacheSettings(provider).enabled
   ) {
-    plugins.push(createAnthropicCachePlugin(provider));
+    plugins.push(createAnthropicCachePlugin(provider, assistant));
   }
 
   if (provider.id === SystemProviderIds.openrouter) {

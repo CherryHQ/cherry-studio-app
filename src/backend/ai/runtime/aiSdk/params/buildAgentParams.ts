@@ -227,6 +227,7 @@ export async function buildAgentParams({
   const plugins = [
     ...buildAgentPlugins({
       aiSdkProviderId: sdkConfig.providerId,
+      assistant,
       endpointType,
       hasMcpTools: resolvedTools.hasMcpTools,
       hasReasoningSelectionSource: Boolean(assistant) || request.reasoningEffort !== undefined,
