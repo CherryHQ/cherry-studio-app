@@ -4,7 +4,7 @@ import {
   AssistantSchema,
   AssistantSettingsSchema,
 } from '@shared/data/types/assistant';
-import { GroupIdSchema } from '@shared/data/types/group';
+import { GroupIdSchema, GroupNameSchema } from '@shared/data/types/group';
 import { TagIdSchema } from '@shared/data/types/tag';
 import * as z from 'zod';
 
@@ -29,6 +29,17 @@ export const CreateAssistantSchema = AssistantSchema.pick(ASSISTANT_MUTABLE_FIEL
   .extend({ mcpServerIds: McpServerIdsField, tagIds: TagIdsField })
   .strict();
 export type CreateAssistantDto = z.infer<typeof CreateAssistantSchema>;
+
+export const ImportAssistantSchema = CreateAssistantSchema.pick({
+  description: true,
+  emoji: true,
+  name: true,
+  prompt: true,
+  settings: true,
+}).extend({
+  groupName: GroupNameSchema.optional(),
+});
+export type ImportAssistantDto = z.infer<typeof ImportAssistantSchema>;
 
 export const UpdateAssistantSchema = AssistantSchema.pick(ASSISTANT_MUTABLE_FIELDS)
   .partial()
@@ -63,6 +74,16 @@ export const ListAssistantsQuerySchema = z.strictObject({
 export type ListAssistantsQueryParams = z.input<typeof ListAssistantsQuerySchema>;
 export type ListAssistantsQuery = z.output<typeof ListAssistantsQuerySchema>;
 
+export const DeleteAssistantQuerySchema = z.strictObject({
+  deleteTopics: z.boolean().optional(),
+});
+export type DeleteAssistantQueryParams = z.input<typeof DeleteAssistantQuerySchema>;
+
+export interface DeleteAssistantResult {
+  deleted: boolean;
+  deletedTopicIds?: string[];
+}
+
 export type AssistantSchemas = {
   '/assistants': {
     GET: {
@@ -74,10 +95,17 @@ export type AssistantSchemas = {
       response: Assistant;
     };
   };
+  '/assistants:import': {
+    POST: {
+      body: ImportAssistantDto;
+      response: Assistant;
+    };
+  };
   '/assistants/:id': {
     DELETE: {
       params: { id: string };
-      response: undefined;
+      query?: DeleteAssistantQueryParams;
+      response: DeleteAssistantResult;
     };
     GET: {
       params: { id: string };

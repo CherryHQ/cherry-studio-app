@@ -67,8 +67,8 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
   const painting = new PaintingService(dbService, fileEntry);
   const mcpServer = new McpServerService(dbService);
   const mcpRuntime = new McpRuntimeService({ mcpServer });
-  const assistant = new AssistantService(dbService, group, model, preference, tag, pin);
   const topic = new TopicService(dbService, pin, tag);
+  const assistant = new AssistantService(dbService, group, topic, model, preference, tag, pin);
   const message = new MessageService(dbService, topic, fileEntry);
   const contentSearch = new ContentSearchService(dbService);
   const entitySearch = new EntitySearchService(dbService);

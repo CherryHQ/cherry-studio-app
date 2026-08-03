@@ -1,5 +1,7 @@
 import {
   CreateAssistantSchema,
+  DeleteAssistantQuerySchema,
+  ImportAssistantSchema,
   ListAssistantsQuerySchema,
   UpdateAssistantSchema,
 } from '../assistants';
@@ -67,9 +69,35 @@ describe('assistant api schemas', () => {
     });
   });
 
+  test('normalizes long legacy group names and rejects non-import fields', () => {
+    const groupName = 'x'.repeat(65);
+    expect(
+      ImportAssistantSchema.parse({
+        groupName: `  ${groupName}  `,
+        name: 'Imported Assistant',
+        prompt: 'legacy prompt',
+      }),
+    ).toEqual({ groupName, name: 'Imported Assistant', prompt: 'legacy prompt' });
+    expect(
+      ImportAssistantSchema.safeParse({
+        groupId: '11111111-1111-4111-8111-111111111111',
+        name: 'Imported Assistant',
+      }).success,
+    ).toBe(false);
+  });
+
+  test('accepts only the optional deleteTopics flag for assistant deletion', () => {
+    expect(DeleteAssistantQuerySchema.parse({})).toEqual({});
+    expect(DeleteAssistantQuerySchema.parse({ deleteTopics: true })).toEqual({
+      deleteTopics: true,
+    });
+    expect(DeleteAssistantQuerySchema.safeParse({ deleteTopics: 'true' }).success).toBe(false);
+  });
+
   test.each([CreateAssistantSchema, UpdateAssistantSchema])(
-    'rejects MCP and knowledge-base relation writes',
+    'keeps MCP writes but rejects deferred knowledge-base relation writes',
     (schema) => {
+      expect(schema.safeParse({ mcpServerIds: ['mcp-1'], name: 'Assistant' }).success).toBe(true);
       expect(
         schema.safeParse({
           name: 'Assistant',

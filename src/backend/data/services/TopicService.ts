@@ -243,19 +243,30 @@ export class TopicService {
   }
 
   async deleteByAssistantId(assistantId: string): Promise<DeleteTopicsResult> {
-    const deletedIds = await this.dbService.withWriteTx(async (tx) => {
-      await assertActiveAssistantTx(tx, assistantId);
-      const rows = await tx
-        .select({ id: topicTable.id })
-        .from(topicTable)
-        .where(and(eq(topicTable.assistantId, assistantId), isNull(topicTable.deletedAt)));
-      return this.deleteManyByIdsTx(
-        tx,
-        rows.map((row: { id: string }) => row.id),
-        false,
-      );
-    });
+    const deletedIds = await this.dbService.withWriteTx((tx) =>
+      this.deleteByAssistantIdTx(tx, assistantId),
+    );
     return { deletedCount: deletedIds.length, deletedIds };
+  }
+
+  async deleteByAssistantIdTx(
+    tx: DbOrTx,
+    assistantId: string,
+    options: { validateAssistant?: boolean } = {},
+  ): Promise<string[]> {
+    if (options.validateAssistant ?? true) {
+      await assertActiveAssistantTx(tx, assistantId);
+    }
+
+    const rows = await tx
+      .select({ id: topicTable.id })
+      .from(topicTable)
+      .where(and(eq(topicTable.assistantId, assistantId), isNull(topicTable.deletedAt)));
+    return this.deleteManyByIdsTx(
+      tx,
+      rows.map((row: { id: string }) => row.id),
+      false,
+    );
   }
 
   async setActiveNode(topicId: string, nodeId: string): Promise<ActiveNodeResponse> {

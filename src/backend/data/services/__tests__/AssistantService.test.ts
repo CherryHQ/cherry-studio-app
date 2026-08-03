@@ -9,6 +9,7 @@ import type { GroupService } from '../GroupService';
 import type { ModelService } from '../ModelService';
 import type { PinService } from '../PinService';
 import type { TagService } from '../TagService';
+import type { TopicService } from '../TopicService';
 import { applyMoves, insertWithOrderKey } from '../utils/orderKey';
 
 jest.mock('uuid', () => ({
@@ -40,6 +41,7 @@ describe('AssistantService', () => {
     const service = new AssistantService(
       { getDb: () => db } as unknown as DbService,
       {} as GroupService,
+      {} as TopicService,
       {} as ModelService,
       {} as PreferenceService,
       tagService,
@@ -78,6 +80,7 @@ describe('AssistantService', () => {
         withWriteTx: async (callback: (tx: unknown) => Promise<unknown>) => callback(transaction),
       } as unknown as DbService,
       {} as GroupService,
+      {} as TopicService,
       {} as ModelService,
       {} as PreferenceService,
       tagService,
@@ -124,6 +127,7 @@ describe('AssistantService', () => {
         withWriteTx: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
       } as unknown as DbService,
       {} as GroupService,
+      {} as TopicService,
       {} as ModelService,
       { get: jest.fn(async () => null) } as unknown as PreferenceService,
       tagService,

@@ -20,7 +20,7 @@ import type {
   Group,
   UpdateGroupDto,
 } from '@cherrystudio/universal/data/types/group';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { groupTable } from '@/backend/data/db/schemas';
@@ -73,6 +73,30 @@ export class GroupService {
   async findByIdTx(tx: Pick<Database, 'select'>, id: string): Promise<Group | null> {
     const [row] = await tx.select().from(groupTable).where(eq(groupTable.id, id)).limit(1);
     return row ? rowToGroup(row) : null;
+  }
+
+  async findOrCreateByNameTx(tx: Database, entityType: EntityType, name: string): Promise<Group> {
+    const [existing] = await tx
+      .select()
+      .from(groupTable)
+      .where(and(eq(groupTable.entityType, entityType), eq(groupTable.name, name)))
+      .orderBy(asc(groupTable.orderKey), asc(groupTable.id))
+      .limit(1);
+
+    if (existing) {
+      return rowToGroup(existing);
+    }
+
+    const inserted = (await insertWithOrderKey(
+      tx,
+      groupTable,
+      { entityType, name },
+      {
+        pkColumn: groupTable.id,
+        scope: eq(groupTable.entityType, entityType),
+      },
+    )) as GroupRow;
+    return rowToGroup(inserted);
   }
 
   /**
