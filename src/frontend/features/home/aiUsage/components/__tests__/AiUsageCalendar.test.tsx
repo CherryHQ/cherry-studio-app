@@ -1,6 +1,8 @@
 import type { ComponentType } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { aiUsageCalendar } from '@/frontend/utils/constants';
+
 import { AiUsageCalendar } from '../AiUsageCalendar';
 
 jest.mock('react-native', () => {
@@ -27,18 +29,12 @@ jest.mock('react-native', () => {
   };
 });
 
-jest.mock('lucide-uniwind', () => ({ PlayIcon: () => null }));
-
 jest.mock('uniwind', () => ({ useUniwind: () => ({ theme: 'light' }) }));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: { language: 'en-US', resolvedLanguage: 'en-US' },
-    t: (key: string) =>
-      ({
-        'home.aiUsage.dailyActivity': 'Daily activity',
-        'home.aiUsage.replay': 'Replay activity animation',
-      })[key] ?? key,
+    t: (key: string) => ({ 'aiUsage.replay': 'Replay usage animation' })[key] ?? key,
   }),
 }));
 
@@ -77,18 +73,18 @@ describe('AiUsageCalendar', () => {
     renderer = undefined;
   });
 
-  it('keeps the year scrollable and returns to the latest dates when the highlight changes', async () => {
+  it('keeps the detail year scrollable and returns to the latest dates', async () => {
     await act(async () => {
       renderer = create(
         <AiUsageCalendar
           data={{ '2025-08-03': 1, '2026-08-02': 4 }}
           highlightedFromDateKey="2026-07-04"
           isLoading={false}
+          layout="scroll"
         />,
       );
     });
 
-    expect(scrollProps().scrollEnabled).toBe(true);
     expect(mockScrollToEnd).toHaveBeenCalledWith({ animated: false });
     mockScrollToEnd.mockClear();
 
@@ -98,6 +94,7 @@ describe('AiUsageCalendar', () => {
           data={{ '2025-08-03': 1, '2026-08-02': 4 }}
           highlightedFromDateKey="2026-05-05"
           isLoading={false}
+          layout="scroll"
         />,
       );
     });
@@ -108,6 +105,28 @@ describe('AiUsageCalendar', () => {
     expect(mockScrollToEnd).toHaveBeenCalledWith({ animated: false });
   });
 
+  it('fits the 183-day summary into exactly 27 columns without a scroll view', async () => {
+    await act(async () => {
+      renderer = create(
+        <AiUsageCalendar
+          data={{ '2026-02-01': 1, '2026-08-02': 4 }}
+          highlightedFromDateKey="2026-02-01"
+          isLoading={false}
+          layout="fit"
+        />,
+      );
+    });
+
+    const calendar = renderer?.root.findByProps({ testID: 'ai-usage-calendar' });
+    await act(async () => calendar?.props.onLayout({ nativeEvent: { layout: { width: 324 } } }));
+
+    expect(renderer?.root.findAllByProps({ testID: 'ai-usage-calendar-scroll' })).toHaveLength(0);
+    const squareProps = renderer?.root.findAllByType(MockAiUsageSquare).map((node) => node.props);
+    const expectedCellSize = (324 - aiUsageCalendar.summaryCellGap * 26) / 27;
+    expect(squareProps).toHaveLength(183);
+    expect(squareProps?.every((props) => props.cellSize === expectedCellSize)).toBe(true);
+  });
+
   it('dims older dates and rebases the highlighted wave to its first week', async () => {
     await act(async () => {
       renderer = create(
@@ -115,6 +134,7 @@ describe('AiUsageCalendar', () => {
           data={{ '2026-01-01': 1, '2026-02-01': 4 }}
           highlightedFromDateKey="2026-01-20"
           isLoading={false}
+          layout="scroll"
         />,
       );
     });
@@ -131,26 +151,27 @@ describe('AiUsageCalendar', () => {
     ).toBe(0);
   });
 
-  it('replays the square wave from the activity control', async () => {
+  it('replays the wave when the heatmap area is pressed', async () => {
     await act(async () => {
       renderer = create(
         <AiUsageCalendar
           data={{ '2026-01-01': 4 }}
           highlightedFromDateKey="2026-01-01"
           isLoading={false}
+          layout="fit"
         />,
       );
     });
     mockReplayAnimation.mockClear();
 
-    const replayButton = renderer?.root
-      .findAllByProps({ testID: 'ai-usage-replay' })
+    const heatmap = renderer?.root
+      .findAllByProps({ testID: 'ai-usage-calendar-replay' })
       .find((node) => typeof node.props.onPress === 'function');
-    if (!replayButton) {
-      throw new Error('AI usage replay button was not found.');
+    if (!heatmap) {
+      throw new Error('AI usage heatmap button was not found.');
     }
 
-    await act(async () => replayButton.props.onPress());
+    await act(async () => heatmap.props.onPress());
     expect(mockReplayAnimation).toHaveBeenCalledTimes(1);
   });
 

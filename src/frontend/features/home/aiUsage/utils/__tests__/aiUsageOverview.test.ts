@@ -7,6 +7,7 @@ describe('AI usage overview', () => {
   test.each([
     ['30d', 30],
     ['90d', 90],
+    ['183d', 183],
     ['365d', 365],
   ] as const)('builds an inclusive %s local-date range', (windowKey, expectedDays) => {
     const endDate = new Date(2026, 7, 2, 12);

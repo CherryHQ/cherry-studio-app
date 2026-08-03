@@ -5,7 +5,7 @@ import { ScrollView, View } from 'react-native';
 import { TabRootHeader } from '@/frontend/components/headers';
 import type { HeaderToolbarAction } from '@/frontend/components/headers/BackHeader/BackHeader.types';
 
-import { AiUsageCard } from './aiUsage';
+import { AiUsageSummaryCard } from './aiUsage';
 import { HomeHeaderAvatarButton } from './components/HomeHeaderAvatarButton';
 
 export default function HomeScreen() {
@@ -25,7 +25,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-3 px-2 pt-3">
-          <AiUsageCard />
+          <AiUsageSummaryCard />
         </View>
       </ScrollView>
     </>

@@ -1,4 +1,4 @@
-import { homeAiUsageCalendar } from '@/frontend/utils/constants';
+import { aiUsageCalendar } from '@/frontend/utils/constants';
 
 import type { AiUsageCalendarDay, AiUsageData } from '../types';
 
@@ -36,7 +36,7 @@ export function buildAiUsageCalendarWeeks(data: AiUsageData): AiUsageCalendarDay
 
 // Bottom-left to top-right wave: the first week's Sunday fires first.
 export function getAiUsageSweepDelayMs(weekIndex: number, dayIndex: number): number {
-  return homeAiUsageCalendar.sweepStepMs * (weekIndex + (aiUsageCalendarRowCount - 1 - dayIndex));
+  return aiUsageCalendar.sweepStepMs * (weekIndex + (aiUsageCalendarRowCount - 1 - dayIndex));
 }
 
 export function getAiUsageMonthLabelKeys(weeks: AiUsageCalendarDay[][]): (string | undefined)[] {

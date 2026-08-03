@@ -1,4 +1,4 @@
-import { homeAiUsageCalendar } from '@/frontend/utils/constants';
+import { aiUsageCalendar } from '@/frontend/utils/constants';
 
 import {
   buildAiUsageCalendarWeeks,
@@ -53,7 +53,7 @@ describe('AI usage calendar layout', () => {
   test('sweeps from the bottom-left toward the top-right by diagonal', () => {
     expect(getAiUsageSweepDelayMs(0, 6)).toBe(0);
     expect(getAiUsageSweepDelayMs(0, 5)).toBe(getAiUsageSweepDelayMs(1, 6));
-    expect(getAiUsageSweepDelayMs(1, 0)).toBe(homeAiUsageCalendar.sweepStepMs * 7);
+    expect(getAiUsageSweepDelayMs(1, 0)).toBe(aiUsageCalendar.sweepStepMs * 7);
   });
 
   test('labels month changes without crowding adjacent weeks', () => {

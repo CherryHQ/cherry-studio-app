@@ -11,6 +11,7 @@ import {
 const aiUsageWindowDays: Record<AiUsageWindowKey, number> = {
   '30d': 30,
   '90d': 90,
+  '183d': 183,
   '365d': 365,
 };
 

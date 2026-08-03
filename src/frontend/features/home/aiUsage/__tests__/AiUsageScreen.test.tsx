@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { AiUsageOverview, AiUsageWindowKey } from '../../types';
-import { AiUsageCard } from '../AiUsageCard';
+import { AiUsageScreen } from '../AiUsageScreen';
+import type { AiUsageDetailWindowKey, AiUsageOverview } from '../types';
 
 const mockRefetch = jest.fn();
 const mockUseAiUsageOverview = jest.fn();
@@ -62,13 +62,23 @@ jest.mock('heroui-native', () => {
   return { Tabs };
 });
 
-jest.mock('lucide-uniwind', () => ({ RefreshCwIcon: () => null }));
+jest.mock('lucide-uniwind/png', () => ({ RefreshCwIcon: () => null }));
 
-jest.mock('../../hooks/useAiUsageOverview', () => ({
-  useAiUsageOverview: (windowKey: AiUsageWindowKey) => mockUseAiUsageOverview(windowKey),
+jest.mock('@/frontend/components/headers', () => {
+  const { Text: MockText } = jest.requireActual('react-native');
+
+  return {
+    BackHeader: ({ title }: { title: string }) => (
+      <MockText testID="ai-usage-header">{title}</MockText>
+    ),
+  };
+});
+
+jest.mock('../hooks/useAiUsageOverview', () => ({
+  useAiUsageOverview: (windowKey: AiUsageDetailWindowKey) => mockUseAiUsageOverview(windowKey),
 }));
 
-jest.mock('../AiUsageCalendar', () => {
+jest.mock('../components/AiUsageCalendar', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
   return {
@@ -83,19 +93,20 @@ jest.mock('react-i18next', () => ({
     i18n: { language: 'en-US', resolvedLanguage: 'en-US' },
     t: (key: string, options?: { count?: number; tokens?: string }) =>
       ({
-        'home.aiUsage.activeDays': 'Active days',
-        'home.aiUsage.cacheHitRate': 'Cache hit rate',
-        'home.aiUsage.cacheObservedTokens': `Observable input: ${options?.tokens}`,
-        'home.aiUsage.loadError': 'AI usage could not be loaded.',
-        'home.aiUsage.loading': 'Loading AI usage',
-        'home.aiUsage.longestStreak': `${options?.count}-day streak`,
-        'home.aiUsage.peakDay': 'Peak day',
-        'home.aiUsage.range.30d': '30D',
-        'home.aiUsage.range.365d': '1Y',
-        'home.aiUsage.range.90d': '90D',
-        'home.aiUsage.retry': 'Retry',
-        'home.aiUsage.title': 'AI Usage',
-        'home.aiUsage.totalTokens': 'Total tokens',
+        'aiUsage.activeDays': 'Active days',
+        'aiUsage.cacheHitRate': 'Cache hit rate',
+        'aiUsage.cacheObservedTokens': `Observable input: ${options?.tokens}`,
+        'aiUsage.dailyActivity': 'Daily activity',
+        'aiUsage.loadError': 'Usage statistics could not be loaded.',
+        'aiUsage.loading': 'Loading usage statistics',
+        'aiUsage.longestStreak': `${options?.count}-day streak`,
+        'aiUsage.peakDay': 'Peak day',
+        'aiUsage.range.30d': '30D',
+        'aiUsage.range.365d': '1Y',
+        'aiUsage.range.90d': '90D',
+        'aiUsage.retry': 'Retry',
+        'aiUsage.title': 'Usage Statistics',
+        'aiUsage.totalTokens': 'Total tokens',
       })[key] ?? key,
   }),
 }));
@@ -110,18 +121,18 @@ const overview: AiUsageOverview = {
   totalTokens: 1_200,
 };
 const calendarData = { '2025-01-05': 2, '2026-01-04': 4 } as const;
-const ranges: Record<AiUsageWindowKey, { from: number; to: number }> = {
+const ranges: Record<AiUsageDetailWindowKey, { from: number; to: number }> = {
   '30d': rangeForDates(new Date(2026, 0, 4), new Date(2026, 1, 2)),
   '90d': rangeForDates(new Date(2025, 10, 5), new Date(2026, 1, 2)),
   '365d': rangeForDates(new Date(2025, 1, 3), new Date(2026, 1, 2)),
 };
 
-describe('AiUsageCard', () => {
+describe('AiUsageScreen', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseAiUsageOverview.mockImplementation((windowKey: AiUsageWindowKey) =>
+    mockUseAiUsageOverview.mockImplementation((windowKey: AiUsageDetailWindowKey) =>
       queryResult({ range: ranges[windowKey] }),
     );
   });
@@ -132,9 +143,12 @@ describe('AiUsageCard', () => {
   });
 
   it('renders timeline metrics and defaults to the last 30 days', async () => {
-    await renderCard();
+    await renderScreen();
 
     expect(mockUseAiUsageOverview).toHaveBeenLastCalledWith('30d');
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-header' }).props.children).toBe(
+      'Usage Statistics',
+    );
     expect(metricValue('ai-usage-total-tokens-value')).toBe('1.2K');
     expect(metricValue('ai-usage-cache-hit-rate-value')).toBe('76.7%');
     expect(metricValue('ai-usage-active-days-value')).toBe('4');
@@ -145,10 +159,11 @@ describe('AiUsageCard', () => {
     const calendar = renderer?.root.findByProps({ testID: 'ai-usage-calendar' });
     expect(calendar?.props.data).toBe(calendarData);
     expect(calendar?.props.highlightedFromDateKey).toBe('2026-01-04');
+    expect(calendar?.props.layout).toBe('scroll');
   });
 
   it('changes the timeline window from the segmented control', async () => {
-    await renderCard();
+    await renderScreen();
     const rangeButton = renderer?.root
       .findAllByProps({ testID: 'ai-usage-range-365d' })
       .find((node) => typeof node.props.onPress === 'function');
@@ -170,7 +185,7 @@ describe('AiUsageCard', () => {
       queryResult({ hasData: false, isLoading: true, overview: emptyOverview() }),
     );
 
-    await renderCard();
+    await renderScreen();
 
     expect(metricValue('ai-usage-total-tokens-value')).toBe('--');
     expect(metricValue('ai-usage-cache-hit-rate-value')).toBe('--');
@@ -189,9 +204,9 @@ describe('AiUsageCard', () => {
       }),
     );
 
-    await renderCard();
+    await renderScreen();
 
-    expect(textValues()).toContain('AI usage could not be loaded.');
+    expect(textValues()).toContain('Usage statistics could not be loaded.');
     expect(renderer?.root.findAllByProps({ testID: 'ai-usage-calendar' })).toHaveLength(0);
 
     await act(async () => renderer?.root.findByProps({ testID: 'ai-usage-retry' }).props.onPress());
@@ -203,7 +218,7 @@ describe('AiUsageCard', () => {
       queryResult({ error: new Error('refresh failed'), isError: true }),
     );
 
-    await renderCard();
+    await renderScreen();
 
     expect(renderer?.root.findByProps({ testID: 'ai-usage-calendar' })).toBeDefined();
     expect(metricValue('ai-usage-total-tokens-value')).toBe('1.2K');
@@ -214,9 +229,9 @@ describe('AiUsageCard', () => {
     expect(mockRefetch).toHaveBeenCalledTimes(1);
   });
 
-  async function renderCard() {
+  async function renderScreen() {
     await act(async () => {
-      renderer = create(<AiUsageCard />);
+      renderer = create(<AiUsageScreen />);
     });
   }
 

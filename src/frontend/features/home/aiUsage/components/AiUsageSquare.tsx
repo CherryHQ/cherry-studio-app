@@ -10,12 +10,13 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 
-import { homeAiUsageCalendar } from '@/frontend/utils/constants';
+import { aiUsageCalendar } from '@/frontend/utils/constants';
 
 import type { AiUsageAnimationControls, AiUsageLevel } from '../types';
 import { getAiUsageSweepDelayMs } from '../utils/aiUsageCalendar';
 
 type AiUsageSquareProps = {
+  cellSize: number;
   dayIndex: number;
   isHighlighted: boolean;
   level: AiUsageLevel;
@@ -25,6 +26,7 @@ type AiUsageSquareProps = {
 };
 
 export function AiUsageSquare({
+  cellSize,
   dayIndex,
   isHighlighted,
   level,
@@ -47,7 +49,7 @@ export function AiUsageSquare({
     progress.set(
       withDelay(
         getAiUsageSweepDelayMs(weekIndex, dayIndex),
-        withSpring(1, homeAiUsageCalendar.enterSpring),
+        withSpring(1, aiUsageCalendar.enterSpring),
       ),
     );
   }, [dayIndex, isHighlighted, progress, weekIndex]);
@@ -63,17 +65,24 @@ export function AiUsageSquare({
     };
   }, [activeColor, restingColor]);
 
-  return <Animated.View style={[styles.square, !isHighlighted && styles.dimmed, animatedStyle]} />;
+  return (
+    <Animated.View
+      style={[
+        styles.square,
+        { height: cellSize, width: cellSize },
+        !isHighlighted && styles.dimmed,
+        animatedStyle,
+      ]}
+    />
+  );
 }
 
 const styles = StyleSheet.create({
   dimmed: {
-    opacity: homeAiUsageCalendar.dimmedOpacity,
+    opacity: aiUsageCalendar.dimmedOpacity,
   },
   square: {
     borderCurve: 'continuous',
-    borderRadius: homeAiUsageCalendar.cellRadius,
-    height: homeAiUsageCalendar.cellSize,
-    width: homeAiUsageCalendar.cellSize,
+    borderRadius: aiUsageCalendar.cellRadius,
   },
 });

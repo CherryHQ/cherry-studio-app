@@ -7,10 +7,16 @@ import type { AiUsageWindowKey } from '../types';
 import { toLocalDateKey } from '../utils/aiUsageCalendar';
 import { buildAiUsageOverview, getAiUsageWindowRange } from '../utils/aiUsageOverview';
 
-export function useAiUsageOverview(windowKey: AiUsageWindowKey) {
+export function useAiUsageOverview(
+  windowKey: AiUsageWindowKey,
+  timelineWindowKey: AiUsageWindowKey = '365d',
+) {
   const [endDate, setEndDate] = useState(() => new Date());
   const range = useMemo(() => getAiUsageWindowRange(windowKey, endDate), [endDate, windowKey]);
-  const timelineRange = useMemo(() => getAiUsageWindowRange('365d', endDate), [endDate]);
+  const timelineRange = useMemo(
+    () => getAiUsageWindowRange(timelineWindowKey, endDate),
+    [endDate, timelineWindowKey],
+  );
   const query = useMemo(
     () => ({ from: timelineRange.from, limit: 1, metric: 'tokens' as const, to: timelineRange.to }),
     [timelineRange],
@@ -48,8 +54,11 @@ export function useAiUsageOverview(windowKey: AiUsageWindowKey) {
     [buckets, timelineRange],
   );
   const overview = useMemo(
-    () => (windowKey === '365d' ? timelineOverview : buildAiUsageOverview(buckets ?? [], range)),
-    [buckets, range, timelineOverview, windowKey],
+    () =>
+      windowKey === timelineWindowKey
+        ? timelineOverview
+        : buildAiUsageOverview(buckets ?? [], range),
+    [buckets, range, timelineOverview, timelineWindowKey, windowKey],
   );
 
   return {

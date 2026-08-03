@@ -42,13 +42,15 @@ export const screenBottomActionInset = 16;
 // focus() call landing before that is silently ignored by UIKit.
 export const searchBarAutoFocusDelayMs = 100;
 
-// Tuning knobs for the GitHub-style AI usage calendar card on the Home tab.
+// Tuning knobs for the GitHub-style AI usage calendars.
 // Sizes, colors and spring feel replicate the reference contribution-graph
 // animation 1:1 — adjust here, not in the AI usage components.
-export const homeAiUsageCalendar = {
+export const aiUsageCalendar = {
   cellSize: 14,
   cellGap: 3,
   cellRadius: 2,
+  summaryCellGap: 2,
+  summaryFallbackCellSize: 10,
   cardShadow: '0px 0px 20px 0px rgba(0, 0, 0, 0.05)',
   // no activity → highest; GitHub's green scales for both themes. Level 0 in
   // dark sits slightly above the dark surface so empty cells stay visible.

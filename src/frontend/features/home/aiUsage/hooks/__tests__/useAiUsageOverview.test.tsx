@@ -70,8 +70,14 @@ function Providers({ children }: { children: ReactNode }) {
   );
 }
 
-function Probe({ windowKey }: { windowKey: AiUsageWindowKey }) {
-  const result = useAiUsageOverview(windowKey);
+function Probe({
+  timelineWindowKey,
+  windowKey,
+}: {
+  timelineWindowKey?: AiUsageWindowKey;
+  windowKey: AiUsageWindowKey;
+}) {
+  const result = useAiUsageOverview(windowKey, timelineWindowKey);
 
   useEffect(() => {
     latestResult = result;
@@ -159,6 +165,25 @@ describe('useAiUsageOverview', () => {
       cacheObservedTokens: 620,
       totalTokens: 620,
     });
+  });
+
+  test('queries only the 183-day timeline for the Home summary', async () => {
+    await act(async () => {
+      renderer = create(
+        <Providers>
+          <Probe timelineWindowKey="183d" windowKey="183d" />
+        </Providers>,
+      );
+    });
+    await flushQueryNotifications();
+
+    const range = getAiUsageWindowRange('183d', new Date());
+    expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/timeline', {
+      query: { from: range.from, limit: 1, metric: 'tokens', to: range.to },
+    });
+    expect(Object.keys(latestResult?.calendarData ?? {})).toHaveLength(183);
+    expect(latestResult?.calendarData).not.toHaveProperty('2026-01-01');
+    expect(latestResult?.calendarData).toHaveProperty('2026-08-02');
   });
 
   test('moves the local-date range forward when Home regains focus after midnight', async () => {
