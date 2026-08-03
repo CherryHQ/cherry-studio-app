@@ -1,12 +1,11 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-
-import type { EndpointType } from '@/shared/data/types/model';
+import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type {
   AuthType,
   EndpointConfig,
   EndpointConfigs,
   Provider,
-} from '@/shared/data/types/provider';
+} from '@cherrystudio/universal/data/types/provider';
 
 export const configurableEndpointTypes: EndpointType[] = [
   ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,

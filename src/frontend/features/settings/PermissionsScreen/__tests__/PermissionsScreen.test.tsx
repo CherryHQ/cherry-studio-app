@@ -1,8 +1,7 @@
+import type { PermissionMode } from '@cherrystudio/universal/data/preference';
 import type { ReactNode } from 'react';
 import { Platform, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import type { PermissionMode } from '@/shared/data/preference';
 
 import PermissionsSettingsScreen from '../PermissionsScreen';
 

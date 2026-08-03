@@ -1,17 +1,24 @@
 import type { ListToolsResult, MCPClient } from '@ai-sdk/mcp';
 import { createMCPClient } from '@ai-sdk/mcp';
+import type { McpCallToolResult } from '@cherrystudio/universal/ai/tools/mcpResult';
+import { mcpResultToTextSummary } from '@cherrystudio/universal/ai/tools/mcpResult';
+import {
+  isMcpToolDisabledBySource,
+  isMcpToolForcePromptBySource,
+} from '@cherrystudio/universal/ai/tools/mcpSourcePolicy';
+import { buildFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
+import { DataApiError, ErrorCode } from '@cherrystudio/universal/data/api/types';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import {
+  DEFAULT_MCP_TIMEOUT_SECONDS,
+  type StreamableHttpMcpServer,
+} from '@cherrystudio/universal/data/types/mcpServer';
+import { fnv1a32 } from '@cherrystudio/universal/utils/fnv1a';
 import type { Tool, ToolSet } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import type { ToolEntry } from '@/backend/ai/tools';
 import type { McpServerService } from '@/backend/data/services/McpServerService';
-import type { McpCallToolResult } from '@/shared/ai/tools/mcpResult';
-import { mcpResultToTextSummary } from '@/shared/ai/tools/mcpResult';
-import {
-  isMcpToolDisabledBySource,
-  isMcpToolForcePromptBySource,
-} from '@/shared/ai/tools/mcpSourcePolicy';
-import { buildFunctionCallToolName } from '@/shared/ai/tools/mcpToolName';
 import type {
   McpConnectionConfig,
   McpServerInfo,
@@ -19,13 +26,6 @@ import type {
   McpToolSummary,
 } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { DataApiError, ErrorCode } from '@/shared/data/api/types';
-import type { Assistant } from '@/shared/data/types/assistant';
-import {
-  DEFAULT_MCP_TIMEOUT_SECONDS,
-  type StreamableHttpMcpServer,
-} from '@/shared/data/types/mcpServer';
-import { fnv1a32 } from '@/shared/utils/fnv1a';
 
 import { resolveServersForAssistant } from './resolveAssistantMcpServers';
 
@@ -230,7 +230,10 @@ export class McpRuntimeService {
    * tools are returned immediately while they refresh in the background.
    * Returns an empty list when nothing applies and never surfaces MCP failures.
    */
-  async getToolEntriesForAssistant(assistant: Assistant): Promise<ToolEntry[]> {
+  async getToolEntriesForAssistant(
+    assistant: Assistant,
+    selectedToolIds?: readonly string[],
+  ): Promise<ToolEntry[]> {
     let activeServers: StreamableHttpMcpServer[];
     try {
       ({ items: activeServers } = await this.deps.mcpServer.list({
@@ -251,6 +254,7 @@ export class McpRuntimeService {
     }));
     await this.warmColdToolCaches(preparedServers);
 
+    const selectedToolIdSet = selectedToolIds ? new Set(selectedToolIds) : undefined;
     const entries: ToolEntry[] = [];
     const registeredNames = new Set<string>();
     for (const { server, state } of preparedServers) {
@@ -270,6 +274,9 @@ export class McpRuntimeService {
         }
 
         const key = buildFunctionCallToolName(server.name, rawName);
+        if (selectedToolIdSet && !selectedToolIdSet.has(key)) {
+          continue;
+        }
         if (registeredNames.has(key)) {
           logger.warn('Duplicate MCP tool key, skipping', { key, server: server.name });
           continue;

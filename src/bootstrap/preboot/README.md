@@ -23,6 +23,8 @@ here merely because they run early.
 - `abortSignal.ts` supplies the missing `AbortSignal.throwIfAborted()` behavior required by MCP tool
   execution.
 - `blob.ts` installs Expo's Blob implementation on the Hermes global.
+- `webCrypto.ts` installs `crypto.getRandomValues`/`crypto.randomUUID` from expo-crypto; the `uuid`
+  package behind Drizzle id column defaults reads the bare `crypto` global that Hermes lacks.
 
 ## Import Rules
 
@@ -32,6 +34,7 @@ so order and side effects remain visible:
 ```ts
 import '@/bootstrap/preboot/abortSignal';
 import '@/bootstrap/preboot/blob';
+import '@/bootstrap/preboot/webCrypto';
 ```
 
 Preboot must not import app routes, backend modules, frontend modules, composition, or runtime. Add a

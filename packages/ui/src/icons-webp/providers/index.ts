@@ -2,7 +2,7 @@
  * Auto-generated provider icon registry
  * Do not edit manually.
  *
- * Total icons: 156
+ * Total icons: 157
  */
 
 import { resolveGeneralIcon } from '../general';
@@ -79,13 +79,13 @@ export const PROVIDER_ICONS = {
     light: require('./light/baichuan.webp'),
     dark: require('./light/baichuan.webp'),
   },
-  'baidu-cloud': {
-    light: require('./light/baidu-cloud.webp'),
-    dark: require('./light/baidu-cloud.webp'),
-  },
   baidu: {
     light: require('./light/baidu.webp'),
     dark: require('./light/baidu.webp'),
+  },
+  'baidu-cloud': {
+    light: require('./light/baidu-cloud.webp'),
+    dark: require('./light/baidu-cloud.webp'),
   },
   bailian: {
     light: require('./light/bailian.webp'),
@@ -231,13 +231,13 @@ export const PROVIDER_ICONS = {
     light: require('./light/gitee-ai.webp'),
     dark: require('./dark/gitee-ai.webp'),
   },
-  'github-copilot': {
-    light: require('./light/github-copilot.webp'),
-    dark: require('./dark/github-copilot.webp'),
-  },
   github: {
     light: require('./light/github.webp'),
     dark: require('./dark/github.webp'),
+  },
+  'github-copilot': {
+    light: require('./light/github-copilot.webp'),
+    dark: require('./dark/github-copilot.webp'),
   },
   glama: {
     light: require('./light/glama.webp'),
@@ -367,13 +367,13 @@ export const PROVIDER_ICONS = {
     light: require('./light/mineru.webp'),
     dark: require('./dark/mineru.webp'),
   },
-  'minimax-agent': {
-    light: require('./light/minimax-agent.webp'),
-    dark: require('./light/minimax-agent.webp'),
-  },
   minimax: {
     light: require('./light/minimax.webp'),
     dark: require('./dark/minimax.webp'),
+  },
+  'minimax-agent': {
+    light: require('./light/minimax-agent.webp'),
+    dark: require('./light/minimax-agent.webp'),
   },
   mistral: {
     light: require('./light/mistral.webp'),
@@ -482,6 +482,10 @@ export const PROVIDER_ICONS = {
   qwen: {
     light: require('./light/qwen.webp'),
     dark: require('./light/qwen.webp'),
+  },
+  'radeon-cloud': {
+    light: require('./light/radeon-cloud.webp'),
+    dark: require('./light/radeon-cloud.webp'),
   },
   recraft: {
     light: require('./light/recraft.webp'),

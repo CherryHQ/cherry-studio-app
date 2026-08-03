@@ -1,11 +1,12 @@
-import { useEffect } from 'react';
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
+import { useEffect, useRef } from 'react';
 
 import { useChatInputActions, useChatInputState } from '../context/ChatInputProvider';
 import {
   CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   type ChatInputReasoningEffort,
-  getFallbackChatInputReasoningEffort,
   isChatInputReasoningEffortAvailable,
+  resolveAvailableChatInputReasoningEffort,
 } from '../utils/chatInputReasoning';
 
 /**
@@ -17,9 +18,19 @@ import {
  */
 export function useChatInputReasoningEffortSync(
   reasoningEfforts: readonly ChatInputReasoningEffort[],
+  assistantReasoningEffort: ReasoningEffortOption = CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+  assistantId?: string | null,
 ) {
   const { isReasoningEffortSelected, reasoningEffort } = useChatInputState();
-  const { clearReasoningEffort, selectReasoningEffort } = useChatInputActions();
+  const { clearReasoningEffort, selectReasoningEffort, syncReasoningEffort } =
+    useChatInputActions();
+  const previousAssistantId = useRef(assistantId);
+
+  useEffect(() => {
+    if (previousAssistantId.current === assistantId) return;
+    previousAssistantId.current = assistantId;
+    clearReasoningEffort();
+  }, [assistantId, clearReasoningEffort]);
 
   useEffect(() => {
     if (reasoningEfforts.length === 0) {
@@ -29,14 +40,29 @@ export function useChatInputReasoningEffortSync(
       return;
     }
 
+    if (!isReasoningEffortSelected) {
+      const nextReasoningEffort = resolveAvailableChatInputReasoningEffort(
+        assistantReasoningEffort,
+        reasoningEfforts,
+      );
+      if (reasoningEffort !== nextReasoningEffort) {
+        syncReasoningEffort(nextReasoningEffort);
+      }
+      return;
+    }
+
     if (!isChatInputReasoningEffortAvailable(reasoningEffort, reasoningEfforts)) {
-      selectReasoningEffort(getFallbackChatInputReasoningEffort(reasoningEfforts));
+      selectReasoningEffort(
+        resolveAvailableChatInputReasoningEffort(reasoningEffort, reasoningEfforts),
+      );
     }
   }, [
+    assistantReasoningEffort,
     clearReasoningEffort,
     isReasoningEffortSelected,
     reasoningEffort,
     reasoningEfforts,
     selectReasoningEffort,
+    syncReasoningEffort,
   ]);
 }

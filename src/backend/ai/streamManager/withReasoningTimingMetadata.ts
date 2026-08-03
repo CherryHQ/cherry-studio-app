@@ -10,10 +10,12 @@
  * of the resulting stream sees the same computed values.
  */
 
+import {
+  type CherryReasoningMeta,
+  CherryReasoningMetaSchema,
+} from '@cherrystudio/universal/data/types/uiParts';
 import { loggerService } from '@logger';
 import type { ProviderMetadata, UIMessageChunk } from 'ai';
-
-import { type CherryReasoningMeta, CherryReasoningMetaSchema } from '@/shared/data/types/uiParts';
 
 const logger = loggerService.withContext('withReasoningTimingMetadata');
 
@@ -44,6 +46,21 @@ export function withReasoningTimingMetadata(
             providerMetadata: toProviderMetadata(chunk.providerMetadata),
           });
           controller.enqueue(withChunkCherryMeta(chunk, { startedAt: epochNow }));
+          return;
+        }
+
+        if (chunk.type === 'reasoning-delta') {
+          const deltaMetadata = toProviderMetadata(chunk.providerMetadata);
+          if (deltaMetadata) {
+            const reasoning = reasoningById.get(chunk.id);
+            if (reasoning) {
+              reasoning.providerMetadata = {
+                ...reasoning.providerMetadata,
+                ...deltaMetadata,
+              };
+            }
+          }
+          controller.enqueue(chunk);
           return;
         }
 

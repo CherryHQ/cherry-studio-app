@@ -10,8 +10,8 @@ export const preferenceTable = sqliteTable(
     value: text({ mode: 'json' }),
     ...createUpdateTimestamps,
   },
-  (table) => [primaryKey({ columns: [table.scope, table.key] })],
+  (t) => [primaryKey({ columns: [t.scope, t.key] })],
 );
 
-export type InsertPreferenceRow = typeof preferenceTable.$inferInsert;
 export type PreferenceRow = typeof preferenceTable.$inferSelect;
+export type InsertPreferenceRow = typeof preferenceTable.$inferInsert;

@@ -1,6 +1,5 @@
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import type { Painting } from '@/shared/data/types/painting';
 
 import { DrawingList } from '../DrawingList';
 

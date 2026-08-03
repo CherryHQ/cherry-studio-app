@@ -7,6 +7,7 @@ import { PROVIDER_ICONS, resolveProviderIcon } from '../providers';
 describe('provider WebP icon registry', () => {
   test('resolves provider icons by id', () => {
     expect(resolveProviderIcon('openai')).toBe(PROVIDER_ICONS.openai);
+    expect(resolveProviderIcon('radeon-cloud')).toBe(PROVIDER_ICONS['radeon-cloud']);
   });
 
   test('resolves provider aliases', () => {

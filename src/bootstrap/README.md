@@ -34,7 +34,8 @@ restore flat `create*`, provider, runtime-task, or polyfill files beside `index.
 3. The runtime initializes cache, SQLite, preferences, boot theme, and i18n in order.
 4. `AppBootstrapGate` opens after required startup work succeeds.
 5. Best-effort post-ready tasks start outside the first-paint critical path.
-6. Provider unmount disposes MCP, web-search state, backend cache, and SQLite.
+6. Provider unmount starts one idempotent asynchronous shutdown: abort and await the Chat Runtime,
+   then dispose MCP, web-search state, backend cache, and SQLite in that order.
 
 ## Ownership Rules
 

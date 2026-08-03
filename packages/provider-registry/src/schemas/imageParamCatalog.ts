@@ -63,8 +63,8 @@ export const IMAGE_PARAM_CATALOG = {
   negativePrompt: { schema: optString },
   numImages: { schema: optInt },
   numInferenceSteps: { schema: optInt },
-  outputCompression: { schema: optInt },
   outputFormat: { schema: optString },
+  outputCompression: { schema: optInt },
   personGeneration: { schema: optString },
   promptEnhancement: { schema: optBool },
   promptExtend: { schema: optBool },
@@ -102,7 +102,7 @@ export type ParamValues = { [K in CanonicalParamKey]?: ParamValue<K> };
  * `z.object` whose `z.infer` is exactly {@link ParamValues}. The one `as` is on
  * the dynamic `Object.fromEntries` SHAPE (provably the catalog keys → their
  * schemas); the output type then flows without a cast. Consumers (the
- * `ai.generate_image` IPC payload) use this to validate + coerce the bag with zod
+ * `ai.image.generate` IPC payload) use this to validate + coerce the bag with zod
  * AT THE BOUNDARY — non-catalog keys are stripped, per-model option/range
  * constraints stay in the renderer's `buildParamsSchema`.
  */

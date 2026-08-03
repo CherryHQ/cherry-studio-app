@@ -1,7 +1,6 @@
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-
-import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { formatToolPartValue, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';

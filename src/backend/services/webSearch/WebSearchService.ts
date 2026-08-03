@@ -1,6 +1,7 @@
-import type { PreferenceService } from '@/backend/data/PreferenceService';
-import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/preference';
+import type {
+  WebSearchCapability,
+  WebSearchProvider,
+} from '@cherrystudio/universal/data/preference';
 import type {
   WebSearchCheckProviderRequest,
   WebSearchCheckProviderResponse,
@@ -8,7 +9,10 @@ import type {
   WebSearchFetchUrlsRequest,
   WebSearchResponse,
   WebSearchSearchKeywordsRequest,
-} from '@/shared/data/types/webSearch';
+} from '@cherrystudio/universal/data/types/webSearch';
+
+import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { postProcessWebSearchResponse } from './postProcessing';
 import type { WebSearchProviderDriver } from './providers/factory';
@@ -18,6 +22,7 @@ import { getProviderForCapability, getRuntimeConfig } from './utils/config';
 import { isAbortError } from './utils/errors';
 import { normalizeWebSearchKeywords, normalizeWebSearchUrls } from './utils/input';
 import { ApiKeyRotationState } from './utils/provider';
+import { WebSearchConfigError } from './WebSearchConfigError';
 
 const logger = loggerService.withContext('WebSearchService');
 
@@ -68,7 +73,8 @@ export class WebSearchService {
     const capabilityRunner = context.providerDriver[context.capability];
 
     if (!capabilityRunner) {
-      throw new Error(
+      throw new WebSearchConfigError(
+        'capability_unsupported',
         `Web search provider ${context.provider.id} does not implement capability ${context.capability}`,
       );
     }

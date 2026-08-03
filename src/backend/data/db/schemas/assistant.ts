@@ -1,6 +1,5 @@
+import type { AssistantSettings } from '@cherrystudio/universal/data/types/assistant';
 import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-
-import type { AssistantSettings } from '@/shared/data/types/assistant';
 
 import {
   createUpdateDeleteTimestamps,
@@ -8,6 +7,7 @@ import {
   orderKeyIndex,
   uuidPrimaryKey,
 } from './_columnHelpers';
+import { groupTable } from './group';
 import { userModelTable } from './userModel';
 
 /**
@@ -30,16 +30,16 @@ export const assistantTable = sqliteTable(
     // Default/primary model: FK to user_model(id) — UniqueModelId "providerId::modelId"
     // Legitimately nullable (R1): NULL = "no model selected yet"
     modelId: text().references(() => userModelTable.id, { onDelete: 'set null' }),
+    // Optional assistant group. The v1 migrator preserves legacy tag groups here,
+    // and runtime assistant grouping reads/writes this same canonical reference.
+    groupId: text().references(() => groupTable.id, { onDelete: 'set null' }),
     // JSON blob: inference params + context source toggles
     // Tunable product value: AssistantService.create() supplies DEFAULT_ASSISTANT_SETTINGS
     settings: text({ mode: 'json' }).$type<AssistantSettings>().notNull(),
     ...orderKeyColumns,
     ...createUpdateDeleteTimestamps,
   },
-  (table) => [
-    index('assistant_created_at_idx').on(table.createdAt),
-    orderKeyIndex('assistant')(table),
-  ],
+  (t) => [index('assistant_created_at_idx').on(t.createdAt), orderKeyIndex('assistant')(t)],
 );
 
 export type InsertAssistantRow = typeof assistantTable.$inferInsert;

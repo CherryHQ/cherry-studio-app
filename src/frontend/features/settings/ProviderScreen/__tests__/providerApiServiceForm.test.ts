@@ -117,25 +117,25 @@ describe('provider API service form helpers', () => {
     expect(getProviderPrimaryBaseUrl({ endpointConfigs: {} } as never)).toBe('');
   });
 
-  it('allows clearing the primary endpoint base URL', () => {
-    const updates = buildProviderApiServiceEndpointUpdates({
-      draft: createTestEndpointDraft({
-        baseUrlByEndpoint: {
-          'openai-chat-completions': '',
-        },
+  it('rejects clearing the default endpoint base URL', () => {
+    expect(() =>
+      buildProviderApiServiceEndpointUpdates({
+        draft: createTestEndpointDraft({
+          baseUrlByEndpoint: {
+            'openai-chat-completions': '',
+          },
+        }),
+        provider: {
+          authType: 'api-key',
+          endpointConfigs: {
+            'openai-chat-completions': { baseUrl: 'https://old.example.com' },
+          },
+        } as never,
       }),
-      provider: {
-        authType: 'api-key',
-        endpointConfigs: {
-          'openai-chat-completions': { baseUrl: 'https://old.example.com' },
-        },
-      } as never,
-    });
-
-    expect(updates).toEqual({ endpointConfigs: {} });
+    ).toThrow(new ProviderApiServiceSaveError('invalid-base-url'));
   });
 
-  it('saves endpoint configs without changing defaultChatEndpoint', () => {
+  it('saves endpoint configs with the selected defaultChatEndpoint', () => {
     const updates = buildProviderApiServiceEndpointUpdates({
       draft: createTestEndpointDraft({
         baseUrlByEndpoint: {
@@ -154,6 +154,7 @@ describe('provider API service form helpers', () => {
     });
 
     expect(updates).toEqual({
+      defaultChatEndpoint: 'openai-chat-completions',
       endpointConfigs: {
         'openai-chat-completions': { baseUrl: 'https://chat.example.com' },
         'openai-responses': { baseUrl: 'https://responses.example.com' },
@@ -180,10 +181,34 @@ describe('provider API service form helpers', () => {
     });
 
     expect(updates).toEqual({
+      defaultChatEndpoint: 'openai-chat-completions',
       endpointConfigs: {
         'openai-chat-completions': { baseUrl: 'https://chat.example.com' },
       },
     });
+  });
+
+  it('persists a configured endpoint as the provider default', () => {
+    const updates = buildProviderApiServiceEndpointUpdates({
+      draft: createTestEndpointDraft({
+        baseUrlByEndpoint: {
+          'anthropic-messages': 'https://anthropic.example.com',
+          'openai-chat-completions': 'https://chat.example.com',
+        },
+        primaryEndpoint: 'anthropic-messages',
+        visibleEndpointTypes: ['openai-chat-completions', 'anthropic-messages'],
+      }),
+      provider: {
+        authType: 'api-key',
+        defaultChatEndpoint: 'openai-chat-completions',
+        endpointConfigs: {
+          'anthropic-messages': { baseUrl: 'https://anthropic.example.com' },
+          'openai-chat-completions': { baseUrl: 'https://chat.example.com' },
+        },
+      } as never,
+    });
+
+    expect(updates.defaultChatEndpoint).toBe('anthropic-messages');
   });
 
   it('normalizes API key entries before they reach the save call', () => {

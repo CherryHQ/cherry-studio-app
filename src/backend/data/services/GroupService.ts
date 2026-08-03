@@ -12,15 +12,19 @@
  *   scope inference and enforces "batch stays within one entityType".
  */
 
-import { asc, eq } from 'drizzle-orm';
+import type { OrderRequest } from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
+import type { EntityType } from '@cherrystudio/universal/data/types/entityType';
+import type {
+  CreateGroupDto,
+  Group,
+  UpdateGroupDto,
+} from '@cherrystudio/universal/data/types/group';
+import { and, asc, eq } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import type { Database, DbService } from '@/backend/data/db/DbService';
 import { groupTable } from '@/backend/data/db/schemas';
 import type { GroupRow } from '@/backend/data/db/schemas/group';
-import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
-import { DataApiErrorFactory } from '@/shared/data/api/types';
-import type { EntityType } from '@/shared/data/types/entityType';
-import type { CreateGroupDto, Group, UpdateGroupDto } from '@/shared/data/types/group';
 
 import { applyScopedMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
@@ -59,13 +63,40 @@ export class GroupService {
    * Get a group by ID.
    */
   async getById(id: string): Promise<Group> {
-    const [row] = await this.db.select().from(groupTable).where(eq(groupTable.id, id)).limit(1);
-
-    if (!row) {
+    const group = await this.findByIdTx(this.db, id);
+    if (!group) {
       throw DataApiErrorFactory.notFound('Group', id);
     }
+    return group;
+  }
 
-    return rowToGroup(row);
+  async findByIdTx(tx: Pick<Database, 'select'>, id: string): Promise<Group | null> {
+    const [row] = await tx.select().from(groupTable).where(eq(groupTable.id, id)).limit(1);
+    return row ? rowToGroup(row) : null;
+  }
+
+  async findOrCreateByNameTx(tx: Database, entityType: EntityType, name: string): Promise<Group> {
+    const [existing] = await tx
+      .select()
+      .from(groupTable)
+      .where(and(eq(groupTable.entityType, entityType), eq(groupTable.name, name)))
+      .orderBy(asc(groupTable.orderKey), asc(groupTable.id))
+      .limit(1);
+
+    if (existing) {
+      return rowToGroup(existing);
+    }
+
+    const inserted = (await insertWithOrderKey(
+      tx,
+      groupTable,
+      { entityType, name },
+      {
+        pkColumn: groupTable.id,
+        scope: eq(groupTable.entityType, entityType),
+      },
+    )) as GroupRow;
+    return rowToGroup(inserted);
   }
 
   /**

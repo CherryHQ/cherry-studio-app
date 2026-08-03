@@ -1,7 +1,8 @@
 # Feature Module Conventions
 
 This directory owns the app's features — screen implementations plus the feature-private
-components, hooks, context, session owners, and utils that back them (ADRs 0010 and 0011). Expo
+components, hooks, context, runtime projections, session owners, and utils that back them (ADRs
+0010 and 0011). Expo
 Router route files in `src/app` stay thin and re-export from here.
 
 ## Route Adapter Rule
@@ -36,8 +37,9 @@ settings/
   WebSearchScreen/
 ```
 
-A feature that owns a runtime or backend session keeps the React owner in the feature
-(`chat/session/`, per ADRs 0001 and 0011).
+A feature that subscribes to an app-owned runtime or owns a backend session keeps its React adapter
+in the feature (`chat/runtime/` for the shared Chat Runtime; painting's generation hook for its
+caller-owned session).
 
 ## Imports
 
@@ -73,7 +75,8 @@ ESLint enforces these (see the boundary blocks in `eslint.config.js`):
 ## Current Ownership
 
 - `chat/`: chat topic screen, new-topic screen, message content, message item rows, workspace
-  behavior, and the `ChatSession` runtime owner. `input/` and `workspace/` are its public areas.
+  behavior, and the React subscription/effect adapter for the app-owned `ChatRuntime`. `input/` and
+  `workspace/` are its public areas.
 - `assistants/`: assistant list and assistant editing flows.
 - `settings/`: settings home (with the animated profile hero at the top), about/data/model/
   provider/web-search/mcp/permissions settings screens, and settings-specific UI controls.

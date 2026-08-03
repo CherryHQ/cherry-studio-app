@@ -49,9 +49,11 @@ type ChatInputActionsContextValue = {
   removeAttachment: (attachmentId: string) => void;
   selectAction: (actionId: ChatInputActionId) => void;
   selectReasoningEffort: (reasoningEffort: ChatInputReasoningEffort) => void;
+  setSelectedTool: (actionId: ChatInputActionId | null) => void;
   setAttachments: (attachments: ChatInputAttachmentDraft[]) => void;
   setDraft: (draft: string) => void;
   setInputFocused: (isFocused: boolean) => void;
+  syncReasoningEffort: (reasoningEffort: ChatInputReasoningEffort) => void;
 };
 
 type ChatInputMediaContextValue = ReturnType<typeof useChatInputPhotoPicker>;
@@ -122,6 +124,10 @@ export function ChatInputProvider({
     setReasoningEffort(CHAT_INPUT_DEFAULT_REASONING_EFFORT);
   }, []);
 
+  const syncReasoningEffort = useCallback((nextReasoningEffort: ChatInputReasoningEffort) => {
+    setReasoningEffort(nextReasoningEffort);
+  }, []);
+
   const clearSelectedTool = useCallback(() => {
     setSelectedToolId(null);
   }, []);
@@ -170,9 +176,11 @@ export function ChatInputProvider({
       removeAttachment,
       selectAction,
       selectReasoningEffort,
+      setSelectedTool: setSelectedToolId,
       setAttachments,
       setDraft,
       setInputFocused: setIsInputFocused,
+      syncReasoningEffort,
     }),
     [
       addAttachments,
@@ -184,6 +192,7 @@ export function ChatInputProvider({
       removeAttachment,
       selectAction,
       selectReasoningEffort,
+      syncReasoningEffort,
     ],
   );
 

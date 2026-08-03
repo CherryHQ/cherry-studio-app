@@ -1,7 +1,8 @@
+import type { EndpointType } from '@cherrystudio/universal/data/types/model';
+import type { ApiKeyEntry, EndpointConfigs } from '@cherrystudio/universal/data/types/provider';
 import { useCallback, useMemo } from 'react';
 
 import { useMutation, useQuery } from '@/frontend/data';
-import type { ApiKeyEntry, EndpointConfigs } from '@/shared/data/types/provider';
 
 export function useProviderApiServiceQueries(providerId: string) {
   const providerQuery = useQuery('/providers/:id', {
@@ -28,7 +29,7 @@ export function useProviderApiServiceQueries(providerId: string) {
   const saveProviderRequest = saveMutation.trigger;
   const replaceApiKeysRequest = replaceMutation.trigger;
   const saveProvider = useCallback(
-    (updates: { endpointConfigs: EndpointConfigs }) =>
+    (updates: { defaultChatEndpoint: EndpointType; endpointConfigs: EndpointConfigs }) =>
       saveProviderRequest({ body: updates, params: { id: providerId } }),
     [providerId, saveProviderRequest],
   );
