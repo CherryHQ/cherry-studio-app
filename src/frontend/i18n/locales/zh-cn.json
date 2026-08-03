@@ -1,6 +1,7 @@
 {
   "aiUsage.average": "平均",
   "aiUsage.dayAccessibility": "{{date}}，{{tokens}} Tokens",
+  "aiUsage.lastWeek": "上周用量",
   "aiUsage.loadError": "无法加载用量统计。",
   "aiUsage.loading": "正在加载用量统计",
   "aiUsage.modelLoadError": "无法加载模型用量。",
@@ -16,7 +17,7 @@
   "aiUsage.unknownModel": "未知模型",
   "aiUsage.viewDetails": "查看详情",
   "aiUsage.weekChartAccessibility": "按模型展示的每周 Token 用量",
-  "aiUsage.weekTotal": "本周累计",
+  "aiUsage.weekTotal": "周累计",
   "chat.actions.createImage": "创建图片",
   "chat.actions.webSearch": "网络搜索",
   "chat.builtinTool.calendar.createEvent": "创建日程",

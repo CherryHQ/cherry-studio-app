@@ -13,6 +13,10 @@ export type AiUsageWeekPage = {
   weeksAgo: number;
 };
 
+export type AiUsageDetailPage = AiUsageWeekPage & {
+  selectedDateKey: string;
+};
+
 export type AiUsageCalendarDay = {
   dateKey: string;
   inRange: boolean;

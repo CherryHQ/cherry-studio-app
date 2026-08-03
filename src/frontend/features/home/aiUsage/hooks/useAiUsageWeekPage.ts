@@ -1,5 +1,3 @@
-import { useMemo } from 'react';
-
 import { useQuery } from '@/frontend/data';
 
 import type { AiUsageTimeRange } from '../types';
@@ -23,11 +21,8 @@ export function useAiUsageWeekPage({
   selectedDateKey,
   todayDateKey,
 }: UseAiUsageWeekPageOptions) {
-  const timelineQueryParams = useMemo(() => getAiUsageWeekTimelineQuery(range), [range]);
-  const modelQueryParams = useMemo(
-    () => getAiUsageDayStatsQuery(selectedDateKey),
-    [selectedDateKey],
-  );
+  const timelineQueryParams = getAiUsageWeekTimelineQuery(range);
+  const modelQueryParams = getAiUsageDayStatsQuery(selectedDateKey);
   const timelineQuery = useQuery('/ai-usage-records/timeline', {
     enabled,
     query: timelineQueryParams,
@@ -36,11 +31,8 @@ export function useAiUsageWeekPage({
     enabled,
     query: modelQueryParams,
   });
-  const weeklyData = useMemo(
-    () => buildAiUsageWeeklyData(timelineQuery.data?.buckets ?? [], range, todayDateKey),
-    [range, timelineQuery.data?.buckets, todayDateKey],
-  );
-  const modelUsage = useMemo(() => buildAiUsageModelUsage(modelQuery.data), [modelQuery.data]);
+  const weeklyData = buildAiUsageWeeklyData(timelineQuery.data?.buckets ?? [], range, todayDateKey);
+  const modelUsage = buildAiUsageModelUsage(modelQuery.data);
 
   return {
     modelUsage,

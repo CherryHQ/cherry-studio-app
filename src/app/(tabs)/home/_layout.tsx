@@ -13,6 +13,11 @@ export default function HomeStackLayout() {
         headerTransparent: isLiquidGlassAvailable,
         headerTintColor: foregroundColor,
       }}
-    />
+    >
+      <Stack.Screen
+        name="ai-usage"
+        options={{ fullScreenGestureEnabled: false, gestureEnabled: true }}
+      />
+    </Stack>
   );
 }

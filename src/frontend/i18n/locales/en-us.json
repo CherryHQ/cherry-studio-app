@@ -1,6 +1,7 @@
 {
   "aiUsage.average": "Average",
   "aiUsage.dayAccessibility": "{{date}}, {{tokens}} Tokens",
+  "aiUsage.lastWeek": "Last Week",
   "aiUsage.loadError": "Usage statistics could not be loaded.",
   "aiUsage.loading": "Loading usage statistics",
   "aiUsage.modelLoadError": "Model usage could not be loaded.",

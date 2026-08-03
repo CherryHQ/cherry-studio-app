@@ -1,56 +1,54 @@
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { useQuery } from '@/frontend/data';
+import { queryKeys } from '@/frontend/data';
 
+import type { AiUsageWeekPage } from '../types';
 import { toLocalDateKey } from '../utils/aiUsageCalendar';
 import {
-  buildAiUsageModelUsage,
-  buildAiUsageWeeklyData,
-  getAiUsageDayRange,
-  getAiUsageWeekRange,
+  AI_USAGE_CURRENT_WEEK_PAGE_INDEX,
+  getAiUsageDayStatsQuery,
+  getAiUsageRecentWeekPages,
+  getAiUsageWeekDefaultDateKey,
+  getAiUsageWeekTimelineQuery,
 } from '../utils/aiUsageDetail';
 
+type SelectedDateKeys = Readonly<Record<string, string>>;
+
+type DetailStateSnapshot = {
+  activePageIndex: number;
+  pages: AiUsageWeekPage[];
+  selectedDateKeys: SelectedDateKeys;
+  todayDateKey: string;
+};
+
 export function useAiUsageDetail() {
+  const queryClient = useQueryClient();
   const [referenceDate, setReferenceDate] = useState(() => new Date());
-  const [selectedDateKey, setSelectedDateKey] = useState(() => toLocalDateKey(new Date()));
+  const [activePageIndex, setActivePageIndex] = useState(AI_USAGE_CURRENT_WEEK_PAGE_INDEX);
+  const pages = getAiUsageRecentWeekPages(referenceDate);
+  const [selectedDateKeys, setSelectedDateKeys] = useState<SelectedDateKeys>(() =>
+    createSelectedDateKeys(pages, referenceDate),
+  );
   const todayDateKey = toLocalDateKey(referenceDate);
-  const weekRange = useMemo(() => getAiUsageWeekRange(referenceDate), [referenceDate]);
-  const selectedDayRange = useMemo(() => getAiUsageDayRange(selectedDateKey), [selectedDateKey]);
-  const timelineQueryParams = useMemo(
-    () => ({
-      from: weekRange.from,
-      groupBy: 'model' as const,
-      limit: 3,
-      metric: 'tokens' as const,
-      to: weekRange.to,
-    }),
-    [weekRange],
-  );
-  const modelQueryParams = useMemo(
-    () => ({
-      from: selectedDayRange.from,
-      groupBy: 'model' as const,
-      limit: 50,
-      metric: 'tokens' as const,
-      to: selectedDayRange.to,
-    }),
-    [selectedDayRange],
-  );
-  const timelineQuery = useQuery('/ai-usage-records/timeline', { query: timelineQueryParams });
-  const modelQuery = useQuery('/ai-usage-records/stats', { query: modelQueryParams });
+  const pagerKey = pages[AI_USAGE_CURRENT_WEEK_PAGE_INDEX]?.key ?? todayDateKey;
   const hasFocusedOnceRef = useRef(false);
-  const todayDateKeyRef = useRef(todayDateKey);
-  const weekStartDateKeyRef = useRef(toLocalDateKey(new Date(weekRange.from)));
-  const timelineRefetchRef = useRef(timelineQuery.refetch);
-  const modelRefetchRef = useRef(modelQuery.refetch);
+  const stateRef = useRef<DetailStateSnapshot>({
+    activePageIndex,
+    pages,
+    selectedDateKeys,
+    todayDateKey,
+  });
 
   useEffect(() => {
-    todayDateKeyRef.current = todayDateKey;
-    weekStartDateKeyRef.current = toLocalDateKey(new Date(weekRange.from));
-    timelineRefetchRef.current = timelineQuery.refetch;
-    modelRefetchRef.current = modelQuery.refetch;
-  }, [modelQuery.refetch, timelineQuery.refetch, todayDateKey, weekRange.from]);
+    stateRef.current = {
+      activePageIndex,
+      pages,
+      selectedDateKeys,
+      todayDateKey,
+    };
+  }, [activePageIndex, pages, selectedDateKeys, todayDateKey]);
 
   useFocusEffect(
     useCallback(() => {
@@ -59,60 +57,123 @@ export function useAiUsageDetail() {
         return;
       }
 
+      const state = stateRef.current;
       const nextReferenceDate = new Date();
       const nextTodayDateKey = toLocalDateKey(nextReferenceDate);
-      if (nextTodayDateKey !== todayDateKeyRef.current) {
-        const nextWeekRange = getAiUsageWeekRange(nextReferenceDate);
-        const nextWeekStartDateKey = toLocalDateKey(new Date(nextWeekRange.from));
-        if (nextWeekStartDateKey === weekStartDateKeyRef.current) {
-          void timelineRefetchRef.current();
-        }
+      const nextPages = getAiUsageRecentWeekPages(nextReferenceDate);
+      const currentWeekKey = state.pages[AI_USAGE_CURRENT_WEEK_PAGE_INDEX]?.key;
+      const nextCurrentWeekKey = nextPages[AI_USAGE_CURRENT_WEEK_PAGE_INDEX]?.key;
+
+      if (nextCurrentWeekKey !== currentWeekKey) {
+        const nextSelectedDateKeys = createSelectedDateKeys(nextPages, nextReferenceDate);
+        stateRef.current = {
+          activePageIndex: AI_USAGE_CURRENT_WEEK_PAGE_INDEX,
+          pages: nextPages,
+          selectedDateKeys: nextSelectedDateKeys,
+          todayDateKey: nextTodayDateKey,
+        };
         setReferenceDate(nextReferenceDate);
-        setSelectedDateKey(nextTodayDateKey);
+        setActivePageIndex(AI_USAGE_CURRENT_WEEK_PAGE_INDEX);
+        setSelectedDateKeys(nextSelectedDateKeys);
         return;
       }
 
-      void Promise.all([timelineRefetchRef.current(), modelRefetchRef.current()]);
-    }, []),
-  );
+      if (nextTodayDateKey !== state.todayDateKey && nextCurrentWeekKey) {
+        const nextSelectedDateKeys = {
+          ...state.selectedDateKeys,
+          [nextCurrentWeekKey]: nextTodayDateKey,
+        };
+        const activePage = state.pages[state.activePageIndex];
+        const activeSelectedDateKey = activePage
+          ? getSelectedDateKey(activePage, nextSelectedDateKeys, nextReferenceDate)
+          : undefined;
 
-  const weeklyData = useMemo(
-    () => buildAiUsageWeeklyData(timelineQuery.data?.buckets ?? [], weekRange, todayDateKey),
-    [timelineQuery.data?.buckets, todayDateKey, weekRange],
-  );
-  const modelUsage = useMemo(() => buildAiUsageModelUsage(modelQuery.data), [modelQuery.data]);
-  const selectDate = useCallback(
-    (dateKey: string) => {
-      const firstDateKey = weeklyData.days[0]?.dateKey;
-      const lastDateKey = weeklyData.days.at(-1)?.dateKey;
-      if (
-        !firstDateKey ||
-        !lastDateKey ||
-        dateKey < firstDateKey ||
-        dateKey > lastDateKey ||
-        dateKey > todayDateKey
-      ) {
+        stateRef.current = {
+          ...state,
+          selectedDateKeys: nextSelectedDateKeys,
+          todayDateKey: nextTodayDateKey,
+        };
+        setReferenceDate(nextReferenceDate);
+        setSelectedDateKeys(nextSelectedDateKeys);
+        if (activePage && activeSelectedDateKey) {
+          void refreshPage(queryClient, activePage, activeSelectedDateKey);
+        }
         return;
       }
-      setSelectedDateKey(dateKey);
-    },
-    [todayDateKey, weeklyData.days],
+
+      const activePage = state.pages[state.activePageIndex];
+      const activeSelectedDateKey = activePage
+        ? getSelectedDateKey(activePage, state.selectedDateKeys, nextReferenceDate)
+        : undefined;
+      if (activePage && activeSelectedDateKey) {
+        void refreshPage(queryClient, activePage, activeSelectedDateKey);
+      }
+    }, [queryClient]),
   );
+
+  const selectPage = useCallback((pageIndex: number) => {
+    if (pageIndex < 0 || pageIndex >= stateRef.current.pages.length) return;
+    stateRef.current = { ...stateRef.current, activePageIndex: pageIndex };
+    setActivePageIndex(pageIndex);
+  }, []);
+
+  const selectDate = useCallback((pageKey: string, dateKey: string) => {
+    const state = stateRef.current;
+    const page = state.pages.find((item) => item.key === pageKey);
+    if (!page || !isSelectableDate(dateKey, page, state.todayDateKey)) return;
+
+    const nextSelectedDateKeys = { ...state.selectedDateKeys, [pageKey]: dateKey };
+    stateRef.current = { ...state, selectedDateKeys: nextSelectedDateKeys };
+    setSelectedDateKeys(nextSelectedDateKeys);
+  }, []);
+
+  const detailPages = pages.map((page) => ({
+    ...page,
+    selectedDateKey: getSelectedDateKey(page, selectedDateKeys, referenceDate),
+  }));
 
   return {
-    modelUsage,
-    models: {
-      ...modelQuery,
-      hasData: modelQuery.data !== undefined,
-    },
+    activePageIndex,
+    pagerKey,
+    pages: detailPages,
     selectDate,
-    selectedDateKey,
-    timeline: {
-      ...timelineQuery,
-      hasData: timelineQuery.data !== undefined,
-    },
+    selectPage,
     todayDateKey,
-    weeklyData,
-    weekRange,
   };
+}
+
+function createSelectedDateKeys(
+  pages: readonly AiUsageWeekPage[],
+  referenceDate: Date,
+): SelectedDateKeys {
+  return Object.fromEntries(
+    pages.map((page) => [page.key, getAiUsageWeekDefaultDateKey(referenceDate, page.weeksAgo)]),
+  );
+}
+
+function getSelectedDateKey(
+  page: AiUsageWeekPage,
+  selectedDateKeys: SelectedDateKeys,
+  referenceDate: Date,
+): string {
+  return selectedDateKeys[page.key] ?? getAiUsageWeekDefaultDateKey(referenceDate, page.weeksAgo);
+}
+
+function isSelectableDate(dateKey: string, page: AiUsageWeekPage, todayDateKey: string): boolean {
+  const firstDateKey = toLocalDateKey(new Date(page.range.from));
+  const lastDateKey = toLocalDateKey(new Date(page.range.to));
+  return dateKey >= firstDateKey && dateKey <= lastDateKey && dateKey <= todayDateKey;
+}
+
+function refreshPage(queryClient: QueryClient, page: AiUsageWeekPage, selectedDateKey: string) {
+  return Promise.all([
+    queryClient.invalidateQueries({
+      exact: true,
+      queryKey: queryKeys.aiUsageRecords.timeline(getAiUsageWeekTimelineQuery(page.range)),
+    }),
+    queryClient.invalidateQueries({
+      exact: true,
+      queryKey: queryKeys.aiUsageRecords.stats(getAiUsageDayStatsQuery(selectedDateKey)),
+    }),
+  ]);
 }
