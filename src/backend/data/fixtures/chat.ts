@@ -1,8 +1,8 @@
+import type { ModelCapability } from '@cherrystudio/provider-registry';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
+import { type CherryMessagePart, type Message } from '@cherrystudio/universal/data/types/message';
+import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { generateNKeysBetween } from 'fractional-indexing';
-
-import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
-import { type CherryMessagePart, type Message } from '@/shared/data/types/message';
-import type { Topic } from '@/shared/data/types/topic';
 
 const baseDateMs = Date.parse('2026-05-15T00:00:00.000Z');
 // Must exceed the largest topic's messageCount (1000) * the per-message offset
@@ -12,12 +12,17 @@ const baseDateMs = Date.parse('2026-05-15T00:00:00.000Z');
 const topicIndexSpanMs = 100_000_000;
 export const mockAssistantId = 'mock-assistant-default';
 
+// Mock models are custom rows (no presetModelId), so the
+// `user_model_custom_config_check` CHECK requires name, capabilities, and
+// supportsStreaming to all be present.
 export const mockChatModel = {
+  capabilities: [] as ModelCapability[],
   id: 'cherryai::mock-chat-model',
   modelId: 'mock-chat-model',
   name: 'Mock Chat Model',
   orderKey: 'a0',
   providerId: 'cherryai',
+  supportsStreaming: true,
 } as const;
 
 export const mockChatAssistant = {
@@ -937,11 +942,13 @@ const personaOrderKeys = {
 };
 
 export const mockPersonaModels = personaSeedDefinitions.map((seed, index) => ({
+  capabilities: [] as ModelCapability[],
   id: `cherryai::${mockPersonaModelIdPrefix}${seed.key}`,
   modelId: `${mockPersonaModelIdPrefix}${seed.key}`,
   name: seed.modelName,
   orderKey: personaOrderKeys.models[index],
   providerId: 'cherryai',
+  supportsStreaming: true,
 }));
 
 export const mockPersonaAssistants = personaSeedDefinitions.map((seed, index) => ({

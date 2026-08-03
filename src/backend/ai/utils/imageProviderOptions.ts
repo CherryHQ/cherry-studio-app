@@ -1,7 +1,7 @@
+import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import { type CanonicalParamKey, wireName } from '@cherrystudio/provider-registry';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { JSONValue } from 'ai';
-
-import type { Provider } from '@/shared/data/types/provider';
 
 import { normalizeAspectRatio } from './imageOptions';
 
@@ -169,9 +169,9 @@ export function buildImageProviderOptions({
 }
 
 export function mergeImageProviderOptions(
-  existing: Record<string, Record<string, JSONValue>> | undefined,
+  existing: ProviderOptions | undefined,
   imageOptions: Record<string, Record<string, JSONValue>>,
-): Record<string, Record<string, JSONValue>> | undefined {
+): ProviderOptions | undefined {
   const providerIds = new Set([...Object.keys(existing ?? {}), ...Object.keys(imageOptions)]);
   if (providerIds.size === 0) {
     return undefined;
@@ -179,7 +179,10 @@ export function mergeImageProviderOptions(
 
   const merged: Record<string, Record<string, JSONValue>> = {};
   for (const providerId of providerIds) {
-    merged[providerId] = deepMerge(existing?.[providerId] ?? {}, imageOptions[providerId] ?? {});
+    merged[providerId] = deepMerge(
+      (existing?.[providerId] ?? {}) as Record<string, JSONValue>,
+      imageOptions[providerId] ?? {},
+    );
   }
   return merged;
 }

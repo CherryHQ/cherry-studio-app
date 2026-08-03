@@ -1,6 +1,5 @@
+import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import * as Crypto from 'expo-crypto';
-
-import type { ApiKeyEntry } from '@/shared/data/types/provider';
 
 function createApiKeyEntryId(): string {
   return Crypto.randomUUID();

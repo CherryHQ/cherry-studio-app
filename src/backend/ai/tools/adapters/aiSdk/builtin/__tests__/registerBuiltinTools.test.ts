@@ -16,10 +16,10 @@ const preferenceKeys = [
 ] as const;
 
 describe('registerBuiltinTools', () => {
-  test('registers the exact domain-first device catalog and web search', () => {
+  test('registers the exact domain-first device catalog and web tools', () => {
     const registry = createRegistry();
     expect(registry.getAll().map((entry) => entry.name)).toEqual(
-      [...deviceToolNames, 'web_search'].sort(),
+      [...deviceToolNames, 'web_fetch', 'web_search'].sort(),
     );
 
     for (const entry of deviceEntries(registry)) {
@@ -28,6 +28,7 @@ describe('registerBuiltinTools', () => {
       expect(entry.tool.strict).toBe(true);
       expect(entry.tool.outputSchema).toBeDefined();
     }
+    expect(registry.getByName('web_fetch')).toMatchObject({ defer: 'auto', namespace: 'web' });
     expect(registry.getByName('web_search')).toMatchObject({ defer: 'auto', namespace: 'web' });
     expect(registry.getByName('tool_exec')).toBeUndefined();
   });
@@ -78,14 +79,14 @@ function createRegistry() {
 
 function dependencies(mode: 'ask' | 'always') {
   return {
-    devicePermission: { getStatusForPreference: jest.fn(async () => 'granted' as const) },
+    devicePermissions: { getStatusForPreference: jest.fn(async () => 'granted' as const) },
     preference: { get: jest.fn(async () => mode) },
     webSearch: { searchKeywords: jest.fn() },
   } as never;
 }
 
 function deviceEntries(registry: ToolRegistry): ToolEntry[] {
-  return registry.getAll().filter((entry) => entry.name !== 'web_search');
+  return registry.getAll().filter((entry) => entry.namespace !== 'web');
 }
 
 function access(
@@ -100,7 +101,6 @@ function access(
 function scope(overrides: Partial<ToolApplyScope> = {}): ToolApplyScope {
   return {
     deviceAccess: access(),
-    externalWebSearchEnabled: false,
     platform: 'ios',
     ...overrides,
   };

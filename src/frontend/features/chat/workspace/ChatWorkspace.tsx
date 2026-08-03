@@ -1,3 +1,4 @@
+import type { Message } from '@cherrystudio/universal/data/types/message';
 import type { LegendListRef } from '@legendapp/list/react-native';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useToast } from 'heroui-native/toast';
@@ -8,15 +9,14 @@ import { useSharedValue } from 'react-native-reanimated';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
 import { isIOS } from '@/frontend/utils/constants';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { Message } from '@/shared/data/types/message';
 
 import { ToolApprovalSheet } from '../approval/ToolApprovalSheet';
 import { MessageSlideInProvider } from '../messageItem';
+import { useChat, useChatTopic } from '../runtime/ChatProvider';
 import {
   getPendingToolApprovals,
   mergeMessagesWithOverlay,
-} from '../session/chatSessionProjection';
-import { useChatSession, useChatSessionTopic } from '../session/ChatSessionProvider';
+} from '../runtime/chatRuntimeProjection';
 import { ChatComposer } from './components/ChatComposer';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessageList } from './components/ChatMessageList';
@@ -48,7 +48,7 @@ type ChatWorkspaceProps = {
 
 export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWorkspaceProps) {
   const { isLoadingInitial, isLoadingOlder, loadOlder, messages } = messageWindow;
-  const chatSession = useChatSessionTopic(topicId);
+  const chatTopic = useChatTopic(topicId);
   const headerHeight = useHeaderHeight();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -57,26 +57,26 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   const handleScrollToEnd = useCallback(() => {
     void listRef.current?.scrollToEnd({ animated: true });
   }, []);
-  const messagesWithUser = mergeMessagesWithOverlay(messages, chatSession.pendingUserMessage);
-  const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatSession.overlayMessage);
+  const messagesWithUser = mergeMessagesWithOverlay(messages, chatTopic.pendingUserMessage);
+  const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatTopic.overlayMessage);
   const anchorIndex = getAnchoredUserMessageIndex(visibleMessages);
-  const session = useChatSession();
+  const chat = useChat();
   // 待审批检测以活动 tip 的 parts 为准，因此杀 app 重进后 sheet 也会自动恢复。
   const pendingApprovals = getPendingToolApprovals(visibleMessages);
-  const isApprovalSheetOpen = pendingApprovals.length > 0 && chatSession.status !== 'streaming';
+  const isApprovalSheetOpen = pendingApprovals.length > 0 && chatTopic.status !== 'streaming';
   const handleApprovalRespond = useCallback(
     async (input: { approvalId: string; approved: boolean; messageId: string }) => {
       try {
-        await session.respondToolApproval({ ...input, topicId });
+        await chat.respondToolApproval({ ...input, topicId });
       } catch (error) {
         logger.error('Tool approval response failed', error as Error);
         toast.show({ label: t('chat.tool.approval.failed'), variant: 'danger' });
       }
     },
-    [session, t, toast, topicId],
+    [chat, t, toast, topicId],
   );
   const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
-    hasHistoryBeforePendingTurn: chatSession.hasHistoryBeforePendingTurn,
+    hasHistoryBeforePendingTurn: chatTopic.hasHistoryBeforePendingTurn,
     isLoadingInitial,
     messageCount: messages.length,
   });
@@ -102,7 +102,7 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   return (
     <ChatWorkspaceFrame>
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
-      <MessageSlideInProvider slideInMessageId={chatSession.pendingUserMessage?.id}>
+      <MessageSlideInProvider slideInMessageId={chatTopic.pendingUserMessage?.id}>
         <ChatMessageList
           key={listRenderKey}
           anchorIndex={anchorIndex}

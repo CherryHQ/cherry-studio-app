@@ -8,6 +8,8 @@ const { defineConfig } = require('eslint/config');
 // backend -> {backend, shared}
 // backend internals: ai -> {services, data}; services -> data
 // shared -> shared
+// packages/universal (@cherrystudio/universal) sits below every layer: any layer
+// may import it, it must not import app code or react/react-native/expo.
 
 const retiredRootPatterns = [
   'ai',
@@ -36,9 +38,16 @@ const tombstonePatterns = [
     message: 'Constants now live in the owning layer under its utils directory.',
   },
   {
+    // Lives on the base rule rather than beside the layer rules below, so that a
+    // later @typescript-eslint/no-restricted-imports block cannot replace it.
+    group: ['@shared/*', '@shared/*/**'],
+    message:
+      '@shared/* is the package-internal alias inside packages/universal (it matches desktop verbatim); app code imports @cherrystudio/universal/*.',
+  },
+  {
     group: ['@/shared/domain', '@/shared/domain/*', '@/shared/domain/*/**'],
     message:
-      'The generic shared domain root was retired. Use @/shared/ai for AI rules, @/shared/data for data vocabulary, or @/shared/utils for pure helpers.',
+      'The generic shared domain root was retired. Use @cherrystudio/universal/ai for AI rules, @cherrystudio/universal/data for data vocabulary, or @cherrystudio/universal/utils and @/shared/utils for pure helpers.',
   },
   {
     group: ['@/screens', '@/screens/*', '@/screens/*/**'],
@@ -131,6 +140,96 @@ const layerPattern = (roots, message) => ({
   message,
 });
 
+// A flat-config block *replaces* a rule it shares with an earlier block rather
+// than adding to it, so a narrower file set never inherits the layer rule of the
+// directory above it. Each pattern is named here and every block below spells
+// out the full union that applies to its files.
+const backendLayer = layerPattern(
+  ['app', 'bootstrap', 'frontend'],
+  'Backend may depend only on backend and shared modules. Bootstrap owns cross-layer assembly.',
+);
+
+const backendServicesLayer = {
+  group: aliasRoots(['backend/ai']),
+  message:
+    'Backend services receive AI capabilities through constructor interfaces; bootstrap owns concrete assembly.',
+};
+
+const backendDataLayer = {
+  group: aliasRoots(['backend/ai', 'backend/services']),
+  message: 'Backend data modules must not depend on AI or general backend services.',
+};
+
+const frontendLayer = layerPattern(
+  ['app', 'backend', 'bootstrap'],
+  'Frontend may depend only on frontend and shared modules. Use Data API hooks for resources, preference hooks for settings, and useBackendModule() for workflows.',
+);
+
+const frontendSharedLayer = {
+  group: ['@/frontend/features/*', '@/frontend/features/*/**'],
+  message:
+    'Shared frontend modules must not depend on features; move the shared capability down instead.',
+};
+
+const frontendFeatureLayer = {
+  // Cross-feature imports go through a feature's public surface:
+  // `@/frontend/features/<feature>` or one documented area below it.
+  // Gitignore-style negations must first unban each ancestor directory.
+  group: [
+    '@/frontend/features/*/*/*',
+    '@/frontend/features/*/*/*/*',
+    '@/frontend/features/*/*/*/*/*',
+    '@/frontend/features/*/*/*/*/*/*',
+    '!@/frontend/features/chat/input/chatInputLayout',
+    '!@/frontend/features/chat/input/utils',
+    '@/frontend/features/chat/input/utils/*',
+    '!@/frontend/features/chat/input/utils/chatInputAttachments',
+    '!@/frontend/features/chat/input/hooks',
+    '@/frontend/features/chat/input/hooks/*',
+    '!@/frontend/features/chat/input/hooks/useChatInputPhotoPicker',
+    '!@/frontend/features/settings/components',
+    '@/frontend/features/settings/components/*',
+    '!@/frontend/features/settings/components/SettingSelect',
+  ],
+  allowTypeImports: true,
+  message:
+    "Deep cross-feature import: use the feature's public surface or add a deliberate sanctioned export.",
+};
+
+const sharedLayer = layerPattern(
+  ['app', 'backend', 'bootstrap', 'frontend'],
+  'Shared modules must not depend on an upper layer.',
+);
+
+const platformIndependentPackages = [
+  'react',
+  'react/*',
+  'react-native',
+  'react-native/*',
+  'react-native-*',
+  'react-native-*/*',
+  'expo',
+  'expo-*',
+  'expo-*/*',
+  '@expo/*',
+  '@expo/*/**',
+];
+
+const sharedPlatformIndependence = {
+  group: platformIndependentPackages,
+  message:
+    'Shared contracts, data, AI rules, and utilities must remain platform- and React-independent.',
+};
+
+const sharedFrontendDirectories = [
+  'src/frontend/components/**/*.{ts,tsx}',
+  'src/frontend/data/**/*.{ts,tsx}',
+  'src/frontend/hooks/**/*.{ts,tsx}',
+  'src/frontend/i18n/**/*.{ts,tsx}',
+  'src/frontend/types/**/*.{ts,tsx}',
+  'src/frontend/utils/**/*.{ts,tsx}',
+];
+
 module.exports = defineConfig([
   expoConfig,
   {
@@ -174,79 +273,6 @@ module.exports = defineConfig([
     ],
   ),
   restrictedImports(
-    ['src/frontend/**/*.{ts,tsx}'],
-    [
-      layerPattern(
-        ['app', 'backend', 'bootstrap'],
-        'Frontend may depend only on frontend and shared modules. Use Data API hooks for resources, preference hooks for settings, and useBackendModule() for workflows.',
-      ),
-    ],
-  ),
-  restrictedImports(
-    ['src/backend/**/*.{ts,tsx}'],
-    [
-      layerPattern(
-        ['app', 'bootstrap', 'frontend'],
-        'Backend may depend only on backend and shared modules. Bootstrap owns cross-layer assembly.',
-      ),
-    ],
-  ),
-  restrictedImports(
-    ['src/backend/services/**/*.{ts,tsx}'],
-    [
-      {
-        group: aliasRoots(['backend/ai']),
-        message:
-          'Backend services receive AI capabilities through constructor interfaces; bootstrap owns concrete assembly.',
-      },
-    ],
-  ),
-  restrictedImports(
-    ['src/backend/data/**/*.{ts,tsx}'],
-    [
-      {
-        group: aliasRoots(['backend/ai', 'backend/services']),
-        message: 'Backend data modules must not depend on AI or general backend services.',
-      },
-    ],
-  ),
-  restrictedImports(
-    ['src/shared/**/*.{ts,tsx}'],
-    [
-      layerPattern(
-        ['app', 'backend', 'bootstrap', 'frontend'],
-        'Shared modules must not depend on an upper layer.',
-      ),
-    ],
-  ),
-  restrictedImports(
-    [
-      'src/shared/ai/**/*.{ts,tsx}',
-      'src/shared/contracts/**/*.{ts,tsx}',
-      'src/shared/data/**/*.{ts,tsx}',
-      'src/shared/utils/**/*.{ts,tsx}',
-    ],
-    [
-      {
-        group: [
-          'react',
-          'react/*',
-          'react-native',
-          'react-native/*',
-          'react-native-*',
-          'react-native-*/*',
-          'expo',
-          'expo-*',
-          'expo-*/*',
-          '@expo/*',
-          '@expo/*/**',
-        ],
-        message:
-          'Shared contracts, data, AI rules, and utilities must remain platform- and React-independent.',
-      },
-    ],
-  ),
-  restrictedImports(
     ['src/app/**/*.{ts,tsx}'],
     [
       layerPattern(
@@ -255,49 +281,29 @@ module.exports = defineConfig([
       ),
     ],
   ),
+  restrictedImports(['src/backend/**/*.{ts,tsx}'], [backendLayer]),
+  restrictedImports(['src/backend/services/**/*.{ts,tsx}'], [backendLayer, backendServicesLayer]),
+  restrictedImports(['src/backend/data/**/*.{ts,tsx}'], [backendLayer, backendDataLayer]),
+  restrictedImports(['src/frontend/**/*.{ts,tsx}'], [frontendLayer]),
+  restrictedImports(sharedFrontendDirectories, [frontendLayer, frontendSharedLayer]),
+  restrictedImports(['src/frontend/features/**/*.{ts,tsx}'], [frontendLayer, frontendFeatureLayer]),
+  restrictedImports(['src/shared/**/*.{ts,tsx}'], [sharedLayer]),
   restrictedImports(
-    [
-      'src/frontend/components/**/*.{ts,tsx}',
-      'src/frontend/data/**/*.{ts,tsx}',
-      'src/frontend/hooks/**/*.{ts,tsx}',
-      'src/frontend/i18n/**/*.{ts,tsx}',
-      'src/frontend/types/**/*.{ts,tsx}',
-      'src/frontend/utils/**/*.{ts,tsx}',
-    ],
-    [
-      {
-        group: ['@/frontend/features/*', '@/frontend/features/*/**'],
-        message:
-          'Shared frontend modules must not depend on features; move the shared capability down instead.',
-      },
-    ],
+    ['src/shared/contracts/**/*.{ts,tsx}', 'src/shared/oauth/**/*.{ts,tsx}'],
+    [sharedLayer, sharedPlatformIndependence],
   ),
   restrictedImports(
-    ['src/frontend/features/**/*.{ts,tsx}'],
+    ['packages/universal/src/**/*.{ts,tsx}'],
     [
       {
-        // Cross-feature imports go through a feature's public surface:
-        // `@/frontend/features/<feature>` or one documented area below it.
-        // Gitignore-style negations must first unban each ancestor directory.
-        group: [
-          '@/frontend/features/*/*/*',
-          '@/frontend/features/*/*/*/*',
-          '@/frontend/features/*/*/*/*/*',
-          '@/frontend/features/*/*/*/*/*/*',
-          '!@/frontend/features/chat/input/chatInputLayout',
-          '!@/frontend/features/chat/input/utils',
-          '@/frontend/features/chat/input/utils/*',
-          '!@/frontend/features/chat/input/utils/chatInputAttachments',
-          '!@/frontend/features/chat/input/hooks',
-          '@/frontend/features/chat/input/hooks/*',
-          '!@/frontend/features/chat/input/hooks/useChatInputPhotoPicker',
-          '!@/frontend/features/settings/components',
-          '@/frontend/features/settings/components/*',
-          '!@/frontend/features/settings/components/SettingSelect',
-        ],
-        allowTypeImports: true,
+        group: ['@/*', '@/*/**', '@src/*', '@src/*/**', '@logger'],
         message:
-          "Deep cross-feature import: use the feature's public surface or add a deliberate sanctioned export.",
+          '@cherrystudio/universal must not depend on app code; the dependency direction is app -> package.',
+      },
+      {
+        group: platformIndependentPackages,
+        message:
+          '@cherrystudio/universal mirrors desktop src/shared and must remain platform- and React-independent.',
       },
     ],
   ),

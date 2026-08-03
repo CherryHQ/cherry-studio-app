@@ -1,7 +1,9 @@
+import {
+  type Assistant,
+  DEFAULT_ASSISTANT_SETTINGS,
+} from '@cherrystudio/universal/data/types/assistant';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 
 import AssistantDetailScreen from '../AssistantDetailScreen';
 
@@ -91,6 +93,7 @@ function makeAssistant(overrides: Partial<Assistant> = {}): Assistant {
     createdAt: '2026-07-01T00:00:00.000Z',
     description: '',
     emoji: '🌟',
+    groupId: null,
     id: 'assistant-1',
     knowledgeBaseIds: [],
     mcpServerIds: [],

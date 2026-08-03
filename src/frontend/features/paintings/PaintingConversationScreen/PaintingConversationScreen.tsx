@@ -1,3 +1,4 @@
+import type { Message } from '@cherrystudio/universal/data/types/message';
 import type { LegendListRef } from '@legendapp/list/react-native';
 import * as Crypto from 'expo-crypto';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -22,7 +23,6 @@ import {
   useFloatingChatInputLayout,
 } from '@/frontend/features/chat/workspace';
 import { isIOS } from '@/frontend/utils/constants';
-import type { Message } from '@/shared/data/types/message';
 
 import { PaintingInput } from '../components/PaintingInput';
 import {

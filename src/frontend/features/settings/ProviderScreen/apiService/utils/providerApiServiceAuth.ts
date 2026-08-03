@@ -1,4 +1,4 @@
-import type { AuthConfig, Provider } from '@/shared/data/types/provider';
+import type { AuthConfig, Provider } from '@cherrystudio/universal/data/types/provider';
 
 export function emptyAuthConfigFor(type: AuthConfig['type']): AuthConfig {
   switch (type) {

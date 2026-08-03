@@ -10,6 +10,7 @@ import { FileEntryService } from '../FileEntryService';
 import { PaintingService } from '../PaintingService';
 
 jest.mock('uuid', () => ({
+  v4: jest.fn(() => '00000000-0000-4000-8000-000000000001'),
   v7: jest.fn(() => '00000000-0000-7000-8000-000000000001'),
 }));
 

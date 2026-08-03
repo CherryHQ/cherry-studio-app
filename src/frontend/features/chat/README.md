@@ -15,3 +15,6 @@ workspace behavior.
 - `prismSweep/` owns the thinking indicator shared by message content and message rows.
 - `messageContent/` renders structured message parts.
 - `messageItem/` renders user and assistant message rows.
+- `runtime/` subscribes to the app-owned `ChatModule`, projects one Topic snapshot through
+  `useChatTopic()`, and owns frontend navigation and query invalidation effects. It does not create
+  or dispose `ChatRuntime`.

@@ -1,4 +1,4 @@
-import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
 export type McpConnectionConfig = {
   baseUrl: string;
@@ -27,7 +27,7 @@ export type McpServerRuntimeSummary = {
   toolCount?: number;
 };
 
-export interface McpBackend {
+export interface McpModule {
   getRuntimeSummaries(
     servers: readonly StreamableHttpMcpServer[],
   ): Promise<Record<string, McpServerRuntimeSummary>>;

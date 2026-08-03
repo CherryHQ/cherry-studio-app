@@ -1,7 +1,3 @@
-import { eq } from 'drizzle-orm';
-
-import type { DbService } from '@/backend/data/db/DbService';
-import { preferenceTable } from '@/backend/data/db/schemas';
 import {
   DefaultPreferences,
   getDefaultValue,
@@ -11,7 +7,11 @@ import {
   type PreferenceDefaultScopeType,
   type PreferenceKeyType,
   type PreferenceUpdateOptions,
-} from '@/shared/data/preference';
+} from '@cherrystudio/universal/data/preference';
+import { eq } from 'drizzle-orm';
+
+import type { DbService } from '@/backend/data/db/DbService';
+import { preferenceTable } from '@/backend/data/db/schemas';
 
 type PreferenceListener = () => void;
 type PreferenceValue = PreferenceDefaultScopeType[PreferenceKeyType];

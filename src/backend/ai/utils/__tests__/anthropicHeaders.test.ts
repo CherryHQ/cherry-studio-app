@@ -1,7 +1,7 @@
-import type { Assistant } from '@/shared/data/types/assistant';
-import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
-import { createUniqueModelId, type Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
+import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import { addAnthropicHeaders } from '../anthropicHeaders';
 
@@ -45,6 +45,7 @@ function createAssistant(overrides: Partial<Assistant['settings']> = {}): Assist
     createdAt: '2026-01-01T00:00:00.000Z',
     description: '',
     emoji: '',
+    groupId: null,
     id: '00000000-0000-4000-8000-000000000001',
     knowledgeBaseIds: [],
     mcpServerIds: [],
@@ -74,6 +75,15 @@ describe('addAnthropicHeaders', () => {
       createAssistant(),
       createModel('claude-sonnet-4-5'),
       createProvider({ authType: 'iam-gcp' }),
+    );
+    expect(headers).toEqual([]);
+  });
+
+  it('omits interleaved-thinking for a Claude 4.5 reasoning model on Bedrock', () => {
+    const headers = addAnthropicHeaders(
+      createAssistant(),
+      createModel('claude-sonnet-4-5'),
+      createProvider({ authType: 'iam-aws' }),
     );
     expect(headers).toEqual([]);
   });

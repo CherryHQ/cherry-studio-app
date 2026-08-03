@@ -5,6 +5,6 @@
     "lokalise.i18n-ally",
     "bradlc.vscode-tailwindcss",
     "orta.vscode-jest",
-    "biomejs.biome"
+    "oxc.oxc-vscode"
   ]
 }

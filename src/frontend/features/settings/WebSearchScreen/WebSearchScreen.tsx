@@ -1,4 +1,6 @@
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
+import type { WebSearchProviderId } from '@cherrystudio/universal/data/preference';
+import { MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS } from '@cherrystudio/universal/data/presets/webSearchProviders';
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,8 +8,6 @@ import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
-import type { WebSearchProviderId } from '@/shared/data/preference';
-import { MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS } from '@/shared/data/presets/webSearchProviders';
 
 import { SettingNumberInput } from '../components/SettingNumberInput';
 import { SettingSelect, type SettingSelectOption } from '../components/SettingSelect';
@@ -25,27 +25,19 @@ export default function WebSearchSettingsScreen() {
     webSearchProviders.searchKeywords.options,
     iconTheme,
   );
-  const apiWebSearchProviderItems = useMemo<SettingsServiceRowProps[]>(
+  const webSearchProviderItems = useMemo<SettingsServiceRowProps[]>(
     () =>
-      MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS.flatMap((provider) => {
-        if (provider.type !== 'api') {
-          return [];
-        }
-
-        return [
-          {
-            id: provider.id,
-            imageSource: resolveWebSearchProviderIcon(provider.id)?.[iconTheme],
-            isEnabled: true,
-            name: provider.name,
-            onPress: () =>
-              router.push({
-                pathname: './websearch/[providerId]',
-                params: { providerId: provider.id },
-              }),
-          },
-        ];
-      }),
+      MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS.map((provider) => ({
+        id: provider.id,
+        imageSource: resolveWebSearchProviderIcon(provider.id)?.[iconTheme],
+        isEnabled: true,
+        name: provider.name,
+        onPress: () =>
+          router.push({
+            pathname: './websearch/[providerId]',
+            params: { providerId: provider.id },
+          }),
+      })),
     [iconTheme, router],
   );
 
@@ -64,7 +56,6 @@ export default function WebSearchSettingsScreen() {
             {
               accessory: (
                 <SettingSelect
-                  isClearable
                   label={t('settings.websearch.defaultProvider')}
                   options={searchKeywordProviderOptions}
                   value={webSearchProviders.searchKeywords.value}
@@ -116,7 +107,7 @@ export default function WebSearchSettingsScreen() {
             {t('settings.websearch.apiProviders.title')}
           </Text>
           <View className="overflow-hidden rounded-xl bg-settings-grouped-surface">
-            {apiWebSearchProviderItems.map((item, index) => (
+            {webSearchProviderItems.map((item, index) => (
               <SettingsServiceRow key={item.id} {...item} showSeparator={index > 0} />
             ))}
           </View>

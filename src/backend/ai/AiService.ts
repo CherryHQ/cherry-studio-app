@@ -9,28 +9,25 @@ import {
   MODEL_CAPABILITY,
   type ParamValues,
 } from '@cherrystudio/provider-registry';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import type { AiUsageCaptureContext } from '@/backend/data/services/AiUsageRecordService';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
-import type { Model } from '@/shared/data/types/model';
-import { parseUniqueModelId } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
 
-import { resolveMediaCapabilities } from './messages/messageCapabilities';
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { listModels as listProviderModels } from './provider/listModels';
 import { Agent, buildAgentParams } from './runtime/aiSdk';
-import {
-  type BuildAgentParamsDependencies,
-  getCustomParameters,
-} from './runtime/aiSdk/params/buildAgentParams';
+import type { BuildAgentParamsDependencies } from './runtime/aiSdk/params/buildAgentParams';
 import type { AppProviderSettingsMap } from './types';
 import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/requests';
 import { splitImageParamValues } from './utils/imageOptions';
 import { buildImageProviderOptions, mergeImageProviderOptions } from './utils/imageProviderOptions';
 import { extractAiSdkStandardParams } from './utils/options';
+import { getCustomParameters } from './utils/reasoning';
 
 // ── Request types ──────────────────────────────────────────────────
 
@@ -66,6 +63,11 @@ export interface AiImageResult {
 
 export interface AiServiceDependencies extends BuildAgentParamsDependencies {
   fileEntry: Pick<FileEntryService, 'resolveUri'>;
+}
+
+/** `auto` is the picker's "let the model decide" sentinel, not a wire value. */
+function resolveImageRequestSize(size: string | undefined): string | undefined {
+  return size === 'auto' ? undefined : size;
 }
 
 function createProviderCallHandler(
@@ -127,7 +129,7 @@ export class AiService {
     }
 
     const [
-      { context, sdkConfig, model, repairToolCall, system, tools, plugins, options },
+      { context, sdkConfig, nativeFileSupport, repairToolCall, system, tools, plugins, options },
       preparedMessages,
     ] = await Promise.all([
       buildAgentParams({
@@ -146,7 +148,7 @@ export class AiService {
       providerSettings: sdkConfig.providerSettings,
       modelId: sdkConfig.modelId,
       messageId: request.messageId,
-      mediaCapabilities: resolveMediaCapabilities(model),
+      mediaCapabilities: nativeFileSupport,
       plugins,
       context,
       repairToolCall,
@@ -240,7 +242,7 @@ export class AiService {
         model: model.modelId,
         prompt: hasInputImages ? { images: inputImages, text: request.prompt } : request.prompt,
         n: structured.n ?? 1,
-        size: structured.size as `${number}x${number}` | undefined,
+        size: resolveImageRequestSize(structured.size) as `${number}x${number}` | undefined,
         aspectRatio: structured.aspectRatio as `${number}:${number}` | undefined,
         seed: structured.seed,
         maxRetries: request.requestOptions?.maxRetries ?? 0,

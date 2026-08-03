@@ -1,3 +1,5 @@
+import { imageMediaTypeFromExtension } from '@cherrystudio/universal/data/types/file';
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import {
   keepPreviousData,
   useQueryClient,
@@ -14,8 +16,6 @@ import {
   useQuery,
 } from '@/frontend/data';
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
-import { imageMediaTypeFromExtension } from '@/shared/data/types/file';
-import type { Painting } from '@/shared/data/types/painting';
 
 const pageSize = 20;
 

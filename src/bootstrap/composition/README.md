@@ -5,9 +5,11 @@ dependency interfaces. It is wiring code, not a service locator and not a home f
 
 ## Current Modules
 
-- `createBackendServices.ts` constructs the private data, AI, MCP, tool, and device service graph.
-- `createBackend.ts` adapts that graph into the workflow-only `Backend` interface and supplies the
-  workflow implementations required by Data API handlers.
+- `createBackendServices.ts` constructs the private desktop-aligned services plus mobile AI, MCP,
+  tool-resolver, and device-adapter dependencies.
+- `createBackend.ts` creates the app-owned `ChatRuntime`, builds factory-shaped workflow modules,
+  adapts the graph into the workflow-only `Backend` interface, and supplies the MCP mutation
+  coordinator required by Data API handlers.
 
 `createAppBootstrapRuntime()` owns the top-level `CacheService`, `DbService`, and `DataApiService`
 instances and calls these composition functions. Concrete classes never enter frontend React state.
@@ -19,6 +21,7 @@ Composition may:
 - instantiate concrete backend classes;
 - connect constructor dependencies and narrow adapters;
 - select the implementation satisfying a shared interface;
+- create app-owned objects without starting their work;
 - return private dependency bundles needed by runtime assembly.
 
 Composition must not:

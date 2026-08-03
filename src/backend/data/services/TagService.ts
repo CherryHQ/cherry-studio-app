@@ -1,15 +1,52 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import type { SetTagEntitiesDto } from '@cherrystudio/universal/data/api/schemas/tags';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
+import type { EntityType } from '@cherrystudio/universal/data/types/entityType';
+import type {
+  CreateTagDto,
+  SyncEntityTagsDto,
+  Tag,
+  UpdateTagDto,
+} from '@cherrystudio/universal/data/types/tag';
+import { and, asc, eq, inArray, or, type SQL } from 'drizzle-orm';
 
 import type { DbService } from '@/backend/data/db/DbService';
 import { entityTagTable, tagTable } from '@/backend/data/db/schemas';
 import type { TagRow } from '@/backend/data/db/schemas/tagging';
-import { DataApiErrorFactory } from '@/shared/data/api/types';
-import type { EntityType } from '@/shared/data/types/entityType';
-import type { CreateTagDto, SyncEntityTagsDto, Tag, UpdateTagDto } from '@/shared/data/types/tag';
 
 import { timestampToISO } from './utils/rowMappers';
 
 type TxLike = any;
+type EntityBinding = SetTagEntitiesDto['entities'][number];
+
+function entityBindingKey(entity: { entityId: string; entityType: string }): string {
+  return `${entity.entityType}:${entity.entityId}`;
+}
+
+function dedupeEntityBindings(entities: EntityBinding[]): EntityBinding[] {
+  const uniqueEntities = new Map<string, EntityBinding>();
+  for (const entity of entities) {
+    const key = entityBindingKey(entity);
+    if (!uniqueEntities.has(key)) {
+      uniqueEntities.set(key, entity);
+    }
+  }
+  return [...uniqueEntities.values()];
+}
+
+function buildEntityBindingCondition(
+  entities: { entityId: string; entityType: string }[],
+): SQL | undefined {
+  const conditions = entities.map((entity) =>
+    and(
+      eq(entityTagTable.entityType, entity.entityType),
+      eq(entityTagTable.entityId, entity.entityId),
+    ),
+  );
+  if (conditions.length === 0) {
+    return undefined;
+  }
+  return conditions.length === 1 ? conditions[0] : or(...conditions);
+}
 
 function rowToTag(row: TagRow): Tag {
   return {
@@ -109,6 +146,47 @@ export class TagService {
       .orderBy(asc(tagTable.name));
 
     return rows.map(rowToTag);
+  }
+
+  async setEntities(tagId: string, dto: SetTagEntitiesDto): Promise<void> {
+    const desiredEntities = dedupeEntityBindings(dto.entities);
+
+    await this.dbService.withWriteTx(async (tx) => {
+      const [tag] = await tx
+        .select({ id: tagTable.id })
+        .from(tagTable)
+        .where(eq(tagTable.id, tagId))
+        .limit(1);
+      if (!tag) {
+        throw DataApiErrorFactory.notFound('Tag', tagId);
+      }
+
+      const existing = await tx
+        .select({ entityId: entityTagTable.entityId, entityType: entityTagTable.entityType })
+        .from(entityTagTable)
+        .where(eq(entityTagTable.tagId, tagId));
+      const existingKeys = new Set(existing.map(entityBindingKey));
+      const desiredKeys = new Set(desiredEntities.map(entityBindingKey));
+      const toRemove = existing.filter((entity) => !desiredKeys.has(entityBindingKey(entity)));
+      const toAdd = desiredEntities.filter((entity) => !existingKeys.has(entityBindingKey(entity)));
+
+      const deleteCondition = buildEntityBindingCondition(toRemove);
+      if (deleteCondition) {
+        await tx
+          .delete(entityTagTable)
+          .where(and(eq(entityTagTable.tagId, tagId), deleteCondition));
+      }
+
+      if (toAdd.length > 0) {
+        await tx.insert(entityTagTable).values(
+          toAdd.map((entity) => ({
+            entityId: entity.entityId,
+            entityType: entity.entityType,
+            tagId,
+          })),
+        );
+      }
+    });
   }
 
   async getTagsByEntitiesTx(

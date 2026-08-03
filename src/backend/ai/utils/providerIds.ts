@@ -2,6 +2,7 @@ import * as z from 'zod';
 
 const systemProviderIds = [
   'cherryin',
+  'radeon-cloud',
   'silicon',
   'aihubmix',
   'deepseek',
@@ -40,24 +41,3 @@ export const isSystemProviderId = (id: string): id is SystemProviderId =>
 export const SystemProviderIds = Object.fromEntries(
   systemProviderIds.map((id) => [id, id]),
 ) as Record<SystemProviderId, SystemProviderId>;
-
-export type ReasoningEffortOption =
-  | 'default'
-  | 'none'
-  | 'minimal'
-  | 'low'
-  | 'medium'
-  | 'high'
-  | 'xhigh'
-  | 'auto';
-
-export const EFFORT_RATIO: Record<ReasoningEffortOption, number> = {
-  default: 0,
-  none: 0.01,
-  minimal: 0.05,
-  low: 0.05,
-  medium: 0.5,
-  high: 0.8,
-  xhigh: 0.9,
-  auto: 2,
-};

@@ -1,13 +1,17 @@
+import type { ApiKeyEntry, ProviderSettings } from '@cherrystudio/universal/data/types/provider';
+
 import { CacheService, createInMemoryBackendCacheStorage } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { UserProviderRow } from '@/backend/data/db/schemas/userProvider';
-import type { ApiKeyEntry, ProviderSettings } from '@/shared/data/types/provider';
 
 import type { PinService } from '../PinService';
 import { providerRegistryService } from '../ProviderRegistryService';
 import { canDeleteProvider, ProviderService } from '../ProviderService';
 
-jest.mock('uuid', () => ({ v7: jest.fn(() => '00000000-0000-7000-8000-000000000000') }));
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
+  v7: jest.fn(() => '00000000-0000-7000-8000-000000000000'),
+}));
 jest.mock('../utils/orderKey', () => ({
   insertManyWithOrderKey: jest.fn(),
   insertWithOrderKey: jest.fn(),
@@ -379,6 +383,7 @@ function createProviderRow(providerSettings: ProviderSettings): UserProviderRow 
     defaultChatEndpoint: null,
     endpointConfigs: null,
     isEnabled: true,
+    logoKey: null,
     name: 'Custom provider',
     orderKey: 'a0',
     presetProviderId: null,

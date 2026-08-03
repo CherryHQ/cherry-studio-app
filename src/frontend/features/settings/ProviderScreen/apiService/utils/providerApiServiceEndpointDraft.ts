@@ -1,5 +1,5 @@
-import type { EndpointType } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { EndpointType } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import {
   getPrimaryEndpoint,
@@ -35,5 +35,12 @@ export function canAddEndpointToDraft(draft: EndpointDraft, endpoint: EndpointTy
     endpoint !== draft.primaryEndpoint &&
     isConfigurableEndpointType(endpoint) &&
     !draft.visibleEndpointTypes.includes(endpoint)
+  );
+}
+
+export function canUseEndpointAsPrimary(draft: EndpointDraft, endpoint: EndpointType): boolean {
+  return (
+    draft.visibleEndpointTypes.includes(endpoint) &&
+    Boolean(draft.baseUrlByEndpoint[endpoint]?.trim())
   );
 }

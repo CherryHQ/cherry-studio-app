@@ -3,9 +3,9 @@ import {
   REASONING_EFFORT,
   type ReasoningEffort,
 } from '@cherrystudio/provider-registry';
-
-import type { Model } from '@/shared/data/types/model';
-import { getModelSupportedReasoningEffortOptions } from '@/shared/utils/model';
+import { deriveThinkingOptions, nearestThinkingOption } from '@cherrystudio/universal/ai/reasoning';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
 export const CHAT_INPUT_DEFAULT_REASONING_EFFORT = 'default';
 
@@ -74,7 +74,7 @@ export function getChatInputReasoningEffortOption(value: string | null | undefin
 export function getChatInputReasoningEffortsForModel(
   model: Model | null | undefined,
 ): ChatInputReasoningEffort[] {
-  const supportedOptions = getModelSupportedReasoningEffortOptions(model);
+  const supportedOptions = model ? deriveThinkingOptions(model) : undefined;
   if (!supportedOptions?.length) {
     return [];
   }
@@ -90,6 +90,35 @@ export function getFallbackChatInputReasoningEffort(
   return normalizedEfforts.includes(CHAT_INPUT_DEFAULT_REASONING_EFFORT)
     ? CHAT_INPUT_DEFAULT_REASONING_EFFORT
     : (normalizedEfforts[0] ?? CHAT_INPUT_DEFAULT_REASONING_EFFORT);
+}
+
+export function resolveAvailableChatInputReasoningEffort(
+  target: ReasoningEffortOption,
+  availableEfforts: readonly ChatInputReasoningEffort[],
+): ChatInputReasoningEffort {
+  const normalizedEfforts = normalizeChatInputReasoningEfforts(availableEfforts);
+  const normalizedTarget = normalizeChatInputReasoningEffort(target);
+  if (normalizedTarget && normalizedEfforts.includes(normalizedTarget)) {
+    return normalizedTarget;
+  }
+
+  return (
+    nearestThinkingOption(target, normalizedEfforts) ??
+    getFallbackChatInputReasoningEffort(normalizedEfforts)
+  );
+}
+
+export function getChatInputReasoningEffortSnapshot(
+  reasoningEffort: ChatInputReasoningEffort,
+  isReasoningEffortSelected: boolean,
+  assistantReasoningEffort?: ReasoningEffortOption,
+  availableEfforts: readonly ChatInputReasoningEffort[] = [],
+): ReasoningEffortOption {
+  if (isReasoningEffortSelected) return reasoningEffort;
+  return resolveAvailableChatInputReasoningEffort(
+    assistantReasoningEffort ?? CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+    availableEfforts,
+  );
 }
 
 export function isChatInputReasoningEffortAvailable(

@@ -1,3 +1,17 @@
+import type {
+  ApiPath,
+  BodyForPath,
+  ConcreteApiPaths,
+  ParamsForPath,
+  QueryParamsForPath,
+  ResponseForPath,
+  TemplateApiPaths,
+} from '@cherrystudio/universal/data/api/paths';
+import type {
+  ApiClient,
+  CursorPaginationResponse,
+  InferPaginationMode,
+} from '@cherrystudio/universal/data/api/types';
 import {
   type InfiniteData,
   type QueryClient,
@@ -9,20 +23,6 @@ import {
 import { useCallback, useMemo } from 'react';
 
 import { useApiClient } from '@/frontend/data/DataApiProvider';
-import type {
-  ApiPath,
-  BodyForPath,
-  ConcreteApiPaths,
-  ParamsForPath,
-  QueryParamsForPath,
-  ResponseForPath,
-  TemplateApiPaths,
-} from '@/shared/data/api/paths';
-import type {
-  ApiClient,
-  CursorPaginationResponse,
-  InferPaginationMode,
-} from '@/shared/data/api/types';
 
 type DataApiQueryKey = readonly [string] | readonly [string, unknown];
 type MutationMethod = 'DELETE' | 'PATCH' | 'POST' | 'PUT';

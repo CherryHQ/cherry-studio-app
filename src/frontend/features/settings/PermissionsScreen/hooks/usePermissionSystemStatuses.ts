@@ -1,10 +1,10 @@
+import type { PermissionPreferenceKey } from '@cherrystudio/universal/data/preference';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { useBackendModule } from '@/frontend/data';
 import type { SystemPermissionState } from '@/shared/contracts';
-import type { PermissionPreferenceKey } from '@/shared/data/preference';
 
 import { permissionConfig, permissionKinds } from '../permissionConfig';
 

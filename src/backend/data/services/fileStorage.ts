@@ -1,7 +1,3 @@
-import { Directory, File, Paths } from 'expo-file-system';
-
-import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
-import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   type FileEntryId,
   generatedImageExtension,
@@ -9,9 +5,13 @@ import {
   type PreparedInternalFile,
   SafeFileExtensionSchema,
   SafeFileNameSchema,
-} from '@/shared/data/types/file';
-import type { CherryMessagePart } from '@/shared/data/types/message';
-import { readCherryMeta, withCherryMeta } from '@/shared/data/types/uiParts';
+} from '@cherrystudio/universal/data/types/file';
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
+import { readCherryMeta, withCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
+import { Directory, File, Paths } from 'expo-file-system';
+
+import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 
 const FILE_DIRECTORY_NAME = 'files';
 const logger = loggerService.withContext('fileStorage');
