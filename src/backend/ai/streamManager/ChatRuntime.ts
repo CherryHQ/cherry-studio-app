@@ -1987,15 +1987,17 @@ export class ChatRuntime implements ChatModule {
     if (topic?.assistantId) {
       const assistant = await this.dependencies.services.assistant.getById(topic.assistantId);
 
-      if (assistant.modelId) {
-        return assistant.modelId;
+      if (!assistant.modelId) {
+        throw new Error(`Assistant ${topic.assistantId} has no model configured`);
       }
+
+      return assistant.modelId;
     }
 
     const defaultModelId = await this.dependencies.services.preference.get('chat.default_model_id');
 
     if (!isUniqueModelId(defaultModelId)) {
-      throw new Error('No default model configured.');
+      throw new Error('No default model configured for assistant-less topic');
     }
 
     return defaultModelId;

@@ -64,9 +64,7 @@ export function ChatInput({ assistantId, topicId }: ChatInputProps) {
     : (assistantId ?? null);
   const { assistant: selectedAssistant } = useAssistantApiById(selectedAssistantId ?? undefined);
   const selectedModelId = selectedAssistantId
-    ? selectedAssistant
-      ? (selectedAssistant.modelId ?? defaultModelId)
-      : null
+    ? (selectedAssistant?.modelId ?? null)
     : defaultModelId;
   const { model: selectedModel } = useModelById(selectedModelId);
   const selectedModelLabel = selectedModel?.name;

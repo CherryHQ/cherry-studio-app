@@ -118,6 +118,89 @@ describe('ChatRuntime', () => {
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
+  test('uses the bound assistant model without reading the global default', async () => {
+    const services = createServices();
+    const assistantModelId = 'assistant-provider::assistant-model' as UniqueModelId;
+    services.assistant.getById = jest.fn(async (id: string) =>
+      createAssistant(id, assistantModelId),
+    );
+    services.model.getById = jest.fn(async (modelId: UniqueModelId) => createModel(modelId));
+    const runtime = createRuntime({ services });
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterable([createUiMessage('assistant-1', 'hello')]),
+    );
+
+    await runtime.sendText({ text: 'hi', topicId: 'topic-1' });
+
+    expect(services.ai.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({ uniqueModelId: assistantModelId }),
+    );
+    expect((services.preference.get as jest.Mock).mock.calls.map(([key]) => key)).not.toContain(
+      'chat.default_model_id',
+    );
+  });
+
+  test('rejects a bound assistant with no model instead of falling back to the global default', async () => {
+    const services = createServices();
+    services.assistant.getById = jest.fn(async (id: string) => createAssistant(id, null));
+    const runtime = createRuntime({ services });
+
+    await expect(runtime.sendText({ text: 'hi', topicId: 'topic-1' })).rejects.toThrow(
+      'Assistant assistant-1 has no model configured',
+    );
+
+    expect(services.message.createUserMessageWithPlaceholders).not.toHaveBeenCalled();
+    expect(services.ai.streamText).not.toHaveBeenCalled();
+    expect(services.preference.get).not.toHaveBeenCalled();
+  });
+
+  test('uses the global default model for an assistant-less topic', async () => {
+    const services = createServices();
+    const defaultModelId = 'default-provider::default-model' as UniqueModelId;
+    services.topic.getById = jest.fn(async () => createTopic({ assistantId: undefined }));
+    services.preference.get = jest.fn(async (key: string) => {
+      if (key === 'chat.default_model_id') return defaultModelId;
+      if (key === 'topic.naming.enabled') return false;
+      return '';
+    }) as unknown as ChatRuntimeServices['preference']['get'];
+    services.model.getById = jest.fn(async (modelId: UniqueModelId) => createModel(modelId));
+    const runtime = createRuntime({ services });
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterable([createUiMessage('assistant-1', 'hello')]),
+    );
+
+    await runtime.sendText({ text: 'hi', topicId: 'topic-1' });
+
+    expect(services.preference.get).toHaveBeenCalledWith('chat.default_model_id');
+    expect(services.ai.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({ uniqueModelId: defaultModelId }),
+    );
+  });
+
+  test('allows an explicit model override when the bound assistant has no model', async () => {
+    const services = createServices();
+    const overrideModelId = 'override-provider::override-model' as UniqueModelId;
+    services.assistant.getById = jest.fn(async (id: string) => createAssistant(id, null));
+    services.model.getById = jest.fn(async (modelId: UniqueModelId) => createModel(modelId));
+    const runtime = createRuntime({ services });
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterable([createUiMessage('assistant-1', 'hello')]),
+    );
+
+    await runtime.sendText({
+      selectedModelId: overrideModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(services.ai.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({ uniqueModelId: overrideModelId }),
+    );
+    expect((services.preference.get as jest.Mock).mock.calls.map(([key]) => key)).not.toContain(
+      'chat.default_model_id',
+    );
+  });
+
   test('persists file parts from the send payload', async () => {
     const services = createServices();
     const runtime = createRuntime({ services });
@@ -1303,7 +1386,7 @@ describe('ChatRuntime', () => {
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
-  test('falls back to the default model when the pinned resume model is gone', async () => {
+  test('falls back to the bound assistant model when the pinned resume model is gone', async () => {
     const services = createServices();
     const settledMessage = {
       ...createMessage('assistant-1', 'assistant'),
@@ -1324,7 +1407,9 @@ describe('ChatRuntime', () => {
     services.model.getById = jest.fn(async (modelId: UniqueModelId) =>
       modelId === ('provider::gone' as UniqueModelId) ? null : createModel(modelId),
     );
-    services.assistant.getById = jest.fn(async () => createAssistant('assistant-1', null));
+    services.assistant.getById = jest.fn(async () =>
+      createAssistant('assistant-1', 'provider::model' as UniqueModelId),
+    );
     const runtime = createRuntime({ services });
     mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
 
