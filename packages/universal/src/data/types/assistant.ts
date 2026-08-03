@@ -1,6 +1,7 @@
 import * as z from 'zod';
 
 import { ReasoningEffortOptionSchema } from '../../types/aiSdk';
+import { GroupIdSchema } from './group';
 import { UniqueModelIdSchema } from './model';
 import { TagSchema } from './tag';
 
@@ -53,6 +54,7 @@ export const AssistantSchema = z.strictObject({
   createdAt: z.iso.datetime(),
   description: z.string(),
   emoji: z.emoji(),
+  groupId: GroupIdSchema.nullable(),
   id: AssistantIdSchema,
   knowledgeBaseIds: z.array(z.string()),
   mcpServerIds: z.array(z.string()),

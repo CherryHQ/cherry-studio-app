@@ -42,6 +42,7 @@ function makeAssistant(): Assistant {
     createdAt: '2026-07-01T00:00:00.000Z',
     description: '',
     emoji: '🌟',
+    groupId: null,
     id: 'assistant-1',
     knowledgeBaseIds: [],
     mcpServerIds: [],

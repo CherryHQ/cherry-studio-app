@@ -5,6 +5,7 @@ import type { AssistantRow } from '@/backend/data/db/schemas';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { AssistantService } from '../AssistantService';
+import type { GroupService } from '../GroupService';
 import type { ModelService } from '../ModelService';
 import type { PinService } from '../PinService';
 import type { TagService } from '../TagService';
@@ -38,6 +39,7 @@ describe('AssistantService', () => {
     } as unknown as TagService;
     const service = new AssistantService(
       { getDb: () => db } as unknown as DbService,
+      {} as GroupService,
       {} as ModelService,
       {} as PreferenceService,
       tagService,
@@ -75,6 +77,7 @@ describe('AssistantService', () => {
         getDb: () => db,
         withWriteTx: async (callback: (tx: unknown) => Promise<unknown>) => callback(transaction),
       } as unknown as DbService,
+      {} as GroupService,
       {} as ModelService,
       {} as PreferenceService,
       tagService,
@@ -120,6 +123,7 @@ describe('AssistantService', () => {
       {
         withWriteTx: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
       } as unknown as DbService,
+      {} as GroupService,
       {} as ModelService,
       { get: jest.fn(async () => null) } as unknown as PreferenceService,
       tagService,

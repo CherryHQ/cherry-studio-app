@@ -15,7 +15,7 @@ import {
 } from '@cherrystudio/universal/data/types/assistant';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Tag } from '@cherrystudio/universal/data/types/tag';
-import { and, asc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 
 import type { DbService } from '@/backend/data/db/DbService';
 import {
@@ -28,6 +28,7 @@ import {
 } from '@/backend/data/db/schemas';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 
+import type { GroupService } from './GroupService';
 import type { ModelService } from './ModelService';
 import type { PinService } from './PinService';
 import type { TagService } from './TagService';
@@ -54,6 +55,7 @@ function rowToAssistant(
     createdAt: timestampToISO(row.createdAt),
     description: row.description,
     emoji: row.emoji,
+    groupId: row.groupId,
     id: row.id,
     knowledgeBaseIds: relations.knowledgeBaseIds,
     mcpServerIds: relations.mcpServerIds,
@@ -71,6 +73,7 @@ function rowToAssistant(
 export class AssistantService {
   constructor(
     private readonly dbService: DbService,
+    private readonly groupService: GroupService,
     private readonly modelService: ModelService,
     private readonly preferenceService: PreferenceService,
     private readonly tagService: TagService,
@@ -130,6 +133,14 @@ export class AssistantService {
       }
     }
 
+    if (query.groupId !== undefined) {
+      conditions.push(eq(assistantTable.groupId, query.groupId));
+    }
+
+    if (query.updatedAtFrom !== undefined) {
+      conditions.push(gte(assistantTable.updatedAt, Date.parse(query.updatedAtFrom)));
+    }
+
     if (query.tagIds && query.tagIds.length > 0) {
       const assistantIds = await this.tagService.getEntityIdsByTagsTx(
         this.db,
@@ -142,6 +153,25 @@ export class AssistantService {
     }
 
     const whereClause = and(...conditions);
+    const sortBy = query.sortBy ?? 'orderKey';
+    const sortOrder =
+      query.sortOrder ?? (sortBy === 'orderKey' || sortBy === 'name' ? 'asc' : 'desc');
+    const orderFn = sortOrder === 'asc' ? asc : desc;
+    const sortColumn = {
+      createdAt: assistantTable.createdAt,
+      name: assistantTable.name,
+      orderKey: assistantTable.orderKey,
+      updatedAt: assistantTable.updatedAt,
+    }[sortBy];
+    const orderByClauses =
+      sortBy === 'updatedAt'
+        ? [orderFn(sortColumn), asc(assistantTable.id)]
+        : [
+            sql`CASE WHEN ${pinTable.orderKey} IS NULL THEN 1 ELSE 0 END`,
+            asc(pinTable.orderKey),
+            orderFn(sortColumn),
+            asc(assistantTable.createdAt),
+          ];
     const [rows, countRows] = await Promise.all([
       this.db
         .select({ assistant: assistantTable, modelName: userModelTable.name })
@@ -152,12 +182,7 @@ export class AssistantService {
           and(eq(pinTable.entityType, 'assistant'), eq(pinTable.entityId, assistantTable.id)),
         )
         .where(whereClause)
-        .orderBy(
-          sql`CASE WHEN ${pinTable.orderKey} IS NULL THEN 1 ELSE 0 END`,
-          asc(pinTable.orderKey),
-          asc(assistantTable.orderKey),
-          asc(assistantTable.createdAt),
-        )
+        .orderBy(...orderByClauses)
         .limit(query.limit)
         .offset(offset),
       this.db
@@ -191,6 +216,7 @@ export class AssistantService {
 
     const { row, tags } = await this.dbService.withWriteTx(async (tx) => {
       const modelId = await this.resolveCreateModelId(tx, dto.modelId);
+      await this.validateAssistantGroupTx(tx, dto.groupId);
       const { mcpServerIds, tagIds, ...columnDto } = dto;
       const inserted = (await insertWithOrderKey(
         tx,
@@ -259,6 +285,9 @@ export class AssistantService {
           { modelId: [`Model '${dto.modelId}' is not registered in user_model`] },
           `Assistant modelId '${dto.modelId}' is not registered - add the model first or pass null`,
         );
+      }
+      if (dto.groupId !== undefined) {
+        await this.validateAssistantGroupTx(tx, dto.groupId);
       }
 
       let next: AssistantRow;
@@ -418,6 +447,27 @@ export class AssistantService {
 
     const model = await this.modelService.getById(modelId);
     return model?.name ?? null;
+  }
+
+  private async validateAssistantGroupTx(
+    tx: TxLike,
+    groupId: null | string | undefined,
+  ): Promise<void> {
+    if (groupId == null) {
+      return;
+    }
+
+    const group = await this.groupService.findByIdTx(tx, groupId);
+    if (!group) {
+      throw DataApiErrorFactory.validation({
+        groupId: [`Assistant group not found: ${groupId}`],
+      });
+    }
+    if (group.entityType !== 'assistant') {
+      throw DataApiErrorFactory.validation({
+        groupId: [`Assistant group must have entityType 'assistant': ${groupId}`],
+      });
+    }
   }
 
   private async modelExistsTx(tx: TxLike, modelId: string): Promise<boolean> {

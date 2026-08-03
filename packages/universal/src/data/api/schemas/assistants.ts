@@ -1,9 +1,10 @@
-import type { OffsetPaginationParams, OffsetPaginationResponse } from '@shared/data/api/types';
+import type { OffsetPaginationResponse } from '@shared/data/api/types';
 import {
   type Assistant,
   AssistantSchema,
   AssistantSettingsSchema,
 } from '@shared/data/types/assistant';
+import { GroupIdSchema } from '@shared/data/types/group';
 import { TagIdSchema } from '@shared/data/types/tag';
 import * as z from 'zod';
 
@@ -12,6 +13,7 @@ import { type OrderEndpoints } from './_endpointHelpers';
 const ASSISTANT_MUTABLE_FIELDS = {
   description: true,
   emoji: true,
+  groupId: true,
   modelId: true,
   name: true,
   prompt: true,
@@ -43,6 +45,7 @@ export const ASSISTANTS_DEFAULT_LIMIT = 100;
 export const ASSISTANTS_MAX_LIMIT = 500;
 
 export const ListAssistantsQuerySchema = z.strictObject({
+  groupId: GroupIdSchema.optional(),
   id: z.string().optional(),
   limit: z.coerce
     .number()
@@ -52,10 +55,12 @@ export const ListAssistantsQuerySchema = z.strictObject({
     .default(ASSISTANTS_DEFAULT_LIMIT),
   page: z.coerce.number().int().positive().default(ASSISTANTS_DEFAULT_PAGE),
   search: z.string().trim().min(1).optional(),
+  sortBy: z.enum(['createdAt', 'updatedAt', 'name', 'orderKey']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
   tagIds: z.array(TagIdSchema).min(1).optional(),
+  updatedAtFrom: z.iso.datetime().optional(),
 });
-export type ListAssistantsQueryParams = z.input<typeof ListAssistantsQuerySchema> &
-  OffsetPaginationParams;
+export type ListAssistantsQueryParams = z.input<typeof ListAssistantsQuerySchema>;
 export type ListAssistantsQuery = z.output<typeof ListAssistantsQuerySchema>;
 
 export type AssistantSchemas = {

@@ -9,6 +9,7 @@ import { schema } from '@/backend/data/db/schemas';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { AssistantService } from '../AssistantService';
+import { GroupService } from '../GroupService';
 import { McpServerService } from '../McpServerService';
 import type { ModelService } from '../ModelService';
 import type { PinService } from '../PinService';
@@ -18,9 +19,10 @@ jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
 type MigrationJournal = { entries: { tag: string }[] };
 
-describe('AssistantService MCP associations', () => {
+describe('AssistantService persistence', () => {
   let sqlite: DatabaseSync;
   let assistantService: AssistantService;
+  let groupService: GroupService;
   let mcpServerService: McpServerService;
 
   beforeEach(() => {
@@ -61,10 +63,12 @@ describe('AssistantService MCP associations', () => {
     const tagService = {
       getTagsByEntitiesTx: jest.fn(async () => new Map()),
     } as unknown as TagService;
+    groupService = new GroupService(dbService);
     assistantService = new AssistantService(
       dbService,
+      groupService,
       {} as ModelService,
-      {} as PreferenceService,
+      { get: jest.fn(async () => null) } as unknown as PreferenceService,
       tagService,
       {} as PinService,
     );
@@ -115,6 +119,69 @@ describe('AssistantService MCP associations', () => {
     ).rejects.toBeDefined();
     expect(associationIds(sqlite)).toEqual([existing.id]);
   });
+
+  it('creates, replaces, and clears an assistant group', async () => {
+    const first = await groupService.create({ entityType: 'assistant', name: 'Work' });
+    const second = await groupService.create({ entityType: 'assistant', name: 'Personal' });
+
+    const created = await assistantService.create({ groupId: first.id, name: 'Grouped' });
+    expect(created.groupId).toBe(first.id);
+
+    const replaced = await assistantService.update(created.id, { groupId: second.id });
+    expect(replaced.groupId).toBe(second.id);
+
+    const cleared = await assistantService.update(created.id, { groupId: null });
+    expect(cleared.groupId).toBeNull();
+  });
+
+  it('rejects missing groups and groups owned by another entity type', async () => {
+    const topicGroup = await groupService.create({ entityType: 'topic', name: 'Topics' });
+
+    await expect(
+      assistantService.create({
+        groupId: '99999999-9999-4999-8999-999999999999',
+        name: 'Missing group',
+      }),
+    ).rejects.toMatchObject({ details: { fieldErrors: { groupId: expect.any(Array) } } });
+    await expect(
+      assistantService.create({ groupId: topicGroup.id, name: 'Wrong group' }),
+    ).rejects.toMatchObject({ details: { fieldErrors: { groupId: expect.any(Array) } } });
+  });
+
+  it('filters by group and bypasses pins for updatedAt sorting', async () => {
+    const group = await groupService.create({ entityType: 'assistant', name: 'Work' });
+    insertAssistant(sqlite, 'assistant-old', { groupId: group.id, updatedAt: 100 });
+    insertAssistant(sqlite, 'assistant-new', { groupId: group.id, updatedAt: 200 });
+    insertAssistant(sqlite, 'assistant-other', { updatedAt: 300 });
+    insertPin(sqlite, 'assistant-old');
+
+    const grouped = await assistantService.list({ groupId: group.id, limit: 100, page: 1 });
+    expect(grouped.items.map((assistant) => assistant.id)).toEqual([
+      'assistant-old',
+      'assistant-new',
+    ]);
+
+    const scopedSearch = await assistantService.list({
+      groupId: group.id,
+      limit: 100,
+      page: 1,
+      search: 'new',
+      updatedAtFrom: new Date(200).toISOString(),
+    });
+    expect(scopedSearch.items.map((assistant) => assistant.id)).toEqual(['assistant-new']);
+
+    const freshest = await assistantService.list({
+      limit: 100,
+      page: 1,
+      sortBy: 'updatedAt',
+      sortOrder: 'desc',
+    });
+    expect(freshest.items.map((assistant) => assistant.id)).toEqual([
+      'assistant-other',
+      'assistant-new',
+      'assistant-old',
+    ]);
+  });
 });
 
 function applyMigrations(database: DatabaseSync) {
@@ -132,13 +199,26 @@ function applyMigrations(database: DatabaseSync) {
   }
 }
 
-function insertAssistant(database: DatabaseSync, id: string) {
+function insertAssistant(
+  database: DatabaseSync,
+  id: string,
+  options: { groupId?: string; updatedAt?: number } = {},
+) {
   database
     .prepare(
-      `INSERT INTO assistant (id, name, emoji, settings, order_key, created_at, updated_at)
-       VALUES (?, 'Assistant', 'x', '{}', 'a0', 1, 1)`,
+      `INSERT INTO assistant (id, name, emoji, group_id, settings, order_key, created_at, updated_at)
+       VALUES (?, ?, 'x', ?, '{}', ?, 1, ?)`,
     )
-    .run(id);
+    .run(id, id, options.groupId ?? null, id, options.updatedAt ?? 1);
+}
+
+function insertPin(database: DatabaseSync, assistantId: string) {
+  database
+    .prepare(
+      `INSERT INTO pin (id, entity_type, entity_id, order_key, created_at, updated_at)
+       VALUES (?, 'assistant', ?, 'a0', 1, 1)`,
+    )
+    .run(`pin-${assistantId}`, assistantId);
 }
 
 function insertRawServer(

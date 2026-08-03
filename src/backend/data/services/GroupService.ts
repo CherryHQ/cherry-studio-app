@@ -22,7 +22,7 @@ import type {
 } from '@cherrystudio/universal/data/types/group';
 import { asc, eq } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import type { Database, DbService } from '@/backend/data/db/DbService';
 import { groupTable } from '@/backend/data/db/schemas';
 import type { GroupRow } from '@/backend/data/db/schemas/group';
 
@@ -63,13 +63,16 @@ export class GroupService {
    * Get a group by ID.
    */
   async getById(id: string): Promise<Group> {
-    const [row] = await this.db.select().from(groupTable).where(eq(groupTable.id, id)).limit(1);
-
-    if (!row) {
+    const group = await this.findByIdTx(this.db, id);
+    if (!group) {
       throw DataApiErrorFactory.notFound('Group', id);
     }
+    return group;
+  }
 
-    return rowToGroup(row);
+  async findByIdTx(tx: Pick<Database, 'select'>, id: string): Promise<Group | null> {
+    const [row] = await tx.select().from(groupTable).where(eq(groupTable.id, id)).limit(1);
+    return row ? rowToGroup(row) : null;
   }
 
   /**

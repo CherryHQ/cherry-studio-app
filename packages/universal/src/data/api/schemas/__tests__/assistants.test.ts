@@ -12,6 +12,35 @@ describe('assistant api schemas', () => {
     });
   });
 
+  test('accepts desktop group and sorting query fields', () => {
+    expect(
+      ListAssistantsQuerySchema.parse({
+        groupId: '11111111-1111-4111-8111-111111111111',
+        sortBy: 'updatedAt',
+        sortOrder: 'desc',
+        updatedAtFrom: '2026-05-01T00:00:00.000Z',
+      }),
+    ).toMatchObject({
+      groupId: '11111111-1111-4111-8111-111111111111',
+      sortBy: 'updatedAt',
+      sortOrder: 'desc',
+      updatedAtFrom: '2026-05-01T00:00:00.000Z',
+    });
+  });
+
+  test.each([CreateAssistantSchema, UpdateAssistantSchema])(
+    'accepts a nullable group assignment',
+    (schema) => {
+      expect(
+        schema.safeParse({
+          groupId: '11111111-1111-4111-8111-111111111111',
+          name: 'Assistant',
+        }).success,
+      ).toBe(true);
+      expect(schema.safeParse({ groupId: null, name: 'Assistant' }).success).toBe(true);
+    },
+  );
+
   test('accepts partial settings updates without requiring the full settings object', () => {
     const result = UpdateAssistantSchema.safeParse({
       settings: {

@@ -2798,6 +2798,7 @@ function createAssistant(id: string, modelId: UniqueModelId | null): Assistant {
     createdAt: now,
     description: '',
     emoji: '🌟',
+    groupId: null,
     id,
     knowledgeBaseIds: [],
     mcpServerIds: [],
